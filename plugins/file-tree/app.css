@@ -1,0 +1,16 @@
+.file-tree {
+  color-scheme: inherit;
+  --trees-accent-override: var(--ring);
+  --trees-bg-override: var(--background);
+  --trees-bg-muted-override: var(--accent);
+  --trees-fg-override: var(--foreground);
+  --trees-fg-muted-override: var(--muted-foreground);
+  --trees-selected-bg-override: var(--muted);
+  --trees-selected-fg-override: var(--foreground);
+  --trees-border-color-override: var(--border);
+  --trees-focus-ring-color-override: var(--ring);
+  --trees-selected-focused-border-color-override: var(--ring);
+  --trees-input-bg-override: var(--background);
+  --trees-font-family-override: var(--font-sans);
+  --trees-font-size-override: 0.8125rem;
+}

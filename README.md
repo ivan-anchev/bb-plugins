@@ -24,6 +24,7 @@ bb plugin install git:https://github.com/ivan-anchev/bb-plugins.git@^0.1.0 --tag
 | Plugin | What it does |
 | --- | --- |
 | [`comfortable-type`](plugins/comfortable-type) | A theme that sets bb's text at 14px in the system font, with bb's own colors. |
+| [`file-tree`](plugins/file-tree) | Browse the environment's files and git changes as a tree with colored per-file-type icons. |
 | [`proactive-visuals`](plugins/proactive-visuals) | Agents answer data with an inline chart, without being asked. |
 
 ## Repository layout

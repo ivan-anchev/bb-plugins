@@ -1,0 +1,47 @@
+{
+  "name": "bb-plugin-file-tree",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "keywords": [
+    "bb-plugin",
+    "files",
+    "git"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ivan-anchev/bb-plugins.git",
+    "directory": "plugins/file-tree"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "node --test src/tree-input.test.ts",
+    "build": "bb plugin build"
+  },
+  "engines": {
+    "bb": ">=0.48",
+    "bbPluginSdk": ">=0.6.104"
+  },
+  "bb": {
+    "name": "File Tree",
+    "description": "Browse the environment's files and git changes as a tree with colored per-file-type icons.",
+    "branding": {
+      "icon": "Folder"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx"
+  },
+  "dependencies": {
+    "@pierre/trees": "1.0.0-beta.6",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.6.104",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "hono": "^4.11.9",
+    "typescript": "^5.7.0"
+  }
+}

@@ -28,6 +28,28 @@
       }
     },
     {
+      "id": "file-tree",
+      "displayName": "File Tree",
+      "description": "Browse the environment's files and git changes as a tree with colored per-file-type icons.",
+      "icon": "Folder",
+      "tags": [
+        "files",
+        "git"
+      ],
+      "author": {
+        "name": "Ivan Anchev",
+        "github": "ivan-anchev"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/ivan-anchev/bb-plugins.git",
+          "subdir": "plugins/file-tree",
+          "range": "0.x",
+          "tagPrefix": "file-tree/"
+        }
+      }
+    },
+    {
       "id": "proactive-visuals",
       "displayName": "Proactive Visuals",
       "description": "Agents answer data with an inline chart, without being asked, using bb's inline visualizations.",
