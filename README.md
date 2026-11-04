@@ -21,7 +21,9 @@ bb plugin install git:https://github.com/ivan-anchev/bb-plugins.git@^0.1.0 --tag
 
 ## Plugins
 
-_None yet._ Run `npm run new -- <id>` to add the first one.
+| Plugin | What it does |
+| --- | --- |
+| [`proactive-visuals`](plugins/proactive-visuals) | Agents answer data with an inline chart, without being asked. |
 
 ## Repository layout
 

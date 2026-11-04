@@ -4,5 +4,29 @@
   "name": "ivan-anchev",
   "displayName": "Ivan Anchev's Plugins",
   "description": "bb plugins Ivan Anchev maintains.",
-  "plugins": []
+  "plugins": [
+    {
+      "id": "proactive-visuals",
+      "displayName": "Proactive Visuals",
+      "description": "Agents answer data with an inline chart, without being asked, using bb's inline visualizations.",
+      "icon": "ChartColumn",
+      "tags": [
+        "charts",
+        "visualization",
+        "agents"
+      ],
+      "author": {
+        "name": "Ivan Anchev",
+        "github": "ivan-anchev"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/ivan-anchev/bb-plugins.git",
+          "subdir": "plugins/proactive-visuals",
+          "range": "0.x",
+          "tagPrefix": "proactive-visuals/"
+        }
+      }
+    }
+  ]
 }

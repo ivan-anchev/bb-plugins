@@ -1,0 +1,45 @@
+{
+  "name": "bb-plugin-proactive-visuals",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Agents answer data with an inline chart, without being asked, using bb's inline visualizations.",
+  "keywords": [
+    "bb-plugin",
+    "charts",
+    "visualization",
+    "agents"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ivan-anchev/bb-plugins.git",
+    "directory": "plugins/proactive-visuals"
+  },
+  "engines": {
+    "bb": ">=0.48",
+    "bbPluginSdk": ">=0.6.104"
+  },
+  "bb": {
+    "name": "Proactive Visuals",
+    "description": "Agents answer data with an inline chart, without being asked, using bb's inline visualizations.",
+    "branding": {
+      "icon": "ChartColumn"
+    },
+    "server": "./server.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "node --test '*.test.ts'",
+    "build": "bb plugin build"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.6.104",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "hono": "^4.11.9",
+    "typescript": "^5.7.0",
+    "zod": "^4.6.5"
+  }
+}
