@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # bb downloads its plugin build toolchain into ~/.bb/plugins on first use.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bb/plugins/toolchain-*
+          key: bb-toolchain-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: bb-toolchain-${{ runner.os }}-
+      # manifests in sync with plugins, scripts + plugins typecheck, tests, bb plugin build
+      - run: npm run check
+
+  # bb installs a git plugin with `npm install --omit=dev` inside its directory,
+  # outside any workspace. Prove every plugin survives exactly that.
+  standalone-install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for plugin in plugins/*/; do
+            echo "::group::npm install --omit=dev ($plugin)"
+            (cd "$plugin" && npm install --omit=dev --omit=optional --ignore-scripts --no-audit --no-fund)
+            echo "::endgroup::"
+          done

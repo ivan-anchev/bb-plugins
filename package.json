@@ -1,0 +1,41 @@
+{
+  "name": "bb-plugins",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Ivan Anchev's bb plugins, one per directory under plugins/, published as a bb marketplace.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ivan-anchev/bb-plugins.git"
+  },
+  "bbMarketplace": {
+    "name": "ivan-anchev",
+    "displayName": "Ivan Anchev's Plugins",
+    "description": "bb plugins Ivan Anchev maintains.",
+    "author": { "name": "Ivan Anchev", "github": "ivan-anchev" }
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "workspaces": [
+    "plugins/*"
+  ],
+  "scripts": {
+    "new": "node scripts/new-plugin.ts",
+    "manifests": "node scripts/manifests.ts",
+    "manifests:check": "node scripts/manifests.ts --check",
+    "release": "node scripts/release.ts",
+    "typecheck": "tsc -p . && node scripts/each-plugin.ts typecheck",
+    "test": "node --test 'scripts/**/*.test.ts' && node scripts/each-plugin.ts test",
+    "build": "node scripts/each-plugin.ts build",
+    "check": "npm run manifests:check && npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "ajv": "^8.17.1",
+    "bb-app": "0.48.1",
+    "typescript": "^5.9.0",
+    "zod": "^4.1.0"
+  }
+}

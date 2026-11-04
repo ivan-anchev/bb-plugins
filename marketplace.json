@@ -1,0 +1,8 @@
+{
+  "$schema": "https://getbb.app/schemas/marketplace.schema.json",
+  "schemaVersion": 1,
+  "name": "ivan-anchev",
+  "displayName": "Ivan Anchev's Plugins",
+  "description": "bb plugins Ivan Anchev maintains.",
+  "plugins": []
+}
