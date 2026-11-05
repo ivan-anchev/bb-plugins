@@ -1,8 +1,8 @@
 # bb-plugin-comfortable-type
 
 Contributes one theme, **Comfortable Type**
-(`plugin:comfortable-type:comfortable`), that raises bb's desktop type scale to
-T3 Code's 14px body text in the system font, without touching colors.
+(`plugin:comfortable-type:comfortable`), that raises bb's desktop type scale one step,
+to 14px body text in the system font, without touching colors.
 
 - `themes/comfortable.css`: the theme. CSS variables, each commented with the
   bb value it replaces, plus one workaround for a bb layout bug: the macOS

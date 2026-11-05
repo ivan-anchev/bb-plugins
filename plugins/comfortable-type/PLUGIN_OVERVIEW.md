@@ -1,4 +1,4 @@
-bb sets most desktop text at 13px. This plugin adds a **Comfortable Type** theme that raises bb's type scale one step, to the 14px body text T3 Code uses, sets it in your system font, and leaves every color as bb's default palette has it.
+bb sets most desktop text at 13px. This plugin adds a **Comfortable Type** theme that raises bb's type scale one step, to 14px body text, sets it in your system font, and leaves every color as bb's default palette has it.
 
 ## What you get
 

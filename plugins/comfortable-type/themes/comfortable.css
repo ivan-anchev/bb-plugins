@@ -1,6 +1,6 @@
 /*
- * Comfortable Type: bb's desktop type scale raised to T3 Code's proportions
- * (Tailwind's default 14px body text), set in the system font.
+ * Comfortable Type: bb's desktop type scale raised one step, to Tailwind's
+ * default 14px body text, set in the system font.
  *
  * Size, line-height, and font tokens, plus one bb layout fix at the end. No
  * color tokens, so bb's default palette applies in light and dark mode. Each
@@ -28,7 +28,7 @@
     --text-base: 1rem;
     --text-base--line-height: 1.5rem;
 
-    /* 48px: thread and page header height, matching T3's 52px top bar. */
+    /* 48px: thread and page header height, raised to 52px to fit the larger title. */
     --bb-app-chrome-row-height: 3.25rem;
   }
 
