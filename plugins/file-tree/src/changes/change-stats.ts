@@ -11,7 +11,12 @@ export type ChangeSummary = Headline & { breakdown: KindBreakdown };
 
 type Headline = { text: string; stats: LineStats | null; title: string };
 
-type ShownChanges = { shown: readonly ChangedFile[]; totalCount: number; truncated: boolean; filtering: boolean };
+type SummarizedChanges = {
+  files: readonly ChangedFile[];
+  shown: readonly ChangedFile[];
+  truncated: boolean;
+  filtering: boolean;
+};
 
 const COUNT_FORMAT = new Intl.NumberFormat("en-US");
 
@@ -31,43 +36,44 @@ export function lineStatPartsOf(stats: LineStats): StatPart[] {
   return [insertionPart(stats.insertions), deletionPart(stats.deletions)];
 }
 
-export function changeSummaryOf(changes: ShownChanges): ChangeSummary {
-  return { ...headlineOf(changes), breakdown: kindBreakdownOf(changes) };
+export function changeSummaryOf(changes: SummarizedChanges): ChangeSummary {
+  const stats = totalStatsOf(changes.files);
+  return { ...headlineOf(changes, stats), breakdown: kindBreakdownOf(changes.files, changes.truncated) };
 }
 
 export function plainTextOf(parts: readonly StatPart[]): string {
   return parts.map((part) => part.text).join(" ");
 }
 
-function headlineOf({ shown, totalCount, truncated, filtering }: ShownChanges): Headline {
-  const stats = totalStatsOf(shown);
+function headlineOf({ files, shown, truncated, filtering }: SummarizedChanges, stats: LineStats): Headline {
   const changed = hasLines(stats);
   const visibleStats = changed ? stats : null;
-  const more = truncated ? "+" : "";
+  const statsLead = changed ? (truncated ? " · shown " : " · ") : "";
   if (filtering) {
+    const matching = `${shown.length} of ${files.length}${truncated ? "+" : ""}`;
     return {
-      text: `${shown.length} of ${totalCount}${more} files${changed ? " · " : ""}`,
+      text: `${matching} files${statsLead}`,
       stats: visibleStats,
-      title: `${shown.length} of ${totalCount}${more} changed files match the filter`,
+      title: `${matching} changed files match the filter`,
     };
   }
   if (truncated) {
     return {
-      text: `${shown.length}+ ${filesWord(shown.length)}${changed ? " · shown " : ""}`,
+      text: `${files.length}+ ${filesWord(files.length)}${statsLead}`,
       stats: visibleStats,
-      title: `Showing the first ${filesOf(shown.length)}; shown slice: ${countOf(stats.insertions, "insertion")}, ${countOf(stats.deletions, "deletion")}`,
+      title: `Showing the first ${filesOf(files.length)}; shown slice: ${countOf(stats.insertions, "insertion")}, ${countOf(stats.deletions, "deletion")}`,
     };
   }
-  if (shown.length === 0) return { text: "No changes", stats: null, title: "No changes" };
+  if (files.length === 0) return { text: "No changes", stats: null, title: "No changes" };
   return changed
-    ? { text: `${filesOf(shown.length)}, `, stats, title: `${filesOf(shown.length)}, ${plainTextOf(lineStatPartsOf(stats))}` }
-    : { text: filesOf(shown.length), stats: null, title: filesOf(shown.length) };
+    ? { text: `${filesOf(files.length)}, `, stats, title: `${filesOf(files.length)}, ${plainTextOf(lineStatPartsOf(stats))}` }
+    : { text: filesOf(files.length), stats: null, title: filesOf(files.length) };
 }
 
-function kindBreakdownOf({ shown, truncated }: ShownChanges): KindBreakdown {
+function kindBreakdownOf(files: readonly ChangedFile[], truncated: boolean): KindBreakdown {
   const rows = CHANGE_KINDS.map((kind) => ({
     kind,
-    stats: totalStatsOf(shown.filter((file) => changeKindOf(file.path) === kind)),
+    stats: totalStatsOf(files.filter((file) => changeKindOf(file.path) === kind)),
   }));
   return { rows: rows.filter((row) => hasLines(row.stats)), totalLabel: truncated ? "Shown slice" : "Total" };
 }

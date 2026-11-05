@@ -42,8 +42,8 @@ export function ChangesTree({ changes, input, controls, diff, refreshError }: Ch
     setSelectedPath(path);
   };
   const summary = changeSummaryOf({
+    files: changes.files,
     shown: shownFiles,
-    totalCount: changes.files.length,
     truncated: changes.truncated,
     filtering: isFiltering(pathQuery, filters),
   });

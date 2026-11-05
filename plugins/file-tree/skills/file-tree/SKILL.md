@@ -26,11 +26,14 @@ has an environment. It has no CLI command, no agent tool, and no settings.
     branch), **Committed changes** (only the branch's commits), **Uncommitted
     changes** (the working tree against `HEAD`), and each of the branch's
     commits. Options with nothing in them are not offered.
-  - **Stats**: `N files, +A -D` for what the tree shows, or `N of M files`
-    while a filter is on. Hovering the total, or focusing it with Tab, opens
-    its breakdown: `+A -D` for each change kind that has lines, then the
-    total (labelled **Shown slice** when the change list was cut short).
-    Escape or moving away closes it.
+  - **Stats**: `N files, +A -D`, or `N of M files · +A -D` while a filter is
+    on. The file count follows the filters; the `+A -D` lines always cover
+    the whole change, whatever the search and filters hide. Hovering the
+    stats, or focusing them with Tab, opens the breakdown of those lines:
+    `+A -D` for each change kind that has lines, then the total. When the
+    change list was cut short, the lines cover the loaded files only: the
+    header says `shown` and the total is labelled **Shown slice**. Escape or
+    moving away closes it.
   - **Search** (magnifier): filters the tree by path. Plain text matches
     anywhere in the path; globs such as `*.md` or `docs/**` work, terms are
     separated by commas, and `!` excludes (`*.ts, !*.test.ts`). Escape closes it.
