@@ -31,20 +31,23 @@ export function foldTaskEvents(ledger: TaskLedger, events: readonly EventRow[]):
   return next;
 }
 
-export function normalise(rows: readonly TimelineRow[], ledger: TaskLedger): Delegate[] {
-  return groupByChild(topLevelDelegations(rows)).map((group) => toDelegate(group, ledger));
+/** The thread's delegation rows as delegates; `providerId` is the thread's, which runs them all. */
+export function normalise(rows: readonly TimelineRow[], ledger: TaskLedger, providerId: string): Delegate[] {
+  return groupByChild(topLevelDelegations(rows)).map((group) => toDelegate(group, ledger, providerId));
 }
 
 // ---------------------------------------------------------------- layer 2
 
-function toDelegate(group: readonly [DelegationRow, ...DelegationRow[]], ledger: TaskLedger): Delegate {
+function toDelegate(group: readonly [DelegationRow, ...DelegationRow[]], ledger: TaskLedger, providerId: string): Delegate {
   const first = group[0];
   const task = taskFor(group, ledger);
   const childRows = concatChildRows(group);
   const settled = task ? stateFromTask(task, childRows) : stateFromRow(group[group.length - 1], childRows);
   const { state, steps } = reportFromSteps(settled, childRows && transcriptSteps(childRows));
   return {
-    id: first.callId as DelegateId, // the one brand point: a callId becomes a DelegateId here
+    id: first.callId as DelegateId, // a delegation's brand point: its first callId
+    origin: { kind: "delegation" },
+    providerId,
     turnId: first.turnId,
     title: titleOf(first),
     startedAt: first.startedAt,

@@ -2,7 +2,7 @@
 // line, elapsed time) that expands in place to its meta line, outcome, and step
 // trail, with Open thread in its footer. Words come from roster.ts and steps.ts.
 import { useId, useRef, useState, type KeyboardEvent, type TransitionEvent } from "react";
-import { experimental_Icon as Icon, experimental_useAppPanel } from "@get-bb/plugin-sdk/app";
+import { experimental_Icon as Icon, experimental_useAppPanel, useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { StepRow } from "../bb.ts";
 import type { Delegate } from "../delegate.ts";
 import { detailLine, elapsed, isRunning, metaParts } from "../roster.ts";
@@ -14,9 +14,9 @@ import { MetaLine, Outcome, StepIcon } from "./DelegateDetail.tsx";
 import { RollingText } from "./Motion.tsx";
 import { followTail, startAtTop } from "./scroll.ts";
 
-type RowProps = { providerId: string; delegate: Delegate; expanded: boolean; onToggle: () => void };
+type RowProps = { delegate: Delegate; expanded: boolean; onToggle: () => void };
 
-export function DelegateRow({ providerId, delegate: d, expanded, onToggle }: RowProps) {
+export function DelegateRow({ delegate: d, expanded, onToggle }: RowProps) {
   const now = useNow(isRunning(d));
   const bodyId = useId();
   const trigger = useRef<HTMLButtonElement>(null);
@@ -29,7 +29,7 @@ export function DelegateRow({ providerId, delegate: d, expanded, onToggle }: Row
   return (
     <li className="sr-row" data-st={d.state.status} data-open={expanded || undefined} onKeyDown={collapseOnEscape} onTransitionEnd={expanded ? keepGrownRowInView : undefined}>
       <button ref={trigger} type="button" className="sr-row-head" aria-expanded={expanded} aria-controls={bodyId} onClick={onToggle}>
-        <Avatar providerId={providerId} status={d.state.status} />
+        <Avatar delegate={d} />
         <span className="sr-row-txt">
           <span className="sr-row-title" title={d.title}>{d.title}</span>
           <RollingText className="sr-row-detail" text={detailLine(d)} />
@@ -62,8 +62,7 @@ function RowDetail({ delegate: d }: { delegate: Delegate }) {
         {d.steps && <Trail delegate={d} steps={trailSteps(d.steps)} />}
       </div>
       <footer className="sr-x-foot">
-        {/* why: a provider that sends no child rows (ACP) leaves no transcript to open. */}
-        {d.steps && <OpenThreadButton delegate={d} />}
+        {opens(d) && <OpenThreadButton delegate={d} />}
         <span className="sr-x-hint"><kbd>Esc</kbd> to collapse</span>
       </footer>
     </>
@@ -71,13 +70,24 @@ function RowDetail({ delegate: d }: { delegate: Delegate }) {
 }
 
 /**
- * Opens the delegate's transcript in the side panel, or focuses its tab if it
- * is open. A Claude Code subagent is not a bb thread, so this never navigates.
+ * Opens where the delegate lives. A child thread is a bb thread, so it opens
+ * that thread. A delegation is not (a Claude Code childRef is a tool-use id),
+ * so its transcript opens in the side panel, or its tab is focused if open.
  */
 function OpenThreadButton({ delegate: d }: { delegate: Delegate }) {
   const panel = experimental_useAppPanel();
+  const navigate = useBbNavigate();
   const open = () => {
-    panel.openTab({ tab: TRANSCRIPT_TAB, params: transcriptParams(d.id), title: d.title });
+    switch (d.origin.kind) {
+      case "delegation":
+        panel.openTab({ tab: TRANSCRIPT_TAB, params: transcriptParams(d.id), title: d.title });
+        return;
+      case "child-thread":
+        navigate.toThread(d.origin.threadId);
+        return;
+      default:
+        return d.origin satisfies never; // why: our own type, so a new origin is a compile error here
+    }
   };
   return (
     <button type="button" className="sr-open" onClick={open}>
@@ -85,6 +95,11 @@ function OpenThreadButton({ delegate: d }: { delegate: Delegate }) {
       <Icon name="ArrowUpRight" fallback="ExternalLink" className="sr-open-icon" aria-hidden />
     </button>
   );
+}
+
+// why: a provider that sends no child rows (ACP) leaves no transcript to open; a child thread always opens.
+function opens(d: Delegate): boolean {
+  return d.origin.kind === "child-thread" || d.steps !== null;
 }
 
 const STEPS_SHOWN = 6;

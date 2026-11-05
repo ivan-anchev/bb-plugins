@@ -10,7 +10,7 @@ import { census, detailLine, elapsed, metaParts, selectRoster, span } from "./ro
 const fixture: { rows: TimelineRow[]; events: EventRow[] } = JSON.parse(
   readFileSync(new URL("./fixtures/claude-thread.json", import.meta.url), "utf8"),
 );
-const real = normalise(fixture.rows, foldTaskEvents(new Map(), fixture.events));
+const real = normalise(fixture.rows, foldTaskEvents(new Map(), fixture.events), "claude-code");
 
 test("selectRoster keeps the latest delegating turn plus anything still running, oldest first", () => {
   const delegates = [
@@ -108,5 +108,5 @@ function realById(id: string): Delegate {
 }
 
 function delegate(id: string, turnId: string, startedAt: number, state: DelegateState): Delegate {
-  return { id: id as DelegateId, turnId, title: id, startedAt, steps: [], usage: null, state };
+  return { id: id as DelegateId, origin: { kind: "delegation" }, providerId: "claude-code", turnId, title: id, startedAt, steps: [], usage: null, state };
 }

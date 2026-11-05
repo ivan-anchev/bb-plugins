@@ -1,26 +1,28 @@
 // The provider icon on a disc, with a status dot bottom-right cut out by a ring
 // in the surface colour. Status never replaces the icon.
 import { experimental_ProviderIcon as ProviderIcon, experimental_useProviders } from "@get-bb/plugin-sdk/app";
-import type { Delegate, DelegateStatus } from "../delegate.ts";
+import type { Delegate } from "../delegate.ts";
 import { statusWord } from "../roster.ts";
 import { RollingNumber, StatusDot } from "./Motion.tsx";
 
 const STACK_LIMIT = 3;
 
 /** Overlapped avatars of the most recent three delegates, then a "+N" chip. */
-export function AvatarStack({ providerId, delegates }: { providerId: string; delegates: readonly Delegate[] }) {
+export function AvatarStack({ delegates }: { delegates: readonly Delegate[] }) {
   const shown = delegates.slice(-STACK_LIMIT);
   const extra = delegates.length - shown.length;
   return (
     <span className="sr-stack" aria-hidden>
-      {shown.map((d) => <Avatar key={d.id} providerId={providerId} status={d.state.status} />)}
+      {shown.map((d) => <Avatar key={d.id} delegate={d} />)}
       {extra > 0 && <span className="sr-av sr-more">+<RollingNumber value={extra} /></span>}
     </span>
   );
 }
 
-export function Avatar({ providerId, status }: { providerId: string; status: DelegateStatus }) {
-  const provider = useProviderRecord(providerId);
+/** The delegate's own provider: a Codex child under a Claude Code thread shows the Codex icon. */
+export function Avatar({ delegate: d }: { delegate: Delegate }) {
+  const provider = useProviderRecord(d.providerId);
+  const { status } = d.state;
   return (
     <span className="sr-av">
       <ProviderIcon providerKind="agent" provider={provider} fallback="UserRound" className="sr-av-icon" aria-hidden />

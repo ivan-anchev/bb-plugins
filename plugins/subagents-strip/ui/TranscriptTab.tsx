@@ -38,9 +38,10 @@ function TranscriptTab({ threadId, params }: ExperimentalThreadActionTabProps): 
     case "loading": return null;
     case "failed": return <Note text={`The subagents could not be read: ${live.message}`} />;
     case "ready": {
-      const delegate = live.delegates.find((d) => d.id === delegateId);
+      // why: a child thread opens itself, never this tab.
+      const delegate = live.delegates.find((d) => d.id === delegateId && d.origin.kind === "delegation");
       if (!delegate) return <Note text="This subagent is outside the loaded timeline." />;
-      return <Transcript providerId={live.providerId} delegate={delegate} />;
+      return <Transcript delegate={delegate} />;
     }
   }
 }
@@ -48,12 +49,12 @@ function TranscriptTab({ threadId, params }: ExperimentalThreadActionTabProps): 
 // ---------------------------------------------------------------- layer 2
 
 /** The header, then every step in order, then the report, error, or stop at the end. */
-function Transcript({ providerId, delegate: d }: { providerId: string; delegate: Delegate }) {
+function Transcript({ delegate: d }: { delegate: Delegate }) {
   const steps = d.steps ?? [];
   const running = isRunning(d);
   return (
     <article className="sr-tx">
-      <Header providerId={providerId} delegate={d} />
+      <Header delegate={d} />
       {/* why: the reader stays at the live end while it grows, and keeps their place once they scroll up. */}
       <div className="sr-tx-scroll" ref={followTail}>
         <ol className="sr-tx-steps" aria-label="Transcript">
@@ -71,11 +72,11 @@ function Transcript({ providerId, delegate: d }: { providerId: string; delegate:
 }
 
 /** The avatar, title, and status word over the row's meta line, with the elapsed time. */
-function Header({ providerId, delegate: d }: { providerId: string; delegate: Delegate }) {
+function Header({ delegate: d }: { delegate: Delegate }) {
   const now = useNow(isRunning(d));
   return (
     <header className="sr-tx-head">
-      <Avatar providerId={providerId} status={d.state.status} />
+      <Avatar delegate={d} />
       <div className="sr-tx-name">
         <h2 className="sr-tx-title">{d.title}</h2>
         <span className="sr-tx-status" data-st={d.state.status} aria-hidden>{statusWord(d.state.status)}</span>
