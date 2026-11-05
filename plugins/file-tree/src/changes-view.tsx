@@ -1,10 +1,19 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useRef, type ReactNode, type RefObject } from "react";
 import { experimental_useRpcKeyedQuery, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
-import { Footnote, Notice, SegmentedControl, TabFrame, Toolbar, type SegmentOption } from "./chrome.tsx";
-import { gitContract, type ChangeTarget } from "./git.ts";
+import {
+  Footnote,
+  Notice,
+  SegmentedControl,
+  SelectFilePrompt,
+  SplitView,
+  TabFrame,
+  Toolbar,
+  type SegmentOption,
+} from "./chrome.tsx";
+import { DiffViewer, type DiffViewerHandle } from "./diff-viewer.tsx";
+import { gitContract, type ChangeTarget, type ChangesInput } from "./git.ts";
 import { changesTreeOf } from "./tree-input.ts";
 import { TreeView } from "./tree-view.tsx";
-import { useOpenFile } from "./hooks/use-open-file.ts";
 import { useRememberedState } from "./hooks/use-remembered-state.ts";
 import { useRefetchOnShow } from "./hooks/use-refetch-on-show.ts";
 
@@ -12,24 +21,32 @@ type Scope = ChangeTarget["type"];
 type ChangesQuery = ReturnType<typeof useChangedFiles>;
 type ChangesResponse = NonNullable<ChangesQuery["data"]>;
 type AvailableChanges = Extract<ChangesResponse, { outcome: "available" }>;
+type ShownDiff = RefObject<DiffViewerHandle | null>;
 
 const rememberedScopes = new Map<string, Scope>();
+const rememberedSelections = new Map<string, string | null>();
 
 export function ChangesView({ environmentId, viewSwitch }: { environmentId: string; viewSwitch: ReactNode }) {
   const mergeBaseBranch = useMergeBaseBranch(environmentId);
   const [scope, setScope] = useRememberedState(rememberedScopes, environmentId, "uncommitted");
-  const changes = useChangedFiles(environmentId, targetOf(scope, mergeBaseBranch));
-  useRefetchOnShow(changes.refetch);
+  const input: ChangesInput = { environmentId, target: targetOf(scope, mergeBaseBranch), ignoreWhitespace: false };
+  const changes = useChangedFiles(input);
+  const diff = useRef<DiffViewerHandle>(null);
+  const refresh = () => {
+    changes.refetch();
+    diff.current?.reread();
+  };
+  useRefetchOnShow(refresh);
 
   return (
     <TabFrame>
-      <Toolbar onRefresh={changes.refetch}>
+      <Toolbar onRefresh={refresh}>
         {viewSwitch}
         {mergeBaseBranch === null ? null : (
           <SegmentedControl label="Compare" options={scopeOptions(mergeBaseBranch)} value={scope} onChange={setScope} />
         )}
       </Toolbar>
-      <ChangesBody changes={changes} environmentId={environmentId} />
+      <ChangesBody changes={changes} input={input} diff={diff} />
     </TabFrame>
   );
 }
@@ -45,13 +62,8 @@ function useMergeBaseBranch(environmentId: string): string | null {
   return row?.outcome === "available" ? (row.workspace.mergeBase?.mergeBaseBranch ?? null) : null;
 }
 
-function useChangedFiles(environmentId: string, target: ChangeTarget) {
-  return experimental_useRpcQuery({
-    pluginId: "bb--git",
-    contract: gitContract,
-    method: "files",
-    input: { environmentId, target, ignoreWhitespace: false },
-  });
+function useChangedFiles(input: ChangesInput) {
+  return experimental_useRpcQuery({ pluginId: "bb--git", contract: gitContract, method: "files", input });
 }
 
 function targetOf(scope: Scope, mergeBaseBranch: string | null): ChangeTarget {
@@ -65,18 +77,22 @@ function scopeOptions(mergeBaseBranch: string): SegmentOption<Scope>[] {
   ];
 }
 
-function ChangesBody({ changes, environmentId }: { changes: ChangesQuery; environmentId: string }) {
+type ChangesBodyProps = { changes: ChangesQuery; input: ChangesInput; diff: ShownDiff };
+
+function ChangesBody({ changes, input, diff }: ChangesBodyProps) {
   const { data, error, isLoading } = changes;
   return (
     <>
       {error === null ? null : <Notice tone="error">Could not read changes: {error.message}</Notice>}
       {isLoading ? <Notice>Loading changes…</Notice> : null}
-      {data === undefined ? null : <ChangesResult result={data} environmentId={environmentId} />}
+      {data === undefined ? null : <ChangesResult result={data} input={input} diff={diff} />}
     </>
   );
 }
 
-function ChangesResult({ result, environmentId }: { result: ChangesResponse; environmentId: string }) {
+type ChangesResultProps = { result: ChangesResponse; input: ChangesInput; diff: ShownDiff };
+
+function ChangesResult({ result, input, diff }: ChangesResultProps) {
   switch (result.outcome) {
     case "not_applicable":
       return <Notice>{result.message}</Notice>;
@@ -86,31 +102,46 @@ function ChangesResult({ result, environmentId }: { result: ChangesResponse; env
       return result.files.length === 0 ? (
         <Notice>No changes.</Notice>
       ) : (
-        <ChangesTree changes={result} environmentId={environmentId} />
+        <ChangesTree changes={result} input={input} diff={diff} />
       );
   }
 }
 
-function ChangesTree({ changes, environmentId }: { changes: AvailableChanges; environmentId: string }) {
+type ChangesTreeProps = { changes: AvailableChanges; input: ChangesInput; diff: ShownDiff };
+
+function ChangesTree({ changes, input, diff }: ChangesTreeProps) {
   const tree = useMemo(() => changesTreeOf(changes.files), [changes.files]);
-  const openFile = useOpenFile(environmentId);
-  const openChange = (treePath: string) => {
-    const file = tree.filesByTreePath.get(treePath);
-    if (file !== undefined) openFile(file.path, file.changeKind === "deleted" ? (changes.mergeBaseRef ?? "HEAD") : undefined);
+  const [selectedPath, setSelectedPath] = useRememberedState(rememberedSelections, input.environmentId, null);
+  const shownFile = selectedPath === null ? undefined : tree.filesByTreePath.get(selectedPath);
+  const openFile = (path: string) => {
+    if (path === selectedPath) diff.current?.reread();
+    setSelectedPath(path);
   };
 
   return (
-    <>
-      <TreeView
-        label="Changed files"
-        memoryKey={`changes:${environmentId}`}
-        paths={tree.paths}
-        gitStatus={tree.gitStatus}
-        icons={tree.icons}
-        initialExpansion="open"
-        onOpenFile={openChange}
-      />
-      {changes.truncated ? <Footnote>Showing the first {changes.files.length} changed files.</Footnote> : null}
-    </>
+    <SplitView
+      tree={
+        <>
+          <TreeView
+            label="Changed files"
+            memoryKey={`changes:${input.environmentId}`}
+            paths={tree.paths}
+            gitStatus={tree.gitStatus}
+            icons={tree.icons}
+            initialExpansion="open"
+            selectedPath={shownFile === undefined ? null : selectedPath}
+            onSelectFile={openFile}
+          />
+          {changes.truncated ? <Footnote>Showing the first {changes.files.length} changed files.</Footnote> : null}
+        </>
+      }
+      viewer={
+        shownFile === undefined ? (
+          <SelectFilePrompt />
+        ) : (
+          <DiffViewer file={shownFile} initialPatches={changes.initialPatches} input={input} ref={diff} />
+        )
+      }
+    />
   );
 }

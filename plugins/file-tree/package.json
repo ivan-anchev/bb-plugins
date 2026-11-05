@@ -16,7 +16,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p .",
-    "test": "node --test src/tree-input.test.ts",
+    "test": "node --test src/tree-input.test.ts src/tree-selection.test.ts src/viewer-input.test.ts",
     "build": "bb plugin build"
   },
   "engines": {
@@ -25,7 +25,7 @@
   },
   "bb": {
     "name": "File Tree",
-    "description": "Browse the environment's files and git changes as a tree with colored per-file-type icons.",
+    "description": "Browse the environment's files and git changes as a tree with colored per-file-type icons, and read any file or its diff beside the tree.",
     "branding": {
       "icon": "Folder"
     },
