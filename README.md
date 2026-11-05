@@ -61,12 +61,14 @@ How each plugin field maps into the marketplace:
 
 ## Release
 
-Bump `version` in the plugin's `package.json`, run `npm run manifests`, commit,
-then:
+`main` is protected: every change lands through a pull request with green CI.
+Bump `version` in the plugin's `package.json`, run `npm run manifests`, and
+merge that PR. Then tag the merged commit:
 
 ```sh
+git switch main && git pull
 npm run release -- <id>       # tags <id>/v<version> on HEAD
-git push origin main <id>/v<version>
+git push origin <id>/v<version>
 ```
 
 The marketplace tracks each plugin's whole major line, so a pushed tag reaches
