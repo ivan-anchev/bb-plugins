@@ -1,0 +1,47 @@
+{
+  "name": "bb-plugin-comfortable-type",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "A theme that sets bb's text one step larger, at 14px in the system font, with bb's own colors.",
+  "keywords": [
+    "bb-plugin",
+    "theme",
+    "typography"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ivan-anchev/bb-plugins.git",
+    "directory": "plugins/comfortable-type"
+  },
+  "engines": {
+    "bb": ">=0.48",
+    "bbPluginSdk": ">=0.6.104"
+  },
+  "bb": {
+    "name": "Comfortable Type",
+    "description": "A theme that sets bb's text one step larger, at 14px in the system font, with bb's own colors.",
+    "branding": {
+      "icon": "AlignLeft"
+    },
+    "server": "./server.ts",
+    "themes": [
+      {
+        "id": "comfortable",
+        "name": "Comfortable Type",
+        "description": "bb's default colors with 14px text in the system font",
+        "css": "./themes/comfortable.css"
+      }
+    ]
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "build": "bb plugin build"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.6.104",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

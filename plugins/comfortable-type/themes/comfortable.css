@@ -1,0 +1,33 @@
+/*
+ * Comfortable Type: bb's desktop type scale raised to T3 Code's proportions
+ * (Tailwind's default 14px body text), set in the system font.
+ *
+ * Only size, line-height, and font tokens. No color tokens, so bb's default
+ * palette applies in light and dark mode. Each comment gives bb's value
+ * (bb 0.48.1) so a later bb release is easy to re-check.
+ *
+ * Phone-sized touch screens keep bb's own font and touch scale, which is
+ * already larger.
+ */
+@media not ((width <= 767px) and (pointer: coarse)) {
+  :root,
+  .light {
+    /* "Inter Variable", Inter, sans-serif: SF Pro on macOS, Inter elsewhere. */
+    --font-sans: -apple-system, BlinkMacSystemFont, "Inter Variable", "Segoe UI", system-ui, sans-serif;
+
+    /* 10px / 14px */
+    --text-2xs: 0.6875rem;
+    --text-2xs--line-height: 1rem;
+
+    /* 13px / calc(1.25 / .875) (18.6px): message body, composer, sidebar, header title. */
+    --text-sm: 0.875rem;
+    --text-sm--line-height: 1.25rem;
+
+    /* 15px / 22px */
+    --text-base: 1rem;
+    --text-base--line-height: 1.5rem;
+
+    /* 48px: thread and page header height, matching T3's 52px top bar. */
+    --bb-app-chrome-row-height: 3.25rem;
+  }
+}

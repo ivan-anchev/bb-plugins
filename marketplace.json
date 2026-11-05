@@ -6,6 +6,28 @@
   "description": "bb plugins Ivan Anchev maintains.",
   "plugins": [
     {
+      "id": "comfortable-type",
+      "displayName": "Comfortable Type",
+      "description": "A theme that sets bb's text one step larger, at 14px in the system font, with bb's own colors.",
+      "icon": "AlignLeft",
+      "tags": [
+        "theme",
+        "typography"
+      ],
+      "author": {
+        "name": "Ivan Anchev",
+        "github": "ivan-anchev"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/ivan-anchev/bb-plugins.git",
+          "subdir": "plugins/comfortable-type",
+          "range": "0.x",
+          "tagPrefix": "comfortable-type/"
+        }
+      }
+    },
+    {
       "id": "proactive-visuals",
       "displayName": "Proactive Visuals",
       "description": "Agents answer data with an inline chart, without being asked, using bb's inline visualizations.",
