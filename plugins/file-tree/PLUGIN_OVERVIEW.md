@@ -6,14 +6,18 @@ icon for each file type.
 
 - **All files**: the whole environment as a collapsible tree, folders first,
   single-child folders collapsed into one row, and gitignored files left out.
-- **Changes**: the same tree limited to what git reports as changed, with an
-  `A`, `M`, `D`, `R` or `U` status on each file and a dot on folders that
-  contain changes. Compare uncommitted work with `HEAD`, or everything on the
-  branch with its merge base.
+- **Changes**: the same tree limited to what git reports as changed, with
+  `+A -D` line counts and an `A`, `M`, `D`, `R` or `U` status on each file, in
+  bb's diff colors, and a dot on folders that contain changes. The header works
+  like bb's Diff tab: pick all changes, committed, uncommitted, or a single
+  commit; read the `N files, +A -D` total; search by path or glob; filter by
+  file type; collapse every folder; and switch the diff between split and
+  unified, wrapped lines, and hidden whitespace.
 - **Read it in place**: click a file and it shows beside the tree, in the same
   tab. In All files you see its contents; in Changes you see its diff, both
   drawn by bb's own code and diff viewers. Nothing opens a new tab, and the
-  file you are reading stays highlighted in the tree.
+  file you are reading stays highlighted in the tree. Drag the divider, or
+  use the arrow keys on it, to give the tree or the viewer more room.
 - **Follows your theme**: the tree uses bb's own colors in light and dark mode.
 
 ## How it works

@@ -1,14 +1,24 @@
 import type { useSdk } from "@get-bb/plugin-sdk/app";
-import { createFileTreeIconResolver, type FileTreeIconConfig, type GitStatus, type GitStatusEntry } from "@pierre/trees";
+import {
+  createFileTreeIconResolver,
+  type FileTreeIconConfig,
+  type FileTreeRowDecoration,
+  type GitStatus,
+  type GitStatusEntry,
+} from "@pierre/trees";
+import { fileStatPartsOf, plainTextOf, type StatPart } from "./changes/change-stats.ts";
 import type { ChangedFile } from "./git.ts";
 
 type EnvironmentPaths = Awaited<ReturnType<ReturnType<typeof useSdk>["environments"]["paths"]>>;
 export type WorkspacePath = Pick<EnvironmentPaths["paths"][number], "kind" | "path">;
 
+export type RowDecorations = ReadonlyMap<string, FileTreeRowDecoration>;
+
 export type ChangesTreeInput = {
   paths: string[];
   gitStatus: GitStatusEntry[];
   icons: FileTreeIconConfig;
+  decorations: RowDecorations;
   filesByTreePath: ReadonlyMap<string, ChangedFile>;
 };
 
@@ -25,6 +35,14 @@ const treeIconResolver = createFileTreeIconResolver(TREE_ICONS);
 
 const ZERO_WIDTH_SPACE = "\u200b";
 
+const NO_BREAK_SPACE = "\u00a0";
+
+const STAT_COLORS: Record<StatPart["tone"], string> = {
+  added: "var(--diff-added)",
+  removed: "var(--diff-removed)",
+  muted: "var(--muted-foreground)",
+};
+
 export function treePathsOf(entries: readonly WorkspacePath[]): string[] {
   return entries.map((entry) => (entry.kind === "directory" ? `${entry.path}/` : entry.path));
 }
@@ -37,6 +55,7 @@ export function changesTreeOf(files: readonly ChangedFile[]): ChangesTreeInput {
     paths: [...filesByTreePath.keys()],
     gitStatus: entries.map(([path, file]) => ({ path, status: gitStatusOf(file) })),
     icons: iconsKeepingOriginalNames(entries.filter(([treePath, file]) => treePath !== file.path)),
+    decorations: new Map(entries.flatMap(([path, file]) => statDecorationOf(path, file))),
     filesByTreePath,
   };
 }
@@ -67,6 +86,16 @@ function iconsKeepingOriginalNames(renamed: readonly [string, ChangedFile][]): F
     treeIconResolver.resolveIcon("file-tree-icon-file", file.path),
   ]);
   return { ...TREE_ICONS, byFileName: { ...TREE_ICONS.byFileName, ...Object.fromEntries(iconsByTreeName) } };
+}
+
+function statDecorationOf(path: string, file: ChangedFile): [string, FileTreeRowDecoration][] {
+  const parts = fileStatPartsOf(file);
+  if (parts.length === 0) return [];
+  const coloredParts = parts.flatMap((part, index) => [
+    ...(index === 0 ? [] : [{ text: NO_BREAK_SPACE }]),
+    { text: part.text, color: STAT_COLORS[part.tone] },
+  ]);
+  return [[path, { text: plainTextOf(parts), title: plainTextOf(parts), parts: coloredParts }]];
 }
 
 function baseNameOf(path: string): string {

@@ -1,15 +1,16 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { Footnote, Notice, SelectFilePrompt, SplitView, TabFrame, Toolbar } from "./chrome.tsx";
+import { useCallback, useImperativeHandle, useMemo, useState, type Ref } from "react";
+import { Footnote, Notice, SelectFilePrompt, type RefreshHandle } from "./chrome.tsx";
 import { FileViewer } from "./file-viewer.tsx";
+import { SplitView } from "./split/split-view.tsx";
 import { TREE_ICONS, treePathsOf, type WorkspacePath } from "./tree-input.ts";
-import { TreeView } from "./tree-view.tsx";
+import { TreeView, useTreeModel } from "./tree-view.tsx";
 import { useEnvironmentPaths, type EnvironmentPathsState } from "./hooks/use-environment-paths.ts";
 import { useRefetchOnShow } from "./hooks/use-refetch-on-show.ts";
 import { useRememberedState } from "./hooks/use-remembered-state.ts";
 
 const rememberedSelections = new Map<string, string | null>();
 
-export function AllFilesView({ environmentId, viewSwitch }: { environmentId: string; viewSwitch: ReactNode }) {
+export function AllFilesView({ environmentId, ref }: { environmentId: string; ref: Ref<RefreshHandle> }) {
   const { state, refetch } = useEnvironmentPaths(environmentId);
   const [readCount, setReadCount] = useState(0);
   const refresh = useCallback(() => {
@@ -17,13 +18,9 @@ export function AllFilesView({ environmentId, viewSwitch }: { environmentId: str
     setReadCount((count) => count + 1);
   }, [refetch]);
   useRefetchOnShow(refresh);
+  useImperativeHandle(ref, () => ({ refresh }), [refresh]);
 
-  return (
-    <TabFrame>
-      <Toolbar onRefresh={refresh}>{viewSwitch}</Toolbar>
-      <AllFilesBody state={state} environmentId={environmentId} readCount={readCount} />
-    </TabFrame>
-  );
+  return <AllFilesBody state={state} environmentId={environmentId} readCount={readCount} />;
 }
 
 type AllFilesBodyProps = { state: EnvironmentPathsState; environmentId: string; readCount: number };
@@ -54,20 +51,19 @@ function AllFilesTree({ entries, truncated, environmentId, readCount }: AllFiles
   const paths = useMemo(() => treePathsOf(entries), [entries]);
   const [selectedPath, setSelectedPath] = useRememberedState(rememberedSelections, environmentId, null);
   const shownPath = selectedPath !== null && paths.includes(selectedPath) ? selectedPath : null;
+  const model = useTreeModel({
+    memoryKey: `files:${environmentId}`,
+    paths,
+    icons: TREE_ICONS,
+    initialExpansion: "closed",
+    selectedPath: shownPath,
+  });
 
   return (
     <SplitView
       tree={
         <>
-          <TreeView
-            label="Environment files"
-            memoryKey={`files:${environmentId}`}
-            paths={paths}
-            icons={TREE_ICONS}
-            initialExpansion="closed"
-            selectedPath={shownPath}
-            onSelectFile={setSelectedPath}
-          />
+          <TreeView model={model} label="Environment files" onSelectFile={setSelectedPath} />
           {truncated ? <Footnote>Showing the first {entries.length} paths.</Footnote> : null}
         </>
       }
