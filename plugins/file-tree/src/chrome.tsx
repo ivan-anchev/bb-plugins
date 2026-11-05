@@ -7,7 +7,6 @@ export function TabFrame({ children }: { children: ReactNode }) {
   return <div className="flex h-full min-h-0 flex-col bg-background text-foreground">{children}</div>;
 }
 
-/** What the Toolbar's refresh button asks of the view shown below it. */
 export type RefreshHandle = { refresh(): void };
 
 export function Toolbar({ children, onRefresh }: { children: ReactNode; onRefresh(): void }) {
@@ -35,7 +34,6 @@ const SEGMENT_CLASSES =
 const SELECTED_SEGMENT_CLASSES = "bg-state-active text-foreground";
 const IDLE_SEGMENT_CLASSES = "text-muted-foreground hover:bg-state-hover hover:text-foreground hover:duration-0";
 
-/** A view switch with tab semantics: one tab stop, arrows and Home/End move the selection and focus together. */
 export function SegmentedControl<Value extends string>({ label, options, value, onChange }: SegmentedControlProps<Value>) {
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const index = options.findIndex((option) => option.value === value);

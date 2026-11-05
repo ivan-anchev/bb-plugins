@@ -1,4 +1,3 @@
-/** The segment a key moves selection to in a horizontal tablist, or null when the key is not a tablist key. */
 export function segmentIndexAfterKey(key: string, index: number, count: number): number | null {
   switch (key) {
     case "ArrowRight":

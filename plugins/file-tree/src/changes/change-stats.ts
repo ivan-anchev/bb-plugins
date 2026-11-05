@@ -1,10 +1,15 @@
 import type { ChangedFile } from "../git.ts";
+import { CHANGE_KINDS, changeKindOf, type ChangeKind } from "./change-kind.ts";
 
 export type LineStats = { insertions: number; deletions: number };
 
 export type StatPart = { text: string; tone: "added" | "removed" | "muted" };
 
-export type ChangeSummary = { text: string; stats: LineStats | null; title: string };
+export type KindBreakdown = { rows: { kind: ChangeKind; stats: LineStats }[]; totalLabel: string };
+
+export type ChangeSummary = Headline & { breakdown: KindBreakdown };
+
+type Headline = { text: string; stats: LineStats | null; title: string };
 
 type ShownChanges = { shown: readonly ChangedFile[]; totalCount: number; truncated: boolean; filtering: boolean };
 
@@ -26,9 +31,17 @@ export function lineStatPartsOf(stats: LineStats): StatPart[] {
   return [insertionPart(stats.insertions), deletionPart(stats.deletions)];
 }
 
-export function changeSummaryOf({ shown, totalCount, truncated, filtering }: ShownChanges): ChangeSummary {
+export function changeSummaryOf(changes: ShownChanges): ChangeSummary {
+  return { ...headlineOf(changes), breakdown: kindBreakdownOf(changes) };
+}
+
+export function plainTextOf(parts: readonly StatPart[]): string {
+  return parts.map((part) => part.text).join(" ");
+}
+
+function headlineOf({ shown, totalCount, truncated, filtering }: ShownChanges): Headline {
   const stats = totalStatsOf(shown);
-  const changed = stats.insertions > 0 || stats.deletions > 0;
+  const changed = hasLines(stats);
   const visibleStats = changed ? stats : null;
   const more = truncated ? "+" : "";
   if (filtering) {
@@ -51,8 +64,12 @@ export function changeSummaryOf({ shown, totalCount, truncated, filtering }: Sho
     : { text: filesOf(shown.length), stats: null, title: filesOf(shown.length) };
 }
 
-export function plainTextOf(parts: readonly StatPart[]): string {
-  return parts.map((part) => part.text).join(" ");
+function kindBreakdownOf({ shown, truncated }: ShownChanges): KindBreakdown {
+  const rows = CHANGE_KINDS.map((kind) => ({
+    kind,
+    stats: totalStatsOf(shown.filter((file) => changeKindOf(file.path) === kind)),
+  }));
+  return { rows: rows.filter((row) => hasLines(row.stats)), totalLabel: truncated ? "Shown slice" : "Total" };
 }
 
 function totalStatsOf(files: readonly ChangedFile[]): LineStats {
@@ -60,6 +77,10 @@ function totalStatsOf(files: readonly ChangedFile[]): LineStats {
     insertions: files.reduce((sum, file) => sum + file.additions, 0),
     deletions: files.reduce((sum, file) => sum + file.deletions, 0),
   };
+}
+
+function hasLines(stats: LineStats): boolean {
+  return stats.insertions > 0 || stats.deletions > 0;
 }
 
 function insertionPart(count: number): StatPart {

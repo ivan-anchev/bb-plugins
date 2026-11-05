@@ -1,13 +1,14 @@
 import picomatch from "picomatch";
 import type { ChangedFile } from "../git.ts";
+import { CHANGE_KINDS, changeKindOf, type ChangeKind } from "./change-kind.ts";
 
-export type FileFilters = { extensions: readonly string[]; showDeleted: boolean };
+export type FileFilters = { extensions: readonly string[]; showDeleted: boolean; hiddenKinds: readonly ChangeKind[] };
 
 type PathMatcher = (path: string) => boolean;
 
 const DESCENDANTS = "\u002f**";
 
-export const NO_FILTERS: FileFilters = { extensions: [], showDeleted: true };
+export const NO_FILTERS: FileFilters = { extensions: [], showDeleted: true, hiddenKinds: [] };
 
 export function filterChangedFiles(
   files: readonly ChangedFile[],
@@ -17,7 +18,8 @@ export function filterChangedFiles(
   return filesMatchingPathQuery(files, pathQuery ?? "").filter(
     (file) =>
       (filters.extensions.length === 0 || filters.extensions.includes(extensionOf(file.path))) &&
-      (filters.showDeleted || file.changeKind !== "deleted"),
+      (filters.showDeleted || file.changeKind !== "deleted") &&
+      !filters.hiddenKinds.includes(changeKindOf(file.path)),
   );
 }
 
@@ -26,8 +28,22 @@ export function withExtensionShown(filters: FileFilters, extension: string, show
   return { ...filters, extensions: shown ? [...others, extension] : others };
 }
 
+export function withKindsShown(filters: FileFilters, kinds: readonly ChangeKind[], shown: boolean): FileFilters {
+  const others = filters.hiddenKinds.filter((candidate) => !kinds.includes(candidate));
+  return { ...filters, hiddenKinds: shown ? others : [...others, ...kinds] };
+}
+
+export function hidesKinds(filters: FileFilters, kinds: readonly ChangeKind[]): boolean {
+  return kinds.every((kind) => filters.hiddenKinds.includes(kind));
+}
+
 export function isFiltering(pathQuery: string | null, filters: FileFilters): boolean {
-  return (pathQuery ?? "").trim() !== "" || filters.extensions.length > 0 || !filters.showDeleted;
+  return (
+    (pathQuery ?? "").trim() !== "" ||
+    filters.extensions.length > 0 ||
+    !filters.showDeleted ||
+    filters.hiddenKinds.length > 0
+  );
 }
 
 export function extensionCountsOf(files: readonly ChangedFile[]): [string, number][] {
@@ -37,6 +53,12 @@ export function extensionCountsOf(files: readonly ChangedFile[]): [string, numbe
     counts.set(extension, (counts.get(extension) ?? 0) + 1);
   }
   return [...counts].sort(([left], [right]) => left.localeCompare(right));
+}
+
+export function kindCountsOf(files: readonly ChangedFile[]): [ChangeKind, number][] {
+  const kinds = files.map((file) => changeKindOf(file.path));
+  const counts = CHANGE_KINDS.map((kind): [ChangeKind, number] => [kind, kinds.filter((each) => each === kind).length]);
+  return counts.filter(([, count]) => count > 0);
 }
 
 function filesMatchingPathQuery(files: readonly ChangedFile[], pathQuery: string): ChangedFile[] {

@@ -27,15 +27,40 @@ has an environment. It has no CLI command, no agent tool, and no settings.
     changes** (the working tree against `HEAD`), and each of the branch's
     commits. Options with nothing in them are not offered.
   - **Stats**: `N files, +A -D` for what the tree shows, or `N of M files`
-    while a filter is on.
+    while a filter is on. Hovering the total, or focusing it with Tab, opens
+    its breakdown: `+A -D` for each change kind that has lines, then the
+    total (labelled **Shown slice** when the change list was cut short).
+    Escape or moving away closes it.
   - **Search** (magnifier): filters the tree by path. Plain text matches
     anywhere in the path; globs such as `*.md` or `docs/**` work, terms are
     separated by commas, and `!` excludes (`*.ts, !*.test.ts`). Escape closes it.
-  - **Filter** (funnel): keep only some file extensions, hide deleted files,
-    or reset every filter.
+  - **Filter** (funnel): hide change kinds, keep only some file extensions,
+    hide deleted files, or reset every filter. **Hide tests** hides tests and
+    mocks together and is checked while both are hidden; under **Kinds** each
+    kind present has its file count, and unchecking one hides its files.
   - **Collapse / expand all folders**.
   - **Diff settings** (gear): **Unified** or **Split** diff, **Wrap lines**,
     and **Hide whitespace**, which also recounts the lines.
+
+Every changed file has one **change kind**, decided by its path alone (a
+renamed file by its new path), checked in this order:
+
+1. **Generated**: lockfiles (`package-lock.json`, `pnpm-lock.yaml`,
+   `Cargo.lock`, `go.sum`, …), `.gen.` and `.generated.` files, minified
+   files and source maps, protobuf output, and anything under `generated`,
+   `_generated` or `__generated__`.
+2. **Mocks**: snapshots (`.snap`), `.mock.`, `.fixture.`, `.stub.` and
+   `.fake.` files, names that are or start with a word such as `mock` or
+   `fixtures` (`mockServer.ts`, `fixtures.json`), and anything under
+   `__mocks__`, `__fixtures__`, `__snapshots__`, `fixtures`, `mocks`,
+   `stubs`, `fakes` or `testdata`.
+3. **Tests**: `.test.`, `.spec.`, `.e2e.` and `.eval.` files, `_test` and
+   `_spec` files, `test_*.py`, `conftest.py`, test classes such as
+   `FooTest.java` (but not `Latest.java`), and anything under `test`,
+   `tests`, `__tests__`, `spec`, `specs`, `e2e`, `cypress` or `evals`.
+4. **Docs**: `.md`, `.mdx`, `.markdown`, `.rst`, `.adoc` and `.txt` files,
+   except tool inputs such as `requirements.txt` or `CMakeLists.txt`.
+5. **Code**: everything else.
 
 Clicking a file shows it inside the same tab, beside the tree when the panel is
 wide and below it when the panel is narrow; no new tab opens. Drag the line
