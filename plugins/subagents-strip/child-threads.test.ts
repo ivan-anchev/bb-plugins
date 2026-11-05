@@ -8,7 +8,16 @@
 //                 GET /api/v1/threads/<id>/timeline?segmentLimit=20&includeNestedRows=true
 //   counter       thr_ys49uh7mzb (Codex child of a throwaway Claude Code thread, issue 06b) running
 //                 its first `sleep`, then settled; its list row at each read
-// Every string is cut to 200 characters except a closing assistant message.
+//   outcomes      children of thr_zx2w4sat7z (throwaway Claude Code parent, issue 06c), each list row as
+//                 `bb thread show <id> --json` gave it and its rows read as the source reads a child;
+//                 parentRows is that parent's rows read the same way
+//     stopped       thr_8d4ytj895v (Codex) after `bb thread stop` mid `sleep 300`
+//     resumed       the same child after `bb thread send` "Reply with exactly: resumed." and its reply
+//     failedTurn    thr_uixigbd79i (Claude Code, `--model claude-nonexistent-06c`): the provider rejected the turn
+//     failedProvisioning thr_79zb76x32u (Codex, `--base-branch no-such-branch-06c`): no worktree, no turn
+//     waiting       thr_c7hytt7tdq (Claude Code) blocked on its own AskUserQuestion
+//     reused        thr_tfst24jjhy (Codex) settled, then running and settled again after a `bb thread send`
+// Every string is cut to 200 characters except an assistant message.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -23,9 +32,19 @@ const fixture: {
   children: ChildThread[];
   reviewerRows: TimelineRow[];
   counter: { running: Read; settled: Read };
+  outcomes: {
+    parentRows: TimelineRow[];
+    stopped: Read;
+    resumed: Read;
+    failedTurn: Read;
+    failedProvisioning: Read;
+    waiting: Read;
+    reused: { settled: Read; running: Read; settledAgain: Read };
+  };
 } = JSON.parse(readFileSync(new URL("./fixtures/child-threads.json", import.meta.url), "utf8"));
 const parentRows = fixture.parent.rows;
 const { running, settled } = fixture.counter;
+const { outcomes } = fixture;
 
 test("a child belongs to the parent turn under way when it was created", () => {
   const designer = childById("thr_hyxefjhk94");
@@ -102,6 +121,63 @@ test("an idle child ends the way its last turn did; an errored thread fails with
   };
   const failed = childDelegate({ ...settled.child, status: "error" }, [...settled.rows, error], parentRows);
   assert.deepEqual(failed.state, { status: "failed", endedAt: settled.child.updatedAt, error: "Provider exited" });
+});
+
+test("a stopped child reads stopped at its stop, though bb leaves its interrupted turn no turn row", () => {
+  const { child, rows } = outcomes.stopped;
+  assert.equal(child.status, "idle", "fixture premise: a stopped thread is idle");
+  assert.ok(!rows.some((row) => row.kind === "turn"), "fixture premise: no turn row");
+  const stop = rows.at(-1);
+  assert.ok(stop?.kind === "system" && stop.systemKind === "operation" && stop.operationKind === "thread-interrupted");
+  const d = childDelegate(child, rows, outcomes.parentRows);
+  assert.deepEqual(d.state, { status: "stopped", endedAt: stop.completedAt });
+  assert.equal(detailLine(d), "Stopped");
+  assert.deepEqual(metaParts(d).slice(1), ["ran 1m 08s", "4 steps"]);
+});
+
+test("a stopped child told something since ends the way that newer turn did, not stopped", () => {
+  const { child, rows } = outcomes.resumed;
+  assert.ok(rows.some((row) => row.kind === "system" && row.status === "interrupted"), "fixture premise: the stop row is still there");
+  assert.ok(!rows.some((row) => row.kind === "turn"), "fixture premise: the reply-only turn has no turn row");
+  const d = childDelegate(child, rows, outcomes.parentRows);
+  assert.deepEqual(d.state, { status: "completed", endedAt: child.updatedAt, report: "resumed." });
+});
+
+test("a child whose provider rejected its turn fails with bb's error row, at the turn's end", () => {
+  const { child, rows } = outcomes.failedTurn;
+  const turn = rows.find((row) => row.kind === "turn");
+  assert.ok(turn?.kind === "turn" && turn.status === "error", "fixture premise: an errored turn row");
+  const d = childDelegate(child, rows, outcomes.parentRows);
+  assert.deepEqual(d.state, { status: "failed", endedAt: turn.completedAt, error: "Provider rejected request" });
+  assert.equal(detailLine(d), "Provider rejected request");
+});
+
+test("a child whose workspace could not be provisioned fails with that step's title, at its updatedAt", () => {
+  const { child, rows } = outcomes.failedProvisioning;
+  assert.ok(!rows.some((row) => row.kind === "turn" || (row.kind === "system" && row.systemKind === "error")), "fixture premise");
+  const d = childDelegate(child, rows, outcomes.parentRows);
+  assert.deepEqual(d.state, { status: "failed", endedAt: child.updatedAt, error: "Provisioning thread failed" });
+});
+
+test("a child waiting on its own question is active, so it reads running, its detail the question", () => {
+  const { child, rows } = outcomes.waiting;
+  assert.equal(child.status, "active", "fixture premise: bb keeps a child blocked on a question active");
+  const d = childDelegate(child, rows, outcomes.parentRows);
+  assert.deepEqual(d.state, { status: "running" });
+  assert.equal(detailLine(d), "Asked a question");
+});
+
+test("a reused child stays one delegate of its spawning turn: running again, then settled with its new closing message", () => {
+  const { settled: first, running: again, settledAgain: last } = outcomes.reused;
+  const [d1, d2, d3] = [first, again, last].map(({ child, rows }) => childDelegate(child, rows, outcomes.parentRows));
+  assert.deepEqual([d1, d2, d3].map((d) => [d.id, d.turnId, d.startedAt]), Array(3).fill(["thr_tfst24jjhy", "daebae5ddb-t2", first.child.createdAt]));
+  assert.equal(d1.state.status === "completed" && d1.state.report, "first done.");
+  assert.deepEqual(d2.state, { status: "running" });
+  assert.equal(detailLine(d2), "Ran sleep 30 && echo three");
+  const lastTurn = last.rows.findLast((row) => row.kind === "turn");
+  assert.ok(lastTurn?.kind === "turn");
+  assert.deepEqual(d3.state, { status: "completed", endedAt: lastTurn.completedAt, report: "third done." });
+  assert.equal(metaParts(d3)[1], "ran 4m 12s");
 });
 
 test("a thread status newer than the pinned SDK reads as running and never throws", () => {
