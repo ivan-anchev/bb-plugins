@@ -1,6 +1,7 @@
-/* The strip: the summary row and the list it opens above itself. Every
-   selector sits under .sr, the plugin's root, and every keyframe is sr-
-   prefixed; colours come from bb's theme tokens, except the state marks. */
+/* The strip: the summary row and the list it opens above itself; and the
+   transcript tab. Every class and keyframe is sr- prefixed, and the tokens sit
+   on the two roots, .sr and .sr-tx; colours come from bb's theme tokens,
+   except the state marks. */
 
 /* --sr-cut is the surface behind an avatar; rings take it so the notch reads as a cut-out on any tint */
 @property --sr-cut {
@@ -9,7 +10,8 @@
   initial-value: transparent;
 }
 
-.sr {
+.sr,
+.sr-tx {
   /* approved look (roster lab DEFAULT_CONFIG) */
   --sr-ease: cubic-bezier(0.22, 1, 0.36, 1); /* R6: the one ease */
   --sr-expand-ms: 260ms;
@@ -56,17 +58,21 @@
   --sr-shimmer-base: var(--subtle-foreground);
   --sr-census-fs: max(10px, calc(var(--sr-detail-fs) - 1px));
 
+  font-size: var(--sr-title-fs);
+  line-height: 1.35;
+}
+
+.sr {
   container: sr / inline-size;
   display: flex;
   flex-direction: column;
-  font-size: var(--sr-title-fs);
-  line-height: 1.35;
   transition: opacity var(--sr-hover-ms) var(--sr-ease);
 }
 
 /* R9: reduced motion collapses every duration; the shimmer only runs without it (below) */
 @media (prefers-reduced-motion: reduce) {
-  .sr {
+  .sr,
+  .sr-tx {
     --sr-expand-ms: 1ms;
     --sr-row-expand-ms: 1ms;
     --sr-hover-ms: 1ms;
@@ -80,10 +86,10 @@
   opacity: var(--sr-dim);
 }
 
-.sr [data-st="running"] { --sr-st: var(--sr-st-running); }
-.sr [data-st="completed"] { --sr-st: var(--sr-st-completed); }
-.sr [data-st="failed"] { --sr-st: var(--sr-st-failed); }
-.sr [data-st="stopped"] { --sr-st: var(--sr-st-stopped); }
+:is(.sr, .sr-tx) [data-st="running"] { --sr-st: var(--sr-st-running); }
+:is(.sr, .sr-tx) [data-st="completed"] { --sr-st: var(--sr-st-completed); }
+:is(.sr, .sr-tx) [data-st="failed"] { --sr-st: var(--sr-st-failed); }
+:is(.sr, .sr-tx) [data-st="stopped"] { --sr-st: var(--sr-st-stopped); }
 
 /* ---------------------------------------------------------------- summary row: no fill, no border (R1) */
 
@@ -554,23 +560,23 @@
 }
 
 /* bb's message markdown (className is its styling hook), set in the body's type so it sits under the row title */
-.sr .sr-md {
+.sr-md {
   font-size: inherit;
   line-height: inherit;
   color: inherit;
 }
 
-.sr .sr-md :is(p, li) {
+.sr-md :is(p, li) {
   color: inherit;
 }
 
-.sr .sr-md :is(h1, h2, h3, h4, h5, h6) {
+.sr-md :is(h1, h2, h3, h4, h5, h6) {
   margin: 6px 0 2px;
   font-size: 1em;
   color: var(--foreground);
 }
 
-.sr .sr-md :is(h1, h2, h3, h4, h5, h6):first-child {
+.sr-md :is(h1, h2, h3, h4, h5, h6):first-child {
   margin-top: 0;
 }
 
@@ -642,7 +648,9 @@
 }
 
 .sr-step[data-k="message"] .sr-stx { color: var(--muted-foreground); }
-.sr-step[data-step="live"] .sr-stx { color: var(--foreground); }
+/* both live steps under reduced motion; it sits before the shimmer, so with motion the text stays transparent */
+.sr-step[data-step="live"] .sr-stx,
+.sr-tx-line[data-step="live"] .sr-stx { color: var(--foreground); }
 
 /* colour never carries the failure alone (R9) */
 .sr-sw {
@@ -694,6 +702,52 @@
   box-shadow: inset 0 1px 0 var(--sr-rail);
 }
 
+/* the one action: ink-filled, with a padded hit area */
+.sr-open {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 9px 0 11px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--foreground);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--background);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--sr-hover-ms) var(--sr-ease), scale 150ms var(--sr-ease);
+}
+
+.sr-open::before {
+  content: "";
+  position: absolute;
+  inset: -6px -4px;
+}
+
+.sr-open:active {
+  scale: 0.96;
+}
+
+.sr-open:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--ring) 70%, transparent);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sr-open:hover {
+    background: color-mix(in oklab, var(--foreground) 86%, var(--background));
+  }
+}
+
+.sr-open-icon {
+  width: 13px;
+  height: 13px;
+}
+
 .sr-x-hint {
   margin-left: auto;
   font-size: 11px;
@@ -732,7 +786,8 @@
 /* the running detail and the live step carry a moving band of ink; never under reduced motion (R9) */
 @media (prefers-reduced-motion: no-preference) {
   .sr-row[data-st="running"] .sr-row-detail > span:not(.sr-roll-out),
-  .sr-step[data-step="live"] .sr-stx {
+  .sr-step[data-step="live"] .sr-stx,
+  .sr-tx-line[data-step="live"] .sr-stx {
     color: transparent;
     background: linear-gradient(
       90deg,
@@ -795,8 +850,196 @@
     color: var(--sr-faint);
     text-align: center;
   }
-  /* why: the hint is the footer's only content until Open thread lands (issue 04) */
-  .sr-x-foot {
+  .sr-x-hint {
     display: none;
   }
+}
+
+/* ---------------------------------------------------------------- transcript tab: a header over the steps, the outcome last */
+
+/* the same columns as an expanded row: a gutter on the avatar's axis, then the text */
+.sr-tx {
+  --sr-x-text: calc(var(--sr-row-av) + var(--sr-row-gap));
+  --sr-x-cut: var(--sr-cut);
+  --sr-rail: color-mix(in oklab, var(--foreground) 13%, transparent);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.sr-tx-head {
+  display: grid;
+  grid-template-columns: var(--sr-row-av) minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--sr-row-gap);
+  row-gap: 4px;
+  padding: 14px 16px 10px;
+  box-shadow: inset 0 -1px 0 var(--sr-rail);
+}
+
+.sr-tx-head .sr-av {
+  --sr-av: var(--sr-row-av);
+  margin-left: 0;
+}
+
+.sr-tx-head .sr-x-meta {
+  grid-column: 2 / -1;
+  margin: 0;
+}
+
+.sr-tx-name {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.sr-tx-title {
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--foreground);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sr-tx-status {
+  font-size: var(--sr-detail-fs);
+  color: var(--subtle-foreground);
+}
+
+.sr-tx-status:is([data-st="running"], [data-st="failed"]) {
+  color: var(--sr-st);
+}
+
+.sr-tx-scroll {
+  flex: 1;
+  min-height: 0;
+  padding: 10px 16px 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.sr-tx-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* a message reads in the text column, in the body type */
+.sr-tx-msg {
+  margin: 4px 0;
+  margin-left: var(--sr-x-text);
+  font-size: 13px;
+  line-height: var(--sr-res-lh);
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+
+/* every other step is one line: kind icon in the gutter, label, failed, offset */
+.sr-tx-line {
+  display: grid;
+  grid-template-columns: var(--sr-x-text) minmax(0, 1fr) auto auto;
+  align-items: center;
+  min-width: 0;
+  height: var(--sr-step-h);
+  font-size: var(--sr-step-fs);
+  color: var(--subtle-foreground);
+  --sr-shimmer-base: var(--muted-foreground);
+}
+
+.sr-tx-line .sr-sk {
+  justify-self: center;
+}
+
+.sr-tx-line[data-k="command"] .sr-stx {
+  font-family: var(--font-mono);
+  font-size: calc(var(--sr-step-fs) - 0.5px);
+}
+
+.sr-tx-line[data-step="failed"] .sr-sk { color: var(--sr-st-failed); }
+.sr-tx-line[data-k="thinking"] { color: var(--sr-faint); }
+
+/* a command or a thought opens in place; the chevron is the only marker */
+.sr-tx-sum {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--sr-chev);
+  align-items: center;
+  column-gap: 6px;
+  border-radius: 6px;
+  list-style: none;
+  cursor: pointer;
+  transition: background-color var(--sr-hover-ms) var(--sr-ease);
+}
+
+.sr-tx-sum::-webkit-details-marker {
+  display: none;
+}
+
+.sr-tx-sum:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--ring) 70%, transparent);
+  outline-offset: -2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sr-tx-sum:hover { background: var(--sr-wash); }
+  .sr-tx-sum:hover .sr-tx-chev { color: var(--foreground); }
+}
+
+.sr-tx-chev {
+  width: var(--sr-chev);
+  height: var(--sr-chev);
+  color: color-mix(in oklab, var(--subtle-foreground) 55%, transparent);
+  transition: transform var(--sr-row-expand-ms) var(--sr-ease), color var(--sr-hover-ms) var(--sr-ease);
+}
+
+details[open] > .sr-tx-sum .sr-tx-chev {
+  transform: rotate(90deg);
+}
+
+.sr-tx-out {
+  margin: 4px 0 8px var(--sr-x-text);
+  max-height: 360px;
+  overflow: auto;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--sr-rail);
+}
+
+p.sr-tx-out {
+  padding: 6px 10px;
+  box-shadow: none;
+}
+
+.sr-tx-think-b {
+  margin: 2px 0 8px var(--sr-x-text);
+  padding-left: 10px;
+  box-shadow: inset 1px 0 0 var(--sr-rail);
+  font-size: var(--sr-step-fs);
+  line-height: 1.5;
+  color: var(--subtle-foreground);
+}
+
+/* the outcome closes the transcript under a hairline, as the row draws it */
+.sr-tx .sr-out {
+  margin-top: 10px;
+  padding-top: 8px;
+  box-shadow: inset 0 1px 0 var(--sr-rail);
+}
+
+.sr-tx .sr-res {
+  color: var(--foreground);
+}
+
+.sr-tx-empty {
+  margin: 0;
+  padding: 32px 24px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+  text-align: center;
 }

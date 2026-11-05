@@ -2,7 +2,8 @@
 
 A live strip above a thread's composer that counts the thread's subagents and
 how long they have taken, and opens into one row per subagent that expands to
-its report and latest steps. Frontend only:
+its report and latest steps and opens its full transcript in the side panel.
+Frontend only:
 `server.ts` is the empty entry bb requires.
 
 - `bb.ts`: bb's row and event types and the SDK slice the thread source
@@ -20,11 +21,16 @@ its report and latest steps. Frontend only:
   (`createThreadSource`).
 - `source.ts`: shares one thread source per thread across the window
   (`useThreadDelegates`).
+- `transcript.ts`: the transcript tab's reference and the params that name its
+  delegate (`TRANSCRIPT_TAB`, `transcriptParams`, `parseTranscriptParams`).
 - `clock.ts`: one shared 1 s tick and the time formats (`formatDuration`,
   `formatOffset`, `formatClockTime`).
-- `app.tsx`, `ui/`, `roster.css`: the composer banner. `ui/RosterBanner.tsx`
-  is the summary row and the list, `ui/DelegateRow.tsx` one row and its
-  expanded detail, `ui/scroll.ts` the expanded body's overflow and tail,
+- `app.tsx`, `ui/`, `roster.css`: the composer banner and the transcript tab.
+  `ui/RosterBanner.tsx` is the summary row and the list, `ui/DelegateRow.tsx`
+  one row, its expanded detail, and Open thread, `ui/DelegateDetail.tsx` the
+  meta line, outcome, and step icon the row and the tab share,
+  `ui/TranscriptTab.tsx` the side-panel transcript, `ui/scroll.ts` the
+  overflow and live tail of a scrolling body,
   `ui/Avatar.tsx` the avatar and stack, `ui/Motion.tsx` the rolling text,
   digits, and status dot, `ui/room.ts` the room the list may open into.
 - `fixtures/claude-thread.json`: a trimmed real Claude Code capture the tests

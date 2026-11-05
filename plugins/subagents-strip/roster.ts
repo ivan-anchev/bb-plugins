@@ -1,5 +1,6 @@
 // What the strip shows: which delegates, the census words, the elapsed span,
-// each row's detail line and elapsed time, and an expanded row's meta line.
+// each row's detail line and elapsed time, an expanded row's meta line, and
+// the status words the strip and the transcript share.
 import { formatClockTime, formatDuration } from "./clock.ts";
 import type { Delegate, DelegateStatus } from "./delegate.ts";
 import { firstLine, stepLabel, trailSteps } from "./steps.ts";
@@ -69,10 +70,14 @@ export function elapsed(d: Delegate, now: number): number {
 
 export const isRunning = (d: Delegate): boolean => d.state.status === "running";
 
+/** A status as one capitalised word: Running, Done, Failed, Stopped. */
+export const statusWord = (status: DelegateStatus): string => STATUS_WORD[status];
+
 // ---------------------------------------------------------------- layer 2
 
 const CENSUS_ORDER: readonly DelegateStatus[] = ["running", "completed", "failed", "stopped"];
 const CENSUS_WORD: Record<DelegateStatus, string> = { running: "running", completed: "done", failed: "failed", stopped: "stopped" };
+const STATUS_WORD: Record<DelegateStatus, string> = { running: "Running", completed: "Done", failed: "Failed", stopped: "Stopped" };
 
 const endOf = (d: Delegate, now: number): number => (d.state.status === "running" ? now : d.state.endedAt);
 

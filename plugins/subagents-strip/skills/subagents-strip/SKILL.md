@@ -1,6 +1,6 @@
 ---
 name: subagents-strip
-description: Explain the Subagents Strip, the live line above a bb thread's composer that counts the thread's subagents and how long they have taken, and opens into one row per subagent that expands to its report and steps. Use when the user asks what the strip shows, why a subagent reads as running or done there, or why no strip appears.
+description: Explain the Subagents Strip, the live line above a bb thread's composer that counts the thread's subagents and how long they have taken, and opens into one row per subagent that expands to its report and steps and opens its full transcript in the side panel. Use when the user asks what the strip shows, why a subagent reads as running or done there, or why no strip appears.
 ---
 
 # Subagents Strip
@@ -59,8 +59,34 @@ focus on the row. The expanded row shows, top to bottom:
   shimmers, and the body stays scrolled to the newest step unless you scroll
   up. A subagent whose provider sends no steps shows no trail.
 
-The body scrolls inside a fixed height. Below it, "Esc to collapse" (hidden
-on a narrow strip).
+The body scrolls inside a fixed height. Below it, **Open thread** and "Esc to
+collapse" (the hint is hidden on a narrow strip). A subagent whose provider
+sends no steps has no Open thread.
+
+## The transcript tab
+
+Open thread opens a side-panel tab titled with the subagent's description, or
+switches to it when that subagent's tab is already open, so each subagent has
+at most one tab. A Claude Code subagent is not a bb thread, so this never
+navigates away. On a view without a side panel, Open thread does nothing.
+
+The tab shows the avatar, description, status word, and elapsed time over the
+same meta line as the row, then every step in order:
+
+- what the subagent said, as markdown;
+- each command as one line that opens to its output;
+- each file read, edit, search, page fetch, and tool call as one line, with
+  "failed" when it failed and its time since the subagent started;
+- its reasoning as a collapsed, muted "Thinking" block (the row's trail and
+  step count leave reasoning out);
+- at the end, the report in full, the error, or the stopped note.
+
+While the subagent runs, new steps appear at the end and the tab stays at the
+bottom unless you scroll up; the report appears when it finishes. The tab
+reads the same live data as the strip, so both always show the same status.
+Its subagent is saved with the tab, so it comes back after a reload; one
+outside the loaded timeline reads "This subagent is outside the loaded
+timeline."
 
 ## Which subagents
 

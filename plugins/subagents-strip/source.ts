@@ -7,14 +7,20 @@ import type { ThreadSdk } from "./bb.ts";
 import type { ThreadDelegates } from "./delegate.ts";
 import { createThreadSource, type ThreadSource } from "./thread-source.ts";
 
-/** The thread's delegates, live. A disabled caller holds no subscription and reads "loading". */
+/**
+ * The thread's delegates, live. A disabled caller holds no subscription and
+ * is not re-rendered by changes, but still reads the shared source's latest
+ * snapshot when it renders ("loading" once no one holds the source). So a
+ * panel tab being hidden keeps what it drew, scroll position and open blocks
+ * included, instead of dropping to a loading state.
+ */
 export function useThreadDelegates(threadId: string, { enabled = true }: { enabled?: boolean } = {}): ThreadDelegates {
   const sdk = useSdk();
   const subscribe = useCallback(
     (onChange: () => void) => (enabled ? acquire(sdk, threadId).subscribe(onChange) : () => {}),
     [sdk, threadId, enabled],
   );
-  const snapshot = useCallback(() => (enabled ? (sources.get(threadId)?.snapshot ?? LOADING) : LOADING), [threadId, enabled]);
+  const snapshot = useCallback(() => sources.get(threadId)?.snapshot ?? LOADING, [threadId]);
   return useSyncExternalStore(subscribe, snapshot);
 }
 

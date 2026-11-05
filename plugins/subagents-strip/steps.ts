@@ -1,6 +1,6 @@
 // What a delegate's child rows mean as steps. A step is a bb row (StepRow),
 // never a reshaped copy; meaning is derived at the point of use.
-import type { StepRow, TimelineRow } from "./bb.ts";
+import type { ReasoningRow, StepRow, TimelineRow } from "./bb.ts";
 
 /** The rows a delegate's transcript shows, in order: reasoning included. */
 export function transcriptSteps(rows: readonly TimelineRow[]): StepRow[] {
@@ -50,6 +50,11 @@ export function firstLine(text: string): string {
 /** The provider's report row: Claude Code's SubagentHandback tool call. */
 export function isHandback(row: TimelineRow): row is Extract<TimelineRow, { workKind: "tool" }> {
   return row.kind === "work" && row.workKind === "tool" && row.toolName === "SubagentHandback";
+}
+
+/** A reasoning row: the transcript shows it as a collapsed Thinking block; the trail leaves it out. */
+export function isReasoning(row: StepRow): row is ReasoningRow {
+  return row.kind === "system" && row.systemKind === "operation" && row.operationKind === "reasoning";
 }
 
 // ---------------------------------------------------------------- layer 2
@@ -125,6 +130,3 @@ function isTranscriptStep(row: TimelineRow): boolean {
   return !(row.kind === "work" && row.workKind === "delegation"); // nesting is ignored
 }
 
-function isReasoning(row: StepRow): boolean {
-  return row.kind === "system" && row.systemKind === "operation" && row.operationKind === "reasoning";
-}
