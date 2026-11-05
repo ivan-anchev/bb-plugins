@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { Footnote, Notice, SelectFilePrompt, TabFrame, Toolbar } from "./chrome.tsx";
+import { useCallback, useImperativeHandle, useMemo, useState, type Ref } from "react";
+import { Footnote, Notice, SelectFilePrompt, type RefreshHandle } from "./chrome.tsx";
 import { FileViewer } from "./file-viewer.tsx";
 import { SplitView } from "./split/split-view.tsx";
 import { TREE_ICONS, treePathsOf, type WorkspacePath } from "./tree-input.ts";
@@ -10,7 +10,7 @@ import { useRememberedState } from "./hooks/use-remembered-state.ts";
 
 const rememberedSelections = new Map<string, string | null>();
 
-export function AllFilesView({ environmentId, viewSwitch }: { environmentId: string; viewSwitch: ReactNode }) {
+export function AllFilesView({ environmentId, ref }: { environmentId: string; ref: Ref<RefreshHandle> }) {
   const { state, refetch } = useEnvironmentPaths(environmentId);
   const [readCount, setReadCount] = useState(0);
   const refresh = useCallback(() => {
@@ -18,13 +18,9 @@ export function AllFilesView({ environmentId, viewSwitch }: { environmentId: str
     setReadCount((count) => count + 1);
   }, [refetch]);
   useRefetchOnShow(refresh);
+  useImperativeHandle(ref, () => ({ refresh }), [refresh]);
 
-  return (
-    <TabFrame>
-      <Toolbar onRefresh={refresh}>{viewSwitch}</Toolbar>
-      <AllFilesBody state={state} environmentId={environmentId} readCount={readCount} />
-    </TabFrame>
-  );
+  return <AllFilesBody state={state} environmentId={environmentId} readCount={readCount} />;
 }
 
 type AllFilesBodyProps = { state: EnvironmentPathsState; environmentId: string; readCount: number };

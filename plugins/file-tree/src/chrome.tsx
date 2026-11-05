@@ -1,28 +1,27 @@
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
+import { IconButton } from "./ui/icon-button.tsx";
+import { segmentIndexAfterKey } from "./ui/segment-keys.ts";
 
 export function TabFrame({ children }: { children: ReactNode }) {
   return <div className="flex h-full min-h-0 flex-col bg-background text-foreground">{children}</div>;
 }
 
+/** What the Toolbar's refresh button asks of the view shown below it. */
+export type RefreshHandle = { refresh(): void };
+
 export function Toolbar({ children, onRefresh }: { children: ReactNode; onRefresh(): void }) {
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-2 py-1.5">
+    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-4 py-2">
       {children}
-      <button
-        type="button"
-        aria-label="Refresh"
-        title="Refresh"
-        onClick={onRefresh}
-        className="ml-auto inline-flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-      >
-        <Icon name="RotateCcw" className="size-3.5" aria-hidden />
-      </button>
+      <div className="ml-auto">
+        <IconButton icon="RotateCcw" label="Refresh" onClick={onRefresh} />
+      </div>
     </div>
   );
 }
 
-export type SegmentOption<Value extends string> = { value: Value; label: string };
+export type SegmentOption<Value extends string> = { value: Value; label: string; icon: string };
 
 type SegmentedControlProps<Value extends string> = {
   label: string;
@@ -31,20 +30,46 @@ type SegmentedControlProps<Value extends string> = {
   onChange(value: NoInfer<Value>): void;
 };
 
+const SEGMENT_CLASSES =
+  "inline-flex h-[26px] cursor-pointer select-none items-center gap-1.5 rounded-[5px] px-2.5 text-xs transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
+const SELECTED_SEGMENT_CLASSES = "bg-state-active text-foreground";
+const IDLE_SEGMENT_CLASSES = "text-muted-foreground hover:bg-state-hover hover:text-foreground hover:duration-0";
+
+/** A view switch with tab semantics: one tab stop, arrows and Home/End move the selection and focus together. */
 export function SegmentedControl<Value extends string>({ label, options, value, onChange }: SegmentedControlProps<Value>) {
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const index = options.findIndex((option) => option.value === value);
+    const next = segmentIndexAfterKey(event.key, index, options.length);
+    if (next === null) return;
+    event.preventDefault();
+    onChange(options[next].value);
+    event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next].focus();
+  };
+
   return (
-    <div role="group" aria-label={label} className="inline-flex items-center gap-0.5 rounded-md bg-muted p-0.5">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          aria-pressed={option.value === value}
-          onClick={() => onChange(option.value)}
-          className="rounded px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm"
-        >
-          {option.label}
-        </button>
-      ))}
+    <div
+      role="tablist"
+      aria-label={label}
+      onKeyDown={onKeyDown}
+      className="inline-flex h-8 items-center gap-0.5 rounded-lg border border-border p-0.5"
+    >
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            tabIndex={selected ? 0 : -1}
+            onClick={() => onChange(option.value)}
+            className={`${SEGMENT_CLASSES} ${selected ? SELECTED_SEGMENT_CLASSES : IDLE_SEGMENT_CLASSES}`}
+          >
+            <Icon name={option.icon} className="size-3.5 shrink-0" aria-hidden />
+            {option.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

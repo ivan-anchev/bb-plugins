@@ -16,7 +16,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p .",
-    "test": "node --test src/tree-input.test.ts src/tree-selection.test.ts src/tree-expansion.test.ts src/viewer-input.test.ts src/changes/change-targets.test.ts src/changes/change-stats.test.ts src/changes/file-filter.test.ts src/split/split-size.test.ts",
+    "test": "node --test src/tree-input.test.ts src/tree-selection.test.ts src/tree-expansion.test.ts src/viewer-input.test.ts src/changes/change-targets.test.ts src/changes/change-stats.test.ts src/changes/file-filter.test.ts src/split/split-size.test.ts src/ui/segment-keys.test.ts",
     "build": "bb plugin build"
   },
   "engines": {
