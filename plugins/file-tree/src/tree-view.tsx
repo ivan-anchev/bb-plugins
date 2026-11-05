@@ -30,6 +30,7 @@ export function TreeView({
     paths,
     gitStatus,
     ...expansionFor(memoryKey, initialExpansion),
+    initialSelectedPaths: selectedPath === null ? [] : [selectedPath],
     icons,
     density: "compact",
     flattenEmptyDirectories: true,

@@ -1,19 +1,27 @@
+import { useImperativeHandle, type Ref } from "react";
 import { experimental_Diff as Diff, experimental_useRpcKeyedQuery } from "@get-bb/plugin-sdk/app";
 import { Footnote, Notice, ViewerFrame } from "./chrome.tsx";
 import { gitContract, type ChangedFile, type ChangesInput, type GitPatch } from "./git.ts";
 import { diffSourceOf } from "./viewer-input.ts";
 
-type DiffViewerProps = { file: ChangedFile; initialPatches: readonly GitPatch[]; input: ChangesInput };
+export type DiffViewerHandle = { reread(): void };
 
-export function DiffViewer({ file, initialPatches, input }: DiffViewerProps) {
+type DiffViewerProps = {
+  file: ChangedFile;
+  initialPatches: readonly GitPatch[];
+  input: ChangesInput;
+  ref: Ref<DiffViewerHandle>;
+};
+
+export function DiffViewer({ file, initialPatches, input, ref }: DiffViewerProps) {
   return (
     <ViewerFrame path={file.path}>
-      <ChangeDiff file={file} initialPatches={initialPatches} input={input} />
+      <ChangeDiff file={file} initialPatches={initialPatches} input={input} ref={ref} />
     </ViewerFrame>
   );
 }
 
-function ChangeDiff({ file, initialPatches, input }: DiffViewerProps) {
+function ChangeDiff({ file, initialPatches, input, ref }: DiffViewerProps) {
   const source = diffSourceOf(file, initialPatches, input);
   switch (source.kind) {
     case "notice":
@@ -21,17 +29,18 @@ function ChangeDiff({ file, initialPatches, input }: DiffViewerProps) {
     case "patch":
       return <PatchDiff patch={source.patch} />;
     case "fetch":
-      return <FetchedPatchDiff patchKey={source.patchKey} />;
+      return <FetchedPatchDiff patchKey={source.patchKey} ref={ref} />;
   }
 }
 
-function FetchedPatchDiff({ patchKey }: { patchKey: string }) {
-  const { data, error } = experimental_useRpcKeyedQuery({
+function FetchedPatchDiff({ patchKey, ref }: { patchKey: string; ref: Ref<DiffViewerHandle> }) {
+  const { data, error, refetch } = experimental_useRpcKeyedQuery({
     pluginId: "bb--git",
     contract: gitContract,
     method: "patches",
     keys: [patchKey],
   });
+  useImperativeHandle(ref, () => ({ reread: refetch }), [refetch]);
   const row = data?.[patchKey];
   if (row === undefined) {
     return error === null ? (
