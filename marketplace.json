@@ -6,6 +6,28 @@
   "description": "bb plugins Ivan Anchev maintains.",
   "plugins": [
     {
+      "id": "code-explorer",
+      "displayName": "Code Explorer",
+      "description": "Browse the environment's files and git changes as a tree with colored per-file-type icons, see how a change splits into code, tests, mocks, generated files and docs, and read any file or its diff beside the tree.",
+      "icon": "Folder",
+      "tags": [
+        "files",
+        "git"
+      ],
+      "author": {
+        "name": "Ivan Anchev",
+        "github": "ivan-anchev"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/ivan-anchev/bb-plugins.git",
+          "subdir": "plugins/code-explorer",
+          "range": "0.x",
+          "tagPrefix": "code-explorer/"
+        }
+      }
+    },
+    {
       "id": "comfortable-type",
       "displayName": "Comfortable Type",
       "description": "A theme that sets bb's text one step larger, at 14px in the system font, with bb's own colors.",
@@ -24,28 +46,6 @@
           "subdir": "plugins/comfortable-type",
           "range": "0.x",
           "tagPrefix": "comfortable-type/"
-        }
-      }
-    },
-    {
-      "id": "file-tree",
-      "displayName": "File Tree",
-      "description": "Browse the environment's files and git changes as a tree with colored per-file-type icons, see how a change splits into code, tests, mocks, generated files and docs, and read any file or its diff beside the tree.",
-      "icon": "Folder",
-      "tags": [
-        "files",
-        "git"
-      ],
-      "author": {
-        "name": "Ivan Anchev",
-        "github": "ivan-anchev"
-      },
-      "source": {
-        "git": {
-          "url": "https://github.com/ivan-anchev/bb-plugins.git",
-          "subdir": "plugins/file-tree",
-          "range": "0.x",
-          "tagPrefix": "file-tree/"
         }
       }
     },

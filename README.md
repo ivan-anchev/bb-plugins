@@ -24,8 +24,22 @@ bb plugin install git:https://github.com/ivan-anchev/bb-plugins.git@^0.1.0 --tag
 | Plugin | What it does |
 | --- | --- |
 | [`comfortable-type`](plugins/comfortable-type) | A theme that sets bb's text at 14px in the system font, with bb's own colors. |
-| [`file-tree`](plugins/file-tree) | Browse the environment's files and git changes as a tree with colored per-file-type icons, and read any file or its diff beside the tree. |
+| [Code Explorer](plugins/code-explorer) | Browse the environment's files and git changes as a tree with colored per-file-type icons, and read any file or its diff beside the tree. |
 | [`proactive-visuals`](plugins/proactive-visuals) | Agents answer data with an inline chart, without being asked. |
+
+## Code Explorer screenshots
+
+Browse changed files and read their diffs beside the tree.
+
+![Changes tree with the selected file diff](plugins/code-explorer/screenshots/changes.png)
+
+Hover or focus the totals to see added and deleted lines by change kind.
+
+![Diff buckets showing line counts for code, generated files and docs](plugins/code-explorer/screenshots/diff-buckets.png)
+
+Filter by change kind or file type, or hide tests and mocks together.
+
+![Filter menu with change kinds and file types](plugins/code-explorer/screenshots/filters.png)
 
 ## Repository layout
 

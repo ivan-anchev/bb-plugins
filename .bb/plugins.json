@@ -4,12 +4,12 @@
   "name": "ivan-anchev",
   "plugins": [
     {
-      "name": "comfortable-type",
-      "source": "./plugins/comfortable-type"
+      "name": "code-explorer",
+      "source": "./plugins/code-explorer"
     },
     {
-      "name": "file-tree",
-      "source": "./plugins/file-tree"
+      "name": "comfortable-type",
+      "source": "./plugins/comfortable-type"
     },
     {
       "name": "proactive-visuals",

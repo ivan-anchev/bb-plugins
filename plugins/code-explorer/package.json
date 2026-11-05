@@ -1,5 +1,5 @@
 {
-  "name": "bb-plugin-file-tree",
+  "name": "bb-plugin-code-explorer",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -12,7 +12,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ivan-anchev/bb-plugins.git",
-    "directory": "plugins/file-tree"
+    "directory": "plugins/code-explorer"
   },
   "scripts": {
     "typecheck": "tsc -p .",
@@ -24,7 +24,7 @@
     "bbPluginSdk": ">=0.6.104"
   },
   "bb": {
-    "name": "File Tree",
+    "name": "Code Explorer",
     "description": "Browse the environment's files and git changes as a tree with colored per-file-type icons, see how a change splits into code, tests, mocks, generated files and docs, and read any file or its diff beside the tree.",
     "branding": {
       "icon": "Folder"
