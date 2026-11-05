@@ -24,6 +24,24 @@ export function stepLabel(row: StepRow): string {
   }
 }
 
+/** What a step did, as the trail's kind icon shows it. */
+export type StepKind = "command" | "read" | "edit" | "search" | "web" | "tool" | "message" | "note";
+
+export function stepKind(row: StepRow): StepKind {
+  switch (row.kind) {
+    case "conversation": return "message";
+    case "system": return "note";
+    case "work": return workStepKind(row);
+    default: return unhandledKind(row);
+  }
+}
+
+/** A work step that ended in error, or a command that exited non-zero. */
+export function stepFailed(row: StepRow): boolean {
+  if (row.kind !== "work") return false;
+  return row.status === "error" || (row.workKind === "command" && row.exitCode !== null && row.exitCode !== 0);
+}
+
 /** The first non-empty line of markdown text, without heading, list, bold, or code marks. */
 export function firstLine(text: string): string {
   return text.split("\n").map((line) => line.replace(/^#+\s*|^[-*]\s+|\*\*|`/g, "").trim()).find(Boolean) ?? "";
@@ -59,6 +77,28 @@ function workLabel(row: Extract<StepRow, { kind: "work" }>): string {
   }
 }
 
+function workStepKind(row: Extract<StepRow, { kind: "work" }>): StepKind {
+  switch (row.workKind) {
+    case "command": return "command";
+    case "file-read":
+    case "image-view": return "read";
+    case "file-change": return "edit";
+    case "search": return "search";
+    case "web-search":
+    case "web-fetch": return "web";
+    case "approval":
+    case "question":
+    case "form": return "message";
+    case "plan-steps": return "note";
+    case "tool":
+    case "extension":
+    case "image-generation":
+    case "delegation":
+    case "workflow": return "tool";
+    default: return unhandledKind(row);
+  }
+}
+
 /**
  * `never` keeps the switches exhaustive at compile time. At runtime the bb host
  * can be newer than the pinned SDK, so a kind it adds reads as its title, or
@@ -66,6 +106,11 @@ function workLabel(row: Extract<StepRow, { kind: "work" }>): string {
  */
 function unhandled(row: never): string {
   return presentationTitle(row) ?? "Working";
+}
+
+/** As `unhandled`: a kind a newer host adds shows the generic tool icon. */
+function unhandledKind(_row: never): StepKind {
+  return "tool";
 }
 
 function presentationTitle(row: unknown): string | null {

@@ -4,7 +4,7 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "A live strip above the composer that counts the thread's subagents and how long they have taken, and opens into one row per subagent with its current step or result.",
+  "description": "A live strip above the composer that counts the thread's subagents and how long they have taken, and opens into one row per subagent that expands to its report and latest steps.",
   "keywords": [
     "bb-plugin",
     "subagents",
@@ -22,7 +22,7 @@
   },
   "bb": {
     "name": "Subagents Strip",
-    "description": "A live strip above the composer that counts the thread's subagents and how long they have taken, and opens into one row per subagent with its current step or result.",
+    "description": "A live strip above the composer that counts the thread's subagents and how long they have taken, and opens into one row per subagent that expands to its report and latest steps.",
     "branding": {
       "icon": "UsersRound"
     },

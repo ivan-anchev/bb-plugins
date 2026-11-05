@@ -1,4 +1,4 @@
-// One shared 1 s tick for every live timer in the window, and the duration format.
+// One shared 1 s tick for every live timer in the window, and the time formats.
 import { useCallback, useSyncExternalStore } from "react";
 
 /** The current time, re-rendering once a second while `live`; frozen otherwise. */
@@ -13,6 +13,20 @@ export function formatDuration(ms: number): string {
   if (s < 60) return `${s}s`;
   if (s < 3600) return `${Math.floor(s / 60)}m ${pad(s % 60)}s`;
   return `${Math.floor(s / 3600)}h ${pad(Math.floor((s % 3600) / 60))}m`;
+}
+
+/** Time since a delegate started, as a step shows it: 0:42 / 12:05 / 1:02:05. */
+export function formatOffset(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h > 0 ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
+}
+
+/** Local time of day on a 24-hour clock: 13:58 / 09:05. */
+export function formatClockTime(at: number): string {
+  const time = new Date(at);
+  return `${pad(time.getHours())}:${pad(time.getMinutes())}`;
 }
 
 // ---------------------------------------------------------------- layer 2

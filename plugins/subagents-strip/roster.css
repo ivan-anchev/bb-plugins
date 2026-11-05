@@ -32,6 +32,17 @@
   --sr-radius: 10px;
   --sr-accent-hue: 250;
   --sr-strip-share: 0.8;
+  /* the expanded row (row-expansion knobs) */
+  --sr-row-expand-ms: 240ms;
+  --sr-x-max: 210px;
+  --sr-step-h: 24px;
+  --sr-step-fs: 12px;
+  --sr-res-lines: 6;
+  --sr-res-lh: 19px;
+  --sr-open-fill: 3%;
+  --sr-row-gap: 10px;
+  --sr-chev: 14px;
+  --sr-sk: 12px;
 
   /* state marks: colour marks state only, as small marks (R2) */
   --sr-st-running: oklch(72% 0.15 var(--sr-accent-hue));
@@ -42,6 +53,7 @@
   --sr-wash: color-mix(in oklab, var(--foreground) 5%, transparent);
   --sr-faint: color-mix(in oklab, var(--muted-foreground) 45%, transparent);
   --sr-shimmer-ink: color-mix(in oklab, var(--foreground) 50%, white);
+  --sr-shimmer-base: var(--subtle-foreground);
   --sr-census-fs: max(10px, calc(var(--sr-detail-fs) - 1px));
 
   container: sr / inline-size;
@@ -56,6 +68,7 @@
 @media (prefers-reduced-motion: reduce) {
   .sr {
     --sr-expand-ms: 1ms;
+    --sr-row-expand-ms: 1ms;
     --sr-hover-ms: 1ms;
     --sr-morph-in-ms: 1ms;
     --sr-morph-out-ms: 1ms;
@@ -283,15 +296,68 @@
   list-style: none;
 }
 
-/* ---------------------------------------------------------------- delegate row: two lines (R3) */
+/* ---------------------------------------------------------------- delegate row: two lines (R3), a disclosure */
 
+/* an open row is the row plus its body on one faint fill; every cut-out ring inside takes that fill */
 .sr-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  column-gap: 10px;
-  padding: var(--sr-row-py) var(--sr-row-px);
+  --sr-x-text: calc(var(--sr-row-av) + var(--sr-row-gap)); /* the title column */
+  --sr-x-end: calc(var(--sr-chev) + var(--sr-row-gap)); /* the chevron column, so times line up with the elapsed */
+  --sr-x-cut: color-mix(in oklab, var(--foreground) calc(1.5% + var(--sr-open-fill)), var(--background));
+  --sr-rail: color-mix(in oklab, var(--foreground) 13%, transparent);
   border-radius: max(0px, calc(var(--sr-radius) - 4px));
+  transition: background-color var(--sr-hover-ms) var(--sr-ease);
+}
+
+.sr-row[data-open] {
+  --sr-cut: var(--sr-x-cut);
+  background: color-mix(in oklab, var(--foreground) var(--sr-open-fill), transparent);
+}
+
+.sr-row-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto var(--sr-chev);
+  align-items: center;
+  column-gap: var(--sr-row-gap);
+  width: 100%;
+  padding: var(--sr-row-py) var(--sr-row-px);
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--sr-hover-ms) var(--sr-ease), --sr-cut var(--sr-hover-ms) var(--sr-ease);
+}
+
+.sr-row-head:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--ring) 70%, transparent);
+  outline-offset: -2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sr-row-head:hover {
+    background: var(--sr-wash);
+    --sr-cut: color-mix(in oklab, var(--foreground) 6.4%, var(--background)); /* the wash over the panel tint */
+  }
+  .sr-row[data-open] .sr-row-head:hover {
+    --sr-cut: color-mix(in oklab, var(--foreground) calc(6.4% + var(--sr-open-fill)), var(--background));
+  }
+  .sr-row-head:hover .sr-row-chev {
+    color: var(--foreground);
+  }
+}
+
+.sr-row-chev {
+  width: var(--sr-chev);
+  height: var(--sr-chev);
+  color: color-mix(in oklab, var(--subtle-foreground) 55%, transparent);
+  transition: transform var(--sr-row-expand-ms) var(--sr-ease), color var(--sr-hover-ms) var(--sr-ease);
+}
+
+.sr-row[data-open] .sr-row-chev {
+  transform: rotate(90deg);
+  color: var(--muted-foreground);
 }
 
 .sr-row .sr-av {
@@ -329,6 +395,320 @@
   color: var(--sr-st-failed);
 }
 
+/* ---------------------------------------------------------------- expanded row: meta, outcome, trail */
+
+/* grows on grid rows; collapsing runs at 0.7x */
+.sr-x-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows calc(var(--sr-row-expand-ms) * 0.7) var(--sr-ease);
+}
+
+.sr-row[data-open] .sr-x-wrap {
+  grid-template-rows: 1fr;
+  transition-duration: var(--sr-row-expand-ms);
+}
+
+.sr-x-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sr-x {
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  transform: translateY(-4px);
+  visibility: hidden;
+  transition:
+    opacity calc(var(--sr-row-expand-ms) * 0.5) var(--sr-ease),
+    transform calc(var(--sr-row-expand-ms) * 0.7) var(--sr-ease),
+    visibility 0s linear calc(var(--sr-row-expand-ms) * 0.7);
+}
+
+.sr-row[data-open] .sr-x {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  transition:
+    opacity var(--sr-row-expand-ms) var(--sr-ease),
+    transform var(--sr-row-expand-ms) var(--sr-ease),
+    visibility 0s;
+}
+
+.sr-x-scroll {
+  display: flex;
+  flex-direction: column;
+  max-height: var(--sr-x-max);
+  padding: 0 calc(var(--sr-row-px) + var(--sr-x-end)) 2px var(--sr-row-px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* one muted line; parts wrap whole and the dot rides the line end */
+.sr-x-meta {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 0.4em;
+  margin: 0 0 4px var(--sr-x-text);
+  font-size: var(--sr-detail-fs);
+  line-height: 1.45;
+  color: var(--subtle-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-x-meta > span {
+  white-space: nowrap;
+}
+
+.sr-x-meta > span:not(:last-child)::after {
+  content: "·";
+  margin-left: 0.4em;
+  color: var(--sr-faint);
+}
+
+/* a rail dot sits on the avatar's axis, in the status-dot convention (F3) */
+.sr-sd {
+  position: relative;
+  z-index: 1;
+  width: var(--sr-dot-size);
+  height: var(--sr-dot-size);
+  margin-left: calc((var(--sr-row-av) - var(--sr-dot-size)) / 2);
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--subtle-foreground) 62%, var(--background));
+  box-shadow: 0 0 0 2px var(--sr-x-cut);
+}
+
+.sr-tm {
+  min-width: 4ch;
+  margin-left: 12px;
+  font-size: calc(var(--sr-step-fs) - 1px);
+  color: var(--sr-faint);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* the outcome: the report (rendered, clamped), the error, or the stop; it leads the body */
+.sr-out {
+  display: flex;
+  flex-direction: column;
+  padding: 2px 0 6px;
+}
+
+.sr-out-h {
+  display: grid;
+  grid-template-columns: var(--sr-x-text) minmax(0, 1fr) auto;
+  align-items: center;
+  height: var(--sr-step-h);
+  font-size: var(--sr-step-fs);
+}
+
+.sr-out-h .sr-sd {
+  background: var(--sr-st);
+}
+
+.sr-out-l {
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.sr-out[data-st="failed"] .sr-out-l {
+  color: var(--sr-st-failed);
+}
+
+.sr-out-b {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  margin-left: var(--sr-x-text);
+}
+
+.sr-res,
+.sr-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: var(--sr-res-lh);
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+
+.sr-res {
+  align-self: stretch;
+}
+
+/* an error keeps its own line breaks (a command line, then its stderr) */
+.sr-out[data-st="failed"] .sr-note {
+  white-space: pre-line;
+}
+
+/* the clamp counts real lines (lh) of the type the report is set in */
+.sr-res[data-clamp] {
+  max-height: calc(var(--sr-res-lines) * 1lh);
+  overflow: hidden;
+}
+
+.sr-res[data-clamp][data-overflow] {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 1lh), transparent);
+}
+
+/* bb's message markdown (className is its styling hook), set in the body's type so it sits under the row title */
+.sr .sr-md {
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+
+.sr .sr-md :is(p, li) {
+  color: inherit;
+}
+
+.sr .sr-md :is(h1, h2, h3, h4, h5, h6) {
+  margin: 6px 0 2px;
+  font-size: 1em;
+  color: var(--foreground);
+}
+
+.sr .sr-md :is(h1, h2, h3, h4, h5, h6):first-child {
+  margin-top: 0;
+}
+
+/* Show more only when the clamp hides something (ui/scroll.ts marks it) */
+.sr-res:not([data-overflow]) + .sr-res-more[aria-expanded="false"] {
+  display: none;
+}
+
+/* the trail: one row per step on a rail */
+.sr-trail {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sr-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--sr-x-text) calc(var(--sr-sk) + 8px) minmax(0, 1fr) auto auto;
+  align-items: center;
+  height: var(--sr-step-h);
+  font-size: var(--sr-step-fs);
+  line-height: 1.3;
+  color: var(--subtle-foreground);
+  --sr-shimmer-base: var(--muted-foreground);
+}
+
+.sr-step::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--sr-row-av) / 2 - 0.5px);
+  width: 1px;
+  background: var(--sr-rail);
+}
+
+.sr-step:first-child::before { top: 50%; }
+.sr-step:last-child::before { bottom: 50%; }
+
+.sr-step[data-step="live"] .sr-sd { background: var(--sr-st-running); }
+.sr-step[data-step="failed"] .sr-sd { background: var(--sr-st-failed); }
+
+.sr-step-more .sr-sd {
+  background: var(--sr-x-cut);
+  box-shadow: inset 0 0 0 1px var(--subtle-foreground), 0 0 0 2px var(--sr-x-cut);
+}
+
+.sr-step-more .sr-lnk {
+  grid-column: 3;
+}
+
+.sr-sk {
+  width: var(--sr-sk);
+  height: var(--sr-sk);
+  color: var(--sr-faint);
+}
+
+.sr-stx {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sr-step[data-k="command"] .sr-stx {
+  font-family: var(--font-mono);
+  font-size: calc(var(--sr-step-fs) - 0.5px);
+}
+
+.sr-step[data-k="message"] .sr-stx { color: var(--muted-foreground); }
+.sr-step[data-step="live"] .sr-stx { color: var(--foreground); }
+
+/* colour never carries the failure alone (R9) */
+.sr-sw {
+  margin-left: 8px;
+  font-size: calc(var(--sr-step-fs) - 1px);
+  color: var(--sr-st-failed);
+}
+
+/* a text button with a padded hit area */
+.sr-lnk {
+  position: relative;
+  width: max-content;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: calc(var(--sr-step-fs) - 0.5px);
+  color: var(--subtle-foreground);
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--sr-hover-ms) var(--sr-ease);
+}
+
+.sr-lnk::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+
+.sr-lnk:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--ring) 70%, transparent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sr-lnk:hover { color: var(--foreground); }
+}
+
+/* pinned under the scroll; a hairline marks where scrolled content meets it */
+.sr-x-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px calc(var(--sr-row-px) + var(--sr-x-end)) 8px calc(var(--sr-row-px) + var(--sr-x-text));
+}
+
+.sr-x-scroll[data-overflow] + .sr-x-foot {
+  box-shadow: inset 0 1px 0 var(--sr-rail);
+}
+
+.sr-x-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--sr-faint);
+  white-space: nowrap;
+}
+
+.sr-x-hint kbd {
+  padding: 0 4px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--border);
+  font: inherit;
+  color: var(--subtle-foreground);
+}
+
 /* ---------------------------------------------------------------- motion (R5) */
 
 /* rolling text: the old line rolls out and the new one in, with a small blur */
@@ -349,15 +729,16 @@
 .sr-roll-in { animation: sr-roll-in var(--sr-morph-in-ms) var(--sr-ease) both; }
 .sr-roll-out { animation: sr-roll-out var(--sr-morph-out-ms) var(--sr-ease) both; }
 
-/* the running detail carries a moving band of ink; never under reduced motion (R9) */
+/* the running detail and the live step carry a moving band of ink; never under reduced motion (R9) */
 @media (prefers-reduced-motion: no-preference) {
-  .sr-row[data-st="running"] .sr-row-detail > span:not(.sr-roll-out) {
+  .sr-row[data-st="running"] .sr-row-detail > span:not(.sr-roll-out),
+  .sr-step[data-step="live"] .sr-stx {
     color: transparent;
     background: linear-gradient(
       90deg,
-      var(--subtle-foreground) calc(50% - var(--sr-shimmer-band)),
+      var(--sr-shimmer-base) calc(50% - var(--sr-shimmer-band)),
       var(--sr-shimmer-ink) 50%,
-      var(--subtle-foreground) calc(50% + var(--sr-shimmer-band))
+      var(--sr-shimmer-base) calc(50% + var(--sr-shimmer-band))
     );
     background-size: 300% 100%;
     background-clip: text;
@@ -396,7 +777,7 @@
 @keyframes sr-dg-out-up { to { opacity: 0; transform: translateY(-70%); filter: blur(2px); } }
 @keyframes sr-dg-out-down { to { opacity: 0; transform: translateY(70%); filter: blur(2px); } }
 
-/* ---------------------------------------------------------------- narrow strip: the census wraps */
+/* ---------------------------------------------------------------- narrow strip: the census wraps, the footer hint goes */
 
 @container sr (max-width: 440px) {
   /* each part leads with its dot; a line-start dot falls in .sr-txt's clipped edge */
@@ -413,5 +794,9 @@
     margin: 0;
     color: var(--sr-faint);
     text-align: center;
+  }
+  /* why: the hint is the footer's only content until Open thread lands (issue 04) */
+  .sr-x-foot {
+    display: none;
   }
 }
