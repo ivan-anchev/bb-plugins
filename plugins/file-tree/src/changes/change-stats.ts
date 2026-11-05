@@ -1,12 +1,22 @@
 import type { ChangedFile } from "../git.ts";
+import { CHANGE_KINDS, changeKindOf, type ChangeKind } from "./change-kind.ts";
 
 export type LineStats = { insertions: number; deletions: number };
 
 export type StatPart = { text: string; tone: "added" | "removed" | "muted" };
 
-export type ChangeSummary = { text: string; stats: LineStats | null; title: string };
+export type KindBreakdown = { rows: { kind: ChangeKind; stats: LineStats }[]; totalLabel: string };
 
-type ShownChanges = { shown: readonly ChangedFile[]; totalCount: number; truncated: boolean; filtering: boolean };
+export type ChangeSummary = Headline & { breakdown: KindBreakdown };
+
+type Headline = { text: string; stats: LineStats | null; title: string };
+
+type SummarizedChanges = {
+  files: readonly ChangedFile[];
+  shown: readonly ChangedFile[];
+  truncated: boolean;
+  filtering: boolean;
+};
 
 const COUNT_FORMAT = new Intl.NumberFormat("en-US");
 
@@ -26,33 +36,46 @@ export function lineStatPartsOf(stats: LineStats): StatPart[] {
   return [insertionPart(stats.insertions), deletionPart(stats.deletions)];
 }
 
-export function changeSummaryOf({ shown, totalCount, truncated, filtering }: ShownChanges): ChangeSummary {
-  const stats = totalStatsOf(shown);
-  const changed = stats.insertions > 0 || stats.deletions > 0;
-  const visibleStats = changed ? stats : null;
-  const more = truncated ? "+" : "";
-  if (filtering) {
-    return {
-      text: `${shown.length} of ${totalCount}${more} files${changed ? " · " : ""}`,
-      stats: visibleStats,
-      title: `${shown.length} of ${totalCount}${more} changed files match the filter`,
-    };
-  }
-  if (truncated) {
-    return {
-      text: `${shown.length}+ ${filesWord(shown.length)}${changed ? " · shown " : ""}`,
-      stats: visibleStats,
-      title: `Showing the first ${filesOf(shown.length)}; shown slice: ${countOf(stats.insertions, "insertion")}, ${countOf(stats.deletions, "deletion")}`,
-    };
-  }
-  if (shown.length === 0) return { text: "No changes", stats: null, title: "No changes" };
-  return changed
-    ? { text: `${filesOf(shown.length)}, `, stats, title: `${filesOf(shown.length)}, ${plainTextOf(lineStatPartsOf(stats))}` }
-    : { text: filesOf(shown.length), stats: null, title: filesOf(shown.length) };
+export function changeSummaryOf(changes: SummarizedChanges): ChangeSummary {
+  const stats = totalStatsOf(changes.files);
+  return { ...headlineOf(changes, stats), breakdown: kindBreakdownOf(changes.files, changes.truncated) };
 }
 
 export function plainTextOf(parts: readonly StatPart[]): string {
   return parts.map((part) => part.text).join(" ");
+}
+
+function headlineOf({ files, shown, truncated, filtering }: SummarizedChanges, stats: LineStats): Headline {
+  const changed = hasLines(stats);
+  const visibleStats = changed ? stats : null;
+  const statsLead = changed ? (truncated ? " · shown " : " · ") : "";
+  if (filtering) {
+    const matching = `${shown.length} of ${files.length}${truncated ? "+" : ""}`;
+    return {
+      text: `${matching} files${statsLead}`,
+      stats: visibleStats,
+      title: `${matching} changed files match the filter`,
+    };
+  }
+  if (truncated) {
+    return {
+      text: `${files.length}+ ${filesWord(files.length)}${statsLead}`,
+      stats: visibleStats,
+      title: `Showing the first ${filesOf(files.length)}; shown slice: ${countOf(stats.insertions, "insertion")}, ${countOf(stats.deletions, "deletion")}`,
+    };
+  }
+  if (files.length === 0) return { text: "No changes", stats: null, title: "No changes" };
+  return changed
+    ? { text: `${filesOf(files.length)}, `, stats, title: `${filesOf(files.length)}, ${plainTextOf(lineStatPartsOf(stats))}` }
+    : { text: filesOf(files.length), stats: null, title: filesOf(files.length) };
+}
+
+function kindBreakdownOf(files: readonly ChangedFile[], truncated: boolean): KindBreakdown {
+  const rows = CHANGE_KINDS.map((kind) => ({
+    kind,
+    stats: totalStatsOf(files.filter((file) => changeKindOf(file.path) === kind)),
+  }));
+  return { rows: rows.filter((row) => hasLines(row.stats)), totalLabel: truncated ? "Shown slice" : "Total" };
 }
 
 function totalStatsOf(files: readonly ChangedFile[]): LineStats {
@@ -60,6 +83,10 @@ function totalStatsOf(files: readonly ChangedFile[]): LineStats {
     insertions: files.reduce((sum, file) => sum + file.additions, 0),
     deletions: files.reduce((sum, file) => sum + file.deletions, 0),
   };
+}
+
+function hasLines(stats: LineStats): boolean {
+  return stats.insertions > 0 || stats.deletions > 0;
 }
 
 function insertionPart(count: number): StatPart {

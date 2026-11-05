@@ -82,7 +82,7 @@ function ChangesBody({ changes, input, controls, diff }: ChangesBodyProps) {
   }
   return (
     <>
-      <ChangesHeader controls={controls} summary={null} extensionCounts={[]} model={null} />
+      <ChangesHeader controls={controls} summary={null} extensionCounts={[]} kindCounts={[]} model={null} />
       {refreshError}
       {isLoading ? <Notice>Loading changes…</Notice> : null}
       {data === undefined ? null : <UnavailableChanges result={data} />}

@@ -28,7 +28,6 @@ function EnvironmentFiles({ environmentId }: { environmentId: string }) {
   const [view, setView] = useRememberedState(rememberedViews, environmentId, "files");
   const shownView = useRef<RefreshHandle>(null);
 
-  // The Toolbar sits above the views so switching keeps the switch mounted and focused.
   return (
     <TabFrame>
       <Toolbar onRefresh={() => shownView.current?.refresh()}>

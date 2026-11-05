@@ -2,25 +2,22 @@ import { useRef } from "react";
 import type { FileTree as TreeModel } from "@pierre/trees";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { IconButton } from "../../ui/icon-button.tsx";
-import { lineStatPartsOf, type ChangeSummary, type StatPart } from "../change-stats.ts";
+import type { ChangeKind } from "../change-kind.ts";
+import type { ChangeSummary } from "../change-stats.ts";
 import type { ChangesControls } from "../use-changes-controls.ts";
 import { CollapseAllButton, DisabledCollapseButton } from "./collapse-all-button.tsx";
 import { FilterMenu, SettingsMenu, TargetSelect } from "./header-menus.tsx";
+import { SummaryText } from "./summary-text.tsx";
 
 type ChangesHeaderProps = {
   controls: ChangesControls;
   summary: ChangeSummary | null;
   extensionCounts: readonly [string, number][];
+  kindCounts: readonly [ChangeKind, number][];
   model: TreeModel | null;
 };
 
-const TONE_CLASSES: Record<StatPart["tone"], string> = {
-  added: "text-diff-added",
-  removed: "text-diff-removed",
-  muted: "text-muted-foreground",
-};
-
-export function ChangesHeader({ controls, summary, extensionCounts, model }: ChangesHeaderProps) {
+export function ChangesHeader({ controls, summary, extensionCounts, kindCounts, model }: ChangesHeaderProps) {
   const { pathQuery } = controls;
   return (
     <div className="shrink-0 select-none px-4 pb-3 pt-3">
@@ -37,7 +34,12 @@ export function ChangesHeader({ controls, summary, extensionCounts, model }: Cha
               aria-pressed={pathQuery.value !== null}
               onClick={() => pathQuery.onChange(pathQuery.value === null ? "" : null)}
             />
-            <FilterMenu filters={controls.filters} pathQuery={pathQuery} extensionCounts={extensionCounts} />
+            <FilterMenu
+              filters={controls.filters}
+              pathQuery={pathQuery}
+              extensionCounts={extensionCounts}
+              kindCounts={kindCounts}
+            />
             {model === null ? <DisabledCollapseButton /> : <CollapseAllButton model={model} />}
             <SettingsMenu settings={controls.settings} />
           </div>
@@ -45,37 +47,6 @@ export function ChangesHeader({ controls, summary, extensionCounts, model }: Cha
       </div>
       {pathQuery.value === null ? null : <PathFilterInput value={pathQuery.value} onChange={pathQuery.onChange} />}
     </div>
-  );
-}
-
-function SummaryText({ summary }: { summary: ChangeSummary | null }) {
-  if (summary === null) {
-    return (
-      <span
-        role="status"
-        aria-label="Loading changes"
-        className="inline-block h-3 w-24 animate-pulse rounded-sm bg-surface-selected align-middle"
-      />
-    );
-  }
-  return (
-    <span title={summary.title} className="min-w-0 max-w-full shrink-0 truncate pl-2.5 text-xs text-muted-foreground">
-      {summary.text}
-      {summary.stats === null ? null : <StatText parts={lineStatPartsOf(summary.stats)} />}
-    </span>
-  );
-}
-
-function StatText({ parts }: { parts: readonly StatPart[] }) {
-  return (
-    <span className="whitespace-nowrap">
-      {parts.map((part, index) => (
-        <span key={part.tone}>
-          {index === 0 ? null : " "}
-          <span className={TONE_CLASSES[part.tone]}>{part.text}</span>
-        </span>
-      ))}
-    </span>
   );
 }
 

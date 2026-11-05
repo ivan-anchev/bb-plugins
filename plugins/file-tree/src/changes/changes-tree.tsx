@@ -7,7 +7,7 @@ import { SplitView } from "../split/split-view.tsx";
 import { changesTreeOf } from "../tree-input.ts";
 import { TreeView, useTreeModel } from "../tree-view.tsx";
 import { changeSummaryOf } from "./change-stats.ts";
-import { extensionCountsOf, filterChangedFiles, isFiltering } from "./file-filter.ts";
+import { extensionCountsOf, filterChangedFiles, isFiltering, kindCountsOf } from "./file-filter.ts";
 import { ChangesHeader } from "./header/changes-header.tsx";
 import type { ChangesControls } from "./use-changes-controls.ts";
 
@@ -42,8 +42,8 @@ export function ChangesTree({ changes, input, controls, diff, refreshError }: Ch
     setSelectedPath(path);
   };
   const summary = changeSummaryOf({
+    files: changes.files,
     shown: shownFiles,
-    totalCount: changes.files.length,
     truncated: changes.truncated,
     filtering: isFiltering(pathQuery, filters),
   });
@@ -54,6 +54,7 @@ export function ChangesTree({ changes, input, controls, diff, refreshError }: Ch
         controls={controls}
         summary={summary}
         extensionCounts={extensionCountsOf(changes.files)}
+        kindCounts={kindCountsOf(changes.files)}
         model={model}
       />
       {refreshError}

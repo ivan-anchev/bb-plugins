@@ -16,7 +16,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p .",
-    "test": "node --test src/tree-input.test.ts src/tree-selection.test.ts src/tree-expansion.test.ts src/viewer-input.test.ts src/changes/change-targets.test.ts src/changes/change-stats.test.ts src/changes/file-filter.test.ts src/split/split-size.test.ts src/ui/segment-keys.test.ts",
+    "test": "node --test src/tree-input.test.ts src/tree-selection.test.ts src/tree-expansion.test.ts src/viewer-input.test.ts src/changes/change-targets.test.ts src/changes/change-kind.test.ts src/changes/change-stats.test.ts src/changes/file-filter.test.ts src/split/split-size.test.ts src/ui/segment-keys.test.ts",
     "build": "bb plugin build"
   },
   "engines": {
@@ -25,7 +25,7 @@
   },
   "bb": {
     "name": "File Tree",
-    "description": "Browse the environment's files and git changes as a tree with colored per-file-type icons, and read any file or its diff beside the tree.",
+    "description": "Browse the environment's files and git changes as a tree with colored per-file-type icons, see how a change splits into code, tests, mocks, generated files and docs, and read any file or its diff beside the tree.",
     "branding": {
       "icon": "Folder"
     },

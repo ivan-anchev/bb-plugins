@@ -5,8 +5,11 @@ import {
   NO_FILTERS,
   extensionCountsOf,
   filterChangedFiles,
+  hidesKinds,
   isFiltering,
+  kindCountsOf,
   withExtensionShown,
+  withKindsShown,
 } from "./file-filter.ts";
 
 const FILES = [
@@ -63,6 +66,48 @@ describe("filterChangedFiles by type", () => {
   });
 });
 
+describe("filterChangedFiles by kind", () => {
+  test("hides the files of a hidden kind", () => {
+    assert.deepEqual(pathsMatching(null, withKindsShown(NO_FILTERS, ["docs"], false)), [
+      "docs/api/index.ts",
+      "src/tree.test.ts",
+      "src/tree.ts",
+      "src/new-name.ts",
+      "LICENSE",
+    ]);
+  });
+
+  test("combines with the path query", () => {
+    assert.deepEqual(pathsMatching("tree", withKindsShown(NO_FILTERS, ["tests"], false)), ["src/tree.ts"]);
+  });
+
+  test("kinds a renamed file by its new path", () => {
+    const renamed = [changedFile("src/a.ts", { changeKind: "renamed", previousPath: "src/a.test.ts" })];
+    assert.deepEqual(filterChangedFiles(renamed, null, withKindsShown(NO_FILTERS, ["tests"], false)), renamed);
+  });
+});
+
+describe("withKindsShown and hidesKinds", () => {
+  test("hides and shows several kinds at once", () => {
+    const hidden = withKindsShown(NO_FILTERS, ["tests", "mocks"], false);
+    assert.deepEqual(hidden.hiddenKinds, ["tests", "mocks"]);
+    assert.equal(hidesKinds(hidden, ["tests", "mocks"]), true);
+    assert.deepEqual(withKindsShown(hidden, ["tests", "mocks"], true).hiddenKinds, []);
+  });
+
+  test("hides each kind once", () => {
+    const tests = withKindsShown(NO_FILTERS, ["tests"], false);
+    assert.deepEqual(withKindsShown(tests, ["tests", "mocks"], false).hiddenKinds, ["tests", "mocks"]);
+  });
+
+  test("hides a group only while every kind in it is hidden", () => {
+    const testsOnly = withKindsShown(NO_FILTERS, ["tests"], false);
+    assert.equal(hidesKinds(testsOnly, ["tests", "mocks"]), false);
+    assert.equal(hidesKinds(withKindsShown(testsOnly, ["mocks"], false), ["tests", "mocks"]), true);
+    assert.equal(hidesKinds(withKindsShown(testsOnly, ["mocks"], false), ["tests"]), true);
+  });
+});
+
 describe("withExtensionShown", () => {
   test("adds and removes one extension", () => {
     const shown = withExtensionShown(NO_FILTERS, ".ts", true);
@@ -77,10 +122,11 @@ describe("isFiltering", () => {
     assert.equal(isFiltering(" ", NO_FILTERS), false);
   });
 
-  test("is on for a query, an extension, or hidden deleted files", () => {
+  test("is on for a query, an extension, hidden deleted files, or a hidden kind", () => {
     assert.equal(isFiltering("*.md", NO_FILTERS), true);
     assert.equal(isFiltering(null, withExtensionShown(NO_FILTERS, ".md", true)), true);
     assert.equal(isFiltering(null, { ...NO_FILTERS, showDeleted: false }), true);
+    assert.equal(isFiltering(null, withKindsShown(NO_FILTERS, ["generated"], false)), true);
   });
 });
 
@@ -90,6 +136,16 @@ describe("extensionCountsOf", () => {
       ["", 1],
       [".md", 2],
       [".ts", 4],
+    ]);
+  });
+});
+
+describe("kindCountsOf", () => {
+  test("counts files per present kind in display order", () => {
+    assert.deepEqual(kindCountsOf(FILES), [
+      ["code", 4],
+      ["tests", 1],
+      ["docs", 2],
     ]);
   });
 });

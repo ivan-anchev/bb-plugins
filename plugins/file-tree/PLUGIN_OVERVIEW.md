@@ -13,6 +13,11 @@ icon for each file type.
   commit; read the `N files, +A -D` total; search by path or glob; filter by
   file type; collapse every folder; and switch the diff between split and
   unified, wrapped lines, and hidden whitespace.
+- **See what kind of change it is**: every changed file is sorted by its path
+  into code, tests, mocks (fixtures, snapshots and other test support),
+  generated files (lockfiles and build output) or docs. Hover or focus the
+  total to see its `+A -D` per kind, and use the filter menu to hide kinds,
+  or every test and mock at once with **Hide tests**.
 - **Read it in place**: click a file and it shows beside the tree, in the same
   tab. In All files you see its contents; in Changes you see its diff, both
   drawn by bb's own code and diff viewers. Nothing opens a new tab, and the
