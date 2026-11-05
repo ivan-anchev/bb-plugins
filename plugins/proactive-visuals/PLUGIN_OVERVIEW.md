@@ -3,6 +3,7 @@ Agents in bb can already draw an HTML page inside their reply, but they only do 
 ## What you get
 
 - **Charts without asking.** When an answer rests on a trend, a comparison, a distribution, or a breakdown, the agent shows it as an inline chart next to the prose.
+- **Finished pages, not sketches.** Each page has a titled section per question the data answers, the trend when there is history, exact values on hover and keyboard focus, a collapsed data table, and controls when the data has more than one useful view. Pages are saved in the thread's storage, so you can open them in the sidebar later.
 - **Visuals that fit the thread.** The agent follows bb's inline layout and theme rules, so pages use your theme's colours, follow light and dark mode, and have no stray black backgrounds or self-scrolling frames.
 - **No noise in ordinary work.** Editing, refactoring, debugging, or explaining code gets no chart, even when the code is chart code.
 - **The right format for images you want to post.** Ask for an image to post or send elsewhere and the agent makes a `.png` file instead of an inline page.
