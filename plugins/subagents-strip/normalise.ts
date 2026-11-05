@@ -2,9 +2,9 @@
 // events become canonical delegates. Nothing else in the plugin reads `output`,
 // `childRef`, `toolArgs`, or task events. `background` is never read: Claude
 // Code agents run async whatever it says.
-import type { BackgroundTaskItem, DelegationRow, EventRow, TaskStatus, TimelineRow } from "./bb.ts";
+import type { BackgroundTaskItem, DelegationRow, EventRow, StepRow, TaskStatus, TimelineRow } from "./bb.ts";
 import type { Delegate, DelegateId, DelegateState, DelegateStatus } from "./delegate.ts";
-import { isHandback, transcriptSteps } from "./steps.ts";
+import { isHandback, splitReport, transcriptSteps } from "./steps.ts";
 
 /** Latest background-task snapshot per delegation callId (the task's `parentToolCallId`). */
 export type TaskLedger = ReadonlyMap<string, TaskSnapshot>;
@@ -41,14 +41,16 @@ function toDelegate(group: readonly [DelegationRow, ...DelegationRow[]], ledger:
   const first = group[0];
   const task = taskFor(group, ledger);
   const childRows = concatChildRows(group);
+  const settled = task ? stateFromTask(task, childRows) : stateFromRow(group[group.length - 1], childRows);
+  const { state, steps } = reportFromSteps(settled, childRows && transcriptSteps(childRows));
   return {
     id: first.callId as DelegateId, // the one brand point: a callId becomes a DelegateId here
     turnId: first.turnId,
     title: titleOf(first),
     startedAt: first.startedAt,
-    steps: childRows && transcriptSteps(childRows),
+    steps,
     usage: task?.usage ?? null,
-    state: task ? stateFromTask(task, childRows) : stateFromRow(group[group.length - 1], childRows),
+    state,
   };
 }
 
@@ -74,6 +76,21 @@ function stateFromRow(row: DelegationRow, childRows: readonly TimelineRow[] | nu
     case "failed": return { status, endedAt, error: nonEmpty(row.output) };
     case "stopped": return { status, endedAt };
   }
+}
+
+/**
+ * A completed delegate with no handback and no output reports its last
+ * assistant message, which then leaves its steps. Codex sends neither: output
+ * is "" on all 6 captured rows, and each ends in its closing message.
+ */
+// why: keyed on the data, not the provider: Claude Code agents hand back, so it never fires for them.
+function reportFromSteps(
+  state: DelegateState,
+  steps: readonly StepRow[] | null,
+): { state: DelegateState; steps: readonly StepRow[] | null } {
+  if (state.status !== "completed" || state.report !== null || steps === null) return { state, steps };
+  const split = splitReport(steps);
+  return { state: { ...state, report: split.report }, steps: split.steps };
 }
 
 // why: paused counts as live; killed and stopped merge into one "stopped" (TaskStop sends killed, then stopped).
@@ -125,8 +142,15 @@ function handbackReport(childRows: readonly TimelineRow[] | null): string | null
 }
 
 function titleOf(row: DelegationRow): string {
-  return nonEmpty(row.description) ?? nonEmpty(row.presentation?.title) ?? nonEmpty(row.subagentType) ?? "Subagent";
+  return agentName(nonEmpty(row.description) ?? nonEmpty(row.presentation?.title) ?? nonEmpty(row.subagentType) ?? "Subagent");
 }
+
+/** Codex names an agent by its path ("/root/counter_e"); the last segment is its name. */
+// why: only a whitespace-free absolute path matches, so a free-text description is never cut.
+function agentName(title: string): string {
+  return AGENT_PATH.exec(title)?.[1] ?? title;
+}
+const AGENT_PATH = /^\/(?:[^/\s]+\/)*([^/\s]+)$/;
 
 function backgroundTaskOf(event: EventRow): BackgroundTaskItem | null {
   switch (event.type) {

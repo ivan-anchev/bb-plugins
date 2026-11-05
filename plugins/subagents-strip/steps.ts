@@ -1,6 +1,6 @@
 // What a delegate's child rows mean as steps. A step is a bb row (StepRow),
 // never a reshaped copy; meaning is derived at the point of use.
-import type { ReasoningRow, StepRow, TimelineRow } from "./bb.ts";
+import type { AssistantRow, ReasoningRow, StepRow, TimelineRow } from "./bb.ts";
 
 /** The rows a delegate's transcript shows, in order: reasoning included. */
 export function transcriptSteps(rows: readonly TimelineRow[]): StepRow[] {
@@ -50,6 +50,17 @@ export function firstLine(text: string): string {
 /** The provider's report row: Claude Code's SubagentHandback tool call. */
 export function isHandback(row: TimelineRow): row is Extract<TimelineRow, { workKind: "tool" }> {
   return row.kind === "work" && row.workKind === "tool" && row.toolName === "SubagentHandback";
+}
+
+/**
+ * A finished delegate's report when its provider hands none back: its last
+ * non-blank assistant message, which leaves the steps so the row and the
+ * transcript show it once, as the outcome (as isTranscriptStep drops the handback).
+ */
+export function splitReport(steps: readonly StepRow[]): { steps: readonly StepRow[]; report: string | null } {
+  const message = steps.findLast(isReportMessage);
+  if (!message) return { steps, report: null };
+  return { steps: steps.filter((row) => row !== message), report: message.text };
 }
 
 /** A reasoning row: the transcript shows it as a collapsed Thinking block; the trail leaves it out. */
@@ -123,6 +134,11 @@ function presentationTitle(row: unknown): string | null {
   const { presentation } = row;
   if (typeof presentation !== "object" || presentation === null || !("title" in presentation)) return null;
   return typeof presentation.title === "string" ? presentation.title : null;
+}
+
+// why: a blank message cannot be a report; the one before it can.
+function isReportMessage(row: StepRow): row is AssistantRow {
+  return row.kind === "conversation" && row.role === "assistant" && row.text.trim() !== "";
 }
 
 function isTranscriptStep(row: TimelineRow): boolean {

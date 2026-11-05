@@ -17,4 +17,4 @@ When an agent hands work to subagents, bb folds them into the thread's step list
 
 The strip reads the thread's timeline and its background-task events through bb's own API, in your browser, and updates when the thread changes. It has no server logic, settings, commands, or network access beyond bb.
 
-Status comes from Claude Code's background-task events. Other providers' subagents show the status bb's timeline gives them; Codex and ACP subagents have not been checked live.
+Status comes from Claude Code's background-task events. Other providers' subagents show the status bb's timeline gives them. A Codex subagent reads by its agent name and, once done, reports its last message; ACP subagents have not been checked live.
