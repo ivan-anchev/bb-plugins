@@ -19,6 +19,9 @@ It changes only type and the header height, never colors.
 | `--text-xs` (labels, metadata) | 12px | 12px, unchanged |
 | `--bb-app-chrome-row-height` (header) | 48px | 52px |
 
+It also fixes one bb layout bug while active: in the macOS desktop window, the
+close button on a right-panel tab no longer stretches into a tall strip on hover.
+
 Phone-sized touch screens keep bb's own font and touch scale, which is already larger.
 
 ## Procedure

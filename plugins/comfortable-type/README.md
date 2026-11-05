@@ -4,8 +4,10 @@ Contributes one theme, **Comfortable Type**
 (`plugin:comfortable-type:comfortable`), that raises bb's desktop type scale to
 T3 Code's 14px body text in the system font, without touching colors.
 
-- `themes/comfortable.css`: the theme. CSS variables only; each one is
-  commented with the bb value it replaces.
+- `themes/comfortable.css`: the theme. CSS variables, each commented with the
+  bb value it replaces, plus one workaround for a bb layout bug: the macOS
+  title bar's `[&_button]:h-(--bb-title-bar-control-size)` stretches the
+  close button inside each tab pill to 28px. Drop the rule once bb fixes it.
 - `server.ts`: an empty entry, because bb requires one.
 - `skills/comfortable-type/SKILL.md`: how an agent turns the theme on and off.
 
