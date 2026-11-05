@@ -1,4 +1,4 @@
-A **Files** tab in the side panel of every thread, showing the thread's
+Code Explorer adds a **Files** tab to every thread, showing the thread's
 environment the way T3 Code and the Codex app do: a compact tree with a colored
 icon for each file type.
 

@@ -1,11 +1,11 @@
 ---
-name: file-tree
-description: What the File Tree plugin's "Files" side-panel tab shows (the environment's files and its git changes as a tree with colored file-type icons, with the clicked file's contents or diff shown beside the tree) and how to point a user at it.
+name: code-explorer
+description: What the Code Explorer plugin's "Files" side-panel tab shows (the environment's files and its git changes as a tree with colored file-type icons, with the clicked file's contents or diff shown beside the tree) and how to point a user at it.
 ---
 
-# File Tree
+# Code Explorer
 
-The File Tree plugin adds a **Files** tab to the side panel of every thread that
+The Code Explorer plugin adds a **Files** tab to the side panel of every thread that
 has an environment. It has no CLI command, no agent tool, and no settings.
 
 ## What the tab shows
