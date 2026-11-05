@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { ChangedFile } from "./git.ts";
 import { FileTree, createFileTreeIconResolver } from "@pierre/trees";
+import { changedFile } from "./changed-file.fixture.ts";
 import { TREE_ICONS, changesTreeOf, treePathsOf } from "./tree-input.ts";
 
 describe("treePathsOf", () => {
@@ -31,11 +32,8 @@ describe("treePathsOf", () => {
 });
 
 describe("changesTreeOf", () => {
-  const change = (path: string, changeKind: ChangedFile["changeKind"]): ChangedFile => ({
-    path,
-    changeKind,
-    origin: "tracked",
-  });
+  const change = (path: string, changeKind: ChangedFile["changeKind"]): ChangedFile =>
+    changedFile(path, { changeKind });
 
   test("maps every tracked change kind to the tree's git status", () => {
     const tree = changesTreeOf([
@@ -58,7 +56,7 @@ describe("changesTreeOf", () => {
   });
 
   test("reports untracked files as untracked whatever their change kind", () => {
-    const tree = changesTreeOf([{ path: "notes.md", changeKind: "added", origin: "untracked" }]);
+    const tree = changesTreeOf([changedFile("notes.md", { changeKind: "added", origin: "untracked" })]);
 
     assert.deepEqual(tree.gitStatus, [{ path: "notes.md", status: "untracked" }]);
   });

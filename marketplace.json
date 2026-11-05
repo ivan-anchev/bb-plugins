@@ -30,7 +30,7 @@
     {
       "id": "file-tree",
       "displayName": "File Tree",
-      "description": "Browse the environment's files and git changes as a tree with colored per-file-type icons.",
+      "description": "Browse the environment's files and git changes as a tree with colored per-file-type icons, and read any file or its diff beside the tree.",
       "icon": "Folder",
       "tags": [
         "files",

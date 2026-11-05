@@ -6,11 +6,25 @@ const changeTargetSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("all"), mergeBaseBranch: z.string() }),
 ]);
 
+const changesInputSchema = z.object({
+  environmentId: z.string(),
+  target: changeTargetSchema,
+  ignoreWhitespace: z.boolean(),
+});
+
 const changedFileSchema = z.object({
   path: z.string(),
+  previousPath: z.string().nullable(),
   changeKind: z.enum(["added", "modified", "deleted", "renamed", "copied", "type_changed"]),
   origin: z.enum(["tracked", "untracked"]),
+  additions: z.number(),
+  deletions: z.number(),
+  binary: z.boolean(),
+  loadMode: z.enum(["auto", "on_demand", "too_large"]),
+  revision: z.string(),
 });
+
+const patchSchema = z.object({ path: z.string(), patch: z.string(), truncated: z.boolean() });
 
 const notApplicableSchema = z.object({ outcome: z.literal("not_applicable"), message: z.string() });
 
@@ -21,21 +35,28 @@ const unavailableSchema = z.object({
 
 export const gitContract = {
   files: {
-    input: z.object({
-      environmentId: z.string(),
-      target: changeTargetSchema,
-      ignoreWhitespace: z.boolean(),
-    }),
+    input: changesInputSchema,
     output: z.discriminatedUnion("outcome", [
       z.object({
         outcome: z.literal("available"),
         files: z.array(changedFileSchema),
         truncated: z.boolean(),
-        mergeBaseRef: z.string().nullable(),
+        initialPatches: z.array(patchSchema),
       }),
       notApplicableSchema,
       unavailableSchema,
     ]),
+  },
+  patches: {
+    input: z.object({ keys: z.array(z.string()) }),
+    output: z.record(
+      z.string(),
+      z.discriminatedUnion("outcome", [
+        z.object({ outcome: z.literal("available"), patch: patchSchema }),
+        notApplicableSchema,
+        unavailableSchema,
+      ]),
+    ),
   },
   status: {
     input: z.object({ keys: z.array(z.string()) }),
@@ -57,4 +78,6 @@ export const gitContract = {
 } satisfies PluginRpcContract;
 
 export type ChangeTarget = z.infer<typeof changeTargetSchema>;
+export type ChangesInput = z.infer<typeof changesInputSchema>;
 export type ChangedFile = z.infer<typeof changedFileSchema>;
+export type GitPatch = z.infer<typeof patchSchema>;

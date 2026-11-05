@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { FileTree as TreeModel, FileTreeIconConfig, FileTreeInitialExpansion, GitStatusEntry } from "@pierre/trees";
 import { FileTree, useFileTree } from "@pierre/trees/react";
+import { keepOnlySelected } from "./tree-selection.ts";
 
 const rememberedExpansion = new Map<string, readonly string[]>();
 
@@ -11,10 +12,20 @@ type TreeViewProps = {
   gitStatus?: readonly GitStatusEntry[];
   icons: FileTreeIconConfig;
   initialExpansion: FileTreeInitialExpansion;
-  onOpenFile(path: string): void;
+  selectedPath: string | null;
+  onSelectFile(path: string): void;
 };
 
-export function TreeView({ label, memoryKey, paths, gitStatus, icons, initialExpansion, onOpenFile }: TreeViewProps) {
+export function TreeView({
+  label,
+  memoryKey,
+  paths,
+  gitStatus,
+  icons,
+  initialExpansion,
+  selectedPath,
+  onSelectFile,
+}: TreeViewProps) {
   const { model } = useFileTree({
     paths,
     gitStatus,
@@ -28,6 +39,7 @@ export function TreeView({ label, memoryKey, paths, gitStatus, icons, initialExp
   useSyncedPaths(model, paths);
   useRememberedExpansion(model, memoryKey);
   useEffect(() => model.setGitStatus(gitStatus), [model, gitStatus]);
+  useSelectionOf(model, selectedPath);
 
   return (
     <FileTree
@@ -36,7 +48,7 @@ export function TreeView({ label, memoryKey, paths, gitStatus, icons, initialExp
       className="file-tree min-h-0 flex-1"
       onClick={(event) => {
         const path = clickedFilePath(event.nativeEvent);
-        if (path !== null) onOpenFile(path);
+        if (path !== null) onSelectFile(path);
       }}
     />
   );
@@ -54,6 +66,10 @@ function useRememberedExpansion(model: TreeModel, memoryKey: string): void {
     () => model.subscribe(() => rememberedExpansion.set(memoryKey, expandedDirectoriesOf(model))),
     [model, memoryKey],
   );
+}
+
+function useSelectionOf(model: TreeModel, selectedPath: string | null): void {
+  useEffect(() => keepOnlySelected(model, selectedPath), [model, selectedPath]);
 }
 
 function useSyncedPaths(model: TreeModel, paths: readonly string[]): void {

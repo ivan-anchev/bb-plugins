@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSdk } from "@get-bb/plugin-sdk/app";
 import type { WorkspacePath } from "../tree-input.ts";
+import { messageOf } from "./error-message.ts";
 
 const PATH_LIMIT = 20000;
 
@@ -35,8 +36,4 @@ export function useEnvironmentPaths(environmentId: string) {
 
   const refetch = useCallback(() => setGeneration((current) => current + 1), []);
   return { state, refetch };
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

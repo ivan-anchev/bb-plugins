@@ -65,3 +65,31 @@ export function Notice({ children, tone = "quiet" }: { children: ReactNode; tone
 export function Footnote({ children }: { children: ReactNode }) {
   return <p className="shrink-0 border-t border-border px-3 py-1.5 text-xs text-muted-foreground">{children}</p>;
 }
+
+export function SplitView({ tree, viewer }: { tree: ReactNode; viewer: ReactNode }) {
+  return (
+    <div className="@container flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col @3xl:flex-row">
+        <div className="flex min-h-0 shrink-0 grow-0 basis-2/5 flex-col border-b border-border @3xl:basis-72 @3xl:border-r @3xl:border-b-0">
+          {tree}
+        </div>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">{viewer}</div>
+      </div>
+    </div>
+  );
+}
+
+export function ViewerFrame({ path, children }: { path: string; children: ReactNode }) {
+  return (
+    <>
+      <p title={path} className="shrink-0 truncate border-b border-border px-3 py-1.5 font-mono text-xs text-muted-foreground">
+        {path}
+      </p>
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto">{children}</div>
+    </>
+  );
+}
+
+export function SelectFilePrompt() {
+  return <Notice>Select a file</Notice>;
+}
