@@ -1,5 +1,5 @@
 // The canonical delegate: one record per subagent, whatever the provider.
-import type { TaskUsage, TimelineRow } from "./bb.ts";
+import type { StepRow, TaskUsage } from "./bb.ts";
 
 export type DelegateId = string & { readonly __brand: "DelegateId" };
 
@@ -10,7 +10,7 @@ export type Delegate = {
   title: string;
   startedAt: number;
   /** Child rows in order (see steps.ts). null = the provider sends none (ACP); [] = none yet. */
-  steps: readonly TimelineRow[] | null;
+  steps: readonly StepRow[] | null;
   /** Only background-task events carry usage; null otherwise. */
   usage: TaskUsage | null;
   state: DelegateState;

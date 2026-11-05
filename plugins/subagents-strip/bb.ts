@@ -14,6 +14,8 @@ type TimelineRead = Awaited<ReturnType<Threads["timeline"]>>;
 type TimelineFull = Extract<TimelineRead, { rows: unknown }>;
 
 export type TimelineRow = TimelineFull["rows"][number];
+/** Any row but a turn group: what a delegate's step is. */
+export type StepRow = Exclude<TimelineRow, { kind: "turn" }>;
 export type DelegationRow = Extract<TimelineRow, { kind: "work"; workKind: "delegation" }>;
 
 /** A background-task item as task events carry it. */

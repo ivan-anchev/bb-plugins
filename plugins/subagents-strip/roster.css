@@ -1,28 +1,70 @@
-/* The strip's summary row. Every selector sits under .sr, the plugin's root;
-   colours come from bb's theme tokens, except the state marks below. */
+/* The strip: the summary row and the list it opens above itself. Every
+   selector sits under .sr, the plugin's root, and every keyframe is sr-
+   prefixed; colours come from bb's theme tokens, except the state marks. */
+
+/* --sr-cut is the surface behind an avatar; rings take it so the notch reads as a cut-out on any tint */
+@property --sr-cut {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+
 .sr {
   /* approved look (roster lab DEFAULT_CONFIG) */
+  --sr-ease: cubic-bezier(0.22, 1, 0.36, 1); /* R6: the one ease */
+  --sr-expand-ms: 260ms;
+  --sr-hover-ms: 160ms;
+  --sr-morph-in-ms: 420ms;
+  --sr-morph-out-ms: 280ms;
+  --sr-shimmer-ms: 1800ms;
+  --sr-shimmer-band: 14%;
   --sr-stack-size: 24px;
   --sr-stack-overlap: 6px;
   --sr-dot-size: 7px;
+  --sr-row-av: 22px;
+  --sr-icon-sat: 0.85;
+  --sr-row-py: 6px;
+  --sr-row-px: 8px;
   --sr-title-fs: 13px;
   --sr-detail-fs: 12px;
-  --sr-row-px: 8px;
+  --sr-dim: 0.6;
+  --sr-ring: 9%;
   --sr-radius: 10px;
   --sr-accent-hue: 250;
+  --sr-strip-share: 0.8;
 
-  /* state marks: colour marks state only, as small marks */
+  /* state marks: colour marks state only, as small marks (R2) */
   --sr-st-running: oklch(72% 0.15 var(--sr-accent-hue));
   --sr-st-completed: var(--success);
   --sr-st-failed: oklch(66% 0.2 12);
   --sr-st-stopped: color-mix(in oklab, var(--muted-foreground) 45%, var(--background));
   --sr-cut: var(--background);
+  --sr-wash: color-mix(in oklab, var(--foreground) 5%, transparent);
+  --sr-faint: color-mix(in oklab, var(--muted-foreground) 45%, transparent);
+  --sr-shimmer-ink: color-mix(in oklab, var(--foreground) 50%, white);
   --sr-census-fs: max(10px, calc(var(--sr-detail-fs) - 1px));
 
+  container: sr / inline-size;
   display: flex;
   flex-direction: column;
   font-size: var(--sr-title-fs);
   line-height: 1.35;
+  transition: opacity var(--sr-hover-ms) var(--sr-ease);
+}
+
+/* R9: reduced motion collapses every duration; the shimmer only runs without it (below) */
+@media (prefers-reduced-motion: reduce) {
+  .sr {
+    --sr-expand-ms: 1ms;
+    --sr-hover-ms: 1ms;
+    --sr-morph-in-ms: 1ms;
+    --sr-morph-out-ms: 1ms;
+  }
+}
+
+/* R8: a settled strip dims, and returns on hover, focus, or open */
+.sr[data-settled]:not([data-open]):not(:hover):not(:focus-within) {
+  opacity: var(--sr-dim);
 }
 
 .sr [data-st="running"] { --sr-st: var(--sr-st-running); }
@@ -30,14 +72,38 @@
 .sr [data-st="failed"] { --sr-st: var(--sr-st-failed); }
 .sr [data-st="stopped"] { --sr-st: var(--sr-st-stopped); }
 
-/* no fill, no border */
+/* ---------------------------------------------------------------- summary row: no fill, no border (R1) */
+
 .sr-sum {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
   min-height: 40px;
   padding: 6px var(--sr-row-px);
+  border: 0;
   border-radius: var(--sr-radius);
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--sr-hover-ms) var(--sr-ease), --sr-cut var(--sr-hover-ms) var(--sr-ease);
+}
+
+.sr-sum:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--ring) 70%, transparent);
+  outline-offset: -2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sr-sum:hover {
+    background: var(--sr-wash);
+    --sr-cut: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  }
+  .sr-sum:hover .sr-chev {
+    color: var(--foreground);
+  }
 }
 
 .sr-stack {
@@ -45,46 +111,6 @@
   flex: none;
   align-items: center;
   padding-left: var(--sr-stack-overlap);
-}
-
-.sr-av {
-  position: relative;
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: var(--sr-stack-size);
-  height: var(--sr-stack-size);
-  margin-left: calc(-1 * var(--sr-stack-overlap));
-  border-radius: 50%;
-  background: color-mix(in oklab, var(--foreground) 10%, var(--background));
-  box-shadow: 0 0 0 2px var(--sr-cut), inset 0 0 0 1px color-mix(in oklab, var(--foreground) 9%, transparent);
-}
-
-.sr-av-icon {
-  width: calc(var(--sr-stack-size) * 0.6);
-  height: calc(var(--sr-stack-size) * 0.6);
-}
-
-.sr-dot {
-  position: absolute;
-  right: -1px;
-  bottom: -1px;
-  width: var(--sr-dot-size);
-  height: var(--sr-dot-size);
-  border-radius: 50%;
-  background: var(--sr-st);
-  box-shadow: 0 0 0 2px var(--sr-cut);
-}
-
-.sr-more {
-  width: auto;
-  min-width: var(--sr-stack-size);
-  padding: 0 calc(var(--sr-stack-size) * 0.22);
-  border-radius: 999px;
-  font-size: max(10px, calc(var(--sr-stack-size) * 0.42));
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  color: var(--subtle-foreground);
 }
 
 .sr-txt {
@@ -100,7 +126,6 @@
 
 .sr-title {
   font-weight: 500;
-  font-variant-numeric: tabular-nums;
   color: var(--foreground);
 }
 
@@ -110,14 +135,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: var(--sr-census-fs);
-  font-variant-numeric: tabular-nums;
   color: var(--subtle-foreground);
 }
 
 .sr-part:not(:first-child)::before {
   content: "·";
   margin: 0 0.4em;
-  color: color-mix(in oklab, var(--muted-foreground) 45%, transparent);
+  color: var(--sr-faint);
 }
 
 .sr-part[data-st="running"],
@@ -130,4 +154,264 @@
   font-size: var(--sr-detail-fs);
   font-variant-numeric: tabular-nums;
   color: var(--subtle-foreground);
+}
+
+.sr-chev {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: color-mix(in oklab, var(--subtle-foreground) 70%, transparent);
+  transition: transform var(--sr-expand-ms) var(--sr-ease), color var(--sr-hover-ms) var(--sr-ease);
+}
+
+.sr[data-open] .sr-chev {
+  transform: rotate(180deg);
+}
+
+/* ---------------------------------------------------------------- avatar: one recipe for the stack and the rows (R4, F1-F3) */
+
+.sr-av {
+  --sr-av: var(--sr-stack-size);
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--sr-av);
+  height: var(--sr-av);
+  margin-left: calc(-1 * var(--sr-stack-overlap));
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--foreground) 10%, var(--background));
+  box-shadow: 0 0 0 2px var(--sr-cut), inset 0 0 0 1px color-mix(in oklab, var(--foreground) 9%, transparent);
+}
+
+.sr-av-icon {
+  width: calc(var(--sr-av) * 0.6);
+  height: calc(var(--sr-av) * 0.6);
+  filter: saturate(var(--sr-icon-sat));
+}
+
+/* every state lives in the dot, bottom-right with its own cut ring; a change scales across (R5) */
+.sr-dot {
+  position: absolute;
+  z-index: 1;
+  right: -1px;
+  bottom: -1px;
+  width: var(--sr-dot-size);
+  height: var(--sr-dot-size);
+  border-radius: 50%;
+  background: var(--sr-st);
+  box-shadow: 0 0 0 2px var(--sr-cut);
+}
+
+.sr-dot-in { animation: sr-pop var(--sr-morph-in-ms) var(--sr-ease) both; }
+.sr-dot-out { animation: sr-pop-out var(--sr-morph-out-ms) var(--sr-ease) both; }
+
+.sr-more {
+  display: flex;
+  justify-content: center;
+  width: auto;
+  min-width: var(--sr-av);
+  padding: 0 calc(var(--sr-av) * 0.22);
+  border-radius: 999px;
+  font-size: max(10px, calc(var(--sr-av) * 0.42));
+  font-weight: 500;
+  color: var(--subtle-foreground);
+}
+
+.sr-status-word {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- the list: the only container (R1), grows upward */
+
+.sr-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--sr-expand-ms) var(--sr-ease);
+}
+
+.sr[data-open] .sr-wrap {
+  grid-template-rows: 1fr;
+}
+
+.sr-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sr-panel {
+  --sr-cut: color-mix(in oklab, var(--foreground) 1.5%, var(--background));
+  margin-bottom: 4px;
+  padding: 4px;
+  border-radius: var(--sr-radius);
+  background: color-mix(in oklab, var(--foreground) 1.5%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) var(--sr-ring), transparent);
+  opacity: 0;
+  transform: translateY(6px);
+  visibility: hidden;
+  transition:
+    opacity calc(var(--sr-expand-ms) * 0.7) var(--sr-ease),
+    transform var(--sr-expand-ms) var(--sr-ease),
+    visibility 0s linear var(--sr-expand-ms);
+}
+
+.sr[data-open] .sr-panel {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  transition:
+    opacity calc(var(--sr-expand-ms) * 0.7) var(--sr-ease),
+    transform var(--sr-expand-ms) var(--sr-ease),
+    visibility 0s;
+}
+
+/* never more than its share of the room above the summary row (--sr-room, kept by ui/room.ts) */
+.sr-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: calc(var(--sr-room) * var(--sr-strip-share));
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+/* ---------------------------------------------------------------- delegate row: two lines (R3) */
+
+.sr-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  padding: var(--sr-row-py) var(--sr-row-px);
+  border-radius: max(0px, calc(var(--sr-radius) - 4px));
+}
+
+.sr-row .sr-av {
+  --sr-av: var(--sr-row-av);
+  margin-left: 0;
+}
+
+.sr-row-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.sr-row-title {
+  overflow: hidden;
+  font-weight: 500;
+  color: var(--foreground);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sr-row .sr-el {
+  min-width: 4ch;
+  text-align: right;
+}
+
+.sr-row-detail {
+  font-size: var(--sr-detail-fs);
+  line-height: 1.45;
+  color: var(--subtle-foreground);
+}
+
+.sr-row[data-st="failed"] .sr-row-detail {
+  color: var(--sr-st-failed);
+}
+
+/* ---------------------------------------------------------------- motion (R5) */
+
+/* rolling text: the old line rolls out and the new one in, with a small blur */
+.sr-roll {
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.sr-roll > span {
+  grid-area: 1 / 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sr-roll-in { animation: sr-roll-in var(--sr-morph-in-ms) var(--sr-ease) both; }
+.sr-roll-out { animation: sr-roll-out var(--sr-morph-out-ms) var(--sr-ease) both; }
+
+/* the running detail carries a moving band of ink; never under reduced motion (R9) */
+@media (prefers-reduced-motion: no-preference) {
+  .sr-row[data-st="running"] .sr-row-detail > span:not(.sr-roll-out) {
+    color: transparent;
+    background: linear-gradient(
+      90deg,
+      var(--subtle-foreground) calc(50% - var(--sr-shimmer-band)),
+      var(--sr-shimmer-ink) 50%,
+      var(--subtle-foreground) calc(50% + var(--sr-shimmer-band))
+    );
+    background-size: 300% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    animation: sr-shimmer var(--sr-shimmer-ms) linear infinite;
+  }
+  .sr-row[data-st="running"] .sr-row-detail > span.sr-roll-in {
+    animation: sr-roll-in var(--sr-morph-in-ms) var(--sr-ease) both, sr-shimmer var(--sr-shimmer-ms) linear infinite;
+  }
+}
+
+/* rolling digits: only the digits that changed roll, up when the count grows */
+.sr-num {
+  display: inline-flex;
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-dg {
+  display: inline-grid;
+  overflow: hidden;
+}
+
+.sr-dg > span { grid-area: 1 / 1; }
+.sr-dg-in-up { animation: sr-dg-in-up var(--sr-morph-in-ms) var(--sr-ease) both; }
+.sr-dg-in-down { animation: sr-dg-in-down var(--sr-morph-in-ms) var(--sr-ease) both; }
+.sr-dg-out-up { animation: sr-dg-out-up var(--sr-morph-out-ms) var(--sr-ease) both; }
+.sr-dg-out-down { animation: sr-dg-out-down var(--sr-morph-out-ms) var(--sr-ease) both; }
+
+@keyframes sr-roll-in { from { opacity: 0; transform: translateY(70%); filter: blur(3px); } }
+@keyframes sr-roll-out { to { opacity: 0; transform: translateY(-70%); filter: blur(3px); } }
+@keyframes sr-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@keyframes sr-pop { from { opacity: 0; transform: scale(0.6); } }
+@keyframes sr-pop-out { to { opacity: 0; transform: scale(0.6); } }
+@keyframes sr-dg-in-up { from { opacity: 0; transform: translateY(70%); filter: blur(2px); } }
+@keyframes sr-dg-in-down { from { opacity: 0; transform: translateY(-70%); filter: blur(2px); } }
+@keyframes sr-dg-out-up { to { opacity: 0; transform: translateY(-70%); filter: blur(2px); } }
+@keyframes sr-dg-out-down { to { opacity: 0; transform: translateY(70%); filter: blur(2px); } }
+
+/* ---------------------------------------------------------------- narrow strip: the census wraps */
+
+@container sr (max-width: 440px) {
+  /* each part leads with its dot; a line-start dot falls in .sr-txt's clipped edge */
+  .sr-census {
+    display: flex;
+    flex-wrap: wrap;
+    margin-left: -1.1em;
+  }
+  .sr-part::before,
+  .sr-part:not(:first-child)::before {
+    content: "·";
+    display: inline-block;
+    width: 1.1em;
+    margin: 0;
+    color: var(--sr-faint);
+    text-align: center;
+  }
 }
