@@ -110,6 +110,36 @@ describe("changesTreeOf", () => {
     });
   }
 
+  test("decorates each changed row with its line stats in bb's diff colors", () => {
+    const tree = changesTreeOf([
+      changedFile("README.md", { additions: 3, deletions: 1 }),
+      changedFile("notes.md", { changeKind: "added", additions: 4, deletions: 0 }),
+      changedFile("pixel.png", { binary: true, additions: 0, deletions: 0 }),
+      changedFile("empty.txt", { changeKind: "added", additions: 0, deletions: 0 }),
+    ]);
+
+    assert.deepEqual(tree.decorations.get("README.md"), {
+      text: "+3 -1",
+      title: "+3 -1",
+      parts: [
+        { text: "+3", color: "var(--diff-added)" },
+        { text: "\u00a0" },
+        { text: "-1", color: "var(--diff-removed)" },
+      ],
+    });
+    assert.deepEqual(tree.decorations.get("notes.md"), {
+      text: "+4",
+      title: "+4",
+      parts: [{ text: "+4", color: "var(--diff-added)" }],
+    });
+    assert.deepEqual(tree.decorations.get("pixel.png"), {
+      text: "Binary",
+      title: "Binary",
+      parts: [{ text: "Binary", color: "var(--muted-foreground)" }],
+    });
+    assert.equal(tree.decorations.has("empty.txt"), false);
+  });
+
   test("keeps the real file's icon on a distinct tree path", () => {
     const tree = changesTreeOf([change("app/package.json", "deleted"), change("app/package.json/index.ts", "added")]);
     const [fileTreePath] = tree.paths;

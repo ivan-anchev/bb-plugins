@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { Footnote, Notice, SelectFilePrompt, SplitView, TabFrame, Toolbar } from "./chrome.tsx";
+import { Footnote, Notice, SelectFilePrompt, TabFrame, Toolbar } from "./chrome.tsx";
 import { FileViewer } from "./file-viewer.tsx";
+import { SplitView } from "./split/split-view.tsx";
 import { TREE_ICONS, treePathsOf, type WorkspacePath } from "./tree-input.ts";
-import { TreeView } from "./tree-view.tsx";
+import { TreeView, useTreeModel } from "./tree-view.tsx";
 import { useEnvironmentPaths, type EnvironmentPathsState } from "./hooks/use-environment-paths.ts";
 import { useRefetchOnShow } from "./hooks/use-refetch-on-show.ts";
 import { useRememberedState } from "./hooks/use-remembered-state.ts";
@@ -54,20 +55,19 @@ function AllFilesTree({ entries, truncated, environmentId, readCount }: AllFiles
   const paths = useMemo(() => treePathsOf(entries), [entries]);
   const [selectedPath, setSelectedPath] = useRememberedState(rememberedSelections, environmentId, null);
   const shownPath = selectedPath !== null && paths.includes(selectedPath) ? selectedPath : null;
+  const model = useTreeModel({
+    memoryKey: `files:${environmentId}`,
+    paths,
+    icons: TREE_ICONS,
+    initialExpansion: "closed",
+    selectedPath: shownPath,
+  });
 
   return (
     <SplitView
       tree={
         <>
-          <TreeView
-            label="Environment files"
-            memoryKey={`files:${environmentId}`}
-            paths={paths}
-            icons={TREE_ICONS}
-            initialExpansion="closed"
-            selectedPath={shownPath}
-            onSelectFile={setSelectedPath}
-          />
+          <TreeView model={model} label="Environment files" onSelectFile={setSelectedPath} />
           {truncated ? <Footnote>Showing the first {entries.length} paths.</Footnote> : null}
         </>
       }

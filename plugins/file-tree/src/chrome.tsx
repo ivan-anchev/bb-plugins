@@ -22,7 +22,7 @@ export function Toolbar({ children, onRefresh }: { children: ReactNode; onRefres
   );
 }
 
-export type SegmentOption<Value extends string> = { value: Value; label: string; title?: string };
+export type SegmentOption<Value extends string> = { value: Value; label: string };
 
 type SegmentedControlProps<Value extends string> = {
   label: string;
@@ -38,7 +38,6 @@ export function SegmentedControl<Value extends string>({ label, options, value, 
         <button
           key={option.value}
           type="button"
-          title={option.title}
           aria-pressed={option.value === value}
           onClick={() => onChange(option.value)}
           className="rounded px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm"
@@ -64,19 +63,6 @@ export function Notice({ children, tone = "quiet" }: { children: ReactNode; tone
 
 export function Footnote({ children }: { children: ReactNode }) {
   return <p className="shrink-0 border-t border-border px-3 py-1.5 text-xs text-muted-foreground">{children}</p>;
-}
-
-export function SplitView({ tree, viewer }: { tree: ReactNode; viewer: ReactNode }) {
-  return (
-    <div className="@container flex min-h-0 flex-1 flex-col">
-      <div className="flex min-h-0 flex-1 flex-col @3xl:flex-row">
-        <div className="flex min-h-0 shrink-0 grow-0 basis-2/5 flex-col border-b border-border @3xl:basis-72 @3xl:border-r @3xl:border-b-0">
-          {tree}
-        </div>
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">{viewer}</div>
-      </div>
-    </div>
-  );
 }
 
 export function ViewerFrame({ path, children }: { path: string; children: ReactNode }) {

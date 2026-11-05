@@ -13,4 +13,9 @@
   --trees-input-bg-override: var(--background);
   --trees-font-family-override: var(--font-sans);
   --trees-font-size-override: 0.8125rem;
+  --trees-status-added-override: var(--diff-added);
+  --trees-status-untracked-override: var(--diff-added);
+  --trees-status-deleted-override: var(--diff-removed);
+  --trees-status-modified-override: var(--subtle-foreground);
+  --trees-status-renamed-override: var(--subtle-foreground);
 }
