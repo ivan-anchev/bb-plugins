@@ -1,0 +1,672 @@
+{
+ "rows": [
+  {
+   "id": "thr_b2fe5q9v9i:daee87293d-t1:turn",
+   "threadId": "thr_b2fe5q9v9i",
+   "turnId": "daee87293d-t1",
+   "sourceSeqStart": 1,
+   "sourceSeqEnd": 41,
+   "startedAt": 1793894058216,
+   "createdAt": 1793894092686,
+   "kind": "turn",
+   "status": "interrupted",
+   "summaryCount": 1,
+   "completedAt": 1793894092686,
+   "children": [
+    {
+     "id": "thr_b2fe5q9v9i:delegation:daee87293d-i1",
+     "threadId": "thr_b2fe5q9v9i",
+     "turnId": "daee87293d-t1",
+     "sourceSeqStart": 20,
+     "sourceSeqEnd": 39,
+     "startedAt": 1793894060690,
+     "createdAt": 1793894092686,
+     "kind": "work",
+     "workKind": "delegation",
+     "status": "completed",
+     "callId": "daee87293d-i1",
+     "toolName": "delegation",
+     "childRef": "toolu_016gkXMgM5dpTQmEsogMEerN",
+     "background": true,
+     "subagentType": null,
+     "description": "Count slowly to ninety",
+     "output": "Async agent launched successfully. (This tool result is internal metadata — never quote or paste any part of it, including the agentId below, into a user-facing reply.)\nThe agent is working in the bac",
+     "completedAt": 1793894061184,
+     "childRows": [
+      {
+       "id": "thr_b2fe5q9v9i:delegation:daee87293d-i1:child:thr_b2fe5q9v9i:command:daee87293d-i3",
+       "threadId": "thr_b2fe5q9v9i",
+       "turnId": "daee87293d-t1",
+       "sourceSeqStart": 23,
+       "sourceSeqEnd": 33,
+       "startedAt": 1793894062505,
+       "createdAt": 1793894071609,
+       "kind": "work",
+       "workKind": "command",
+       "status": "completed",
+       "callId": "daee87293d-i3",
+       "command": "sleep 8 && echo 1",
+       "cwd": "",
+       "source": null,
+       "output": "1",
+       "exitCode": 0,
+       "completedAt": 1793894071609,
+       "approvalStatus": null,
+       "activityIntents": [],
+       "presentation": {
+        "label": {
+         "pending": "Running command",
+         "completed": "Ran command"
+        },
+        "icon": {
+         "glyph": "Terminal"
+        },
+        "title": "sleep 8 && echo 1"
+       }
+      },
+      {
+       "id": "thr_b2fe5q9v9i:delegation:daee87293d-i1:child:thr_b2fe5q9v9i:command:daee87293d-i5",
+       "threadId": "thr_b2fe5q9v9i",
+       "turnId": "daee87293d-t1",
+       "sourceSeqStart": 34,
+       "sourceSeqEnd": 36,
+       "startedAt": 1793894072924,
+       "createdAt": 1793894081469,
+       "kind": "work",
+       "workKind": "command",
+       "status": "completed",
+       "callId": "daee87293d-i5",
+       "command": "sleep 8 && echo 2",
+       "cwd": "",
+       "source": null,
+       "output": "2",
+       "exitCode": 0,
+       "completedAt": 1793894081469,
+       "approvalStatus": null,
+       "activityIntents": [],
+       "presentation": {
+        "label": {
+         "pending": "Running command",
+         "completed": "Ran command"
+        },
+        "icon": {
+         "glyph": "Terminal"
+        },
+        "title": "sleep 8 && echo 2"
+       }
+      },
+      {
+       "id": "thr_b2fe5q9v9i:delegation:daee87293d-i1:child:thr_b2fe5q9v9i:command:daee87293d-i6",
+       "threadId": "thr_b2fe5q9v9i",
+       "turnId": "daee87293d-t1",
+       "sourceSeqStart": 37,
+       "sourceSeqEnd": 39,
+       "startedAt": 1793894082743,
+       "createdAt": 1793894091250,
+       "kind": "work",
+       "workKind": "command",
+       "status": "completed",
+       "callId": "daee87293d-i6",
+       "command": "sleep 8 && echo 3",
+       "cwd": "",
+       "source": null,
+       "output": "3",
+       "exitCode": 0,
+       "completedAt": 1793894091250,
+       "approvalStatus": null,
+       "activityIntents": [],
+       "presentation": {
+        "label": {
+         "pending": "Running command",
+         "completed": "Ran command"
+        },
+        "icon": {
+         "glyph": "Terminal"
+        },
+        "title": "sleep 8 && echo 3"
+       }
+      }
+     ],
+     "presentation": {
+      "label": {
+       "pending": "Launching subagent",
+       "completed": "Launched subagent"
+      },
+      "icon": {
+       "glyph": "UserRound"
+      },
+      "title": "Count slowly to ninety"
+     }
+    }
+   ]
+  },
+  {
+   "id": "thr_b2fe5q9v9i:da77a0df0c-t1:turn:0",
+   "threadId": "thr_b2fe5q9v9i",
+   "turnId": "da77a0df0c-t1",
+   "sourceSeqStart": 53,
+   "sourceSeqEnd": 67,
+   "startedAt": 1793894156305,
+   "createdAt": 1793894161805,
+   "kind": "turn",
+   "status": "completed",
+   "summaryCount": 4,
+   "completedAt": 1793894168034,
+   "children": [
+    {
+     "id": "thr_b2fe5q9v9i:delegation:da77a0df0c-i2",
+     "threadId": "thr_b2fe5q9v9i",
+     "turnId": "da77a0df0c-t1",
+     "sourceSeqStart": 58,
+     "sourceSeqEnd": 62,
+     "startedAt": 1793894161805,
+     "createdAt": 1793894162409,
+     "kind": "work",
+     "workKind": "delegation",
+     "status": "error",
+     "callId": "da77a0df0c-i2",
+     "toolName": "delegation",
+     "childRef": "toolu_01KWGWgAMHGnkrzjsSoGT3j9",
+     "background": true,
+     "subagentType": null,
+     "description": "Use a missing agent type",
+     "output": "Agent type 'no-such-agent-type' not found. Available agents: claude, codex:codex-rescue, Explore, general-purpose, impeccable-asset-producer, impeccable-documenter, impeccable-finish-reviewer, impecca",
+     "completedAt": 1793894162409,
+     "childRows": [],
+     "presentation": {
+      "label": {
+       "pending": "Launching subagent",
+       "completed": "Launched subagent"
+      },
+      "icon": {
+       "glyph": "UserRound"
+      },
+      "title": "Use a missing agent type",
+      "detail": "no-such-agent-type agent"
+     }
+    }
+   ]
+  },
+  {
+   "id": "thr_b2fe5q9v9i:da77a0df0c-t2:turn:0",
+   "threadId": "thr_b2fe5q9v9i",
+   "turnId": "da77a0df0c-t2",
+   "sourceSeqStart": 84,
+   "sourceSeqEnd": 111,
+   "startedAt": 1793894261766,
+   "createdAt": 1793894265540,
+   "kind": "turn",
+   "status": "completed",
+   "summaryCount": 5,
+   "completedAt": 1793894271099,
+   "children": [
+    {
+     "id": "thr_b2fe5q9v9i:delegation:da77a0df0c-i8",
+     "threadId": "thr_b2fe5q9v9i",
+     "turnId": "da77a0df0c-t2",
+     "sourceSeqStart": 89,
+     "sourceSeqEnd": 105,
+     "startedAt": 1793894265582,
+     "createdAt": 1793894268990,
+     "kind": "work",
+     "workKind": "delegation",
+     "status": "completed",
+     "callId": "da77a0df0c-i8",
+     "toolName": "delegation",
+     "childRef": "toolu_01ERHmcMF1EYUkm4cpi1MKJJ",
+     "background": true,
+     "subagentType": null,
+     "description": "Count until killed",
+     "output": "Async agent launched successfully. (This tool result is internal metadata — never quote or paste any part of it, including the agentId below, into a user-facing reply.)\nThe agent is working in the bac",
+     "completedAt": 1793894266179,
+     "childRows": [
+      {
+       "id": "thr_b2fe5q9v9i:delegation:da77a0df0c-i8:child:thr_b2fe5q9v9i:command:da77a0df0c-i12",
+       "threadId": "thr_b2fe5q9v9i",
+       "turnId": "da77a0df0c-t2",
+       "sourceSeqStart": 99,
+       "sourceSeqEnd": 105,
+       "startedAt": 1793894267496,
+       "createdAt": 1793894268990,
+       "kind": "work",
+       "workKind": "command",
+       "status": "error",
+       "callId": "da77a0df0c-i12",
+       "command": "sleep 8 && echo 1",
+       "cwd": "",
+       "source": null,
+       "output": "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to",
+       "exitCode": 1,
+       "completedAt": 1793894268990,
+       "approvalStatus": null,
+       "activityIntents": [],
+       "presentation": {
+        "label": {
+         "pending": "Running command",
+         "completed": "Ran command"
+        },
+        "icon": {
+         "glyph": "Terminal"
+        },
+        "title": "sleep 8 && echo 1"
+       }
+      }
+     ],
+     "presentation": {
+      "label": {
+       "pending": "Launching subagent",
+       "completed": "Launched subagent"
+      },
+      "icon": {
+       "glyph": "UserRound"
+      },
+      "title": "Count until killed"
+     }
+    }
+   ]
+  }
+ ],
+ "events": [
+  {
+   "id": "evt_cr5k54vsg9",
+   "scope": {
+    "kind": "turn",
+    "turnId": "daee87293d-t1"
+   },
+   "threadId": "thr_b2fe5q9v9i",
+   "seq": 20,
+   "createdAt": 1793894060690,
+   "type": "item/started",
+   "data": {
+    "providerThreadId": "156f3db1-d8d6-4494-991f-96d4b1a6bdbc",
+    "item": {
+     "type": "delegation",
+     "id": "daee87293d-i1",
+     "childRef": "toolu_016gkXMgM5dpTQmEsogMEerN",
+     "label": "Count slowly to ninety",
+     "status": "pending",
+     "background": true,
+     "presentation": {
+      "label": {
+       "pending": "Launching subagent",
+       "completed": "Launched subagent"
+      },
+      "icon": {
+       "glyph": "UserRound"
+      },
+      "title": "Count slowly to ninety"
+     }
+    }
+   }
+  },
+  {
+   "id": "evt_jik5eaiptv",
+   "scope": {
+    "kind": "turn",
+    "turnId": "daee87293d-t1"
+   },
+   "threadId": "thr_b2fe5q9v9i",
+   "seq": 21,
+   "createdAt": 1793894061133,
+   "type": "item/started",
+   "data": {
+    "providerThreadId": "156f3db1-d8d6-4494-991f-96d4b1a6bdbc",
+    "item": {
+     "type": "backgroundTask",
+     "id": "daee87293d-i2",
+     "familyId": "ad13ac33d9ab49226",
+     "taskType": "local_agent",
+     "description": "Count slowly to ninety",
+     "status": "pending",
+     "taskStatus": "running",
+     "skipTranscript": false,
+     "foreground": false,
+     "presentation": {
+      "label": {
+       "pending": "Running background agent",
+       "completed": "Background agent finished"
+      },
+      "icon": {
+       "glyph": "UserRound"
+      },
+      "title": "Count slowly to ninety"
+     },
+     "parentToolCallId": "daee87293d-i1"
+    }
+   }
+  },
+  {
+   "id": "evt_amuv4iiwjy",
+   "scope": {
+    "kind": "thread"
+   },
+   "threadId": "thr_b2fe5q9v9i",
+   "seq": 24,
+   "createdAt": 1793894062505,
+   "type": "item/backgroundTask/progress",
+   "data": {
+    "providerThreadId": "156f3db1-d8d6-4494-991f-96d4b1a6bdbc",
+    "item": {
+     "type": "backgroundTask",
+     "id": "daee87293d-i2",
+     "familyId": "ad13ac33d9ab49226",
+     "taskType": "local_agent",
+     "description": "Count slowly to ninety",
+     "status": "pending",
+     "taskStatus": "running",
+     "skipTranscript": false,
+     "foreground": false,
+     "usage": {
+      "totalTokens": 26337,
+      "toolUses": 1,
+      "durationMs": 1378
+     },
+     "parentToolCallId": "daee87293d-i1"
+    }
+   }
+  },
+  {
+   "id": "evt_jy2mt82qmb",
+   "scope": {
+    "kind": "thread"
+   },
+   "threadId": "thr_b2fe5q9v9i",
+   "seq": 35,
+   "createdAt": 1793894072924,
+   "type": "item/backgroundTask/progress",
+   "data": {
+    "providerThreadId": "156f3db1-d8d6-4494-991f-96d4b1a6bdbc",
+    "item": {
+     "type": "backgroundTask",
+     "id": "daee87293d-i2",
+     "familyId": "ad13ac33d9ab49226",
+     "taskType": "local_agent",
+     "description": "Count slowly to ninety",
+     "status": "pending",
+     "taskStatus": "running",
+     "skipTranscript": false,
+     "foreground": false,
+     "usage": {
+      "totalTokens": 31764,
+      "toolUses": 2,
+      "durationMs": 11797
+     },
+     "parentToolCallId": "daee87293d-i1"
+    }
+   }
+  },
+  {
+   "id": "evt_ayditwqiw4",
+   "scope": {
+    "kind": "thread"
+   },
+   "threadId": "thr_b2fe5q9v9i",
+   "seq": 38,
+   "createdAt": 1793894082743,
+   "type": "item/backgroundTask/progress",
+   "data": {
+    "providerThreadId": "156f3db1-d8d6-4494-991f-96d4b1a6bdbc",
+    "item": {
+     "type": "backgroundTask",
+     "id": "daee87293d-i2",
+     "familyId": "ad13ac33d9ab49226",
+     "taskType": "local_agent",
+     "description": "Count slowly to ninety",
+     "status": "pending",
+     "taskStatus": "running",
+     "skipTranscript": false,
+     "foreground": false,
+     "usage": {
+      "totalTokens": 31876,
+      "toolUses": 3,
+      "durationMs": 21616
+     },
+     "parentToolCallId": "daee87293d-i1"
+    }
+   }
+  },
+  {
+   "id": "evt_5wef9m8mxk",
+   "scope": {
+    "kind": "thread"
+   },
+   "threadId": "thr_b2fe5q9v9i",
+   "seq": 42,
+   "createdAt": 1793894092686,
+   "type": "item/backgroundTask/completed",
+   "data": {
+    "providerThreadId": "156f3db1-d8d6-4494-991f-96d4b1a6bdbc",
+    "item": {
+     "type": "backgroundTask",
+     "id": "daee87293d-i2",
+     "familyId": "ad13ac33d9ab49226",
+     "taskType": "local_agent",
+     "description": "Count slowly to ninety",
+     "status": "interrupted",
+     "taskStatus": "stopped",
+     "skipTranscript": false,
+     "foreground": false,
+     "usage": {
+      "totalTokens": 31876,
+      "toolUses": 3,
+      "durationMs": 21616
+     },
+     "presentation": {
+      "label": {
+       "pending": "Running background agent",
+       "completed": "Background agent finished"
+      },
+      "icon": {
+       "glyph": "UserRound"
+      },
+      "title": "Count slowly to ninety"
+     },
+     "parentToolCallId": "daee87293d-i1"
+    }
+   }
+  },
+  {
+   "id": "evt_2xdxa4gcq5",
+   "scope": {
+    "kind": "turn",
+    "turnId": "da77a0df0c-t1"
+   },
+   "threadId": "thr_b2fe5q9v9i",
+   "seq": 58,
+   "createdAt": 1793894161805,
+   "type": "item/started",
+   "data": {
+    "providerThreadId": "156f3db1-d8d6-4494-991f-96d4b1a6bdbc",
+    "item": {
+     "type": "delegation",
+     "id": "da77a0df0c-i2",
+     "childRef": "toolu_01KWGWgAMHGnkrzjsSoGT3j9",
+     "label": "Use a missing agent type",
+     "status": "pending",
+     "background": true,
+     "presentation": {
+      "label": {
+       "pending": "Launching subagent",
+       "completed": "Launched subagent"
+      },
+      "icon": {
+       "glyph": "UserRound"
+      },
+      "title": "Use a missing agent type",
+      "detail": "no-such-agent-type agent"
+     }
+    }
+   }
+  },
+  {
+   "id": "evt_k8xv5v5tkh",
+   "scope": {
+    "kind": "turn",
+    "turnId": "da77a0df0c-t2"
+   },
+   "threadId": "thr_b2fe5q9v9i",
+   "seq": 89,
+   "createdAt": 1793894265582,
+   "type": "item/started",
+   "data": {
+    "providerThreadId": "156f3db1-d8d6-4494-991f-96d4b1a6bdbc",
+    "item": {
+     "type": "delegation",
+     "id": "da77a0df0c-i8",
+     "childRef": "toolu_01ERHmcMF1EYUkm4cpi1MKJJ",
+     "label": "Count until killed",
+     "status": "pending",
+     "background": true,
+     "presentation": {
+      "label": {
+       "pending": "Launching subagent",
+       "completed": "Launched subagent"
+      },
+      "icon": {
+       "glyph": "UserRound"
+      },
+      "title": "Count until killed"
+     }
+    }
+   }
+  },
+  {
+   "id": "evt_yu49pgf8ft",
+   "scope": {
+    "kind": "turn",
+    "turnId": "da77a0df0c-t2"
+   },
+   "threadId": "thr_b2fe5q9v9i",
+   "seq": 93,
+   "createdAt": 1793894266128,
+   "type": "item/started",
+   "data": {
+    "providerThreadId": "156f3db1-d8d6-4494-991f-96d4b1a6bdbc",
+    "item": {
+     "type": "backgroundTask",
+     "id": "da77a0df0c-i10",
+     "familyId": "a9fd64d6dd289571f",
+     "taskType": "local_agent",
+     "description": "Count until killed",
+     "status": "pending",
+     "taskStatus": "running",
+     "skipTranscript": false,
+     "foreground": false,
+     "presentation": {
+      "label": {
+       "pending": "Running background agent",
+       "completed": "Background agent finished"
+      },
+      "icon": {
+       "glyph": "UserRound"
+      },
+      "title": "Count until killed"
+     },
+     "parentToolCallId": "da77a0df0c-i8"
+    }
+   }
+  },
+  {
+   "id": "evt_ju3fgg3jz4",
+   "scope": {
+    "kind": "thread"
+   },
+   "threadId": "thr_b2fe5q9v9i",
+   "seq": 100,
+   "createdAt": 1793894267496,
+   "type": "item/backgroundTask/progress",
+   "data": {
+    "providerThreadId": "156f3db1-d8d6-4494-991f-96d4b1a6bdbc",
+    "item": {
+     "type": "backgroundTask",
+     "id": "da77a0df0c-i10",
+     "familyId": "a9fd64d6dd289571f",
+     "taskType": "local_agent",
+     "description": "Count until killed",
+     "status": "pending",
+     "taskStatus": "running",
+     "skipTranscript": false,
+     "foreground": false,
+     "usage": {
+      "totalTokens": 26373,
+      "toolUses": 1,
+      "durationMs": 1373
+     },
+     "parentToolCallId": "da77a0df0c-i8"
+    }
+   }
+  },
+  {
+   "id": "evt_936stw9c6f",
+   "scope": {
+    "kind": "thread"
+   },
+   "threadId": "thr_b2fe5q9v9i",
+   "seq": 103,
+   "createdAt": 1793894268990,
+   "type": "item/backgroundTask/progress",
+   "data": {
+    "providerThreadId": "156f3db1-d8d6-4494-991f-96d4b1a6bdbc",
+    "item": {
+     "type": "backgroundTask",
+     "id": "da77a0df0c-i10",
+     "familyId": "a9fd64d6dd289571f",
+     "taskType": "local_agent",
+     "description": "Count until killed",
+     "status": "failed",
+     "taskStatus": "killed",
+     "skipTranscript": false,
+     "foreground": false,
+     "usage": {
+      "totalTokens": 26373,
+      "toolUses": 1,
+      "durationMs": 1373
+     },
+     "parentToolCallId": "da77a0df0c-i8"
+    }
+   }
+  },
+  {
+   "id": "evt_s4c63z7sk5",
+   "scope": {
+    "kind": "thread"
+   },
+   "threadId": "thr_b2fe5q9v9i",
+   "seq": 104,
+   "createdAt": 1793894268990,
+   "type": "item/backgroundTask/completed",
+   "data": {
+    "providerThreadId": "156f3db1-d8d6-4494-991f-96d4b1a6bdbc",
+    "item": {
+     "type": "backgroundTask",
+     "id": "da77a0df0c-i10",
+     "familyId": "a9fd64d6dd289571f",
+     "taskType": "local_agent",
+     "description": "Count until killed",
+     "status": "interrupted",
+     "taskStatus": "stopped",
+     "skipTranscript": false,
+     "foreground": false,
+     "usage": {
+      "totalTokens": 26373,
+      "toolUses": 1,
+      "durationMs": 1373
+     },
+     "summary": "Count until killed",
+     "outputFile": "/private/tmp/claude-501/-private-tmp-claude-501-sr-05/156f3db1-d8d6-4494-991f-96d4b1a6bdbc/tasks/a9fd64d6dd289571f.output",
+     "presentation": {
+      "label": {
+       "pending": "Running background agent",
+       "completed": "Background agent finished"
+      },
+      "icon": {
+       "glyph": "UserRound"
+      },
+      "title": "Count until killed"
+     },
+     "parentToolCallId": "da77a0df0c-i8"
+    }
+   }
+  }
+ ]
+}

@@ -11,7 +11,9 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { DelegationRow, EventRow, TimelineRow } from "./bb.ts";
 import type { Delegate } from "./delegate.ts";
+import { formatDuration } from "./clock.ts";
 import { foldTaskEvents, normalise } from "./normalise.ts";
+import { elapsed } from "./roster.ts";
 import { trailSteps } from "./steps.ts";
 
 const fixture: { rows: TimelineRow[]; events: EventRow[] } = JSON.parse(
@@ -110,8 +112,64 @@ test("ACP (hand-built): a row with childRows null yields steps null and its outp
 test("a row with no task maps by its own status", () => {
   const [failed] = normalise([handBuilt({ callId: "e1", status: "error", output: "boom" })], new Map());
   assert.deepEqual(failed.state, { status: "failed", endedAt: 50, error: "boom" });
-  const [stopped] = normalise([handBuilt({ callId: "i1", status: "interrupted", output: "" })], new Map());
+  // hand-built: no interrupted row could be produced (see the stopped capture below); bb writes this output when it interrupts a pending call.
+  const [stopped] = normalise([handBuilt({ callId: "i1", status: "interrupted", output: "Tool execution interrupted" })], new Map());
   assert.deepEqual(stopped.state, { status: "stopped", endedAt: 50 });
+});
+
+// ---------------------------------------------------------------- stopped and failed, real
+
+// A second trimmed real capture, thread thr_b2fe5q9v9i (Claude Code 2.1, issue 05),
+// taken and trimmed as above, one delegate per turn:
+//   turn 1  "Count slowly to ninety": background agent; the parent thread was stopped (`bb thread stop`) 32 s in.
+//   turn 2  "Use a missing agent type": an Agent call with an unknown subagent_type, refused at launch.
+//   turn 3  "Count until killed": background agent the parent stopped with its TaskStop tool.
+const stopFailed: { rows: TimelineRow[]; events: EventRow[] } = JSON.parse(
+  readFileSync(new URL("./fixtures/claude-stopped-failed.json", import.meta.url), "utf8"),
+);
+const stopFailedLedger = foldTaskEvents(new Map(), stopFailed.events);
+
+test("a background agent whose parent thread is stopped reads stopped, ended and frozen at the stop", () => {
+  const stop = eventAt(stopFailed.events, 42);
+  assert.equal(taskOf(stop)?.taskStatus, "stopped"); // bb closes the task when it interrupts the turn
+  const d = byId(normalise(stopFailed.rows, stopFailedLedger), "daee87293d-i1");
+  assert.deepEqual(d.state, { status: "stopped", endedAt: stop.createdAt });
+  assert.equal(elapsed(d, stop.createdAt + 60_000), elapsed(d, stop.createdAt)); // the clock stops
+  assert.equal(formatDuration(elapsed(d, Date.now())), "31s"); // 31.996 s from launch to stop
+});
+
+test("a background agent stopped with TaskStop reads stopped from its killed progress on", () => {
+  assert.equal(taskOf(eventAt(stopFailed.events, 103))?.taskStatus, "killed");
+  const seen = (seq: number) => stopFailed.events.filter((event) => event.seq <= seq);
+  for (const seq of [103, 104]) {
+    const d = byId(normalise(stopFailed.rows, foldTaskEvents(new Map(), seen(seq))), "da77a0df0c-i8");
+    assert.deepEqual(d.state, { status: "stopped", endedAt: eventAt(stopFailed.events, seq).createdAt }, `after seq ${seq}`);
+  }
+});
+
+test("an Agent call refused at launch fails with the row's error, over its real sub-second run", () => {
+  const row = stopFailed.rows.flatMap((r) => (r.kind === "turn" ? (r.children ?? []) : [])).filter(isDelegationRow)
+    .find((r) => r.callId === "da77a0df0c-i2");
+  assert.ok(row?.completedAt, "fixture premise: the refused row carries its completedAt");
+  assert.equal(row.status, "error");
+  assert.ok(!stopFailedLedger.has(row.callId), "fixture premise: no task started");
+  const d = byId(normalise(stopFailed.rows, stopFailedLedger), row.callId);
+  assert.deepEqual(d.state, { status: "failed", endedAt: row.completedAt, error: row.output });
+  assert.match(row.output, /^Agent type 'no-such-agent-type' not found/);
+  assert.ok(elapsed(d, Date.now()) < 1_000); // so its "0s" is the truth
+});
+
+test("a failed task (hand-built) takes its error from the task event, never the row's launch receipt", () => {
+  // why: no agent task has failed on this machine; this is the turn 1 agent's real closing event, refiled as failed.
+  const stop = eventAt(stopFailed.events, 42);
+  assert.ok(stop.type === "item/backgroundTask/completed");
+  const stateIfFailedWith = (error: string) => {
+    const failed: EventRow = { ...stop, data: { ...stop.data, item: { ...stop.data.item, taskStatus: "failed", error } } };
+    const ledger = foldTaskEvents(new Map(), [...stopFailed.events.filter((e) => e.seq < stop.seq), failed]);
+    return byId(normalise(stopFailed.rows, ledger), "daee87293d-i1").state;
+  };
+  assert.deepEqual(stateIfFailedWith("API Error: 529 overloaded"), { status: "failed", endedAt: stop.createdAt, error: "API Error: 529 overloaded" });
+  assert.deepEqual(stateIfFailedWith(""), { status: "failed", endedAt: stop.createdAt, error: null });
 });
 
 // ---------------------------------------------------------------- helpers
@@ -134,6 +192,12 @@ function byId(list: readonly Delegate[], id: string): Delegate {
   const d = list.find((x) => x.id === id);
   assert.ok(d, `no delegate ${id}`);
   return d;
+}
+
+function eventAt(events: readonly EventRow[], seq: number): EventRow {
+  const event = events.find((e) => e.seq === seq);
+  assert.ok(event, `no fixture event ${seq}`);
+  return event;
 }
 
 function taskOf(event: EventRow) {

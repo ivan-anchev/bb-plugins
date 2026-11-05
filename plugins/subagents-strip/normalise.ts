@@ -65,6 +65,8 @@ function stateFromTask(task: TaskSnapshot, childRows: readonly TimelineRow[] | n
 
 function stateFromRow(row: DelegationRow, childRows: readonly TimelineRow[] | null): DelegateState {
   const status = ROW_STATUS[row.status];
+  // why: bb stamps completedAt when it settles a row, interrupting included, and none of the 104
+  // settled rows across 65 local Claude Code threads lacks it; startedAt only satisfies the type.
   const endedAt = row.completedAt ?? row.startedAt;
   switch (status) {
     case "running": return { status };
@@ -74,7 +76,7 @@ function stateFromRow(row: DelegationRow, childRows: readonly TimelineRow[] | nu
   }
 }
 
-// why: paused counts as live; killed and stopped merge into one "stopped".
+// why: paused counts as live; killed and stopped merge into one "stopped" (TaskStop sends killed, then stopped).
 const TASK_STATUS: Record<TaskStatus, DelegateStatus> = {
   pending: "running", running: "running", paused: "running",
   completed: "completed", failed: "failed", killed: "stopped", stopped: "stopped",

@@ -98,6 +98,12 @@ still running. Subagents a subagent starts are not counted.
 - A Claude Code background agent is running from launch until its background
   task completes, even after the parent turn has ended. bb's own timeline marks
   it finished at launch; the strip reads the task's events instead.
+- Stopping the thread stops its running background agents with it, and an
+  agent the parent stops itself (Claude Code's TaskStop tool) ends the same
+  way: each reads "Stopped", and its time freezes at how long it really ran.
+- A background agent whose task fails reads "Failed" with the task's error.
+  An agent call refused at launch, such as one naming an unknown agent type,
+  fails at once: "0s", no steps, and bb's error as its detail.
 - Other providers' subagents use the status bb's timeline gives them. Codex and
   ACP subagents have not been checked live.
 
