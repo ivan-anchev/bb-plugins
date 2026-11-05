@@ -23,7 +23,7 @@ if (tagged === head) {
   run("git", ["tag", "--annotate", tag, "--message", `${plugin.manifest.bb.name} ${plugin.manifest.version}`]);
   console.log(`✓ tagged ${tag}`);
 }
-console.log(`\nPublish it with:  git push origin main ${tag}`);
+console.log(`\nPublish it with:  git push origin ${tag}`);
 
 function releaseBlockers(): string[] {
   const { files, problems } = planManifests();
