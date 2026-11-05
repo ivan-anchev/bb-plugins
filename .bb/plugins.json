@@ -4,6 +4,10 @@
   "name": "ivan-anchev",
   "plugins": [
     {
+      "name": "comfortable-type",
+      "source": "./plugins/comfortable-type"
+    },
+    {
       "name": "proactive-visuals",
       "source": "./plugins/proactive-visuals"
     }
