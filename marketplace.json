@@ -71,6 +71,29 @@
           "tagPrefix": "proactive-visuals/"
         }
       }
+    },
+    {
+      "id": "subagents-strip",
+      "displayName": "Subagents Strip",
+      "description": "A live strip above the composer that counts the thread's subagents, how many are running and done, and how long they have taken.",
+      "icon": "UsersRound",
+      "tags": [
+        "subagents",
+        "agents",
+        "observability"
+      ],
+      "author": {
+        "name": "Ivan Anchev",
+        "github": "ivan-anchev"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/ivan-anchev/bb-plugins.git",
+          "subdir": "plugins/subagents-strip",
+          "range": "0.x",
+          "tagPrefix": "subagents-strip/"
+        }
+      }
     }
   ]
 }
