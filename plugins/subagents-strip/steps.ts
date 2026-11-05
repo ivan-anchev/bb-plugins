@@ -14,7 +14,10 @@ export function trailSteps(steps: readonly StepRow[]): StepRow[] {
   return steps.filter((row) => !isReasoning(row));
 }
 
-/** A step's one-line label: what it ran, read, edited, searched, or fetched, led by that verb; or what it said. */
+/**
+ * A step's one-line label: what it ran, read, edited, searched, or fetched, led by that verb,
+ * in the present tense while the step runs ("Running …") and the past once it ends ("Ran …"); or what it said.
+ */
 export function stepLabel(row: StepRow): string {
   switch (row.kind) {
     case "conversation": return firstLine(row.text);
@@ -70,30 +73,44 @@ export function isReasoning(row: StepRow): row is ReasoningRow {
 
 // ---------------------------------------------------------------- layer 2
 
+type WorkRow = Extract<StepRow, { kind: "work" }>;
+
 // why: exhaustive, so a work kind a new SDK adds fails to compile here instead of showing its raw kind.
-function workLabel(row: Extract<StepRow, { kind: "work" }>): string {
+function workLabel(row: WorkRow): string {
+  const verb = (running: string, ran: string): string => (isLive(row) ? running : ran);
   switch (row.workKind) {
-    case "command": return `Ran ${row.command}`;
-    case "file-read": return `Read ${row.path}`;
-    case "image-view": return `Viewed ${row.path}`;
-    case "file-change": return `Edited ${row.change.path}`;
-    case "search": return `Searched ${row.query}`;
-    case "web-search": return `Searched ${row.queries[0] ?? "the web"}`;
-    case "web-fetch": return `Fetched ${row.url}`;
-    case "image-generation": return "Generated an image";
-    case "plan-steps": return "Updated the plan";
+    case "command": return `${verb("Running", "Ran")} ${row.command}`;
+    case "file-read": return `${verb("Reading", "Read")} ${row.path}`;
+    case "image-view": return `${verb("Viewing", "Viewed")} ${row.path}`;
+    case "file-change": return `${verb("Editing", "Edited")} ${row.change.path}`;
+    case "search": return `${verb("Searching", "Searched")} ${row.query}`;
+    case "web-search": return `${verb("Searching", "Searched")} ${row.queries[0] ?? "the web"}`;
+    case "web-fetch": return `${verb("Fetching", "Fetched")} ${row.url}`;
+    case "image-generation": return verb("Generating an image", "Generated an image");
+    case "plan-steps": return verb("Updating the plan", "Updated the plan");
     case "tool": return row.presentation?.title ?? row.toolName;
     case "extension": return row.presentation.title ?? row.presentation.label.completed;
     case "form": return row.title;
-    case "approval": return "Asked for approval";
-    case "question": return "Asked a question";
+    case "approval": return verb("Asking for approval", "Asked for approval");
+    case "question": return verb("Asking a question", "Asked a question");
     case "delegation":
-    case "workflow": return `Started ${row.description ?? "a subagent"}`;
+    case "workflow": return `${verb("Starting", "Started")} ${row.description ?? "a subagent"}`;
     default: return unhandled(row);
   }
 }
 
-function workStepKind(row: Extract<StepRow, { kind: "work" }>): StepKind {
+// why: exhaustive, so a status a new SDK adds fails to compile here; at runtime it reads as finished.
+function isLive(row: WorkRow): boolean {
+  switch (row.status) {
+    case "pending": return true;
+    case "completed":
+    case "error":
+    case "interrupted": return false;
+    default: return unhandledStatus(row.status);
+  }
+}
+
+function workStepKind(row: WorkRow): StepKind {
   switch (row.workKind) {
     case "command": return "command";
     case "file-read":
@@ -127,6 +144,11 @@ function unhandled(row: never): string {
 /** As `unhandled`: a kind a newer host adds shows the generic tool icon. */
 function unhandledKind(_row: never): StepKind {
   return "tool";
+}
+
+/** As `unhandled`: a status a newer host adds reads in the past tense, as every step did before tenses. */
+function unhandledStatus(_status: never): boolean {
+  return false;
 }
 
 function presentationTitle(row: unknown): string | null {

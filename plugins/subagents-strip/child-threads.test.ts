@@ -90,7 +90,7 @@ test("an idle child whose turn completed reports its closing message, which leav
 test("a running child is running, its detail its latest command, and its brief is not a step", () => {
   const d = childDelegate(running.child, running.rows, parentRows);
   assert.deepEqual(d.state, { status: "running" });
-  assert.equal(detailLine(d), "Ran sleep 40 && echo one");
+  assert.equal(detailLine(d), "Running sleep 40 && echo one");
   assert.ok(!d.steps?.some((row) => row.kind === "conversation" && row.role === "user"));
   assert.ok(running.rows.some((row) => row.kind === "conversation" && row.role === "user"), "fixture premise: the brief is a row");
 });
@@ -164,7 +164,7 @@ test("a child waiting on its own question is active, so it reads running, its de
   assert.equal(child.status, "active", "fixture premise: bb keeps a child blocked on a question active");
   const d = childDelegate(child, rows, outcomes.parentRows);
   assert.deepEqual(d.state, { status: "running" });
-  assert.equal(detailLine(d), "Asked a question");
+  assert.equal(detailLine(d), "Asking a question");
 });
 
 test("a reused child stays one delegate of its spawning turn: running again, then settled with its new closing message", () => {
@@ -173,7 +173,7 @@ test("a reused child stays one delegate of its spawning turn: running again, the
   assert.deepEqual([d1, d2, d3].map((d) => [d.id, d.turnId, d.startedAt]), Array(3).fill(["thr_tfst24jjhy", "daebae5ddb-t2", first.child.createdAt]));
   assert.equal(d1.state.status === "completed" && d1.state.report, "first done.");
   assert.deepEqual(d2.state, { status: "running" });
-  assert.equal(detailLine(d2), "Ran sleep 30 && echo three");
+  assert.equal(detailLine(d2), "Running sleep 30 && echo three");
   const lastTurn = last.rows.findLast((row) => row.kind === "turn");
   assert.ok(lastTurn?.kind === "turn");
   assert.deepEqual(d3.state, { status: "completed", endedAt: lastTurn.completedAt, report: "third done." });
