@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { segmentIndexAfterKey } from "./segment-keys.ts";
+import { segmentIndexAfterKey } from "./segment-index.ts";
 
 describe("segmentIndexAfterKey", () => {
   test("arrows step to the neighbouring segment", () => {

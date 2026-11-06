@@ -49,7 +49,7 @@ Filter by change kind or file type, or hide tests and mocks together.
 | `src/viewer-input.ts` | Pure choice of what the viewer shows: a patch, a patch key to fetch, source text, or a notice. Unit tested. |
 | `src/tree-input.ts` | Pure mapping from bb data to `@pierre/trees` input: paths, git status, icons, per-row `+A -D` decorations, and distinct tree paths for a changed file that stands where a changed directory is. Unit tested. |
 | `src/tree-view.tsx` | The `@pierre/trees` model and view: density, path sync, row decorations, the selected row, click to select. |
-| `src/tree-expansion.ts` | Collapse and expand every folder, and whether any is open. Unit tested. |
+| `src/tree-expansion.ts` | Collapse and expand every folder, optionally only down to a given depth, and whether any is open. Unit tested. |
 | `src/split/` | The resizable tree-beside-viewer layout: a divider you drag or move with the arrow keys, with the sizes remembered. The clamping is unit tested. |
 | `src/ui/` | Small controls in bb token classes: icon button, dropdown menu (bb's shared Radix menu), and a hover and focus tooltip. |
 | `src/hooks/` | React hooks: environment paths, file contents, refetch on show, per-environment remembered state. |

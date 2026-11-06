@@ -1,7 +1,7 @@
 import type { KeyboardEvent, ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { IconButton } from "./ui/icon-button.tsx";
-import { segmentIndexAfterKey } from "./ui/segment-keys.ts";
+import { segmentIndexAfterKey } from "./ui/segment-index.ts";
 
 export function TabFrame({ children }: { children: ReactNode }) {
   return <div className="flex h-full min-h-0 flex-col bg-background text-foreground">{children}</div>;

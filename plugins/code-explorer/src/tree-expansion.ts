@@ -18,15 +18,17 @@ export function collapseAllFolders(model: FileTree): void {
   for (const path of expandedDirectoriesOf(model).reverse()) setFolderExpanded(model, path, false);
 }
 
-export function expandAllFolders(model: FileTree): void {
+/** Opens folders level by level, stopping below `maxDepth` (1 = top-level folders only). */
+export function expandAllFolders(model: FileTree, maxDepth = Number.POSITIVE_INFINITY): void {
   const expanded = new Set<string>();
-  let revealed = collapsedDirectoriesOf(model);
+  const withinDepth = (path: string) => depthOf(path) <= maxDepth;
+  let revealed = collapsedDirectoriesOf(model).filter(withinDepth);
   while (revealed.length > 0) {
     for (const path of revealed) {
       setFolderExpanded(model, path, true);
       expanded.add(path);
     }
-    revealed = collapsedDirectoriesOf(model).filter((path) => !expanded.has(path));
+    revealed = collapsedDirectoriesOf(model).filter((path) => withinDepth(path) && !expanded.has(path));
   }
 }
 
@@ -38,6 +40,11 @@ function collapsedDirectoriesOf(model: FileTree): string[] {
 
 function visibleFoldersOf(model: FileTree): FileTreeVisibleRow[] {
   return model.getVisibleRows(0, model.getVisibleCount()).filter((row) => row.kind === "directory");
+}
+
+// "src/app/" is depth 2: one per path segment, with the trailing slash ignored.
+function depthOf(directoryPath: string): number {
+  return directoryPath.split("/").filter(Boolean).length;
 }
 
 function setFolderExpanded(model: FileTree, path: string, expanded: boolean): void {

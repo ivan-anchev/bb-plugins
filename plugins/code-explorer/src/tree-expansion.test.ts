@@ -38,4 +38,11 @@ describe("expandAllFolders", () => {
 
     assert.deepEqual(expandedDirectoriesOf(tree), ["docs/guide/", "src/", "src/app/", "src/app/view/", "src/lib/"]);
   });
+
+  test("stops at the depth it is given", () => {
+    const tree = new FileTree({ paths: PATHS, initialExpansion: "closed", flattenEmptyDirectories: true });
+    expandAllFolders(tree, 2);
+
+    assert.deepEqual(expandedDirectoriesOf(tree), ["docs/guide/", "src/", "src/app/", "src/lib/"]);
+  });
 });
