@@ -33,8 +33,10 @@ Frontend only:
   overflow and live tail of a scrolling body,
   `ui/Avatar.tsx` the avatar and stack, `ui/Motion.tsx` the rolling text,
   digits, and status dot, `ui/room.ts` the room the list may open into.
-- `fixtures/claude-thread.json`: a trimmed real Claude Code capture the tests
-  run on; `normalise.test.ts` says how it was taken.
+- `fixtures/claude-thread.json`, `fixtures/claude-stopped-failed.json`:
+  trimmed real Claude Code captures the tests run on, the second with agents
+  stopped by the thread and by TaskStop and an agent call refused at launch;
+  `normalise.test.ts` says how each was taken.
 
 ## Develop
 
