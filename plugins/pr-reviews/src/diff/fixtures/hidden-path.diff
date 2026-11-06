@@ -1,0 +1,21 @@
+diff --git a/src/a.ts b/src/a.ts
+index 7898192..9ad2ebb 100644
+--- a/src/a.ts
++++ b/src/a.ts
+@@ -1 +1,2 @@
+ a
++a2
+diff --git "a/src/a\342\200\213.ts" "b/src/a\342\200\213.ts"
+index 7a61d37..b35efa0 100644
+--- "a/src/a\342\200\213.ts"
++++ "b/src/a\342\200\213.ts"
+@@ -1 +1,2 @@
+ zw
++zw2
+diff --git "a/src/\342\200\256gnp.ts" "b/src/\342\200\256gnp.ts"
+index d1b59ef..7b68699 100644
+--- "a/src/\342\200\256gnp.ts"
++++ "b/src/\342\200\256gnp.ts"
+@@ -1 +1,2 @@
+ bidi
++bidi2

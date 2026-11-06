@@ -6,6 +6,7 @@ import { parseRoute } from "../routes.ts";
 import { Notice } from "../ui/notice.tsx";
 import { ReadError } from "../ui/read-error.tsx";
 import { PrHeader } from "./pr-header.tsx";
+import { NoGuideScreen, NoneScreen, RunningScreen, type PrTarget } from "./review-screens.tsx";
 
 export function PrPage({ subPath }: PluginNavPanelProps) {
   const route = parseRoute(subPath);
@@ -23,26 +24,22 @@ function PullRequestPage({ projectId, number }: { projectId: string; number: num
       {pull.data !== undefined && (
         <>
           <PrHeader pr={pull.data.pr} />
-          <ReviewScreen review={pull.data.review} />
+          <ReviewScreen target={{ projectId, number }} review={pull.data.review} />
         </>
       )}
     </div>
   );
 }
 
-function ReviewScreen({ review }: { review: ReviewState }) {
+function ReviewScreen({ target, review }: { target: PrTarget; review: ReviewState }) {
   switch (review.kind) {
     case "none":
-      return <NoGuideYet />;
+      return <NoneScreen target={target} />;
+    case "running":
+      return <RunningScreen target={target} review={review} />;
+    case "no-guide":
+      return <NoGuideScreen target={target} review={review} />;
     default:
-      return review.kind satisfies never;
+      return review satisfies never;
   }
-}
-
-function NoGuideYet() {
-  return (
-    <div className="flex min-h-0 flex-1 items-center justify-center px-7 pb-16">
-      <h2 className="text-base font-semibold">No guide yet</h2>
-    </div>
-  );
 }

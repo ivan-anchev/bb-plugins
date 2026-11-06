@@ -1,0 +1,17 @@
+diff --git a/mod.txt b/mod.txt
+index bea6346..9d2ab68 100644
+--- a/mod.txt
++++ b/mod.txt
+@@ -1,5 +1,5 @@
+ one
+-two
++TWO
+ three
+ four
+ five
+@@ -11,5 +11,5 @@ ten
+ eleven
+ twelve
+ thirteen
+-fourteen
++FOURTEEN

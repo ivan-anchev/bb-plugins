@@ -4,6 +4,7 @@ import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import type { PrDetail, PrSummary } from "../contract.ts";
 import { firstLine, parseHostCommandFailure, runHostCommand } from "./host-command.ts";
+import type { PrCommits } from "./pr-commits.ts";
 import type { Repo } from "./repo.ts";
 
 const LIST_LIMIT = 200;
@@ -53,6 +54,28 @@ export async function listOpenPrs(repo: Repo): Promise<PrSummary[]> {
 export async function viewPr(repo: Repo, number: number): Promise<PrDetail> {
   const json = await runGh(["pr", "view", String(number), "-R", repo, "--json", DETAIL_FIELDS.join(",")]);
   return toDetail(ghDetailSchema.parse(JSON.parse(json)));
+}
+
+/** A PR's diff between the two commits it was read at. */
+export type PrDiffSnapshot = PrCommits & { diff: string };
+
+// `gh pr diff` takes no commit and always serves the current head against the current base,
+// so read both before and after the diff and accept only a pair that agrees: a push to
+// either branch in between changed the diff.
+export async function snapshotPrDiff(repo: Repo, number: number): Promise<PrDiffSnapshot> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const before = await commitsOf(repo, number);
+    const diff = await runGh(["pr", "diff", String(number), "-R", repo, "--color", "never"]);
+    const after = await commitsOf(repo, number);
+    if (after.headSha === before.headSha && after.baseSha === before.baseSha) return { ...before, diff };
+  }
+  throw new Refusal({ code: "conflict", message: "The PR is being pushed to right now. Try again in a moment." });
+}
+
+async function commitsOf(repo: Repo, number: number): Promise<PrCommits> {
+  const json = await runGh(["pr", "view", String(number), "-R", repo, "--json", "headRefOid,baseRefOid"]);
+  const { headRefOid, baseRefOid } = z.object({ headRefOid: z.string(), baseRefOid: z.string() }).parse(JSON.parse(json));
+  return { headSha: headRefOid, baseSha: baseRefOid };
 }
 
 async function runGh(args: string[]): Promise<string> {

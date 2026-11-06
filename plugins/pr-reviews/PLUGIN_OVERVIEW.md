@@ -11,6 +11,10 @@ ever posted to GitHub.
   it was last updated, and its review state in words.
 - **A page per pull request**: its title, author, `branch → base`, and a link
   to the PR on GitHub, above its guide.
+- **Start review**: starts a review thread in a new worktree, with your
+  Review instructions from Settings → PR Reviews. The page shows it writing,
+  with the time so far, Open thread and Cancel, and asks it to finish if it
+  stops without a guide.
 - **Errors beside your data**: if GitHub can't be read, the error shows above
   the list you already had. Refresh, or click the open PR again, to retry.
 
@@ -18,4 +22,8 @@ ever posted to GitHub.
 
 PR Reviews reads pull requests with the GitHub CLI (`gh`) on the machine that
 runs bb, so `gh` must be installed and signed in there. It only reads: it
-never comments, approves, or changes anything on GitHub.
+never comments, approves, or changes anything on GitHub. Review threads never
+reach GitHub at all: before one starts, PR Reviews fetches the PR's commits
+into the project's repository with `git fetch`, and the thread reads them
+there. So Start review needs the project's default checkout on the machine
+that runs bb.
