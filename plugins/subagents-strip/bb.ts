@@ -17,6 +17,7 @@ export type TimelineRow = TimelineFull["rows"][number];
 /** Any row but a turn group: what a delegate's step is. */
 export type StepRow = Exclude<TimelineRow, { kind: "turn" }>;
 export type DelegationRow = Extract<TimelineRow, { kind: "work"; workKind: "delegation" }>;
+export type AssistantRow = Extract<StepRow, { kind: "conversation"; role: "assistant" }>;
 // why: the operation row's operationKind is an enum, not a literal, so Extract alone cannot pick reasoning.
 export type ReasoningRow = Extract<StepRow, { systemKind: "operation" }> & { operationKind: "reasoning" };
 

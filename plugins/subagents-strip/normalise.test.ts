@@ -13,8 +13,8 @@ import type { DelegationRow, EventRow, TimelineRow } from "./bb.ts";
 import type { Delegate } from "./delegate.ts";
 import { formatDuration } from "./clock.ts";
 import { foldTaskEvents, normalise } from "./normalise.ts";
-import { elapsed } from "./roster.ts";
-import { trailSteps } from "./steps.ts";
+import { detailLine, elapsed } from "./roster.ts";
+import { trailSteps, transcriptSteps } from "./steps.ts";
 
 const fixture: { rows: TimelineRow[]; events: EventRow[] } = JSON.parse(
   readFileSync(new URL("./fixtures/claude-thread.json", import.meta.url), "utf8"),
@@ -88,6 +88,14 @@ test("steps keep reasoning and drop the handback; the trail also drops reasoning
   const trail = delegates.flatMap((d) => trailSteps(d.steps ?? []));
   assert.ok(trail.length > 0);
   assert.ok(!trail.some(isReasoning));
+});
+
+test("Claude Code delegates keep their description as the title and every transcript step", () => {
+  for (const d of delegates) {
+    const row = rowById(d.id);
+    assert.equal(d.title, row.description);
+    assert.deepEqual(d.steps, transcriptSteps(row.childRows ?? []), d.title);
+  }
 });
 
 test("Codex (hand-built): several collab rows on one childRef make one delegate", () => {
@@ -172,7 +180,86 @@ test("a failed task (hand-built) takes its error from the task event, never the 
   assert.deepEqual(stateIfFailedWith(""), { status: "failed", endedAt: stop.createdAt, error: null });
 });
 
+// ---------------------------------------------------------------- Codex, real
+
+// A third trimmed real capture, thread thr_6thqrgar7v (Codex, native multi-agent:
+// each of 3 turns spawns two counters that count with `sleep` and then reply),
+// read as above once during turn 1 (`midrun`: both counters running, their rows
+// not yet in a turn) and once after turn 3 (`final`: 6 settled counters).
+// Trimmed to: turn rows holding only their delegation rows; every child row kept.
+// Codex sends no background-task events, so the ledger is empty.
+const codex: { final: TimelineRow[]; midrun: TimelineRow[] } = JSON.parse(
+  readFileSync(new URL("./fixtures/codex-thread.json", import.meta.url), "utf8"),
+);
+const codexSettled = normalise(codex.final, new Map());
+const codexRunning = normalise(codex.midrun, new Map());
+
+test("Codex fixture premise: settled rows carry no handback and no output, and end in an assistant message", () => {
+  const rows = codex.final.flatMap((row) => (row.kind === "turn" ? (row.children ?? []) : [])).filter(isDelegationRow);
+  assert.equal(rows.length, 6);
+  for (const row of rows) {
+    assert.equal(row.status, "completed");
+    assert.equal(row.output, "");
+    assert.equal(closingMessage(row).role, "assistant");
+    assert.ok(!row.childRows?.some((child) => child.kind === "work" && child.workKind === "tool"));
+  }
+});
+
+test("a Codex delegate reads as its agent name, not its path", () => {
+  assert.deepEqual(codexSettled.map((d) => d.title), ["counter_a", "counter_b", "counter_c", "counter_d", "counter_e", "counter_f"]);
+  assert.deepEqual(codexRunning.map((d) => d.title), ["counter_a", "counter_b"]);
+});
+
+test("a title that is not a whitespace-free absolute path is kept whole", () => {
+  const titles = ["Research the SDK", "/root/a b", "/root/", "root/counter_a"].map(
+    (description, i) => normalise([handBuilt({ callId: `t${i}`, status: "pending", output: "", description })], new Map())[0].title,
+  );
+  assert.deepEqual(titles, ["Research the SDK", "/root/a b", "/root/", "root/counter_a"]);
+  assert.equal(normalise([handBuilt({ callId: "t9", status: "pending", output: "", description: "/root/team/counter_g" })], new Map())[0].title, "counter_g");
+});
+
+test("a settled Codex delegate reports its closing message, which leaves its steps", () => {
+  for (const d of codexSettled) {
+    const row = codexRowById(d.id);
+    const closing = closingMessage(row);
+    assert.deepEqual(d.state, { status: "completed", endedAt: row.completedAt, report: closing.text }, d.title);
+    assert.ok(!d.steps?.some((step) => step.id === closing.id), d.title);
+    // why: every counter says its last number just before its closing message, so that number is now the last step.
+    assert.equal(trailSteps(d.steps ?? []).at(-1), row.childRows?.at(-2), d.title);
+  }
+  assert.equal(detailLine(byId(codexSettled, "da2bb99053-i60")), "counter_e said: 1, 2, 3, 4, 5, 6. Ran sleep 5 between numbers, five times total. No files edited.");
+});
+
+test("a running Codex delegate keeps its last message as its live step and has no report", () => {
+  const [a, b] = codexRunning;
+  for (const d of codexRunning) {
+    assert.deepEqual(d.state, { status: "running" }, d.title);
+    assert.deepEqual(d.steps, transcriptSteps(codexRowById(d.id, codex.midrun).childRows ?? []), d.title);
+  }
+  assert.equal(detailLine(a), "Ran sleep 3");
+  assert.equal(detailLine(b), "4");
+});
+
+test("a completed row's own output outranks its last message", () => {
+  const row = { ...codexRowById("da2bb99053-i63"), output: "Counted to six." };
+  const [d] = normalise([row], new Map());
+  assert.deepEqual(d.state, { status: "completed", endedAt: row.completedAt, report: "Counted to six." });
+  assert.deepEqual(d.steps, transcriptSteps(row.childRows ?? []));
+});
+
 // ---------------------------------------------------------------- helpers
+
+function codexRowById(callId: string, rows: readonly TimelineRow[] = codex.final): DelegationRow {
+  const row = rows.flatMap((r) => (r.kind === "turn" ? (r.children ?? []) : [r])).filter(isDelegationRow).find((r) => r.callId === callId);
+  assert.ok(row, `no Codex fixture row ${callId}`);
+  return row;
+}
+
+function closingMessage(row: DelegationRow): Extract<TimelineRow, { kind: "conversation" }> {
+  const last = row.childRows?.at(-1);
+  assert.ok(last?.kind === "conversation", `fixture premise: ${row.callId} ends in a message`);
+  return last;
+}
 
 function isDelegationRow(row: TimelineRow): row is DelegationRow {
   return row.kind === "work" && row.workKind === "delegation";

@@ -26,13 +26,17 @@ One row per subagent, oldest at the top, so the newest sits nearest the
 composer. Each row shows:
 
 - The provider icon with the same status dot.
-- The subagent's description.
+- The subagent's description. A Codex subagent, which bb names by its path
+  ("/root/counter_e"), shows its agent name ("counter_e").
 - While it runs, its latest step, led by its verb: "Ran" and the command,
   "Read" or "Edited" and the file, "Searched" and the query, "Fetched" and
   the page; a tool by its title, or the first line of what it said
   ("Starting…" before its first step). Reasoning is skipped.
 - Once it finishes, the first line of its report ("Finished without a report"
-  when it handed none back), the first line of its error, or "Stopped".
+  when it handed none back), the first line of its error, or "Stopped". A
+  subagent that hands nothing back, like a Codex one, reports its last
+  message, which then appears once, as the report, and not again as its last
+  step.
 - How long it ran, ticking while it runs.
 
 The step text rolls when it changes and shimmers while the subagent runs.
@@ -104,8 +108,8 @@ still running. Subagents a subagent starts are not counted.
 - A background agent whose task fails reads "Failed" with the task's error.
   An agent call refused at launch, such as one naming an unknown agent type,
   fails at once: "0s", no steps, and bb's error as its detail.
-- Other providers' subagents use the status bb's timeline gives them. Codex and
-  ACP subagents have not been checked live.
+- Other providers' subagents use the status bb's timeline gives them. Codex's
+  native subagents were checked live; ACP subagents have not been.
 
 ## When no strip appears
 

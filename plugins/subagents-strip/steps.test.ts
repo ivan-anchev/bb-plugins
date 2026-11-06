@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { StepRow, TimelineRow } from "./bb.ts";
-import { firstLine, isReasoning, stepFailed, stepKind, stepLabel, trailSteps, transcriptSteps } from "./steps.ts";
+import { firstLine, isReasoning, splitReport, stepFailed, stepKind, stepLabel, trailSteps, transcriptSteps } from "./steps.ts";
 
 // The real child rows of the fixture's delegates (see normalise.test.ts for how it was taken).
 const fixture: { rows: TimelineRow[] } = JSON.parse(readFileSync(new URL("./fixtures/claude-thread.json", import.meta.url), "utf8"));
@@ -85,6 +85,42 @@ test("firstLine skips blank lines and drops heading, list, bold, and code marks"
   assert.equal(firstLine("\n\n# t3code **visuals**: findings\nmore"), "t3code visuals: findings");
   assert.equal(firstLine("- ran `npm run check`"), "ran npm run check");
   assert.equal(firstLine("  \n \n"), "");
+});
+
+// A Codex counter's real child rows (see normalise.test.ts): numbers said between `sleep` commands, then a closing message.
+const codex: { final: TimelineRow[] } = JSON.parse(readFileSync(new URL("./fixtures/codex-thread.json", import.meta.url), "utf8"));
+const [counterRow] = codex.final.flatMap((row) => (row.kind === "turn" ? (row.children ?? []) : []));
+const counter = transcriptSteps(childRowsOf(counterRow));
+
+test("splitReport takes the last assistant message as the report and drops only that row", () => {
+  const closing = counter.at(-1);
+  assert.ok(closing?.kind === "conversation" && closing.role === "assistant");
+  assert.deepEqual(splitReport(counter), { steps: counter.slice(0, -1), report: closing.text });
+});
+
+test("splitReport skips a blank message and reports the last message even when steps follow it", () => {
+  const [one, sleep] = counter;
+  assert.ok(one.kind === "conversation");
+  const blank: StepRow = { ...one, id: "blank", text: " \n" };
+  assert.deepEqual(splitReport([one, sleep, blank]), { steps: [sleep, blank], report: "1" });
+});
+
+test("splitReport with no assistant message reports nothing and keeps every step", () => {
+  const [one, sleep] = counter;
+  assert.ok(one.kind === "conversation" && one.role === "assistant");
+  // why: no captured delegate has a user row; this is the real "1" message as the user would have sent it.
+  const said: Extract<StepRow, { kind: "conversation"; role: "user" }> = {
+    ...one,
+    role: "user",
+    initiator: "user",
+    mentions: [],
+    senderThreadId: null,
+    systemMessageKind: "unlabeled",
+    systemMessageSubject: null,
+    turnRequest: { isGrouped: false, kind: "message", status: "accepted" },
+  };
+  assert.deepEqual(splitReport([sleep, said]), { steps: [sleep, said], report: null });
+  assert.deepEqual(splitReport([]), { steps: [], report: null });
 });
 
 function first(match: (row: StepRow) => boolean): StepRow {
