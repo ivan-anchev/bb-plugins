@@ -1,5 +1,6 @@
 // The bar under the guide. On the overview it starts the walkthrough; on a step it reads
-// `‹ n / N ›`, and each arrow's tooltip names where it leads.
+// `‹ n / N ›`, and each arrow's tooltip names where it leads. N counts the steps shown; with none
+// shown (a guide of tests alone, tests hidden) there is nothing to start, and no bar.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { Button } from "../ui/button.tsx";
 import { Tooltip } from "../ui/tooltip.tsx";
@@ -7,6 +8,7 @@ import type { Walkthrough } from "./use-walkthrough.ts";
 
 export function Controller({ walkthrough }: { walkthrough: Walkthrough }) {
   const { place, total, next, previous } = walkthrough;
+  if (total === 0) return null;
   return (
     <nav aria-label="Walkthrough" className="flex shrink-0 items-center justify-center gap-1.5 px-7 pt-2.5 pb-3.5">
       {place.kind === "overview" ? (

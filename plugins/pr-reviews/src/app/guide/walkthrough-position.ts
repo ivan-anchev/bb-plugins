@@ -1,11 +1,8 @@
 // Where the reader is in a guide, and where ← and → take them. Pure; the hook holds the state.
-import type { GuideStep } from "../../guide/guide-schema.ts";
+import type { VisibleStep } from "../../guide/walkthrough.ts";
 
-/** A step as the walkthrough shows it, with its index in `guide.steps`. */
-export type VisibleStep = { index: number; step: GuideStep };
-
-// why the guide index, not the position among shown steps: issue 05 filters steps, and the
-// reader must stay on the same step when that list changes.
+// why the guide index, not the position among shown steps: the view options change which steps
+// are shown, and the reader must stay on the same step when they do.
 export type Position = { kind: "overview" } | { kind: "step"; index: number };
 
 export const OVERVIEW: Position = { kind: "overview" };
@@ -40,6 +37,15 @@ export function nextPosition(steps: VisibleStep[], position: Position): Position
 export function previousPosition(steps: VisibleStep[], position: Position): Position {
   const at = shownAt(steps, position);
   return at === -1 ? OVERVIEW : positionAt(steps, at - 1);
+}
+
+/**
+ * Where the reader lands when the shown steps change: the same step, else the nearest earlier
+ * shown step, else the overview. `steps` are in guide order.
+ */
+export function resolvePosition(steps: VisibleStep[], position: Position): Position {
+  if (position.kind === "overview") return OVERVIEW;
+  return positionAt(steps, steps.filter((shown) => shown.index <= position.index).length - 1);
 }
 
 // The position's place among the shown steps; -1 for the overview, or a step not shown.

@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { hunkIdSchema } from "../../diff/diff-schema.ts";
 import type { GuideStep } from "../../guide/guide-schema.ts";
-import { nextPosition, OVERVIEW, placeOf, previousPosition, type Position, type VisibleStep } from "./walkthrough-position.ts";
+import type { VisibleStep } from "../../guide/walkthrough.ts";
+import { nextPosition, OVERVIEW, placeOf, previousPosition, resolvePosition, type Position } from "./walkthrough-position.ts";
 
 const step = (title: string): GuideStep => ({ title, explanation: "…", forYou: null, hunks: [{ file: "a.ts", hunk: hunkIdSchema.parse("@@ -1,1 +1,1 @@"), collapsed: null }] });
 
@@ -63,5 +64,25 @@ describe("previousPosition", () => {
 
   test("stays on the overview", () => {
     assert.deepEqual(previousPosition(STEPS, OVERVIEW), OVERVIEW);
+  });
+});
+
+describe("resolvePosition", () => {
+  test("keeps a step that is still shown", () => {
+    assert.deepEqual(resolvePosition(STEPS, at(2)), at(2));
+  });
+
+  test("moves from a step no longer shown to the nearest earlier shown step", () => {
+    assert.deepEqual(resolvePosition(STEPS, at(1)), at(0));
+    assert.deepEqual(resolvePosition(STEPS.slice(0, 2), at(3)), at(2));
+  });
+
+  test("moves to the overview when no earlier step is shown", () => {
+    assert.deepEqual(resolvePosition(STEPS.slice(1), at(0)), OVERVIEW);
+    assert.deepEqual(resolvePosition([], at(3)), OVERVIEW);
+  });
+
+  test("keeps the overview", () => {
+    assert.deepEqual(resolvePosition(STEPS, OVERVIEW), OVERVIEW);
   });
 });

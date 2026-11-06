@@ -107,13 +107,35 @@ Missing: these hunks are in no step and not in hidden (1):
 });
 
 test("a hunk in a step and in hidden is listed more than once, with both places", () => {
-  const input = withHidden([...complete.hidden, { file: CLIENT_TEST, hunk: "@@ -1,2 +1,3 @@", reason: "Only a test." }]);
+  const input = withHidden([...complete.hidden, { file: CLIENT, hunk: "@@ -60,3 +70,4 @@", reason: "Plumbing." }]);
   assert.equal(
     rejection(input),
     `${REJECTED}
 
 Listed more than once (1):
-  - "src/auth/token-client.test.ts" @@ -1,2 +1,3 @@ (step 2, hidden)`,
+  - "src/auth/token-client.ts" @@ -60,3 +70,4 @@ (step 1, hidden)`,
+  );
+});
+
+test("tests and mocks in hidden, as a hunk or as files, are sent back to a step", () => {
+  const MOCK = "__mocks__/x.ts";
+  const files = [...FILES, modified(MOCK, [TEST_CASE])];
+  const input: SubmitReviewInput = {
+    ...complete,
+    steps: [refreshStep],
+    hidden: [
+      ...complete.hidden,
+      { file: CLIENT_TEST, hunk: "@@ -1,2 +1,3 @@", reason: "Only a test." },
+      { files: [MOCK], reason: "A mock." },
+    ],
+  };
+  assert.equal(
+    rejection(input, files),
+    `${REJECTED}
+
+Hidden tests and mocks: put them in a step (2):
+  - "src/auth/token-client.test.ts" @@ -1,2 +1,3 @@
+  - "__mocks__/x.ts" @@ -1,2 +1,3 @@`,
   );
 });
 
