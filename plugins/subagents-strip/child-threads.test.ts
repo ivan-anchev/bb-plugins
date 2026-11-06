@@ -17,12 +17,15 @@
 //     failedProvisioning thr_79zb76x32u (Codex, `--base-branch no-such-branch-06c`): no worktree, no turn
 //     waiting       thr_c7hytt7tdq (Claude Code) blocked on its own AskUserQuestion
 //     reused        thr_tfst24jjhy (Codex) settled, then running and settled again after a `bb thread send`
+//   usage         thr_x6sjw8pxue (Codex reviewer 10c r1, settled), its list row and rows read as the source reads
+//                 a child, and its events as the source reads its tokens:
+//                 GET /api/v1/threads/<id>/events?types=thread/tokenUsage/updated&order=desc&limit=1
 // Every string is cut to 200 characters except an assistant message.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import type { ChildThread, TimelineRow } from "./bb.ts";
-import { childDelegate, childrenInView, threadRunning } from "./child-threads.ts";
+import type { ChildThread, EventRow, TimelineRow } from "./bb.ts";
+import { childDelegate, childrenInView, threadRunning, totalTokensOf, type ChildRead } from "./child-threads.ts";
 import { detailLine } from "./detail-line.ts";
 import { metaParts } from "./roster.ts";
 
@@ -42,6 +45,7 @@ const fixture: {
     waiting: Read;
     reused: { settled: Read; running: Read; settledAgain: Read };
   };
+  usage: Read & { events: EventRow[] };
 } = JSON.parse(readFileSync(new URL("./fixtures/child-threads.json", import.meta.url), "utf8"));
 const parentRows = fixture.parent.rows;
 const { running, settled } = fixture.counter;
@@ -50,7 +54,7 @@ const { outcomes } = fixture;
 test("a child belongs to the parent turn under way when it was created", () => {
   const designer = childById("thr_hyxefjhk94");
   // Live: this Codex child landed in the turn of the Claude delegation "Designer 06-A".
-  assert.equal(childDelegate(designer, [], parentRows).turnId, "da0b57f386-t1");
+  assert.equal(childDelegate(designer, withoutUsage([]), parentRows).turnId, "da0b57f386-t1");
 });
 
 test("a child spawned in a running parent turn belongs to it, though that turn has no turn row yet", () => {
@@ -60,14 +64,14 @@ test("a child spawned in a running parent turn belongs to it, though that turn h
   assert.ok(!rows.some((row) => row.kind === "turn" && row.turnId === command.turnId), "fixture premise: no turn row for it");
   // hand-built: the counter's list row, created just after that command started, as `bb thread spawn` would.
   const spawned = { ...settled.child, createdAt: command.startedAt + 100 };
-  assert.equal(childDelegate(spawned, [], rows).turnId, "da2752d426-t5");
+  assert.equal(childDelegate(spawned, withoutUsage([]), rows).turnId, "da2752d426-t5");
 });
 
 test("a settled child spawned before the loaded parent rows is out of view; a running one stays in", () => {
   const reviewer = childById("thr_2sspz65bvd");
   assert.ok(reviewer.createdAt < Math.min(...parentRows.map((row) => row.startedAt)), "fixture premise");
   assert.deepEqual(childrenInView(fixture.children, parentRows).map((child) => child.id), ["thr_hyxefjhk94"]);
-  assert.equal(childDelegate(reviewer, [], parentRows).turnId, null);
+  assert.equal(childDelegate(reviewer, withoutUsage([]), parentRows).turnId, null);
   const stillRunning = { ...reviewer, status: "active" as const };
   assert.deepEqual(childrenInView([stillRunning], parentRows), [stillRunning]);
 });
@@ -76,7 +80,7 @@ test("an idle child whose turn completed reports its closing message, which leav
   const reviewer = childById("thr_2sspz65bvd");
   const closing = fixture.reviewerRows.at(-1);
   assert.ok(closing?.kind === "conversation" && closing.role === "assistant", "fixture premise: the rows end in the closing message");
-  const d = childDelegate(reviewer, fixture.reviewerRows, parentRows);
+  const d = childDelegate(reviewer, withoutUsage(fixture.reviewerRows), parentRows);
   // `bb thread output thr_2sspz65bvd` prints the same text.
   assert.deepEqual(d.state, { status: "completed", endedAt: reviewer.updatedAt, report: closing.text });
   assert.match(detailLine(d), /^VERDICT: APPROVE$/);
@@ -85,28 +89,36 @@ test("an idle child whose turn completed reports its closing message, which leav
   assert.deepEqual(d.origin, { kind: "child-thread", threadId: "thr_2sspz65bvd" });
   assert.equal(d.providerId, "codex");
   assert.equal(d.title, "reviewer 05 r1 (gpt-6.1-sol)");
-  assert.equal(d.usage, null);
 });
 
 test("a running child is running, its detail its latest line in bb's words, and its brief is not a step", () => {
-  const d = childDelegate(running.child, running.rows, parentRows);
+  const d = childDelegate(running.child, withoutUsage(running.rows), parentRows);
   assert.deepEqual(d.state, { status: "running" });
   assert.equal(detailLine(d), "Running 1 command"); // the trail's live line, never the raw command
   assert.ok(!d.steps?.some((row) => row.kind === "conversation" && row.role === "user"));
   assert.ok(running.rows.some((row) => row.kind === "conversation" && row.role === "user"), "fixture premise: the brief is a row");
 });
 
-test("a settled child ends at its turn's completedAt, and its meta line counts steps but no usage", () => {
-  const d = childDelegate(settled.child, settled.rows, parentRows);
+test("a settled child ends at its turn's completedAt; with no token-usage event its meta line counts tool calls but no tokens", () => {
+  const d = childDelegate(settled.child, { rows: settled.rows, totalTokens: totalTokensOf(undefined) }, parentRows);
   assert.equal(d.state.status === "completed" && d.state.endedAt, settled.child.updatedAt);
   assert.equal(d.state.status === "completed" && d.state.report, "Counted: one, two. Both commands ran; nothing was edited.");
-  assert.deepEqual(metaParts(d).slice(1), ["ran 1m 32s", "3 steps"]);
+  assert.deepEqual(metaParts(d).slice(1), ["ran 1m 32s", "3 steps", "2 tool calls"]);
+});
+
+test("a child's tokens are its latest token-usage event's total, and its tool calls its own work rows", () => {
+  const { child, rows, events } = fixture.usage;
+  assert.deepEqual(events.map((e) => [e.seq, e.type]), [[117, "thread/tokenUsage/updated"]], "fixture premise: the latest usage event alone");
+  const d = childDelegate(child, { rows, totalTokens: totalTokensOf(events[0]) }, parentRows);
+  // Live: 20 rows, the brief, 3 messages (the last its report), and 16 commands.
+  assert.deepEqual(d.usage, { toolUses: 16, totalTokens: 427_050 });
+  assert.deepEqual(metaParts(d).slice(1), ["ran 1m 10s", "18 steps", "16 tool calls", "427.1k tokens"]);
 });
 
 test("an idle child ends the way its last turn did; an errored thread fails with bb's last error", () => {
   const withTurn = (status: Extract<TimelineRow, { kind: "turn" }>["status"]) =>
     settled.rows.map((row) => (row.kind === "turn" ? { ...row, status } : row));
-  const statusOf = (child: ChildThread, rows: readonly TimelineRow[]) => childDelegate(child, rows, parentRows).state.status;
+  const statusOf = (child: ChildThread, rows: readonly TimelineRow[]) => childDelegate(child, withoutUsage(rows), parentRows).state.status;
   assert.equal(statusOf(settled.child, withTurn("completed")), "completed");
   assert.equal(statusOf(settled.child, withTurn("error")), "failed");
   assert.equal(statusOf(settled.child, withTurn("interrupted")), "stopped");
@@ -120,7 +132,7 @@ test("an idle child ends the way its last turn did; an errored thread fails with
     startedAt: 1793898234000, createdAt: 1793898234000, kind: "system", systemKind: "error",
     status: null, title: "Provider exited", detail: null,
   };
-  const failed = childDelegate({ ...settled.child, status: "error" }, [...settled.rows, error], parentRows);
+  const failed = childDelegate({ ...settled.child, status: "error" }, withoutUsage([...settled.rows, error]), parentRows);
   assert.deepEqual(failed.state, { status: "failed", endedAt: settled.child.updatedAt, error: "Provider exited" });
 });
 
@@ -130,17 +142,17 @@ test("a stopped child reads stopped at its stop, though bb leaves its interrupte
   assert.ok(!rows.some((row) => row.kind === "turn"), "fixture premise: no turn row");
   const stop = rows.at(-1);
   assert.ok(stop?.kind === "system" && stop.systemKind === "operation" && stop.operationKind === "thread-interrupted");
-  const d = childDelegate(child, rows, outcomes.parentRows);
+  const d = childDelegate(child, withoutUsage(rows), outcomes.parentRows);
   assert.deepEqual(d.state, { status: "stopped", endedAt: stop.completedAt });
   assert.equal(detailLine(d), "Stopped");
-  assert.deepEqual(metaParts(d).slice(1), ["ran 1m 08s", "4 steps"]);
+  assert.deepEqual(metaParts(d).slice(1), ["ran 1m 08s", "4 steps", "1 tool call"]); // its `sleep 300`
 });
 
 test("a stopped child told something since ends the way that newer turn did, not stopped", () => {
   const { child, rows } = outcomes.resumed;
   assert.ok(rows.some((row) => row.kind === "system" && row.status === "interrupted"), "fixture premise: the stop row is still there");
   assert.ok(!rows.some((row) => row.kind === "turn"), "fixture premise: the reply-only turn has no turn row");
-  const d = childDelegate(child, rows, outcomes.parentRows);
+  const d = childDelegate(child, withoutUsage(rows), outcomes.parentRows);
   assert.deepEqual(d.state, { status: "completed", endedAt: child.updatedAt, report: "resumed." });
 });
 
@@ -148,7 +160,7 @@ test("a child whose provider rejected its turn fails with bb's error row, at the
   const { child, rows } = outcomes.failedTurn;
   const turn = rows.find((row) => row.kind === "turn");
   assert.ok(turn?.kind === "turn" && turn.status === "error", "fixture premise: an errored turn row");
-  const d = childDelegate(child, rows, outcomes.parentRows);
+  const d = childDelegate(child, withoutUsage(rows), outcomes.parentRows);
   assert.deepEqual(d.state, { status: "failed", endedAt: turn.completedAt, error: "Provider rejected request" });
   assert.equal(detailLine(d), "Provider rejected request");
 });
@@ -156,21 +168,21 @@ test("a child whose provider rejected its turn fails with bb's error row, at the
 test("a child whose workspace could not be provisioned fails with that step's title, at its updatedAt", () => {
   const { child, rows } = outcomes.failedProvisioning;
   assert.ok(!rows.some((row) => row.kind === "turn" || (row.kind === "system" && row.systemKind === "error")), "fixture premise");
-  const d = childDelegate(child, rows, outcomes.parentRows);
+  const d = childDelegate(child, withoutUsage(rows), outcomes.parentRows);
   assert.deepEqual(d.state, { status: "failed", endedAt: child.updatedAt, error: "Provisioning thread failed" });
 });
 
 test("a child waiting on its own question is active, so it reads running, its detail the question", () => {
   const { child, rows } = outcomes.waiting;
   assert.equal(child.status, "active", "fixture premise: bb keeps a child blocked on a question active");
-  const d = childDelegate(child, rows, outcomes.parentRows);
+  const d = childDelegate(child, withoutUsage(rows), outcomes.parentRows);
   assert.deepEqual(d.state, { status: "running" });
   assert.equal(detailLine(d), "Asking a question");
 });
 
 test("a reused child stays one delegate of its spawning turn: running again, then settled with its new closing message", () => {
   const { settled: first, running: again, settledAgain: last } = outcomes.reused;
-  const [d1, d2, d3] = [first, again, last].map(({ child, rows }) => childDelegate(child, rows, outcomes.parentRows));
+  const [d1, d2, d3] = [first, again, last].map(({ child, rows }) => childDelegate(child, withoutUsage(rows), outcomes.parentRows));
   assert.deepEqual([d1, d2, d3].map((d) => [d.id, d.turnId, d.startedAt]), Array(3).fill(["thr_tfst24jjhy", "daebae5ddb-t2", first.child.createdAt]));
   assert.equal(d1.state.status === "completed" && d1.state.report, "first done.");
   assert.deepEqual(d2.state, { status: "running" });
@@ -186,8 +198,28 @@ test("a thread status newer than the pinned SDK reads as running and never throw
   const status: ChildThread["status"] = JSON.parse('"hibernating"');
   const child = { ...settled.child, status };
   assert.equal(threadRunning(child), true);
-  assert.deepEqual(childDelegate(child, settled.rows, parentRows).state, { status: "running" });
+  assert.deepEqual(childDelegate(child, withoutUsage(settled.rows), parentRows).state, { status: "running" });
 });
+
+test("an approval on a command is an interaction on that call, not a second call", () => {
+  const command = running.rows.at(-1);
+  assert.ok(command?.kind === "work" && command.workKind === "command", "fixture premise: the child's one command");
+  // hand-built from the SDK's permission-grant row: bb records the grant beside the command it targets.
+  const approval: TimelineRow = {
+    id: `${command.threadId}:approval:1`, threadId: command.threadId, turnId: command.turnId,
+    sourceSeqStart: command.sourceSeqEnd + 1, sourceSeqEnd: command.sourceSeqEnd + 1,
+    startedAt: command.startedAt, createdAt: command.createdAt,
+    kind: "work", workKind: "approval", approvalKind: "permission-grant", interactionId: "int_1",
+    lifecycle: "granted", grantScope: "turn", status: "completed", statusReason: null,
+    target: { itemId: command.callId, toolName: "Bash" },
+  };
+  const d = childDelegate(running.child, withoutUsage([...running.rows, approval]), parentRows);
+  assert.equal(d.usage?.toolUses, 1);
+});
+
+function withoutUsage(rows: readonly TimelineRow[]): ChildRead {
+  return { rows, totalTokens: null };
+}
 
 function childById(id: string): ChildThread {
   const child = fixture.children.find((c) => c.id === id);

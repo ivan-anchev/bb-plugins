@@ -1,10 +1,12 @@
 // bb child threads of the current thread as canonical delegates. A child is a
 // real bb thread, so nothing here is a provider quirk: its status is the
 // thread's, its steps are its own timeline's rows, its report its closing
-// message, and the parent turn it belongs to is read off the parent's rows.
-import type { ChildThread, InterruptRow, StepRow, TimelineRow, TurnRow } from "./bb.ts";
+// message, its tool calls its work rows, its tokens its latest token-usage
+// event, and the parent turn it belongs to is read off the parent's rows.
+import type { ChildThread, EventRow, InterruptRow, StepRow, TimelineRow, TurnRow } from "./bb.ts";
 import type { Delegate, DelegateId, DelegateState, DelegateStatus } from "./delegate.ts";
 import { childSteps, splitReport } from "./steps.ts";
+import { conceptOf } from "./work-label.ts";
 
 /**
  * The children the source reads and watches: those spawned inside the loaded
@@ -20,8 +22,19 @@ export function threadRunning(child: ChildThread): boolean {
   return liveStatus(child.status) === "running";
 }
 
-/** One child thread as a delegate, from its list row, its own timeline rows, and the parent's rows. */
-export function childDelegate(child: ChildThread, rows: readonly TimelineRow[], parentRows: readonly TimelineRow[]): Delegate {
+/** What the source reads of a child itself: its own timeline rows, and its total tokens (null before it has a figure). */
+export type ChildRead = { rows: readonly TimelineRow[]; totalTokens: number | null };
+
+/** The event a child's tokens come from: bb records one per provider call, its `total` cumulative. */
+export const TOKEN_USAGE_EVENT = "thread/tokenUsage/updated" satisfies EventRow["type"];
+
+/** A child's total tokens from its latest token-usage event; null when it has none yet. */
+export function totalTokensOf(latest: EventRow | undefined): number | null {
+  return latest?.type === TOKEN_USAGE_EVENT ? latest.data.tokenUsage.total.totalTokens : null;
+}
+
+/** One child thread as a delegate, from its list row, what was read of it, and the parent's rows. */
+export function childDelegate(child: ChildThread, { rows, totalTokens }: ChildRead, parentRows: readonly TimelineRow[]): Delegate {
   const { state, steps } = settle(child, rows);
   return {
     id: child.id as DelegateId, // a child thread's brand point: its thread id
@@ -33,7 +46,7 @@ export function childDelegate(child: ChildThread, rows: readonly TimelineRow[], 
     steps,
     // why: bb's chat compacts a thread's timeline open, and each settled turn's group closed inside it (`as`, `is`).
     scopes: [{ rows, closed: false }],
-    usage: null, // why: the thread list carries no usage, so the meta line leaves those parts out
+    usage: { toolUses: steps.filter(isToolCall).length, totalTokens },
     state,
   };
 }
@@ -111,6 +124,11 @@ const TURN_OUTCOME: Record<TurnRow["status"], DelegateStatus> = {
 
 // why: the brief, and any later message to the child, is what it was asked, not what it did.
 const isOwnStep = (row: StepRow): boolean => !(row.kind === "conversation" && row.role === "user");
+
+// why: a call is work bb's chat tallies (conceptOf, exhaustive over workKind). Approvals, questions, and forms are
+// interactions (an interactionId, no callId), an approval on a call already counted, and bb tallies no workflow.
+// A delegation counts, as Claude Code counts its Agent call among a task's tool uses.
+const isToolCall = (row: StepRow): boolean => row.kind === "work" && conceptOf(row) !== null;
 
 type TurnEnd = TurnRow | InterruptRow;
 

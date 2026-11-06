@@ -1,6 +1,6 @@
 // The canonical delegate: one record per subagent, whatever the provider and
 // wherever it lives in bb.
-import type { StepRow, TaskUsage, TimelineRow } from "./bb.ts";
+import type { StepRow, TimelineRow } from "./bb.ts";
 
 export type DelegateId = string & { readonly __brand: "DelegateId" };
 
@@ -19,10 +19,17 @@ export type Delegate = {
   steps: readonly StepRow[] | null;
   /** Its rows as bb's chat compacts them, in order; [] when the provider sends none. */
   scopes: readonly StepScope[];
-  /** Only background-task events carry usage; null otherwise (Codex rows, child threads). */
-  usage: TaskUsage | null;
+  /** null = its source reports none (a Codex or ACP delegation row). */
+  usage: Usage | null;
   state: DelegateState;
 };
+
+/**
+ * What a delegate used: tool calls and total tokens. A background-task event carries both. A child thread
+ * counts its tool calls from its own rows and reads its tokens from a separate event, which it may not have
+ * yet: tokens alone can be missing, so they are the one nullable field, not two optional ones.
+ */
+export type Usage = { toolUses: number; totalTokens: number | null };
 
 // why: a union, not a flag plus an optional threadId, so a child thread always names the thread it opens.
 // `threadId` repeats `id` on purpose: `id` is opaque identity (keys, tab params), `threadId` is the bb thread.

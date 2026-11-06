@@ -1,11 +1,12 @@
 // One thread's delegates, kept live from bb: task events and the child-thread
 // list are pulled cheaply on every change; timeline rows (the thread's own and
 // each child's) only when a delegate starts or settles, or on a throttle, per
-// timeline, while it runs. That live read is bounded to the latest segments.
+// timeline, while it runs; a child's tokens, one event, only when it is first
+// seen or its updatedAt moves. That live read is bounded to the latest segments.
 // The history before them is read on start in outline (every delegate and
 // message, ~0.1 KB a row), and in full while a reader wants it.
 import type { ChildThread, DelegationRow, EventRow, OlderCursor, ThreadChange, ThreadSdk, TimelineRead, TimelineRow } from "./bb.ts";
-import { childDelegate, childrenInView, threadRunning } from "./child-threads.ts";
+import { TOKEN_USAGE_EVENT, childDelegate, childrenInView, threadRunning, totalTokensOf, type ChildRead } from "./child-threads.ts";
 import type { Delegate, DelegateId, ThreadDelegates } from "./delegate.ts";
 import { TASK_EVENT_TYPES, foldTaskEvents, normalise, turnsOf, type TaskLedger } from "./normalise.ts";
 import { isRunning } from "./roster.ts";
@@ -44,10 +45,10 @@ type Pull = "refresh" | "reload";
  * message, without a delegation's child rows, so its steps and report wait) or the full rows.
  */
 type Older = { rows: readonly TimelineRow[]; detail: "outline" | "full" };
-/** A child's rows as last read, and the child's updatedAt they were read at. */
-type ChildRead = { version: number; rows: readonly TimelineRow[] };
-/** A child in view with its rows: what childDelegate is built from. */
-type ReadChild = { child: ChildThread; read: ChildRead };
+/** What was last read of a child, and the child's updatedAt it was read at. */
+type VersionedRead = ChildRead & { version: number };
+/** A child in view with what was read of it: what childDelegate is built from. */
+type ReadChild = { child: ChildThread; read: VersionedRead };
 
 class LiveThreadSource implements ThreadSource {
   snapshot: ThreadDelegates = { status: "loading" };
@@ -72,7 +73,7 @@ class LiveThreadSource implements ThreadSource {
   // why: one per run of wanting; the last release aborts it, which cancels the walk's read in flight and ends the walk.
   private historyDemand = new AbortController();
   private children: readonly ChildThread[] = [];
-  private childReads: ReadonlyMap<string, ChildRead> = new Map();
+  private childReads: ReadonlyMap<string, VersionedRead> = new Map();
   // why: one thread:changed subscription per child in view, so a child settles whatever the parent hears.
   private readonly childWatches = new Map<string, () => void>();
   // why: one periodic reread deadline per timeline (this thread's and each child's), so a read of one never postpones another.
@@ -194,7 +195,7 @@ class LiveThreadSource implements ThreadSource {
       const delegations = normalise(allRows, this.ledger, providerId);
       this.emit({
         status: "ready",
-        delegates: [...delegations, ...readChildren.map(({ child, read }) => childDelegate(child, read.rows, allRows))],
+        delegates: [...delegations, ...readChildren.map(({ child, read }) => childDelegate(child, read, allRows))],
         turns: turnsOf(allRows),
         outlined: older?.detail === "outline" ? outlinedOf(delegations, normalise(rows, this.ledger, providerId)) : NONE,
       });
@@ -256,19 +257,25 @@ class LiveThreadSource implements ThreadSource {
   }
 
   /**
-   * Each child in view, from the cache while it is current: read again when it is new, its updatedAt
-   * moved (it started, settled, or was renamed), or when due while it runs. Reads run in parallel.
+   * Each child in view, from the cache while it is current: its rows read again when it is new, its updatedAt
+   * moved (it started, settled, or was renamed), or when due while it runs; its tokens only on the first two.
+   * Reads run in parallel.
    */
   private async readChildren(
     inView: readonly ChildThread[],
-    cache: ReadonlyMap<string, ChildRead>,
+    cache: ReadonlyMap<string, VersionedRead>,
     signal: AbortSignal,
   ): Promise<ReadChild[]> {
     return Promise.all(
       inView.map(async (child): Promise<ReadChild> => {
         const cached = cache.get(child.id);
-        if (cached && cached.version === child.updatedAt && !(threadRunning(child) && this.rereadDue(child.id))) return { child, read: cached };
-        return { child, read: { version: child.updatedAt, rows: await this.readChildRows(child.id, signal) } };
+        const current = cached?.version === child.updatedAt ? cached : undefined;
+        if (current && !(threadRunning(child) && this.rereadDue(child.id))) return { child, read: current };
+        const [rows, totalTokens] = await Promise.all([
+          this.readChildRows(child.id, signal),
+          current ? current.totalTokens : this.readChildTokens(child.id, signal),
+        ]);
+        return { child, read: { version: child.updatedAt, rows, totalTokens } };
       }),
     );
   }
@@ -358,6 +365,18 @@ class LiveThreadSource implements ThreadSource {
       this.sdk.threads.timeline({ threadId, includeNestedRows: "true", deferContent: "true", segmentLimit: SEGMENT_LIMIT, signal }),
     );
     return timeline.rows;
+  }
+
+  /**
+   * A child's total tokens: its latest token-usage event, one small read. bb filters by `types`
+   * (live: a read by `eventTypes` came back unfiltered, 7 usage events in a page of 100).
+   */
+  private async readChildTokens(threadId: string, signal: AbortSignal): Promise<number | null> {
+    const [latest] = await unlessStopped(
+      signal,
+      this.sdk.threads.events.list({ threadId, types: [TOKEN_USAGE_EVENT], order: "desc", limit: "1", signal }),
+    );
+    return totalTokensOf(latest);
   }
 
   private emit(next: ThreadDelegates): void {

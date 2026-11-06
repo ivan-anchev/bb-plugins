@@ -90,7 +90,7 @@ export function span(delegates: readonly Delegate[], now: number): number {
 /**
  * An expanded row's meta line, part by part: started 13:58 · ran 4m 48s ·
  * 19 steps · 24 tool calls · 61.2k tokens. "ran" waits for the end, steps
- * need child rows, and the usage parts need a task event that carried usage.
+ * need child rows, tool calls need usage, and tokens a figure in it.
  */
 export function metaParts(d: Delegate): string[] {
   const { state, steps, usage } = d;
@@ -98,7 +98,8 @@ export function metaParts(d: Delegate): string[] {
     `started ${formatClockTime(d.startedAt)}`,
     ...(state.status === "running" ? [] : [`ran ${formatDuration(state.endedAt - d.startedAt)}`]),
     ...(steps ? [plural(trailSteps(steps).length, "step")] : []),
-    ...(usage ? [plural(usage.toolUses, "tool call"), `${formatTokens(usage.totalTokens)} tokens`] : []),
+    ...(usage ? [plural(usage.toolUses, "tool call")] : []),
+    ...(usage && usage.totalTokens !== null ? [`${formatTokens(usage.totalTokens)} tokens`] : []),
   ];
 }
 

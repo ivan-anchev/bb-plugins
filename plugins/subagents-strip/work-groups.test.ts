@@ -300,7 +300,7 @@ function byTitle(list: readonly Delegate[], title: string): Delegate {
 }
 
 function childOf(read: Read): Delegate {
-  return childDelegate(read.child, read.rows, []);
+  return childDelegate(read.child, { rows: read.rows, totalTokens: null }, []);
 }
 
 function workRow<K extends WorkRow["workKind"]>(workKind: K, match: (row: Extract<WorkRow, { workKind: K }>) => boolean): Extract<WorkRow, { workKind: K }> {
