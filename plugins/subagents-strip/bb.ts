@@ -22,6 +22,8 @@ export type TurnRow = Extract<TimelineRow, { kind: "turn" }>;
 export type AssistantRow = Extract<StepRow, { kind: "conversation"; role: "assistant" }>;
 // why: the operation row's operationKind is an enum, not a literal, so Extract alone cannot pick reasoning.
 export type ReasoningRow = Extract<StepRow, { systemKind: "operation" }> & { operationKind: "reasoning" };
+/** bb's "Stopped manually" row: what an interrupted turn leaves in place of a turn group. */
+export type InterruptRow = Extract<StepRow, { systemKind: "operation" }> & { operationKind: "thread-interrupted" };
 
 /** A background-task item as task events carry it. */
 export type BackgroundTaskItem = Extract<EventRow, { type: "item/backgroundTask/completed" }>["data"]["item"];
@@ -47,8 +49,11 @@ export type ThreadSdk = {
     get(args: Parameters<Threads["get"]>[0]): Promise<Pick<Awaited<ReturnType<Threads["get"]>>, "providerId">>;
     timeline(args: Parameters<Threads["timeline"]>[0] & { afterTag?: undefined }): Promise<Pick<TimelineFull, "rows">>;
     events: { list(args: Parameters<Threads["events"]["list"]>[0]): Promise<EventRow[]> };
-    /** Archived and hidden children are left out unless asked for. */
-    list(args: NonNullable<Parameters<Threads["list"]>[0]> & { parentThreadId: string }): Promise<ChildThread[]>;
+    /**
+     * A thread's children. Hidden ones are left out unless asked for; archived ones are not, so the
+     * source must ask (live: the route listed 10 children of a parent whose threads.count was 9).
+     */
+    list(args: NonNullable<Parameters<Threads["list"]>[0]> & { parentThreadId: string; archived: false }): Promise<ChildThread[]>;
   };
 };
 

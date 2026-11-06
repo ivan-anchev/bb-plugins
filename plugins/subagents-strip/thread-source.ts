@@ -131,7 +131,9 @@ class LiveThreadSource implements ThreadSource {
       const events = await this.eventsAfter(afterSeq, signal);
       // why: a child is spawned by a command in this thread's turn and its end wakes this thread, so this
       // thread's changes cover both; its own subscription covers the rest. The list is ~1 KB per child.
-      const children = await unlessStopped(signal, this.sdk.threads.list({ parentThreadId: this.threadId, signal }));
+      // Not paged: given no limit, the list route returns every match (1,777 threads in one read, live),
+      // and for each parent read its length equals threads.count (thr_24dxq5xhph: 6 and 6).
+      const children = await unlessStopped(signal, this.sdk.threads.list({ parentThreadId: this.threadId, archived: false, signal }));
       const rows = this.needsRows(reload, events, children) ? await this.readRows(signal) : this.rows;
       const inView = childrenInView(children, rows);
       const readChildren = await this.readChildren(inView, reload ? new Map() : this.childReads, signal);

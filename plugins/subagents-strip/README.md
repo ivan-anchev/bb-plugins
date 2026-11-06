@@ -1,8 +1,9 @@
 # bb-plugin-subagents-strip
 
 A live strip above a thread's composer that counts the thread's subagents and
-how long they have taken, and opens into one row per subagent that expands to
-its report and latest steps and opens its full transcript in the side panel.
+child threads and how long they have taken, and opens into one row per subagent
+that expands to its report and latest steps and opens its full transcript in
+the side panel or its own thread.
 Frontend only:
 `server.ts` is the empty entry bb requires.
 
@@ -11,6 +12,9 @@ Frontend only:
 - `delegate.ts`: the canonical `Delegate` every other module reads.
 - `normalise.ts`: delegation rows plus background-task events become
   delegates. The only place provider quirks live.
+- `child-threads.ts`: the thread's child threads become delegates: status
+  from the thread, steps, report, and end from its own timeline, the spawning
+  turn from the parent's.
 - `steps.ts`: which child rows are steps (`transcriptSteps`, `trailSteps`)
   and what each says and did (`stepLabel`, `stepKind`, `stepFailed`,
   `firstLine`).
@@ -36,7 +40,9 @@ Frontend only:
 - `fixtures/claude-thread.json`, `fixtures/claude-stopped-failed.json`:
   trimmed real Claude Code captures the tests run on, the second with agents
   stopped by the thread and by TaskStop and an agent call refused at launch;
-  `normalise.test.ts` says how each was taken.
+  `normalise.test.ts` says how each was taken. `fixtures/child-threads.json`:
+  real child threads (settled, running, stopped, failed, waiting, reused);
+  `child-threads.test.ts` says how each was taken.
 
 ## Develop
 
