@@ -1,0 +1,133 @@
+/* The strip's summary row. Every selector sits under .sr, the plugin's root;
+   colours come from bb's theme tokens, except the state marks below. */
+.sr {
+  /* approved look (roster lab DEFAULT_CONFIG) */
+  --sr-stack-size: 24px;
+  --sr-stack-overlap: 6px;
+  --sr-dot-size: 7px;
+  --sr-title-fs: 13px;
+  --sr-detail-fs: 12px;
+  --sr-row-px: 8px;
+  --sr-radius: 10px;
+  --sr-accent-hue: 250;
+
+  /* state marks: colour marks state only, as small marks */
+  --sr-st-running: oklch(72% 0.15 var(--sr-accent-hue));
+  --sr-st-completed: var(--success);
+  --sr-st-failed: oklch(66% 0.2 12);
+  --sr-st-stopped: color-mix(in oklab, var(--muted-foreground) 45%, var(--background));
+  --sr-cut: var(--background);
+  --sr-census-fs: max(10px, calc(var(--sr-detail-fs) - 1px));
+
+  display: flex;
+  flex-direction: column;
+  font-size: var(--sr-title-fs);
+  line-height: 1.35;
+}
+
+.sr [data-st="running"] { --sr-st: var(--sr-st-running); }
+.sr [data-st="completed"] { --sr-st: var(--sr-st-completed); }
+.sr [data-st="failed"] { --sr-st: var(--sr-st-failed); }
+.sr [data-st="stopped"] { --sr-st: var(--sr-st-stopped); }
+
+/* no fill, no border */
+.sr-sum {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 6px var(--sr-row-px);
+  border-radius: var(--sr-radius);
+}
+
+.sr-stack {
+  display: flex;
+  flex: none;
+  align-items: center;
+  padding-left: var(--sr-stack-overlap);
+}
+
+.sr-av {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--sr-stack-size);
+  height: var(--sr-stack-size);
+  margin-left: calc(-1 * var(--sr-stack-overlap));
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--foreground) 10%, var(--background));
+  box-shadow: 0 0 0 2px var(--sr-cut), inset 0 0 0 1px color-mix(in oklab, var(--foreground) 9%, transparent);
+}
+
+.sr-av-icon {
+  width: calc(var(--sr-stack-size) * 0.6);
+  height: calc(var(--sr-stack-size) * 0.6);
+}
+
+.sr-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: var(--sr-dot-size);
+  height: var(--sr-dot-size);
+  border-radius: 50%;
+  background: var(--sr-st);
+  box-shadow: 0 0 0 2px var(--sr-cut);
+}
+
+.sr-more {
+  width: auto;
+  min-width: var(--sr-stack-size);
+  padding: 0 calc(var(--sr-stack-size) * 0.22);
+  border-radius: 999px;
+  font-size: max(10px, calc(var(--sr-stack-size) * 0.42));
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--subtle-foreground);
+}
+
+.sr-txt {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.sr-title {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground);
+}
+
+.sr-census {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--sr-census-fs);
+  font-variant-numeric: tabular-nums;
+  color: var(--subtle-foreground);
+}
+
+.sr-part:not(:first-child)::before {
+  content: "·";
+  margin: 0 0.4em;
+  color: color-mix(in oklab, var(--muted-foreground) 45%, transparent);
+}
+
+.sr-part[data-st="running"],
+.sr-part[data-st="failed"] {
+  color: var(--sr-st);
+}
+
+.sr-el {
+  flex: none;
+  font-size: var(--sr-detail-fs);
+  font-variant-numeric: tabular-nums;
+  color: var(--subtle-foreground);
+}

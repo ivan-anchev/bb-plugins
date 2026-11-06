@@ -1,0 +1,43 @@
+{
+  "name": "bb-plugin-subagents-strip",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "A live strip above the composer that counts the thread's subagents, how many are running and done, and how long they have taken.",
+  "keywords": [
+    "bb-plugin",
+    "subagents",
+    "agents",
+    "observability"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ivan-anchev/bb-plugins.git",
+    "directory": "plugins/subagents-strip"
+  },
+  "engines": {
+    "bb": ">=0.48",
+    "bbPluginSdk": ">=0.6.104"
+  },
+  "bb": {
+    "name": "Subagents Strip",
+    "description": "A live strip above the composer that counts the thread's subagents, how many are running and done, and how long they have taken.",
+    "branding": {
+      "icon": "UsersRound"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "node --test '*.test.ts'",
+    "build": "bb plugin build"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.6.104",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "typescript": "^5.7.0"
+  }
+}
