@@ -1,6 +1,6 @@
 // The canonical delegate: one record per subagent, whatever the provider and
 // wherever it lives in bb.
-import type { StepRow, TaskUsage } from "./bb.ts";
+import type { StepRow, TaskUsage, TimelineRow } from "./bb.ts";
 
 export type DelegateId = string & { readonly __brand: "DelegateId" };
 
@@ -17,6 +17,8 @@ export type Delegate = {
   startedAt: number;
   /** Rows in order (see steps.ts). null = the provider sends none (ACP); [] = none yet. */
   steps: readonly StepRow[] | null;
+  /** Its rows as bb's chat compacts them, in order; [] when the provider sends none. */
+  scopes: readonly StepScope[];
   /** Only background-task events carry usage; null otherwise (Codex rows, child threads). */
   usage: TaskUsage | null;
   state: DelegateState;
@@ -29,6 +31,13 @@ export type DelegateOrigin =
   | { kind: "delegation" }
   /** A bb thread whose parentThreadId is this thread. */
   | { kind: "child-thread"; threadId: string };
+
+/**
+ * Rows bb's chat compacts in one pass, as their source holds them, user messages and turn groups
+ * included: a delegation row's child rows, folded closed once that row settles; or a child
+ * thread's timeline, folded open, while each of its settled turns folds closed (work-groups.ts).
+ */
+export type StepScope = { rows: readonly TimelineRow[]; closed: boolean };
 
 export type DelegateState =
   | { status: "running" }

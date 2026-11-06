@@ -61,12 +61,37 @@ focus on the row. The expanded row shows, top to bottom:
 - The outcome, once it has finished: the report rendered as markdown, cut to
   six lines with "Show more" when it is longer; the error in full; or
   "Stopped after 35s. Nothing was handed back."
-- The last six steps on a rail, oldest first, each with an icon for what it
-  did, the same words as the row's step line, "failed" when it failed, and its
-  time since the subagent started ("4:12"). "Show N earlier steps" reveals
-  the rest. While the subagent runs, its last step is the live one and
-  shimmers, and the body stays scrolled to the newest step unless you scroll
-  up. A subagent whose provider sends no steps shows no trail.
+- The trail: the last six lines on a rail, oldest first, with "Show N
+  earlier" for the rest. Steps fold into lines the way bb's chat folds them
+  when you expand the same subagent there, with the same words: "Explored 3
+  files, ran 2 commands", "Edited 2 files", and "2 errors" when some failed.
+  - Where bb's chat shows the work as done, everything between two messages
+    is one line: a delegation whose row has settled, which for a Claude Code
+    background agent is from its launch, and each finished turn of a child
+    thread. A single step stays its own line, with an icon for what it did,
+    the same words as the row's step line, and "failed" when it failed.
+  - Where bb's chat shows it still running (a pending delegation row, a child
+    thread's turn under way), only neighbouring steps of one kind fold
+    ("Running 2 commands"); a message still folds the whole run before it.
+  - Messages, questions, approvals, and a `bb thread tell` that went through
+    (bb shows it as a message) are their own lines and split the runs. A tell
+    is recognised in its plain form only, one command of plain or quoted
+    words; one sent through a heredoc, a variable, `sh -c`, or a redirect
+    folds as a command here, though bb's chat shows it as a message.
+  - Click a line to open it to its steps, one per line; click again to close
+    it.
+  - Each line shows its time since the subagent started ("4:12").
+  - While the subagent runs, its latest line is the live one: it shimmers, and
+    a group reads in the present tense, even where bb's chat shows the work as
+    done (a Claude Code background agent: "Running 3 commands" here, "Ran 3
+    commands" there). A line a message or a finished turn closed is never
+    live, and when bb's latest line is one the trail hides (the subagent
+    thinking), no line is. Liveness never changes which steps share a line.
+    Once the subagent finishes, every line reads as bb's chat reads it. The
+    body stays scrolled to the newest line unless you scroll up.
+  - Reasoning and the hand-back (the report) never show as steps, though bb
+    counts the hand-back as a tool ("ran 1 tool").
+  - A subagent whose provider sends no steps shows no trail.
 
 The body scrolls inside a fixed height. Below it, **Open thread** and "Esc to
 collapse" (the hint is hidden on a narrow strip). A subagent whose provider

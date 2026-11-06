@@ -16,6 +16,10 @@ type TimelineFull = Extract<TimelineRead, { rows: unknown }>;
 export type TimelineRow = TimelineFull["rows"][number];
 /** Any row but a turn group: what a delegate's step is. */
 export type StepRow = Exclude<TimelineRow, { kind: "turn" }>;
+/** A step that did work: ran, read, edited, searched, asked, or delegated. */
+export type WorkRow = Extract<StepRow, { kind: "work" }>;
+/** What a command reads, lists, or searches, as bb reads it from the command line. */
+export type ActivityIntent = Extract<WorkRow, { workKind: "command" }>["activityIntents"][number];
 export type DelegationRow = Extract<TimelineRow, { kind: "work"; workKind: "delegation" }>;
 /** A turn group: its status and completedAt settle a child thread. */
 export type TurnRow = Extract<TimelineRow, { kind: "turn" }>;

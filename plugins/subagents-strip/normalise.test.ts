@@ -14,7 +14,7 @@ import type { Delegate } from "./delegate.ts";
 import { formatDuration } from "./clock.ts";
 import { foldTaskEvents, normalise } from "./normalise.ts";
 import { detailLine, elapsed } from "./roster.ts";
-import { trailSteps, transcriptSteps } from "./steps.ts";
+import { childSteps, trailSteps, transcriptSteps } from "./steps.ts";
 
 const fixture: { rows: TimelineRow[]; events: EventRow[] } = JSON.parse(
   readFileSync(new URL("./fixtures/claude-thread.json", import.meta.url), "utf8"),
@@ -74,27 +74,33 @@ test("usage is non-null exactly for delegates with task events", () => {
   for (const d of normalise(fixture.rows, new Map(), "claude-code")) assert.equal(d.usage, null);
 });
 
-test("a nested delegation is neither a delegate nor a step", () => {
+// why: bb's chat counts a nested delegation ("ran 1 subagent") and the handback ("ran 1 tool") in
+// its work groups, so both stay steps; the strip shows the handback only as the outcome.
+test("a nested delegation is a step of its delegate, never a delegate of its own", () => {
   assert.equal(delegates.length, 8);
   assert.ok(!delegates.some((d) => d.id === "dafebd499d-i19"));
-  assert.ok(rowById("dafebd499d-i3").childRows?.some((row) => row.kind === "work" && row.workKind === "delegation"));
-  for (const d of delegates) assert.ok(!(d.steps ?? []).some((row) => row.kind === "work" && row.workKind === "delegation"));
+  const nested = rowById("dafebd499d-i3").childRows?.find((row) => row.kind === "work" && row.workKind === "delegation");
+  assert.ok(nested, "fixture premise: dafebd499d-i3 runs a nested agent");
+  assert.ok(trailSteps(byId(delegates, "dafebd499d-i3").steps ?? []).includes(nested));
 });
 
-test("steps keep reasoning and drop the handback; the trail also drops reasoning", () => {
+test("steps keep reasoning and the handback; the transcript drops the handback, the trail both", () => {
   const steps = delegates.flatMap((d) => d.steps ?? []);
   assert.ok(steps.some(isReasoning));
-  assert.ok(!steps.some((row) => row.kind === "work" && row.workKind === "tool" && row.toolName === "SubagentHandback"));
+  assert.ok(steps.some(isHandbackRow));
+  const transcript = delegates.flatMap((d) => transcriptSteps(d.steps ?? []));
+  assert.ok(transcript.some(isReasoning));
+  assert.ok(!transcript.some(isHandbackRow));
   const trail = delegates.flatMap((d) => trailSteps(d.steps ?? []));
   assert.ok(trail.length > 0);
-  assert.ok(!trail.some(isReasoning));
+  assert.ok(!trail.some(isReasoning) && !trail.some(isHandbackRow));
 });
 
 test("Claude Code delegates keep their description as the title and every transcript step", () => {
   for (const d of delegates) {
     const row = rowById(d.id);
     assert.equal(d.title, row.description);
-    assert.deepEqual(d.steps, transcriptSteps(row.childRows ?? []), d.title);
+    assert.deepEqual(d.steps, childSteps(row.childRows ?? []), d.title);
   }
 });
 
@@ -234,7 +240,7 @@ test("a running Codex delegate keeps its last message as its live step and has n
   const [a, b] = codexRunning;
   for (const d of codexRunning) {
     assert.deepEqual(d.state, { status: "running" }, d.title);
-    assert.deepEqual(d.steps, transcriptSteps(codexRowById(d.id, codex.midrun).childRows ?? []), d.title);
+    assert.deepEqual(d.steps, childSteps(codexRowById(d.id, codex.midrun).childRows ?? []), d.title);
   }
   assert.equal(detailLine(a), "Ran sleep 3");
   assert.equal(detailLine(b), "4");
@@ -244,7 +250,7 @@ test("a completed row's own output outranks its last message", () => {
   const row = { ...codexRowById("da2bb99053-i63"), output: "Counted to six." };
   const [d] = normalise([row], new Map(), "codex");
   assert.deepEqual(d.state, { status: "completed", endedAt: row.completedAt, report: "Counted to six." });
-  assert.deepEqual(d.steps, transcriptSteps(row.childRows ?? []));
+  assert.deepEqual(d.steps, childSteps(row.childRows ?? []));
 });
 
 test("every delegation-row delegate carries the delegation origin and the thread's provider", () => {
@@ -270,6 +276,10 @@ function closingMessage(row: DelegationRow): Extract<TimelineRow, { kind: "conve
 
 function isDelegationRow(row: TimelineRow): row is DelegationRow {
   return row.kind === "work" && row.workKind === "delegation";
+}
+
+function isHandbackRow(row: TimelineRow): boolean {
+  return row.kind === "work" && row.workKind === "tool" && row.toolName === "SubagentHandback";
 }
 
 function isReasoning(row: TimelineRow): boolean {

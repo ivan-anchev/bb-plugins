@@ -15,9 +15,16 @@ Frontend only:
 - `child-threads.ts`: the thread's child threads become delegates: status
   from the thread, steps, report, and end from its own timeline, the spawning
   turn from the parent's.
-- `steps.ts`: which child rows are steps (`transcriptSteps`, `trailSteps`)
-  and what each says and did (`stepLabel`, `stepKind`, `stepFailed`,
-  `firstLine`).
+- `steps.ts`: a delegate's child rows as steps (`childSteps`), which of them
+  the transcript and the trail show (`transcriptSteps`, `trailSteps`), and
+  what each says and did (`stepLabel`, `stepKind`, `stepFailed`, `firstLine`,
+  `stepIntents`).
+- `work-groups.ts`: the trail's lines, steps folded the way bb's chat folds
+  them (`trailItems`); `work-label.ts`: a group's words in bb's chat's
+  wording ("Explored 3 files, ran 2 commands"); `thread-tell.ts`: the
+  commands bb's chat shows as a message to a thread (`isThreadTell`), in
+  their plain form only. All three mirror functions of bb's own client,
+  named in their comments.
 - `roster.ts`: which delegates the strip shows, the census, the elapsed span,
   each row's detail line and elapsed time, and an expanded row's meta line
   (`metaParts`).
@@ -42,7 +49,9 @@ Frontend only:
   stopped by the thread and by TaskStop and an agent call refused at launch;
   `normalise.test.ts` says how each was taken. `fixtures/child-threads.json`:
   real child threads (settled, running, stopped, failed, waiting, reused);
-  `child-threads.test.ts` says how each was taken.
+  `child-threads.test.ts` says how each was taken. `fixtures/claude-groups.json`:
+  one real delegation whose trail was compared with bb's chat live;
+  `work-groups.test.ts` says how it was taken.
 
 ## Develop
 

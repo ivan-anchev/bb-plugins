@@ -12,7 +12,7 @@ import {
 import type { ReasoningRow, StepRow } from "../bb.ts";
 import type { Delegate } from "../delegate.ts";
 import { elapsed, isRunning, metaParts, statusWord } from "../roster.ts";
-import { isReasoning, stepFailed, stepKind, stepLabel } from "../steps.ts";
+import { isReasoning, stepFailed, stepKind, stepLabel, transcriptSteps } from "../steps.ts";
 import { formatDuration, formatOffset, useNow } from "../clock.ts";
 import { useThreadDelegates } from "../source.ts";
 import { parseTranscriptParams, TRANSCRIPT_TAB } from "../transcript.ts";
@@ -50,7 +50,7 @@ function TranscriptTab({ threadId, params }: ExperimentalThreadActionTabProps): 
 
 /** The header, then every step in order, then the report, error, or stop at the end. */
 function Transcript({ delegate: d }: { delegate: Delegate }) {
-  const steps = d.steps ?? [];
+  const steps = transcriptSteps(d.steps ?? []);
   const running = isRunning(d);
   return (
     <article className="sr-tx">

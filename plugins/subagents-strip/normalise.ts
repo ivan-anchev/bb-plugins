@@ -3,8 +3,8 @@
 // `childRef`, `toolArgs`, or task events. `background` is never read: Claude
 // Code agents run async whatever it says.
 import type { BackgroundTaskItem, DelegationRow, EventRow, StepRow, TaskStatus, TimelineRow } from "./bb.ts";
-import type { Delegate, DelegateId, DelegateState, DelegateStatus } from "./delegate.ts";
-import { isHandback, splitReport, transcriptSteps } from "./steps.ts";
+import type { Delegate, DelegateId, DelegateState, DelegateStatus, StepScope } from "./delegate.ts";
+import { childSteps, isHandback, splitReport } from "./steps.ts";
 
 /** Latest background-task snapshot per delegation callId (the task's `parentToolCallId`). */
 export type TaskLedger = ReadonlyMap<string, TaskSnapshot>;
@@ -43,7 +43,7 @@ function toDelegate(group: readonly [DelegationRow, ...DelegationRow[]], ledger:
   const task = taskFor(group, ledger);
   const childRows = concatChildRows(group);
   const settled = task ? stateFromTask(task, childRows) : stateFromRow(group[group.length - 1], childRows);
-  const { state, steps } = reportFromSteps(settled, childRows && transcriptSteps(childRows));
+  const { state, steps } = reportFromSteps(settled, childRows && childSteps(childRows));
   return {
     id: first.callId as DelegateId, // a delegation's brand point: its first callId
     origin: { kind: "delegation" },
@@ -52,6 +52,7 @@ function toDelegate(group: readonly [DelegationRow, ...DelegationRow[]], ledger:
     title: titleOf(first),
     startedAt: first.startedAt,
     steps,
+    scopes: group.flatMap(scopeOf),
     usage: task?.usage ?? null,
     state,
   };
@@ -130,6 +131,12 @@ function groupByChild(rows: readonly DelegationRow[]): [DelegationRow, ...Delega
 
 function taskFor(group: readonly DelegationRow[], ledger: TaskLedger): TaskSnapshot | undefined {
   return group.map((row) => ledger.get(row.callId)).findLast((task) => task !== undefined);
+}
+
+// why: bb's chat compacts each delegation row's child rows apart, closed once the row settles (`rs`):
+// the row's status, not the task's, so a Claude Code agent that runs on folds closed, as bb's chat shows it.
+function scopeOf(row: DelegationRow): StepScope[] {
+  return row.childRows ? [{ rows: row.childRows, closed: row.status !== "pending" }] : [];
 }
 
 function concatChildRows(group: readonly DelegationRow[]): TimelineRow[] | null {

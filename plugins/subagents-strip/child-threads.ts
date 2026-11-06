@@ -4,7 +4,7 @@
 // message, and the parent turn it belongs to is read off the parent's rows.
 import type { ChildThread, InterruptRow, StepRow, TimelineRow, TurnRow } from "./bb.ts";
 import type { Delegate, DelegateId, DelegateState, DelegateStatus } from "./delegate.ts";
-import { splitReport, transcriptSteps } from "./steps.ts";
+import { childSteps, splitReport } from "./steps.ts";
 
 /**
  * The children the source reads and watches: those spawned inside the loaded
@@ -31,6 +31,8 @@ export function childDelegate(child: ChildThread, rows: readonly TimelineRow[], 
     title: child.title ?? child.titleFallback ?? "Untitled thread",
     startedAt: child.createdAt,
     steps,
+    // why: bb's chat compacts a thread's timeline open, and each settled turn's group closed inside it (`as`, `is`).
+    scopes: [{ rows, closed: false }],
     usage: null, // why: the thread list carries no usage, so the meta line leaves those parts out
     state,
   };
@@ -46,7 +48,7 @@ function spawningTurn(child: ChildThread, parentRows: readonly TimelineRow[]): s
 
 /** Status from the thread; which way it ended, when, and the report from its own rows. */
 function settle(child: ChildThread, rows: readonly TimelineRow[]): { state: DelegateState; steps: readonly StepRow[] } {
-  const steps = transcriptSteps(rows).filter(isOwnStep);
+  const steps = childSteps(rows).filter(isOwnStep);
   const end = latestTurnEnd(rows);
   // why: a settled turn's completedAt is when the child finished (it equals the thread's updatedAt on
   // every live child read); updatedAt covers a thread that failed before any turn, or a turn left ungrouped.

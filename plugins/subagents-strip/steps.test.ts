@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import type { StepRow, TimelineRow } from "./bb.ts";
-import { firstLine, isReasoning, splitReport, stepFailed, stepKind, stepLabel, trailSteps, transcriptSteps } from "./steps.ts";
+import type { StepRow, TimelineRow, WorkRow } from "./bb.ts";
+import { childSteps, firstLine, isHandback, isReasoning, splitReport, stepFailed, stepKind, stepLabel, trailSteps, transcriptSteps } from "./steps.ts";
 
 // The real child rows of the fixture's delegates (see normalise.test.ts for how it was taken).
 const fixture: { rows: TimelineRow[] } = JSON.parse(readFileSync(new URL("./fixtures/claude-thread.json", import.meta.url), "utf8"));
-const steps = transcriptSteps(fixture.rows.flatMap((row) => (row.kind === "turn" ? (row.children ?? []) : [])).flatMap(childRowsOf));
+const steps = childSteps(fixture.rows.flatMap((row) => (row.kind === "turn" ? (row.children ?? []) : [])).flatMap(childRowsOf));
 
 test("a tool step reads as its title, without a verb, whether it runs or not", () => {
-  const tool = first((r) => r.kind === "work" && r.workKind === "tool");
+  const tool = first((r) => r.kind === "work" && r.workKind === "tool" && !isHandback(r));
   assert.ok(tool.kind === "work");
   assert.equal(stepLabel(tool), "emil-design-foundations");
   assert.equal(stepLabel({ ...tool, status: "pending" }), "emil-design-foundations");
@@ -71,7 +71,6 @@ test("a pending question reads as Asking, a pending delegation as Starting; answ
 
 // Hand-built rows: no captured thread holds these kinds. Each is typed as bb's own row, so the
 // compiler checks every field against the pinned SDK; the fields common to every work row are shared.
-type WorkRow = Extract<StepRow, { kind: "work" }>;
 const pendingWork: Pick<WorkRow, "kind" | "id" | "threadId" | "turnId" | "createdAt" | "startedAt" | "sourceSeqStart" | "sourceSeqEnd" | "status"> = {
   kind: "work", id: "hand-built", threadId: "thr_hand_built", turnId: null, createdAt: 0, startedAt: 0, sourceSeqStart: 0, sourceSeqEnd: 0, status: "pending",
 };
@@ -182,7 +181,7 @@ test("firstLine skips blank lines and drops heading, list, bold, and code marks"
 // A Codex counter's real child rows (see normalise.test.ts): numbers said between `sleep` commands, then a closing message.
 const codex: { final: TimelineRow[] } = JSON.parse(readFileSync(new URL("./fixtures/codex-thread.json", import.meta.url), "utf8"));
 const [counterRow] = codex.final.flatMap((row) => (row.kind === "turn" ? (row.children ?? []) : []));
-const counter = transcriptSteps(childRowsOf(counterRow));
+const counter = childSteps(childRowsOf(counterRow));
 
 test("splitReport takes the last assistant message as the report and drops only that row", () => {
   const closing = counter.at(-1);

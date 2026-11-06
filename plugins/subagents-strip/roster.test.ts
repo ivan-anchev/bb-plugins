@@ -54,9 +54,9 @@ test("span of settled delegates runs from the first start to the last end, not t
   assert.equal(span(delegates, 99_000), 5_000);
 });
 
-test("a running row's detail is its latest step's label, skipping reasoning", () => {
-  const d = realById("dafb9611c6-i5"); // its steps end: reasoning, command, reasoning
-  assert.equal(d.steps?.at(-1)?.kind, "system");
+test("a running row's detail is its latest step's label, skipping reasoning and the handback", () => {
+  const d = realById("dafb9611c6-i5"); // its steps end: reasoning, command, reasoning, handback
+  assert.deepEqual(d.steps?.slice(-2).map((row) => row.kind), ["system", "work"]);
   assert.match(detailLine({ ...d, state: { status: "running" } }), /^Ran D=\/Users\/ivananchev\/\.bb\/thread-storage\//);
 });
 
@@ -108,5 +108,5 @@ function realById(id: string): Delegate {
 }
 
 function delegate(id: string, turnId: string, startedAt: number, state: DelegateState): Delegate {
-  return { id: id as DelegateId, origin: { kind: "delegation" }, providerId: "claude-code", turnId, title: id, startedAt, steps: [], usage: null, state };
+  return { id: id as DelegateId, origin: { kind: "delegation" }, providerId: "claude-code", turnId, title: id, startedAt, steps: [], scopes: [], usage: null, state };
 }
