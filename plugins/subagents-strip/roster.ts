@@ -1,5 +1,7 @@
-// What the strip shows: which delegates, the census words, and the elapsed span.
+// What the strip shows: which delegates, the census words, the elapsed span,
+// and each row's detail line and elapsed time.
 import type { Delegate, DelegateStatus } from "./delegate.ts";
+import { firstLine, stepLabel, trailSteps } from "./steps.ts";
 
 /**
  * The latest delegating turn's delegates, plus any still running from earlier
@@ -27,8 +29,26 @@ export function census(delegates: readonly Delegate[]): { total: number; parts: 
 /** Wall-clock span from the first start to the last end, or to `now` while any runs. */
 export function span(delegates: readonly Delegate[], now: number): number {
   const start = Math.min(...delegates.map((d) => d.startedAt));
-  const end = delegates.some(isRunning) ? now : Math.max(...delegates.map(endOf));
+  const end = Math.max(...delegates.map((d) => endOf(d, now)));
   return end - start;
+}
+
+/** A row's second line: the latest step while running, the outcome once settled. */
+export function detailLine(d: Delegate): string {
+  switch (d.state.status) {
+    case "running": {
+      const step = trailSteps(d.steps ?? []).at(-1);
+      return step ? stepLabel(step) : "Starting…";
+    }
+    case "completed": return d.state.report ? firstLine(d.state.report) : "Finished without a report";
+    case "failed": return d.state.error ? firstLine(d.state.error) : "Failed";
+    case "stopped": return "Stopped";
+  }
+}
+
+/** One delegate's run time: to `now` while it runs, to its end once settled. */
+export function elapsed(d: Delegate, now: number): number {
+  return endOf(d, now) - d.startedAt;
 }
 
 export const isRunning = (d: Delegate): boolean => d.state.status === "running";
@@ -38,4 +58,4 @@ export const isRunning = (d: Delegate): boolean => d.state.status === "running";
 const CENSUS_ORDER: readonly DelegateStatus[] = ["running", "completed", "failed", "stopped"];
 const CENSUS_WORD: Record<DelegateStatus, string> = { running: "running", completed: "done", failed: "failed", stopped: "stopped" };
 
-const endOf = (d: Delegate): number => (d.state.status === "running" ? d.startedAt : d.state.endedAt);
+const endOf = (d: Delegate, now: number): number => (d.state.status === "running" ? now : d.state.endedAt);
