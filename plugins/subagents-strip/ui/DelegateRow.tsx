@@ -1,16 +1,18 @@
 // One delegate: a two-line row (avatar with status dot, title over the detail
 // line, elapsed time) that expands in place to its meta line, outcome, and step
-// trail. Words come from roster.ts and steps.ts; the outcome notes live here.
-import { useId, useRef, useState, type JSX, type KeyboardEvent, type ReactNode, type TransitionEvent } from "react";
-import { experimental_Icon as Icon, Markdown } from "@get-bb/plugin-sdk/app";
+// trail, with Open thread in its footer. Words come from roster.ts and steps.ts.
+import { useId, useRef, useState, type KeyboardEvent, type TransitionEvent } from "react";
+import { experimental_Icon as Icon, experimental_useAppPanel } from "@get-bb/plugin-sdk/app";
 import type { StepRow } from "../bb.ts";
-import type { Delegate, DelegateStatus } from "../delegate.ts";
+import type { Delegate } from "../delegate.ts";
 import { detailLine, elapsed, isRunning, metaParts } from "../roster.ts";
-import { stepFailed, stepKind, stepLabel, trailSteps, type StepKind } from "../steps.ts";
+import { stepFailed, stepKind, stepLabel, trailSteps } from "../steps.ts";
 import { formatDuration, formatOffset, useNow } from "../clock.ts";
+import { TRANSCRIPT_TAB, transcriptParams } from "../transcript.ts";
 import { Avatar } from "./Avatar.tsx";
+import { MetaLine, Outcome, StepIcon } from "./DelegateDetail.tsx";
 import { RollingText } from "./Motion.tsx";
-import { followTail, markOverflow, startAtTop } from "./scroll.ts";
+import { followTail, startAtTop } from "./scroll.ts";
 
 type RowProps = { providerId: string; delegate: Delegate; expanded: boolean; onToggle: () => void };
 
@@ -56,73 +58,32 @@ function RowDetail({ delegate: d }: { delegate: Delegate }) {
       {/* why: while running, the body follows the live step at its bottom; settled, it leads with the outcome. */}
       <div className="sr-x-scroll" ref={isRunning(d) ? followTail : startAtTop}>
         <MetaLine parts={metaParts(d)} />
-        <Outcome delegate={d} />
+        <Outcome delegate={d} report="clamped" />
         {d.steps && <Trail delegate={d} steps={trailSteps(d.steps)} />}
       </div>
       <footer className="sr-x-foot">
+        {/* why: a provider that sends no child rows (ACP) leaves no transcript to open. */}
+        {d.steps && <OpenThreadButton delegate={d} />}
         <span className="sr-x-hint"><kbd>Esc</kbd> to collapse</span>
       </footer>
     </>
   );
 }
 
-function MetaLine({ parts }: { parts: string[] }) {
-  return <p className="sr-x-meta">{parts.map((part) => <span key={part}>{part}</span>)}</p>;
-}
-
-function Outcome({ delegate: d }: { delegate: Delegate }): JSX.Element | null {
-  const { state } = d;
-  switch (state.status) {
-    case "running": return null;
-    case "completed":
-      return (
-        <OutcomeBlock status={state.status} label="Report" ranFor={state.endedAt - d.startedAt}>
-          {state.report ? <Report markdown={state.report} /> : <p className="sr-note">Finished without handing back report text.</p>}
-        </OutcomeBlock>
-      );
-    case "failed":
-      return (
-        <OutcomeBlock status={state.status} label="Failed" ranFor={state.endedAt - d.startedAt}>
-          <p className="sr-note">{state.error ?? "The subagent failed without an error message."}</p>
-        </OutcomeBlock>
-      );
-    case "stopped":
-      return (
-        <OutcomeBlock status={state.status} label="Stopped" ranFor={state.endedAt - d.startedAt}>
-          <p className="sr-note">Stopped after {formatDuration(state.endedAt - d.startedAt)}. Nothing was handed back.</p>
-        </OutcomeBlock>
-      );
-  }
-}
-
-type OutcomeBlockProps = { status: DelegateStatus; label: string; ranFor: number; children: ReactNode };
-
-/** A dot in the status colour, the label, and when it ended, over the body. */
-function OutcomeBlock({ status, label, ranFor, children }: OutcomeBlockProps) {
+/**
+ * Opens the delegate's transcript in the side panel, or focuses its tab if it
+ * is open. A Claude Code subagent is not a bb thread, so this never navigates.
+ */
+function OpenThreadButton({ delegate: d }: { delegate: Delegate }) {
+  const panel = experimental_useAppPanel();
+  const open = () => {
+    panel.openTab({ tab: TRANSCRIPT_TAB, params: transcriptParams(d.id), title: d.title });
+  };
   return (
-    <div className="sr-out" data-st={status}>
-      <div className="sr-out-h">
-        <span className="sr-sd" />
-        <span className="sr-out-l">{label}</span>
-        <span className="sr-tm">{formatOffset(ranFor)}</span>
-      </div>
-      <div className="sr-out-b">{children}</div>
-    </div>
-  );
-}
-
-/** The report as markdown, clamped; Show more appears only when the clamp hides something. */
-function Report({ markdown }: { markdown: string }) {
-  const [full, setFull] = useState(false);
-  return (
-    <>
-      <div className="sr-res" data-clamp={!full || undefined} ref={markOverflow}>
-        <Markdown className="sr-md" content={markdown} />
-      </div>
-      <button type="button" className="sr-lnk sr-res-more" aria-expanded={full} onClick={() => setFull(!full)}>
-        {full ? "Show less" : "Show more"}
-      </button>
-    </>
+    <button type="button" className="sr-open" onClick={open}>
+      Open thread
+      <Icon name="ArrowUpRight" fallback="ExternalLink" className="sr-open-icon" aria-hidden />
+    </button>
   );
 }
 
@@ -159,8 +120,7 @@ function Step({ row, live, sinceStart }: { row: StepRow; live: boolean; sinceSta
   return (
     <li className="sr-step" data-k={kind} data-step={live ? "live" : failed ? "failed" : "done"} aria-current={live ? "step" : undefined}>
       <span className="sr-sd" />
-      {/* why: the label already leads with its verb, so the icon is decoration. */}
-      <Icon name={STEP_ICON[kind]} fallback="Circle" className="sr-sk" aria-hidden />
+      <StepIcon kind={kind} />
       <span className="sr-stx" title={label}>{label}</span>
       {failed && <span className="sr-sw">failed</span>}
       <span className="sr-tm">{formatOffset(sinceStart)}</span>
@@ -177,17 +137,6 @@ function StartingStep() {
     </li>
   );
 }
-
-const STEP_ICON: Record<StepKind, string> = {
-  command: "Terminal",
-  read: "FileText",
-  edit: "FilePen",
-  search: "Search",
-  web: "Globe",
-  tool: "Wrench",
-  message: "MessageSquare",
-  note: "Info",
-};
 
 /** When a row finishes growing, the list scrolls just enough to show all of it; never the page. */
 function keepGrownRowInView(e: TransitionEvent<HTMLLIElement>) {

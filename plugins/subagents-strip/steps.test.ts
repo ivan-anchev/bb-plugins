@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { StepRow, TimelineRow } from "./bb.ts";
-import { firstLine, stepFailed, stepKind, stepLabel, transcriptSteps } from "./steps.ts";
+import { firstLine, isReasoning, stepFailed, stepKind, stepLabel, trailSteps, transcriptSteps } from "./steps.ts";
 
 // The real child rows of the fixture's delegates (see normalise.test.ts for how it was taken).
 const fixture: { rows: TimelineRow[] } = JSON.parse(readFileSync(new URL("./fixtures/claude-thread.json", import.meta.url), "utf8"));
@@ -69,6 +69,16 @@ test("a step failed when it ended in error or its command exited non-zero", () =
   assert.ok(tool.kind === "work");
   assert.equal(stepFailed({ ...tool, status: "error" }), true);
   assert.equal(stepFailed(tool), false);
+});
+
+test("reasoning is the transcript's Thinking text, and only reasoning leaves the trail", () => {
+  const thought = first(isReasoning);
+  assert.ok(isReasoning(thought));
+  assert.equal(thought.detail, "I'm going to read through the skill files first to see what guidance they give.");
+  // why: other operation rows (a warning here, built from the real reasoning row) are steps the trail keeps.
+  const warning: StepRow = { ...thought, operationKind: "warning" };
+  assert.equal(isReasoning(warning), false);
+  assert.deepEqual(trailSteps([thought, warning]), [warning]);
 });
 
 test("firstLine skips blank lines and drops heading, list, bold, and code marks", () => {

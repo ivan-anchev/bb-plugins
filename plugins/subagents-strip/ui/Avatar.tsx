@@ -2,6 +2,7 @@
 // in the surface colour. Status never replaces the icon.
 import { experimental_ProviderIcon as ProviderIcon, experimental_useProviders } from "@get-bb/plugin-sdk/app";
 import type { Delegate, DelegateStatus } from "../delegate.ts";
+import { statusWord } from "../roster.ts";
 import { RollingNumber, StatusDot } from "./Motion.tsx";
 
 const STACK_LIMIT = 3;
@@ -25,14 +26,12 @@ export function Avatar({ providerId, status }: { providerId: string; status: Del
       <ProviderIcon providerKind="agent" provider={provider} fallback="UserRound" className="sr-av-icon" aria-hidden />
       <StatusDot status={status} />
       {/* why: colour never carries state alone (R9). */}
-      <span className="sr-status-word">{STATUS_WORD[status]}</span>
+      <span className="sr-status-word">{statusWord(status)}</span>
     </span>
   );
 }
 
 // ---------------------------------------------------------------- layer 2
-
-const STATUS_WORD: Record<DelegateStatus, string> = { running: "Running", completed: "Done", failed: "Failed", stopped: "Stopped" };
 
 /** bb's cached provider record; an id-only record still resolves registered artwork. */
 function useProviderRecord(providerId: string) {
