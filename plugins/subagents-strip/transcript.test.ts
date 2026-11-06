@@ -11,7 +11,7 @@ import { parseTranscriptParams, transcriptParams } from "./transcript.ts";
 const fixture: { rows: TimelineRow[]; events: EventRow[] } = JSON.parse(
   readFileSync(new URL("./fixtures/claude-thread.json", import.meta.url), "utf8"),
 );
-const delegates = normalise(fixture.rows, foldTaskEvents(new Map(), fixture.events));
+const delegates = normalise(fixture.rows, foldTaskEvents(new Map(), fixture.events), "claude-code");
 
 test("params written for a delegate name the same delegate after a round trip through persistence", () => {
   for (const d of delegates) {

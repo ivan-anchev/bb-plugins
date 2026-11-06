@@ -20,7 +20,7 @@ const fixture: { rows: TimelineRow[]; events: EventRow[] } = JSON.parse(
   readFileSync(new URL("./fixtures/claude-thread.json", import.meta.url), "utf8"),
 );
 const delegationRows = fixture.rows.flatMap((row) => (row.kind === "turn" ? (row.children ?? []) : [])).filter(isDelegationRow);
-const delegates = normalise(fixture.rows, foldTaskEvents(new Map(), fixture.events));
+const delegates = normalise(fixture.rows, foldTaskEvents(new Map(), fixture.events), "claude-code");
 
 test("fixture premise: every row says completed and carries the launch receipt as output", () => {
   assert.equal(delegationRows.length, 8);
@@ -33,7 +33,7 @@ test("fixture premise: every row says completed and carries the launch receipt a
 test("at every point in the event stream, each delegate's status follows its latest task event", () => {
   for (const cut of fixture.events) {
     const seen = fixture.events.filter((event) => event.seq <= cut.seq);
-    for (const d of normalise(fixture.rows, foldTaskEvents(new Map(), seen))) {
+    for (const d of normalise(fixture.rows, foldTaskEvents(new Map(), seen), "claude-code")) {
       const latest = taskEventsFor(seen, d.id).at(-1);
       const expected = latest === undefined ? "completed" : latest.taskStatus === "completed" ? "completed" : "running";
       assert.equal(d.state.status, expected, `${d.title} after seq ${cut.seq}`);
@@ -44,7 +44,7 @@ test("at every point in the event stream, each delegate's status follows its lat
 test("a task with only item/started is running, though its row says completed", () => {
   const started = fixture.events.find((e) => e.type === "item/started" && taskOf(e)?.parentToolCallId === "dafb9611c6-i4");
   assert.ok(started);
-  const d = byId(normalise(fixture.rows, foldTaskEvents(new Map(), [started])), "dafb9611c6-i4");
+  const d = byId(normalise(fixture.rows, foldTaskEvents(new Map(), [started]), "claude-code"), "dafb9611c6-i4");
   assert.equal(rowById("dafb9611c6-i4").status, "completed");
   assert.equal(d.state.status, "running");
 });
@@ -71,7 +71,7 @@ test("usage is non-null exactly for delegates with task events", () => {
     assert.ok(lastUsage, `fixture premise: ${d.title} has task events with usage`);
     assert.deepEqual(d.usage, lastUsage);
   }
-  for (const d of normalise(fixture.rows, new Map())) assert.equal(d.usage, null);
+  for (const d of normalise(fixture.rows, new Map(), "claude-code")) assert.equal(d.usage, null);
 });
 
 test("a nested delegation is neither a delegate nor a step", () => {
@@ -104,7 +104,7 @@ test("Codex (hand-built): several collab rows on one childRef make one delegate"
     handBuilt({ callId: "c2", childRef: "agent-A", status: "completed", output: "waited", startedAt: 2 }),
     handBuilt({ callId: "c3", childRef: "agent-A", status: "pending", output: "", startedAt: 3 }),
   ];
-  const [d, ...rest] = normalise(rows, new Map());
+  const [d, ...rest] = normalise(rows, new Map(), "codex");
   assert.equal(rest.length, 0);
   assert.equal(d.id, "c1");
   assert.equal(d.startedAt, 1);
@@ -112,16 +112,16 @@ test("Codex (hand-built): several collab rows on one childRef make one delegate"
 });
 
 test("ACP (hand-built): a row with childRows null yields steps null and its output as the report", () => {
-  const [d] = normalise([handBuilt({ callId: "a1", childRef: null, status: "completed", output: "All done.", childRows: null })], new Map());
+  const [d] = normalise([handBuilt({ callId: "a1", childRef: null, status: "completed", output: "All done.", childRows: null })], new Map(), "claude-code");
   assert.equal(d.steps, null);
   assert.deepEqual(d.state, { status: "completed", endedAt: 50, report: "All done." });
 });
 
 test("a row with no task maps by its own status", () => {
-  const [failed] = normalise([handBuilt({ callId: "e1", status: "error", output: "boom" })], new Map());
+  const [failed] = normalise([handBuilt({ callId: "e1", status: "error", output: "boom" })], new Map(), "claude-code");
   assert.deepEqual(failed.state, { status: "failed", endedAt: 50, error: "boom" });
   // hand-built: no interrupted row could be produced (see the stopped capture below); bb writes this output when it interrupts a pending call.
-  const [stopped] = normalise([handBuilt({ callId: "i1", status: "interrupted", output: "Tool execution interrupted" })], new Map());
+  const [stopped] = normalise([handBuilt({ callId: "i1", status: "interrupted", output: "Tool execution interrupted" })], new Map(), "claude-code");
   assert.deepEqual(stopped.state, { status: "stopped", endedAt: 50 });
 });
 
@@ -140,7 +140,7 @@ const stopFailedLedger = foldTaskEvents(new Map(), stopFailed.events);
 test("a background agent whose parent thread is stopped reads stopped, ended and frozen at the stop", () => {
   const stop = eventAt(stopFailed.events, 42);
   assert.equal(taskOf(stop)?.taskStatus, "stopped"); // bb closes the task when it interrupts the turn
-  const d = byId(normalise(stopFailed.rows, stopFailedLedger), "daee87293d-i1");
+  const d = byId(normalise(stopFailed.rows, stopFailedLedger, "claude-code"), "daee87293d-i1");
   assert.deepEqual(d.state, { status: "stopped", endedAt: stop.createdAt });
   assert.equal(elapsed(d, stop.createdAt + 60_000), elapsed(d, stop.createdAt)); // the clock stops
   assert.equal(formatDuration(elapsed(d, Date.now())), "31s"); // 31.996 s from launch to stop
@@ -150,7 +150,7 @@ test("a background agent stopped with TaskStop reads stopped from its killed pro
   assert.equal(taskOf(eventAt(stopFailed.events, 103))?.taskStatus, "killed");
   const seen = (seq: number) => stopFailed.events.filter((event) => event.seq <= seq);
   for (const seq of [103, 104]) {
-    const d = byId(normalise(stopFailed.rows, foldTaskEvents(new Map(), seen(seq))), "da77a0df0c-i8");
+    const d = byId(normalise(stopFailed.rows, foldTaskEvents(new Map(), seen(seq)), "claude-code"), "da77a0df0c-i8");
     assert.deepEqual(d.state, { status: "stopped", endedAt: eventAt(stopFailed.events, seq).createdAt }, `after seq ${seq}`);
   }
 });
@@ -161,7 +161,7 @@ test("an Agent call refused at launch fails with the row's error, over its real 
   assert.ok(row?.completedAt, "fixture premise: the refused row carries its completedAt");
   assert.equal(row.status, "error");
   assert.ok(!stopFailedLedger.has(row.callId), "fixture premise: no task started");
-  const d = byId(normalise(stopFailed.rows, stopFailedLedger), row.callId);
+  const d = byId(normalise(stopFailed.rows, stopFailedLedger, "claude-code"), row.callId);
   assert.deepEqual(d.state, { status: "failed", endedAt: row.completedAt, error: row.output });
   assert.match(row.output, /^Agent type 'no-such-agent-type' not found/);
   assert.ok(elapsed(d, Date.now()) < 1_000); // so its "0s" is the truth
@@ -174,7 +174,7 @@ test("a failed task (hand-built) takes its error from the task event, never the 
   const stateIfFailedWith = (error: string) => {
     const failed: EventRow = { ...stop, data: { ...stop.data, item: { ...stop.data.item, taskStatus: "failed", error } } };
     const ledger = foldTaskEvents(new Map(), [...stopFailed.events.filter((e) => e.seq < stop.seq), failed]);
-    return byId(normalise(stopFailed.rows, ledger), "daee87293d-i1").state;
+    return byId(normalise(stopFailed.rows, ledger, "claude-code"), "daee87293d-i1").state;
   };
   assert.deepEqual(stateIfFailedWith("API Error: 529 overloaded"), { status: "failed", endedAt: stop.createdAt, error: "API Error: 529 overloaded" });
   assert.deepEqual(stateIfFailedWith(""), { status: "failed", endedAt: stop.createdAt, error: null });
@@ -191,8 +191,8 @@ test("a failed task (hand-built) takes its error from the task event, never the 
 const codex: { final: TimelineRow[]; midrun: TimelineRow[] } = JSON.parse(
   readFileSync(new URL("./fixtures/codex-thread.json", import.meta.url), "utf8"),
 );
-const codexSettled = normalise(codex.final, new Map());
-const codexRunning = normalise(codex.midrun, new Map());
+const codexSettled = normalise(codex.final, new Map(), "codex");
+const codexRunning = normalise(codex.midrun, new Map(), "codex");
 
 test("Codex fixture premise: settled rows carry no handback and no output, and end in an assistant message", () => {
   const rows = codex.final.flatMap((row) => (row.kind === "turn" ? (row.children ?? []) : [])).filter(isDelegationRow);
@@ -212,10 +212,10 @@ test("a Codex delegate reads as its agent name, not its path", () => {
 
 test("a title that is not a whitespace-free absolute path is kept whole", () => {
   const titles = ["Research the SDK", "/root/a b", "/root/", "root/counter_a"].map(
-    (description, i) => normalise([handBuilt({ callId: `t${i}`, status: "pending", output: "", description })], new Map())[0].title,
+    (description, i) => normalise([handBuilt({ callId: `t${i}`, status: "pending", output: "", description })], new Map(), "codex")[0].title,
   );
   assert.deepEqual(titles, ["Research the SDK", "/root/a b", "/root/", "root/counter_a"]);
-  assert.equal(normalise([handBuilt({ callId: "t9", status: "pending", output: "", description: "/root/team/counter_g" })], new Map())[0].title, "counter_g");
+  assert.equal(normalise([handBuilt({ callId: "t9", status: "pending", output: "", description: "/root/team/counter_g" })], new Map(), "codex")[0].title, "counter_g");
 });
 
 test("a settled Codex delegate reports its closing message, which leaves its steps", () => {
@@ -242,9 +242,16 @@ test("a running Codex delegate keeps its last message as its live step and has n
 
 test("a completed row's own output outranks its last message", () => {
   const row = { ...codexRowById("da2bb99053-i63"), output: "Counted to six." };
-  const [d] = normalise([row], new Map());
+  const [d] = normalise([row], new Map(), "codex");
   assert.deepEqual(d.state, { status: "completed", endedAt: row.completedAt, report: "Counted to six." });
   assert.deepEqual(d.steps, transcriptSteps(row.childRows ?? []));
+});
+
+test("every delegation-row delegate carries the delegation origin and the thread's provider", () => {
+  const claude = [...delegates, ...normalise(stopFailed.rows, stopFailedLedger, "claude-code")];
+  for (const d of claude) assert.deepEqual([d.origin, d.providerId], [{ kind: "delegation" }, "claude-code"], d.title);
+  for (const d of [...codexSettled, ...codexRunning]) assert.deepEqual([d.origin, d.providerId], [{ kind: "delegation" }, "codex"], d.title);
+  assert.equal(claude.length + codexSettled.length + codexRunning.length, 19);
 });
 
 // ---------------------------------------------------------------- helpers

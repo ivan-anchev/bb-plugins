@@ -34,12 +34,11 @@ function Roster({ threadId }: { threadId: string }) {
       <DelegateList
         id={listId}
         open={open}
-        providerId={live.providerId}
         delegates={roster}
         expanded={expanded}
         onToggleRow={(id) => setExpanded(expanded === id ? null : id)}
       />
-      <SummaryRow providerId={live.providerId} delegates={roster} listId={listId} open={open} onToggle={() => setOpen(!open)} />
+      <SummaryRow delegates={roster} listId={listId} open={open} onToggle={() => setOpen(!open)} />
     </section>
   );
 }
@@ -47,14 +46,13 @@ function Roster({ threadId }: { threadId: string }) {
 type ListProps = {
   id: string;
   open: boolean;
-  providerId: string;
   delegates: readonly Delegate[];
   expanded: DelegateId | null;
   onToggleRow: (id: DelegateId) => void;
 };
 
 /** The list grows upward from the summary row, oldest first, so the newest sits nearest the composer. One row expands at a time. */
-function DelegateList({ id, open, providerId, delegates, expanded, onToggleRow }: ListProps) {
+function DelegateList({ id, open, delegates, expanded, onToggleRow }: ListProps) {
   return (
     // why: kept mounted while closed so it can animate shut; inert keeps it out of focus and the a11y tree.
     <div className="sr-wrap" ref={trackRoomAbove}>
@@ -62,7 +60,7 @@ function DelegateList({ id, open, providerId, delegates, expanded, onToggleRow }
         <div className="sr-panel" id={id} inert={!open}>
           <ol className="sr-list">
             {delegates.map((d) => (
-              <DelegateRow key={d.id} providerId={providerId} delegate={d} expanded={d.id === expanded} onToggle={() => onToggleRow(d.id)} />
+              <DelegateRow key={d.id} delegate={d} expanded={d.id === expanded} onToggle={() => onToggleRow(d.id)} />
             ))}
           </ol>
         </div>
@@ -71,15 +69,15 @@ function DelegateList({ id, open, providerId, delegates, expanded, onToggleRow }
   );
 }
 
-type SummaryProps = { providerId: string; delegates: readonly Delegate[]; listId: string; open: boolean; onToggle: () => void };
+type SummaryProps = { delegates: readonly Delegate[]; listId: string; open: boolean; onToggle: () => void };
 
 /** R7: nothing here moves but the timer and the rolling counts. */
-function SummaryRow({ providerId, delegates, listId, open, onToggle }: SummaryProps) {
+function SummaryRow({ delegates, listId, open, onToggle }: SummaryProps) {
   const now = useNow(delegates.some(isRunning));
   const { total, parts } = census(delegates);
   return (
     <button type="button" className="sr-sum" aria-expanded={open} aria-controls={listId} onClick={onToggle}>
-      <AvatarStack providerId={providerId} delegates={delegates} />
+      <AvatarStack delegates={delegates} />
       <span className="sr-txt">
         <span className="sr-title"><RollingNumber value={total} /> {total === 1 ? "subagent" : "subagents"}</span>
         <span className="sr-census" aria-live="polite">
