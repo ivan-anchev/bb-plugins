@@ -1,3 +1,4 @@
+/** The segment index a key press moves to, wrapping at both ends; null for keys that do not move. */
 export function segmentIndexAfterKey(key: string, index: number, count: number): number | null {
   switch (key) {
     case "ArrowRight":
