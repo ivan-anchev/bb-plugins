@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { StepRow, TimelineRow } from "./bb.ts";
-import { firstLine, stepLabel, transcriptSteps } from "./steps.ts";
+import { firstLine, stepFailed, stepKind, stepLabel, transcriptSteps } from "./steps.ts";
 
 // The real child rows of the fixture's delegates (see normalise.test.ts for how it was taken).
 const fixture: { rows: TimelineRow[] } = JSON.parse(readFileSync(new URL("./fixtures/claude-thread.json", import.meta.url), "utf8"));
@@ -37,6 +37,38 @@ test("a row kind newer than the pinned SDK reads as its title, else Working, and
   assert.equal(stepLabel(titled), "Teleported home");
   assert.equal(stepLabel(bare), "Working");
   assert.equal(stepLabel(newKind), "Working");
+});
+
+test("a step's kind follows what it did: ran, read, fetched, called a tool, or said", () => {
+  assert.equal(stepKind(first((r) => r.kind === "work" && r.workKind === "command")), "command");
+  assert.equal(stepKind(first((r) => r.kind === "work" && r.workKind === "file-read")), "read");
+  assert.equal(stepKind(first((r) => r.kind === "work" && r.workKind === "web-fetch")), "web");
+  assert.equal(stepKind(first((r) => r.kind === "work" && r.workKind === "tool")), "tool");
+  assert.equal(stepKind(first((r) => r.kind === "conversation")), "message");
+  assert.equal(stepKind(first((r) => r.kind === "system")), "note");
+});
+
+test("a row kind newer than the pinned SDK takes the generic tool kind and never throws", () => {
+  const newWork: StepRow = JSON.parse('{"kind":"work","workKind":"teleport"}');
+  const newKind: StepRow = JSON.parse('{"kind":"hologram"}');
+  assert.equal(stepKind(newWork), "tool");
+  assert.equal(stepKind(newKind), "tool");
+});
+
+test("a step failed when it ended in error or its command exited non-zero", () => {
+  const exited = first((r) => r.kind === "work" && r.workKind === "command" && r.exitCode === 1);
+  const passed = first((r) => r.kind === "work" && r.workKind === "command" && r.exitCode === 0);
+  assert.equal(stepFailed(exited), true);
+  assert.equal(stepFailed(passed), false);
+  // why: Claude Code also marks such a row "error"; a provider that only reports the exit code still fails it.
+  assert.ok(passed.kind === "work" && passed.workKind === "command");
+  assert.equal(stepFailed({ ...passed, exitCode: 2 }), true);
+  assert.equal(stepFailed(first((r) => r.kind === "conversation")), false);
+  // why: a failed tool call reports its status, not an exit code; built from a real tool row.
+  const tool = first((r) => r.kind === "work" && r.workKind === "tool");
+  assert.ok(tool.kind === "work");
+  assert.equal(stepFailed({ ...tool, status: "error" }), true);
+  assert.equal(stepFailed(tool), false);
 });
 
 test("firstLine skips blank lines and drops heading, list, bold, and code marks", () => {

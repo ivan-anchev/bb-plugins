@@ -1,5 +1,6 @@
 // What the strip shows: which delegates, the census words, the elapsed span,
-// and each row's detail line and elapsed time.
+// each row's detail line and elapsed time, and an expanded row's meta line.
+import { formatClockTime, formatDuration } from "./clock.ts";
 import type { Delegate, DelegateStatus } from "./delegate.ts";
 import { firstLine, stepLabel, trailSteps } from "./steps.ts";
 
@@ -46,6 +47,21 @@ export function detailLine(d: Delegate): string {
   }
 }
 
+/**
+ * An expanded row's meta line, part by part: started 13:58 · ran 4m 48s ·
+ * 19 steps · 24 tool calls · 61.2k tokens. "ran" waits for the end, steps
+ * need child rows, and the usage parts need a task event that carried usage.
+ */
+export function metaParts(d: Delegate): string[] {
+  const { state, steps, usage } = d;
+  return [
+    `started ${formatClockTime(d.startedAt)}`,
+    ...(state.status === "running" ? [] : [`ran ${formatDuration(state.endedAt - d.startedAt)}`]),
+    ...(steps ? [plural(trailSteps(steps).length, "step")] : []),
+    ...(usage ? [plural(usage.toolUses, "tool call"), `${formatTokens(usage.totalTokens)} tokens`] : []),
+  ];
+}
+
 /** One delegate's run time: to `now` while it runs, to its end once settled. */
 export function elapsed(d: Delegate, now: number): number {
   return endOf(d, now) - d.startedAt;
@@ -59,3 +75,11 @@ const CENSUS_ORDER: readonly DelegateStatus[] = ["running", "completed", "failed
 const CENSUS_WORD: Record<DelegateStatus, string> = { running: "running", completed: "done", failed: "failed", stopped: "stopped" };
 
 const endOf = (d: Delegate, now: number): number => (d.state.status === "running" ? now : d.state.endedAt);
+
+const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/** 950 / 61.2k / 1.3M */
+function formatTokens(n: number): string {
+  if (n < 1000) return String(n);
+  return n < 1_000_000 ? `${(n / 1000).toFixed(1)}k` : `${(n / 1_000_000).toFixed(1)}M`;
+}

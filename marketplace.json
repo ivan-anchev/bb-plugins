@@ -75,7 +75,7 @@
     {
       "id": "subagents-strip",
       "displayName": "Subagents Strip",
-      "description": "A live strip above the composer that counts the thread's subagents and how long they have taken, and opens into one row per subagent with its current step or result.",
+      "description": "A live strip above the composer that counts the thread's subagents and how long they have taken, and opens into one row per subagent that expands to its report and latest steps.",
       "icon": "UsersRound",
       "tags": [
         "subagents",

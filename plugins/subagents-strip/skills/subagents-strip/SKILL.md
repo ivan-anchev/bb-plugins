@@ -1,6 +1,6 @@
 ---
 name: subagents-strip
-description: Explain the Subagents Strip, the live line above a bb thread's composer that counts the thread's subagents and how long they have taken, and opens into one row per subagent. Use when the user asks what the strip shows, why a subagent reads as running or done there, or why no strip appears.
+description: Explain the Subagents Strip, the live line above a bb thread's composer that counts the thread's subagents and how long they have taken, and opens into one row per subagent that expands to its report and steps. Use when the user asks what the strip shows, why a subagent reads as running or done there, or why no strip appears.
 ---
 
 # Subagents Strip
@@ -38,6 +38,29 @@ composer. Each row shows:
 The step text rolls when it changes and shimmers while the subagent runs.
 With the system's reduced-motion setting on, nothing shimmers and every
 change is instant; the dots and words still show each state.
+
+## An expanded row
+
+Clicking a row expands it in place; clicking another row closes the first, so
+one is open at a time. Esc, or clicking the row again, closes it and leaves
+focus on the row. The expanded row shows, top to bottom:
+
+- A meta line: "started 13:58", "ran 4m 48s" once it has finished, the step
+  count (reasoning not counted), and, when a background-task event reported
+  usage, its tool calls and tokens ("61.2k tokens"). Parts with nothing to
+  report are left out.
+- The outcome, once it has finished: the report rendered as markdown, cut to
+  six lines with "Show more" when it is longer; the error in full; or
+  "Stopped after 35s. Nothing was handed back."
+- The last six steps on a rail, oldest first, each with an icon for what it
+  did, the same words as the row's step line, "failed" when it failed, and its
+  time since the subagent started ("4:12"). "Show N earlier steps" reveals
+  the rest. While the subagent runs, its last step is the live one and
+  shimmers, and the body stays scrolled to the newest step unless you scroll
+  up. A subagent whose provider sends no steps shows no trail.
+
+The body scrolls inside a fixed height. Below it, "Esc to collapse" (hidden
+on a narrow strip).
 
 ## Which subagents
 
