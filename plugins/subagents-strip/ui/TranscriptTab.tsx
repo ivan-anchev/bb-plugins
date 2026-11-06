@@ -1,6 +1,8 @@
-// The side-panel tab Open thread opens: one delegate's full transcript, drawn
-// from its child rows. It reads the strip's own source, so the two always
-// show the same delegate in the same state.
+// The side-panel tab Open thread opens: one delegate's full transcript, read the
+// way bb's chat reads the same delegate expanded: its messages, and its work
+// folded into the trail's lines (work-groups.ts), each opening to its steps. It
+// reads the strip's own source, so the two always show the same delegate in the
+// same state.
 import { useState, type JSX, type ReactNode } from "react";
 import {
   experimental_Icon as Icon,
@@ -12,10 +14,11 @@ import {
 import type { ReasoningRow, StepRow } from "../bb.ts";
 import type { Delegate } from "../delegate.ts";
 import { elapsed, isRunning, metaParts, statusWord } from "../roster.ts";
-import { isReasoning, stepFailed, stepKind, stepLabel, transcriptSteps } from "../steps.ts";
+import { isReasoning, stepFailed, stepKind, stepLabel } from "../steps.ts";
 import { formatDuration, formatOffset, useNow } from "../clock.ts";
 import { useThreadDelegates } from "../source.ts";
 import { parseTranscriptParams, TRANSCRIPT_TAB } from "../transcript.ts";
+import { transcriptItems, type WorkItem } from "../work-groups.ts";
 import { Avatar } from "./Avatar.tsx";
 import { MetaLine, Outcome, StepIcon } from "./DelegateDetail.tsx";
 import { followTail } from "./scroll.ts";
@@ -48,22 +51,21 @@ function TranscriptTab({ threadId, params }: ExperimentalThreadActionTabProps): 
 
 // ---------------------------------------------------------------- layer 2
 
-/** The header, then every step in order, then the report, error, or stop at the end. */
+/** The header, then the delegate's lines in order, then the report, error, or stop at the end. */
 function Transcript({ delegate: d }: { delegate: Delegate }) {
-  const steps = transcriptSteps(d.steps ?? []);
-  const running = isRunning(d);
+  const items = transcriptItems(d);
   return (
     <article className="sr-tx">
       <Header delegate={d} />
       {/* why: the reader stays at the live end while it grows, and keeps their place once they scroll up. */}
       <div className="sr-tx-scroll" ref={followTail}>
-        <ol className="sr-tx-steps" aria-label="Transcript">
-          {steps.map((row, i) => (
-            <li key={row.id} className="sr-tx-step">
-              <Step row={row} sinceStart={row.startedAt - d.startedAt} live={running && i === steps.length - 1} />
+        <ol className="sr-tx-items" aria-label="Transcript">
+          {items.map((item) => (
+            <li key={item.kind === "group" ? item.id : item.step.id} className="sr-tx-item">
+              <Line item={item} startedAt={d.startedAt} />
             </li>
           ))}
-          {steps.length === 0 && running && <li className="sr-tx-step"><p className="sr-note">Starting…</p></li>}
+          {items.length === 0 && isRunning(d) && <li className="sr-tx-item"><p className="sr-note">Starting…</p></li>}
         </ol>
         <Outcome delegate={d} report="full" />
       </div>
@@ -87,21 +89,44 @@ function Header({ delegate: d }: { delegate: Delegate }) {
   );
 }
 
-/** `live`: the delegate's latest step while it runs, drawn as the trail draws its live step. */
+/** A line: a group of steps, or one step drawn on its own. */
+function Line({ item, startedAt }: { item: WorkItem; startedAt: number }) {
+  if (item.kind === "group") return <WorkGroup group={item} startedAt={startedAt} />;
+  return <Step row={item.step} sinceStart={item.step.startedAt - startedAt} live={item.live} />;
+}
+
+/** What a run of steps did, in bb's words; it opens to those steps, each drawn as on its own. */
+function WorkGroup({ group, startedAt }: { group: Extract<WorkItem, { kind: "group" }>; startedAt: number }) {
+  const line = (
+    <span className="sr-tx-line" data-k="group" data-step={group.live ? "live" : "done"}>
+      <span className="sr-stx" title={group.label}>{group.label}</span>
+      {group.note && <span className="sr-sw">{group.note}</span>}
+    </span>
+  );
+  return (
+    <Disclosure className="sr-tx-grp" line={line}>
+      <ol className="sr-tx-grp-steps">
+        {group.steps.map((row) => <li key={row.id}><Step row={row} sinceStart={row.startedAt - startedAt} live={false} /></li>)}
+      </ol>
+    </Disclosure>
+  );
+}
+
+/** `live`: the delegate's latest line, drawn as the trail draws its live step. */
 type StepProps = { row: StepRow; sinceStart: number; live: boolean };
 
-/** A message as markdown, reasoning as a Thinking block, a command with its output, anything else as one line. */
+/** A message as markdown, reasoning as a Thinking line, a command with its output, anything else as one line. */
 function Step({ row, sinceStart, live }: StepProps) {
   if (row.kind === "conversation") return <Markdown className="sr-md sr-tx-msg" content={row.text} />;
-  if (isReasoning(row)) return <Thinking row={row} />;
+  if (isReasoning(row)) return <Thinking row={row} live={live} />;
   if (row.kind === "work" && row.workKind === "command") return <Command row={row} sinceStart={sinceStart} live={live} />;
   return <StepLine row={row} sinceStart={sinceStart} live={live} />;
 }
 
 /** Muted and collapsed: what the subagent thought on the way. */
-function Thinking({ row }: { row: ReasoningRow }) {
+function Thinking({ row, live }: { row: ReasoningRow; live: boolean }) {
   const line = (
-    <span className="sr-tx-line" data-k="thinking">
+    <span className="sr-tx-line" data-k="thinking" data-step={live ? "live" : "done"}>
       <Icon name="Brain" fallback="Sparkles" className="sr-sk" aria-hidden />
       <span className="sr-stx">Thinking</span>
     </span>
