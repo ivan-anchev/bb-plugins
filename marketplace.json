@@ -50,6 +50,29 @@
       }
     },
     {
+      "id": "pr-reviews",
+      "displayName": "PR Reviews",
+      "description": "A PR Reviews app on the left rail that lists a GitHub project's open pull requests and opens each one as a guided review, written by a review thread, that walks you through the change step by step. Nothing is ever posted to GitHub.",
+      "icon": "GitPullRequest",
+      "tags": [
+        "github",
+        "pull-requests",
+        "code-review"
+      ],
+      "author": {
+        "name": "Ivan Anchev",
+        "github": "ivan-anchev"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/ivan-anchev/bb-plugins.git",
+          "subdir": "plugins/pr-reviews",
+          "range": "0.x",
+          "tagPrefix": "pr-reviews/"
+        }
+      }
+    },
+    {
       "id": "proactive-visuals",
       "displayName": "Proactive Visuals",
       "description": "Agents answer data with an inline chart, without being asked, using bb's inline visualizations.",

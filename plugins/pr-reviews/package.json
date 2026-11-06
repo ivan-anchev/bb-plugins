@@ -1,0 +1,48 @@
+{
+  "name": "bb-plugin-pr-reviews",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "keywords": [
+    "bb-plugin",
+    "github",
+    "pull-requests",
+    "code-review"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ivan-anchev/bb-plugins.git",
+    "directory": "plugins/pr-reviews"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "node --test 'src/**/*.test.ts'",
+    "build": "bb plugin build"
+  },
+  "engines": {
+    "bb": ">=0.48",
+    "bbPluginSdk": ">=0.6.104"
+  },
+  "bb": {
+    "name": "PR Reviews",
+    "description": "A PR Reviews app on the left rail that lists a GitHub project's open pull requests and opens each one as a guided review, written by a review thread, that walks you through the change step by step. Nothing is ever posted to GitHub.",
+    "branding": {
+      "icon": "GitPullRequest"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.6.104",
+    "@radix-ui/react-dropdown-menu": "^2.1.20",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "hono": "^4.11.9",
+    "typescript": "^5.7.0"
+  }
+}
