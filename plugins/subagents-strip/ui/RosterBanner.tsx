@@ -8,7 +8,7 @@ import type { Delegate, DelegateId } from "../delegate.ts";
 import { census, isRunning, plural, selectRoster, span, type Batch, type Roster } from "../roster.ts";
 import { formatDuration, useNow } from "../clock.ts";
 import { useThreadDelegates } from "../source.ts";
-import { openSubagents, subagentsTabShown } from "../subagents-tab.ts";
+import { listShown, openSubagents } from "../subagents-tab.ts";
 import { AvatarStack } from "./Avatar.tsx";
 import { DelegateRow } from "./DelegateRow.tsx";
 import { RollingNumber } from "./Motion.tsx";
@@ -85,7 +85,7 @@ function DelegateList({ id, open, threadId, roster, outlined, expanded, onToggle
  */
 function PreviousRow({ threadId, previous }: { threadId: string; previous: Roster["previous"] }) {
   const panel = experimental_useAppPanel();
-  const shown = subagentsTabShown(experimental_usePanelTabs());
+  const shown = listShown(experimental_usePanelTabs());
   return (
     <li className="sr-prev">
       <button type="button" className="sr-prev-open" aria-pressed={shown} title="Every subagent in this thread, in the side panel" onClick={() => openSubagents(panel, threadId, null)}>

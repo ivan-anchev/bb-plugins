@@ -130,7 +130,8 @@ sends no steps has no Open thread.
 The Subagents tab lists every subagent in the thread. Its header is the
 thread's census: "41 subagents" over "3 running · 1 failed · 1 stopped" (or
 "41 done"). Clicking a count opens the newest subagent it counts, the way the
-list's "1 failed" does. There is one Subagents tab per thread.
+list's "1 failed" does. There is one Subagents list per thread; it is what
+bb's new-tab launcher opens too, under Actions.
 
 Below the header the subagents are in batches, newest first, back to the
 thread's first. A batch is one of your prompts and every subagent launched
@@ -164,15 +165,15 @@ the tab, with a hairline beneath it. The latest batch is not marked as the
 one in the strip.
 
 Each batch holds one row per subagent launched in it, oldest first, the same
-row as the list's, expanding the same way; its Open thread opens the
-transcript tab beside the Subagents tab, which stays open. The tab stays live
-while it shows.
+row as the list's, expanding the same way; its Open thread opens that
+subagent's transcript in a tab of its own beside the list, which stays open.
+The list stays live while it shows.
 
 ## The transcript tab
 
-Open thread opens a side-panel tab titled with the subagent's description, or
-switches to it when that subagent's tab is already open, so each subagent has
-at most one tab. A Claude Code or Codex subagent is not a bb thread, so this
+Open thread opens a Subagents tab of its own for that subagent, titled with
+its description, or switches to it when that subagent's tab is already open,
+so each subagent has at most one tab, and several can sit beside the list. A Claude Code or Codex subagent is not a bb thread, so this
 never navigates away. On a view without a side panel, Open thread does nothing.
 
 A child thread is a real bb thread, so its Open thread goes to that thread

@@ -1,29 +1,45 @@
-// The side-panel tab the strip's previous row opens: every subagent in the
-// thread, in batches, newest prompt first, under the thread's census. Its rows
-// are the strip's own. It reads the strip's source, and asks it for the full
-// history while it shows. Its UI state (subagents-view.ts) is kept per thread,
-// outside the tab, which bb unmounts while another tab is selected.
+// The plugin's one side-panel tab. Its params pick the instance: the list, which
+// the strip's previous row and bb's launcher open, or one subagent's transcript
+// (TranscriptTab.tsx), which Open thread opens. The list is every subagent in
+// the thread, in batches, newest prompt first, under the thread's census; its
+// rows are the strip's own. It reads the strip's source, and asks it for the
+// full history while it shows. Its UI state (subagents-view.ts) is kept per
+// thread, outside the tab, which bb unmounts while another tab is selected.
 import { useMemo, type JSX, type Ref } from "react";
 import { experimental_useAppPanel, experimental_useTabVisible, type ExperimentalThreadActionTabProps } from "@get-bb/plugin-sdk/app";
 import type { Delegate, DelegateId, Turn } from "../delegate.ts";
 import { census, plural, selectBatches } from "../roster.ts";
 import { useThreadDelegates } from "../source.ts";
-import { KEPT_THREADS, openSubagents, SUBAGENTS_TAB, useLanding, type Landing } from "../subagents-tab.ts";
+import { KEPT_THREADS, openSubagents, parseTabParams, SUBAGENTS_TAB, useLanding, type Landing } from "../subagents-tab.ts";
 import { EMPTY_VIEW, isOpen, landOn, toggleBatch, toggleRow, type View } from "../subagents-view.ts";
 import { threadState, useThreadState } from "../thread-state.ts";
 import { BatchSection } from "./BatchSection.tsx";
+import { TranscriptTab } from "./TranscriptTab.tsx";
 
 export const SUBAGENTS_TAB_REGISTRATION = {
   ...SUBAGENTS_TAB,
   title: "Subagents",
-  // why: bb has no built-in group-of-people icon (UsersRound falls back to Zap, live); UserRound is the transcript's.
+  // why: bb has no built-in group-of-people icon (UsersRound falls back to Zap, live).
   icon: "Bot",
   layout: "flush",
   component: SubagentsTab,
 } as const;
 
+function SubagentsTab({ threadId, params }: ExperimentalThreadActionTabProps): JSX.Element | null {
+  const shows = parseTabParams(params);
+  switch (shows.kind) {
+    case "list": return <List threadId={threadId} />;
+    case "transcript": return <TranscriptTab threadId={threadId} delegateId={shows.delegateId} />;
+    default:
+      shows satisfies never; // why: our own type, parsed once at the boundary, so a new kind is a compile error here
+      return null;
+  }
+}
+
+// ---------------------------------------------------------------- layer 2
+
 // why: the declared return type makes an unhandled source status a compile error.
-function SubagentsTab({ threadId }: ExperimentalThreadActionTabProps): JSX.Element | null {
+function List({ threadId }: { threadId: string }): JSX.Element | null {
   // why: bb keeps a closed panel's tab mounted; only a showing tab follows the source, and reads the full history.
   const live = useThreadDelegates(threadId, { enabled: experimental_useTabVisible(), history: true });
   switch (live.status) {
@@ -32,8 +48,6 @@ function SubagentsTab({ threadId }: ExperimentalThreadActionTabProps): JSX.Eleme
     case "ready": return <Subagents threadId={threadId} delegates={live.delegates} turns={live.turns} outlined={live.outlined} />;
   }
 }
-
-// ---------------------------------------------------------------- layer 2
 
 // why: the user's toggles win, across tab switches; thread-state.ts says how long they are kept.
 const views = threadState<View>(EMPTY_VIEW, KEPT_THREADS);

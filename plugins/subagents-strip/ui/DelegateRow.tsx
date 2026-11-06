@@ -11,7 +11,7 @@ import { elapsed, isRunning, metaParts } from "../roster.ts";
 import { stepFailed, stepKind, stepLabel } from "../steps.ts";
 import { trailItems, type WorkItem } from "../work-groups.ts";
 import { formatDuration, formatOffset, useNow } from "../clock.ts";
-import { TRANSCRIPT_TAB, transcriptParams } from "../transcript.ts";
+import { openTranscript } from "../subagents-tab.ts";
 import { Avatar } from "./Avatar.tsx";
 import { MetaLine, Outcome, StepIcon } from "./DelegateDetail.tsx";
 import { RollingText } from "./Motion.tsx";
@@ -102,7 +102,7 @@ function OpenThreadButton({ delegate: d }: { delegate: Delegate }) {
   const open = () => {
     switch (d.origin.kind) {
       case "delegation":
-        panel.openTab({ tab: TRANSCRIPT_TAB, params: transcriptParams(d.id), title: d.title });
+        openTranscript(panel, d.id, d.title);
         return;
       case "child-thread":
         navigate.toThread(d.origin.threadId);

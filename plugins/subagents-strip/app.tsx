@@ -1,10 +1,9 @@
-// Registration only: the strip above each thread composer, and the two
-// side-panel tabs: Subagents, which its previous row opens, and the transcript
-// a row's Open thread opens.
+// Registration only: the strip above each thread composer, and the one
+// side-panel tab: Subagents, the thread's list, which the strip's previous row
+// opens, or one subagent's transcript, which a row's Open thread opens.
 import { definePluginApp } from "@get-bb/plugin-sdk/app";
 import { RosterBanner } from "./ui/RosterBanner.tsx";
 import { SUBAGENTS_TAB_REGISTRATION } from "./ui/SubagentsTab.tsx";
-import { TRANSCRIPT_TAB_REGISTRATION } from "./ui/TranscriptTab.tsx";
 import "./roster.css";
 
 export default definePluginApp((app) => {
@@ -16,5 +15,4 @@ export default definePluginApp((app) => {
     banners: [{ id: "roster", chrome: "bare", component: RosterBanner }],
   });
   app.slots.experimental_tab(SUBAGENTS_TAB_REGISTRATION);
-  app.slots.experimental_tab(TRANSCRIPT_TAB_REGISTRATION);
 });

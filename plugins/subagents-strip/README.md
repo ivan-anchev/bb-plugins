@@ -40,24 +40,24 @@ Frontend only:
   whose release cancels a walk under way).
 - `source.ts`: shares one thread source per thread across the window
   (`useThreadDelegates`, which also asks it for the full history when told).
-- `subagents-tab.ts`: the Subagents tab's reference, opening it, optionally
-  landing on one delegate (`openSubagents`, `useLanding`), and whether it shows
-  (`subagentsTabShown`). `subagents-view.ts`: the tab's UI state and how a click
+- `subagents-tab.ts`: the one tab's reference and its params, parsed once into
+  the list or one delegate's transcript (`SUBAGENTS_TAB`, `parseTabParams`);
+  opening the list, optionally landing on one delegate (`openSubagents`,
+  `useLanding`), or a transcript (`openTranscript`); and whether the list shows
+  (`listShown`). `subagents-view.ts`: the tab's UI state and how a click
   or a landing changes it (`landOn`, `toggleBatch`, `toggleRow`).
   `thread-state.ts`: UI state kept per thread outside a component, for the
   threads last changed (`threadState`, `useThreadState`), which a hidden panel
   tab would lose.
-- `transcript.ts`: the transcript tab's reference and the params that name its
-  delegate (`TRANSCRIPT_TAB`, `transcriptParams`, `parseTranscriptParams`).
 - `clock.ts`: one shared 1 s tick and the time formats (`formatDuration`,
   `formatOffset`, `formatClockTime`).
-- `app.tsx`, `ui/`, `roster.css`: the composer banner and the two tabs.
+- `app.tsx`, `ui/`, `roster.css`: the composer banner and the side-panel tab.
   `ui/RosterBanner.tsx` is the summary row, the list, and its previous row,
-  `ui/SubagentsTab.tsx` the Subagents tab, `ui/BatchSection.tsx` one of its
+  `ui/SubagentsTab.tsx` the tab and its list, `ui/BatchSection.tsx` one of its
   batches' label and rows, `ui/DelegateRow.tsx`
   one row, its expanded detail, and Open thread, `ui/DelegateDetail.tsx` the
   meta line, outcome, and step icon the row and the tab share,
-  `ui/TranscriptTab.tsx` the side-panel transcript, `ui/scroll.ts` the
+  `ui/TranscriptTab.tsx` the tab's transcript of one subagent, `ui/scroll.ts` the
   overflow and live tail of a scrolling body,
   `ui/Avatar.tsx` the avatar and stack, `ui/Motion.tsx` the rolling text,
   digits, and status dot, `ui/room.ts` the room the list may open into.
