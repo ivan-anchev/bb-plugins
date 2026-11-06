@@ -12,13 +12,28 @@ import { createThreadSource, type ThreadSource } from "./thread-source.ts";
  * is not re-rendered by changes, but still reads the shared source's latest
  * snapshot when it renders ("loading" once no one holds the source). So a
  * panel tab being hidden keeps what it drew, scroll position and open blocks
- * included, instead of dropping to a loading state.
+ * included, instead of dropping to a loading state. `history`: while
+ * subscribed, also want the history before the live window in full
+ * (ThreadSource.wantHistory); unsubscribing releases it. The strip needs only
+ * its outline.
  */
-export function useThreadDelegates(threadId: string, { enabled = true }: { enabled?: boolean } = {}): ThreadDelegates {
+export function useThreadDelegates(
+  threadId: string,
+  { enabled = true, history = false }: { enabled?: boolean; history?: boolean } = {},
+): ThreadDelegates {
   const sdk = useSdk();
   const subscribe = useCallback(
-    (onChange: () => void) => (enabled ? acquire(sdk, threadId).subscribe(onChange) : () => {}),
-    [sdk, threadId, enabled],
+    (onChange: () => void) => {
+      if (!enabled) return () => {};
+      const source = acquire(sdk, threadId);
+      const unsubscribe = source.subscribe(onChange);
+      const release = history ? source.wantHistory() : null;
+      return () => {
+        release?.();
+        unsubscribe();
+      };
+    },
+    [sdk, threadId, enabled, history],
   );
   const snapshot = useCallback(() => sources.get(threadId)?.snapshot ?? LOADING, [threadId]);
   return useSyncExternalStore(subscribe, snapshot);

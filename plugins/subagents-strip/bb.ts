@@ -10,10 +10,17 @@ export type EventRow = Awaited<ReturnType<Threads["events"]["list"]>>[number];
 
 // why: `timeline` is overloaded; ReturnType takes the last overload, the
 // full | delta union, so pick the full response by its `rows`.
-type TimelineRead = Awaited<ReturnType<Threads["timeline"]>>;
-type TimelineFull = Extract<TimelineRead, { rows: unknown }>;
+type TimelineFull = Extract<Awaited<ReturnType<Threads["timeline"]>>, { rows: unknown }>;
 
 export type TimelineRow = TimelineFull["rows"][number];
+type TimelinePage = TimelineFull["timelinePage"];
+/**
+ * Where the rows before a read begin: pass it back as beforeAnchorId and beforeAnchorSeq to read
+ * the page before them. null: the read reached the thread's first row.
+ */
+export type OlderCursor = TimelinePage["olderCursor"];
+/** A timeline read as the source keeps it: its rows, where older ones begin, and older rows that changed since. */
+export type TimelineRead = Pick<TimelineFull, "rows"> & { timelinePage: Pick<TimelinePage, "olderCursor" | "olderRowUpdates"> };
 /** Any row but a turn group: what a delegate's step is. */
 export type StepRow = Exclude<TimelineRow, { kind: "turn" }>;
 /** A step that did work: ran, read, edited, searched, asked, or delegated. */
@@ -24,6 +31,8 @@ export type DelegationRow = Extract<TimelineRow, { kind: "work"; workKind: "dele
 /** A turn group: its status and completedAt settle a child thread. */
 export type TurnRow = Extract<TimelineRow, { kind: "turn" }>;
 export type AssistantRow = Extract<StepRow, { kind: "conversation"; role: "assistant" }>;
+/** A message that starts a turn: the user's, another agent's, or bb's own system message. */
+export type UserRow = Extract<StepRow, { kind: "conversation"; role: "user" }>;
 // why: the operation row's operationKind is an enum, not a literal, so Extract alone cannot pick reasoning.
 export type ReasoningRow = Extract<StepRow, { systemKind: "operation" }> & { operationKind: "reasoning" };
 /** bb's "Stopped manually" row: what an interrupted turn leaves in place of a turn group. */
@@ -51,7 +60,7 @@ export type ThreadSdk = {
   subscribe: PluginBrowserBbSdk["subscribe"];
   threads: {
     get(args: Parameters<Threads["get"]>[0]): Promise<Pick<Awaited<ReturnType<Threads["get"]>>, "providerId">>;
-    timeline(args: Parameters<Threads["timeline"]>[0] & { afterTag?: undefined }): Promise<Pick<TimelineFull, "rows">>;
+    timeline(args: Parameters<Threads["timeline"]>[0] & { afterTag?: undefined }): Promise<TimelineRead>;
     events: { list(args: Parameters<Threads["events"]["list"]>[0]): Promise<EventRow[]> };
     /**
      * A thread's children. Hidden ones are left out unless asked for; archived ones are not, so the

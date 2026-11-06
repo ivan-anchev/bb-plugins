@@ -12,8 +12,9 @@ import { test } from "node:test";
 import type { DelegationRow, EventRow, TimelineRow } from "./bb.ts";
 import type { Delegate } from "./delegate.ts";
 import { formatDuration } from "./clock.ts";
-import { foldTaskEvents, normalise } from "./normalise.ts";
-import { detailLine, elapsed } from "./roster.ts";
+import { foldTaskEvents, normalise, turnsOf } from "./normalise.ts";
+import { detailLine } from "./detail-line.ts";
+import { elapsed } from "./roster.ts";
 import { childSteps, trailSteps, transcriptSteps } from "./steps.ts";
 
 const fixture: { rows: TimelineRow[]; events: EventRow[] } = JSON.parse(
@@ -236,13 +237,13 @@ test("a settled Codex delegate reports its closing message, which leaves its ste
   assert.equal(detailLine(byId(codexSettled, "da2bb99053-i60")), "counter_e said: 1, 2, 3, 4, 5, 6. Ran sleep 5 between numbers, five times total. No files edited.");
 });
 
-test("a running Codex delegate keeps its last message as its live step and has no report", () => {
+test("a running Codex delegate keeps its last message as its live line and has no report", () => {
   const [a, b] = codexRunning;
   for (const d of codexRunning) {
     assert.deepEqual(d.state, { status: "running" }, d.title);
     assert.deepEqual(d.steps, childSteps(codexRowById(d.id, codex.midrun).childRows ?? []), d.title);
   }
-  assert.equal(detailLine(a), "Ran sleep 3");
+  assert.equal(detailLine(a), "Running 1 command");
   assert.equal(detailLine(b), "4");
 });
 
@@ -336,3 +337,41 @@ function handBuilt(fields: Partial<DelegationRow> & Pick<DelegationRow, "callId"
     ...fields,
   };
 }
+
+// ---------------------------------------------------------------- turns
+
+// Top-level rows of thread thr_24dxq5xhph, read with includeNestedRows=true across its older pages: the
+// thread's seed prompt, which bb leaves without a turnId, and the turn after it; a bb system message and the
+// turn it started; a turn no message started (Claude Code resuming on a task notification); and the user's
+// prompt and its turn; and a bb notice whose turn the user steered with a second message (da20200006-t1).
+// Each turn's children are cut to [], as turnsOf reads none.
+const turnRows: { rows: TimelineRow[] } = JSON.parse(readFileSync(new URL("./fixtures/claude-turns.json", import.meta.url), "utf8"));
+
+test("turnsOf reads each turn's start and every message sent into it: the user's prompts, steered ones too, what a bb notice reports, or none", () => {
+  const user = turnRows.rows.find((row) => row.kind === "conversation" && row.turnId === "dae8270d2a-t3");
+  assert.ok(user?.kind === "conversation" && user.role === "user" && user.initiator === "user", "fixture premise: the user's own message");
+  const [seed] = turnRows.rows;
+  assert.ok(seed.kind === "conversation" && seed.role === "user" && seed.turnId === null, "fixture premise: bb's seed prompt has no turn");
+  const [notice, steer] = turnRows.rows.slice(-2);
+  assert.ok(steer.kind === "conversation" && steer.role === "user" && steer.turnRequest.kind === "steer", "fixture premise: the user steered a running turn");
+  const system = turnRows.rows[3];
+  assert.deepEqual(turnsOf(turnRows.rows), [
+    { id: "da3b7c4ca3-t5", startedAt: seed.startedAt, messages: [{ id: seed.id, at: seed.startedAt, from: "user", text: seed.text }] },
+    { id: "daeac18995-t6", startedAt: 1793886681815, messages: [] },
+    { id: "da0b57f386-t1", startedAt: 1793894794770, messages: [{ id: system.id, at: system.startedAt, from: "other", text: "reviewer 05 r1 (gpt-6.1-sol) completed" }] },
+    { id: "dae8270d2a-t3", startedAt: 1793956796997, messages: [{ id: user.id, at: user.startedAt, from: "user", text: user.text }] },
+    {
+      id: "da20200006-t1",
+      startedAt: notice.startedAt,
+      messages: [
+        { id: notice.id, at: notice.startedAt, from: "other", text: "reviewer 10 r1 (gpt-6.1-sol) completed" },
+        { id: steer.id, at: steer.startedAt, from: "user", text: steer.text },
+      ],
+    },
+  ]);
+});
+
+test("a turn starts at its earliest row, whatever order the rows come in", () => {
+  const [, , , message, group] = turnRows.rows;
+  assert.equal(turnsOf([group, message])[0].startedAt, message.startedAt);
+});

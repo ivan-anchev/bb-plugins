@@ -219,14 +219,15 @@ test("file changes of one action name it; a mix reads as edits; live, they read 
 test("the transcript reads as bb's chat read it live for the same delegate, reasoning folded into its groups", () => {
   const [d] = normalise([liveLineWorker.row], new Map(), "claude-code");
   const items = transcriptItems(d);
-  // Live, thr_24dxq5xhph's chat, its "Subagent finished Worker: issue 08 round 3 (live line)" row expanded.
+  // Live, thr_24dxq5xhph's chat, its "Subagent finished Worker: issue 08 round 3 (live line)" row expanded;
+  // bb draws its sixth line, the message `::browser-preview{session="7bd5a0b5-…"}`, as a live browser view.
   assert.deepEqual(items.map(line), [
     "Explored 10 files, 1 list, 1 search, ran 1 tool, ran 4 commands, edited 1 file (1 error)",
     "Now the change in work-groups.ts.",
     "Edited 1 file, ran 5 commands, explored 1 file, 2 searches",
     "Update the docs (SKILL.md trail bullet and PLUGIN_OVERVIEW).",
     "Edited 2 files, ran 6 commands, explored 2 lists, 1 file, 1 search, ran 1 tool",
-    `::browser-preview{session="7bd5a0b5-413d-4050-9aee-fcadf4d89a4d"}`,
+    "Opened a browser preview",
     "Ran 10 commands, explored 3 searches, 2 files, ran 1 tool (1 error)",
   ]);
   // bb opens the first group to "Thought", "Read brief-worker-08-r3.md", "Thought", ...: every step in order, reasoning too

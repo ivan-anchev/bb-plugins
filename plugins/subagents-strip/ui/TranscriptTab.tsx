@@ -1,4 +1,4 @@
-// The side-panel tab Open thread opens: one delegate's full transcript, read the
+// The Subagents tab's transcript instance, which Open thread opens: one delegate's full transcript, read the
 // way bb's chat reads the same delegate expanded: its messages, and its work
 // folded into the trail's lines (work-groups.ts), each opening to its steps. It
 // reads the strip's own source, so the two always show the same delegate in the
@@ -9,34 +9,23 @@ import {
   experimental_SourceCode as SourceCode,
   experimental_useTabVisible,
   Markdown,
-  type ExperimentalThreadActionTabProps,
 } from "@get-bb/plugin-sdk/app";
 import type { ReasoningRow, StepRow } from "../bb.ts";
-import type { Delegate } from "../delegate.ts";
+import type { Delegate, DelegateId } from "../delegate.ts";
 import { elapsed, isRunning, metaParts, statusWord } from "../roster.ts";
-import { isReasoning, stepFailed, stepKind, stepLabel } from "../steps.ts";
+import { isReasoning, messageText, stepFailed, stepKind, stepLabel } from "../steps.ts";
 import { formatDuration, formatOffset, useNow } from "../clock.ts";
 import { useThreadDelegates } from "../source.ts";
-import { parseTranscriptParams, TRANSCRIPT_TAB } from "../transcript.ts";
 import { transcriptItems, type WorkItem } from "../work-groups.ts";
 import { Avatar } from "./Avatar.tsx";
 import { MetaLine, Outcome, StepIcon } from "./DelegateDetail.tsx";
 import { followTail } from "./scroll.ts";
 
-export const TRANSCRIPT_TAB_REGISTRATION = {
-  ...TRANSCRIPT_TAB,
-  title: "Subagent",
-  icon: "UserRound",
-  layout: "flush",
-  component: TranscriptTab,
-} as const;
-
 // why: the declared return type makes an unhandled source status a compile error.
-function TranscriptTab({ threadId, params }: ExperimentalThreadActionTabProps): JSX.Element | null {
-  const delegateId = parseTranscriptParams(params);
-  // why: bb keeps a closed panel's tab mounted; only a showing tab follows the source.
-  const live = useThreadDelegates(threadId, { enabled: experimental_useTabVisible() });
-  if (!delegateId) return <Note text="Open a subagent from the strip above the composer." />;
+export function TranscriptTab({ threadId, delegateId }: { threadId: string; delegateId: DelegateId }): JSX.Element | null {
+  // why: bb keeps a closed panel's tab mounted; only a showing tab follows the source. A transcript restored after
+  // a reload may name a delegate before the live window, read in outline only, so it wants the full history too.
+  const live = useThreadDelegates(threadId, { enabled: experimental_useTabVisible(), history: true });
   switch (live.status) {
     case "loading": return null;
     case "failed": return <Note text={`The subagents could not be read: ${live.message}`} />;
@@ -44,6 +33,7 @@ function TranscriptTab({ threadId, params }: ExperimentalThreadActionTabProps): 
       // why: a child thread opens itself, never this tab.
       const delegate = live.delegates.find((d) => d.id === delegateId && d.origin.kind === "delegation");
       if (!delegate) return <Note text="This subagent is outside the loaded timeline." />;
+      if (live.outlined.has(delegate.id)) return <Note text="Loading its steps and report…" />;
       return <Transcript delegate={delegate} />;
     }
   }
@@ -117,7 +107,11 @@ type StepProps = { row: StepRow; sinceStart: number; live: boolean };
 
 /** A message as markdown, reasoning as a Thinking line, a command with its output, anything else as one line. */
 function Step({ row, sinceStart, live }: StepProps) {
-  if (row.kind === "conversation") return <Markdown className="sr-md sr-tx-msg" content={row.text} />;
+  if (row.kind === "conversation") {
+    const text = messageText(row.text);
+    // why: a message that only opened a browser preview has nothing to read; it is one line, as in the trail.
+    return text === null ? <StepLine row={row} sinceStart={sinceStart} live={live} /> : <Markdown className="sr-md sr-tx-msg" content={text} />;
+  }
   if (isReasoning(row)) return <Thinking row={row} live={live} />;
   if (row.kind === "work" && row.workKind === "command") return <Command row={row} sinceStart={sinceStart} live={live} />;
   return <StepLine row={row} sinceStart={sinceStart} live={live} />;

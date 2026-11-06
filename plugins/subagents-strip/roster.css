@@ -1,5 +1,5 @@
-/* The strip: the summary row and the list it opens above itself; and the
-   transcript tab. Every class and keyframe is sr- prefixed, and the tokens sit
+/* The strip: the summary row and the list it opens above itself; the
+   Subagents tab; and the transcript tab. Every class and keyframe is sr- prefixed, and the tokens sit
    on the two roots, .sr and .sr-tx; colours come from bb's theme tokens,
    except the state marks. */
 
@@ -302,6 +302,127 @@
   list-style: none;
 }
 
+/* ---------------------------------------------------------------- previous row: the list's oldest end, the way into the Subagents tab */
+
+/* quiet at rest, a tint on hover only; the text sits in the title column, the panel icon in the chevron's.
+   The row's button stretches over the whole row, under the parts, which are buttons of their own */
+.sr-prev {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-height: 32px;
+  margin-bottom: 3px;
+  padding: 0 var(--sr-row-px) 0 calc(var(--sr-row-px) + var(--sr-row-av) + var(--sr-row-gap));
+  border-radius: max(0px, calc(var(--sr-radius) - 4px));
+  font-size: var(--sr-census-fs);
+  line-height: 1.35;
+  color: var(--subtle-foreground);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition: background-color var(--sr-hover-ms) var(--sr-ease);
+}
+
+.sr-prev-open,
+.sr-prev-part,
+.sr-pn-part {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sr-prev-open {
+  min-width: 0;
+  min-height: 32px;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  text-overflow: ellipsis;
+  transition: color var(--sr-hover-ms) var(--sr-ease);
+}
+
+.sr-prev-open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.sr-prev-open:focus-visible {
+  outline: none;
+}
+
+.sr-prev:has(.sr-prev-open:focus-visible) {
+  outline: 2px solid color-mix(in oklab, var(--ring) 70%, transparent);
+  outline-offset: -2px;
+}
+
+/* a part's dot sits outside its box, so its focus ring and underline hold the words alone */
+.sr-prev-part,
+.sr-pn-part {
+  position: relative;
+  z-index: 1;
+  margin-left: 1.1em;
+}
+
+.sr-prev-part::before,
+.sr-pn-part::before {
+  content: "·";
+  position: absolute;
+  left: -1.1em;
+  width: 1.1em;
+  color: var(--sr-faint);
+  text-align: center;
+}
+
+.sr-prev-part,
+.sr-pn-part:is([data-st="running"], [data-st="failed"]) {
+  color: var(--sr-st);
+}
+
+:is(.sr-prev-part, .sr-pn-part):focus-visible {
+  border-radius: 3px;
+  outline: 2px solid color-mix(in oklab, var(--ring) 70%, transparent);
+  outline-offset: 1px;
+}
+
+.sr-prev-icon {
+  flex: none;
+  align-self: center;
+  width: var(--sr-chev);
+  height: var(--sr-chev);
+  margin-left: auto;
+  padding-left: var(--sr-row-gap);
+  box-sizing: content-box;
+  color: color-mix(in oklab, var(--subtle-foreground) 70%, transparent);
+  pointer-events: none;
+  transition: color var(--sr-hover-ms) var(--sr-ease);
+}
+
+/* pressed while the Subagents tab shows: the row holds its hover look */
+.sr-prev:has(.sr-prev-open[aria-pressed="true"]) {
+  background: var(--sr-wash);
+}
+
+.sr-prev:has(.sr-prev-open[aria-pressed="true"]) :is(.sr-prev-open, .sr-prev-icon) {
+  color: var(--foreground);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sr-prev:hover {
+    background: var(--sr-wash);
+  }
+  .sr-prev:hover :is(.sr-prev-open, .sr-prev-icon) {
+    color: var(--foreground);
+  }
+  :is(.sr-prev-part, .sr-pn-part):hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+}
+
 /* ---------------------------------------------------------------- delegate row: two lines (R3), a disclosure */
 
 /* an open row is the row plus its body on one faint fill; every cut-out ring inside takes that fill */
@@ -452,6 +573,11 @@
 }
 
 /* one muted line; parts wrap whole and the dot rides the line end */
+/* an outlined row's body, until the full history arrives */
+.sr-x-loading {
+  margin: 0 0 8px var(--sr-x-text);
+}
+
 .sr-x-meta {
   display: flex;
   flex-wrap: wrap;
@@ -877,14 +1003,42 @@
 @keyframes sr-dg-out-up { to { opacity: 0; transform: translateY(-70%); filter: blur(2px); } }
 @keyframes sr-dg-out-down { to { opacity: 0; transform: translateY(70%); filter: blur(2px); } }
 
-/* ---------------------------------------------------------------- narrow strip: the census wraps, the footer hint goes */
+/* ---------------------------------------------------------------- narrow strip: the census runs under the time, the footer hint goes */
 
 @container sr (max-width: 440px) {
-  /* each part leads with its dot; a line-start dot falls in .sr-txt's clipped edge */
+  /* the title and the time share the first line, so the census has the width of both on the second:
+     "3 running · 1 failed · 1 stopped" fits one line at 360px, and the strip stays two lines */
+  .sr-sum {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    row-gap: 1px;
+  }
+  .sr-stack {
+    grid-row: 1 / span 2;
+  }
+  .sr-txt {
+    display: contents;
+  }
+  .sr-title {
+    grid-area: 1 / 2;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .sr-sum > .sr-el {
+    grid-area: 1 / 3;
+  }
+  .sr-chev {
+    grid-area: 1 / 4 / span 2;
+  }
+  /* each part leads with its dot, and the box's clipped first 1.1em hides the dot that starts a line */
   .sr-census {
     display: flex;
     flex-wrap: wrap;
+    grid-area: 2 / 2 / auto / span 2;
     margin-left: -1.1em;
+    white-space: nowrap;
+    clip-path: inset(0 0 0 1.1em);
   }
   .sr-part::before,
   .sr-part:not(:first-child)::before {
@@ -1110,4 +1264,214 @@ p.sr-tx-out {
   font-size: 13px;
   color: var(--muted-foreground);
   text-align: center;
+}
+
+/* ---------------------------------------------------------------- Subagents tab: the thread's census over its batches, newest first */
+
+/* a second root on .sr: the strip's tokens, and its narrow container queries, hold here too */
+.sr-pn {
+  /* bb's side panel is drawn on the sidebar colour: the sticky labels match it */
+  --sr-surface: var(--sidebar);
+  --sr-cut: var(--sr-surface);
+  --sr-rail: color-mix(in oklab, var(--foreground) 13%, transparent);
+  height: 100%;
+  min-height: 0;
+}
+
+.sr-pn-head {
+  flex: none;
+  padding: 14px 16px 10px;
+  box-shadow: inset 0 -1px 0 var(--sr-rail);
+}
+
+/* each part leads with its dot, and the box's clipped first 1.1em hides the dot that starts a line,
+   so the census wraps whole parts with no stray dot */
+.sr-pn-census {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 1px 0 0 -1.1em;
+  font-size: var(--sr-detail-fs);
+  line-height: 1.45;
+  color: var(--subtle-foreground);
+  clip-path: inset(-4px -4px -4px 1.1em);
+}
+
+.sr-pn-scroll {
+  flex: 1;
+  min-height: 0;
+  padding: 6px 8px 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.sr-pn-batches {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* a row scrolled into view clears the sticky batch label */
+.sr-pn .sr-row {
+  scroll-margin-top: 32px;
+}
+
+/* a batch is a quiet label, a delegate a row. The sticky box: opaque, square, the tab's own surface, so rows
+   scroll under it without showing through;
+   it sticks only while its own batch runs on below it */
+.sr-batch-h {
+  container-type: scroll-state;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--sr-surface);
+}
+
+/* no card at rest: small muted text, a tint only on hover */
+.sr-batch-label {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--sr-row-av) minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--sr-row-gap);
+  width: 100%;
+  min-height: 28px;
+  padding: 4px var(--sr-row-px);
+  border: 0;
+  border-radius: max(0px, calc(var(--sr-radius) - 4px));
+  background: transparent;
+  font: inherit;
+  font-size: var(--sr-census-fs);
+  line-height: 1.35;
+  color: var(--subtle-foreground);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--sr-hover-ms) var(--sr-ease), color var(--sr-hover-ms) var(--sr-ease);
+}
+
+/* a hairline under the label only while it is stuck */
+.sr-batch-label::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 1px;
+  background: color-mix(in oklab, var(--foreground) 13%, transparent);
+  opacity: 0;
+  transition: opacity var(--sr-hover-ms) var(--sr-ease);
+}
+
+@container scroll-state(stuck: top) {
+  .sr-batch-label::after {
+    opacity: 1;
+  }
+}
+
+.sr-batch-label:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--ring) 70%, transparent);
+  outline-offset: -2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sr-batch-label:hover {
+    background: var(--sr-wash);
+    color: var(--muted-foreground);
+  }
+  .sr-batch-label:hover :is(.sr-batch-q, .sr-batch-caret) {
+    color: var(--foreground);
+  }
+}
+
+.sr-batch-caret {
+  justify-self: center;
+  width: 12px;
+  height: 12px;
+  color: var(--sr-faint);
+  transition: transform var(--sr-row-expand-ms) var(--sr-ease), color var(--sr-hover-ms) var(--sr-ease);
+}
+
+.sr-batch[data-open] > .sr-batch-h .sr-batch-caret {
+  transform: rotate(90deg);
+  color: var(--subtle-foreground);
+}
+
+.sr-batch-t {
+  display: flex;
+  gap: 0.5em;
+  min-width: 0;
+}
+
+.sr-batch-tm {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-batch-q {
+  overflow: hidden;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  transition: color var(--sr-hover-ms) var(--sr-ease);
+}
+
+.sr-batch-c {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-batch-c > span + span::before {
+  content: ", ";
+  color: var(--subtle-foreground);
+}
+
+.sr-batch-c > :is([data-st="running"], [data-st="failed"]) {
+  color: var(--sr-st);
+}
+
+/* a batch opens and closes the way a row does */
+.sr-batch-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows calc(var(--sr-row-expand-ms) * 0.7) var(--sr-ease);
+}
+
+.sr-batch[data-open] > .sr-batch-wrap {
+  grid-template-rows: 1fr;
+  transition-duration: var(--sr-row-expand-ms);
+}
+
+.sr-batch-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sr-batch-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0 0 2px;
+  list-style: none;
+  opacity: 0;
+  transition: opacity calc(var(--sr-row-expand-ms) * 0.5) var(--sr-ease);
+}
+
+.sr-batch[data-open] > .sr-batch-wrap .sr-batch-rows {
+  opacity: 1;
+  transition-duration: var(--sr-row-expand-ms);
+}
+
+/* narrow: the prompt keeps the label's line, the census runs under it */
+@container sr (max-width: 400px) {
+  .sr-batch-label {
+    grid-template-columns: var(--sr-row-av) minmax(0, 1fr);
+    row-gap: 1px;
+  }
+  .sr-batch-c {
+    grid-column: 2;
+  }
 }

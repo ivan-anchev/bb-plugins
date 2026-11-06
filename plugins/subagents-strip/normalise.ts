@@ -1,9 +1,11 @@
 // The one place provider quirks live: bb's delegation rows plus background-task
-// events become canonical delegates. Nothing else in the plugin reads `output`,
-// `childRef`, `toolArgs`, or task events. `background` is never read: Claude
+// events become canonical delegates, and the thread's turns what started them.
+// Nothing else in the plugin reads `output`, `childRef`, `toolArgs`, task
+// events, or a message's system subject. `background` is never read: Claude
 // Code agents run async whatever it says.
-import type { BackgroundTaskItem, DelegationRow, EventRow, StepRow, TaskStatus, TimelineRow } from "./bb.ts";
-import type { Delegate, DelegateId, DelegateState, DelegateStatus, StepScope } from "./delegate.ts";
+import type { BackgroundTaskItem, DelegationRow, EventRow, StepRow, TaskStatus, TimelineRow, UserRow } from "./bb.ts";
+import type { Delegate, DelegateId, DelegateState, DelegateStatus, StepScope, Turn, TurnMessage } from "./delegate.ts";
+import { plural } from "./roster.ts";
 import { childSteps, isHandback, splitReport } from "./steps.ts";
 
 /** Latest background-task snapshot per delegation callId (the task's `parentToolCallId`). */
@@ -34,6 +36,31 @@ export function foldTaskEvents(ledger: TaskLedger, events: readonly EventRow[]):
 /** The thread's delegation rows as delegates; `providerId` is the thread's, which runs them all. */
 export function normalise(rows: readonly TimelineRow[], ledger: TaskLedger, providerId: string): Delegate[] {
   return groupByChild(topLevelDelegations(rows)).map((group) => toDelegate(group, ledger, providerId));
+}
+
+/**
+ * Each turn in the rows, in order: when it began, and every message sent into it. A running turn's
+ * rows come back flat, each with its turnId, so every row counts, not only turn groups.
+ */
+export function turnsOf(rows: readonly TimelineRow[]): Turn[] {
+  const turns = new Map<string, Turn>();
+  // why: bb leaves the thread's seed prompt without a turnId (live, thr_24dxq5xhph); it starts the turn after it.
+  let unplaced: UserRow | null = null;
+  for (const row of rows) {
+    if (row.turnId === null) {
+      if (isUserMessage(row)) unplaced = row;
+      continue;
+    }
+    const message = isUserMessage(row) ? row : unplaced;
+    const turn = turns.get(row.turnId) ?? { id: row.turnId, startedAt: message?.startedAt ?? row.startedAt, messages: [] };
+    turns.set(row.turnId, {
+      ...turn,
+      startedAt: Math.min(turn.startedAt, row.startedAt),
+      messages: message ? [...turn.messages, messageOf(message)] : turn.messages,
+    });
+    unplaced = null;
+  }
+  return [...turns.values()];
 }
 
 // ---------------------------------------------------------------- layer 2
@@ -106,7 +133,47 @@ const ROW_STATUS: Record<DelegationRow["status"], DelegateStatus> = {
   pending: "running", completed: "completed", error: "failed", interrupted: "stopped",
 };
 
+/**
+ * What a turn's message said: the user's or another agent's text, or, for a bb system message, what
+ * it reports ("reviewer 05 r1 completed"), since its text opens with bb's "[bb system]" header.
+ */
+function messageOf(row: UserRow): TurnMessage {
+  const from = row.initiator === "user" ? "user" : "other";
+  const subject = row.initiator === "system" ? row.systemMessageSubject : null;
+  const text = row.initiator !== "system" ? row.text : subject ? systemSummary(subject, row.systemMessageKind) : row.text.replace(SYSTEM_HEADER, "");
+  return { id: row.id, at: row.startedAt, from, text };
+}
+
+type SystemSubject = NonNullable<UserRow["systemMessageSubject"]>;
+
+function systemSummary(subject: SystemSubject, kind: UserRow["systemMessageKind"]): string {
+  // why: partial, as the host can send a kind newer than this SDK; those read "reported back".
+  const outcome = SYSTEM_OUTCOME[kind] ?? "reported back";
+  switch (subject.kind) {
+    case "thread": return `${subject.threadName} ${outcome}`;
+    case "thread-batch": return `${plural(subject.count, "thread")} ${outcome}`;
+    case "tool-call": return `${subject.toolName} returned`;
+    case "directory": return `Moved to ${subject.path}`;
+    default: return unhandledSubject(subject);
+  }
+}
+
+const SYSTEM_OUTCOME: Partial<Record<UserRow["systemMessageKind"], string>> = {
+  "child-completed": "completed",
+  "child-failed": "failed",
+  "child-interrupted": "was interrupted",
+  "child-needs-attention": "needs attention",
+};
+const SYSTEM_HEADER = /^\[bb system\]\s*/u;
+
 // ---------------------------------------------------------------- layer 3
+
+const isUserMessage = (row: TimelineRow): row is UserRow => row.kind === "conversation" && row.role === "user";
+
+/** `never` keeps the switch exhaustive; a subject a newer host adds reads as bb's message. */
+function unhandledSubject(_subject: never): string {
+  return "bb reported back";
+}
 
 /** Delegation rows at the top level and inside turn groups, never inside a delegate's own children. */
 function topLevelDelegations(rows: readonly TimelineRow[]): DelegationRow[] {
