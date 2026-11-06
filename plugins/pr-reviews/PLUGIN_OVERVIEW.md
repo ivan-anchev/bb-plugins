@@ -15,6 +15,12 @@ ever posted to GitHub.
   Review instructions from Settings → PR Reviews. The page shows it writing,
   with the time so far, Open thread and Cancel, and asks it to finish if it
   stops without a guide.
+- **A checked guide**: the thread hands in its guide with the `submit_review`
+  tool, which only review threads get. PR Reviews rejects a guide that leaves
+  out a hunk of the diff, lists one twice, or has more than 7 steps, and says
+  exactly what to fix. The row then reads Guide ready, the page shows the
+  guide's problem and approach and who wrote it, and the rail badge counts
+  the ready guides.
 - **Errors beside your data**: if GitHub can't be read, the error shows above
   the list you already had. Refresh, or click the open PR again, to retry.
 

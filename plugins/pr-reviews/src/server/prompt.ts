@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import type { PrDetail } from "../contract.ts";
 import { unitIdsOf, type DiffFile } from "../diff/diff-schema.ts";
 import type { Repo } from "../github/repo.ts";
+import { pathLiteral, stripHidden } from "./visible-text.ts";
 
 /** The PR as the review thread must see it: pinned to `headSha` and `baseSha`, with the diff between them. */
 export type PromptFacts = { repo: Repo; pr: PrDetail; headSha: string; baseSha: string; files: DiffFile[] };
@@ -58,11 +59,3 @@ function prFacts({ repo, pr, headSha, baseSha, files }: PromptFacts): string {
     `<<<${marker}_END>>>`,
   ].join("\n");
 }
-
-// Zero-width characters, bidi embeddings, overrides and isolates, and the byte-order mark.
-const HIDDEN_CHARACTERS = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
-
-const stripHidden = (text: string) => text.replace(HIDDEN_CHARACTERS, "");
-
-// Lossless: JSON.parse gives back the exact path.
-const pathLiteral = (path: string) => JSON.stringify(path).replace(HIDDEN_CHARACTERS, (character) => `\\u${character.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`);

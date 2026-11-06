@@ -1,8 +1,8 @@
 // experimental_sidebar: the project picker, then the chosen project's open PRs.
 import { useEffect } from "react";
 import { useBbNavigate, type PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
-import type { GitHubProject, PrRow } from "../../contract.ts";
-import { useProjects, usePullRequest, usePullRequests, useSelectProject } from "../queries.ts";
+import { guideHeadShaOf, type GitHubProject, type PrRow } from "../../contract.ts";
+import { useGuide, useProjects, usePullRequest, usePullRequests, useSelectProject, type GuideTarget } from "../queries.ts";
 import { PANEL_PATH, parseRoute, routeSubPath, type Route } from "../routes.ts";
 import { Notice } from "../ui/notice.tsx";
 import { ReadError } from "../ui/read-error.tsx";
@@ -84,12 +84,25 @@ function PrList({ projectId, openNumber }: { projectId: string; openNumber: numb
   );
 }
 
-// Clicking the open PR again re-reads it and the list, so a failed read is retried (REVIEW.md);
-// navigating to the route already shown would not. Same input as the page's read, so this
-// refetches the page's cache entry.
-function OpenPrRow({ projectId, row, refetchList }: { projectId: string; row: PrRow; refetchList(): Promise<void> }) {
+// Clicking the open PR again re-reads it, its guide and the list, so a failed read is retried
+// (REVIEW.md); navigating to the route already shown would not. Same inputs as the page's
+// reads, so this refetches the page's cache entries.
+type OpenPrRowProps = { projectId: string; row: PrRow; refetchList(): Promise<void> };
+
+function OpenPrRow({ projectId, row, refetchList }: OpenPrRowProps) {
   const pull = usePullRequest(projectId, row.number);
-  return <PrRowButton row={row} current onClick={() => void Promise.all([pull.refetch(), refetchList()])} />;
+  const headSha = pull.data === undefined ? null : guideHeadShaOf(pull.data.review);
+  const refetch = [pull.refetch, refetchList];
+  return headSha === null ? (
+    <PrRowButton row={row} current onClick={() => void Promise.all(refetch.map((read) => read()))} />
+  ) : (
+    <OpenGuidedPrRow row={row} refetch={refetch} guide={{ projectId, number: row.number, headSha }} />
+  );
+}
+
+function OpenGuidedPrRow({ row, refetch, guide }: { row: PrRow; refetch: (() => Promise<void>)[]; guide: GuideTarget }) {
+  const read = useGuide(guide);
+  return <PrRowButton row={row} current onClick={() => void Promise.all([...refetch, read.refetch].map((reread) => reread()))} />;
 }
 
 function useChooseProject() {

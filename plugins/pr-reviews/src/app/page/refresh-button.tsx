@@ -2,7 +2,8 @@
 // method and input as the sidebar and the page, so it shares their cache entries, and
 // refetch() re-reads each one regardless of freshness or a cached failure (REVIEW.md).
 import type { ExperimentalRpcQueryState, PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
-import { useProjects, usePullRequest, usePullRequests } from "../queries.ts";
+import { guideHeadShaOf } from "../../contract.ts";
+import { useGuide, useProjects, usePullRequest, usePullRequests, type GuideTarget } from "../queries.ts";
 import { parseRoute } from "../routes.ts";
 import { IconButton } from "../ui/icon-button.tsx";
 
@@ -25,9 +26,15 @@ const RefreshProjects = () => <RefreshReads reads={[useProjects()]} />;
 
 const RefreshProject = ({ projectId }: { projectId: string }) => <RefreshReads reads={[useProjects(), usePullRequests(projectId)]} />;
 
-const RefreshPr = ({ projectId, number }: { projectId: string; number: number }) => (
-  <RefreshReads reads={[useProjects(), usePullRequests(projectId), usePullRequest(projectId, number)]} />
-);
+// A PR page that shows a guide also re-reads the guide.
+function RefreshPr({ projectId, number }: { projectId: string; number: number }) {
+  const pull = usePullRequest(projectId, number);
+  const reads = [useProjects(), usePullRequests(projectId), pull];
+  const headSha = pull.data === undefined ? null : guideHeadShaOf(pull.data.review);
+  return headSha === null ? <RefreshReads reads={reads} /> : <RefreshWithGuide reads={reads} guide={{ projectId, number, headSha }} />;
+}
+
+const RefreshWithGuide = ({ reads, guide }: { reads: Read[]; guide: GuideTarget }) => <RefreshReads reads={[...reads, useGuide(guide)]} />;
 
 type Read = Pick<ExperimentalRpcQueryState<unknown>, "isFetching" | "refetch">;
 

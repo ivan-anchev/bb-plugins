@@ -8,6 +8,7 @@ import { createReviews } from "./src/server/reviews.ts";
 import { createRpcHandlers } from "./src/server/rpc-handlers.ts";
 import { defineReviewSettings } from "./src/server/settings.ts";
 import { openStore } from "./src/server/store.ts";
+import { registerSubmitReviewTool } from "./src/server/submit-review-tool.ts";
 import { forwardReviewThreadEvents } from "./src/server/thread-events.ts";
 
 export default function plugin(bb: BbPluginApi): void {
@@ -15,6 +16,7 @@ export default function plugin(bb: BbPluginApi): void {
   const store = openStore(bb.storage);
   const reader = createReviewReader({ bb, store });
   const reviews = createReviews({ bb, store, settings, reader, github: { snapshotPrDiff, fetchPrCommits } });
-  bb.rpc.register(prReviewsContract, createRpcHandlers({ bb, reader, reviews }));
+  registerSubmitReviewTool(bb, store);
+  bb.rpc.register(prReviewsContract, createRpcHandlers({ bb, store, reader, reviews }));
   forwardReviewThreadEvents(bb, store);
 }

@@ -1,0 +1,24 @@
+diff --git a/ lead.ts b/ lead.ts
+index 422c2b7..55dce13 100644
+--- a/ lead.ts	
++++ b/ lead.ts	
+@@ -1,2 +1,2 @@
+ a
+-b
++B
+diff --git a/trail.ts  b/trail.ts 
+index 422c2b7..55dce13 100644
+--- a/trail.ts 	
++++ b/trail.ts 	
+@@ -1,2 +1,2 @@
+ a
+-b
++B
+diff --git "a/\357\273\277bom.ts" "b/\357\273\277bom.ts"
+index 422c2b7..55dce13 100644
+--- "a/\357\273\277bom.ts"
++++ "b/\357\273\277bom.ts"
+@@ -1,2 +1,2 @@
+ a
+-b
++B

@@ -2,7 +2,13 @@
 import type { PrRow, ReviewState } from "../../contract.ts";
 import { timeAgo } from "../relative-time.ts";
 
-const REVIEW_LABEL: Record<ReviewState["kind"], string> = { none: "No guide", running: "Writing guide…", "no-guide": "No guide" };
+const REVIEW_LABEL: Record<ReviewState["kind"], string> = {
+  none: "No guide",
+  running: "Writing guide…",
+  ready: "Guide ready",
+  stale: "New commits",
+  "no-guide": "No guide",
+};
 
 type PrRowButtonProps = { row: PrRow; current: boolean; onClick(): void };
 

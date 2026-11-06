@@ -4,7 +4,7 @@ import { repoSchema } from "../github/repo.ts";
 import { deriveRunningReview, type ThreadFacts } from "./review-state.ts";
 import { createReviews, type PrRef } from "./reviews.ts";
 import type { ReviewRun } from "./store.ts";
-import type { PrDetail } from "../contract.ts";
+import type { PrDetail, ReviewState } from "../contract.ts";
 
 const repo = repoSchema.parse("ivan-anchev/bb-plugins");
 const ref: PrRef = { projectId: "proj_1", repo, number: 23 };
@@ -45,7 +45,7 @@ function cancelHarness(failedStops: number) {
     settings: { get: notUsedByCancel },
     reader: {
       pullRequest: async () => assert.fail("gh: could not reach api.github.com"),
-      runningReview: async () => deriveRunningReview({ runs, threads }),
+      runningReview: async () => deriveRunningReview({ guides: [], runs, threads }),
     },
     github: { snapshotPrDiff: notUsedByCancel, fetchPrCommits: notUsedByCancel },
   });
@@ -98,9 +98,9 @@ const PR: PrDetail = {
 };
 const DIFF = "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-old\n+new\n";
 
-// Start with no review yet, the project's default checkout on `checkoutHost`, and every
+// Start with the PR in `review`, the project's default checkout on `checkoutHost`, and every
 // GitHub read, fetch, and spawn recorded in order.
-function startHarness(checkoutHost: string) {
+function startHarness(checkoutHost: string, review: ReviewState = { kind: "none" }) {
   const calls: string[] = [];
   const reviews = createReviews({
     bb: {
@@ -121,7 +121,7 @@ function startHarness(checkoutHost: string) {
     store: { saveRun: () => void calls.push("save run"), deleteRun: () => assert.fail("Start must not delete a run") },
     settings: { get: async () => ({ instructions: "" }) },
     reader: {
-      pullRequest: async () => ({ pr: PR, review: { kind: "none" } }),
+      pullRequest: async () => ({ pr: PR, review }),
       runningReview: async () => assert.fail("Start reads the review through pullRequest"),
     },
     github: {
@@ -145,4 +145,10 @@ test("Start on the server's own machine fetches the PR's commits, then spawns th
   const { reviews, calls } = startHarness(SERVER_HOST);
   assert.deepEqual(await reviews.start(ref), { threadId: "thr_new" });
   assert.deepEqual(calls, ["snapshot diff", "fetch into /repos/bb-plugins", `spawn on ${SERVER_HOST}`, "save run"]);
+});
+
+test("Start refuses a PR that already has a guide for its current commit, before anything runs", async () => {
+  const { reviews, calls } = startHarness(SERVER_HOST, { kind: "ready", threadId: "thr_1", guideHeadSha: "head1" });
+  await assert.rejects(reviews.start(ref), { code: "conflict", message: "This PR already has a guide for its current commit." });
+  assert.deepEqual(calls, []);
 });

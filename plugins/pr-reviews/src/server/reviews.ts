@@ -70,6 +70,7 @@ export function createReviews({ bb, store, settings, reader, github }: Deps) {
   async function startThread({ projectId, repo, number }: PrRef): Promise<{ threadId: string }> {
     const { pr, review } = await reader.pullRequest(repo, number);
     if (review.kind === "running") return { threadId: review.threadId };
+    if (review.kind === "ready") throw new Refusal({ code: "conflict", message: "This PR already has a guide for its current commit." });
 
     const checkout = await localDefaultCheckoutOf(projectId);
     const { headSha, baseSha, diff } = await github.snapshotPrDiff(repo, number);
