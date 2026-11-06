@@ -19,8 +19,9 @@ Frontend only:
   the transcript and the trail show (`transcriptSteps`, `trailSteps`), and
   what each says and did (`stepLabel`, `stepKind`, `stepFailed`, `firstLine`,
   `stepIntents`).
-- `work-groups.ts`: the trail's lines, steps folded the way bb's chat folds
-  them (`trailItems`); `work-label.ts`: a group's words in bb's chat's
+- `work-groups.ts`: the trail's and the transcript's lines, steps folded the
+  way bb's chat folds them (`trailItems`, `transcriptItems`, the second with
+  reasoning in them); `work-label.ts`: a group's words in bb's chat's
   wording ("Explored 3 files, ran 2 commands"); `thread-tell.ts`: the
   commands bb's chat shows as a message to a thread (`isThreadTell`), in
   their plain form only. All three mirror functions of bb's own client,
@@ -49,9 +50,10 @@ Frontend only:
   stopped by the thread and by TaskStop and an agent call refused at launch;
   `normalise.test.ts` says how each was taken. `fixtures/child-threads.json`:
   real child threads (settled, running, stopped, failed, waiting, reused);
-  `child-threads.test.ts` says how each was taken. `fixtures/claude-groups.json`:
-  one real delegation whose trail was compared with bb's chat live;
-  `work-groups.test.ts` says how it was taken.
+  `child-threads.test.ts` says how each was taken. `fixtures/claude-groups.json`
+  and `fixtures/claude-panel.json`: real delegations whose trail and transcript
+  were compared with bb's chat live; `work-groups.test.ts` says how they were
+  taken.
 
 ## Develop
 

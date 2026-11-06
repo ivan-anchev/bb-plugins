@@ -900,13 +900,18 @@
   }
 }
 
-/* ---------------------------------------------------------------- transcript tab: a header over the steps, the outcome last */
+/* ---------------------------------------------------------------- transcript tab: a header over the lines, the outcome last */
 
-/* the same columns as an expanded row: a gutter on the avatar's axis, then the text */
+/* the same columns as an expanded row: a gutter on the avatar's axis, then the text;
+   below the header it reads in bb chat's type and rhythm: one body size, 22px work lines, 8px between lines */
 .sr-tx {
   --sr-x-text: calc(var(--sr-row-av) + var(--sr-row-gap));
   --sr-x-cut: var(--sr-cut);
   --sr-rail: color-mix(in oklab, var(--foreground) 13%, transparent);
+  --sr-tx-fs: var(--text-sm);
+  --sr-tx-line-h: 22px;
+  --sr-tx-gap: calc(var(--spacing) * 2);
+  --sr-sk: 14px;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -968,59 +973,73 @@
   overscroll-behavior: contain;
 }
 
-.sr-tx-steps {
+/* every line sits in the text column, under the header's title, as bb indents a delegation's rows under it */
+.sr-tx-items {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin: 0;
+  gap: var(--sr-tx-gap);
+  margin: 0 0 0 var(--sr-x-text);
   padding: 0;
   list-style: none;
 }
 
-/* a message reads in the text column, in the body type */
+/* a message reads as bb's chat sets one */
 .sr-tx-msg {
-  margin: 4px 0;
-  margin-left: var(--sr-x-text);
-  font-size: 13px;
-  line-height: var(--sr-res-lh);
+  margin: 0;
+  font-size: var(--sr-tx-fs);
+  line-height: var(--leading-relaxed);
   color: var(--foreground);
   overflow-wrap: anywhere;
 }
 
-/* every other step is one line: kind icon in the gutter, label, failed, offset */
+/* a work line: what it did in the summary tone, its icon before it, failed and its offset after */
 .sr-tx-line {
-  display: grid;
-  grid-template-columns: var(--sr-x-text) minmax(0, 1fr) auto auto;
+  display: flex;
   align-items: center;
+  gap: 6px;
   min-width: 0;
-  height: var(--sr-step-h);
-  font-size: var(--sr-step-fs);
+  height: var(--sr-tx-line-h);
+  font-size: var(--sr-tx-fs);
   color: var(--subtle-foreground);
   --sr-shimmer-base: var(--muted-foreground);
 }
 
-.sr-tx-line .sr-sk {
-  justify-self: center;
-}
+.sr-tx-line .sr-sk { flex: none; }
+.sr-tx-line .sr-sw { flex: none; margin-left: 0; white-space: nowrap; }
+.sr-tx-line .sr-tm { margin-left: auto; padding-left: 6px; }
 
 .sr-tx-line[data-k="command"] .sr-stx {
   font-family: var(--font-mono);
-  font-size: calc(var(--sr-step-fs) - 0.5px);
+  font-size: calc(var(--sr-tx-fs) - 1px);
 }
 
 .sr-tx-line[data-step="failed"] .sr-sk { color: var(--sr-st-failed); }
 .sr-tx-line[data-k="thinking"] { color: var(--sr-faint); }
 
-/* a command or a thought opens in place; the chevron is the only marker */
+/* an open group lists its steps flush under its line, dimmer, as bb lists a group's steps */
+.sr-tx-grp-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sr-tx-grp-steps .sr-tx-line { color: var(--sr-faint); }
+
+/* a group, a command, or a thought opens in place; the chevron is the only marker */
 .sr-tx-sum {
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--sr-chev);
   align-items: center;
-  column-gap: 6px;
+  column-gap: 4px;
   border-radius: 6px;
   list-style: none;
   cursor: pointer;
   transition: background-color var(--sr-hover-ms) var(--sr-ease);
+}
+
+/* a group's chevron follows its words, as bb's does */
+.sr-tx-grp > .sr-tx-sum {
+  grid-template-columns: minmax(0, max-content) var(--sr-chev);
 }
 
 .sr-tx-sum::-webkit-details-marker {
@@ -1035,6 +1054,7 @@
 @media (hover: hover) and (pointer: fine) {
   .sr-tx-sum:hover { background: var(--sr-wash); }
   .sr-tx-sum:hover .sr-tx-chev { color: var(--foreground); }
+  .sr-tx-grp > .sr-tx-sum:hover > .sr-tx-line { color: var(--muted-foreground); }
 }
 
 .sr-tx-chev {
@@ -1049,7 +1069,7 @@ details[open] > .sr-tx-sum .sr-tx-chev {
 }
 
 .sr-tx-out {
-  margin: 4px 0 8px var(--sr-x-text);
+  margin: 4px 0 8px;
   max-height: 360px;
   overflow: auto;
   border-radius: 8px;
@@ -1062,10 +1082,10 @@ p.sr-tx-out {
 }
 
 .sr-tx-think-b {
-  margin: 2px 0 8px var(--sr-x-text);
+  margin: 2px 0 8px;
   padding-left: 10px;
   box-shadow: inset 1px 0 0 var(--sr-rail);
-  font-size: var(--sr-step-fs);
+  font-size: calc(var(--sr-tx-fs) - 1px);
   line-height: 1.5;
   color: var(--subtle-foreground);
 }
@@ -1077,7 +1097,10 @@ p.sr-tx-out {
   box-shadow: inset 0 1px 0 var(--sr-rail);
 }
 
+/* the report reads as the messages above it */
 .sr-tx .sr-res {
+  font-size: var(--sr-tx-fs);
+  line-height: var(--leading-relaxed);
   color: var(--foreground);
 }
 

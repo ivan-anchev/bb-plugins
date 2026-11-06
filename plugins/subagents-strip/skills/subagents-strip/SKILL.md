@@ -108,18 +108,32 @@ A child thread is a real bb thread, so its Open thread goes to that thread
 instead, in place of the current one, with no tab.
 
 The tab shows the avatar, description, status word, and elapsed time over the
-same meta line as the row, then every step in order:
+same meta line as the row, then the subagent as bb's chat shows it when you
+expand the same subagent there, in the same order and words:
 
 - what the subagent said, as markdown;
-- each command as one line that opens to its output;
-- each file read, edit, search, page fetch, and tool call as one line, with
-  "failed" when it failed and its time since the subagent started;
-- its reasoning as a collapsed, muted "Thinking" block (the row's trail and
-  step count leave reasoning out);
-- at the end, the report in full, the error, or the stopped note.
+- its work between two messages folded into the same lines as the row's trail
+  ("Explored 3 files, ran 2 commands", "1 error" when some failed). Click a
+  line to open it to its steps, one per line:
+  - its reasoning as a collapsed, muted "Thinking" line that opens to the
+    thought; reasoning that stands alone between two messages is its own
+    Thinking line (the row's trail and step count leave reasoning out);
+  - each command as one line that opens to its output;
+  - each file read, edit, search, page fetch, and tool call as one line, with
+    "failed" when it failed and its time since the subagent started;
+- questions and approvals as their own lines;
+- at the end, the report in full, the error, or the stopped note. bb's chat
+  shows the launch receipt there for a background agent; the tab shows what
+  the agent handed back.
 
-While the subagent runs, new steps appear at the end and the tab stays at the
-bottom unless you scroll up; the report appears when it finishes. The tab
+Inside a group, a step reads as it does on the row's trail ("Ran cat
+notes.md"), not as bb's compact form ("Read notes.md"). A message that is a
+bb chat directive, such as a browser preview, shows as its raw text.
+
+While the subagent runs, new lines appear at the end and the tab stays at the
+bottom unless you scroll up. Its latest line is live as on the row: it
+shimmers, and a group reads in the present tense ("Running 3 commands"); here
+that can also be the subagent thinking. The report appears when it finishes. The tab
 reads the same live data as the strip, so both always show the same status.
 Its subagent is saved with the tab, so it comes back after a reload; one
 outside the loaded timeline reads "This subagent is outside the loaded

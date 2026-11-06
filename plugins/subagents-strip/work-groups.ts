@@ -1,17 +1,17 @@
-// bb's chat compaction, mirrored for the trail. bb computes it in its client from
-// flat rows (ThreadScreen bundle: `as` walks a scope's rows, `es` and `ts` fold a
-// run, `Zo` dedupes it, `Wo` words it), so a plugin can only recompute it.
-// Consecutive work steps fold into one line that says what they did ("Explored
-// 3 files, ran 2 commands"); messages, questions, and approvals stay their own
-// lines and split the runs. A step's own label stays stepLabel's (steps.ts).
+// bb's chat compaction, mirrored for the trail and the transcript tab. bb computes
+// it in its client from flat rows (ThreadScreen bundle: `as` walks a scope's rows,
+// `es` and `ts` fold a run, `Zo` dedupes it, `Wo` words it), so a plugin can only
+// recompute it. Consecutive work steps fold into one line that says what they did
+// ("Explored 3 files, ran 2 commands"); messages, questions, and approvals stay
+// their own lines and split the runs. A step's own label stays stepLabel's (steps.ts).
 import type { ActivityIntent, ReasoningRow, StepRow, TimelineRow, WorkRow } from "./bb.ts";
 import type { Delegate } from "./delegate.ts";
 import { isRunning, plural } from "./roster.ts";
-import { isReasoning, stepIntents, trailSteps } from "./steps.ts";
+import { isReasoning, stepIntents, trailSteps, transcriptSteps } from "./steps.ts";
 import { isThreadTell } from "./thread-tell.ts";
 import { conceptOf, groupLabel, type Concept } from "./work-label.ts";
 
-/** One trail line: a single step, or a run of steps folded into what they did. */
+/** One line of the trail or the transcript: a single step, or a run of steps folded into what they did. */
 export type WorkItem =
   | { kind: "step"; step: StepRow; live: boolean }
   | {
@@ -25,22 +25,32 @@ export type WorkItem =
       steps: readonly StepRow[];
     };
 
-/**
- * A delegate's trail. Which steps share a line is bb's chat's call, made on the rows as their
- * source holds them, scope by scope (Delegate.scopes). Then what the trail does not show
- * (reasoning, the handback, the report, a child's own brief) leaves every line, and lines left
- * empty drop. While the delegate runs, bb's latest line is live, unless a message or its settled
- * turn closed it: a live group reads in the present tense. Liveness never moves a step between lines.
- */
+/** A delegate's trail: its lines without reasoning, the handback, the report, or a child's own brief. */
 export function trailItems(d: Delegate): WorkItem[] {
-  const scopes = d.scopes.map(({ rows, closed }) => compact(rows, closed));
-  // why: decided on bb's lines before anything is hidden, so a hidden latest line (reasoning) leaves none live.
-  const live = isRunning(d) ? liveUnit(scopes.at(-1) ?? []) : null;
-  const shown = new Set(trailSteps(d.steps ?? []).map((row) => row.id));
-  return scopes.flat().flatMap((unit) => lines(unit, live, shown));
+  return workItems(d, trailSteps(d.steps ?? []));
+}
+
+/** A delegate's transcript: the same lines with reasoning in them, as bb's chat shows it; the rest still leaves. */
+export function transcriptItems(d: Delegate): WorkItem[] {
+  return workItems(d, transcriptSteps(d.steps ?? []));
 }
 
 // ---------------------------------------------------------------- layer 2
+
+/**
+ * Which steps share a line is bb's chat's call, made on the rows as their source holds them,
+ * scope by scope (Delegate.scopes). Then the steps a view does not show leave every line, and
+ * lines left empty drop. While the delegate runs, bb's latest line is live, unless a message or
+ * its settled turn closed it: a live group reads in the present tense. Liveness never moves a
+ * step between lines.
+ */
+function workItems(d: Delegate, visible: readonly StepRow[]): WorkItem[] {
+  const scopes = d.scopes.map(({ rows, closed }) => compact(rows, closed));
+  // why: decided on bb's lines before anything is hidden, so a hidden latest line (the trail's reasoning) leaves none live.
+  const live = isRunning(d) ? liveUnit(scopes.at(-1) ?? []) : null;
+  const shown = new Set(visible.map((row) => row.id));
+  return scopes.flat().flatMap((unit) => lines(unit, live, shown));
+}
 
 /** What bb folds: completed reasoning, and work but approvals, questions, workflows, and thread tells. */
 type GroupRow = WorkRow | ReasoningRow;
@@ -93,7 +103,7 @@ function liveUnit(units: readonly Unit[]): Unit | null {
   }
 }
 
-/** A unit's trail lines: what it shows of its steps, a settled turn's lines in its place. */
+/** A unit's lines: what it shows of its steps, a settled turn's lines in its place. */
 function lines(unit: Unit, live: Unit | null, shown: ReadonlySet<string>): WorkItem[] {
   switch (unit.kind) {
     case "step": return shown.has(unit.step.id) ? [{ kind: "step", step: unit.step, live: unit === live }] : [];
