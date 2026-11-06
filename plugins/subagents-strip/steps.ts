@@ -1,17 +1,24 @@
 // What a delegate's child rows mean as steps. A step is a bb row (StepRow),
 // never a reshaped copy; meaning is derived at the point of use.
-import type { AssistantRow, ReasoningRow, StepRow, TimelineRow } from "./bb.ts";
+import type { ActivityIntent, AssistantRow, ReasoningRow, StepRow, TimelineRow, WorkRow } from "./bb.ts";
 
-/** The rows a delegate's transcript shows, in order: reasoning included. */
-export function transcriptSteps(rows: readonly TimelineRow[]): StepRow[] {
-  return rows.flatMap((row) =>
-    row.kind === "turn" ? transcriptSteps(row.children ?? []) : isTranscriptStep(row) ? [row] : [],
-  );
+/**
+ * A delegate's rows as its steps, in order, turn groups flattened. Every row bb's chat
+ * shows stays, the handback and nested delegations included, so the trail's work
+ * groups count what bb's count ("ran 1 tool" for the handback, "ran 1 subagent").
+ */
+export function childSteps(rows: readonly TimelineRow[]): StepRow[] {
+  return rows.flatMap((row) => (row.kind === "turn" ? childSteps(row.children ?? []) : [row]));
+}
+
+/** The steps the transcript shows: all but the handback, which it shows as the outcome. */
+export function transcriptSteps(steps: readonly StepRow[]): StepRow[] {
+  return steps.filter((row) => !isHandback(row));
 }
 
 /** The steps the strip counts and labels: the transcript without reasoning. */
 export function trailSteps(steps: readonly StepRow[]): StepRow[] {
-  return steps.filter((row) => !isReasoning(row));
+  return transcriptSteps(steps).filter((row) => !isReasoning(row));
 }
 
 /**
@@ -58,7 +65,7 @@ export function isHandback(row: TimelineRow): row is Extract<TimelineRow, { work
 /**
  * A finished delegate's report when its provider hands none back: its last
  * non-blank assistant message, which leaves the steps so the row and the
- * transcript show it once, as the outcome (as isTranscriptStep drops the handback).
+ * transcript show it once, as the outcome (as transcriptSteps hides the handback).
  */
 export function splitReport(steps: readonly StepRow[]): { steps: readonly StepRow[]; report: string | null } {
   const message = steps.findLast(isReportMessage);
@@ -71,9 +78,41 @@ export function isReasoning(row: StepRow): row is ReasoningRow {
   return row.kind === "system" && row.systemKind === "operation" && row.operationKind === "reasoning";
 }
 
-// ---------------------------------------------------------------- layer 2
+/**
+ * What a step reads, lists, or searches, as bb reads it (`mo`): a command's activity intents, or a
+ * read or search as the intent a command would carry for it. Other work carries none.
+ */
+export function stepIntents(row: WorkRow): readonly ActivityIntent[] {
+  switch (row.workKind) {
+    case "command": return row.activityIntents;
+    case "file-read": return [{ type: "read", command: row.cmd ?? row.path, name: "fileRead", path: row.path }];
+    case "search":
+      return row.mode === "content"
+        ? [{ type: "search", command: row.cmd ?? row.query, query: row.query, path: row.path }]
+        : [{ type: "list_files", command: row.cmd ?? row.query, path: row.path ?? (row.query.length > 0 ? row.query : null) }];
+    case "file-change":
+    case "image-view":
+    case "image-generation":
+    case "web-search":
+    case "web-fetch":
+    case "plan-steps":
+    case "tool":
+    case "extension":
+    case "form":
+    case "approval":
+    case "question":
+    case "delegation":
+    case "workflow": return [];
+    default: return unhandledIntents(row);
+  }
+}
 
-type WorkRow = Extract<StepRow, { kind: "work" }>;
+/** bb's `vo`: a read, a search, or a command bb reads as one; bb's chat counts these as exploring. */
+export function isExploration(row: WorkRow): boolean {
+  return stepIntents(row).some((intent) => intent.type !== "unknown");
+}
+
+// ---------------------------------------------------------------- layer 2
 
 // why: exhaustive, so a work kind a new SDK adds fails to compile here instead of showing its raw kind.
 function workLabel(row: WorkRow): string {
@@ -146,6 +185,11 @@ function unhandledKind(_row: never): StepKind {
   return "tool";
 }
 
+/** As `unhandled`: a work kind a newer host adds reads, lists, and searches nothing. */
+function unhandledIntents(_row: never): readonly ActivityIntent[] {
+  return [];
+}
+
 /** As `unhandled`: a status a newer host adds reads in the past tense, as every step did before tenses. */
 function unhandledStatus(_status: never): boolean {
   return false;
@@ -161,10 +205,5 @@ function presentationTitle(row: unknown): string | null {
 // why: a blank message cannot be a report; the one before it can.
 function isReportMessage(row: StepRow): row is AssistantRow {
   return row.kind === "conversation" && row.role === "assistant" && row.text.trim() !== "";
-}
-
-function isTranscriptStep(row: TimelineRow): boolean {
-  if (isHandback(row)) return false; // it is the report, shown as the outcome
-  return !(row.kind === "work" && row.workKind === "delegation"); // nesting is ignored
 }
 

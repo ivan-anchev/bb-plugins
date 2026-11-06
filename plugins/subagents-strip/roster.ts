@@ -70,6 +70,9 @@ export function elapsed(d: Delegate, now: number): number {
 
 export const isRunning = (d: Delegate): boolean => d.state.status === "running";
 
+/** "1 step", "2 steps"; "2 searches" given its plural. */
+export const plural = (n: number, word: string, words = `${word}s`): string => `${n} ${n === 1 ? word : words}`;
+
 /** A status as one capitalised word: Running, Done, Failed, Stopped. */
 export const statusWord = (status: DelegateStatus): string => STATUS_WORD[status];
 
@@ -80,8 +83,6 @@ const CENSUS_WORD: Record<DelegateStatus, string> = { running: "running", comple
 const STATUS_WORD: Record<DelegateStatus, string> = { running: "Running", completed: "Done", failed: "Failed", stopped: "Stopped" };
 
 const endOf = (d: Delegate, now: number): number => (d.state.status === "running" ? now : d.state.endedAt);
-
-const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 /** 950 / 61.2k / 1.3M */
 function formatTokens(n: number): string {

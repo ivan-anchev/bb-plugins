@@ -614,11 +614,56 @@
   background: var(--sr-rail);
 }
 
-.sr-step:first-child::before { top: 50%; }
-.sr-step:last-child::before { bottom: 50%; }
+/* the rail starts and ends at a dot; an open group is taller than one line, so measure from its first line */
+.sr-step:first-child::before { top: calc(var(--sr-step-h) / 2); }
+.sr-step:last-child::before { bottom: calc(var(--sr-step-h) / 2); }
 
-.sr-step[data-step="live"] .sr-sd { background: var(--sr-st-running); }
-.sr-step[data-step="failed"] .sr-sd { background: var(--sr-st-failed); }
+.sr-step[data-step="live"] > .sr-sd { background: var(--sr-st-running); }
+.sr-step[data-step="failed"] > .sr-sd { background: var(--sr-st-failed); }
+
+/* a group: what a run of steps did, over those steps once open; the group's rail runs through them */
+.sr-grp {
+  height: auto;
+  grid-template-rows: var(--sr-step-h);
+}
+
+.sr-grp-chev {
+  transition: transform var(--sr-hover-ms) var(--sr-ease);
+}
+
+.sr-grp[data-open] > .sr-grp-chev { transform: rotate(90deg); }
+
+.sr-grp-btn {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--muted-foreground);
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--sr-hover-ms) var(--sr-ease);
+}
+
+.sr-grp-btn:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--ring) 70%, transparent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sr-grp-btn:hover { color: var(--foreground); }
+}
+
+.sr-grp-steps {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sr-grp-steps > .sr-step::before { content: none; }
+.sr-grp-steps > .sr-step > .sr-sd { transform: scale(0.6); }
 
 .sr-step-more .sr-sd {
   background: var(--sr-x-cut);
@@ -649,7 +694,7 @@
 
 .sr-step[data-k="message"] .sr-stx { color: var(--muted-foreground); }
 /* both live steps under reduced motion; it sits before the shimmer, so with motion the text stays transparent */
-.sr-step[data-step="live"] .sr-stx,
+.sr-step[data-step="live"] > .sr-stx,
 .sr-tx-line[data-step="live"] .sr-stx { color: var(--foreground); }
 
 /* colour never carries the failure alone (R9) */
@@ -786,7 +831,7 @@
 /* the running detail and the live step carry a moving band of ink; never under reduced motion (R9) */
 @media (prefers-reduced-motion: no-preference) {
   .sr-row[data-st="running"] .sr-row-detail > span:not(.sr-roll-out),
-  .sr-step[data-step="live"] .sr-stx,
+  .sr-step[data-step="live"] > .sr-stx,
   .sr-tx-line[data-step="live"] .sr-stx {
     color: transparent;
     background: linear-gradient(

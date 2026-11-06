@@ -1,12 +1,14 @@
 // One delegate: a two-line row (avatar with status dot, title over the detail
 // line, elapsed time) that expands in place to its meta line, outcome, and step
-// trail, with Open thread in its footer. Words come from roster.ts and steps.ts.
+// trail, with Open thread in its footer. Words come from roster.ts and steps.ts;
+// the trail's lines, steps folded as bb's chat folds them, from work-groups.ts.
 import { useId, useRef, useState, type KeyboardEvent, type TransitionEvent } from "react";
 import { experimental_Icon as Icon, experimental_useAppPanel, useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { StepRow } from "../bb.ts";
 import type { Delegate } from "../delegate.ts";
 import { detailLine, elapsed, isRunning, metaParts } from "../roster.ts";
-import { stepFailed, stepKind, stepLabel, trailSteps } from "../steps.ts";
+import { stepFailed, stepKind, stepLabel } from "../steps.ts";
+import { trailItems, type WorkItem } from "../work-groups.ts";
 import { formatDuration, formatOffset, useNow } from "../clock.ts";
 import { TRANSCRIPT_TAB, transcriptParams } from "../transcript.ts";
 import { Avatar } from "./Avatar.tsx";
@@ -59,7 +61,7 @@ function RowDetail({ delegate: d }: { delegate: Delegate }) {
       <div className="sr-x-scroll" ref={isRunning(d) ? followTail : startAtTop}>
         <MetaLine parts={metaParts(d)} />
         <Outcome delegate={d} report="clamped" />
-        {d.steps && <Trail delegate={d} steps={trailSteps(d.steps)} />}
+        {d.steps && <Trail delegate={d} />}
       </div>
       <footer className="sr-x-foot">
         {opens(d) && <OpenThreadButton delegate={d} />}
@@ -102,29 +104,54 @@ function opens(d: Delegate): boolean {
   return d.origin.kind === "child-thread" || d.steps !== null;
 }
 
-const STEPS_SHOWN = 6;
+const LINES_SHOWN = 6;
 
-/** The last six steps on a rail, oldest first, "Show N earlier steps" above them; the live step is last. */
-function Trail({ delegate: d, steps }: { delegate: Delegate; steps: readonly StepRow[] }) {
+/**
+ * The last six lines on a rail, oldest first, "Show N earlier" above them: a line is a step, or a
+ * group of steps that expands to them. While the delegate runs, its latest line can be live.
+ */
+function Trail({ delegate: d }: { delegate: Delegate }) {
   const [all, setAll] = useState(false);
-  const running = isRunning(d);
-  if (steps.length === 0) return running ? <ol className="sr-trail"><StartingStep /></ol> : null;
-  const shown = all ? steps : steps.slice(-STEPS_SHOWN);
-  const earlier = steps.length - STEPS_SHOWN;
+  const items = trailItems(d);
+  if (items.length === 0) return isRunning(d) ? <ol className="sr-trail"><StartingStep /></ol> : null;
+  const shown = all ? items : items.slice(-LINES_SHOWN);
+  const earlier = items.length - LINES_SHOWN;
   return (
     <ol className="sr-trail" aria-label="Steps">
       {earlier > 0 && (
         <li className="sr-step sr-step-more">
           <span className="sr-sd" />
           <button type="button" className="sr-lnk" aria-expanded={all} onClick={() => setAll(!all)}>
-            {all ? `Show only the last ${STEPS_SHOWN}` : `Show ${earlier} earlier ${earlier === 1 ? "step" : "steps"}`}
+            {all ? `Show only the last ${LINES_SHOWN}` : `Show ${earlier} earlier`}
           </button>
         </li>
       )}
-      {shown.map((row, i) => (
-        <Step key={row.id} row={row} live={running && i === shown.length - 1} sinceStart={row.startedAt - d.startedAt} />
-      ))}
+      {shown.map((item) =>
+        item.kind === "step"
+          ? <Step key={item.step.id} row={item.step} live={item.live} sinceStart={item.step.startedAt - d.startedAt} />
+          : <WorkGroup key={item.id} group={item} startedAt={d.startedAt} />,
+      )}
     </ol>
+  );
+}
+
+/** What a run of steps did, in bb's words; it expands in place to its steps, each on its own line. */
+function WorkGroup({ group, startedAt }: { group: Extract<WorkItem, { kind: "group" }>; startedAt: number }) {
+  const [open, setOpen] = useState(false);
+  const stepsId = useId();
+  return (
+    <li className="sr-step sr-grp" data-k="group" data-step={group.live ? "live" : "done"} data-open={open || undefined} aria-current={group.live ? "step" : undefined}>
+      <span className="sr-sd" />
+      <Icon name="ChevronRight" className="sr-sk sr-grp-chev" aria-hidden />
+      <button type="button" className="sr-stx sr-grp-btn" aria-expanded={open} aria-controls={stepsId} title={group.label} onClick={() => setOpen(!open)}>
+        {group.label}
+      </button>
+      {group.note && <span className="sr-sw">{group.note}</span>}
+      <span className="sr-tm">{formatOffset(group.steps[0].startedAt - startedAt)}</span>
+      <ol className="sr-grp-steps" id={stepsId} hidden={!open}>
+        {group.steps.map((row) => <Step key={row.id} row={row} live={false} sinceStart={row.startedAt - startedAt} />)}
+      </ol>
+    </li>
   );
 }
 
