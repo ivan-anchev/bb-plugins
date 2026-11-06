@@ -32,7 +32,10 @@ composer. Each row shows:
 - While it runs, its latest step, led by its verb: "Ran" and the command,
   "Read" or "Edited" and the file, "Searched" and the query, "Fetched" and
   the page; a tool by its title, or the first line of what it said
-  ("Starting…" before its first step). Reasoning is skipped.
+  ("Starting…" before its first step). Reasoning is skipped. A step still
+  under way reads in the present tense ("Running sleep 9", "Reading
+  README.md") and switches to the past once it ends, in the trail and the
+  transcript too.
 - Once it finishes, the first line of its report ("Finished without a report"
   when it handed none back), the first line of its error, or "Stopped". A
   subagent that hands nothing back, like a Codex one, reports its last
