@@ -79,10 +79,12 @@ one is open at a time. Esc, or clicking the row again, closes it and leaves
 focus on the row. A closed row forgets its "Show more" and "Show N earlier". The expanded row shows, top to bottom:
 
 - A meta line: "started 13:58", "ran 4m 48s" once it has finished, the step
-  count (reasoning not counted), and, when a background-task event reported
-  usage, its tool calls and tokens ("61.2k tokens"). Only a Claude Code
-  background agent's task reports usage, so Codex subagents and child threads
-  show no tool calls or tokens. Parts with nothing to report are left out.
+  count (reasoning not counted), and its tool calls and tokens ("61.2k
+  tokens"), total tokens for both kinds. A Claude Code background agent's task
+  reports both. A child thread counts its own commands and other tool rows,
+  and takes its tokens from its latest token-usage event, which it may not
+  have yet. Codex subagents report neither. Parts with nothing to report are
+  left out.
 - The outcome, once it has finished: the report rendered as markdown, cut to
   six lines with "Show more" when it is longer; the error in full; or
   "Stopped after 35s. Nothing was handed back."

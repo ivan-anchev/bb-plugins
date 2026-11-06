@@ -4,14 +4,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import type { ChildThread, DelegationRow, EventRow, OlderCursor, ThreadChange, ThreadSdk, TimelineRead, TimelineRow } from "./bb.ts";
-import type { Delegate, DelegateStatus } from "./delegate.ts";
+import type { Delegate, DelegateStatus, Usage } from "./delegate.ts";
 import { createThreadSource, type ThreadSource } from "./thread-source.ts";
 
 const fixture: { rows: TimelineRow[]; events: EventRow[] } = JSON.parse(
   readFileSync(new URL("./fixtures/claude-thread.json", import.meta.url), "utf8"),
 );
 type ChildRead = { child: ChildThread; rows: TimelineRow[] };
-const { counter }: { counter: { running: ChildRead; settled: ChildRead } } = JSON.parse(
+const { counter, usage }: { counter: { running: ChildRead; settled: ChildRead }; usage: { events: EventRow[] } } = JSON.parse(
   readFileSync(new URL("./fixtures/child-threads.json", import.meta.url), "utf8"),
 );
 const CHILD = counter.running.child.id;
@@ -241,6 +241,31 @@ test("this thread's lifecycle reads leave a running child's reread deadline alon
   mock.timers.tick(500);
   await settle();
   assert.equal(bb.readsOf(CHILD), 2, "the child is due 2 s after its own last read");
+  stop();
+});
+
+test("a child's tokens are read with its rows, once per updatedAt: its latest token-usage event alone", async () => {
+  const bb = fakeBb({ events: fixture.events });
+  bb.serveChild(counter.running, [tokenUsage(1, 30_000)]);
+  const source = createThreadSource(bb.sdk, "thr_c_tokens", () => {});
+  const stop = source.subscribe(() => {});
+  await settle();
+  const query = ({ types, order, limit }: EventsQuery) => ({ types, order, limit });
+  assert.deepEqual(bb.eventQueriesOf(CHILD).map(query), [{ types: ["thread/tokenUsage/updated"], order: "desc", limit: "1" }]);
+  assert.deepEqual(usageOf(source, CHILD), { toolUses: 1, totalTokens: 30_000 });
+
+  mock.timers.tick(2_000);
+  bb.serveChild(counter.running, [tokenUsage(1, 30_000), tokenUsage(2, 60_000)]);
+  bb.change("events-appended", CHILD);
+  await settle();
+  assert.equal(bb.readsOf(CHILD), 2, "a running child's rows are reread on the throttle");
+  assert.equal(bb.eventQueriesOf(CHILD).length, 1, "its tokens wait for its updatedAt to move");
+
+  bb.serveChild(counter.settled, [tokenUsage(1, 30_000), tokenUsage(2, 60_000), tokenUsage(3, 90_000)]);
+  bb.change("status-changed", CHILD);
+  await settle();
+  assert.equal(bb.eventQueriesOf(CHILD).length, 2);
+  assert.deepEqual(usageOf(source, CHILD), { toolUses: 2, totalTokens: 90_000 });
   stop();
 });
 
@@ -511,15 +536,17 @@ function fakeBb(init: { rows?: TimelineRow[]; events: EventRow[] }) {
       events: {
         list: async (query: EventsQuery) => {
           state.reads++;
+          state.eventQueries.push(query);
           await held;
           const afterSeq = Number(query.afterSeq ?? -1);
           if (afterSeq === state.failEventsAfter) {
             state.failEventsAfter = null;
             throw new Error("events page failed");
           }
-          return state.events
-            .filter((e) => e.seq > afterSeq && (query.types ?? [e.type]).includes(e.type))
-            .slice(0, Number(query.limit));
+          const matching = (childEvents.get(query.threadId) ?? state.events).filter(
+            (e) => e.seq > afterSeq && (query.types ?? [e.type]).includes(e.type),
+          );
+          return (query.order === "desc" ? matching.toReversed() : matching).slice(0, Number(query.limit));
         },
       },
       timeline: async (query: TimelineQuery) => {
@@ -545,6 +572,7 @@ function fakeBb(init: { rows?: TimelineRow[]; events: EventRow[] }) {
   };
   const timelineReadsOf = new Map<string, number>();
   const childRows = new Map<string, TimelineRow[]>();
+  const childEvents = new Map<string, EventRow[]>();
   const state = {
     sdk,
     rows: init.rows ?? fixture.rows,
@@ -586,10 +614,15 @@ function fakeBb(init: { rows?: TimelineRow[]; events: EventRow[] }) {
     readsOf(threadId: string): number {
       return timelineReadsOf.get(threadId) ?? 0;
     },
-    /** Lists the child as it was at this read, and serves its rows. */
-    serveChild({ child, rows }: ChildRead) {
+    eventQueries: [] as EventsQuery[],
+    eventQueriesOf(threadId: string): EventsQuery[] {
+      return state.eventQueries.filter((query) => query.threadId === threadId);
+    },
+    /** Lists the child as it was at this read, and serves its rows and its own events. */
+    serveChild({ child, rows }: ChildRead, events: EventRow[] = []) {
       state.children = [child];
       childRows.set(child.id, rows);
+      childEvents.set(child.id, events);
     },
     /** The threads with a thread:changed subscription. */
     watched(): (string | undefined)[] {
@@ -713,6 +746,18 @@ function delegatesOf(source: ThreadSource): readonly Delegate[] {
   const { snapshot } = source;
   assert.equal(snapshot.status, "ready");
   return snapshot.status === "ready" ? snapshot.delegates : [];
+}
+
+function usageOf(source: ThreadSource, id: string): Usage | null | undefined {
+  return delegatesOf(source).find((d) => d.id === id)?.usage;
+}
+
+/** The fixture's real token-usage event, at `seq` and carrying `totalTokens`. */
+function tokenUsage(seq: number, totalTokens: number): EventRow {
+  const [event] = usage.events;
+  assert.ok(event.type === "thread/tokenUsage/updated", "fixture premise: a token-usage event");
+  const { tokenUsage } = event.data;
+  return { ...event, id: `evt_usage_${seq}`, seq, data: { ...event.data, tokenUsage: { ...tokenUsage, total: { ...tokenUsage.total, totalTokens } } } };
 }
 
 function statusOf(source: ThreadSource, id: string): DelegateStatus | undefined {

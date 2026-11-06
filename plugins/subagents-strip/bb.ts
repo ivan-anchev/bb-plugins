@@ -41,7 +41,6 @@ export type InterruptRow = Extract<StepRow, { systemKind: "operation" }> & { ope
 /** A background-task item as task events carry it. */
 export type BackgroundTaskItem = Extract<EventRow, { type: "item/backgroundTask/completed" }>["data"]["item"];
 export type TaskStatus = BackgroundTaskItem["taskStatus"];
-export type TaskUsage = NonNullable<BackgroundTaskItem["usage"]>;
 
 type ThreadListRow = Awaited<ReturnType<Threads["list"]>>[number];
 
