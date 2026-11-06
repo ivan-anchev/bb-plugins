@@ -1,42 +1,51 @@
-// The PR page below its header once a guide exists: for now the overview's problem and
-// approach, and who wrote it for which commit.
-import type { GuideRecord } from "../../contract.ts";
+// The PR page below its header once a guide exists: the overview first, then one step at a time,
+// with the controller pinned under the scrolling page.
+import { useRef } from "react";
+import type { GuideRecord, PrDetail } from "../../contract.ts";
+import type { DiffFile } from "../../diff/diff-schema.ts";
 import { useGuide, type GuideTarget } from "../queries.ts";
-import { timeAgo } from "../relative-time.ts";
 import { Notice } from "../ui/notice.tsx";
 import { ReadError } from "../ui/read-error.tsx";
+import { Controller } from "./controller.tsx";
+import { Overview } from "./overview.tsx";
+import { PageTitle } from "./page-text.tsx";
+import { StepPage } from "./step-page.tsx";
+import { useStepKeys, useWalkthrough } from "./use-walkthrough.ts";
 
-export function GuideView({ target }: { target: GuideTarget }) {
+export function GuideView({ target, pr }: { target: GuideTarget; pr: PrDetail }) {
   const guide = useGuide(target);
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
+    <>
       <ReadError read={guide} what="the guide" />
       {guide.isLoading && <Notice>Loading the guide…</Notice>}
-      {guide.data !== undefined && <Overview record={guide.data.record} />}
-    </div>
+      {guide.data !== undefined && <LoadedGuide pr={pr} record={guide.data.record} files={guide.data.files} />}
+    </>
   );
 }
 
-function Overview({ record }: { record: GuideRecord }) {
-  const { problem, approach } = record.guide.overview;
-  return (
-    <article className="grid max-w-[880px] content-start gap-[18px] px-7 pt-[18px] pb-10">
-      <h2 className="text-[21px] font-semibold leading-7 tracking-[-0.01em] text-balance">What this PR does</h2>
-      <p className="max-w-[68ch] text-sm leading-[22px]">{problem}</p>
-      <p className="max-w-[68ch] text-sm leading-[22px]">{approach}</p>
-      <Byline record={record} />
-    </article>
-  );
-}
+type LoadedGuideProps = { pr: PrDetail; record: GuideRecord; files: DiffFile[] };
 
-function Byline({ record }: { record: GuideRecord }) {
-  const submittedAt = new Date(record.submittedAt).toISOString();
+function LoadedGuide({ pr, record, files }: LoadedGuideProps) {
+  // Issue 05 filters these by the view options; the index keeps the reader's place when it does.
+  const steps = record.guide.steps.map((step, index) => ({ index, step }));
+  const scroll = useRef<HTMLDivElement>(null);
+  const title = useRef<HTMLHeadingElement>(null);
+  const walkthrough = useWalkthrough(steps, { scroll, title });
+  useStepKeys(walkthrough);
+  const { place } = walkthrough;
   return (
-    <p className="mt-1.5 text-xs text-muted-foreground">
-      Written by {record.model ?? "the review thread"} for <code className="font-mono">{record.key.headSha.slice(0, 7)}</code>,{" "}
-      <time dateTime={submittedAt} title={new Date(record.submittedAt).toLocaleString()}>
-        {timeAgo(submittedAt, Date.now())}
-      </time>
-    </p>
+    <>
+      <div ref={scroll} className="min-h-0 flex-1 overflow-y-auto">
+        {/* Keyed by page: each page opens fresh, with its rows folded again. */}
+        <article
+          key={place.kind === "overview" ? "overview" : place.step.index}
+          className="grid max-w-[880px] grid-cols-[minmax(0,1fr)] content-start gap-[18px] px-7 pt-[18px] pb-10"
+        >
+          <PageTitle ref={title}>{place.title}</PageTitle>
+          {place.kind === "overview" ? <Overview pr={pr} record={record} files={files} /> : <StepPage step={place.step.step} files={files} />}
+        </article>
+      </div>
+      <Controller walkthrough={walkthrough} />
+    </>
   );
 }

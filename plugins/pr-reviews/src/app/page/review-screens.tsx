@@ -1,12 +1,13 @@
 // The PR page below its header while there is no guide: one screen per review state, each a
 // heading, a line of context, and its actions.
 import type { ReactNode } from "react";
-import { useBbNavigate, type experimental_PluginRpcCallError as RpcCallError } from "@get-bb/plugin-sdk/app";
+import type { experimental_PluginRpcCallError as RpcCallError } from "@get-bb/plugin-sdk/app";
 import type { ReviewState } from "../../contract.ts";
 import { useReviewAction } from "../queries.ts";
 import { timeAgo } from "../relative-time.ts";
 import { Button } from "../ui/button.tsx";
 import { useElapsed } from "./elapsed.ts";
+import { OpenThreadButton } from "./open-thread-button.tsx";
 
 /** The PR the screen acts on. */
 export type PrTarget = { projectId: string; number: number };
@@ -45,7 +46,7 @@ export function RunningScreen({ target, review }: { target: PrTarget; review: Ru
       error={cancel.error}
       actions={
         <>
-          <OpenThreadButton threadId={review.threadId} />
+          <OpenThreadButton threadId={review.threadId} variant="secondary" />
           <Button variant="ghost" disabled={cancel.isPending} onClick={cancel.run}>
             Cancel
           </Button>
@@ -68,7 +69,7 @@ export function NoGuideScreen({ target, review }: { target: PrTarget; review: No
           <Button variant="primary" disabled={nudge.isPending} onClick={nudge.run}>
             Ask it to submit the guide
           </Button>
-          <OpenThreadButton threadId={review.threadId} />
+          <OpenThreadButton threadId={review.threadId} variant="secondary" />
         </>
       }
     >
@@ -93,15 +94,6 @@ function Screen({ title, error, actions, children }: ScreenProps) {
         )}
       </section>
     </div>
-  );
-}
-
-function OpenThreadButton({ threadId }: { threadId: string }) {
-  const navigate = useBbNavigate();
-  return (
-    <Button variant="secondary" onClick={() => navigate.toThread(threadId)}>
-      Open thread
-    </Button>
   );
 }
 
