@@ -2,11 +2,12 @@
 // line, elapsed time) that expands in place to its meta line, outcome, and step
 // trail, with Open thread in its footer. Words come from roster.ts and steps.ts;
 // the trail's lines, steps folded as bb's chat folds them, from work-groups.ts.
-import { useId, useRef, useState, type KeyboardEvent, type TransitionEvent } from "react";
+import { useId, useRef, useState, type KeyboardEvent, type Ref, type TransitionEvent } from "react";
 import { experimental_Icon as Icon, experimental_useAppPanel, useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { StepRow } from "../bb.ts";
 import type { Delegate } from "../delegate.ts";
-import { detailLine, elapsed, isRunning, metaParts } from "../roster.ts";
+import { detailLine } from "../detail-line.ts";
+import { elapsed, isRunning, metaParts } from "../roster.ts";
 import { stepFailed, stepKind, stepLabel } from "../steps.ts";
 import { trailItems, type WorkItem } from "../work-groups.ts";
 import { formatDuration, formatOffset, useNow } from "../clock.ts";
@@ -16,12 +17,29 @@ import { MetaLine, Outcome, StepIcon } from "./DelegateDetail.tsx";
 import { RollingText } from "./Motion.tsx";
 import { followTail, startAtTop } from "./scroll.ts";
 
-type RowProps = { delegate: Delegate; expanded: boolean; onToggle: () => void };
+type RowProps = {
+  delegate: Delegate;
+  /** Read from the history's outline only: its steps and report are on their way. */
+  outlined: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  /** The row's element: the Subagents tab scrolls a row it lands on into view. */
+  ref?: Ref<HTMLLIElement>;
+};
 
-export function DelegateRow({ delegate: d, expanded, onToggle }: RowProps) {
+export function DelegateRow({ delegate: d, outlined, expanded, onToggle, ref }: RowProps) {
   const now = useNow(isRunning(d));
   const bodyId = useId();
   const trigger = useRef<HTMLButtonElement>(null);
+  const [bodyShown, setBodyShown] = useState(expanded);
+  if (expanded && !bodyShown) setBodyShown(true);
+  /** Once grown, the list scrolls just enough to show all of the row, never the page; once shrunk shut, the body unmounts. */
+  const settle = (e: TransitionEvent<HTMLLIElement>) => {
+    // why: the body's grid-rows grow is the only grid-rows transition inside a row.
+    if (e.propertyName !== "grid-template-rows") return;
+    if (expanded) e.currentTarget.scrollIntoView({ block: "nearest" });
+    else setBodyShown(false);
+  };
   const collapseOnEscape = (e: KeyboardEvent) => {
     if (!expanded || e.key !== "Escape") return;
     e.stopPropagation(); // the row's Esc, not the thread's
@@ -29,21 +47,23 @@ export function DelegateRow({ delegate: d, expanded, onToggle }: RowProps) {
     trigger.current?.focus(); // the body goes inert, so focus inside it would be lost
   };
   return (
-    <li className="sr-row" data-st={d.state.status} data-open={expanded || undefined} onKeyDown={collapseOnEscape} onTransitionEnd={expanded ? keepGrownRowInView : undefined}>
+    <li ref={ref} className="sr-row" data-st={d.state.status} data-open={expanded || undefined} onKeyDown={collapseOnEscape} onTransitionEnd={settle}>
       <button ref={trigger} type="button" className="sr-row-head" aria-expanded={expanded} aria-controls={bodyId} onClick={onToggle}>
         <Avatar delegate={d} />
         <span className="sr-row-txt">
           <span className="sr-row-title" title={d.title}>{d.title}</span>
-          <RollingText className="sr-row-detail" text={detailLine(d)} />
+          <RollingText className="sr-row-detail" text={outlined ? LOADING : detailLine(d)} />
         </span>
         <span className="sr-el">{formatDuration(elapsed(d, now))}</span>
         <Icon name="ChevronRight" className="sr-row-chev" aria-hidden />
       </button>
-      {/* why: kept mounted while collapsed so it can grow and shrink, and keeps its Show more state; inert hides it. */}
+      {/* why: the body mounts as the row opens and unmounts once it has shrunk shut, inert meanwhile: a long
+          thread's every row with its report and trail mounted is tens of thousands of elements (live: 40k of a
+          42k-element page), which bb restyles on every update. */}
       <div className="sr-x-wrap">
         <div className="sr-x-clip">
           <div className="sr-x" id={bodyId} inert={!expanded}>
-            <RowDetail delegate={d} />
+            {bodyShown && (outlined ? <p className="sr-note sr-x-loading">{LOADING}</p> : <RowDetail delegate={d} />)}
           </div>
         </div>
       </div>
@@ -105,6 +125,7 @@ function opens(d: Delegate): boolean {
 }
 
 const LINES_SHOWN = 6;
+const LOADING = "Loading its steps and report…";
 
 /**
  * The last six lines on a rail, oldest first, "Show N earlier" above them: a line is a step, or a
@@ -178,10 +199,4 @@ function StartingStep() {
       <span className="sr-stx">Starting…</span>
     </li>
   );
-}
-
-/** When a row finishes growing, the list scrolls just enough to show all of it; never the page. */
-function keepGrownRowInView(e: TransitionEvent<HTMLLIElement>) {
-  // why: the body's grid-rows grow is the only grid-rows transition inside a row.
-  if (e.propertyName === "grid-template-rows") e.currentTarget.scrollIntoView({ block: "nearest" });
 }

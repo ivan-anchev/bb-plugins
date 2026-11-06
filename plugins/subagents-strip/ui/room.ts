@@ -11,9 +11,16 @@ export function trackRoomAbove(wrap: HTMLElement | null): (() => void) | undefin
   // why: React's ref type allows null, though with a cleanup returned React 19 never passes it.
   if (!wrap) return;
   const pane = clippingAncestor(wrap);
+  let room = -Infinity;
   const measure = () => {
     const paneTop = pane ? pane.getBoundingClientRect().top : 0; // no pane: the viewport's top
-    wrap.style.setProperty("--sr-room", `${wrap.getBoundingClientRect().bottom - paneTop}px`);
+    const next = wrap.getBoundingClientRect().bottom - paneTop;
+    // why: a list at its cap resizes with the room, and bb's chat keeps its scroll place by moving the strip a
+    // fraction of a pixel, which moves the room again: live, a loop restyling the page every frame. Only a
+    // move of a pixel or more counts.
+    if (Math.abs(next - room) < 1) return;
+    room = next;
+    wrap.style.setProperty("--sr-room", `${room}px`);
   };
   measure();
   // why: anything that moves the summary row (the composer growing, the pane resizing) resizes one of these.

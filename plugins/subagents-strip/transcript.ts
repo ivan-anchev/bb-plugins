@@ -11,7 +11,7 @@ export const TRANSCRIPT_TAB = {
   availability: "action",
 } as const satisfies ExperimentalTabReference;
 
-export type TranscriptParams = { delegateId: DelegateId };
+type TranscriptParams = { delegateId: DelegateId };
 
 export function transcriptParams(delegateId: DelegateId): TranscriptParams {
   return { delegateId };

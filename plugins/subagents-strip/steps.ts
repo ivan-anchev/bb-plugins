@@ -27,7 +27,7 @@ export function trailSteps(steps: readonly StepRow[]): StepRow[] {
  */
 export function stepLabel(row: StepRow): string {
   switch (row.kind) {
-    case "conversation": return firstLine(row.text);
+    case "conversation": return firstLine(messageText(row.text) ?? OPENED_PREVIEW);
     case "system": return row.title;
     case "work": return workLabel(row);
     default: return unhandled(row);
@@ -39,7 +39,7 @@ export type StepKind = "command" | "read" | "edit" | "search" | "web" | "tool" |
 
 export function stepKind(row: StepRow): StepKind {
   switch (row.kind) {
-    case "conversation": return "message";
+    case "conversation": return messageText(row.text) === null ? "web" : "message";
     case "system": return "note";
     case "work": return workStepKind(row);
     default: return unhandledKind(row);
@@ -50,6 +50,17 @@ export function stepKind(row: StepRow): StepKind {
 export function stepFailed(row: StepRow): boolean {
   if (row.kind !== "work") return false;
   return row.status === "error" || (row.workKind === "command" && row.exitCode !== null && row.exitCode !== 0);
+}
+
+/**
+ * A message's text without bb's `::browser-preview{…}` directive lines, which bb's chat draws as a
+ * live browser view; null when the message is only the directive, which reads "Opened a browser preview".
+ */
+export function messageText(text: string): string | null {
+  const lines = text.split("\n");
+  const kept = lines.filter((line) => !BROWSER_PREVIEW.test(line));
+  if (kept.length === lines.length) return text;
+  return kept.join("\n").trim() === "" ? null : kept.join("\n");
 }
 
 /** The first non-empty line of markdown text, without heading, list, bold, or code marks. */
@@ -66,11 +77,12 @@ export function isHandback(row: TimelineRow): row is Extract<TimelineRow, { work
  * A finished delegate's report when its provider hands none back: its last
  * non-blank assistant message, which leaves the steps so the row and the
  * transcript show it once, as the outcome (as transcriptSteps hides the handback).
+ * Its browser-preview line is dropped; a message that only opened a preview stays a step.
  */
 export function splitReport(steps: readonly StepRow[]): { steps: readonly StepRow[]; report: string | null } {
   const message = steps.findLast(isReportMessage);
   if (!message) return { steps, report: null };
-  return { steps: steps.filter((row) => row !== message), report: message.text };
+  return { steps: steps.filter((row) => row !== message), report: messageText(message.text) };
 }
 
 /** A reasoning row: the transcript shows it as a collapsed Thinking block; the trail leaves it out. */
@@ -113,6 +125,9 @@ export function isExploration(row: WorkRow): boolean {
 }
 
 // ---------------------------------------------------------------- layer 2
+
+const BROWSER_PREVIEW = /^\s*::browser-preview\{[^}\n]*\}\s*$/u;
+const OPENED_PREVIEW = "Opened a browser preview";
 
 // why: exhaustive, so a work kind a new SDK adds fails to compile here instead of showing its raw kind.
 function workLabel(row: WorkRow): string {
@@ -202,8 +217,8 @@ function presentationTitle(row: unknown): string | null {
   return typeof presentation.title === "string" ? presentation.title : null;
 }
 
-// why: a blank message cannot be a report; the one before it can.
+// why: a blank message cannot be a report, nor one that only opened a browser preview; the one before it can.
 function isReportMessage(row: StepRow): row is AssistantRow {
-  return row.kind === "conversation" && row.role === "assistant" && row.text.trim() !== "";
+  return row.kind === "conversation" && row.role === "assistant" && row.text.trim() !== "" && messageText(row.text) !== null;
 }
 

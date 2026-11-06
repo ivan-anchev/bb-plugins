@@ -14,7 +14,7 @@ import {
 import type { ReasoningRow, StepRow } from "../bb.ts";
 import type { Delegate } from "../delegate.ts";
 import { elapsed, isRunning, metaParts, statusWord } from "../roster.ts";
-import { isReasoning, stepFailed, stepKind, stepLabel } from "../steps.ts";
+import { isReasoning, messageText, stepFailed, stepKind, stepLabel } from "../steps.ts";
 import { formatDuration, formatOffset, useNow } from "../clock.ts";
 import { useThreadDelegates } from "../source.ts";
 import { parseTranscriptParams, TRANSCRIPT_TAB } from "../transcript.ts";
@@ -117,7 +117,11 @@ type StepProps = { row: StepRow; sinceStart: number; live: boolean };
 
 /** A message as markdown, reasoning as a Thinking line, a command with its output, anything else as one line. */
 function Step({ row, sinceStart, live }: StepProps) {
-  if (row.kind === "conversation") return <Markdown className="sr-md sr-tx-msg" content={row.text} />;
+  if (row.kind === "conversation") {
+    const text = messageText(row.text);
+    // why: a message that only opened a browser preview has nothing to read; it is one line, as in the trail.
+    return text === null ? <StepLine row={row} sinceStart={sinceStart} live={live} /> : <Markdown className="sr-md sr-tx-msg" content={text} />;
+  }
   if (isReasoning(row)) return <Thinking row={row} live={live} />;
   if (row.kind === "work" && row.workKind === "command") return <Command row={row} sinceStart={sinceStart} live={live} />;
   return <StepLine row={row} sinceStart={sinceStart} live={live} />;

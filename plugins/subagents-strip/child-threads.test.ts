@@ -23,7 +23,8 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { ChildThread, TimelineRow } from "./bb.ts";
 import { childDelegate, childrenInView, threadRunning } from "./child-threads.ts";
-import { detailLine, metaParts } from "./roster.ts";
+import { detailLine } from "./detail-line.ts";
+import { metaParts } from "./roster.ts";
 
 type Read = { child: ChildThread; rows: TimelineRow[] };
 const fixture: {
@@ -87,10 +88,10 @@ test("an idle child whose turn completed reports its closing message, which leav
   assert.equal(d.usage, null);
 });
 
-test("a running child is running, its detail its latest command, and its brief is not a step", () => {
+test("a running child is running, its detail its latest line in bb's words, and its brief is not a step", () => {
   const d = childDelegate(running.child, running.rows, parentRows);
   assert.deepEqual(d.state, { status: "running" });
-  assert.equal(detailLine(d), "Running sleep 40 && echo one");
+  assert.equal(detailLine(d), "Running 1 command"); // the trail's live line, never the raw command
   assert.ok(!d.steps?.some((row) => row.kind === "conversation" && row.role === "user"));
   assert.ok(running.rows.some((row) => row.kind === "conversation" && row.role === "user"), "fixture premise: the brief is a row");
 });
@@ -173,7 +174,7 @@ test("a reused child stays one delegate of its spawning turn: running again, the
   assert.deepEqual([d1, d2, d3].map((d) => [d.id, d.turnId, d.startedAt]), Array(3).fill(["thr_tfst24jjhy", "daebae5ddb-t2", first.child.createdAt]));
   assert.equal(d1.state.status === "completed" && d1.state.report, "first done.");
   assert.deepEqual(d2.state, { status: "running" });
-  assert.equal(detailLine(d2), "Running sleep 30 && echo three");
+  assert.equal(detailLine(d2), "Running 1 command");
   const lastTurn = last.rows.findLast((row) => row.kind === "turn");
   assert.ok(lastTurn?.kind === "turn");
   assert.deepEqual(d3.state, { status: "completed", endedAt: lastTurn.completedAt, report: "third done." });

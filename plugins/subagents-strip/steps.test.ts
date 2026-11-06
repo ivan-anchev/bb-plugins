@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { StepRow, TimelineRow, WorkRow } from "./bb.ts";
-import { childSteps, firstLine, isHandback, isReasoning, splitReport, stepFailed, stepKind, stepLabel, trailSteps, transcriptSteps } from "./steps.ts";
+import { childSteps, firstLine, isHandback, isReasoning, messageText, splitReport, stepFailed, stepKind, stepLabel, trailSteps } from "./steps.ts";
 
 // The real child rows of the fixture's delegates (see normalise.test.ts for how it was taken).
 const fixture: { rows: TimelineRow[] } = JSON.parse(readFileSync(new URL("./fixtures/claude-thread.json", import.meta.url), "utf8"));
@@ -18,6 +18,24 @@ test("a tool step reads as its title, without a verb, whether it runs or not", (
 test("an assistant message reads as its first line; reasoning as its title", () => {
   assert.equal(stepLabel(first((r) => r.kind === "conversation")), "I'll start by reading the emil-prototype skill and its picker docs.");
   assert.equal(stepLabel(first((r) => r.kind === "system")), "Thought");
+});
+
+// A subagent's whole message in thr_24dxq5xhph (delegation daddeb4148-i3): bb's chat draws it as a live browser view.
+const PREVIEW = '::browser-preview{session="802128db-7efa-49f9-8664-c509a6160212"}';
+
+test("a message that is only the browser-preview directive reads as Opened a browser preview", () => {
+  const message = saying(PREVIEW);
+  assert.equal(messageText(PREVIEW), null);
+  assert.equal(stepLabel(message), "Opened a browser preview");
+  assert.equal(stepKind(message), "web");
+});
+
+test("a mixed message drops the directive line and keeps the rest; other messages are left as they are", () => {
+  const mixed = `I opened the strip.\n${PREVIEW}\nIt shows 41 subagents.`;
+  assert.equal(messageText(mixed), "I opened the strip.\nIt shows 41 subagents.");
+  assert.equal(stepLabel(saying(`${PREVIEW}\n\nThe list is open.`)), "The list is open.");
+  assert.equal(messageText("Use ::browser-preview{…} to show it."), "Use ::browser-preview{…} to show it.", "only a line that is the directive");
+  assert.equal(messageText(""), "");
 });
 
 // Live rows from the fixtures' midrun captures: a Codex child mid `sleep`, a Claude Code child blocked on
@@ -196,6 +214,20 @@ test("splitReport skips a blank message and reports the last message even when s
   assert.deepEqual(splitReport([one, sleep, blank]), { steps: [sleep, blank], report: "1" });
 });
 
+test("splitReport passes over a message that only opened a browser preview: it stays a step, the message before reports", () => {
+  const [one, sleep] = counter;
+  assert.ok(one.kind === "conversation");
+  const preview: StepRow = { ...one, id: "preview", text: PREVIEW };
+  assert.deepEqual(splitReport([one, sleep, preview]), { steps: [sleep, preview], report: "1" });
+});
+
+test("splitReport drops the browser-preview line from a mixed closing message's report", () => {
+  const [one, sleep] = counter;
+  assert.ok(one.kind === "conversation");
+  const closing: StepRow = { ...one, id: "closing", text: `Counted to six.\n${PREVIEW}` };
+  assert.deepEqual(splitReport([sleep, closing]), { steps: [sleep], report: "Counted to six." });
+});
+
 test("splitReport with no assistant message reports nothing and keeps every step", () => {
   const [one, sleep] = counter;
   assert.ok(one.kind === "conversation" && one.role === "assistant");
@@ -218,6 +250,13 @@ function first(match: (row: StepRow) => boolean): StepRow {
   const row = steps.find(match);
   assert.ok(row, "fixture premise: a step of this kind exists");
   return row;
+}
+
+/** The fixture's first message, saying `text` instead. */
+function saying(text: string): StepRow {
+  const message = first((r) => r.kind === "conversation");
+  assert.ok(message.kind === "conversation");
+  return { ...message, text };
 }
 
 function childRowsOf(row: TimelineRow): TimelineRow[] {

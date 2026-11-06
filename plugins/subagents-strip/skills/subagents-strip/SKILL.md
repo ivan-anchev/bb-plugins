@@ -1,41 +1,66 @@
 ---
 name: subagents-strip
-description: Explain the Subagents Strip, the live line above a bb thread's composer that counts the thread's subagents and child threads and how long they have taken, and opens into one row per subagent that expands to its report and steps and opens its full transcript in the side panel or its own thread. Use when the user asks what the strip shows, why a subagent reads as running or done there, or why no strip appears.
+description: Explain the Subagents Strip, the live line above a bb thread's composer that counts the latest prompt's subagents and child threads, plus any still running, and how long they have taken, and opens into one row per subagent that expands to its report and steps and opens its full transcript in the side panel or its own thread; a Subagents tab in the side panel lists every subagent in the thread, grouped by the prompt it was launched after. Use when the user asks what the strip shows, why a subagent reads as running or done there, or why no strip appears.
 ---
 
 # Subagents Strip
 
 The Subagents Strip plugin draws one line above the composer of a thread whose
-agent has started subagents or that has child threads. Clicking the line opens a list of the subagents
-above it; clicking again closes it. It has no commands and no settings.
+agent has started subagents or that has child threads. Clicking the line opens a list above it
+of your latest prompt's subagents, plus any still running from an earlier prompt; clicking
+again closes it. Every subagent in the thread, by prompt, is in the **Subagents** tab of the
+side panel, which the list's "N previous subagents" row opens. It has no commands and no
+settings.
 
 ## What it shows
 
 - One provider icon per subagent (the three most recent, then "+N"), each with
   a status dot: blue running, green done, red failed, grey stopped.
-- "N subagents", then the counts in a fixed order: running, done, failed,
-  stopped. A count of zero is left out.
-- The wall-clock time from the first subagent's start to the last one's end, or
-  to now while any runs. It ticks once a second.
+- "N subagents", then what needs attention: running, failed, stopped, in that
+  order ("41 subagents · 3 running · 1 failed · 1 stopped"). A count of zero is
+  left out, and "done" shows only when nothing else is left ("5 subagents ·
+  5 done"). It counts the subagents the list shows: the latest batch (see The
+  Subagents tab) and any earlier one still running.
+  On a narrow strip the time moves up beside "N subagents", so the counts keep
+  to one line and the strip to two.
+- The latest batch's time: from its first subagent's start to its last one's
+  end, or to now while any of that batch's subagents runs, when it ticks once a
+  second. It never spans batches.
 - When every subagent has finished, the line dims until it is hovered,
   focused, or opened.
 
 ## The list
 
-One row per subagent, oldest at the top, so the newest sits nearest the
-composer. Each row shows:
+The list holds your latest prompt's subagents and any subagent still running
+from an earlier prompt, oldest first, so the newest sits nearest the composer.
+It has no batch labels.
+
+When the thread has subagents the list leaves out, its first row is a quiet
+"N previous subagents", followed by how many of them failed or stopped when
+any did ("37 previous subagents · 1 failed · 1 stopped"), with a panel icon at
+the right. N counts every subagent not in the list, so the list's count plus N
+is the Subagents tab's total. A thread whose subagents are all in the list has
+no such row.
+
+- Clicking the row opens the Subagents tab, or switches to it when it is
+  already open; the list stays open. The row reads as pressed while the
+  side panel shows the tab.
+- Clicking "1 failed" or "1 stopped" opens the tab on the newest subagent
+  that ended that way, with its batch open and its row expanded.
+
+Each row in the list shows:
 
 - The provider icon with the same status dot.
 - The subagent's description. A Codex subagent, which bb names by its path
   ("/root/counter_e"), shows its agent name ("counter_e"). A child thread
   shows its thread title.
-- While it runs, its latest step, led by its verb: "Ran" and the command,
-  "Read" or "Edited" and the file, "Searched" and the query, "Fetched" and
-  the page; a tool by its title, or the first line of what it said
-  ("Starting…" before its first step). Reasoning is skipped. A step still
-  under way reads in the present tense ("Running sleep 9", "Reading
-  README.md") and switches to the past once it ends, in the trail and the
-  transcript too.
+- While it runs, its trail's latest line in bb's compact words ("Running 7
+  commands, exploring 2 files"; a lone step counted the same way, "Running 1
+  command"), never the raw command; a question or approval as its own line
+  ("Asking a question"), or the first line of what it said ("Starting…"
+  before its first step). Reasoning is skipped. In the trail and the
+  transcript a step still under way reads in the present tense ("Running
+  sleep 9", "Reading README.md") and switches to the past once it ends.
 - Once it finishes, the first line of its report ("Finished without a report"
   when it handed none back), the first line of its error, or "Stopped". A
   subagent that hands nothing back, like a Codex one, reports its last
@@ -51,7 +76,7 @@ change is instant; the dots and words still show each state.
 
 Clicking a row expands it in place; clicking another row closes the first, so
 one is open at a time. Esc, or clicking the row again, closes it and leaves
-focus on the row. The expanded row shows, top to bottom:
+focus on the row. A closed row forgets its "Show more" and "Show N earlier". The expanded row shows, top to bottom:
 
 - A meta line: "started 13:58", "ran 4m 48s" once it has finished, the step
   count (reasoning not counted), and, when a background-task event reported
@@ -73,6 +98,9 @@ focus on the row. The expanded row shows, top to bottom:
   - Where bb's chat shows it still running (a pending delegation row, a child
     thread's turn under way), only neighbouring steps of one kind fold
     ("Running 2 commands"); a message still folds the whole run before it.
+  - A message that only opened a browser preview (bb's `::browser-preview`
+    directive, which bb's chat draws as a live browser view) reads "Opened a
+    browser preview"; in a longer message the directive line is left out.
   - Messages, questions, approvals, and a `bb thread tell` that went through
     (bb shows it as a message) are their own lines and split the runs. A tell
     is recognised in its plain form only, one command of plain or quoted
@@ -96,6 +124,49 @@ focus on the row. The expanded row shows, top to bottom:
 The body scrolls inside a fixed height. Below it, **Open thread** and "Esc to
 collapse" (the hint is hidden on a narrow strip). A subagent whose provider
 sends no steps has no Open thread.
+
+## The Subagents tab
+
+The Subagents tab lists every subagent in the thread. Its header is the
+thread's census: "41 subagents" over "3 running · 1 failed · 1 stopped" (or
+"41 done"). Clicking a count opens the newest subagent it counts, the way the
+list's "1 failed" does. There is one Subagents tab per thread.
+
+Below the header the subagents are in batches, newest first, back to the
+thread's first. A batch is one of your prompts and every subagent launched
+after it until your next prompt, however many turns the agent took: the turns
+it takes on its own (Claude Code resuming when a background agent finishes)
+and the ones a bb notice starts ("reviewer 05 r1 completed") fold into the
+prompt before them and are never labels. A prompt you send while the agent is
+still working, queued or steered into its turn, ends the batch before it: what
+the agent launches after you sent it is the new prompt's. Subagents launched
+before your first prompt share one batch under the thread's first message, or
+"Before the first prompt" when there is none. A prompt that launched nothing
+has no batch.
+
+Each batch starts with a quiet label, small and muted, with no card until you
+point at it:
+
+- a caret that opens or closes the batch;
+- the prompt's clock time ("11:55");
+- the prompt's first line, without wrapping quotes or a filler lead-in ("ok,",
+  "now,", "lets", "so", "please"), its full text in the tooltip;
+- the batch's counts ("1 running, 8 done"), running and failed in their
+  colours; on a narrow tab, under the prompt.
+
+The latest batch starts open, and so does any older batch with a subagent
+still running; every other batch starts closed, its counts still showing an
+old failure in red. Your clicks override that until you reload; they are kept
+by thread and by prompt, so switching tabs or history arriving never moves
+them. The tab remembers them for the eight threads you last clicked in.
+While a batch's rows scroll under its label, the label stays at the top of
+the tab, with a hairline beneath it. The latest batch is not marked as the
+one in the strip.
+
+Each batch holds one row per subagent launched in it, oldest first, the same
+row as the list's, expanding the same way; its Open thread opens the
+transcript tab beside the Subagents tab, which stays open. The tab stays live
+while it shows.
 
 ## The transcript tab
 
@@ -127,8 +198,10 @@ expand the same subagent there, in the same order and words:
   the agent handed back.
 
 Inside a group, a step reads as it does on the row's trail ("Ran cat
-notes.md"), not as bb's compact form ("Read notes.md"). A message that is a
-bb chat directive, such as a browser preview, shows as its raw text.
+notes.md"), not as bb's compact form ("Read notes.md"). A message that only
+opened a browser preview is one line, "Opened a browser preview"; in a longer
+message the directive line is left out. Other bb chat directives show as
+their raw text.
 
 While the subagent runs, new lines appear at the end and the tab stays at the
 bottom unless you scroll up. Its latest line is live as on the row: it
@@ -148,11 +221,26 @@ Two kinds of subagent appear, side by side in one list:
 - **Child threads**: bb threads whose parent is this thread, such as one made
   with `bb thread spawn --parent-thread <this thread>` or `--parent-self`.
 
-The strip shows those of the most recent turn that started any, plus any older
-ones still running. A child thread belongs to the parent turn that was under
-way when it was created. Left out: subagents a subagent starts, a child's own
-child threads, hidden and archived child threads, and workflow workers, which
-are not children of the thread.
+The Subagents tab shows every one in the thread, in the batch of the prompt it
+was launched after; the strip shows the latest batch's and any still running.
+A child thread belongs to the batch of the parent turn that was under way when
+it was created.
+
+The live updates read only the thread's latest timeline segments (the last
+20) in full. The history before them is read on opening the thread in outline
+(bb's deferred content: every subagent and message, without a subagent's
+steps and report; about 0.65 MB for a thread of 45 subagents), so "N previous
+subagents" is right before anything opens. While the Subagents tab shows, it reads
+that history in full, page by page back to the first row; meanwhile an earlier
+row reads "Loading its steps and report…". Switching to another tab or closing
+the panel before it finishes stops the read; showing the tab again starts it
+over. Once read in full it stays read. History bb rewrites or compacts is
+read again. Child
+threads are read the same deferred way, which leaves out nothing a row shows.
+
+Left out: subagents a subagent starts, a child's own child threads, hidden and
+archived child threads, and workflow workers, which are not children of the
+thread.
 
 A child thread created while this thread is idle and nothing else changes
 appears on the thread's next change (a turn, a delegate starting or settling,

@@ -26,7 +26,7 @@ export type Delegate = {
 
 // why: a union, not a flag plus an optional threadId, so a child thread always names the thread it opens.
 // `threadId` repeats `id` on purpose: `id` is opaque identity (keys, tab params), `threadId` is the bb thread.
-export type DelegateOrigin =
+type DelegateOrigin =
   /** A delegation row in this thread's timeline; its transcript is its child rows. */
   | { kind: "delegation" }
   /** A bb thread whose parentThreadId is this thread. */
@@ -47,8 +47,32 @@ export type DelegateState =
 
 export type DelegateStatus = DelegateState["status"];
 
+/** A parent turn: when it began and the messages sent into it, from which the strip draws its batches. */
+export type Turn = {
+  id: string;
+  /** When its first row began: its first message, or its work when no message started it. */
+  startedAt: number;
+  /**
+   * In order: the one that started it, then any sent while it ran (a steer). [] = the agent continued on its
+   * own, as Claude Code does when a background agent finishes.
+   */
+  messages: readonly TurnMessage[];
+};
+
+/**
+ * A message sent into a turn: the user's own prompt, which starts a batch from its own time, or another
+ * message: an agent's, or a bb system notice, as what it reports ("reviewer 05 r1 completed").
+ */
+export type TurnMessage = { id: string; at: number; from: "user" | "other"; text: string };
+
 /** What `useThreadDelegates` hands every component. */
 export type ThreadDelegates =
   | { status: "loading" }
-  | { status: "ready"; delegates: readonly Delegate[] }
+  | {
+      status: "ready";
+      delegates: readonly Delegate[];
+      turns: readonly Turn[];
+      /** Delegates read from the outline only: their steps and report wait for the full history. */
+      outlined: ReadonlySet<DelegateId>;
+    }
   | { status: "failed"; message: string };

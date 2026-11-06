@@ -4,7 +4,7 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "A live strip above the composer that counts the thread's subagents and child threads and how long they have taken, and opens into one row per subagent that expands to its report and latest steps and opens its full transcript in the side panel or its own thread.",
+  "description": "A live strip above the composer that counts the latest prompt's subagents and child threads, plus any still running, and how long they have taken, and opens into one row per subagent that expands to its report and latest steps and opens its full transcript in the side panel or its own thread; a Subagents tab in the side panel lists every subagent in the thread, grouped by the prompt it was launched after.",
   "keywords": [
     "bb-plugin",
     "subagents",
@@ -22,7 +22,7 @@
   },
   "bb": {
     "name": "Subagents Strip",
-    "description": "A live strip above the composer that counts the thread's subagents and child threads and how long they have taken, and opens into one row per subagent that expands to its report and latest steps and opens its full transcript in the side panel or its own thread.",
+    "description": "A live strip above the composer that counts the latest prompt's subagents and child threads, plus any still running, and how long they have taken, and opens into one row per subagent that expands to its report and latest steps and opens its full transcript in the side panel or its own thread; a Subagents tab in the side panel lists every subagent in the thread, grouped by the prompt it was launched after.",
     "branding": {
       "icon": "UsersRound"
     },
