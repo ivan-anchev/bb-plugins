@@ -5,9 +5,10 @@ import { FileIcon } from "./file-icon.tsx";
 
 type StepFileListProps = { files: StepFile[]; onJump(path: string): void };
 
+// `minmax(0,1fr)`: an implicit `auto` track would widen every row to the longest unwrapped path.
 export function StepFileList({ files, onJump }: StepFileListProps) {
   return (
-    <ul aria-label="Files in this step" className="grid gap-1.5">
+    <ul aria-label="Files in this step" className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
       {files.map((file) => (
         <li key={file.path}>
           <FileRow file={file} onJump={onJump} />
