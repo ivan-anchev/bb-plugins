@@ -10,7 +10,7 @@ import { timeAgo } from "../relative-time.ts";
 import { Button } from "../ui/button.tsx";
 import { Prose } from "../ui/prose.tsx";
 import { HunkDiff } from "./hunk-block.tsx";
-import { PROSE } from "./page-text.tsx";
+import { PROSE_TYPE } from "./page-text.tsx";
 import { Priority } from "./priority.tsx";
 import { ShowToggle } from "./show-toggle.tsx";
 
@@ -33,8 +33,8 @@ export function Overview({ pr, record, files, findings, steps, onOpenStep, hidde
   return (
     <>
       {pr.body.trim() !== "" && <AuthorDescription author={pr.author} body={pr.body} />}
-      <Prose text={overview.problem} className={PROSE} />
-      <Prose text={overview.approach} className={PROSE} />
+      <Prose text={overview.problem} className={PROSE_TYPE} />
+      <Prose text={overview.approach} className={PROSE_TYPE} />
       {overview.behaviour !== null && <BeforeAfter behaviour={overview.behaviour} />}
       {findings.length > 0 && (
         <Section title="Findings">
@@ -71,7 +71,7 @@ function AuthorDescription({ author, body }: { author: string; body: string }) {
         </Button>
       </div>
       {open && (
-        <section className={`${CONTAIN_BODY} max-w-[75ch] rounded-lg bg-muted px-4 py-3.5 text-[13.5px] leading-[21px]`}>
+        <section className={`${CONTAIN_BODY} rounded-lg bg-muted px-4 py-3.5 text-[13.5px] leading-[21px]`}>
           <p className="text-xs text-subtle-foreground">{author} wrote</p>
           <Prose text={body} />
         </section>
