@@ -18,7 +18,10 @@ export function collapseAllFolders(model: FileTree): void {
   for (const path of expandedDirectoriesOf(model).reverse()) setFolderExpanded(model, path, false);
 }
 
-/** Opens folders level by level, stopping below `maxDepth` (1 = top-level folders only; 0 opens none). */
+/**
+ * Opens folders level by level, stopping below `maxDepth` path segments. A flattened chain such
+ * as "src/app/" is depth 2, so a `maxDepth` of 1 leaves it closed; 0 opens none.
+ */
 export function expandAllFolders(model: FileTree, maxDepth = Number.POSITIVE_INFINITY): void {
   const expanded = new Set<string>();
   const withinDepth = (path: string) => depthOf(path) <= maxDepth;
