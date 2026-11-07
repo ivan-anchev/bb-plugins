@@ -1,8 +1,11 @@
-// The PR page header: number and title, author and `head → base`, and a quiet GitHub link.
+// The PR page header: number and title, author and `head → base`, and quiet "Open thread" (when a
+// review thread exists) and "GitHub" actions.
 import { UrlLink } from "@get-bb/plugin-sdk/app";
 import type { PrDetail } from "../../contract.ts";
+import { buttonClass } from "../ui/button.tsx";
+import { OpenThreadButton } from "./open-thread-button.tsx";
 
-export function PrHeader({ pr }: { pr: PrDetail }) {
+export function PrHeader({ pr, threadId }: { pr: PrDetail; threadId: string | null }) {
   return (
     <header className="flex shrink-0 items-start justify-between gap-4 px-7 pt-4 pb-3.5">
       <div className="min-w-0">
@@ -16,12 +19,13 @@ export function PrHeader({ pr }: { pr: PrDetail }) {
           </span>
         </p>
       </div>
-      <UrlLink
-        href={pr.url}
-        className="inline-flex h-7 shrink-0 items-center rounded-md px-2 text-xs text-muted-foreground transition-colors duration-150 hover:bg-state-hover hover:text-foreground hover:duration-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-      >
-        GitHub
-      </UrlLink>
+      <div className="flex shrink-0 gap-1">
+        {threadId !== null && <OpenThreadButton threadId={threadId} variant="ghost" size="small" />}
+        <UrlLink href={pr.url} className={buttonClass("ghost", "small")}>
+          GitHub
+        </UrlLink>
+      </div>
     </header>
   );
 }
+

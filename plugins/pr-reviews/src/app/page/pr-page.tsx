@@ -1,6 +1,6 @@
 // navPanel component: the chosen PR's page, its header above one screen per review state.
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
-import type { ReviewState } from "../../contract.ts";
+import type { PrDetail, ReviewState } from "../../contract.ts";
 import { usePullRequest } from "../queries.ts";
 import { GuideView } from "../guide/guide-view.tsx";
 import { parseRoute } from "../routes.ts";
@@ -24,15 +24,18 @@ function PullRequestPage({ projectId, number }: { projectId: string; number: num
       {pull.isLoading && <Notice>Loading pull request…</Notice>}
       {pull.data !== undefined && (
         <>
-          <PrHeader pr={pull.data.pr} />
-          <ReviewScreen target={{ projectId, number }} review={pull.data.review} />
+          <PrHeader pr={pull.data.pr} threadId={reviewThreadOf(pull.data.review)} />
+          <ReviewScreen target={{ projectId, number }} pr={pull.data.pr} review={pull.data.review} />
         </>
       )}
     </div>
   );
 }
 
-function ReviewScreen({ target, review }: { target: PrTarget; review: ReviewState }) {
+// Every state but "none" has a review thread.
+const reviewThreadOf = (review: ReviewState) => (review.kind === "none" ? null : review.threadId);
+
+function ReviewScreen({ target, pr, review }: { target: PrTarget; pr: PrDetail; review: ReviewState }) {
   switch (review.kind) {
     case "none":
       return <NoneScreen target={target} />;
@@ -44,7 +47,7 @@ function ReviewScreen({ target, review }: { target: PrTarget; review: ReviewStat
     case "ready":
     case "stale":
       // Keyed: a new guide is a new view.
-      return <GuideView key={review.guideHeadSha} target={{ ...target, headSha: review.guideHeadSha }} />;
+      return <GuideView key={review.guideHeadSha} target={{ ...target, headSha: review.guideHeadSha }} pr={pr} />;
     default:
       return review satisfies never;
   }

@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request, and a badge counting ready guides), how Start review runs a review thread in a new worktree that finishes with the submit_review agent tool, its Review instructions setting, where its data comes from (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request, and a badge counting ready guides), how a guide reads (the What this PR does overview and the step-by-step walkthrough with its ←/→ and J/K keys), how Start review runs a review thread in a new worktree that finishes with the submit_review agent tool, its Review instructions setting, where its data comes from (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -34,8 +34,9 @@ remembered project that read **Guide ready**, and no badge at zero.
 ## The page
 
 Clicking a row opens that PR's page. Its header shows `#number` and the title,
-the author, `head-branch → base-branch`, and a **GitHub** link that opens the
-PR on github.com. Below it, one screen per review state:
+the author, `head-branch → base-branch`, **Open thread** (goes to the review
+thread; shown once a review has started) and **GitHub** (opens the PR on
+github.com). Below it, one screen per review state:
 
 - **No guide yet**, with **Start review**.
 - **Writing the guide**, while the review thread works: a spinner, the time
@@ -48,14 +49,41 @@ PR on github.com. Below it, one screen per review state:
   current commit stopped without submitting one: **Ask it to submit the
   guide** messages the thread to finish (the row reads Writing guide… while it
   answers), and **Open thread** shows what it said.
-- **The guide**, once one exists: for now "What this PR does", with the
-  guide's problem and approach, and a byline: "Written by <model> for <short
-  commit>, <how long ago>" ("the review thread" when bb reported no model).
-  A PR whose newest guide is for an older commit shows that guide the same
-  way; the "new commits" banner and Update guide are not built yet.
+- **The guide**, once one exists (see "Reading a guide" below). A PR whose
+  newest guide is for an older commit shows that guide the same way; the "new
+  commits" banner and Update guide are not built yet.
 
 The page and the rows follow the review thread on their own; no refresh is
 needed. Archiving or deleting a review thread returns the PR to No guide yet.
+
+## Reading a guide
+
+A guide opens on **What this PR does**:
+
+- **Show the author's description** expands the PR's own body, rendered as
+  markdown under "<author> wrote". It is hidden when the PR has no body.
+- The guide's problem and approach, then **Before** and **After** lists when
+  the change alters behaviour.
+- **Not in this guide**: each hunk or set of files the agent left out, with
+  its reason. Show expands the hunk's diff, or lists the files.
+- A byline: "Written by <model> for <short commit>, <how long ago>" ("the
+  review thread" when bb reported no model).
+
+The bar at the bottom reads **Start the walkthrough · N steps**. Each step
+shows its title, its explanation, **For you to decide** when the agent left the
+reader a decision, then its hunks: each in bb's own diff view (the component
+and code theme Code Explorer uses) under its file path. A hunk the agent
+collapsed is one line, its path and reason, with Show. A file with no text
+changes (a binary file, a pure rename) is one line saying so.
+
+On a step the bar reads `‹ n / N ›`. **→** or **J** goes to the next step,
+**←** or **K** to the previous one; Next on the last step returns to the
+overview, and Previous on the first step does too. Hovering or focusing an
+arrow shows where it leads ("What this PR does" before step 1, "Back to the
+overview" after the last); Escape closes that tooltip. The keys do nothing
+while you type in a text field, such as bb's composer in a split view, or
+with ⌘, Ctrl or Alt held. All guide text renders inline markdown (`code`,
+emphasis, links) the same way.
 
 ## Start review
 

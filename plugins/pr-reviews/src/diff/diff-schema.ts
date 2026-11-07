@@ -66,3 +66,20 @@ export function numberedLines(hunk: Hunk): NumberedLine[] {
 
 // git writes the line before an empty side as its start (`@@ -0,0 +1,2 @@`).
 const firstLineOf = (start: number, count: number) => (count === 0 ? start + 1 : start);
+
+// why throw: a guide is validated against exactly these files, so a miss is a storage bug that
+// should fail loudly, not a case to render around.
+
+/** The file a guide names. */
+export function fileOf(files: DiffFile[], path: string): DiffFile {
+  const file = files.find((candidate) => candidate.path === path);
+  if (file === undefined) throw new Error(`The guide names ${path}, which is not in its diff`);
+  return file;
+}
+
+/** The text hunk a guide names in `file`. */
+export function hunkOf(file: DiffFile, id: HunkId): Hunk {
+  const hunk = file.hunks.find((candidate) => hunkIdOf(candidate) === id);
+  if (hunk === undefined) throw new Error(`The guide names ${id} in ${file.path}, which has no such hunk`);
+  return hunk;
+}
