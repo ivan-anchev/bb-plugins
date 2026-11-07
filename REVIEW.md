@@ -9,5 +9,7 @@ Findings that came up repeatedly in review here and were fixed every time. Flag 
 - Casts or JSON round-trips that hide a test fixture's type, such as a fake SDK or a fake row. Type the fake against what the code uses and build valid rows. The one exception: a deliberately off-type row that stands in for data from a newer host, with a comment saying why.
 - A switch over a union without a compile-time exhaustiveness check. When the union is host data, the runtime fallback must return something neutral, not throw, because the host can send variants newer than the plugin's SDK.
 - Async work that outlives its owner, or one shared timer or clock that lets one reader starve another. Commit cursors only after the read succeeds, clear timers and abort pulls in stop(), and treat a status-only change as a change.
+- File paths trimmed, sanitized, or partly decoded on the way from the diff (stripped zero-width or bidi characters, `.trim()`, a dropped trailing space or BOM, octal escapes decoded before header parsing), which silently moves a hunk to another file: a path must keep exact byte identity from the diff parser through prompts, schemas, validation, and storage. Escape it for display; never normalize it.
+- Focus dropped to the page body when the focused control unmounts or remounts, as on a screen transition or a header that remounts when state changes: move focus to a deliberate target, such as the new heading or the replacement control, and keep stable chrome (headers, toolbars) mounted across states.
 
 ## Never flag
