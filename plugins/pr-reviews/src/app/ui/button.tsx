@@ -16,7 +16,7 @@ type Size = keyof typeof SIZES;
 
 /** A button's look, for an element that acts like one but is not a <button>, such as a link. */
 export function buttonClass(variant: Variant, size: Size = "default"): string {
-  return `inline-flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md font-medium transition-[background-color,color,scale] duration-150 ease-out hover:duration-0 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50 disabled:active:scale-100 motion-reduce:transition-none motion-reduce:active:scale-100 ${SIZES[size]} ${VARIANTS[variant]}`;
+  return `inline-flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md font-medium transition-[background-color,color,scale] duration-150 ease-out hover:duration-0 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50 disabled:active:scale-100 aria-disabled:cursor-default aria-disabled:opacity-50 aria-disabled:active:scale-100 motion-reduce:transition-none motion-reduce:active:scale-100 ${SIZES[size]} ${VARIANTS[variant]}`;
 }
 
 export type ButtonProps = Omit<ComponentProps<"button">, "type" | "className"> & { variant: Variant; size?: Size };

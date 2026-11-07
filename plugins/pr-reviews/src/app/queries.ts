@@ -21,3 +21,5 @@ export const useSelectProject = () => experimental_useRpcMutation({ contract, me
 
 type ReviewAction = "startReview" | "cancelReview" | "nudgeReview";
 export const useReviewAction = (method: ReviewAction) => experimental_useRpcMutation({ contract, method });
+
+export const useAskAboutFinding = () => experimental_useRpcMutation({ contract, method: "askAboutFinding" });

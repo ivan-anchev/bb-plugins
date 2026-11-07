@@ -1,13 +1,13 @@
-// Everything PR Reviews does to review threads: start one, cancel it, nudge it. Each action
-// reads the PR's review state first, so the "which thread, which head" rules live only in
-// review-state.ts, and ends by refreshing the repo's reads.
+// Everything PR Reviews does to review threads: start one, cancel it, nudge it, ask it about a
+// finding. Each action on a PR reads its review state first, so the "which thread, which head"
+// rules live only in review-state.ts, and ends by refreshing the repo's reads.
 import { experimental_PluginRpcRefusal as Refusal, type BbPluginApi } from "@get-bb/plugin-sdk";
-import { repoTag } from "../contract.ts";
+import { repoTag, type PrHeadKey } from "../contract.ts";
 import { parsePrDiff } from "../diff/parse-pr-diff.ts";
 import type { snapshotPrDiff } from "../github/gh.ts";
 import type { fetchPrCommits } from "../github/pr-commits.ts";
 import type { Repo } from "../github/repo.ts";
-import { nudgeMessage, reviewPrompt } from "./prompt.ts";
+import { askMessage, nudgeMessage, reviewPrompt } from "./prompt.ts";
 import type { ReviewReader } from "./review-reader.ts";
 import type { ReviewSettings } from "./settings.ts";
 import type { Store } from "./store.ts";
@@ -43,7 +43,7 @@ type Bb = {
 
 type Deps = {
   bb: Bb;
-  store: Pick<Store, "saveRun" | "deleteRun">;
+  store: Pick<Store, "saveRun" | "deleteRun" | "guide">;
   settings: Pick<ReviewSettings, "get">;
   reader: Pick<ReviewReader, "pullRequest" | "runningReview">;
   github: { snapshotPrDiff: typeof snapshotPrDiff; fetchPrCommits: typeof fetchPrCommits };
@@ -53,6 +53,9 @@ export type Reviews = ReturnType<typeof createReviews>;
 
 export function createReviews({ bb, store, settings, reader, github }: Deps) {
   const refresh = (repo: Repo) => bb.rpc.experimental_invalidate([repoTag(repo)]);
+  // Queued behind a turn the thread is still running, so a message never interrupts it.
+  const send = (threadId: string, text: string) =>
+    bb.sdk.threads.send({ threadId, input: [{ type: "text", text, mentions: [] }], mode: "queue-if-active" });
 
   // A second Start while one is in flight for the same PR joins it, so a double click spawns
   // one thread. Once a start lands, its run makes the PR read as running.
@@ -124,9 +127,18 @@ export function createReviews({ bb, store, settings, reader, github }: Deps) {
   async function nudge({ repo, number }: PrRef): Promise<void> {
     const { review } = await reader.pullRequest(repo, number);
     if (review.kind !== "no-guide") throw new Refusal({ code: "conflict", message: "The review thread isn't waiting to be asked." });
-    await bb.sdk.threads.send({ threadId: review.threadId, input: [{ type: "text", text: nudgeMessage(), mentions: [] }], mode: "queue-if-active" });
+    await send(review.threadId, nudgeMessage());
     refresh(repo);
   }
 
-  return { start, cancel, nudge };
+  // Asks the thread that wrote the guide, whatever the PR's state now. The page stays "Guide
+  // ready" while the thread answers: a guide for the current head outranks a busy thread.
+  async function ask(key: PrHeadKey, findingIndex: number, question: string): Promise<void> {
+    const record = store.guide(key);
+    const finding = record?.guide.findings[findingIndex];
+    if (record === null || finding === undefined) throw new Refusal({ code: "not_found", message: "That finding is no longer in the guide." });
+    await send(record.threadId, askMessage(finding, question));
+  }
+
+  return { start, cancel, nudge, ask };
 }

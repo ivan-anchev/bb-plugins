@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request, and a badge counting ready guides), how a guide reads (the What this PR does overview and the step-by-step walkthrough with its ←/→ and J/K keys), how Start review runs a review thread in a new worktree that finishes with the submit_review agent tool, its Review instructions setting, where its data comes from (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request, and a badge counting ready guides), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this, and the view options for tests and findings), how Start review runs a review thread in a new worktree that finishes with the submit_review agent tool, its Review instructions setting, where its data comes from (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -64,6 +64,10 @@ A guide opens on **What this PR does**:
   markdown under "<author> wrote". It is hidden when the PR has no body.
 - The guide's problem and approach, then **Before** and **After** lists when
   the change alters behaviour.
+- **Findings**: each finding's priority, **Must fix**, **Should fix** or
+  **Nit**, and its title, with **Step n** going to the step that shows its
+  hunk. A finding on a hunk the guide leaves out, or on a test the view
+  options hide, has no step link.
 - **Not in this guide**: each hunk or set of files the agent left out, with
   its reason. Show expands the hunk's diff, or lists the files.
 - A byline: "Written by <model> for <short commit>, <how long ago>" ("the
@@ -75,6 +79,29 @@ reader a decision, then its hunks: each in bb's own diff view (the component
 and code theme Code Explorer uses) under its file path. A hunk the agent
 collapsed is one line, its path and reason, with Show. A file with no text
 changes (a binary file, a pure rename) is one line saying so.
+
+A finding sits in a grey block directly under its line in the step's diff: its
+priority, title and body, and **Ask about this**. A finding on a removed line
+that was replaced sits under the whole removed-and-added pair, so the pair keeps
+its word highlighting. **Ask about this** opens a text box; **Send** messages
+the question, quoting the finding, to the review thread, which answers there
+(Open thread shows it). The page keeps reading Guide ready while the thread
+answers. If the send fails, the question stays in the box with the error beside
+Send. Text typed while a question is sending stays in the box, unsent.
+
+The header's view-options icon opens a popover of switches, each shown only
+when the guide has something for it:
+
+- **Show tests and mocks**, off by default. Tests and mocks are spotted from
+  the file path. While it is off, their hunks leave the steps, a step of tests
+  alone leaves the walkthrough, the step count follows, and Not in this guide
+  shows a Tests and mocks row whose Show turns the switch on.
+- **Show findings**, on by default. Off, the overview's Findings and every
+  block in the steps are hidden, and each diff is drawn whole.
+
+The switches are remembered for the session, across PRs, and reset when bb
+reloads. Turning one keeps the reader on their step, or on the nearest
+earlier step still shown.
 
 On a step the bar reads `‹ n / N ›`. **→** or **J** goes to the next step,
 **←** or **K** to the previous one; Next on the last step returns to the

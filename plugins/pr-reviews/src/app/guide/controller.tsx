@@ -7,7 +7,8 @@ import { Tooltip } from "../ui/tooltip.tsx";
 import type { Walkthrough } from "./use-walkthrough.ts";
 
 export function Controller({ walkthrough }: { walkthrough: Walkthrough }) {
-  const { place, total, next, previous } = walkthrough;
+  const { place, steps, next, previous } = walkthrough;
+  const total = steps.length;
   if (total === 0) return null;
   return (
     <nav aria-label="Walkthrough" className="flex shrink-0 items-center justify-center gap-1.5 px-7 pt-2.5 pb-3.5">

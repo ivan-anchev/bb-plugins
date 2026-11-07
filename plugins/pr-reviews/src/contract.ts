@@ -120,4 +120,9 @@ export const prReviewsContract = defineRpcContract({
   startReview: { input: prRefSchema, output: z.object({ threadId: z.string() }) },
   cancelReview: { input: prRefSchema, output: empty },
   nudgeReview: { input: prRefSchema, output: empty },
+  /** Sends the reader's question about one finding of a guide, named by its index, to the guide's review thread. */
+  askAboutFinding: {
+    input: prRefSchema.extend({ headSha: z.string(), findingIndex: z.number().int().nonnegative(), question: z.string().trim().min(1) }),
+    output: empty,
+  },
 });

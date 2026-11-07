@@ -4,7 +4,10 @@ import { repoSchema } from "../github/repo.ts";
 import { deriveRunningReview, type ThreadFacts } from "./review-state.ts";
 import { createReviews, type PrRef } from "./reviews.ts";
 import type { ReviewRun } from "./store.ts";
-import type { PrDetail, ReviewState } from "../contract.ts";
+import type { GuideRecord, PrDetail, ReviewState } from "../contract.ts";
+import { hunkIdSchema } from "../diff/diff-schema.ts";
+import type { Finding } from "../guide/guide-schema.ts";
+import { askMessage } from "./prompt.ts";
 
 const repo = repoSchema.parse("ivan-anchev/bb-plugins");
 const ref: PrRef = { projectId: "proj_1", repo, number: 23 };
@@ -41,6 +44,7 @@ function cancelHarness(failedStops: number) {
     store: {
       saveRun: () => assert.fail("Cancel must not save a run"),
       deleteRun: (key) => void (runs = runs.filter((run) => run.key.headSha !== key.headSha)),
+      guide: () => assert.fail("Cancel must not read a guide"),
     },
     settings: { get: notUsedByCancel },
     reader: {
@@ -118,7 +122,11 @@ function startHarness(checkoutHost: string, review: ReviewState = { kind: "none"
         system: { config: async () => ({ primaryHostId: SERVER_HOST }) },
       },
     },
-    store: { saveRun: () => void calls.push("save run"), deleteRun: () => assert.fail("Start must not delete a run") },
+    store: {
+      saveRun: () => void calls.push("save run"),
+      deleteRun: () => assert.fail("Start must not delete a run"),
+      guide: () => assert.fail("Start must not read a guide"),
+    },
     settings: { get: async () => ({ instructions: "" }) },
     reader: {
       pullRequest: async () => ({ pr: PR, review }),
@@ -151,4 +159,72 @@ test("Start refuses a PR that already has a guide for its current commit, before
   const { reviews, calls } = startHarness(SERVER_HOST, { kind: "ready", threadId: "thr_1", guideHeadSha: "head1" });
   await assert.rejects(reviews.start(ref), { code: "conflict", message: "This PR already has a guide for its current commit." });
   assert.deepEqual(calls, []);
+});
+
+// ---- asking about a finding ----
+
+const FINDING: Finding = {
+  file: "src/a.ts",
+  line: 2,
+  side: "old",
+  hunk: hunkIdSchema.parse("@@ -1,2 +1,1 @@"),
+  priority: "p0",
+  title: "Drops the last token",
+  body: "…",
+};
+const GUIDE_KEY = { repo, number: 23, headSha: "head1" };
+const RECORD: GuideRecord = {
+  key: GUIDE_KEY,
+  threadId: "thr_review",
+  model: null,
+  submittedAt: 100,
+  guide: { overview: { problem: "…", approach: "…", behaviour: null }, steps: [], hidden: [], findings: [FINDING] },
+};
+
+const notUsedByAsk = async () => assert.fail("Ask must not call this");
+
+// Ask with one stored guide, recording every message bb is asked to send.
+function askHarness() {
+  const sent: unknown[] = [];
+  const reviews = createReviews({
+    bb: {
+      rpc: { experimental_invalidate: () => assert.fail("Ask changes no read") },
+      sdk: {
+        threads: {
+          spawn: notUsedByAsk,
+          stop: notUsedByAsk,
+          send: async (args) => {
+            sent.push(args);
+            return { ok: true, delivery: "sent" };
+          },
+        },
+        projects: { get: notUsedByAsk },
+        system: { config: notUsedByAsk },
+      },
+    },
+    store: {
+      saveRun: () => assert.fail("Ask must not save a run"),
+      deleteRun: () => assert.fail("Ask must not delete a run"),
+      guide: (key) => (key.headSha === GUIDE_KEY.headSha ? RECORD : null),
+    },
+    settings: { get: notUsedByAsk },
+    reader: { pullRequest: notUsedByAsk, runningReview: notUsedByAsk },
+    github: { snapshotPrDiff: notUsedByAsk, fetchPrCommits: notUsedByAsk },
+  });
+  return { reviews, sent };
+}
+
+test("Ask sends the question about the finding to the guide's thread, queued behind any running turn", async () => {
+  const { reviews, sent } = askHarness();
+  await reviews.ask(GUIDE_KEY, 0, "Is the last token ever empty?");
+  assert.deepEqual(sent, [
+    { threadId: "thr_review", input: [{ type: "text", text: askMessage(FINDING, "Is the last token ever empty?"), mentions: [] }], mode: "queue-if-active" },
+  ]);
+});
+
+test("Ask refuses a finding the guide does not have, or a head with no guide, and sends nothing", async () => {
+  const { reviews, sent } = askHarness();
+  await assert.rejects(reviews.ask(GUIDE_KEY, 1, "Why?"), { code: "not_found" });
+  await assert.rejects(reviews.ask({ ...GUIDE_KEY, headSha: "head2" }, 0, "Why?"), { code: "not_found" });
+  assert.deepEqual(sent, []);
 });

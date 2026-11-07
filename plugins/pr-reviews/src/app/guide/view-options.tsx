@@ -1,6 +1,7 @@
 // The reader's view options: remembered for the session, and set from the PR header's icon button,
 // whose popover holds a switch per option.
 import { useState } from "react";
+import type { Guide } from "../../guide/guide-schema.ts";
 import { testHunkCount, type ViewOptions } from "../../guide/walkthrough.ts";
 import { useGuide, type GuideTarget } from "../queries.ts";
 import { IconButton } from "../ui/icon-button.tsx";
@@ -9,7 +10,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover.tsx";
 /** The options and their setter, owned by the PR page so its header and its guide share them. */
 export type ViewOptionsState = { options: ViewOptions; setOptions(options: ViewOptions): void };
 
-// Remembered for the session, across PRs, and never persisted: a reload starts with tests hidden.
+// Remembered for the session, across PRs, and never persisted: a reload starts with tests hidden
+// and findings shown.
 let rememberedOptions: ViewOptions = { showTests: false, showFindings: true };
 
 export function useViewOptions(): ViewOptionsState {
@@ -28,19 +30,23 @@ type GuideViewOptionsProps = { target: GuideTarget; viewOptions: ViewOptionsStat
 /** The header's action for a PR with a guide. It shows once the guide has loaded. */
 export function GuideViewOptions({ target, viewOptions }: GuideViewOptionsProps) {
   const guide = useGuide(target);
-  // Its only option so far is the tests switch, so a guide without tests has no button.
-  if (guide.data === undefined || testHunkCount(guide.data.record.guide) === 0) return null;
-  return <ViewOptionsButton {...viewOptions} />;
+  if (guide.data === undefined) return null;
+  return <ViewOptionsButton guide={guide.data.record.guide} {...viewOptions} />;
 }
 
-function ViewOptionsButton({ options, setOptions }: ViewOptionsState) {
+// A switch shows only for what the guide has, and a guide with neither tests nor findings has no button.
+function ViewOptionsButton({ guide, options, setOptions }: { guide: Guide } & ViewOptionsState) {
+  const hasTests = testHunkCount(guide) > 0;
+  const hasFindings = guide.findings.length > 0;
+  if (!hasTests && !hasFindings) return null;
   return (
     <Popover>
       <PopoverTrigger asChild>
         <IconButton icon="SlidersHorizontal" label="View options" />
       </PopoverTrigger>
       <PopoverContent label="View options">
-        <Switch label="Show tests and mocks" checked={options.showTests} onChange={(showTests) => setOptions({ ...options, showTests })} />
+        {hasTests && <Switch label="Show tests and mocks" checked={options.showTests} onChange={(showTests) => setOptions({ ...options, showTests })} />}
+        {hasFindings && <Switch label="Show findings" checked={options.showFindings} onChange={(showFindings) => setOptions({ ...options, showFindings })} />}
       </PopoverContent>
     </Popover>
   );

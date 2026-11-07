@@ -95,5 +95,10 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
       await reviews.nudge(await prRef(input));
       return {};
     },
+
+    async askAboutFinding({ projectId, number, headSha, findingIndex, question }) {
+      await reviews.ask({ repo: await repoOf(projectId), number, headSha }, findingIndex, question);
+      return {};
+    },
   };
 }

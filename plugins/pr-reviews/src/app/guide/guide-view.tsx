@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import type { GuideRecord, PrDetail } from "../../contract.ts";
 import type { DiffFile } from "../../diff/diff-schema.ts";
-import { hiddenTestHunkCount } from "../../guide/walkthrough.ts";
+import { hiddenTestHunkCount, visibleFindings } from "../../guide/walkthrough.ts";
 import { useGuide, type GuideTarget } from "../queries.ts";
 import { Notice } from "../ui/notice.tsx";
 import { ReadError } from "../ui/read-error.tsx";
@@ -22,20 +22,21 @@ export function GuideView({ target, pr, viewOptions }: GuideViewProps) {
     <>
       <ReadError read={guide} what="the guide" />
       {guide.isLoading && <Notice>Loading the guide…</Notice>}
-      {guide.data !== undefined && <LoadedGuide pr={pr} record={guide.data.record} files={guide.data.files} viewOptions={viewOptions} />}
+      {guide.data !== undefined && <LoadedGuide target={target} pr={pr} record={guide.data.record} files={guide.data.files} viewOptions={viewOptions} />}
     </>
   );
 }
 
-type LoadedGuideProps = { pr: PrDetail; record: GuideRecord; files: DiffFile[]; viewOptions: ViewOptionsState };
+type LoadedGuideProps = { target: GuideTarget; pr: PrDetail; record: GuideRecord; files: DiffFile[]; viewOptions: ViewOptionsState };
 
-function LoadedGuide({ pr, record, files, viewOptions }: LoadedGuideProps) {
+function LoadedGuide({ target, pr, record, files, viewOptions }: LoadedGuideProps) {
   const scroll = useRef<HTMLDivElement>(null);
   const title = useRef<HTMLHeadingElement>(null);
   const walkthrough = useWalkthrough(record.guide, viewOptions, { scroll, title });
   useStepKeys(walkthrough);
   const { place, setOptions } = walkthrough;
   const { options } = viewOptions;
+  const findings = visibleFindings(record.guide, options);
   return (
     <>
       <div ref={scroll} className="min-h-0 flex-1 overflow-y-auto">
@@ -50,11 +51,14 @@ function LoadedGuide({ pr, record, files, viewOptions }: LoadedGuideProps) {
               pr={pr}
               record={record}
               files={files}
+              findings={findings}
+              steps={walkthrough.steps}
+              onOpenStep={walkthrough.goToStep}
               hiddenTests={hiddenTestHunkCount(record.guide, options)}
               onShowTests={() => setOptions({ ...options, showTests: true })}
             />
           ) : (
-            <StepPage step={place.step.step} files={files} />
+            <StepPage step={place.step.step} files={files} findings={findings} target={target} />
           )}
         </article>
       </div>
