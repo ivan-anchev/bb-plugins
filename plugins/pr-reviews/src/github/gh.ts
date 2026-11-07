@@ -3,13 +3,14 @@
 import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import type { PrDetail, PrSummary } from "../contract.ts";
+import { statusCheckRollupSchema, summarizeChecks } from "./checks.ts";
 import { firstLine, parseHostCommandFailure, runHostCommand } from "./host-command.ts";
 import type { PrCommits } from "./pr-commits.ts";
 import type { Repo } from "./repo.ts";
 
 const LIST_LIMIT = 200;
 const SUMMARY_FIELDS = ["number", "title", "author", "updatedAt", "headRefOid"];
-const DETAIL_FIELDS = [...SUMMARY_FIELDS, "body", "url", "headRefName", "baseRefName", "state", "commits"];
+const DETAIL_FIELDS = [...SUMMARY_FIELDS, "body", "url", "headRefName", "baseRefName", "state", "commits", "changedFiles", "additions", "deletions", "statusCheckRollup"];
 
 const ghSummarySchema = z.object({
   number: z.number(),
@@ -34,6 +35,10 @@ const ghDetailSchema = ghSummarySchema.extend({
   baseRefName: z.string(),
   state: z.enum(["OPEN", "CLOSED", "MERGED"]),
   commits: z.array(z.object({ oid: z.string() })),
+  changedFiles: z.number(),
+  additions: z.number(),
+  deletions: z.number(),
+  statusCheckRollup: statusCheckRollupSchema,
 });
 
 const toDetail = (pr: z.infer<typeof ghDetailSchema>): PrDetail => ({
@@ -44,6 +49,10 @@ const toDetail = (pr: z.infer<typeof ghDetailSchema>): PrDetail => ({
   baseRefName: pr.baseRefName,
   state: pr.state,
   commits: pr.commits.map((commit) => commit.oid),
+  changedFiles: pr.changedFiles,
+  additions: pr.additions,
+  deletions: pr.deletions,
+  checks: summarizeChecks(pr.statusCheckRollup),
 });
 
 export async function listOpenPrs(repo: Repo): Promise<PrSummary[]> {

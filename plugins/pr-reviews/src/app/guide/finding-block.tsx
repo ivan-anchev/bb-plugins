@@ -5,6 +5,7 @@ import { useId, useRef, useState } from "react";
 import type { VisibleFinding } from "../../guide/walkthrough.ts";
 import { useAskAboutFinding, type GuideTarget } from "../queries.ts";
 import { Button } from "../ui/button.tsx";
+import { DESTRUCTIVE_TEXT_ON_MUTED } from "../ui/destructive-text-on-muted.ts";
 import { Prose } from "../ui/prose.tsx";
 import { Priority } from "./priority.tsx";
 
@@ -96,7 +97,7 @@ function AskAboutThis({ shown, target }: FindingBlockProps) {
           />
           <div className="flex items-center justify-end gap-1.5">
             {ask.error !== null && (
-              <p role="alert" className="mr-auto text-xs text-destructive">
+              <p role="alert" className={`mr-auto text-xs ${DESTRUCTIVE_TEXT_ON_MUTED}`}>
                 {ask.error.message}
               </p>
             )}

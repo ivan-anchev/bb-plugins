@@ -85,7 +85,7 @@ function Screen({ title, error, actions, children }: ScreenProps) {
         <p className="text-[13px] leading-5 text-muted-foreground">{children}</p>
         <div className="mt-1 flex flex-wrap items-center gap-2">{actions}</div>
         {error !== null && (
-          <p role="alert" className="text-xs text-destructive">
+          <p role="alert" className="text-xs text-destructive-text">
             {error.message}
           </p>
         )}
