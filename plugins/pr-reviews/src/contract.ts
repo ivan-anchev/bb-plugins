@@ -22,6 +22,12 @@ const prSummarySchema = z.object({
 });
 export type PrSummary = z.infer<typeof prSummarySchema>;
 
+const countSchema = z.number().int().nonnegative();
+
+/** A PR's CI checks by outcome; all zero when the PR has none. */
+const checksSummarySchema = z.object({ passing: countSchema, failing: countSchema, pending: countSchema });
+export type ChecksSummary = z.infer<typeof checksSummarySchema>;
+
 const prDetailSchema = prSummarySchema.extend({
   body: z.string(),
   url: z.string(),
@@ -30,6 +36,11 @@ const prDetailSchema = prSummarySchema.extend({
   state: z.enum(["OPEN", "CLOSED", "MERGED"]),
   /** Commit oids, oldest first. */
   commits: z.array(z.string()),
+  changedFiles: countSchema,
+  /** Lines added and deleted across the whole PR. */
+  additions: countSchema,
+  deletions: countSchema,
+  checks: checksSummarySchema,
 });
 export type PrDetail = z.infer<typeof prDetailSchema>;
 

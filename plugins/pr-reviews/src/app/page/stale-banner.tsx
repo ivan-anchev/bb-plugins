@@ -14,7 +14,7 @@ export function StaleBanner({ target, pr, guideHeadSha }: StaleBannerProps) {
         {sinceGuide(commitsSince(pr, guideHeadSha))}
       </p>
       {update.error !== null && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-xs text-destructive-text">
           {update.error.message}
         </p>
       )}

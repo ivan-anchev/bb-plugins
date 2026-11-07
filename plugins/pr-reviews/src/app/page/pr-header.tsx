@@ -1,8 +1,9 @@
-// The PR page header: number and title, author and `head → base`, and quiet "Review chat" (when a
-// review thread exists) and "GitHub" actions, then the screen's own actions (`children`).
+// The PR page header: number and title; author, `head → base` and the PR's stats (files, lines,
+// CI checks); quiet "Review chat" (when a review thread exists) and "GitHub" actions, then the
+// screen's own actions (`children`).
 import type { ReactNode } from "react";
 import { UrlLink } from "@get-bb/plugin-sdk/app";
-import type { PrDetail } from "../../contract.ts";
+import type { ChecksSummary, PrDetail } from "../../contract.ts";
 import { ReviewChatButton } from "../review-chat/review-chat-button.tsx";
 import { buttonClass } from "../ui/button.tsx";
 
@@ -20,6 +21,13 @@ export function PrHeader({ pr, hasReviewThread, children }: PrHeaderProps) {
           <span className="min-w-0 break-all">
             <code className="font-mono">{pr.headRefName}</code> → <code className="font-mono">{pr.baseRefName}</code>
           </span>
+          <span className="tabular-nums">
+            {pr.changedFiles} {pr.changedFiles === 1 ? "file" : "files"}
+          </span>
+          <span className="tabular-nums">
+            +{pr.additions} −{pr.deletions}
+          </span>
+          <ChecksStat checks={pr.checks} />
         </p>
       </div>
       <div className="flex shrink-0 gap-1">
@@ -33,3 +41,20 @@ export function PrHeader({ pr, hasReviewThread, children }: PrHeaderProps) {
   );
 }
 
+
+// A count only: the header runs no checks and links to none.
+function ChecksStat({ checks: { passing, failing, pending } }: { checks: ChecksSummary }) {
+  const total = passing + failing + pending;
+  if (total === 0) return null;
+  return (
+    <span className="tabular-nums">
+      {passing}/{total} checks passing
+      {failing > 0 && (
+        <>
+          , <span className="text-destructive-text">{failing} failing</span>
+        </>
+      )}
+      {pending > 0 && `, ${pending} pending`}
+    </span>
+  );
+}

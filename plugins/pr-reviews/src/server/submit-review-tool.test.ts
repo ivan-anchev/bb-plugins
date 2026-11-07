@@ -291,6 +291,7 @@ function promptedPaths(diff: string): string[] {
     baseRefName: "main",
     state: "OPEN",
     commits: [KEY.headSha],
+    changedFiles: 1, additions: 1, deletions: 1, checks: { passing: 0, failing: 0, pending: 0 },
   };
   const prompt = reviewPrompt({ repo, pr, headSha: KEY.headSha, baseSha: KEY.headSha, files: parsePrDiff(diff) }, "");
   return [...prompt.matchAll(/^- ("(?:[^"\\]|\\.)*"): /gm)].map(([, literal]) => JSON.parse(literal));

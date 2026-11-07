@@ -23,6 +23,7 @@ const pr: PrDetail = {
   baseRefName: "main",
   state: "OPEN",
   commits: [HEAD],
+  changedFiles: 1, additions: 1, deletions: 1, checks: { passing: 0, failing: 0, pending: 0 },
 };
 
 const files: DiffFile[] = [
