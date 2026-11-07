@@ -71,7 +71,7 @@ function AuthorDescription({ author, body }: { author: string; body: string }) {
         </Button>
       </div>
       {open && (
-        <section className="grid max-w-[75ch] gap-2.5 rounded-lg bg-muted px-4 py-3.5 text-[13.5px] leading-[21px]">
+        <section className={`${CONTAIN_BODY} max-w-[75ch] rounded-lg bg-muted px-4 py-3.5 text-[13.5px] leading-[21px]`}>
           <p className="text-xs text-subtle-foreground">{author} wrote</p>
           <Prose text={body} />
         </section>
@@ -79,6 +79,14 @@ function AuthorDescription({ author, body }: { author: string; body: string }) {
     </>
   );
 }
+
+// why: the author's body is any markdown, so the card holds it in:
+// - its track is `minmax(0,1fr)`: the implicit `auto` track grows to the body's widest table and
+//   carries the text past the card.
+// - bb lets a table break out of the text as far as the nearest ancestor that clips overflow (in
+//   chat, the timeline). Clipping the card stops it at the card, and a zero start offset (bb's own
+//   setting for indented blocks) keeps it on the text's edges, scrolling inside its own wrapper.
+const CONTAIN_BODY = "grid grid-cols-[minmax(0,1fr)] gap-2.5 overflow-x-clip [--md-table-start-offset:0px]";
 
 type Behaviour = NonNullable<Guide["overview"]["behaviour"]>;
 
