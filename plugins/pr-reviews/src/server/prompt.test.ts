@@ -6,7 +6,7 @@ import type { DiffFile } from "../diff/diff-schema.ts";
 import { parsePrDiff } from "../diff/parse-pr-diff.ts";
 import { repoSchema } from "../github/repo.ts";
 import { hunkIdSchema } from "../diff/diff-schema.ts";
-import { askMessage, reviewPrompt, type PromptFacts } from "./prompt.ts";
+import { askMessage, reviewPrompt, updateMessage, type PromptFacts } from "./prompt.ts";
 
 const HEAD = "66963303b329b9a961abc029115209f18f89ddb0";
 const BASE = "60a4f5c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6";
@@ -57,9 +57,10 @@ test("blank instructions are left out", () => {
   for (const blank of ["", "  \n\t "]) assert.doesNotMatch(reviewPrompt(facts, blank), /Reviewer instructions/);
 });
 
-test("the scaffold pins the head, diffs it against the base, and keeps the thread off GitHub", () => {
+test("the scaffold pins the head, diffs it against the base, names the head to submit for, and keeps the thread off GitHub", () => {
   const prompt = reviewPrompt(facts, "");
   assert.match(prompt, new RegExp(`Run \`git checkout --detach ${HEAD}\``));
+  assert.match(prompt, new RegExp(`Finish by calling submit_review with headSha ${HEAD}:`));
   assert.match(prompt, new RegExp(`\`git diff ${BASE}\\.\\.\\.${HEAD}\` shows the same hunks`));
   assert.match(prompt, /Do not run `gh`, and do not fetch, pull or push\./);
   assert.doesNotMatch(prompt, /gh pr/);
@@ -101,6 +102,24 @@ test("a path with hidden characters is escaped, never stripped, so each index en
   const decoded = lines.map((line) => JSON.parse(line.slice("- ".length, line.lastIndexOf('": ') + 1)));
   assert.deepEqual(decoded, parsed.map((file) => file.path));
   assert.equal(new Set(decoded).size, 3);
+});
+
+const PREVIOUS_HEAD = "32bb055aa1b2c3d4e5f60718293a4b5c6d7e8f90";
+
+test("an update names both heads, reads only the new commits, and asks for a complete guide for the new head", () => {
+  const message = updateMessage(facts, PREVIOUS_HEAD);
+  assert.match(message, new RegExp(`Its head is now ${HEAD}; your guide was for ${PREVIOUS_HEAD}\\.`));
+  assert.match(message, new RegExp(`Run \`git checkout --detach ${HEAD}\``));
+  assert.match(message, new RegExp(`Review only the new commits: \`git diff ${PREVIOUS_HEAD}\\.\\.${HEAD}\``));
+  assert.match(message, new RegExp(`Call submit_review again with headSha ${HEAD} and a complete guide for it, not just the new commits: it is checked against the whole PR diff, \`git diff ${BASE}\\.\\.\\.${HEAD}\``));
+  assert.match(message, /Every hunk in the list below must appear exactly once\./);
+  assert.doesNotMatch(message, /gh pr/);
+});
+
+test("an update ends with the new head's facts and hunk index between fresh markers", () => {
+  const lines = factLines(updateMessage(facts, PREVIOUS_HEAD));
+  assert.deepEqual(lines.slice(3), [`Head: ${HEAD}`, `Base: ${BASE}`, HUNKS_HEADING, '- "src/keys.ts": @@ -1,8 +1,10 @@, @@ -20,3 +22,4 @@', '- "logo.png": whole file']);
+  assert.notEqual(MARKERS.exec(updateMessage(facts, PREVIOUS_HEAD))?.[1], MARKERS.exec(updateMessage(facts, PREVIOUS_HEAD))?.[1]);
 });
 
 const HUNKS_HEADING =

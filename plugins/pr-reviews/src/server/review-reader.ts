@@ -37,6 +37,11 @@ export function createReviewReader({ bb, store }: { bb: BbPluginApi; store: Stor
     return deriveRunningReview({ guides: store.guideHeadsFor(repo, [number]), runs, threads: await threadFacts(runs.map((run) => run.threadId)) });
   }
 
+  /** Whether the thread still counts as a review thread: it exists and is not archived. */
+  async function threadIsOpen(threadId: string): Promise<boolean> {
+    return (await threadFacts([threadId])).has(threadId);
+  }
+
   // Threads that still exist and are not archived; hidden ones too, since a user may hide a
   // review thread from the sidebar without abandoning it.
   async function threadFacts(threadIds: string[]): Promise<ReadonlyMap<string, ThreadFacts>> {
@@ -46,7 +51,7 @@ export function createReviewReader({ bb, store }: { bb: BbPluginApi; store: Stor
     return new Map(pages.flat().map((thread) => [thread.id, { status: thread.status, updatedAt: thread.updatedAt }]));
   }
 
-  return { withReviews, pullRequest, runningReview };
+  return { withReviews, pullRequest, runningReview, threadIsOpen };
 }
 
 const ofPr = <Row extends { key: { number: number } }>(rows: Row[], number: number) => rows.filter((row) => row.key.number === number);

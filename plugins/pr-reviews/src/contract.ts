@@ -33,6 +33,12 @@ const prDetailSchema = prSummarySchema.extend({
 });
 export type PrDetail = z.infer<typeof prDetailSchema>;
 
+/** The PR's commits after the guide's head, or null when a force push removed that head from the PR. */
+export function commitsSince(pr: PrDetail, guideHeadSha: string): number | null {
+  const at = pr.commits.indexOf(guideHeadSha);
+  return at === -1 ? null : pr.commits.length - at - 1;
+}
+
 // A sum type on `kind`: each variant carries exactly what its screen needs.
 const reviewStateSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("none") }),
@@ -120,6 +126,8 @@ export const prReviewsContract = defineRpcContract({
   startReview: { input: prRefSchema, output: z.object({ threadId: z.string() }) },
   cancelReview: { input: prRefSchema, output: empty },
   nudgeReview: { input: prRefSchema, output: empty },
+  /** Asks the stale guide's thread to update it for the PR's current head, or starts a new review when that thread is gone. */
+  updateGuide: { input: prRefSchema, output: z.object({ threadId: z.string() }) },
   /** Sends the reader's question about one finding of a guide, named by its index, to the guide's review thread. */
   askAboutFinding: {
     input: prRefSchema.extend({ headSha: z.string(), findingIndex: z.number().int().nonnegative(), question: z.string().trim().min(1) }),

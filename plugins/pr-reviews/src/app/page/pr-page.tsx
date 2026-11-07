@@ -2,14 +2,15 @@
 import type { ReactNode } from "react";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import type { PrDetail, ReviewState } from "../../contract.ts";
-import { usePullRequest } from "../queries.ts";
+import { usePullRequest, type PrTarget } from "../queries.ts";
 import { GuideView } from "../guide/guide-view.tsx";
 import { GuideViewOptions, useViewOptions, type ViewOptionsState } from "../guide/view-options.tsx";
 import { parseRoute } from "../routes.ts";
 import { Notice } from "../ui/notice.tsx";
 import { ReadError } from "../ui/read-error.tsx";
 import { PrHeader } from "./pr-header.tsx";
-import { NoGuideScreen, NoneScreen, RunningScreen, type PrTarget } from "./review-screens.tsx";
+import { NoGuideScreen, NoneScreen, RunningScreen } from "./review-screens.tsx";
+import { StaleBanner } from "./stale-banner.tsx";
 
 export function PrPage({ subPath }: PluginNavPanelProps) {
   const route = parseRoute(subPath);
@@ -59,14 +60,19 @@ function screenOf(target: PrTarget, pr: PrDetail, review: ReviewState, viewOptio
       return { actions: null, body: <RunningScreen target={target} review={review} /> };
     case "no-guide":
       return { actions: null, body: <NoGuideScreen target={target} review={review} /> };
-    // Stale shows its guide too; its banner and Update guide are not built yet.
+    // A stale guide is still worth reading: it shows under a banner offering Update guide.
     case "ready":
     case "stale": {
       const guide = { ...target, headSha: review.guideHeadSha };
       return {
         actions: <GuideViewOptions target={guide} viewOptions={viewOptions} />,
-        // Keyed: a new guide is a new view.
-        body: <GuideView key={review.guideHeadSha} target={guide} pr={pr} viewOptions={viewOptions} />,
+        body: (
+          <>
+            {review.kind === "stale" && <StaleBanner target={target} pr={pr} guideHeadSha={review.guideHeadSha} />}
+            {/* Keyed: a new guide is a new view. */}
+            <GuideView key={review.guideHeadSha} target={guide} pr={pr} viewOptions={viewOptions} />
+          </>
+        ),
       };
     }
     default:

@@ -3,20 +3,17 @@
 import type { ReactNode } from "react";
 import type { experimental_PluginRpcCallError as RpcCallError } from "@get-bb/plugin-sdk/app";
 import type { ReviewState } from "../../contract.ts";
-import { useReviewAction } from "../queries.ts";
+import { useReviewAction, type PrTarget } from "../queries.ts";
 import { timeAgo } from "../relative-time.ts";
 import { Button } from "../ui/button.tsx";
 import { useElapsed } from "./elapsed.ts";
 import { OpenThreadButton } from "./open-thread-button.tsx";
 
-/** The PR the screen acts on. */
-export type PrTarget = { projectId: string; number: number };
-
 type Running = Extract<ReviewState, { kind: "running" }>;
 type NoGuide = Extract<ReviewState, { kind: "no-guide" }>;
 
 export function NoneScreen({ target }: { target: PrTarget }) {
-  const start = useAction("startReview", target);
+  const start = useReviewAction("startReview", target);
   return (
     <Screen
       title="No guide yet"
@@ -33,7 +30,7 @@ export function NoneScreen({ target }: { target: PrTarget }) {
 }
 
 export function RunningScreen({ target, review }: { target: PrTarget; review: Running }) {
-  const cancel = useAction("cancelReview", target);
+  const cancel = useReviewAction("cancelReview", target);
   const elapsed = useElapsed(review.startedAt);
   return (
     <Screen
@@ -59,7 +56,7 @@ export function RunningScreen({ target, review }: { target: PrTarget; review: Ru
 }
 
 export function NoGuideScreen({ target, review }: { target: PrTarget; review: NoGuide }) {
-  const nudge = useAction("nudgeReview", target);
+  const nudge = useReviewAction("nudgeReview", target);
   return (
     <Screen
       title="The review finished without a guide"
@@ -99,12 +96,4 @@ function Screen({ title, error, actions, children }: ScreenProps) {
 
 function Spinner() {
   return <span aria-hidden className="inline-block size-3.5 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent motion-reduce:animate-none" />;
-}
-
-// One review action on this PR. The hook's error state reports a failed write beside the
-// buttons; the rejection itself carries nothing more.
-function useAction(method: Parameters<typeof useReviewAction>[0], target: PrTarget) {
-  const action = useReviewAction(method);
-  const run = () => void action.mutate(target).catch(() => undefined);
-  return { run, isPending: action.isPending, error: action.error };
 }

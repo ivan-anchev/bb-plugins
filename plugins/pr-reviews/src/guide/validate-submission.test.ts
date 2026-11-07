@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { hunkIdOf, WHOLE_FILE, type DiffFile, type Hunk } from "../diff/diff-schema.ts";
-import type { SubmitReviewInput } from "./guide-schema.ts";
+import type { GuideInput } from "./guide-schema.ts";
 import { validateSubmission } from "./validate-submission.ts";
 
 // A hunk from its lines; the counts follow from them, as git writes them.
@@ -35,7 +35,7 @@ const FILES: DiffFile[] = [
 
 const overview = { problem: "Parallel 401s each refreshed the token.", approach: "Refresh is single-flight." };
 
-const complete: SubmitReviewInput = {
+const complete: GuideInput = {
   overview,
   steps: [
     {
@@ -53,21 +53,21 @@ const complete: SubmitReviewInput = {
 };
 
 // Exactly one change to the complete guide.
-const withSteps = (steps: SubmitReviewInput["steps"]): SubmitReviewInput => ({ ...complete, steps });
-const withHidden = (hidden: SubmitReviewInput["hidden"]): SubmitReviewInput => ({ ...complete, hidden });
-const withFindings = (findings: SubmitReviewInput["findings"]): SubmitReviewInput => ({ ...complete, findings });
+const withSteps = (steps: GuideInput["steps"]): GuideInput => ({ ...complete, steps });
+const withHidden = (hidden: GuideInput["hidden"]): GuideInput => ({ ...complete, hidden });
+const withFindings = (findings: GuideInput["findings"]): GuideInput => ({ ...complete, findings });
 const [refreshStep, testStep] = complete.steps;
 
 const REJECTED =
   "submit_review was rejected and nothing was saved. Fix every problem below and call submit_review again with the whole guide. Do not drop a hunk to make a problem go away: put it in a step, or in hidden with a reason.";
 
-function rejection(input: SubmitReviewInput, files = FILES): string {
+function rejection(input: GuideInput, files = FILES): string {
   const result = validateSubmission(input, files);
   assert.equal(result.ok, false, "expected a rejection");
   return result.ok ? "" : result.message;
 }
 
-function guideOf(input: SubmitReviewInput, files = FILES) {
+function guideOf(input: GuideInput, files = FILES) {
   const result = validateSubmission(input, files);
   assert.ok(result.ok, result.ok ? "" : result.message);
   return result.guide;
@@ -120,7 +120,7 @@ Listed more than once (1):
 test("tests and mocks in hidden, as a hunk or as files, are sent back to a step", () => {
   const MOCK = "__mocks__/x.ts";
   const files = [...FILES, modified(MOCK, [TEST_CASE])];
-  const input: SubmitReviewInput = {
+  const input: GuideInput = {
     ...complete,
     steps: [refreshStep],
     hidden: [
@@ -140,7 +140,7 @@ Hidden tests and mocks: put them in a step (2):
 });
 
 test("a file that is not in the PR is an unknown file, wherever it is named", () => {
-  const input: SubmitReviewInput = {
+  const input: GuideInput = {
     ...withSteps([{ ...refreshStep, hunks: [...refreshStep.hunks, { file: "src/auth/session.ts", hunk: "@@ -1,1 +1,1 @@" }] }, testStep]),
     findings: [{ file: "src/auth/sessoin.ts", line: 3, priority: "p2", title: "Typo", body: "…" }],
   };
@@ -169,7 +169,7 @@ Unknown hunks (1):
 });
 
 test("hidden files cover every hunk of each file", () => {
-  const input: SubmitReviewInput = {
+  const input: GuideInput = {
     ...complete,
     steps: [testStep],
     hidden: [{ files: [CLIENT, "CHANGELOG.md", "logo.png"], reason: "Covered by the test." }],
@@ -248,7 +248,7 @@ test("a ref whose count is wrong, or that is not a range, is unknown", () => {
 test("paths in the message are written as in the hunk list, with hidden characters escaped", () => {
   const zeroWidth = `src/a${String.fromCharCode(0x200b)}.ts`;
   const files = [modified(zeroWidth, [TEST_CASE])];
-  const input: SubmitReviewInput = { overview, steps: [{ ...testStep, hunks: [{ file: "src/a.ts", hunk: "@@ -1,2 +1,3 @@" }] }], hidden: [], findings: [] };
+  const input: GuideInput = { overview, steps: [{ ...testStep, hunks: [{ file: "src/a.ts", hunk: "@@ -1,2 +1,3 @@" }] }], hidden: [], findings: [] };
   const escaped = `"src/a${"\\"}u200B.ts"`;
   assert.equal(
     rejection(input, files),
@@ -266,7 +266,7 @@ Unknown files (1):
 
 test("each section lists at most 40 problems", () => {
   const files = Array.from({ length: 45 }, (_, i) => modified(`f${i}.ts`, [TEST_CASE]));
-  const input: SubmitReviewInput = { overview, steps: [{ ...testStep, hunks: [{ file: "f0.ts", hunk: "@@ -1,2 +1,3 @@" }] }], hidden: [], findings: [] };
+  const input: GuideInput = { overview, steps: [{ ...testStep, hunks: [{ file: "f0.ts", hunk: "@@ -1,2 +1,3 @@" }] }], hidden: [], findings: [] };
   const lines = rejection(input, files).split("\n");
   assert.equal(lines[2], "Missing: these hunks are in no step and not in hidden (44):");
   assert.equal(lines.filter((line) => line.startsWith("  - ")).length, 40);

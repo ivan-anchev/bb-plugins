@@ -50,6 +50,7 @@ function cancelHarness(failedStops: number) {
     reader: {
       pullRequest: async () => assert.fail("gh: could not reach api.github.com"),
       runningReview: async () => deriveRunningReview({ guides: [], runs, threads }),
+      threadIsOpen: notUsedByCancel,
     },
     github: { snapshotPrDiff: notUsedByCancel, fetchPrCommits: notUsedByCancel },
   });
@@ -92,20 +93,23 @@ const PR: PrDetail = {
   title: "Fixture",
   author: "ivan-anchev",
   updatedAt: "2026-11-06T00:00:00Z",
-  headSha: "head1",
+  headSha: "head2",
   body: "",
   url: "https://github.com/ivan-anchev/bb-plugins/pull/23",
   headRefName: "fixture/pr-reviews-live",
   baseRefName: "main",
   state: "OPEN",
-  commits: ["head1"],
+  commits: ["head1", "head2"],
 };
 const DIFF = "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-old\n+new\n";
 
-// Start with the PR in `review`, the project's default checkout on `checkoutHost`, and every
-// GitHub read, fetch, and spawn recorded in order.
-function startHarness(checkoutHost: string, review: ReviewState = { kind: "none" }) {
+// Start or Update with the PR in `review`, the project's default checkout on `checkoutHost`, the
+// threads in `openThreads` still open, and every GitHub read, fetch, spawn, message and saved run
+// recorded in order.
+function actionHarness(checkoutHost: string, review: ReviewState = { kind: "none" }, openThreads: string[] = []) {
   const calls: string[] = [];
+  const messages: string[] = [];
+  let pullRequestReads = 0;
   const reviews = createReviews({
     bb: {
       rpc: { experimental_invalidate: () => undefined },
@@ -115,50 +119,101 @@ function startHarness(checkoutHost: string, review: ReviewState = { kind: "none"
             calls.push(`spawn on ${environment.type === "host" ? environment.hostId : environment.type}`);
             return { id: "thr_new" };
           },
-          send: async () => assert.fail("Start must not message a thread"),
-          stop: async () => assert.fail("Start must not stop a thread"),
+          send: async ({ threadId, input, mode }) => {
+            calls.push(`send to ${threadId} (${mode})`);
+            messages.push(...input.flatMap((part) => (part.type === "text" ? [part.text] : [])));
+            return { ok: true, delivery: "sent" };
+          },
+          stop: async () => assert.fail("Start and Update must not stop a thread"),
         },
         projects: { get: async () => ({ sources: [{ path: "/repos/bb-plugins", hostId: checkoutHost, isDefault: true }] }) },
         system: { config: async () => ({ primaryHostId: SERVER_HOST }) },
       },
     },
     store: {
-      saveRun: () => void calls.push("save run"),
-      deleteRun: () => assert.fail("Start must not delete a run"),
-      guide: () => assert.fail("Start must not read a guide"),
+      saveRun: (run) => void calls.push(`save run for ${run.key.headSha} by ${run.threadId}`),
+      deleteRun: () => assert.fail("Start and Update must not delete a run"),
+      guide: () => assert.fail("Start and Update must not read a guide"),
     },
     settings: { get: async () => ({ instructions: "" }) },
     reader: {
-      pullRequest: async () => ({ pr: PR, review }),
-      runningReview: async () => assert.fail("Start reads the review through pullRequest"),
+      pullRequest: async () => {
+        pullRequestReads += 1;
+        return { pr: PR, review };
+      },
+      runningReview: async () => assert.fail("Start and Update read the review through pullRequest"),
+      threadIsOpen: async (threadId) => openThreads.includes(threadId),
     },
     github: {
       snapshotPrDiff: async () => {
         calls.push("snapshot diff");
-        return { headSha: "head1", baseSha: "base1", diff: DIFF };
+        return { headSha: PR.headSha, baseSha: "base1", diff: DIFF };
       },
-      fetchPrCommits: async (path) => void calls.push(`fetch into ${path}`),
+      fetchPrCommits: async (path, _number, { headSha, baseSha }) => void calls.push(`fetch ${headSha} and ${baseSha} into ${path}`),
     },
   });
-  return { reviews, calls };
+  return { reviews, calls, messages, pullRequestReads: () => pullRequestReads };
 }
 
 test("Start refuses a default checkout on another machine before reading the diff, fetching, or spawning", async () => {
-  const { reviews, calls } = startHarness("host_remote");
+  const { reviews, calls } = actionHarness("host_remote");
   await assert.rejects(reviews.start(ref), /default checkout is on the machine running bb/);
   assert.deepEqual(calls, []);
 });
 
 test("Start on the server's own machine fetches the PR's commits, then spawns there", async () => {
-  const { reviews, calls } = startHarness(SERVER_HOST);
+  const { reviews, calls } = actionHarness(SERVER_HOST);
   assert.deepEqual(await reviews.start(ref), { threadId: "thr_new" });
-  assert.deepEqual(calls, ["snapshot diff", "fetch into /repos/bb-plugins", `spawn on ${SERVER_HOST}`, "save run"]);
+  assert.deepEqual(calls, ["snapshot diff", "fetch head2 and base1 into /repos/bb-plugins", `spawn on ${SERVER_HOST}`, "save run for head2 by thr_new"]);
 });
 
 test("Start refuses a PR that already has a guide for its current commit, before anything runs", async () => {
-  const { reviews, calls } = startHarness(SERVER_HOST, { kind: "ready", threadId: "thr_1", guideHeadSha: "head1" });
+  const { reviews, calls } = actionHarness(SERVER_HOST, { kind: "ready", threadId: "thr_1", guideHeadSha: "head2" });
   await assert.rejects(reviews.start(ref), { code: "conflict", message: "This PR already has a guide for its current commit." });
   assert.deepEqual(calls, []);
+});
+
+// ---- updating a stale guide ----
+
+const STALE: ReviewState = { kind: "stale", threadId: "thr_old", guideHeadSha: "head1" };
+
+test("Update pins the new head's diff, fetches its commits, then messages the guide's own thread and saves its run for the new head", async () => {
+  const { reviews, calls, messages } = actionHarness(SERVER_HOST, STALE, ["thr_old"]);
+  assert.deepEqual(await reviews.update(ref), { threadId: "thr_old" });
+  assert.deepEqual(calls, ["snapshot diff", "fetch head2 and base1 into /repos/bb-plugins", "send to thr_old (queue-if-active)", "save run for head2 by thr_old"]);
+  assert.match(messages[0] ?? "", /git diff head1\.\.head2/);
+});
+
+test("Update starts a new review when the guide's thread was archived or deleted", async () => {
+  const { reviews, calls, messages } = actionHarness(SERVER_HOST, STALE, []);
+  assert.deepEqual(await reviews.update(ref), { threadId: "thr_new" });
+  assert.deepEqual(calls, ["snapshot diff", "fetch head2 and base1 into /repos/bb-plugins", `spawn on ${SERVER_HOST}`, "save run for head2 by thr_new"]);
+  assert.deepEqual(messages, []);
+});
+
+test("Update refuses a default checkout on another machine before reading the diff, fetching, or messaging", async () => {
+  const { reviews, calls } = actionHarness("host_remote", STALE, ["thr_old"]);
+  await assert.rejects(reviews.update(ref), /default checkout is on the machine running bb/);
+  assert.deepEqual(calls, []);
+});
+
+test("Update joins a review already running, and refuses a PR without a stale guide", async () => {
+  const running = actionHarness(SERVER_HOST, { kind: "running", threadId: "thr_old", runHeadSha: "head2", startedAt: 1 });
+  assert.deepEqual(await running.reviews.update(ref), { threadId: "thr_old" });
+  assert.deepEqual(running.calls, []);
+  for (const review of [{ kind: "none" }, { kind: "ready", threadId: "thr_old", guideHeadSha: "head2" }, { kind: "no-guide", threadId: "thr_old", idleSince: 1 }] as const) {
+    const { reviews, calls } = actionHarness(SERVER_HOST, review, ["thr_old"]);
+    await assert.rejects(reviews.update(ref), { code: "conflict" });
+    assert.deepEqual(calls, []);
+  }
+});
+
+test("a second Update while the first is in flight joins it: one message, one run", async () => {
+  const { reviews, calls, pullRequestReads } = actionHarness(SERVER_HOST, STALE, ["thr_old"]);
+  const [first, second] = await Promise.all([reviews.update(ref), reviews.update(ref)]);
+  assert.deepEqual([first, second], [{ threadId: "thr_old" }, { threadId: "thr_old" }]);
+  assert.equal(pullRequestReads(), 1);
+  assert.equal(calls.filter((call) => call.startsWith("send")).length, 1);
 });
 
 // ---- asking about a finding ----
@@ -208,7 +263,7 @@ function askHarness() {
       guide: (key) => (key.headSha === GUIDE_KEY.headSha ? RECORD : null),
     },
     settings: { get: notUsedByAsk },
-    reader: { pullRequest: notUsedByAsk, runningReview: notUsedByAsk },
+    reader: { pullRequest: notUsedByAsk, runningReview: notUsedByAsk, threadIsOpen: notUsedByAsk },
     github: { snapshotPrDiff: notUsedByAsk, fetchPrCommits: notUsedByAsk },
   });
   return { reviews, sent };

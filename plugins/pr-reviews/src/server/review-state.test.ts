@@ -96,6 +96,17 @@ const cases: [name: string, facts: Facts, state: ReviewState][] = [
     { guides: [guide("t1", "head1", 300)], runs: [run("t1", "head1", 100), run("t2", HEAD, 400)], threads: threads({ t1: thread("idle"), t2: thread("idle", 990) }) },
     { kind: "no-guide", threadId: "t2", idleSince: 990 },
   ],
+  // Update guide: the stale guide's thread is asked to write the guide for the new head.
+  [
+    "after Update, the guide's thread is writing for the current head",
+    { guides: [guide("t1", "head1", 300)], runs: [run("t1", "head1", 100), run("t1", HEAD, 400)], threads: threads({ t1: thread("active") }) },
+    { kind: "running", threadId: "t1", runHeadSha: HEAD, startedAt: 400 },
+  ],
+  [
+    "after Update, the thread submitted the guide for the current head",
+    { guides: [guide("t1", "head1", 300), guide("t1", HEAD, 500)], runs: [run("t1", "head1", 100), run("t1", HEAD, 400)], threads: threads({ t1: thread("idle") }) },
+    { kind: "ready", threadId: "t1", guideHeadSha: HEAD },
+  ],
 ];
 
 for (const [name, { guides = [], ...facts }, state] of cases) {
