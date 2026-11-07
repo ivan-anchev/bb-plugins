@@ -4,13 +4,24 @@
 // so there is no dead gap between them (WCAG 1.4.13).
 import { useEffect, useId, useState, type ReactNode } from "react";
 
+type Placement = "top" | "bottom-end";
+
 type TooltipProps = {
   content: ReactNode;
+  /** "bottom-end" for a trigger in a header bar, where "top" would be clipped by the page's top
+   *  edge and a centered popup by its right edge. */
+  placement?: Placement;
   /** Renders the trigger; pass `describedBy` to its `aria-describedby`. */
   children: (describedBy: string) => ReactNode;
 };
 
-export function Tooltip({ content, children }: TooltipProps) {
+// The gap between trigger and popup is padding inside the popup, so the pointer never leaves the hover area.
+const PLACEMENTS = {
+  top: "bottom-full left-1/2 -translate-x-1/2 pb-1.5",
+  "bottom-end": "top-full right-0 pt-1.5",
+} as const satisfies Record<Placement, string>;
+
+export function Tooltip({ content, placement = "top", children }: TooltipProps) {
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -32,8 +43,7 @@ export function Tooltip({ content, children }: TooltipProps) {
       onBlur={() => setFocused(false)}
     >
       {children(id)}
-      {/* pb-1.5 is the gap above the trigger, inside the popup, so the pointer never leaves the hover area. */}
-      <span role="tooltip" id={id} hidden={!open} className="absolute bottom-full left-1/2 z-50 -translate-x-1/2 pb-1.5">
+      <span role="tooltip" id={id} hidden={!open} className={`absolute z-50 ${PLACEMENTS[placement]}`}>
         <span className="block w-max max-w-[320px] rounded-md bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-md ring-1 ring-foreground/8 animate-in fade-in-0 zoom-in-95 motion-reduce:animate-none">
           {content}
         </span>

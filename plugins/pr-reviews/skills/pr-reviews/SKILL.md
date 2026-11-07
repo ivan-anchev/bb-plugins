@@ -33,11 +33,12 @@ remembered project that read **Guide ready**, and no badge at zero.
 
 ## The page
 
-Clicking a row opens that PR's page. Its header shows `#number` and the title,
-the author, `head-branch → base-branch`, **Review chat** (opens the review
-thread's chat beside the page; shown once a review has started, see "Review
-chat" below) and **GitHub** (opens the PR on github.com). Below it, one screen
-per review state:
+Clicking a row opens that PR's page. Its header shows the title over
+`#number`, the author's GitHub avatar and login, and `base-branch ← head-branch`;
+the files, lines and CI checks; and icon buttons, each named by its tooltip:
+**Review chat** (opens the review thread's chat beside the page; shown once a
+review has started, see "Review chat" below) and **Open on GitHub** (opens the
+PR on github.com). Below it, one screen per review state:
 
 - **No guide yet**, with **Start review**.
 - **Writing the guide**, while the review thread works: a spinner, the time
