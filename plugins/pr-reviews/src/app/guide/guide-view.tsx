@@ -39,14 +39,12 @@ function LoadedGuide({ target, pr, record, files, viewOptions }: LoadedGuideProp
   const findings = visibleFindings(record.guide, options);
   return (
     <>
-      <div ref={scroll} className="min-h-0 flex-1 overflow-y-auto">
+      {/* A size container: the step page's columns and its sticky story read its width and height. */}
+      <div ref={scroll} className="min-h-0 flex-1 overflow-y-auto [container-type:size]">
         {/* Keyed by page: each page opens fresh, with its rows folded again. */}
-        <article
-          key={place.kind === "overview" ? "overview" : place.step.index}
-          className="grid max-w-[880px] grid-cols-[minmax(0,1fr)] content-start gap-[18px] px-7 pt-[18px] pb-10"
-        >
-          <PageTitle ref={title}>{place.title}</PageTitle>
-          {place.kind === "overview" ? (
+        {place.kind === "overview" ? (
+          <article key="overview" className="grid max-w-[880px] grid-cols-[minmax(0,1fr)] content-start gap-[18px] px-7 pt-[18px] pb-10">
+            <PageTitle ref={title}>{place.title}</PageTitle>
             <Overview
               pr={pr}
               record={record}
@@ -57,10 +55,10 @@ function LoadedGuide({ target, pr, record, files, viewOptions }: LoadedGuideProp
               hiddenTests={hiddenTestHunkCount(record.guide, options)}
               onShowTests={() => setOptions({ ...options, showTests: true })}
             />
-          ) : (
-            <StepPage step={place.step.step} files={files} findings={findings} target={target} />
-          )}
-        </article>
+          </article>
+        ) : (
+          <StepPage key={place.step.index} place={place} total={walkthrough.steps.length} title={title} files={files} findings={findings} target={target} />
+        )}
       </div>
       <Controller walkthrough={walkthrough} />
     </>
