@@ -10,7 +10,9 @@ ever posted to GitHub.
 - **Open pull requests**: each row shows the PR's number, title, author, when
   it was last updated, and its review state in words.
 - **A page per pull request**: its title, author, `base ← branch`, files,
-  lines and checks, and Review chat and GitHub icon buttons, above its guide.
+  lines and checks, and Review chat and GitHub icon buttons, above two tabs:
+  **Summary**, the author's own description, and **Guide**, which keeps its
+  step while you switch and marks a ready guide with a dot.
 - **Start review**: starts a review thread in a new worktree, with your
   Review instructions from Settings → PR Reviews. The page shows it writing,
   with the time so far, Review chat and Cancel, and asks it to finish if it
@@ -24,9 +26,9 @@ ever posted to GitHub.
   chat opens the PR's review thread beside its page, the whole conversation
   live with a composer, so you can watch it work and ask it anything. Ask
   about this, the nudge and Update guide all show up there.
-- **What this PR does**: the guide opens on an overview: the author's own
-  description on demand, the problem and the approach, before and after when
-  behaviour changes, what the guide leaves out and why, and who wrote it.
+- **What this PR does**: the guide opens on an overview: the problem and the
+  approach, before and after when behaviour changes, what the guide leaves out
+  and why, and who wrote it.
 - **One step at a time**: Start the walkthrough shows each step's
   explanation, any decision left to you, and its code in bb's own diff view,
   the same one Code Explorer uses. Move with ← and → (or J and K); each

@@ -22,7 +22,7 @@ export type Walkthrough = {
 export type WalkthroughPage = { scroll: RefObject<HTMLElement | null>; title: RefObject<HTMLElement | null> };
 
 /**
- * Starts on the overview. When the view options change, from the header or from the page, the
+ * Starts on the overview. When the view options change, from the tab bar or from the page, the
  * reader stays on their step, or moves to the nearest earlier one still shown. Every move scrolls
  * the page back to the top. A change that removes the focused element (Start, an arrow at either
  * end, anything on the old page such as a finding's step link, the overview's "Tests and mocks"
@@ -31,7 +31,7 @@ export type WalkthroughPage = { scroll: RefObject<HTMLElement | null>; title: Re
 export function useWalkthrough(guide: Guide, viewOptions: ViewOptionsState, page: WalkthroughPage): Walkthrough {
   const { options } = viewOptions;
   const [position, setPosition] = useState<Position>(OVERVIEW);
-  // why state set while rendering: the options arrive as a prop (the header's switch sits outside
+  // why state set while rendering: the options arrive as a prop (the tab bar's switch sits outside
   // the guide), and the position must follow them before the page shows the new steps.
   const [positionOptions, setPositionOptions] = useState(options);
   if (positionOptions !== options) {
@@ -50,7 +50,7 @@ export function useWalkthrough(guide: Guide, viewOptions: ViewOptionsState, page
     [position, options, page.title],
   );
   const shownIndex = stepIndexOf(position);
-  // why an effect: a move can come from the header's switch, outside the walkthrough's handlers.
+  // why an effect: a move can come from the tab bar's switch, outside the walkthrough's handlers.
   useLayoutEffect(
     function scrollNewPageToTop() {
       page.scroll.current?.scrollTo({ top: 0 });
@@ -79,13 +79,15 @@ export function useWalkthrough(guide: Guide, viewOptions: ViewOptionsState, page
 
 const stepIndexOf = (position: Position) => (position.kind === "overview" ? -1 : position.index);
 
-// → and J move to the next step, ← and K to the previous one. Ignored while typing (inputs,
-// textareas, selects, contenteditable, such as bb's composer in a split view), with a modifier
-// held, or when something else already handled the key.
+// → and J move to the next step, ← and K to the previous one, only while the guide is `shown`.
+// Ignored while typing (inputs, textareas, selects, contenteditable, such as bb's composer in a
+// split view), with a modifier held, or when something else already handled the key (the PR
+// page's tabs).
 // why an effect: a document listener is a subscription to the DOM.
-export function useStepKeys({ next, previous }: Walkthrough): void {
+export function useStepKeys({ next, previous }: Walkthrough, shown: boolean): void {
   useEffect(
     function moveOnStepKeys() {
+      if (!shown) return;
       const onKeyDown = (event: KeyboardEvent) => {
         if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
         const direction = STEP_KEYS[event.key];
@@ -97,7 +99,7 @@ export function useStepKeys({ next, previous }: Walkthrough): void {
       document.addEventListener("keydown", onKeyDown);
       return () => document.removeEventListener("keydown", onKeyDown);
     },
-    [next, previous],
+    [next, previous, shown],
   );
 }
 

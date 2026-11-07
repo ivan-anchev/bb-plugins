@@ -1,8 +1,8 @@
-// The guide's first screen, under its title "What this PR does": the author's own description on
-// demand, the problem and the approach, before and after when behaviour changes, the findings,
-// what the guide leaves out (and the tests and mocks the view options hide), and who wrote it.
+// The guide's first screen, under its title "What this PR does": the problem and the approach,
+// before and after when behaviour changes, the findings, what the guide leaves out (and the tests
+// and mocks the view options hide), and who wrote it.
 import { useState, type ReactNode } from "react";
-import type { GuideRecord, PrDetail } from "../../contract.ts";
+import type { GuideRecord } from "../../contract.ts";
 import { fileOf, type DiffFile } from "../../diff/diff-schema.ts";
 import type { Finding, Guide, HiddenItem } from "../../guide/guide-schema.ts";
 import { stepNumberOfFinding, type VisibleFinding, type VisibleStep } from "../../guide/walkthrough.ts";
@@ -15,7 +15,6 @@ import { Priority } from "./priority.tsx";
 import { ShowToggle } from "./show-toggle.tsx";
 
 type OverviewProps = {
-  pr: PrDetail;
   record: GuideRecord;
   files: DiffFile[];
   /** The findings the view options show; none while the findings switch is off. */
@@ -28,11 +27,10 @@ type OverviewProps = {
   onShowTests(): void;
 };
 
-export function Overview({ pr, record, files, findings, steps, onOpenStep, hiddenTests, onShowTests }: OverviewProps) {
+export function Overview({ record, files, findings, steps, onOpenStep, hiddenTests, onShowTests }: OverviewProps) {
   const { overview, hidden } = record.guide;
   return (
     <>
-      {pr.body.trim() !== "" && <AuthorDescription author={pr.author} body={pr.body} />}
       <Prose text={overview.problem} className={PROSE_TYPE} />
       <Prose text={overview.approach} className={PROSE_TYPE} />
       {overview.behaviour !== null && <BeforeAfter behaviour={overview.behaviour} />}
@@ -59,34 +57,6 @@ export function Overview({ pr, record, files, findings, steps, onOpenStep, hidde
     </>
   );
 }
-
-function AuthorDescription({ author, body }: { author: string; body: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      {/* The negative margins line the label up with the text column. */}
-      <div className="-mt-1.5 -ml-2.5 justify-self-start">
-        <Button variant="ghost" size="small" aria-expanded={open} onClick={() => setOpen(!open)}>
-          {open ? "Hide the author's description" : "Show the author's description"}
-        </Button>
-      </div>
-      {open && (
-        <section className={`${CONTAIN_BODY} rounded-lg bg-muted px-4 py-3.5 text-[13.5px] leading-[21px]`}>
-          <p className="text-xs text-subtle-foreground">{author} wrote</p>
-          <Prose text={body} />
-        </section>
-      )}
-    </>
-  );
-}
-
-// why: the author's body is any markdown, so the card holds it in:
-// - its track is `minmax(0,1fr)`: the implicit `auto` track grows to the body's widest table and
-//   carries the text past the card.
-// - bb lets a table break out of the text as far as the nearest ancestor that clips overflow (in
-//   chat, the timeline). Clipping the card stops it at the card, and a zero start offset (bb's own
-//   setting for indented blocks) keeps it on the text's edges, scrolling inside its own wrapper.
-const CONTAIN_BODY = "grid grid-cols-[minmax(0,1fr)] gap-2.5 overflow-x-clip [--md-table-start-offset:0px]";
 
 type Behaviour = NonNullable<Guide["overview"]["behaviour"]>;
 
