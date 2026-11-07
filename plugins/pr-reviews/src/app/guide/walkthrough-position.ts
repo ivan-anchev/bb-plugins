@@ -20,11 +20,11 @@ export function placeOf(steps: VisibleStep[], position: Position): Place {
   if (at === -1) return { kind: "overview", title: OVERVIEW_TITLE };
   return {
     kind: "step",
-    title: steps[at].step.title,
+    title: titleOf(steps[at]),
     step: steps[at],
     number: at + 1,
-    previousTitle: at === 0 ? OVERVIEW_TITLE : steps[at - 1].step.title,
-    nextTitle: at === steps.length - 1 ? null : steps[at + 1].step.title,
+    previousTitle: at === 0 ? OVERVIEW_TITLE : titleOf(steps[at - 1]),
+    nextTitle: at === steps.length - 1 ? null : titleOf(steps[at + 1]),
   };
 }
 
@@ -47,6 +47,10 @@ export function resolvePosition(steps: VisibleStep[], position: Position): Posit
   if (position.kind === "overview") return OVERVIEW;
   return positionAt(steps, steps.filter((shown) => shown.index <= position.index).length - 1);
 }
+
+// The step counter already numbers the steps, and counts only the shown ones, so a number the
+// agent wrote into a title ("2. Retry once") is dropped: it repeats the counter, or contradicts it.
+const titleOf = (shown: VisibleStep) => shown.step.title.replace(/^\s*(?:step\s+)?\d+\s*[.):\-–—]\s+/i, "");
 
 // The position's place among the shown steps; -1 for the overview, or a step not shown.
 function shownAt(steps: VisibleStep[], position: Position): number {

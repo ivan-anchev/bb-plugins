@@ -37,6 +37,21 @@ describe("placeOf", () => {
     const only = STEPS.slice(0, 1);
     assert.deepEqual(placeOf(only, at(0)), { kind: "step", title: "One refresh in flight", step: only[0], number: 1, previousTitle: "What this PR does", nextTitle: null });
   });
+
+  test("drops a step number the agent wrote into a title", () => {
+    const numbered: VisibleStep[] = [
+      { index: 0, step: step("1. One refresh in flight") },
+      { index: 1, step: step("Step 2: Retry once") },
+      { index: 2, step: step("3) Tests") },
+    ];
+    assert.deepEqual(placeOf(numbered, at(1)), { kind: "step", title: "Retry once", step: numbered[1], number: 2, previousTitle: "One refresh in flight", nextTitle: "Tests" });
+  });
+
+  test("keeps a number that is part of the title", () => {
+    const only: VisibleStep[] = [{ index: 0, step: step("3 retries, then give up") }, { index: 1, step: step("1.5x faster reads") }];
+    assert.equal(placeOf(only, at(0)).title, "3 retries, then give up");
+    assert.equal(placeOf(only, at(1)).title, "1.5x faster reads");
+  });
 });
 
 describe("nextPosition", () => {
