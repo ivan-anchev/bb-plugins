@@ -14,11 +14,11 @@ export function PrIdentity({ pr }: { pr: PrDetail }) {
       </span>
       {/* The arrow stays with the head branch, so a wrapped pair reads `base` over `← head`. */}
       <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
-        <BranchChip>{pr.baseRefName}</BranchChip>
+        <Branch>{pr.baseRefName}</Branch>
         <span className="inline-flex min-w-0 items-center gap-1">
           <Icon name="ArrowLeft" className="size-3 shrink-0 text-subtle-foreground" aria-hidden />
           <span className="sr-only">from</span>
-          <BranchChip>{pr.headRefName}</BranchChip>
+          <Branch>{pr.headRefName}</Branch>
         </span>
       </span>
     </p>
@@ -36,6 +36,8 @@ function Avatar({ login }: { login: string }) {
   );
 }
 
-function BranchChip({ children }: { children: ReactNode }) {
-  return <code className="min-w-0 break-all rounded-[5px] bg-surface-recessed px-1.5 font-mono text-[11.5px] leading-[18px] text-foreground ring-1 ring-border-seam ring-inset">{children}</code>;
+// Plain monospace text in the row's muted color. Hover lifts it to the foreground color, not a heavier
+// weight, so the name keeps its width and nothing beside it moves. Decoration only: no link, no focus stop.
+function Branch({ children }: { children: ReactNode }) {
+  return <code className="min-w-0 break-all font-mono text-[11.5px] transition-colors duration-150 ease-out hover:text-foreground motion-reduce:transition-none">{children}</code>;
 }
