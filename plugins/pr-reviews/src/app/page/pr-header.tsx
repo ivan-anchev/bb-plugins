@@ -16,7 +16,7 @@ export function PrHeader({ pr, hasReviewThread, children }: PrHeaderProps) {
     <header className="@container shrink-0 px-7 pt-4 pb-3.5">
       <div className={MASTHEAD}>
         <PrTile />
-        <h1 className="text-[17px] leading-6 font-semibold text-pretty [grid-area:title]">{pr.title}</h1>
+        <h1 className="text-[17px] leading-6 font-semibold text-pretty break-words [grid-area:title]">{pr.title}</h1>
         {/* -my-0.5 centers the 28px buttons on the title's 24px first line; -mr-1.5 lines the last
             glyph, not its hit area, up with the stats' right edge. */}
         <div className="-my-0.5 -mr-1.5 flex gap-1 justify-self-end [grid-area:actions]">
