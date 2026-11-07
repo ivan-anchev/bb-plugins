@@ -1,5 +1,6 @@
-// The files a step touches, under its story: icon, name, the dimmed folder and the step's own
-// `+N −M`. Each row is a button that jumps the diffs to the file's first hunk.
+// The files a step touches, under its story: icon, name, the dimmed folder, a "New" or "Deleted"
+// tag when the PR adds or deletes the file, and the step's own `+N −M`. Each row is a button that
+// jumps the diffs to the file's first hunk.
 import type { StepFile } from "../../guide/step-files.ts";
 import { FileIcon } from "./file-icon.tsx";
 
@@ -21,11 +22,12 @@ export function StepFileList({ files, onJump }: StepFileListProps) {
 // The ring is inset: the story column scrolls on its own, which would clip a ring drawn outside.
 function FileRow({ file, onJump }: { file: StepFile; onJump(path: string): void }) {
   const { name, folder } = splitPath(file.path);
+  const tag = statusTagOf(file.status);
   return (
     <button
       type="button"
       title={file.path}
-      aria-label={`${file.path}: ${file.added} added, ${file.removed} removed`}
+      aria-label={`${file.path}${tag === null ? "" : `, ${tag.label.toLowerCase()} file`}: ${file.added} added, ${file.removed} removed`}
       onClick={() => onJump(file.path)}
       className="flex min-h-9 w-full cursor-pointer touch-manipulation items-center gap-2.5 rounded-lg bg-muted/40 px-3 text-left text-[13px] outline-none transition-colors duration-150 ease-out hover:bg-state-hover focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset motion-reduce:transition-none"
     >
@@ -34,9 +36,26 @@ function FileRow({ file, onJump }: { file: StepFile; onJump(path: string): void 
         <span className="max-w-full shrink-0 truncate">{name}</span>
         <span className="min-w-0 truncate text-subtle-foreground">{folder}</span>
       </span>
+      {tag !== null && <StatusTag tag={tag} />}
       <LineCounts added={file.added} removed={file.removed} />
     </button>
   );
+}
+
+// A word, not only a colour: the tint is the same green and red as the line counts beside it.
+const STATUS_TAGS = {
+  added: { label: "New", tone: "bg-diff-added/12 text-diff-added" },
+  deleted: { label: "Deleted", tone: "bg-diff-removed/12 text-diff-removed" },
+};
+
+type StatusTag = (typeof STATUS_TAGS)[keyof typeof STATUS_TAGS];
+
+// A modified or renamed file is the common case and stays untagged.
+const statusTagOf = (status: StepFile["status"]): StatusTag | null =>
+  status === "added" || status === "deleted" ? STATUS_TAGS[status] : null;
+
+function StatusTag({ tag }: { tag: StatusTag }) {
+  return <span className={`shrink-0 rounded px-1.5 py-px text-[11.5px] font-medium ${tag.tone}`}>{tag.label}</span>;
 }
 
 // A side with no lines is left out, as in "+57"; a file with no text lines shows neither.
