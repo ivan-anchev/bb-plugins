@@ -5,9 +5,9 @@ import type { experimental_PluginRpcCallError as RpcCallError } from "@get-bb/pl
 import type { ReviewState } from "../../contract.ts";
 import { useReviewAction, type PrTarget } from "../queries.ts";
 import { timeAgo } from "../relative-time.ts";
+import { ReviewChatButton } from "../review-chat/review-chat-button.tsx";
 import { Button } from "../ui/button.tsx";
 import { useElapsed } from "./elapsed.ts";
-import { OpenThreadButton } from "./open-thread-button.tsx";
 
 type Running = Extract<ReviewState, { kind: "running" }>;
 type NoGuide = Extract<ReviewState, { kind: "no-guide" }>;
@@ -43,7 +43,7 @@ export function RunningScreen({ target, review }: { target: PrTarget; review: Ru
       error={cancel.error}
       actions={
         <>
-          <OpenThreadButton threadId={review.threadId} variant="secondary" />
+          <ReviewChatButton variant="secondary" />
           <Button variant="ghost" disabled={cancel.isPending} onClick={cancel.run}>
             Cancel
           </Button>
@@ -66,7 +66,7 @@ export function NoGuideScreen({ target, review }: { target: PrTarget; review: No
           <Button variant="primary" disabled={nudge.isPending} onClick={nudge.run}>
             Ask it to submit the guide
           </Button>
-          <OpenThreadButton threadId={review.threadId} variant="secondary" />
+          <ReviewChatButton variant="secondary" />
         </>
       }
     >

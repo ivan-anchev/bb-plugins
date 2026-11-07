@@ -5,6 +5,8 @@ export type Route =
   | { kind: "project"; projectId: string }
   | { kind: "pr"; projectId: string; number: number };
 
+export const PANEL_ID = "pr-reviews";
+
 export const PANEL_PATH = "prs";
 
 export function parseRoute(subPath: string): Route {

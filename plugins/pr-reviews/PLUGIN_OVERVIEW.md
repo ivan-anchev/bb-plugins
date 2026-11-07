@@ -10,16 +10,20 @@ ever posted to GitHub.
 - **Open pull requests**: each row shows the PR's number, title, author, when
   it was last updated, and its review state in words.
 - **A page per pull request**: its title, author, `branch → base`, and quiet
-  Open thread and GitHub buttons, above its guide.
+  Review chat and GitHub buttons, above its guide.
 - **Start review**: starts a review thread in a new worktree, with your
   Review instructions from Settings → PR Reviews. The page shows it writing,
-  with the time so far, Open thread and Cancel, and asks it to finish if it
+  with the time so far, Review chat and Cancel, and asks it to finish if it
   stops without a guide.
 - **A checked guide**: the thread hands in its guide with the `submit_review`
   tool, which only review threads get. PR Reviews rejects a guide that leaves
   out a hunk of the diff, lists one twice, or has more than 7 steps, and says
   exactly what to fix. The row then reads Guide ready, and the rail badge
   counts the ready guides.
+- **Review chat**: review threads stay out of bb's thread sidebar. Review
+  chat opens the PR's review thread beside its page, the whole conversation
+  live with a composer, so you can watch it work and ask it anything. Ask
+  about this, the nudge and Update guide all show up there.
 - **What this PR does**: the guide opens on an overview: the author's own
   description on demand, the problem and the approach, before and after when
   behaviour changes, what the guide leaves out and why, and who wrote it.
@@ -31,7 +35,7 @@ ever posted to GitHub.
 - **Findings, second**: the overview lists the thread's findings, Must fix,
   Should fix or Nit, each linking to its step, and each step shows a finding
   in a grey block under its line. Ask about this sends the thread a question
-  about it; the answer is in the thread.
+  about it; the answer is in Review chat.
 - **New commits**: when a PR moves past its guide, the row reads New commits
   and the guide stays readable under "N new commits since this guide was
   written". Update guide asks the same review thread to read only the new

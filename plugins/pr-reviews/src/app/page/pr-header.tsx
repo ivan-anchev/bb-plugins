@@ -1,14 +1,14 @@
-// The PR page header: number and title, author and `head → base`, and quiet "Open thread" (when a
+// The PR page header: number and title, author and `head → base`, and quiet "Review chat" (when a
 // review thread exists) and "GitHub" actions, then the screen's own actions (`children`).
 import type { ReactNode } from "react";
 import { UrlLink } from "@get-bb/plugin-sdk/app";
 import type { PrDetail } from "../../contract.ts";
+import { ReviewChatButton } from "../review-chat/review-chat-button.tsx";
 import { buttonClass } from "../ui/button.tsx";
-import { OpenThreadButton } from "./open-thread-button.tsx";
 
-type PrHeaderProps = { pr: PrDetail; threadId: string | null; children?: ReactNode };
+type PrHeaderProps = { pr: PrDetail; hasReviewThread: boolean; children?: ReactNode };
 
-export function PrHeader({ pr, threadId, children }: PrHeaderProps) {
+export function PrHeader({ pr, hasReviewThread, children }: PrHeaderProps) {
   return (
     <header className="flex shrink-0 items-start justify-between gap-4 px-7 pt-4 pb-3.5">
       <div className="min-w-0">
@@ -23,7 +23,7 @@ export function PrHeader({ pr, threadId, children }: PrHeaderProps) {
         </p>
       </div>
       <div className="flex shrink-0 gap-1">
-        {threadId !== null && <OpenThreadButton threadId={threadId} variant="ghost" size="small" />}
+        {hasReviewThread && <ReviewChatButton variant="ghost" size="small" />}
         <UrlLink href={pr.url} className={buttonClass("ghost", "small")}>
           GitHub
         </UrlLink>
