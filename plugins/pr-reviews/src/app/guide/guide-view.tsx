@@ -1,6 +1,6 @@
 // The Guide tab once a guide exists: the overview first, then one step at a time, with the
 // controller pinned under the scrolling page.
-import { useRef } from "react";
+import { useRef, type ReactNode, type Ref } from "react";
 import type { GuideRecord } from "../../contract.ts";
 import type { DiffFile } from "../../diff/diff-schema.ts";
 import { hiddenTestHunkCount, visibleFindings } from "../../guide/walkthrough.ts";
@@ -19,11 +19,20 @@ type GuideViewProps = { target: GuideTarget; viewOptions: ViewOptionsState; show
 
 export function GuideView({ target, viewOptions, shown }: GuideViewProps) {
   const guide = useGuide(target);
+  const error = <ReadError read={guide} what="the guide" />;
+  // Until a guide arrives the page holds the read's state; after, a failed re-read sits above it.
+  if (guide.data === undefined) {
+    return (
+      <GuidePage>
+        {error}
+        {guide.isLoading && <Notice>Loading the guide…</Notice>}
+      </GuidePage>
+    );
+  }
   return (
     <>
-      <ReadError read={guide} what="the guide" />
-      {guide.isLoading && <Notice>Loading the guide…</Notice>}
-      {guide.data !== undefined && <LoadedGuide target={target} record={guide.data.record} files={guide.data.files} viewOptions={viewOptions} shown={shown} />}
+      {error}
+      <LoadedGuide target={target} record={guide.data.record} files={guide.data.files} viewOptions={viewOptions} shown={shown} />
     </>
   );
 }
@@ -40,8 +49,8 @@ function LoadedGuide({ target, record, files, viewOptions, shown }: LoadedGuideP
   const findings = visibleFindings(record.guide, options);
   return (
     <>
-      {/* A size container: the step page's columns and its sticky story read its width and height. */}
-      <div ref={scroll} className="min-h-0 flex-1 overflow-y-auto [container-type:size]">
+      {/* It stays mounted across pages, so a step move keeps focus on it. */}
+      <GuidePage ref={scroll}>
         {/* Keyed by page: each page opens fresh, with its rows folded again. */}
         {place.kind === "overview" ? (
           <article key="overview" className="grid max-w-[880px] grid-cols-[minmax(0,1fr)] content-start gap-[18px] px-7 pt-[18px] pb-10">
@@ -59,8 +68,26 @@ function LoadedGuide({ target, record, files, viewOptions, shown }: LoadedGuideP
         ) : (
           <StepPage key={place.step.index} place={place} total={walkthrough.steps.length} title={title} files={files} findings={findings} target={target} />
         )}
-      </div>
+      </GuidePage>
       <Controller walkthrough={walkthrough} />
     </>
+  );
+}
+
+// The Guide tab's one tab stop for its content, in place of the Guide panel's, in every state of
+// the read: the loading notice, a failed read's error, and the guide's scrolling page,
+// so the scroll keys move it and ← → step from it. A size container: the step page's columns and
+// its sticky story read its width and height.
+function GuidePage({ ref, children }: { ref?: Ref<HTMLDivElement>; children: ReactNode }) {
+  return (
+    <div
+      ref={ref}
+      role="region"
+      aria-label="Guide page"
+      tabIndex={0}
+      className="min-h-0 flex-1 overflow-y-auto outline-none [container-type:size] focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
+    >
+      {children}
+    </div>
   );
 }
