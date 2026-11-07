@@ -28,6 +28,12 @@ ever posted to GitHub.
   the same one Code Explorer uses. Move with ← and → (or J and K); each
   arrow's tooltip names the step it leads to, and Next on the last step
   returns to the overview.
+- **Findings, second**: the overview lists the thread's findings, Must fix,
+  Should fix or Nit, each linking to its step, and each step shows a finding
+  in a grey block under its line. Ask about this sends the thread a question
+  about it; the answer is in the thread.
+- **View options**: switches to show tests and mocks (hidden by default) and
+  findings (shown by default).
 - **Errors beside your data**: if GitHub can't be read, the error shows above
   the list you already had. Refresh, or click the open PR again, to retry.
 

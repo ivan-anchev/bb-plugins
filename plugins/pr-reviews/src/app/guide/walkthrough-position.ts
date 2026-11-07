@@ -53,6 +53,7 @@ function shownAt(steps: VisibleStep[], position: Position): number {
   return position.kind === "overview" ? -1 : steps.findIndex((shown) => shown.index === position.index);
 }
 
-function positionAt(steps: VisibleStep[], at: number): Position {
+/** The shown step at `at`, counted from 0; the overview outside the shown steps. */
+export function positionAt(steps: VisibleStep[], at: number): Position {
   return at < 0 || at >= steps.length ? OVERVIEW : { kind: "step", index: steps[at].index };
 }

@@ -2,6 +2,7 @@
 import { randomBytes } from "node:crypto";
 import type { PrDetail } from "../contract.ts";
 import { unitIdsOf, type DiffFile } from "../diff/diff-schema.ts";
+import type { Finding } from "../guide/guide-schema.ts";
 import type { Repo } from "../github/repo.ts";
 import { pathLiteral, stripHidden } from "./visible-text.ts";
 
@@ -16,6 +17,15 @@ export function reviewPrompt(facts: PromptFacts, instructions: string): string {
 /** Sent when a review thread settled without a guide. */
 export function nudgeMessage(): string {
   return "You stopped without a successful submit_review call, so the user has no guide. Call submit_review now with the complete guide. If an earlier call was rejected, fix every problem it listed. If you cannot finish, say why in one short paragraph.";
+}
+
+/** The reader's question about one of the thread's findings, quoted so the thread knows which. */
+export function askMessage(finding: Finding, question: string): string {
+  return [
+    `The reviewer has a question about your finding "${finding.title}" (${pathLiteral(finding.file)}, line ${finding.line}, ${finding.side} side):`,
+    question,
+    "Answer in this thread. Call submit_review again only if the answer shows the guide is wrong, and then with the whole corrected guide.",
+  ].join("\n\n");
 }
 
 function scaffold({ repo, pr, headSha, baseSha }: PromptFacts): string {

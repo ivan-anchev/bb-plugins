@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { hunkIdSchema } from "../diff/diff-schema.ts";
-import type { Guide, GuideHunk, GuideStep } from "./guide-schema.ts";
-import { hiddenTestHunkCount, testHunkCount, visibleSteps, type ViewOptions } from "./walkthrough.ts";
+import type { Finding, Guide, GuideHunk, GuideStep } from "./guide-schema.ts";
+import { findingsOn, hiddenTestHunkCount, stepNumberOfFinding, testHunkCount, visibleFindings, visibleSteps, type ViewOptions } from "./walkthrough.ts";
 
 const entry = (file: string): GuideHunk => ({ file, hunk: hunkIdSchema.parse("@@ -1,1 +1,1 @@"), collapsed: null });
 const step = (title: string, files: string[]): GuideStep => ({ title, explanation: "…", forYou: null, hunks: files.map(entry) });
@@ -62,5 +62,53 @@ describe("hiddenTestHunkCount", () => {
   test("is 0 while tests are shown, or when the guide has none", () => {
     assert.equal(hiddenTestHunkCount(guide, SHOWN), 0);
     assert.equal(hiddenTestHunkCount({ ...guide, steps: [CODE] }, HIDDEN), 0);
+  });
+});
+
+const finding = (file: string, title: string): Finding => ({
+  file,
+  line: 1,
+  side: "new",
+  hunk: hunkIdSchema.parse("@@ -1,1 +1,1 @@"),
+  priority: "p1",
+  title,
+  body: "…",
+});
+
+const ON_CODE = finding("src/fetch.ts", "Retries forever");
+const ON_TEST = finding("src/fetch.test.ts", "Asserts nothing");
+const ON_HIDDEN = finding("CHANGELOG.md", "Wrong version");
+const withFindings: Guide = { ...guide, findings: [ON_CODE, ON_TEST, ON_HIDDEN] };
+
+describe("visibleFindings", () => {
+  test("shows every finding, with its index, while the findings switch is on", () => {
+    assert.deepEqual(visibleFindings(withFindings, HIDDEN), [
+      { index: 0, finding: ON_CODE },
+      { index: 1, finding: ON_TEST },
+      { index: 2, finding: ON_HIDDEN },
+    ]);
+  });
+
+  test("shows none while it is off", () => {
+    assert.deepEqual(visibleFindings(withFindings, { showTests: true, showFindings: false }), []);
+  });
+
+  test("a step's hunk gets only its own findings", () => {
+    assert.deepEqual(findingsOn(visibleFindings(withFindings, SHOWN), entry("src/fetch.test.ts")), [{ index: 1, finding: ON_TEST }]);
+  });
+});
+
+describe("stepNumberOfFinding", () => {
+  test("is the shown step's number, counted from 1", () => {
+    assert.equal(stepNumberOfFinding(visibleSteps(withFindings, SHOWN), ON_CODE), 2);
+    assert.equal(stepNumberOfFinding(visibleSteps(withFindings, SHOWN), ON_TEST), 3);
+  });
+
+  test("is null for a finding on a test hunk while tests are hidden", () => {
+    assert.equal(stepNumberOfFinding(visibleSteps(withFindings, HIDDEN), ON_TEST), null);
+  });
+
+  test("is null for a finding on a hunk the guide leaves out", () => {
+    assert.equal(stepNumberOfFinding(visibleSteps(withFindings, SHOWN), ON_HIDDEN), null);
   });
 });

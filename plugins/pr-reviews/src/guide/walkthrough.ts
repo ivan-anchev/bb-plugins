@@ -1,8 +1,8 @@
 // What the walkthrough shows for the reader's view options. Pure; the app calls it at render.
 import { isTestOrMock } from "./change-kind.ts";
-import type { Guide, GuideStep } from "./guide-schema.ts";
+import type { Finding, Guide, GuideHunk, GuideStep } from "./guide-schema.ts";
 
-/** The switches in the header's view options. `showFindings` has no effect until findings render. */
+/** The switches in the header's view options. */
 export type ViewOptions = { showTests: boolean; showFindings: boolean };
 
 /** A step as the walkthrough shows it, with its index in `guide.steps`. */
@@ -28,3 +28,24 @@ export function testHunkCount(guide: Guide): number {
 export function hiddenTestHunkCount(guide: Guide, options: ViewOptions): number {
   return options.showTests ? 0 : testHunkCount(guide);
 }
+
+/** A finding as the walkthrough shows it, with its index in `guide.findings`, which names it to the server. */
+export type VisibleFinding = { index: number; finding: Finding };
+
+/** Every finding while the findings switch is on, in submission order; none while it is off. */
+export function visibleFindings(guide: Guide, options: ViewOptions): VisibleFinding[] {
+  return options.showFindings ? guide.findings.map((finding, index) => ({ index, finding })) : [];
+}
+
+/** The findings on one hunk of a step. */
+export function findingsOn(findings: VisibleFinding[], entry: GuideHunk): VisibleFinding[] {
+  return findings.filter(({ finding }) => isOn(finding, entry));
+}
+
+/** The number, counted from 1 as the controller counts, of the shown step that holds the finding's hunk; null when its hunk is hidden or filtered out. */
+export function stepNumberOfFinding(steps: VisibleStep[], finding: Finding): number | null {
+  const at = steps.findIndex(({ step }) => step.hunks.some((entry) => isOn(finding, entry)));
+  return at === -1 ? null : at + 1;
+}
+
+const isOn = (finding: Finding, entry: GuideHunk) => finding.file === entry.file && finding.hunk === entry.hunk;

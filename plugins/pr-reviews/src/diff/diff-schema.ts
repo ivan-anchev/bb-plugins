@@ -48,8 +48,7 @@ export type NumberedLine = { text: string; old: number | null; new: number | nul
 
 /** The hunk's lines numbered from its header. The `\ No newline` marker is on neither side. */
 export function numberedLines(hunk: Hunk): NumberedLine[] {
-  let oldNumber = firstLineOf(hunk.oldStart, hunk.oldLines);
-  let newNumber = firstLineOf(hunk.newStart, hunk.newLines);
+  let { old: oldNumber, new: newNumber } = firstLinesOf(hunk);
   return hunk.lines.map((text) => {
     switch (text[0]) {
       case " ":
@@ -64,7 +63,14 @@ export function numberedLines(hunk: Hunk): NumberedLine[] {
   });
 }
 
-// git writes the line before an empty side as its start (`@@ -0,0 +1,2 @@`).
+/**
+ * The number the hunk's first line on each side has, or would have. git writes the line before
+ * an empty side as its start (`@@ -0,0 +1,2 @@`), so an empty side starts one line later.
+ */
+export function firstLinesOf(hunk: Hunk): { old: number; new: number } {
+  return { old: firstLineOf(hunk.oldStart, hunk.oldLines), new: firstLineOf(hunk.newStart, hunk.newLines) };
+}
+
 const firstLineOf = (start: number, count: number) => (count === 0 ? start + 1 : start);
 
 // why throw: a guide is validated against exactly these files, so a miss is a storage bug that

@@ -5,7 +5,8 @@ import type { PrDetail } from "../contract.ts";
 import type { DiffFile } from "../diff/diff-schema.ts";
 import { parsePrDiff } from "../diff/parse-pr-diff.ts";
 import { repoSchema } from "../github/repo.ts";
-import { reviewPrompt, type PromptFacts } from "./prompt.ts";
+import { hunkIdSchema } from "../diff/diff-schema.ts";
+import { askMessage, reviewPrompt, type PromptFacts } from "./prompt.ts";
 
 const HEAD = "66963303b329b9a961abc029115209f18f89ddb0";
 const BASE = "60a4f5c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6";
@@ -111,3 +112,16 @@ function factLines(prompt: string): string[] {
   assert.ok(body !== undefined, "markers not found at the end of the prompt");
   return body.split("\n");
 }
+
+test("a question about a finding quotes the finding, then the question, then how to answer", () => {
+  const finding = { file: "src/a\u200b.ts", line: 7, side: "old", hunk: hunkIdSchema.parse("@@ -5,3 +5,2 @@"), priority: "p1", title: "Loses the error", body: "…" } as const;
+
+  assert.equal(
+    askMessage(finding, "Does anything catch it later?"),
+    [
+      'The reviewer has a question about your finding "Loses the error" ("src/a\\u200B.ts", line 7, old side):',
+      "Does anything catch it later?",
+      "Answer in this thread. Call submit_review again only if the answer shows the guide is wrong, and then with the whole corrected guide.",
+    ].join("\n\n"),
+  );
+});

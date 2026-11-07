@@ -1,27 +1,34 @@
 // The guide's first screen, under its title "What this PR does": the author's own description on
-// demand, the problem and the approach, before and after when behaviour changes, what the guide
-// leaves out (and the tests and mocks the view options hide), and who wrote it.
+// demand, the problem and the approach, before and after when behaviour changes, the findings,
+// what the guide leaves out (and the tests and mocks the view options hide), and who wrote it.
 import { useState, type ReactNode } from "react";
 import type { GuideRecord, PrDetail } from "../../contract.ts";
 import { fileOf, type DiffFile } from "../../diff/diff-schema.ts";
-import type { Guide, HiddenItem } from "../../guide/guide-schema.ts";
+import type { Finding, Guide, HiddenItem } from "../../guide/guide-schema.ts";
+import { stepNumberOfFinding, type VisibleFinding, type VisibleStep } from "../../guide/walkthrough.ts";
 import { timeAgo } from "../relative-time.ts";
 import { Button } from "../ui/button.tsx";
 import { Prose } from "../ui/prose.tsx";
 import { HunkDiff } from "./hunk-block.tsx";
 import { PROSE } from "./page-text.tsx";
+import { Priority } from "./priority.tsx";
 import { ShowToggle } from "./show-toggle.tsx";
 
 type OverviewProps = {
   pr: PrDetail;
   record: GuideRecord;
   files: DiffFile[];
+  /** The findings the view options show; none while the findings switch is off. */
+  findings: VisibleFinding[];
+  /** The steps shown, which a finding's link counts in. */
+  steps: VisibleStep[];
+  onOpenStep(number: number): void;
   /** Test and mock hunks the view options hide; 0 while they are shown. */
   hiddenTests: number;
   onShowTests(): void;
 };
 
-export function Overview({ pr, record, files, hiddenTests, onShowTests }: OverviewProps) {
+export function Overview({ pr, record, files, findings, steps, onOpenStep, hiddenTests, onShowTests }: OverviewProps) {
   const { overview, hidden } = record.guide;
   return (
     <>
@@ -29,6 +36,15 @@ export function Overview({ pr, record, files, hiddenTests, onShowTests }: Overvi
       <Prose text={overview.problem} className={PROSE} />
       <Prose text={overview.approach} className={PROSE} />
       {overview.behaviour !== null && <BeforeAfter behaviour={overview.behaviour} />}
+      {findings.length > 0 && (
+        <Section title="Findings">
+          <div className="grid gap-0.5">
+            {findings.map(({ index, finding }) => (
+              <FindingRow key={index} finding={finding} step={stepNumberOfFinding(steps, finding)} onOpenStep={onOpenStep} />
+            ))}
+          </div>
+        </Section>
+      )}
       {(hidden.length > 0 || hiddenTests > 0) && (
         <Section title="Not in this guide">
           <div className="grid gap-0.5">
@@ -89,6 +105,30 @@ function Sequence({ items }: { items: string[] }) {
         </li>
       ))}
     </ol>
+  );
+}
+
+type FindingRowProps = { finding: Finding; step: number | null; onOpenStep(number: number): void };
+
+// The priority word and the title, and the step that shows the finding's hunk. A finding on a hunk
+// the guide leaves out, or on a test the view options hide, has no step to go to. The link sits
+// beside the title, never around it, so a link in the title works on its own.
+function FindingRow({ finding, step, onOpenStep }: FindingRowProps) {
+  return (
+    <div className="grid grid-cols-[1fr_auto] items-baseline gap-x-4 py-2">
+      <span className="flex min-w-0 items-baseline gap-2 text-[13.5px]">
+        <Priority priority={finding.priority} />
+        <Prose text={finding.title} className="min-w-0" />
+      </span>
+      {step !== null && (
+        // The negative margins keep the row's height and line the link up with the text column's edge.
+        <div className="-my-1.5 -mr-2.5">
+          <Button variant="ghost" size="small" aria-label={`Step ${step}: ${finding.title}`} onClick={() => onOpenStep(step)}>
+            Step {step}
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
 

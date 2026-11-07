@@ -2,16 +2,18 @@
 // them, and the keys that move it.
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type { Guide } from "../../guide/guide-schema.ts";
-import { visibleSteps, type ViewOptions } from "../../guide/walkthrough.ts";
+import { visibleSteps, type ViewOptions, type VisibleStep } from "../../guide/walkthrough.ts";
 import type { ViewOptionsState } from "./view-options.tsx";
-import { nextPosition, OVERVIEW, placeOf, previousPosition, resolvePosition, type Place, type Position } from "./walkthrough-position.ts";
+import { nextPosition, OVERVIEW, placeOf, positionAt, previousPosition, resolvePosition, type Place, type Position } from "./walkthrough-position.ts";
 
 export type Walkthrough = {
   place: Place;
   /** The steps shown, which every count reads. */
-  total: number;
+  steps: VisibleStep[];
   next(): void;
   previous(): void;
+  /** To the shown step numbered `number`, counted from 1 (an overview finding's link). */
+  goToStep(number: number): void;
   /** For controls on the page, which a change can remove (the overview's "Tests and mocks" row). */
   setOptions(options: ViewOptions): void;
 };
@@ -23,8 +25,8 @@ export type WalkthroughPage = { scroll: RefObject<HTMLElement | null>; title: Re
  * Starts on the overview. When the view options change, from the header or from the page, the
  * reader stays on their step, or moves to the nearest earlier one still shown. Every move scrolls
  * the page back to the top. A change that removes the focused element (Start, an arrow at either
- * end, anything on the old page, the overview's "Tests and mocks" row) hands focus to the new
- * page's title, so keyboard focus never falls back to the document.
+ * end, anything on the old page such as a finding's step link, the overview's "Tests and mocks"
+ * row) hands focus to the new page's title, so keyboard focus never falls back to the document.
  */
 export function useWalkthrough(guide: Guide, viewOptions: ViewOptionsState, page: WalkthroughPage): Walkthrough {
   const { options } = viewOptions;
@@ -63,10 +65,11 @@ export function useWalkthrough(guide: Guide, viewOptions: ViewOptionsState, page
   };
   return {
     place,
-    total: steps.length,
+    steps,
     // ← on the overview, and → with no steps shown, land on the same OVERVIEW: React skips them.
     next: () => moveTo(nextPosition(steps, position)),
     previous: () => moveTo(previousPosition(steps, position)),
+    goToStep: (number) => moveTo(positionAt(steps, number - 1)),
     setOptions: (next) => {
       focusedBeforeChange.current = document.activeElement;
       viewOptions.setOptions(next);
