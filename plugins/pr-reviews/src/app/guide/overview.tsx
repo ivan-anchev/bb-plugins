@@ -1,6 +1,6 @@
 // The guide's first screen, under its title "What this PR does": the author's own description on
 // demand, the problem and the approach, before and after when behaviour changes, what the guide
-// leaves out, and who wrote it.
+// leaves out (and the tests and mocks the view options hide), and who wrote it.
 import { useState, type ReactNode } from "react";
 import type { GuideRecord, PrDetail } from "../../contract.ts";
 import { fileOf, type DiffFile } from "../../diff/diff-schema.ts";
@@ -12,9 +12,16 @@ import { HunkDiff } from "./hunk-block.tsx";
 import { PROSE } from "./page-text.tsx";
 import { ShowToggle } from "./show-toggle.tsx";
 
-type OverviewProps = { pr: PrDetail; record: GuideRecord; files: DiffFile[] };
+type OverviewProps = {
+  pr: PrDetail;
+  record: GuideRecord;
+  files: DiffFile[];
+  /** Test and mock hunks the view options hide; 0 while they are shown. */
+  hiddenTests: number;
+  onShowTests(): void;
+};
 
-export function Overview({ pr, record, files }: OverviewProps) {
+export function Overview({ pr, record, files, hiddenTests, onShowTests }: OverviewProps) {
   const { overview, hidden } = record.guide;
   return (
     <>
@@ -22,7 +29,16 @@ export function Overview({ pr, record, files }: OverviewProps) {
       <Prose text={overview.problem} className={PROSE} />
       <Prose text={overview.approach} className={PROSE} />
       {overview.behaviour !== null && <BeforeAfter behaviour={overview.behaviour} />}
-      {hidden.length > 0 && <NotInGuide items={hidden} files={files} />}
+      {(hidden.length > 0 || hiddenTests > 0) && (
+        <Section title="Not in this guide">
+          <div className="grid gap-0.5">
+            {hidden.map((item, i) => (
+              <HiddenRow key={i} item={item} files={files} />
+            ))}
+            {hiddenTests > 0 && <HiddenTestsRow count={hiddenTests} onShow={onShowTests} />}
+          </div>
+        </Section>
+      )}
       <Byline record={record} />
     </>
   );
@@ -76,32 +92,50 @@ function Sequence({ items }: { items: string[] }) {
   );
 }
 
-function NotInGuide({ items, files }: { items: HiddenItem[]; files: DiffFile[] }) {
-  return (
-    <Section title="Not in this guide">
-      <div className="grid gap-0.5">
-        {items.map((item, i) => (
-          <HiddenRow key={i} item={item} files={files} />
-        ))}
-      </div>
-    </Section>
-  );
-}
-
 // One left-out item: what it is and why, with Show expanding its diff or its list of files.
 function HiddenRow({ item, files }: { item: HiddenItem; files: DiffFile[] }) {
   const [open, setOpen] = useState(false);
   return (
     <div>
-      <div className="grid grid-cols-[1fr_auto] items-baseline gap-x-4 gap-y-0.5 py-2">
-        <HiddenLabel item={item} />
-        {/* The negative margins keep the row's height and line "Show" up with the text column's edge. */}
-        <div className="-my-1.5 -mr-2.5">
-          <ShowToggle open={open} subject={subjectOf(item)} onToggle={() => setOpen(!open)} />
-        </div>
-        <Prose text={item.reason} className="col-start-1 text-[12.5px] leading-[18px] text-muted-foreground" />
-      </div>
+      <NotInGuideRow
+        label={<HiddenLabel item={item} />}
+        action={<ShowToggle open={open} subject={subjectOf(item)} onToggle={() => setOpen(!open)} />}
+        reason={<Prose text={item.reason} className={REASON} />}
+      />
       {open && <HiddenBody item={item} files={files} />}
+    </div>
+  );
+}
+
+// Tests and mocks are never in `hidden` (the validator puts them in a step): the view options hide
+// them, and Show turns the switch on, which removes this row.
+function HiddenTestsRow({ count, onShow }: { count: number; onShow(): void }) {
+  return (
+    <NotInGuideRow
+      label={<span className="text-[13.5px]">Tests and mocks</span>}
+      action={
+        <Button variant="ghost" size="small" aria-label="Show tests and mocks" onClick={onShow}>
+          Show
+        </Button>
+      }
+      reason={
+        <p className={REASON}>
+          {count} {count === 1 ? "hunk" : "hunks"}, hidden by default. Showing them adds them to the steps that cover them.
+        </p>
+      }
+    />
+  );
+}
+
+const REASON = "col-start-1 text-[12.5px] leading-[18px] text-muted-foreground";
+
+function NotInGuideRow({ label, action, reason }: { label: ReactNode; action: ReactNode; reason: ReactNode }) {
+  return (
+    <div className="grid grid-cols-[1fr_auto] items-baseline gap-x-4 gap-y-0.5 py-2">
+      {label}
+      {/* The negative margins keep the row's height and line "Show" up with the text column's edge. */}
+      <div className="-my-1.5 -mr-2.5">{action}</div>
+      {reason}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import type { GuideRecord, PrDetail } from "../../contract.ts";
 import type { DiffFile } from "../../diff/diff-schema.ts";
+import { hiddenTestHunkCount } from "../../guide/walkthrough.ts";
 import { useGuide, type GuideTarget } from "../queries.ts";
 import { Notice } from "../ui/notice.tsx";
 import { ReadError } from "../ui/read-error.tsx";
@@ -11,28 +12,30 @@ import { Overview } from "./overview.tsx";
 import { PageTitle } from "./page-text.tsx";
 import { StepPage } from "./step-page.tsx";
 import { useStepKeys, useWalkthrough } from "./use-walkthrough.ts";
+import type { ViewOptionsState } from "./view-options.tsx";
 
-export function GuideView({ target, pr }: { target: GuideTarget; pr: PrDetail }) {
+type GuideViewProps = { target: GuideTarget; pr: PrDetail; viewOptions: ViewOptionsState };
+
+export function GuideView({ target, pr, viewOptions }: GuideViewProps) {
   const guide = useGuide(target);
   return (
     <>
       <ReadError read={guide} what="the guide" />
       {guide.isLoading && <Notice>Loading the guide…</Notice>}
-      {guide.data !== undefined && <LoadedGuide pr={pr} record={guide.data.record} files={guide.data.files} />}
+      {guide.data !== undefined && <LoadedGuide pr={pr} record={guide.data.record} files={guide.data.files} viewOptions={viewOptions} />}
     </>
   );
 }
 
-type LoadedGuideProps = { pr: PrDetail; record: GuideRecord; files: DiffFile[] };
+type LoadedGuideProps = { pr: PrDetail; record: GuideRecord; files: DiffFile[]; viewOptions: ViewOptionsState };
 
-function LoadedGuide({ pr, record, files }: LoadedGuideProps) {
-  // Issue 05 filters these by the view options; the index keeps the reader's place when it does.
-  const steps = record.guide.steps.map((step, index) => ({ index, step }));
+function LoadedGuide({ pr, record, files, viewOptions }: LoadedGuideProps) {
   const scroll = useRef<HTMLDivElement>(null);
   const title = useRef<HTMLHeadingElement>(null);
-  const walkthrough = useWalkthrough(steps, { scroll, title });
+  const walkthrough = useWalkthrough(record.guide, viewOptions, { scroll, title });
   useStepKeys(walkthrough);
-  const { place } = walkthrough;
+  const { place, setOptions } = walkthrough;
+  const { options } = viewOptions;
   return (
     <>
       <div ref={scroll} className="min-h-0 flex-1 overflow-y-auto">
@@ -42,7 +45,17 @@ function LoadedGuide({ pr, record, files }: LoadedGuideProps) {
           className="grid max-w-[880px] grid-cols-[minmax(0,1fr)] content-start gap-[18px] px-7 pt-[18px] pb-10"
         >
           <PageTitle ref={title}>{place.title}</PageTitle>
-          {place.kind === "overview" ? <Overview pr={pr} record={record} files={files} /> : <StepPage step={place.step.step} files={files} />}
+          {place.kind === "overview" ? (
+            <Overview
+              pr={pr}
+              record={record}
+              files={files}
+              hiddenTests={hiddenTestHunkCount(record.guide, options)}
+              onShowTests={() => setOptions({ ...options, showTests: true })}
+            />
+          ) : (
+            <StepPage step={place.step.step} files={files} />
+          )}
         </article>
       </div>
       <Controller walkthrough={walkthrough} />

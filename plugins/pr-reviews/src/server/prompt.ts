@@ -31,7 +31,7 @@ Steps:
 2. Read the change. \`git diff ${baseSha}...${headSha}\` shows the same hunks as the list at the end of this message. That list is authoritative.
 3. Finish by calling submit_review:
    - 1 to 7 steps in reading order, with the headline change first. You decide how to split them.
-   - Every hunk in the list exactly once, either in a step or in hidden with a reason. Tests and mocks go in a step: the app hides them until the reader asks.
+   - Every hunk in the list exactly once, either in a step or in hidden with a reason. Tests and mocks always go in a step, never in hidden: the app hides them until the reader asks.
    - Findings cite a file and a line inside one of its hunks. The side is "new" unless the line was removed.
    - If submit_review rejects the call, fix every problem it lists and call it again.`;
 }

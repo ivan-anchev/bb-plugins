@@ -2,6 +2,7 @@
 // into the canonical Guide. Server only; pure.
 import { hunkIdOf, numberedLines, unitIdsOf, WHOLE_FILE, type DiffFile, type HunkId } from "../diff/diff-schema.ts";
 import { pathLiteral } from "../server/visible-text.ts";
+import { isTestOrMock } from "./change-kind.ts";
 import type { Finding, Guide, GuideHunk, GuideStep, HiddenItem, SubmitReviewInput } from "./guide-schema.ts";
 
 export type Validation = { ok: true; guide: Guide } | { ok: false; message: string };
@@ -36,10 +37,10 @@ function toStep(step: InputStep, where: string, ledger: CoverageLedger): GuideSt
 
 function toHiddenItems(item: InputHidden, ledger: CoverageLedger): HiddenItem[] {
   if ("files" in item) {
-    item.files.forEach((file) => ledger.placeFile(file, "hidden"));
+    item.files.forEach((file) => ledger.placeFile(file, HIDDEN));
     return [{ kind: "files", files: item.files, reason: item.reason }];
   }
-  return ledger.place(item.file, item.hunk, "hidden").map((hunk) => ({ kind: "hunk", file: item.file, hunk, reason: item.reason }));
+  return ledger.place(item.file, item.hunk, HIDDEN).map((hunk) => ({ kind: "hunk", file: item.file, hunk, reason: item.reason }));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -47,12 +48,15 @@ function toHiddenItems(item: InputHidden, ledger: CoverageLedger): HiddenItem[] 
 
 type Side = Finding["side"];
 
+const HIDDEN = "hidden";
+
 type Problem =
   | { kind: "missing"; file: string; hunk: HunkId }
   | { kind: "duplicate"; file: string; hunk: HunkId; places: string[] }
   | { kind: "unknown-file"; file: string; where: string }
   | { kind: "unknown-hunk"; file: string; ref: string; valid: HunkId[]; where: string }
-  | { kind: "finding-outside"; where: string; file: string; line: number; side: Side; ranges: string[] };
+  | { kind: "finding-outside"; where: string; file: string; line: number; side: Side; ranges: string[] }
+  | { kind: "hidden-test"; file: string; hunk: HunkId };
 
 type CoverageLedger = ReturnType<typeof createCoverageLedger>;
 
@@ -65,6 +69,8 @@ function createCoverageLedger(files: DiffFile[]) {
   const record = (file: string, hunk: HunkId, where: string) => {
     const key = unitKey(file, hunk);
     placements.set(key, [...(placements.get(key) ?? []), where]);
+    // Tests and mocks go in a step: the app hides them until the reader asks to see them.
+    if (where === HIDDEN && isTestOrMock(file)) found.push({ kind: "hidden-test", file, hunk });
   };
 
   // The file at `path`, or null after recording that the PR has no such file.
@@ -168,6 +174,7 @@ function formatProblems(problems: Problem[]): string {
     section("Findings outside the diff", problems, "finding-outside", (p) =>
       `${p.where} (${pathLiteral(p.file)} line ${p.line}, ${p.side} side): not inside any hunk. ${linesOnSide(p.side, p.ranges)}`,
     ),
+    section("Hidden tests and mocks: put them in a step", problems, "hidden-test", (p) => `${pathLiteral(p.file)} ${p.hunk}`),
   ];
   return [REJECTED, ...sections.filter((text) => text !== null)].join("\n\n");
 }

@@ -1,11 +1,14 @@
 // The PR page header: number and title, author and `head → base`, and quiet "Open thread" (when a
-// review thread exists) and "GitHub" actions.
+// review thread exists) and "GitHub" actions, then the screen's own actions (`children`).
+import type { ReactNode } from "react";
 import { UrlLink } from "@get-bb/plugin-sdk/app";
 import type { PrDetail } from "../../contract.ts";
 import { buttonClass } from "../ui/button.tsx";
 import { OpenThreadButton } from "./open-thread-button.tsx";
 
-export function PrHeader({ pr, threadId }: { pr: PrDetail; threadId: string | null }) {
+type PrHeaderProps = { pr: PrDetail; threadId: string | null; children?: ReactNode };
+
+export function PrHeader({ pr, threadId, children }: PrHeaderProps) {
   return (
     <header className="flex shrink-0 items-start justify-between gap-4 px-7 pt-4 pb-3.5">
       <div className="min-w-0">
@@ -24,6 +27,7 @@ export function PrHeader({ pr, threadId }: { pr: PrDetail; threadId: string | nu
         <UrlLink href={pr.url} className={buttonClass("ghost", "small")}>
           GitHub
         </UrlLink>
+        {children}
       </div>
     </header>
   );

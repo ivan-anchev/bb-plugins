@@ -73,6 +73,6 @@ const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 const TOOL_INSTRUCTIONS = `submit_review takes the whole guide in one call:
 - overview: problem (why the PR exists), approach (how it solves it), and behaviour {before: [...], after: [...]} only when behaviour actually changes.
 - steps: 1 to 7, in reading order. Each has a title, an explanation, an optional forYou (a decision only the reviewer can make), and hunks: [{file, hunk, collapsed?}]. Set collapsed to a one-line reason for a hunk that needs no reading.
-- hidden: hunks or whole files left out of the steps, each with a reason: {file, hunk, reason} or {files: [...], reason}.
+- hidden: hunks or whole files left out of the steps, each with a reason: {file, hunk, reason} or {files: [...], reason}. Never tests or mocks: put them in a step, and the app hides them until the reader asks.
 - findings: {file, line, side?, priority: "p0" (must fix) | "p1" (should fix) | "p2" (nit), title, body}. The line must be inside one of the file's hunks; side is "new" unless the line was removed.
 Name files and hunks exactly as the hunk list in your first message prints them: a hunk by its range header, e.g. "@@ -18,9 +18,19 @@", and a file without text changes by "whole file". Every hunk must appear exactly once across steps and hidden. If a call is rejected, fix every problem it lists and call submit_review again with the whole guide.`;

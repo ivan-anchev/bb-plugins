@@ -1,10 +1,7 @@
 import type { ReactNode } from "react";
 import { Content, Item, Portal, Root, Trigger } from "@radix-ui/react-dropdown-menu";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
-
-declare const __BB_PLUGIN_ID__: string;
-
-const PORTAL_SCOPE = { "data-bb-portaled-overlay": "", "data-bb-plugin-root": "", "data-bb-plugin": __BB_PLUGIN_ID__ };
+import { PORTAL_SCOPE } from "./portal-scope.ts";
 
 export { Root as Menu, Trigger as MenuTrigger };
 
