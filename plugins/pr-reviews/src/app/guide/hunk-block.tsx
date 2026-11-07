@@ -1,7 +1,7 @@
 // One hunk of a step: a quiet file row above bb's diff, with each finding under its line. A
 // collapsed hunk is only the row, with the agent's reason and Show; a file with no text hunks is
 // the row with a one-line note.
-import { useState, type ReactNode } from "react";
+import { useState, type ReactNode, type Ref } from "react";
 import { experimental_Diff as Diff } from "@get-bb/plugin-sdk/app";
 import { hunkOf, WHOLE_FILE, type DiffFile, type HunkId } from "../../diff/diff-schema.ts";
 import { hunkToPatch } from "../../diff/hunk-patch.ts";
@@ -14,14 +14,17 @@ import { ContinuationDiff } from "./continuation-diff.tsx";
 import { FindingBlock } from "./finding-block.tsx";
 import { ShowToggle } from "./show-toggle.tsx";
 
-/** `findings` are the hunk's findings the view options show; the guide they belong to is `target`. */
-type HunkBlockProps = { file: DiffFile; entry: GuideHunk; findings: VisibleFinding[]; target: GuideTarget };
+/**
+ * `findings` are the hunk's findings the view options show; the guide they belong to is `target`.
+ * `ref` is the block, which takes focus when the step's file list jumps to it.
+ */
+type HunkBlockProps = { file: DiffFile; entry: GuideHunk; findings: VisibleFinding[]; target: GuideTarget } & BlockRef;
 
-export function HunkBlock({ file, entry, findings, target }: HunkBlockProps) {
-  if (entry.hunk === WHOLE_FILE) return <WholeFile file={file} />;
+export function HunkBlock({ file, entry, findings, target, ref }: HunkBlockProps) {
+  if (entry.hunk === WHOLE_FILE) return <WholeFile file={file} ref={ref} />;
   const body = <AnnotatedDiff file={file} hunk={entry.hunk} findings={findings} target={target} />;
-  if (entry.collapsed === null) return <OpenHunk path={file.path} body={body} />;
-  return <CollapsedHunk path={file.path} reason={entry.collapsed} body={body} />;
+  if (entry.collapsed === null) return <OpenHunk path={file.path} body={body} ref={ref} />;
+  return <CollapsedHunk path={file.path} reason={entry.collapsed} body={body} ref={ref} />;
 }
 
 /** A unit's body without its file row: bb's diff, the same component and theme as Code Explorer's, or the whole-file note. */
@@ -44,25 +47,40 @@ function AnnotatedDiff({ file, hunk, findings, target }: { file: DiffFile; hunk:
   });
 }
 
-const BLOCK = "overflow-hidden rounded-lg bg-muted/40";
 const FILE_ROW = "flex items-baseline gap-3 px-3 pt-2.5 pb-2 text-[12.5px]";
 const ROW_NOTE = "ml-auto text-right text-subtle-foreground";
 
-function OpenHunk({ path, body }: { path: string; body: ReactNode }) {
+type BlockRef = { ref?: Ref<HTMLElement> };
+
+// tabIndex -1: a jump from the step's file list focuses the block, which is not a tab stop. The
+// scroll margin keeps the jump's landing clear of the page's top edge.
+function Block({ ref, children }: BlockRef & { children: ReactNode }) {
   return (
-    <section className={BLOCK}>
-      <p className={FILE_ROW}>
-        <Path path={path} />
-      </p>
-      {body}
+    <section
+      ref={ref}
+      tabIndex={-1}
+      className="scroll-mt-[18px] overflow-hidden rounded-lg bg-muted/40 outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    >
+      {children}
     </section>
   );
 }
 
-function CollapsedHunk({ path, reason, body }: { path: string; reason: string; body: ReactNode }) {
+function OpenHunk({ path, body, ref }: { path: string; body: ReactNode } & BlockRef) {
+  return (
+    <Block ref={ref}>
+      <p className={FILE_ROW}>
+        <Path path={path} />
+      </p>
+      {body}
+    </Block>
+  );
+}
+
+function CollapsedHunk({ path, reason, body, ref }: { path: string; reason: string; body: ReactNode } & BlockRef) {
   const [open, setOpen] = useState(false);
   return (
-    <section className={BLOCK}>
+    <Block ref={ref}>
       <div className={FILE_ROW}>
         <Path path={path} />
         <Prose text={reason} className={ROW_NOTE} />
@@ -72,18 +90,18 @@ function CollapsedHunk({ path, reason, body }: { path: string; reason: string; b
         </div>
       </div>
       {open && body}
-    </section>
+    </Block>
   );
 }
 
-function WholeFile({ file }: { file: DiffFile }) {
+function WholeFile({ file, ref }: { file: DiffFile } & BlockRef) {
   return (
-    <section className={BLOCK}>
+    <Block ref={ref}>
       <p className={FILE_ROW}>
         <Path path={file.path} />
         <span className={ROW_NOTE}>{wholeFileNoteOf(file)}</span>
       </p>
-    </section>
+    </Block>
   );
 }
 
