@@ -3,11 +3,11 @@
 import { hunkIdOf, numberedLines, unitIdsOf, WHOLE_FILE, type DiffFile, type HunkId } from "../diff/diff-schema.ts";
 import { pathLiteral } from "../server/visible-text.ts";
 import { isTestOrMock } from "./change-kind.ts";
-import type { Finding, Guide, GuideHunk, GuideStep, HiddenItem, SubmitReviewInput } from "./guide-schema.ts";
+import type { Finding, Guide, GuideHunk, GuideInput, GuideStep, HiddenItem } from "./guide-schema.ts";
 
 export type Validation = { ok: true; guide: Guide } | { ok: false; message: string };
 
-export function validateSubmission(input: SubmitReviewInput, files: DiffFile[]): Validation {
+export function validateSubmission(input: GuideInput, files: DiffFile[]): Validation {
   const ledger = createCoverageLedger(files);
   const guide: Guide = {
     overview: { problem: input.overview.problem, approach: input.overview.approach, behaviour: input.overview.behaviour ?? null },
@@ -24,9 +24,9 @@ export function validateSubmission(input: SubmitReviewInput, files: DiffFile[]):
 // unit was placed. An unknown reference is left out of the guide, but it is also a problem,
 // and any problem rejects the whole submission, so a partial guide never reaches storage.
 
-type InputStep = SubmitReviewInput["steps"][number];
-type InputHidden = SubmitReviewInput["hidden"][number];
-type InputFinding = SubmitReviewInput["findings"][number];
+type InputStep = GuideInput["steps"][number];
+type InputHidden = GuideInput["hidden"][number];
+type InputFinding = GuideInput["findings"][number];
 
 function toStep(step: InputStep, where: string, ledger: CoverageLedger): GuideStep {
   const hunks = step.hunks.flatMap((ref): GuideHunk[] =>

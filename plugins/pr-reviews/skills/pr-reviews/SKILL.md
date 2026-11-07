@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request, and a badge counting ready guides), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this, and the view options for tests and findings), how Start review runs a review thread in a new worktree that finishes with the submit_review agent tool, its Review instructions setting, where its data comes from (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request, and a badge counting ready guides), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this, and the view options for tests and findings), how Start review runs a review thread in a new worktree that finishes with the submit_review agent tool, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -49,9 +49,12 @@ github.com). Below it, one screen per review state:
   current commit stopped without submitting one: **Ask it to submit the
   guide** messages the thread to finish (the row reads Writing guide… while it
   answers), and **Open thread** shows what it said.
-- **The guide**, once one exists (see "Reading a guide" below). A PR whose
-  newest guide is for an older commit shows that guide the same way; the "new
-  commits" banner and Update guide are not built yet.
+- **The guide**, once one exists (see "Reading a guide" below).
+- **The guide with new commits**, when the PR's newest guide is for an older
+  commit: the guide shows as usual under a banner, "N new commits since this
+  guide was written", with **Update guide** (see "Update guide" below). After a
+  force push removed the guide's commit from the PR, the banner reads "The PR
+  changed since this guide was written". New commits show after a Refresh.
 
 The page and the rows follow the review thread on their own; no refresh is
 needed. Archiving or deleting a review thread returns the PR to No guide yet.
@@ -150,10 +153,34 @@ and runs nothing: no diff read, no fetch, no thread.
 A PR that already has a guide for its current commit cannot be started again:
 Start review says "This PR already has a guide for its current commit."
 
+## Update guide
+
+Update guide brings a guide for an older commit up to the PR's current head.
+Like Start review, it first pins the PR's diff at the current head and base,
+and fetches both commits into `refs/pr-reviews/<number>/`, in the project's
+default checkout on the machine running bb (a checkout on another machine is
+refused the same way). Then it messages the **same** review thread that wrote
+the guide, queued behind anything it is still doing. The message gives the new
+head and the guide's head, tells it to `git checkout --detach <new head>`, to
+review only the new commits with `git diff <guide head>..<new head>`, and to
+call `submit_review` again with a complete guide for the new head, covering
+every hunk in the new hunk list it carries. From then on, that thread's
+`submit_review` calls are accepted only for the new head, and checked against
+its diff; a call its earlier turn makes for the old head is refused.
+
+The row reads Writing guide… while the thread works, then Guide ready, and the
+guide's byline names the new commit. The older guide is kept: it is stored by
+its commit, and no submission can overwrite it once Update guide (or Start
+review) has asked for a newer one, even after a Cancel. If the thread that wrote the guide was
+archived or deleted, Update guide starts a new review instead, exactly as Start
+review does. Clicking Update guide twice sends one message. If it fails, the
+error shows beside the button and the guide stays.
+
 ## The submit_review tool
 
-A review thread finishes by calling `submit_review` with the whole guide:
-`overview` (`problem`, `approach`, optional `behaviour {before, after}`), 1 to
+A review thread finishes by calling `submit_review` with the head commit the
+guide is for (`headSha`, as Start review's or Update guide's message names it)
+and the whole guide: `overview` (`problem`, `approach`, optional `behaviour {before, after}`), 1 to
 7 `steps` (each a `title`, an `explanation`, an optional `forYou`, and `hunks`
 of `{file, hunk, collapsed?}`), `hidden` (`{file, hunk, reason}` or `{files,
 reason}`), and `findings` (`{file, line, side?, priority: p0|p1|p2, title,
@@ -163,10 +190,12 @@ with no text changes by `whole file`.
 
 The tool is offered only to threads PR Reviews started, recognised by the
 thread's origin and its `{repo, number, headSha}` metadata; a thread started
-from bb's composer does not have it. On each call PR Reviews looks up the
-thread's review run, checks the guide against the diff pinned when the
-review started, and stores it by repo, PR number and head commit. A second
-accepted guide for the same commit replaces the first. A rejected call saves
+from bb's composer does not have it. A PR has one review run at a time: the
+review Start review or Update guide last asked for, replacing any earlier one.
+On each call PR Reviews looks up the thread's run, accepts the call only when
+its `headSha` is that run's commit, checks the guide against the diff pinned for
+it, and stores it by repo, PR number and head commit. A second accepted guide
+for the same commit replaces the first. A rejected call saves
 nothing, and its message lists every problem at once:
 
 - **Missing**: hunks in no step and not in `hidden`.
@@ -177,8 +206,9 @@ nothing, and its message lists every problem at once:
 
 More than 7 steps is refused by the tool's own input check: "Invalid arguments
 for tool "submit_review": steps: Too big: expected array to have <=7 items".
-A thread whose review was cancelled, or replaced by a newer Start for the same
-commit, is refused ("this thread is no longer writing a guide in PR Reviews").
+A call for any other commit, or from a thread whose review was cancelled or
+replaced by a newer review, is refused ("this thread is not writing a guide for
+"<headSha>" in PR Reviews"); the refusal never names the run's commit.
 
 When a guide is accepted, the row turns to Guide ready, the page shows the
 guide, and the badge counts it, without a refresh.
@@ -211,8 +241,8 @@ whatever was already on screen, and the old list stays. Typical errors:
 
 PR Reviews runs `gh pr list`, `gh pr view` and `gh pr diff` for the project's
 `owner/name` on the machine that runs bb, and `git remote get-url origin` for a
-project whose remote bb did not record. On Start review it also runs `git
-fetch` in the project's default checkout, which only adds the refs under
+project whose remote bb did not record. On Start review and Update guide it
+also runs `git fetch` in the project's default checkout, which only adds the refs under
 `refs/pr-reviews/`. It only reads; it never writes to GitHub. The diff pinned for each reviewed commit, each review run, and each guide are
 kept in the plugin's own SQLite database (`plugins/pr-reviews/data.db` in bb's data
 directory).

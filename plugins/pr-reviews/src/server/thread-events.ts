@@ -18,7 +18,7 @@ type ThreadEvent = { thread: { id: string; originPluginId: string | null } };
 export function forwardReviewThreadEvents(bb: BbPluginApi, store: Store): void {
   const refreshReviewOf = ({ thread }: ThreadEvent) => {
     if (thread.originPluginId !== bb.pluginId) return; // a cheap filter before touching SQLite
-    const run = store.latestRunForThread(thread.id);
+    const run = store.runForThread(thread.id);
     if (run !== null) bb.rpc.experimental_invalidate([repoTag(run.key.repo)]);
   };
   for (const event of STATUS_EVENTS) bb.events.on(event, refreshReviewOf);

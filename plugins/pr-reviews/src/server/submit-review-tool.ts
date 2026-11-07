@@ -16,7 +16,7 @@ type Bb = {
   rpc: Pick<BbPluginApi["rpc"], "experimental_invalidate">;
 };
 
-type ToolStore = Pick<Store, "latestRunForThread" | "snapshotFiles" | "saveGuide">;
+type ToolStore = Pick<Store, "runForThread" | "snapshotFiles" | "saveGuide">;
 
 export function registerSubmitReviewTool(bb: Bb, store: ToolStore): void {
   bb.agents.registerTool({
@@ -40,17 +40,19 @@ function isReviewThread(pluginId: string, ctx: PluginAgentConfigurationContext):
   return ctx.origin.pluginId === pluginId && prHeadKeySchema.safeParse(ctx.pluginMetadata).success;
 }
 
-// A thread's newest run names the PR head it writes for. A thread with no run was cancelled,
-// or a later Start for the same head replaced its run (review_runs holds one run per head),
-// so its guide would land on a review the user no longer waits for: it is refused.
-// The one await comes first. Cancel and Start change runs while it is pending, so from the
-// run lookup to the write the tool runs synchronously, and the run it checks is the run it
+// A submission names the head it was written for, and is stored only when that is the head
+// of the thread's run. A PR keeps one run, its newest review request (store.saveRun): a thread
+// has no run once its review was cancelled or a new Start replaced it, and Update moves its run
+// to the new head. So a guide written before either, even one whose diff is identical, never
+// lands on another head, nor on a head the PR has moved past.
+// The one await comes first. Cancel, Start and Update change runs while it is pending, so from
+// the run lookup to the write the tool runs synchronously, and the run it checks is the run it
 // writes for.
-async function submitReview(bb: Bb, store: ToolStore, input: SubmitReviewInput, threadId: string): Promise<PluginAgentToolResult> {
+async function submitReview(bb: Bb, store: ToolStore, { headSha, ...input }: SubmitReviewInput, threadId: string): Promise<PluginAgentToolResult> {
   const model = (await bb.sdk.threads.defaultExecutionOptions({ threadId }))?.model ?? null;
 
-  const run = store.latestRunForThread(threadId);
-  if (run === null) return rejected(NOT_THE_REVIEW);
+  const run = store.runForThread(threadId);
+  if (run === null || run.key.headSha !== headSha) return rejected(notWritingFor(headSha));
 
   const validation = validateSubmission(input, store.snapshotFiles(run.key));
   if (!validation.ok) return rejected(validation.message);
@@ -62,8 +64,9 @@ async function submitReview(bb: Bb, store: ToolStore, input: SubmitReviewInput, 
   return `Guide saved for #${run.key.number} at ${run.key.headSha.slice(0, 7)}: ${count(steps.length, "step")}, ${count(findings.length, "finding")}. The user reads it in PR Reviews. You are done unless they ask you something.`;
 }
 
-const NOT_THE_REVIEW =
-  "submit_review was rejected and nothing was saved: this thread is no longer writing a guide in PR Reviews. Its review was cancelled, or a newer review of this pull request replaced it. Stop here unless the user asks you to continue.";
+// Never names the run's head: a turn written for an older head would only copy it.
+const notWritingFor = (headSha: string) =>
+  `submit_review was rejected and nothing was saved: this thread is not writing a guide for ${JSON.stringify(headSha)} in PR Reviews. If that is not the full head commit PR Reviews named when it asked for this guide, call again with that commit. Otherwise the review was cancelled, or a newer review of this pull request replaced it: stop here, and act on any newer message from PR Reviews.`;
 
 const rejected = (text: string): PluginAgentToolResult => ({ content: [{ type: "text", text }], isError: true });
 
@@ -71,6 +74,7 @@ const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
 // Appended to the thread's instructions while the tool is in its set (at most 4096 characters).
 const TOOL_INSTRUCTIONS = `submit_review takes the whole guide in one call:
+- headSha: the full head commit the guide is for, exactly as PR Reviews named it when it asked for this guide.
 - overview: problem (why the PR exists), approach (how it solves it), and behaviour {before: [...], after: [...]} only when behaviour actually changes.
 - steps: 1 to 7, in reading order. Each has a title, an explanation, an optional forYou (a decision only the reviewer can make), and hunks: [{file, hunk, collapsed?}]. Set collapsed to a one-line reason for a hunk that needs no reading.
 - hidden: hunks or whole files left out of the steps, each with a reason: {file, hunk, reason} or {files: [...], reason}. Never tests or mocks: put them in a step, and the app hides them until the reader asks.

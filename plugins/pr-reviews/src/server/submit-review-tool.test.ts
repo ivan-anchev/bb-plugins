@@ -6,6 +6,7 @@ import Database from "better-sqlite3";
 import type { PrDetail } from "../contract.ts";
 import { parsePrDiff } from "../diff/parse-pr-diff.ts";
 import { submitReviewInputSchema, type SubmitReviewInput } from "../guide/guide-schema.ts";
+import { validateSubmission } from "../guide/validate-submission.ts";
 import { repoSchema } from "../github/repo.ts";
 import { reviewPrompt } from "./prompt.ts";
 import { openStore, type ReviewRun } from "./store.ts";
@@ -20,6 +21,7 @@ const TEST_FILE = "plugins/code-explorer/src/ui/segment-keys.test.ts";
 const SOURCE_FILE = "plugins/code-explorer/src/ui/segment-keys.ts";
 
 const guide: SubmitReviewInput = {
+  headSha: KEY.headSha,
   overview: { problem: "segmentIndexAfterKey was undocumented.", approach: "Document it and test the edges." },
   steps: [
     {
@@ -73,8 +75,9 @@ function harness({ model = "claude-opus-5-5", modelLookup = Promise.resolve() }:
   // As bb calls it: the arguments parsed by the tool's schema.
   const submit = async (threadId: string, input: SubmitReviewInput = guide) =>
     resultText(await execute(submitReviewInputSchema.parse(input), { threadId, projectId: "proj_1", signal: new AbortController().signal }));
-  const start = (threadId: string, requestedAt: number, diff = DIFF) =>
-    store.saveRun({ key: KEY, threadId, requestedAt } satisfies ReviewRun, diff);
+  // What Start and Update save: a run for `headSha` by `threadId`.
+  const start = (threadId: string, requestedAt: number, diff = DIFF, headSha = KEY.headSha) =>
+    store.saveRun({ key: { ...KEY, headSha }, threadId, requestedAt } satisfies ReviewRun, diff);
 
   return { store, invalidations, submit, start, toolsFor: (ctx: PluginAgentConfigurationContext) => select(ctx).tools, name: tool.name };
 }
@@ -84,8 +87,9 @@ function resultText(result: PluginAgentToolResult): { error: boolean; text: stri
   return { error: result.isError === true, text: result.content.map((part) => (part.type === "text" ? part.text : "")).join("") };
 }
 
-const NOT_THE_REVIEW =
-  "submit_review was rejected and nothing was saved: this thread is no longer writing a guide in PR Reviews. Its review was cancelled, or a newer review of this pull request replaced it. Stop here unless the user asks you to continue.";
+const notWritingFor = (headSha: string) =>
+  `submit_review was rejected and nothing was saved: this thread is not writing a guide for "${headSha}" in PR Reviews. If that is not the full head commit PR Reviews named when it asked for this guide, call again with that commit. Otherwise the review was cancelled, or a newer review of this pull request replaced it: stop here, and act on any newer message from PR Reviews.`;
+const NOT_THE_REVIEW = notWritingFor(KEY.headSha);
 
 function threadContext(origin: string | null, pluginMetadata: PluginAgentConfigurationContext["pluginMetadata"]): PluginAgentConfigurationContext {
   return {
@@ -185,12 +189,16 @@ test("a thread whose run a later Start for the same head replaced is refused; th
   assert.equal(store.guide(KEY)?.threadId, "thr_new");
 });
 
-// Cancel or Start acting while the tool awaits the thread's model: `act` runs mid-lookup.
-async function submitDuring(act: (h: ReturnType<typeof harness>) => void) {
+// Cancel, Start or Update acting while the tool awaits the thread's model: `setup` runs before
+// the call, `act` mid-lookup.
+async function submitDuring(
+  act: (h: ReturnType<typeof harness>) => void,
+  { setup = (h) => h.start("thr_1", 100), input = guide }: { setup?: (h: ReturnType<typeof harness>) => void; input?: SubmitReviewInput } = {},
+) {
   let answerLookup = () => {};
   const h = harness({ modelLookup: new Promise<void>((resolve) => (answerLookup = resolve)) });
-  h.start("thr_1", 100);
-  const pending = h.submit("thr_1");
+  setup(h);
+  const pending = h.submit("thr_1", input);
   act(h);
   answerLookup();
   return { h, result: await pending };
@@ -220,6 +228,7 @@ test("paths with a leading space, a trailing space or a byte-order mark round-tr
   start("thr_1", 100, diff);
   const [lead, trail, bom] = paths;
   const result = await submit("thr_1", {
+    headSha: KEY.headSha,
     overview: guide.overview,
     steps: [{ title: "Lead", explanation: "The leading-space file.", hunks: [{ file: lead, hunk: "@@ -1,2 +1,2 @@" }] }],
     hidden: [
@@ -251,6 +260,7 @@ for (const fixture of ["line-separator-paths.diff", "line-separator-paths-raw.di
     const { store, submit, start } = harness();
     start("thr_1", 100, diff);
     const result = await submit("thr_1", {
+      headSha: KEY.headSha,
       overview: guide.overview,
       steps: [{ title: "Edits", explanation: "Every edited file.", hunks: edited.map((file) => ({ file, hunk: "@@ -1,6 +1,6 @@" })) }],
       hidden: [{ files: [pureRename], reason: "A pure rename." }],
@@ -293,4 +303,75 @@ test("a second guide for the same head replaces the first", async () => {
   await submit("thr_1", { ...guide, overview: { ...guide.overview, problem: "Second take." } });
   assert.equal(store.guideHeadsFor(repo, [23]).length, 1);
   assert.equal(store.guide(KEY)?.guide.overview.problem, "Second take.");
+});
+
+// ---- Update reuses the review thread: every submission belongs to one run and one head ----
+
+// The PR's next head. The commit is empty, so its diff is identical to KEY's and only the head
+// tells a guide for one from a guide for the other.
+const NEXT = { ...KEY, headSha: "b7c9e2d41f0a3b5c6d7e8f9a0b1c2d3e4f5a6b7c" };
+const updated = { ...guide, headSha: NEXT.headSha, overview: { ...guide.overview, problem: "Updated for the new head." } };
+
+// thr_1 wrote KEY's guide; then Update asked it, by message, to write NEXT's.
+function guidedThenUpdated(h: ReturnType<typeof harness>) {
+  h.start("thr_1", 100);
+  const written = validateSubmission(guide, parsePrDiff(DIFF));
+  assert.ok(written.ok);
+  h.store.saveGuide({ key: KEY, threadId: "thr_1", model: "claude-opus-5-5", submittedAt: 150, guide: written.guide });
+  h.start("thr_1", 200, DIFF, NEXT.headSha);
+}
+
+const problemOf = (h: ReturnType<typeof harness>, key: typeof KEY) => h.store.guide(key)?.guide.overview.problem ?? null;
+
+test("Update queued behind a turn: that turn's guide for the old head is refused, and only the updated guide lands on the new head", async () => {
+  const h = harness();
+  guidedThenUpdated(h);
+
+  // The turn that was running when Update queued its message has not read it yet.
+  const oldTurn = { ...guide, overview: { ...guide.overview, problem: "Written before the update." } };
+  assert.deepEqual(await h.submit("thr_1", oldTurn), { error: true, text: NOT_THE_REVIEW });
+  assert.equal(problemOf(h, KEY), guide.overview.problem, "the old head's guide is untouched");
+  assert.equal(h.store.guide(NEXT), null, "nothing lands on the new head");
+
+  // The next turn reads the update message and names the head it gave.
+  assert.deepEqual(await h.submit("thr_1", updated), {
+    error: false,
+    text: "Guide saved for #23 at b7c9e2d: 1 step, 1 finding. The user reads it in PR Reviews. You are done unless they ask you something.",
+  });
+  assert.equal(problemOf(h, NEXT), "Updated for the new head.");
+  assert.equal(problemOf(h, KEY), guide.overview.problem);
+});
+
+test("Update landing while an older turn's submission awaits the model refuses it and stores nothing", async () => {
+  const { h, result } = await submitDuring((h) => h.start("thr_1", 200, DIFF, NEXT.headSha), { setup: (h) => h.start("thr_1", 100) });
+  assert.deepEqual(result, { error: true, text: NOT_THE_REVIEW });
+  assert.equal(h.store.guide(KEY), null);
+  assert.equal(h.store.guide(NEXT), null);
+  assert.deepEqual(h.invalidations, []);
+});
+
+test("a cancelled Update refuses a late submission for either head and keeps the old guide", async () => {
+  // Cancel withdraws the update's run while its submission awaits the model.
+  const { h, result } = await submitDuring((h) => h.store.deleteRun(NEXT), { setup: guidedThenUpdated, input: updated });
+  assert.deepEqual(result, { error: true, text: notWritingFor(NEXT.headSha) });
+
+  // The run for the old head does not come back: the old guide cannot be overwritten either.
+  const rewrite = { ...guide, overview: { ...guide.overview, problem: "Rewritten after the cancel." } };
+  assert.deepEqual(await h.submit("thr_1", rewrite), { error: true, text: NOT_THE_REVIEW });
+
+  assert.equal(problemOf(h, KEY), guide.overview.problem);
+  assert.equal(h.store.guide(NEXT), null);
+  assert.deepEqual(h.invalidations, []);
+});
+
+test("once a new review of a newer head starts in another thread, the old thread cannot overwrite its guide", async () => {
+  const h = harness();
+  h.start("thr_1", 100);
+  assert.equal((await h.submit("thr_1")).error, false);
+  h.start("thr_2", 200, DIFF, NEXT.headSha);
+
+  const rewrite = { ...guide, overview: { ...guide.overview, problem: "Rewritten later." } };
+  assert.deepEqual(await h.submit("thr_1", rewrite), { error: true, text: NOT_THE_REVIEW });
+  assert.equal(problemOf(h, KEY), guide.overview.problem);
+  assert.equal(h.store.guide(KEY)?.threadId, "thr_1");
 });

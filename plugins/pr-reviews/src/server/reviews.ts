@@ -1,13 +1,13 @@
-// Everything PR Reviews does to review threads: start one, cancel it, nudge it, ask it about a
-// finding. Each action on a PR reads its review state first, so the "which thread, which head"
+// Everything PR Reviews does to review threads: start one, update its guide, cancel it, nudge
+// it, ask it about a finding. Each action on a PR reads its review state first, so the "which thread, which head"
 // rules live only in review-state.ts, and ends by refreshing the repo's reads.
 import { experimental_PluginRpcRefusal as Refusal, type BbPluginApi } from "@get-bb/plugin-sdk";
-import { repoTag, type PrHeadKey } from "../contract.ts";
+import { repoTag, type PrDetail, type PrHeadKey, type ReviewState } from "../contract.ts";
 import { parsePrDiff } from "../diff/parse-pr-diff.ts";
-import type { snapshotPrDiff } from "../github/gh.ts";
+import type { PrDiffSnapshot, snapshotPrDiff } from "../github/gh.ts";
 import type { fetchPrCommits } from "../github/pr-commits.ts";
 import type { Repo } from "../github/repo.ts";
-import { askMessage, nudgeMessage, reviewPrompt } from "./prompt.ts";
+import { askMessage, nudgeMessage, reviewPrompt, updateMessage, type PromptFacts } from "./prompt.ts";
 import type { ReviewReader } from "./review-reader.ts";
 import type { ReviewSettings } from "./settings.ts";
 import type { Store } from "./store.ts";
@@ -21,6 +21,8 @@ const REVIEW_PERMISSION_MODE = "auto";
 export type PrRef = { projectId: string; repo: Repo; number: number };
 
 type Threads = BbPluginApi["sdk"]["threads"];
+
+type Stale = Extract<ReviewState, { kind: "stale" }>;
 
 /** The fields of a project's checkout that Start reads. */
 interface Checkout {
@@ -45,7 +47,7 @@ type Deps = {
   bb: Bb;
   store: Pick<Store, "saveRun" | "deleteRun" | "guide">;
   settings: Pick<ReviewSettings, "get">;
-  reader: Pick<ReviewReader, "pullRequest" | "runningReview">;
+  reader: Pick<ReviewReader, "pullRequest" | "runningReview" | "threadIsOpen">;
   github: { snapshotPrDiff: typeof snapshotPrDiff; fetchPrCommits: typeof fetchPrCommits };
 };
 
@@ -57,40 +59,78 @@ export function createReviews({ bb, store, settings, reader, github }: Deps) {
   const send = (threadId: string, text: string) =>
     bb.sdk.threads.send({ threadId, input: [{ type: "text", text, mentions: [] }], mode: "queue-if-active" });
 
-  // A second Start while one is in flight for the same PR joins it, so a double click spawns
-  // one thread. Once a start lands, its run makes the PR read as running.
-  const starting = new Map<string, Promise<{ threadId: string }>>();
+  // A second Start or Update while one is in flight for the same PR joins it, so a double click
+  // spawns or messages one thread. Once one lands, its run makes the PR read as running.
+  const inFlight = new Map<string, Promise<{ threadId: string }>>();
 
-  function start(ref: PrRef): Promise<{ threadId: string }> {
+  function once(ref: PrRef, action: (ref: PrRef) => Promise<{ threadId: string }>): Promise<{ threadId: string }> {
     const key = `${ref.repo}#${ref.number}`;
-    const inFlight = starting.get(key);
-    if (inFlight !== undefined) return inFlight;
-    const started = startThread(ref).finally(() => starting.delete(key));
-    starting.set(key, started);
+    const pending = inFlight.get(key);
+    if (pending !== undefined) return pending;
+    const started = action(ref).finally(() => inFlight.delete(key));
+    inFlight.set(key, started);
     return started;
   }
 
-  async function startThread({ projectId, repo, number }: PrRef): Promise<{ threadId: string }> {
-    const { pr, review } = await reader.pullRequest(repo, number);
+  const start = (ref: PrRef) => once(ref, startReview);
+  const update = (ref: PrRef) => once(ref, updateGuide);
+
+  async function startReview(ref: PrRef): Promise<{ threadId: string }> {
+    const { pr, review } = await reader.pullRequest(ref.repo, ref.number);
     if (review.kind === "running") return { threadId: review.threadId };
     if (review.kind === "ready") throw new Refusal({ code: "conflict", message: "This PR already has a guide for its current commit." });
+    return spawnReview(ref, pr);
+  }
 
-    const checkout = await localDefaultCheckoutOf(projectId);
-    const { headSha, baseSha, diff } = await github.snapshotPrDiff(repo, number);
-    await github.fetchPrCommits(checkout.path, number, { headSha, baseSha });
+  // The thread that wrote the stale guide updates it, so it keeps what it learned. Once that
+  // thread is archived or deleted, a new review starts from scratch.
+  async function updateGuide(ref: PrRef): Promise<{ threadId: string }> {
+    const { pr, review } = await reader.pullRequest(ref.repo, ref.number);
+    if (review.kind === "running") return { threadId: review.threadId };
+    if (review.kind !== "stale") throw new Refusal({ code: "conflict", message: "Only a guide written for an older commit can be updated." });
+    if (!(await reader.threadIsOpen(review.threadId))) return spawnReview(ref, pr);
+    return messageReview(ref, pr, review);
+  }
+
+  async function spawnReview({ projectId, repo, number }: PrRef, pr: PrDetail): Promise<{ threadId: string }> {
+    const { checkout, snapshot } = await pinPrDiff(projectId, repo, number);
     const { instructions } = await settings.get();
     const thread = await bb.sdk.threads.spawn({
       projectId,
       environment: newWorktreeOn(checkout.hostId),
       title: `Review #${number}: ${pr.title}`,
-      pluginMetadata: { repo, number, headSha },
+      pluginMetadata: { repo, number, headSha: snapshot.headSha },
       permissionMode: REVIEW_PERMISSION_MODE,
-      prompt: reviewPrompt({ repo, pr, headSha, baseSha, files: parsePrDiff(diff) }, instructions),
+      prompt: reviewPrompt(promptFacts(repo, pr, snapshot), instructions),
     });
-    store.saveRun({ key: { repo, number, headSha }, threadId: thread.id, requestedAt: Date.now() }, diff);
-    refresh(repo);
-    return { threadId: thread.id };
+    return saveRun(repo, number, thread.id, snapshot);
   }
+
+  // The new run is saved only once the thread has the message. It replaces the thread's run
+  // for the old head: from then on submit_review accepts only a guide that names the new head,
+  // checked against its diff, and the PR reads as running.
+  async function messageReview({ projectId, repo, number }: PrRef, pr: PrDetail, stale: Stale): Promise<{ threadId: string }> {
+    const { snapshot } = await pinPrDiff(projectId, repo, number);
+    await send(stale.threadId, updateMessage(promptFacts(repo, pr, snapshot), stale.guideHeadSha));
+    return saveRun(repo, number, stale.threadId, snapshot);
+  }
+
+  // Pins the diff at the PR's current head and makes its commits local, since review threads
+  // cannot reach GitHub.
+  async function pinPrDiff(projectId: string, repo: Repo, number: number) {
+    const checkout = await localDefaultCheckoutOf(projectId);
+    const snapshot = await github.snapshotPrDiff(repo, number);
+    await github.fetchPrCommits(checkout.path, number, snapshot);
+    return { checkout, snapshot };
+  }
+
+  function saveRun(repo: Repo, number: number, threadId: string, { headSha, diff }: PrDiffSnapshot): { threadId: string } {
+    store.saveRun({ key: { repo, number, headSha }, threadId, requestedAt: Date.now() }, diff);
+    refresh(repo);
+    return { threadId };
+  }
+
+  const promptFacts = (repo: Repo, pr: PrDetail, { headSha, baseSha, diff }: PrDiffSnapshot): PromptFacts => ({ repo, pr, headSha, baseSha, files: parsePrDiff(diff) });
 
   // bb makes review worktrees from the project's default checkout, and the PR's commits are
   // fetched into that checkout's repository first. The fetch runs git on the machine running bb
@@ -140,5 +180,5 @@ export function createReviews({ bb, store, settings, reader, github }: Deps) {
     await send(record.threadId, askMessage(finding, question));
   }
 
-  return { start, cancel, nudge, ask };
+  return { start, update, cancel, nudge, ask };
 }

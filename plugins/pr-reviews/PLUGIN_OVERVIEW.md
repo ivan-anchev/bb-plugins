@@ -32,6 +32,10 @@ ever posted to GitHub.
   Should fix or Nit, each linking to its step, and each step shows a finding
   in a grey block under its line. Ask about this sends the thread a question
   about it; the answer is in the thread.
+- **New commits**: when a PR moves past its guide, the row reads New commits
+  and the guide stays readable under "N new commits since this guide was
+  written". Update guide asks the same review thread to read only the new
+  commits and hand in a complete guide for the new head.
 - **View options**: switches to show tests and mocks (hidden by default) and
   findings (shown by default).
 - **Errors beside your data**: if GitHub can't be read, the error shows above

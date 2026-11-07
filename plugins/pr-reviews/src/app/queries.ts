@@ -12,14 +12,24 @@ export const usePullRequests = (projectId: string | null) =>
 export const usePullRequest = (projectId: string, number: number) =>
   experimental_useRpcQuery({ contract, method: "pullRequest", input: { projectId, number } });
 
+/** The PR a page or action is about. */
+export type PrTarget = { projectId: string; number: number };
+
 /** One PR's guide for one head commit. */
-export type GuideTarget = { projectId: string; number: number; headSha: string };
+export type GuideTarget = PrTarget & { headSha: string };
 
 export const useGuide = (target: GuideTarget) => experimental_useRpcQuery({ contract, method: "guide", input: target });
 
 export const useSelectProject = () => experimental_useRpcMutation({ contract, method: "selectProject" });
 
-type ReviewAction = "startReview" | "cancelReview" | "nudgeReview";
-export const useReviewAction = (method: ReviewAction) => experimental_useRpcMutation({ contract, method });
+type ReviewAction = "startReview" | "cancelReview" | "nudgeReview" | "updateGuide";
+
+// One review action on one PR. The hook's error state reports a failed write beside the
+// buttons; the rejection itself carries nothing more.
+export function useReviewAction(method: ReviewAction, target: PrTarget) {
+  const action = experimental_useRpcMutation({ contract, method });
+  const run = () => void action.mutate(target).catch(() => undefined);
+  return { run, isPending: action.isPending, error: action.error };
+}
 
 export const useAskAboutFinding = () => experimental_useRpcMutation({ contract, method: "askAboutFinding" });

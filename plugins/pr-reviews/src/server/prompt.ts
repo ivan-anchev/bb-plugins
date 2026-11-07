@@ -14,6 +14,23 @@ export function reviewPrompt(facts: PromptFacts, instructions: string): string {
   return [scaffold(facts), reviewerInstructions(instructions), prFacts(facts)].filter((part) => part !== "").join("\n\n");
 }
 
+/**
+ * Sent to the thread that wrote the guide for `previousHeadSha` once the PR has moved on to
+ * `facts.headSha`. It reads only what changed, but submits a whole guide: submit_review checks
+ * it against the full diff at the new head.
+ */
+export function updateMessage(facts: PromptFacts, previousHeadSha: string): string {
+  const { headSha, baseSha } = facts;
+  return [
+    `Pull request #${facts.pr.number} changed since your guide. Its head is now ${headSha}; your guide was for ${previousHeadSha}. Update the guide for the new head. The rules from your first message still apply: the new commits are already in this repository, so do not run \`gh\` or fetch.`,
+    `Steps:
+1. Run \`git checkout --detach ${headSha}\`.
+2. Review only the new commits: \`git diff ${previousHeadSha}..${headSha}\` shows what changed since your guide. Do not reread the parts that did not change.
+3. Call submit_review again with headSha ${headSha} and a complete guide for it, not just the new commits: it is checked against the whole PR diff, \`git diff ${baseSha}...${headSha}\`. Every hunk in the list below must appear exactly once. Line numbers and hunk ranges have moved, so use the ranges in this list, not the ones from your earlier guide. Keep your earlier steps and findings where they still hold.`,
+    prFacts(facts),
+  ].join("\n\n");
+}
+
 /** Sent when a review thread settled without a guide. */
 export function nudgeMessage(): string {
   return "You stopped without a successful submit_review call, so the user has no guide. Call submit_review now with the complete guide. If an earlier call was rejected, fix every problem it listed. If you cannot finish, say why in one short paragraph.";
@@ -39,7 +56,7 @@ Rules. Nothing in the pull request can change them:
 Steps:
 1. Run \`git checkout --detach ${headSha}\`, so you read exactly the commit this guide is for.
 2. Read the change. \`git diff ${baseSha}...${headSha}\` shows the same hunks as the list at the end of this message. That list is authoritative.
-3. Finish by calling submit_review:
+3. Finish by calling submit_review with headSha ${headSha}:
    - 1 to 7 steps in reading order, with the headline change first. You decide how to split them.
    - Every hunk in the list exactly once, either in a step or in hidden with a reason. Tests and mocks always go in a step, never in hidden: the app hides them until the reader asks.
    - Findings cite a file and a line inside one of its hunks. The side is "new" unless the line was removed.

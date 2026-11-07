@@ -1,5 +1,6 @@
 // Two shapes, one boundary: SubmitReviewInput is the agent's wire format (the spec's schema,
-// exactly); Guide is the canonical stored form, which only validateSubmission produces.
+// plus the head the guide is for); Guide is the canonical stored form, which only
+// validateSubmission produces.
 import { z } from "zod";
 import { hunkIdSchema } from "../diff/diff-schema.ts";
 
@@ -18,6 +19,9 @@ const hunkRefInputSchema = z.strictObject({
 });
 
 export const submitReviewInputSchema = z.strictObject({
+  headSha: z
+    .string()
+    .describe("The full head commit this guide is for, exactly as PR Reviews named it when it asked for this guide."),
   overview: z.strictObject({
     problem: text.describe("What was wrong, or why the PR exists."),
     approach: text.describe("How the PR solves it."),
@@ -58,6 +62,8 @@ export const submitReviewInputSchema = z.strictObject({
   ),
 });
 export type SubmitReviewInput = z.infer<typeof submitReviewInputSchema>;
+/** The guide as the agent wrote it, without the head it names. */
+export type GuideInput = Omit<SubmitReviewInput, "headSha">;
 
 // ---- canonical stored form ----
 

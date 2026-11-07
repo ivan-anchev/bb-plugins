@@ -96,6 +96,8 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
       return {};
     },
 
+    updateGuide: async (input) => reviews.update(await prRef(input)),
+
     async askAboutFinding({ projectId, number, headSha, findingIndex, question }) {
       await reviews.ask({ repo: await repoOf(projectId), number, headSha }, findingIndex, question);
       return {};

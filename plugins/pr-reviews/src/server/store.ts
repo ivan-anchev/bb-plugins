@@ -34,14 +34,16 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
   storage.migrate(db(), MIGRATIONS);
 
   return {
-    // The run and the diff its prompt was built from land together or not at all. REPLACE on
-    // both: a new run for the same head (after Cancel) takes over the key, and the base branch
-    // may have moved since, which changes the diff without changing the head.
+    // The run and the diff its prompt was built from land together or not at all. A PR has one
+    // run, the review it waits for now: a new run replaces the PR's earlier ones, for any head and
+    // any thread, so no submission can land on a head the PR has moved past. REPLACE on the diff:
+    // the base branch may have moved since, which changes the diff without changing the head.
     saveRun(run: ReviewRun, diff: string): void {
       const { repo, number, headSha } = run.key;
       db().transaction(() => {
         db().prepare("INSERT OR REPLACE INTO diff_snapshots VALUES (?, ?, ?, ?, ?)").run(repo, number, headSha, diff, run.requestedAt);
-        db().prepare("INSERT OR REPLACE INTO review_runs VALUES (?, ?, ?, ?, ?)").run(repo, number, headSha, run.threadId, run.requestedAt);
+        db().prepare("DELETE FROM review_runs WHERE repo = ? AND number = ?").run(repo, number);
+        db().prepare("INSERT INTO review_runs VALUES (?, ?, ?, ?, ?)").run(repo, number, headSha, run.threadId, run.requestedAt);
       })();
     },
 
@@ -49,13 +51,13 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
       db().prepare("DELETE FROM review_runs WHERE repo = ? AND number = ? AND head_sha = ?").run(repo, number, headSha);
     },
 
-    /** The head this thread is writing a guide for now: its newest run. */
-    latestRunForThread(threadId: string): ReviewRun | null {
-      const row = db().prepare("SELECT * FROM review_runs WHERE thread_id = ? ORDER BY requested_at DESC LIMIT 1").get(threadId);
+    /** The head this thread is writing a guide for now, or null once its review was cancelled or replaced. */
+    runForThread(threadId: string): ReviewRun | null {
+      const row = db().prepare("SELECT * FROM review_runs WHERE thread_id = ?").get(threadId);
       return row === undefined ? null : toRun(row);
     },
 
-    /** Every run of these PRs, for any head. */
+    /** The runs of these PRs: at most one each. */
     runsFor(repo: Repo, numbers: number[]): ReviewRun[] {
       return db()
         .prepare("SELECT * FROM review_runs WHERE repo = ? AND number IN (SELECT value FROM json_each(?))")
