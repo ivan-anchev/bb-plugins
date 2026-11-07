@@ -1,7 +1,7 @@
 // navPanel component: the chosen PR's page, its header above one screen per review state.
 import type { ReactNode } from "react";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
-import type { PrDetail, ReviewState } from "../../contract.ts";
+import { reviewThreadOf, type PrDetail, type ReviewState } from "../../contract.ts";
 import { usePullRequest, type PrTarget } from "../queries.ts";
 import { GuideView } from "../guide/guide-view.tsx";
 import { GuideViewOptions, useViewOptions, type ViewOptionsState } from "../guide/view-options.tsx";
@@ -31,9 +31,6 @@ function PullRequestPage({ projectId, number }: { projectId: string; number: num
   );
 }
 
-// Every state but "none" has a review thread.
-const reviewThreadOf = (review: ReviewState) => (review.kind === "none" ? null : review.threadId);
-
 type ReviewPageProps = { target: PrTarget; pr: PrDetail; review: ReviewState; viewOptions: ViewOptionsState };
 
 // One header for every review state, so its buttons keep keyboard focus while the state changes.
@@ -41,7 +38,7 @@ function ReviewPage({ target, pr, review, viewOptions }: ReviewPageProps) {
   const screen = screenOf(target, pr, review, viewOptions);
   return (
     <>
-      <PrHeader pr={pr} threadId={reviewThreadOf(review)}>
+      <PrHeader pr={pr} hasReviewThread={reviewThreadOf(review) !== null}>
         {screen.actions}
       </PrHeader>
       {screen.body}

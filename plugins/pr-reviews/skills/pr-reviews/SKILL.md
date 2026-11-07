@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request, and a badge counting ready guides), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this, and the view options for tests and findings), how Start review runs a review thread in a new worktree that finishes with the submit_review agent tool, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request, and a badge counting ready guides), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this, and the view options for tests and findings), how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -34,13 +34,14 @@ remembered project that read **Guide ready**, and no badge at zero.
 ## The page
 
 Clicking a row opens that PR's page. Its header shows `#number` and the title,
-the author, `head-branch → base-branch`, **Open thread** (goes to the review
-thread; shown once a review has started) and **GitHub** (opens the PR on
-github.com). Below it, one screen per review state:
+the author, `head-branch → base-branch`, **Review chat** (opens the review
+thread's chat beside the page; shown once a review has started, see "Review
+chat" below) and **GitHub** (opens the PR on github.com). Below it, one screen
+per review state:
 
 - **No guide yet**, with **Start review**.
 - **Writing the guide**, while the review thread works: a spinner, the time
-  since the review started ("4:12 so far."), **Open thread**, and **Cancel**.
+  since the review started ("4:12 so far."), **Review chat**, and **Cancel**.
   Cancel stops the thread and the page returns to No guide yet. Cancel needs
   only bb, not GitHub, so it works while GitHub is unreachable. If bb cannot
   stop the thread, Cancel shows the error, the page keeps showing Writing the
@@ -48,7 +49,7 @@ github.com). Below it, one screen per review state:
 - **The review finished without a guide**, when the review thread for the PR's
   current commit stopped without submitting one: **Ask it to submit the
   guide** messages the thread to finish (the row reads Writing guide… while it
-  answers), and **Open thread** shows what it said.
+  answers), and **Review chat** shows what it said.
 - **The guide**, once one exists (see "Reading a guide" below).
 - **The guide with new commits**, when the PR's newest guide is for an older
   commit: the guide shows as usual under a banner, "N new commits since this
@@ -58,6 +59,26 @@ github.com). Below it, one screen per review state:
 
 The page and the rows follow the review thread on their own; no refresh is
 needed. Archiving or deleting a review thread returns the PR to No guide yet.
+
+## Review chat
+
+Review threads are hidden from bb's thread sidebar: PR Reviews starts them
+hidden, and the first time it loads it hides the ones it started earlier. A
+review thread you show again yourself (`bb thread update <id> --visibility
+visible`) stays shown.
+
+**Review chat** opens a **Review chat** tab in the page's side panel with the
+review thread's whole conversation, live: its messages, tool calls and a
+composer to write to it. It is bb's own chat, so it streams, queues and stops
+like any thread. While a review runs you watch the thread work. Everything the
+page sends the thread appears there too: Ask about this, Ask it to submit the
+guide, and Update guide.
+
+The tab always shows the review thread of the PR on screen. Open another PR and
+it shows that PR's thread, or says the PR has no review thread yet; when a PR
+gets a new review thread, it switches to it. The panel's **+** menu also lists
+Review chat on a PR's page. Close the tab with its ×, or the panel with the
+title bar's panel button.
 
 ## Reading a guide
 
@@ -88,7 +109,7 @@ priority, title and body, and **Ask about this**. A finding on a removed line
 that was replaced sits under the whole removed-and-added pair, so the pair keeps
 its word highlighting. **Ask about this** opens a text box; **Send** messages
 the question, quoting the finding, to the review thread, which answers there
-(Open thread shows it). The page keeps reading Guide ready while the thread
+(Review chat shows it). The page keeps reading Guide ready while the thread
 answers. If the send fails, the question stays in the box with the error beside
 Send. Text typed while a question is sending stays in the box, unsent.
 

@@ -17,6 +17,9 @@ import type { Store } from "./store.ts";
 // has the provider review escalations itself.
 const REVIEW_PERMISSION_MODE = "auto";
 
+// Review threads stay out of bb's sidebar: the PR page's Review chat is where they are read.
+const REVIEW_THREAD_VISIBILITY = "hidden";
+
 /** One PR of one bb project. */
 export type PrRef = { projectId: string; repo: Repo; number: number };
 
@@ -101,6 +104,7 @@ export function createReviews({ bb, store, settings, reader, github }: Deps) {
       title: `Review #${number}: ${pr.title}`,
       pluginMetadata: { repo, number, headSha: snapshot.headSha },
       permissionMode: REVIEW_PERMISSION_MODE,
+      visibility: REVIEW_THREAD_VISIBILITY,
       prompt: reviewPrompt(promptFacts(repo, pr, snapshot), instructions),
     });
     return saveRun(repo, number, thread.id, snapshot);

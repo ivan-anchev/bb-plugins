@@ -115,8 +115,8 @@ function actionHarness(checkoutHost: string, review: ReviewState = { kind: "none
       rpc: { experimental_invalidate: () => undefined },
       sdk: {
         threads: {
-          spawn: async ({ environment }) => {
-            calls.push(`spawn on ${environment.type === "host" ? environment.hostId : environment.type}`);
+          spawn: async ({ environment, visibility }) => {
+            calls.push(`spawn ${visibility} on ${environment.type === "host" ? environment.hostId : environment.type}`);
             return { id: "thr_new" };
           },
           send: async ({ threadId, input, mode }) => {
@@ -161,10 +161,10 @@ test("Start refuses a default checkout on another machine before reading the dif
   assert.deepEqual(calls, []);
 });
 
-test("Start on the server's own machine fetches the PR's commits, then spawns there", async () => {
+test("Start on the server's own machine fetches the PR's commits, then spawns a hidden thread there", async () => {
   const { reviews, calls } = actionHarness(SERVER_HOST);
   assert.deepEqual(await reviews.start(ref), { threadId: "thr_new" });
-  assert.deepEqual(calls, ["snapshot diff", "fetch head2 and base1 into /repos/bb-plugins", `spawn on ${SERVER_HOST}`, "save run for head2 by thr_new"]);
+  assert.deepEqual(calls, ["snapshot diff", "fetch head2 and base1 into /repos/bb-plugins", `spawn hidden on ${SERVER_HOST}`, "save run for head2 by thr_new"]);
 });
 
 test("Start refuses a PR that already has a guide for its current commit, before anything runs", async () => {
@@ -184,10 +184,10 @@ test("Update pins the new head's diff, fetches its commits, then messages the gu
   assert.match(messages[0] ?? "", /git diff head1\.\.head2/);
 });
 
-test("Update starts a new review when the guide's thread was archived or deleted", async () => {
+test("Update starts a new hidden review when the guide's thread was archived or deleted", async () => {
   const { reviews, calls, messages } = actionHarness(SERVER_HOST, STALE, []);
   assert.deepEqual(await reviews.update(ref), { threadId: "thr_new" });
-  assert.deepEqual(calls, ["snapshot diff", "fetch head2 and base1 into /repos/bb-plugins", `spawn on ${SERVER_HOST}`, "save run for head2 by thr_new"]);
+  assert.deepEqual(calls, ["snapshot diff", "fetch head2 and base1 into /repos/bb-plugins", `spawn hidden on ${SERVER_HOST}`, "save run for head2 by thr_new"]);
   assert.deepEqual(messages, []);
 });
 

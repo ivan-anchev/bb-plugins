@@ -42,8 +42,8 @@ export function createReviewReader({ bb, store }: { bb: BbPluginApi; store: Stor
     return (await threadFacts([threadId])).has(threadId);
   }
 
-  // Threads that still exist and are not archived; hidden ones too, since a user may hide a
-  // review thread from the sidebar without abandoning it.
+  // Threads that still exist and are not archived; hidden ones too, since review threads are
+  // spawned hidden.
   async function threadFacts(threadIds: string[]): Promise<ReadonlyMap<string, ThreadFacts>> {
     const pages = await Promise.all(
       chunks([...new Set(threadIds)], THREAD_IDS_PER_LIST).map((ids) => bb.sdk.threads.list({ threadIds: ids, archived: false, includeHidden: true })),

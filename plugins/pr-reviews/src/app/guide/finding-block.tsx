@@ -76,7 +76,7 @@ function AskAboutThis({ shown, target }: FindingBlockProps) {
           Ask about this
         </button>
         <span aria-live="polite" className="text-xs text-subtle-foreground">
-          {sent && "Sent to the review thread. Its answer is in Open thread."}
+          {sent && "Sent to the review thread. Its answer is in Review chat."}
         </span>
       </div>
       {open && (

@@ -69,6 +69,9 @@ export function guideHeadShaOf(review: ReviewState): string | null {
   }
 }
 
+/** The PR's review thread: every state but "none" has one. */
+export const reviewThreadOf = (review: ReviewState): string | null => (review.kind === "none" ? null : review.threadId);
+
 /** A guide as stored: who wrote it (`model` is null when bb did not report one), for which head, and when (epoch ms). */
 const guideRecordSchema = z.object({
   key: prHeadKeySchema,
