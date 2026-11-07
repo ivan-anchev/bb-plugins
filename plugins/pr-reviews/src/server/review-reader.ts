@@ -1,5 +1,6 @@
-// Reads PRs with their review state: one runs query and one thread-status read for a whole
-// list, then the pure derivation per PR. A PR's running review needs no GitHub read at all.
+// Reads PRs with their review state: one guides query, one runs query and one thread-status
+// read for a whole list, then the pure derivation per PR. A PR's running review needs no
+// GitHub read at all.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { PrDetail, PrSummary, ReviewState } from "../contract.ts";
 import { viewPr } from "../github/gh.ts";
@@ -16,11 +17,13 @@ export type ReviewReader = ReturnType<typeof createReviewReader>;
 
 export function createReviewReader({ bb, store }: { bb: BbPluginApi; store: Store }) {
   async function withReviews<P extends PrHead>(repo: Repo, prs: P[]): Promise<(P & { review: ReviewState })[]> {
-    const runs = store.runsFor(repo, prs.map((pr) => pr.number));
+    const numbers = prs.map((pr) => pr.number);
+    const guides = store.guideHeadsFor(repo, numbers);
+    const runs = store.runsFor(repo, numbers);
     const threads = await threadFacts(runs.map((run) => run.threadId));
     return prs.map((pr) => ({
       ...pr,
-      review: deriveReviewState({ headSha: pr.headSha, runs: runs.filter((run) => run.key.number === pr.number), threads }),
+      review: deriveReviewState({ headSha: pr.headSha, guides: ofPr(guides, pr.number), runs: ofPr(runs, pr.number), threads }),
     }));
   }
 
@@ -31,7 +34,7 @@ export function createReviewReader({ bb, store }: { bb: BbPluginApi; store: Stor
 
   async function runningReview(repo: Repo, number: number): Promise<RunningReview | null> {
     const runs = store.runsFor(repo, [number]);
-    return deriveRunningReview({ runs, threads: await threadFacts(runs.map((run) => run.threadId)) });
+    return deriveRunningReview({ guides: store.guideHeadsFor(repo, [number]), runs, threads: await threadFacts(runs.map((run) => run.threadId)) });
   }
 
   // Threads that still exist and are not archived; hidden ones too, since a user may hide a
@@ -45,6 +48,8 @@ export function createReviewReader({ bb, store }: { bb: BbPluginApi; store: Stor
 
   return { withReviews, pullRequest, runningReview };
 }
+
+const ofPr = <Row extends { key: { number: number } }>(rows: Row[], number: number) => rows.filter((row) => row.key.number === number);
 
 const chunks = <T>(items: T[], size: number): T[][] =>
   Array.from({ length: Math.ceil(items.length / size) }, (_, index) => items.slice(index * size, (index + 1) * size));

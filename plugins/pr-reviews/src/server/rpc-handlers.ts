@@ -1,6 +1,6 @@
 // RPC handlers: resolve the project to its GitHub repo, read GitHub through gh with each PR's
-// review state, remember the chosen project, and hand review actions to `reviews`. A thin
-// shell; the logic lives in the modules it calls.
+// review state, read stored guides, remember the chosen project, and hand review actions to
+// `reviews`. A thin shell; the logic lives in the modules it calls.
 import { experimental_PluginRpcRefusal as Refusal, type BbPluginApi, type ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { PROJECTS_TAG, prReviewsContract, type GitHubProject, type UnreadableProject } from "../contract.ts";
@@ -9,6 +9,7 @@ import { projectRepo, type ProjectRepo } from "../github/project-repo.ts";
 import type { Repo } from "../github/repo.ts";
 import type { ReviewReader } from "./review-reader.ts";
 import type { PrRef, Reviews } from "./reviews.ts";
+import type { Store } from "./store.ts";
 
 const SELECTED_PROJECT_KEY = "selected-project";
 
@@ -17,9 +18,9 @@ const NO_REMOTE: ProjectRepo = { kind: "none" };
 
 type Handlers = ExperimentalPluginRpcHandlersWithContext<typeof prReviewsContract>;
 
-type Deps = { bb: BbPluginApi; reader: ReviewReader; reviews: Reviews };
+type Deps = { bb: BbPluginApi; store: Pick<Store, "guide" | "snapshotFiles">; reader: ReviewReader; reviews: Reviews };
 
-export function createRpcHandlers({ bb, reader, reviews }: Deps): Handlers {
+export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handlers {
   // One project's unreadable remote is reported beside the others, never failing the read.
   async function githubProjects(): Promise<{ projects: GitHubProject[]; unreadable: UnreadableProject[] }> {
     const projects = await bb.sdk.projects.list();
@@ -68,6 +69,13 @@ export function createRpcHandlers({ bb, reader, reviews }: Deps): Handlers {
     async pullRequest({ projectId, number }) {
       const repo = await repoOf(projectId);
       return { repo, ...(await reader.pullRequest(repo, number)) };
+    },
+
+    async guide({ projectId, number, headSha }) {
+      const key = { repo: await repoOf(projectId), number, headSha };
+      const record = store.guide(key);
+      if (record === null) throw new Refusal({ code: "not_found", message: "This PR has no guide for that commit." });
+      return { record, files: store.snapshotFiles(key) };
     },
 
     async selectProject({ projectId }) {

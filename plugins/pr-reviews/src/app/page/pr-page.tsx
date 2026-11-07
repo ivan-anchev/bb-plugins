@@ -2,6 +2,7 @@
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import type { ReviewState } from "../../contract.ts";
 import { usePullRequest } from "../queries.ts";
+import { GuideView } from "../guide/guide-view.tsx";
 import { parseRoute } from "../routes.ts";
 import { Notice } from "../ui/notice.tsx";
 import { ReadError } from "../ui/read-error.tsx";
@@ -39,6 +40,11 @@ function ReviewScreen({ target, review }: { target: PrTarget; review: ReviewStat
       return <RunningScreen target={target} review={review} />;
     case "no-guide":
       return <NoGuideScreen target={target} review={review} />;
+    // Stale shows its guide too; its banner and Update guide are not built yet.
+    case "ready":
+    case "stale":
+      // Keyed: a new guide is a new view.
+      return <GuideView key={review.guideHeadSha} target={{ ...target, headSha: review.guideHeadSha }} />;
     default:
       return review satisfies never;
   }

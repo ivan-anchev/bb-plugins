@@ -2,22 +2,78 @@
 import { parsePatch, type StructuredPatch, type StructuredPatchHunk } from "diff";
 import type { DiffFile, Hunk } from "./diff-schema.ts";
 
-/** Throws when a hunk's line counts disagree with its header, as in a truncated diff. */
+/** Throws when a hunk's line counts disagree with its header, as in a truncated diff, or a file name can't be read. */
 export function parsePrDiff(text: string): DiffFile[] {
-  return parsePatch(text).map(toDiffFile);
+  return fileSections(text).map(toDiffFile);
 }
 
-function toDiffFile(patch: StructuredPatch): DiffFile {
-  const oldPath = withoutPrefix(patch.oldFileName);
-  const newPath = withoutPrefix(patch.newFileName);
+// One file's lines each, from its `diff --git` line to the next file's. A hunk line starts
+// with a space, `+`, `-` or `\`, so it never starts a file. Nothing precedes the first file.
+function fileSections(text: string): string[][] {
+  const sections: string[][] = [];
+  for (const line of text.split("\n")) {
+    if (line.startsWith("diff --git ")) sections.push([]);
+    sections.at(-1)?.push(line);
+  }
+  return sections;
+}
+
+// jsdiff reads the hunks and the kind of change. It also reads file names, but trims them,
+// drops a byte-order mark, and cuts a name at U+2028 or U+2029, so they are read here.
+function toDiffFile(lines: string[]): DiffFile {
+  const [patch] = parsePatch(lines.join("\n"));
   return {
-    path: patch.isDelete === true ? oldPath : newPath,
-    previousPath: patch.isRename === true ? oldPath : null,
+    ...pathsOf(lines),
     status: statusOf(patch),
     binary: patch.isBinary === true,
     hunks: patch.hunks.map(toHunk),
   };
 }
+
+// git names a file exactly in `rename from`/`rename to` or `copy to`, and otherwise in its
+// `diff --git` line. Those keys start no hunk line, so the whole section can be searched.
+function pathsOf([gitHeader, ...lines]: string[]): Pick<DiffFile, "path" | "previousPath"> {
+  const field = (key: string) => lines.find((line) => line.startsWith(key))?.slice(key.length);
+  const renamedFrom = field("rename from ");
+  const target = field("rename to ") ?? field("copy to ");
+  return {
+    path: target === undefined ? samePathOf(gitHeader) : unquoted(target),
+    previousPath: renamedFrom === undefined ? null : unquoted(renamedFrom),
+  };
+}
+
+// Without a rename or copy, `diff --git a/<path> b/<path>` writes the same text on both
+// sides, so it splits at its middle, whatever the path holds.
+function samePathOf(gitHeader: string): string {
+  const sides = gitHeader.slice("diff --git ".length);
+  const middle = (sides.length - 1) / 2;
+  const [oldSide, newSide] = [sides.slice(0, middle), sides.slice(middle + 1)].map(unquoted);
+  if (sides[middle] !== " " || !oldSide.startsWith("a/") || newSide !== `b/${oldSide.slice(2)}`) {
+    throw new Error(`Can't read the file name in: ${gitHeader}`);
+  }
+  return oldSide.slice(2);
+}
+
+// git C-quotes a name that holds a control character, `"` or `\`, and by default any
+// non-ASCII byte; each escape is one byte of the name's UTF-8. Other names are written raw.
+const QUOTED_NAME = /^"(?:[^"\\]|\\[abtnvfr"\\]|\\[0-7]{3})*"$/;
+const QUOTED_PART = /\\([0-7]{3}|.)|[^\\]+/g;
+const CONTROL_ESCAPES = new Map([["a", 7], ["b", 8], ["t", 9], ["n", 10], ["v", 11], ["f", 12], ["r", 13]]);
+const ENCODER = new TextEncoder();
+const DECODER = new TextDecoder("utf-8", { ignoreBOM: true });
+
+function unquoted(name: string): string {
+  if (!name.startsWith('"')) return name;
+  if (!QUOTED_NAME.test(name)) throw new Error(`Can't read the quoted file name ${name}`);
+  const bytes = [...name.slice(1, -1).matchAll(QUOTED_PART)].flatMap(([part, escape]) =>
+    escape === undefined ? [...ENCODER.encode(part)] : [byteOf(escape)],
+  );
+  return DECODER.decode(Uint8Array.from(bytes));
+}
+
+// An escaped `"` or `\` is its own byte.
+const byteOf = (escape: string) =>
+  escape.length === 3 ? parseInt(escape, 8) : (CONTROL_ESCAPES.get(escape) ?? escape.charCodeAt(0));
 
 function statusOf(patch: StructuredPatch): DiffFile["status"] {
   if (patch.isCreate === true) return "added";
@@ -36,11 +92,4 @@ function toHunk({ oldStart, oldLines, newStart, newLines, lines }: StructuredPat
     newLines,
     lines,
   };
-}
-
-// jsdiff keeps git's a/ and b/ prefixes. A git diff always names both sides, using
-// /dev/null for the side that does not exist, and that side is never the one read.
-function withoutPrefix(name: string | undefined): string {
-  if (name === undefined) throw new Error("The diff has a file with no name.");
-  return name.replace(/^[ab]\//, "");
 }

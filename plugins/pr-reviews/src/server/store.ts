@@ -1,14 +1,18 @@
-// The plugin's SQLite: the diff pinned for each reviewed head, and the review runs. Every SQL
-// statement lives here.
+// The plugin's SQLite: the diff pinned for each reviewed head, the review runs, and the
+// guides. Every SQL statement lives here.
 import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { z } from "zod";
+import type { GuideRecord, PrHeadKey } from "../contract.ts";
+import type { DiffFile } from "../diff/diff-schema.ts";
+import { parsePrDiff } from "../diff/parse-pr-diff.ts";
+import { guideSchema } from "../guide/guide-schema.ts";
 import { repoSchema, type Repo } from "../github/repo.ts";
-
-/** One head commit of one PR: the key of a pinned diff and of a review run. */
-export type PrHeadKey = { repo: Repo; number: number; headSha: string };
 
 /** "Thread `threadId` was asked, at `requestedAt` (epoch ms), to write the guide for `key`." */
 export type ReviewRun = { key: PrHeadKey; threadId: string; requestedAt: number };
+
+/** A guide without its body: what review state needs for every row of the list. */
+export type GuideHead = Pick<GuideRecord, "key" | "threadId" | "submittedAt">;
 
 // Append-only: bb.storage.migrate records each statement's hash by its index.
 const MIGRATIONS = [
@@ -17,11 +21,14 @@ const MIGRATIONS = [
   `CREATE TABLE review_runs (repo TEXT NOT NULL, number INTEGER NOT NULL, head_sha TEXT NOT NULL,
      thread_id TEXT NOT NULL, requested_at INTEGER NOT NULL, PRIMARY KEY (repo, number, head_sha))`,
   `CREATE INDEX review_runs_by_thread ON review_runs (thread_id, requested_at)`,
+  `CREATE TABLE guides (repo TEXT NOT NULL, number INTEGER NOT NULL, head_sha TEXT NOT NULL,
+     thread_id TEXT NOT NULL, model TEXT, submitted_at INTEGER NOT NULL, guide TEXT NOT NULL,
+     PRIMARY KEY (repo, number, head_sha))`,
 ];
 
 export type Store = ReturnType<typeof openStore>;
 
-export function openStore(storage: PluginStorage) {
+export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) {
   // The host closes the handle on reload and reopens it on the next call, so never keep it.
   const db = () => storage.database();
   storage.migrate(db(), MIGRATIONS);
@@ -55,6 +62,32 @@ export function openStore(storage: PluginStorage) {
         .all(repo, JSON.stringify(numbers))
         .map(toRun);
     },
+
+    /** The diff the run for `key` was prompted with, parsed. Every run saved one. */
+    snapshotFiles({ repo, number, headSha }: PrHeadKey): DiffFile[] {
+      const row = db().prepare("SELECT diff FROM diff_snapshots WHERE repo = ? AND number = ? AND head_sha = ?").get(repo, number, headSha);
+      return parsePrDiff(snapshotRowSchema.parse(row).diff);
+    },
+
+    // REPLACE: a second submission for the same head replaces the first.
+    saveGuide({ key, threadId, model, submittedAt, guide }: GuideRecord): void {
+      db()
+        .prepare("INSERT OR REPLACE INTO guides VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .run(key.repo, key.number, key.headSha, threadId, model, submittedAt, JSON.stringify(guide));
+    },
+
+    /** Every guide of these PRs, for any head, without the guide itself. */
+    guideHeadsFor(repo: Repo, numbers: number[]): GuideHead[] {
+      return db()
+        .prepare("SELECT repo, number, head_sha, thread_id, submitted_at FROM guides WHERE repo = ? AND number IN (SELECT value FROM json_each(?))")
+        .all(repo, JSON.stringify(numbers))
+        .map(toGuideHead);
+    },
+
+    guide({ repo, number, headSha }: PrHeadKey): GuideRecord | null {
+      const row = db().prepare("SELECT * FROM guides WHERE repo = ? AND number = ? AND head_sha = ?").get(repo, number, headSha);
+      return row === undefined ? null : toGuideRecord(row);
+    },
   };
 }
 
@@ -70,4 +103,27 @@ const runRowSchema = z.object({
 function toRun(row: unknown): ReviewRun {
   const { repo, number, head_sha, thread_id, requested_at } = runRowSchema.parse(row);
   return { key: { repo, number, headSha: head_sha }, threadId: thread_id, requestedAt: requested_at };
+}
+
+const snapshotRowSchema = z.object({ diff: z.string() });
+
+const guideHeadRowSchema = z.object({
+  repo: repoSchema,
+  number: z.number(),
+  head_sha: z.string(),
+  thread_id: z.string(),
+  submitted_at: z.number(),
+});
+
+const guideRowSchema = guideHeadRowSchema.extend({ model: z.string().nullable(), guide: z.string() });
+
+const toGuideHead = (row: unknown): GuideHead => headOf(guideHeadRowSchema.parse(row));
+
+function toGuideRecord(row: unknown): GuideRecord {
+  const parsed = guideRowSchema.parse(row);
+  return { ...headOf(parsed), model: parsed.model, guide: guideSchema.parse(JSON.parse(parsed.guide)) };
+}
+
+function headOf({ repo, number, head_sha, thread_id, submitted_at }: z.infer<typeof guideHeadRowSchema>): GuideHead {
+  return { key: { repo, number, headSha: head_sha }, threadId: thread_id, submittedAt: submitted_at };
 }

@@ -1,0 +1,7 @@
+diff --git "a/tab\there \"q\" back\\slash.ts" "b/tab\there \"q\" back\\slash.ts"
+index 587be6b..b77b4eb 100644
+--- "a/tab\there \"q\" back\\slash.ts"	
++++ "b/tab\there \"q\" back\\slash.ts"	
+@@ -1 +1,2 @@
+ x
++y

@@ -1,12 +1,13 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, and a page per pull request), how Start review runs a review thread in a new worktree, its Review instructions setting, where its data comes from (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request, and a badge counting ready guides), how Start review runs a review thread in a new worktree that finishes with the submit_review agent tool, its Review instructions setting, where its data comes from (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
 
-The PR Reviews plugin adds a **PR Reviews** entry to bb's left rail. It has no
-CLI command and no agent tool yet, and one setting.
+The PR Reviews plugin adds a **PR Reviews** entry to bb's left rail. It has one
+agent tool, `submit_review`, offered only to its own review threads, one
+setting, and no CLI command.
 
 ## The sidebar
 
@@ -22,8 +23,13 @@ Opening PR Reviews replaces the thread list with:
   opens.
 - **The project's open pull requests**, in the order `gh pr list` returns them (newest first), up to 200.
   Each row shows `#number` and the title, then the author's GitHub login, how
-  long ago the PR was last updated, and its review state: **Writing guide…**
-  while a review thread is working on it, otherwise **No guide**.
+  long ago the PR was last updated, and its review state: **Guide ready** when
+  it has a guide for its current commit, **New commits** when its newest guide
+  is for an older commit, **Writing guide…** while a review thread is working
+  on it, otherwise **No guide**.
+
+The rail entry shows a badge with the number of open pull requests in the
+remembered project that read **Guide ready**, and no badge at zero.
 
 ## The page
 
@@ -42,6 +48,11 @@ PR on github.com. Below it, one screen per review state:
   current commit stopped without submitting one: **Ask it to submit the
   guide** messages the thread to finish (the row reads Writing guide… while it
   answers), and **Open thread** shows what it said.
+- **The guide**, once one exists: for now "What this PR does", with the
+  guide's problem and approach, and a byline: "Written by <model> for <short
+  commit>, <how long ago>" ("the review thread" when bb reported no model).
+  A PR whose newest guide is for an older commit shows that guide the same
+  way; the "new commits" banner and Update guide are not built yet.
 
 The page and the rows follow the review thread on their own; no refresh is
 needed. Archiving or deleting a review thread returns the PR to No guide yet.
@@ -81,8 +92,41 @@ checkout is on another enrolled machine, Start review says "PR Reviews can
 only review a project whose default checkout is on the machine running bb"
 and runs nothing: no diff read, no fetch, no thread.
 
-Submitting a guide is not available yet, so every review currently ends as
-"The review finished without a guide".
+A PR that already has a guide for its current commit cannot be started again:
+Start review says "This PR already has a guide for its current commit."
+
+## The submit_review tool
+
+A review thread finishes by calling `submit_review` with the whole guide:
+`overview` (`problem`, `approach`, optional `behaviour {before, after}`), 1 to
+7 `steps` (each a `title`, an `explanation`, an optional `forYou`, and `hunks`
+of `{file, hunk, collapsed?}`), `hidden` (`{file, hunk, reason}` or `{files,
+reason}`), and `findings` (`{file, line, side?, priority: p0|p1|p2, title,
+body}`). A hunk is named by its range header (`@@ -18,9 +18,19 @@`; the `@@`
+marks, trailing function text and an omitted `,1` are accepted), and a file
+with no text changes by `whole file`.
+
+The tool is offered only to threads PR Reviews started, recognised by the
+thread's origin and its `{repo, number, headSha}` metadata; a thread started
+from bb's composer does not have it. On each call PR Reviews looks up the
+thread's review run, checks the guide against the diff pinned when the
+review started, and stores it by repo, PR number and head commit. A second
+accepted guide for the same commit replaces the first. A rejected call saves
+nothing, and its message lists every problem at once:
+
+- **Missing**: hunks in no step and not in `hidden`.
+- **Listed more than once**: hunks placed twice, with both places.
+- **Unknown files** and **Unknown hunks** (with the file's real hunks).
+- **Findings outside the diff**: a finding's line is in none of its file's
+  hunks on that side (the message lists the file's line ranges).
+
+More than 7 steps is refused by the tool's own input check: "Invalid arguments
+for tool "submit_review": steps: Too big: expected array to have <=7 items".
+A thread whose review was cancelled, or replaced by a newer Start for the same
+commit, is refused ("this thread is no longer writing a guide in PR Reviews").
+
+When a guide is accepted, the row turns to Guide ready, the page shows the
+guide, and the badge counts it, without a refresh.
 
 ## Settings
 
@@ -94,8 +138,8 @@ here. A blank field sends nothing.
 ## Refresh and errors
 
 The **Refresh** button in the page's title bar re-reads the projects, the
-pull request list, and the open PR. Clicking the PR that is already open does
-the same for that PR and the list. When a read fails, its error shows above
+pull request list, the open PR, and its guide. Clicking the PR that is already
+open does the same for that PR, its guide and the list. When a read fails, its error shows above
 whatever was already on screen, and the old list stays. Typical errors:
 
 - "PR Reviews needs the GitHub CLI": `gh` is not installed or not on the
@@ -114,6 +158,6 @@ PR Reviews runs `gh pr list`, `gh pr view` and `gh pr diff` for the project's
 `owner/name` on the machine that runs bb, and `git remote get-url origin` for a
 project whose remote bb did not record. On Start review it also runs `git
 fetch` in the project's default checkout, which only adds the refs under
-`refs/pr-reviews/`. It only reads; it never writes to GitHub. The diff pinned for each reviewed commit and each review run are kept
-in the plugin's own SQLite database (`plugins/pr-reviews/data.db` in bb's data
+`refs/pr-reviews/`. It only reads; it never writes to GitHub. The diff pinned for each reviewed commit, each review run, and each guide are
+kept in the plugin's own SQLite database (`plugins/pr-reviews/data.db` in bb's data
 directory).

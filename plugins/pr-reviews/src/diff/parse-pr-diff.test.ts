@@ -68,6 +68,42 @@ test("a C-quoted path is unquoted", () => {
   ]);
 });
 
+test("a path keeps a leading space, a trailing space and a leading byte-order mark", () => {
+  assert.deepEqual(
+    parseFixture("space-paths.diff").map((file) => file.path),
+    [" lead.ts", "trail.ts ", "\uFEFFbom.ts"],
+  );
+});
+
+// The same change, as git writes it by default (non-ASCII bytes octal-escaped) and with
+// core.quotePath=false (written raw). Line and paragraph separators, a byte-order mark and
+// edge spaces, in modified files, edited renames and a pure rename.
+for (const fixture of ["line-separator-paths.diff", "line-separator-paths-raw.diff"]) {
+  test(`modified and renamed paths with U+2028, U+2029, a byte-order mark and edge spaces stay exact (${fixture})`, () => {
+    const edited = ["@@ -1,6 +1,6 @@"];
+    assert.deepEqual(parseFixture(fixture).map(summary), [
+      { path: " pure moved .ts", previousPath: "pure ﻿ .ts", status: "renamed", binary: false, units: ["whole file"] },
+      { path: " ﻿all  .ts ", previousPath: null, status: "modified", binary: false, units: edited },
+      { path: "line sep.ts", previousPath: null, status: "modified", binary: false, units: edited },
+      { path: "new name.ts", previousPath: "old name.ts", status: "renamed", binary: false, units: edited },
+      { path: "new name.ts", previousPath: "old name.ts", status: "renamed", binary: false, units: edited },
+      { path: "para sep.ts", previousPath: null, status: "modified", binary: false, units: edited },
+      { path: "﻿new  .ts ", previousPath: " ﻿old  .ts ", status: "renamed", binary: false, units: edited },
+    ]);
+  });
+}
+
+test("a path's tab, quote and backslash escapes are decoded", () => {
+  assert.deepEqual(
+    parseFixture("escaped-path.diff").map((file) => file.path),
+    ['tab\there "q" back\\slash.ts'],
+  );
+});
+
+test("an empty diff has no files", () => {
+  assert.deepEqual(parsePrDiff(""), []);
+});
+
 test("a truncated hunk throws", () => {
   assert.throws(() => parseFixture("truncated.diff"), Error);
 });

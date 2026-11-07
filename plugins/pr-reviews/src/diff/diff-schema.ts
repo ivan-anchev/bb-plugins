@@ -13,7 +13,7 @@ const hunkSchema = z.object({
 });
 export type Hunk = z.infer<typeof hunkSchema>;
 
-const diffFileSchema = z.object({
+export const diffFileSchema = z.object({
   /** The new path; the old path for a deletion. */
   path: z.string(),
   /** The old path of a rename, otherwise null. */
@@ -27,7 +27,7 @@ export type DiffFile = z.infer<typeof diffFileSchema>;
 
 // The name the review agent uses for one unit of a file's change. Derived from the hunk's
 // numbers, never stored beside them, so the two cannot disagree.
-const hunkIdSchema = z.string().brand<"HunkId">();
+export const hunkIdSchema = z.string().brand<"HunkId">();
 export type HunkId = z.infer<typeof hunkIdSchema>;
 
 /** The one unit of a file with no text hunks. */
@@ -42,3 +42,27 @@ export function hunkIdOf(hunk: Hunk): HunkId {
 export function unitIdsOf(file: DiffFile): HunkId[] {
   return file.hunks.length === 0 ? [WHOLE_FILE] : file.hunks.map(hunkIdOf);
 }
+
+/** One line of a hunk with its line number on each side; null on the side it is not on. */
+export type NumberedLine = { text: string; old: number | null; new: number | null };
+
+/** The hunk's lines numbered from its header. The `\ No newline` marker is on neither side. */
+export function numberedLines(hunk: Hunk): NumberedLine[] {
+  let oldNumber = firstLineOf(hunk.oldStart, hunk.oldLines);
+  let newNumber = firstLineOf(hunk.newStart, hunk.newLines);
+  return hunk.lines.map((text) => {
+    switch (text[0]) {
+      case " ":
+        return { text, old: oldNumber++, new: newNumber++ };
+      case "-":
+        return { text, old: oldNumber++, new: null };
+      case "+":
+        return { text, old: null, new: newNumber++ };
+      default:
+        return { text, old: null, new: null };
+    }
+  });
+}
+
+// git writes the line before an empty side as its start (`@@ -0,0 +1,2 @@`).
+const firstLineOf = (start: number, count: number) => (count === 0 ? start + 1 : start);
