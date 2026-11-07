@@ -33,7 +33,7 @@ export const submitReviewInputSchema = z.strictObject({
   steps: z
     .array(
       z.strictObject({
-        title: text,
+        title: text.describe("No step number: the page numbers the steps."),
         explanation: text.describe("What this code does and why it matters."),
         forYou: text.optional().describe("A decision only the reviewer can make."),
         hunks: z.array(hunkRefInputSchema).min(1),
