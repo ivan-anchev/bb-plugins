@@ -1,0 +1,8 @@
+diff --git a/del.txt b/del.txt
+deleted file mode 100644
+index d3bc718..0000000
+--- a/del.txt
++++ /dev/null
+@@ -1,2 +0,0 @@
+-gone
+-bye

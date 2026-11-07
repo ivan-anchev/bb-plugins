@@ -1,0 +1,11 @@
+diff --git a/nonl.txt b/nonl.txt
+index 17ffa56..d9fb1fe 100644
+--- a/nonl.txt
++++ b/nonl.txt
+@@ -1,2 +1,3 @@
+ line
+-end
+\ No newline at end of file
++end
++more
+\ No newline at end of file

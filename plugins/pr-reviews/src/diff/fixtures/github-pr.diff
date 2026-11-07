@@ -1,0 +1,39 @@
+diff --git a/plugins/code-explorer/src/ui/segment-keys.test.ts b/plugins/code-explorer/src/ui/segment-keys.test.ts
+index 776d8d0..e8f48b5 100644
+--- a/plugins/code-explorer/src/ui/segment-keys.test.ts
++++ b/plugins/code-explorer/src/ui/segment-keys.test.ts
+@@ -13,13 +13,18 @@ describe("segmentIndexAfterKey", () => {
+     assert.equal(segmentIndexAfterKey("ArrowLeft", 0, 3), 2);
+   });
+ 
++  test("vertical arrows step like horizontal ones", () => {
++    assert.equal(segmentIndexAfterKey("ArrowDown", 0, 3), 1);
++    assert.equal(segmentIndexAfterKey("ArrowUp", 0, 3), 2);
++  });
++
+   test("Home and End jump to the ends", () => {
+     assert.equal(segmentIndexAfterKey("Home", 2, 3), 0);
+     assert.equal(segmentIndexAfterKey("End", 0, 3), 2);
+   });
+ 
+   test("ignores keys a tablist does not own", () => {
+-    assert.equal(segmentIndexAfterKey("ArrowDown", 0, 3), null);
+     assert.equal(segmentIndexAfterKey("Enter", 0, 3), null);
++    assert.equal(segmentIndexAfterKey("Tab", 0, 3), null);
+   });
+ });
+diff --git a/plugins/code-explorer/src/ui/segment-keys.ts b/plugins/code-explorer/src/ui/segment-keys.ts
+index bbf9d73..866e1e0 100644
+--- a/plugins/code-explorer/src/ui/segment-keys.ts
++++ b/plugins/code-explorer/src/ui/segment-keys.ts
+@@ -1,8 +1,10 @@
+ export function segmentIndexAfterKey(key: string, index: number, count: number): number | null {
+   switch (key) {
+     case "ArrowRight":
++    case "ArrowDown":
+       return (index + 1) % count;
+     case "ArrowLeft":
++    case "ArrowUp":
+       return (index - 1 + count) % count;
+     case "Home":
+       return 0;

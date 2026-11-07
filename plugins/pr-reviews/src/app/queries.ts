@@ -11,3 +11,6 @@ export const usePullRequest = (projectId: string, number: number) =>
   experimental_useRpcQuery({ contract, method: "pullRequest", input: { projectId, number } });
 
 export const useSelectProject = () => experimental_useRpcMutation({ contract, method: "selectProject" });
+
+type ReviewAction = "startReview" | "cancelReview" | "nudgeReview";
+export const useReviewAction = (method: ReviewAction) => experimental_useRpcMutation({ contract, method });

@@ -1,0 +1,11 @@
+diff --git a/add.txt b/add.txt
+new file mode 100644
+index 0000000..07f33c4
+--- /dev/null
++++ b/add.txt
+@@ -0,0 +1,2 @@
++new
++file
+diff --git a/empty.txt b/empty.txt
+new file mode 100644
+index 0000000..e69de29

@@ -1,22 +1,25 @@
-// RPC handlers: resolve the project to its GitHub repo, read GitHub through gh, and remember
-// the chosen project. A thin shell; the logic lives in the modules it calls.
+// RPC handlers: resolve the project to its GitHub repo, read GitHub through gh with each PR's
+// review state, remember the chosen project, and hand review actions to `reviews`. A thin
+// shell; the logic lives in the modules it calls.
 import { experimental_PluginRpcRefusal as Refusal, type BbPluginApi, type ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { PROJECTS_TAG, prReviewsContract, type GitHubProject, type ReviewState, type UnreadableProject } from "../contract.ts";
-import { listOpenPrs, viewPr } from "../github/gh.ts";
+import { PROJECTS_TAG, prReviewsContract, type GitHubProject, type UnreadableProject } from "../contract.ts";
+import { listOpenPrs } from "../github/gh.ts";
 import { projectRepo, type ProjectRepo } from "../github/project-repo.ts";
 import type { Repo } from "../github/repo.ts";
+import type { ReviewReader } from "./review-reader.ts";
+import type { PrRef, Reviews } from "./reviews.ts";
 
 const SELECTED_PROJECT_KEY = "selected-project";
 
-// Until reviews exist, every PR reads as not reviewed.
-const NO_REVIEW: ReviewState = { kind: "none" };
 // A deleted project reads as one without a remote.
 const NO_REMOTE: ProjectRepo = { kind: "none" };
 
 type Handlers = ExperimentalPluginRpcHandlersWithContext<typeof prReviewsContract>;
 
-export function createRpcHandlers(bb: BbPluginApi): Handlers {
+type Deps = { bb: BbPluginApi; reader: ReviewReader; reviews: Reviews };
+
+export function createRpcHandlers({ bb, reader, reviews }: Deps): Handlers {
   // One project's unreadable remote is reported beside the others, never failing the read.
   async function githubProjects(): Promise<{ projects: GitHubProject[]; unreadable: UnreadableProject[] }> {
     const projects = await bb.sdk.projects.list();
@@ -40,6 +43,10 @@ export function createRpcHandlers(bb: BbPluginApi): Handlers {
     }
   }
 
+  async function prRef({ projectId, number }: { projectId: string; number: number }): Promise<PrRef> {
+    return { projectId, repo: await repoOf(projectId), number };
+  }
+
   async function rememberedProjectId(): Promise<string | undefined> {
     return z.string().optional().parse(await bb.storage.kv.get(SELECTED_PROJECT_KEY));
   }
@@ -55,17 +62,29 @@ export function createRpcHandlers(bb: BbPluginApi): Handlers {
     async pullRequests({ projectId }) {
       const repo = await repoOf(projectId);
       const prs = await listOpenPrs(repo);
-      return { repo, rows: prs.map((pr) => ({ ...pr, review: NO_REVIEW })) };
+      return { repo, rows: await reader.withReviews(repo, prs) };
     },
 
     async pullRequest({ projectId, number }) {
       const repo = await repoOf(projectId);
-      return { repo, pr: await viewPr(repo, number), review: NO_REVIEW };
+      return { repo, ...(await reader.pullRequest(repo, number)) };
     },
 
     async selectProject({ projectId }) {
       await bb.storage.kv.set(SELECTED_PROJECT_KEY, projectId);
       bb.rpc.experimental_invalidate([PROJECTS_TAG]);
+      return {};
+    },
+
+    startReview: async (input) => reviews.start(await prRef(input)),
+
+    async cancelReview(input) {
+      await reviews.cancel(await prRef(input));
+      return {};
+    },
+
+    async nudgeReview(input) {
+      await reviews.nudge(await prRef(input));
       return {};
     },
   };

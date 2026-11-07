@@ -27,9 +27,15 @@ const prDetailSchema = prSummarySchema.extend({
 });
 export type PrDetail = z.infer<typeof prDetailSchema>;
 
-// A sum type on `kind`: later states (running, ready, stale, no-guide) join as variants that
-// carry exactly what their screen needs.
-const reviewStateSchema = z.discriminatedUnion("kind", [z.object({ kind: z.literal("none") })]);
+// A sum type on `kind`: each variant carries exactly what its screen needs. Later states
+// (ready, stale) join as variants.
+const reviewStateSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("none") }),
+  /** A review thread is writing the guide for `runHeadSha`; `startedAt` is epoch ms. */
+  z.object({ kind: z.literal("running"), threadId: z.string(), runHeadSha: z.string(), startedAt: z.number() }),
+  /** The review thread for the current head settled without a guide; `idleSince` is epoch ms. */
+  z.object({ kind: z.literal("no-guide"), threadId: z.string(), idleSince: z.number() }),
+]);
 export type ReviewState = z.infer<typeof reviewStateSchema>;
 
 const githubProjectSchema = z.object({ id: z.string(), name: z.string(), repo: repoSchema });
@@ -42,9 +48,11 @@ export type UnreadableProject = z.infer<typeof unreadableProjectSchema>;
 const prRowSchema = prSummarySchema.extend({ review: reviewStateSchema });
 export type PrRow = z.infer<typeof prRowSchema>;
 
+const prRefSchema = z.object({ projectId: z.string(), number: prNumberSchema });
+
 const empty = z.object({});
 export const PROJECTS_TAG = "projects";
-const repoTag = (repo: Repo) => `repo:${repo}`;
+export const repoTag = (repo: Repo) => `repo:${repo}`;
 
 export const prReviewsContract = defineRpcContract({
   projects: {
@@ -62,9 +70,12 @@ export const prReviewsContract = defineRpcContract({
     tags: (_input, output) => [repoTag(output.repo)],
   },
   pullRequest: {
-    input: z.object({ projectId: z.string(), number: prNumberSchema }),
+    input: prRefSchema,
     output: z.object({ repo: repoSchema, pr: prDetailSchema, review: reviewStateSchema }),
     tags: (_input, output) => [repoTag(output.repo)],
   },
   selectProject: { input: z.object({ projectId: z.string() }), output: empty },
+  startReview: { input: prRefSchema, output: z.object({ threadId: z.string() }) },
+  cancelReview: { input: prRefSchema, output: empty },
+  nudgeReview: { input: prRefSchema, output: empty },
 });

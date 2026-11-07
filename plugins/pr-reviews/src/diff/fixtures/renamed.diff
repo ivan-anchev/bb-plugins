@@ -1,0 +1,19 @@
+diff --git a/old-name.txt b/new-name.txt
+similarity index 89%
+rename from old-name.txt
+rename to new-name.txt
+index 1e395f2..f09db21 100644
+--- a/old-name.txt
++++ b/new-name.txt
+@@ -3,6 +3,6 @@ beta
+ gamma
+ delta
+ epsilon
+-zeta
++ZETA
+ eta
+ theta
+diff --git a/keep.txt b/moved.txt
+similarity index 100%
+rename from keep.txt
+rename to moved.txt

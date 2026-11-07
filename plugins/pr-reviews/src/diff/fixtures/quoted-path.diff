@@ -1,0 +1,7 @@
+diff --git "a/caf\303\251 x.txt" "b/caf\303\251 x.txt"
+index bca70f3..8a08eba 100644
+--- "a/caf\303\251 x.txt"	
++++ "b/caf\303\251 x.txt"	
+@@ -1 +1,2 @@
+ q
++r
