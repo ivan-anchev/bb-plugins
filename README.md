@@ -25,6 +25,7 @@ bb plugin install git:https://github.com/ivan-anchev/bb-plugins.git@^0.1.0 --tag
 | --- | --- |
 | [`comfortable-type`](plugins/comfortable-type) | A theme that sets bb's text at 14px in the system font, with bb's own colors. |
 | [Code Explorer](plugins/code-explorer) | Browse the environment's files and git changes as a tree with colored per-file-type icons, and read any file or its diff beside the tree. |
+| [Generative UI](plugins/generative-ui) | Agents answer with interactive UI inline in the chat: charts, tables, forms, cards and layouts, drawn by OpenUI's stock components. |
 | [`proactive-visuals`](plugins/proactive-visuals) | Agents answer data with an inline chart, without being asked. |
 | [`subagents-strip`](plugins/subagents-strip) | A live strip above the composer that counts the thread's subagents and child threads and opens into one row per subagent that expands to its report and latest steps. |
 

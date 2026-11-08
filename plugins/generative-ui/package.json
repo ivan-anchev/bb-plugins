@@ -1,0 +1,54 @@
+{
+  "name": "bb-plugin-generative-ui",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Agents answer with interactive UI inline in the chat: charts, tables, forms, cards and layouts, drawn by OpenUI's stock components.",
+  "keywords": [
+    "bb-plugin",
+    "generative-ui",
+    "openui",
+    "charts",
+    "forms"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ivan-anchev/bb-plugins.git",
+    "directory": "plugins/generative-ui"
+  },
+  "engines": {
+    "bb": ">=0.48",
+    "bbPluginSdk": ">=0.6.132"
+  },
+  "bb": {
+    "name": "Generative UI",
+    "description": "Agents answer with interactive UI inline in the chat: charts, tables, forms, cards and layouts, drawn by OpenUI's stock components.",
+    "branding": {
+      "icon": "LayoutDashboard"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "node --test '*.test.ts' 'src/**/*.test.ts'",
+    "skill": "node src/agent/write-skill.ts",
+    "build": "bb plugin build"
+  },
+  "dependencies": {
+    "@openuidev/react-lang": "1.1.0",
+    "@openuidev/react-ui": "0.18.5",
+    "zod": "^4.6.5",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.6.132",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "hono": "^4.11.9",
+    "sonner": "^1.7.4",
+    "typescript": "^5.7.0"
+  }
+}
