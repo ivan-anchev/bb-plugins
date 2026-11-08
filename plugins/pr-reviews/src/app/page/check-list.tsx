@@ -56,17 +56,30 @@ function PassingDisclosure({ passing, toggle }: { passing: Check[]; toggle: RefO
   );
 }
 
-// Keyed by position: two workflows can each run a check of the same name.
 function CheckRows({ checks }: { checks: Check[] }) {
+  const keys = rowKeys(checks);
   return (
     <ul>
       {checks.map((check, index) => (
-        <li key={index}>
+        <li key={keys[index]}>
           <CheckRow check={check} />
         </li>
       ))}
     </ul>
   );
+}
+
+// Each row keyed by its check, so a refresh that moves a check away takes its row, and any focus on
+// it, along. A name alone can repeat (two workflows can each run a check of the same name), so the
+// key adds the URL, and numbers checks that share both in the order they come.
+function rowKeys(checks: Check[]): string[] {
+  const seen = new Map<string, number>();
+  return checks.map(({ name, url }) => {
+    const identity = JSON.stringify([name, url]);
+    const repeat = seen.get(identity) ?? 0;
+    seen.set(identity, repeat + 1);
+    return `${identity}#${repeat}`;
+  });
 }
 
 const ROW = "flex min-h-[26px] min-w-0 items-center gap-2 text-[12.5px]";
