@@ -265,9 +265,9 @@ id per bb server), `bb.boat/role=machine` and `bb.boat/key` (the thread id).
 ## Idle stops and resumes
 
 Once a minute the plugin checks every boat machine. A machine is **busy**
-while any thread on it is `pending`, `starting`, `active` or `stopping`, so a
-turn that runs a long, silent command (a slow build or test run) is never
-stopped. It is **idle** from the later of: the end of its last turn, the
+while any thread on it is `starting` or `active`, hidden threads such as
+workflow workers included, so a turn that runs a long, silent command (a slow
+build or test run) is never stopped. It is **idle** from the later of: the end of its last turn, the
 last minute it was seen busy, the last input in one of its terminals, and its
 create or resume.
 

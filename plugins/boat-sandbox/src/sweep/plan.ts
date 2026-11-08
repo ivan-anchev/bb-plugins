@@ -11,7 +11,7 @@ export interface HostView {
   hostId: string;
   phase: HostPhase;
   sandboxId: SandboxId;
-  /** A thread on it is pending, starting, running a turn or stopping one. */
+  /** A thread on it, hidden ones included, is starting or running a turn. */
   busy: boolean;
   /** From the idle clock; null when nothing was recorded yet. */
   lastActiveAt: number | null;

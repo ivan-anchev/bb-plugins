@@ -8,8 +8,8 @@ import { ownerLabels, parseResource } from "../ownership.ts";
 import type { HostView, SweepInput } from "./plan.ts";
 
 type Sdk = BbPluginApi["sdk"];
-type ThreadStatus = NonNullable<NonNullable<Parameters<Sdk["threads"]["count"]>[0]>["status"]>;
 type Host = Awaited<ReturnType<Sdk["hosts"]["list"]>>[number];
+type RunningThread = Awaited<ReturnType<Sdk["threads"]["listRunning"]>>[number];
 /** The part of a bb host the sweep reads. */
 export type HostFacts = Pick<Host, "id" | "machineProviderId"> & { lifecycle: Pick<Host["lifecycle"], "phase"> };
 
@@ -17,7 +17,7 @@ export type HostFacts = Pick<Host, "id" | "machineProviderId"> & { lifecycle: Pi
 export interface ObserveBb {
   sdk: {
     hosts: { list(args: { includeCreating: boolean; signal: AbortSignal }): Promise<HostFacts[]> };
-    threads: { count(args: { hostId: string; status: ThreadStatus; signal: AbortSignal }): Promise<{ total: number }> };
+    threads: { listRunning(args: { signal: AbortSignal }): Promise<Pick<RunningThread, "hostId">[]> };
   };
   experimental_machines: { getResource(hostId: string): Promise<JsonValue | null> };
 }
@@ -27,9 +27,6 @@ export interface ObserveDeps {
   idle: Pick<IdleClock, "read">;
   ownerId: string;
 }
-
-/** A thread in any of these is working, however quiet: a 20-minute silent tool call stays `active`. */
-const BUSY_STATUSES: readonly ThreadStatus[] = ["pending", "starting", "active", "stopping"];
 
 /**
  * bb first, boat second: a sandbox a create makes in between is then new on boat, and new sandboxes
@@ -61,10 +58,12 @@ export async function observeHost({ bb, idle }: ObserveDeps, host: HostFacts, si
   };
 }
 
-/** Counted, never paged through `threads.list`, which would miscount past its limit (SDK `ThreadCountArgs`). */
+/**
+ * A starting or active thread is working, however quiet: a 20-minute silent tool call stays `active`.
+ * `threads.listRunning` includes hidden threads (workflow workers); `threads.count` leaves them out.
+ */
 async function isBusy(bb: ObserveBb, hostId: string, signal: AbortSignal): Promise<boolean> {
-  const counts = await Promise.all(BUSY_STATUSES.map((status) => bb.sdk.threads.count({ hostId, status, signal })));
-  return counts.some(({ total }) => total > 0);
+  return (await bb.sdk.threads.listRunning({ signal })).some((thread) => thread.hostId === hostId);
 }
 
 /**
