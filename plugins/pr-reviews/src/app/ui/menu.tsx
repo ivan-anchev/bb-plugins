@@ -1,7 +1,10 @@
 import type { ReactNode } from "react";
-import { Content, Item, Portal, Root, Trigger } from "@radix-ui/react-dropdown-menu";
+import { CheckboxItem, Content, Item, ItemIndicator, Label, Portal, Root, Separator, Trigger } from "@radix-ui/react-dropdown-menu";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { PORTAL_SCOPE } from "./portal-scope.ts";
+
+const ITEM_CLASS =
+  "relative flex cursor-default select-none items-center rounded-sm py-[0.3125rem] text-xs outline-none transition-none focus:bg-state-hover focus:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
 
 export { Root as Menu, Trigger as MenuTrigger };
 
@@ -22,17 +25,45 @@ export function MenuContent({ align, className = "", children }: MenuContentProp
   );
 }
 
-type MenuItemProps = { onSelect(): void; children: ReactNode };
+type MenuItemProps = { onSelect(): void; disabled?: boolean; children: ReactNode };
 
-export function MenuItem({ onSelect, children }: MenuItemProps) {
+export function MenuItem({ onSelect, disabled = false, children }: MenuItemProps) {
   return (
-    <Item
-      onSelect={onSelect}
-      className="relative flex cursor-default select-none items-center justify-between gap-2 rounded-sm px-2 py-[0.3125rem] text-xs outline-none transition-none focus:bg-state-hover focus:text-foreground"
-    >
+    <Item onSelect={onSelect} disabled={disabled} className={`${ITEM_CLASS} justify-between gap-2 px-2`}>
       {children}
     </Item>
   );
+}
+
+/** `keepOpen`: the menu stays open after a toggle, for a list of filters set one after another. */
+type MenuCheckboxItemProps = { checked: boolean; onCheckedChange(checked: boolean): void; keepOpen?: boolean; children: ReactNode };
+
+export function MenuCheckboxItem({ checked, onCheckedChange, keepOpen = false, children }: MenuCheckboxItemProps) {
+  return (
+    <CheckboxItem
+      checked={checked}
+      onCheckedChange={onCheckedChange}
+      onSelect={(event) => {
+        if (keepOpen) event.preventDefault();
+      }}
+      className={`${ITEM_CLASS} pl-2 pr-8`}
+    >
+      <span className="absolute right-2 flex size-3.5 items-center justify-center">
+        <ItemIndicator>
+          <Icon name="Check" className="size-3.5" aria-hidden />
+        </ItemIndicator>
+      </span>
+      {children}
+    </CheckboxItem>
+  );
+}
+
+export function MenuLabel({ children }: { children: ReactNode }) {
+  return <Label className="px-2 py-[0.3125rem] text-xs font-medium text-muted-foreground">{children}</Label>;
+}
+
+export function MenuSeparator() {
+  return <Separator className="-mx-1 my-1 h-px bg-muted" />;
 }
 
 export function MenuCheck({ shown }: { shown: boolean }) {

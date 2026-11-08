@@ -1,7 +1,7 @@
 // Typed hooks over the contract. The same method and input share one cache entry, so the
 // sidebar, the page and the Refresh button read, and refetch, the same data.
 import { experimental_useRpcMutation, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
-import { prReviewsContract as contract } from "../contract.ts";
+import { prReviewsContract as contract, type FileAtCommit } from "../contract.ts";
 
 export const useProjects = () => experimental_useRpcQuery({ contract, method: "projects", input: {} });
 
@@ -19,6 +19,12 @@ export type PrTarget = { projectId: string; number: number };
 export type GuideTarget = PrTarget & { headSha: string };
 
 export const useGuide = (target: GuideTarget) => experimental_useRpcQuery({ contract, method: "guide", input: target });
+
+/** The PR's whole diff. `enabled` stays false until the Changes tab is first shown, since the read runs `gh pr diff`. */
+export const useChanges = (target: PrTarget, enabled: boolean) => experimental_useRpcQuery({ contract, method: "changes", input: target, enabled });
+
+/** One file's text at a commit. `enabled`: false reads nothing, for a file whose diff can't expand. */
+export const useFileContent = (input: FileAtCommit, enabled: boolean) => experimental_useRpcQuery({ contract, method: "fileContent", input, enabled });
 
 export const useSelectProject = () => experimental_useRpcMutation({ contract, method: "selectProject" });
 

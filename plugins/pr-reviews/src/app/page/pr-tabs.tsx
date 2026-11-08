@@ -1,22 +1,28 @@
-// The PR page's tabs under its header, Summary then Guide, on the ARIA tabs pattern: one tab stop,
-// ← → Home End to move, and a tab is selected as it is focused. The bar stays put and each panel
+// The PR page's tabs under its header, Summary, Changes then Guide, on the ARIA tabs pattern: one
+// tab stop, ← → Home End to move, and a tab is selected as it is focused. The bar stays put and each panel
 // scrolls on its own. Every panel stays mounted, hidden while another is selected, so the guide
-// keeps its step and scroll position across switches.
+// keeps its step and scroll position across switches, and Changes its file, scroll and folders.
 import { useId, type KeyboardEvent, type ReactNode } from "react";
+import type { LineCounts } from "../../diff/diff-schema.ts";
+import { labelStatPartsOf } from "../changes/change-stats.ts";
+import { StatText } from "../changes/stat-text.tsx";
 import { Spinner } from "../ui/spinner.tsx";
 
-export type PrTab = "summary" | "guide";
+export type PrTab = "summary" | "changes" | "guide";
 
 // `panelTabStop`: whether the panel itself takes the tab stop after the tab, for content that
-// brings none of its own. Every Guide screen does: its actions, or the guide's page region, which
-// the guide renders while it loads and after a failed read too.
+// brings none of its own. Changes does: its file tree and its diff, or its read's region while the
+// diff loads or after a failed read. Every Guide screen does too: its actions, or the guide's page
+// region, which the guide renders while it loads and after a failed read too.
 const TABS: { id: PrTab; label: string; panelTabStop: boolean }[] = [
   { id: "summary", label: "Summary", panelTabStop: true },
+  { id: "changes", label: "Changes", panelTabStop: false },
   { id: "guide", label: "Guide", panelTabStop: false },
 ];
 
-/** What a tab's label shows after its name: a dot once its content is ready, a spinner while it is written. */
-export type TabStatus = "none" | "ready" | "writing";
+/** What a tab's label shows after its name: a dot once its content is ready, a spinner while it is
+ *  written, or the lines a change adds and removes. */
+type TabStatus = { kind: "none" } | { kind: "ready" } | { kind: "writing" } | ({ kind: "lines" } & LineCounts);
 
 /** A tab's panel, its status, and the controls it adds to the bar's end while it is selected. */
 export type TabContent = { status: TabStatus; panel: ReactNode; barEnd: ReactNode };
@@ -116,11 +122,11 @@ const TAB_KEYS: Partial<Record<string, (at: number, last: number) => number>> = 
   End: (_, last) => last,
 };
 
-// The leading comma makes the tab read "Guide, ready" to a screen reader. The dot takes the
-// theme's success text colour, as the header's passing checks do: `success` itself is too pale on
-// light surfaces for a graphic that carries meaning (WCAG 1.4.11 asks 3:1).
+// The leading comma makes the tab read "Guide, ready" or "Changes, 12 additions, 3 deletions" to a
+// screen reader. The dot takes the theme's success text colour, as the header's passing checks do:
+// `success` itself is too pale on light surfaces for a graphic that carries meaning (WCAG 1.4.11 asks 3:1).
 function StatusMark({ status }: { status: TabStatus }) {
-  switch (status) {
+  switch (status.kind) {
     case "none":
       return null;
     case "ready":
@@ -137,7 +143,22 @@ function StatusMark({ status }: { status: TabStatus }) {
           <span className="sr-only">, writing</span>
         </>
       );
+    case "lines":
+      return (
+        <>
+          {/* A zero is muted, not `subtle-foreground`: on the selected tab muted reads 6.33:1 dark and
+              6.28:1 light, subtle 4.36:1 dark, under AA. */}
+          <span aria-hidden className="tabular-nums">
+            <StatText parts={labelStatPartsOf(status)} />
+          </span>
+          <span className="sr-only">
+            , {countOf(status.added, "addition")}, {countOf(status.removed, "deletion")}
+          </span>
+        </>
+      );
     default:
       return status satisfies never;
   }
 }
+
+const countOf = (count: number, noun: string) => `${count.toLocaleString("en-US")} ${noun}${count === 1 ? "" : "s"}`;

@@ -1,8 +1,9 @@
-// navPanel component: the chosen PR's page, its header above the Summary and Guide tabs. The Guide
-// tab shows one screen per review state.
+// navPanel component: the chosen PR's page, its header above the Summary, Changes and Guide tabs.
+// The Guide tab shows one screen per review state.
 import { useState } from "react";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { reviewThreadOf, type PrDetail, type ReviewState } from "../../contract.ts";
+import { ChangesTab } from "../changes/changes-tab.tsx";
 import { usePullRequest, type PrTarget } from "../queries.ts";
 import { GuideView } from "../guide/guide-view.tsx";
 import { GuideViewOptions, useViewOptions, type ViewOptionsState } from "../guide/view-options.tsx";
@@ -47,7 +48,12 @@ function ReviewPage({ target, pr, review, viewOptions }: ReviewPageProps) {
         selected={tab}
         onSelect={setTab}
         tabs={{
-          summary: { status: "none", panel: <SummaryTab pr={pr} />, barEnd: null },
+          summary: { status: { kind: "none" }, panel: <SummaryTab pr={pr} />, barEnd: null },
+          changes: {
+            status: { kind: "lines", added: pr.additions, removed: pr.deletions },
+            panel: <ChangesTab target={target} shown={tab === "changes"} />,
+            barEnd: null,
+          },
           guide: guideTabOf(target, pr, review, viewOptions, tab === "guide"),
         }}
       />
@@ -59,17 +65,17 @@ function ReviewPage({ target, pr, review, viewOptions }: ReviewPageProps) {
 function guideTabOf(target: PrTarget, pr: PrDetail, review: ReviewState, viewOptions: ViewOptionsState, shown: boolean): TabContent {
   switch (review.kind) {
     case "none":
-      return { status: "none", panel: <NoneScreen target={target} />, barEnd: null };
+      return { status: { kind: "none" }, panel: <NoneScreen target={target} />, barEnd: null };
     case "running":
-      return { status: "writing", panel: <RunningScreen target={target} review={review} />, barEnd: null };
+      return { status: { kind: "writing" }, panel: <RunningScreen target={target} review={review} />, barEnd: null };
     case "no-guide":
-      return { status: "none", panel: <NoGuideScreen target={target} review={review} />, barEnd: null };
+      return { status: { kind: "none" }, panel: <NoGuideScreen target={target} review={review} />, barEnd: null };
     // A stale guide is still worth reading: it shows under a banner offering Update guide.
     case "ready":
     case "stale": {
       const guide = { ...target, headSha: review.guideHeadSha };
       return {
-        status: "ready",
+        status: { kind: "ready" },
         panel: (
           <>
             {review.kind === "stale" && <StaleBanner target={target} pr={pr} guideHeadSha={review.guideHeadSha} />}

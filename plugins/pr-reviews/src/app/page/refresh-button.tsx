@@ -1,44 +1,11 @@
-// headerContent: one Refresh for the whole screen. It mounts the route's reads with the same
-// method and input as the sidebar and the page, so it shares their cache entries, and
-// refetch() re-reads each one regardless of freshness or a cached failure (REVIEW.md).
-import type { ExperimentalRpcQueryState, PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
-import { guideHeadShaOf } from "../../contract.ts";
-import { useGuide, useProjects, usePullRequest, usePullRequests, type GuideTarget } from "../queries.ts";
-import { parseRoute } from "../routes.ts";
+// headerContent: one Refresh for the whole screen. bb's plugin-wide refresh re-reads every read on
+// screen, a cached failure included (REVIEW.md): the projects, the PR list, the PR, its diff once
+// the Changes tab has read it, the selected file's text and the guide. A read not yet enabled,
+// such as the diff of a Changes tab never opened, stays unread.
+import { experimental_useRpcRefresh } from "@get-bb/plugin-sdk/app";
 import { IconButton } from "../ui/icon-button.tsx";
 
-export function RefreshButton({ subPath }: PluginNavPanelProps) {
-  const route = parseRoute(subPath);
-  switch (route.kind) {
-    case "root":
-      return <RefreshProjects />;
-    case "project":
-      return <RefreshProject projectId={route.projectId} />;
-    case "pr":
-      return <RefreshPr projectId={route.projectId} number={route.number} />;
-    default:
-      route satisfies never;
-      return null;
-  }
-}
-
-const RefreshProjects = () => <RefreshReads reads={[useProjects()]} />;
-
-const RefreshProject = ({ projectId }: { projectId: string }) => <RefreshReads reads={[useProjects(), usePullRequests(projectId)]} />;
-
-// A PR page that shows a guide also re-reads the guide.
-function RefreshPr({ projectId, number }: { projectId: string; number: number }) {
-  const pull = usePullRequest(projectId, number);
-  const reads = [useProjects(), usePullRequests(projectId), pull];
-  const headSha = pull.data === undefined ? null : guideHeadShaOf(pull.data.review);
-  return headSha === null ? <RefreshReads reads={reads} /> : <RefreshWithGuide reads={reads} guide={{ projectId, number, headSha }} />;
-}
-
-const RefreshWithGuide = ({ reads, guide }: { reads: Read[]; guide: GuideTarget }) => <RefreshReads reads={[...reads, useGuide(guide)]} />;
-
-type Read = Pick<ExperimentalRpcQueryState<unknown>, "isFetching" | "refetch">;
-
-function RefreshReads({ reads }: { reads: Read[] }) {
-  const busy = reads.some((read) => read.isFetching);
-  return <IconButton icon="RotateCcw" label="Refresh" disabled={busy} onClick={() => void Promise.all(reads.map((read) => read.refetch()))} />;
+export function RefreshButton() {
+  const { refresh, isRefreshing } = experimental_useRpcRefresh();
+  return <IconButton icon="RotateCcw" label="Refresh" disabled={isRefreshing} onClick={refresh} />;
 }

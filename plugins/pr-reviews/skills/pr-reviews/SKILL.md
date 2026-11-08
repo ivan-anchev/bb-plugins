@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request with Summary and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this, and the view options for tests and findings), how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request with Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), what the Changes tab shows (the whole diff as a file tree beside the host diff view, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this, and the view options for tests and findings), how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -33,18 +33,21 @@ remembered project that read **Guide ready**, and no badge at zero.
 
 ## The page
 
-Clicking a row opens that PR's page. Its header shows the title over
-`#number`, the author's GitHub avatar and login, and `base-branch ← head-branch`;
-the files and lines; and icon buttons, each named by its tooltip:
+Clicking a row opens that PR's page. Its header shows the PR's state as an
+icon before the title (green Open, grey Draft, purple Merged, red Closed; hover
+it for the name), the title over `#number`, the author's GitHub avatar and
+login, and `base-branch ← head-branch`; and icon buttons, each named by its
+tooltip:
 **Review chat** (opens the review thread's chat beside the page; shown once a
 review has started, see "Review chat" below) and **Open on GitHub** (opens the
 PR on github.com).
 
-Under the header sit two tabs, **Summary** and **Guide**; a PR opens on
-Summary. The header and the tabs stay put, and each tab scrolls on its own.
-Switching tabs keeps the guide where you left it, on the same step and scroll
-position. With focus on a tab, ← and → (and Home and End) move between the
-tabs.
+Under the header sit three tabs, **Summary**, **Changes** and **Guide**; a PR
+opens on Summary. The Changes tab carries the PR's lines added and removed,
+`Changes +A −D`, as GitHub counts them. The header and the tabs stay put, and each tab scrolls on its
+own. Switching tabs keeps the guide where you left it, on the same step and
+scroll position, and Changes on the same file, scroll position and open
+folders. With focus on a tab, ← and → (and Home and End) move between the tabs.
 
 **Summary** shows the PR's own description, rendered as markdown under
 "<author> wrote", or "No description provided." when the PR has none. Beside it,
@@ -68,6 +71,38 @@ A section with nothing in it is left out, and a PR with no reviewers, checks or
 labels has no side panel. The panel never changes anything on GitHub. It comes
 with the PR's own read, so Refresh updates it. With no side panel, or on a page
 narrower than 600px, the description takes the whole width.
+
+**Changes** shows the PR's whole diff, base to head, as GitHub serves it now,
+laid out like Code Explorer's Changes view. It needs no guide: it works on any
+PR, before a review starts. It reads the diff (`gh pr diff`) the first time the
+tab is opened, not when the page opens.
+
+- **The tree**: every changed file in its folders, with its `+N −M` (an added
+  file shows only `+N`, a deleted one only `−M`, a binary file "Binary") and a
+  letter for how it changed (A, M, D or R). Click a file, or move to it with
+  the arrow keys and press Enter or Space, to show its diff.
+- **The diff**: the selected file's path over its diff in bb's own diff view.
+  A binary file, a file renamed without changes, or a file with no changed
+  lines shows a sentence saying so instead. Once the file's text at the PR's
+  head has loaded (`gh api`, for a modified or renamed file of up to 1 MB),
+  clicking "N unmodified lines" between hunks shows those lines; until then,
+  or when that read fails, the diff shows as the patch draws it.
+- **The header**: "N files, +A −D" (hover or focus it for the lines by kind:
+  code, tests, mocks, generated files, docs), then four icon buttons:
+  - **Search filenames** opens a path filter: comma-separated plain text or
+    globs (`*.md`, `docs/**`), with `!` to exclude (`!*.test.ts`). A renamed
+    file matches by either path. Escape closes it and clears the filter.
+  - **Filter files**: Hide tests, each kind, each file extension, Deleted
+    files, and Reset filters. While a filter is on, the summary reads "M of N
+    files" and the button carries a dot.
+  - **Collapse all folders** / **Expand all folders**.
+  - **Diff settings**: Unified or Split, and Wrap lines.
+- **The divider** between the tree and the diff drags, or takes ← → (↑ ↓ when
+  stacked), Home and End. Below a 48rem-wide panel the tree sits above the
+  diff.
+
+The path filter and the filters are kept per PR, and the diff settings for
+every PR, until bb reloads.
 
 **Guide** shows one screen per review state, and its label carries the state: a
 dot once a guide exists, a spinner while the review thread writes one:
@@ -276,8 +311,9 @@ here. A blank field sends nothing.
 ## Refresh and errors
 
 The **Refresh** button in the page's title bar re-reads the projects, the
-pull request list, the open PR, and its guide. Clicking the PR that is already
-open does the same for that PR, its guide and the list. When a read fails, its error shows above
+pull request list, the open PR, its diff once the Changes tab has read it, its
+guide, and the selected file's text. Clicking the PR that is already open does
+the same as Refresh. When a read fails, its error shows above
 whatever was already on screen, and the old list stays. Typical errors:
 
 - "PR Reviews needs the GitHub CLI": `gh` is not installed or not on the
@@ -292,8 +328,9 @@ whatever was already on screen, and the old list stays. Typical errors:
 
 ## Where the data comes from
 
-PR Reviews runs `gh pr list`, `gh pr view` and `gh pr diff` for the project's
-`owner/name` on the machine that runs bb, and `git remote get-url origin` for a
+PR Reviews runs `gh pr list`, `gh pr view` and `gh pr diff` (for the Changes
+tab, and to pin a reviewed commit's diff) for the project's `owner/name` on the
+machine that runs bb, and `git remote get-url origin` for a
 project whose remote bb did not record. On Start review and Update guide it
 also runs `git fetch` in the project's default checkout, which only adds the refs under
 `refs/pr-reviews/`. It only reads; it never writes to GitHub. The diff pinned for each reviewed commit, each review run, and each guide are

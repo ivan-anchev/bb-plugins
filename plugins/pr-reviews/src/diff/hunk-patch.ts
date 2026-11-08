@@ -1,10 +1,15 @@
-// A hunk as experimental_Diff input, and the slices of a hunk a step draws a finding between.
-// Shared: the app renders each hunk of a step on its own.
-import { firstLinesOf, hunkIdOf, type Hunk } from "./diff-schema.ts";
+// A hunk or a whole file as experimental_Diff input, and the slices of a hunk a step draws a finding between.
+// Shared: the app renders each hunk of a step on its own, and each file of the Changes tab whole.
+import { firstLinesOf, hunkIdOf, type DiffFile, type Hunk } from "./diff-schema.ts";
 
 /** A headerless single-hunk patch; experimental_Diff completes it from its `path` prop. */
 export function hunkToPatch(hunk: Hunk): string {
   return `${hunkIdOf(hunk)}\n${hunk.lines.join("\n")}\n`;
+}
+
+/** A headerless patch of every hunk of the file, in order; experimental_Diff completes it from its `path` prop. */
+export function filePatchOf(file: DiffFile): string {
+  return file.hunks.map(hunkToPatch).join("");
 }
 
 /**

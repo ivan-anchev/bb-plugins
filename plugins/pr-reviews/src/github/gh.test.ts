@@ -14,8 +14,8 @@ const PR_42 = {
   headRefName: "bb/add-summary-and-guide-tabs-thr_ejw2au8a9j",
   baseRefName: "main",
   state: "MERGED",
+  isDraft: false,
   commits: [{ oid: "ec618b08a91e3f5e179ba46d1e43c6f6aeddfb53" }],
-  changedFiles: 14,
   additions: 310,
   deletions: 103,
   statusCheckRollup: [
@@ -89,6 +89,11 @@ test("a dismissed or draft review, a state GitHub adds later, and an unknown req
     { kind: "user", login: "octocat", status: "awaiting" },
     { kind: "user", login: "alice", status: "approved" },
   ]);
+});
+
+test("an open draft is a draft; a closed one is closed, as on GitHub", () => {
+  const stateOf = (state: string, isDraft: boolean) => parsePrDetail({ ...PR_42, state, isDraft }).state;
+  assert.deepEqual([stateOf("OPEN", false), stateOf("OPEN", true), stateOf("CLOSED", true), stateOf("MERGED", false)], ["OPEN", "DRAFT", "CLOSED", "MERGED"]);
 });
 
 test("labels keep their name and gain a CSS hex color", () => {

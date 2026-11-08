@@ -4,13 +4,16 @@
 // so there is no dead gap between them (WCAG 1.4.13).
 import { useEffect, useId, useState, type ReactNode } from "react";
 
-type Placement = "top" | "bottom-end";
+type Placement = "top" | "bottom-start" | "bottom-end";
 
 type TooltipProps = {
   content: ReactNode;
-  /** "bottom-end" for a trigger in a header bar, where "top" would be clipped by the page's top
-   *  edge and a centered popup by its right edge. */
+  /** "bottom-end" for a trigger at the right end of a header bar, where "top" would be clipped by
+   *  the page's top edge and a centered popup by its right edge; "bottom-start" at its left end. */
   placement?: Placement;
+  /** Layout classes for the hover area, which is the trigger's box in its parent: "min-w-0" lets a
+   *  truncating trigger shrink in a flex row. */
+  className?: string;
   /** Renders the trigger; pass `describedBy` to its `aria-describedby`. */
   children: (describedBy: string) => ReactNode;
 };
@@ -18,10 +21,11 @@ type TooltipProps = {
 // The gap between trigger and popup is padding inside the popup, so the pointer never leaves the hover area.
 const PLACEMENTS = {
   top: "bottom-full left-1/2 -translate-x-1/2 pb-1.5",
+  "bottom-start": "top-full left-0 pt-1.5",
   "bottom-end": "top-full right-0 pt-1.5",
 } as const satisfies Record<Placement, string>;
 
-export function Tooltip({ content, placement = "top", children }: TooltipProps) {
+export function Tooltip({ content, placement = "top", className = "", children }: TooltipProps) {
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -30,7 +34,7 @@ export function Tooltip({ content, placement = "top", children }: TooltipProps) 
   useDismissOnEscape(open, setDismissed);
   return (
     <span
-      className="relative inline-flex"
+      className={`relative inline-flex ${className}`}
       onPointerEnter={() => {
         setHovered(true);
         setDismissed(false);

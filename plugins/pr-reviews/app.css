@@ -1,0 +1,25 @@
+/* Themes the Changes tab's @pierre/trees file tree to bb's tokens (from code-explorer). Its own
+   class, not code-explorer's `.file-tree`: bb does not scope a plugin's stylesheet, so a shared
+   class name would let either plugin's rule restyle the other's tree. */
+.pr-reviews-file-tree {
+  color-scheme: inherit;
+  --trees-accent-override: var(--ring);
+  --trees-bg-override: var(--background);
+  --trees-bg-muted-override: var(--accent);
+  --trees-fg-override: var(--foreground);
+  --trees-fg-muted-override: var(--muted-foreground);
+  --trees-selected-bg-override: var(--muted);
+  --trees-selected-fg-override: var(--foreground);
+  --trees-border-color-override: var(--border);
+  --trees-focus-ring-color-override: var(--ring);
+  --trees-selected-focused-border-color-override: var(--ring);
+  --trees-input-bg-override: var(--background);
+  --trees-font-family-override: var(--font-sans);
+  --trees-font-size-override: 0.8125rem;
+  --trees-status-added-override: var(--diff-added);
+  --trees-status-deleted-override: var(--diff-removed);
+  /* Not code-explorer's --subtle-foreground: on a selected row (--muted) it reads 4.27:1 in the
+     dark theme, under the 4.5:1 a status letter needs. --muted-foreground reads 6.20:1 there. */
+  --trees-status-modified-override: var(--muted-foreground);
+  --trees-status-renamed-override: var(--muted-foreground);
+}
