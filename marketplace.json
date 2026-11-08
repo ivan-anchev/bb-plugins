@@ -6,6 +6,31 @@
   "description": "bb plugins Ivan Anchev maintains.",
   "plugins": [
     {
+      "id": "boat-sandbox",
+      "displayName": "boat Sandbox",
+      "description": "Run bb threads on on-demand boat.dev sandboxes that stop when idle and resume on the same disk.",
+      "icon": {
+        "url": "./plugins/boat-sandbox/boat.svg"
+      },
+      "tags": [
+        "sandbox",
+        "cloud",
+        "boat"
+      ],
+      "author": {
+        "name": "Ivan Anchev",
+        "github": "ivan-anchev"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/ivan-anchev/bb-plugins.git",
+          "subdir": "plugins/boat-sandbox",
+          "range": "0.x",
+          "tagPrefix": "boat-sandbox/"
+        }
+      }
+    },
+    {
       "id": "code-explorer",
       "displayName": "Code Explorer",
       "description": "Browse the environment's files and git changes as a tree with colored per-file-type icons, see how a change splits into code, tests, mocks, generated files and docs, and read any file or its diff beside the tree.",
