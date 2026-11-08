@@ -1,7 +1,6 @@
 // The PR page header, a masthead: the PR tile, the title, and the identity row (`#number`, author,
-// `base ← head`) on the left; icon actions (Review chat when a review thread exists, GitHub, then
-// the screen's own `children`) over the stats strip on the right.
-import type { ReactNode } from "react";
+// `base ← head`) on the left; icon actions (Review chat when a review thread exists, then GitHub)
+// over the stats strip on the right.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { PrDetail } from "../../contract.ts";
 import { ReviewChatIconButton } from "../review-chat/review-chat-button.tsx";
@@ -9,9 +8,9 @@ import { IconLink } from "../ui/icon-button.tsx";
 import { PrIdentity } from "./pr-identity.tsx";
 import { PrStats } from "./pr-stats.tsx";
 
-type PrHeaderProps = { pr: PrDetail; hasReviewThread: boolean; children?: ReactNode };
+type PrHeaderProps = { pr: PrDetail; hasReviewThread: boolean };
 
-export function PrHeader({ pr, hasReviewThread, children }: PrHeaderProps) {
+export function PrHeader({ pr, hasReviewThread }: PrHeaderProps) {
   return (
     <header className="@container shrink-0 px-7 pt-4 pb-3.5">
       <div className={MASTHEAD}>
@@ -22,7 +21,6 @@ export function PrHeader({ pr, hasReviewThread, children }: PrHeaderProps) {
         <div className="-my-0.5 -mr-1.5 flex gap-1 justify-self-end [grid-area:actions]">
           {hasReviewThread && <ReviewChatIconButton />}
           <IconLink icon="Github" label="Open on GitHub" href={pr.url} />
-          {children}
         </div>
         <div className="[grid-area:identity]">
           <PrIdentity pr={pr} />

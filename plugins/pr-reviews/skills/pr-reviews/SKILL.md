@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request, and a badge counting ready guides), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this, and the view options for tests and findings), how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request with Summary and Guide tabs, and a badge counting ready guides), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this, and the view options for tests and findings), how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -38,7 +38,21 @@ Clicking a row opens that PR's page. Its header shows the title over
 the files, lines and CI checks; and icon buttons, each named by its tooltip:
 **Review chat** (opens the review thread's chat beside the page; shown once a
 review has started, see "Review chat" below) and **Open on GitHub** (opens the
-PR on github.com). Below it, one screen per review state:
+PR on github.com).
+
+Under the header sit two tabs, **Summary** and **Guide**; a PR opens on
+Summary. The header and the tabs stay put, and each tab scrolls on its own.
+Switching tabs keeps the guide where you left it, on the same step and scroll
+position. With focus on a tab, ← and → (and Home and End) move between the
+tabs.
+
+**Summary** shows the PR's own description, rendered as markdown under
+"<author> wrote", or "No description provided." when the PR has none. Its right
+side is kept for the PR's details and is empty for now; a page narrower than
+600px gives the description the whole width.
+
+**Guide** shows one screen per review state, and its label carries the state: a
+dot once a guide exists, a spinner while the review thread writes one:
 
 - **No guide yet**, with **Start review**.
 - **Writing the guide**, while the review thread works: a spinner, the time
@@ -85,8 +99,6 @@ title bar's panel button.
 
 A guide opens on **What this PR does**:
 
-- **Show the author's description** expands the PR's own body, rendered as
-  markdown under "<author> wrote". It is hidden when the PR has no body.
 - The guide's problem and approach, then **Before** and **After** lists when
   the change alters behaviour.
 - **Findings**: each finding's priority, **Must fix**, **Should fix** or
@@ -114,8 +126,9 @@ the question, quoting the finding, to the review thread, which answers there
 answers. If the send fails, the question stays in the box with the error beside
 Send. Text typed while a question is sending stays in the box, unsent.
 
-The header's view-options icon opens a popover of switches, each shown only
-when the guide has something for it:
+The view-options icon at the right end of the tab bar, shown on the Guide tab
+once there is a guide, opens a popover of switches, each shown only when the
+guide has something for it:
 
 - **Show tests and mocks**, off by default. Tests and mocks are spotted from
   the file path. While it is off, their hunks leave the steps, a step of tests

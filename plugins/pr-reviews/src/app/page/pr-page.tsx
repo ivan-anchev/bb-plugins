@@ -1,5 +1,6 @@
-// navPanel component: the chosen PR's page, its header above one screen per review state.
-import type { ReactNode } from "react";
+// navPanel component: the chosen PR's page, its header above the Summary and Guide tabs. The Guide
+// tab shows one screen per review state.
+import { useState } from "react";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { reviewThreadOf, type PrDetail, type ReviewState } from "../../contract.ts";
 import { usePullRequest, type PrTarget } from "../queries.ts";
@@ -9,8 +10,10 @@ import { parseRoute } from "../routes.ts";
 import { Notice } from "../ui/notice.tsx";
 import { ReadError } from "../ui/read-error.tsx";
 import { PrHeader } from "./pr-header.tsx";
+import { PrTabs, type PrTab, type TabContent } from "./pr-tabs.tsx";
 import { NoGuideScreen, NoneScreen, RunningScreen } from "./review-screens.tsx";
 import { StaleBanner } from "./stale-banner.tsx";
+import { SummaryTab } from "./summary-tab.tsx";
 
 export function PrPage({ subPath }: PluginNavPanelProps) {
   const route = parseRoute(subPath);
@@ -33,43 +36,48 @@ function PullRequestPage({ projectId, number }: { projectId: string; number: num
 
 type ReviewPageProps = { target: PrTarget; pr: PrDetail; review: ReviewState; viewOptions: ViewOptionsState };
 
-// One header for every review state, so its buttons keep keyboard focus while the state changes.
+// One header and one tab bar for every review state, so their buttons keep keyboard focus while the
+// state changes. A PR opens on Summary: the page is keyed by PR, so the tab is too.
 function ReviewPage({ target, pr, review, viewOptions }: ReviewPageProps) {
-  const screen = screenOf(target, pr, review, viewOptions);
+  const [tab, setTab] = useState<PrTab>("summary");
   return (
     <>
-      <PrHeader pr={pr} hasReviewThread={reviewThreadOf(review) !== null}>
-        {screen.actions}
-      </PrHeader>
-      {screen.body}
+      <PrHeader pr={pr} hasReviewThread={reviewThreadOf(review) !== null} />
+      <PrTabs
+        selected={tab}
+        onSelect={setTab}
+        tabs={{
+          summary: { status: "none", panel: <SummaryTab pr={pr} />, barEnd: null },
+          guide: guideTabOf(target, pr, review, viewOptions, tab === "guide"),
+        }}
+      />
     </>
   );
 }
 
-/** A review state's page under the header, and its own actions in the header. */
-type Screen = { actions: ReactNode; body: ReactNode };
-
-function screenOf(target: PrTarget, pr: PrDetail, review: ReviewState, viewOptions: ViewOptionsState): Screen {
+/** The Guide tab for a review state: its screen, its status, and the view options once there is a guide. */
+function guideTabOf(target: PrTarget, pr: PrDetail, review: ReviewState, viewOptions: ViewOptionsState, shown: boolean): TabContent {
   switch (review.kind) {
     case "none":
-      return { actions: null, body: <NoneScreen target={target} /> };
+      return { status: "none", panel: <NoneScreen target={target} />, barEnd: null };
     case "running":
-      return { actions: null, body: <RunningScreen target={target} review={review} /> };
+      return { status: "writing", panel: <RunningScreen target={target} review={review} />, barEnd: null };
     case "no-guide":
-      return { actions: null, body: <NoGuideScreen target={target} review={review} /> };
+      return { status: "none", panel: <NoGuideScreen target={target} review={review} />, barEnd: null };
     // A stale guide is still worth reading: it shows under a banner offering Update guide.
     case "ready":
     case "stale": {
       const guide = { ...target, headSha: review.guideHeadSha };
       return {
-        actions: <GuideViewOptions target={guide} viewOptions={viewOptions} />,
-        body: (
+        status: "ready",
+        panel: (
           <>
             {review.kind === "stale" && <StaleBanner target={target} pr={pr} guideHeadSha={review.guideHeadSha} />}
             {/* Keyed: a new guide is a new view. */}
-            <GuideView key={review.guideHeadSha} target={guide} pr={pr} viewOptions={viewOptions} />
+            <GuideView key={review.guideHeadSha} target={guide} viewOptions={viewOptions} shown={shown} />
           </>
         ),
+        barEnd: <GuideViewOptions target={guide} viewOptions={viewOptions} />,
       };
     }
     default:

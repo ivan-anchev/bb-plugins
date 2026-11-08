@@ -1,5 +1,5 @@
-// The reader's view options: remembered for the session, and set from the PR header's icon button,
-// whose popover holds a switch per option.
+// The reader's view options: remembered for the session, and set from the icon button at the end
+// of the PR page's tab bar, whose popover holds a switch per option.
 import { useState } from "react";
 import type { Guide } from "../../guide/guide-schema.ts";
 import { testHunkCount, type ViewOptions } from "../../guide/walkthrough.ts";
@@ -7,7 +7,7 @@ import { useGuide, type GuideTarget } from "../queries.ts";
 import { IconButton } from "../ui/icon-button.tsx";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover.tsx";
 
-/** The options and their setter, owned by the PR page so its header and its guide share them. */
+/** The options and their setter, owned by the PR page so its tab bar and its guide share them. */
 export type ViewOptionsState = { options: ViewOptions; setOptions(options: ViewOptions): void };
 
 // Remembered for the session, across PRs, and never persisted: a reload starts with tests hidden
@@ -27,7 +27,7 @@ export function useViewOptions(): ViewOptionsState {
 
 type GuideViewOptionsProps = { target: GuideTarget; viewOptions: ViewOptionsState };
 
-/** The header's action for a PR with a guide. It shows once the guide has loaded. */
+/** The tab bar's action on the Guide tab of a PR with a guide. It shows once the guide has loaded. */
 export function GuideViewOptions({ target, viewOptions }: GuideViewOptionsProps) {
   const guide = useGuide(target);
   if (guide.data === undefined) return null;

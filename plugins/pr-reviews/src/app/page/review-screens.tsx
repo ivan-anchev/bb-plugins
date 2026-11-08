@@ -1,4 +1,4 @@
-// The PR page below its header while there is no guide: one screen per review state, each a
+// The Guide tab while there is no guide: one screen per review state, each a
 // heading, a line of context, and its actions.
 import type { ReactNode } from "react";
 import type { experimental_PluginRpcCallError as RpcCallError } from "@get-bb/plugin-sdk/app";
@@ -7,6 +7,7 @@ import { useReviewAction, type PrTarget } from "../queries.ts";
 import { timeAgo } from "../relative-time.ts";
 import { ReviewChatButton } from "../review-chat/review-chat-button.tsx";
 import { Button } from "../ui/button.tsx";
+import { Spinner } from "../ui/spinner.tsx";
 import { useElapsed } from "./elapsed.ts";
 
 type Running = Extract<ReviewState, { kind: "running" }>;
@@ -92,8 +93,4 @@ function Screen({ title, error, actions, children }: ScreenProps) {
       </section>
     </div>
   );
-}
-
-function Spinner() {
-  return <span aria-hidden className="inline-block size-3.5 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent motion-reduce:animate-none" />;
 }
