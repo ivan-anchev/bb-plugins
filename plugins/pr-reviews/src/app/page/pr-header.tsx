@@ -34,8 +34,8 @@ export function PrHeader({ pr, hasReviewThread }: PrHeaderProps) {
 const MASTHEAD = "grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-0.5 [grid-template-areas:'tile_title_actions'_'tile_identity_identity']";
 
 // why a purple of our own: bb has no purple token. GitHub's merged purple mixed a quarter toward
-// the foreground reads 4.87:1 on the tile in the dark theme and 5.05:1 in light, over the 3:1 a
-// graphic needs.
+// the foreground reads 5.04:1 on its tinted tile in the dark theme and 4.79:1 in light, over the
+// 3:1 a graphic needs.
 const MERGED = "text-[color-mix(in_oklab,#8957e5_75%,var(--foreground))]";
 
 const STATE_TILES = {
@@ -46,7 +46,8 @@ const STATE_TILES = {
 } as const satisfies Record<PrState, { label: string; icon: string; color: string }>;
 
 // The tile names the state to a screen reader and, as a tooltip, on hover. It stays at every
-// width, since it is the header's only mark of the state.
+// width, since it is the header's only mark of the state. Its wash is the icon's own color at 15%
+// over the page; the icon reads 3.98:1 or more on it (open, light theme, is the lowest).
 function PrStateTile({ state }: { state: PrState }) {
   const { label, icon, color } = STATE_TILES[state];
   return (
@@ -54,7 +55,7 @@ function PrStateTile({ state }: { state: PrState }) {
       role="img"
       aria-label={label}
       title={label}
-      className={`mt-[3px] grid size-8 place-items-center rounded-lg bg-secondary ring-1 ring-border-seam ring-inset [grid-area:tile] ${color}`}
+      className={`mt-[3px] grid size-8 place-items-center rounded-lg bg-[color-mix(in_oklab,currentColor_15%,transparent)] [grid-area:tile] ${color}`}
     >
       <Icon name={icon} aria-hidden className="size-[18px]" />
     </span>
