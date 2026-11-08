@@ -4,6 +4,7 @@
 import type { PrDetail } from "../../contract.ts";
 import { PROSE_TYPE } from "../guide/page-text.tsx";
 import { Prose } from "../ui/prose.tsx";
+import { directImages } from "./direct-images.ts";
 import { hasSidePanel, SidePanel, useSidePanelFocus } from "./side-panel.tsx";
 
 // The layout tops out at the Guide overview's width (880px) plus the gap and the side panel, so the
@@ -26,9 +27,9 @@ const WITH_SIDE_PANEL = "grid-cols-[minmax(0,1fr)_220px] @max-[600px]:grid-cols-
 function Description({ author, body }: { author: string; body: string }) {
   if (body.trim() === "") return <p className="text-sm text-muted-foreground">No description provided.</p>;
   return (
-    <section aria-label="Description" className={CONTAIN_BODY}>
+    <section ref={directImages} aria-label="Description" className={CONTAIN_BODY}>
       <p className="text-xs text-subtle-foreground">{author} wrote</p>
-      <Prose text={body} className={PROSE_TYPE} />
+      <Prose text={body} className={`${PROSE_TYPE} ${FULL_SIZE_IMAGES}`} />
     </section>
   );
 }
@@ -40,3 +41,9 @@ function Description({ author, body }: { author: string; body: string }) {
 //   chat, the timeline). Clipping the column stops it there, and a zero start offset (bb's own
 //   setting for indented blocks) keeps it on the text's edges, scrolling inside its own wrapper.
 const CONTAIN_BODY = "grid grid-cols-[minmax(0,1fr)] gap-2.5 overflow-x-clip [--md-table-start-offset:0px]";
+
+// why: bb's markdown caps an image at half the window's height, so a chat message stays short, and a
+// tall screenshot shrinks with it: on a 900px window a 1456×1872 one drew 350px wide in a 768px
+// column. A description shows images the way GitHub does: as wide as the column at most, never
+// taller than that makes them, and never past their own size. Guide prose keeps bb's cap.
+const FULL_SIZE_IMAGES = "[&_img]:max-h-none";
