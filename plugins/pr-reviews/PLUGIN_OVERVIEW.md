@@ -9,10 +9,11 @@ ever posted to GitHub.
   git remote is on github.com, and remembers the one you chose last.
 - **Open pull requests**: each row shows the PR's number, title, author, when
   it was last updated, and its review state in words.
-- **A page per pull request**: its title, author, `base ← branch`, files,
-  lines and checks, and Review chat and GitHub icon buttons, above two tabs:
-  **Summary**, the author's own description, and **Guide**, which keeps its
-  step while you switch and marks a ready guide with a dot.
+- **A page per pull request**: its title, author, `base ← branch`, files and
+  lines, and Review chat and GitHub icon buttons, above two tabs:
+  **Summary**, the author's own description beside the PR's reviewers, checks
+  and labels, and **Guide**, which keeps its step while you switch and marks a
+  ready guide with a dot.
 - **Start review**: starts a review thread in a new worktree, with your
   Review instructions from Settings → PR Reviews. The page shows it writing,
   with the time so far, Review chat and Cancel, and asks it to finish if it

@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request with Summary and Guide tabs, and a badge counting ready guides), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this, and the view options for tests and findings), how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request with Summary and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this, and the view options for tests and findings), how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -35,7 +35,7 @@ remembered project that read **Guide ready**, and no badge at zero.
 
 Clicking a row opens that PR's page. Its header shows the title over
 `#number`, the author's GitHub avatar and login, and `base-branch ← head-branch`;
-the files, lines and CI checks; and icon buttons, each named by its tooltip:
+the files and lines; and icon buttons, each named by its tooltip:
 **Review chat** (opens the review thread's chat beside the page; shown once a
 review has started, see "Review chat" below) and **Open on GitHub** (opens the
 PR on github.com).
@@ -47,9 +47,27 @@ position. With focus on a tab, ← and → (and Home and End) move between the
 tabs.
 
 **Summary** shows the PR's own description, rendered as markdown under
-"<author> wrote", or "No description provided." when the PR has none. Its right
-side is kept for the PR's details and is empty for now; a page narrower than
-600px gives the description the whole width.
+"<author> wrote", or "No description provided." when the PR has none. Beside it,
+a side panel shows the PR's details as GitHub has them, read only:
+
+- **Reviewers**: everyone asked for a review that is still outstanding (a team
+  shows as the team), and everyone whose latest review approved, requested
+  changes or commented. Each row has a glyph for where they stand (Approved,
+  Changes requested, Commented or Awaiting review, which screen readers hear by
+  name), the GitHub avatar (the login's first letter when it fails to load), and
+  the login or team name. Someone asked again after an earlier review shows as
+  Awaiting review; dismissed and draft reviews are left out.
+- **Checks**: one status beside the heading, `N failing` when any check fails,
+  else `N running` when any is still pending, else `N passing`; then the checks
+  by name, failing first, then pending, then passing. The first three always
+  show; any more sit behind **Show N more**. Each check with a details page
+  opens it outside bb; one without is plain text.
+- **Labels**: one chip per label, with a dot in the label's GitHub color.
+
+A section with nothing in it is left out, and a PR with no reviewers, checks or
+labels has no side panel. The panel never changes anything on GitHub. It comes
+with the PR's own read, so Refresh updates it. With no side panel, or on a page
+narrower than 600px, the description takes the whole width.
 
 **Guide** shows one screen per review state, and its label carries the state: a
 dot once a guide exists, a spinner while the review thread writes one:

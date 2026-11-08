@@ -3,14 +3,15 @@
 import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import type { PrDetail, PrSummary } from "../contract.ts";
-import { statusCheckRollupSchema, summarizeChecks } from "./checks.ts";
+import { statusCheckRollupSchema } from "./checks.ts";
 import { firstLine, parseHostCommandFailure, runHostCommand } from "./host-command.ts";
 import type { PrCommits } from "./pr-commits.ts";
 import type { Repo } from "./repo.ts";
+import { latestReviewsSchema, reviewRequestsSchema, toReviewers } from "./reviewers.ts";
 
 const LIST_LIMIT = 200;
 const SUMMARY_FIELDS = ["number", "title", "author", "updatedAt", "headRefOid"];
-const DETAIL_FIELDS = [...SUMMARY_FIELDS, "body", "url", "headRefName", "baseRefName", "state", "commits", "changedFiles", "additions", "deletions", "statusCheckRollup"];
+const DETAIL_FIELDS = [...SUMMARY_FIELDS, "body", "url", "headRefName", "baseRefName", "state", "commits", "changedFiles", "additions", "deletions", "statusCheckRollup", "reviewRequests", "latestReviews", "labels"];
 
 const ghSummarySchema = z.object({
   number: z.number(),
@@ -39,6 +40,10 @@ const ghDetailSchema = ghSummarySchema.extend({
   additions: z.number(),
   deletions: z.number(),
   statusCheckRollup: statusCheckRollupSchema,
+  reviewRequests: reviewRequestsSchema,
+  latestReviews: latestReviewsSchema,
+  // gh gives a label's color as hex without the `#`.
+  labels: z.array(z.object({ name: z.string(), color: z.string() }).transform(({ name, color }) => ({ name, color: `#${color}` }))),
 });
 
 const toDetail = (pr: z.infer<typeof ghDetailSchema>): PrDetail => ({
@@ -52,8 +57,13 @@ const toDetail = (pr: z.infer<typeof ghDetailSchema>): PrDetail => ({
   changedFiles: pr.changedFiles,
   additions: pr.additions,
   deletions: pr.deletions,
-  checks: summarizeChecks(pr.statusCheckRollup),
+  checks: pr.statusCheckRollup,
+  reviewers: toReviewers(pr.reviewRequests, pr.latestReviews),
+  labels: pr.labels,
 });
+
+/** `gh pr view --json` output for DETAIL_FIELDS, as the canonical PR. */
+export const parsePrDetail = (json: unknown): PrDetail => toDetail(ghDetailSchema.parse(json));
 
 export async function listOpenPrs(repo: Repo): Promise<PrSummary[]> {
   const json = await runGh(["pr", "list", "-R", repo, "--state", "open", "--limit", String(LIST_LIMIT), "--json", SUMMARY_FIELDS.join(",")]);
@@ -62,7 +72,7 @@ export async function listOpenPrs(repo: Repo): Promise<PrSummary[]> {
 
 export async function viewPr(repo: Repo, number: number): Promise<PrDetail> {
   const json = await runGh(["pr", "view", String(number), "-R", repo, "--json", DETAIL_FIELDS.join(",")]);
-  return toDetail(ghDetailSchema.parse(JSON.parse(json)));
+  return parsePrDetail(JSON.parse(json));
 }
 
 /** A PR's diff between the two commits it was read at. */
