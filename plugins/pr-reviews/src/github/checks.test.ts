@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { statusCheckRollupSchema, summarizeChecks } from "./checks.ts";
-
-type Outcome = "passing" | "failing" | "pending";
+import { summarizeChecks, type CheckOutcome as Outcome } from "../contract.ts";
+import { statusCheckRollupSchema } from "./checks.ts";
 
 // Shaped as `gh pr view --json statusCheckRollup` prints them; the extra fields are gh's.
 type Check = { name: string; item: object };
@@ -63,4 +62,28 @@ test("summarizeChecks counts a mixed rollup by outcome", () => {
 
 test("summarizeChecks gives all zeros for a PR with no checks", () => {
   assert.deepEqual(summaryOf([]), { passing: 0, failing: 0, pending: 0 });
+});
+
+test("each check keeps its name and details page: a CheckRun's name and detailsUrl, a StatusContext's context and targetUrl", () => {
+  const rollup = [checkRun("COMPLETED", "FAILURE"), statusContext("PENDING"), checkRun("COMPLETED", "SUCCESS")];
+  assert.deepEqual(statusCheckRollupSchema.parse(rollup.map((check) => check.item)), [
+    { name: "check", outcome: "failing", url: "https://github.com/o/r/actions/runs/1/job/2" },
+    { name: "ci/legacy", outcome: "pending", url: "https://ci.example/1" },
+    { name: "check", outcome: "passing", url: "https://github.com/o/r/actions/runs/1/job/2" },
+  ]);
+});
+
+test("a check without a details page has a null url", () => {
+  const rollup = [
+    { __typename: "CheckRun", name: "external", status: "COMPLETED", conclusion: "SUCCESS", detailsUrl: "" },
+    { __typename: "StatusContext", context: "ci/no-target", state: "SUCCESS", targetUrl: null },
+  ];
+  assert.deepEqual(
+    statusCheckRollupSchema.parse(rollup).map((check) => check.url),
+    [null, null],
+  );
+});
+
+test("a rollup item kind GitHub adds later is a pending check named by its kind, with no url", () => {
+  assert.deepEqual(statusCheckRollupSchema.parse([{ __typename: "BrandNewCheck", outcome: "WHATEVER" }]), [{ name: "BrandNewCheck", outcome: "pending", url: null }]);
 });

@@ -24,9 +24,37 @@ export type PrSummary = z.infer<typeof prSummarySchema>;
 
 const countSchema = z.number().int().nonnegative();
 
-/** A PR's CI checks by outcome; all zero when the PR has none. */
-const checksSummarySchema = z.object({ passing: countSchema, failing: countSchema, pending: countSchema });
-export type ChecksSummary = z.infer<typeof checksSummarySchema>;
+/** What a CI check says, folded from GitHub's statuses, conclusions and states by `github/checks.ts`. */
+const checkOutcomeSchema = z.enum(["failing", "pending", "passing"]);
+export type CheckOutcome = z.infer<typeof checkOutcomeSchema>;
+
+/** One CI check: its name, outcome, and details page, null when GitHub gives it none. */
+const checkSchema = z.object({ name: z.string(), outcome: checkOutcomeSchema, url: z.string().nullable() });
+export type Check = z.infer<typeof checkSchema>;
+
+/** A PR's CI checks counted by outcome; all zero when the PR has none. */
+export type ChecksSummary = Record<CheckOutcome, number>;
+
+export function summarizeChecks(checks: Check[]): ChecksSummary {
+  const summary: ChecksSummary = { failing: 0, pending: 0, passing: 0 };
+  for (const check of checks) summary[check.outcome]++;
+  return summary;
+}
+
+/** Where a reviewer stands: their latest review, or awaiting one they were asked for. */
+const reviewerStatusSchema = z.enum(["approved", "changes-requested", "commented", "awaiting"]);
+export type ReviewerStatus = z.infer<typeof reviewerStatusSchema>;
+
+// A team is only ever requested: its members review as users.
+const reviewerSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("user"), login: z.string(), status: reviewerStatusSchema }),
+  z.object({ kind: z.literal("team"), name: z.string() }),
+]);
+export type Reviewer = z.infer<typeof reviewerSchema>;
+
+/** A GitHub label; `color` is a CSS hex color, `#rrggbb`. */
+const labelSchema = z.object({ name: z.string(), color: z.string() });
+export type Label = z.infer<typeof labelSchema>;
 
 const prDetailSchema = prSummarySchema.extend({
   body: z.string(),
@@ -40,7 +68,11 @@ const prDetailSchema = prSummarySchema.extend({
   /** Lines added and deleted across the whole PR. */
   additions: countSchema,
   deletions: countSchema,
-  checks: checksSummarySchema,
+  /** In GitHub's order. */
+  checks: z.array(checkSchema),
+  /** Requested reviewers first, then the rest who reviewed. */
+  reviewers: z.array(reviewerSchema),
+  labels: z.array(labelSchema),
 });
 export type PrDetail = z.infer<typeof prDetailSchema>;
 

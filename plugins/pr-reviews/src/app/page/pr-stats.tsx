@@ -1,12 +1,12 @@
 // The PR header's stats strip, divided by hairlines: files, `+N −N` with its diffstat, and the CI
 // checks verdict. A count only: the header runs no checks and links to none.
 import type { ReactNode } from "react";
-import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
-import type { PrDetail } from "../../contract.ts";
-import { checksVerdict, diffBlocks, type ChecksTone, type ChecksVerdict, type DiffBlock } from "./header-stats.ts";
+import { summarizeChecks, type PrDetail } from "../../contract.ts";
+import { CheckOutcomeIcon } from "./check-outcome-icon.tsx";
+import { checksVerdict, diffBlocks, type ChecksVerdict, type DiffBlock } from "./header-stats.ts";
 
 export function PrStats({ pr }: { pr: PrDetail }) {
-  const verdict = checksVerdict(pr.checks);
+  const verdict = checksVerdict(summarizeChecks(pr.checks));
   return (
     <p className="overflow-hidden text-xs leading-5 whitespace-nowrap text-muted-foreground">
       {/* -ml-[21px] pulls each line's first hairline (and its margins) out of view, so a wrapped
@@ -60,18 +60,11 @@ function LineCount({ sign, count, color }: { sign: string; count: number; color:
   );
 }
 
-const TONE_ICONS = {
-  failing: { name: "CircleX", color: "text-destructive-text" },
-  pending: { name: "Clock", color: "text-muted-foreground" },
-  passing: { name: "CircleCheck", color: "text-success-foreground" },
-} as const satisfies Record<ChecksTone, { name: string; color: string }>;
-
 // The glyph carries the tone; of the words, only a failing headline is colored.
 function ChecksStat({ verdict: { tone, headline, rest } }: { verdict: ChecksVerdict }) {
-  const icon = TONE_ICONS[tone];
   return (
     <span className="inline-flex items-center gap-1.5">
-      <Icon name={icon.name} className={`size-3.5 shrink-0 ${icon.color}`} aria-hidden />
+      <CheckOutcomeIcon outcome={tone} />
       <span>
         <span className={tone === "failing" ? "text-destructive-text" : undefined}>{headline}</span>
         {rest.map((part) => ` · ${part}`).join("")}

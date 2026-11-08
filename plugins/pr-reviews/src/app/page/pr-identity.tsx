@@ -1,15 +1,16 @@
 // The PR header's identity row: `#number`, the author's GitHub avatar and login, and the branches
 // GitHub's way round, `base ← head`.
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { PrDetail } from "../../contract.ts";
+import { Avatar } from "../ui/avatar.tsx";
 
 export function PrIdentity({ pr }: { pr: PrDetail }) {
   return (
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-muted-foreground">
       <span className="font-medium tabular-nums">#{pr.number}</span>
       <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
-        <Avatar login={pr.author} />
+        <Avatar login={pr.author} size={16} />
         {pr.author}
       </span>
       {/* The arrow stays with the head branch, so a wrapped pair reads `base` over `← head`. */}
@@ -22,17 +23,6 @@ export function PrIdentity({ pr }: { pr: PrDetail }) {
         </span>
       </span>
     </p>
-  );
-}
-
-// 16px, fetched at 2x. The muted circle is the placeholder while it loads and when it fails (an
-// unknown login is a 404), so a failure shows no broken image and moves nothing.
-function Avatar({ login }: { login: string }) {
-  const [failed, setFailed] = useState(false);
-  return (
-    <span className="size-4 shrink-0 overflow-hidden rounded-full bg-muted ring-1 ring-foreground/8">
-      {!failed && <img src={`https://github.com/${login}.png?size=32`} alt="" className="size-full" onError={() => setFailed(true)} />}
-    </span>
   );
 }
 
