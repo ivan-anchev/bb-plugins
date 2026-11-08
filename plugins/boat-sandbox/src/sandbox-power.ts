@@ -1,10 +1,15 @@
-// Stopping and waking one boat sandbox, for bb's suspend and resume. A stop keeps the disk, so the
-// sandbox id is all bb needs to get the same machine back.
+// Stopping and waking one boat sandbox, for bb's suspend and resume, and the auto-stop lease it
+// carries while awake. A stop keeps the disk, so the sandbox id is all bb needs to get the same machine back.
 import { setTimeout as sleep } from "node:timers/promises";
 import type { BoatClient } from "./boat/client.ts";
 import { isAwake, type Sandbox, type SandboxId } from "./boat/sandbox.ts";
 import type { StartGate } from "./boat/start-gate.ts";
 
+/**
+ * The auto-stop every awake sandbox carries: the longest a trial allows. The sweep renews it while bb
+ * runs, so boat stops a sandbox only once bb has been gone for about an hour.
+ */
+export const LEASE_TTL_SECONDS = 7200;
 /** A fresh or resumed sandbox is up in about 1.5 s (spike Q1, Q5). */
 const START_PATIENCE_MS = 5 * 60_000;
 /** A stop takes about 14 s (spike Q5); boat retries one whose disk save fails. */
@@ -20,13 +25,17 @@ export async function stopSandbox(client: BoatClient, id: SandboxId, signal: Abo
   await waitUntilStopped(client, id, signal);
 }
 
-/** Gets the same sandbox running again on its saved disk; running already is fine. */
+/**
+ * Gets the same sandbox running again on its saved disk; running already is fine. Either way it ends
+ * on a fresh lease: boat otherwise keeps whatever auto-stop was last set, by hand or a 20-second test.
+ */
 export async function wakeSandbox(client: BoatClient, gate: StartGate, id: SandboxId, signal: AbortSignal): Promise<void> {
   const found = await client.get(id, signal);
   const sandbox = found?.phase === "stopping" ? await waitUntilStopped(client, id, signal) : found;
   if (sandbox === null) throw new Error(`boat sandbox ${id} no longer exists; remove this machine.`);
   if (sandbox.dataExpired) throw new Error(`boat deleted the disk of sandbox ${id} after its stopped-disk retention; remove this machine.`);
-  if (!isAwake(sandbox)) await resumeStopped(client, gate, sandbox, signal);
+  if (isAwake(sandbox)) await client.setTtl(id, LEASE_TTL_SECONDS, signal);
+  else await resumeStopped(client, gate, sandbox, signal);
   await waitUntilRunning(client, id, signal);
 }
 
@@ -48,7 +57,7 @@ export async function waitUntilRunning(client: BoatClient, id: SandboxId, signal
  * last word at the edge of the window, and a 429 it sends then holds back later starts.
  */
 async function resumeStopped(client: BoatClient, gate: StartGate, sandbox: Sandbox, signal: AbortSignal): Promise<void> {
-  const resume = () => client.resume(sandbox.id, signal);
+  const resume = () => client.resume(sandbox.id, LEASE_TTL_SECONDS, signal);
   const kept = sandbox.stoppedAt !== null && Date.now() - sandbox.stoppedAt < KEPT_MACHINE_MS;
   await (kept ? gate.startUncounted(resume, signal) : gate.start(resume, signal));
 }

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { afterEach, mock, test } from "node:test";
 import { createBoatClient } from "./client.ts";
 import { sandboxId } from "./wire.ts";
@@ -55,4 +56,20 @@ test("a command sent while the sandbox starts is sent again", async () => {
 
   assert.equal((await run()).exitCode, 3);
   assert.equal(fetch.mock.callCount(), 2);
+});
+
+test("list follows boat's cursor until the last page", async () => {
+  const captured = JSON.parse(readFileSync(new URL("./fixtures/create-a.json", import.meta.url), "utf8")).sandbox;
+  const pages = [
+    { sandboxes: [{ ...captured, id: "bx_aaaaaaaa" }], pageInfo: { nextCursor: "page-2", hasMore: true, limit: 200 } },
+    { sandboxes: [{ ...captured, id: "bx_bbbbbbbb" }], pageInfo: { nextCursor: null, hasMore: false, limit: 200 } },
+  ];
+  const fetch = mock.method(globalThis, "fetch", async () => Response.json(pages[fetch.mock.callCount()]));
+
+  const listed = await createBoatClient("boat_test").list({ "bb.boat/owner": "owner-1" }, AbortSignal.timeout(10_000));
+
+  assert.deepEqual(listed.map(({ id }) => id), ["bx_aaaaaaaa", "bx_bbbbbbbb"]);
+  const urls = fetch.mock.calls.map(({ arguments: [url] }) => new URL(String(url)));
+  assert.deepEqual(urls.map(({ searchParams }) => searchParams.get("cursor")), [null, "page-2"]);
+  assert.equal(urls[0]?.searchParams.get("label"), "bb.boat/owner=owner-1");
 });

@@ -49,12 +49,17 @@ function fakeBoat() {
       const sandbox = sandboxes.get(id);
       if (sandbox !== undefined) sandboxes.set(id, { ...sandbox, phase: "stopped", stoppedAt: Date.now() });
     },
-    async resume(id) {
-      calls.push(`resume ${id}`);
+    // Auto-stop counts from the resume, with the TTL the resume sends.
+    async resume(id, ttlSeconds) {
+      calls.push(`resume ${id} ttl ${ttlSeconds}`);
       const sandbox = sandboxes.get(id);
-      if (sandbox !== undefined) sandboxes.set(id, { ...sandbox, phase: "running", stoppedAt: null });
+      if (sandbox !== undefined) sandboxes.set(id, { ...sandbox, phase: "running", stoppedAt: null, archiveAfter: Date.now() + ttlSeconds * 1000 });
     },
-    setTtl: async () => {},
+    async setTtl(id, ttlSeconds) {
+      calls.push(`ttl ${id} ${ttlSeconds}`);
+      const sandbox = sandboxes.get(id);
+      if (sandbox !== undefined) sandboxes.set(id, { ...sandbox, archiveAfter: Date.now() + ttlSeconds * 1000 });
+    },
     run: async () => ({ exitCode: 0 }),
     writeFile: async () => {},
   };
@@ -249,7 +254,7 @@ test("resume within the kept window bypasses the start gate", async () => {
 
   await resume(lifecycle(sandbox));
 
-  assert.deepEqual(boat.calls, [`resume ${sandbox.id}`]);
+  assert.deepEqual(boat.calls, [`resume ${sandbox.id} ttl 7200`]);
   assert.equal(counted.starts, 0);
   assert.deepEqual(bootstraps, ["thr_1"]);
   assert.deepEqual(touched, ["host_1"]);
@@ -263,7 +268,7 @@ test("resume after the kept window goes through the start gate", async () => {
 
   await resume(lifecycle(sandbox));
 
-  assert.deepEqual(boat.calls, [`resume ${sandbox.id}`]);
+  assert.deepEqual(boat.calls, [`resume ${sandbox.id} ttl 7200`]);
   assert.equal(counted.starts, 1);
 });
 
@@ -275,7 +280,7 @@ test("resume in the kept window's last minute still bypasses the start gate", as
 
   await resume(lifecycle(sandbox));
 
-  assert.deepEqual(boat.calls, [`resume ${sandbox.id}`]);
+  assert.deepEqual(boat.calls, [`resume ${sandbox.id} ttl 7200`]);
   assert.equal(counted.starts, 0);
 });
 
@@ -300,7 +305,7 @@ test("a kept resume boat counts and refuses with 429 holds back later starts", a
   assert.deepEqual(boat.posts, []);
 });
 
-test("resume of a running sandbox only re-enrolls it", async () => {
+test("resume of a running sandbox renews its lease and re-enrolls it", async () => {
   const boat = fakeBoat();
   const sandbox = boat.add(machineLabels(OWNER, "thr_1"));
   const resumer = provider(boat.client);
@@ -308,8 +313,21 @@ test("resume of a running sandbox only re-enrolls it", async () => {
 
   await resume(lifecycle(sandbox));
 
-  assert.deepEqual(boat.calls, []);
+  assert.deepEqual(boat.calls, [`ttl ${sandbox.id} 7200`]);
   assert.deepEqual(resumer.bootstraps, ["thr_1"]);
+});
+
+test("resume puts the 2-hour lease back, whatever auto-stop was set on the sandbox before", async () => {
+  const boat = fakeBoat();
+  // A 20-second auto-stop set by hand: boat keeps it for later resumes unless the resume sends another.
+  const sandbox = { ...boat.stopped(30), archiveAfter: Date.now() + 20_000 };
+  boat.sandboxes.set(sandbox.id, sandbox);
+  const { resume } = suspendResume(provider(boat.client));
+
+  await resume(lifecycle(sandbox));
+
+  const archiveAfter = boat.sandboxes.get(sandbox.id)?.archiveAfter ?? 0;
+  assert.ok(archiveAfter - Date.now() > 7190_000, `auto-stop only ${Math.round((archiveAfter - Date.now()) / 1000)} s away`);
 });
 
 test("resume of a sandbox boat no longer has says to remove the machine", async () => {

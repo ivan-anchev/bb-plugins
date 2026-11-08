@@ -55,20 +55,26 @@ const cancelledSandbox = z.object({ id: sandboxId, state: z.literal("cancelled")
 const presentSandbox = z.object({
   id: sandboxId,
   state: z.enum(["init", "provisioning", "provisioned", "cloning", "ready", "idle", "running", "archiving", "archived", "error"]),
+  type: z.string(),
   labels: z.record(z.string(), z.string()),
   createdAt: instant,
   archiveAfter: instant.nullable(),
   stoppedAt: instant.nullable(),
   dataExpiredAt: instant.nullable(),
   error: z.string().nullable(),
-  stop: z.object({}).nullable(),
+  /** The last stop requested through the API, ever (OAS `StopOperation`); null if there never was one. */
+  stop: z.object({ endedAt: instant.nullable() }).nullable(),
 });
 
 export const wireSandbox = z.discriminatedUnion("state", [cancelledSandbox, presentSandbox]);
 
 /** `GET /sandboxes/{id}` and `POST /sandboxes` both wrap the sandbox the same way. */
 export const wireSandboxEnvelope = z.object({ sandbox: z.unknown() });
-export const wireSandboxList = z.object({ sandboxes: z.array(z.unknown()) });
+/** `nextCursor` is null on the last page. */
+export const wireSandboxList = z.object({
+  sandboxes: z.array(z.unknown()),
+  pageInfo: z.object({ nextCursor: z.string().nullable() }),
+});
 
 /**
  * One NDJSON line of `POST /sandboxes/{id}/commands` with `stream: true` (OAS `CommandStreamFrame`):

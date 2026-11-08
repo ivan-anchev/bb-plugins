@@ -63,7 +63,7 @@ export interface BoatClient {
   limits(signal?: AbortSignal): Promise<Limits>;
   /** null when boat no longer has the sandbox (404 or cancelled). */
   get(id: SandboxId, signal: AbortSignal): Promise<Sandbox | null>;
-  /** Every sandbox carrying all of `labels`. */
+  /** Every sandbox carrying all of `labels`, in any state, across all pages. */
   list(labels: Labels, signal: AbortSignal): Promise<Sandbox[]>;
   /** A repeat with the same key and body returns the same sandbox. */
   create(body: CreateSandboxBody, idempotencyKey: string, signal: AbortSignal): Promise<Sandbox>;
@@ -71,8 +71,11 @@ export interface BoatClient {
   remove(id: SandboxId, signal: AbortSignal): Promise<void>;
   /** Saves the disk, then powers off; returns while boat is still stopping. A repeat joins the pending stop. */
   stop(id: SandboxId, signal: AbortSignal): Promise<void>;
-  /** Starts a stopped sandbox on the same disk; returns while it is still starting. */
-  resume(id: SandboxId, signal: AbortSignal): Promise<void>;
+  /**
+   * Starts a stopped sandbox on the same disk with auto-stop `ttlSeconds` from now, kept for later
+   * resumes; returns while it is still starting.
+   */
+  resume(id: SandboxId, ttlSeconds: number, signal: AbortSignal): Promise<void>;
   /** Moves the auto-stop deadline to now + `ttlSeconds`, and keeps that TTL for later resumes. */
   setTtl(id: SandboxId, ttlSeconds: number, signal: AbortSignal): Promise<void>;
   /** Runs `command` in a login shell as `user`, streaming its output, and returns its exit code. */
@@ -97,8 +100,14 @@ export function createBoatClient(apiKey: string): BoatClient {
       }
     },
     async list(labels, signal) {
-      const { sandboxes } = wireSandboxList.parse(await json(`/sandboxes?${labelQuery(labels)}`, { signal }));
-      return sandboxes.map(toSandbox).filter((sandbox) => sandbox !== null);
+      const found: Sandbox[] = [];
+      let cursor: string | null = null;
+      do {
+        const page = wireSandboxList.parse(await json(`/sandboxes?${listQuery(labels, cursor)}`, { signal }));
+        found.push(...page.sandboxes.map(toSandbox).filter((sandbox) => sandbox !== null));
+        cursor = page.pageInfo.nextCursor;
+      } while (cursor !== null);
+      return found;
     },
     async create(body, idempotencyKey, signal) {
       const created = await json("/sandboxes", {
@@ -117,8 +126,8 @@ export function createBoatClient(apiKey: string): BoatClient {
     async stop(id, signal) {
       await call(`/sandboxes/${id}/stop`, { method: "POST", body: {}, signal });
     },
-    async resume(id, signal) {
-      await call(`/sandboxes/${id}/resume`, { method: "POST", body: {}, signal });
+    async resume(id, ttlSeconds, signal) {
+      await call(`/sandboxes/${id}/resume`, { method: "POST", body: { ttlSeconds }, signal });
     },
     async setTtl(id, ttlSeconds, signal) {
       await call(`/sandboxes/${id}`, { method: "PATCH", body: { ttlSeconds }, signal });
@@ -186,10 +195,11 @@ function parseJson(text: string): unknown {
   }
 }
 
-// The key's labels match at most a couple of sandboxes, so one page always holds them all.
-const labelQuery = (labels: Labels): string => {
+// No state filter: boat then lists every state, stopped and failed included.
+const listQuery = (labels: Labels, cursor: string | null): string => {
   const query = new URLSearchParams({ limit: "200" });
   for (const [key, value] of Object.entries(labels)) query.append("label", `${key}=${value}`);
+  if (cursor !== null) query.set("cursor", cursor);
   return query.toString();
 };
 
