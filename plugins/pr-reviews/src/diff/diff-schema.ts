@@ -43,6 +43,17 @@ export function unitIdsOf(file: DiffFile): HunkId[] {
   return file.hunks.length === 0 ? [WHOLE_FILE] : file.hunks.map(hunkIdOf);
 }
 
+/** How many lines a change adds and removes. */
+export type LineCounts = { added: number; removed: number };
+
+/** The lines these raw hunk lines add and remove; context and `\ No newline` markers count on neither side. */
+export function lineCountsOf(lines: readonly string[]): LineCounts {
+  return { added: lines.filter((line) => line[0] === "+").length, removed: lines.filter((line) => line[0] === "-").length };
+}
+
+/** The lines the whole file adds and removes. A file with no text hunks has none. */
+export const fileLineCountsOf = (file: DiffFile): LineCounts => lineCountsOf(file.hunks.flatMap((hunk) => hunk.lines));
+
 /** One line of a hunk with its line number on each side; null on the side it is not on. */
 export type NumberedLine = { text: string; old: number | null; new: number | null };
 

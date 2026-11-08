@@ -1,17 +1,19 @@
-// The PR page's tabs under its header, Summary then Guide, on the ARIA tabs pattern: one tab stop,
-// ← → Home End to move, and a tab is selected as it is focused. The bar stays put and each panel
+// The PR page's tabs under its header, Summary, Changes then Guide, on the ARIA tabs pattern: one
+// tab stop, ← → Home End to move, and a tab is selected as it is focused. The bar stays put and each panel
 // scrolls on its own. Every panel stays mounted, hidden while another is selected, so the guide
-// keeps its step and scroll position across switches.
+// keeps its step and scroll position across switches, and Changes its file, scroll and folders.
 import { useId, type KeyboardEvent, type ReactNode } from "react";
 import { Spinner } from "../ui/spinner.tsx";
 
-export type PrTab = "summary" | "guide";
+export type PrTab = "summary" | "changes" | "guide";
 
 // `panelTabStop`: whether the panel itself takes the tab stop after the tab, for content that
-// brings none of its own. Every Guide screen does: its actions, or the guide's page region, which
-// the guide renders while it loads and after a failed read too.
+// brings none of its own. Changes does: its file tree and its diff, or its read's region while the
+// diff loads or after a failed read. Every Guide screen does too: its actions, or the guide's page
+// region, which the guide renders while it loads and after a failed read too.
 const TABS: { id: PrTab; label: string; panelTabStop: boolean }[] = [
   { id: "summary", label: "Summary", panelTabStop: true },
+  { id: "changes", label: "Changes", panelTabStop: false },
   { id: "guide", label: "Guide", panelTabStop: false },
 ];
 

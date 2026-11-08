@@ -1,7 +1,7 @@
 PR Reviews adds a **PR Reviews** app to bb's left rail. It lists a GitHub
-project's open pull requests and opens each one as a guided review, written by
-a review thread, that walks you through the change step by step. Nothing is
-ever posted to GitHub.
+project's open pull requests and opens each one on a page with its whole diff
+in a file tree and a guided review, written by a review thread, that walks you
+through the change step by step. Nothing is ever posted to GitHub.
 
 ## What you get
 
@@ -10,10 +10,16 @@ ever posted to GitHub.
 - **Open pull requests**: each row shows the PR's number, title, author, when
   it was last updated, and its review state in words.
 - **A page per pull request**: its title, author, `base ← branch`, files and
-  lines, and Review chat and GitHub icon buttons, above two tabs:
+  lines, and Review chat and GitHub icon buttons, above three tabs:
   **Summary**, the author's own description beside the PR's reviewers, checks
-  and labels, and **Guide**, which keeps its step while you switch and marks a
-  ready guide with a dot.
+  and labels; **Changes**, the PR's whole diff; and **Guide**, which keeps its
+  step while you switch and marks a ready guide with a dot.
+- **Changes**: every changed file in a tree with its `+N −M`, beside the
+  selected file's diff in bb's own diff view, laid out like Code Explorer's
+  Changes view. Filter by path (globs, `!` to exclude), by kind, extension or
+  deleted files; switch between Unified and Split, wrap lines, and collapse or
+  expand every folder. It needs no guide, and reads the diff only once you
+  open the tab.
 - **Start review**: starts a review thread in a new worktree, with your
   Review instructions from Settings → PR Reviews. The page shows it writing,
   with the time so far, Review chat and Cancel, and asks it to finish if it

@@ -3,7 +3,7 @@
 // refetch() re-reads each one regardless of freshness or a cached failure (REVIEW.md).
 import type { ExperimentalRpcQueryState, PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { guideHeadShaOf } from "../../contract.ts";
-import { useGuide, useProjects, usePullRequest, usePullRequests, type GuideTarget } from "../queries.ts";
+import { useChangesToReread, useGuide, useProjects, usePullRequest, usePullRequests, type GuideTarget } from "../queries.ts";
 import { parseRoute } from "../routes.ts";
 import { IconButton } from "../ui/icon-button.tsx";
 
@@ -26,10 +26,10 @@ const RefreshProjects = () => <RefreshReads reads={[useProjects()]} />;
 
 const RefreshProject = ({ projectId }: { projectId: string }) => <RefreshReads reads={[useProjects(), usePullRequests(projectId)]} />;
 
-// A PR page that shows a guide also re-reads the guide.
+// A PR page also re-reads its diff once the Changes tab has read it, and its guide when it shows one.
 function RefreshPr({ projectId, number }: { projectId: string; number: number }) {
   const pull = usePullRequest(projectId, number);
-  const reads = [useProjects(), usePullRequests(projectId), pull];
+  const reads = [useProjects(), usePullRequests(projectId), pull, ...useChangesToReread({ projectId, number })];
   const headSha = pull.data === undefined ? null : guideHeadShaOf(pull.data.review);
   return headSha === null ? <RefreshReads reads={reads} /> : <RefreshWithGuide reads={reads} guide={{ projectId, number, headSha }} />;
 }

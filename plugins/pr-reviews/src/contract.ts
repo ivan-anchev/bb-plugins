@@ -174,6 +174,15 @@ export const prReviewsContract = defineRpcContract({
     output: z.object({ record: guideRecordSchema, files: z.array(diffFileSchema) }),
     tags: (_input, output) => [guideTag(output.record.key)],
   },
+  /**
+   * The PR's whole diff (base...head) as GitHub serves it now, and the head it reflects. It needs
+   * no review run. Untagged: it runs `gh pr diff`, so it re-reads only on Refresh, never on a
+   * thread event.
+   */
+  changes: {
+    input: prRefSchema,
+    output: z.object({ headSha: z.string(), files: z.array(diffFileSchema) }),
+  },
   selectProject: { input: z.object({ projectId: z.string() }), output: empty },
   startReview: { input: prRefSchema, output: z.object({ threadId: z.string() }) },
   cancelReview: { input: prRefSchema, output: empty },

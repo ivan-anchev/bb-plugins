@@ -20,6 +20,18 @@ export type GuideTarget = PrTarget & { headSha: string };
 
 export const useGuide = (target: GuideTarget) => experimental_useRpcQuery({ contract, method: "guide", input: target });
 
+/**
+ * The PR's whole diff. `enabled` stays false until the Changes tab is first shown, since the read
+ * runs `gh pr diff`; a disabled hook still shares the read's cache entry and its refetch.
+ */
+export const useChanges = (target: PrTarget, enabled: boolean) => experimental_useRpcQuery({ contract, method: "changes", input: target, enabled });
+
+/** The PR diff's read for Refresh and reselection to re-read: only once it has settled, as data or a failure, so only once the Changes tab asked for it. */
+export function useChangesToReread(target: PrTarget) {
+  const changes = useChanges(target, false);
+  return changes.data !== undefined || changes.error !== null ? [changes] : [];
+}
+
 export const useSelectProject = () => experimental_useRpcMutation({ contract, method: "selectProject" });
 
 type ReviewAction = "startReview" | "cancelReview" | "nudgeReview" | "updateGuide";

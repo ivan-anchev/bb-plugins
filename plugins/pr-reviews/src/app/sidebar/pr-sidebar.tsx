@@ -2,7 +2,7 @@
 import { useEffect } from "react";
 import { useBbNavigate, type PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { guideHeadShaOf, type GitHubProject, type PrRow } from "../../contract.ts";
-import { useGuide, useProjects, usePullRequest, usePullRequests, useSelectProject, type GuideTarget } from "../queries.ts";
+import { useChangesToReread, useGuide, useProjects, usePullRequest, usePullRequests, useSelectProject, type GuideTarget } from "../queries.ts";
 import { PANEL_PATH, parseRoute, routeSubPath, type Route } from "../routes.ts";
 import { Notice } from "../ui/notice.tsx";
 import { ReadError } from "../ui/read-error.tsx";
@@ -84,15 +84,16 @@ function PrList({ projectId, openNumber }: { projectId: string; openNumber: numb
   );
 }
 
-// Clicking the open PR again re-reads it, its guide and the list, so a failed read is retried
-// (REVIEW.md); navigating to the route already shown would not. Same inputs as the page's
-// reads, so this refetches the page's cache entries.
+// Clicking the open PR again re-reads it, its diff once read, its guide and the list, so a failed
+// read is retried (REVIEW.md); navigating to the route already shown would not. Same inputs as the
+// page's reads, so this refetches the page's cache entries.
 type OpenPrRowProps = { projectId: string; row: PrRow; refetchList(): Promise<void> };
 
 function OpenPrRow({ projectId, row, refetchList }: OpenPrRowProps) {
   const pull = usePullRequest(projectId, row.number);
   const headSha = pull.data === undefined ? null : guideHeadShaOf(pull.data.review);
-  const refetch = [pull.refetch, refetchList];
+  const changes = useChangesToReread({ projectId, number: row.number });
+  const refetch = [pull.refetch, refetchList, ...changes.map((read) => read.refetch)];
   return headSha === null ? (
     <PrRowButton row={row} current onClick={() => void Promise.all(refetch.map((read) => read()))} />
   ) : (

@@ -5,6 +5,7 @@ import { useReadyGuidesBadge } from "./src/app/ready-badge.ts";
 import { reviewChatTab } from "./src/app/review-chat/review-chat-tab.tsx";
 import { PANEL_ID, PANEL_PATH } from "./src/app/routes.ts";
 import { PrSidebar } from "./src/app/sidebar/pr-sidebar.tsx";
+import "./app.css";
 
 export default definePluginApp((app) => {
   app.slots.navPanel({

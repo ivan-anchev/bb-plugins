@@ -1,8 +1,9 @@
-// navPanel component: the chosen PR's page, its header above the Summary and Guide tabs. The Guide
-// tab shows one screen per review state.
+// navPanel component: the chosen PR's page, its header above the Summary, Changes and Guide tabs.
+// The Guide tab shows one screen per review state.
 import { useState } from "react";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { reviewThreadOf, type PrDetail, type ReviewState } from "../../contract.ts";
+import { ChangesTab } from "../changes/changes-tab.tsx";
 import { usePullRequest, type PrTarget } from "../queries.ts";
 import { GuideView } from "../guide/guide-view.tsx";
 import { GuideViewOptions, useViewOptions, type ViewOptionsState } from "../guide/view-options.tsx";
@@ -48,6 +49,7 @@ function ReviewPage({ target, pr, review, viewOptions }: ReviewPageProps) {
         onSelect={setTab}
         tabs={{
           summary: { status: "none", panel: <SummaryTab pr={pr} />, barEnd: null },
+          changes: { status: "none", panel: <ChangesTab target={target} shown={tab === "changes"} />, barEnd: null },
           guide: guideTabOf(target, pr, review, viewOptions, tab === "guide"),
         }}
       />

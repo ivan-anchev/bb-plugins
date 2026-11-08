@@ -1,0 +1,18 @@
+// What the Changes tab's viewer shows for a file (code-explorer's viewer-input notice rules): its
+// patch, or a notice where a diff would be empty. Pure.
+import { fileLineCountsOf, type DiffFile } from "../../diff/diff-schema.ts";
+import { filePatchOf } from "../../diff/hunk-patch.ts";
+
+type DiffSource = { kind: "patch"; patch: string } | { kind: "notice"; message: string };
+
+export function diffSourceOf(file: DiffFile): DiffSource {
+  if (file.binary) return { kind: "notice", message: "Binary file. There is no text diff to show." };
+  const { added, removed } = fileLineCountsOf(file);
+  if (added + removed === 0) return { kind: "notice", message: unchangedContentsMessageOf(file) };
+  return { kind: "patch", patch: filePatchOf(file) };
+}
+
+// Display only: the path is shown as the diff wrote it.
+function unchangedContentsMessageOf(file: DiffFile): string {
+  return file.previousPath === null ? "No text changes." : `Renamed from ${file.previousPath}. The contents are unchanged.`;
+}
