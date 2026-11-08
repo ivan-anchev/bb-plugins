@@ -62,15 +62,18 @@ export type Reviewer = z.infer<typeof reviewerSchema>;
 const labelSchema = z.object({ name: z.string(), color: z.string() });
 export type Label = z.infer<typeof labelSchema>;
 
+/** GitHub's state of a PR, where an open draft is DRAFT. */
+const prStateSchema = z.enum(["OPEN", "DRAFT", "CLOSED", "MERGED"]);
+export type PrState = z.infer<typeof prStateSchema>;
+
 const prDetailSchema = prSummarySchema.extend({
   body: z.string(),
   url: z.string(),
   headRefName: z.string(),
   baseRefName: z.string(),
-  state: z.enum(["OPEN", "CLOSED", "MERGED"]),
+  state: prStateSchema,
   /** Commit oids, oldest first. */
   commits: z.array(z.string()),
-  changedFiles: countSchema,
   /** Lines added and deleted across the whole PR. */
   additions: countSchema,
   deletions: countSchema,
@@ -143,6 +146,14 @@ export type PrRow = z.infer<typeof prRowSchema>;
 
 const prRefSchema = z.object({ projectId: z.string(), number: prNumberSchema });
 
+/** The PR's whole diff and the head it reflects: the `changes` read. */
+const prChangesSchema = z.object({ headSha: z.string(), files: z.array(diffFileSchema) });
+export type PrChanges = z.infer<typeof prChangesSchema>;
+
+/** A file of a project's repo at one commit: the `fileContent` read's input. */
+const fileAtCommitSchema = z.object({ projectId: z.string(), sha: z.string(), path: z.string() });
+export type FileAtCommit = z.infer<typeof fileAtCommitSchema>;
+
 const empty = z.object({});
 export const PROJECTS_TAG = "projects";
 export const repoTag = (repo: Repo) => `repo:${repo}`;
@@ -179,10 +190,9 @@ export const prReviewsContract = defineRpcContract({
    * no review run. Untagged: it runs `gh pr diff`, so it re-reads only on Refresh, never on a
    * thread event.
    */
-  changes: {
-    input: prRefSchema,
-    output: z.object({ headSha: z.string(), files: z.array(diffFileSchema) }),
-  },
+  changes: { input: prRefSchema, output: prChangesSchema },
+  /** One file's text at one commit of the project's repo, for the Changes tab's diff to expand its unchanged lines. Untagged, like `changes`. */
+  fileContent: { input: fileAtCommitSchema, output: z.object({ content: z.string() }) },
   selectProject: { input: z.object({ projectId: z.string() }), output: empty },
   startReview: { input: prRefSchema, output: z.object({ threadId: z.string() }) },
   cancelReview: { input: prRefSchema, output: empty },

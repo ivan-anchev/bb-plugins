@@ -33,15 +33,18 @@ remembered project that read **Guide ready**, and no badge at zero.
 
 ## The page
 
-Clicking a row opens that PR's page. Its header shows the title over
-`#number`, the author's GitHub avatar and login, and `base-branch ← head-branch`;
-the files and lines; and icon buttons, each named by its tooltip:
+Clicking a row opens that PR's page. Its header shows the PR's state as an
+icon before the title (green Open, grey Draft, purple Merged, red Closed; hover
+it for the name), the title over `#number`, the author's GitHub avatar and
+login, and `base-branch ← head-branch`; and icon buttons, each named by its
+tooltip:
 **Review chat** (opens the review thread's chat beside the page; shown once a
 review has started, see "Review chat" below) and **Open on GitHub** (opens the
 PR on github.com).
 
 Under the header sit three tabs, **Summary**, **Changes** and **Guide**; a PR
-opens on Summary. The header and the tabs stay put, and each tab scrolls on its
+opens on Summary. The Changes tab carries the PR's lines added and removed,
+`Changes +A −D`, as GitHub counts them. The header and the tabs stay put, and each tab scrolls on its
 own. Switching tabs keeps the guide where you left it, on the same step and
 scroll position, and Changes on the same file, scroll position and open
 folders. With focus on a tab, ← and → (and Home and End) move between the tabs.
@@ -80,7 +83,10 @@ tab is opened, not when the page opens.
   the arrow keys and press Enter or Space, to show its diff.
 - **The diff**: the selected file's path over its diff in bb's own diff view.
   A binary file, a file renamed without changes, or a file with no changed
-  lines shows a sentence saying so instead.
+  lines shows a sentence saying so instead. Once the file's text at the PR's
+  head has loaded (`gh api`, for a modified or renamed file of up to 1 MB),
+  clicking "N unmodified lines" between hunks shows those lines; until then,
+  or when that read fails, the diff shows as the patch draws it.
 - **The header**: "N files, +A −D" (hover or focus it for the lines by kind:
   code, tests, mocks, generated files, docs), then four icon buttons:
   - **Search filenames** opens a path filter: comma-separated plain text or
@@ -305,9 +311,9 @@ here. A blank field sends nothing.
 ## Refresh and errors
 
 The **Refresh** button in the page's title bar re-reads the projects, the
-pull request list, the open PR, its diff once the Changes tab has read it, and
-its guide. Clicking the PR that is already open does the same for that PR, its
-diff, its guide and the list. When a read fails, its error shows above
+pull request list, the open PR, its diff once the Changes tab has read it, its
+guide, and the selected file's text. Clicking the PR that is already open does
+the same as Refresh. When a read fails, its error shows above
 whatever was already on screen, and the old list stays. Typical errors:
 
 - "PR Reviews needs the GitHub CLI": `gh` is not installed or not on the

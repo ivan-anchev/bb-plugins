@@ -7,7 +7,9 @@
 // open when it arrives. Until then the panel shows the read's state in one region, and focus there
 // moves to the diff pane that replaces it.
 import { useMemo, type ReactNode } from "react";
+import type { PrChanges } from "../../contract.ts";
 import type { DiffFile } from "../../diff/diff-schema.ts";
+import type { PrTarget } from "../queries.ts";
 import { Notice } from "../ui/notice.tsx";
 import { useRememberedState } from "../use-remembered-state.ts";
 import { changeSummaryOf } from "./change-stats.ts";
@@ -20,19 +22,20 @@ import { changesTreeOf } from "./tree/tree-input.ts";
 import { TreeView, useTreeModel } from "./tree/tree-view.tsx";
 import { useChangesControls } from "./use-changes-controls.ts";
 
-/** `files`: null until the diff is first read. `loading`: that first read is running. `readError`:
+/** `changes`: null until the diff is first read. `loading`: that first read is running. `readError`:
  *  a failed read, shown above the files it leaves in place. */
-type ChangesPanelProps = { memoryKey: string; files: readonly DiffFile[] | null; loading: boolean; readError: ReactNode };
+type ChangesPanelProps = { target: PrTarget; changes: PrChanges | null; loading: boolean; readError: ReactNode };
 
 const NO_FILES: readonly DiffFile[] = [];
 
 const rememberedSelections = new Map<string, string | null>();
 
-export function ChangesPanel({ memoryKey, files, loading, readError }: ChangesPanelProps) {
+export function ChangesPanel({ target, changes, loading, readError }: ChangesPanelProps) {
+  const memoryKey = `${target.projectId}/${target.number}`;
   const controls = useChangesControls(memoryKey);
   const pathQuery = controls.pathQuery.value;
   const filters = controls.filters.value;
-  const changedFiles = files ?? NO_FILES;
+  const changedFiles = changes?.files ?? NO_FILES;
   const shownFiles = useMemo(() => filterChangedFiles(changedFiles, pathQuery, filters), [changedFiles, pathQuery, filters]);
   const tree = useMemo(() => changesTreeOf(shownFiles), [shownFiles]);
   const [selectedPath, setSelectedPath] = useRememberedState(rememberedSelections, memoryKey, null);
@@ -47,14 +50,14 @@ export function ChangesPanel({ memoryKey, files, loading, readError }: ChangesPa
   });
   const focusHandOff = useFocusHandOff();
   const summary =
-    files === null
+    changes === null
       ? loading ? "loading" : null
-      : changeSummaryOf({ files, shown: shownFiles, filtering: isFiltering(pathQuery, filters) });
+      : changeSummaryOf({ files: changes.files, shown: shownFiles, filtering: isFiltering(pathQuery, filters) });
 
   return (
     <>
       <ChangesHeader controls={controls} summary={summary} extensionCounts={extensionCountsOf(changedFiles)} kindCounts={kindCountsOf(changedFiles)} model={model} />
-      {files === null ? (
+      {changes === null ? (
         <ReadState ref={focusHandOff.from}>
           {readError}
           {loading && <Notice>Loading changes…</Notice>}
@@ -65,11 +68,11 @@ export function ChangesPanel({ memoryKey, files, loading, readError }: ChangesPa
           <SplitView
             tree={
               <>
-                {shownFiles.length === 0 && <Notice>{files.length === 0 ? "No changes." : "No files match the filter."}</Notice>}
+                {shownFiles.length === 0 && <Notice>{changes.files.length === 0 ? "No changes." : "No files match the filter."}</Notice>}
                 <TreeView model={model} label="Changed files" onSelectFile={setSelectedPath} />
               </>
             }
-            viewer={<DiffViewer ref={focusHandOff.to} file={shownFile ?? null} settings={controls.settings.value} />}
+            viewer={<DiffViewer ref={focusHandOff.to} file={shownFile ?? null} projectId={target.projectId} headSha={changes.headSha} settings={controls.settings.value} />}
           />
         </>
       )}

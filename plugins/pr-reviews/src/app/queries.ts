@@ -1,7 +1,7 @@
 // Typed hooks over the contract. The same method and input share one cache entry, so the
 // sidebar, the page and the Refresh button read, and refetch, the same data.
 import { experimental_useRpcMutation, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
-import { prReviewsContract as contract } from "../contract.ts";
+import { prReviewsContract as contract, type FileAtCommit } from "../contract.ts";
 
 export const useProjects = () => experimental_useRpcQuery({ contract, method: "projects", input: {} });
 
@@ -20,17 +20,11 @@ export type GuideTarget = PrTarget & { headSha: string };
 
 export const useGuide = (target: GuideTarget) => experimental_useRpcQuery({ contract, method: "guide", input: target });
 
-/**
- * The PR's whole diff. `enabled` stays false until the Changes tab is first shown, since the read
- * runs `gh pr diff`; a disabled hook still shares the read's cache entry and its refetch.
- */
+/** The PR's whole diff. `enabled` stays false until the Changes tab is first shown, since the read runs `gh pr diff`. */
 export const useChanges = (target: PrTarget, enabled: boolean) => experimental_useRpcQuery({ contract, method: "changes", input: target, enabled });
 
-/** The PR diff's read for Refresh and reselection to re-read: only once it has settled, as data or a failure, so only once the Changes tab asked for it. */
-export function useChangesToReread(target: PrTarget) {
-  const changes = useChanges(target, false);
-  return changes.data !== undefined || changes.error !== null ? [changes] : [];
-}
+/** One file's text at a commit. `enabled`: false reads nothing, for a file whose diff can't expand. */
+export const useFileContent = (input: FileAtCommit, enabled: boolean) => experimental_useRpcQuery({ contract, method: "fileContent", input, enabled });
 
 export const useSelectProject = () => experimental_useRpcMutation({ contract, method: "selectProject" });
 

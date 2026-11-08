@@ -1,8 +1,8 @@
 // experimental_sidebar: the project picker, then the chosen project's open PRs.
 import { useEffect } from "react";
-import { useBbNavigate, type PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
-import { guideHeadShaOf, type GitHubProject, type PrRow } from "../../contract.ts";
-import { useChangesToReread, useGuide, useProjects, usePullRequest, usePullRequests, useSelectProject, type GuideTarget } from "../queries.ts";
+import { experimental_useRpcRefresh, useBbNavigate, type PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
+import type { GitHubProject } from "../../contract.ts";
+import { useProjects, usePullRequests, useSelectProject } from "../queries.ts";
 import { PANEL_PATH, parseRoute, routeSubPath, type Route } from "../routes.ts";
 import { Notice } from "../ui/notice.tsx";
 import { ReadError } from "../ui/read-error.tsx";
@@ -63,6 +63,9 @@ function PrList({ projectId, openNumber }: { projectId: string; openNumber: numb
   const navigate = useBbNavigate();
   const openPr = (number: number) => navigate.toPluginPanel(PANEL_PATH, { subPath: routeSubPath({ kind: "pr", projectId, number }) });
   const rows = pulls.data?.rows;
+  // Clicking the open PR again re-reads it, as Refresh does, so a failed read is retried
+  // (REVIEW.md); navigating to the route already shown would not.
+  const { refresh } = experimental_useRpcRefresh();
 
   return (
     <>
@@ -73,7 +76,7 @@ function PrList({ projectId, openNumber }: { projectId: string; openNumber: numb
         {rows?.map((row) => (
           <li key={row.number}>
             {row.number === openNumber ? (
-              <OpenPrRow projectId={projectId} row={row} refetchList={pulls.refetch} />
+              <PrRowButton row={row} current onClick={refresh} />
             ) : (
               <PrRowButton row={row} current={false} onClick={() => openPr(row.number)} />
             )}
@@ -82,28 +85,6 @@ function PrList({ projectId, openNumber }: { projectId: string; openNumber: numb
       </ul>
     </>
   );
-}
-
-// Clicking the open PR again re-reads it, its diff once read, its guide and the list, so a failed
-// read is retried (REVIEW.md); navigating to the route already shown would not. Same inputs as the
-// page's reads, so this refetches the page's cache entries.
-type OpenPrRowProps = { projectId: string; row: PrRow; refetchList(): Promise<void> };
-
-function OpenPrRow({ projectId, row, refetchList }: OpenPrRowProps) {
-  const pull = usePullRequest(projectId, row.number);
-  const headSha = pull.data === undefined ? null : guideHeadShaOf(pull.data.review);
-  const changes = useChangesToReread({ projectId, number: row.number });
-  const refetch = [pull.refetch, refetchList, ...changes.map((read) => read.refetch)];
-  return headSha === null ? (
-    <PrRowButton row={row} current onClick={() => void Promise.all(refetch.map((read) => read()))} />
-  ) : (
-    <OpenGuidedPrRow row={row} refetch={refetch} guide={{ projectId, number: row.number, headSha }} />
-  );
-}
-
-function OpenGuidedPrRow({ row, refetch, guide }: { row: PrRow; refetch: (() => Promise<void>)[]; guide: GuideTarget }) {
-  const read = useGuide(guide);
-  return <PrRowButton row={row} current onClick={() => void Promise.all([...refetch, read.refetch].map((reread) => reread()))} />;
 }
 
 function useChooseProject() {

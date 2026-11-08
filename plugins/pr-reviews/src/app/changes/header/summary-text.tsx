@@ -5,13 +5,8 @@
 import type { LineCounts } from "../../../diff/diff-schema.ts";
 import { CHANGE_KIND_LABELS } from "../../../guide/change-kind.ts";
 import { Tooltip } from "../../ui/tooltip.tsx";
-import { lineStatPartsOf, type ChangeSummary, type KindBreakdown, type StatPart } from "../change-stats.ts";
-
-const TONE_CLASSES: Record<StatPart["tone"], string> = {
-  added: "text-diff-added",
-  removed: "text-diff-removed",
-  muted: "text-muted-foreground",
-};
+import { lineStatPartsOf, type ChangeSummary, type KindBreakdown } from "../change-stats.ts";
+import { StatText, TONE_CLASSES } from "../stat-text.tsx";
 
 const SUMMARY_CLASS = "min-w-0 max-w-full truncate text-xs text-muted-foreground";
 
@@ -40,19 +35,6 @@ export function SummaryText({ summary }: { summary: SummaryState }) {
         </span>
       )}
     </Tooltip>
-  );
-}
-
-function StatText({ parts }: { parts: readonly StatPart[] }) {
-  return (
-    <span className="whitespace-nowrap">
-      {parts.map((part, index) => (
-        <span key={part.tone}>
-          {index === 0 ? null : " "}
-          <span className={TONE_CLASSES[part.tone]}>{part.text}</span>
-        </span>
-      ))}
-    </span>
   );
 }
 

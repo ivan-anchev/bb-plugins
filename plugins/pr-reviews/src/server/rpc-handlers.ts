@@ -5,7 +5,7 @@ import { experimental_PluginRpcRefusal as Refusal, type BbPluginApi, type Experi
 import { z } from "zod";
 import { PROJECTS_TAG, prReviewsContract, type GitHubProject, type UnreadableProject } from "../contract.ts";
 import { parsePrDiff } from "../diff/parse-pr-diff.ts";
-import { listOpenPrs, snapshotPrDiff, type PrDiffSnapshot } from "../github/gh.ts";
+import { listOpenPrs, readFileAt, snapshotPrDiff, type PrDiffSnapshot } from "../github/gh.ts";
 import { projectRepo, type ProjectRepo } from "../github/project-repo.ts";
 import type { Repo } from "../github/repo.ts";
 import type { ReviewReader } from "./review-reader.ts";
@@ -81,6 +81,10 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
 
     async changes({ projectId, number }) {
       return changesOf(await snapshotPrDiff(await repoOf(projectId), number));
+    },
+
+    async fileContent({ projectId, sha, path }) {
+      return { content: await readFileAt(await repoOf(projectId), sha, path) };
     },
 
     async selectProject({ projectId }) {

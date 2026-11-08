@@ -9,14 +9,16 @@ through the change step by step. Nothing is ever posted to GitHub.
   git remote is on github.com, and remembers the one you chose last.
 - **Open pull requests**: each row shows the PR's number, title, author, when
   it was last updated, and its review state in words.
-- **A page per pull request**: its title, author, `base ← branch`, files and
-  lines, and Review chat and GitHub icon buttons, above three tabs:
-  **Summary**, the author's own description beside the PR's reviewers, checks
-  and labels; **Changes**, the PR's whole diff; and **Guide**, which keeps its
+- **A page per pull request**: an icon for whether it is open, a draft,
+  merged or closed, its title, author, `base ← branch`, and Review chat and
+  GitHub icon buttons, above three tabs: **Summary**, the author's own
+  description beside the PR's reviewers, checks and labels; **Changes**, the
+  PR's whole diff, with its `+N −M` on the tab; and **Guide**, which keeps its
   step while you switch and marks a ready guide with a dot.
 - **Changes**: every changed file in a tree with its `+N −M`, beside the
   selected file's diff in bb's own diff view, laid out like Code Explorer's
-  Changes view. Filter by path (globs, `!` to exclude), by kind, extension or
+  Changes view. Click "N unmodified lines" to show the lines between hunks.
+  Filter by path (globs, `!` to exclude), by kind, extension or
   deleted files; switch between Unified and Split, wrap lines, and collapse or
   expand every folder. It needs no guide, and reads the diff only once you
   open the tab.

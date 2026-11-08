@@ -38,6 +38,13 @@ export function lineStatPartsOf({ added, removed }: LineCounts): StatPart[] {
   return [addedPart(added), removedPart(removed)];
 }
 
+/** `+A −D` inside a label, such as the Changes tab's: a zero count is not a signal, so it is muted. */
+export function labelStatPartsOf({ added, removed }: LineCounts): StatPart[] {
+  return [mutedIfZero(added, addedPart(added)), mutedIfZero(removed, removedPart(removed))];
+}
+
+const mutedIfZero = (count: number, part: StatPart): StatPart => (count === 0 ? { ...part, tone: "muted" } : part);
+
 export function changeSummaryOf(changes: SummarizedChanges): ChangeSummary {
   return { ...headlineOf(changes, totalCountsOf(changes.files)), breakdown: kindBreakdownOf(changes.files) };
 }

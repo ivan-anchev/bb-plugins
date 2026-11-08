@@ -13,8 +13,8 @@ export function ChangesTab({ target, shown }: ChangesTabProps) {
   const changes = useChanges(target, useShownOnce(shown));
   return (
     <ChangesPanel
-      memoryKey={`${target.projectId}/${target.number}`}
-      files={changes.data?.files ?? null}
+      target={target}
+      changes={changes.data ?? null}
       loading={changes.isLoading}
       readError={<ReadError read={changes} what="the changes" />}
     />

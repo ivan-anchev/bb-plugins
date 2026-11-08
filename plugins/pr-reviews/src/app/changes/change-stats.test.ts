@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { DiffFile, LineCounts } from "../../diff/diff-schema.ts";
-import { changeSummaryOf, fileStatPartsOf, lineStatPartsOf, plainTextOf } from "./change-stats.ts";
+import { changeSummaryOf, fileStatPartsOf, labelStatPartsOf, lineStatPartsOf, plainTextOf } from "./change-stats.ts";
 import { diffFile } from "./diff-file.fixture.ts";
 import { NO_FILTERS, filterChangedFiles, isFiltering, withExtensionShown, withKindsShown, type FileFilters } from "./file-filter.ts";
 
@@ -29,6 +29,17 @@ describe("fileStatPartsOf", () => {
   test("groups thousands like bb", () => {
     assert.deepEqual(lineStatPartsOf({ added: 1261, removed: 3 }), [
       { text: "+1,261", tone: "added" },
+      { text: "−3", tone: "removed" },
+    ]);
+  });
+
+  test("inside a label, a zero count is muted", () => {
+    assert.deepEqual(labelStatPartsOf({ added: 1261, removed: 0 }), [
+      { text: "+1,261", tone: "added" },
+      { text: "−0", tone: "muted" },
+    ]);
+    assert.deepEqual(labelStatPartsOf({ added: 0, removed: 3 }), [
+      { text: "+0", tone: "muted" },
       { text: "−3", tone: "removed" },
     ]);
   });
