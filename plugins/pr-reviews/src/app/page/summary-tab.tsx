@@ -2,13 +2,15 @@
 // empty for now. Below 600px the side panel drops away and the description takes the width. It
 // scrolls with its tab panel.
 import type { PrDetail } from "../../contract.ts";
-import { PROSE } from "../guide/page-text.tsx";
+import { PROSE_TYPE } from "../guide/page-text.tsx";
 import { Prose } from "../ui/prose.tsx";
 
+// The layout tops out at the Guide overview's width (880px) plus the gap and the side panel, so the
+// description runs as wide as the overview's text and the side panel stays beside it on a wide panel.
 export function SummaryTab({ pr }: { pr: PrDetail }) {
   return (
     <div className="@container">
-      <div className="grid grid-cols-[minmax(0,1fr)_220px] items-start gap-9 px-7 pt-6 pb-16 @max-[600px]:grid-cols-[minmax(0,1fr)]">
+      <div className="grid max-w-[1136px] grid-cols-[minmax(0,1fr)_220px] items-start gap-9 px-7 pt-6 pb-16 @max-[600px]:grid-cols-[minmax(0,1fr)]">
         <Description author={pr.author} body={pr.body} />
         <aside aria-label="Pull request details" className="sticky top-6 @max-[600px]:hidden" />
       </div>
@@ -21,7 +23,7 @@ function Description({ author, body }: { author: string; body: string }) {
   return (
     <section aria-label="Description" className={CONTAIN_BODY}>
       <p className="text-xs text-subtle-foreground">{author} wrote</p>
-      <Prose text={body} className={PROSE} />
+      <Prose text={body} className={PROSE_TYPE} />
     </section>
   );
 }
