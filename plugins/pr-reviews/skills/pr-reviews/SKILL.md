@@ -58,10 +58,10 @@ a side panel shows the PR's details as GitHub has them, read only:
   the login or team name. Someone asked again after an earlier review shows as
   Awaiting review; dismissed and draft reviews are left out.
 - **Checks**: one status beside the heading, `N failing` when any check fails,
-  else `N running` when any is still pending, else `N passing`; then the failing
-  and pending checks by name. The passing
-  ones sit behind **Show N passing**. Each check with a details page opens it
-  outside bb; one without is plain text.
+  else `N running` when any is still pending, else `N passing`; then the checks
+  by name, failing first, then pending, then passing. The first three always
+  show; any more sit behind **Show N more**. Each check with a details page
+  opens it outside bb; one without is plain text.
 - **Labels**: one chip per label, with a dot in the label's GitHub color.
 
 A section with nothing in it is left out, and a PR with no reviewers, checks or

@@ -37,9 +37,9 @@ export type SidePanelFocus = {
   toggle: RefObject<HTMLButtonElement | null>;
 };
 
-// A refresh can remove the control holding focus: a check moving into the collapsed passing list,
-// the Checks section when no check is left, the whole panel when no section is. Focus then goes to
-// the passing list's button, or to the Summary tab's panel when there is none, never to the page.
+// A refresh can remove the control holding focus: a check moving past the first three, the Checks
+// section when no check is left, the whole panel when no section is. Focus then goes to the Checks
+// disclosure's button, or to the Summary tab's panel when there is none, never to the page.
 // Called by the panel's parent: it must outlive the panel to see it removed.
 export function useSidePanelFocus(): SidePanelFocus {
   const tab = useRef<HTMLDivElement>(null);
