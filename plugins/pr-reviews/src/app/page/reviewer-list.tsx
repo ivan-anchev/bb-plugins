@@ -1,5 +1,6 @@
-// The side panel's reviewers: avatar, name, and a glyph for where each stands, named for screen
-// readers. A team shows a team glyph, and is always awaiting review: its members review as users.
+// The side panel's reviewers: a glyph for where each stands, in the check rows' icon column, then
+// avatar and name, with the stand named for screen readers after the name. A team shows a team
+// glyph, and is always awaiting review: its members review as users.
 import type { Reviewer, ReviewerStatus } from "../../contract.ts";
 import { Avatar } from "../ui/avatar.tsx";
 import { StatusGlyph, type StatusGlyphName } from "./status-glyph.tsx";
@@ -25,12 +26,10 @@ function ReviewerRow({ reviewer }: { reviewer: Reviewer }) {
   const status = STATUS_LOOKS[statusOf(reviewer)];
   return (
     <li className="flex min-h-[26px] items-center gap-2 text-[12.5px]">
+      <StatusGlyph name={status.glyph} />
       {reviewer.kind === "user" ? <Avatar login={reviewer.login} size={20} /> : <TeamGlyph />}
       <span className="min-w-0 truncate">{nameOf(reviewer)}</span>
-      <span className="ml-auto inline-flex shrink-0">
-        <StatusGlyph name={status.glyph} />
-        <span className="sr-only">{status.word}</span>
-      </span>
+      <span className="sr-only">, {status.word}</span>
     </li>
   );
 }

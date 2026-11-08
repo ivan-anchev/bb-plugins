@@ -2,7 +2,7 @@
 // split by hairlines. A section with nothing in it is left out; with none, so is the panel.
 import { useId, useLayoutEffect, useRef, type FocusEvent, type ReactNode, type RefObject } from "react";
 import type { Label, PrDetail } from "../../contract.ts";
-import { CheckList } from "./check-list.tsx";
+import { CheckList, ChecksStatus } from "./check-list.tsx";
 import { ReviewerList } from "./reviewer-list.tsx";
 
 export const hasSidePanel = (pr: PrDetail): boolean => pr.reviewers.length > 0 || pr.checks.length > 0 || pr.labels.length > 0;
@@ -17,7 +17,7 @@ export function SidePanel({ pr, focus }: { pr: PrDetail; focus: SidePanelFocus }
         </PanelSection>
       )}
       {pr.checks.length > 0 && (
-        <PanelSection title="Checks">
+        <PanelSection title="Checks" status={<ChecksStatus checks={pr.checks} />}>
           <CheckList checks={pr.checks} toggle={focus.toggle} />
         </PanelSection>
       )}
@@ -68,14 +68,18 @@ export function useSidePanelFocus(): SidePanelFocus {
   };
 }
 
-// Each section after the first leads with a hairline.
-function PanelSection({ title, children }: { title: string; children: ReactNode }) {
+// Each section after the first leads with a hairline, quieter than bb's `border`: it only groups.
+// A section's status, when it has one, sits at the end of its heading's line.
+function PanelSection({ title, status, children }: { title: string; status?: ReactNode; children: ReactNode }) {
   const headingId = useId();
   return (
-    <section aria-labelledby={headingId} className="border-t border-border py-3.5 first:border-t-0 first:pt-0">
-      <h2 id={headingId} className="mb-2 text-xs font-medium text-muted-foreground">
-        {title}
-      </h2>
+    <section aria-labelledby={headingId} className="border-t border-border/60 py-3.5 first:border-t-0 first:pt-0">
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <h2 id={headingId} className="text-xs font-medium text-muted-foreground">
+          {title}
+        </h2>
+        {status}
+      </div>
       {children}
     </section>
   );

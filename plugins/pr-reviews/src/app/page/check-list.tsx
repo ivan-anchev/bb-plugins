@@ -1,9 +1,9 @@
-// The side panel's checks: the count line, then the failing and pending checks, then the passing
-// ones behind a disclosure. Each check with a details page links to it, opened outside the app the
-// way the header's GitHub button is; one without is plain text.
+// The side panel's checks: the failing and pending checks, then the passing ones behind a
+// disclosure; and the one status the Checks heading shows. Each check with a details page links to
+// it, opened outside the app the way the header's GitHub button is; one without is plain text.
 import { useId, useState, type ReactNode, type RefObject } from "react";
 import { UrlLink } from "@get-bb/plugin-sdk/app";
-import { summarizeChecks, type Check, type CheckOutcome, type ChecksSummary } from "../../contract.ts";
+import { leadingOutcome, summarizeChecks, type Check, type CheckOutcome } from "../../contract.ts";
 import { Button } from "../ui/button.tsx";
 import { CheckOutcomeIcon } from "./check-outcome-icon.tsx";
 
@@ -14,7 +14,6 @@ export function CheckList({ checks, toggle }: { checks: Check[]; toggle: RefObje
   const passing = withOutcome(checks, "passing");
   return (
     <>
-      <CountLine summary={summarizeChecks(checks)} />
       {urgent.length > 0 && <CheckRows checks={urgent} />}
       {passing.length > 0 && <PassingDisclosure passing={passing} toggle={toggle} />}
     </>
@@ -23,17 +22,15 @@ export function CheckList({ checks, toggle }: { checks: Check[]; toggle: RefObje
 
 const withOutcome = (checks: Check[], outcome: CheckOutcome) => checks.filter((check) => check.outcome === outcome);
 
-// `N failing · N pending · N passing`: a zero failing or pending count is left out, passing never.
-function CountLine({ summary: { failing, pending, passing } }: { summary: ChecksSummary }) {
+// A pending check is one still running, or queued to run.
+const STATUS_WORDS = { failing: "failing", pending: "running", passing: "passing" } as const satisfies Record<CheckOutcome, string>;
+
+/** `N failing`, else `N running`, else `N passing`: only failing is coloured. */
+export function ChecksStatus({ checks }: { checks: Check[] }) {
+  const { outcome, count } = leadingOutcome(summarizeChecks(checks));
   return (
-    <p className="mb-1 text-xs text-muted-foreground tabular-nums">
-      {failing > 0 && (
-        <>
-          <span className="text-destructive-text">{failing} failing</span> ·{" "}
-        </>
-      )}
-      {pending > 0 && `${pending} pending · `}
-      {passing} passing
+    <p className={`text-xs tabular-nums ${outcome === "failing" ? "text-destructive-text" : "text-muted-foreground"}`}>
+      {count} {STATUS_WORDS[outcome]}
     </p>
   );
 }

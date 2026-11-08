@@ -41,6 +41,12 @@ export function summarizeChecks(checks: Check[]): ChecksSummary {
   return summary;
 }
 
+/** The one outcome that sums up a PR's checks, and how many have it: failing, else pending, else passing. */
+export function leadingOutcome(summary: ChecksSummary): { outcome: CheckOutcome; count: number } {
+  const outcome = summary.failing > 0 ? "failing" : summary.pending > 0 ? "pending" : "passing";
+  return { outcome, count: summary[outcome] };
+}
+
 /** Where a reviewer stands: their latest review, or awaiting one they were asked for. */
 const reviewerStatusSchema = z.enum(["approved", "changes-requested", "commented", "awaiting"]);
 export type ReviewerStatus = z.infer<typeof reviewerStatusSchema>;

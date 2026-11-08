@@ -1,6 +1,6 @@
-// The glyphs for where a check or a review stands, shared by the header's checks verdict, the check
-// rows and the reviewer rows, so an approval and a passing check look alike. Done is a solid disc
-// with its mark cut out; still to come is yellow: a half disc for a review, an arc for a check.
+// The glyphs for where a check or a review stands, shared by the check rows and the reviewer rows,
+// so an approval and a passing check look alike. Done is a solid disc with its mark cut out, and a
+// comment a solid speech bubble; still to come is yellow: a half disc for a review, an arc for a check.
 // why our own SVG: bb's icon set has only outline circles. Each glyph is 14px like the icons
 // beside it, and decorative: the row's text names the status.
 import type { ReactNode } from "react";
@@ -51,16 +51,10 @@ const GLYPHS = {
       </>
     ),
   },
+  // A rounded box as wide as the disc, with its tail at the lower left.
   commented: {
     color: "text-muted-foreground",
-    shape: (
-      <>
-        {DISC}
-        {[5, 8, 11].map((x) => (
-          <circle key={x} cx={x} cy={8} r={1} fill="var(--background)" />
-        ))}
-      </>
-    ),
+    shape: <path d="M4.5 1.5h7A3.5 3.5 0 0 1 15 5v3.5a3.5 3.5 0 0 1-3.5 3.5h-3l-4 3v-3A3.5 3.5 0 0 1 1 8.5V5a3.5 3.5 0 0 1 3.5-3.5z" fill="currentColor" />,
   },
   awaiting: {
     color: ATTENTION,

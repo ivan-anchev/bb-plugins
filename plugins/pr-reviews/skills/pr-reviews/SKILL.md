@@ -35,7 +35,7 @@ remembered project that read **Guide ready**, and no badge at zero.
 
 Clicking a row opens that PR's page. Its header shows the title over
 `#number`, the author's GitHub avatar and login, and `base-branch ← head-branch`;
-the files, lines and CI checks; and icon buttons, each named by its tooltip:
+the files and lines; and icon buttons, each named by its tooltip:
 **Review chat** (opens the review thread's chat beside the page; shown once a
 review has started, see "Review chat" below) and **Open on GitHub** (opens the
 PR on github.com).
@@ -52,13 +52,14 @@ a side panel shows the PR's details as GitHub has them, read only:
 
 - **Reviewers**: everyone asked for a review that is still outstanding (a team
   shows as the team), and everyone whose latest review approved, requested
-  changes or commented. Each row has the GitHub avatar (the login's first letter
-  when it fails to load), the login or team name, and a glyph for where they
-  stand: Approved, Changes requested, Commented or Awaiting review, which screen
-  readers hear by name. Someone asked again after an earlier review shows as
+  changes or commented. Each row has a glyph for where they stand (Approved,
+  Changes requested, Commented or Awaiting review, which screen readers hear by
+  name), the GitHub avatar (the login's first letter when it fails to load), and
+  the login or team name. Someone asked again after an earlier review shows as
   Awaiting review; dismissed and draft reviews are left out.
-- **Checks**: `N failing · N pending · N passing` (a zero failing or pending
-  count is left out), then the failing and pending checks by name. The passing
+- **Checks**: one status beside the heading, `N failing` when any check fails,
+  else `N running` when any is still pending, else `N passing`; then the failing
+  and pending checks by name. The passing
   ones sit behind **Show N passing**. Each check with a details page opens it
   outside bb; one without is plain text.
 - **Labels**: one chip per label, with a dot in the label's GitHub color.
