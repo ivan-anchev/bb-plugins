@@ -1,7 +1,7 @@
 // Whether the configured key can run sandboxes: the settings first, then boat's view of the
 // key's account and wallet.
-import { PASTE_KEY_STEP, resolveSettings, type BoatSettings } from "../settings.ts";
-import { problem, type Problem } from "../problem.ts";
+import { PASTE_KEY_STEP, resolveSettings, type BoatSettings, type ResolvedSettings } from "../settings.ts";
+import { describeProblems, problem, type Problem } from "../problem.ts";
 import { BoatApiError, createBoatClient, type BoatClient } from "./client.ts";
 import type { Account, Limits } from "./wire.ts";
 
@@ -12,31 +12,43 @@ export interface BoatFacts {
 }
 
 export type Configuration =
-  | { status: "available"; facts: BoatFacts }
+  | { status: "available"; facts: BoatFacts; client: BoatClient; settings: Extract<ResolvedSettings, { ok: true }> }
   | { status: "setup-required"; facts: null; problems: readonly [Problem] }
   | { status: "unavailable"; facts: BoatFacts | null; problems: readonly [Problem, ...Problem[]] };
 
 export interface BoatAccess {
   /** Reads the settings and, with a key, boat's /me and /limits. Never throws. */
   configuration(signal?: AbortSignal): Promise<Configuration>;
+  /** The available configuration, for work on boat; throws the problems' text otherwise. */
+  session(signal?: AbortSignal): Promise<BoatSession>;
 }
 
+export type BoatSession = Extract<Configuration, { status: "available" }>;
+
 export function createBoatAccess(settings: Pick<BoatSettings, "get">): BoatAccess {
+  async function configuration(signal?: AbortSignal): Promise<Configuration> {
+    const resolved = resolveSettings(await settings.get());
+    if (!resolved.ok) return { status: "setup-required", facts: null, problems: [resolved.problem] };
+
+    const client = createBoatClient(resolved.apiKey);
+    let facts: BoatFacts;
+    try {
+      facts = await readFacts(client, signal);
+    } catch (error) {
+      return { status: "unavailable", facts: null, problems: [unreadable(error)] };
+    }
+
+    const [first, ...rest] = refusals(facts);
+    if (first === undefined) return { status: "available", facts, client, settings: resolved };
+    return { status: "unavailable", facts, problems: [first, ...rest] };
+  }
+
   return {
-    async configuration(signal) {
-      const resolved = resolveSettings(await settings.get());
-      if (!resolved.ok) return { status: "setup-required", facts: null, problems: [resolved.problem] };
-
-      let facts: BoatFacts;
-      try {
-        facts = await readFacts(createBoatClient(resolved.apiKey), signal);
-      } catch (error) {
-        return { status: "unavailable", facts: null, problems: [unreadable(error)] };
-      }
-
-      const [first, ...rest] = refusals(facts);
-      if (first === undefined) return { status: "available", facts };
-      return { status: "unavailable", facts, problems: [first, ...rest] };
+    configuration,
+    async session(signal) {
+      const current = await configuration(signal);
+      if (current.status !== "available") throw new Error(describeProblems(current.problems));
+      return current;
     },
   };
 }

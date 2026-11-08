@@ -2,6 +2,7 @@ boat Sandbox gives bb threads their own cloud computer on boat.dev. A sandbox st
 
 ## What you get
 
+- **boat Sandbox in the new-thread environment picker.** A thread started there gets a new boat sandbox with the project cloned and `.bb-env-setup.sh` run, and the sandbox is deleted when bb removes the machine. From the CLI: `bb thread spawn --environment-provider boat-sandbox --machine-inputs '{"preset":"large"}' --prompt "…"`.
 - **A boat Sandbox section in Settings** for your boat API key, how long a sandbox may sit idle before it stops (15 minutes by default), and the default sandbox size.
 - **`bb boat status`**, which checks the key and shows the boat account, the wallet it bills, whether zero data retention is on, and how many sandbox starts are left in each window. Anything missing comes with the one step that fixes it.
 
@@ -9,4 +10,6 @@ boat Sandbox gives bb threads their own cloud computer on boat.dev. A sandbox st
 
 The plugin talks to boat's REST API with a key you make with `boat api-key create bb --preset ci`. bb stores the key as a secret file and never shows it again. The plugin refuses accounts with zero data retention, because a stop there deletes the sandbox, and keys that bill an organization wallet.
 
-This release sets up and checks the account; creating sandboxes for threads comes next.
+bb's enrollment secret travels to the sandbox as a file in a private directory, never as command text, so it never appears in boat's 90-day command history. Each sandbox carries labels that tie it to this bb server and thread, so an interrupted create picks up its sandbox instead of starting a second one.
+
+This release creates and deletes sandboxes; stopping idle sandboxes and resuming them on the same disk comes next.

@@ -15,3 +15,7 @@ export const problem = (message: string, step: string): Problem => ({
   message,
   fix: `${step}, then run \`${RELOAD}\`.`,
 });
+
+/** All problems as one paragraph, for bb's status line and provider messages. */
+export const describeProblems = (problems: readonly Problem[]): string =>
+  problems.map((problem) => `${problem.message} ${problem.fix}`).join(" ");
