@@ -69,6 +69,12 @@ export interface BoatClient {
   create(body: CreateSandboxBody, idempotencyKey: string, signal: AbortSignal): Promise<Sandbox>;
   /** Asynchronous on boat's side, but the sandbox is 404 at once. Throws a 404 BoatApiError when it is gone. */
   remove(id: SandboxId, signal: AbortSignal): Promise<void>;
+  /** Saves the disk, then powers off; returns while boat is still stopping. A repeat joins the pending stop. */
+  stop(id: SandboxId, signal: AbortSignal): Promise<void>;
+  /** Starts a stopped sandbox on the same disk; returns while it is still starting. */
+  resume(id: SandboxId, signal: AbortSignal): Promise<void>;
+  /** Moves the auto-stop deadline to now + `ttlSeconds`, and keeps that TTL for later resumes. */
+  setTtl(id: SandboxId, ttlSeconds: number, signal: AbortSignal): Promise<void>;
   /** Runs `command` in a login shell as `user`, streaming its output, and returns its exit code. */
   run(id: SandboxId, request: CommandRequest): Promise<{ exitCode: number }>;
   /** Writes `content` to `path`, mode 0644 whatever the directory's umask. */
@@ -108,6 +114,15 @@ export function createBoatClient(apiKey: string): BoatClient {
     async remove(id, signal) {
       await call(`/sandboxes/${id}`, { method: "DELETE", headers: { "x-ascii-confirm-delete": id }, signal });
     },
+    async stop(id, signal) {
+      await call(`/sandboxes/${id}/stop`, { method: "POST", body: {}, signal });
+    },
+    async resume(id, signal) {
+      await call(`/sandboxes/${id}/resume`, { method: "POST", body: {}, signal });
+    },
+    async setTtl(id, ttlSeconds, signal) {
+      await call(`/sandboxes/${id}`, { method: "PATCH", body: { ttlSeconds }, signal });
+    },
     run: (id, { command, timeoutSeconds, signal, onOutput }) =>
       retryWhileNotRun(signal, async () => {
         const response = await call(`/sandboxes/${id}/commands`, {
@@ -127,7 +142,7 @@ export function createBoatClient(apiKey: string): BoatClient {
 export const isNotFound = (error: unknown): boolean => error instanceof BoatApiError && error.status === 404;
 
 interface RequestOptions {
-  method?: "GET" | "POST" | "PUT" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   headers?: Record<string, string>;
   signal?: AbortSignal;

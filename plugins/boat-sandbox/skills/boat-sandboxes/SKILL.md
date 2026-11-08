@@ -1,13 +1,13 @@
 ---
 name: boat-sandboxes
-description: The boat Sandbox plugin, which starts bb threads on new boat.dev sandboxes (`bb thread spawn --environment-provider boat-sandbox --machine-inputs '{"preset":"small"}'`, or boat Sandbox in the new-thread picker) and deletes them with `bb machine remove`. Covers its settings (API key, Stop after idle, Default size), presets, start limits, failed creates, and `bb boat status`. Use when a user sets up or uses boat.dev sandboxes for bb, or asks why one failed.
+description: The boat Sandbox plugin, which starts bb threads on new boat.dev sandboxes (`bb thread spawn --environment-provider boat-sandbox --machine-inputs '{"preset":"small"}'`, or boat Sandbox in the new-thread picker), stops them when idle, resumes them on a follow-up, and deletes them with `bb machine remove`. Covers its settings (API key, Stop after idle, Default size), presets, start limits, idle stops and resumes, the auto-stop lease, failed creates, and `bb boat status`. Use when a user sets up or uses boat.dev sandboxes for bb, or asks why one stopped, resumed or failed.
 ---
 
 # boat Sandbox
 
-boat Sandbox runs bb threads on boat.dev sandboxes. This version creates a
-sandbox for a thread and deletes it when bb removes the machine; it does not
-stop idle sandboxes or resume them yet.
+boat Sandbox runs bb threads on boat.dev sandboxes. It creates a sandbox for a
+thread, stops it when it has been idle, resumes the same sandbox when the
+thread gets a follow-up, and deletes it when bb removes the machine.
 
 ## Start a thread on a sandbox
 
@@ -73,8 +73,54 @@ stored output, and the sandbox's journal and `/var/log`.
 
 Every sandbox is named `bb <thread-id>` and labelled `bb.boat/owner` (a random
 id per bb server), `bb.boat/role=machine` and `bb.boat/key` (the thread id).
-It is created with a 2-hour auto-stop. This version does not extend it yet, so
-boat stops every sandbox 2 hours after its create, even mid-turn.
+
+## Idle stops and resumes
+
+Once a minute the plugin checks every boat machine. A machine is **busy**
+while any thread on it is `pending`, `starting`, `active` or `stopping`, so a
+turn that runs a long, silent command (a slow build or test run) is never
+stopped. It is **idle** from the later of: the end of its last turn, the
+last minute it was seen busy, the last input in one of its terminals, and its
+create or resume.
+
+After **Stop after idle** minutes idle, the plugin asks bb to suspend the
+machine. It looks again just before asking, so a follow-up or terminal input
+that arrived during the check cancels the stop. bb stops its daemon and the
+plugin runs a boat stop, which saves the disk. `bb machine list --all` then shows the machine `disconnected`
+(`bb machine show <host-id>` says phase `suspended`), and `boat list --all`
+shows the sandbox `stopped`. A suspended machine costs no machine time.
+
+A background agent (Claude Code's Agent tool with `run_in_background`) keeps
+its thread `active` until it reports back, so it counts as busy (checked live
+on 2026-11-08). A command the agent left running in the background after its
+turn ended does not: a forgotten dev server must not keep a sandbox billing.
+
+**A follow-up resumes it.** A message to the thread (`bb thread tell`, or the
+composer) is queued with `Waiting for boat <sandbox-id> to be ready` while bb
+resumes the machine, then runs. The thread keeps the same bb machine id and
+the same boat sandbox, so every file on the disk is still there, and
+`.bb-env-setup.sh` does not run again. `bb machine resume <host-id>` does the
+same without a message. A turn a suspend cut off is not continued; send it
+again.
+
+- **Within 10 minutes of the stop** boat hands back the same machine it kept,
+  in a few seconds, and it does not count as a start (`bb boat status` shows
+  the same numbers before and after), and `/tmp` is still there.
+- **Later**, boat starts a new machine on the saved disk, which counts as a
+  start and goes through the start limits above. `/tmp` and running programs
+  are gone; bb's daemon comes back by itself.
+- A sandbox deleted outside bb, or whose disk boat deleted after its
+  stopped-disk retention (at least 14 days), cannot resume: the thread shows
+  `… remove this machine.` Remove it with `bb machine remove <host-id> --yes`.
+
+**The auto-stop lease.** boat stops a sandbox at its auto-stop deadline
+whatever runs on it. Every sandbox is created with a 2-hour auto-stop, and
+while bb runs the plugin moves the deadline back to 2 hours from now whenever
+it is under an hour away (`boat info <sandbox-id>` shows `archiveAfter`),
+including just before an idle stop and while bb is still suspending the
+machine, so a stop bb refuses or that fails leaves the sandbox covered. So
+boat never stops a sandbox bb is using, and stops one by itself only about an
+hour after this bb server stopped running.
 
 ## Settings
 
@@ -87,7 +133,8 @@ Settings → boat Sandbox, or `bb plugin config boat-sandbox`:
   in Settings rather than passing it to `bb plugin config … set`, which leaves
   it in shell history. Do not print or echo it.
 - **Stop after idle (minutes)** (`idleMinutes`, default 15). A whole number
-  from 0 to 1440; 0 never stops a sandbox for being idle.
+  from 0 to 1440; 0 never stops a sandbox for being idle (the auto-stop lease
+  is still renewed). Takes effect at the next minute's check, without a reload.
 - **Default size** (`defaultPreset`, default `default`). One of boat's sandbox
   types: `small`, `default`, `large`, `xlarge`.
 

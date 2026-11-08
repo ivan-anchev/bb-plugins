@@ -12,4 +12,4 @@ The plugin talks to boat's REST API with a key you make with `boat api-key creat
 
 bb's enrollment secret travels to the sandbox as a file in a private directory, never as command text, so it never appears in boat's 90-day command history. Each sandbox carries labels that tie it to this bb server and thread, so an interrupted create picks up its sandbox instead of starting a second one.
 
-This release creates and deletes sandboxes; stopping idle sandboxes and resuming them on the same disk comes next.
+Once a minute the plugin stops a sandbox whose threads have been idle for the set time; a thread running a long command is never idle. A follow-up to the thread resumes the same sandbox in seconds, with its files where they were. While bb runs, the plugin keeps pushing boat's auto-stop deadline back, so boat never stops a sandbox bb is using.
