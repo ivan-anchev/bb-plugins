@@ -27,33 +27,3 @@ bb plugin install ./plugins/boat-sandbox   # once
 bb plugin dev plugins/boat-sandbox         # rebuild and reload on save
 npm test --workspace plugins/boat-sandbox
 ```
-
-- `server.ts`: composition root.
-- `src/settings.ts`: the settings and `resolveSettings`, the one parse of them.
-- `src/boat/wire.ts`: every boat JSON shape, parsed once with zod.
-- `src/boat/client.ts`: the only HTTP to boat, and `BoatApiError`.
-- `src/boat/access.ts`: whether the configured key can run sandboxes.
-- `src/boat/sandbox.ts`: `Sandbox`, with boat's states collapsed to phases.
-- `src/boat/start-gate.ts`: boat's start limit (`429 rate_limited`).
-- `src/launch.ts`: the machine inputs (`template`, `environment`, `preset`)
-  and `resolveLaunch`, the one rule that turns them into a launch.
-- `src/catalog/`: boat's saved snapshots and environments as launch choices,
-  and the `bb boat templates` tables.
-- `src/ownership.ts`: the owner id, labels and the resource core persists.
-- `src/executor.ts`: core's command channel over boat's commands API, with
-  stdin staged as a file in a private directory.
-- `src/instance-reset.ts`: on create, removes the bb machine state a template
-  carried from another machine.
-- `src/daemon-setup.ts`: the systemd drop-in that gives bb's daemon boat's
-  sign-ins, and GitHub over HTTPS with boat's token when bb forwards none.
-- `src/github.ts`: which GitHub login threads use, and its status rows.
-- `src/machine-provider.ts`: validate, create, suspend, resume, remove and
-  keyed cleanup.
-- `src/cli.ts`, `src/status.ts`: `bb boat status`, `templates` and
-  `sandboxes`.
-- `src/contract.ts`: the provider id and the `launchChoices` RPC the composer
-  chip reads (`bb boat templates --json` prints the same object).
-- `app.tsx`, `src/app/`: the composer chip. `chip-report.ts` decides what it
-  shows and reports; `launch-chip.tsx` draws it with the menu in `ui/menu.tsx`.
-- `src/sign-ins.ts`, `src/settle.ts`: the Claude Code, Codex and AI proxy
-  rows for one environment, and boat reads reported as `unknown (<reason>)`.

@@ -23,6 +23,7 @@ bb plugin install git:https://github.com/ivan-anchev/bb-plugins.git@^0.1.0 --tag
 
 | Plugin | What it does |
 | --- | --- |
+| [`boat-sandbox`](plugins/boat-sandbox) | Run bb threads on on-demand boat.dev sandboxes, with template, environment and size choices. |
 | [Code Explorer](plugins/code-explorer) | Browse the environment's files and git changes as a tree with colored per-file-type icons, and read any file or its diff beside the tree. |
 | [`bot-wake`](plugins/bot-wake) | Wakes your Grok Bots by webhook when a bb thread needs attention: an open question or approval, a finished turn, or a failure. |
 | [`proactive-visuals`](plugins/proactive-visuals) | Agents answer data with an inline chart, without being asked. |
