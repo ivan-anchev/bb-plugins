@@ -1,46 +1,153 @@
 // The only module that speaks HTTP to boat.dev.
-import { wireError, wireLimits, wireMe, type Account, type Limits } from "./wire.ts";
+import { setTimeout as sleep } from "node:timers/promises";
+import type { Preset } from "../launch.ts";
+import { toSandbox, type Sandbox, type SandboxId } from "./sandbox.ts";
+import {
+  wireCommandFrame,
+  wireError,
+  wireLimits,
+  wireMe,
+  wireSandboxEnvelope,
+  wireSandboxList,
+  type Account,
+  type Limits,
+} from "./wire.ts";
 
 const BASE_URL = "https://boat.dev/api/v1";
+/** boat holds a command for up to 60 s while the sandbox starts, then answers `409 sandbox_starting`. */
+const NOT_RUN_PATIENCE_MS = 60_000;
+const NOT_RUN_RETRY_MS = 2_000;
+/** What core sees for a command a signal ended: boat reports no exit code for it. */
+const SIGNALLED_EXIT_CODE = 128;
 
-/** Every non-2xx response from boat, in one shape. */
+/** Every boat refusal, in one shape: a non-2xx response, or an `error` frame of a command stream. */
 export class BoatApiError extends Error {
   override readonly name = "BoatApiError";
   readonly status: number;
   readonly code: string;
   /** From `Retry-After`, which boat sends on every 429. */
   readonly retryAfterMs: number | null;
+  /** boat says the command provably never ran, so sending it again is safe. */
+  readonly retryable: boolean;
 
-  constructor(status: number, code: string, message: string, retryAfterMs: number | null) {
+  constructor(status: number, code: string, message: string, retryAfterMs: number | null, retryable: boolean) {
     super(message);
     this.status = status;
     this.code = code;
     this.retryAfterMs = retryAfterMs;
+    this.retryable = retryable;
   }
+}
+
+export type Labels = Readonly<Record<string, string>>;
+
+export interface CreateSandboxBody {
+  name: string;
+  type: Preset;
+  labels: Labels;
+  ttlSeconds: number;
+  /** boat puts none of its own logins on the disk. */
+  noEnv: true;
+}
+
+export interface CommandRequest {
+  command: string;
+  timeoutSeconds: number;
+  signal: AbortSignal;
+  onOutput(chunk: string): void;
 }
 
 export interface BoatClient {
   me(signal?: AbortSignal): Promise<Account>;
   /** Start budget and wallet of the wallet a create would bill. */
   limits(signal?: AbortSignal): Promise<Limits>;
+  /** null when boat no longer has the sandbox (404 or cancelled). */
+  get(id: SandboxId, signal: AbortSignal): Promise<Sandbox | null>;
+  /** Every sandbox carrying all of `labels`. */
+  list(labels: Labels, signal: AbortSignal): Promise<Sandbox[]>;
+  /** A repeat with the same key and body returns the same sandbox. */
+  create(body: CreateSandboxBody, idempotencyKey: string, signal: AbortSignal): Promise<Sandbox>;
+  /** Asynchronous on boat's side, but the sandbox is 404 at once. Throws a 404 BoatApiError when it is gone. */
+  remove(id: SandboxId, signal: AbortSignal): Promise<void>;
+  /** Runs `command` in a login shell as `user`, streaming its output, and returns its exit code. */
+  run(id: SandboxId, request: CommandRequest): Promise<{ exitCode: number }>;
+  /** Writes `content` to `path`, mode 0644 whatever the directory's umask. */
+  writeFile(id: SandboxId, path: string, content: string, signal: AbortSignal): Promise<void>;
 }
 
 export function createBoatClient(apiKey: string): BoatClient {
+  const call = (path: string, options: RequestOptions = {}) => send(apiKey, path, options);
+  const json = async (path: string, options?: RequestOptions) => (await call(path, options)).json();
+
   return {
-    me: async (signal) => wireMe.parse(await request(apiKey, "/me", signal)),
-    limits: async (signal) => wireLimits.parse(await request(apiKey, "/limits", signal)),
+    me: async (signal) => wireMe.parse(await json("/me", { signal })),
+    limits: async (signal) => wireLimits.parse(await json("/limits", { signal })),
+    async get(id, signal) {
+      try {
+        return toSandbox(wireSandboxEnvelope.parse(await json(`/sandboxes/${id}`, { signal })).sandbox);
+      } catch (error) {
+        if (isNotFound(error)) return null;
+        throw error;
+      }
+    },
+    async list(labels, signal) {
+      const { sandboxes } = wireSandboxList.parse(await json(`/sandboxes?${labelQuery(labels)}`, { signal }));
+      return sandboxes.map(toSandbox).filter((sandbox) => sandbox !== null);
+    },
+    async create(body, idempotencyKey, signal) {
+      const created = await json("/sandboxes", {
+        method: "POST",
+        body,
+        headers: { "idempotency-key": idempotencyKey },
+        signal,
+      });
+      const sandbox = toSandbox(wireSandboxEnvelope.parse(created).sandbox);
+      if (sandbox === null) throw new Error("boat cancelled the new sandbox as it was created.");
+      return sandbox;
+    },
+    async remove(id, signal) {
+      await call(`/sandboxes/${id}`, { method: "DELETE", headers: { "x-ascii-confirm-delete": id }, signal });
+    },
+    run: (id, { command, timeoutSeconds, signal, onOutput }) =>
+      retryWhileNotRun(signal, async () => {
+        const response = await call(`/sandboxes/${id}/commands`, {
+          method: "POST",
+          body: { command, timeoutSeconds, stream: true },
+          signal,
+        });
+        return { exitCode: await readExitCode(response, onOutput) };
+      }),
+    async writeFile(id, path, content, signal) {
+      const body = { path, content: Buffer.from(content).toString("base64"), encoding: "base64" };
+      await call(`/sandboxes/${id}/files`, { method: "PUT", body, signal });
+    },
   };
 }
 
-/** The one fetch wrapper: bearer auth, JSON back, and every non-2xx thrown as a BoatApiError. */
-async function request(apiKey: string, path: string, signal: AbortSignal | undefined): Promise<unknown> {
+export const isNotFound = (error: unknown): boolean => error instanceof BoatApiError && error.status === 404;
+
+interface RequestOptions {
+  method?: "GET" | "POST" | "PUT" | "DELETE";
+  body?: unknown;
+  headers?: Record<string, string>;
+  signal?: AbortSignal;
+}
+
+/** The one fetch wrapper: bearer auth, JSON in, and every non-2xx thrown as a BoatApiError. */
+async function send(apiKey: string, path: string, { method = "GET", body, headers, signal }: RequestOptions): Promise<Response> {
   const response = await fetch(`${BASE_URL}${path}`, {
-    headers: { authorization: `Bearer ${apiKey}`, accept: "application/json" },
+    method,
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      accept: "application/json",
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+      ...headers,
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
     signal,
   });
-  const text = await response.text();
-  if (!response.ok) throw toApiError(response, text);
-  return JSON.parse(text);
+  if (!response.ok) throw toApiError(response, await response.text());
+  return response;
 }
 
 // A gateway in front of boat can answer with HTML, so the body may not be boat's envelope.
@@ -52,6 +159,7 @@ function toApiError(response: Response, text: string): BoatApiError {
     envelope.success ? envelope.data.code : `http_${response.status}`,
     envelope.success ? envelope.data.message : `HTTP ${response.status} ${response.statusText}`,
     retryAfter === null ? null : Number(retryAfter) * 1000,
+    envelope.success && envelope.data.error?.details?.retryable === true,
   );
 }
 
@@ -62,3 +170,69 @@ function parseJson(text: string): unknown {
     return null;
   }
 }
+
+// The key's labels match at most a couple of sandboxes, so one page always holds them all.
+const labelQuery = (labels: Labels): string => {
+  const query = new URLSearchParams({ limit: "200" });
+  for (const [key, value] of Object.entries(labels)) query.append("label", `${key}=${value}`);
+  return query.toString();
+};
+
+/** Sends again while boat says the command never ran: the sandbox is still starting or restoring its disk. */
+async function retryWhileNotRun<T>(signal: AbortSignal, attempt: () => Promise<T>): Promise<T> {
+  const deadline = Date.now() + NOT_RUN_PATIENCE_MS;
+  for (;;) {
+    try {
+      return await attempt();
+    } catch (error) {
+      if (!commandNeverRan(error) || Date.now() > deadline) throw error;
+      await sleep(NOT_RUN_RETRY_MS, undefined, { signal });
+    }
+  }
+}
+
+const commandNeverRan = (error: unknown): boolean =>
+  error instanceof BoatApiError && (error.retryable || (error.status === 409 && error.code === "sandbox_starting"));
+
+/** Forwards every output chunk and returns the exit frame's code. */
+async function readExitCode(response: Response, onOutput: (chunk: string) => void): Promise<number> {
+  for await (const line of ndjsonLines(response)) {
+    const frame = wireCommandFrame.parse(JSON.parse(line));
+    switch (frame.type) {
+      case "started":
+        break;
+      case "stdout":
+      case "stderr":
+        onOutput(frame.data);
+        break;
+      case "exit":
+        return frame.exitCode ?? SIGNALLED_EXIT_CODE;
+      case "error":
+        throw new BoatApiError(
+          response.status,
+          frame.error ?? "command_failed",
+          frame.message ?? "boat could not run the command.",
+          null,
+          frame.retryable === true,
+        );
+      default:
+        frame satisfies never; // why: parsed once in wire.ts, so a new frame type is a compile error here
+    }
+  }
+  throw new Error("boat's command stream ended without an exit frame.");
+}
+
+async function* ndjsonLines(response: Response): AsyncGenerator<string> {
+  if (response.body === null) throw new Error("boat answered a streamed command with no body.");
+  let pending = "";
+  for await (const text of response.body.pipeThrough(new TextDecoderStream())) {
+    pending += text;
+    const end = pending.lastIndexOf("\n");
+    if (end === -1) continue;
+    yield* pending.slice(0, end).split("\n").filter(isNotBlank);
+    pending = pending.slice(end + 1);
+  }
+  if (isNotBlank(pending)) yield pending;
+}
+
+const isNotBlank = (line: string): boolean => line.trim() !== "";

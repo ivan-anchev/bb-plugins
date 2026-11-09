@@ -10,7 +10,7 @@
 import { z } from "zod";
 
 export const sandboxId = z.string().regex(/^bx_[23456789abcdefghjkmnpqrstuvwxyz]{8}$/).brand<"SandboxId">();
-const accountId = z.string().min(1).brand<"AccountId">();
+export const accountId = z.string().min(1).brand<"AccountId">();
 const instant = z.iso.datetime().transform((value) => Date.parse(value));
 
 export const wireMe = z
@@ -39,8 +39,15 @@ export const wireLimits = z
     startsBlockedBy: limits.canStart ? null : (limits.startBlockedReason ?? "boat gave no reason"),
   }));
 
-/** The `ErrorEnvelope` every non-2xx JSON response carries. */
-export const wireError = z.object({ code: z.string(), message: z.string() });
+/**
+ * The `ErrorEnvelope` every non-2xx JSON response carries. `error.details.retryable` marks a
+ * `502 sandbox_direct_failed` whose command provably never ran.
+ */
+export const wireError = z.object({
+  code: z.string(),
+  message: z.string(),
+  error: z.object({ details: z.object({ retryable: z.boolean().optional() }).nullish() }).optional(),
+});
 
 /** `cancelled` is terminal: boat reports it once with only id, state and error, then answers 404. */
 const cancelledSandbox = z.object({ id: sandboxId, state: z.literal("cancelled") });
@@ -58,6 +65,27 @@ const presentSandbox = z.object({
 });
 
 export const wireSandbox = z.discriminatedUnion("state", [cancelledSandbox, presentSandbox]);
+
+/** `GET /sandboxes/{id}` and `POST /sandboxes` both wrap the sandbox the same way. */
+export const wireSandboxEnvelope = z.object({ sandbox: z.unknown() });
+export const wireSandboxList = z.object({ sandboxes: z.array(z.unknown()) });
+
+/**
+ * One NDJSON line of `POST /sandboxes/{id}/commands` with `stream: true` (OAS `CommandStreamFrame`):
+ * `started`, then output chunks, then exactly one `exit` or `error`. `exitCode` is null when a
+ * signal ended the command; `retryable` on `error` means the command provably never ran.
+ */
+export const wireCommandFrame = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("started") }),
+  z.object({ type: z.enum(["stdout", "stderr"]), data: z.string() }),
+  z.object({ type: z.literal("exit"), exitCode: z.number().int().nullable() }),
+  z.object({
+    type: z.literal("error"),
+    error: z.string().optional(),
+    message: z.string().optional(),
+    retryable: z.boolean().optional(),
+  }),
+]);
 
 export type Account = z.output<typeof wireMe>;
 export type Limits = z.output<typeof wireLimits>;
