@@ -5,7 +5,7 @@ import type { WakeBody } from "./wake-body.ts";
 
 /**
  * Why a delivery failed, as a category only. Fetch's own error text is never
- * kept: undici messages can embed the host. `cancelled` means grok-wake itself
+ * kept: undici messages can embed the host. `cancelled` means bot-wake itself
  * stopped the request (the plugin unloaded, or the CLI caller went away).
  */
 export const failureReasonSchema = z.union([

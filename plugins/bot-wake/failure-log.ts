@@ -42,7 +42,7 @@ const rowSchema = z.object({
   reason: failureReasonSchema,
 });
 
-/** The failure log in the plugin's own SQLite file (`<dataDir>/plugins/grok-wake/data.db`). */
+/** The failure log in the plugin's own SQLite file (`<dataDir>/plugins/bot-wake/data.db`). */
 export function openFailureLog(db: Database.Database, migrate: Migrate): FailureLog {
   migrate(db, MIGRATIONS);
   const insert = db.prepare("INSERT INTO failures (at, target, body, reason) VALUES (?, ?, ?, ?)");

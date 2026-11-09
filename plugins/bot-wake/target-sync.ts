@@ -1,5 +1,5 @@
 import type { PluginSettingsHandle } from "@get-bb/plugin-sdk";
-import type { GrokWakeHost, RoutesDescriptors } from "./bb-types.ts";
+import type { BotWakeHost, RoutesDescriptors } from "./bb-types.ts";
 import type { Target } from "./routes.ts";
 import type { TargetSecrets } from "./target-secrets.ts";
 
@@ -18,7 +18,7 @@ interface TargetSyncDeps {
  * only after a reload. A dropped target's secrets are unset first, while its
  * fields are still declared: once undeclared, nothing can delete their files.
  */
-export function syncTargetsOnChange(bb: GrokWakeHost, deps: TargetSyncDeps) {
+export function syncTargetsOnChange(bb: BotWakeHost, deps: TargetSyncDeps) {
   // One sync at a time: onChange also fires for the sync's own unsets, and the
   // sync re-reads routes, so writes that land while it runs are not lost.
   let syncing = false;
@@ -50,7 +50,7 @@ export function syncTargetsOnChange(bb: GrokWakeHost, deps: TargetSyncDeps) {
  * the routed targets differ from the declared ones. Stops before any further
  * write once the instance unloads. Returns whether it reloaded.
  */
-async function applyRoutesChange(bb: GrokWakeHost, { secrets, currentTargets, signal }: TargetSyncDeps) {
+async function applyRoutesChange(bb: BotWakeHost, { secrets, currentTargets, signal }: TargetSyncDeps) {
   const unset: Target[] = [];
   while (!signal.aborted) {
     const latest = await currentTargets();

@@ -31,6 +31,29 @@
       }
     },
     {
+      "id": "bot-wake",
+      "displayName": "Bot Wake",
+      "description": "Wakes your Grok Bots by webhook when a bb thread needs attention: an open question or approval, a finished turn, or a failure.",
+      "icon": "BellRing",
+      "tags": [
+        "webhooks",
+        "notifications",
+        "automation"
+      ],
+      "author": {
+        "name": "Ivan Anchev",
+        "github": "ivan-anchev"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/ivan-anchev/bb-plugins.git",
+          "subdir": "plugins/bot-wake",
+          "range": "0.x",
+          "tagPrefix": "bot-wake/"
+        }
+      }
+    },
+    {
       "id": "code-explorer",
       "displayName": "Code Explorer",
       "description": "Browse the environment's files and git changes as a tree with colored per-file-type icons, see how a change splits into code, tests, mocks, generated files and docs, and read any file or its diff beside the tree.",
@@ -71,29 +94,6 @@
           "subdir": "plugins/comfortable-type",
           "range": "0.x",
           "tagPrefix": "comfortable-type/"
-        }
-      }
-    },
-    {
-      "id": "grok-wake",
-      "displayName": "Grok Wake",
-      "description": "Wakes your Grok Bots by webhook when a bb thread needs attention: an open question or approval, a finished turn, or a failure.",
-      "icon": "BellRing",
-      "tags": [
-        "webhooks",
-        "notifications",
-        "automation"
-      ],
-      "author": {
-        "name": "Ivan Anchev",
-        "github": "ivan-anchev"
-      },
-      "source": {
-        "git": {
-          "url": "https://github.com/ivan-anchev/bb-plugins.git",
-          "subdir": "plugins/grok-wake",
-          "range": "0.x",
-          "tagPrefix": "grok-wake/"
         }
       }
     },

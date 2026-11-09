@@ -8,16 +8,16 @@
       "source": "./plugins/boat-sandbox"
     },
     {
+      "name": "bot-wake",
+      "source": "./plugins/bot-wake"
+    },
+    {
       "name": "code-explorer",
       "source": "./plugins/code-explorer"
     },
     {
       "name": "comfortable-type",
       "source": "./plugins/comfortable-type"
-    },
-    {
-      "name": "grok-wake",
-      "source": "./plugins/grok-wake"
     },
     {
       "name": "pr-reviews",

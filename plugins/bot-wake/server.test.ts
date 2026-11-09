@@ -10,18 +10,18 @@ import type {
   PluginThreadEventHandler,
   PluginThreadEventPayloads,
 } from "@get-bb/plugin-sdk";
-import type { AttentionEvent, GrokWakeHost, RoutesDescriptors, SecretPairDescriptors } from "./bb-types.ts";
+import type { AttentionEvent, BotWakeHost, RoutesDescriptors, SecretPairDescriptors } from "./bb-types.ts";
 import { routesSetting } from "./routes.ts";
 import plugin from "./server.ts";
 import { startReceiver, thread, turnCompleted, until, type ThreadEventRow } from "./test-support.ts";
 
-const URL_KEY = "GROK_WAKE_OPS_URL";
-const KEY_KEY = "GROK_WAKE_OPS_KEY";
+const URL_KEY = "BOT_WAKE_OPS_URL";
+const KEY_KEY = "BOT_WAKE_OPS_KEY";
 const receiver = await startReceiver();
 after(() => receiver.close());
 
-test("bb's plugin API is a GrokWakeHost", () => {
-  const host: (bb: BbPluginApi) => GrokWakeHost = (bb) => bb;
+test("bb's plugin API is a BotWakeHost", () => {
+  const host: (bb: BbPluginApi) => BotWakeHost = (bb) => bb;
   assert.equal(typeof host, "function");
 });
 
@@ -30,14 +30,20 @@ test("it listens to the three attention signals only", async () => {
   assert.deepEqual(Object.keys(bb.current().handlers).sort(), ["interaction.pending", "thread.failed", "thread.idle"]);
 });
 
+test("it registers the bb bot-wake command group", async () => {
+  const { cli } = (await loadedWith({ projects: { proj_1: "ops" } })).current();
+  assert.equal(cli.name, "bot-wake");
+  assert.deepEqual(cli.commands?.map((command) => command.name), ["failures", "drain", "test"]);
+});
+
 test("each routed target gets a URL and a key secret field", async () => {
   const bb = await loadedWith({ sections: { sec_1: "ops" }, projects: { proj_1: "Dev", proj_2: "ops" } });
   const secretFields = [...bb.current().declared].filter(([, descriptor]) => descriptor.type === "string" && descriptor.secret);
   assert.deepEqual(secretFields.map(([name]) => name).sort(), [
-    "GROK_WAKE_DEV_KEY",
-    "GROK_WAKE_DEV_URL",
-    "GROK_WAKE_OPS_KEY",
-    "GROK_WAKE_OPS_URL",
+    "BOT_WAKE_DEV_KEY",
+    "BOT_WAKE_DEV_URL",
+    "BOT_WAKE_OPS_KEY",
+    "BOT_WAKE_OPS_URL",
   ]);
 });
 
@@ -45,7 +51,7 @@ test("adding a target reloads the plugin so its fields appear", async () => {
   const bb = await loadedWith({ projects: { proj_1: "ops" } });
   await bb.setRoutes({ projects: { proj_1: "ops", proj_2: "dev" } });
   assert.equal(bb.loads(), 2);
-  assert.ok(bb.current().declared.has("GROK_WAKE_DEV_URL"));
+  assert.ok(bb.current().declared.has("BOT_WAKE_DEV_URL"));
 });
 
 test("removing a target unsets its secrets before the reload drops its fields", async () => {
@@ -92,12 +98,12 @@ test("test names the missing setting, never a value", async () => {
   const bb = await loadedWith({ projects: { proj_1: "ops" } });
   const unset = await bb.cli(["test", "ops"]);
   assert.equal(unset.exitCode, 1);
-  assert.match(unset.stderr ?? "", /OPS is missing GROK_WAKE_OPS_URL and GROK_WAKE_OPS_KEY/);
+  assert.match(unset.stderr ?? "", /OPS is missing BOT_WAKE_OPS_URL and BOT_WAKE_OPS_KEY/);
 
   bb.set({ [URL_KEY]: "http://127.0.0.1:9/secret-path" });
   const halfSet = await bb.cli(["test", "ops", "--json"]);
   const output = `${halfSet.stdout}${halfSet.stderr}`;
-  assert.match(output, /missing GROK_WAKE_OPS_KEY\./);
+  assert.match(output, /missing BOT_WAKE_OPS_KEY\./);
   assert.ok(!output.includes("secret-path"));
 });
 
@@ -146,7 +152,7 @@ test("a target added then another removed before the sync runs: the removed one'
   assert.equal(bb.loads(), 2);
   assert.equal(bb.stored.has(URL_KEY), false);
   assert.equal(bb.stored.has(KEY_KEY), false);
-  assert.deepEqual(secretFieldsOf(bb), ["GROK_WAKE_DEV_KEY", "GROK_WAKE_DEV_URL", "GROK_WAKE_NEW_KEY", "GROK_WAKE_NEW_URL"]);
+  assert.deepEqual(secretFieldsOf(bb), ["BOT_WAKE_DEV_KEY", "BOT_WAKE_DEV_URL", "BOT_WAKE_NEW_KEY", "BOT_WAKE_NEW_URL"]);
 });
 
 test("a target removed then restored before the sync runs keeps its secrets", async () => {
@@ -170,7 +176,7 @@ test("after a failed unset, the next routes change still syncs", async () => {
   await bb.setRoutes({ projects: { proj_2: "dev", proj_3: "new" } });
   assert.equal(bb.loads(), 2);
   assert.equal(bb.stored.has(KEY_KEY), false);
-  assert.deepEqual(secretFieldsOf(bb), ["GROK_WAKE_DEV_KEY", "GROK_WAKE_DEV_URL", "GROK_WAKE_NEW_KEY", "GROK_WAKE_NEW_URL"]);
+  assert.deepEqual(secretFieldsOf(bb), ["BOT_WAKE_DEV_KEY", "BOT_WAKE_DEV_URL", "BOT_WAKE_NEW_KEY", "BOT_WAKE_NEW_URL"]);
 });
 
 test("after a failed reload, the next routes change still reloads", async () => {
@@ -182,7 +188,7 @@ test("after a failed reload, the next routes change still reloads", async () => 
 
   await bb.setRoutes({ sections: { sec_1: "dev" }, projects: { proj_1: "ops", proj_2: "dev" } });
   assert.equal(bb.loads(), 2);
-  assert.ok(bb.current().declared.has("GROK_WAKE_DEV_URL"));
+  assert.ok(bb.current().declared.has("BOT_WAKE_DEV_URL"));
 });
 
 test("unloading cancels a sync that has not run yet", async () => {
@@ -237,7 +243,7 @@ test("a drain whose caller goes away stops promptly and keeps the entry as it wa
 
 test("a target restored while an earlier target's unset is pending keeps its secrets", async () => {
   const bb = await loadedWith({ projects: { proj_1: "ops", proj_2: "dev" } });
-  bb.set({ GROK_WAKE_DEV_URL: "http://127.0.0.1:9/dev", GROK_WAKE_DEV_KEY: "dummy-key-dev" });
+  bb.set({ BOT_WAKE_DEV_URL: "http://127.0.0.1:9/dev", BOT_WAKE_DEV_KEY: "dummy-key-dev" });
   bb.set({ [URL_KEY]: "http://127.0.0.1:9/hook", [KEY_KEY]: "dummy-key-restored-later" });
   const unsetDev = bb.hold("secretWrite");
   await bb.writeRoutes({});
@@ -246,7 +252,7 @@ test("a target restored while an earlier target's unset is pending keeps its sec
   unsetDev.release();
   await settle();
 
-  assert.equal(bb.stored.has("GROK_WAKE_DEV_KEY"), false);
+  assert.equal(bb.stored.has("BOT_WAKE_DEV_KEY"), false);
   assert.equal(bb.stored.get(KEY_KEY), "dummy-key-restored-later");
   assert.equal(bb.loads(), 2);
   assert.deepEqual(secretFieldsOf(bb), [KEY_KEY, URL_KEY]);
@@ -268,7 +274,7 @@ test("unloading while the sync reads routes stops it before any unset or reload"
 
 test("unloading during one unset leaves the other dropped targets' secrets alone", async () => {
   const bb = await loadedWith({ projects: { proj_1: "ops", proj_2: "dev", proj_3: "keep" } });
-  bb.set({ GROK_WAKE_DEV_URL: "http://127.0.0.1:9/dev", GROK_WAKE_DEV_KEY: "dummy-key-dev" });
+  bb.set({ BOT_WAKE_DEV_URL: "http://127.0.0.1:9/dev", BOT_WAKE_DEV_KEY: "dummy-key-dev" });
   bb.set({ [URL_KEY]: "http://127.0.0.1:9/hook", [KEY_KEY]: "dummy-key-untouched" });
   const unsetDev = bb.hold("secretWrite");
   await bb.writeRoutes({ projects: { proj_3: "keep" } });
@@ -277,7 +283,7 @@ test("unloading during one unset leaves the other dropped targets' secrets alone
   unsetDev.release();
   await settle();
 
-  assert.equal(bb.stored.has("GROK_WAKE_DEV_KEY"), false);
+  assert.equal(bb.stored.has("BOT_WAKE_DEV_KEY"), false);
   assert.equal(bb.stored.get(KEY_KEY), "dummy-key-untouched");
   assert.equal(bb.loads(), 1);
 });
@@ -392,8 +398,8 @@ async function loadedWith(routes: object) {
       };
     }
 
-    const host: GrokWakeHost = {
-      pluginId: "grok-wake",
+    const host: BotWakeHost = {
+      pluginId: "bot-wake",
       log: { debug() {}, info() {}, warn() {}, error: (message) => void errors.push(message) },
       settings: { define },
       storage: {

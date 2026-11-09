@@ -78,7 +78,7 @@ test("an unreachable host fails as a network error", async () => {
 
 test("a target without its URL or key fails as a missing secret, with no request", async () => {
   const before = receiver.requests.length;
-  const deliver = deliverWith({ endpoint: async () => ({ ok: false, missing: ["GROK_WAKE_OPS_KEY"] }) });
+  const deliver = deliverWith({ endpoint: async () => ({ ok: false, missing: ["BOT_WAKE_OPS_KEY"] }) });
   const target = parseTarget("ops");
   assert.ok(target);
 
@@ -91,7 +91,7 @@ test("a secret lookup cut off by its caller fails as cancelled, not as a missing
   const deliver = deliverWith({
     async endpoint() {
       caller.abort();
-      return { ok: false, missing: ["GROK_WAKE_OPS_URL", "GROK_WAKE_OPS_KEY"] };
+      return { ok: false, missing: ["BOT_WAKE_OPS_URL", "BOT_WAKE_OPS_KEY"] };
     },
   });
   const target = parseTarget("ops");

@@ -6,7 +6,7 @@ Wakes your Grok Bots by webhook when a bb thread needs attention: an open questi
 - **Routing by section or project.** A JSON setting maps section and project ids to target names; a section match beats a project match. Unrouted threads wake nobody. Only top-level, visible threads count.
 - **Secrets that stay secret.** Each target's webhook URL and sender key are masked secret settings that appear as soon as you add the target. They never show up in settings, logs, the failure log, or command output.
 - **A small, fixed body.** `{project, section, thread, event, title, summary}` with a one-line summary of at most two sentences, sent with `Authorization: Bearer` and `X-Automation-Key` headers.
-- **A failure log you can drain.** A non-2xx answer, timeout, network error, or missing secret keeps the event locally. `bb grok-wake failures` lists them, `bb grok-wake drain` retries them, and `bb grok-wake test <target>` checks a target.
+- **A failure log you can drain.** A non-2xx answer, timeout, network error, or missing secret keeps the event locally. `bb bot-wake failures` lists them, `bb bot-wake drain` retries them, and `bb bot-wake test <target>` checks a target.
 
 ## How it works
 

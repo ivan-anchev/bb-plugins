@@ -1,11 +1,11 @@
 ---
-name: grok-wake
-description: Explain and operate the Grok Wake plugin, which POSTs a small JSON body to a webhook (a Grok Bot) when a top-level bb thread needs attention: an open question or approval, a finished turn, or a failure. Covers the routes setting, the per-target URL and key secrets and how to set them safely, the body, and the `bb grok-wake failures`, `drain`, and `test` commands. Use when the user asks why a bot was or was not woken, how to route a project or section to a bot, or to retry or test deliveries.
+name: bot-wake
+description: Explain and operate the Bot Wake plugin, which POSTs a small JSON body to a webhook (a Grok Bot) when a top-level bb thread needs attention: an open question or approval, a finished turn, or a failure. Covers the routes setting, the per-target URL and key secrets and how to set them safely, the body, and the `bb bot-wake failures`, `drain`, and `test` commands. Use when the user asks why a bot was or was not woken, how to route a project or section to a bot, or to retry or test deliveries.
 ---
 
-# Grok Wake
+# Bot Wake
 
-Grok Wake watches thread state on the bb server and wakes a bot by webhook
+Bot Wake watches thread state on the bb server and wakes a bot by webhook
 when a thread needs someone to look at it. Each wake is one `POST` to the
 target the thread routes to.
 
@@ -42,16 +42,16 @@ wakes nobody and is not logged.
 
 ## Secrets
 
-Each target in routes gets two secret settings: `GROK_WAKE_<TARGET>_URL` (the
-webhook) and `GROK_WAKE_<TARGET>_KEY` (the sender key). Target `ops` uses
-`GROK_WAKE_OPS_URL` and `GROK_WAKE_OPS_KEY`.
+Each target in routes gets two secret settings: `BOT_WAKE_<TARGET>_URL` (the
+webhook) and `BOT_WAKE_<TARGET>_KEY` (the sender key). Target `ops` uses
+`BOT_WAKE_OPS_URL` and `BOT_WAKE_OPS_KEY`.
 
 - Saving routes with a new target reloads the plugin, so its two fields
-  appear at once in **Settings → Installed plugins → Grok Wake**.
+  appear at once in **Settings → Installed plugins → Bot Wake**.
 - Set them there: the fields are masked, and the values live only in 0600
   files under the plugin's `secrets/` directory, never in bb's database, logs,
   or the failure log.
-- `bb plugin config grok-wake set GROK_WAKE_OPS_KEY <value>` works too, but the
+- `bb plugin config bot-wake set BOT_WAKE_OPS_KEY <value>` works too, but the
   value lands in the command line and your shell history. Prefer the Settings
   page.
 - Removing a target from routes deletes its stored URL and key.
@@ -61,7 +61,7 @@ webhook) and `GROK_WAKE_<TARGET>_KEY` (the sender key). Target `ops` uses
 ## The request
 
 ```
-POST <GROK_WAKE_<TARGET>_URL>
+POST <BOT_WAKE_<TARGET>_URL>
 Content-Type: application/json
 Authorization: Bearer <key>
 X-Automation-Key: <key>
@@ -86,9 +86,9 @@ X-Automation-Key: <key>
 
 | Command | Effect |
 | --- | --- |
-| `bb grok-wake failures [--limit N]` | List undelivered events, oldest first: time, target, event, thread, title, reason (`http <status>`, `timeout`, `network`, `missing-secret`, `cancelled`). Shows 50 by default. |
-| `bb grok-wake drain` | Retry every logged event once. Delivered ones leave the log; the rest stay with their new reason. Prints the counts. If the command is interrupted, it stops after the current event and leaves the rest untouched. |
-| `bb grok-wake test <target>` | POST a harmless body (`"event": "test"`) to the target and print the HTTP status, or the failure reason. An unknown target or an unset secret is an error naming the missing setting. A failed test is not logged. |
+| `bb bot-wake failures [--limit N]` | List undelivered events, oldest first: time, target, event, thread, title, reason (`http <status>`, `timeout`, `network`, `missing-secret`, `cancelled`). Shows 50 by default. |
+| `bb bot-wake drain` | Retry every logged event once. Delivered ones leave the log; the rest stay with their new reason. Prints the counts. If the command is interrupted, it stops after the current event and leaves the rest untouched. |
+| `bb bot-wake test <target>` | POST a harmless body (`"event": "test"`) to the target and print the HTTP status, or the failure reason. An unknown target or an unset secret is an error naming the missing setting. A failed test is not logged. |
 
 Add `--json` to any command for machine-readable output. No command prints a
 URL or key.
@@ -97,6 +97,6 @@ URL or key.
 
 1. Route: set `routes`, then fill in the new target's URL and key on the
    Settings page.
-2. Check: `bb grok-wake test <target>` should print `HTTP 200` (or another 2xx).
-3. After an outage: `bb grok-wake failures`, fix the receiver, then
-   `bb grok-wake drain`.
+2. Check: `bb bot-wake test <target>` should print `HTTP 200` (or another 2xx).
+3. After an outage: `bb bot-wake failures`, fix the receiver, then
+   `bb bot-wake drain`.

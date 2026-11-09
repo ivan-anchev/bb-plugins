@@ -1,4 +1,4 @@
-import type { GrokWakeSettings, SecretPairDescriptors } from "./bb-types.ts";
+import type { BotWakeSettings, SecretPairDescriptors } from "./bb-types.ts";
 import type { Target } from "./routes.ts";
 
 /** Where a target's webhook lives and the key it is sent with. Never logged or printed. */
@@ -21,7 +21,7 @@ export interface TargetSecrets {
 }
 
 function secretKeys(target: Target): { url: string; key: string } {
-  return { url: `GROK_WAKE_${target}_URL`, key: `GROK_WAKE_${target}_KEY` };
+  return { url: `BOT_WAKE_${target}_URL`, key: `BOT_WAKE_${target}_KEY` };
 }
 
 /**
@@ -29,7 +29,7 @@ function secretKeys(target: Target): { url: string; key: string } {
  * names when the factory runs, so a new target's fields appear only after the
  * plugin reloads.
  */
-export function defineTargetSecrets(settings: GrokWakeSettings, targets: readonly Target[]): TargetSecrets {
+export function defineTargetSecrets(settings: BotWakeSettings, targets: readonly Target[]): TargetSecrets {
   const handles = new Map(targets.map((target) => [target, defineSecretPair(settings, target)]));
 
   return {
@@ -51,7 +51,7 @@ export function defineTargetSecrets(settings: GrokWakeSettings, targets: readonl
   };
 }
 
-function defineSecretPair(settings: GrokWakeSettings, target: Target) {
+function defineSecretPair(settings: BotWakeSettings, target: Target) {
   const names = secretKeys(target);
   const descriptors: SecretPairDescriptors = {
     [names.url]: {
