@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request with Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), what the Changes tab shows (the whole diff as a file tree beside the host diff view, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this, and the view options for tests and findings), how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request with Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this, and the view options for tests and findings), how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -81,7 +81,8 @@ tab is opened, not when the page opens.
   file shows only `+N`, a deleted one only `−M`, a binary file "Binary") and a
   letter for how it changed (A, M, D or R). Click a file, or move to it with
   the arrow keys and press Enter or Space, to show its diff.
-- **The diff**: the selected file's path over its diff in bb's own diff view.
+- **The diff**: the selected file's path over its diff, drawn with bb's own
+  diff engine and code theme, so it looks like bb's diff view.
   A binary file, a file renamed without changes, or a file with no changed
   lines shows a sentence saying so instead. Once the file's text at the PR's
   head has loaded (`gh api`, for a modified or renamed file of up to 1 MB),
@@ -165,15 +166,16 @@ A guide opens on **What this PR does**:
 
 The bar at the bottom reads **Start the walkthrough · N steps**. Each step
 shows its title, its explanation, **For you to decide** when the agent left the
-reader a decision, then its hunks: each in bb's own diff view (the component
-and code theme Code Explorer uses) under its file path. A hunk the agent
+reader a decision, then its hunks: each one diff, drawn with bb's own diff
+engine and code theme (as Code Explorer's diffs are), under its file path. A hunk the agent
 collapsed is one line, its path and reason, with Show. A file with no text
 changes (a binary file, a pure rename) is one line saying so.
 
-A finding sits in a grey block directly under its line in the step's diff: its
-priority, title and body, and **Ask about this**. A finding on a removed line
-that was replaced sits under the whole removed-and-added pair, so the pair keeps
-its word highlighting. **Ask about this** opens a text box; **Send** messages
+A finding sits in a grey block directly under its line, inside its hunk's diff:
+its priority, title and body, and **Ask about this**. A finding on a removed line
+sits under that removed line, and the replaced pair keeps its word
+highlighting. Findings on the same line stack in the order the thread gave
+them. **Ask about this** opens a text box; **Send** messages
 the question, quoting the finding, to the review thread, which answers there
 (Review chat shows it). The page keeps reading Guide ready while the thread
 answers. If the send fails, the question stays in the box with the error beside

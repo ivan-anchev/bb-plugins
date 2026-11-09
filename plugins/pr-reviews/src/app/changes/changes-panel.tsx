@@ -72,7 +72,7 @@ export function ChangesPanel({ target, changes, loading, readError }: ChangesPan
                 <TreeView model={model} label="Changed files" onSelectFile={setSelectedPath} />
               </>
             }
-            viewer={<DiffViewer ref={focusHandOff.to} file={shownFile ?? null} projectId={target.projectId} headSha={changes.headSha} settings={controls.settings.value} />}
+            viewer={<DiffViewer ref={focusHandOff.to} file={shownFile ?? null} head={{ ...target, headSha: changes.headSha }} settings={controls.settings.value} />}
           />
         </>
       )}

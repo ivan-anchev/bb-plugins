@@ -1,10 +1,11 @@
 // The Changes header's menus (ported from code-explorer's header-menus): Filter (kinds, extensions,
 // deleted files, reset) and diff settings (Unified or Split, Wrap lines).
 import { CHANGE_KIND_LABELS, TEST_KINDS, type ChangeKind } from "../../../guide/change-kind.ts";
+import type { DiffSettings } from "../../diff/diff-options.ts";
 import { IconButton } from "../../ui/icon-button.tsx";
 import { Menu, MenuCheckboxItem, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from "../../ui/menu.tsx";
 import { NO_FILTERS, hidesKinds, isFiltering, withExtensionShown, withKindsShown, type FileFilters } from "../file-filter.ts";
-import type { ChangesControls, DiffSettings } from "../use-changes-controls.ts";
+import type { ChangesControls } from "../use-changes-controls.ts";
 
 type FilterMenuProps = {
   filters: ChangesControls["filters"];

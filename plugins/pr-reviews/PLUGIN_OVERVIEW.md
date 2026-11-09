@@ -16,7 +16,7 @@ through the change step by step. Nothing is ever posted to GitHub.
   PR's whole diff, with its `+N −M` on the tab; and **Guide**, which keeps its
   step while you switch and marks a ready guide with a dot.
 - **Changes**: every changed file in a tree with its `+N −M`, beside the
-  selected file's diff in bb's own diff view, laid out like Code Explorer's
+  selected file's diff, drawn like bb's own, laid out like Code Explorer's
   Changes view. Click "N unmodified lines" to show the lines between hunks.
   Filter by path (globs, `!` to exclude), by kind, extension or
   deleted files; switch between Unified and Split, wrap lines, and collapse or
@@ -39,8 +39,8 @@ through the change step by step. Nothing is ever posted to GitHub.
   approach, before and after when behaviour changes, what the guide leaves out
   and why, and who wrote it.
 - **One step at a time**: Start the walkthrough shows each step's
-  explanation, any decision left to you, and its code in bb's own diff view,
-  the same one Code Explorer uses. Move with ← and → (or J and K); each
+  explanation, any decision left to you, and its code, drawn like bb's own
+  diffs, with each finding under its line. Move with ← and → (or J and K); each
   arrow's tooltip names the step it leads to, and Next on the last step
   returns to the overview.
 - **Findings, second**: the overview lists the thread's findings, Must fix,

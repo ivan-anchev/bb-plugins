@@ -1,6 +1,6 @@
 // The reader's view of a guide: which steps the view options show, where the reader is among
 // them, and the keys that move it.
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { Guide } from "../../guide/guide-schema.ts";
 import { visibleSteps, type ViewOptions, type VisibleStep } from "../../guide/walkthrough.ts";
 import type { ViewOptionsState } from "./view-options.tsx";
@@ -57,7 +57,8 @@ export function useWalkthrough(guide: Guide, viewOptions: ViewOptionsState, page
     },
     [shownIndex, page.scroll],
   );
-  const steps = visibleSteps(guide, options);
+  // Memoised: a step page memoises what it derives from its step.
+  const steps = useMemo(() => visibleSteps(guide, options), [guide, options]);
   const place = placeOf(steps, position);
   const moveTo = (to: Position) => {
     focusedBeforeChange.current = document.activeElement;

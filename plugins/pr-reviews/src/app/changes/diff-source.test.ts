@@ -5,8 +5,8 @@ import { diffSourceOf } from "./diff-source.ts";
 import { diffFile } from "./diff-file.fixture.ts";
 
 describe("diffSourceOf", () => {
-  test("shows the file's patch, built from its hunks", () => {
-    assert.deepEqual(diffSourceOf(diffFile("src/a.ts", { added: 1, removed: 1 })), { kind: "patch", patch: "@@ -1,1 +1,1 @@\n-old\n+new\n", expandable: true });
+  test("shows the file's patch", () => {
+    assert.deepEqual(diffSourceOf(diffFile("src/a.ts", { added: 1, removed: 1 })), { kind: "patch", expandable: true });
   });
 
   test("a modified or renamed file's unchanged lines can expand; an added or deleted file's patch is all of it", () => {
