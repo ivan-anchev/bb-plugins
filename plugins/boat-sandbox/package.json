@@ -1,0 +1,46 @@
+{
+  "name": "bb-plugin-boat-sandbox",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "keywords": [
+    "bb-plugin",
+    "sandbox",
+    "cloud",
+    "boat"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ivan-anchev/bb-plugins.git",
+    "directory": "plugins/boat-sandbox"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "node --test 'src/**/*.test.ts'",
+    "build": "bb plugin build"
+  },
+  "engines": {
+    "bb": ">=0.48",
+    "bbPluginSdk": ">=0.6.104"
+  },
+  "bb": {
+    "name": "boat Sandbox",
+    "description": "Run bb threads on on-demand boat.dev sandboxes that stop when idle and resume on the same disk.",
+    "branding": {
+      "icon": "./boat.svg"
+    },
+    "server": "./server.ts",
+    "skills": [
+      "skills"
+    ]
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.6.104",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}
