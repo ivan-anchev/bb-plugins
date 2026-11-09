@@ -16,10 +16,6 @@
       "source": "./plugins/code-explorer"
     },
     {
-      "name": "comfortable-type",
-      "source": "./plugins/comfortable-type"
-    },
-    {
       "name": "pr-reviews",
       "source": "./plugins/pr-reviews"
     },
