@@ -30,6 +30,11 @@ Run `npm run check` (manifests in sync, typecheck, tests, `bb plugin build`).
 For behavior changes, also run the plugin live: `bb plugin install
 ./plugins/<id>` once, then `bb plugin dev plugins/<id>`.
 
+On a remote machine (your checkout is under `~/.bb-machines/`), those commands
+reach the user's bb server, which can't read your checkout. Live-test against a
+throwaway local server instead: follow `docs/remote-live-testing.md`. Never run
+`bb plugin install|dev|remove` there without its `local_bb` wrapper.
+
 The plugin SDK contract is
 `node_modules/@get-bb/plugin-sdk/bundled-types/bb-plugin-sdk.d.ts`. Run
 `bb plugin types plugins/<id>` when the SDK pin drifts from the installed bb.
