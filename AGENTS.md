@@ -1,7 +1,7 @@
 # Agent guide
 
 A monorepo of bb plugins published as one bb marketplace. Read the README's
-layout and release sections first.
+development and release sections first.
 
 ## Rules
 

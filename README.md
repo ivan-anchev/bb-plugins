@@ -23,38 +23,10 @@ bb plugin install git:https://github.com/ivan-anchev/bb-plugins.git@^0.1.0 --tag
 
 | Plugin | What it does |
 | --- | --- |
-| [`comfortable-type`](plugins/comfortable-type) | A theme that sets bb's text at 14px in the system font, with bb's own colors. |
 | [Code Explorer](plugins/code-explorer) | Browse the environment's files and git changes as a tree with colored per-file-type icons, and read any file or its diff beside the tree. |
 | [`bot-wake`](plugins/bot-wake) | Wakes your Grok Bots by webhook when a bb thread needs attention: an open question or approval, a finished turn, or a failure. |
 | [`proactive-visuals`](plugins/proactive-visuals) | Agents answer data with an inline chart, without being asked. |
 | [`subagents-strip`](plugins/subagents-strip) | A live strip above the composer that counts the thread's subagents and child threads and opens into one row per subagent that expands to its report and latest steps. |
-
-## Code Explorer screenshots
-
-Browse changed files and read their diffs beside the tree.
-
-![Changes tree with the selected file diff](plugins/code-explorer/screenshots/changes.png)
-
-Hover or focus the totals to see added and deleted lines by change kind.
-
-![Diff buckets showing line counts for code, generated files and docs](plugins/code-explorer/screenshots/diff-buckets.png)
-
-Filter by change kind or file type, or hide tests and mocks together.
-
-![Filter menu with change kinds and file types](plugins/code-explorer/screenshots/filters.png)
-
-## Repository layout
-
-| Path | What it is |
-| --- | --- |
-| `plugins/<id>/` | One self-contained plugin. Its `package.json` is the single source of truth for its name, description, icon, tags, and version. |
-| `.bb/plugins.json` | Collection index behind `bb plugin install … --plugin <id>`. **Generated.** |
-| `marketplace.json` | Marketplace catalog behind `bb marketplace add`. **Generated.** |
-| `schema/` | bb's official JSON schemas, vendored, so validation runs offline. |
-| `scripts/` | `new`, `manifests`, and `release`, the repo's three commands. |
-
-Never edit the two generated files by hand: change the plugin's `package.json`
-and run `npm run manifests`. CI fails when they are out of date.
 
 ## Develop
 
