@@ -16,6 +16,10 @@
       "source": "./plugins/comfortable-type"
     },
     {
+      "name": "grok-wake",
+      "source": "./plugins/grok-wake"
+    },
+    {
       "name": "pr-reviews",
       "source": "./plugins/pr-reviews"
     },
