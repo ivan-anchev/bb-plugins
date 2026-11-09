@@ -80,7 +80,7 @@ function cliWith(account: Account = {}) {
 }
 
 const cli = (boat: BoatAccess, machineEnvironment: StatusDeps["machineEnvironment"] = unused) =>
-  boatCli({ boat, machineEnvironment }, { bb: { sdk: { hosts: { list: unused }, threads: { count: unused } }, experimental_machines: { getResource: unused } }, idle: { read: unused }, ownerId: "owner-1" });
+  boatCli({ boat, machineEnvironment }, { bb: { sdk: { hosts: { list: unused }, threads: { listRunning: unused } }, experimental_machines: { getResource: unused } }, idle: { read: unused }, ownerId: "owner-1" });
 
 test("bb boat templates lists every template and environment with its --machine-inputs, and the default launch", async () => {
   const { exitCode, stdout } = await cliWith({ template: "tpl-test" }).run(["templates"], {});

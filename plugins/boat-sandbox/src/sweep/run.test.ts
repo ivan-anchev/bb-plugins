@@ -23,8 +23,10 @@ interface FakeHost {
   phase?: HostPhase;
   /** null: boat no longer has it. */
   sandbox: Sandbox | null;
-  /** Threads on it that are pending, starting, active or stopping. */
+  /** Visible threads on it that are starting or active. */
   busyThreads: number;
+  /** Hidden threads on it (workflow workers) that are starting or active. */
+  hiddenThreads?: number;
   /** Its sandbox id when `sandbox` is null. */
   sandboxId?: SandboxId;
 }
@@ -114,7 +116,10 @@ function world(hosts: FakeHost[], orphans: Sandbox[] = []) {
         },
         experimental_reconcile: async ({ hostId }: { hostId: string }) => void reconciled.push(hostId),
       },
-      threads: { count: async ({ hostId, status }: { hostId: string; status: string }) => ({ total: status === "active" ? find(hostId).busyThreads : 0 }) },
+      threads: {
+        listRunning: async () =>
+          hosts.flatMap(({ id, busyThreads, hiddenThreads = 0 }) => Array.from({ length: busyThreads + hiddenThreads }, () => ({ hostId: id }))),
+      },
     },
     experimental_machines: {
       async getResource(hostId: string) {
@@ -152,6 +157,26 @@ test("a follow-up that starts a turn after the sweep looked cancels the suspend"
   const boat = world([host]);
   boat.idleFor("host_1", 20);
   boat.hooks.duringList = () => void (host.busyThreads = 1);
+
+  await boat.sweep(signal());
+
+  assert.deepEqual(boat.suspended, []);
+});
+
+test("a machine whose only work is a hidden workflow worker is not suspended", async () => {
+  const boat = world([{ id: "host_1", sandbox: sandbox("abcdefgh"), busyThreads: 0, hiddenThreads: 1 }]);
+  boat.idleFor("host_1", 20);
+
+  await boat.sweep(signal());
+
+  assert.deepEqual([boat.suspended, boat.touched], [[], ["host_1"]]);
+});
+
+test("a hidden workflow worker that starts after the sweep looked cancels the suspend", async () => {
+  const host = { id: "host_1", sandbox: sandbox("abcdefgh"), busyThreads: 0, hiddenThreads: 0 };
+  const boat = world([host]);
+  boat.idleFor("host_1", 20);
+  boat.hooks.duringList = () => void (host.hiddenThreads = 1);
 
   await boat.sweep(signal());
 
