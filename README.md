@@ -39,29 +39,3 @@ bb plugin install ./plugins/my-plugin
 bb plugin dev plugins/my-plugin   # rebuild and reload on save
 npm run check                     # manifests, typecheck, tests, build (what CI runs)
 ```
-
-How each plugin field maps into the marketplace:
-
-| `plugins/<id>/package.json` | Marketplace entry |
-| --- | --- |
-| `name` (`bb-plugin-<id>`) | `id` (must match the directory name) |
-| `bb.name`, `bb.description` | `displayName`, `description` |
-| `bb.branding.icon` | `icon` (named icon, or a file path relative to the plugin) |
-| `keywords` (minus `bb-plugin`) | `tags` |
-| `version` major | `range` (`0.x`, `1.x`, …) over `<id>/vX.Y.Z` tags |
-
-## Release
-
-`main` is protected: every change lands through a pull request with green CI.
-Bump `version` in the plugin's `package.json`, run `npm run manifests`, and
-merge that PR. Then tag the merged commit:
-
-```sh
-git switch main && git pull
-npm run release -- <id>       # tags <id>/v<version> on HEAD
-git push origin <id>/v<version>
-```
-
-The marketplace tracks each plugin's whole major line, so a pushed tag reaches
-users on their next `bb plugin update` with no catalog change. bb refuses a tag
-that moves after release: publish fixes as a new version, never retag.
