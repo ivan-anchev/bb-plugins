@@ -5,14 +5,20 @@ import type { BoatAccess, BoatSession, Configuration } from "./boat/access.ts";
 import { isNotFound, type BoatClient } from "./boat/client.ts";
 import type { Sandbox, SandboxId } from "./boat/sandbox.ts";
 import type { StartGate } from "./boat/start-gate.ts";
+import { resolveOnBoat } from "./catalog/read.ts";
+import { passSignInsToDaemon } from "./daemon-sign-ins.ts";
 import { boatExecutor } from "./executor.ts";
 import type { IdleClock } from "./idle-clock.ts";
-import { machineInputs, resolveLaunch, type Launch } from "./launch.ts";
+import { resetInstance } from "./instance-reset.ts";
+import { describeLaunch, machineInputs, type Launch } from "./launch.ts";
 import { machineLabels, parseResource, sandboxName, type BoatResource } from "./ownership.ts";
-import { describeProblems } from "./problem.ts";
+import { describeProblems, messageOf } from "./problem.ts";
 import { LEASE_TTL_SECONDS, stopSandbox, waitUntilRunning, wakeSandbox } from "./sandbox-power.ts";
 
 export const PROVIDER_ID = "boat-sandbox";
+
+/** validate gets no caller signal; it reads /me, /limits and /saved-snapshots. */
+const VALIDATE_PATIENCE_MS = 15_000;
 
 interface ProviderDeps {
   access: BoatAccess;
@@ -37,27 +43,53 @@ export function boatMachineProvider(deps: ProviderDeps): PluginMachineProviderDe
     return session;
   }
 
+  /** Core's enrollment, with the daemon it starts signed in to whatever boat's environment passes. */
+  async function enroll(client: BoatClient, sandboxId: SandboxId, key: string, report: MachineBootstrapRequest["report"], signal: AbortSignal) {
+    await passSignInsToDaemon(client, sandboxId, signal);
+    return bootstrap({ key, executor: boatExecutor(client, sandboxId), report, signal });
+  }
+
   return {
     id: PROVIDER_ID,
     displayName: "boat Sandbox",
-    description: "An on-demand boat.dev VM for one thread. It stops when idle and resumes on the same disk.",
+    description: "An on-demand boat.dev VM for one thread, from boat's stock image or a saved snapshot. It stops when idle and resumes on the same disk.",
     icon: "./boat.svg",
     // Core removes the machine once no live thread or launch needs it, as for Modal.
     ephemeral: true,
     inputs: machineInputs,
     availability: async () => toAvailability(await access.configuration()),
 
+    // Before core records a thread or a machine. Asks boat, because boat owns the template names.
+    async validate({ inputs }) {
+      try {
+        const signal = AbortSignal.timeout(VALIDATE_PATIENCE_MS);
+        const resolution = await resolveOnBoat(await access.session(signal), inputs, signal);
+        return resolution.ok ? { action: "accept" } : { action: "refuse", message: resolution.message };
+      } catch (error) {
+        // One path for every failure: if boat cannot answer now, the create could not run either.
+        return { action: "refuse", message: messageOf(error) };
+      }
+    },
+
     async create({ inputs, key, attempt, checkpoint, report, signal }) {
       try {
         const session = await access.session(signal);
-        const launch = resolveLaunch(inputs, session.settings.defaultPreset);
-        report.step(`Creating ${launch.preset === "xlarge" ? "an" : "a"} ${launch.preset} boat sandbox`);
+        // Again here: a template may be gone, or a setting changed, since validate.
+        const resolution = await resolveOnBoat(session, inputs, signal);
+        if (!resolution.ok) return { status: "failed", message: resolution.message };
+        const { launch } = resolution;
+        report.step(`Creating ${describeLaunch(launch)}`);
         const sandbox = await findOrStartSandbox({ session, gate, ownerId, launch, key, attempt, signal });
         const resource: BoatResource = { sandboxId: sandbox.id, key, accountId: session.facts.account.id };
-        // Before bootstrap, so a restart finds and deletes this sandbox instead of leaking it.
+        // Before anything that can fail, so core's cleanup deletes this sandbox instead of leaking it.
         await checkpoint(resource);
-        await waitUntilRunning(session.client, sandbox.id, signal);
-        const { hostId } = await bootstrap({ key, executor: boatExecutor(session.client, sandbox.id), report, signal });
+        expectSignIns(await waitUntilRunning(session.client, sandbox.id, signal), launch);
+        // Create only, never resume: a template may carry another machine's bb identity.
+        const removed = await resetInstance(session.client, sandbox.id, key, signal);
+        // A log line, not a step: core samples the current step once a second, so a short one can vanish.
+        if (removed.length > 0)
+          report.log(`Removed the bb machine state template ${launch.template} carried from another machine: ${removed.join(", ")}`);
+        const { hostId } = await enroll(session.client, sandbox.id, key, report, signal);
         await idle.touch(hostId);
         return { status: "created", name: `boat ${sandbox.id}`, resource };
       } catch (error) {
@@ -84,7 +116,8 @@ export function boatMachineProvider(deps: ProviderDeps): PluginMachineProviderDe
       await wakeSandbox(client, gate, owned.sandboxId, signal);
       // Unchanged, but core refuses it if this resume no longer owns the machine.
       await checkpoint(resource);
-      const enrolled = await bootstrap({ key: owned.key, executor: boatExecutor(client, owned.sandboxId), report, signal });
+      // No resetInstance: the disk is this machine's own.
+      const enrolled = await enroll(client, owned.sandboxId, owned.key, report, signal);
       if (enrolled.hostId !== hostId)
         throw new Error(`boat sandbox ${owned.sandboxId} enrolled as ${enrolled.hostId}, not as machine ${hostId}.`);
       await idle.touch(hostId);
@@ -120,6 +153,20 @@ export function boatMachineProvider(deps: ProviderDeps): PluginMachineProviderDe
   };
 }
 
+/**
+ * A `from` create inherits the no-env of the sandbox the snapshot was saved from (OAS
+ * `CreateSandboxRequest.from`), so it gets none of the account's sign-ins and its first turn would only
+ * say `/login`. Read once running: the create response does not say yet.
+ */
+function expectSignIns(sandbox: Sandbox, launch: Launch): void {
+  if (sandbox.holdsLogins) return;
+  const source = launch.template === null ? "" : ` from template ${launch.template}`;
+  throw new Error(
+    `boat started sandbox ${sandbox.id}${source} as a no-env sandbox, so it would get no sign-ins. ` +
+      "A template saved from a no-env sandbox makes only no-env sandboxes; save the template from a sandbox in an environment.",
+  );
+}
+
 const toAvailability = (configuration: Configuration) =>
   configuration.status === "available"
     ? { status: configuration.status }
@@ -144,7 +191,14 @@ async function findOrStartSandbox({ session, gate, ownerId, launch, key, attempt
   const [existing] = await session.client.list(labels, signal);
   if (existing !== undefined) return existing;
 
-  const body = { name: sandboxName(key), type: launch.preset, labels, ttlSeconds: LEASE_TTL_SECONDS, noEnv: true } as const;
+  // No `noEnv`: boat's default environment signs the agents in, as the user set it up on boat.
+  const body = {
+    name: sandboxName(key),
+    type: launch.preset,
+    labels,
+    ttlSeconds: LEASE_TTL_SECONDS,
+    ...(launch.template === null ? {} : { from: launch.template }),
+  };
   const idempotencyKey = `bb:${ownerId}:${key}:${attempt}`;
   return gate.start(
     (retry) => session.client.create(body, retry ? `${idempotencyKey}:after-limit` : idempotencyKey, signal),
@@ -160,6 +214,3 @@ async function deleteSandbox(client: BoatClient, id: SandboxId, signal: AbortSig
     if (!isNotFound(error)) throw error;
   }
 }
-
-// boat's and the start gate's messages are written for people; core shows them on the thread.
-const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));

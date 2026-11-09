@@ -39,12 +39,13 @@ export async function wakeSandbox(client: BoatClient, gate: StartGate, id: Sandb
   await waitUntilRunning(client, id, signal);
 }
 
-export async function waitUntilRunning(client: BoatClient, id: SandboxId, signal: AbortSignal): Promise<void> {
+/** The sandbox as boat reports it once running. */
+export async function waitUntilRunning(client: BoatClient, id: SandboxId, signal: AbortSignal): Promise<Sandbox> {
   const deadline = Date.now() + START_PATIENCE_MS;
   for (;;) {
     const sandbox = await client.get(id, signal);
     if (sandbox === null) throw new Error(`boat deleted sandbox ${id} while it was starting.`);
-    if (sandbox.phase === "running") return;
+    if (sandbox.phase === "running") return sandbox;
     if (sandbox.phase !== "starting")
       throw new Error(`boat sandbox ${id} is ${sandbox.phase} instead of starting${sandbox.stopNote ? ` (${sandbox.stopNote})` : ""}.`);
     if (Date.now() > deadline) throw new Error(`boat sandbox ${id} did not start within ${START_PATIENCE_MS / 60_000} minutes.`);

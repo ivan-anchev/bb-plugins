@@ -8,7 +8,7 @@
     {
       "id": "boat-sandbox",
       "displayName": "boat Sandbox",
-      "description": "Run bb threads on on-demand boat.dev sandboxes that stop when idle and resume on the same disk.",
+      "description": "Run bb threads on on-demand boat.dev sandboxes that stop when idle, resume on the same disk, and can start from your boat saved snapshots.",
       "icon": {
         "url": "./plugins/boat-sandbox/boat.svg"
       },

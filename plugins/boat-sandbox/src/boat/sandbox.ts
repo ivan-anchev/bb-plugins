@@ -18,6 +18,8 @@ export interface Sandbox {
   dataExpired: boolean;
   /** Human text only (logs, CLI). Never branch on it. */
   stopNote: string | null;
+  /** boat put the account's sign-ins on it; false for a no-env sandbox. */
+  holdsLogins: boolean;
 }
 
 // `idle` and `running` only describe work queued through boat's own prompt API, and a fresh
@@ -52,6 +54,7 @@ export function toSandbox(json: unknown): Sandbox | null {
     stoppedAt: wire.stoppedAt,
     dataExpired: wire.dataExpiredAt !== null,
     stopNote: describeStop(wire),
+    holdsLogins: wire.holdsCreatorLogins,
   };
 }
 

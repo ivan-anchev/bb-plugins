@@ -1,0 +1,36 @@
+{
+  "ok": true,
+  "type": "snapshot.saved.list",
+  "snapshots": [
+    {
+      "createdAt": "2026-11-09T09:50:26.018Z",
+      "name": "tpl-test",
+      "sizeBytes": 138944512,
+      "snapshotId": "00000000-0000-4000-8000-000000000001",
+      "sourceSandboxId": "bx_aaaaaaaa",
+      "status": "ready",
+      "type": "small"
+    },
+    {
+      "createdAt": "2026-11-09T09:49:05.974Z",
+      "name": "tpl-noenv",
+      "sizeBytes": 6385664,
+      "snapshotId": "00000000-0000-4000-8000-000000000002",
+      "sourceSandboxId": "bx_bbbbbbbb",
+      "status": "ready",
+      "type": "small"
+    }
+  ],
+  "allowance": {
+    "extra": 0,
+    "extraDailyDollars": 0,
+    "extraMonthlyDollars": 0,
+    "free": 10,
+    "included": 10,
+    "org": null,
+    "orgName": null,
+    "pricePerExtraDailyDollars": 0.056,
+    "pricePerExtraMonthlyDollars": 1.68,
+    "used": 2
+  }
+}

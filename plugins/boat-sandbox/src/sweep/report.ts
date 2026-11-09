@@ -1,5 +1,6 @@
 // `bb boat sandboxes`: the sweep's look at bb and boat, one row per sandbox, with what the next sweep would do.
 import type { Sandbox, SandboxId, SandboxPhase } from "../boat/sandbox.ts";
+import { formatTable } from "../table.ts";
 import type { HostPhase, HostView, SweepAction, SweepInput } from "./plan.ts";
 
 export interface SandboxRow {
@@ -73,13 +74,10 @@ function describeAction(action: SweepAction): string {
 
 const HEADER = ["SANDBOX", "TYPE", "BOAT", "MACHINE", "AUTO-STOP", "NOTES"] as const;
 
-/** A plain table, one line per sandbox; notes are joined into the last column. */
+/** One line per sandbox; notes are joined into the last column. */
 export function formatRows(rows: readonly SandboxRow[]): string {
   if (rows.length === 0) return "This bb server has no boat sandboxes.\n";
-  const cells = [HEADER, ...rows.map(rowCells)];
-  const widths = HEADER.map((_, column) => Math.max(...cells.map((line) => line[column].length)));
-  const lines = cells.map((line) => line.map((cell, column) => (column === line.length - 1 ? cell : cell.padEnd(widths[column]))).join("  "));
-  return `${lines.map((line) => line.trimEnd()).join("\n")}\n`;
+  return formatTable(HEADER, rows.map(rowCells));
 }
 
 function rowCells(row: SandboxRow): readonly string[] {
