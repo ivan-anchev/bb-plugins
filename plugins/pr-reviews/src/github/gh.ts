@@ -9,7 +9,8 @@ import type { PrCommits } from "./pr-commits.ts";
 import type { Repo } from "./repo.ts";
 import { latestReviewsSchema, reviewRequestsSchema, toReviewers } from "./reviewers.ts";
 
-const LIST_LIMIT = 200;
+// [throwaway test] a smaller page while testing comments.
+const LIST_LIMIT = 100;
 const SUMMARY_FIELDS = ["number", "title", "author", "updatedAt", "headRefOid"];
 const DETAIL_FIELDS = [...SUMMARY_FIELDS, "body", "url", "headRefName", "baseRefName", "state", "isDraft", "commits", "additions", "deletions", "statusCheckRollup", "reviewRequests", "latestReviews", "labels"];
 
@@ -125,8 +126,9 @@ function refusalFor(error: unknown): Refusal {
   if (stderr.includes("gh auth login")) {
     return new Refusal({ code: "forbidden", message: "The GitHub CLI isn't signed in. Run `gh auth login`, then Refresh." });
   }
+  // [throwaway test] a reworded refusal, to have removed and added lines to comment on.
   if (stderr.includes("Could not resolve to a PullRequest")) {
-    return new Refusal({ code: "not_found", message: "GitHub has no such pull request." });
+    return new Refusal({ code: "not_found", message: "GitHub has no such pull request, or it can't be seen." });
   }
   return new Refusal({ code: "invalid", message: firstLine(stderr) ?? "The GitHub CLI failed." });
 }
