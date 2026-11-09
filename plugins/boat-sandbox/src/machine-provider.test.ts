@@ -6,7 +6,7 @@ import type { BoatAccess, BoatSession } from "./boat/access.ts";
 import { BoatApiError, type BoatClient, type CreateSandboxBody, type Labels } from "./boat/client.ts";
 import { toSandbox, type Sandbox, type SandboxId } from "./boat/sandbox.ts";
 import { createStartGate, type StartGate } from "./boat/start-gate.ts";
-import { accountId, sandboxId, wireMe, type SavedSnapshot } from "./boat/wire.ts";
+import { accountId, sandboxId, wireEnvironmentList, wireMe, type SavedSnapshot } from "./boat/wire.ts";
 import type { MachineInputs } from "./launch.ts";
 import { boatMachineProvider } from "./machine-provider.ts";
 import { machineLabels } from "./ownership.ts";
@@ -16,6 +16,8 @@ const ACCOUNT = "sandbox_account_1";
 const CAPTURED = JSON.parse(readFileSync(new URL("./boat/fixtures/create-a.json", import.meta.url), "utf8")).sandbox;
 
 const NODE_TOOLS: SavedSnapshot = { name: "node-tools", status: "ready", error: null, savedFrom: "small", savedAt: "2026-11-09T10:12:00.000Z" };
+/** base (boat's default, passes everything) and customer-demos (safe for third parties, AI proxy placeholders). */
+const ENVIRONMENTS = wireEnvironmentList.parse(JSON.parse(readFileSync(new URL("./boat/fixtures/environments.json", import.meta.url), "utf8")));
 
 /** boat in memory: Idempotency-Keys and labels behave as on the live API (spike Q1, Q9). */
 function fakeBoat() {
@@ -27,11 +29,19 @@ function fakeBoat() {
   /** Every command run in a sandbox; `answer` decides each one's output and exit code. */
   const commands: string[] = [];
   const shell = { answer: (_command: string) => ({ output: "", exitCode: 0 }) };
-  /** The saved snapshots on the account, and whether boat puts the account's logins on a new sandbox. */
-  const account = { templates: [NODE_TOOLS], holdsLogins: true };
-  const add = (labels: Labels): Sandbox => {
+  /**
+   * The saved snapshots and environments on the account, whether boat puts the account's logins on a new
+   * sandbox, and the environment boat attaches for the one a create names.
+   */
+  const account = {
+    templates: [NODE_TOOLS],
+    environments: ENVIRONMENTS,
+    holdsLogins: true,
+    attaches: (named: string): string | null => named,
+  };
+  const add = (labels: Labels, environment: string | null = "base"): Sandbox => {
     const id = sandboxId.parse(`bx_${"abcdefghjkmnpqrs".slice(sandboxes.size, sandboxes.size + 8)}`);
-    const sandbox = toSandbox({ ...CAPTURED, id, labels, state: "idle", holdsCreatorLogins: account.holdsLogins });
+    const sandbox = toSandbox({ ...CAPTURED, id, labels, state: "idle", holdsCreatorLogins: account.holdsLogins, environment });
     if (sandbox === null) throw new Error("unreachable: idle is present");
     sandboxes.set(id, sandbox);
     return sandbox;
@@ -40,6 +50,8 @@ function fakeBoat() {
     me: async () => wireMe.parse({ user: { id: ACCOUNT, login: "octocat", zeroDataRetention: false } }),
     limits: async () => ({ wallet: { kind: "personal" }, starts: { unlimited: true }, startsBlockedBy: null }),
     savedSnapshots: async () => account.templates,
+    environments: async () => account.environments,
+    credentialProfiles: () => Promise.reject(new Error("create never reads credential profiles")),
     get: async (id) => sandboxes.get(id) ?? null,
     list: async (labels) =>
       [...sandboxes.values()].filter((sandbox) => Object.entries(labels).every(([key, value]) => sandbox.labels[key] === value)),
@@ -48,7 +60,7 @@ function fakeBoat() {
       bodies.push(body);
       const replay = byIdempotencyKey.get(idempotencyKey);
       if (replay !== undefined) return replay;
-      const created = add(body.labels);
+      const created = add(body.labels, account.attaches(body.environment));
       byIdempotencyKey.set(idempotencyKey, created);
       return created;
     },
@@ -107,7 +119,7 @@ function provider(client: BoatClient, account = ACCOUNT, gate: StartGate = creat
       limits: { wallet: { kind: "personal" }, starts: { unlimited: true }, startsBlockedBy: null },
     },
     client,
-    settings: { ok: true, apiKey: "boat_test", idleMs: null, defaults: { template: null, preset: "small" } },
+    settings: { ok: true, apiKey: "boat_test", idleMs: null, defaults: { template: null, environment: null, preset: "small" } },
   };
   const access: BoatAccess = { configuration: async () => session, session: async () => session };
   const bootstraps: string[] = [];
@@ -399,19 +411,56 @@ test("validate refuses with boat's message when boat cannot list the snapshots",
   assert.deepEqual(await provider(boat.client).validate({}), { action: "refuse", message: "boat is down for maintenance." });
 });
 
-test("a create from a template sends its name as `from`, never noEnv, and says so", async () => {
+test("a create names its environment, and a template as `from`, never noEnv, and says so", async () => {
   const boat = fakeBoat();
   const { declaration } = provider(boat.client);
 
   const { result, steps } = await create(declaration, "thr_1", 1, { template: "node-tools", preset: "large" });
-  await create(declaration, "thr_2", 1, { template: null });
+  await create(declaration, "thr_2", 1, { template: null, environment: "customer-demos" });
 
   assert.equal(result.status, "created");
   assert.deepEqual(boat.bodies, [
-    { name: "bb thr_1", type: "large", labels: machineLabels(OWNER, "thr_1"), ttlSeconds: 7200, from: "node-tools" },
-    { name: "bb thr_2", type: "small", labels: machineLabels(OWNER, "thr_2"), ttlSeconds: 7200 },
+    { name: "bb thr_1", type: "large", labels: machineLabels(OWNER, "thr_1"), ttlSeconds: 7200, environment: "base", from: "node-tools" },
+    { name: "bb thr_2", type: "small", labels: machineLabels(OWNER, "thr_2"), ttlSeconds: 7200, environment: "customer-demos" },
   ]);
-  assert.deepEqual(steps, ["Creating a large boat sandbox from template node-tools"]);
+  assert.deepEqual(steps, ["Creating a large boat sandbox from template node-tools in environment base"]);
+});
+
+test("validate refuses an environment boat does not have", async () => {
+  const { validate } = provider(fakeBoat().client);
+
+  assert.deepEqual(await validate({ environment: "base" }), { action: "accept" });
+  assert.deepEqual(await validate({ environment: "nope" }), {
+    action: "refuse",
+    message: 'boat has no environment "nope". Run `bb boat templates` to list them.',
+  });
+});
+
+test("a sandbox boat started in another environment, or in none, fails the create after its checkpoint", async () => {
+  for (const [attached, holds] of [["customer-demos", "customer-demos"], [null, "none"]] as const) {
+    const boat = fakeBoat();
+    boat.account.attaches = () => attached;
+    const { declaration, bootstraps } = provider(boat.client);
+
+    const { result, checkpoints } = await create(declaration, "thr_1", 1, { template: "node-tools" });
+
+    assert.deepEqual(result, {
+      status: "failed",
+      message: `boat started sandbox bx_abcdefgh from template node-tools without environment base (it holds ${holds}), so it would not get that environment's sign-ins.`,
+    });
+    assert.equal(checkpoints.length, 1);
+    assert.deepEqual([boat.commands, bootstraps], [[], []]);
+  }
+});
+
+test("a sandbox in an environment that passes nothing holds no logins, and that is what was asked for", async () => {
+  const boat = fakeBoat();
+  boat.account.holdsLogins = false;
+  const { declaration } = provider(boat.client);
+
+  const { result } = await create(declaration, "thr_1", 1, { environment: "customer-demos" });
+
+  assert.equal(result.status, "created");
 });
 
 test("a template boat no longer has fails the create before any sandbox exists", async () => {
@@ -457,7 +506,7 @@ test("create resets another machine's bb state before passing sign-ins and enrol
   assert.deepEqual(created, ["reset", "sign-ins"]);
   assert.deepEqual(boat.commands.slice(2).map(kindOf), ["sign-ins"]);
   assert.match(boat.commands[0] ?? "", /'thr_1'/);
-  assert.deepEqual(steps, ["Creating a small boat sandbox from template node-tools"]);
+  assert.deepEqual(steps, ["Creating a small boat sandbox from template node-tools in environment base"]);
   assert.deepEqual(logs, [
     "Removed the bb machine state template node-tools carried from another machine: ~/.config/systemd/user/bb-host-daemon-x.service, ~/.bb-machines",
   ]);
@@ -468,7 +517,7 @@ test("a create on a clean disk reports no reset", async () => {
 
   const { steps, logs } = await create(declaration, "thr_1");
 
-  assert.deepEqual([steps, logs], [["Creating a small boat sandbox from boat's stock image"], []]);
+  assert.deepEqual([steps, logs], [["Creating a small boat sandbox from boat's stock image in environment base"], []]);
 });
 
 test("a create whose sign-in drop-in fails reports it and never enrolls the daemon", async () => {

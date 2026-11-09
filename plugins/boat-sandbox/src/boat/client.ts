@@ -4,6 +4,8 @@ import type { Preset } from "../launch.ts";
 import { toSandbox, type Sandbox, type SandboxId } from "./sandbox.ts";
 import {
   wireCommandFrame,
+  wireCredentialProfileList,
+  wireEnvironmentList,
   wireError,
   wireLimits,
   wireMe,
@@ -11,7 +13,9 @@ import {
   wireSandboxList,
   wireSavedSnapshotList,
   type Account,
+  type CredentialProfile,
   type Limits,
+  type SandboxEnvironment,
   type SavedSnapshot,
 } from "./wire.ts";
 
@@ -48,6 +52,8 @@ export interface CreateSandboxBody {
   type: Preset;
   labels: Labels;
   ttlSeconds: number;
+  /** Always named: a `from` create would otherwise take the snapshot source's environment (OAS `from`). */
+  environment: string;
   /** The saved snapshot whose disk the sandbox starts from; boat's stock image when absent. */
   from?: string;
 }
@@ -65,6 +71,10 @@ export interface BoatClient {
   limits(signal?: AbortSignal): Promise<Limits>;
   /** Every saved snapshot on the account, in any status (`snapshot.read`). */
   savedSnapshots(signal?: AbortSignal): Promise<SavedSnapshot[]>;
+  /** Every environment on the account, boat's default among them (`environment.read`). */
+  environments(signal?: AbortSignal): Promise<SandboxEnvironment[]>;
+  /** Every AI credential profile the account can use (`account.admin`, which a `ci` key lacks). */
+  credentialProfiles(signal?: AbortSignal): Promise<CredentialProfile[]>;
   /** null when boat no longer has the sandbox (404 or cancelled). */
   get(id: SandboxId, signal: AbortSignal): Promise<Sandbox | null>;
   /** Every sandbox carrying all of `labels`, in any state, across all pages. */
@@ -97,6 +107,8 @@ export function createBoatClient(apiKey: string): BoatClient {
     limits: async (signal) => wireLimits.parse(await json("/limits", { signal })),
     // No query parameters: boat refuses unknown ones, and this list has no paging.
     savedSnapshots: async (signal) => wireSavedSnapshotList.parse(await json("/saved-snapshots", { signal })),
+    environments: async (signal) => wireEnvironmentList.parse(await json("/environments", { signal })),
+    credentialProfiles: async (signal) => wireCredentialProfileList.parse(await json("/credential-profiles", { signal })),
     async get(id, signal) {
       try {
         return toSandbox(wireSandboxEnvelope.parse(await json(`/sandboxes/${id}`, { signal })).sandbox);

@@ -7,6 +7,10 @@
 // - /limits reads the wallet a create would bill (the key's active wallet). It carries `teamId`
 //   only when that is an organization wallet. `starts.{minute,hour,day}` are `{limit, used, remaining}`,
 //   all null when `starts.unlimited`. `canStart` / `startBlockedReason` say whether any start can run.
+// - /environments `environments[]` carries the pass toggles, `safeForThirdParties` (which overrides
+//   them), `proxyAiCredentials` and `credentialProfileId` (null: the sandbox owner's default profile).
+// - /credential-profiles `profiles[]` carries `connected` (credential ids such as
+//   `claude-subscription`, never a secret) and `owner.{id, aiProxyEnabled}`.
 import { z } from "zod";
 
 export const sandboxId = z.string().regex(/^bx_[23456789abcdefghjkmnpqrstuvwxyz]{8}$/).brand<"SandboxId">();
@@ -40,6 +44,58 @@ export const wireLimits = z
   }));
 
 /**
+ * OAS `SandboxEnvironment`: what of the account boat passes into the sandboxes started in it. Only the
+ * flags are read: zod drops `envContents` and `secretFiles` (OAS: "Treat as sensitive") right here.
+ */
+const sandboxEnvironment = z
+  .object({
+    name: z.string(),
+    isDefault: z.boolean(),
+    safeForThirdParties: z.boolean(),
+    proxyAiCredentials: z.boolean(),
+    passAgentsCredentials: z.boolean(),
+    passGithub: z.boolean(),
+    passSecrets: z.boolean(),
+    credentialProfileId: z.string().nullable(),
+  })
+  .transform((environment) => ({
+    name: environment.name,
+    /** boat keeps exactly one: a create that names no environment gets it. */
+    isBoatDefault: environment.isDefault,
+    /** Safe for third parties: passes nothing, whatever `passes` says, except proxy placeholders. */
+    withholdsAll: environment.safeForThirdParties,
+    /** With `withholdsAll`, the agents still sign in, through boat's AI proxy placeholders. */
+    proxiesAi: environment.proxyAiCredentials,
+    passes: { agents: environment.passAgentsCredentials, github: environment.passGithub, secrets: environment.passSecrets },
+    /** The AI credential profile its sandboxes get; null: the sandbox owner's default profile. */
+    profileId: environment.credentialProfileId,
+  }));
+
+export const wireEnvironmentList = z
+  .object({ environments: z.array(sandboxEnvironment) })
+  .transform(({ environments }) => environments);
+
+/** OAS `CredentialProfile`: which AI credentials boat holds, and whether its owner proxies them. */
+const credentialProfile = z
+  .object({
+    id: z.string(),
+    isDefault: z.boolean(),
+    owner: z.object({ id: z.string(), aiProxyEnabled: z.boolean() }),
+    connected: z.array(z.string()),
+  })
+  .transform((profile) => ({
+    id: profile.id,
+    isDefault: profile.isDefault,
+    ownerId: profile.owner.id,
+    proxyOn: profile.owner.aiProxyEnabled,
+    connected: profile.connected,
+  }));
+
+export const wireCredentialProfileList = z
+  .object({ profiles: z.array(credentialProfile) })
+  .transform(({ profiles }) => profiles);
+
+/**
  * The `ErrorEnvelope` every non-2xx JSON response carries. `error.details.retryable` marks a
  * `502 sandbox_direct_failed` whose command provably never ran.
  */
@@ -69,6 +125,11 @@ const presentSandbox = z.object({
    * sandbox, which still reports `environment: "base"` (live, 2026-11-09), so this is the field to read.
    */
   holdsCreatorLogins: z.boolean(),
+  /**
+   * The environment the sandbox runs (OAS: "what the sandbox actually holds"). Read it once the sandbox
+   * runs: a create response can say null before then (live, 2026-11-09).
+   */
+  environment: z.string().nullable(),
 });
 
 export const wireSandbox = z.discriminatedUnion("state", [cancelledSandbox, presentSandbox]);
@@ -126,3 +187,5 @@ export type Limits = z.output<typeof wireLimits>;
 export type Wallet = Limits["wallet"];
 export type PresentSandbox = z.output<typeof presentSandbox>;
 export type SavedSnapshot = z.output<typeof savedSnapshot>;
+export type SandboxEnvironment = z.output<typeof sandboxEnvironment>;
+export type CredentialProfile = z.output<typeof credentialProfile>;

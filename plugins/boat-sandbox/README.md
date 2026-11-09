@@ -35,10 +35,10 @@ npm test --workspace plugins/boat-sandbox
 - `src/boat/access.ts`: whether the configured key can run sandboxes.
 - `src/boat/sandbox.ts`: `Sandbox`, with boat's states collapsed to phases.
 - `src/boat/start-gate.ts`: boat's start limit (`429 rate_limited`).
-- `src/launch.ts`: the machine inputs (`template`, `preset`) and
-  `resolveLaunch`, the one rule that turns them into a launch.
-- `src/catalog/`: boat's saved snapshots as launch choices, and the
-  `bb boat templates` table.
+- `src/launch.ts`: the machine inputs (`template`, `environment`, `preset`)
+  and `resolveLaunch`, the one rule that turns them into a launch.
+- `src/catalog/`: boat's saved snapshots and environments as launch choices,
+  and the `bb boat templates` tables.
 - `src/ownership.ts`: the owner id, labels and the resource core persists.
 - `src/executor.ts`: core's command channel over boat's commands API, with
   stdin staged as a file in a private directory.
@@ -50,3 +50,5 @@ npm test --workspace plugins/boat-sandbox
   keyed cleanup.
 - `src/cli.ts`, `src/status.ts`: `bb boat status`, `templates` and
   `sandboxes`.
+- `src/sign-ins.ts`, `src/settle.ts`: the Claude Code, Codex and AI proxy
+  rows for one environment, and boat reads reported as `unknown (<reason>)`.

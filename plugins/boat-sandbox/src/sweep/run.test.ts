@@ -62,6 +62,8 @@ function world(hosts: FakeHost[], orphans: Sandbox[] = []) {
     me: unused,
     limits: unused,
     savedSnapshots: unused,
+    environments: unused,
+    credentialProfiles: unused,
     create: unused,
     remove: unused,
     resume: unused,
@@ -85,7 +87,7 @@ function world(hosts: FakeHost[], orphans: Sandbox[] = []) {
     status: "available",
     facts: { account: { id: ACCOUNT, login: "octocat", zeroDataRetention: false }, limits: { wallet: { kind: "personal" }, starts: { unlimited: true }, startsBlockedBy: null } },
     client,
-    settings: { ok: true, apiKey: "boat_test", idleMs: IDLE_MS, defaults: { template: null, preset: "small" } },
+    settings: { ok: true, apiKey: "boat_test", idleMs: IDLE_MS, defaults: { template: null, environment: null, preset: "small" } },
   };
   const access: BoatAccess = { configuration: async () => session, session: async () => session };
   const idle: IdleClock = {

@@ -2,9 +2,10 @@
 // channel, suspends it as a boat stop, resumes the same sandbox, and deletes it when the machine goes.
 import type { MachineBootstrapRequest, PluginMachineProviderDeclaration } from "@get-bb/plugin-sdk";
 import type { BoatAccess, BoatSession, Configuration } from "./boat/access.ts";
-import { isNotFound, type BoatClient } from "./boat/client.ts";
+import { isNotFound, type BoatClient, type CreateSandboxBody } from "./boat/client.ts";
 import type { Sandbox, SandboxId } from "./boat/sandbox.ts";
 import type { StartGate } from "./boat/start-gate.ts";
+import type { SandboxEnvironment } from "./boat/wire.ts";
 import { resolveOnBoat } from "./catalog/read.ts";
 import { passSignInsToDaemon } from "./daemon-sign-ins.ts";
 import { boatExecutor } from "./executor.ts";
@@ -17,7 +18,7 @@ import { LEASE_TTL_SECONDS, stopSandbox, waitUntilRunning, wakeSandbox } from ".
 
 export const PROVIDER_ID = "boat-sandbox";
 
-/** validate gets no caller signal; it reads /me, /limits and /saved-snapshots. */
+/** validate gets no caller signal; it reads /me, /limits, /saved-snapshots and /environments. */
 const VALIDATE_PATIENCE_MS = 15_000;
 
 interface ProviderDeps {
@@ -59,7 +60,7 @@ export function boatMachineProvider(deps: ProviderDeps): PluginMachineProviderDe
     inputs: machineInputs,
     availability: async () => toAvailability(await access.configuration()),
 
-    // Before core records a thread or a machine. Asks boat, because boat owns the template names.
+    // Before core records a thread or a machine. Asks boat, because boat owns the template and environment names.
     async validate({ inputs }) {
       try {
         const signal = AbortSignal.timeout(VALIDATE_PATIENCE_MS);
@@ -74,16 +75,16 @@ export function boatMachineProvider(deps: ProviderDeps): PluginMachineProviderDe
     async create({ inputs, key, attempt, checkpoint, report, signal }) {
       try {
         const session = await access.session(signal);
-        // Again here: a template may be gone, or a setting changed, since validate.
+        // Again here: a template or environment may be gone, or a setting changed, since validate.
         const resolution = await resolveOnBoat(session, inputs, signal);
         if (!resolution.ok) return { status: "failed", message: resolution.message };
-        const { launch } = resolution;
+        const { launch, environment } = resolution;
         report.step(`Creating ${describeLaunch(launch)}`);
         const sandbox = await findOrStartSandbox({ session, gate, ownerId, launch, key, attempt, signal });
         const resource: BoatResource = { sandboxId: sandbox.id, key, accountId: session.facts.account.id };
         // Before anything that can fail, so core's cleanup deletes this sandbox instead of leaking it.
         await checkpoint(resource);
-        expectSignIns(await waitUntilRunning(session.client, sandbox.id, signal), launch);
+        expectEnvironment(await waitUntilRunning(session.client, sandbox.id, signal), launch, environment);
         // Create only, never resume: a template may carry another machine's bb identity.
         const removed = await resetInstance(session.client, sandbox.id, key, signal);
         // A log line, not a step: core samples the current step once a second, so a short one can vanish.
@@ -154,18 +155,29 @@ export function boatMachineProvider(deps: ProviderDeps): PluginMachineProviderDe
 }
 
 /**
- * A `from` create inherits the no-env of the sandbox the snapshot was saved from (OAS
- * `CreateSandboxRequest.from`), so it gets none of the account's sign-ins and its first turn would only
- * say `/login`. Read once running: the create response does not say yet.
+ * Checks what boat attached, once the sandbox runs (a create response can say `environment: null` before
+ * then): the environment must be the launch's, and a sandbox in an environment that passes logins must
+ * hold them. The second check is the one that catches no-env: a `from` create inherits the no-env of the
+ * snapshot's source sandbox even when it names an environment, and then reports that environment with
+ * `holdsCreatorLogins: false` (live, 2026-11-09). Its first turn would only say `/login`.
  */
-function expectSignIns(sandbox: Sandbox, launch: Launch): void {
-  if (sandbox.holdsLogins) return;
+function expectEnvironment(sandbox: Sandbox, launch: Launch, environment: SandboxEnvironment): void {
   const source = launch.template === null ? "" : ` from template ${launch.template}`;
-  throw new Error(
-    `boat started sandbox ${sandbox.id}${source} as a no-env sandbox, so it would get no sign-ins. ` +
-      "A template saved from a no-env sandbox makes only no-env sandboxes; save the template from a sandbox in an environment.",
-  );
+  if (sandbox.environment !== launch.environment)
+    throw new Error(
+      `boat started sandbox ${sandbox.id}${source} without environment ${launch.environment} ` +
+        `(it holds ${sandbox.environment ?? "none"}), so it would not get that environment's sign-ins.`,
+    );
+  if (!sandbox.holdsLogins && passesLogins(environment))
+    throw new Error(
+      `boat started sandbox ${sandbox.id}${source} as a no-env sandbox, so it would get no sign-ins. ` +
+        "A template saved from a no-env sandbox makes only no-env sandboxes; save the template from a sandbox in an environment.",
+    );
 }
+
+/** boat holds none of the creator's logins on a sandbox whose environment passes nothing (OAS `Sandbox.visibility`). */
+const passesLogins = ({ withholdsAll, passes }: SandboxEnvironment): boolean =>
+  !withholdsAll && (passes.agents || passes.github || passes.secrets);
 
 const toAvailability = (configuration: Configuration) =>
   configuration.status === "available"
@@ -191,12 +203,13 @@ async function findOrStartSandbox({ session, gate, ownerId, launch, key, attempt
   const [existing] = await session.client.list(labels, signal);
   if (existing !== undefined) return existing;
 
-  // No `noEnv`: boat's default environment signs the agents in, as the user set it up on boat.
-  const body = {
+  // Never `noEnv`: the launch's environment signs the agents in, as the user set it up on boat.
+  const body: CreateSandboxBody = {
     name: sandboxName(key),
     type: launch.preset,
     labels,
     ttlSeconds: LEASE_TTL_SECONDS,
+    environment: launch.environment,
     ...(launch.template === null ? {} : { from: launch.template }),
   };
   const idempotencyKey = `bb:${ownerId}:${key}:${attempt}`;

@@ -1,6 +1,6 @@
 ---
 name: boat-sandboxes
-description: The boat Sandbox plugin, which starts bb threads on new boat.dev sandboxes (`bb thread spawn --environment-provider boat-sandbox --machine-inputs '{"preset":"small"}'`, or boat Sandbox in the new-thread picker), stops them when idle, resumes them on a follow-up, and deletes them with `bb machine remove`. Covers its settings (API key, Stop after idle, Default size, Default template), presets, templates (boat saved snapshots, `--machine-inputs '{"template":"<name>"}'`, `bb boat templates`), start limits, idle stops and resumes, the auto-stop lease, failed creates, drift between bb and boat, leaked sandboxes, `bb boat status`, `bb boat templates` and `bb boat sandboxes`. Use when a user sets up or uses boat.dev sandboxes for bb, or asks why one stopped, resumed, failed or was stopped as an orphan.
+description: The boat Sandbox plugin, which starts bb threads on new boat.dev sandboxes (`bb thread spawn --environment-provider boat-sandbox --machine-inputs '{"preset":"small"}'`, or boat Sandbox in the new-thread picker), stops them when idle, resumes them on a follow-up, and deletes them with `bb machine remove`. Covers its settings (API key, Stop after idle, Default size, Default template, Default environment), presets, templates (boat saved snapshots, `--machine-inputs '{"template":"<name>"}'`, `bb boat templates`), environments (`--machine-inputs '{"environment":"<name>"}'`, which decide the sign-ins, GitHub token and secrets a sandbox gets), Claude Code and Codex sign-ins from boat, the AI proxy, start limits, idle stops and resumes, the auto-stop lease, failed creates, drift between bb and boat, leaked sandboxes, `bb boat status`, `bb boat templates` and `bb boat sandboxes`. Use when a user sets up or uses boat.dev sandboxes for bb, or asks why one stopped, resumed, failed or was stopped as an orphan.
 ---
 
 # boat Sandbox
@@ -18,28 +18,28 @@ bb thread spawn --project <project-id> --environment-provider boat-sandbox \
   --machine-inputs '{"preset":"small"}' --prompt "…"
 ```
 
-The thread's provisioning details show `Creating a small boat sandbox`, then
+The thread's provisioning details show
+`Creating a small boat sandbox from boat's stock image in environment base`, then
 bb's own steps: machine enrollment, the daemon install, the clone and
 `.bb-env-setup.sh`. A new sandbox is up in a few seconds and the whole
 provisioning takes about 15 s.
 
 - `--machine-inputs` takes `{"preset": "small" | "default" | "large" | "xlarge"}`,
-  boat's sandbox types (2/4/8/16 vCPU), and `{"template": "<name>"}`, a boat
+  boat's sandbox types (2/4/8/16 vCPU); `{"template": "<name>"}`, a boat
   saved snapshot to start from (see Templates), or `{"template": null}` for
-  boat's stock image. A key left out takes its setting (**Default size**,
-  **Default template**). Any other key is refused.
+  boat's stock image; and `{"environment": "<name>"}`, the boat environment
+  the sandbox starts in (see Environments). A key left out takes its setting
+  (**Default size**, **Default template**, **Default environment**). Any other
+  key is refused. `bb boat templates` prints every name with its
+  `--machine-inputs`.
 - The project needs a Git remote that bb knows about (`bb project show <id>`
   prints `gitRemoteUrl`). Without one, `boat-sandbox` is missing from
   `--environment-provider`, because bb clones the project from that remote.
 - The bb server must be reachable from the internet (bb Connect), since the
   daemon on the sandbox connects back to it.
-- Claude Code and Codex sign in from boat. A sandbox starts in the boat
-  account's default environment, and before bb's daemon starts the plugin
-  installs a systemd drop-in that loads the sign-ins boat writes to
-  `/run/ascii-secrets/env.sh` (connected under
-  [Agents & Proxying](https://boat.dev/dashboard?tab=agents)) at every daemon
-  start, on create and on resume. Without one there, a turn answers
-  `Not logged in · Please run /login`.
+- Claude Code and Codex sign in from boat, with what the sandbox's
+  environment passes (see Sign-ins from boat). Without a sign-in, a turn
+  answers `Not logged in · Please run /login`.
 
 `bb machine list --all` shows the machine as `boat <sandbox-id>`, type
 `ephemeral`, provider `boat-sandbox`. bb removes it once no live thread
@@ -48,6 +48,50 @@ needs it, or remove it yourself:
 ```sh
 bb machine remove <host-id> --yes    # deletes the boat sandbox; boat answers 404 at once
 ```
+
+## Environments
+
+A boat **environment** decides what of your boat account a sandbox gets: the
+Claude Code and Codex sign-ins, the GitHub token, and the environment's
+variables and secret files. Every boat account has `base`, boat's default
+environment. You make and change environments on boat; the plugin lists them
+and starts each thread sandbox in one.
+
+```sh
+boat env list                               # every environment; boat's default is marked
+boat env info base                          # its toggles, variables, secret files and repositories
+bb thread spawn --project <project-id> --environment-provider boat-sandbox \
+  --machine-inputs '{"environment":"base","preset":"small"}' --prompt "…"
+```
+
+An environment holds:
+
+- **Toggles**, changed with `boat env set <name> --<toggle> true|false`:
+  `--agents-credentials` (the Claude Code and Codex sign-ins), `--github`
+  (the GitHub token and the environment's repositories), `--secrets` (its
+  variables and secret files) and `--boat-credentials` (boat's CLI token in
+  the sandbox, see below).
+- **Safe for third parties** (`--safe-for-third-parties true`): passes
+  nothing, whatever the toggles say, like `boat new --no-env`. With
+  `--proxy-ai-credentials true` the agents still sign in, through boat's AI
+  proxy placeholders; real keys never enter the sandbox.
+- **Variables, secret files and repositories** (`boat env set-var`,
+  `set-file`, `add-repo`). A repository is cloned to `/home/user/<name>` in
+  every sandbox and its setup script runs at every start, resume included.
+- **A credential profile** (`--credential-profile`): which of your AI
+  credentials the agents get; the default is your own default profile.
+
+Every change makes a new version of the environment. New sandboxes take the
+latest version. A sandbox keeps the version it started with, so a running
+thread sandbox does not see the change until `boat env upgrade <name>`
+pushes it (to live sandboxes at once, stopped ones at resume).
+
+A thread that names no environment gets the **Default environment** setting;
+empty is boat's default environment. Every create names its environment to
+boat, and the create fails if boat attached another one:
+`boat started sandbox bx_… without environment base (it holds none), so it would not get that environment's sign-ins.`
+An unknown name is refused at spawn, before bb records the thread:
+``boat has no environment "nope". Run `bb boat templates` to list them.``
 
 ## Templates
 
@@ -95,12 +139,55 @@ boat snapshot rm node-tools                 # delete it on boat
   bb's daemon on the sandbox before you save one you will reuse:
   `systemctl --user disable --now $(cd ~/.config/systemd/user && ls bb-host-daemon-*.service)`.
 - **Saved from a `--no-env` sandbox** (`boat new --no-env`). boat makes every
-  sandbox from it no-env too, so it would get no sign-ins. The create fails
+  sandbox from it no-env too, even though the create names an environment
+  (boat then reports that environment but attaches none of its logins;
+  checked live on 2026-11-09), so it would get no sign-ins. The create fails
   with `… as a no-env sandbox, so it would get no sign-ins …` and bb deletes
   the sandbox. Save the template again from a sandbox in an environment.
 - Any size can start from any template; the template's own size is only shown.
 - boat's trial accounts cannot save snapshots; `bb boat templates` then lists
   only the stock image.
+
+## Sign-ins from boat
+
+Thread sandboxes take their sign-ins from the boat environment they start
+in; the plugin writes no credentials itself. With **agent credentials** on,
+boat writes the sign-ins connected under
+[Agents & Proxying](https://boat.dev/dashboard?tab=agents) (a Claude or
+ChatGPT subscription, or an Anthropic or OpenAI API key) to
+`/run/ascii-secrets/env.sh` (`CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`,
+`OPENAI_API_KEY`, the `CHATGPT_*` tokens) and `~/.codex/auth.json`, fresh at
+every start and resume. With **GitHub** on, it adds `GITHUB_TOKEN`; with
+**secrets** on, the environment's variables.
+
+Only `~/.bashrc` loads boat's file, and bb's daemon is a systemd user
+service, so before each enrollment, on create and on resume, the plugin
+writes a drop-in,
+`~/.config/systemd/user/bb-host-daemon-.service.d/boat-sign-ins.conf`. At
+every daemon start it copies the file into `/run/user/<uid>`, readable by the
+user alone, and loads it, so agent turns and terminals get boat's variables.
+The drop-in holds no secret.
+
+Variables set in bb's own machine environment still reach every agent turn
+through bb core, and win over boat's value for the same name.
+
+`bb boat status` reports Claude Code, Codex and the AI proxy for the default
+launch's environment.
+
+**The AI proxy** is your boat account's choice (`boat ai proxy on|off`); the
+plugin never changes it.
+
+- **Off**: the sandbox holds the real tokens. boat refreshes them only at
+  each sandbox start and resume (and before its own `boat prompt`, which bb's
+  turns are not), so a sandbox that stays up long enough can hold an expired
+  token until its next resume.
+- **On**: the sandbox holds placeholders, and boat renews the real tokens on
+  its side. It costs $1 a day plus $1 per 1,000 requests, from the wallet.
+
+**boat's CLI token in the sandbox** (`--boat-credentials`, on by default)
+stays on. It acts only on its own sandbox (read, stop, commands, files,
+snapshots of that sandbox), so nothing a thread runs can reach your other
+sandboxes through it.
 
 ## When a create fails
 
@@ -242,26 +329,41 @@ with the same problem lines as `bb boat status` when the key does not work.
 ## `bb boat templates`
 
 Lists boat's stock image and every saved snapshot on the account, in any
-status, with the `--machine-inputs` to start from each, then the default
-launch as a full spawn command.
+status, then every environment, each with the `--machine-inputs` to use it,
+then the default launch as a full spawn command. Every `--machine-inputs` value
+and every printed command is shell-quoted, so an environment name with spaces
+or an apostrophe pastes as is.
 
 ```text
-TEMPLATE          STATUS  SIZE   SAVED              --machine-inputs           NOTES
-boat stock image  ready   -      -                  {"template":null}
-node-tools        ready   small  2026-11-09T10:12Z  {"template":"node-tools"}  default
-py-ml             failed  -      2026-11-09T11:02Z  -                          source sandbox was deleted
+TEMPLATE          STATUS  SIZE   SAVED              --machine-inputs             NOTES
+boat stock image  ready   -      -                  '{"template":null}'
+node-tools        ready   small  2026-11-09T10:12Z  '{"template":"node-tools"}'  default
+py-ml             failed  -      2026-11-09T11:02Z  -                            source sandbox was deleted
 
-Default launch (Settings → boat Sandbox): a default boat sandbox from template node-tools.
+ENVIRONMENT     PASSES                                               --machine-inputs                    NOTES
+base            agents, GitHub, secrets                              '{"environment":"base"}'            boat's default; default
+customer-demos  AI proxy placeholders only (safe for third parties)  '{"environment":"customer-demos"}'
+
+Default launch (Settings → boat Sandbox): a default boat sandbox from template node-tools in environment base.
   bb thread spawn --project <project-id> --environment-provider boat-sandbox \
-    --machine-inputs '{"template":"node-tools","preset":"default"}' --prompt "…"
+    --machine-inputs '{"template":"node-tools","environment":"base","preset":"default"}' --prompt "…"
 Save a template from any boat sandbox with: boat snapshot <sandbox-id> <name>
 ```
 
 **SIZE** is the size the template was saved from, **SAVED** is in UTC, and
-**NOTES** marks the Default template and carries boat's error for a failed
-save. `--json` prints `{templates: [{name, status, error, savedFrom, savedAt}],
-defaults: {template, preset}}`. The command exits 1 with the same problem lines
-as `bb boat status` when the key does not work.
+**NOTES** marks the defaults and carries boat's error for a failed save.
+**PASSES** is what the environment gives a sandbox: any of `agents`, `GitHub`
+and `secrets`, `nothing (safe for third parties)`, or
+`AI proxy placeholders only (safe for third parties)`. `boat's default` marks
+the environment boat uses when nothing names one; `default` marks the one a
+thread that names none gets.
+
+`--json` prints `{templates: [{name, status, error, savedFrom, savedAt}],
+environments: [{name, isBoatDefault, withholdsAll, proxiesAi, passes: {agents,
+github, secrets}, profileId}], defaults: {template, environment, preset}}`.
+It never carries an environment's variables or secret files. The command
+exits 1 with the same problem lines as `bb boat status` when the key does not
+work.
 
 ## Settings
 
@@ -273,6 +375,11 @@ Settings → boat Sandbox, or `bb plugin config boat-sandbox`:
   in a 0600 file, never shown again, and never printed by the plugin. Paste it
   in Settings rather than passing it to `bb plugin config … set`, which leaves
   it in shell history. Do not print or echo it.
+  A boat key keeps the actions it was created with. A `ci` key made before
+  `snapshot.read` and `environment.read` joined the preset is refused when
+  `bb boat templates` or a spawn lists templates or environments (a `403`
+  naming the scope): make a new `ci` key and paste it, rather than giving the
+  key more scopes (`boat api-key list` shows each key's actions).
 - **Stop after idle (minutes)** (`idleMinutes`, default 15). A whole number
   from 0 to 1440; 0 never stops a sandbox for being idle (the auto-stop lease
   is still renewed). Takes effect at the next minute's check, without a reload.
@@ -284,6 +391,12 @@ Settings → boat Sandbox, or `bb plugin config boat-sandbox`:
   has it is checked at each spawn and by `bb boat status`.
   `bb plugin config boat-sandbox unset defaultTemplate` goes back to the stock
   image.
+- **Default environment** (`defaultEnvironment`, default empty). The boat
+  environment new machines start in when a thread names none; empty is boat's
+  default environment. Whether boat has it is checked at each spawn and by
+  `bb boat status`.
+  `bb plugin config boat-sandbox unset defaultEnvironment` goes back to boat's
+  default.
 
 bb reads the plugin's status only when the plugin loads, so after any fix (a
 new key, a setting, the wallet, the network) run
@@ -293,8 +406,10 @@ plugin as `needs-configuration`.
 ## `bb boat status`
 
 Prints one line per fact and, for each problem, a `Fix:` line with the one
-step that fixes it, ending with `bb plugin reload boat-sandbox`. Exit 0 when
-boat Sandbox can run; exit 1 otherwise.
+step that fixes it, ending with `bb plugin reload boat-sandbox`. Once boat
+accepts the key, it adds the default launch and what its environment signs
+in, each gap with a `Fix:` line. Exit 0 when boat Sandbox can run, whatever
+the sign-ins say; exit 1 otherwise.
 
 ```text
 API key: accepted by boat
@@ -302,20 +417,39 @@ Account: sandbox_… (octocat)
 Wallet: personal
 Zero data retention: off
 Starts: 0/12 in the last minute, 0/60 in the last hour, 6/200 in the last day
-Default launch: a default boat sandbox from template node-tools
+Default launch: a default boat sandbox from template node-tools in environment base (boat's default environment)
+Claude Code: connected on boat (claude-subscription)
+Codex: not connected on boat
+Fix: Sign in to ChatGPT, or add an OpenAI API key, on https://boat.dev/dashboard?tab=agents
+AI proxy: off for your boat account
 ```
 
-**Default launch** is what a thread that names no template or size gets, from
-the settings, checked against boat's saved snapshots. A Default template boat
-does not have prints the refusal a spawn would get, with a `Fix:`:
+**Default launch** is what a thread that names nothing gets, from the
+settings, checked against boat's saved snapshots and environments. A Default
+template or Default environment boat does not have prints the refusal a spawn
+would get, with a `Fix:` for that setting:
 
 ```text
-Default launch: refused: No saved snapshot "gone" on this boat account (Settings → boat Sandbox → Default template). Run `bb boat templates` to list them.
-Fix: Run `bb plugin config boat-sandbox set defaultTemplate <name>` with a template `bb boat templates` lists, or `bb plugin config boat-sandbox unset defaultTemplate` for boat's stock image.
+Default launch: refused: boat has no environment "nope" (Settings → boat Sandbox → Default environment). Run `bb boat templates` to list them.
+Fix: Run `bb plugin config boat-sandbox set defaultEnvironment <name>` with an environment `bb boat templates` lists, or `bb plugin config boat-sandbox unset defaultEnvironment` for boat's default environment.
 ```
 
-It reads `Default launch: unknown (<boat's message>)` when boat cannot list
-the saved snapshots; the exit code depends on the key alone.
+- **Claude Code** and **Codex** are `connected on boat` with the credential
+  that signs them in, `not connected on boat`, `withheld` when the
+  environment does not pass agent credentials (with the `boat env set`
+  command that lets them through), or
+  `through boat's AI proxy (environment … passes placeholders)` for an
+  environment safe for third parties with proxy placeholders.
+- **AI proxy** is on or off for your boat account (see Sign-ins from boat).
+- A row boat will not show reads `unknown (<reason>)` and the command goes on.
+  A `ci` key lacks boat's `account.admin` scope, so the Claude Code, Codex and
+  AI proxy rows read
+  ``unknown (the API key lacks boat's account.admin scope; `boat ai profiles` shows it)``.
+  The plugin does not ask for that scope, because it would let the key change
+  the account's AI keys and proxy. `boat ai profiles` and `boat ai proxy` show
+  the same facts.
+- When boat cannot list the templates or environments, the default launch
+  and the three rows read `unknown (<boat's message>)`.
 
 The starts are boat's rolling start windows for the wallet a create would
 bill. `; blocked: <reason>` follows them when boat lets no start run (for

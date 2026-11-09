@@ -20,6 +20,8 @@ export interface Sandbox {
   stopNote: string | null;
   /** boat put the account's sign-ins on it; false for a no-env sandbox. */
   holdsLogins: boolean;
+  /** The environment boat attached; null for none. */
+  environment: string | null;
 }
 
 // `idle` and `running` only describe work queued through boat's own prompt API, and a fresh
@@ -55,6 +57,7 @@ export function toSandbox(json: unknown): Sandbox | null {
     dataExpired: wire.dataExpiredAt !== null,
     stopNote: describeStop(wire),
     holdsLogins: wire.holdsCreatorLogins,
+    environment: wire.environment,
   };
 }
 

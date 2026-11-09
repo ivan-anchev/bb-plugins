@@ -26,7 +26,7 @@
   },
   "bb": {
     "name": "boat Sandbox",
-    "description": "Run bb threads on on-demand boat.dev sandboxes that stop when idle, resume on the same disk, and can start from your boat saved snapshots.",
+    "description": "Run bb threads on on-demand boat.dev sandboxes that stop when idle, resume on the same disk, and start from the boat saved snapshot and environment you pick.",
     "branding": {
       "icon": "./boat.svg"
     },
