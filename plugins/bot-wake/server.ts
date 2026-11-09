@@ -1,5 +1,5 @@
-import type { GrokWakeHost } from "./bb-types.ts";
-import { grokWakeCli } from "./cli.ts";
+import type { BotWakeHost } from "./bb-types.ts";
+import { botWakeCli } from "./cli.ts";
 import { deliverWith } from "./delivery.ts";
 import { openFailureLog } from "./failure-log.ts";
 import { parseRoutes, routesSetting, targetsOf, type Routes } from "./routes.ts";
@@ -7,7 +7,7 @@ import { defineTargetSecrets } from "./target-secrets.ts";
 import { syncTargetsOnChange } from "./target-sync.ts";
 import { createWaker } from "./waker.ts";
 
-export default async function plugin(bb: GrokWakeHost) {
+export default async function plugin(bb: BotWakeHost) {
   const lifetime = new AbortController();
   bb.onDispose(async () => {
     lifetime.abort();
@@ -40,7 +40,7 @@ export default async function plugin(bb: GrokWakeHost) {
   bb.events.on("thread.idle", waker.onThreadIdle);
   bb.events.on("thread.failed", waker.onThreadFailed);
   syncTargetsOnChange(bb, { routesSetting: settings, secrets, currentTargets, signal: lifetime.signal });
-  bb.cli.register(grokWakeCli({ failures, deliver, secrets, signal: lifetime.signal }));
+  bb.cli.register(botWakeCli({ failures, deliver, secrets, signal: lifetime.signal }));
 }
 
 function routesOf(text: string): Routes {

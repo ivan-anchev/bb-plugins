@@ -22,28 +22,28 @@ export interface SecretDescriptor {
   description: string;
 }
 
-/** A target's two secret fields, keyed by their `GROK_WAKE_<TARGET>_*` names. */
+/** A target's two secret fields, keyed by their `BOT_WAKE_<TARGET>_*` names. */
 export type SecretPairDescriptors = Record<string, SecretDescriptor>;
 
-/** The two kinds of settings grok-wake declares; bb's generic `define` serves both. */
-export interface GrokWakeSettings {
+/** The two kinds of settings bot-wake declares; bb's generic `define` serves both. */
+export interface BotWakeSettings {
   define(descriptors: RoutesDescriptors): PluginSettingsHandle<RoutesDescriptors>;
   define(descriptors: SecretPairDescriptors): PluginSettingsHandle<SecretPairDescriptors>;
 }
 
-/** The thread events that wake a bot; grok-wake listens to no others. */
+/** The thread events that wake a bot; bot-wake listens to no others. */
 export type AttentionEvent = "interaction.pending" | "thread.idle" | "thread.failed";
 
-export interface GrokWakeEvents {
+export interface BotWakeEvents {
   on(event: "interaction.pending", handler: PluginThreadEventHandler<"interaction.pending">): void;
   on(event: "thread.idle", handler: PluginThreadEventHandler<"thread.idle">): void;
   on(event: "thread.failed", handler: PluginThreadEventHandler<"thread.failed">): void;
 }
 
-/** The slice of the plugin API grok-wake uses, so tests can hand it a small fake. */
-export interface GrokWakeHost extends Pick<BbPluginApi, "pluginId" | "log" | "cli" | "onDispose"> {
-  settings: GrokWakeSettings;
-  events: GrokWakeEvents;
+/** The slice of the plugin API bot-wake uses, so tests can hand it a small fake. */
+export interface BotWakeHost extends Pick<BbPluginApi, "pluginId" | "log" | "cli" | "onDispose"> {
+  settings: BotWakeSettings;
+  events: BotWakeEvents;
   storage: Pick<BbPluginApi["storage"], "database" | "migrate">;
   sdk: {
     threads: {

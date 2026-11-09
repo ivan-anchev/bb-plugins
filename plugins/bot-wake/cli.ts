@@ -16,11 +16,11 @@ interface CliDeps {
 
 const json = { type: "boolean", description: "Emit machine-readable JSON" } as const;
 
-/** `bb grok-wake failures | drain | test <target>`. Prints targets and statuses, never a URL or key. */
-export function grokWakeCli({ failures, deliver, secrets, signal }: CliDeps) {
+/** `bb bot-wake failures | drain | test <target>`. Prints targets and statuses, never a URL or key. */
+export function botWakeCli({ failures, deliver, secrets, signal }: CliDeps) {
   return defineCli({
-    name: "grok-wake",
-    summary: "List, drain, and test Grok Wake webhook deliveries",
+    name: "bot-wake",
+    summary: "List, drain, and test Bot Wake webhook deliveries",
     commands: {
       failures: cliCommand({
         summary: "List events that could not be delivered, oldest first",
@@ -84,7 +84,7 @@ function routedTarget(name: string, routed: readonly Target[]): Target {
 function missingSecrets(target: Target, missing: readonly string[]): PluginCliError {
   return new PluginCliError(`${target} is missing ${missing.join(" and ")}.`, {
     code: "missing_secret",
-    hint: "Set target secrets in Settings → Installed plugins → Grok Wake.",
+    hint: "Set target secrets in Settings → Installed plugins → Bot Wake.",
   });
 }
 

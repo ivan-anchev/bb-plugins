@@ -192,7 +192,7 @@ test("hidden threads and child threads send nothing", async () => {
 });
 
 test("an unrouted thread sends nothing and logs no failure", async () => {
-  const { waker, failures } = setup({ lookup: { ok: false, missing: ["GROK_WAKE_OPS_URL"] } });
+  const { waker, failures } = setup({ lookup: { ok: false, missing: ["BOT_WAKE_OPS_URL"] } });
   await waker.onThreadIdle({ thread: thread({ projectId: "proj_other" }), lastAssistantText: "done" });
   await waker.idle();
   assert.equal(receiver.requests.length, 0);
@@ -332,7 +332,7 @@ test("an interaction of a kind newer than this SDK still sends, with a neutral s
 test("each kind of failed delivery writes one entry with no URL or key in it", async () => {
   const cases = [
     { name: "non-2xx", reason: "http 503", arrange: () => (receiver.state.status = 503) },
-    { name: "missing secret", reason: "missing-secret", lookup: { ok: false, missing: ["GROK_WAKE_OPS_KEY"] } },
+    { name: "missing secret", reason: "missing-secret", lookup: { ok: false, missing: ["BOT_WAKE_OPS_KEY"] } },
     { name: "network", reason: "network", lookup: { ok: true, endpoint: { url: "http://127.0.0.1:1/hook", key: KEY } } },
   ] as const;
   for (const { name, reason, ...rest } of cases) {

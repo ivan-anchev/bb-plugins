@@ -37,8 +37,8 @@ export const TEST_BODY: WakeBody = {
   section: null,
   thread: "test",
   event: "test",
-  title: "Grok Wake test",
-  summary: "A test event from bb grok-wake test. Nothing needs attention.",
+  title: "Bot Wake test",
+  summary: "A test event from bb bot-wake test. Nothing needs attention.",
 };
 
 function threadTitle(thread: ThreadResponse): string {

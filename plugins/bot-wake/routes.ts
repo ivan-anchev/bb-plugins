@@ -1,7 +1,7 @@
 import type { PluginSettingDescriptors } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
-/** A target name, upper-cased: the stem of its `GROK_WAKE_<TARGET>_URL` and `_KEY` secrets. */
+/** A target name, upper-cased: the stem of its `BOT_WAKE_<TARGET>_URL` and `_KEY` secrets. */
 export type Target = string & { readonly __brand: "Target" };
 
 /** The `routes` setting, parsed: section and project ids mapped to targets. */
