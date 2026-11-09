@@ -42,6 +42,15 @@ export async function startReceiver() {
   };
 }
 
+/** Waits until `check` holds: for a POST that a handler started and returned without awaiting. */
+export async function until(check: () => boolean, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!check()) {
+    if (Date.now() > deadline) throw new Error("the condition did not hold in time");
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
 export function memoryFailureLog() {
   const db = new Database(":memory:");
   const failures = openFailureLog(db, (target, statements) => statements.forEach((sql) => target.exec(sql)));
