@@ -1,4 +1,5 @@
-// The minutely sweep's decisions, pure: from what bb and boat each say now, what to do this minute.
+// The minutely sweep's decisions, pure: from what bb and boat each say now, what to do this minute
+// (design.md "Drift table"): idle stops, the auto-stop lease, drift between bb and boat, and leaked sandboxes.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { isAwake, type Sandbox, type SandboxId } from "../boat/sandbox.ts";
 
@@ -18,7 +19,10 @@ export interface HostView {
 
 export interface SweepInput {
   hosts: readonly HostView[];
-  /** This server's sandboxes, as boat lists them. */
+  /**
+   * Every machine sandbox this server owns, in any state, plus any machine's sandbox the owner listing
+   * missed. A machine's sandbox absent here no longer exists on boat.
+   */
   sandboxes: ReadonlyMap<SandboxId, Sandbox>;
 }
 
@@ -31,28 +35,40 @@ export interface SweepPolicy {
 export type SweepAction =
   | { kind: "mark-active"; hostId: string }
   | { kind: "suspend-idle"; hostId: string }
-  | { kind: "renew-lease"; sandboxId: SandboxId };
+  | { kind: "renew-lease"; sandboxId: SandboxId }
+  /** The machine is active but its sandbox is down or gone: core suspends it, and the provider's stop finds nothing to stop. */
+  | { kind: "record-stopped"; hostId: string; why: string }
+  /** The machine is suspended but its sandbox runs: core's reconcile runs the provider's suspend again. */
+  | { kind: "stop-again"; hostId: string }
+  /** An owned sandbox no machine uses: stopped, never deleted. */
+  | { kind: "stop-orphan"; sandboxId: SandboxId };
 
 /** Renewing under an hour keeps boat's deadline at least ~59 minutes away while bb runs. */
 const RENEW_BELOW_MS = 60 * 60_000;
+/** A create checkpoints its sandbox within seconds, so a quarter of an hour is far past any create still in flight. */
+const ORPHAN_AFTER_MS = 15 * 60_000;
 
-export function planSweep({ hosts, sandboxes }: SweepInput, policy: SweepPolicy): SweepAction[] {
-  return hosts.flatMap((host) => planHost(host, sandboxes.get(host.sandboxId) ?? null, policy));
+export function planSweep(input: SweepInput, policy: SweepPolicy): SweepAction[] {
+  const referenced = new Set(input.hosts.map((host) => host.sandboxId));
+  const orphans = [...input.sandboxes.values()].filter((sandbox) => !referenced.has(sandbox.id));
+  return [
+    ...input.hosts.flatMap((host) => planHost(host, input.sandboxes.get(host.sandboxId) ?? null, policy)),
+    ...orphans.flatMap((sandbox) => planOrphan(sandbox, policy)),
+  ];
 }
 
 function planHost(host: HostView, sandbox: Sandbox | null, policy: SweepPolicy): SweepAction[] {
-  const awake = sandbox !== null && isAwake(sandbox);
   switch (host.phase) {
     case "active":
-      // Not awake under an active machine means boat stopped or lost it outside bb, which this sweep leaves alone.
-      return awake ? planActive(host, sandbox, policy) : [];
-    // Compute runs until boat confirms it stopped, and a suspend can fail and leave it running.
+      return planActive(host, sandbox, policy);
+    case "suspended":
+      return planSuspended(host, sandbox);
+    // Core is mid-operation. Compute runs until boat confirms it stopped, and a suspend can fail and leave it running.
     case "creating":
     case "resuming":
     case "suspending":
-      return awake ? leaseIfDue(sandbox, policy) : [];
-    // Core has it down already or is removing it: nothing runs on it that needs the lease.
-    case "suspended":
+      return sandbox !== null && isAwake(sandbox) ? leaseIfDue(sandbox, policy) : [];
+    // Core is removing it or has: nothing runs on it that needs the lease.
     case "removing":
     case "destroyed":
       return [];
@@ -62,14 +78,34 @@ function planHost(host: HostView, sandbox: Sandbox | null, policy: SweepPolicy):
 }
 
 /**
- * The lease is renewed when due, and before any suspend: core can refuse the suspend (machine_busy) or
- * fail to stop the sandbox, which then keeps running on the lease it has.
+ * Down or gone under an active machine means boat stopped or lost it outside bb (its auto-stop after
+ * bb was away, an empty wallet, an error, a `boat delete`), so bb records the machine as suspended.
+ * Otherwise the lease is renewed when due, and before any suspend: core can refuse the suspend
+ * (machine_busy) or fail to stop the sandbox, which then keeps running on the lease it has.
  */
-function planActive(host: HostView, sandbox: Sandbox, policy: SweepPolicy): SweepAction[] {
+function planActive(host: HostView, sandbox: Sandbox | null, policy: SweepPolicy): SweepAction[] {
+  if (sandbox === null) return [recordStopped(host, `boat sandbox ${host.sandboxId} no longer exists`)];
+  if (!isAwake(sandbox)) return [recordStopped(host, `boat sandbox ${sandbox.id} is ${describePhase(sandbox)}`)];
   if (isIdle(host, policy)) return [...leaseIfDue(sandbox, policy), { kind: "suspend-idle", hostId: host.hostId }];
   // A machine never seen before starts its idle clock now rather than counting as idle forever.
   const markActive: SweepAction[] = host.busy || host.lastActiveAt === null ? [{ kind: "mark-active", hostId: host.hostId }] : [];
   return [...markActive, ...leaseIfDue(sandbox, policy)];
+}
+
+/**
+ * Awake under a suspended machine means someone resumed it outside bb, or a stop never landed. A gone
+ * one is left to the follow-up, which fails with "remove this machine".
+ */
+function planSuspended(host: HostView, sandbox: Sandbox | null): SweepAction[] {
+  return sandbox !== null && isAwake(sandbox) ? [{ kind: "stop-again", hostId: host.hostId }] : [];
+}
+
+/**
+ * An owned sandbox no machine references is stopped, never deleted: a stop ends the bill and keeps the
+ * disk, so a wrong call costs nothing, while a wrong delete loses someone's work.
+ */
+function planOrphan(sandbox: Sandbox, { now }: SweepPolicy): SweepAction[] {
+  return isAwake(sandbox) && now - sandbox.createdAt >= ORPHAN_AFTER_MS ? [{ kind: "stop-orphan", sandboxId: sandbox.id }] : [];
 }
 
 const isIdle = ({ busy, lastActiveAt }: HostView, { now, idleMs }: SweepPolicy): boolean =>
@@ -80,6 +116,10 @@ function leaseIfDue(sandbox: Sandbox, { now }: SweepPolicy): SweepAction[] {
     ? [{ kind: "renew-lease", sandboxId: sandbox.id }]
     : [];
 }
+
+const recordStopped = ({ hostId }: HostView, why: string): SweepAction => ({ kind: "record-stopped", hostId, why });
+
+const describePhase = ({ phase, stopNote }: Sandbox): string => (stopNote === null ? phase : `${phase} (${stopNote})`);
 
 /** A phase a newer bb adds is a compile error here, and nothing at run time. */
 function neutral(phase: never): SweepAction[] {

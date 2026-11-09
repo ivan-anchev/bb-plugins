@@ -8,6 +8,8 @@ export type SandboxPhase = "starting" | "running" | "stopping" | "stopped" | "fa
 export interface Sandbox {
   id: SandboxId;
   phase: SandboxPhase;
+  /** boat's machine size, for example `small`. */
+  type: string;
   labels: Readonly<Record<string, string>>;
   createdAt: number;
   /** The auto-stop deadline; null when auto-stop is off. */
@@ -43,6 +45,7 @@ export function toSandbox(json: unknown): Sandbox | null {
   return {
     id: wire.id,
     phase: PHASES[wire.state],
+    type: wire.type,
     labels: wire.labels,
     createdAt: wire.createdAt,
     archiveAfter: wire.archiveAfter,
@@ -52,9 +55,19 @@ export function toSandbox(json: unknown): Sandbox | null {
   };
 }
 
+/**
+ * An API stop ends the moment the sandbox stops (18 ms apart, live 2026-11-08), and an older one at
+ * least a resume and a ~14 s stop earlier, so this tells the current stop's record from an old one.
+ */
+const SAME_STOP_MS = 5_000;
+
 function describeStop(wire: PresentSandbox): string | null {
   if (wire.state !== "archived" && wire.state !== "error") return null;
   if (wire.error !== null) return `boat: ${wire.error}`;
-  // A boat-initiated stop (auto-stop, wallet, maintenance) leaves no stop record (spike Q7).
-  return wire.stop === null ? "stopped by boat" : "stopped through the API";
+  // A boat-initiated stop (auto-stop, wallet, maintenance) adds no stop record (spike Q7), but the
+  // sandbox keeps the record of the last API stop, which may be an earlier one.
+  return stoppedThroughApi(wire) ? "stopped through the API" : "stopped by boat";
 }
+
+const stoppedThroughApi = ({ stop, stoppedAt }: PresentSandbox): boolean =>
+  stop?.endedAt != null && stoppedAt !== null && stop.endedAt >= stoppedAt - SAME_STOP_MS;

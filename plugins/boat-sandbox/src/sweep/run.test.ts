@@ -5,64 +5,80 @@ import type { BoatAccess, BoatSession } from "../boat/access.ts";
 import type { BoatClient } from "../boat/client.ts";
 import { toSandbox, type Sandbox, type SandboxId } from "../boat/sandbox.ts";
 import { accountId, sandboxId } from "../boat/wire.ts";
+import { boatCli } from "../cli.ts";
 import type { IdleClock } from "../idle-clock.ts";
 import { PROVIDER_ID } from "../machine-provider.ts";
+import { machineLabels } from "../ownership.ts";
+import type { HostPhase } from "./plan.ts";
 import { createSweep } from "./run.ts";
 
 const CAPTURED = JSON.parse(readFileSync(new URL("../boat/fixtures/create-a.json", import.meta.url), "utf8")).sandbox;
 const ACCOUNT = accountId.parse("sandbox_account_1");
+const OWNER = "owner-1";
 const MINUTE = 60_000;
 const IDLE_MS = 15 * MINUTE;
 
 interface FakeHost {
   id: string;
-  sandbox: Sandbox;
+  phase?: HostPhase;
+  /** null: boat no longer has it. */
+  sandbox: Sandbox | null;
   /** Threads on it that are pending, starting, active or stopping. */
   busyThreads: number;
+  /** Its sandbox id when `sandbox` is null. */
+  sandboxId?: SandboxId;
 }
 
-/** A running sandbox whose auto-stop is `leaseMinutes` away. */
-function sandbox(suffix: string, leaseMinutes = 120): Sandbox {
+/** An owned sandbox: running with its auto-stop `leaseMinutes` away unless `wire` says otherwise. */
+function sandbox(suffix: string, leaseMinutes = 120, wire: object = {}): Sandbox {
   const id = sandboxId.parse(`bx_${suffix}`);
-  const parsed = toSandbox({ ...CAPTURED, id, state: "idle", archiveAfter: new Date(Date.now() + leaseMinutes * MINUTE).toISOString() });
-  if (parsed === null) throw new Error("unreachable: idle is present");
+  const archiveAfter = new Date(Date.now() + leaseMinutes * MINUTE).toISOString();
+  const parsed = toSandbox({ ...CAPTURED, id, state: "idle", labels: machineLabels(OWNER, suffix), archiveAfter, ...wire });
+  if (parsed === null) throw new Error("unreachable: the state is present");
   return parsed;
 }
 
 /** bb, boat and the idle clock in memory, with hooks for what happens while the sweep works. */
-function world(hosts: FakeHost[]) {
+function world(hosts: FakeHost[], orphans: Sandbox[] = []) {
   const lastActive = new Map<string, number>();
   const touched: string[] = [];
   const suspended: string[] = [];
+  const reconciled: string[] = [];
   const renewed: SandboxId[] = [];
+  const stopped: SandboxId[] = [];
+  const lookedUp: SandboxId[] = [];
   const warnings: string[] = [];
   const hooks = { duringList: () => {}, onRead: () => {}, onTouch: () => {}, onSuspend: () => {}, onRenew: () => {} };
-  const facts = (host: FakeHost) => ({ id: host.id, machineProviderId: PROVIDER_ID, lifecycle: { phase: "active" as const } });
+  const facts = (host: FakeHost) => ({ id: host.id, machineProviderId: PROVIDER_ID, lifecycle: { phase: host.phase ?? ("active" as const) } });
   const find = (hostId: string) => {
     const host = hosts.find(({ id }) => id === hostId);
     if (host === undefined) throw new Error(`no host ${hostId}`);
     return host;
   };
+  const onBoat = () => [...hosts.flatMap(({ sandbox }) => (sandbox === null ? [] : [sandbox])), ...orphans];
 
   const unused = () => Promise.reject(new Error("the sweep never calls this"));
   const client: BoatClient = {
     me: unused,
     limits: unused,
-    get: unused,
     create: unused,
     remove: unused,
-    stop: unused,
     resume: unused,
     run: unused,
     writeFile: unused,
-    async list() {
+    async get(id) {
+      lookedUp.push(id);
+      return onBoat().find((each) => each.id === id) ?? null;
+    },
+    async list(labels) {
       hooks.duringList();
-      return hosts.map(({ sandbox }) => sandbox);
+      return onBoat().filter((each) => Object.entries(labels).every(([key, value]) => each.labels[key] === value));
     },
     async setTtl(id) {
       renewed.push(id);
       hooks.onRenew();
     },
+    stop: async (id) => void stopped.push(id),
   };
   const session: BoatSession = {
     status: "available",
@@ -92,18 +108,28 @@ function world(hosts: FakeHost[]) {
           hooks.onSuspend();
           suspended.push(hostId);
         },
+        experimental_reconcile: async ({ hostId }: { hostId: string }) => void reconciled.push(hostId),
       },
       threads: { count: async ({ hostId, status }: { hostId: string; status: string }) => ({ total: status === "active" ? find(hostId).busyThreads : 0 }) },
     },
     experimental_machines: {
-      getResource: async (hostId: string) => ({ sandboxId: find(hostId).sandbox.id, key: hostId, accountId: ACCOUNT }),
+      async getResource(hostId: string) {
+        const host = find(hostId);
+        return { sandboxId: host.sandbox?.id ?? host.sandboxId ?? null, key: hostId, accountId: ACCOUNT };
+      },
     },
     log: { info: () => {}, warn: (message: string) => void warnings.push(message) },
   };
   /** The machine last did work `minutesAgo` minutes ago. */
   const idleFor = (hostId: string, minutesAgo: number) => lastActive.set(hostId, Date.now() - minutesAgo * MINUTE);
-  const sweep = createSweep({ bb, access, idle, ownerId: "owner-1" });
-  return { sweep, hooks, idleFor, touched, suspended, renewed, warnings };
+  const sweep = createSweep({ bb, access, idle, ownerId: OWNER });
+  /** `bb boat sandboxes --json`, through the plugin's CLI registration. */
+  async function sandboxesJson() {
+    const { exitCode, stdout } = await boatCli(access, { bb, idle, ownerId: OWNER }).run(["sandboxes", "--json"], {});
+    assert.equal(exitCode, 0);
+    return JSON.parse(stdout ?? "");
+  }
+  return { sweep, sandboxesJson, hooks, idleFor, touched, suspended, reconciled, renewed, stopped, lookedUp, warnings };
 }
 
 const signal = () => AbortSignal.timeout(10_000);
@@ -198,4 +224,98 @@ test("a sweep that runs out of time during its last action rejects though the ac
 
   await assert.rejects(boat.sweep(timeLimit.signal), /out of time/);
   assert.deepEqual(boat.suspended, ["host_1"]);
+});
+
+test("an active machine whose sandbox boat stopped by itself is recorded as suspended", async () => {
+  const boat = world([{ id: "host_1", sandbox: sandbox("abcdefgh", 0, { state: "archived", stop: null }), busyThreads: 1 }]);
+
+  await boat.sweep(signal());
+
+  assert.deepEqual(boat.suspended, ["host_1"]);
+  assert.deepEqual([boat.renewed, boat.stopped, boat.touched], [[], [], []]);
+});
+
+test("an active machine whose sandbox was deleted outside bb is recorded as suspended", async () => {
+  const id = sandboxId.parse("bx_abcdefgh");
+  const boat = world([{ id: "host_1", sandbox: null, sandboxId: id, busyThreads: 0 }]);
+
+  await boat.sweep(signal());
+
+  assert.deepEqual(boat.lookedUp, [id]);
+  assert.deepEqual(boat.suspended, ["host_1"]);
+});
+
+test("a machine's sandbox missing from the owner listing is looked up, not taken for deleted", async () => {
+  // Made under an earlier owner id: the listing for this owner does not show it.
+  const earlier = sandbox("abcdefgh", 120, { labels: machineLabels("owner-0", "host_1") });
+  const boat = world([{ id: "host_1", sandbox: earlier, busyThreads: 1 }]);
+
+  await boat.sweep(signal());
+
+  assert.deepEqual(boat.lookedUp, [earlier.id]);
+  assert.deepEqual([boat.suspended, boat.touched], [[], ["host_1"]]);
+});
+
+test("a sandbox resumed by hand under a suspended machine is stopped again through core", async () => {
+  const boat = world([{ id: "host_1", phase: "suspended", sandbox: sandbox("abcdefgh"), busyThreads: 0 }]);
+
+  await boat.sweep(signal());
+
+  assert.deepEqual(boat.reconciled, ["host_1"]);
+  assert.deepEqual([boat.suspended, boat.stopped, boat.renewed], [[], [], []]);
+});
+
+test("an awake orphan older than 15 minutes is stopped, and a younger one is not", async () => {
+  const old = sandbox("rrrrrrr2", 120, { createdAt: new Date(Date.now() - 16 * MINUTE).toISOString() });
+  const young = sandbox("rrrrrrr3", 120, { createdAt: new Date(Date.now() - 5 * MINUTE).toISOString() });
+  const boat = world([], [old, young]);
+
+  await boat.sweep(signal());
+
+  // The fake boat rejects `remove`, so a delete would have failed the action with a warning.
+  assert.deepEqual(boat.stopped, [old.id]);
+  assert.match(boat.warnings.join("\n"), new RegExp(`Stopping boat sandbox ${old.id}: no bb machine uses it`));
+});
+
+test("bb boat sandboxes lists healthy, boat-stopped, deleted and orphan sandboxes with the sweep's plan", async () => {
+  const healthy = sandbox("hhhhhhh2");
+  const stoppedByBoat = sandbox("sssssss2", 0, { state: "archived", stop: null, archiveAfter: null });
+  const deleted = sandboxId.parse("bx_ddddddd2");
+  const stoppedAt = new Date(Date.now() - 30 * MINUTE).toISOString();
+  const createdAt = new Date(Date.now() - 60 * MINUTE).toISOString();
+  const orphan = sandbox("rrrrrrr2", 120, { state: "archived", stoppedAt, stop: { endedAt: stoppedAt }, createdAt });
+  const boat = world(
+    [
+      { id: "host_1", sandbox: healthy, busyThreads: 0 },
+      { id: "host_2", sandbox: stoppedByBoat, busyThreads: 0 },
+      { id: "host_3", phase: "suspended", sandbox: null, sandboxId: deleted, busyThreads: 0 },
+    ],
+    [orphan],
+  );
+  boat.idleFor("host_1", 1);
+
+  const rows = await boat.sandboxesJson();
+
+  assert.deepEqual(
+    rows.map(({ sandboxId, boatPhase, machine, notes }: Record<string, unknown>) => ({ sandboxId, boatPhase, machine, notes })),
+    [
+      { sandboxId: healthy.id, boatPhase: "running", machine: { hostId: "host_1", phase: "active" }, notes: [] },
+      {
+        sandboxId: stoppedByBoat.id,
+        boatPhase: "stopped",
+        machine: { hostId: "host_2", phase: "active" },
+        notes: ["stopped by boat", "sweep will record the machine as suspended"],
+      },
+      {
+        sandboxId: deleted,
+        boatPhase: "gone",
+        machine: { hostId: "host_3", phase: "suspended" },
+        notes: ["no longer exists on boat, so a follow-up cannot resume it; remove the machine with `bb machine remove host_3 --yes`"],
+      },
+      { sandboxId: orphan.id, boatPhase: "stopped", machine: null, notes: ["stopped through the API", "orphan: no bb machine uses it"] },
+    ],
+  );
+  assert.equal(rows[0].type, "small");
+  // Printing applies nothing.
+  assert.deepEqual([boat.suspended, boat.stopped, boat.touched], [[], [], []]);
 });

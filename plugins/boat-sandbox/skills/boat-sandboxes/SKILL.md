@@ -1,6 +1,6 @@
 ---
 name: boat-sandboxes
-description: The boat Sandbox plugin, which starts bb threads on new boat.dev sandboxes (`bb thread spawn --environment-provider boat-sandbox --machine-inputs '{"preset":"small"}'`, or boat Sandbox in the new-thread picker), stops them when idle, resumes them on a follow-up, and deletes them with `bb machine remove`. Covers its settings (API key, Stop after idle, Default size), presets, start limits, idle stops and resumes, the auto-stop lease, failed creates, and `bb boat status`. Use when a user sets up or uses boat.dev sandboxes for bb, or asks why one stopped, resumed or failed.
+description: The boat Sandbox plugin, which starts bb threads on new boat.dev sandboxes (`bb thread spawn --environment-provider boat-sandbox --machine-inputs '{"preset":"small"}'`, or boat Sandbox in the new-thread picker), stops them when idle, resumes them on a follow-up, and deletes them with `bb machine remove`. Covers its settings (API key, Stop after idle, Default size), presets, start limits, idle stops and resumes, the auto-stop lease, failed creates, drift between bb and boat, leaked sandboxes, `bb boat status` and `bb boat sandboxes`. Use when a user sets up or uses boat.dev sandboxes for bb, or asks why one stopped, resumed, failed or was stopped as an orphan.
 ---
 
 # boat Sandbox
@@ -120,7 +120,66 @@ it is under an hour away (`boat info <sandbox-id>` shows `archiveAfter`),
 including just before an idle stop and while bb is still suspending the
 machine, so a stop bb refuses or that fails leaves the sandbox covered. So
 boat never stops a sandbox bb is using, and stops one by itself only about an
-hour after this bb server stopped running.
+hour after this bb server stopped running. Every resume, by a follow-up or
+`bb machine resume`, also sets the deadline back to 2 hours from then: boat
+otherwise keeps whatever auto-stop was last set on the sandbox, by hand or by
+`boat extend --ttl`.
+
+## Drift and leaks
+
+Each minute's check also compares what bb thinks with what boat says, and
+puts bb right:
+
+- **boat stopped a sandbox on its own** (its auto-stop after bb was away, an
+  empty wallet, an error), or it was deleted with `boat delete`, while bb has
+  the machine active: the plugin asks bb to suspend the machine, which finds
+  nothing left to stop. bb notices within about two minutes: for the first
+  minute or so bb still holds the stopped daemon's connection, so its first
+  suspend gives up after 30 s and the next check succeeds. A follow-up then
+  resumes the sandbox as usual. For a deleted sandbox the follow-up fails with
+  `… no longer exists; remove this machine.`; remove it with
+  `bb machine remove <host-id> --yes`.
+- **Someone resumed a bb-suspended sandbox** (`boat resume`, the boat
+  dashboard): the plugin asks bb to reconcile the machine, and bb stops the
+  sandbox again within about a minute. bb keeps showing it suspended
+  throughout. Resume through bb (a follow-up or `bb machine resume`) instead.
+- **A leaked sandbox**: one labelled `bb.boat/owner=<this server>` and
+  `bb.boat/role=machine` that no bb machine uses (a create that crashed before
+  bb recorded it, a machine bb removed without boat deleting the sandbox). Once
+  it is 15 minutes old and running, the plugin stops it. It never deletes one:
+  a stop ends the bill and keeps the disk, so a wrong call loses nothing.
+  Check what is on it, then delete it yourself with `boat delete <sandbox-id>`.
+
+The plugin looks only at sandboxes carrying this server's owner label, plus,
+by id, any machine's sandbox missing from that list, so another bb server's
+sandboxes on the same boat account are never touched.
+
+## `bb boat sandboxes`
+
+Lists every sandbox this bb server owns: one row per machine, then each
+orphan, with the notes the next minute's check would act on. It runs the same
+look as the check but changes nothing.
+
+```text
+SANDBOX      TYPE   BOAT     MACHINE                      AUTO-STOP          NOTES
+bx_aaaaaaaa  small  running  host_1 (active)              2026-11-08T23:30Z
+bx_bbbbbbbb  small  stopped  host_2 (active)              -                  stopped by boat; sweep will record the machine as suspended
+bx_cccccccc  -      gone     host_3 (suspended)           -                  no longer exists on boat, so a follow-up cannot resume it; remove the machine with `bb machine remove host_3 --yes`
+bx_dddddddd  small  stopped  -                            -                  stopped through the API; orphan: no bb machine uses it
+```
+
+- **BOAT** is boat's state: `starting`, `running`, `stopping`, `stopped`,
+  `failed`, or `gone` once boat no longer has the sandbox.
+- **MACHINE** is the bb machine and its phase (`active`, `suspended`, …);
+  `-` for an orphan.
+- **AUTO-STOP** is boat's deadline in UTC, `-` while stopped.
+- **NOTES** say who stopped a stopped sandbox (`stopped by boat`,
+  `stopped through the API` for bb's own stops and `boat stop`, or boat's error
+  text), then one note per action the next check takes (`sweep will …`).
+
+`--json` prints the rows as an array of `{sandboxId, type, boatPhase,
+machine: {hostId, phase} | null, archiveAfter, notes}`. The command exits 1
+with the same problem lines as `bb boat status` when the key does not work.
 
 ## Settings
 

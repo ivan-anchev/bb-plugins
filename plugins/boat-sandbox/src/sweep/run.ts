@@ -1,30 +1,22 @@
-// The minutely sweep: read bb and boat, let planSweep decide, apply what it decided.
-import type { BbPluginApi, JsonValue } from "@get-bb/plugin-sdk";
+// The minutely sweep: look at bb and boat, let planSweep decide, apply what it decided.
+import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { BoatAccess } from "../boat/access.ts";
 import type { BoatClient } from "../boat/client.ts";
-import type { Sandbox, SandboxId } from "../boat/sandbox.ts";
 import type { IdleClock } from "../idle-clock.ts";
-import { LEASE_TTL_SECONDS, PROVIDER_ID } from "../machine-provider.ts";
-import { ownerLabels, parseResource } from "../ownership.ts";
-import { planSweep, type HostView, type SweepAction } from "./plan.ts";
-
-type Sdk = BbPluginApi["sdk"];
-type ThreadStatus = NonNullable<NonNullable<Parameters<Sdk["threads"]["count"]>[0]>["status"]>;
-type Host = Awaited<ReturnType<Sdk["hosts"]["list"]>>[number];
-/** The part of a bb host the sweep reads. */
-type HostFacts = Pick<Host, "id" | "machineProviderId"> & { lifecycle: Pick<Host["lifecycle"], "phase"> };
+import { describeProblems } from "../problem.ts";
+import { LEASE_TTL_SECONDS } from "../sandbox-power.ts";
+import { observe, observeHost, type HostFacts, type ObserveBb } from "./observe.ts";
+import { planSweep, type SweepAction, type SweepInput, type SweepPolicy } from "./plan.ts";
 
 /** What the sweep asks of bb; the plugin API is one. */
-interface SweepBb {
-  sdk: {
-    hosts: {
-      list(args: { includeCreating: boolean; signal: AbortSignal }): Promise<HostFacts[]>;
+interface SweepBb extends ObserveBb {
+  sdk: ObserveBb["sdk"] & {
+    hosts: ObserveBb["sdk"]["hosts"] & {
       get(args: { hostId: string; signal: AbortSignal }): Promise<HostFacts>;
       experimental_suspend(args: { hostId: string }): Promise<unknown>;
+      experimental_reconcile(args: { hostId: string }): Promise<unknown>;
     };
-    threads: { count(args: { hostId: string; status: ThreadStatus; signal: AbortSignal }): Promise<{ total: number }> };
   };
-  experimental_machines: { getResource(hostId: string): Promise<JsonValue | null> };
   log: Pick<BbPluginApi["log"], "info" | "warn">;
 }
 
@@ -35,15 +27,14 @@ interface SweepDeps {
   ownerId: string;
 }
 
-/** One sweep's boat session and its view of boat, kept to decide again just before a suspend. */
+/** One sweep's boat session and its look at bb and boat, kept to decide again just before a suspend. */
 interface SweepRun extends SweepDeps {
   client: BoatClient;
   signal: AbortSignal;
-  plan(hosts: readonly HostView[]): SweepAction[];
+  input: SweepInput;
+  policy(): SweepPolicy;
 }
 
-/** A thread in any of these is working, however quiet: a 20-minute silent tool call stays `active`. */
-const BUSY_STATUSES: readonly ThreadStatus[] = ["pending", "starting", "active", "stopping"];
 /** Ends a sweep before the next one is due. */
 const SWEEP_PATIENCE_MS = 50_000;
 
@@ -65,45 +56,13 @@ export function createSweep(deps: SweepDeps): (signal?: AbortSignal) => Promise<
 }
 
 async function sweep(deps: SweepDeps, signal: AbortSignal): Promise<void> {
-  const hosts = await observeHosts(deps, signal);
-  // No boat call while this server has no boat machine.
-  if (hosts.length === 0) return;
-  const { client, settings } = await deps.access.session(signal);
-  const sandboxes = await listSandboxes(client, deps.ownerId, signal);
-  const plan = (views: readonly HostView[]) => planSweep({ hosts: views, sandboxes }, { now: Date.now(), idleMs: settings.idleMs });
-  await applyActions({ ...deps, client, signal, plan }, plan(hosts));
-}
-
-async function observeHosts(deps: SweepDeps, signal: AbortSignal): Promise<HostView[]> {
-  const hosts = (await deps.bb.sdk.hosts.list({ includeCreating: true, signal })).filter(
-    (host) => host.machineProviderId === PROVIDER_ID,
-  );
-  return (await Promise.all(hosts.map((host) => observeHost(deps, host, signal)))).filter((view) => view !== null);
-}
-
-/** null for a create that has not checkpointed yet: it has no sandbox to look after. */
-async function observeHost({ bb, idle }: SweepDeps, host: HostFacts, signal: AbortSignal): Promise<HostView | null> {
-  const resource = await bb.experimental_machines.getResource(host.id);
-  if (resource === null) return null;
-  const phase = host.lifecycle.phase;
-  return {
-    hostId: host.id,
-    phase,
-    sandboxId: parseResource(resource).sandboxId,
-    busy: phase === "active" && (await isBusy(bb, host.id, signal)),
-    lastActiveAt: await idle.read(host.id),
-  };
-}
-
-/** Counted, never paged through `threads.list`, which would miscount past its limit (SDK `ThreadCountArgs`). */
-async function isBusy(bb: SweepBb, hostId: string, signal: AbortSignal): Promise<boolean> {
-  const counts = await Promise.all(BUSY_STATUSES.map((status) => bb.sdk.threads.count({ hostId, status, signal })));
-  return counts.some(({ total }) => total > 0);
-}
-
-async function listSandboxes(client: BoatClient, ownerId: string, signal: AbortSignal): Promise<Map<SandboxId, Sandbox>> {
-  const sandboxes = await client.list(ownerLabels(ownerId), signal);
-  return new Map(sandboxes.map((sandbox) => [sandbox.id, sandbox]));
+  const configuration = await deps.access.configuration(signal);
+  // No key means nothing on boat to look after; any other problem leaves machines unwatched, so it fails loudly.
+  if (configuration.status === "setup-required") return;
+  if (configuration.status === "unavailable") throw new Error(describeProblems(configuration.problems));
+  const input = await observe(deps, configuration.client, signal);
+  const policy = (): SweepPolicy => ({ now: Date.now(), idleMs: configuration.settings.idleMs });
+  await applyActions({ ...deps, client: configuration.client, signal, input, policy }, planSweep(input, policy()));
 }
 
 /**
@@ -140,6 +99,19 @@ async function apply(run: SweepRun, action: SweepAction): Promise<void> {
     case "renew-lease":
       bb.log.info(`Renewing the auto-stop of boat sandbox ${action.sandboxId} to ${LEASE_TTL_SECONDS} s from now.`);
       return client.setTtl(action.sandboxId, LEASE_TTL_SECONDS, signal);
+    case "record-stopped":
+      // Core suspends in the background. Within about a minute of a boat-side stop bb still holds the
+      // daemon's session, so core cancels after 30 s and logs it; the next sweep asks again (design G3).
+      bb.log.info(`${action.why}, but bb has machine ${action.hostId} active; recording it as suspended.`);
+      await bb.sdk.hosts.experimental_suspend({ hostId: action.hostId });
+      return;
+    case "stop-again":
+      bb.log.info(`boat machine ${action.hostId} is suspended in bb, but its sandbox is running; stopping it again.`);
+      await bb.sdk.hosts.experimental_reconcile({ hostId: action.hostId });
+      return;
+    case "stop-orphan":
+      bb.log.warn(`Stopping boat sandbox ${action.sandboxId}: no bb machine uses it. Its disk is kept; \`boat delete ${action.sandboxId}\` deletes it.`);
+      return client.stop(action.sandboxId, signal);
     default:
       action satisfies never;
   }
@@ -151,7 +123,9 @@ async function apply(run: SweepRun, action: SweepAction): Promise<void> {
  */
 async function isStillIdle(run: SweepRun, hostId: string): Promise<boolean> {
   const view = await observeHost(run, await run.bb.sdk.hosts.get({ hostId, signal: run.signal }), run.signal);
-  return view !== null && run.plan([view]).some((action) => action.kind === "suspend-idle");
+  if (view === null) return false;
+  const hosts = run.input.hosts.map((host) => (host.hostId === hostId ? view : host));
+  return planSweep({ ...run.input, hosts }, run.policy()).some((action) => action.kind === "suspend-idle" && action.hostId === hostId);
 }
 
 /** bb's SDK errors carry the API's error code. */

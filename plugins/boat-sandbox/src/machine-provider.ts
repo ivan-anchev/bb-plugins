@@ -10,14 +10,9 @@ import type { IdleClock } from "./idle-clock.ts";
 import { machineInputs, resolveLaunch, type Launch } from "./launch.ts";
 import { machineLabels, parseResource, sandboxName, type BoatResource } from "./ownership.ts";
 import { describeProblems } from "./problem.ts";
-import { stopSandbox, waitUntilRunning, wakeSandbox } from "./sandbox-power.ts";
+import { LEASE_TTL_SECONDS, stopSandbox, waitUntilRunning, wakeSandbox } from "./sandbox-power.ts";
 
 export const PROVIDER_ID = "boat-sandbox";
-/**
- * The auto-stop every sandbox carries: the longest a trial allows. The sweep renews it while bb
- * runs, so boat stops a sandbox only once bb has been gone for about an hour.
- */
-export const LEASE_TTL_SECONDS = 7200;
 
 interface ProviderDeps {
   access: BoatAccess;

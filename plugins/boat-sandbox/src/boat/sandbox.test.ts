@@ -61,8 +61,22 @@ test("timestamps parse to epoch milliseconds", () => {
 
 test("a stop note says who stopped the sandbox", () => {
   const wire = captured("create-a.json");
+  const stopped = { ...wire, state: "archived", stoppedAt: "2026-11-08T21:28:07.781Z" };
   assert.equal(toSandbox(wire)?.stopNote, null);
-  assert.equal(toSandbox({ ...wire, state: "archived" })?.stopNote, "stopped by boat");
-  assert.equal(toSandbox({ ...wire, state: "archived", stop: { id: "stop_1" } })?.stopNote, "stopped through the API");
+  assert.equal(toSandbox(stopped)?.stopNote, "stopped by boat");
+  // Live 2026-11-08: the API stop record ended 18 ms after the sandbox stopped.
+  assert.equal(toSandbox({ ...stopped, stop: { id: "stop_1", endedAt: "2026-11-08T21:28:07.799Z" } })?.stopNote, "stopped through the API");
   assert.equal(toSandbox({ ...wire, state: "error", error: "out of capacity" })?.stopNote, "boat: out of capacity");
+});
+
+test("boat's own stop after an earlier API stop is a stop by boat", () => {
+  // Live 2026-11-08 (bx_pqzun5yr): bb stopped it at 21:28:07, resumed it, then its auto-stop stopped it
+  // at 21:29:05; the sandbox still carried the 21:28:07 stop record.
+  const wire = {
+    ...captured("create-a.json"),
+    state: "archived",
+    stoppedAt: "2026-11-08T21:29:05.011Z",
+    stop: { id: "stop_84e70caa778516ff", status: "completed", endedAt: "2026-11-08T21:28:07.799Z" },
+  };
+  assert.equal(toSandbox(wire)?.stopNote, "stopped by boat");
 });
