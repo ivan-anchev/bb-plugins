@@ -1,7 +1,9 @@
 // bb boat …: thin commands that read, then print.
 import { cliCommand, defineCli } from "@get-bb/plugin-sdk";
-import type { BoatAccess, BoatFacts, Configuration } from "./boat/access.ts";
-import type { Limits, Wallet } from "./boat/wire.ts";
+import type { BoatAccess } from "./boat/access.ts";
+import { readLaunchChoices } from "./catalog/read.ts";
+import { formatChoices } from "./catalog/report.ts";
+import { configurationLines, readStatus } from "./status.ts";
 import { observe, type ObserveDeps } from "./sweep/observe.ts";
 import { planSweep } from "./sweep/plan.ts";
 import { formatRows, sandboxRows } from "./sweep/report.ts";
@@ -16,13 +18,21 @@ export function boatCli(boat: BoatAccess, machines: ObserveDeps) {
     summary: "boat.dev sandboxes for bb threads",
     commands: {
       status: cliCommand({
-        summary: "Check the boat API key, account, wallet and start budget",
+        summary: "Check the boat API key, account, wallet and start budget, and what a thread sandbox starts from by default",
         run: async (_input, ctx) => {
-          const configuration = await boat.configuration(ctx.signal);
-          return {
-            exitCode: configuration.status === "available" ? 0 : 1,
-            stdout: `${statusLines(configuration).join("\n")}\n`,
-          };
+          const { usable, lines } = await readStatus(boat, ctx.signal);
+          return { exitCode: usable ? 0 : 1, stdout: `${lines.join("\n")}\n` };
+        },
+      }),
+      templates: cliCommand({
+        summary: "List the boat saved snapshots a thread sandbox can start from, with the --machine-inputs for each",
+        options: { json: { type: "boolean", description: "Print the templates and defaults as one JSON object" } },
+        run: async ({ options }, ctx) => {
+          const signal = ctx.signal ?? AbortSignal.timeout(PATIENCE_MS);
+          const configuration = await boat.configuration(signal);
+          if (configuration.status !== "available") return { exitCode: 1, stdout: `${configurationLines(configuration).join("\n")}\n` };
+          const choices = await readLaunchChoices(configuration, signal);
+          return { exitCode: 0, stdout: options.json ? `${JSON.stringify(choices, null, 2)}\n` : formatChoices(choices) };
         },
       }),
       sandboxes: cliCommand({
@@ -31,7 +41,7 @@ export function boatCli(boat: BoatAccess, machines: ObserveDeps) {
         run: async ({ options }, ctx) => {
           const signal = ctx.signal ?? AbortSignal.timeout(PATIENCE_MS);
           const configuration = await boat.configuration(signal);
-          if (configuration.status !== "available") return { exitCode: 1, stdout: `${statusLines(configuration).join("\n")}\n` };
+          if (configuration.status !== "available") return { exitCode: 1, stdout: `${configurationLines(configuration).join("\n")}\n` };
           const input = await observe(machines, configuration.client, signal);
           const rows = sandboxRows(input, planSweep(input, { now: Date.now(), idleMs: configuration.settings.idleMs }));
           return { exitCode: 0, stdout: options.json ? `${JSON.stringify(rows, null, 2)}\n` : formatRows(rows) };
@@ -39,41 +49,4 @@ export function boatCli(boat: BoatAccess, machines: ObserveDeps) {
       }),
     },
   });
-}
-
-/** One line per fact, then each problem with the command that fixes it. */
-function statusLines(configuration: Configuration): string[] {
-  const facts = configuration.facts === null ? [] : factLines(configuration.facts);
-  const problems = configuration.status === "available"
-    ? []
-    : configuration.problems.flatMap((problem) => [problem.message, `Fix: ${problem.fix}`]);
-  return [...facts, ...problems];
-}
-
-function factLines({ account, limits }: BoatFacts): string[] {
-  return [
-    "API key: accepted by boat",
-    `Account: ${account.id} (${account.login})`,
-    `Wallet: ${describeWallet(limits.wallet)}`,
-    `Zero data retention: ${account.zeroDataRetention ? "on" : "off"}`,
-    `Starts: ${describeStarts(limits)}`,
-  ];
-}
-
-function describeWallet(wallet: Wallet): string {
-  switch (wallet.kind) {
-    case "personal":
-      return "personal";
-    case "organization":
-      return `organization ${wallet.teamId}`;
-  }
-}
-
-function describeStarts({ starts, startsBlockedBy }: Limits): string {
-  const budget = starts.unlimited
-    ? "unlimited"
-    : `${starts.minute.used}/${starts.minute.limit} in the last minute, ` +
-      `${starts.hour.used}/${starts.hour.limit} in the last hour, ` +
-      `${starts.day.used}/${starts.day.limit} in the last day`;
-  return startsBlockedBy === null ? budget : `${budget}; blocked: ${startsBlockedBy}`;
 }

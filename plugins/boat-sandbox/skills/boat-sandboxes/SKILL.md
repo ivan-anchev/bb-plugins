@@ -1,6 +1,6 @@
 ---
 name: boat-sandboxes
-description: The boat Sandbox plugin, which starts bb threads on new boat.dev sandboxes (`bb thread spawn --environment-provider boat-sandbox --machine-inputs '{"preset":"small"}'`, or boat Sandbox in the new-thread picker), stops them when idle, resumes them on a follow-up, and deletes them with `bb machine remove`. Covers its settings (API key, Stop after idle, Default size), presets, start limits, idle stops and resumes, the auto-stop lease, failed creates, drift between bb and boat, leaked sandboxes, `bb boat status` and `bb boat sandboxes`. Use when a user sets up or uses boat.dev sandboxes for bb, or asks why one stopped, resumed, failed or was stopped as an orphan.
+description: The boat Sandbox plugin, which starts bb threads on new boat.dev sandboxes (`bb thread spawn --environment-provider boat-sandbox --machine-inputs '{"preset":"small"}'`, or boat Sandbox in the new-thread picker), stops them when idle, resumes them on a follow-up, and deletes them with `bb machine remove`. Covers its settings (API key, Stop after idle, Default size, Default template), presets, templates (boat saved snapshots, `--machine-inputs '{"template":"<name>"}'`, `bb boat templates`), start limits, idle stops and resumes, the auto-stop lease, failed creates, drift between bb and boat, leaked sandboxes, `bb boat status`, `bb boat templates` and `bb boat sandboxes`. Use when a user sets up or uses boat.dev sandboxes for bb, or asks why one stopped, resumed, failed or was stopped as an orphan.
 ---
 
 # boat Sandbox
@@ -24,17 +24,22 @@ bb's own steps: machine enrollment, the daemon install, the clone and
 provisioning takes about 15 s.
 
 - `--machine-inputs` takes `{"preset": "small" | "default" | "large" | "xlarge"}`,
-  boat's sandbox types (2/4/8/16 vCPU). Leave it out (`{}`) for the
-  **Default size** setting. Any other key is refused.
+  boat's sandbox types (2/4/8/16 vCPU), and `{"template": "<name>"}`, a boat
+  saved snapshot to start from (see Templates), or `{"template": null}` for
+  boat's stock image. A key left out takes its setting (**Default size**,
+  **Default template**). Any other key is refused.
 - The project needs a Git remote that bb knows about (`bb project show <id>`
   prints `gitRemoteUrl`). Without one, `boat-sandbox` is missing from
   `--environment-provider`, because bb clones the project from that remote.
 - The bb server must be reachable from the internet (bb Connect), since the
   daemon on the sandbox connects back to it.
-- The plugin installs no agent sign-in. Claude Code and Codex are
-  preinstalled on boat's image but signed out, so a turn answers
-  `Not logged in · Please run /login` until the machine has a login (for
-  Claude Code, `CLAUDE_CODE_OAUTH_TOKEN` in `bb machine env`).
+- Claude Code and Codex sign in from boat. A sandbox starts in the boat
+  account's default environment, and before bb's daemon starts the plugin
+  installs a systemd drop-in that loads the sign-ins boat writes to
+  `/run/ascii-secrets/env.sh` (connected under
+  [Agents & Proxying](https://boat.dev/dashboard?tab=agents)) at every daemon
+  start, on create and on resume. Without one there, a turn answers
+  `Not logged in · Please run /login`.
 
 `bb machine list --all` shows the machine as `boat <sandbox-id>`, type
 `ephemeral`, provider `boat-sandbox`. bb removes it once no live thread
@@ -43,6 +48,59 @@ needs it, or remove it yourself:
 ```sh
 bb machine remove <host-id> --yes    # deletes the boat sandbox; boat answers 404 at once
 ```
+
+## Templates
+
+A template is a boat **saved snapshot**: a frozen copy of a sandbox's disk,
+saved under a name on your boat account. You make and manage them on boat;
+the plugin lists them and starts thread sandboxes from them.
+
+```sh
+boat snapshot <sandbox-id> node-tools       # save any boat sandbox's disk as "node-tools"
+bb boat templates                           # every template, with the --machine-inputs for each
+bb thread spawn --project <project-id> --environment-provider boat-sandbox \
+  --machine-inputs '{"template":"node-tools","preset":"small"}' --prompt "…"
+boat snapshot rm node-tools                 # delete it on boat
+```
+
+- Install your tools on a sandbox (a thread sandbox, or `boat new`), then
+  save it. The sandbox can keep running; boat takes a fresh snapshot first.
+  Names are 1–63 lowercase letters, digits and dashes.
+- A template holds whatever was on that disk, logins and tokens included. The
+  plugin does not inspect it. Save from a sandbox you would hand to every
+  thread that uses the template.
+- A thread that names no template gets the **Default template** setting;
+  empty is boat's stock image. `{"template":null}` asks for the stock image
+  even when a Default template is set.
+- An unknown name, or a template boat is still saving or failed to save, is
+  refused at spawn, before bb records the thread, for example
+  ``No saved snapshot "nope" on this boat account. Run `bb boat templates` to list them.``
+  Names come from the API key's boat account, so a template on another
+  account is unknown here.
+- **Saved from a bb thread sandbox.** Such a disk carries that machine's bb
+  identity: `~/.bb-machines` (its host key and checkouts) and its
+  `bb-host-daemon-*.service` unit, plus `~/.local/bin/bb` when that is a
+  symlink into `~/.bb-machines`. On create (never on
+  resume), before bb enrolls the new sandbox, the plugin stops and removes
+  them, and the provisioning details say so:
+  `Removed the bb machine state template node-tools carried from another machine: ~/.config/systemd/user/bb-host-daemon-….service, ~/.bb-machines`.
+  It removes nothing until systemd confirms the old daemon is stopped. When it
+  cannot, the create fails with
+  `Could not remove the old bb machine state on sandbox bx_… (exit 1): … did not stop (state: active)`
+  (or systemd's own error) and bb deletes the sandbox.
+  It records the create in `~/.local/state/bb-boat/instance-key`, so a retried
+  create of the same thread never removes what it already enrolled. It leaves
+  everything else on the disk alone. The old daemon starts at boot and runs
+  for about a second before that. To keep a template clean, stop and disable
+  bb's daemon on the sandbox before you save one you will reuse:
+  `systemctl --user disable --now $(cd ~/.config/systemd/user && ls bb-host-daemon-*.service)`.
+- **Saved from a `--no-env` sandbox** (`boat new --no-env`). boat makes every
+  sandbox from it no-env too, so it would get no sign-ins. The create fails
+  with `… as a no-env sandbox, so it would get no sign-ins …` and bb deletes
+  the sandbox. Save the template again from a sandbox in an environment.
+- Any size can start from any template; the template's own size is only shown.
+- boat's trial accounts cannot save snapshots; `bb boat templates` then lists
+  only the stock image.
 
 ## When a create fails
 
@@ -181,6 +239,30 @@ bx_dddddddd  small  stopped  -                            -                  sto
 machine: {hostId, phase} | null, archiveAfter, notes}`. The command exits 1
 with the same problem lines as `bb boat status` when the key does not work.
 
+## `bb boat templates`
+
+Lists boat's stock image and every saved snapshot on the account, in any
+status, with the `--machine-inputs` to start from each, then the default
+launch as a full spawn command.
+
+```text
+TEMPLATE          STATUS  SIZE   SAVED              --machine-inputs           NOTES
+boat stock image  ready   -      -                  {"template":null}
+node-tools        ready   small  2026-11-09T10:12Z  {"template":"node-tools"}  default
+py-ml             failed  -      2026-11-09T11:02Z  -                          source sandbox was deleted
+
+Default launch (Settings → boat Sandbox): a default boat sandbox from template node-tools.
+  bb thread spawn --project <project-id> --environment-provider boat-sandbox \
+    --machine-inputs '{"template":"node-tools","preset":"default"}' --prompt "…"
+Save a template from any boat sandbox with: boat snapshot <sandbox-id> <name>
+```
+
+**SIZE** is the size the template was saved from, **SAVED** is in UTC, and
+**NOTES** marks the Default template and carries boat's error for a failed
+save. `--json` prints `{templates: [{name, status, error, savedFrom, savedAt}],
+defaults: {template, preset}}`. The command exits 1 with the same problem lines
+as `bb boat status` when the key does not work.
+
 ## Settings
 
 Settings → boat Sandbox, or `bb plugin config boat-sandbox`:
@@ -196,6 +278,12 @@ Settings → boat Sandbox, or `bb plugin config boat-sandbox`:
   is still renewed). Takes effect at the next minute's check, without a reload.
 - **Default size** (`defaultPreset`, default `default`). One of boat's sandbox
   types: `small`, `default`, `large`, `xlarge`.
+- **Default template** (`defaultTemplate`, default empty). A boat saved
+  snapshot new machines start from when a thread names none; empty is boat's
+  stock image. Only the name's form is checked when you save it; whether boat
+  has it is checked at each spawn and by `bb boat status`.
+  `bb plugin config boat-sandbox unset defaultTemplate` goes back to the stock
+  image.
 
 bb reads the plugin's status only when the plugin loads, so after any fix (a
 new key, a setting, the wallet, the network) run
@@ -214,7 +302,20 @@ Account: sandbox_… (octocat)
 Wallet: personal
 Zero data retention: off
 Starts: 0/12 in the last minute, 0/60 in the last hour, 6/200 in the last day
+Default launch: a default boat sandbox from template node-tools
 ```
+
+**Default launch** is what a thread that names no template or size gets, from
+the settings, checked against boat's saved snapshots. A Default template boat
+does not have prints the refusal a spawn would get, with a `Fix:`:
+
+```text
+Default launch: refused: No saved snapshot "gone" on this boat account (Settings → boat Sandbox → Default template). Run `bb boat templates` to list them.
+Fix: Run `bb plugin config boat-sandbox set defaultTemplate <name>` with a template `bb boat templates` lists, or `bb plugin config boat-sandbox unset defaultTemplate` for boat's stock image.
+```
+
+It reads `Default launch: unknown (<boat's message>)` when boat cannot list
+the saved snapshots; the exit code depends on the key alone.
 
 The starts are boat's rolling start windows for the wallet a create would
 bill. `; blocked: <reason>` follows them when boat lets no start run (for

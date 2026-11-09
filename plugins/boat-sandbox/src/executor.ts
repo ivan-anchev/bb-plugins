@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import type { MachineExecutor } from "@get-bb/plugin-sdk";
 import type { BoatClient } from "./boat/client.ts";
 import type { SandboxId } from "./boat/sandbox.ts";
+import { shellQuoteArgv } from "./shell.ts";
 
 /** boat refuses more; core's bootstrap asks for exactly this. */
 const BOAT_MAX_TIMEOUT_SECONDS = 600;
@@ -37,10 +38,6 @@ export function boatExecutor(client: CommandChannel, sandboxId: SandboxId): Mach
     },
   };
 }
-
-/** POSIX single quotes around each word, so core's multi-line script reaches the shell unchanged. */
-const shellQuoteArgv = (argv: readonly string[]): string =>
-  argv.map((word) => `'${word.replaceAll("'", `'\\''`)}'`).join(" ");
 
 async function expectSuccess(result: Promise<{ exitCode: number }>, failure: string): Promise<void> {
   const { exitCode } = await result;

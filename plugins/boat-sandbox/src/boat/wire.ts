@@ -64,6 +64,11 @@ const presentSandbox = z.object({
   error: z.string().nullable(),
   /** The last stop requested through the API, ever (OAS `StopOperation`); null if there never was one. */
   stop: z.object({ endedAt: instant.nullable() }).nullable(),
+  /**
+   * The account's logins (agent sign-ins, GitHub token, secrets) are on the sandbox. False for a no-env
+   * sandbox, which still reports `environment: "base"` (live, 2026-11-09), so this is the field to read.
+   */
+  holdsCreatorLogins: z.boolean(),
 });
 
 export const wireSandbox = z.discriminatedUnion("state", [cancelledSandbox, presentSandbox]);
@@ -93,7 +98,31 @@ export const wireCommandFrame = z.discriminatedUnion("type", [
   }),
 ]);
 
+/**
+ * One saved snapshot of `GET /saved-snapshots` (OAS `SavedSnapshot`): a template a thread sandbox can
+ * start from. `error` comes only with `failed`; `type` is the size it was saved from, for display.
+ */
+const savedSnapshot = z
+  .object({
+    name: z.string(),
+    status: z.enum(["saving", "ready", "failed"]),
+    error: z.string().optional(),
+    type: z.string().optional(),
+    createdAt: z.iso.datetime(),
+  })
+  .transform((snapshot) => ({
+    name: snapshot.name,
+    status: snapshot.status,
+    error: snapshot.error ?? null,
+    savedFrom: snapshot.type ?? null,
+    savedAt: snapshot.createdAt,
+  }));
+
+/** Every saved snapshot on the account, in one page: the endpoint takes no `limit` or `cursor`. */
+export const wireSavedSnapshotList = z.object({ snapshots: z.array(savedSnapshot) }).transform(({ snapshots }) => snapshots);
+
 export type Account = z.output<typeof wireMe>;
 export type Limits = z.output<typeof wireLimits>;
 export type Wallet = Limits["wallet"];
 export type PresentSandbox = z.output<typeof presentSandbox>;
+export type SavedSnapshot = z.output<typeof savedSnapshot>;

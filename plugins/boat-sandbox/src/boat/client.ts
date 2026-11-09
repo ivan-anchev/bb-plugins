@@ -9,8 +9,10 @@ import {
   wireMe,
   wireSandboxEnvelope,
   wireSandboxList,
+  wireSavedSnapshotList,
   type Account,
   type Limits,
+  type SavedSnapshot,
 } from "./wire.ts";
 
 const BASE_URL = "https://boat.dev/api/v1";
@@ -46,8 +48,8 @@ export interface CreateSandboxBody {
   type: Preset;
   labels: Labels;
   ttlSeconds: number;
-  /** boat puts none of its own logins on the disk. */
-  noEnv: true;
+  /** The saved snapshot whose disk the sandbox starts from; boat's stock image when absent. */
+  from?: string;
 }
 
 export interface CommandRequest {
@@ -61,6 +63,8 @@ export interface BoatClient {
   me(signal?: AbortSignal): Promise<Account>;
   /** Start budget and wallet of the wallet a create would bill. */
   limits(signal?: AbortSignal): Promise<Limits>;
+  /** Every saved snapshot on the account, in any status (`snapshot.read`). */
+  savedSnapshots(signal?: AbortSignal): Promise<SavedSnapshot[]>;
   /** null when boat no longer has the sandbox (404 or cancelled). */
   get(id: SandboxId, signal: AbortSignal): Promise<Sandbox | null>;
   /** Every sandbox carrying all of `labels`, in any state, across all pages. */
@@ -91,6 +95,8 @@ export function createBoatClient(apiKey: string): BoatClient {
   return {
     me: async (signal) => wireMe.parse(await json("/me", { signal })),
     limits: async (signal) => wireLimits.parse(await json("/limits", { signal })),
+    // No query parameters: boat refuses unknown ones, and this list has no paging.
+    savedSnapshots: async (signal) => wireSavedSnapshotList.parse(await json("/saved-snapshots", { signal })),
     async get(id, signal) {
       try {
         return toSandbox(wireSandboxEnvelope.parse(await json(`/sandboxes/${id}`, { signal })).sandbox);

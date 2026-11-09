@@ -1,7 +1,7 @@
 // boat Sandbox's settings, shown under Settings → boat Sandbox.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { PRESETS, type Preset } from "./launch.ts";
+import { PRESETS, snapshotName, type LaunchDefaults } from "./launch.ts";
 import { problem, type Problem } from "./problem.ts";
 
 const MAX_IDLE_MINUTES = 1440;
@@ -27,16 +27,26 @@ export const defineBoatSettings = (bb: BbPluginApi) =>
       options: [...PRESETS],
       default: "default",
     },
+    defaultTemplate: {
+      type: "string",
+      label: "Default template",
+      description:
+        "A boat saved snapshot new machines start from when a thread names none; `bb boat templates` lists them. Empty uses boat's stock image.",
+      default: "",
+    },
   });
 
 export type BoatSettings = ReturnType<typeof defineBoatSettings>;
 export type BoatSettingsValues = Awaited<ReturnType<BoatSettings["get"]>>;
 
 export type ResolvedSettings =
-  | { ok: true; apiKey: string; idleMs: number | null; defaultPreset: Preset }
+  | { ok: true; apiKey: string; idleMs: number | null; defaults: LaunchDefaults }
   | { ok: false; problem: Problem };
 
-/** Parses the stored settings once; everything inward trusts ResolvedSettings. */
+/**
+ * Parses the stored settings once; everything inward trusts ResolvedSettings. Only the Default
+ * template's syntax is checked here: whether boat has it is resolveLaunch's call, at each launch.
+ */
 export function resolveSettings(values: BoatSettingsValues): ResolvedSettings {
   const apiKey = values.apiKey?.trim() ?? "";
   if (apiKey === "") return { ok: false, problem: missingKey() };
@@ -48,13 +58,21 @@ export function resolveSettings(values: BoatSettingsValues): ResolvedSettings {
   const preset = z.enum(PRESETS).safeParse(values.defaultPreset);
   if (!preset.success) return { ok: false, problem: invalidPreset(values.defaultPreset) };
 
+  const template = values.defaultTemplate.trim();
+  if (template !== "" && !snapshotName.safeParse(template).success) return { ok: false, problem: invalidTemplate(template) };
+
   return {
     ok: true,
     apiKey,
     idleMs: idleMinutes === 0 ? null : idleMinutes * 60_000,
-    defaultPreset: preset.data,
+    defaults: { template: template === "" ? null : template, preset: preset.data },
   };
 }
+
+/** How to point the Default template at a template boat has, or back at the stock image. */
+export const DEFAULT_TEMPLATE_STEP =
+  "Run `bb plugin config boat-sandbox set defaultTemplate <name>` with a template `bb boat templates` lists, " +
+  "or `bb plugin config boat-sandbox unset defaultTemplate` for boat's stock image";
 
 /** How to put a working key in place. */
 export const PASTE_KEY_STEP =
@@ -72,4 +90,10 @@ const invalidPreset = (preset: string): Problem =>
   problem(
     `Default size "${preset}" is not one of ${PRESETS.join(", ")}.`,
     "Run `bb plugin config boat-sandbox set defaultPreset default`",
+  );
+
+const invalidTemplate = (template: string): Problem =>
+  problem(
+    `Default template "${template}" is not a boat saved-snapshot name (lowercase letters, digits and dashes).`,
+    DEFAULT_TEMPLATE_STEP,
   );

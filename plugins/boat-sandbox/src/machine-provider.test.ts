@@ -6,7 +6,8 @@ import type { BoatAccess, BoatSession } from "./boat/access.ts";
 import { BoatApiError, type BoatClient, type CreateSandboxBody, type Labels } from "./boat/client.ts";
 import { toSandbox, type Sandbox, type SandboxId } from "./boat/sandbox.ts";
 import { createStartGate, type StartGate } from "./boat/start-gate.ts";
-import { accountId, sandboxId, wireMe } from "./boat/wire.ts";
+import { accountId, sandboxId, wireMe, type SavedSnapshot } from "./boat/wire.ts";
+import type { MachineInputs } from "./launch.ts";
 import { boatMachineProvider } from "./machine-provider.ts";
 import { machineLabels } from "./ownership.ts";
 
@@ -14,15 +15,23 @@ const OWNER = "owner-1";
 const ACCOUNT = "sandbox_account_1";
 const CAPTURED = JSON.parse(readFileSync(new URL("./boat/fixtures/create-a.json", import.meta.url), "utf8")).sandbox;
 
+const NODE_TOOLS: SavedSnapshot = { name: "node-tools", status: "ready", error: null, savedFrom: "small", savedAt: "2026-11-09T10:12:00.000Z" };
+
 /** boat in memory: Idempotency-Keys and labels behave as on the live API (spike Q1, Q9). */
 function fakeBoat() {
   const sandboxes = new Map<SandboxId, Sandbox>();
   const byIdempotencyKey = new Map<string, Sandbox>();
   const posts: string[] = [];
+  const bodies: CreateSandboxBody[] = [];
   const calls: string[] = [];
+  /** Every command run in a sandbox; `answer` decides each one's output and exit code. */
+  const commands: string[] = [];
+  const shell = { answer: (_command: string) => ({ output: "", exitCode: 0 }) };
+  /** The saved snapshots on the account, and whether boat puts the account's logins on a new sandbox. */
+  const account = { templates: [NODE_TOOLS], holdsLogins: true };
   const add = (labels: Labels): Sandbox => {
     const id = sandboxId.parse(`bx_${"abcdefghjkmnpqrs".slice(sandboxes.size, sandboxes.size + 8)}`);
-    const sandbox = toSandbox({ ...CAPTURED, id, labels, state: "idle" });
+    const sandbox = toSandbox({ ...CAPTURED, id, labels, state: "idle", holdsCreatorLogins: account.holdsLogins });
     if (sandbox === null) throw new Error("unreachable: idle is present");
     sandboxes.set(id, sandbox);
     return sandbox;
@@ -30,11 +39,13 @@ function fakeBoat() {
   const client: BoatClient = {
     me: async () => wireMe.parse({ user: { id: ACCOUNT, login: "octocat", zeroDataRetention: false } }),
     limits: async () => ({ wallet: { kind: "personal" }, starts: { unlimited: true }, startsBlockedBy: null }),
+    savedSnapshots: async () => account.templates,
     get: async (id) => sandboxes.get(id) ?? null,
     list: async (labels) =>
       [...sandboxes.values()].filter((sandbox) => Object.entries(labels).every(([key, value]) => sandbox.labels[key] === value)),
     async create(body: CreateSandboxBody, idempotencyKey: string) {
       posts.push(idempotencyKey);
+      bodies.push(body);
       const replay = byIdempotencyKey.get(idempotencyKey);
       if (replay !== undefined) return replay;
       const created = add(body.labels);
@@ -60,7 +71,12 @@ function fakeBoat() {
       const sandbox = sandboxes.get(id);
       if (sandbox !== undefined) sandboxes.set(id, { ...sandbox, archiveAfter: Date.now() + ttlSeconds * 1000 });
     },
-    run: async () => ({ exitCode: 0 }),
+    async run(_id, { command, onOutput }) {
+      commands.push(command);
+      const { output, exitCode } = shell.answer(command);
+      onOutput(output);
+      return { exitCode };
+    },
     writeFile: async () => {},
   };
   /** A sandbox boat stopped `minutesAgo` minutes ago. */
@@ -69,7 +85,7 @@ function fakeBoat() {
     sandboxes.set(sandbox.id, sandbox);
     return sandbox;
   };
-  return { client, sandboxes, posts, calls, add, stopped };
+  return { client, sandboxes, posts, bodies, calls, commands, shell, account, add, stopped };
 }
 
 /** A start gate that counts the starts it was asked for. */
@@ -91,7 +107,7 @@ function provider(client: BoatClient, account = ACCOUNT, gate: StartGate = creat
       limits: { wallet: { kind: "personal" }, starts: { unlimited: true }, startsBlockedBy: null },
     },
     client,
-    settings: { ok: true, apiKey: "boat_test", idleMs: null, defaultPreset: "small" },
+    settings: { ok: true, apiKey: "boat_test", idleMs: null, defaults: { template: null, preset: "small" } },
   };
   const access: BoatAccess = { configuration: async () => session, session: async () => session };
   const bootstraps: string[] = [];
@@ -103,23 +119,34 @@ function provider(client: BoatClient, account = ACCOUNT, gate: StartGate = creat
     idle: { touch: async (hostId) => void touched.push(hostId) },
     bootstrap: async ({ key }) => (bootstraps.push(key), { hostId: "host_1" }),
   });
-  return { declaration, bootstraps, touched };
+  /** What core gets from validate for these inputs. */
+  const validate = (inputs: MachineInputs) => {
+    if (declaration.validate === undefined) throw new Error("the provider declares no validate");
+    return declaration.validate({ inputs });
+  };
+  return { declaration, validate, bootstraps, touched };
 }
 
 const quiet = { step: () => {}, log: () => {} };
 
-async function create(declaration: ReturnType<typeof provider>["declaration"], key: string, attempt = 1) {
+async function create(declaration: ReturnType<typeof provider>["declaration"], key: string, attempt = 1, inputs: MachineInputs = {}) {
   const checkpoints: Exclude<JsonValue, null>[] = [];
+  const steps: string[] = [];
+  const logs: string[] = [];
   const result = await declaration.create({
-    inputs: {},
+    inputs,
     key,
     attempt,
     checkpoint: async (resource) => void checkpoints.push(resource),
-    report: quiet,
+    report: { step: (step) => void steps.push(step), log: (text) => void logs.push(text) },
     signal: AbortSignal.timeout(10_000),
   });
-  return { result, checkpoints };
+  return { result, checkpoints, steps, logs };
 }
+
+/** Which plugin step each command a sandbox ran was. */
+const kindOf = (command: string): string =>
+  command.includes("bb-boat/instance-key") ? "reset" : command.includes("EnvironmentFile=-%t/boat-sign-ins.env") ? "sign-ins" : command;
 
 test("create adopts the labelled sandbox an interrupted create left behind", async () => {
   const boat = fakeBoat();
@@ -351,4 +378,107 @@ test("resume refuses a daemon that enrolls as another machine", async () => {
 
   await assert.rejects(resume({ ...lifecycle(sandbox), hostId: "host_2" }), /enrolled as host_1, not as machine host_2/);
   assert.deepEqual(resumer.touched, []);
+});
+
+test("validate asks boat for its saved snapshots and refuses a name boat does not have", async () => {
+  const { validate } = provider(fakeBoat().client);
+
+  assert.deepEqual(await validate({ template: "node-tools" }), { action: "accept" });
+  assert.deepEqual(await validate({ template: "nope" }), {
+    action: "refuse",
+    message: 'No saved snapshot "nope" on this boat account. Run `bb boat templates` to list them.',
+  });
+});
+
+test("validate refuses with boat's message when boat cannot list the snapshots", async () => {
+  const boat = fakeBoat();
+  boat.client.savedSnapshots = async () => {
+    throw new BoatApiError(503, "unavailable", "boat is down for maintenance.", null, false);
+  };
+
+  assert.deepEqual(await provider(boat.client).validate({}), { action: "refuse", message: "boat is down for maintenance." });
+});
+
+test("a create from a template sends its name as `from`, never noEnv, and says so", async () => {
+  const boat = fakeBoat();
+  const { declaration } = provider(boat.client);
+
+  const { result, steps } = await create(declaration, "thr_1", 1, { template: "node-tools", preset: "large" });
+  await create(declaration, "thr_2", 1, { template: null });
+
+  assert.equal(result.status, "created");
+  assert.deepEqual(boat.bodies, [
+    { name: "bb thr_1", type: "large", labels: machineLabels(OWNER, "thr_1"), ttlSeconds: 7200, from: "node-tools" },
+    { name: "bb thr_2", type: "small", labels: machineLabels(OWNER, "thr_2"), ttlSeconds: 7200 },
+  ]);
+  assert.deepEqual(steps, ["Creating a large boat sandbox from template node-tools"]);
+});
+
+test("a template boat no longer has fails the create before any sandbox exists", async () => {
+  const boat = fakeBoat();
+  const { declaration } = provider(boat.client);
+  boat.account.templates = [];
+
+  const { result, checkpoints } = await create(declaration, "thr_1", 1, { template: "node-tools" });
+
+  assert.equal(result.status, "failed");
+  assert.deepEqual([boat.posts, checkpoints], [[], []]);
+});
+
+test("a sandbox boat started as no-env fails the create after its checkpoint, so core deletes it", async () => {
+  const boat = fakeBoat();
+  boat.account.holdsLogins = false;
+  const { declaration, bootstraps } = provider(boat.client);
+
+  const { result, checkpoints } = await create(declaration, "thr_1", 1, { template: "node-tools" });
+
+  assert.deepEqual(result, {
+    status: "failed",
+    message:
+      "boat started sandbox bx_abcdefgh from template node-tools as a no-env sandbox, so it would get no sign-ins. " +
+      "A template saved from a no-env sandbox makes only no-env sandboxes; save the template from a sandbox in an environment.",
+  });
+  assert.equal(checkpoints.length, 1);
+  assert.deepEqual([boat.commands, bootstraps], [[], []]);
+});
+
+test("create resets another machine's bb state before passing sign-ins and enrolling; resume never resets", async () => {
+  const boat = fakeBoat();
+  boat.shell.answer = (command) => ({
+    output: kindOf(command) === "reset" ? "removed ~/.config/systemd/user/bb-host-daemon-x.service\nremoved ~/.bb-machines\n" : "",
+    exitCode: 0,
+  });
+  const { declaration } = provider(boat.client);
+
+  const { steps, logs } = await create(declaration, "thr_1", 1, { template: "node-tools" });
+  const created = boat.commands.map(kindOf);
+  await suspendResume(provider(boat.client)).resume(lifecycle(boat.stopped(2)));
+
+  assert.deepEqual(created, ["reset", "sign-ins"]);
+  assert.deepEqual(boat.commands.slice(2).map(kindOf), ["sign-ins"]);
+  assert.match(boat.commands[0] ?? "", /'thr_1'/);
+  assert.deepEqual(steps, ["Creating a small boat sandbox from template node-tools"]);
+  assert.deepEqual(logs, [
+    "Removed the bb machine state template node-tools carried from another machine: ~/.config/systemd/user/bb-host-daemon-x.service, ~/.bb-machines",
+  ]);
+});
+
+test("a create on a clean disk reports no reset", async () => {
+  const { declaration } = provider(fakeBoat().client);
+
+  const { steps, logs } = await create(declaration, "thr_1");
+
+  assert.deepEqual([steps, logs], [["Creating a small boat sandbox from boat's stock image"], []]);
+});
+
+test("a create whose sign-in drop-in fails reports it and never enrolls the daemon", async () => {
+  const boat = fakeBoat();
+  boat.shell.answer = (command) => ({ output: "", exitCode: kindOf(command) === "sign-ins" ? 1 : 0 });
+  const { declaration, bootstraps } = provider(boat.client);
+
+  const { result } = await create(declaration, "thr_1");
+
+  assert.equal(result.status, "failed");
+  assert.match(result.status === "failed" ? result.message : "", /Could not pass boat's sign-ins to bb's daemon on sandbox bx_\w+ \(exit 1\)/);
+  assert.deepEqual(bootstraps, []);
 });

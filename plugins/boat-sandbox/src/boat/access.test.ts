@@ -4,7 +4,7 @@ import type { BoatSettingsValues } from "../settings.ts";
 import { createBoatAccess, type Configuration } from "./access.ts";
 
 const RELOAD_ENDING = ", then run `bb plugin reload boat-sandbox`.";
-const WORKING: BoatSettingsValues = { apiKey: "boat_abc", idleMinutes: 15, defaultPreset: "default" };
+const WORKING: BoatSettingsValues = { apiKey: "boat_abc", idleMinutes: 15, defaultPreset: "default", defaultTemplate: "" };
 const ME = { user: { id: "sandbox_1", login: "octocat", zeroDataRetention: false } };
 const LIMITS = { canStart: true, starts: { unlimited: true } };
 

@@ -19,3 +19,6 @@ export const problem = (message: string, step: string): Problem => ({
 /** All problems as one paragraph, for bb's status line and provider messages. */
 export const describeProblems = (problems: readonly Problem[]): string =>
   problems.map((problem) => `${problem.message} ${problem.fix}`).join(" ");
+
+/** boat's and the start gate's messages are written for people, so they are shown as they are. */
+export const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));

@@ -35,9 +35,18 @@ npm test --workspace plugins/boat-sandbox
 - `src/boat/access.ts`: whether the configured key can run sandboxes.
 - `src/boat/sandbox.ts`: `Sandbox`, with boat's states collapsed to phases.
 - `src/boat/start-gate.ts`: boat's start limit (`429 rate_limited`).
-- `src/launch.ts`: the machine inputs (`preset`) and what a create asks for.
+- `src/launch.ts`: the machine inputs (`template`, `preset`) and
+  `resolveLaunch`, the one rule that turns them into a launch.
+- `src/catalog/`: boat's saved snapshots as launch choices, and the
+  `bb boat templates` table.
 - `src/ownership.ts`: the owner id, labels and the resource core persists.
 - `src/executor.ts`: core's command channel over boat's commands API, with
   stdin staged as a file in a private directory.
-- `src/machine-provider.ts`: create, remove and keyed cleanup.
-- `src/cli.ts`: `bb boat status`.
+- `src/instance-reset.ts`: on create, removes the bb machine state a template
+  carried from another machine.
+- `src/daemon-sign-ins.ts`: the systemd drop-in that loads boat's sign-ins
+  into bb's daemon.
+- `src/machine-provider.ts`: validate, create, suspend, resume, remove and
+  keyed cleanup.
+- `src/cli.ts`, `src/status.ts`: `bb boat status`, `templates` and
+  `sandboxes`.

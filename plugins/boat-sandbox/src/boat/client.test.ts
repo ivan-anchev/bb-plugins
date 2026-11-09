@@ -73,3 +73,14 @@ test("list follows boat's cursor until the last page", async () => {
   assert.deepEqual(urls.map(({ searchParams }) => searchParams.get("cursor")), [null, "page-2"]);
   assert.equal(urls[0]?.searchParams.get("label"), "bb.boat/owner=owner-1");
 });
+
+test("savedSnapshots reads every saved snapshot with no query parameters, which boat would refuse", async () => {
+  const fixture = readFileSync(new URL("./fixtures/saved-snapshots.json", import.meta.url), "utf8");
+  const urls: string[] = [];
+  mock.method(globalThis, "fetch", async (url: string) => (urls.push(url), new Response(fixture, { status: 200 })));
+
+  const snapshots = await createBoatClient("boat_test").savedSnapshots();
+
+  assert.deepEqual(urls, ["https://boat.dev/api/v1/saved-snapshots"]);
+  assert.deepEqual(snapshots[0], { name: "tpl-test", status: "ready", error: null, savedFrom: "small", savedAt: "2026-11-09T09:50:26.018Z" });
+});
