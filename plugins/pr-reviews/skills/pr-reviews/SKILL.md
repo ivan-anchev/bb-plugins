@@ -176,7 +176,8 @@ fails, the question stays in the box with the error beside Send. A question
 cancelled while it sends still goes to the thread, but the page no longer
 follows it: Review chat stays as it is and the selection, or a newer one, stays.
 Esc anywhere in an empty box, Cancel included, closes it; a box with text
-ignores Esc, so a question is never lost to it.
+ignores Esc, so a question is never lost to it. While the box is open, Esc
+elsewhere on the page, after a click outside it, does nothing.
 
 ## Commenting on GitHub
 
@@ -224,8 +225,9 @@ network, or a comment too long to hand to `gh`. When GitHub doesn't answer
 within a minute the comment may have been posted, so it says to check the PR
 before posting again, and never retries by itself.
 
-Esc never leaves the page from a comment box: it closes an empty write box, does
-nothing in a box with text or a preview, and acts as Done once posted.
+Esc never leaves the page while a comment box is open, wherever focus is. In the
+box it closes an empty write box, does nothing in a box with text or a preview,
+and acts as Done once posted; elsewhere on the page it does nothing.
 
 ## Reading a guide
 
@@ -259,7 +261,8 @@ the question, quoting the finding, to the review thread, which answers there
 (Review chat shows it). The page keeps reading Guide ready while the thread
 answers. If the send fails, the question stays in the box with the error beside
 Send. Text typed while a question is sending stays in the box, unsent. Esc
-closes an empty box and leaves one with text, and the page, as they are.
+closes an empty box and leaves one with text, and the page, as they are; while
+any box is open, Esc elsewhere on the page does nothing.
 
 **Comment as is** opens a GitHub comment on the finding's line and side, at the
 guide's commit, straight at its preview, with the finding's title in bold over
