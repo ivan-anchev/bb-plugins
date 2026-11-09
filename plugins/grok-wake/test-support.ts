@@ -1,6 +1,7 @@
 // Shared by the tests only; server.ts never imports it, so the build leaves it out.
 import Database from "better-sqlite3";
 import { createServer, type IncomingHttpHeaders } from "node:http";
+import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { PendingInteraction, ThreadResponse } from "./bb-types.ts";
 import { openFailureLog } from "./failure-log.ts";
 
@@ -96,5 +97,21 @@ export function question(id: string, prompt: string): PendingInteraction {
     statusReason: null,
     threadId: "thr_abcdefgh123",
     turnId: "turn_1",
+  };
+}
+
+/** A row of a thread's event log; the SDK does not export the name. */
+export type ThreadEventRow = Awaited<ReturnType<BbPluginApi["sdk"]["threads"]["events"]["list"]>>[number];
+
+/** The `turn/completed` row bb records when a turn ends, as `bb thread log` shows it. */
+export function turnCompleted(seq: number, status: "completed" | "interrupted"): ThreadEventRow {
+  return {
+    id: `evt_${seq}`,
+    scope: { kind: "turn", turnId: `turn_${seq}` },
+    threadId: "thr_abcdefgh123",
+    seq,
+    createdAt: seq,
+    type: "turn/completed",
+    data: { providerThreadId: "pt", status },
   };
 }

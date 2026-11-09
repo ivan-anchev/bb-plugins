@@ -22,6 +22,10 @@ export default async function plugin(bb: GrokWakeHost) {
     routes: currentRoutes,
     pendingInteraction: async (threadId) =>
       (await bb.sdk.threads.interactions.list({ threadId })).find((row) => row.status === "pending") ?? null,
+    lastTurnInterrupted: async (threadId) => {
+      const [latest] = await bb.sdk.threads.events.list({ threadId, types: ["turn/completed"], order: "desc", limit: "1" });
+      return latest?.type === "turn/completed" && latest.data.status === "interrupted";
+    },
     deliver,
     failures,
     log: bb.log,

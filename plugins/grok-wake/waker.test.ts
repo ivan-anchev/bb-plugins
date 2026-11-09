@@ -16,7 +16,9 @@ beforeEach(() => {
 });
 
 /** A waker routing proj_1 to OPS, whose endpoint is the local receiver unless overridden. */
-function setup(options: { pending?: PendingInteraction | null; lookup?: EndpointLookup } = {}) {
+function setup(
+  options: { pending?: PendingInteraction | null; lookup?: EndpointLookup; interrupted?: () => Promise<boolean> } = {},
+) {
   const parsed = parseRoutes('{"projects": {"proj_1": "ops"}}');
   assert.ok(parsed.ok);
   const lookup = options.lookup ?? { ok: true, endpoint: { url: receiver.url, key: KEY } };
@@ -26,6 +28,7 @@ function setup(options: { pending?: PendingInteraction | null; lookup?: Endpoint
   const waker = createWaker({
     routes: async () => parsed.routes,
     pendingInteraction: async () => options.pending ?? null,
+    lastTurnInterrupted: options.interrupted ?? (async () => false),
     deliver: deliverWith({ endpoint: async () => lookup }),
     failures: log.failures,
     log: { debug: record, info: record, warn: record, error: record },
@@ -51,6 +54,45 @@ test("a finished turn sends one POST with the thread's body", async () => {
       summary: "Build fixed. Tests pass.",
     },
   ]);
+});
+
+test("a thread idling after a user stop sends nothing and logs no failure", async () => {
+  receiver.state.status = 500;
+  const { waker, failures } = setup({ interrupted: async () => true });
+  await waker.onThreadIdle({ thread: thread(), lastAssistantText: "Stopped mid-command." });
+  assert.equal(receiver.requests.length, 0);
+  assert.deepEqual(failures.list(), []);
+});
+
+test("a thread idling after a completed turn sends one finished", async () => {
+  const { waker } = setup({ interrupted: async () => false });
+  await waker.onThreadIdle({ thread: thread(), lastAssistantText: "Done." });
+  assert.deepEqual(sentBodies().map(({ event, summary }) => ({ event, summary })), [{ event: "finished", summary: "Done." }]);
+});
+
+test("a completed turn after a stopped one sends one finished; a late repeat of the stop sends nothing", async () => {
+  let interrupted = true;
+  const { waker } = setup({ interrupted: async () => interrupted });
+  const stopped = { thread: thread({ updatedAt: 100 }), lastAssistantText: "Stopped." };
+  await waker.onThreadIdle(stopped);
+  interrupted = false;
+  await waker.onThreadIdle(stopped);
+  await waker.onThreadIdle({ thread: thread({ updatedAt: 250 }), lastAssistantText: "Done." });
+  assert.deepEqual(sentBodies().map(({ event, summary }) => ({ event, summary })), [{ event: "finished", summary: "Done." }]);
+});
+
+test("when how the turn ended cannot be read, the idle thread still sends finished", async () => {
+  const { waker, messages } = setup({ interrupted: async () => Promise.reject(new Error("events unavailable")) });
+  await waker.onThreadIdle({ thread: thread(), lastAssistantText: "Done." });
+  assert.deepEqual(sentBodies().map(({ event }) => event), ["finished"]);
+  assert.ok(messages.some((message) => message.includes("events unavailable")));
+});
+
+test("a stopped last turn does not hold back an interaction or a failure", async () => {
+  const { waker } = setup({ interrupted: async () => true });
+  await waker.onInteractionPending({ thread: thread(), interaction: question("int_1", "Which database?") });
+  await waker.onThreadFailed({ thread: thread({ updatedAt: 250 }), error: "boom" });
+  assert.deepEqual(sentBodies().map(({ event }) => event), ["interaction", "failed"]);
 });
 
 test("an open question sends its prompt; a failure sends its error", async () => {
@@ -228,6 +270,7 @@ test("a timeout is logged like any other failure", async () => {
   const waker = createWaker({
     routes: async () => parsed.routes,
     pendingInteraction: async () => null,
+    lastTurnInterrupted: async () => false,
     deliver: async () => ({ ok: false, reason: "timeout" }),
     failures: log.failures,
     log: { debug() {}, info() {}, warn() {}, error() {} },

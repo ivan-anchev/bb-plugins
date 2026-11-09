@@ -46,7 +46,10 @@ export interface GrokWakeHost extends Pick<BbPluginApi, "pluginId" | "log" | "cl
   events: GrokWakeEvents;
   storage: Pick<BbPluginApi["storage"], "database" | "migrate">;
   sdk: {
-    threads: { interactions: Pick<BbPluginApi["sdk"]["threads"]["interactions"], "list"> };
+    threads: {
+      interactions: Pick<BbPluginApi["sdk"]["threads"]["interactions"], "list">;
+      events: Pick<BbPluginApi["sdk"]["threads"]["events"], "list">;
+    };
     plugins: Pick<BbPluginApi["sdk"]["plugins"], "reload">;
   };
 }

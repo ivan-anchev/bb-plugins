@@ -13,7 +13,7 @@ import type {
 import type { AttentionEvent, GrokWakeHost, RoutesDescriptors, SecretPairDescriptors } from "./bb-types.ts";
 import { routesSetting } from "./routes.ts";
 import plugin from "./server.ts";
-import { startReceiver, thread } from "./test-support.ts";
+import { startReceiver, thread, turnCompleted, type ThreadEventRow } from "./test-support.ts";
 
 const URL_KEY = "GROK_WAKE_OPS_URL";
 const KEY_KEY = "GROK_WAKE_OPS_KEY";
@@ -71,6 +71,19 @@ test("an attention event on a routed thread POSTs once", async () => {
   await bb.fire("thread.idle", { thread: thread(), lastAssistantText: "Done." });
   assert.equal(receiver.requests.length, before + 1);
   assert.equal(JSON.parse(receiver.requests.at(-1)?.body ?? "{}").event, "finished");
+});
+
+test("a thread a user stopped sends nothing; its next completed turn sends finished", async () => {
+  const bb = await loadedWith({ projects: { proj_1: "ops" } });
+  bb.set({ [URL_KEY]: receiver.url, [KEY_KEY]: "dummy-key-server" });
+  const before = receiver.requests.length;
+  bb.threadEvents.push(turnCompleted(17, "interrupted"));
+  await bb.fire("thread.idle", { thread: thread({ updatedAt: 100 }), lastAssistantText: null });
+  assert.equal(receiver.requests.length, before);
+  bb.threadEvents.push(turnCompleted(30, "completed"));
+  await bb.fire("thread.idle", { thread: thread({ updatedAt: 250 }), lastAssistantText: "Done." });
+  assert.deepEqual(receiver.requests.slice(before).map((request) => JSON.parse(request.body).event), ["finished"]);
+  assert.deepEqual(bb.failureReasons(), []);
 });
 
 test("test names the missing setting, never a value", async () => {
@@ -318,6 +331,8 @@ async function loadedWith(routes: object) {
   const faults = { secretWrites: 0, reloads: 0 };
   const holds = new Map<HeldStep, () => Promise<void>>();
   const errors: string[] = [];
+  /** The thread event log, oldest first; `events.list` answers from it the way bb does. */
+  const threadEvents: ThreadEventRow[] = [];
   let instance = await load();
   let loads = 1;
 
@@ -400,7 +415,16 @@ async function loadedWith(routes: object) {
       cli: { register: (registration) => void (cli = registration) },
       onDispose: (hook) => void disposeHooks.push(hook),
       sdk: {
-        threads: { interactions: { list: async () => [] } },
+        threads: {
+          interactions: { list: async () => [] },
+          events: {
+            async list({ types, order, limit }) {
+              const matching = threadEvents.filter((row) => types === undefined || types.includes(row.type));
+              const ordered = order === "desc" ? [...matching].reverse() : matching;
+              return limit === undefined ? ordered : ordered.slice(0, Number(limit));
+            },
+          },
+        },
         plugins: {
           async reload() {
             if (faults.reloads > 0) {
@@ -440,6 +464,7 @@ async function loadedWith(routes: object) {
 
   return {
     stored,
+    threadEvents,
     faults,
     errors,
     loads: () => loads,

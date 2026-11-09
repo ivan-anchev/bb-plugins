@@ -10,6 +10,8 @@ interface WakerDeps {
   routes(): Promise<Routes>;
   /** The thread's open interaction, if it has one now. */
   pendingInteraction(threadId: string): Promise<PendingInteraction | null>;
+  /** Whether the thread's latest turn ended interrupted, as when a user stops it. */
+  lastTurnInterrupted(threadId: string): Promise<boolean>;
   deliver: Deliver;
   failures: FailureLog;
   log: PluginLogger;
@@ -19,10 +21,15 @@ interface WakerDeps {
 
 type Payload<E extends keyof PluginThreadEventPayloads> = PluginThreadEventPayloads[E];
 
-/** The states of one thread that already woke its bot. */
+/** A user stopped the turn: the idle state is settled, but nobody is woken. */
+interface Stopped {
+  kind: "stopped";
+}
+
+/** The states of one thread already settled, whether or not they woke its bot. */
 interface SeenStates {
   interactions: Set<string>;
-  /** The newest thread version that sent `finished` or `failed`. */
+  /** The newest thread version that settled as finished, stopped, or failed. */
   settledVersion: number;
 }
 
@@ -45,29 +52,47 @@ export function createWaker(deps: WakerDeps) {
     },
   };
 
-  async function wake(thread: ThreadResponse, attentionNow: () => Promise<Attention>) {
+  async function wake(thread: ThreadResponse, attentionNow: () => Promise<Attention | Stopped>) {
     if (!wakesBots(thread)) return;
     const target = routeFor(await deps.routes(), thread);
     if (target === null) return;
     const attention = await attentionNow();
     if (!claim(thread, attention)) return;
+    if (attention.kind === "stopped") return;
     await send(target, thread, attention);
   }
 
-  /** A thread that idles on an open question or approval is waiting on that, not finished. */
-  async function idleAttention(threadId: string, lastAssistantText: string | null): Promise<Attention> {
+  /**
+   * A thread that idles on an open question or approval is waiting on that,
+   * and one a user stopped needs nothing; otherwise it finished.
+   */
+  async function idleAttention(threadId: string, lastAssistantText: string | null): Promise<Attention | Stopped> {
     const interaction = await deps.pendingInteraction(threadId);
-    return interaction === null ? { kind: "finished", lastAssistantText } : { kind: "interaction", interaction };
+    if (interaction !== null) return { kind: "interaction", interaction };
+    if (await stoppedByUser(threadId)) return { kind: "stopped" };
+    return { kind: "finished", lastAssistantText };
+  }
+
+  /** An unreadable turn ending counts as finished: a spare wake beats a lost completion. */
+  async function stoppedByUser(threadId: string): Promise<boolean> {
+    try {
+      return await deps.lastTurnInterrupted(threadId);
+    } catch (error) {
+      deps.log.warn(`could not read how ${threadId}'s last turn ended, so it counts as finished: ${String(error)}`);
+      return false;
+    }
   }
 
   /**
    * One POST per state, claimed before sending so overlapping or delayed
-   * repeats of a signal find it taken. An interaction is its id. A finished or
-   * failed thread is the row version bb moved into that status: a version at or
-   * below the newest one already claimed is a repeat or a superseded state,
-   * while a later idle → active → idle carries a newer version.
+   * repeats of a signal find it taken. An interaction is its id. A finished,
+   * stopped, or failed thread is the row version bb moved into that status: a
+   * version at or below the newest one already claimed is a repeat or a
+   * superseded state, while a later idle → active → idle carries a newer
+   * version. A stop claims its version without sending, so a late repeat of it
+   * cannot send finished once a newer turn has completed.
    */
-  function claim(thread: ThreadResponse, attention: Attention): boolean {
+  function claim(thread: ThreadResponse, attention: Attention | Stopped): boolean {
     const states = seen.get(thread.id) ?? { interactions: new Set<string>(), settledVersion: -Infinity };
     seen.set(thread.id, states);
     if (attention.kind === "interaction") {
