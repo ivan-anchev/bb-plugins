@@ -30,30 +30,7 @@ Filter by change kind or file type, or hide tests and mocks together.
 
 ![Filter menu with change kinds and file types](screenshots/filters.png)
 
-## Layout
-
-| Path | What it is |
-| --- | --- |
-| `app.tsx` | Registers the fixed `files` tab in thread context. |
-| `app.css` | Maps the tree's theme and git status colors to bb's host tokens. |
-| `server.ts` | Minimal backend entry; bb requires one. |
-| `src/files-tab.tsx` | The tab: no-environment notice and the All files / Changes switch. |
-| `src/all-files-view.tsx` | All files: `useSdk().environments.paths` as a tree, with the selected file's contents beside it. |
-| `src/changes-view.tsx` | Changes: the `bb--git` `status` and `files` reads, refresh, and the loading and error states around the changes tree. |
-| `src/changes/` | The Changes header and tree: target options, `N files, +A -D` stats and their per-kind breakdown, the path, type and kind filters (pure and unit tested), the remembered header controls, and the tree beside the selected file's diff. |
-| `src/changes/change-kind.ts` | Sorts a changed path into a change kind: code, tests, mocks, generated or docs. Self-contained, so other views can reuse it. Unit tested. |
-| `src/changes/header/` | The header bb's Diff tab draws: target dropdown, stats line with its kind breakdown on hover and focus, filename search, filter menu, collapse/expand all, and diff settings. |
-| `src/file-viewer.tsx` | A file's contents in bb's `experimental_SourceCode`, read with `useSdk().files.read`. |
-| `src/diff-viewer.tsx` | A changed file's diff in bb's `experimental_Diff`, from `files` `initialPatches` or the keyed `patches` read, drawn split or unified, wrapped or scrolled. |
-| `src/git.ts` | The slice of the `bb--git` RPC contract this plugin reads. |
-| `src/viewer-input.ts` | Pure choice of what the viewer shows: a patch, a patch key to fetch, source text, or a notice. Unit tested. |
-| `src/tree-input.ts` | Pure mapping from bb data to `@pierre/trees` input: paths, git status, icons, per-row `+A -D` decorations, and distinct tree paths for a changed file that stands where a changed directory is. Unit tested. |
-| `src/tree-view.tsx` | The `@pierre/trees` model and view: density, path sync, row decorations, the selected row, click to select. |
-| `src/tree-expansion.ts` | Collapse and expand every folder, and whether any is open. Unit tested. |
-| `src/split/` | The resizable tree-beside-viewer layout: a divider you drag or move with the arrow keys, with the sizes remembered. The clamping is unit tested. |
-| `src/ui/` | Small controls in bb token classes: icon button, dropdown menu (bb's shared Radix menu), and a hover and focus tooltip. |
-| `src/hooks/` | React hooks: environment paths, file contents, refetch on show, per-environment remembered state. |
-| `src/chrome.tsx` | Toolbar, segmented control, notices, and the viewer frame in bb token classes. |
+## Credits
 
 The tree and its icons are [`@pierre/trees`](https://www.npmjs.com/package/@pierre/trees)
 (Apache-2.0) with its built-in `complete` colored icon set, the same component
