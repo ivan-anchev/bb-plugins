@@ -74,6 +74,33 @@ test("list follows boat's cursor until the last page", async () => {
   assert.equal(urls[0]?.searchParams.get("label"), "bb.boat/owner=owner-1");
 });
 
+test("environments keeps only what boat passes, and never the environment's variables or secret files", async () => {
+  const fixture = readFileSync(new URL("./fixtures/environments.json", import.meta.url), "utf8");
+  mock.method(globalThis, "fetch", async () => new Response(fixture, { status: 200 }));
+
+  const environments = await createBoatClient("boat_test").environments();
+
+  assert.deepEqual(environments, [
+    {
+      name: "base",
+      isBoatDefault: true,
+      withholdsAll: false,
+      proxiesAi: false,
+      passes: { agents: true, github: true, secrets: true },
+      profileId: null,
+    },
+    {
+      name: "customer-demos",
+      isBoatDefault: false,
+      withholdsAll: true,
+      proxiesAi: true,
+      passes: { agents: true, github: true, secrets: true },
+      profileId: null,
+    },
+  ]);
+  assert.doesNotMatch(JSON.stringify(environments), /not-a-real-secret/);
+});
+
 test("savedSnapshots reads every saved snapshot with no query parameters, which boat would refuse", async () => {
   const fixture = readFileSync(new URL("./fixtures/saved-snapshots.json", import.meta.url), "utf8");
   const urls: string[] = [];

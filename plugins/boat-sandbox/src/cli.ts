@@ -1,9 +1,8 @@
 // bb boat …: thin commands that read, then print.
 import { cliCommand, defineCli } from "@get-bb/plugin-sdk";
-import type { BoatAccess } from "./boat/access.ts";
 import { readLaunchChoices } from "./catalog/read.ts";
 import { formatChoices } from "./catalog/report.ts";
-import { configurationLines, readStatus } from "./status.ts";
+import { configurationLines, readStatus, type StatusDeps } from "./status.ts";
 import { observe, type ObserveDeps } from "./sweep/observe.ts";
 import { planSweep } from "./sweep/plan.ts";
 import { formatRows, sandboxRows } from "./sweep/report.ts";
@@ -12,15 +11,16 @@ import { formatRows, sandboxRows } from "./sweep/report.ts";
 const PATIENCE_MS = 60_000;
 
 /** `machines` is what the sweep looks at, so `bb boat sandboxes` shows exactly what it would do. */
-export function boatCli(boat: BoatAccess, machines: ObserveDeps) {
+export function boatCli(deps: StatusDeps, machines: ObserveDeps) {
+  const { boat } = deps;
   return defineCli({
     name: "boat",
     summary: "boat.dev sandboxes for bb threads",
     commands: {
       status: cliCommand({
-        summary: "Check the boat API key, account, wallet and start budget, and what a thread sandbox starts from by default",
+        summary: "Check the boat API key, account, wallet and start budget, what a thread sandbox starts from by default, and the GitHub login it uses",
         run: async (_input, ctx) => {
-          const { usable, lines } = await readStatus(boat, ctx.signal);
+          const { usable, lines } = await readStatus(deps, ctx.signal);
           return { exitCode: usable ? 0 : 1, stdout: `${lines.join("\n")}\n` };
         },
       }),
