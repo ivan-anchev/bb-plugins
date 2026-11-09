@@ -52,10 +52,27 @@ export const wireLimits = z
   }));
 
 /**
- * OAS `SandboxEnvironment`: what of the account boat passes into the sandboxes started in it. Only the
- * flags are read: zod drops `envContents` and `secretFiles` (OAS: "Treat as sensitive") right here.
+ * A boat environment as the plugin and the chip's RPC carry it: what of the account boat passes into
+ * the sandboxes started in it.
  */
-const sandboxEnvironment = z
+export const sandboxEnvironment = z.object({
+  name: z.string(),
+  /** boat keeps exactly one: a create that names no environment gets it. */
+  isBoatDefault: z.boolean(),
+  /** Safe for third parties: passes nothing, whatever `passes` says, except proxy placeholders. */
+  withholdsAll: z.boolean(),
+  /** With `withholdsAll`, the agents still sign in, through boat's AI proxy placeholders. */
+  proxiesAi: z.boolean(),
+  passes: z.object({ agents: z.boolean(), github: z.boolean(), secrets: z.boolean() }),
+  /** The AI credential profile its sandboxes get; null: the sandbox owner's default profile. */
+  profileId: z.string().nullable(),
+});
+
+/**
+ * OAS `SandboxEnvironment`. Only the flags are read: zod drops `envContents` and `secretFiles`
+ * (OAS: "Treat as sensitive") right here.
+ */
+const wireEnvironment = z
   .object({
     name: z.string(),
     isDefault: z.boolean(),
@@ -66,21 +83,17 @@ const sandboxEnvironment = z
     passSecrets: z.boolean(),
     credentialProfileId: z.string().nullable(),
   })
-  .transform((environment) => ({
+  .transform((environment): SandboxEnvironment => ({
     name: environment.name,
-    /** boat keeps exactly one: a create that names no environment gets it. */
     isBoatDefault: environment.isDefault,
-    /** Safe for third parties: passes nothing, whatever `passes` says, except proxy placeholders. */
     withholdsAll: environment.safeForThirdParties,
-    /** With `withholdsAll`, the agents still sign in, through boat's AI proxy placeholders. */
     proxiesAi: environment.proxyAiCredentials,
     passes: { agents: environment.passAgentsCredentials, github: environment.passGithub, secrets: environment.passSecrets },
-    /** The AI credential profile its sandboxes get; null: the sandbox owner's default profile. */
     profileId: environment.credentialProfileId,
   }));
 
 export const wireEnvironmentList = z
-  .object({ environments: z.array(sandboxEnvironment) })
+  .object({ environments: z.array(wireEnvironment) })
   .transform(({ environments }) => environments);
 
 /** OAS `CredentialProfile`: which AI credentials boat holds, and whether its owner proxies them. */
@@ -167,19 +180,28 @@ export const wireCommandFrame = z.discriminatedUnion("type", [
   }),
 ]);
 
-/**
- * One saved snapshot of `GET /saved-snapshots` (OAS `SavedSnapshot`): a template a thread sandbox can
- * start from. `error` comes only with `failed`; `type` is the size it was saved from, for display.
- */
-const savedSnapshot = z
+/** A boat saved snapshot as the plugin and the chip's RPC carry it: a template a thread sandbox can start from. */
+export const savedSnapshot = z.object({
+  name: z.string(),
+  status: z.enum(["saving", "ready", "failed"]),
+  /** boat's reason, only with `failed`. */
+  error: z.string().nullable(),
+  /** The size it was saved from, for display. */
+  savedFrom: z.string().nullable(),
+  /** ISO 8601. */
+  savedAt: z.string(),
+});
+
+/** One saved snapshot of `GET /saved-snapshots` (OAS `SavedSnapshot`). */
+const wireSavedSnapshot = z
   .object({
     name: z.string(),
-    status: z.enum(["saving", "ready", "failed"]),
+    status: savedSnapshot.shape.status,
     error: z.string().optional(),
     type: z.string().optional(),
     createdAt: z.iso.datetime(),
   })
-  .transform((snapshot) => ({
+  .transform((snapshot): SavedSnapshot => ({
     name: snapshot.name,
     status: snapshot.status,
     error: snapshot.error ?? null,
@@ -188,7 +210,7 @@ const savedSnapshot = z
   }));
 
 /** Every saved snapshot on the account, in one page: the endpoint takes no `limit` or `cursor`. */
-export const wireSavedSnapshotList = z.object({ snapshots: z.array(savedSnapshot) }).transform(({ snapshots }) => snapshots);
+export const wireSavedSnapshotList = z.object({ snapshots: z.array(wireSavedSnapshot) }).transform(({ snapshots }) => snapshots);
 
 /**
  * `GET /repos` (OAS `ReposResponse`), only who boat's GitHub App is installed for: boat's token is a

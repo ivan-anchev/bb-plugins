@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { test } from "node:test";
-import type { BoatAccess, BoatSession, Configuration } from "./boat/access.ts";
+import { afterEach, mock, test } from "node:test";
+import { createBoatAccess, type BoatAccess, type BoatSession, type Configuration } from "./boat/access.ts";
 import { BoatApiError, type BoatClient } from "./boat/client.ts";
 import {
   accountId,
@@ -13,6 +13,7 @@ import {
   type SandboxEnvironment,
   type SavedSnapshot,
 } from "./boat/wire.ts";
+import { launchRpcHandlers } from "./catalog/read.ts";
 import { boatCli } from "./cli.ts";
 import { problem } from "./problem.ts";
 import type { StatusDeps } from "./status.ts";
@@ -46,6 +47,11 @@ interface Account {
 type BuiltInGitStatus = Awaited<ReturnType<StatusDeps["machineEnvironment"]>>["builtInGit"]["status"];
 
 function cliWith(account: Account = {}) {
+  const { access, machineEnvironment } = accountWith(account);
+  return cli(access, machineEnvironment);
+}
+
+function accountWith(account: Account): { access: BoatAccess; machineEnvironment: StatusDeps["machineEnvironment"] } {
   const { template = null, environment = null, environments = ENVIRONMENTS, savedSnapshots, credentialProfiles, githubApp, githubLinked = true, bbGithub = "logged in" } = account;
   const client: BoatClient = {
     savedSnapshots: savedSnapshots ?? (async () => [...SAVED, FAILED]),
@@ -76,7 +82,7 @@ function cliWith(account: Account = {}) {
   const machineEnvironment = typeof bbGithub === "string"
     ? async () => ({ builtInGit: { status: bbGithub, statusMessage: "" }, variables: [] })
     : bbGithub;
-  return cli({ configuration: async () => session, session: async () => session }, machineEnvironment);
+  return { access: { configuration: async () => session, session: async () => session }, machineEnvironment };
 }
 
 const cli = (boat: BoatAccess, machineEnvironment: StatusDeps["machineEnvironment"] = unused) =>
@@ -146,10 +152,11 @@ test("bb boat templates prints --machine-inputs a shell passes unchanged, for an
   assert.deepEqual(JSON.parse(words[words.indexOf("--machine-inputs") + 1] ?? ""), { template: null, environment: ODD_NAME, preset: "default" });
 });
 
-test("bb boat templates --json prints the launch choices", async () => {
+test("bb boat templates --json prints the launch choices, as the composer chip receives them", async () => {
   const { stdout } = await cliWith().run(["templates", "--json"], {});
 
   assert.deepEqual(JSON.parse(stdout ?? ""), {
+    status: "ready",
     templates: [...SAVED, FAILED],
     environments: ENVIRONMENTS,
     defaults: { template: null, environment: null, preset: "default" },
@@ -164,6 +171,74 @@ test("bb boat templates exits 1 with the status problem lines when the key does 
 
   assert.equal(exitCode, 1);
   assert.equal(stdout, "No boat API key is set.\nFix: Paste one, then run `bb plugin reload boat-sandbox`.\n");
+});
+
+test("bb boat templates --json prints the chip's unavailable reply, and exits 1, when the key does not work", async () => {
+  const missing: Configuration = { status: "setup-required", facts: null, problems: [problem("No boat API key is set.", "Paste one")] };
+  const access: BoatAccess = { configuration: async () => missing, session: unused };
+
+  const { exitCode, stdout } = await cli(access).run(["templates", "--json"], {});
+
+  assert.equal(exitCode, 1);
+  assert.deepEqual(JSON.parse(stdout ?? ""), {
+    status: "unavailable",
+    message: "No boat API key is set. Paste one, then run `bb plugin reload boat-sandbox`.",
+  });
+});
+
+test("the chip's launchChoices RPC returns exactly what bb boat templates --json prints", async () => {
+  const { access, machineEnvironment } = accountWith({ template: "tpl-test" });
+  const { stdout } = await cli(access, machineEnvironment).run(["templates", "--json"], {});
+
+  const reply = await launchChoicesRpc(access);
+
+  assert.deepEqual(JSON.parse(stdout ?? ""), JSON.parse(JSON.stringify(reply)));
+});
+
+const launchChoicesRpc = async (access: BoatAccess) =>
+  launchRpcHandlers(access).launchChoices({}, { experimental_signal: new AbortController().signal, experimental_caller: { kind: "client" } });
+
+afterEach(() => mock.restoreAll());
+
+/** The plugin's own access to a boat whose /me and /limits answer every request with `answer`. */
+function accessToBoat(answer: { status: number } | { failure: Error }): BoatAccess {
+  mock.method(globalThis, "fetch", async () => {
+    if ("failure" in answer) throw answer.failure;
+    return new Response(JSON.stringify({ code: "unauthorized", message: "no" }), { status: answer.status });
+  });
+  return createBoatAccess({ get: async () => ({ apiKey: "boat_abc", idleMinutes: 15, defaultPreset: "default", defaultTemplate: "", defaultEnvironment: "" }) });
+}
+
+// The chip blocks submit on an `unavailable` reply and never on a thrown read.
+test("a failed read of boat's account is no refusal: the chip's RPC and bb boat templates --json both throw it", async () => {
+  for (const answer of [{ failure: new TypeError("fetch failed") }, { status: 503 }]) {
+    const access = accessToBoat(answer);
+    const thrown = { message: /^Could not read the boat account: / };
+
+    await assert.rejects(launchChoicesRpc(access), thrown);
+    await assert.rejects(async () => cli(access).run(["templates", "--json"], {}), thrown);
+    mock.restoreAll();
+  }
+});
+
+test("boat rejecting the key is a refusal: the chip's RPC returns the unavailable reply bb boat templates --json prints", async () => {
+  const access = accessToBoat({ status: 401 });
+
+  const { exitCode, stdout } = await cli(access).run(["templates", "--json"], {});
+
+  assert.equal(exitCode, 1);
+  assert.deepEqual(JSON.parse(stdout ?? ""), {
+    status: "unavailable",
+    message: "boat rejected the API key (401 unauthorized). Paste a key from `boat api-key create bb --preset ci` into Settings → boat Sandbox → API key, then run `bb plugin reload boat-sandbox`.",
+  });
+  assert.deepEqual(JSON.parse(stdout ?? ""), await launchChoicesRpc(access));
+});
+
+test("a failed list read throws from the chip's RPC and bb boat templates --json alike", async () => {
+  const { access } = accountWith({ savedSnapshots: () => Promise.reject(new Error("boat is down for maintenance.")) });
+
+  await assert.rejects(launchChoicesRpc(access), { message: "boat is down for maintenance." });
+  await assert.rejects(async () => cli(access).run(["templates", "--json"], {}), { message: "boat is down for maintenance." });
 });
 
 /** The GitHub rows while bb forwards the bb server's gh login. */

@@ -50,11 +50,13 @@ test("an unknown template is refused, naming the setting only when the name came
     ok: false,
     message: 'No saved snapshot "nope" on this boat account. Run `bb boat templates` to list them.',
     setting: null,
+    name: "nope",
   });
   assert.deepEqual(resolveLaunch({}, choices([], { template: "gone" })), {
     ok: false,
     message: `No saved snapshot "gone" on this boat account${SETTING}. Run \`bb boat templates\` to list them.`,
     setting: "defaultTemplate",
+    name: "gone",
   });
 });
 
@@ -63,12 +65,14 @@ test("a template boat is still saving, or failed to save, is refused with boat's
     ok: false,
     message: `Template "node-tools" is still saving on boat${SETTING}. Start the thread once \`bb boat templates\` shows it ready.`,
     setting: "defaultTemplate",
+    name: "node-tools",
   });
   const failed = choices([snapshot("node-tools", "failed", "source sandbox was deleted")]);
   assert.deepEqual(resolveLaunch({ template: "node-tools" }, failed), {
     ok: false,
     message: "boat could not save template \"node-tools\": source sandbox was deleted. Save it again with `boat snapshot <sandbox-id> 'node-tools'`.",
     setting: null,
+    name: "node-tools",
   });
 });
 
@@ -97,11 +101,13 @@ test("an unknown environment is refused, naming the setting only when the name c
     ok: false,
     message: 'boat has no environment "nope". Run `bb boat templates` to list them.',
     setting: null,
+    name: "nope",
   });
   assert.deepEqual(resolveLaunch({}, choices([], { environment: "gone" })), {
     ok: false,
     message: 'boat has no environment "gone" (Settings → boat Sandbox → Default environment). Run `bb boat templates` to list them.',
     setting: "defaultEnvironment",
+    name: "gone",
   });
   // A thread that names an environment does not need the stale default.
   assert.ok(resolveLaunch({ environment: "qa" }, choices([], { environment: "gone" })).ok);

@@ -2,7 +2,7 @@
 // input in one of its terminals, and a turn ending on it.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { IdleClock } from "./idle-clock.ts";
-import { PROVIDER_ID } from "./machine-provider.ts";
+import { PROVIDER_ID } from "./contract.ts";
 
 export function trackActivity(bb: Pick<BbPluginApi, "events" | "sdk">, idle: IdleClock): void {
   async function touchIfOwned(hostId: string): Promise<void> {

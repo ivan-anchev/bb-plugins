@@ -11,7 +11,35 @@ thread gets a follow-up, and deletes it when bb removes the machine.
 
 ## Start a thread on a sandbox
 
-Pick **boat Sandbox** in the new-thread environment picker, or:
+Pick **boat Sandbox** in the new-thread environment picker. A chip in the
+composer reads `<template> · <environment> · <size>`, for example
+`stock image · base · default`, starting from the settings' defaults. Open it
+to pick from three groups:
+
+- **Template:** `boat stock image` and every saved snapshot on the account.
+  A snapshot still `saving`, or one that `failed`, is listed but cannot be
+  picked. `default` marks the **Default template**.
+- **Environment:** every boat environment; `boat default` marks boat's own.
+- **Size:** `small`, `default`, `large` and `xlarge`, with their vCPU and memory.
+
+The thread's machine inputs are then the full choice, every key named, such as
+`{"template":"node-tools","environment":"base","preset":"large"}`, so a later
+change to the settings does not change what the thread asked for. The chip
+reads boat each time it opens; after `boat snapshot <sandbox-id> <name>`,
+**Refresh** in the open menu lists the new template (as `saving` until boat
+finishes it).
+
+The chip turns submit off, with the reason on the send button, only when the
+create would be refused: `⚠ <name>` when boat has no such template (or it is
+not ready) or no such environment, often a stale **Default template** or
+**Default environment**, and `⚠ boat: set up` when the key is missing or
+refused. Picking any item from a blocked chip starts again from
+`boat stock image` in boat's default environment. If boat cannot be read (the
+network, a timeout, boat failing), the chip never blocks: it shows
+`⚠ boat: list failed`, or the choice it last read with a warning, plus the
+error and **Retry**, and the create checks again.
+
+Or, from the CLI:
 
 ```sh
 bb thread spawn --project <project-id> --environment-provider boat-sandbox \
@@ -401,12 +429,15 @@ and `secrets`, `nothing (safe for third parties)`, or
 the environment boat uses when nothing names one; `default` marks the one a
 thread that names none gets.
 
-`--json` prints `{templates: [{name, status, error, savedFrom, savedAt}],
+`--json` prints the object the composer chip receives:
+`{status: "ready", templates: [{name, status, error, savedFrom, savedAt}],
 environments: [{name, isBoatDefault, withholdsAll, proxiesAi, passes: {agents,
 github, secrets}, profileId}], defaults: {template, environment, preset}}`.
-It never carries an environment's variables or secret files. The command
-exits 1 with the same problem lines as `bb boat status` when the key does not
-work.
+It never carries an environment's variables or secret files. When the key is
+missing or boat refuses it or its account, the command exits 1: `--json` prints
+`{status: "unavailable", message}`, and the table form prints the same problem
+lines as `bb boat status`. When boat cannot be read at all, `--json` fails with
+the error, as the chip's read does.
 
 ## Settings
 

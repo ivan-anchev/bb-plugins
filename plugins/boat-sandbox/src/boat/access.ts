@@ -1,7 +1,7 @@
 // Whether the configured key can run sandboxes: the settings first, then boat's view of the
 // key's account and wallet.
 import { PASTE_KEY_STEP, resolveSettings, type BoatSettings, type ResolvedSettings } from "../settings.ts";
-import { describeProblems, problem, type Problem } from "../problem.ts";
+import { describeProblems, messageOf, problem, type Problem } from "../problem.ts";
 import { BoatApiError, createBoatClient, type BoatClient } from "./client.ts";
 import type { Account, Limits } from "./wire.ts";
 
@@ -11,10 +11,16 @@ export interface BoatFacts {
   limits: Limits;
 }
 
+/**
+ * `refused` is boat's definite answer (a rejected key, an account boat Sandbox cannot run on), so
+ * nothing launches until the settings change. `read-failed` is no answer (the network, a timeout,
+ * boat failing), so the next read may work.
+ */
 export type Configuration =
   | { status: "available"; facts: BoatFacts; client: BoatClient; settings: Extract<ResolvedSettings, { ok: true }> }
   | { status: "setup-required"; facts: null; problems: readonly [Problem] }
-  | { status: "unavailable"; facts: BoatFacts | null; problems: readonly [Problem, ...Problem[]] };
+  | { status: "refused"; facts: BoatFacts | null; problems: readonly [Problem, ...Problem[]] }
+  | { status: "read-failed"; facts: null; problems: readonly [Problem] };
 
 export interface BoatAccess {
   /** Reads the settings and, with a key, boat's /me and /limits. Never throws. */
@@ -35,12 +41,14 @@ export function createBoatAccess(settings: Pick<BoatSettings, "get">): BoatAcces
     try {
       facts = await readFacts(client, signal);
     } catch (error) {
-      return { status: "unavailable", facts: null, problems: [unreadable(error)] };
+      if (error instanceof BoatApiError && (error.status === 401 || error.status === 403))
+        return { status: "refused", facts: null, problems: [problem(`boat rejected the API key (${error.status} ${error.code}).`, PASTE_KEY_STEP)] };
+      return { status: "read-failed", facts: null, problems: [unreadable(error)] };
     }
 
     const [first, ...rest] = refusals(facts);
     if (first === undefined) return { status: "available", facts, client, settings: resolved };
-    return { status: "unavailable", facts, problems: [first, ...rest] };
+    return { status: "refused", facts, problems: [first, ...rest] };
   }
 
   return {
@@ -74,11 +82,5 @@ function refusals({ account, limits }: BoatFacts): Problem[] {
   return problems;
 }
 
-function unreadable(error: unknown): Problem {
-  if (error instanceof BoatApiError && (error.status === 401 || error.status === 403))
-    return problem(`boat rejected the API key (${error.status} ${error.code}).`, PASTE_KEY_STEP);
-  return problem(
-    `Could not read the boat account: ${error instanceof Error ? error.message : String(error)}`,
-    "Check the network connection",
-  );
-}
+const unreadable = (error: unknown): Problem =>
+  problem(`Could not read the boat account: ${messageOf(error)}`, "Check the network connection");
