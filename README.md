@@ -65,3 +65,5 @@ git push origin <id>/v<version>
 The marketplace tracks each plugin's whole major line, so a pushed tag reaches
 users on their next `bb plugin update` with no catalog change. bb refuses a tag
 that moves after release: publish fixes as a new version, never retag.
+
+Disposable QA cycle 1 note.
