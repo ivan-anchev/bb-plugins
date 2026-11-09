@@ -35,22 +35,37 @@ interface SeenStates {
 
 /**
  * Turns bb's thread signals into at most one POST per state change, to the
- * thread's routed target. A failed POST lands in the failure log.
+ * thread's routed target. A failed POST lands in the failure log. A handler
+ * returns once its state is claimed; the POST runs on after it, so a slow
+ * webhook never holds up bb. `idle()` waits for handlers and POSTs to settle.
  */
 export function createWaker(deps: WakerDeps) {
   const seen = new Map<string, SeenStates>();
+  /** Handler calls and the POSTs they started that have not settled yet. */
+  const pending = new Set<Promise<void>>();
 
   return {
     onInteractionPending({ thread, interaction }: Payload<"interaction.pending">) {
-      return wake(thread, async () => ({ kind: "interaction", interaction }));
+      return track(wake(thread, async () => ({ kind: "interaction", interaction })));
     },
     onThreadIdle({ thread, lastAssistantText }: Payload<"thread.idle">) {
-      return wake(thread, () => idleAttention(thread.id, lastAssistantText));
+      return track(wake(thread, () => idleAttention(thread.id, lastAssistantText)));
     },
     onThreadFailed({ thread, error }: Payload<"thread.failed">) {
-      return wake(thread, async () => ({ kind: "failed", error }));
+      return track(wake(thread, async () => ({ kind: "failed", error })));
+    },
+    /** Resolves once every handler and POST started so far has settled, delivered or logged. */
+    async idle() {
+      while (pending.size > 0) await Promise.allSettled([...pending]);
     },
   };
+
+  function track(work: Promise<void>): Promise<void> {
+    pending.add(work);
+    const settled = () => void pending.delete(work);
+    void work.then(settled, settled);
+    return work;
+  }
 
   async function wake(thread: ThreadResponse, attentionNow: () => Promise<Attention | Stopped>) {
     if (!wakesBots(thread)) return;
@@ -59,7 +74,19 @@ export function createWaker(deps: WakerDeps) {
     const attention = await attentionNow();
     if (!claim(thread, attention)) return;
     if (attention.kind === "stopped") return;
-    await send(target, thread, attention);
+    start(target, thread, attention);
+  }
+
+  /**
+   * Starts the POST without awaiting it. `deps.signal` still cancels it when the
+   * plugin unloads, and `send` never rejects, so nothing escapes unhandled.
+   */
+  function start(target: Target, thread: ThreadResponse, attention: Attention) {
+    void track(
+      send(target, thread, attention).catch((error: unknown) => {
+        deps.log.error(`could not send ${attention.kind} on ${thread.id}: ${String(error)}`);
+      }),
+    );
   }
 
   /**

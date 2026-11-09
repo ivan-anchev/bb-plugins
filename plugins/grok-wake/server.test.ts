@@ -13,7 +13,7 @@ import type {
 import type { AttentionEvent, GrokWakeHost, RoutesDescriptors, SecretPairDescriptors } from "./bb-types.ts";
 import { routesSetting } from "./routes.ts";
 import plugin from "./server.ts";
-import { startReceiver, thread, turnCompleted, type ThreadEventRow } from "./test-support.ts";
+import { startReceiver, thread, turnCompleted, until, type ThreadEventRow } from "./test-support.ts";
 
 const URL_KEY = "GROK_WAKE_OPS_URL";
 const KEY_KEY = "GROK_WAKE_OPS_KEY";
@@ -69,6 +69,7 @@ test("an attention event on a routed thread POSTs once", async () => {
   bb.set({ [URL_KEY]: receiver.url, [KEY_KEY]: "dummy-key-server" });
   const before = receiver.requests.length;
   await bb.fire("thread.idle", { thread: thread(), lastAssistantText: "Done." });
+  await until(() => receiver.requests.length === before + 1);
   assert.equal(receiver.requests.length, before + 1);
   assert.equal(JSON.parse(receiver.requests.at(-1)?.body ?? "{}").event, "finished");
 });
@@ -82,6 +83,7 @@ test("a thread a user stopped sends nothing; its next completed turn sends finis
   assert.equal(receiver.requests.length, before);
   bb.threadEvents.push(turnCompleted(30, "completed"));
   await bb.fire("thread.idle", { thread: thread({ updatedAt: 250 }), lastAssistantText: "Done." });
+  await until(() => receiver.requests.length === before + 1);
   assert.deepEqual(receiver.requests.slice(before).map((request) => JSON.parse(request.body).event), ["finished"]);
   assert.deepEqual(bb.failureReasons(), []);
 });
@@ -124,6 +126,7 @@ test("a failed event is listed, then drained once the receiver recovers", async 
   bb.set({ [URL_KEY]: receiver.url, [KEY_KEY]: "dummy-key-drain" });
   receiver.state.status = 500;
   await bb.fire("thread.failed", { thread: thread(), error: "Provider rejected request" });
+  await until(() => bb.failureReasons().length === 1);
 
   const listed = await bb.cli(["failures"]);
   assert.match(listed.stdout ?? "", /OPS {2}failed {2}thr_abcdefgh123 {2}Fix the build {2}http 500/);
@@ -197,12 +200,12 @@ test("unloading stops an in-flight wake, which stays in the failure log as cance
   const bb = await loadedWith({ projects: { proj_1: "ops" } });
   bb.set({ [URL_KEY]: receiver.url, [KEY_KEY]: "dummy-key-unload" });
   receiver.state.hang = true;
+  const before = receiver.requests.length;
   try {
-    const wake = bb.fire("thread.idle", { thread: thread({ updatedAt: 900 }), lastAssistantText: "Done." });
-    await settle();
+    await bb.fire("thread.idle", { thread: thread({ updatedAt: 900 }), lastAssistantText: "Done." });
+    await until(() => receiver.requests.length === before + 1);
     const started = Date.now();
     await bb.dispose();
-    await wake;
     assert.ok(Date.now() - started < 1000);
     assert.deepEqual(bb.failureReasons(), ["cancelled"]);
   } finally {
@@ -215,6 +218,7 @@ test("a drain whose caller goes away stops promptly and keeps the entry as it wa
   bb.set({ [URL_KEY]: receiver.url, [KEY_KEY]: "dummy-key-hangup" });
   receiver.state.status = 500;
   await bb.fire("thread.failed", { thread: thread(), error: "Provider rejected request" });
+  await until(() => bb.failureReasons().length === 1);
   receiver.state.status = 200;
   receiver.state.hang = true;
   try {
@@ -284,6 +288,7 @@ test("a drain cancelled before it starts leaves every entry's reason as it was",
   receiver.state.status = 500;
   await bb.fire("thread.failed", { thread: thread({ updatedAt: 100 }), error: "First" });
   await bb.fire("thread.failed", { thread: thread({ updatedAt: 200 }), error: "Second" });
+  await until(() => bb.failureReasons().length === 2);
   receiver.state.status = 200;
   bb.stored.delete(URL_KEY);
   bb.stored.delete(KEY_KEY);

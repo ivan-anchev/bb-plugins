@@ -9,7 +9,11 @@ import { createWaker } from "./waker.ts";
 
 export default async function plugin(bb: GrokWakeHost) {
   const lifetime = new AbortController();
-  bb.onDispose(() => lifetime.abort());
+  bb.onDispose(async () => {
+    lifetime.abort();
+    // Let the cancelled POSTs reach the failure log before bb closes the database.
+    await waker.idle();
+  });
 
   const settings = bb.settings.define(routesSetting);
   const currentRoutes = async () => routesOf((await settings.get()).routes);
