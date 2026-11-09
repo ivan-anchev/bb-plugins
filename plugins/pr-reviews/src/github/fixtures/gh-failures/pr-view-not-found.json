@@ -1,0 +1,7 @@
+{
+  "code": 1,
+  "killed": false,
+  "signal": null,
+  "stdout": "",
+  "stderr": "GraphQL: Could not resolve to a PullRequest with the number of 99999. (repository.pullRequest)\n"
+}

@@ -1,10 +1,14 @@
-// The only module that runs `gh`. It parses gh's JSON once into the canonical PR types and
-// maps every process failure to a refusal the app can show beside its data.
+// The only module that runs `gh`. It parses gh's JSON once into the canonical PR types, posts the
+// review comments a reader chose to, and maps every process failure to a refusal the app can show
+// beside its data or a kept draft.
 import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 import { z } from "zod";
+import type { CommentRequest } from "../comments/comment-schema.ts";
 import type { PrDetail, PrSummary } from "../contract.ts";
 import { statusCheckRollupSchema } from "./checks.ts";
-import { firstLine, parseHostCommandFailure, runHostCommand } from "./host-command.ts";
+import { commentApiArgs } from "./comment-args.ts";
+import { ghPostRefusalFor, ghRefusalFor } from "./gh-refusal.ts";
+import { parseHostCommandFailure, runHostCommand } from "./host-command.ts";
 import type { PrCommits } from "./pr-commits.ts";
 import type { Repo } from "./repo.ts";
 import { latestReviewsSchema, reviewRequestsSchema, toReviewers } from "./reviewers.ts";
@@ -113,20 +117,23 @@ async function runGh(args: string[]): Promise<string> {
   try {
     return await runHostCommand("gh", args);
   } catch (error) {
-    throw refusalFor(error);
+    throw ghRefusalFor(parseHostCommandFailure(error));
   }
 }
 
-function refusalFor(error: unknown): Refusal {
-  const { code, stderr } = parseHostCommandFailure(error);
-  if (code === "ENOENT") {
-    return new Refusal({ code: "invalid", message: "PR Reviews needs the GitHub CLI. Install gh and make sure it is on your PATH, then Refresh." });
+const postedCommentSchema = z.object({ html_url: z.string() });
+
+/** Posts the review comment exactly as requested. Resolves to its page on GitHub. */
+export async function postComment(repo: Repo, number: number, request: CommentRequest): Promise<{ url: string }> {
+  const json = await runGhPost(commentApiArgs(repo, number, request));
+  return { url: postedCommentSchema.parse(JSON.parse(json)).html_url };
+}
+
+// why its own mapping: a POST that timed out may have reached GitHub (ghPostRefusalFor).
+async function runGhPost(args: string[]): Promise<string> {
+  try {
+    return await runHostCommand("gh", args);
+  } catch (error) {
+    throw ghPostRefusalFor(parseHostCommandFailure(error));
   }
-  if (stderr.includes("gh auth login")) {
-    return new Refusal({ code: "forbidden", message: "The GitHub CLI isn't signed in. Run `gh auth login`, then Refresh." });
-  }
-  if (stderr.includes("Could not resolve to a PullRequest")) {
-    return new Refusal({ code: "not_found", message: "GitHub has no such pull request." });
-  }
-  return new Refusal({ code: "invalid", message: firstLine(stderr) ?? "The GitHub CLI failed." });
 }

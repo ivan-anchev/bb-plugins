@@ -41,9 +41,9 @@ function AnnotatedDiff({ file, hunk, findings, head }: { file: DiffFile; hunk: H
     () =>
       findings.map(
         // Keyed by the finding, so an open question never passes to another finding.
-        (shown): LineNote => ({ at: { side: shown.finding.side, line: shown.finding.line }, node: <FindingBlock key={shown.index} shown={shown} head={head} /> }),
+        (shown): LineNote => ({ at: { side: shown.finding.side, line: shown.finding.line }, node: <FindingBlock key={shown.index} shown={shown} file={drawn} head={head} /> }),
       ),
-    [findings, head],
+    [findings, drawn, head],
   );
   return <PrDiff file={drawn} head={head} newContent={null} settings={DEFAULT_DIFF_SETTINGS} notes={notes} />;
 }

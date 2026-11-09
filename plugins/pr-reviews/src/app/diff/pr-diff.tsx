@@ -80,7 +80,15 @@ function SelectableDiff({ file, head, newContent, settings, notes }: PrDiffProps
             {metadata.kind === "note" ? (
               metadata.node
             ) : (
-              <SelectionPanel span={metadata.span} head={head} panel={metadata.panel} onAsk={lines.openAsk} onCloseBox={lines.closeBox} onDone={onSent} />
+              <SelectionPanel
+                span={metadata.span}
+                head={head}
+                panel={metadata.panel}
+                onOpenBox={lines.openBox}
+                onCloseBox={lines.closeBox}
+                onSent={onSent}
+                onDone={lines.clear}
+              />
             )}
           </div>
         )}

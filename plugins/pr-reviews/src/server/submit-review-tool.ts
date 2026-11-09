@@ -1,7 +1,7 @@
 // The `submit_review` agent tool: offered only to review threads, validated against the
 // diff the thread was prompted with, and stored by repo, PR number and head commit.
 import type { BbPluginApi, PluginAgentConfigurationContext, PluginAgents, PluginAgentToolResult } from "@get-bb/plugin-sdk";
-import { guideTag, prHeadKeySchema, repoTag } from "../contract.ts";
+import { guideTag, prHeadKeySchema, repoTag, shortSha } from "../contract.ts";
 import { submitReviewInputSchema, type SubmitReviewInput } from "../guide/guide-schema.ts";
 import { validateSubmission } from "../guide/validate-submission.ts";
 import type { Store } from "./store.ts";
@@ -61,7 +61,7 @@ async function submitReview(bb: Bb, store: ToolStore, { headSha, ...input }: Sub
   bb.rpc.experimental_invalidate([repoTag(run.key.repo), guideTag(run.key)]);
 
   const { steps, findings } = validation.guide;
-  return `Guide saved for #${run.key.number} at ${run.key.headSha.slice(0, 7)}: ${count(steps.length, "step")}, ${count(findings.length, "finding")}. The user reads it in PR Reviews. You are done unless they ask you something.`;
+  return `Guide saved for #${run.key.number} at ${shortSha(run.key.headSha)}: ${count(steps.length, "step")}, ${count(findings.length, "finding")}. The user reads it in PR Reviews. You are done unless they ask you something.`;
 }
 
 // Never names the run's head: a turn written for an older head would only copy it.

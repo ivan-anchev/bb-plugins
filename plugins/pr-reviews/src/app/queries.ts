@@ -41,3 +41,5 @@ export function useReviewAction(method: ReviewAction, target: PrTarget) {
 export const useAskAboutFinding = () => experimental_useRpcMutation({ contract, method: "askAboutFinding" });
 
 export const useAskAboutLines = () => experimental_useRpcMutation({ contract, method: "askAboutLines" });
+
+export const usePostComment = () => experimental_useRpcMutation({ contract, method: "postComment" });

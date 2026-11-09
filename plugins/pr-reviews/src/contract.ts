@@ -2,7 +2,7 @@
 // Shared by server.ts and app.tsx: pure zod, no SDK runtime beyond defineRpcContract.
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { codeQuoteSchema } from "./comments/comment-schema.ts";
+import { codeQuoteSchema, commentRequestSchema } from "./comments/comment-schema.ts";
 import { diffFileSchema } from "./diff/diff-schema.ts";
 import { guideSchema } from "./guide/guide-schema.ts";
 import { repoSchema, type Repo } from "./github/repo.ts";
@@ -85,6 +85,9 @@ const prDetailSchema = prSummarySchema.extend({
   labels: z.array(labelSchema),
 });
 export type PrDetail = z.infer<typeof prDetailSchema>;
+
+/** A commit as people read it: its first seven characters. */
+export const shortSha = (sha: string) => sha.slice(0, 7);
 
 /** The PR's commits after the guide's head, or null when a force push removed that head from the PR. */
 export function commitsSince(pr: PrDetail, guideHeadSha: string): number | null {
@@ -210,4 +213,9 @@ export const prReviewsContract = defineRpcContract({
     input: prRefSchema.extend({ quote: codeQuoteSchema, question: z.string().trim().min(1) }),
     output: empty,
   },
+  /**
+   * Posts one review comment to the project's PR exactly as requested, on the reader's click.
+   * Resolves to the comment's page on GitHub. Untagged: nothing the plugin reads shows comments.
+   */
+  postComment: { input: prRefSchema.extend({ request: commentRequestSchema }), output: z.object({ url: z.string() }) },
 });

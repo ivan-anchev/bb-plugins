@@ -1,11 +1,12 @@
 // RPC handlers: resolve the project to its GitHub repo, read GitHub through gh with each PR's
-// review state, read stored guides and a PR's live diff, remember the chosen project, and hand
-// review actions to `reviews`. A thin shell; the logic lives in the modules it calls.
+// review state, read stored guides and a PR's live diff, remember the chosen project, hand
+// review actions to `reviews`, and post the review comment a reader chose to. A thin shell; the
+// logic lives in the modules it calls.
 import { experimental_PluginRpcRefusal as Refusal, type BbPluginApi, type ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { PROJECTS_TAG, prReviewsContract, type GitHubProject, type UnreadableProject } from "../contract.ts";
 import { parsePrDiff } from "../diff/parse-pr-diff.ts";
-import { listOpenPrs, readFileAt, snapshotPrDiff, type PrDiffSnapshot } from "../github/gh.ts";
+import { listOpenPrs, postComment, readFileAt, snapshotPrDiff, type PrDiffSnapshot } from "../github/gh.ts";
 import { projectRepo, type ProjectRepo } from "../github/project-repo.ts";
 import type { Repo } from "../github/repo.ts";
 import type { ReviewReader } from "./review-reader.ts";
@@ -116,6 +117,9 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
       await reviews.askAboutLines(await prRef(input), quote, question);
       return {};
     },
+
+    // The repo is the project's, read here: the app names only the project and the PR.
+    postComment: async ({ projectId, number, request }) => postComment(await repoOf(projectId), number, request),
   };
 }
 

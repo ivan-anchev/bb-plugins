@@ -1,40 +1,46 @@
-// What sits under the selected lines: a row naming them with what can be done with them, and the
-// box an action opened. The row stays while its box is open, so focus can come back to the button.
+// What sits under the selected lines: a row naming them with what can be done with them (ask the
+// review thread, comment on GitHub), and the box an action opened. The row stays while its box is
+// open, so focus can come back to the button.
 import { useId, useRef, useState, type Ref } from "react";
 import { reviewThreadOf } from "../../contract.ts";
 import { linesLabel, quoteOf, type LineSpan } from "../../comments/line-span.ts";
+import { CommentComposer } from "../comments/comment-composer.tsx";
 import { useLifetime } from "../lifetime.ts";
 import { useAskAboutLines, usePullRequest, type PrHeadTarget } from "../queries.ts";
 import { useOpenReviewChat } from "../review-chat/review-chat-button.tsx";
 import { Button } from "../ui/button.tsx";
 import { DraftBox } from "../ui/draft-box.tsx";
-import type { LinePanel } from "./line-selection.ts";
+import type { LineBox, LinePanel } from "./line-selection.ts";
 
 type SelectionPanelProps = {
   span: LineSpan;
   head: PrHeadTarget;
   panel: LinePanel;
-  onAsk(): void;
+  onOpenBox(box: LineBox): void;
   /** Close the box and keep the lines selected. */
   onCloseBox(): void;
+  /** The question went to the review thread: clear the selection and say where it went. */
+  onSent(): void;
   /** The lines are dealt with: clear the selection. */
   onDone(): void;
 };
 
-export function SelectionPanel({ span, head, panel, onAsk, onCloseBox, onDone }: SelectionPanelProps) {
+export function SelectionPanel({ span, head, panel, onOpenBox, onCloseBox, onSent, onDone }: SelectionPanelProps) {
   const { start, end } = quoteOf(span);
   const hasThread = useHasReviewThread(head);
-  const askButton = useRef<HTMLButtonElement>(null);
-  const askBox = useRef<HTMLDivElement>(null);
-  const askId = useId();
+  const toggles = { ask: useRef<HTMLButtonElement>(null), comment: useRef<HTMLButtonElement>(null) };
+  const box = useRef<HTMLDivElement>(null);
+  const boxId = useId();
   const reasonId = useId();
-  const askOpen = panel === "ask";
+  const open = panel === "actions" ? null : panel;
 
-  // Focus comes back to the button only from inside the closing box, never from elsewhere on the page.
-  const closeAsk = () => {
-    if (askBox.current?.contains(document.activeElement)) askButton.current?.focus();
+  // Focus comes back to the box's button only from inside the closing box, never from elsewhere on the page.
+  const closeBox = () => {
+    if (open !== null && box.current?.contains(document.activeElement)) toggles[open].current?.focus();
     onCloseBox();
   };
+  const toggle = (which: LineBox) => (open === which ? closeBox() : onOpenBox(which));
+  const toggleProps = (which: LineBox) => ({ ref: toggles[which], "aria-expanded": open === which, "aria-controls": open === which ? boxId : undefined });
 
   return (
     <div className="px-2 pt-1 pb-1.5">
@@ -43,14 +49,12 @@ export function SelectionPanel({ span, head, panel, onAsk, onCloseBox, onDone }:
           <span className="text-muted-foreground">{linesLabel(start, end)}</span>
           {/* why aria-disabled, not disabled: the button stays focusable, and its reason is read with it. */}
           <Button
-            ref={askButton}
+            {...toggleProps("ask")}
             variant="secondary"
             size="small"
-            aria-expanded={askOpen}
-            aria-controls={askOpen ? askId : undefined}
             aria-disabled={!hasThread}
             aria-describedby={hasThread ? undefined : reasonId}
-            onClick={hasThread ? () => (askOpen ? closeAsk() : onAsk()) : undefined}
+            onClick={hasThread ? () => toggle("ask") : undefined}
           >
             Ask the review thread
           </Button>
@@ -59,9 +63,17 @@ export function SelectionPanel({ span, head, panel, onAsk, onCloseBox, onDone }:
               Start a review first
             </span>
           )}
-          {!askOpen && <span className="ml-auto text-subtle-foreground">Esc clears</span>}
+          <Button {...toggleProps("comment")} variant="secondary" size="small" onClick={() => toggle("comment")}>
+            Comment on GitHub
+          </Button>
+          {open === null && <span className="ml-auto text-subtle-foreground">Esc clears</span>}
         </div>
-        {askOpen && <AskAboutLines id={askId} ref={askBox} span={span} head={head} onClose={closeAsk} onSent={onDone} />}
+        {open === "ask" && <AskAboutLines id={boxId} ref={box} span={span} head={head} onClose={closeBox} onSent={onSent} />}
+        {open === "comment" && (
+          <div id={boxId} ref={box}>
+            <CommentComposer span={span} head={head} initialText="" startAt="write" onCancel={closeBox} onDone={onDone} />
+          </div>
+        )}
       </section>
     </div>
   );

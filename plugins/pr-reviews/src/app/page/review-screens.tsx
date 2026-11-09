@@ -25,7 +25,7 @@ export function NoneScreen({ target }: { target: PrTarget }) {
         </Button>
       }
     >
-      Starts a review thread in a new worktree, with the instructions from Settings → PR Reviews. Nothing is posted to GitHub.
+      Starts a review thread in a new worktree, with the instructions from Settings → PR Reviews. The thread never posts to GitHub.
     </Screen>
   );
 }
