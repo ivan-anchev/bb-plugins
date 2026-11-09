@@ -7,6 +7,7 @@ import {
   wireCredentialProfileList,
   wireEnvironmentList,
   wireError,
+  wireGithubApp,
   wireLimits,
   wireMe,
   wireSandboxEnvelope,
@@ -14,6 +15,7 @@ import {
   wireSavedSnapshotList,
   type Account,
   type CredentialProfile,
+  type GithubApp,
   type Limits,
   type SandboxEnvironment,
   type SavedSnapshot,
@@ -75,6 +77,8 @@ export interface BoatClient {
   environments(signal?: AbortSignal): Promise<SandboxEnvironment[]>;
   /** Every AI credential profile the account can use (`account.admin`, which a `ci` key lacks). */
   credentialProfiles(signal?: AbortSignal): Promise<CredentialProfile[]>;
+  /** Who boat's GitHub App is installed for. The scope `GET /repos` needs is undocumented. */
+  githubApp(signal?: AbortSignal): Promise<GithubApp>;
   /** null when boat no longer has the sandbox (404 or cancelled). */
   get(id: SandboxId, signal: AbortSignal): Promise<Sandbox | null>;
   /** Every sandbox carrying all of `labels`, in any state, across all pages. */
@@ -109,6 +113,8 @@ export function createBoatClient(apiKey: string): BoatClient {
     savedSnapshots: async (signal) => wireSavedSnapshotList.parse(await json("/saved-snapshots", { signal })),
     environments: async (signal) => wireEnvironmentList.parse(await json("/environments", { signal })),
     credentialProfiles: async (signal) => wireCredentialProfileList.parse(await json("/credential-profiles", { signal })),
+    // No `?sync=true`: that asks GitHub first, and status needs only the installations boat knows.
+    githubApp: async (signal) => wireGithubApp.parse(await json("/repos", { signal })),
     async get(id, signal) {
       try {
         return toSandbox(wireSandboxEnvelope.parse(await json(`/sandboxes/${id}`, { signal })).sandbox);

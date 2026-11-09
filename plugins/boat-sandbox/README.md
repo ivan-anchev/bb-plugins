@@ -44,8 +44,9 @@ npm test --workspace plugins/boat-sandbox
   stdin staged as a file in a private directory.
 - `src/instance-reset.ts`: on create, removes the bb machine state a template
   carried from another machine.
-- `src/daemon-sign-ins.ts`: the systemd drop-in that loads boat's sign-ins
-  into bb's daemon.
+- `src/daemon-setup.ts`: the systemd drop-in that gives bb's daemon boat's
+  sign-ins, and GitHub over HTTPS with boat's token when bb forwards none.
+- `src/github.ts`: which GitHub login threads use, and its status rows.
 - `src/machine-provider.ts`: validate, create, suspend, resume, remove and
   keyed cleanup.
 - `src/cli.ts`, `src/status.ts`: `bb boat status`, `templates` and

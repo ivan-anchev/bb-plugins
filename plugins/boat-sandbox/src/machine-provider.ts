@@ -7,7 +7,7 @@ import type { Sandbox, SandboxId } from "./boat/sandbox.ts";
 import type { StartGate } from "./boat/start-gate.ts";
 import type { SandboxEnvironment } from "./boat/wire.ts";
 import { resolveOnBoat } from "./catalog/read.ts";
-import { passSignInsToDaemon } from "./daemon-sign-ins.ts";
+import { prepareDaemon } from "./daemon-setup.ts";
 import { boatExecutor } from "./executor.ts";
 import type { IdleClock } from "./idle-clock.ts";
 import { resetInstance } from "./instance-reset.ts";
@@ -44,9 +44,9 @@ export function boatMachineProvider(deps: ProviderDeps): PluginMachineProviderDe
     return session;
   }
 
-  /** Core's enrollment, with the daemon it starts signed in to whatever boat's environment passes. */
+  /** Core's enrollment, with the daemon it starts given boat's sign-ins and GitHub token. */
   async function enroll(client: BoatClient, sandboxId: SandboxId, key: string, report: MachineBootstrapRequest["report"], signal: AbortSignal) {
-    await passSignInsToDaemon(client, sandboxId, signal);
+    await prepareDaemon(client, sandboxId, signal);
     return bootstrap({ key, executor: boatExecutor(client, sandboxId), report, signal });
   }
 

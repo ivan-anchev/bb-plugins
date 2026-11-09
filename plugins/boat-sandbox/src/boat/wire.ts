@@ -11,6 +11,8 @@
 //   them), `proxyAiCredentials` and `credentialProfileId` (null: the sandbox owner's default profile).
 // - /credential-profiles `profiles[]` carries `connected` (credential ids such as
 //   `claude-subscription`, never a secret) and `owner.{id, aiProxyEnabled}`.
+// - /me `user.connectionMethods` lists every login method linked to the account; `github` is the link
+//   boat's GitHub token comes from.
 import { z } from "zod";
 
 export const sandboxId = z.string().regex(/^bx_[23456789abcdefghjkmnpqrstuvwxyz]{8}$/).brand<"SandboxId">();
@@ -19,9 +21,15 @@ const instant = z.iso.datetime().transform((value) => Date.parse(value));
 
 export const wireMe = z
   .object({
-    user: z.object({ id: accountId, login: z.string(), zeroDataRetention: z.boolean() }),
+    user: z.object({ id: accountId, login: z.string(), zeroDataRetention: z.boolean(), connectionMethods: z.array(z.string()) }),
   })
-  .transform(({ user }) => user);
+  .transform(({ user }) => ({
+    id: user.id,
+    login: user.login,
+    zeroDataRetention: user.zeroDataRetention,
+    /** boat can give sandboxes a GitHub token only for an account linked to GitHub. */
+    githubLinked: user.connectionMethods.includes("github"),
+  }));
 
 const startWindow = z.object({ limit: z.number().int(), used: z.number().int() });
 
@@ -182,6 +190,14 @@ const savedSnapshot = z
 /** Every saved snapshot on the account, in one page: the endpoint takes no `limit` or `cursor`. */
 export const wireSavedSnapshotList = z.object({ snapshots: z.array(savedSnapshot) }).transform(({ snapshots }) => snapshots);
 
+/**
+ * `GET /repos` (OAS `ReposResponse`), only who boat's GitHub App is installed for: boat's token is a
+ * GitHub App user token, so it reads private repositories and pushes only under those owners.
+ */
+export const wireGithubApp = z
+  .object({ installations: z.array(z.object({ accountLogin: z.string() })) })
+  .transform(({ installations }) => ({ owners: installations.map((installation) => installation.accountLogin) }));
+
 export type Account = z.output<typeof wireMe>;
 export type Limits = z.output<typeof wireLimits>;
 export type Wallet = Limits["wallet"];
@@ -189,3 +205,4 @@ export type PresentSandbox = z.output<typeof presentSandbox>;
 export type SavedSnapshot = z.output<typeof savedSnapshot>;
 export type SandboxEnvironment = z.output<typeof sandboxEnvironment>;
 export type CredentialProfile = z.output<typeof credentialProfile>;
+export type GithubApp = z.output<typeof wireGithubApp>;

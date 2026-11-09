@@ -8,12 +8,14 @@ import {
   accountId,
   wireCredentialProfileList,
   wireEnvironmentList,
+  wireGithubApp,
   wireSavedSnapshotList,
   type SandboxEnvironment,
   type SavedSnapshot,
 } from "./boat/wire.ts";
 import { boatCli } from "./cli.ts";
 import { problem } from "./problem.ts";
+import type { StatusDeps } from "./status.ts";
 
 const fixture = (name: string): unknown => JSON.parse(readFileSync(new URL(`./boat/fixtures/${name}`, import.meta.url), "utf8"));
 
@@ -24,6 +26,8 @@ const FAILED: SavedSnapshot = { name: "py-ml", status: "failed", error: "source 
 const ENVIRONMENTS = wireEnvironmentList.parse(fixture("environments.json"));
 /** The account's default profile, as boat listed it live (owner id redacted): nothing connected, proxy off. */
 const PROFILES = wireCredentialProfileList.parse(fixture("credential-profiles.json"));
+/** boat's GitHub App installed for octocat, in OAS `ReposResponse` shape (live, a `ci` key read `installations: []`). */
+const GITHUB_APP = wireGithubApp.parse(fixture("repos.json"));
 
 const unused = () => Promise.reject(new Error("the command never calls this"));
 
@@ -33,13 +37,21 @@ interface Account {
   environments?: readonly SandboxEnvironment[];
   savedSnapshots?: BoatClient["savedSnapshots"];
   credentialProfiles?: BoatClient["credentialProfiles"];
+  githubApp?: BoatClient["githubApp"];
+  githubLinked?: boolean;
+  /** bb's forwarded GitHub login; a string is bb's `builtInGit.status`. */
+  bbGithub?: BuiltInGitStatus | (() => Promise<never>);
 }
 
-function cliWith({ template = null, environment = null, environments = ENVIRONMENTS, savedSnapshots, credentialProfiles }: Account = {}) {
+type BuiltInGitStatus = Awaited<ReturnType<StatusDeps["machineEnvironment"]>>["builtInGit"]["status"];
+
+function cliWith(account: Account = {}) {
+  const { template = null, environment = null, environments = ENVIRONMENTS, savedSnapshots, credentialProfiles, githubApp, githubLinked = true, bbGithub = "logged in" } = account;
   const client: BoatClient = {
     savedSnapshots: savedSnapshots ?? (async () => [...SAVED, FAILED]),
     environments: async () => [...environments],
     credentialProfiles: credentialProfiles ?? (async () => PROFILES),
+    githubApp: githubApp ?? (async () => GITHUB_APP),
     me: unused,
     limits: unused,
     get: unused,
@@ -55,17 +67,20 @@ function cliWith({ template = null, environment = null, environments = ENVIRONME
   const session: BoatSession = {
     status: "available",
     facts: {
-      account: { id: accountId.parse("sandbox_1"), login: "octocat", zeroDataRetention: false },
+      account: { id: accountId.parse("sandbox_1"), login: "octocat", zeroDataRetention: false, githubLinked },
       limits: { wallet: { kind: "personal" }, starts: { unlimited: true }, startsBlockedBy: null },
     },
     client,
     settings: { ok: true, apiKey: "boat_test", idleMs: null, defaults: { template, environment, preset: "default" } },
   };
-  return cli({ configuration: async () => session, session: async () => session });
+  const machineEnvironment = typeof bbGithub === "string"
+    ? async () => ({ builtInGit: { status: bbGithub, statusMessage: "" }, variables: [] })
+    : bbGithub;
+  return cli({ configuration: async () => session, session: async () => session }, machineEnvironment);
 }
 
-const cli = (access: BoatAccess) =>
-  boatCli(access, { bb: { sdk: { hosts: { list: unused }, threads: { count: unused } }, experimental_machines: { getResource: unused } }, idle: { read: unused }, ownerId: "owner-1" });
+const cli = (boat: BoatAccess, machineEnvironment: StatusDeps["machineEnvironment"] = unused) =>
+  boatCli({ boat, machineEnvironment }, { bb: { sdk: { hosts: { list: unused }, threads: { count: unused } }, experimental_machines: { getResource: unused } }, idle: { read: unused }, ownerId: "owner-1" });
 
 test("bb boat templates lists every template and environment with its --machine-inputs, and the default launch", async () => {
   const { exitCode, stdout } = await cliWith({ template: "tpl-test" }).run(["templates"], {});
@@ -151,6 +166,12 @@ test("bb boat templates exits 1 with the status problem lines when the key does 
   assert.equal(stdout, "No boat API key is set.\nFix: Paste one, then run `bb plugin reload boat-sandbox`.\n");
 });
 
+/** The GitHub rows while bb forwards the bb server's gh login. */
+const BB_FORWARDED = [
+  "GitHub: bb's forwarded login (gh on the bb server), on every bb machine, clone included",
+  "To use boat's GitHub token instead, turn off bb's automatic GH_TOKEN: `bb settings general machineGitCredentialsEnabled false`",
+];
+
 /** The status lines after the five key facts. */
 async function statusAfterFacts(account: Account) {
   const { exitCode, stdout } = await cliWith(account).run(["status"], {});
@@ -168,6 +189,7 @@ test("bb boat status names the default launch's environment and what it signs in
       "Codex: not connected on boat",
       "Fix: Sign in to ChatGPT, or add an OpenAI API key, on https://boat.dev/dashboard?tab=agents",
       "AI proxy: on for your boat account ($1 a day plus $1 per 1,000 requests)",
+      ...BB_FORWARDED,
     ],
   });
 });
@@ -180,6 +202,7 @@ test("bb boat status reads an environment safe for third parties with proxy plac
       "Claude Code: through boat's AI proxy (environment customer-demos passes placeholders)",
       "Codex: through boat's AI proxy (environment customer-demos passes placeholders)",
       "AI proxy: off for your boat account",
+      ...BB_FORWARDED,
     ],
   });
 });
@@ -203,6 +226,7 @@ test("bb boat status leaves the sign-in rows unknown when the key lacks account.
       `Claude Code: ${reason}`,
       `Codex: ${reason}`,
       `AI proxy: ${reason}`,
+      ...BB_FORWARDED,
     ],
   });
 });
@@ -220,6 +244,7 @@ test("bb boat status refuses a Default template or Default environment boat does
       'Default launch: refused: boat has no environment "nope" (Settings → boat Sandbox → Default environment). Run `bb boat templates` to list them.',
       "Fix: Run `bb plugin config boat-sandbox set defaultEnvironment <name>` with an environment `bb boat templates` lists, " +
         "or `bb plugin config boat-sandbox unset defaultEnvironment` for boat's default environment.",
+      ...BB_FORWARDED,
     ],
   });
 });
@@ -229,6 +254,117 @@ test("bb boat status reads the default launch and its sign-ins as unknown when b
 
   assert.deepEqual({ exitCode, lines }, {
     exitCode: 0,
-    lines: ["Default launch", "Claude Code", "Codex", "AI proxy"].map((row) => `${row}: unknown (boat is down for maintenance.)`),
+    lines: [...["Default launch", "Claude Code", "Codex", "AI proxy"].map((row) => `${row}: unknown (boat is down for maintenance.)`), ...BB_FORWARDED],
   });
+});
+
+/** The GitHub rows of `bb boat status`: everything after the AI proxy row. */
+async function githubRows(account: Account) {
+  const { exitCode, lines } = await statusAfterFacts(account);
+  return { exitCode, rows: lines.slice(lines.findIndex((line) => line.startsWith("AI proxy:")) + 1) };
+}
+
+const BOAT_HEAD = "GitHub: boat's token from environment base (bb forwards no GitHub login:";
+
+test("bb boat status names bb's forwarded login or bb's machine-env GH_TOKEN when bb sends one", async () => {
+  assert.deepEqual(await githubRows({ bbGithub: "logged in" }), { exitCode: 0, rows: BB_FORWARDED });
+  assert.deepEqual(await githubRows({ bbGithub: "overridden" }), {
+    exitCode: 0,
+    rows: ["GitHub: the GH_TOKEN in bb's machine environment, which wins over boat's"],
+  });
+});
+
+test("bb boat status names boat's token, why bb sends none, and who boat's GitHub App is installed for", async () => {
+  assert.deepEqual(await githubRows({ bbGithub: "disabled" }), {
+    exitCode: 0,
+    rows: [`${BOAT_HEAD} bb's automatic GH_TOKEN is off)`, "boat GitHub App: installed for octocat"],
+  });
+  assert.deepEqual((await githubRows({ bbGithub: "not logged in" })).rows[0], `${BOAT_HEAD} gh on the bb server is not logged in)`);
+});
+
+test("bb boat status gives each gap on boat's GitHub path its fix", async () => {
+  const connect = "Fix: Click Connect GitHub on https://boat.dev/dashboard?tab=environment";
+  const head = `${BOAT_HEAD} bb's automatic GH_TOKEN is off)`;
+
+  const notInstalled = [
+    "boat GitHub App: not installed, so boat's token can read public repositories and push to none",
+    `${connect}, and install the app for the owners of your repositories`,
+  ];
+  assert.deepEqual((await githubRows({ bbGithub: "disabled", githubApp: async () => ({ owners: [] }) })).rows, [head, ...notInstalled]);
+  const withheld = { ...ODD, passes: { ...ODD.passes, github: false } };
+  const { rows } = await githubRows({ bbGithub: "disabled", environment: ODD_NAME, environments: [...ENVIRONMENTS, withheld] });
+  assert.deepEqual(rows.slice(1, 3), [`Environment ${ODD_NAME} does not pass GitHub`, "Fix: Run `boat env set 'Bob'\\''s demos $HOME' --github true`"]);
+  assert.deepEqual(shellWords(rows[2]?.slice("Fix: Run `".length, -1) ?? ""), ["boat", "env", "set", ODD_NAME, "--github", "true"]);
+
+  const safe = await githubRows({ bbGithub: "disabled", environment: "customer-demos" });
+  assert.equal(safe.rows[2], "Fix: Run `boat env set 'customer-demos' --safe-for-third-parties false --github true`");
+});
+
+test("bb boat status lists every gap on boat's GitHub path at once: the account link, the environment and the App", async () => {
+  const withheld = { ...ODD, passes: { ...ODD.passes, github: false } };
+  const { rows } = await githubRows({
+    bbGithub: "disabled",
+    githubLinked: false,
+    environment: ODD_NAME,
+    environments: [...ENVIRONMENTS, withheld],
+    githubApp: async () => ({ owners: [] }),
+  });
+
+  assert.deepEqual(rows, [
+    `GitHub: boat's token from environment ${ODD_NAME} (bb forwards no GitHub login: bb's automatic GH_TOKEN is off)`,
+    "boat account: not linked to GitHub",
+    "Fix: Click Connect GitHub on https://boat.dev/dashboard?tab=environment",
+    `Environment ${ODD_NAME} does not pass GitHub`,
+    "Fix: Run `boat env set 'Bob'\\''s demos $HOME' --github true`",
+    "boat GitHub App: not installed, so boat's token can read public repositories and push to none",
+    "Fix: Click Connect GitHub on https://boat.dev/dashboard?tab=environment, and install the app for the owners of your repositories",
+  ]);
+});
+
+test("bb boat status words a refused GET /repos in boat's words, and an expired key as expired", async () => {
+  const refusal = (code: string) => async () => Promise.reject(new BoatApiError(403, code, "This API key cannot use repos.read.", null, false));
+
+  const forbidden = await githubRows({ bbGithub: "disabled", githubApp: refusal("api_key_action_forbidden") });
+  assert.deepEqual(forbidden, { exitCode: 0, rows: [`${BOAT_HEAD} bb's automatic GH_TOKEN is off)`, "boat GitHub App: unknown (This API key cannot use repos.read.)"] });
+
+  const expired = await githubRows({ bbGithub: "disabled", githubApp: refusal("api_key_expired") });
+  assert.equal(expired.rows[1], "boat GitHub App: unknown (the API key has expired)");
+});
+
+test("bb boat status reads GitHub as unknown in bb's words when bb's machine environment cannot be read, and prints the boat rows", async () => {
+  const { exitCode, lines } = await statusAfterFacts({ bbGithub: () => Promise.reject(new Error("bb is restarting.")) });
+
+  assert.equal(exitCode, 0);
+  assert.equal(lines[0], "Default launch: a default boat sandbox from boat's stock image in environment base (boat's default environment)");
+  assert.equal(lines.at(-1), "GitHub: unknown (bb is restarting.)");
+});
+
+test("bb boat status reads a GitHub login state newer than this plugin as unknown, on one line", async () => {
+  const { exitCode, rows } = await githubRows({ bbGithub: "forwarded by bb cloud" as BuiltInGitStatus });
+
+  assert.deepEqual({ exitCode, rows }, { exitCode: 0, rows: ['GitHub: unknown (bb reports its GitHub login as "forwarded by bb cloud", which this plugin does not know)'] });
+});
+
+test("bb boat status still names boat's token when the default launch's environment cannot be told", async () => {
+  const { lines } = await statusAfterFacts({ bbGithub: "disabled", environment: "nope" });
+
+  assert.deepEqual(lines.slice(-2), [
+    "GitHub: boat's token (bb forwards no GitHub login: bb's automatic GH_TOKEN is off); whether boat passes it is unknown (the default launch is refused)",
+    "boat GitHub App: installed for octocat",
+  ]);
+});
+
+test("bb boat status still names an unlinked boat account and the App when boat's environments cannot be read", async () => {
+  const { lines } = await statusAfterFacts({
+    bbGithub: "disabled",
+    githubLinked: false,
+    savedSnapshots: () => Promise.reject(new Error("boat is down for maintenance.")),
+  });
+
+  assert.deepEqual(lines.slice(-4), [
+    "GitHub: boat's token (bb forwards no GitHub login: bb's automatic GH_TOKEN is off); whether boat passes it is unknown (boat is down for maintenance.)",
+    "boat account: not linked to GitHub",
+    "Fix: Click Connect GitHub on https://boat.dev/dashboard?tab=environment",
+    "boat GitHub App: installed for octocat",
+  ]);
 });

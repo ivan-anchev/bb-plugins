@@ -1,6 +1,6 @@
 ---
 name: boat-sandboxes
-description: The boat Sandbox plugin, which starts bb threads on new boat.dev sandboxes (`bb thread spawn --environment-provider boat-sandbox --machine-inputs '{"preset":"small"}'`, or boat Sandbox in the new-thread picker), stops them when idle, resumes them on a follow-up, and deletes them with `bb machine remove`. Covers its settings (API key, Stop after idle, Default size, Default template, Default environment), presets, templates (boat saved snapshots, `--machine-inputs '{"template":"<name>"}'`, `bb boat templates`), environments (`--machine-inputs '{"environment":"<name>"}'`, which decide the sign-ins, GitHub token and secrets a sandbox gets), Claude Code and Codex sign-ins from boat, the AI proxy, start limits, idle stops and resumes, the auto-stop lease, failed creates, drift between bb and boat, leaked sandboxes, `bb boat status`, `bb boat templates` and `bb boat sandboxes`. Use when a user sets up or uses boat.dev sandboxes for bb, or asks why one stopped, resumed, failed or was stopped as an orphan.
+description: The boat Sandbox plugin, which starts bb threads on new boat.dev sandboxes (`bb thread spawn --environment-provider boat-sandbox --machine-inputs '{"preset":"small"}'`, or boat Sandbox in the new-thread picker), stops them when idle, resumes them on a follow-up, and deletes them with `bb machine remove`. Covers its settings (API key, Stop after idle, Default size, Default template, Default environment), presets, templates (boat saved snapshots, `--machine-inputs '{"template":"<name>"}'`, `bb boat templates`), environments (`--machine-inputs '{"environment":"<name>"}'`, which decide the sign-ins, GitHub token and secrets a sandbox gets), Claude Code and Codex sign-ins from boat, GitHub (bb's forwarded login, else boat's token over HTTPS, SSH remotes included), the AI proxy, start limits, idle stops and resumes, the auto-stop lease, failed creates, drift between bb and boat, leaked sandboxes, `bb boat status`, `bb boat templates` and `bb boat sandboxes`. Use when a user sets up or uses boat.dev sandboxes for bb, or asks why one stopped, resumed, failed or was stopped as an orphan.
 ---
 
 # boat Sandbox
@@ -163,10 +163,10 @@ every start and resume. With **GitHub** on, it adds `GITHUB_TOKEN`; with
 Only `~/.bashrc` loads boat's file, and bb's daemon is a systemd user
 service, so before each enrollment, on create and on resume, the plugin
 writes a drop-in,
-`~/.config/systemd/user/bb-host-daemon-.service.d/boat-sign-ins.conf`. At
-every daemon start it copies the file into `/run/user/<uid>`, readable by the
-user alone, and loads it, so agent turns and terminals get boat's variables.
-The drop-in holds no secret.
+`~/.config/systemd/user/bb-host-daemon-.service.d/boat.conf`. At every daemon
+start it copies the file into `/run/user/<uid>`, readable by the user alone,
+and loads it, so agent turns and terminals get boat's variables. The same
+drop-in sets up GitHub (see GitHub). It holds no secret.
 
 Variables set in bb's own machine environment still reach every agent turn
 through bb core, and win over boat's value for the same name.
@@ -188,6 +188,49 @@ plugin never changes it.
 stays on. It acts only on its own sandbox (read, stop, commands, files,
 snapshots of that sandbox), so nothing a thread runs can reach your other
 sandboxes through it.
+
+## GitHub
+
+A thread sandbox uses one GitHub login, in a fixed order with no setting:
+
+1. **bb's forwarded login**, whenever bb sends one: bb's
+   `machineGitCredentialsEnabled` is on (Settings → Environment variables →
+   automatic GH_TOKEN) and `gh` is logged in on the bb server, or you set
+   `GH_TOKEN` in bb's machine environment. bb core then gives every command
+   on every bb machine `GH_TOKEN`, a git credential helper and the SSH→HTTPS
+   rewrite, the clone included. bb's switch is global; it has no per-machine
+   opt-out.
+2. **boat's `GITHUB_TOKEN`** from the sandbox's environment otherwise.
+
+bb wins because the plugin uses bb's own variable names: the drop-in gives
+bb's daemon `GIT_CONFIG_COUNT=4` and the same four git settings bb sends (the
+`github.com` credential helpers cleared, a helper that answers with
+`x-access-token` and `$GITHUB_TOKEN`, and `url.https://github.com/.insteadOf`
+for `git@github.com:` and `ssh://git@github.com/`). When bb forwards, its
+per-command values replace the plugin's. So:
+
+- **To use boat's GitHub instead of bb's**, turn bb's forwarding off:
+  `bb settings general machineGitCredentialsEnabled false`. It is global, so
+  every remote bb machine stops getting bb's login.
+- **SSH remotes work on boat's path.** A project whose remote is
+  `git@github.com:owner/repo.git` clones and pushes over HTTPS with boat's
+  token. The checkout keeps the SSH URL (`git config --get remote.origin.url`);
+  `git remote -v` and `git ls-remote --get-url origin` show the HTTPS URL git
+  uses. The rewrite reaches only what bb's daemon runs (turns, terminals, the
+  clone, `.bb-env-setup.sh`), not an SSH session you open with `boat ssh`.
+  Nothing is written to `~/.gitconfig`, so nothing of it lands in a template.
+- **boat's token needs boat's GitHub App to push.** It is a GitHub App user
+  token (`ghu_…`, about 8 hours, renewed at every sandbox start and resume).
+  Without the App installed for a repository's owner it can read public
+  repositories and push to none, not even your own (GitHub answers `403
+  Permission … denied`). Install the App with Connect GitHub on
+  [the dashboard](https://boat.dev/dashboard?tab=environment); `bb boat status`
+  shows the owners boat lists it for.
+- **A project-level `GH_TOKEN` in bb** wins too, for that project's threads.
+  `bb boat status` is not per project, so it cannot show one.
+
+`gh auth status` in a thread names the source: `(GH_TOKEN)` for bb's,
+`(GITHUB_TOKEN)` for boat's.
 
 ## When a create fails
 
@@ -407,8 +450,8 @@ plugin as `needs-configuration`.
 
 Prints one line per fact and, for each problem, a `Fix:` line with the one
 step that fixes it, ending with `bb plugin reload boat-sandbox`. Once boat
-accepts the key, it adds the default launch and what its environment signs
-in, each gap with a `Fix:` line. Exit 0 when boat Sandbox can run, whatever
+accepts the key, it adds the default launch, what its environment signs
+in, and the GitHub login threads use, each gap with a `Fix:` line. Exit 0 when boat Sandbox can run, whatever
 the sign-ins say; exit 1 otherwise.
 
 ```text
@@ -422,6 +465,8 @@ Claude Code: connected on boat (claude-subscription)
 Codex: not connected on boat
 Fix: Sign in to ChatGPT, or add an OpenAI API key, on https://boat.dev/dashboard?tab=agents
 AI proxy: off for your boat account
+GitHub: bb's forwarded login (gh on the bb server), on every bb machine, clone included
+To use boat's GitHub token instead, turn off bb's automatic GH_TOKEN: `bb settings general machineGitCredentialsEnabled false`
 ```
 
 **Default launch** is what a thread that names nothing gets, from the
@@ -441,6 +486,24 @@ Fix: Run `bb plugin config boat-sandbox set defaultEnvironment <name>` with an e
   `through boat's AI proxy (environment … passes placeholders)` for an
   environment safe for third parties with proxy placeholders.
 - **AI proxy** is on or off for your boat account (see Sign-ins from boat).
+- **GitHub** names the login threads use (see GitHub): bb's forwarded login,
+  the `GH_TOKEN` in bb's machine environment, or boat's token with the reason
+  bb sends none (`bb's automatic GH_TOKEN is off`, or
+  `gh on the bb server is not logged in`). On boat's path it lists every gap
+  at once, each with a `Fix:`: your boat account is not linked to GitHub, the
+  environment does not pass GitHub, and then whether boat's GitHub App is
+  installed:
+
+  ```text
+  GitHub: boat's token from environment base (bb forwards no GitHub login: bb's automatic GH_TOKEN is off)
+  boat GitHub App: installed for octocat
+  ```
+
+  or `boat GitHub App: not installed, so boat's token can read public repositories and push to none`
+  with a `Fix:`. boat documents no scope for the App read, so a key it
+  refuses reads `boat GitHub App: unknown (<boat's message>)`. When bb's own
+  state cannot be read, or bb reports a login state newer than the plugin, the
+  row is `GitHub: unknown (<reason>)`.
 - A row boat will not show reads `unknown (<reason>)` and the command goes on.
   A `ci` key lacks boat's `account.admin` scope, so the Claude Code, Codex and
   AI proxy rows read
@@ -450,6 +513,8 @@ Fix: Run `bb plugin config boat-sandbox set defaultEnvironment <name>` with an e
   the same facts.
 - When boat cannot list the templates or environments, the default launch
   and the three rows read `unknown (<boat's message>)`.
+- A refused read says why: `the API key lacks boat's <scope> scope` when the
+  key lacks the action, `the API key has expired`, or boat's own message.
 
 The starts are boat's rolling start windows for the wallet a create would
 bill. `; blocked: <reason>` follows them when boat lets no start run (for

@@ -64,6 +64,7 @@ function world(hosts: FakeHost[], orphans: Sandbox[] = []) {
     savedSnapshots: unused,
     environments: unused,
     credentialProfiles: unused,
+    githubApp: unused,
     create: unused,
     remove: unused,
     resume: unused,
@@ -85,7 +86,7 @@ function world(hosts: FakeHost[], orphans: Sandbox[] = []) {
   };
   const session: BoatSession = {
     status: "available",
-    facts: { account: { id: ACCOUNT, login: "octocat", zeroDataRetention: false }, limits: { wallet: { kind: "personal" }, starts: { unlimited: true }, startsBlockedBy: null } },
+    facts: { account: { id: ACCOUNT, login: "octocat", zeroDataRetention: false, githubLinked: true }, limits: { wallet: { kind: "personal" }, starts: { unlimited: true }, startsBlockedBy: null } },
     client,
     settings: { ok: true, apiKey: "boat_test", idleMs: IDLE_MS, defaults: { template: null, environment: null, preset: "small" } },
   };
@@ -128,7 +129,7 @@ function world(hosts: FakeHost[], orphans: Sandbox[] = []) {
   const sweep = createSweep({ bb, access, idle, ownerId: OWNER });
   /** `bb boat sandboxes --json`, through the plugin's CLI registration. */
   async function sandboxesJson() {
-    const { exitCode, stdout } = await boatCli(access, { bb, idle, ownerId: OWNER }).run(["sandboxes", "--json"], {});
+    const { exitCode, stdout } = await boatCli({ boat: access, machineEnvironment: unused }, { bb, idle, ownerId: OWNER }).run(["sandboxes", "--json"], {});
     assert.equal(exitCode, 0);
     return JSON.parse(stdout ?? "");
   }

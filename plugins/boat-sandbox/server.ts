@@ -18,7 +18,7 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
   const boat = createBoatAccess(defineBoatSettings(bb));
   const ownerId = await loadOwnerId(bb.storage.kv);
   const idle = createIdleClock(bb.storage.kv);
-  bb.cli.register(boatCli(boat, { bb, idle, ownerId }));
+  bb.cli.register(boatCli({ boat, machineEnvironment: () => bb.sdk.system.machineEnvironment() }, { bb, idle, ownerId }));
 
   bb.experimental_machines.register(
     boatMachineProvider({

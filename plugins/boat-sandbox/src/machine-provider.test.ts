@@ -47,11 +47,12 @@ function fakeBoat() {
     return sandbox;
   };
   const client: BoatClient = {
-    me: async () => wireMe.parse({ user: { id: ACCOUNT, login: "octocat", zeroDataRetention: false } }),
+    me: async () => wireMe.parse({ user: { id: ACCOUNT, login: "octocat", zeroDataRetention: false, connectionMethods: ["github"] } }),
     limits: async () => ({ wallet: { kind: "personal" }, starts: { unlimited: true }, startsBlockedBy: null }),
     savedSnapshots: async () => account.templates,
     environments: async () => account.environments,
     credentialProfiles: () => Promise.reject(new Error("create never reads credential profiles")),
+    githubApp: () => Promise.reject(new Error("create never reads the GitHub App")),
     get: async (id) => sandboxes.get(id) ?? null,
     list: async (labels) =>
       [...sandboxes.values()].filter((sandbox) => Object.entries(labels).every(([key, value]) => sandbox.labels[key] === value)),
@@ -115,7 +116,7 @@ function provider(client: BoatClient, account = ACCOUNT, gate: StartGate = creat
   const session: BoatSession = {
     status: "available",
     facts: {
-      account: { id: accountId.parse(account), login: "octocat", zeroDataRetention: false },
+      account: { id: accountId.parse(account), login: "octocat", zeroDataRetention: false, githubLinked: true },
       limits: { wallet: { kind: "personal" }, starts: { unlimited: true }, startsBlockedBy: null },
     },
     client,
@@ -158,7 +159,7 @@ async function create(declaration: ReturnType<typeof provider>["declaration"], k
 
 /** Which plugin step each command a sandbox ran was. */
 const kindOf = (command: string): string =>
-  command.includes("bb-boat/instance-key") ? "reset" : command.includes("EnvironmentFile=-%t/boat-sign-ins.env") ? "sign-ins" : command;
+  command.includes("bb-boat/instance-key") ? "reset" : command.includes("/boat.conf") ? "daemon" : command;
 
 test("create adopts the labelled sandbox an interrupted create left behind", async () => {
   const boat = fakeBoat();
@@ -491,7 +492,7 @@ test("a sandbox boat started as no-env fails the create after its checkpoint, so
   assert.deepEqual([boat.commands, bootstraps], [[], []]);
 });
 
-test("create resets another machine's bb state before passing sign-ins and enrolling; resume never resets", async () => {
+test("create resets another machine's bb state before setting up the daemon and enrolling; resume never resets", async () => {
   const boat = fakeBoat();
   boat.shell.answer = (command) => ({
     output: kindOf(command) === "reset" ? "removed ~/.config/systemd/user/bb-host-daemon-x.service\nremoved ~/.bb-machines\n" : "",
@@ -503,8 +504,8 @@ test("create resets another machine's bb state before passing sign-ins and enrol
   const created = boat.commands.map(kindOf);
   await suspendResume(provider(boat.client)).resume(lifecycle(boat.stopped(2)));
 
-  assert.deepEqual(created, ["reset", "sign-ins"]);
-  assert.deepEqual(boat.commands.slice(2).map(kindOf), ["sign-ins"]);
+  assert.deepEqual(created, ["reset", "daemon"]);
+  assert.deepEqual(boat.commands.slice(2).map(kindOf), ["daemon"]);
   assert.match(boat.commands[0] ?? "", /'thr_1'/);
   assert.deepEqual(steps, ["Creating a small boat sandbox from template node-tools in environment base"]);
   assert.deepEqual(logs, [
@@ -520,14 +521,14 @@ test("a create on a clean disk reports no reset", async () => {
   assert.deepEqual([steps, logs], [["Creating a small boat sandbox from boat's stock image in environment base"], []]);
 });
 
-test("a create whose sign-in drop-in fails reports it and never enrolls the daemon", async () => {
+test("a create whose daemon drop-in fails reports it and never enrolls the daemon", async () => {
   const boat = fakeBoat();
-  boat.shell.answer = (command) => ({ output: "", exitCode: kindOf(command) === "sign-ins" ? 1 : 0 });
+  boat.shell.answer = (command) => ({ output: "", exitCode: kindOf(command) === "daemon" ? 1 : 0 });
   const { declaration, bootstraps } = provider(boat.client);
 
   const { result } = await create(declaration, "thr_1");
 
   assert.equal(result.status, "failed");
-  assert.match(result.status === "failed" ? result.message : "", /Could not pass boat's sign-ins to bb's daemon on sandbox bx_\w+ \(exit 1\)/);
+  assert.match(result.status === "failed" ? result.message : "", /Could not set up bb's daemon for boat's sign-ins and GitHub on sandbox bx_\w+ \(exit 1\)/);
   assert.deepEqual(bootstraps, []);
 });

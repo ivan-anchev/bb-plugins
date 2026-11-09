@@ -41,7 +41,7 @@ export function agentLines(environment: SandboxEnvironment, account: Account, pr
     if (environment.withholdsAll || !environment.passes.agents)
       return [
         `${agent.name}: withheld (environment ${environment.name} does not pass agent credentials)`,
-        `Fix: Run \`${enableAgentsCommand(environment)}\``,
+        `Fix: Run \`${enableCommand(environment, "--agents-credentials")}\``,
       ];
     if (!profile.ok) return [`${agent.name}: unknown (${profile.reason})`];
     const credential = profile.value.connected.find((id) => agent.credentials.includes(id));
@@ -71,6 +71,6 @@ function profileOf(environment: SandboxEnvironment, account: Account, profiles: 
     : { ok: true, value: profile };
 }
 
-/** `boat env set` with agent credentials on, and safe-for-third-parties off when it overrides them. Names are free text. */
-const enableAgentsCommand = (environment: SandboxEnvironment): string =>
-  `boat env set ${shellQuote(environment.name)}${environment.withholdsAll ? " --safe-for-third-parties false" : ""} --agents-credentials true`;
+/** `boat env set` turning one pass toggle on, and safe-for-third-parties off when it overrides it. Names are free text. */
+export const enableCommand = (environment: SandboxEnvironment, toggle: "--agents-credentials" | "--github"): string =>
+  `boat env set ${shellQuote(environment.name)}${environment.withholdsAll ? " --safe-for-third-parties false" : ""} ${toggle} true`;

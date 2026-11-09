@@ -1,0 +1,28 @@
+{
+  "ok": true,
+  "type": "repos.list",
+  "installations": [
+    {
+      "type": "User",
+      "accountLogin": "octocat",
+      "accountAvatarUrl": "https://avatars.githubusercontent.com/u/0?v=4",
+      "repositories": [
+        {
+          "id": 0,
+          "databaseId": "00000000-0000-0000-0000-000000000000",
+          "name": "hello",
+          "fullName": "octocat/hello",
+          "description": null,
+          "url": "https://github.com/octocat/hello",
+          "private": true,
+          "permissions": "admin",
+          "pushedAt": "2026-11-09T12:00:00.000Z",
+          "lastUserCommitAt": null
+        }
+      ]
+    }
+  ],
+  "environmentId": "00000000-0000-0000-0000-000000000000",
+  "subenvironmentId": "00000000-0000-0000-0000-000000000000",
+  "selectedRepositories": []
+}
