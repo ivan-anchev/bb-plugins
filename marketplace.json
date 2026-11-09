@@ -75,6 +75,29 @@
       }
     },
     {
+      "id": "grok-wake",
+      "displayName": "Grok Wake",
+      "description": "Wakes your Grok Bots by webhook when a bb thread needs attention: an open question or approval, a finished turn, or a failure.",
+      "icon": "BellRing",
+      "tags": [
+        "webhooks",
+        "notifications",
+        "automation"
+      ],
+      "author": {
+        "name": "Ivan Anchev",
+        "github": "ivan-anchev"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/ivan-anchev/bb-plugins.git",
+          "subdir": "plugins/grok-wake",
+          "range": "0.x",
+          "tagPrefix": "grok-wake/"
+        }
+      }
+    },
+    {
       "id": "pr-reviews",
       "displayName": "PR Reviews",
       "description": "A PR Reviews app on the left rail that lists a GitHub project's open pull requests and opens each one on a page with its whole diff in a file tree and a guided review, written by a review thread, that walks you through the change step by step. Nothing is ever posted to GitHub.",
