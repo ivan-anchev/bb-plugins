@@ -1,6 +1,6 @@
 // bb boat …: thin commands that read, then print.
 import { cliCommand, defineCli } from "@get-bb/plugin-sdk";
-import { readLaunchChoices } from "./catalog/read.ts";
+import { readLaunchChoices, readLaunchChoicesReply } from "./catalog/read.ts";
 import { formatChoices } from "./catalog/report.ts";
 import { configurationLines, readStatus, type StatusDeps } from "./status.ts";
 import { observe, type ObserveDeps } from "./sweep/observe.ts";
@@ -26,13 +26,17 @@ export function boatCli(deps: StatusDeps, machines: ObserveDeps) {
       }),
       templates: cliCommand({
         summary: "List the boat saved snapshots a thread sandbox can start from, with the --machine-inputs for each",
-        options: { json: { type: "boolean", description: "Print the templates and defaults as one JSON object" } },
+        options: { json: { type: "boolean", description: "Print the templates, environments and defaults as one JSON object, as the composer chip receives it" } },
         run: async ({ options }, ctx) => {
           const signal = ctx.signal ?? AbortSignal.timeout(PATIENCE_MS);
           const configuration = await boat.configuration(signal);
+          if (options.json) {
+            // The object the composer chip receives.
+            const reply = await readLaunchChoicesReply(configuration, signal);
+            return { exitCode: reply.status === "ready" ? 0 : 1, stdout: `${JSON.stringify(reply, null, 2)}\n` };
+          }
           if (configuration.status !== "available") return { exitCode: 1, stdout: `${configurationLines(configuration).join("\n")}\n` };
-          const choices = await readLaunchChoices(configuration, signal);
-          return { exitCode: 0, stdout: options.json ? `${JSON.stringify(choices, null, 2)}\n` : formatChoices(choices) };
+          return { exitCode: 0, stdout: formatChoices(await readLaunchChoices(configuration, signal)) };
         },
       }),
       sandboxes: cliCommand({

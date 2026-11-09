@@ -3,7 +3,7 @@ import type { BbPluginApi, JsonValue } from "@get-bb/plugin-sdk";
 import type { BoatClient } from "../boat/client.ts";
 import type { Sandbox, SandboxId } from "../boat/sandbox.ts";
 import type { IdleClock } from "../idle-clock.ts";
-import { PROVIDER_ID } from "../machine-provider.ts";
+import { PROVIDER_ID } from "../contract.ts";
 import { ownerLabels, parseResource } from "../ownership.ts";
 import type { HostView, SweepInput } from "./plan.ts";
 

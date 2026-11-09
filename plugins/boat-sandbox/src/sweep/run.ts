@@ -59,7 +59,7 @@ async function sweep(deps: SweepDeps, signal: AbortSignal): Promise<void> {
   const configuration = await deps.access.configuration(signal);
   // No key means nothing on boat to look after; any other problem leaves machines unwatched, so it fails loudly.
   if (configuration.status === "setup-required") return;
-  if (configuration.status === "unavailable") throw new Error(describeProblems(configuration.problems));
+  if (configuration.status !== "available") throw new Error(describeProblems(configuration.problems));
   const input = await observe(deps, configuration.client, signal);
   const policy = (): SweepPolicy => ({ now: Date.now(), idleMs: configuration.settings.idleMs });
   await applyActions({ ...deps, client: configuration.client, signal, input, policy }, planSweep(input, policy()));

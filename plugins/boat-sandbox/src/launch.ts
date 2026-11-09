@@ -3,12 +3,20 @@
 // three into a launch. A preset is one of boat's sandbox `type` values; a template is a boat saved
 // snapshot; an environment decides the sign-ins, GitHub token and secrets the sandbox gets.
 import { z } from "zod";
-import type { SandboxEnvironment, SavedSnapshot } from "./boat/wire.ts";
+import { sandboxEnvironment, savedSnapshot, type SandboxEnvironment, type SavedSnapshot } from "./boat/wire.ts";
 import { shellQuote } from "./shell.ts";
 
 export const PRESETS = ["small", "default", "large", "xlarge"] as const;
 
 export type Preset = (typeof PRESETS)[number];
+
+/** What each preset gets on boat (OAS `Sandbox.vcpu`, `Sandbox.memoryGB`). */
+export const PRESET_SIZES: Record<Preset, string> = {
+  small: "2 vCPU · 4 GB",
+  default: "4 vCPU · 8 GB",
+  large: "8 vCPU · 16 GB",
+  xlarge: "16 vCPU · 32 GB",
+};
 
 /** boat's saved-snapshot name (OAS `SavedSnapshot.name`). */
 export const snapshotName = z.string().regex(/^[a-z0-9][a-z0-9-]{0,62}$/);
@@ -32,21 +40,25 @@ export const machineInputs = z
 export type MachineInputs = z.output<typeof machineInputs>;
 
 /** Settings → boat Sandbox, parsed once. A null template is boat's stock image; a null environment is boat's default. */
-export interface LaunchDefaults {
-  template: string | null;
-  environment: string | null;
-  preset: Preset;
-}
+const launchDefaults = z.object({
+  template: z.string().nullable(),
+  environment: z.string().nullable(),
+  preset: z.enum(PRESETS),
+});
+
+export type LaunchDefaults = z.output<typeof launchDefaults>;
 
 /**
  * What a thread can launch from now: boat's saved snapshots and environments, and the defaults.
- * `bb boat templates --json` prints it.
+ * The chip's RPC sends it and `bb boat templates --json` prints it.
  */
-export interface LaunchChoices {
-  templates: readonly SavedSnapshot[];
-  environments: readonly SandboxEnvironment[];
-  defaults: LaunchDefaults;
-}
+export const launchChoices = z.object({
+  templates: z.array(savedSnapshot),
+  environments: z.array(sandboxEnvironment),
+  defaults: launchDefaults,
+});
+
+export type LaunchChoices = z.output<typeof launchChoices>;
 
 /** Every field named, so it is also a complete MachineInputs. */
 export interface Launch {
@@ -61,7 +73,13 @@ export type DefaultSetting = "defaultTemplate" | "defaultEnvironment";
 
 export type LaunchResolution =
   | { ok: true; launch: Launch; environment: SandboxEnvironment }
-  | { ok: false; message: string; setting: DefaultSetting | null };
+  | {
+    ok: false;
+    message: string;
+    setting: DefaultSetting | null;
+    /** The template or environment name boat does not offer, for the chip's label. */
+    name: string;
+  };
 
 const SETTING_LABELS: Record<DefaultSetting, string> = {
   defaultTemplate: "Default template",
@@ -85,7 +103,7 @@ export function resolveLaunch(inputs: MachineInputs, { templates, environments, 
     ? environments.find((candidate) => candidate.isBoatDefault)
     : environments.find((candidate) => candidate.name === environmentName);
   if (environment === undefined)
-    return refuse(`boat has no environment "${environmentName}"${suffix(environmentSetting)}. Run \`bb boat templates\` to list them.`, environmentSetting);
+    return refuse(`boat has no environment "${environmentName}"${suffix(environmentSetting)}. Run \`bb boat templates\` to list them.`, environmentSetting, environmentName ?? "boat's default environment");
 
   return { ok: true, launch: { template, environment: environment.name, preset: inputs.preset ?? defaults.preset }, environment };
 }
@@ -94,14 +112,14 @@ function refuseTemplate(template: string, templates: readonly SavedSnapshot[], s
   const found = templates.find((candidate) => candidate.name === template);
   const from = suffix(setting);
   if (found === undefined)
-    return refuse(`No saved snapshot "${template}" on this boat account${from}. Run \`bb boat templates\` to list them.`, setting);
+    return refuse(`No saved snapshot "${template}" on this boat account${from}. Run \`bb boat templates\` to list them.`, setting, template);
   switch (found.status) {
     case "ready":
       return null;
     case "saving":
-      return refuse(`Template "${template}" is still saving on boat${from}. Start the thread once \`bb boat templates\` shows it ready.`, setting);
+      return refuse(`Template "${template}" is still saving on boat${from}. Start the thread once \`bb boat templates\` shows it ready.`, setting, template);
     case "failed":
-      return refuse(`boat could not save template "${template}"${from}: ${found.error}. Save it again with \`boat snapshot <sandbox-id> ${shellQuote(template)}\`.`, setting);
+      return refuse(`boat could not save template "${template}"${from}: ${found.error}. Save it again with \`boat snapshot <sandbox-id> ${shellQuote(template)}\`.`, setting, template);
     default:
       return found.status satisfies never;
   }
@@ -109,7 +127,7 @@ function refuseTemplate(template: string, templates: readonly SavedSnapshot[], s
 
 const suffix = (setting: DefaultSetting | null): string => (setting === null ? "" : ` (Settings → boat Sandbox → ${SETTING_LABELS[setting]})`);
 
-const refuse = (message: string, setting: DefaultSetting | null): LaunchResolution => ({ ok: false, message, setting });
+const refuse = (message: string, setting: DefaultSetting | null, name: string): LaunchResolution => ({ ok: false, message, setting, name });
 
 /** `a small boat sandbox from template node-tools in environment base`, for the create step, status and `bb boat templates`. */
 export function describeLaunch({ template, environment, preset }: Launch): string {

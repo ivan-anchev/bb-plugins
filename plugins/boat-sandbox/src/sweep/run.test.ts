@@ -7,7 +7,7 @@ import { toSandbox, type Sandbox, type SandboxId } from "../boat/sandbox.ts";
 import { accountId, sandboxId } from "../boat/wire.ts";
 import { boatCli } from "../cli.ts";
 import type { IdleClock } from "../idle-clock.ts";
-import { PROVIDER_ID } from "../machine-provider.ts";
+import { PROVIDER_ID } from "../contract.ts";
 import { machineLabels } from "../ownership.ts";
 import type { HostPhase } from "./plan.ts";
 import { createSweep } from "./run.ts";

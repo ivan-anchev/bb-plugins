@@ -7,6 +7,7 @@ import type { Sandbox, SandboxId } from "./boat/sandbox.ts";
 import type { StartGate } from "./boat/start-gate.ts";
 import type { SandboxEnvironment } from "./boat/wire.ts";
 import { resolveOnBoat } from "./catalog/read.ts";
+import { PROVIDER_ID } from "./contract.ts";
 import { prepareDaemon } from "./daemon-setup.ts";
 import { boatExecutor } from "./executor.ts";
 import type { IdleClock } from "./idle-clock.ts";
@@ -15,8 +16,6 @@ import { describeLaunch, machineInputs, type Launch } from "./launch.ts";
 import { machineLabels, parseResource, sandboxName, type BoatResource } from "./ownership.ts";
 import { describeProblems, messageOf } from "./problem.ts";
 import { LEASE_TTL_SECONDS, stopSandbox, waitUntilRunning, wakeSandbox } from "./sandbox-power.ts";
-
-export const PROVIDER_ID = "boat-sandbox";
 
 /** validate gets no caller signal; it reads /me, /limits, /saved-snapshots and /environments. */
 const VALIDATE_PATIENCE_MS = 15_000;
@@ -179,10 +178,16 @@ function expectEnvironment(sandbox: Sandbox, launch: Launch, environment: Sandbo
 const passesLogins = ({ withholdsAll, passes }: SandboxEnvironment): boolean =>
   !withholdsAll && (passes.agents || passes.github || passes.secrets);
 
-const toAvailability = (configuration: Configuration) =>
+type Availability = Awaited<ReturnType<NonNullable<PluginMachineProviderDeclaration["availability"]>>>;
+
+/** bb has no status for a failed read, so it shows as unavailable, as a refusal does. */
+const toAvailability = (configuration: Configuration): Availability =>
   configuration.status === "available"
-    ? { status: configuration.status }
-    : { status: configuration.status, message: describeProblems(configuration.problems) };
+    ? { status: "available" }
+    : {
+        status: configuration.status === "setup-required" ? "setup-required" : "unavailable",
+        message: describeProblems(configuration.problems),
+      };
 
 interface StartRequest {
   session: BoatSession;

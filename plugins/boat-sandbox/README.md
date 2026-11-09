@@ -51,5 +51,9 @@ npm test --workspace plugins/boat-sandbox
   keyed cleanup.
 - `src/cli.ts`, `src/status.ts`: `bb boat status`, `templates` and
   `sandboxes`.
+- `src/contract.ts`: the provider id and the `launchChoices` RPC the composer
+  chip reads (`bb boat templates --json` prints the same object).
+- `app.tsx`, `src/app/`: the composer chip. `chip-report.ts` decides what it
+  shows and reports; `launch-chip.tsx` draws it with the menu in `ui/menu.tsx`.
 - `src/sign-ins.ts`, `src/settle.ts`: the Claude Code, Codex and AI proxy
   rows for one environment, and boat reads reported as `unknown (<reason>)`.
