@@ -21,8 +21,11 @@ export async function loadOwnerId(kv: PluginKvStorage): Promise<string> {
   return created;
 }
 
+/** The labels of every machine sandbox this bb server made. */
+export const ownerLabels = (ownerId: string): Labels => ({ [OWNER]: ownerId, [ROLE]: "machine" });
+
 /** The labels of the machine sandbox core asked for with `key`. */
-export const machineLabels = (ownerId: string, key: string): Labels => ({ [OWNER]: ownerId, [ROLE]: "machine", [KEY]: key });
+export const machineLabels = (ownerId: string, key: string): Labels => ({ ...ownerLabels(ownerId), [KEY]: key });
 
 /** Readable in `boat list`. For a composed create the key is the thread id. */
 export const sandboxName = (key: string): string => `bb ${key}`;

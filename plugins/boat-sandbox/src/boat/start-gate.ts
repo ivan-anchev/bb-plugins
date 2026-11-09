@@ -24,6 +24,11 @@ export interface StartGate {
    * refused request.
    */
   start<T>(start: (retry: boolean) => Promise<T>, signal: AbortSignal): Promise<T>;
+  /**
+   * Runs a start boat should not count (taking back a kept machine) at once, past any window. If boat
+   * counts it after all and answers 429, that window is recorded and the start is retried as `start` does.
+   */
+  startUncounted<T>(start: (retry: boolean) => Promise<T>, signal: AbortSignal): Promise<T>;
 }
 
 export function createStartGate(): StartGate {
@@ -49,17 +54,23 @@ export function createStartGate(): StartGate {
     }
   }
 
+  /** One attempt, then one retry once a short window clears. */
+  async function attemptAndRetry<T>(start: (retry: boolean) => Promise<T>, signal: AbortSignal): Promise<T> {
+    try {
+      return await attempt(start, false);
+    } catch (error) {
+      if (!(error instanceof StartLimitError)) throw error;
+      await waitForWindow(signal);
+      return attempt(start, true);
+    }
+  }
+
   return {
     async start(start, signal) {
       await waitForWindow(signal);
-      try {
-        return await attempt(start, false);
-      } catch (error) {
-        if (!(error instanceof StartLimitError)) throw error;
-        await waitForWindow(signal);
-        return attempt(start, true);
-      }
+      return attemptAndRetry(start, signal);
     },
+    startUncounted: attemptAndRetry,
   };
 }
 

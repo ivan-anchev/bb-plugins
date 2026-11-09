@@ -33,6 +33,9 @@ const PHASES: Record<PresentSandbox["state"], SandboxPhase> = {
   error: "failed",
 };
 
+/** boat bills it and runs commands on it, or soon will. */
+export const isAwake = (sandbox: Sandbox): boolean => sandbox.phase === "starting" || sandbox.phase === "running";
+
 /** Parses one sandbox object from boat. `cancelled` is boat's "gone", so it is null, like a 404. */
 export function toSandbox(json: unknown): Sandbox | null {
   const wire = wireSandbox.parse(json);

@@ -55,3 +55,17 @@ test("a 429 on the retry fails the start, and later starts respect its window", 
   await assert.rejects(gate.start(start, signal()), StartLimitError);
   assert.equal(calls, 2);
 });
+
+test("an uncounted start runs past a window, and a 429 for it holds back later starts", async () => {
+  const gate = createStartGate();
+  const counted: string[] = [];
+  await assert.rejects(gate.start(async () => Promise.reject(rateLimited(10 * 60_000)), signal()), StartLimitError);
+
+  assert.equal(await gate.startUncounted(async () => "kept", signal()), "kept");
+  await assert.rejects(gate.startUncounted(async () => Promise.reject(rateLimited(20 * 60_000)), signal()), StartLimitError);
+  const failure = await gate.start(async () => void counted.push("start"), signal()).catch((error: unknown) => error);
+
+  assert.ok(failure instanceof StartLimitError);
+  assert.ok(failure.nextStartAt > Date.now() + 19 * 60_000);
+  assert.deepEqual(counted, []);
+});

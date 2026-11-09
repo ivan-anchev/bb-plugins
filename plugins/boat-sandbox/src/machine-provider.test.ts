@@ -5,7 +5,7 @@ import type { JsonValue } from "@get-bb/plugin-sdk";
 import type { BoatAccess, BoatSession } from "./boat/access.ts";
 import { BoatApiError, type BoatClient, type CreateSandboxBody, type Labels } from "./boat/client.ts";
 import { toSandbox, type Sandbox, type SandboxId } from "./boat/sandbox.ts";
-import { createStartGate } from "./boat/start-gate.ts";
+import { createStartGate, type StartGate } from "./boat/start-gate.ts";
 import { accountId, sandboxId, wireMe } from "./boat/wire.ts";
 import { boatMachineProvider } from "./machine-provider.ts";
 import { machineLabels } from "./ownership.ts";
@@ -19,6 +19,7 @@ function fakeBoat() {
   const sandboxes = new Map<SandboxId, Sandbox>();
   const byIdempotencyKey = new Map<string, Sandbox>();
   const posts: string[] = [];
+  const calls: string[] = [];
   const add = (labels: Labels): Sandbox => {
     const id = sandboxId.parse(`bx_${"abcdefghjkmnpqrs".slice(sandboxes.size, sandboxes.size + 8)}`);
     const sandbox = toSandbox({ ...CAPTURED, id, labels, state: "idle" });
@@ -43,13 +44,41 @@ function fakeBoat() {
     async remove(id) {
       if (!sandboxes.delete(id)) throw new BoatApiError(404, "not_found", "not_found", null, false);
     },
+    async stop(id) {
+      calls.push(`stop ${id}`);
+      const sandbox = sandboxes.get(id);
+      if (sandbox !== undefined) sandboxes.set(id, { ...sandbox, phase: "stopped", stoppedAt: Date.now() });
+    },
+    async resume(id) {
+      calls.push(`resume ${id}`);
+      const sandbox = sandboxes.get(id);
+      if (sandbox !== undefined) sandboxes.set(id, { ...sandbox, phase: "running", stoppedAt: null });
+    },
+    setTtl: async () => {},
     run: async () => ({ exitCode: 0 }),
     writeFile: async () => {},
   };
-  return { client, sandboxes, posts, add };
+  /** A sandbox boat stopped `minutesAgo` minutes ago. */
+  const stopped = (minutesAgo: number): Sandbox => {
+    const sandbox = { ...add(machineLabels(OWNER, "thr_1")), phase: "stopped" as const, stoppedAt: Date.now() - minutesAgo * 60_000 };
+    sandboxes.set(sandbox.id, sandbox);
+    return sandbox;
+  };
+  return { client, sandboxes, posts, calls, add, stopped };
 }
 
-function provider(client: BoatClient, account = ACCOUNT) {
+/** A start gate that counts the starts it was asked for. */
+function countingGate() {
+  const gate = createStartGate();
+  const counted = { starts: 0 };
+  const counting: StartGate = {
+    start: (start, signal) => (counted.starts++, gate.start(start, signal)),
+    startUncounted: gate.startUncounted,
+  };
+  return { gate: counting, counted };
+}
+
+function provider(client: BoatClient, account = ACCOUNT, gate: StartGate = createStartGate()) {
   const session: BoatSession = {
     status: "available",
     facts: {
@@ -61,13 +90,15 @@ function provider(client: BoatClient, account = ACCOUNT) {
   };
   const access: BoatAccess = { configuration: async () => session, session: async () => session };
   const bootstraps: string[] = [];
+  const touched: string[] = [];
   const declaration = boatMachineProvider({
     access,
-    gate: createStartGate(),
+    gate,
     ownerId: OWNER,
+    idle: { touch: async (hostId) => void touched.push(hostId) },
     bootstrap: async ({ key }) => (bootstraps.push(key), { hostId: "host_1" }),
   });
-  return { declaration, bootstraps };
+  return { declaration, bootstraps, touched };
 }
 
 const quiet = { step: () => {}, log: () => {} };
@@ -169,4 +200,137 @@ test("reconcileCleanup deletes whatever boat made for the key", async () => {
 
   assert.deepEqual(result, { status: "removed" });
   assert.deepEqual([...boat.sandboxes.keys()], [kept.id]);
+});
+
+/** Core requires suspend and resume together; a provider without them fails here. */
+function suspendResume({ declaration }: ReturnType<typeof provider>) {
+  const { suspend, resume } = declaration;
+  if (suspend === undefined || resume === undefined) throw new Error("the provider declares no suspend and resume");
+  return { suspend, resume };
+}
+
+const lifecycle = (sandbox: Sandbox) => ({
+  hostId: "host_1",
+  resource: { sandboxId: sandbox.id, key: "thr_1", accountId: ACCOUNT },
+  checkpoint: async () => {},
+  report: quiet,
+  signal: AbortSignal.timeout(10_000),
+});
+
+test("suspend stops a running sandbox and keeps the resource", async () => {
+  const boat = fakeBoat();
+  const sandbox = boat.add(machineLabels(OWNER, "thr_1"));
+  const { suspend } = suspendResume(provider(boat.client));
+
+  const result = await suspend(lifecycle(sandbox));
+
+  assert.deepEqual(boat.calls, [`stop ${sandbox.id}`]);
+  assert.equal(boat.sandboxes.get(sandbox.id)?.phase, "stopped");
+  assert.deepEqual(result, { resource: lifecycle(sandbox).resource });
+});
+
+test("suspend on an already stopped sandbox is a no-op", async () => {
+  const boat = fakeBoat();
+  const sandbox = boat.stopped(3);
+  const { suspend } = suspendResume(provider(boat.client));
+
+  await suspend(lifecycle(sandbox));
+
+  assert.deepEqual(boat.calls, []);
+});
+
+test("resume within the kept window bypasses the start gate", async () => {
+  const boat = fakeBoat();
+  const sandbox = boat.stopped(2);
+  const { gate, counted } = countingGate();
+  const resumer = provider(boat.client, ACCOUNT, gate);
+  const { bootstraps, touched } = resumer;
+  const { resume } = suspendResume(resumer);
+
+  await resume(lifecycle(sandbox));
+
+  assert.deepEqual(boat.calls, [`resume ${sandbox.id}`]);
+  assert.equal(counted.starts, 0);
+  assert.deepEqual(bootstraps, ["thr_1"]);
+  assert.deepEqual(touched, ["host_1"]);
+});
+
+test("resume after the kept window goes through the start gate", async () => {
+  const boat = fakeBoat();
+  const sandbox = boat.stopped(30);
+  const { gate, counted } = countingGate();
+  const { resume } = suspendResume(provider(boat.client, ACCOUNT, gate));
+
+  await resume(lifecycle(sandbox));
+
+  assert.deepEqual(boat.calls, [`resume ${sandbox.id}`]);
+  assert.equal(counted.starts, 1);
+});
+
+test("resume in the kept window's last minute still bypasses the start gate", async () => {
+  const boat = fakeBoat();
+  const sandbox = boat.stopped(9.5);
+  const { gate, counted } = countingGate();
+  const { resume } = suspendResume(provider(boat.client, ACCOUNT, gate));
+
+  await resume(lifecycle(sandbox));
+
+  assert.deepEqual(boat.calls, [`resume ${sandbox.id}`]);
+  assert.equal(counted.starts, 0);
+});
+
+test("a kept resume boat counts and refuses with 429 holds back later starts", async () => {
+  const boat = fakeBoat();
+  const sandbox = boat.stopped(2);
+  const resumes: SandboxId[] = [];
+  const refusing: BoatClient = {
+    ...boat.client,
+    async resume(id) {
+      resumes.push(id);
+      throw new BoatApiError(429, "rate_limited", "Start limit reached for this hour.", 30 * 60_000, false);
+    },
+  };
+  const resumer = provider(refusing);
+
+  await assert.rejects(suspendResume(resumer).resume(lifecycle(sandbox)), /start limit is reached/);
+  const { result } = await create(resumer.declaration, "thr_2");
+
+  assert.deepEqual(resumes, [sandbox.id]);
+  assert.equal(result.status, "failed");
+  assert.deepEqual(boat.posts, []);
+});
+
+test("resume of a running sandbox only re-enrolls it", async () => {
+  const boat = fakeBoat();
+  const sandbox = boat.add(machineLabels(OWNER, "thr_1"));
+  const resumer = provider(boat.client);
+  const { resume } = suspendResume(resumer);
+
+  await resume(lifecycle(sandbox));
+
+  assert.deepEqual(boat.calls, []);
+  assert.deepEqual(resumer.bootstraps, ["thr_1"]);
+});
+
+test("resume of a sandbox boat no longer has says to remove the machine", async () => {
+  const boat = fakeBoat();
+  const sandbox = boat.add(machineLabels(OWNER, "thr_1"));
+  boat.sandboxes.delete(sandbox.id);
+  const resumer = provider(boat.client);
+  const { resume } = suspendResume(resumer);
+
+  await assert.rejects(resume(lifecycle(sandbox)), {
+    message: `boat sandbox ${sandbox.id} no longer exists; remove this machine.`,
+  });
+  assert.deepEqual(resumer.bootstraps, []);
+});
+
+test("resume refuses a daemon that enrolls as another machine", async () => {
+  const boat = fakeBoat();
+  const sandbox = boat.stopped(2);
+  const resumer = provider(boat.client);
+  const { resume } = suspendResume(resumer);
+
+  await assert.rejects(resume({ ...lifecycle(sandbox), hostId: "host_2" }), /enrolled as host_1, not as machine host_2/);
+  assert.deepEqual(resumer.touched, []);
 });
