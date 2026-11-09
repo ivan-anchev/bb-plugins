@@ -47,6 +47,9 @@ through the change step by step. Nothing is ever posted to GitHub.
   Should fix or Nit, each linking to its step, and each step shows a finding
   in a grey block under its line. Ask about this sends the thread a question
   about it; the answer is in Review chat.
+- **Ask about lines**: click, shift-click or drag over the line numbers in
+  any diff to select lines, then ask the review thread about them; the
+  question goes with the quoted lines, and the answer is in Review chat.
 - **New commits**: when a PR moves past its guide, the row reads New commits
   and the guide stays readable under "N new commits since this guide was
   written". Update guide asks the same review thread to read only the new

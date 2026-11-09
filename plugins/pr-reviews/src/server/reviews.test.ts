@@ -7,7 +7,8 @@ import type { ReviewRun } from "./store.ts";
 import type { GuideRecord, PrDetail, ReviewState } from "../contract.ts";
 import { hunkIdSchema } from "../diff/diff-schema.ts";
 import type { Finding } from "../guide/guide-schema.ts";
-import { askMessage } from "./prompt.ts";
+import { askMessage, linesQuestionMessage } from "./prompt.ts";
+import type { CodeQuote } from "../comments/comment-schema.ts";
 
 const repo = repoSchema.parse("ivan-anchev/bb-plugins");
 const ref: PrRef = { projectId: "proj_1", repo, number: 23 };
@@ -283,4 +284,21 @@ test("Ask refuses a finding the guide does not have, or a head with no guide, an
   await assert.rejects(reviews.ask(GUIDE_KEY, 1, "Why?"), { code: "not_found" });
   await assert.rejects(reviews.ask({ ...GUIDE_KEY, headSha: "head2" }, 0, "Why?"), { code: "not_found" });
   assert.deepEqual(sent, []);
+});
+
+// ---- asking about selected lines ----
+
+const QUOTE: CodeQuote = { path: "src/a.ts", commit: "head2", start: { side: "new", line: 1 }, end: { side: "new", line: 1 }, lines: ["+new"] };
+
+test("a question about lines goes to the PR's review thread, read fresh, queued behind any running turn", async () => {
+  const { reviews, calls, messages } = actionHarness(SERVER_HOST, STALE);
+  await reviews.askAboutLines(ref, QUOTE, "Why new?");
+  assert.deepEqual(calls, ["send to thr_old (queue-if-active)"]);
+  assert.equal(messages[0]?.replace(/PR_[0-9a-f]{32}/g, "PR_nonce"), linesQuestionMessage(QUOTE, "Why new?").replace(/PR_[0-9a-f]{32}/g, "PR_nonce"));
+});
+
+test("a question about lines of a PR with no review thread is refused, and nothing is sent", async () => {
+  const { reviews, calls } = actionHarness(SERVER_HOST, { kind: "none" });
+  await assert.rejects(reviews.askAboutLines(ref, QUOTE, "Why new?"), { code: "conflict", message: "This pull request has no review thread yet. Start a review first." });
+  assert.deepEqual(calls, []);
 });

@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request with Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this, and the view options for tests and findings), how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request with Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this, and the view options for tests and findings), how to select lines in any diff and ask the review thread about them, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -140,14 +140,42 @@ visible`) stays shown.
 review thread's whole conversation, live: its messages, tool calls and a
 composer to write to it. It is bb's own chat, so it streams, queues and stops
 like any thread. While a review runs you watch the thread work. Everything the
-page sends the thread appears there too: Ask about this, Ask it to submit the
-guide, and Update guide.
+page sends the thread appears there too: Ask about this, questions about
+selected lines, Ask it to submit the guide, and Update guide.
 
 The tab always shows the review thread of the PR on screen. Open another PR and
 it shows that PR's thread, or says the PR has no review thread yet; when a PR
 gets a new review thread, it switches to it. The panel's **+** menu also lists
 Review chat on a PR's page. Close the tab with its ×, or the panel with the
 title bar's panel button.
+
+## Asking about lines
+
+Every diff on the page can select lines: the Changes tab's file diff, each
+guide step's hunks, and the overview's hidden hunks. Click a line number in the
+gutter to select that line, shift-click another to extend the selection to it,
+or drag over the numbers for a range. In Split view a range can start in one
+column and end in the other. Clicking the code itself selects nothing.
+
+The selected lines are highlighted, and under the last one a row names them
+("line 12 (new)", "lines 26–31 (old)", or "line 26 (old) to line 63 (new)" for
+a range across both sides) and offers **Ask the review thread**. A context line
+counts as new, whichever column it was clicked in. With no review thread yet
+the button is disabled and the row says "Start a review first". Esc, or a
+click outside the diff, clears the selection without leaving the page; with
+nothing selected Esc does what it always does.
+
+**Ask the review thread** opens a question box under the row, and the lines
+stay selected while it is open: clicking other numbers does nothing until you
+Cancel. **Send** messages the review thread, queued behind anything it is doing:
+the file, the lines and their sides, the commit the diff shows, the selected
+lines themselves (marked as untrusted PR data) and your question. Review chat
+then opens, where the answer arrives, and the selection clears. If the send
+fails, the question stays in the box with the error beside Send. A question
+cancelled while it sends still goes to the thread, but the page no longer
+follows it: Review chat stays as it is and the selection, or a newer one, stays.
+Esc anywhere in an empty box, Cancel included, closes it; a box with text
+ignores Esc, so a question is never lost to it.
 
 ## Reading a guide
 
@@ -179,7 +207,8 @@ them. **Ask about this** opens a text box; **Send** messages
 the question, quoting the finding, to the review thread, which answers there
 (Review chat shows it). The page keeps reading Guide ready while the thread
 answers. If the send fails, the question stays in the box with the error beside
-Send. Text typed while a question is sending stays in the box, unsent.
+Send. Text typed while a question is sending stays in the box, unsent. Esc
+closes an empty box and leaves one with text, and the page, as they are.
 
 The view-options icon at the right end of the tab bar, shown on the Guide tab
 once there is a guide, opens a popover of switches, each shown only when the

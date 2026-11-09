@@ -111,6 +111,11 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
       await reviews.ask({ repo: await repoOf(projectId), number, headSha }, findingIndex, question);
       return {};
     },
+
+    async askAboutLines({ quote, question, ...input }) {
+      await reviews.askAboutLines(await prRef(input), quote, question);
+      return {};
+    },
   };
 }
 
