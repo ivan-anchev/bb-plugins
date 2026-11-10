@@ -1,0 +1,497 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "timelineItems": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": "Y3Vyc29yOnYyOpPPAAABobAO4sACqzIwMjQ1OTQ1Mzcw"
+          },
+          "nodes": [
+            {
+              "__typename": "PullRequestCommit",
+              "id": "PURC_lADOFL76Q88AAAABM1MbNdoAKGIyYmZkMjM5ZmQ5NzdlZWIyZDFlZjQ4NzkwMGQ3OWQwNTYwMGQ2NjE",
+              "url": "https://github.com/withastro/astro/pull/18616/commits/b2bfd239fd977eeb2d1ef487900d79d05600d661",
+              "commit": {
+                "oid": "b2bfd239fd977eeb2d1ef487900d79d05600d661",
+                "messageHeadline": "chore: replace yargs with mri",
+                "committedDate": "2026-11-04T14:33:37Z"
+              }
+            },
+            {
+              "__typename": "IssueComment",
+              "id": "IC_kwDOFL76Q88AAAABi2Eikw",
+              "databaseId": 6633366163,
+              "url": "https://github.com/withastro/astro/pull/18616#issuecomment-6633366163",
+              "body": "### 🦋 Changeset detected\n\nLatest commit: 8b30d97901c304a40bb99f30f3aea480fcfa2f3d\n\n**The changes in this PR will be included in the next version bump.**\n\n<details><summary>This PR includes changesets to release 1 package</summary>\n\n  | Name  | Type  |\n| ----- | ----- |\n| astro | Patch |\n\n</details>\n\nNot sure what this means? [Click here to learn what changesets are](https://changesets.dev/faq).\n\n[Click here if you're a maintainer who wants to add another changeset to this PR](https://github.com/florian-lefebvre/astro/new/florian-lefebvre/Remove-yargs?filename=.changeset/chilly-cloths-scream.md&value=---%0A%22astro%22%3A%20patch%0A---%0A%0AReplace%20yargs%20with%20mri%20for%20CLI%20argument%20parsing%0A)\n\n",
+              "createdAt": "2026-11-04T14:34:04Z",
+              "author": {
+                "__typename": "Bot",
+                "login": "changeset-bot"
+              }
+            },
+            {
+              "__typename": "PullRequestCommit",
+              "id": "PURC_lADOFL76Q88AAAABM1MbNdoAKDQwZmI4OGRkYjVjNTVjMzJhODgzYjYzNjBjZjMxOGNiYzI2YWZjNWY",
+              "url": "https://github.com/withastro/astro/pull/18616/commits/40fb88ddb5c55c32a883b6360cf318cbc26afc5f",
+              "commit": {
+                "oid": "40fb88ddb5c55c32a883b6360cf318cbc26afc5f",
+                "messageHeadline": "Merge branch 'main' into florian-lefebvre/Remove-yargs",
+                "committedDate": "2026-11-04T14:36:02Z"
+              }
+            },
+            {
+              "__typename": "LabeledEvent",
+              "id": "LE_lADOFL76Q88AAAABcdZuq88AAAAILnEq6Q",
+              "createdAt": "2026-11-04T14:36:07Z",
+              "actor": {
+                "login": "florian-lefebvre"
+              },
+              "label": {
+                "name": "pr: astro-review",
+                "color": "c2e0c6"
+              }
+            },
+            {
+              "__typename": "UnlabeledEvent",
+              "id": "UNLE_lADOFL76Q88AAAABcdZuq88AAAAILnFu8A",
+              "createdAt": "2026-11-04T14:36:18Z",
+              "actor": {
+                "login": "astro-factory"
+              },
+              "label": {
+                "name": "pr: astro-review",
+                "color": "c2e0c6"
+              }
+            },
+            {
+              "__typename": "PullRequestReview",
+              "id": "PRR_kwDOFL76Q88AAAABV-2UwA",
+              "databaseId": 5770155200,
+              "url": "https://github.com/withastro/astro/pull/18616#pullrequestreview-5770155200",
+              "body": "## Findings\n\n- `[medium][correctness]` `packages/language-tools/astro-check/src/index.ts:50`: `astro check --help` (and `--version`) now runs a full diagnostics pass instead of printing help. Details are in the inline comment.\n\n## Merge Requirement Assessment\n\nStatus: gaps found\n\n- `Replace yargs/yargs-parser with mri in Astro and @astrojs/check`: Done. `MriCliArgumentParser` replaces `yargs-parser` in `packages/astro/src/cli/index.ts`, `mri` replaces `yargs` in `astro-check/src/index.ts`, and both manifests and the lockfile drop the yargs packages.\n- `Preserve existing flags, defaults, aliases, and severity choices`: Mostly done. The camelCase conversion, the `-g` alias, the negative `--port` handling, the `--` delimiter, defaults and severity choices are covered by the new contract tests and the extended `parseArgs.test.ts`. However, yargs' built-in `--help` and `--version` behavior is not preserved when `@astrojs/check` runs through `astro check` (see the finding).\n\n## Review Status\n\nVerdict: changes required\nContext: PR #18616 (title and description only; it has no linked issues)\nScope: Full PR diff, base `ff1e2fb` to head `40fb88d`.\nChangeset: Present. It covers `astro` and `@astrojs/check` as patch releases.\nLimitations: I could not search the whole repository for code that reads kebab-case flag keys such as `flags['ignore-lock']`, which the new parser no longer produces. Only the changed and directly related files were inspected.\nValidation: Static review only. I did not run any project code, tests, builds or checks.\nGitHub context: collected\nGit scope: PR base/head verified\n\n<!-- factory-review:delivery=126bd150-d85d-11f1-910b-42bb58c34855:head=40fb88ddb5c55c32a883b6360cf318cbc26afc5f -->\n\n*This review was made by an LLM. The analysis may be wrong, and reports might be incorrect.*",
+              "createdAt": "2026-11-04T14:37:43Z",
+              "author": {
+                "__typename": "Bot",
+                "login": "astro-factory"
+              },
+              "state": "COMMENTED",
+              "submittedAt": "2026-11-04T14:37:43Z",
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0wNFQxNDozNzo0M1rPAAAAAQpd8-E="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4468896737
+                  }
+                ]
+              }
+            },
+            {
+              "__typename": "PullRequestCommit",
+              "id": "PURC_lADOFL76Q88AAAABM1MbNdoAKDdmYmRkNTJmMjNmOGU4ZDM1MmU3YmIxN2JjNThlMDIyMmM5ZmM5MDU",
+              "url": "https://github.com/withastro/astro/pull/18616/commits/7fbdd52f23f8e8d352e7bb17bc58e0222c9fc905",
+              "commit": {
+                "oid": "7fbdd52f23f8e8d352e7bb17bc58e0222c9fc905",
+                "messageHeadline": "fix(check): print help without running diagnostics",
+                "committedDate": "2026-11-04T14:44:33Z"
+              }
+            },
+            {
+              "__typename": "LabeledEvent",
+              "id": "LE_lADOFL76Q88AAAABcdZuq88AAAAILn8fUg",
+              "createdAt": "2026-11-04T14:45:13Z",
+              "actor": {
+                "login": "florian-lefebvre"
+              },
+              "label": {
+                "name": "pr: astro-review",
+                "color": "c2e0c6"
+              }
+            },
+            {
+              "__typename": "UnlabeledEvent",
+              "id": "UNLE_lADOFL76Q88AAAABcdZuq88AAAAILn9u6Q",
+              "createdAt": "2026-11-04T14:45:25Z",
+              "actor": {
+                "login": "astro-factory"
+              },
+              "label": {
+                "name": "pr: astro-review",
+                "color": "c2e0c6"
+              }
+            },
+            {
+              "__typename": "PullRequestReview",
+              "id": "PRR_kwDOFL76Q88AAAABV-_bYQ",
+              "databaseId": 5770304353,
+              "url": "https://github.com/withastro/astro/pull/18616#pullrequestreview-5770304353",
+              "body": "## Findings\n\n- `[medium][correctness]` `packages/language-tools/astro-check/src/index.ts:36`: after this change, `parseArgsAsCheckConfig` no longer handles `--help` by itself, so on older `astro` releases `astro check --help` runs a full type check instead of printing help. See the inline comment.\n\n## Merge Requirement Assessment\n\nStatus: gaps found\n\n- `Replace yargs/yargs-parser with mri in Astro and astro check`: done. `MriCliArgumentParser` and the mri-based `parseArgsAsCheckConfig` replace yargs, and the dependencies and lockfile are updated.\n- `Preserve existing flags, defaults, aliases, and severity choices`: mostly kept. The Astro parser keeps `-g/--global` as a boolean, turns dashed flags into camelCase, handles negation, repeated values, `--`, and negative `--port` values. The new contract tests cover these. The check parser keeps its defaults, the `-w` alias, dashed names, and choice validation. Help/version handling now lives in the caller, which breaks the existing `astro` releases that call `@astrojs/check` (see finding).\n- `Parser contract tests`: present in `argument-parser.contract.ts`/`argument-parser.test.ts` and `parseArgs.test.ts`/`bin.test.ts`.\n\n## Review Status\n\nVerdict: changes required\nContext: PR #18616 plus the PR description\nScope: PR base `ff1e2fb2` to head `7fbdd52f`, 19 files.\nChangeset: present and covers `astro` and `@astrojs/check`.\nLimitations: none.\nValidation: Static review only. No project code, tests, builds, or checks were run.\nGitHub context: collected.\nGit scope: PR base/head verified.\n\n<!-- factory-review:delivery=57c15710-d85e-11f1-8947-12fd2885d168:head=7fbdd52f23f8e8d352e7bb17bc58e0222c9fc905 -->\n\n*This review was made by an LLM. The analysis may be wrong, and reports might be incorrect.*",
+              "createdAt": "2026-11-04T14:47:27Z",
+              "author": {
+                "__typename": "Bot",
+                "login": "astro-factory"
+              },
+              "state": "COMMENTED",
+              "submittedAt": "2026-11-04T14:47:27Z",
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0wNFQxNDo0NzoyN1rPAAAAAQpftQM="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4469011715
+                  }
+                ]
+              }
+            },
+            {
+              "__typename": "LabeledEvent",
+              "id": "LE_lADOFL76Q88AAAABcdZuq88AAAAILoh60g",
+              "createdAt": "2026-11-04T14:51:23Z",
+              "actor": {
+                "login": "github-actions"
+              },
+              "label": {
+                "name": "pkg: astro",
+                "color": "b4a8d1"
+              }
+            },
+            {
+              "__typename": "PullRequestCommit",
+              "id": "PURC_lADOFL76Q88AAAABM1MbNdoAKGM4MTAxZWI0NTJjZmY5YzRjNjViNDk5YjE1MjgxY2U2YTU2MzhmMTc",
+              "url": "https://github.com/withastro/astro/pull/18616/commits/c8101eb452cff9c4c65b499b15281ce6a5638f17",
+              "commit": {
+                "oid": "c8101eb452cff9c4c65b499b15281ce6a5638f17",
+                "messageHeadline": "fix(check): share help handling across callers",
+                "committedDate": "2026-11-04T14:53:42Z"
+              }
+            },
+            {
+              "__typename": "LabeledEvent",
+              "id": "LE_lADOFL76Q88AAAABcdZuq88AAAAILo1SQQ",
+              "createdAt": "2026-11-04T14:54:33Z",
+              "actor": {
+                "login": "florian-lefebvre"
+              },
+              "label": {
+                "name": "pr: astro-review",
+                "color": "c2e0c6"
+              }
+            },
+            {
+              "__typename": "UnlabeledEvent",
+              "id": "UNLE_lADOFL76Q88AAAABcdZuq88AAAAILo2ePA",
+              "createdAt": "2026-11-04T14:54:45Z",
+              "actor": {
+                "login": "astro-factory"
+              },
+              "label": {
+                "name": "pr: astro-review",
+                "color": "c2e0c6"
+              }
+            },
+            {
+              "__typename": "PullRequestReview",
+              "id": "PRR_kwDOFL76Q88AAAABV_IZNg",
+              "databaseId": 5770451254,
+              "url": "https://github.com/withastro/astro/pull/18616#pullrequestreview-5770451254",
+              "body": "## Findings\n\n- `[low][error-handling]` `packages/language-tools/astro-check/src/index.ts:60`: When the standalone `astro-check` binary gets an invalid severity choice, it now crashes with an uncaught exception instead of showing a usage error. Details are in the inline comment.\n\n## Merge Requirement Assessment\n\nStatus: satisfied\n\n- **Replace yargs/yargs-parser with `mri` in `astro` and `@astrojs/check`.** Both packages' `package.json` files and the lockfile are updated. `MriCliArgumentParser` replaces `yargs-parser` in `cli/index.ts`, and `parseArgsAsCheckConfig` now uses `mri`.\n- **Keep existing flags, defaults, aliases and severity choices.**\n  - In Astro, `-g`/`--global` is still a boolean with an alias, dashed flags are still camel-cased, `--no-*` still negates, numeric values are still coerced, value-optional flags (`--host`, `--open`, `--allowed-hosts`) still work, and `--` still ends option parsing. The new parser contract tests cover these cases.\n  - In `@astrojs/check`, defaults, the `-w` alias, dashed option names and severity choice validation are kept, with tests in `parseArgs.test.ts`. Help and version handling now lives in `check()`, and both `astro check --help` and the standalone binary have tests for it.\n\n## Review Status\n\nVerdict: changes required\nContext: PR #18616 plus the PR description\nScope: PR base `ff1e2fb2` to head `c8101eb4`.\nChangeset: present and covers `astro` and `@astrojs/check`.\nLimitations: The local workspace has no repository source, so I couldn't search the whole repo for code reading kebab-case flag keys (yargs-parser used to provide both kebab-case and camelCase keys). I checked the CLI files the change touches, and they all read camelCase keys.\nValidation: Static review only; no project code, tests, builds, or checks were run.\nGitHub context: collected\nGit scope: PR base/head verified\n\n<!-- factory-review:delivery=a5b7e0a0-d85f-11f1-9560-e68f0b9a7b46:head=c8101eb452cff9c4c65b499b15281ce6a5638f17 -->\n\n*This review was made by an LLM. The analysis may be wrong, and reports might be incorrect.*",
+              "createdAt": "2026-11-04T14:57:03Z",
+              "author": {
+                "__typename": "Bot",
+                "login": "astro-factory"
+              },
+              "state": "COMMENTED",
+              "submittedAt": "2026-11-04T14:57:03Z",
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0wNFQxNDo1NzowM1rPAAAAAQphfZU="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4469128597
+                  }
+                ]
+              }
+            },
+            {
+              "__typename": "PullRequestCommit",
+              "id": "PURC_lADOFL76Q88AAAABM1MbNdoAKGMwNDA0Yjc2ZjkyYTdlMzk5ZTczMzQxOTFiMzFjZjgyZTAyMTgxNjg",
+              "url": "https://github.com/withastro/astro/pull/18616/commits/c0404b76f92a7e399e7334191b31cf82e0218168",
+              "commit": {
+                "oid": "c0404b76f92a7e399e7334191b31cf82e0218168",
+                "messageHeadline": "fix(check): report invalid CLI choices cleanly",
+                "committedDate": "2026-11-04T14:59:10Z"
+              }
+            },
+            {
+              "__typename": "LabeledEvent",
+              "id": "LE_lADOFL76Q88AAAABcdZuq88AAAAILpT_tQ",
+              "createdAt": "2026-11-04T14:59:24Z",
+              "actor": {
+                "login": "florian-lefebvre"
+              },
+              "label": {
+                "name": "pr: astro-review",
+                "color": "c2e0c6"
+              }
+            },
+            {
+              "__typename": "UnlabeledEvent",
+              "id": "UNLE_lADOFL76Q88AAAABcdZuq88AAAAILpVCVg",
+              "createdAt": "2026-11-04T14:59:34Z",
+              "actor": {
+                "login": "astro-factory"
+              },
+              "label": {
+                "name": "pr: astro-review",
+                "color": "c2e0c6"
+              }
+            },
+            {
+              "__typename": "PullRequestReview",
+              "id": "PRR_kwDOFL76Q88AAAABV_OabA",
+              "databaseId": 5770549868,
+              "url": "https://github.com/withastro/astro/pull/18616#pullrequestreview-5770549868",
+              "body": "## Findings\n\n- `[low][correctness]` `packages/language-tools/astro-check/src/index.ts:69-73`: The hand-written `--help` output no longer lists aliases, accepted values, defaults, or `--version`. The PR says it preserves aliases, defaults, and severity choices, but users can no longer find them through `--help`.\n\n## Merge Requirement Assessment\n\nStatus: gaps found\n\n- `Replace yargs/yargs-parser with mri in astro and @astrojs/check`: Done. `MriCliArgumentParser` is wired into `cli()`, `@astrojs/check` uses `mri`, and both dependency lists and the lockfile are updated.\n- `Preserve existing flags, defaults, aliases, and severity choices`: Mostly done. Parsing keeps defaults, the `-w`/`-g` aliases, camel-casing of dashed options, `--no-*` negation, repeated values, `--` handling, negative `--port` values, and the choices check. The new contract and parser tests cover these. The gap is in the help output, described in the finding.\n- `Help/version handling for astro check`: Done. `astro check` now skips sync for `--help` and `--version` by reading the `@astrojs/check` parser result. The bin tests cover help, version, and invalid choices.\n\n## Review Status\n\nVerdict: changes required\nContext: PR #18616 plus the PR description; no linked issues.\nScope: base `ff1e2fb2` to head `c0404b76`. All 19 changed files reviewed.\nChangeset: present. It covers `astro` and `@astrojs/check`.\nLimitations: I could not search the whole repository, so I could not confirm whether any consumer reads kebab-case flag keys, which yargs-parser used to provide alongside the camel-cased keys. I traced the consumers I could read (`flagsToAstroInlineConfig`, `cli/index.ts`, `check`), and they all use camel-cased keys.\nValidation: Static review only; no project code, tests, builds, or checks were run.\nGitHub context: collected.\nGit scope: PR base/head verified.\n\n<!-- factory-review:delivery=534bc290-d860-11f1-8349-b0a3f4cc7c65:head=c0404b76f92a7e399e7334191b31cf82e0218168 -->\n\n*This review was made by an LLM. The analysis may be wrong, and reports might be incorrect.*",
+              "createdAt": "2026-11-04T15:02:18Z",
+              "author": {
+                "__typename": "Bot",
+                "login": "astro-factory"
+              },
+              "state": "COMMENTED",
+              "submittedAt": "2026-11-04T15:02:17Z",
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0wNFQxNTowMjoxOFrPAAAAAQpisFQ="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4469207124
+                  }
+                ]
+              }
+            },
+            {
+              "__typename": "PullRequestCommit",
+              "id": "PURC_lADOFL76Q88AAAABM1MbNdoAKDhkN2QwNjE3MTQ1YzJjZjhjMzgwNDkxN2Q1YzU0MDBiMzdiNTA4ODc",
+              "url": "https://github.com/withastro/astro/pull/18616/commits/8d7d0617145c2cf8c3804917d5c5400b37b50887",
+              "commit": {
+                "oid": "8d7d0617145c2cf8c3804917d5c5400b37b50887",
+                "messageHeadline": "chore(cli): scope parser migration to Astro",
+                "committedDate": "2026-11-04T15:07:34Z"
+              }
+            },
+            {
+              "__typename": "PullRequestCommit",
+              "id": "PURC_lADOFL76Q88AAAABM1MbNdoAKDhiMzBkOTc5MDFjMzA0YTQwYmI5OWYzMGYzYWVhNDgwZmNmYTJmM2Q",
+              "url": "https://github.com/withastro/astro/pull/18616/commits/8b30d97901c304a40bb99f30f3aea480fcfa2f3d",
+              "commit": {
+                "oid": "8b30d97901c304a40bb99f30f3aea480fcfa2f3d",
+                "messageHeadline": "chore(changeset): clarify CLI parser summary",
+                "committedDate": "2026-11-04T15:08:59Z"
+              }
+            },
+            {
+              "__typename": "RenamedTitleEvent",
+              "id": "RTE_lADOFL76Q88AAAABcdZuq88AAAAILqRsEw",
+              "createdAt": "2026-11-04T15:09:19Z",
+              "actor": {
+                "login": "florian-lefebvre"
+              },
+              "previousTitle": "Replace yargs with mri for CLI argument parsing",
+              "currentTitle": "Use mri for Astro CLI argument parsing"
+            },
+            {
+              "__typename": "IssueComment",
+              "id": "IC_kwDOFL76Q88AAAABi4mooQ",
+              "databaseId": 6636021921,
+              "url": "https://github.com/withastro/astro/pull/18616#issuecomment-6636021921",
+              "body": "<!-- __CODSPEED_PERFORMANCE_REPORT_COMMENT__ -->\n<!-- __CODSPEED_ERROR_PERFORMANCE_REPORT_COMMENT__ -->\n## Unable to generate the performance report\n\nThere was an internal error while processing the run's data. We're working on fixing the issue. Feel free to contact us at [support@codspeed.io](mailto:support@codspeed.io) or on [Discord](https://codspeed.io/discord) if the issue persists.",
+              "createdAt": "2026-11-04T16:28:56Z",
+              "author": {
+                "__typename": "Bot",
+                "login": "codspeed"
+              }
+            },
+            {
+              "__typename": "ReadyForReviewEvent",
+              "id": "RFRE_lADOFL76Q88AAAABcdZuq88AAAAINLeg5Q",
+              "createdAt": "2026-11-05T13:20:04Z",
+              "actor": {
+                "login": "florian-lefebvre"
+              }
+            },
+            {
+              "__typename": "PullRequestReview",
+              "id": "PRR_kwDOFL76Q88AAAABWOOTsQ",
+              "databaseId": 5786276785,
+              "url": "https://github.com/withastro/astro/pull/18616#pullrequestreview-5786276785",
+              "body": "Without more context, I can't accept this PR. I would suggest explaining **why** we need to change the dependency. \n\nThe added code suggests the new dependency isn't a perfect replacement, so you should explain that too.",
+              "createdAt": "2026-11-05T14:13:23Z",
+              "author": {
+                "__typename": "User",
+                "login": "ematipico"
+              },
+              "state": "COMMENTED",
+              "submittedAt": "2026-11-05T14:15:47Z",
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0wNVQxNDoxMzoyM1rPAAAAAQseHc8="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4481490383
+                  }
+                ]
+              }
+            },
+            {
+              "__typename": "IssueComment",
+              "id": "IC_kwDOFL76Q88AAAABjP_DRw",
+              "databaseId": 6660539207,
+              "url": "https://github.com/withastro/astro/pull/18616#issuecomment-6660539207",
+              "body": "Apologies, should have included more info. Here it's just a matter of package size, see https://npmx.dev/compare?packages=yargs-parser,mri. Fwiw I first tried migrating to the Node builtin `util.parseArgs` to get rid of the dependency entirely but that was not worth it, it ended up recreating a lot of internally.\r\n\r\nI don't have strong opinions on this, if you think it's not worth it we can close it :+1: ",
+              "createdAt": "2026-11-05T14:29:46Z",
+              "author": {
+                "__typename": "User",
+                "login": "florian-lefebvre"
+              }
+            },
+            {
+              "__typename": "IssueComment",
+              "id": "IC_kwDOFL76Q88AAAABjRTSVQ",
+              "databaseId": 6661919317,
+              "url": "https://github.com/withastro/astro/pull/18616#issuecomment-6661919317",
+              "body": "> Fwiw I first tried migrating to the Node builtin util.parseArgs to get rid of the dependency entirely but that was not worth it\r\n\r\nYeah we already tried that :) you could have asked. ",
+              "createdAt": "2026-11-05T15:27:40Z",
+              "author": {
+                "__typename": "User",
+                "login": "ematipico"
+              }
+            },
+            {
+              "__typename": "PullRequestReview",
+              "id": "PRR_kwDOFL76Q88AAAABWPYmqQ",
+              "databaseId": 5787494057,
+              "url": "https://github.com/withastro/astro/pull/18616#pullrequestreview-5787494057",
+              "body": "",
+              "createdAt": "2026-11-05T15:29:43Z",
+              "author": {
+                "__typename": "User",
+                "login": "ematipico"
+              },
+              "state": "APPROVED",
+              "submittedAt": "2026-11-05T15:29:43Z",
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": null
+                },
+                "nodes": []
+              }
+            },
+            {
+              "__typename": "IssueComment",
+              "id": "IC_kwDOFL76Q88AAAABjRYR9g",
+              "databaseId": 6662001142,
+              "url": "https://github.com/withastro/astro/pull/18616#issuecomment-6662001142",
+              "body": "What's the advantage here? Is it smaller I assume? Not opposed just would like a reasoning.",
+              "createdAt": "2026-11-05T15:31:04Z",
+              "author": {
+                "__typename": "User",
+                "login": "matthewp"
+              }
+            },
+            {
+              "__typename": "IssueComment",
+              "id": "IC_kwDOFL76Q88AAAABjRcGdA",
+              "databaseId": 6662063732,
+              "url": "https://github.com/withastro/astro/pull/18616#issuecomment-6662063732",
+              "body": "Oh sorry, I missed the conversation, ignore me.",
+              "createdAt": "2026-11-05T15:33:41Z",
+              "author": {
+                "__typename": "User",
+                "login": "matthewp"
+              }
+            },
+            {
+              "__typename": "PullRequestReview",
+              "id": "PRR_kwDOFL76Q88AAAABWPcbuQ",
+              "databaseId": 5787556793,
+              "url": "https://github.com/withastro/astro/pull/18616#pullrequestreview-5787556793",
+              "body": "",
+              "createdAt": "2026-11-05T15:33:54Z",
+              "author": {
+                "__typename": "User",
+                "login": "matthewp"
+              },
+              "state": "APPROVED",
+              "submittedAt": "2026-11-05T15:33:54Z",
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": null
+                },
+                "nodes": []
+              }
+            },
+            {
+              "__typename": "IssueComment",
+              "id": "IC_kwDOFL76Q88AAAABjjeANg",
+              "databaseId": 6680969270,
+              "url": "https://github.com/withastro/astro/pull/18616#issuecomment-6680969270",
+              "body": "> > Fwiw I first tried migrating to the Node builtin util.parseArgs to get rid of the dependency entirely but that was not worth it\r\n> \r\n> Yeah we already tried that :) you could have asked.\r\n\r\nYeah I remember Bjorn tried a few years ago and it failed because of behavior differences. What I meant here tho is that I got the AI to basically create a contract test based on our CLI behavior, and make an implementation based on `parseArgs()`. But the code in that implementation was not worth maintaining",
+              "createdAt": "2026-11-06T08:49:03Z",
+              "author": {
+                "__typename": "User",
+                "login": "florian-lefebvre"
+              }
+            },
+            {
+              "__typename": "MergedEvent",
+              "id": "ME_lADOFL76Q88AAAABcdZuq88AAAAIOdrs4w",
+              "createdAt": "2026-11-06T08:49:43Z",
+              "actor": {
+                "login": "florian-lefebvre"
+              },
+              "mergeRefName": "main"
+            },
+            {
+              "__typename": "ClosedEvent",
+              "id": "CE_lADOFL76Q88AAAABcdZuq88AAAAIOdrtlw",
+              "createdAt": "2026-11-06T08:49:43Z",
+              "actor": {
+                "login": "florian-lefebvre"
+              }
+            },
+            {
+              "__typename": "CrossReferencedEvent",
+              "id": "CRE_kwDOFL76Q88AAAAEtsCcGg",
+              "createdAt": "2026-11-06T08:52:08Z",
+              "actor": {
+                "login": "astrobot-houston"
+              },
+              "isCrossRepository": false,
+              "source": {
+                "number": 18643,
+                "title": "[ci] release",
+                "url": "https://github.com/withastro/astro/pull/18643",
+                "repository": {
+                  "nameWithOwner": "withastro/astro"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

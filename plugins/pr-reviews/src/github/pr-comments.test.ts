@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { allPages, graphqlArgs, parseConversationPage, parseThreadsPage, prVariables, THREADS_QUERY, toThread } from "./pr-comments.ts";
+import { allPages, graphqlArgs, parseThreadsPage, prVariables, THREADS_QUERY, toThread } from "./pr-comments.ts";
 import type { ReviewThread } from "../comments/thread-schema.ts";
 import { repoSchema } from "./repo.ts";
 
-// Real responses of THREADS_QUERY and CONVERSATION_QUERY for this repo, recorded with `gh api
-// graphql`; PR #71's trimmed to its first four threads.
+// Real responses of THREADS_QUERY for this repo, recorded with `gh api graphql`; PR #71's trimmed
+// to its first four threads.
 const fixture = (name: string): unknown => JSON.parse(readFileSync(new URL(`fixtures/comments/${name}.json`, import.meta.url), "utf8"));
 
 const threadsOf = (name: string) => parseThreadsPage(fixture(name)).nodes.map((thread) => toThread(thread, thread.comments.nodes));
@@ -97,12 +97,6 @@ test("an open thread has no resolver; a resolved one names who resolved it, ghos
   const resolverOf = (isResolved: boolean, resolvedBy: { login: string } | null) => toThread({ ...thread, isResolved, resolvedBy }, thread.comments.nodes).resolvedBy;
 
   assert.deepEqual([resolverOf(false, null), resolverOf(true, { login: "octocat" }), resolverOf(true, null)], [null, "octocat", "ghost"]);
-});
-
-test("PR #40: the conversation's comments, as canonical comments", () => {
-  assert.deepEqual(parseConversationPage(fixture("conversation-40")).nodes, [
-    { id: 6719323092, url: "https://github.com/ivan-anchev/bb-plugins/pull/40#issuecomment-6719323092", author: { login: "ivan-anchev", bot: false }, body: "test", createdAt: "2026-11-08T08:34:16Z" },
-  ]);
 });
 
 test("a deleted account's comment is ghost's, as on GitHub, and an app's is a bot's", () => {

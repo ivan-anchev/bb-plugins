@@ -1,6 +1,6 @@
-// A PR's comments as GitHub's GraphQL API serves them: the queries, a page reader that follows a
-// connection to its end, and the parse into the canonical thread and comment types. gh.ts runs the
-// queries. Pure.
+// A PR's review threads as GitHub's GraphQL API serves them: the queries, a page reader that
+// follows a connection to its end, and the parse into the canonical thread and comment types,
+// which the timeline's parse (pr-timeline.ts) shares. gh.ts runs the queries. Pure.
 import { z } from "zod";
 import type { LineRef } from "../comments/comment-schema.ts";
 import type { GitHubComment, LineAnchor, ReviewThread } from "../comments/thread-schema.ts";
@@ -8,11 +8,11 @@ import { numberedLines, type NumberedLine } from "../diff/diff-schema.ts";
 import type { Repo } from "./repo.ts";
 
 // GitHub's largest page.
-const PAGE = 100;
+export const PAGE = 100;
 
-const COMMENT_FIELDS = "databaseId url body createdAt author { __typename login }";
+export const COMMENT_FIELDS = "databaseId url body createdAt author { __typename login }";
 const REVIEW_COMMENTS = `pageInfo { hasNextPage endCursor } nodes { ${COMMENT_FIELDS} commit { oid } originalCommit { oid } diffHunk }`;
-const PR = "query($owner: String!, $name: String!, $number: Int!, $cursor: String) { repository(owner: $owner, name: $name) { pullRequest(number: $number) {";
+export const PR = "query($owner: String!, $name: String!, $number: Int!, $cursor: String) { repository(owner: $owner, name: $name) { pullRequest(number: $number) {";
 
 export const THREADS_QUERY = `${PR} reviewThreads(first: ${PAGE}, after: $cursor) { pageInfo { hasNextPage endCursor } nodes {
   id isResolved resolvedBy { login } isOutdated path subjectType line startLine diffSide startDiffSide originalLine originalStartLine
@@ -21,8 +21,6 @@ export const THREADS_QUERY = `${PR} reviewThreads(first: ${PAGE}, after: $cursor
 /** The rest of a thread with more comments than its first page holds. */
 export const THREAD_COMMENTS_QUERY = `query($id: ID!, $cursor: String) { node(id: $id) { ... on PullRequestReviewThread {
   comments(first: ${PAGE}, after: $cursor) { ${REVIEW_COMMENTS} } } } }`;
-
-export const CONVERSATION_QUERY = `${PR} comments(first: ${PAGE}, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { ${COMMENT_FIELDS} } } } } }`;
 
 /** `gh api graphql` arguments: text by -f, numbers by -F as JSON integers. A null cursor is left out, so the query starts at the first page. */
 export function graphqlArgs(query: string, variables: Record<string, string | number | null>): string[] {
@@ -33,15 +31,15 @@ export function graphqlArgs(query: string, variables: Record<string, string | nu
   return ["api", "graphql", "-f", `query=${query}`, ...fields];
 }
 
-/** The PR variables of THREADS_QUERY and CONVERSATION_QUERY. */
+/** The PR variables of THREADS_QUERY and TIMELINE_QUERY. */
 export function prVariables(repo: Repo, number: number) {
   const [owner, name] = repo.split("/");
   return { owner, name, number };
 }
 
 const pageInfoSchema = z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable() });
-const connectionOf = <Node extends z.ZodType>(node: Node) => z.object({ pageInfo: pageInfoSchema, nodes: z.array(node) });
-type Connection<Node> = { pageInfo: z.infer<typeof pageInfoSchema>; nodes: Node[] };
+export const connectionOf = <Node extends z.ZodType>(node: Node) => z.object({ pageInfo: pageInfoSchema, nodes: z.array(node) });
+export type Connection<Node> = { pageInfo: z.infer<typeof pageInfoSchema>; nodes: Node[] };
 
 /** Every node of a connection, page after page from `first`, the page already read (or null to read it too). */
 export async function allPages<Node>(first: Connection<Node> | null, readPage: (cursor: string | null) => Promise<Connection<Node>>): Promise<Node[]> {
@@ -55,7 +53,7 @@ export async function allPages<Node>(first: Connection<Node> | null, readPage: (
 }
 
 // A deleted account's comments have no author; GitHub shows them as "ghost". An app's author is a Bot.
-const ghCommentSchema = z.object({
+export const ghCommentSchema = z.object({
   databaseId: z.number(),
   url: z.string(),
   body: z.string(),
@@ -89,7 +87,7 @@ const ghThreadSchema = z.object({
 });
 type GhThread = z.infer<typeof ghThreadSchema>;
 
-const pullRequestOf = <Shape extends z.ZodRawShape>(shape: Shape) => z.object({ data: z.object({ repository: z.object({ pullRequest: z.object(shape) }) }) });
+export const pullRequestOf = <Shape extends z.ZodRawShape>(shape: Shape) => z.object({ data: z.object({ repository: z.object({ pullRequest: z.object(shape) }) }) });
 
 /** One page of THREADS_QUERY's response. */
 export const parseThreadsPage = (json: unknown): Connection<GhThread> => pullRequestOf({ reviewThreads: connectionOf(ghThreadSchema) }).parse(json).data.repository.pullRequest.reviewThreads;
@@ -97,12 +95,6 @@ export const parseThreadsPage = (json: unknown): Connection<GhThread> => pullReq
 /** One page of THREAD_COMMENTS_QUERY's response. */
 export const parseThreadCommentsPage = (json: unknown): Connection<GhReviewComment> =>
   z.object({ data: z.object({ node: z.object({ comments: connectionOf(ghReviewCommentSchema) }) }) }).parse(json).data.node.comments;
-
-/** One page of CONVERSATION_QUERY's response, as canonical comments. */
-export function parseConversationPage(json: unknown): Connection<GitHubComment> {
-  const { pageInfo, nodes } = pullRequestOf({ comments: connectionOf(ghCommentSchema) }).parse(json).data.repository.pullRequest.comments;
-  return { pageInfo, nodes: nodes.map(toComment) };
-}
 
 /** A thread as read, with every one of its comments (its first page holds only some of a long thread's). */
 export function toThread(thread: GhThread, comments: GhReviewComment[]): ReviewThread {
@@ -118,7 +110,7 @@ export function toThread(thread: GhThread, comments: GhReviewComment[]): ReviewT
   };
 }
 
-const toComment = (comment: z.infer<typeof ghCommentSchema>): GitHubComment => ({
+export const toComment = (comment: z.infer<typeof ghCommentSchema>): GitHubComment => ({
   id: comment.databaseId,
   url: comment.url,
   author: comment.author === null ? { login: "ghost", bot: false } : { login: comment.author.login, bot: comment.author.__typename === "Bot" },

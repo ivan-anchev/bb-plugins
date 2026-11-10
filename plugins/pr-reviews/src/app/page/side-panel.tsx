@@ -1,7 +1,8 @@
 // The Summary tab's side panel: the PR's Reviewers, Checks and Labels, read only, in plain sections
 // split by hairlines. A section with nothing in it is left out; with none, so is the panel.
 import { useId, useLayoutEffect, useRef, type FocusEvent, type ReactNode, type RefObject } from "react";
-import type { Label, PrDetail } from "../../contract.ts";
+import type { PrDetail } from "../../contract.ts";
+import type { Label } from "../../github/label.ts";
 import { CheckList, ChecksStatus } from "./check-list.tsx";
 import { ReviewerList } from "./reviewer-list.tsx";
 
