@@ -25,11 +25,13 @@ export async function runHostCommand(command: "gh" | "git", args: string[]): Pro
   return stdout;
 }
 
-// Node's ExecFileException, parsed rather than cast. `code` is the exit code, or "ENOENT" when
-// the command is not installed.
-const failureSchema = z.object({ code: z.unknown(), stderr: z.string().default("") });
+// Node's ExecFileException, parsed rather than cast. `code` is the exit code, or a spawn error:
+// "ENOENT" when the command is not installed, "E2BIG" when an argument is over the OS's limit.
+// `killed`: the timeout stopped it. `stdout` holds what gh read from GitHub's error response.
+const failureSchema = z.object({ code: z.unknown(), stdout: z.string().default(""), stderr: z.string().default(""), killed: z.boolean().default(false) });
+export type HostCommandFailure = z.infer<typeof failureSchema>;
 
-/** The exit code and stderr of a runHostCommand rejection. */
-export const parseHostCommandFailure = (error: unknown) => failureSchema.parse(error);
+/** The exit code, output and timeout flag of a runHostCommand rejection. */
+export const parseHostCommandFailure = (error: unknown): HostCommandFailure => failureSchema.parse(error);
 
 export const firstLine = (text: string) => text.split("\n").find((line) => line.trim() !== "");

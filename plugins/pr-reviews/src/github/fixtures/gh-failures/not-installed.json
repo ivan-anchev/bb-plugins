@@ -1,0 +1,8 @@
+{
+  "code": "ENOENT",
+  "errno": -2,
+  "syscall": "spawn gh-not-installed-pr-reviews-04",
+  "path": "gh-not-installed-pr-reviews-04",
+  "stdout": "",
+  "stderr": ""
+}

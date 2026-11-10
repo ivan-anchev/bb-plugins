@@ -45,12 +45,14 @@ test("pressing the one selected line again and letting go clears it", () => {
   assert.equal(selectionPicked(selectionPicked(null, LINE_5), null), null);
 });
 
-test("while a box is open, gestures keep its lines: the reader picks others after closing it", () => {
-  const asking: LineSelection = { range: LINES_5_9, panel: "ask" };
+test("while a box is open, a question or a comment, gestures keep its lines: the reader picks others after closing it", () => {
+  for (const panel of ["ask", "comment"] as const) {
+    const open: LineSelection = { range: LINES_5_9, panel };
 
-  assert.equal(selectionWhilePicking(asking, LINE_5), asking);
-  assert.equal(selectionPicked(asking, LINE_5), asking);
-  assert.equal(selectionPicked(asking, null), asking);
+    assert.equal(selectionWhilePicking(open, LINE_5), open);
+    assert.equal(selectionPicked(open, LINE_5), open);
+    assert.equal(selectionPicked(open, null), open);
+  }
 });
 
 test("Esc is bb's own with nothing selected, clears lines with no box open, and is the box's while one is", () => {
@@ -58,4 +60,5 @@ test("Esc is bb's own with nothing selected, clears lines with no box open, and 
   assert.equal(escapeActionOf({ range: LINE_5, panel: null }), "clear");
   assert.equal(escapeActionOf({ range: LINE_5, panel: "actions" }), "clear");
   assert.equal(escapeActionOf({ range: LINE_5, panel: "ask" }), "box");
+  assert.equal(escapeActionOf({ range: LINE_5, panel: "comment" }), "box");
 });

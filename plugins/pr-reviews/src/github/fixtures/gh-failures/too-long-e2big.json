@@ -1,0 +1,6 @@
+{
+  "code": "E2BIG",
+  "errno": -7,
+  "syscall": "spawn",
+  "message": "spawn E2BIG"
+}

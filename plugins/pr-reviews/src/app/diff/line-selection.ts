@@ -2,8 +2,11 @@
 // use-line-selection.ts holds the state and wires the diff's gestures, the keys and clicks.
 import type { SelectedLineRange } from "@pierre/diffs";
 
+/** A box an action opened under the selected lines: a question for the review thread, or a GitHub comment. */
+export type LineBox = "ask" | "comment";
+
 /** Under the selected lines: the action row, or the box one of its actions opened. */
-export type LinePanel = "actions" | "ask";
+export type LinePanel = "actions" | LineBox;
 
 /**
  * `range` is the diff's own report, kept as is so the highlight is exactly what the reader
@@ -19,9 +22,12 @@ export const selectionWhilePicking = (current: LineSelection, range: SelectedLin
 /** The selection once the reader lets go: the action row under the lines, or nothing when the gesture cleared them. */
 export const selectionPicked = (current: LineSelection, range: SelectedLineRange | null): LineSelection => next(current, range, "actions");
 
+/** Whether a box is open under the lines: it keeps them, and a stray click never discards it. */
+export const hasOpenBox = (selection: LineSelection) => selection !== null && selection.panel !== null && selection.panel !== "actions";
+
 // An open box keeps its lines: the reader picks others after closing it.
 function next(current: LineSelection, range: SelectedLineRange | null, panel: "actions" | null): LineSelection {
-  if (current?.panel === "ask") return current;
+  if (hasOpenBox(current)) return current;
   if (range === null) return null;
   if (current !== null && current.panel === panel && sameRange(current.range, range)) return current;
   return { range, panel };
@@ -36,7 +42,7 @@ export type EscapeAction = "none" | "clear" | "box";
 
 export function escapeActionOf(selection: LineSelection): EscapeAction {
   if (selection === null) return "none";
-  return selection.panel === "ask" ? "box" : "clear";
+  return hasOpenBox(selection) ? "box" : "clear";
 }
 
 // The ranges Pierre reports are built one way (`endSide` only when it differs from `side`), so

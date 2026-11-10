@@ -2,7 +2,7 @@
 // outside the diff.
 import { useCallback, useEffect, useMemo, useState, type RefObject } from "react";
 import type { SelectedLineRange } from "@pierre/diffs";
-import { escapeActionOf, selectionPicked, selectionWhilePicking, type EscapeAction, type LineSelection } from "./line-selection.ts";
+import { escapeActionOf, hasOpenBox, selectionPicked, selectionWhilePicking, type EscapeAction, type LineBox, type LineSelection } from "./line-selection.ts";
 
 /** What the diff reports as the reader picks lines. Stable: it is part of the diff's memoised options. */
 export type LineGestures = { picking(range: SelectedLineRange | null): void; picked(range: SelectedLineRange | null): void };
@@ -26,12 +26,12 @@ export function useLineSelection(root: RefObject<HTMLDivElement | null>) {
   const forget = useCallback(() => setSelection(null), []);
 
   useEscape(escapeActionOf(selection), clear);
-  useClickAway(root, selection !== null && selection.panel !== "ask", forget);
+  useClickAway(root, selection !== null && !hasOpenBox(selection), forget);
 
   return {
     selection,
     gestures,
-    openAsk: () => setSelection((current) => current && { ...current, panel: "ask" }),
+    openBox: (box: LineBox) => setSelection((current) => current && { ...current, panel: box }),
     closeBox: () => setSelection((current) => current && { ...current, panel: "actions" }),
     clear,
   };

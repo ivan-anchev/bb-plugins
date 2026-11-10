@@ -2,7 +2,7 @@
 // before and after when behaviour changes, the findings, what the guide leaves out (and the tests
 // and mocks the view options hide), and who wrote it.
 import { useState, type ReactNode } from "react";
-import type { GuideRecord } from "../../contract.ts";
+import { shortSha, type GuideRecord } from "../../contract.ts";
 import { fileOf, type DiffFile } from "../../diff/diff-schema.ts";
 import type { Finding, Guide, HiddenItem } from "../../guide/guide-schema.ts";
 import { stepNumberOfFinding, type VisibleFinding, type VisibleStep } from "../../guide/walkthrough.ts";
@@ -211,7 +211,7 @@ function Byline({ record }: { record: GuideRecord }) {
   const submittedAt = new Date(record.submittedAt).toISOString();
   return (
     <p className="mt-1.5 text-xs text-subtle-foreground">
-      Written by {record.model ?? "the review thread"} for <code className="font-mono">{record.key.headSha.slice(0, 7)}</code>,{" "}
+      Written by {record.model ?? "the review thread"} for <code className="font-mono">{shortSha(record.key.headSha)}</code>,{" "}
       <time dateTime={submittedAt} title={new Date(record.submittedAt).toLocaleString()}>
         {timeAgo(submittedAt, Date.now())}
       </time>
