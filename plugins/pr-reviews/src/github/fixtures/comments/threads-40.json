@@ -1,0 +1,124 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "reviewThreads": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0xMFQxMDowNDoyNFrOtaVPnQ=="
+          },
+          "nodes": [
+            {
+              "id": "PRRT_kwDOVjmb-s61pTAP",
+              "isResolved": false,
+              "isOutdated": false,
+              "path": "plugins/generative-ui/src/agent/instructions.ts",
+              "subjectType": "LINE",
+              "line": 12,
+              "startLine": 5,
+              "diffSide": "RIGHT",
+              "startDiffSide": "RIGHT",
+              "originalLine": 12,
+              "originalStartLine": 5,
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0xMFQxMDowMjo1OVrPAAAAAQ2fT-w="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4523511788,
+                    "url": "https://github.com/ivan-anchev/bb-plugins/pull/40#discussion_r4523511788",
+                    "body": "`test`\n\n```ts\nfunction test() {\n   const blabla = 1;\n}\n```",
+                    "createdAt": "2026-11-10T10:02:59Z",
+                    "author": {
+                      "login": "ivan-anchev"
+                    },
+                    "commit": {
+                      "oid": "ff2bc97857da72054e99587086ddf022d0512df7"
+                    },
+                    "originalCommit": {
+                      "oid": "ff2bc97857da72054e99587086ddf022d0512df7"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_kwDOVjmb-s61pTsB",
+              "isResolved": false,
+              "isOutdated": false,
+              "path": "plugins/generative-ui/src/library.ts",
+              "subjectType": "LINE",
+              "line": 13,
+              "startLine": 9,
+              "diffSide": "RIGHT",
+              "startDiffSide": "RIGHT",
+              "originalLine": 13,
+              "originalStartLine": 9,
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0xMFQxMDowMzoyOFrPAAAAAQ2fYcY="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4523516358,
+                    "url": "https://github.com/ivan-anchev/bb-plugins/pull/40#discussion_r4523516358",
+                    "body": "test again",
+                    "createdAt": "2026-11-10T10:03:28Z",
+                    "author": {
+                      "login": "ivan-anchev"
+                    },
+                    "commit": {
+                      "oid": "ff2bc97857da72054e99587086ddf022d0512df7"
+                    },
+                    "originalCommit": {
+                      "oid": "ff2bc97857da72054e99587086ddf022d0512df7"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_kwDOVjmb-s61pU-d",
+              "isResolved": false,
+              "isOutdated": false,
+              "path": "plugins/generative-ui/src/app/use-block-actions.ts",
+              "subjectType": "LINE",
+              "line": 19,
+              "startLine": 19,
+              "diffSide": "RIGHT",
+              "startDiffSide": null,
+              "originalLine": 19,
+              "originalStartLine": null,
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0xMFQxMDowNDoyNFrPAAAAAQ2fg_A="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4523525104,
+                    "url": "https://github.com/ivan-anchev/bb-plugins/pull/40#discussion_r4523525104",
+                    "body": "**Failed send still counts as sent**\n\n`lastAnswer` is set before `send` resolves. If the send fails and the user clicks again within 1s of that click, the retry is silently dropped. Set it only after the send succeeds, or clear it in `.catch`.",
+                    "createdAt": "2026-11-10T10:04:24Z",
+                    "author": {
+                      "login": "ivan-anchev"
+                    },
+                    "commit": {
+                      "oid": "ff2bc97857da72054e99587086ddf022d0512df7"
+                    },
+                    "originalCommit": {
+                      "oid": "ff2bc97857da72054e99587086ddf022d0512df7"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

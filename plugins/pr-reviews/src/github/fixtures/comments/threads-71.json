@@ -1,0 +1,160 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "reviewThreads": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0xMFQwODozMjo1OFrOtZ086w=="
+          },
+          "nodes": [
+            {
+              "id": "PRRT_kwDOVjmb-s61nBuz",
+              "isResolved": false,
+              "isOutdated": false,
+              "path": "plugins/pr-reviews/src/github/gh.ts",
+              "subjectType": "LINE",
+              "line": 13,
+              "startLine": 12,
+              "diffSide": "RIGHT",
+              "startDiffSide": "LEFT",
+              "originalLine": 13,
+              "originalStartLine": 12,
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0xMFQwODoyMDoyN1rPAAAAAQ2Qw1A="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4522558288,
+                    "url": "https://github.com/ivan-anchev/bb-plugins/pull/71#discussion_r4522558288",
+                    "body": "Why halve it? PRs past the **100th** drop out of the sidebar, and `Load more` isn't in this PR.\n\n- keep `200` until paging lands, or\n- page with `--limit` + `gh api --paginate`",
+                    "createdAt": "2026-11-10T08:20:27Z",
+                    "author": {
+                      "login": "ivan-anchev"
+                    },
+                    "commit": {
+                      "oid": "293f1268d74d8247f42a7103740395b8446f1fd9"
+                    },
+                    "originalCommit": {
+                      "oid": "055a799ce211f989381a022b963c4c46002da9a0"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_kwDOVjmb-s61nEVU",
+              "isResolved": false,
+              "isOutdated": true,
+              "path": "plugins/pr-reviews/src/github/gh.ts",
+              "subjectType": "LINE",
+              "line": null,
+              "startLine": null,
+              "diffSide": "RIGHT",
+              "startDiffSide": "RIGHT",
+              "originalLine": 13,
+              "originalStartLine": 12,
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0xMFQwODoyMjo0OFrPAAAAAQ2RB1A="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4522575696,
+                    "url": "https://github.com/ivan-anchev/bb-plugins/pull/71#discussion_r4522575696",
+                    "body": "Why halve it? PRs past the **100th** drop out of the sidebar, and `Load more` isn't in this PR.\n\n- keep `200` until paging lands, or\n- page with `--limit` + `gh api --paginate`",
+                    "createdAt": "2026-11-10T08:22:48Z",
+                    "author": {
+                      "login": "ivan-anchev"
+                    },
+                    "commit": {
+                      "oid": "055a799ce211f989381a022b963c4c46002da9a0"
+                    },
+                    "originalCommit": {
+                      "oid": "055a799ce211f989381a022b963c4c46002da9a0"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_kwDOVjmb-s61nMic",
+              "isResolved": false,
+              "isOutdated": false,
+              "path": "plugins/pr-reviews/src/github/gh.ts",
+              "subjectType": "FILE",
+              "line": 1,
+              "startLine": null,
+              "diffSide": "RIGHT",
+              "startDiffSide": null,
+              "originalLine": 1,
+              "originalStartLine": null,
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0xMFQwODoyNzoxMFrPAAAAAQ2RzBM="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4522626067,
+                    "url": "https://github.com/ivan-anchev/bb-plugins/pull/71#discussion_r4522626067",
+                    "body": "`plugins/pr-reviews/src/github/gh.ts`, lines 13\u201372 (new), at 055a799:\n```diff\n+const LIST_LIMIT = 100;\n const SUMMARY_FIELDS = [\"number\", \"title\", \"author\", \"updatedAt\", \"headRefOid\"];\n const DETAIL_FIELDS = [...SUMMARY_FIELDS, \"body\", \"url\", \"headRefName\", \"baseRefName\", \"state\", \"isDraft\", \"commits\", \"additions\", \"deletions\", \"statusCheckRollup\", \"reviewRequests\", \"latestReviews\", \"labels\"];\n \n const ghSummarySchema = z.object({\n   number: z.number(),\n   title: z.string(),\n   author: z.object({ login: z.string() }),\n   updatedAt: z.string(),\n   headRefOid: z.string(),\n });\n \n const toSummary = (pr: z.infer<typeof ghSummarySchema>): PrSummary => ({\n   number: pr.number,\n   title: pr.title,\n   author: pr.author.login,\n   updatedAt: pr.updatedAt,\n   headSha: pr.headRefOid,\n });\n \n const ghDetailSchema = ghSummarySchema.extend({\n   body: z.string(),\n   url: z.string(),\n   headRefName: z.string(),\n   baseRefName: z.string(),\n   state: z.enum([\"OPEN\", \"CLOSED\", \"MERGED\"]),\n   isDraft: z.boolean(),\n   commits: z.array(z.object({ oid: z.string() })),\n   additions: z.number(),\n   deletions: z.number(),\n   statusCheckRollup: statusCheckRollupSchema,\n   reviewRequests: reviewRequestsSchema,\n   latestReviews: latestReviewsSchema,\n   // gh gives a label's color as hex without the `#`.\n   labels: z.array(z.object({ name: z.string(), color: z.string() }).transform(({ name, color }) => ({ name, color: `#${color}` }))),\n });\n \n const toDetail = (pr: z.infer<typeof ghDetailSchema>): PrDetail => ({\n   ...toSummary(pr),\n   body: pr.body,\n   url: pr.url,\n   headRefName: pr.headRefName,\n   baseRefName: pr.baseRefName,\n   // A closed PR can still be marked draft; it reads as closed, as on GitHub.\n   state: pr.state === \"OPEN\" && pr.isDraft ? \"DRAFT\" : pr.state,\n   commits: pr.commits.map((commit) => commit.oid),\n   additions: pr.additions,\n   deletions: pr.deletions,\n   checks: pr.statusCheckRollup,\n   reviewers: toReviewers(pr.reviewRequests, pr.latestReviews),\n   labels: pr.labels,\n });\n \n /** `gh pr view --json` output for DETAIL_FIELDS, as the canonical PR. */\n export const parsePrDetail = (json: unknown): PrDetail => toDetail(ghDetailSchema.parse(json));\n \n export async function listOpenPrs(repo: Repo): Promise<PrSummary[]> {\n   const json = await runGh([\"pr\", \"list\", \"-R\", repo, \"--state\", \"open\", \"--limit\", String(LIST_LIMIT), \"--json\", SUMMARY_FIELDS.join(\",\")]);\n-  return z.array(ghSummarySchema).parse(JSON.parse(json)).map(toSummary);\n+  const summaries = z.array(ghSummarySchema).parse(JSON.parse(json));\n+  return summaries.map(toSummary);\n```\n\nA file comment across both hunks, from the **issue 06** live test.",
+                    "createdAt": "2026-11-10T08:27:10Z",
+                    "author": {
+                      "login": "ivan-anchev"
+                    },
+                    "commit": {
+                      "oid": "293f1268d74d8247f42a7103740395b8446f1fd9"
+                    },
+                    "originalCommit": {
+                      "oid": "055a799ce211f989381a022b963c4c46002da9a0"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_kwDOVjmb-s61nNTF",
+              "isResolved": false,
+              "isOutdated": false,
+              "path": "plugins/pr-reviews/src/github/gh.ts",
+              "subjectType": "LINE",
+              "line": 12,
+              "startLine": 12,
+              "diffSide": "LEFT",
+              "startDiffSide": null,
+              "originalLine": 12,
+              "originalStartLine": null,
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0xMFQwODoyNzo0M1rPAAAAAQ2R4Es="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4522631243,
+                    "url": "https://github.com/ivan-anchev/bb-plugins/pull/71#discussion_r4522631243",
+                    "body": "**The old page size goes, and nothing pages in the rest**\n\nHalving `LIST_LIMIT` hides every PR past the 100th. `listOpenPrs` has no paging and the comment's **Load more** doesn't exist yet, so a repo with 140 open PRs silently loses 40 from the sidebar.\n\nKeep `200`, or add the paging in this PR.",
+                    "createdAt": "2026-11-10T08:27:43Z",
+                    "author": {
+                      "login": "ivan-anchev"
+                    },
+                    "commit": {
+                      "oid": "293f1268d74d8247f42a7103740395b8446f1fd9"
+                    },
+                    "originalCommit": {
+                      "oid": "055a799ce211f989381a022b963c4c46002da9a0"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -7,8 +7,9 @@ import { fileOf, type DiffFile } from "../../diff/diff-schema.ts";
 import type { GuideStep } from "../../guide/guide-schema.ts";
 import { stepFilesOf } from "../../guide/step-files.ts";
 import { findingsOn, type VisibleFinding } from "../../guide/walkthrough.ts";
-import type { PrHeadTarget } from "../queries.ts";
+import { useComments, type PrHeadTarget } from "../queries.ts";
 import { Prose } from "../ui/prose.tsx";
+import { ReadError } from "../ui/read-error.tsx";
 import { HunkBlock } from "./hunk-block.tsx";
 import { PageTitle, PROSE } from "./page-text.tsx";
 import { StepFileList } from "./step-file-list.tsx";
@@ -36,6 +37,8 @@ export function StepPage({ place, total, title, files, findings, head }: StepPag
   // why memoised: each hunk's diff is handed its findings as line annotations, and new ones make it draw again.
   const findingsByHunk = useMemo(() => step.hunks.map((entry) => findingsOn(findings, entry)), [step, findings]);
   const firstHunks = useRef(new Map<string, HTMLElement>());
+  // Each hunk's diff reads the same entry; a failed read shows once, above them.
+  const comments = useComments({ projectId: head.projectId, number: head.number });
   return (
     <article className="grid max-w-[880px] grid-cols-[minmax(0,1fr)] gap-x-10 px-7 pb-10 @min-[900px]:max-w-[1440px] @min-[900px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
       <div className="grid grid-cols-[minmax(0,1fr)] content-start gap-[18px] pt-[18px] @min-[900px]:sticky @min-[900px]:top-0 @min-[900px]:max-h-[100cqh] @min-[900px]:self-start @min-[900px]:overflow-y-auto @min-[900px]:pb-6">
@@ -49,6 +52,7 @@ export function StepPage({ place, total, title, files, findings, head }: StepPag
         <StepFileList files={stepFilesOf(step, files)} onJump={(path) => jumpTo(firstHunks.current.get(path)!)} />
       </div>
       <div className="grid content-start gap-[18px] pt-[18px]">
+        <ReadError read={comments} what="the PR's comments" />
         {step.hunks.map((entry, i) => (
           <HunkBlock
             key={`${entry.file}\u0000${entry.hunk}`}
@@ -57,6 +61,7 @@ export function StepPage({ place, total, title, files, findings, head }: StepPag
             entry={entry}
             findings={findingsByHunk[i]}
             head={head}
+            withFileThreads={isFirstOfFile(step, i)}
           />
         ))}
       </div>

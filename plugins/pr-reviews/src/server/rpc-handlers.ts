@@ -1,12 +1,12 @@
 // RPC handlers: resolve the project to its GitHub repo, read GitHub through gh with each PR's
-// review state, read stored guides and a PR's live diff, remember the chosen project, hand
-// review actions to `reviews`, and post the review comment a reader chose to. A thin shell; the
-// logic lives in the modules it calls.
+// review state, read stored guides, a PR's live diff and its comments, remember the chosen
+// project, hand review actions to `reviews`, and post the comments a reader chose to. A thin shell;
+// the logic lives in the modules it calls.
 import { experimental_PluginRpcRefusal as Refusal, type BbPluginApi, type ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { PROJECTS_TAG, prReviewsContract, type GitHubProject, type UnreadableProject } from "../contract.ts";
+import { commentsTag, PROJECTS_TAG, prReviewsContract, type GitHubProject, type UnreadableProject } from "../contract.ts";
 import { parsePrDiff } from "../diff/parse-pr-diff.ts";
-import { listOpenPrs, postComment, readFileAt, snapshotPrDiff, type PrDiffSnapshot } from "../github/gh.ts";
+import { listOpenPrs, postComment, postConversationComment, postReply, readFileAt, readPrComments, snapshotPrDiff, type PrDiffSnapshot } from "../github/gh.ts";
 import { projectRepo, type ProjectRepo } from "../github/project-repo.ts";
 import type { Repo } from "../github/repo.ts";
 import type { ReviewReader } from "./review-reader.ts";
@@ -20,7 +20,14 @@ const NO_REMOTE: ProjectRepo = { kind: "none" };
 
 type Handlers = ExperimentalPluginRpcHandlersWithContext<typeof prReviewsContract>;
 
-type Deps = { bb: BbPluginApi; store: Pick<Store, "guide" | "snapshotFiles">; reader: ReviewReader; reviews: Reviews };
+// The parts of bb the handlers use, down to the fields they read.
+type Bb = {
+  sdk: { projects: { list(): Promise<readonly ({ id: string; name: string } & Parameters<typeof projectRepo>[0])[]> } };
+  rpc: Pick<BbPluginApi["rpc"], "experimental_invalidate">;
+  storage: { kv: Pick<BbPluginApi["storage"]["kv"], "get" | "set"> };
+};
+
+type Deps = { bb: Bb; store: Pick<Store, "guide" | "snapshotFiles">; reader: ReviewReader; reviews: Reviews };
 
 export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handlers {
   // One project's unreadable remote is reported beside the others, never failing the read.
@@ -48,6 +55,13 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
 
   async function prRef({ projectId, number }: { projectId: string; number: number }): Promise<PrRef> {
     return { projectId, repo: await repoOf(projectId), number };
+  }
+
+  // The PR's comments re-read once GitHub has the new one, so it shows in place.
+  async function posted(target: { projectId: string; number: number }, post: (repo: Repo) => Promise<{ url: string }>): Promise<{ url: string }> {
+    const result = await post(await repoOf(target.projectId));
+    bb.rpc.experimental_invalidate([commentsTag(target)]);
+    return result;
   }
 
   async function rememberedProjectId(): Promise<string | undefined> {
@@ -118,8 +132,14 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
       return {};
     },
 
+    comments: async ({ projectId, number }) => readPrComments(await repoOf(projectId), number),
+
     // The repo is the project's, read here: the app names only the project and the PR.
-    postComment: async ({ projectId, number, request }) => postComment(await repoOf(projectId), number, request),
+    postComment: ({ request, ...target }) => posted(target, (repo) => postComment(repo, target.number, request)),
+
+    replyToThread: ({ commentId, body, ...target }) => posted(target, (repo) => postReply(repo, target.number, commentId, body)),
+
+    postConversationComment: ({ body, ...target }) => posted(target, (repo) => postConversationComment(repo, target.number, body)),
   };
 }
 

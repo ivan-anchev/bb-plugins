@@ -24,16 +24,18 @@ export type CodeQuote = z.infer<typeof codeQuoteSchema>;
 /** The most characters GitHub takes in a comment's body. */
 export const GITHUB_BODY_LIMIT = 65_536;
 
+/** The text of any comment the plugin posts: a review comment, a reply, a conversation comment. */
+export const commentBodySchema = z.string().min(1).max(GITHUB_BODY_LIMIT);
+
 /**
  * A review comment exactly as GitHub is asked to post it, at the commit the reader viewed. A line
  * comment's `end` is GitHub's `line`/`side`; `start` is null for one line, which GitHub takes
  * without `start_line`. A file comment is on the whole file and quotes its lines in `body`. The
  * preview shows this, the RPC carries it, and the server sends it field for field.
  */
-const bodySchema = z.string().min(1).max(GITHUB_BODY_LIMIT);
 export const commentRequestSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("line"), commit: z.string(), path: z.string(), start: lineRefSchema.nullable(), end: lineRefSchema, body: bodySchema }),
-  z.object({ kind: z.literal("file"), commit: z.string(), path: z.string(), body: bodySchema }),
+  z.object({ kind: z.literal("line"), commit: z.string(), path: z.string(), start: lineRefSchema.nullable(), end: lineRefSchema, body: commentBodySchema }),
+  z.object({ kind: z.literal("file"), commit: z.string(), path: z.string(), body: commentBodySchema }),
 ]);
 export type CommentRequest = z.infer<typeof commentRequestSchema>;
 

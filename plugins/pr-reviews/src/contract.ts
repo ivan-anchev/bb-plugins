@@ -2,7 +2,8 @@
 // Shared by server.ts and app.tsx: pure zod, no SDK runtime beyond defineRpcContract.
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { codeQuoteSchema, commentRequestSchema } from "./comments/comment-schema.ts";
+import { codeQuoteSchema, commentBodySchema, commentRequestSchema } from "./comments/comment-schema.ts";
+import { prCommentsSchema } from "./comments/thread-schema.ts";
 import { diffFileSchema } from "./diff/diff-schema.ts";
 import { guideSchema } from "./guide/guide-schema.ts";
 import { repoSchema, type Repo } from "./github/repo.ts";
@@ -159,9 +160,12 @@ const fileAtCommitSchema = z.object({ projectId: z.string(), sha: z.string(), pa
 export type FileAtCommit = z.infer<typeof fileAtCommitSchema>;
 
 const empty = z.object({});
+/** A comment the plugin posted: its page on GitHub. */
+const postedSchema = z.object({ url: z.string() });
 export const PROJECTS_TAG = "projects";
 export const repoTag = (repo: Repo) => `repo:${repo}`;
 export const guideTag = ({ repo, number, headSha }: PrHeadKey) => `guide:${repo}#${number}@${headSha}`;
+export const commentsTag = ({ projectId, number }: z.infer<typeof prRefSchema>) => `comments:${projectId}#${number}`;
 
 export const prReviewsContract = defineRpcContract({
   projects: {
@@ -214,8 +218,14 @@ export const prReviewsContract = defineRpcContract({
     output: empty,
   },
   /**
-   * Posts one review comment to the project's PR exactly as requested, on the reader's click.
-   * Resolves to the comment's page on GitHub. Untagged: nothing the plugin reads shows comments.
+   * Every comment GitHub has on the PR: its review threads and its conversation. Tagged per PR:
+   * each post below re-reads it, so the comment shows in place.
    */
-  postComment: { input: prRefSchema.extend({ request: commentRequestSchema }), output: z.object({ url: z.string() }) },
+  comments: { input: prRefSchema, output: prCommentsSchema, tags: (input) => [commentsTag(input)] },
+  /** Posts one review comment to the project's PR exactly as requested, on the reader's click. Resolves to the comment's page on GitHub. */
+  postComment: { input: prRefSchema.extend({ request: commentRequestSchema }), output: postedSchema },
+  /** Posts a reply in the review thread that `commentId`, the thread's first comment, opens. */
+  replyToThread: { input: prRefSchema.extend({ commentId: z.number().int(), body: commentBodySchema }), output: postedSchema },
+  /** Posts a comment on the PR's conversation, on no file: what a quote reply to a conversation comment posts. */
+  postConversationComment: { input: prRefSchema.extend({ body: commentBodySchema }), output: postedSchema },
 });

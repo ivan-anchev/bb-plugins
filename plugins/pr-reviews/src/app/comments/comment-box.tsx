@@ -1,15 +1,17 @@
-// A diff's one comment box, under its selected lines: write in markdown, preview it, then ask the
-// review thread about the lines or comment on them on GitHub. The draft is the diff's, so it
-// follows the box from lines to lines. Once the box has done its job it shows the outcome in the
-// same shell, where the text was.
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from "react";
+// A diff's one comment box, under its selected lines or in one of its review threads: write in
+// markdown, preview it, then ask the review thread about the lines, comment on them on GitHub, or
+// reply in the thread. The draft is the diff's, so it follows the box from place to place. Once the
+// box has done its job it shows the outcome in the same shell, where the text was.
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { experimental_Icon as Icon, experimental_PluginRpcCallError as RpcCallError } from "@get-bb/plugin-sdk/app";
 import { reviewThreadOf, type PrDetail, type ReviewState } from "../../contract.ts";
+import type { CommentRequest } from "../../comments/comment-schema.ts";
 import { quoteOf, type LineSpan } from "../../comments/line-span.ts";
-import { checkComment } from "../../comments/plan-comment.ts";
+import { checkComment, checkReply, type BlockedComment, type ReplyRequest } from "../../comments/plan-comment.ts";
+import type { ReviewThread } from "../../comments/thread-schema.ts";
 import { isBlank, type BoxOutcome, type LineBox } from "../diff/line-selection.ts";
 import { useLifetime } from "../lifetime.ts";
-import { useAskAboutFinding, useAskAboutLines, usePostComment, usePullRequest, type PrHeadTarget } from "../queries.ts";
+import { useAskAboutFinding, useAskAboutLines, usePostComment, usePullRequest, useReplyToThread, type PrHeadTarget } from "../queries.ts";
 import { Button } from "../ui/button.tsx";
 import { useHoldEscape } from "../ui/hold-escape.ts";
 import { IconButton } from "../ui/icon-button.tsx";
@@ -20,9 +22,11 @@ import { BOX_CLASS, DoneBox, SentNote } from "./done-box.tsx";
 import { markdownShortcut } from "./markdown-keys.ts";
 import { useWriteTabs, WriteTabs } from "./write-tabs.tsx";
 
+/** What the box is about: the lines under it, at the commit the reader views, or the review thread it replies in. */
+export type BoxSubject = { kind: "lines"; span: LineSpan; finding: number | null } | { kind: "reply"; thread: ReviewThread };
+
 type CommentBoxProps = {
-  /** The lines under the box, at the commit the reader views. */
-  span: LineSpan;
+  subject: BoxSubject;
   head: PrHeadTarget;
   box: LineBox;
   draft: string;
@@ -64,10 +68,10 @@ type ComposerProps = Omit<CommentBoxProps, "onSettled"> & {
   review: ReviewState;
 };
 
-// Both actions take the draft as it is, markdown included. A failure stays beside the kept draft
+// Every action takes the draft as it is, markdown included. A failure stays beside the kept draft
 // until the draft changes. A reply that lands after the box has moved or closed changes nothing:
 // the box is no longer the one that sent it.
-function Composer({ span, head, box, draft, sent, onDraft, onSettled, onClose, pr, review }: ComposerProps) {
+function Composer({ subject, head, draft, sent, onDraft, onSettled, onClose, pr, review }: ComposerProps) {
   const tabs = useWriteTabs();
   const [sending, setSending] = useState<Action | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
@@ -77,18 +81,22 @@ function Composer({ span, head, box, draft, sent, onDraft, onSettled, onClose, p
   const life = useLifetime();
   const askLines = useAskAboutLines();
   const askFinding = useAskAboutFinding();
-  const post = usePostComment();
+  const postComment = usePostComment();
+  const reply = useReplyToThread();
   // why a latch beside `sending`: the state arrives with the next render, so a quick second click
   // would send twice.
   const latch = useRef(false);
   const ids = { text: useId(), error: useId(), noThread: useId() };
 
-  const check = useMemo(() => checkComment(span, pr, draft), [span, pr, draft]);
-  const { request, note } = "blocked" in check ? { request: null, note: null } : check;
+  const check = postOf(subject, pr, draft);
+  const post = "blocked" in check ? null : check;
+  // Only lines can be asked about; a reply has no Ask.
+  const asks = subject.kind === "lines";
   const hasThread = reviewThreadOf(review) !== null;
-  const canAsk = hasThread && !isBlank(draft) && sending === null;
-  const canComment = request !== null && !isBlank(draft) && sending === null;
+  const canAsk = asks && hasThread && !isBlank(draft) && sending === null;
+  const canComment = post !== null && !isBlank(draft) && sending === null;
   const problems = problemsOf("blocked" in check ? check.blocked : null, failure, draft);
+  const words = WORDS[subject.kind];
 
   const run = (action: Action, send: () => Promise<BoxOutcome>) => {
     if (latch.current) return;
@@ -109,21 +117,21 @@ function Composer({ span, head, box, draft, sent, onDraft, onSettled, onClose, p
       )
       .finally(() => (latch.current = false));
   };
+  const target = { projectId: head.projectId, number: head.number };
   const ask = () => {
     if (!canAsk) return;
-    const target = { projectId: head.projectId, number: head.number };
     // A box a finding's button opened, still on its line, asks about the finding, so the thread knows which.
     run("ask", async () => {
-      if (box.finding === null) await askLines.mutate({ ...target, quote: quoteOf(span), question: draft });
-      else await askFinding.mutate({ ...target, headSha: head.headSha, findingIndex: box.finding, question: draft });
+      if (subject.finding === null) await askLines.mutate({ ...target, quote: quoteOf(subject.span), question: draft });
+      else await askFinding.mutate({ ...target, headSha: head.headSha, findingIndex: subject.finding, question: draft });
       return { kind: "asked" };
     });
   };
   const comment = () => {
     if (!canComment) return;
     run("comment", async () => {
-      const { url } = await post.mutate({ projectId: head.projectId, number: head.number, request });
-      return { kind: "commented", url, body: request.body };
+      const { url } = post.kind === "comment" ? await postComment.mutate({ ...target, request: post.request }) : await reply.mutate({ ...target, ...post.request });
+      return { kind: "commented", url };
     });
   };
 
@@ -162,7 +170,7 @@ function Composer({ span, head, box, draft, sent, onDraft, onSettled, onClose, p
       </div>
       <div hidden={tabs.tab !== "write"} {...tabs.panelProps("write")}>
         <label htmlFor={ids.text} className="sr-only">
-          Comment or question about {span.rows.length === 1 ? "this line" : "these lines"}
+          {labelOf(subject)}
         </label>
         <textarea
           ref={textarea}
@@ -170,7 +178,7 @@ function Composer({ span, head, box, draft, sent, onDraft, onSettled, onClose, p
           rows={3}
           value={draft}
           onChange={(event) => onDraft(event.target.value)}
-          placeholder="Ask about these lines, or leave a comment"
+          placeholder={words.placeholder}
           aria-describedby={problems.length === 0 ? undefined : ids.error}
           className={`${TEXT_CLASS} max-h-[330px] resize-none border-0 bg-transparent placeholder:text-subtle-foreground`}
         />
@@ -181,7 +189,7 @@ function Composer({ span, head, box, draft, sent, onDraft, onSettled, onClose, p
           {isBlank(draft) ? <p className="text-subtle-foreground">Nothing to preview</p> : <Prose text={draft} />}
         </div>
       )}
-      {note !== null && <p className="px-[18px] pt-1 text-xs text-muted-foreground">{note}</p>}
+      {post !== null && post.note !== null && <p className="px-[18px] pt-1 text-xs text-muted-foreground">{post.note}</p>}
       {sent !== null && <SentNote outcome={sent} />}
       <div className="flex min-h-11 items-center gap-1.5 pt-1.5 pr-2 pb-2 pl-[18px]">
         {problems.length > 0 ? (
@@ -194,6 +202,7 @@ function Composer({ span, head, box, draft, sent, onDraft, onSettled, onClose, p
             ))}
           </div>
         ) : (
+          asks &&
           !hasThread && (
             <p id={ids.noThread} className="mr-auto text-xs text-subtle-foreground">
               Start a review first
@@ -202,14 +211,16 @@ function Composer({ span, head, box, draft, sent, onDraft, onSettled, onClose, p
         )}
         <div className="ml-auto flex shrink-0 gap-1">
           {/* why aria-disabled, not disabled: the buttons stay focusable, and Ask's reason is read with it. */}
-          <Button variant="ghost" size="small" aria-disabled={!canAsk} aria-describedby={hasThread || problems.length > 0 ? undefined : ids.noThread} onClick={ask}>
-            {sending === "ask" ? "Sending…" : "Ask about this"}
-          </Button>
-          <Tooltip content={`Comment on GitHub (${COMMENT_KEYS})`} placement="top-end">
+          {asks && (
+            <Button variant="ghost" size="small" aria-disabled={!canAsk} aria-describedby={hasThread || problems.length > 0 ? undefined : ids.noThread} onClick={ask}>
+              {sending === "ask" ? "Sending…" : "Ask about this"}
+            </Button>
+          )}
+          <Tooltip content={`${words.post} on GitHub (${COMMENT_KEYS})`} placement="top-end">
             {(describedBy) => (
               <Button variant="primary" size="small" aria-disabled={!canComment} aria-describedby={describedBy} onClick={comment}>
                 <Icon name="GithubLogo" className="size-3.5" aria-hidden />
-                {sending === "comment" ? "Commenting…" : "Comment"}
+                {sending === "comment" ? words.posting : words.post}
               </Button>
             )}
           </Tooltip>
@@ -217,6 +228,28 @@ function Composer({ span, head, box, draft, sent, onDraft, onSettled, onClose, p
       </div>
     </div>
   );
+}
+
+/** What the primary button posts: a review comment on the lines, or a reply in the thread. */
+type Post = { kind: "comment"; request: CommentRequest; note: string | null } | { kind: "reply"; request: ReplyRequest; note: null };
+
+function postOf(subject: BoxSubject, pr: PrDetail, draft: string): Post | BlockedComment {
+  if (subject.kind === "reply") {
+    const check = checkReply(subject.thread, draft);
+    return "blocked" in check ? check : { kind: "reply", request: check.request, note: null };
+  }
+  const check = checkComment(subject.span, pr, draft);
+  return "blocked" in check ? check : { kind: "comment", ...check };
+}
+
+const WORDS = {
+  lines: { placeholder: "Ask about these lines, or leave a comment", post: "Comment", posting: "Commenting…" },
+  reply: { placeholder: "Reply", post: "Reply", posting: "Replying…" },
+} as const satisfies Record<BoxSubject["kind"], { placeholder: string; post: string; posting: string }>;
+
+function labelOf(subject: BoxSubject): string {
+  if (subject.kind === "reply") return `Reply to ${subject.thread.comments[0].author}`;
+  return `Comment or question about ${subject.span.rows.length === 1 ? "this line" : "these lines"}`;
 }
 
 /** Write and Preview share type, padding and minimum height, so switching moves nothing. */

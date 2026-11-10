@@ -1,9 +1,10 @@
 PR Reviews adds a **PR Reviews** app to bb's left rail. It lists a GitHub
 project's open pull requests and opens each one on a page with its whole diff
 in a file tree and a guided review, written by a review thread, that walks you
-through the change step by step. It posts to GitHub only the review comments
-you write or pick from the guide, on your click; review threads never post to
-GitHub.
+through the change step by step. Every diff shows the PR's GitHub review
+threads where they belong. It posts to GitHub only the review comments and
+replies you write or pick from the guide, on your click; review threads never
+post to GitHub.
 
 ## What you get
 
@@ -59,6 +60,12 @@ GitHub.
   lines and links to it; nothing is posted before that click. Lines GitHub
   can't anchor to become a file comment quoting them, and the box says so, as
   it does for a comment on an older commit than the PR's latest.
+- **GitHub's comments in place**: each review thread shows under its lines in
+  the Changes tab and in the guide step that holds them, with each comment's
+  author, avatar, time and markdown. File comments, outdated threads and
+  threads on another commit show at their file, labelled; resolved ones are
+  folded. Reply, or Quote on a comment, opens the same comment box in the
+  thread; a comment or reply you post shows in place.
 - **New commits**: when a PR moves past its guide, the row reads New commits
   and the guide stays readable under "N new commits since this guide was
   written". Update guide asks the same review thread to read only the new
@@ -72,7 +79,7 @@ GitHub.
 
 PR Reviews reads pull requests with the GitHub CLI (`gh`) on the machine that
 runs bb, so `gh` must be installed and signed in there. It writes to GitHub
-only when you click Comment in the comment box, as your `gh` account; it never approves, requests changes or edits anything. Review threads
+only when you click Comment or Reply in the comment box, as your `gh` account; it never approves, requests changes or edits anything. Review threads
 never reach GitHub at all: before one starts, PR Reviews fetches the PR's commits
 into the project's repository with `git fetch`, and the thread reads them
 there. So Start review needs the project's default checkout on the machine

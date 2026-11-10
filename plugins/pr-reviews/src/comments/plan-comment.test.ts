@@ -6,7 +6,8 @@ import { hunkIdOf, type DiffFile } from "../diff/diff-schema.ts";
 import type { Finding } from "../guide/guide-schema.ts";
 import { GITHUB_BODY_LIMIT, type LineRef } from "./comment-schema.ts";
 import { spanBetween } from "./line-span.ts";
-import { checkComment, findingCommentText, planComment } from "./plan-comment.ts";
+import { checkComment, checkReply, findingCommentText, planComment } from "./plan-comment.ts";
+import type { ReviewThread } from "./thread-schema.ts";
 
 const PATH = "src/a.ts";
 const COMMIT = "3f9c2ab0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6";
@@ -163,4 +164,24 @@ test("a body over GitHub's limit blocks the comment and says by how much, the qu
   assert.ok(!("blocked" in atLimit));
   assert.ok("blocked" in quoted);
   assert.deepEqual(quoted, { blocked: "This comment is 65,608 characters, and GitHub takes at most 65,536. Shorten it, or select fewer lines." });
+});
+
+const THREAD: ReviewThread = {
+  id: "PRRT_1",
+  path: PATH,
+  resolved: false,
+  outdated: false,
+  subject: { kind: "file" },
+  comments: [
+    { id: 41, url: "https://github.com/o/r/pull/1#discussion_r41", author: "octocat", body: "Why?", createdAt: "2026-11-10T08:00:00Z" },
+    { id: 42, url: "https://github.com/o/r/pull/1#discussion_r42", author: "hubot", body: "Because.", createdAt: "2026-11-10T09:00:00Z" },
+  ],
+};
+
+test("a reply goes to the thread's first comment, with the reader's words trimmed", () => {
+  assert.deepEqual(checkReply(THREAD, "\n> Because.\n\nAgreed. \n"), { request: { commentId: 41, body: "> Because.\n\nAgreed." } });
+});
+
+test("a reply over GitHub's limit is blocked, not sent", () => {
+  assert.deepEqual(checkReply(THREAD, "x".repeat(GITHUB_BODY_LIMIT + 1)), { blocked: "This comment is 65,537 characters, and GitHub takes at most 65,536. Shorten it." });
 });

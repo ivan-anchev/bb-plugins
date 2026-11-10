@@ -1,15 +1,20 @@
 // Every diff the plugin draws: one PR file, or one hunk of it, at the commit the page shows, in
 // bb's host-shared Pierre diff with bb's theme. Things drawn under a line, such as a guide's
-// findings, come in as notes; the lines the reader selects, from the gutter or a finding's
-// buttons, get the diff's one comment box under their last line.
+// findings, come in as notes. GitHub's review threads come placed: under their last line, or
+// above the diff at their file. The lines the reader selects, from the gutter or a finding's
+// buttons, get the diff's one comment box under their last line; a thread's Reply gets it in the
+// thread.
 import { useMemo, useRef, type ReactNode } from "react";
 import type { DiffLineAnnotation, SelectedLineRange } from "@pierre/diffs";
 import { FileDiff } from "@pierre/diffs/react";
 import type { LineRef } from "../../comments/comment-schema.ts";
 import { refOf, spanBetween, type LineSpan } from "../../comments/line-span.ts";
+import type { LineThread, PlacedThreads } from "../../comments/place-threads.ts";
+import type { ReviewThread } from "../../comments/thread-schema.ts";
 import { diffRowsOf } from "../../diff/diff-rows.ts";
 import type { DiffFile } from "../../diff/diff-schema.ts";
-import { CommentBox } from "../comments/comment-box.tsx";
+import { CommentBox, type BoxSubject } from "../comments/comment-box.tsx";
+import { ReviewThreadCard, type ThreadPlace } from "../comments/review-thread.tsx";
 import type { PrHeadTarget } from "../queries.ts";
 import { DiffErrorBoundary } from "./diff-error-boundary.tsx";
 import { DIFF_TEXT_CLASS, fileDiffOf, useDiffOptions, type DiffSettings } from "./diff-options.ts";
@@ -32,10 +37,14 @@ type PrDiffProps = {
   settings: DiffSettings;
   /** Several notes on one line draw in their order. */
   notes: readonly LineNote[];
+  /** This file's review threads in this diff (place-threads.ts); under a line, after its notes. */
+  threads: PlacedThreads;
 };
 
+type LinesBox = Extract<LineBox, { kind: "lines" }>;
+
 // The box's annotation carries its lines as rows, so the box never draws without them.
-type Annotation = { kind: "note"; note: LineNote } | { kind: "box"; span: LineSpan; box: LineBox };
+type Annotation = { kind: "note"; note: LineNote } | { kind: "thread"; placed: LineThread } | { kind: "box"; span: LineSpan; box: LinesBox };
 
 export function PrDiff(props: PrDiffProps) {
   // Keyed by the file at its commit: another file, or a new head whose lines may be gone, starts
@@ -47,7 +56,7 @@ export function PrDiff(props: PrDiffProps) {
   );
 }
 
-function SelectableDiff({ file, head, newContent, settings, notes }: PrDiffProps) {
+function SelectableDiff({ file, head, newContent, settings, notes, threads }: PrDiffProps) {
   const root = useRef<HTMLDivElement>(null);
   const selection = useLineSelection(root);
   const { lines } = selection;
@@ -55,13 +64,45 @@ function SelectableDiff({ file, head, newContent, settings, notes }: PrDiffProps
   const fileDiff = useMemo(() => fileDiffOf(file, newContent), [file, newContent]);
   const rows = useMemo(() => diffRowsOf(file, newContent), [file, newContent]);
   const { box } = lines;
-  const span = useMemo(() => (box === null ? null : spanBetween(file.path, head.headSha, rows, ...refsOf(box.at))), [file.path, head.headSha, rows, box]);
-  const annotations = useMemo(() => annotationsOf(notes, box === null || span === null ? null : { kind: "box", span, box }), [notes, span, box]);
+  const span = useMemo(() => (box?.kind !== "lines" ? null : spanBetween(file.path, head.headSha, rows, ...refsOf(box.at))), [file.path, head.headSha, rows, box]);
+  const annotations = useMemo(
+    () => annotationsOf(notes, threads.lines, box?.kind !== "lines" || span === null ? null : { kind: "box", span, box }),
+    [notes, threads.lines, span, box],
+  );
+
+  // Keyed by each opening: the box is drawn afresh, on its Write tab, and takes focus.
+  const commentBox = (opened: LineBox, subject: BoxSubject) => (
+    <CommentBox
+      key={opened.opened}
+      subject={subject}
+      head={head}
+      box={opened}
+      draft={lines.draft}
+      onDraft={selection.setDraft}
+      onSettled={selection.settle}
+      onClose={selection.close}
+    />
+  );
+  const threadCard = (thread: ReviewThread, place: ThreadPlace) => (
+    <ReviewThreadCard
+      thread={thread}
+      place={place}
+      box={box?.kind === "reply" && box.threadId === thread.id ? commentBox(box, { kind: "reply", thread }) : null}
+      onReply={({ quote, from }) => selection.openForReply({ threadId: thread.id, quote, from })}
+    />
+  );
 
   return (
     // why a focus target: when the box unmounts with focus inside it, focus lands here rather
     // than on the page body (REVIEW.md).
     <div ref={root} tabIndex={-1} className="outline-none">
+      {threads.file.length > 0 && (
+        <div className="grid gap-2 border-b border-border px-3 py-3">
+          {threads.file.map((placed) => (
+            <div key={placed.thread.id}>{threadCard(placed.thread, { kind: "file", placed })}</div>
+          ))}
+        </div>
+      )}
       <FileDiff<Annotation>
         className={DIFF_TEXT_CLASS}
         fileDiff={fileDiff}
@@ -72,21 +113,9 @@ function SelectableDiff({ file, head, newContent, settings, notes }: PrDiffProps
         lineAnnotations={annotations}
         renderAnnotation={({ metadata }) => (
           <div className={NOTE_CLASS}>
-            {metadata.kind === "note" ? (
-              metadata.note.render((request) => selection.openFromFinding({ ...request, at: metadata.note.at }))
-            ) : (
-              // Keyed by each opening: the box is drawn afresh, on its Write tab, and takes focus.
-              <CommentBox
-                key={metadata.box.opened}
-                span={metadata.span}
-                head={head}
-                box={metadata.box}
-                draft={lines.draft}
-                onDraft={selection.setDraft}
-                onSettled={selection.settle}
-                onClose={selection.close}
-              />
-            )}
+            {metadata.kind === "note" && metadata.note.render((request) => selection.openFromFinding({ ...request, at: metadata.note.at }))}
+            {metadata.kind === "thread" && threadCard(metadata.placed.thread, { kind: "lines", lines: metadata.placed.lines })}
+            {metadata.kind === "box" && commentBox(metadata.box, { kind: "lines", span: metadata.span, finding: metadata.box.finding })}
           </div>
         )}
       />
@@ -107,10 +136,13 @@ const refsOf = ({ start, side, end, endSide = side }: SelectedLineRange): [LineR
   { side: sideOfPierre(endSide), line: end },
 ];
 
-// Notes first, the box last: annotations on one line share one slot in order, so the box sits
-// under any finding on its last line.
-function annotationsOf(notes: readonly LineNote[], drawn: Extract<Annotation, { kind: "box" }> | null): DiffLineAnnotation<Annotation>[] {
-  const noted = notes.map((note): DiffLineAnnotation<Annotation> => ({ side: pierreSideOf(note.at), lineNumber: note.at.line, metadata: { kind: "note", note } }));
+// Notes first, then threads, the box last: annotations on one line share one slot in order, so the
+// box sits under any finding or thread on its last line.
+function annotationsOf(notes: readonly LineNote[], threads: readonly LineThread[], drawn: Extract<Annotation, { kind: "box" }> | null): DiffLineAnnotation<Annotation>[] {
+  const noted = [
+    ...notes.map((note): DiffLineAnnotation<Annotation> => ({ side: pierreSideOf(note.at), lineNumber: note.at.line, metadata: { kind: "note", note } })),
+    ...threads.map((placed): DiffLineAnnotation<Annotation> => ({ side: pierreSideOf(placed.at), lineNumber: placed.at.line, metadata: { kind: "thread", placed } })),
+  ];
   if (drawn === null) return noted;
   const last = refOf(drawn.span.rows[drawn.span.rows.length - 1]);
   return [...noted, { side: pierreSideOf(last), lineNumber: last.line, metadata: drawn }];

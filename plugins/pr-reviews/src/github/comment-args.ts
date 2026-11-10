@@ -1,4 +1,4 @@
-// A review comment request as `gh api` arguments, field for field. Pure.
+// The comments the plugin posts as `gh api` arguments, field for field. Pure.
 import { githubSideOf, type CommentRequest, type LineRef } from "../comments/comment-schema.ts";
 import type { Repo } from "./repo.ts";
 
@@ -20,6 +20,16 @@ export function commentApiArgs(repo: Repo, number: number, request: CommentReque
     default:
       return request satisfies never;
   }
+}
+
+/** POST /repos/{repo}/pulls/{number}/comments/{commentId}/replies: a reply in the thread `commentId` opens. */
+export function replyApiArgs(repo: Repo, number: number, commentId: number, body: string): string[] {
+  return ["api", "--method", "POST", `repos/${repo}/pulls/${number}/comments/${commentId}/replies`, ...text("body", body)];
+}
+
+/** POST /repos/{repo}/issues/{number}/comments: a comment on the PR's conversation, which GitHub keeps as the PR's issue. */
+export function conversationCommentApiArgs(repo: Repo, number: number, body: string): string[] {
+  return ["api", "--method", "POST", `repos/${repo}/issues/${number}/comments`, ...text("body", body)];
 }
 
 // why -f for text: -F reads a value starting with "@" as a file to upload, and turns "true",

@@ -1,9 +1,10 @@
-// The lines selected in one diff, and the one comment box under them. Pure transitions; the hook
-// in use-line-selection.ts holds the state and wires the diff's gestures and the box's actions.
+// The lines selected in one diff, and the one comment box under them or in one of its review
+// threads. Pure transitions; the hook in use-line-selection.ts holds the state and wires the
+// diff's gestures and the box's actions.
 import type { SelectedLineRange } from "@pierre/diffs";
 
-/** What a request did: the posted comment, or a sent question. */
-export type BoxOutcome = { kind: "commented"; url: string; body: string } | { kind: "asked" };
+/** What a request did: the posted comment or reply, or a sent question. */
+export type BoxOutcome = { kind: "commented"; url: string } | { kind: "asked" };
 
 /**
  * `writing`: the box holds the draft. `sent` is a request that went while the reader changed the
@@ -13,14 +14,21 @@ export type BoxOutcome = { kind: "commented"; url: string; body: string } | { ki
 export type BoxStage = { kind: "writing"; sent: BoxOutcome | null } | { kind: "done"; outcome: BoxOutcome };
 
 /**
- * The diff's one box. `at` is the diff's own report of the lines, kept as is so the highlight is
- * exactly what the reader picked; it becomes rows only where it is read (line-span.ts).
- * `opened` changes every time the box opens, so it is drawn afresh and takes focus. `finding` is
- * the finding whose button opened the box, while the box is still on that finding's line.
- * `lit`: whether its lines are highlighted. A box that is done, or whose lines the reader
- * deselected while it held a draft, stays where it is with nothing highlighted.
+ * Where the diff's one box is, and what its text goes to.
+ *
+ * `lines`: under lines, to ask about them or comment on them. `at` is the diff's own report of the
+ * lines, kept as is so the highlight is exactly what the reader picked; it becomes rows only where
+ * it is read (line-span.ts). `finding` is the finding whose button opened the box, while the box
+ * is still on that finding's line. `lit`: whether its lines are highlighted. A box that is done,
+ * or whose lines the reader deselected while it held a draft, stays where it is with nothing
+ * highlighted.
+ *
+ * `reply`: in the review thread `threadId`, under its comments, to reply to it. It highlights nothing.
  */
-export type LineBox = { at: SelectedLineRange; opened: number; finding: number | null; stage: BoxStage; lit: boolean };
+export type BoxPlace = { kind: "lines"; at: SelectedLineRange; finding: number | null; lit: boolean } | { kind: "reply"; threadId: string };
+
+/** The diff's one box. `opened` changes every time the box opens, so it is drawn afresh and takes focus. */
+export type LineBox = BoxPlace & { opened: number; stage: BoxStage };
 
 /**
  * `picking`: the lines of a press or a drag still in progress. The box stays where it is until
@@ -32,7 +40,7 @@ export type DiffLines = { picking: SelectedLineRange | null; box: LineBox | null
 export const NO_LINES: DiffLines = { picking: null, box: null, draft: "" };
 
 /** The lines Pierre highlights: those being picked, else the box's while they are lit. */
-export const highlightOf = ({ picking, box }: DiffLines): SelectedLineRange | null => picking ?? (box !== null && box.lit ? box.at : null);
+export const highlightOf = ({ picking, box }: DiffLines): SelectedLineRange | null => picking ?? (box?.kind === "lines" && box.lit ? box.at : null);
 
 /** Each step of a press, a shift-click or a drag. */
 export function linesPicking(lines: DiffLines, range: SelectedLineRange | null): DiffLines {
@@ -48,10 +56,10 @@ export function linesPicked(lines: DiffLines, range: SelectedLineRange | null): 
   const { box } = lines;
   if (range === null) {
     if (isBlank(lines.draft)) return NO_LINES;
-    return { ...lines, picking: null, box: box && { ...box, lit: false } };
+    return { ...lines, picking: null, box: box && unlit(box) };
   }
-  if (box !== null && box.stage.kind === "writing" && box.lit && sameRange(box.at, range)) return lines.picking === null ? lines : { ...lines, picking: null };
-  return { ...lines, picking: null, box: openAt(box, range, null) };
+  if (box?.kind === "lines" && box.stage.kind === "writing" && box.lit && sameRange(box.at, range)) return lines.picking === null ? lines : { ...lines, picking: null };
+  return { ...lines, picking: null, box: openAt(box, { kind: "lines", at: range, finding: null, lit: true }) };
 }
 
 /**
@@ -59,7 +67,16 @@ export function linesPicked(lines: DiffLines, range: SelectedLineRange | null): 
  * empty draft, so a draft the reader is writing is never replaced.
  */
 export function openedFromFinding(lines: DiffLines, range: SelectedLineRange, finding: number, prefill: string): DiffLines {
-  return { picking: null, box: openAt(lines.box, range, finding), draft: isBlank(lines.draft) ? prefill : lines.draft };
+  return { picking: null, box: openAt(lines.box, { kind: "lines", at: range, finding, lit: true }), draft: isBlank(lines.draft) ? prefill : lines.draft };
+}
+
+/**
+ * Reply, or Quote reply, in a review thread: the box opens under its comments. `quote` goes after
+ * any draft, as on GitHub, so a draft the reader is writing is never replaced.
+ */
+export function openedForReply(lines: DiffLines, threadId: string, quote: string): DiffLines {
+  const draft = isBlank(lines.draft) ? quote : quote === "" ? lines.draft : `${lines.draft.trimEnd()}\n\n${quote}`;
+  return { picking: null, box: openAt(lines.box, { kind: "reply", threadId }), draft };
 }
 
 /**
@@ -71,16 +88,18 @@ export function settled(lines: DiffLines, outcome: BoxOutcome, sent: string): Di
   const { box } = lines;
   if (box === null) return lines;
   if (lines.draft !== sent) return { ...lines, box: { ...box, stage: { kind: "writing", sent: outcome } } };
-  return { ...lines, box: { ...box, stage: { kind: "done", outcome }, lit: false }, draft: "" };
+  return { ...lines, box: { ...unlit(box), stage: { kind: "done", outcome } }, draft: "" };
 }
 
 export const isBlank = (text: string) => text.trim() === "";
 
 const WRITING: BoxStage = { kind: "writing", sent: null };
 
-function openAt(box: LineBox | null, at: SelectedLineRange, finding: number | null): LineBox {
-  return { at, opened: (box?.opened ?? 0) + 1, finding, stage: WRITING, lit: true };
+function openAt(box: LineBox | null, place: BoxPlace): LineBox {
+  return { ...place, opened: (box?.opened ?? 0) + 1, stage: WRITING };
 }
+
+const unlit = (box: LineBox): LineBox => (box.kind === "lines" ? { ...box, lit: false } : box);
 
 // The ranges Pierre reports are built one way (`endSide` only when it differs from `side`), so
 // equal ranges have equal fields.
