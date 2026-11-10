@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { diffRowsOf } from "../diff/diff-rows.ts";
+import type { PrDetail } from "../contract.ts";
 import { hunkIdOf, type DiffFile } from "../diff/diff-schema.ts";
 import type { Finding } from "../guide/guide-schema.ts";
-import type { LineRef } from "./comment-schema.ts";
-import { spanAt, spanBetween } from "./line-span.ts";
-import { findingCommentText, planComment } from "./plan-comment.ts";
+import { GITHUB_BODY_LIMIT, type LineRef } from "./comment-schema.ts";
+import { spanBetween } from "./line-span.ts";
+import { checkComment, findingCommentText, planComment } from "./plan-comment.ts";
 
 const PATH = "src/a.ts";
 const COMMIT = "3f9c2ab0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6";
@@ -62,7 +63,7 @@ test("lines reaching unchanged lines outside the changes are a file comment that
     path: PATH,
     body: ["`src/a.ts`, lines 4–6 (new), at 3f9c2ab:", "```diff", " line 4", " line 5", " line 6", "```", "", "Look here"].join("\n"),
   });
-  assert.equal(plan.why, "Some of these lines are unchanged lines outside the PR's changes, and GitHub anchors a line comment only inside one hunk. It posts as a comment on the file, quoting them.");
+  assert.equal(plan.why, "some of these lines are outside the PR's changes");
 });
 
 test("lines across two hunks are a file comment too", () => {
@@ -71,7 +72,7 @@ test("lines across two hunks are a file comment too", () => {
   assert.ok(!("blocked" in plan));
   assert.equal(plan.request.kind, "file");
   assert.match(plan.request.body, /^`src\/a\.ts`, lines 4–20 \(new\), at 3f9c2ab:\n```diff\n line 4\n line 20\n```\n\nBoth$/);
-  assert.equal(plan.why, "These lines run across more than one hunk of the diff, and GitHub anchors a line comment only inside one hunk. It posts as a comment on the file, quoting them.");
+  assert.equal(plan.why, "these lines span more than one hunk");
 });
 
 test("a commit no longer in the PR blocks the comment: there is no request to post", () => {
@@ -104,8 +105,62 @@ test("a finding's line is one row, and its comment is its bold title over its bo
   const text = findingCommentText(finding);
 
   assert.equal(text, "**Removed line**\n\nLine 3 *mattered*.");
-  assert.deepEqual(planComment(spanAt(PATH, COMMIT, ROWS, OLD(3)), true, text), {
+  assert.deepEqual(planComment(spanOf(OLD(3), OLD(3)), true, text), {
     request: { kind: "line", commit: COMMIT, path: PATH, start: null, end: OLD(3), body: "**Removed line**\n\nLine 3 *mattered*." },
     why: null,
   });
+});
+
+const LATER = "9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b";
+const prAt = (commits: string[]): PrDetail => ({
+  number: 23,
+  title: "Fixture",
+  author: "ivan-anchev",
+  updatedAt: "2026-11-10T09:00:00Z",
+  headSha: commits[commits.length - 1],
+  body: "",
+  url: "https://github.com/ivan-anchev/bb-plugins/pull/23",
+  headRefName: "fixture",
+  baseRefName: "main",
+  state: "OPEN",
+  commits,
+  additions: 1, deletions: 1, checks: [], reviewers: [], labels: [],
+});
+
+test("a line comment on the PR's latest commit says nothing about where it goes: that is obvious", () => {
+  assert.deepEqual(checkComment(spanOf(NEW(3), NEW(3)), prAt([COMMIT]), "Why?"), {
+    request: { kind: "line", commit: COMMIT, path: PATH, start: null, end: NEW(3), body: "Why?" },
+    note: null,
+  });
+});
+
+test("a comment on an older commit than the PR's latest says so", () => {
+  const check = checkComment(spanOf(NEW(3), NEW(3)), prAt([COMMIT, LATER]), "Why?");
+
+  assert.ok(!("blocked" in check));
+  assert.equal(check.note, "Comments on commit 3f9c2ab, not the latest.");
+});
+
+test("a file comment says so and why, after the commit when that is older too", () => {
+  const latest = checkComment(spanOf(NEW(4), NEW(20)), prAt([COMMIT]), "Both");
+  const older = checkComment(spanOf(NEW(4), NEW(6), EXPANDED_ROWS), prAt([COMMIT, LATER]), "Look");
+
+  assert.ok(!("blocked" in latest) && !("blocked" in older));
+  assert.equal(latest.note, "Posts as a file comment: these lines span more than one hunk.");
+  assert.equal(older.note, "Comments on commit 3f9c2ab, not the latest. Posts as a file comment: some of these lines are outside the PR's changes.");
+});
+
+test("a commit gone from the PR blocks the comment with the reload message", () => {
+  assert.deepEqual(checkComment(spanOf(NEW(3), NEW(3)), prAt([LATER]), "Too late"), {
+    blocked: "Commit 3f9c2ab is no longer in the PR (force-pushed). To comment on the current code, Refresh and use the Changes tab, or update the guide.",
+  });
+});
+
+test("a body over GitHub's limit blocks the comment and says by how much, the quote of a file comment counted", () => {
+  const atLimit = checkComment(spanOf(NEW(3), NEW(3)), prAt([COMMIT]), "x".repeat(GITHUB_BODY_LIMIT));
+  const quoted = checkComment(spanOf(NEW(4), NEW(20)), prAt([COMMIT]), "x".repeat(GITHUB_BODY_LIMIT));
+
+  assert.ok(!("blocked" in atLimit));
+  assert.ok("blocked" in quoted);
+  assert.deepEqual(quoted, { blocked: "This comment is 65,608 characters, and GitHub takes at most 65,536. Shorten it, or select fewer lines." });
 });

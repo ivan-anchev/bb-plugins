@@ -40,10 +40,9 @@ function AnnotatedDiff({ file, hunk, findings, head }: { file: DiffFile; hunk: H
   const notes = useMemo(
     () =>
       findings.map(
-        // Keyed by the finding, so an open question never passes to another finding.
-        (shown): LineNote => ({ at: { side: shown.finding.side, line: shown.finding.line }, node: <FindingBlock key={shown.index} shown={shown} file={drawn} head={head} /> }),
+        (shown): LineNote => ({ at: { side: shown.finding.side, line: shown.finding.line }, render: (openBox) => <FindingBlock shown={shown} openBox={openBox} /> }),
       ),
-    [findings, drawn, head],
+    [findings],
   );
   return <PrDiff file={drawn} head={head} newContent={null} settings={DEFAULT_DIFF_SETTINGS} notes={notes} />;
 }

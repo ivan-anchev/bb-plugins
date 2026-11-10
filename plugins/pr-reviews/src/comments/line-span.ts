@@ -17,9 +17,6 @@ export function spanBetween(path: string, commit: string, rows: readonly DiffRow
   return { path, commit, rows: [rows[from], ...rows.slice(from + 1, to + 1)] };
 }
 
-/** One row: a finding's line. */
-export const spanAt = (path: string, commit: string, rows: readonly DiffRow[], at: LineRef): LineSpan => spanBetween(path, commit, rows, at, at);
-
 /** The side and number GitHub anchors a row to: the old side only for a removed line. */
 export const refOf = (row: DiffRow): LineRef => (row.new === null ? { side: "old", line: row.old } : { side: "new", line: row.new });
 

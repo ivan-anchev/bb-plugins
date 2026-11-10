@@ -2,8 +2,8 @@ PR Reviews adds a **PR Reviews** app to bb's left rail. It lists a GitHub
 project's open pull requests and opens each one on a page with its whole diff
 in a file tree and a guided review, written by a review thread, that walks you
 through the change step by step. It posts to GitHub only the review comments
-you write or pick from the guide, after a preview of exactly what and where, on
-your click; review threads never post to GitHub.
+you write or pick from the guide, on your click; review threads never post to
+GitHub.
 
 ## What you get
 
@@ -47,18 +47,19 @@ your click; review threads never post to GitHub.
   returns to the overview.
 - **Findings, second**: the overview lists the thread's findings, Must fix,
   Should fix or Nit, each linking to its step, and each step shows a finding
-  in a grey block under its line. Ask about this sends the thread a question
-  about it; the answer is in Review chat. Comment as is and Edit and comment
-  turn it into a GitHub comment on its line.
-- **Ask about lines**: click, shift-click or drag over the line numbers in
-  any diff to select lines, then ask the review thread about them; the
-  question goes with the quoted lines, and the answer is in Review chat.
-- **Comment on GitHub**: from selected lines or a finding, write a review
-  comment, then Preview shows exactly what will be posted and where: the PR,
-  line or file comment, file, lines, side, commit and the text. Post to GitHub
-  posts it and links to it; nothing is posted before that click. Lines GitHub
-  can't anchor to become a file comment quoting them, and the preview says
-  why.
+  in a block under its line, with Ask about this and Comment: each opens the
+  comment box under it, empty to ask the thread about the finding, or with the
+  finding as the comment to post on its line.
+- **One comment box per diff**: hover a line and click the gutter's +, or
+  drag from it, to select lines in any diff; a box opens under them with Write
+  and Preview tabs for markdown. Pick other lines and it moves there with your
+  text.
+- **Ask about lines**: Ask about this sends the review thread your question
+  with the quoted lines; the answer is in Review chat.
+- **Comment on GitHub**: Comment posts your text as a review comment on the
+  lines and links to it; nothing is posted before that click. Lines GitHub
+  can't anchor to become a file comment quoting them, and the box says so, as
+  it does for a comment on an older commit than the PR's latest.
 - **New commits**: when a PR moves past its guide, the row reads New commits
   and the guide stays readable under "N new commits since this guide was
   written". Update guide asks the same review thread to read only the new
@@ -72,8 +73,7 @@ your click; review threads never post to GitHub.
 
 PR Reviews reads pull requests with the GitHub CLI (`gh`) on the machine that
 runs bb, so `gh` must be installed and signed in there. It writes to GitHub
-only when you click Post to GitHub on a previewed review comment, as your `gh`
-account; it never approves, requests changes or edits anything. Review threads
+only when you click Comment in the comment box, as your `gh` account; it never approves, requests changes or edits anything. Review threads
 never reach GitHub at all: before one starts, PR Reviews fetches the PR's commits
 into the project's repository with `git fetch`, and the thread reads them
 there. So Start review needs the project's default checkout on the machine

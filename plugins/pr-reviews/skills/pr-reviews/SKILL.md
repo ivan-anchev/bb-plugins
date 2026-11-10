@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request with Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this, Comment as is and Edit and comment, and the view options for tests and findings), how to select lines in any diff and ask the review thread about them, how to post a GitHub review comment on selected lines or a finding (a preview of exactly what will be posted and where, then Post to GitHub on an explicit click; review threads never post), how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request with Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (Write and Preview tabs, Ask about this to ask the review thread, Comment to post a GitHub review comment on an explicit click; review threads never post), how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -149,85 +149,92 @@ gets a new review thread, it switches to it. The panel's **+** menu also lists
 Review chat on a PR's page. Close the tab with its ×, or the panel with the
 title bar's panel button.
 
-## Asking about lines
+## Selecting lines and the comment box
 
 Every diff on the page can select lines: the Changes tab's file diff, each
-guide step's hunks, and the overview's hidden hunks. Click a line number in the
-gutter to select that line, shift-click another to extend the selection to it,
-or drag over the numbers for a range. In Split view a range can start in one
-column and end in the other. Clicking the code itself selects nothing.
+guide step's hunks, and the overview's hidden hunks. Hover a line to show the
+gutter's **+** (the one bb's own Changes tab shows): click it to select that
+line, or drag from it for a range. Clicking a line number selects that line
+too, shift-click extends the selection, and a drag over the numbers selects a
+range. In Split view a range can start in one column and end in the other. A
+context line counts as new, whichever column it was clicked in. Clicking the
+code itself selects nothing.
 
-The selected lines are highlighted, and under the last one a row names them
-("line 12 (new)", "lines 26–31 (old)", or "line 26 (old) to line 63 (new)" for
-a range across both sides) and offers **Ask the review thread** and **Comment on
-GitHub** (see Commenting on GitHub). A context line
-counts as new, whichever column it was clicked in. With no review thread yet
-the button is disabled and the row says "Start a review first". Esc, or a
-click outside the diff, clears the selection without leaving the page; with
-nothing selected Esc does what it always does.
+Each diff has one comment box. Selecting lines highlights them and opens the
+box under the last one, after any finding there, with its text field focused.
+Pick other lines in the same diff and the box moves there, keeping what you
+wrote. The box has:
 
-**Ask the review thread** opens a question box under the row, and the lines
-stay selected while it is open: clicking other numbers does nothing until you
-Cancel. **Send** messages the review thread, queued behind anything it is doing:
-the file, the lines and their sides, the commit the diff shows, the selected
-lines themselves (marked as untrusted PR data) and your question. Review chat
-then opens, where the answer arrives, and the selection clears. If the send
-fails, the question stays in the box with the error beside Send. A question
-cancelled while it sends still goes to the thread, but the page no longer
-follows it: Review chat stays as it is and the selection, or a newer one, stays.
-Esc anywhere in an empty box, Cancel included, closes it; a box with text
-ignores Esc, so a question is never lost to it. While the box is open, Esc
-elsewhere on the page, after a click outside it, does nothing.
+- **Write** and **Preview** tabs (← and → switch them): you write markdown,
+  and Preview renders it as bb's chat does, at the same size and inset.
+  ⌘B, ⌘I, ⌘E and ⌘K (Ctrl on Windows and Linux) wrap the selected text in
+  bold, italic, `code` or a link.
+- **×** to discard: the text and the selection go.
+- **Ask about this** and **Comment** at the bottom. Both need some text.
+
+Esc in an empty box closes it and clears the lines; a box with text ignores
+Esc, so a draft is never lost to it. While the box is open, Esc elsewhere on
+the page, after a click outside it, does nothing; with nothing open, Esc does
+what it always does. Pressing the one selected line's number again closes an
+empty box; a box with text stays where it is, with nothing selected.
+
+**Ask about this** messages the review thread, queued behind anything it is
+doing: the file, the lines and their sides, the commit the diff shows, the
+selected lines themselves (marked as untrusted PR data) and your text, as
+markdown. The box then says "Sent to the review thread", with **Open Review
+chat**, where the answer arrives, and **Done**. With no review thread yet Ask is
+disabled and the box says "Start a review first". If the send fails, the text
+stays in the box with the error beside the buttons until you change the text.
+
+If you change the text while Ask or Comment is still sending, the box stays
+open with your new text, unsent. A line above the buttons says the earlier text
+went ("Commented with your earlier text." with **View on GitHub ↗**, or "Sent
+your earlier text to the review thread." with **Open Review chat**), and Esc
+keeps the box as for any text. When a send finishes, **Done** takes focus only
+if focus was in that box; focus you have moved on, such as into another step's
+box, stays where it is.
 
 ## Commenting on GitHub
 
-PR Reviews posts to GitHub only a review comment you wrote or picked, after a
-preview, when you click **Post to GitHub**. It posts nothing else: no general PR
-comment, review, approval, reply or edit. Review threads never post.
+PR Reviews posts to GitHub only a review comment you wrote or picked, when you
+click **Comment** (or press ⌘↵, Ctrl+↵ off a Mac) in the comment box, from
+either tab. It posts nothing else: no general PR comment, review, approval,
+reply or edit. Review threads never post.
 
-**Comment on GitHub** under selected lines opens a comment box; the lines stay
-selected while it is open. **Preview** (once the box has text) shows exactly
-what will be posted and where:
+The comment goes through `gh` as your account, on the commit the diff shows,
+which GitHub may later mark outdated. The box then reads "Commented", with
+**View on GitHub ↗** and **Done**, and the posted comment rendered below. A
+double click posts once.
 
-- "Post to owner/name#N as a line comment" (or "a file comment"), with
-  "(closed)" or "(merged)" for a PR that is.
-- The file, the lines, the side GitHub anchors to (`RIGHT` for added and
-  context lines, `LEFT` for removed ones, `LEFT to RIGHT` for a range across
-  both), and the short commit: the commit the diff shows, which GitHub may
-  later mark outdated.
-- Why it is a file comment, when it is.
-- The comment's text exactly as it will be sent, unrendered.
-
-The preview is made when you click Preview and stays as it is: a refresh of the
-PR does not change it until **Back to edit** and Preview again. **Post to
-GitHub** posts that comment through `gh` as your account and becomes "Posted.
-View on GitHub ↗" with **Done**, which clears the selection. A double click
-posts once, and a posted comment can't be posted again from the same box.
-
-- **One line** is a line comment on that line. **Several lines inside one hunk**
+- **One line** is a line comment on that line: the `RIGHT` side for added and
+  context lines, `LEFT` for removed ones. **Several lines inside one hunk**
   are a multi-line comment from the first to the last, across sides too.
 - **Lines GitHub can't anchor to**, such as unchanged lines you expanded or
   lines across two hunks, become a comment on the whole file that starts by
   quoting them: the file, the lines and the commit, then the lines in a `diff`
   block, then your text.
-- **A commit no longer in the PR** (force-pushed away) can't be commented on:
-  Preview says "Commit abc1234 is no longer in the PR (force-pushed). To
-  comment on the current code, Refresh and use the Changes tab, or update the
-  guide." and the draft stays.
-- **Over 65,536 characters**, GitHub's limit, the preview says so and Post is
-  disabled.
 
-If posting fails, the preview stays with the reason beside Post, and Back to
-edit returns to your text: not signed in to `gh`, no permission, a locked
-conversation, a PR or repository your account can't see, GitHub's own words
-for a comment it refused (most often lines no longer in that commit's diff), no
-network, or a comment too long to hand to `gh`. When GitHub doesn't answer
-within a minute the comment may have been posted, so it says to check the PR
-before posting again, and never retries by itself.
+The box says where a comment goes only when that isn't obvious, in a line
+above the buttons: "Comments on commit abc1234, not the latest." when the diff
+shows an older commit than the PR's (a guide written before new commits), and
+"Posts as a file comment:" with the reason for a file comment.
 
-Esc never leaves the page while a comment box is open, wherever focus is. In the
-box it closes an empty write box, does nothing in a box with text or a preview,
-and acts as Done once posted; elsewhere on the page it does nothing.
+Comment is disabled, with the reason beside the buttons, for:
+
+- **A commit no longer in the PR** (force-pushed away): "Commit abc1234 is no
+  longer in the PR (force-pushed). To comment on the current code, Refresh and
+  use the Changes tab, or update the guide."
+- **Over 65,536 characters**, GitHub's limit, quote included.
+
+If posting fails, the text stays with the reason beside the buttons, until you
+change the text or one of the reasons above disables Comment, which then shows
+instead: not
+signed in to `gh`, no permission, a locked conversation, a PR or repository
+your account can't see, GitHub's own words for a comment it refused (most
+often lines no longer in that commit's diff), no network, or a comment too
+long to hand to `gh`. When GitHub doesn't answer within a minute the comment
+may have been posted, so it says to check the PR before posting again, and
+never retries by itself.
 
 ## Reading a guide
 
@@ -252,23 +259,17 @@ collapsed is one line, its path and reason, with Show. A file with no text
 changes (a binary file, a pure rename) is one line saying so.
 
 A finding sits in a grey block directly under its line, inside its hunk's diff:
-its priority, title and body, then **Ask about this**, **Comment as is** and
-**Edit and comment**. A finding on a removed line
+its priority, title and body, then **Ask about this** and **Comment**. A
+finding on a removed line
 sits under that removed line, and the replaced pair keeps its word
 highlighting. Findings on the same line stack in the order the thread gave
-them. **Ask about this** opens a text box; **Send** messages
-the question, quoting the finding, to the review thread, which answers there
-(Review chat shows it). The page keeps reading Guide ready while the thread
-answers. If the send fails, the question stays in the box with the error beside
-Send. Text typed while a question is sending stays in the box, unsent. Esc
-closes an empty box and leaves one with text, and the page, as they are; while
-any box is open, Esc elsewhere on the page does nothing.
-
-**Comment as is** opens a GitHub comment on the finding's line and side, at the
-guide's commit, straight at its preview, with the finding's title in bold over
-its body; **Edit and comment** opens the same text in the comment box to change
-first. Both then work as Commenting on GitHub describes. One of the three boxes
-is open at a time, and closing one returns focus to its button.
+them. Both buttons select the finding's line and open the diff's comment box
+under the finding (see Selecting lines and the comment box). **Ask about this**
+opens it empty; asking from it, while the box is still on that line, sends the
+question quoting the finding, so the thread knows which one. **Comment** fills
+the box with the finding's title in bold over its body, unless the box already
+holds your text, and posts it as Commenting on GitHub describes. Closing the box
+returns focus to the finding's button.
 
 The view-options icon at the right end of the tab bar, shown on the Guide tab
 once there is a guide, opens a popover of switches, each shown only when the
@@ -425,7 +426,7 @@ machine that runs bb, and `git remote get-url origin` for a
 project whose remote bb did not record. On Start review and Update guide it
 also runs `git fetch` in the project's default checkout, which only adds the refs under
 `refs/pr-reviews/`. Its one write is `gh api --method POST
-repos/<owner>/<name>/pulls/<number>/comments`, run when you click Post to
-GitHub on a previewed comment. The diff pinned for each reviewed commit, each review run, and each guide are
+repos/<owner>/<name>/pulls/<number>/comments`, run when you click Comment in
+the comment box. The diff pinned for each reviewed commit, each review run, and each guide are
 kept in the plugin's own SQLite database (`plugins/pr-reviews/data.db` in bb's data
 directory).

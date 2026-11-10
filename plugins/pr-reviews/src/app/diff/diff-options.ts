@@ -20,7 +20,8 @@ export const DIFF_TEXT_CLASS = "[--diffs-font-size:12px] [--diffs-line-height:18
 
 /**
  * Pierre's options for a diff: bb's code theme and the chrome of bb's own diff, in the reader's
- * settings, with lines picked from the gutter numbers and reported to `gestures`.
+ * settings, with lines picked from the gutter (its numbers, and the "+" bb's own diff shows on the
+ * hovered line) and reported to `gestures`.
  */
 // why memoised: a new options object makes Pierre re-render every row, which on a large file
 // drops a drag in progress. Only a theme or settings change makes a new one, so `gestures` must be
@@ -43,12 +44,23 @@ export function useDiffOptions<Annotation>(settings: DiffSettings, gestures: Lin
       onLineSelectionStart: gestures.picking,
       onLineSelectionChange: gestures.picking,
       onLineSelectionEnd: gestures.picked,
-      // why no gutter utility: setting both of Pierre's gutter APIs throws, which takes down the
-      // whole plugin page.
+      // why the built-in "+" and never `renderGutterUtility`: setting both of Pierre's gutter APIs
+      // throws, which takes down the whole plugin page. Its click handler is what makes a press
+      // and drag from the "+" select lines; it reports the same range as the gesture's end.
+      enableGutterUtility: true,
+      onGutterUtilityClick: gestures.picked,
+      unsafeCSS: NOTE_ROWS,
     }),
     [code.name, code.mode, settings.view, settings.overflow, gestures],
   );
 }
+
+// The rows Pierre slots notes into, the box and findings, are on the page's background, as the
+// prototype draws them. Pierre's own backdrop for them is a step off its code background, and in
+// bb's dark theme it is the very colour of a finding's recessed card, which then has no edge.
+// Pierre also tints a note's row, with its gutter, as part of a selection: only the code lines
+// read as selected.
+const NOTE_ROWS = "[data-line-annotation],[data-gutter-buffer=annotation]{--diffs-annotation-bg:var(--background);--diffs-computed-selected-line-bg:var(--diffs-computed-diff-line-bg)}";
 
 /**
  * The file's diff for Pierre: its patch at first, then, once `newContent` is read, both whole
@@ -57,28 +69,32 @@ export function useDiffOptions<Annotation>(settings: DiffSettings, gestures: Lin
  */
 // why processFile and never loadDiffFiles or hydratePartialDiff: bb renders in a shared worker
 // pool that can't take a function option, and its build shim doesn't export hydratePartialDiff.
-// why one name on both sides, a rename's too: with no `diff --git` line Pierre compares the two
-// names, and two names make it a rename; the bare path, never git's a/ b/ prefixes.
+// why the file's path set as its name, never read back from the patch: the Pierre bb 0.49 runs
+// reads a header's name raw, so a quoted path keeps its quotes, and a bare one loses what Pierre
+// trims or ends a name at. The name is also what Pierre picks the code's language by: one ending
+// in `"` is plain text, and the code goes uncoloured.
 export function fileDiffOf(file: DiffFile, newContent: string | null): FileDiffMetadata {
-  const oldName = file.status === "added" ? "/dev/null" : file.path;
-  const newName = file.status === "deleted" ? "/dev/null" : file.path;
-  const patch = `--- ${headerNameOf(oldName)}\n+++ ${headerNameOf(newName)}\n${filePatchOf(file)}`;
-  if (newContent === null) return getSingularPatch(patch);
+  const patch = patchOf(file);
+  if (newContent === null) return { ...getSingularPatch(patch), name: file.path };
   const parsed = processFile(patch, {
-    oldFile: { name: oldName, contents: oldContentOf(file, newContent) },
-    newFile: { name: newName, contents: newContent },
+    oldFile: { name: file.path, contents: oldContentOf(file, newContent) },
+    newFile: { name: file.path, contents: newContent },
     throwOnError: true,
   });
   if (parsed === undefined) throw new Error(`Pierre found no file in the patch of ${file.path}`);
-  return parsed;
+  return { ...parsed, name: file.path };
 }
 
-// why the path quoted: Pierre trims a header's name and ends it at a tab or line break, so a raw
-// path can lose a leading or trailing space, a BOM, or all after a tab. A quoted name it reads
-// back exactly, once `"`, `\`, tabs and line breaks in it are escaped.
-const QUOTED_ESCAPES: Record<string, string> = { '"': '\\"', "\\": "\\\\", "\t": "\\t", "\n": "\\n", "\r": "\\r" };
-
-/** A side's name as a patch header writes it: a path quoted, `/dev/null` (no git path is absolute) bare. */
-function headerNameOf(name: string): string {
-  return name === "/dev/null" ? name : `"${name.replace(/["\\\t\n\r]/g, (char) => QUOTED_ESCAPES[char])}"`;
+/**
+ * The file's patch with headers that say only which side is missing: `/dev/null`, or a name
+ * every Pierre reads the same.
+ */
+// why one name on both sides, a rename's too: with no `diff --git` line Pierre compares the two
+// names, and two names make it a rename.
+function patchOf(file: DiffFile): string {
+  const oldName = file.status === "added" ? "/dev/null" : SIDE_NAME;
+  const newName = file.status === "deleted" ? "/dev/null" : SIDE_NAME;
+  return `--- ${oldName}\n+++ ${newName}\n${filePatchOf(file)}`;
 }
+
+const SIDE_NAME = "file";

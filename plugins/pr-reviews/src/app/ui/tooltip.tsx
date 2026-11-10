@@ -4,12 +4,13 @@
 // so there is no dead gap between them (WCAG 1.4.13).
 import { useEffect, useId, useState, type ReactNode } from "react";
 
-type Placement = "top" | "bottom-start" | "bottom-end";
+type Placement = "top" | "top-end" | "bottom-start" | "bottom-end";
 
 type TooltipProps = {
   content: ReactNode;
   /** "bottom-end" for a trigger at the right end of a header bar, where "top" would be clipped by
-   *  the page's top edge and a centered popup by its right edge; "bottom-start" at its left end. */
+   *  the page's top edge and a centered popup by its right edge; "bottom-start" at its left end.
+   *  "top-end" for a trigger at the right end of a row with room above, such as a box's footer. */
   placement?: Placement;
   /** Layout classes for the hover area, which is the trigger's box in its parent: "min-w-0" lets a
    *  truncating trigger shrink in a flex row. */
@@ -21,6 +22,7 @@ type TooltipProps = {
 // The gap between trigger and popup is padding inside the popup, so the pointer never leaves the hover area.
 const PLACEMENTS = {
   top: "bottom-full left-1/2 -translate-x-1/2 pb-1.5",
+  "top-end": "bottom-full right-0 pb-1.5",
   "bottom-start": "top-full left-0 pt-1.5",
   "bottom-end": "top-full right-0 pt-1.5",
 } as const satisfies Record<Placement, string>;
