@@ -145,38 +145,47 @@ function ReviewMessage({ ref, review: { review, threads }, context, children }: 
 }
 
 // A review's threads: one row each, its file and line, its first line, and whether it is resolved
-// or outdated. The whole row opens the Changes tab at the thread, unless its file has left the diff:
-// then it is text, which says so.
+// or outdated.
 function Digest({ threads, context }: { threads: ReviewThread[]; context: Context }) {
   return (
     <ul aria-label="Review threads" className="col-start-2 mt-2 -ml-2 grid grid-cols-[minmax(0,1fr)] rounded-lg bg-(--pr-reviews-thread-tint) p-0.5">
-      {threads.map((thread) => {
-        const inDiff = context.changedPaths.has(thread.path);
-        const state = [threadStateOf(thread), inDiff ? "" : "not in this diff"].filter((words) => words !== "").join(" · ");
-        const row = (
-          <>
-            {/* Display only: `whitespace-pre` keeps the path's spaces as they are. */}
-            <span className="font-mono text-xs whitespace-pre text-foreground">{threadLocationOf(thread)}</span>
-            <span className="min-w-0 flex-1 truncate">{snippetOf(thread.comments[0].body)}</span>
-            {state !== "" && <span className="shrink-0">{state}</span>}
-          </>
-        );
-        return (
-          <li key={thread.id} className="grid">
-            {inDiff ? (
-              <button type="button" title={`${thread.path}: show in Changes`} onClick={() => context.onShowThread(thread)} className={`${DIGEST_ROW} cursor-pointer text-left transition-colors duration-150 ease-out hover:bg-(--pr-reviews-thread-tint-hover) hover:duration-0 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none`}>
-                {row}
-              </button>
-            ) : (
-              <div className={DIGEST_ROW}>{row}</div>
-            )}
-          </li>
-        );
-      })}
+      {threads.map((thread) => (
+        <li key={thread.id} className="grid">
+          <DigestRow thread={thread} context={context} />
+        </li>
+      ))}
     </ul>
   );
 }
 
+// The whole row opens the Changes tab at the thread, unless its file has left the diff: then it is
+// text, which says so. A refresh can move a file in or out of the diff, so the row hands focus from
+// the form that leaves to the one that comes; the text holds focus without being a tab stop.
+function DigestRow({ thread, context }: { thread: ReviewThread; context: Context }) {
+  const focus = useFocusHandOff();
+  const formRef = useMemo(() => mergeRefs(focus.from, focus.to), [focus]);
+  const inDiff = context.changedPaths.has(thread.path);
+  const state = [threadStateOf(thread), inDiff ? "" : "not in this diff"].filter((words) => words !== "").join(" · ");
+  const row = (
+    <>
+      {/* Display only: `whitespace-pre` keeps the path's spaces as they are. */}
+      <span className="font-mono text-xs whitespace-pre text-foreground">{threadLocationOf(thread)}</span>
+      <span className="min-w-0 flex-1 truncate">{snippetOf(thread.comments[0].body)}</span>
+      {state !== "" && <span className="shrink-0">{state}</span>}
+    </>
+  );
+  return inDiff ? (
+    <button ref={formRef} type="button" title={`${thread.path}: show in Changes`} onClick={() => context.onShowThread(thread)} className={`${DIGEST_ROW} cursor-pointer text-left transition-colors duration-150 ease-out hover:bg-(--pr-reviews-thread-tint-hover) hover:duration-0 ${FOCUS_RING}`}>
+      {row}
+    </button>
+  ) : (
+    <div ref={formRef} tabIndex={-1} className={`${DIGEST_ROW} ${FOCUS_RING}`}>
+      {row}
+    </div>
+  );
+}
+
+const FOCUS_RING = "focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none";
 const DIGEST_ROW = "flex min-h-7 min-w-0 items-baseline gap-2.5 rounded-md px-2 py-1 text-[12.5px] leading-5 text-muted-foreground";
 
 // The first line as words: markdown's code ticks and bold marks read as noise in a one-line row.

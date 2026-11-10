@@ -82,18 +82,32 @@ export const firstLineOf = (body: string) => body.trim().split("\n")[0];
 // A bot's comment, often long and generated, folds to three lines with Show more, and is never
 // hidden whole. The button shows only when the body is taller than the fold, whose last line fades
 // out, since the fold can cut through it.
-// why a ResizeObserver, not a layout effect: a thread under a line is a note Pierre slots into its
-// shadow root after this render, so the body has no height to measure until it is drawn.
+// why observers, not a layout effect: a thread under a line is a note Pierre slots into its shadow
+// root after this render, so the body has no height to measure until it is drawn; and bb's Markdown
+// can redraw the body's content without changing the fold's height.
+// It measures only the folded body: open, the body never overflows, and Show less must stay as the
+// body folds, since it keeps focus.
 function ClampedBody({ body }: { body: string }) {
   const text = useRef<HTMLDivElement>(null);
   const [overflows, setOverflows] = useState(false);
   const [expanded, setExpanded] = useState(false);
   useEffect(() => {
+    if (expanded) return;
     const field = text.current!;
-    const drawn = new ResizeObserver(() => setOverflows(field.scrollHeight > field.clientHeight + 1));
+    const fold = () => {
+      setOverflows(field.scrollHeight > field.clientHeight + 1);
+      foldControls(field, true);
+    };
+    const drawn = new ResizeObserver(fold);
+    const redrawn = new MutationObserver(fold);
     drawn.observe(field);
-    return () => drawn.disconnect();
-  }, []);
+    redrawn.observe(field, { childList: true, subtree: true });
+    return () => {
+      drawn.disconnect();
+      redrawn.disconnect();
+      foldControls(field, false);
+    };
+  }, [expanded]);
   return (
     <>
       <div ref={text} className={expanded ? "" : `max-h-[3lh] overflow-hidden ${overflows ? FADE_LAST_LINE : ""}`}>
@@ -106,4 +120,15 @@ function ClampedBody({ body }: { body: string }) {
       )}
     </>
   );
+}
+
+const FOCUSABLE = "a[href], button, input, select, textarea, summary, [tabindex]";
+
+// While the body is folded, a link or control the fold hides, even in part, is inert: focus in it
+// would scroll the fold and leave it faded at the bottom edge. The ones in view stay as they are.
+function foldControls(field: HTMLElement, folded: boolean) {
+  const edge = field.getBoundingClientRect().bottom;
+  field.querySelectorAll<HTMLElement>(FOCUSABLE).forEach((control) => {
+    control.inert = folded && control.getBoundingClientRect().bottom > edge;
+  });
 }
