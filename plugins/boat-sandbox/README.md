@@ -1,11 +1,12 @@
 # boat Sandbox
 
-Run bb threads on on-demand [boat.dev](https://boat.dev) sandboxes. See
-`PLUGIN_OVERVIEW.md` for the user-facing description and
-`skills/boat-sandboxes/SKILL.md` for the settings and commands.
+Experimental: it may break with a bb update.
 
-This version starts a thread on a new boat sandbox and deletes the sandbox when
-bb removes the machine. Stopping idle sandboxes and resuming them comes next.
+Run bb threads on on-demand [boat.dev](https://boat.dev) sandboxes. A thread
+gets a new sandbox when it starts; the sandbox stops after the thread has been
+idle, resumes on the same disk when the thread gets a follow-up, and is deleted
+when bb removes the machine. See `PLUGIN_OVERVIEW.md` for the user-facing
+description and `skills/boat-sandboxes/SKILL.md` for the settings and commands.
 
 ## Requirements
 
@@ -18,6 +19,16 @@ Git remote, and the bb server must be reachable from the internet (bb Connect).
 ```sh
 bb marketplace add git:github.com/ivan-anchev/bb-plugins@main
 bb plugin install boat-sandbox@ivan-anchev
+```
+
+## Use
+
+Add the API key in Settings → boat Sandbox, then run `bb boat status` to check
+the account. Pick **boat Sandbox** in the new-thread environment picker, or
+start a thread from the CLI:
+
+```sh
+bb thread spawn --environment-provider boat-sandbox --machine-inputs '{"preset":"small"}' --prompt "…"
 ```
 
 ## Develop

@@ -5,13 +5,13 @@
   "ttlSeconds": 3600,
   "sandbox": {
     "id": "bx_a8k84ben",
-    "name": "bb-spike-a",
+    "name": "bb-fixture-a",
     "state": "provisioned",
     "error": null,
     "dataExpiredAt": null,
     "stoppedAt": null,
     "labels": {
-      "bb-spike": "1"
+      "bb-fixture": "1"
     },
     "health": "ok",
     "healthReason": null,

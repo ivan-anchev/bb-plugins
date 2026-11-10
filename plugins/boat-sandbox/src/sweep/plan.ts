@@ -1,5 +1,5 @@
-// The minutely sweep's decisions, pure: from what bb and boat each say now, what to do this minute
-// (design.md "Drift table"): idle stops, the auto-stop lease, drift between bb and boat, and leaked sandboxes.
+// The minutely sweep's decisions, pure: from what bb and boat each say now, what to do this minute:
+// idle stops, the auto-stop lease, drift between bb and boat, and leaked sandboxes.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { isAwake, type Sandbox, type SandboxId } from "../boat/sandbox.ts";
 

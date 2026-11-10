@@ -4,7 +4,7 @@
 // 1. boat's sign-ins. boat writes the account's sign-ins (CLAUDE_CODE_OAUTH_TOKEN, GITHUB_TOKEN, the
 //    ChatGPT tokens) to /run/ascii-secrets/env.sh at every start and resume, and only ~/.bashrc reads
 //    that file. bb's daemon is a systemd user service that never runs ~/.bashrc, so without this its
-//    agent turns start signed out (checked live on 2026-11-09: "Not logged in · Please run /login").
+//    agent turns start signed out ("Not logged in · Please run /login").
 // 2. GitHub over HTTPS with boat's GITHUB_TOKEN, SSH remotes included: the four git settings bb core sends
 //    with its forwarded login (cleared github.com helpers, a token helper, the two insteadOf rewrites), as
 //    GIT_CONFIG_* on the daemon under core's exact variable names. When bb forwards a login, core's

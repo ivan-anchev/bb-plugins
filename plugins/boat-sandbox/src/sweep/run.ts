@@ -101,7 +101,7 @@ async function apply(run: SweepRun, action: SweepAction): Promise<void> {
       return client.setTtl(action.sandboxId, LEASE_TTL_SECONDS, signal);
     case "record-stopped":
       // Core suspends in the background. Within about a minute of a boat-side stop bb still holds the
-      // daemon's session, so core cancels after 30 s and logs it; the next sweep asks again (design G3).
+      // daemon's session, so core cancels after 30 s and logs it; the next sweep asks again.
       bb.log.info(`${action.why}, but bb has machine ${action.hostId} active; recording it as suspended.`);
       await bb.sdk.hosts.experimental_suspend({ hostId: action.hostId });
       return;

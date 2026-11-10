@@ -10,11 +10,11 @@ import type { StartGate } from "./boat/start-gate.ts";
  * runs, so boat stops a sandbox only once bb has been gone for about an hour.
  */
 export const LEASE_TTL_SECONDS = 7200;
-/** A fresh or resumed sandbox is up in about 1.5 s (spike Q1, Q5). */
+/** A fresh or resumed sandbox is up in about 1.5 s. */
 const START_PATIENCE_MS = 5 * 60_000;
-/** A stop takes about 14 s (spike Q5); boat retries one whose disk save fails. */
+/** A stop takes about 14 s; boat retries one whose disk save fails. */
 const STOP_PATIENCE_MS = 10 * 60_000;
-/** boat keeps the stopped machine for 10 minutes, and taking it back is not a start (spike Q6). */
+/** boat keeps the stopped machine for 10 minutes, and taking it back is not a start. */
 const KEPT_MACHINE_MS = 10 * 60_000;
 const POLL_MS = 2_000;
 
@@ -27,7 +27,7 @@ export async function stopSandbox(client: BoatClient, id: SandboxId, signal: Abo
 
 /**
  * Gets the same sandbox running again on its saved disk; running already is fine. Either way it ends
- * on a fresh lease: boat otherwise keeps whatever auto-stop was last set, by hand or a 20-second test.
+ * on a fresh lease: boat otherwise keeps whatever auto-stop was last set on the sandbox.
  */
 export async function wakeSandbox(client: BoatClient, gate: StartGate, id: SandboxId, signal: AbortSignal): Promise<void> {
   const found = await client.get(id, signal);

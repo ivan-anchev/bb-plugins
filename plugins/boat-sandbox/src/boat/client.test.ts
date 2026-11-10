@@ -21,7 +21,7 @@ function ndjson(frames: object[], chunkSize: number): Response {
   return new Response(body, { status: 200 });
 }
 
-// Frames as boat sent them for the spike's enrollment (spike/enroll-stream.ndjson).
+// Frames as boat sent them for a real enrollment.
 const ENROLL_FRAMES = [
   { type: "started", commandId: "cmd_d82phy5whurp" },
   { type: "stdout", data: "  ✓  Using local host-daemon port 38888\n" },

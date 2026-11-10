@@ -27,7 +27,7 @@ const FAILED: SavedSnapshot = { name: "py-ml", status: "failed", error: "source 
 const ENVIRONMENTS = wireEnvironmentList.parse(fixture("environments.json"));
 /** The account's default profile, as boat listed it live (owner id redacted): nothing connected, proxy off. */
 const PROFILES = wireCredentialProfileList.parse(fixture("credential-profiles.json"));
-/** boat's GitHub App installed for octocat, in OAS `ReposResponse` shape (live, a `ci` key read `installations: []`). */
+/** boat's GitHub App installed for octocat, in OAS `ReposResponse` shape (an account without the App reads `installations: []`). */
 const GITHUB_APP = wireGithubApp.parse(fixture("repos.json"));
 
 const unused = () => Promise.reject(new Error("the command never calls this"));

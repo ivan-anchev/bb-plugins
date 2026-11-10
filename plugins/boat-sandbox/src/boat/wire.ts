@@ -1,8 +1,8 @@
 // boat's JSON, parsed once. This is the only module that knows boat's field names;
 // every other module trusts the types these schemas produce.
 //
-// GET /me and GET /limits were pinned against live boat API v1 responses on 2026-11-08:
-// - /me: `user.id` is the account id (OpenAPI: "Your account id"; live it reads `sandbox_<32 hex>`),
+// What boat API v1 responses carry:
+// - /me: `user.id` is the account id (OpenAPI: "Your account id"; it reads `sandbox_<32 hex>`),
 //   `user.login`, `user.zeroDataRetention`.
 // - /limits reads the wallet a create would bill (the key's active wallet). It carries `teamId`
 //   only when that is an organization wallet. `starts.{minute,hour,day}` are `{limit, used, remaining}`,
@@ -143,12 +143,12 @@ const presentSandbox = z.object({
   stop: z.object({ endedAt: instant.nullable() }).nullable(),
   /**
    * The account's logins (agent sign-ins, GitHub token, secrets) are on the sandbox. False for a no-env
-   * sandbox, which still reports `environment: "base"` (live, 2026-11-09), so this is the field to read.
+   * sandbox, which still reports `environment: "base"`, so this is the field to read.
    */
   holdsCreatorLogins: z.boolean(),
   /**
    * The environment the sandbox runs (OAS: "what the sandbox actually holds"). Read it once the sandbox
-   * runs: a create response can say null before then (live, 2026-11-09).
+   * runs: a create response can say null before then.
    */
   environment: z.string().nullable(),
 });
