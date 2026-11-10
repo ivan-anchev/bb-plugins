@@ -1,105 +1,200 @@
-// A review thread from GitHub where a diff draws it: each comment with its author, avatar, time
-// and markdown, in order, then Reply. A resolved thread is folded to one row. A thread on several
-// lines names them; one at its file says why it is there. Reply and each comment's Quote open the
-// diff's one comment box here.
-import { useState, type ReactNode } from "react";
-import { UrlLink } from "@get-bb/plugin-sdk/app";
-import { linesLabel } from "../../comments/line-span.ts";
+// A review thread from GitHub where a diff draws it, as one recessed tinted surface ("Tint"): its
+// comments in order, each with its author, avatar, time and markdown, then Reply and Ask about
+// this, which open the diff's one comment box under the thread. A long thread shows its first and
+// latest comments with "N more" between; a bot's comment is clamped to three lines; a resolved
+// thread is one row that opens it. A thread at its file that lost its lines says "Outdated" over
+// the lines it was written on. No borders, pills or dividers: spacing separates the comments, and
+// the comment box is the only raised surface (app.css holds the tint).
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { FileThread } from "../../comments/place-threads.ts";
-import { quoteReplyText, type GitHubComment, type LineAnchor, type ReviewThread } from "../../comments/thread-schema.ts";
-import { shortSha } from "../../contract.ts";
+import { quoteReplyText, type GitHubComment, type ReviewThread } from "../../comments/thread-schema.ts";
+import type { NumberedLine } from "../../diff/diff-schema.ts";
 import { timeAgo } from "../relative-time.ts";
-import { ShowToggle } from "../guide/show-toggle.tsx";
 import { Avatar } from "../ui/avatar.tsx";
 import { Button } from "../ui/button.tsx";
+import { IconLink } from "../ui/icon-button.tsx";
 import { Prose } from "../ui/prose.tsx";
 
-/** Reply (`quote` "") or a comment's Quote, from its button. */
+/** Reply, Ask about this, or a comment's Quote (`quote` "" for none), from its button. */
 export type OpenReply = (request: { quote: string; from: HTMLElement }) => void;
-
-/** Where a diff draws the thread: under its last line, on `lines`, or at its file. */
-export type ThreadPlace = { kind: "lines"; lines: LineAnchor } | { kind: "file"; placed: FileThread };
 
 type ReviewThreadCardProps = {
   thread: ReviewThread;
-  place: ThreadPlace;
-  /** The diff's comment box while it is this thread's reply, which takes Reply's place. */
+  /** Why the thread is at its file, or null under its lines. */
+  atFile: FileThread | null;
+  /** The PR's author, whose comments say so; null while the PR is unread. */
+  prAuthor: string | null;
+  /** The diff's comment box while it is this thread's, which takes the footer's place. */
   box: ReactNode | null;
   onReply: OpenReply;
 };
 
-export function ReviewThreadCard({ thread, place, box, onReply }: ReviewThreadCardProps) {
-  const [first] = thread.comments;
-  const [shown, setShown] = useState(!thread.resolved);
-  const where = place.kind === "file" ? <AtFile placed={place.placed} /> : place.lines.start === null ? null : <span>{linesOf(place.lines)}</span>;
+export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: ReviewThreadCardProps) {
+  const [open, setOpen] = useState(thread.resolvedBy === null);
+  if (!open) return <ResolvedRow thread={thread} onOpen={() => setOpen(true)} />;
   return (
-    <section aria-label={`Review thread by ${first.author}`} className="overflow-hidden rounded-xl border border-border bg-background text-[13px] leading-5">
-      {(where !== null || thread.resolved) && (
-        <div className="flex min-h-9 items-center gap-2 border-b border-border px-3.5 py-1.5 text-xs text-muted-foreground">
-          {where}
-          {thread.resolved && (
+    <section aria-label={`Review thread by ${thread.comments[0].author.login}`} className={`${SURFACE} pt-3 pr-3.5 pb-3 pl-3`}>
+      {atFile !== null && atFile.why !== "file" && <Original thread={thread} why={atFile.why} />}
+      <Comments thread={thread} prAuthor={prAuthor} onQuote={(comment, from) => onReply({ quote: quoteReplyText(comment.body), from })} />
+      {box === null ? (
+        <div className="pr-reviews-thread-foot mt-2 -mb-1 ml-5 flex items-center gap-1">
+          <Button variant="ghost" size="small" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
+            Reply
+          </Button>
+          <Button variant="ghost" size="small" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
+            Ask about this
+          </Button>
+          {thread.resolvedBy !== null && (
             <>
-              <span className="font-medium text-foreground">Resolved</span>
-              {!shown && <span className="min-w-0 truncate">{`${first.author}: ${firstLineOf(first.body)}`}</span>}
-              <div className="-my-1 ml-auto">
-                <ShowToggle open={shown} subject={`resolved thread by ${first.author}`} onToggle={() => setShown(!shown)} />
-              </div>
+              <span className="ml-auto text-xs text-muted-foreground">Resolved by {thread.resolvedBy}</span>
+              <Button variant="ghost" size="small" aria-expanded onClick={() => setOpen(false)}>
+                Collapse
+              </Button>
             </>
           )}
         </div>
-      )}
-      {shown && (
-        <>
-          <ol>
-            {thread.comments.map((comment) => (
-              <Comment key={comment.id} comment={comment} onQuote={(from) => onReply({ quote: quoteReplyText(comment.body), from })} />
-            ))}
-          </ol>
-          <div className="border-t border-border px-2.5 py-2">
-            {box ?? (
-              <Button variant="ghost" size="small" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
-                Reply
-              </Button>
-            )}
-          </div>
-        </>
+      ) : (
+        <div className="mt-3">{box}</div>
       )}
     </section>
   );
 }
 
-function Comment({ comment, onQuote }: { comment: GitHubComment; onQuote(from: HTMLElement): void }) {
+const SURFACE = "min-w-0 rounded-[10px] bg-(--pr-reviews-thread-tint) text-[13px] leading-5";
+
+// A thread longer than this shows its first and latest comments, with the rest behind "N more".
+const SHOWN_WHOLE = 3;
+
+function Comments({ thread, prAuthor, onQuote }: { thread: ReviewThread; prAuthor: string | null; onQuote(comment: GitHubComment, from: HTMLElement): void }) {
+  const { comments } = thread;
+  const [whole, setWhole] = useState(comments.length <= SHOWN_WHOLE);
+  const shown = whole ? comments : [comments[0], comments[comments.length - 1]];
   return (
-    <li className="grid gap-1.5 border-t border-border px-3.5 pt-2.5 pb-3 first:border-t-0">
-      <div className="flex items-center gap-2">
-        <Avatar login={comment.author} size={20} />
-        <span className="min-w-0 truncate font-semibold">{comment.author}</span>
-        <UrlLink href={comment.url} title={new Date(comment.createdAt).toLocaleString()} className="shrink-0 text-xs text-subtle-foreground hover:underline">
+    <ol className="grid gap-3.5">
+      {shown.map((comment, index) => (
+        <li key={comment.id} className="grid gap-3.5">
+          <Comment comment={comment} byPrAuthor={comment.author.login === prAuthor} onQuote={(from) => onQuote(comment, from)} />
+          {!whole && index === 0 && (
+            <button type="button" onClick={() => setWhole(true)} className={`${QUIET_BUTTON} -my-1 ml-[22px] justify-self-start px-2 py-0.5`}>
+              {comments.length - 2} more
+            </button>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+const QUIET_BUTTON =
+  "cursor-pointer rounded-md text-xs leading-5 text-muted-foreground transition-colors duration-150 ease-out hover:bg-state-hover hover:text-foreground hover:duration-0 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none";
+
+// Quote and the link to GitHub show on hover or focus, and always where there is no hover.
+function Comment({ comment, byPrAuthor, onQuote }: { comment: GitHubComment; byPrAuthor: boolean; onQuote(from: HTMLElement): void }) {
+  const { author } = comment;
+  return (
+    <article className="group/comment grid grid-cols-[20px_minmax(0,1fr)] gap-x-2.5">
+      <Avatar login={author.login} size={20} />
+      <div className="flex min-h-5 min-w-0 items-center gap-1.5">
+        <span className="min-w-0 truncate font-medium">{author.login}</span>
+        {byPrAuthor && <span className="shrink-0 text-xs text-muted-foreground">author</span>}
+        {author.bot && <span className="shrink-0 text-xs text-muted-foreground">bot</span>}
+        <span title={new Date(comment.createdAt).toLocaleString()} className="shrink-0 text-xs text-subtle-foreground">
           {timeAgo(comment.createdAt, Date.now())}
-        </UrlLink>
-        <div className="-my-1 ml-auto">
-          <Button variant="ghost" size="small" aria-label={`Quote reply to ${comment.author}`} onClick={(event) => onQuote(event.currentTarget)}>
+        </span>
+        <div className="-my-1 ml-auto flex items-center opacity-0 transition-opacity duration-150 group-focus-within/comment:opacity-100 group-hover/comment:opacity-100 [@media(hover:none)]:opacity-100">
+          <Button variant="ghost" size="small" aria-label={`Quote reply to ${author.login}`} onClick={(event) => onQuote(event.currentTarget)}>
             Quote
           </Button>
+          <IconLink icon="ArrowUpRight" label="Open on GitHub" href={comment.url} />
         </div>
       </div>
-      <Prose text={comment.body} className="min-w-0 pl-7" />
-    </li>
+      <div className="col-start-2 mt-0.5 min-w-0 max-w-[80ch]">{author.bot ? <ClampedBody body={comment.body} /> : <Prose text={comment.body} />}</div>
+    </article>
   );
 }
 
-// "File", "Outdated  lines 12–13 (new) at abc1234", "Other commit  line 3 (new) at def5678".
-function AtFile({ placed }: { placed: FileThread }) {
-  const label = { file: "File", outdated: "Outdated", elsewhere: "Other commit" }[placed.why];
-  const last = placed.why === "file" ? null : placed.last;
+// A bot's comment, often long and generated, folds to three lines with Show more, and is never
+// hidden whole. The button shows only when the body is taller than the fold.
+// why a ResizeObserver, not a layout effect: a thread under a line is a note Pierre slots into its
+// shadow root after this render, so the body has no height to measure until it is drawn.
+function ClampedBody({ body }: { body: string }) {
+  const text = useRef<HTMLDivElement>(null);
+  const [overflows, setOverflows] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    const field = text.current!;
+    const drawn = new ResizeObserver(() => setOverflows(field.scrollHeight > field.clientHeight + 1));
+    drawn.observe(field);
+    return () => drawn.disconnect();
+  }, []);
   return (
-    <span className="flex min-w-0 items-baseline gap-1.5">
-      <span className="rounded-sm bg-muted px-1.5 py-px font-medium text-foreground">{label}</span>
-      {last !== null && <span className="min-w-0 truncate">{`${linesOf(last)} at ${shortSha(last.commit)}`}</span>}
-    </span>
+    <>
+      <div ref={text} className={expanded ? "" : "max-h-[60px] overflow-hidden"}>
+        <Prose text={body} />
+      </div>
+      {(overflows || expanded) && (
+        <button type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)} className={`${QUIET_BUTTON} -ml-2 mt-1 px-2 py-0.5`}>
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      )}
+    </>
   );
 }
 
-const linesOf = ({ start, end }: LineAnchor) => linesLabel(start ?? end, end);
+// "Resolved · name · first line", and the count when there are replies. The whole row opens it.
+function ResolvedRow({ thread, onOpen }: { thread: ReviewThread; onOpen(): void }) {
+  const [first] = thread.comments;
+  const count = thread.comments.length;
+  return (
+    <section aria-label={`Resolved review thread by ${first.author.login}`} className={SURFACE}>
+      <button
+        type="button"
+        aria-expanded={false}
+        onClick={onOpen}
+        className="flex min-h-8 w-full cursor-pointer items-center gap-2 rounded-[10px] px-3 py-1.5 text-left text-[12.5px] leading-5 text-muted-foreground transition-colors duration-150 ease-out hover:bg-(--pr-reviews-thread-tint-hover) hover:text-foreground hover:duration-0 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        <span className="shrink-0">Resolved ·</span>
+        <span className="shrink-0 font-medium text-foreground">{first.author.login}</span>
+        <span className="shrink-0">·</span>
+        <span className="min-w-0 flex-1 truncate">{firstLineOf(first.body)}</span>
+        {count > 1 && <span className="shrink-0">{count} comments</span>}
+        <Icon name="ChevronDown" className="size-3.5 shrink-0 text-subtle-foreground" aria-hidden />
+      </button>
+    </section>
+  );
+}
+
+// One muted word over the lines the thread was written on, as GitHub kept them. A thread on
+// another commit's lines (a guide written before new commits) says so instead.
+function Original({ thread, why }: { thread: ReviewThread; why: "outdated" | "elsewhere" }) {
+  const excerpt = thread.subject.kind === "lines" ? thread.subject.excerpt : [];
+  return (
+    <>
+      <p className="mb-1.5 text-xs leading-[18px] text-subtle-foreground">{why === "outdated" ? "Outdated" : "On another commit"}</p>
+      {excerpt.length > 0 && (
+        <div className="mb-3.5 overflow-x-auto rounded-md bg-background font-mono text-xs leading-5">
+          {excerpt.map((line, index) => (
+            <ExcerptRow key={index} line={line} />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+const ROW_TONE: Record<string, string> = {
+  "+": "bg-[color-mix(in_oklab,var(--diff-added)_16%,var(--background))]",
+  "-": "bg-[color-mix(in_oklab,var(--diff-removed)_16%,var(--background))]",
+};
+
+function ExcerptRow({ line }: { line: NumberedLine }) {
+  return (
+    <div className={`grid w-max min-w-full grid-cols-[40px_minmax(0,1fr)] ${ROW_TONE[line.text[0]] ?? ""}`}>
+      <span className="pr-2.5 text-right text-subtle-foreground select-none">{line.new ?? line.old}</span>
+      <span className="pr-3 whitespace-pre">{line.text.slice(1)}</span>
+    </div>
+  );
+}
 
 const firstLineOf = (body: string) => body.trim().split("\n")[0];

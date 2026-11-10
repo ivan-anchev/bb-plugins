@@ -11,7 +11,7 @@ import { checkComment, checkReply, type BlockedComment, type ReplyRequest } from
 import type { ReviewThread } from "../../comments/thread-schema.ts";
 import { isBlank, type BoxOutcome, type LineBox } from "../diff/line-selection.ts";
 import { useLifetime } from "../lifetime.ts";
-import { useAskAboutFinding, useAskAboutLines, usePostComment, usePullRequest, useReplyToThread, type PrHeadTarget } from "../queries.ts";
+import { useAskAboutFinding, useAskAboutGitHubThread, useAskAboutLines, usePostComment, usePullRequest, useReplyToThread, type PrHeadTarget } from "../queries.ts";
 import { Button } from "../ui/button.tsx";
 import { useHoldEscape } from "../ui/hold-escape.ts";
 import { IconButton } from "../ui/icon-button.tsx";
@@ -81,6 +81,7 @@ function Composer({ subject, head, draft, sent, onDraft, onSettled, onClose, pr,
   const life = useLifetime();
   const askLines = useAskAboutLines();
   const askFinding = useAskAboutFinding();
+  const askThread = useAskAboutGitHubThread();
   const postComment = usePostComment();
   const reply = useReplyToThread();
   // why a latch beside `sending`: the state arrives with the next render, so a quick second click
@@ -90,10 +91,8 @@ function Composer({ subject, head, draft, sent, onDraft, onSettled, onClose, pr,
 
   const check = postOf(subject, pr, draft);
   const post = "blocked" in check ? null : check;
-  // Only lines can be asked about; a reply has no Ask.
-  const asks = subject.kind === "lines";
   const hasThread = reviewThreadOf(review) !== null;
-  const canAsk = asks && hasThread && !isBlank(draft) && sending === null;
+  const canAsk = hasThread && !isBlank(draft) && sending === null;
   const canComment = post !== null && !isBlank(draft) && sending === null;
   const problems = problemsOf("blocked" in check ? check.blocked : null, failure, draft);
   const words = WORDS[subject.kind];
@@ -120,9 +119,11 @@ function Composer({ subject, head, draft, sent, onDraft, onSettled, onClose, pr,
   const target = { projectId: head.projectId, number: head.number };
   const ask = () => {
     if (!canAsk) return;
-    // A box a finding's button opened, still on its line, asks about the finding, so the thread knows which.
+    // A box a finding's button opened, still on its line, asks about the finding, so the thread
+    // knows which; a box in a GitHub thread asks about that thread.
     run("ask", async () => {
-      if (subject.finding === null) await askLines.mutate({ ...target, quote: quoteOf(subject.span), question: draft });
+      if (subject.kind === "reply") await askThread.mutate({ ...target, thread: subject.thread, question: draft });
+      else if (subject.finding === null) await askLines.mutate({ ...target, quote: quoteOf(subject.span), question: draft });
       else await askFinding.mutate({ ...target, headSha: head.headSha, findingIndex: subject.finding, question: draft });
       return { kind: "asked" };
     });
@@ -202,7 +203,6 @@ function Composer({ subject, head, draft, sent, onDraft, onSettled, onClose, pr,
             ))}
           </div>
         ) : (
-          asks &&
           !hasThread && (
             <p id={ids.noThread} className="mr-auto text-xs text-subtle-foreground">
               Start a review first
@@ -211,11 +211,9 @@ function Composer({ subject, head, draft, sent, onDraft, onSettled, onClose, pr,
         )}
         <div className="ml-auto flex shrink-0 gap-1">
           {/* why aria-disabled, not disabled: the buttons stay focusable, and Ask's reason is read with it. */}
-          {asks && (
-            <Button variant="ghost" size="small" aria-disabled={!canAsk} aria-describedby={hasThread || problems.length > 0 ? undefined : ids.noThread} onClick={ask}>
-              {sending === "ask" ? "Sending…" : "Ask about this"}
-            </Button>
-          )}
+          <Button variant="ghost" size="small" aria-disabled={!canAsk} aria-describedby={hasThread || problems.length > 0 ? undefined : ids.noThread} onClick={ask}>
+            {sending === "ask" ? "Sending…" : "Ask about this"}
+          </Button>
           <Tooltip content={`${words.post} on GitHub (${COMMENT_KEYS})`} placement="top-end">
             {(describedBy) => (
               <Button variant="primary" size="small" aria-disabled={!canComment} aria-describedby={describedBy} onClick={comment}>
@@ -244,11 +242,11 @@ function postOf(subject: BoxSubject, pr: PrDetail, draft: string): Post | Blocke
 
 const WORDS = {
   lines: { placeholder: "Ask about these lines, or leave a comment", post: "Comment", posting: "Commenting…" },
-  reply: { placeholder: "Reply", post: "Reply", posting: "Replying…" },
+  reply: { placeholder: "Reply, or ask about this thread", post: "Reply", posting: "Replying…" },
 } as const satisfies Record<BoxSubject["kind"], { placeholder: string; post: string; posting: string }>;
 
 function labelOf(subject: BoxSubject): string {
-  if (subject.kind === "reply") return `Reply to ${subject.thread.comments[0].author}`;
+  if (subject.kind === "reply") return `Reply or question about the thread by ${subject.thread.comments[0].author.login}`;
   return `Comment or question about ${subject.span.rows.length === 1 ? "this line" : "these lines"}`;
 }
 

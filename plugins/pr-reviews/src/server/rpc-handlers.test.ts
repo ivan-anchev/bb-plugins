@@ -34,7 +34,7 @@ const handlersWith = (projects: (typeof PROJECT)[]) =>
     },
     store: { guide: () => assert.fail("not part of these tests"), snapshotFiles: () => assert.fail("not part of these tests") },
     reader: { withReviews: notCalled, pullRequest: notCalled, runningReview: notCalled, threadIsOpen: notCalled },
-    reviews: { start: notCalled, update: notCalled, cancel: notCalled, nudge: notCalled, ask: notCalled, askAboutLines: notCalled },
+    reviews: { start: notCalled, update: notCalled, cancel: notCalled, nudge: notCalled, ask: notCalled, askAboutLines: notCalled, askAboutGitHubThread: notCalled },
   });
 const handlers = handlersWith([PROJECT]);
 

@@ -3,7 +3,7 @@
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { codeQuoteSchema, commentBodySchema, commentRequestSchema } from "./comments/comment-schema.ts";
-import { prCommentsSchema } from "./comments/thread-schema.ts";
+import { prCommentsSchema, reviewThreadSchema } from "./comments/thread-schema.ts";
 import { diffFileSchema } from "./diff/diff-schema.ts";
 import { guideSchema } from "./guide/guide-schema.ts";
 import { repoSchema, type Repo } from "./github/repo.ts";
@@ -215,6 +215,11 @@ export const prReviewsContract = defineRpcContract({
   /** Sends the reader's question about lines they selected in a diff, quoted, to the PR's review thread. */
   askAboutLines: {
     input: prRefSchema.extend({ quote: codeQuoteSchema, question: z.string().trim().min(1) }),
+    output: empty,
+  },
+  /** Sends the reader's question about one of the PR's GitHub review threads, as the page shows it, to the PR's review thread. */
+  askAboutGitHubThread: {
+    input: prRefSchema.extend({ thread: reviewThreadSchema, question: z.string().trim().min(1) }),
     output: empty,
   },
   /**

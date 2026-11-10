@@ -169,12 +169,12 @@ test("a body over GitHub's limit blocks the comment and says by how much, the qu
 const THREAD: ReviewThread = {
   id: "PRRT_1",
   path: PATH,
-  resolved: false,
+  resolvedBy: null,
   outdated: false,
   subject: { kind: "file" },
   comments: [
-    { id: 41, url: "https://github.com/o/r/pull/1#discussion_r41", author: "octocat", body: "Why?", createdAt: "2026-11-10T08:00:00Z" },
-    { id: 42, url: "https://github.com/o/r/pull/1#discussion_r42", author: "hubot", body: "Because.", createdAt: "2026-11-10T09:00:00Z" },
+    { id: 41, url: "https://github.com/o/r/pull/1#discussion_r41", author: { login: "octocat", bot: false }, body: "Why?", createdAt: "2026-11-10T08:00:00Z" },
+    { id: 42, url: "https://github.com/o/r/pull/1#discussion_r42", author: { login: "hubot", bot: false }, body: "Because.", createdAt: "2026-11-10T09:00:00Z" },
   ],
 };
 

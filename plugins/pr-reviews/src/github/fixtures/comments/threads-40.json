@@ -11,6 +11,7 @@
             {
               "id": "PRRT_kwDOVjmb-s61pTAP",
               "isResolved": false,
+              "resolvedBy": null,
               "isOutdated": false,
               "path": "plugins/generative-ui/src/agent/instructions.ts",
               "subjectType": "LINE",
@@ -32,6 +33,7 @@
                     "body": "`test`\n\n```ts\nfunction test() {\n   const blabla = 1;\n}\n```",
                     "createdAt": "2026-11-10T10:02:59Z",
                     "author": {
+                      "__typename": "User",
                       "login": "ivan-anchev"
                     },
                     "commit": {
@@ -39,7 +41,8 @@
                     },
                     "originalCommit": {
                       "oid": "ff2bc97857da72054e99587086ddf022d0512df7"
-                    }
+                    },
+                    "diffHunk": "@@ -0,0 +1,14 @@\n+// The standing rule every person-facing thread gets. It says when to answer\n+// with a UI block and points at the skill; the component spec itself is too\n+// long for bb's 4096-character instruction limit, so it lives in the skill.\n+export const SKILL_NAME = \"generative-ui\";\n+\n+export const UI_BLOCK_INSTRUCTIONS = `## Interactive UI in replies\n+\n+bb draws OpenUI Lang blocks in your reply as live UI, using OpenUI's stock components: charts, tables, forms, cards, tabs, steps and layouts.\n+\n+- Answer with a UI block when the answer is data or needs input: numbers to compare or follow over time (a chart), records with several fields (a table), a few items to summarize side by side (cards), or details you need from the user (a form, or buttons to pick from). Prefer a UI block to an inline-vis HTML page for these.\n+- Load the \\`${SKILL_NAME}\\` skill before your first UI block in a thread. It has the syntax and the signature of every component. Never guess a component name or its argument order.\n+- Write the block as a fenced code block with the language \\`openui\\`, and keep any prose outside it. Each block is a complete program that starts with \\`root = Stack(...)\\`."
                   }
                 ]
               }
@@ -47,6 +50,7 @@
             {
               "id": "PRRT_kwDOVjmb-s61pTsB",
               "isResolved": false,
+              "resolvedBy": null,
               "isOutdated": false,
               "path": "plugins/generative-ui/src/library.ts",
               "subjectType": "LINE",
@@ -68,6 +72,7 @@
                     "body": "test again",
                     "createdAt": "2026-11-10T10:03:28Z",
                     "author": {
+                      "__typename": "User",
                       "login": "ivan-anchev"
                     },
                     "commit": {
@@ -75,7 +80,8 @@
                     },
                     "originalCommit": {
                       "oid": "ff2bc97857da72054e99587086ddf022d0512df7"
-                    }
+                    },
+                    "diffHunk": "@@ -0,0 +1,17 @@\n+// The one OpenUI library this plugin ships: UI blocks render with it, and the\n+// skill teaches agents its spec. Both come from OpenUI unmodified.\n+import { openuiLibrary, openuiPromptOptions } from \"@openuidev/react-ui/genui-lib\";\n+\n+export const library = openuiLibrary;\n+\n+/** Fence languages bb hands to the renderer. `openui` is the one agents are taught; `openui-lang` is OpenUI's own name for it. */\n+export const UI_BLOCK_LANGUAGES = [\"openui\", \"openui-lang\"] as const;\n+\n+/**\n+ * The component spec agents read in the skill: OpenUI's stock prompt for this\n+ * library, minus its preamble, which demands that the whole reply be OpenUI\n+ * Lang. In bb a block is one fence inside an ordinary Markdown reply."
                   }
                 ]
               }
@@ -83,6 +89,7 @@
             {
               "id": "PRRT_kwDOVjmb-s61pU-d",
               "isResolved": false,
+              "resolvedBy": null,
               "isOutdated": false,
               "path": "plugins/generative-ui/src/app/use-block-actions.ts",
               "subjectType": "LINE",
@@ -104,6 +111,7 @@
                     "body": "**Failed send still counts as sent**\n\n`lastAnswer` is set before `send` resolves. If the send fails and the user clicks again within 1s of that click, the retry is silently dropped. Set it only after the send succeeds, or clear it in `.catch`.",
                     "createdAt": "2026-11-10T10:04:24Z",
                     "author": {
+                      "__typename": "User",
                       "login": "ivan-anchev"
                     },
                     "commit": {
@@ -111,7 +119,8 @@
                     },
                     "originalCommit": {
                       "oid": "ff2bc97857da72054e99587086ddf022d0512df7"
-                    }
+                    },
+                    "diffHunk": "@@ -0,0 +1,29 @@\n+// What a click in a UI block does in bb: @ToAssistant posts the answer to the\n+// block's thread as a user message, @OpenUrl opens the link the way bb opens links.\n+// A double-click repeats the answer; only the first one is sent.\n+import { useBbNavigate, useSdk } from \"@get-bb/plugin-sdk/app\";\n+import { type ActionEvent, BuiltinActionType } from \"@openuidev/react-lang\";\n+import { useRef } from \"react\";\n+import { toast } from \"sonner\";\n+import { formatActionMessage } from \"../action-message.ts\";\n+import { isRepeatedAnswer, type SentAnswer } from \"../repeated-answer.ts\";\n+\n+export function useBlockActions(threadId: string): (event: ActionEvent) => void {\n+  const sdk = useSdk();\n+  const navigate = useBbNavigate();\n+  const lastAnswer = useRef<SentAnswer>(undefined);\n+\n+  const sendAnswer = (event: ActionEvent) => {\n+    const answer = { text: formatActionMessage(event), at: performance.now() };\n+    if (isRepeatedAnswer(lastAnswer.current, answer)) return;\n+    lastAnswer.current = answer;"
                   }
                 ]
               }

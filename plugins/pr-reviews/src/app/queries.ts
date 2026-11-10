@@ -48,6 +48,8 @@ export const useAskAboutFinding = () => experimental_useRpcMutation({ contract, 
 
 export const useAskAboutLines = () => experimental_useRpcMutation({ contract, method: "askAboutLines" });
 
+export const useAskAboutGitHubThread = () => experimental_useRpcMutation({ contract, method: "askAboutGitHubThread" });
+
 export const usePostComment = () => experimental_useRpcMutation({ contract, method: "postComment" });
 
 export const useReplyToThread = () => experimental_useRpcMutation({ contract, method: "replyToThread" });

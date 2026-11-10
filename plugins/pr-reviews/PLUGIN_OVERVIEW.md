@@ -62,10 +62,11 @@ post to GitHub.
   it does for a comment on an older commit than the PR's latest.
 - **GitHub's comments in place**: each review thread shows under its lines in
   the Changes tab and in the guide step that holds them, with each comment's
-  author, avatar, time and markdown. File comments, outdated threads and
-  threads on another commit show at their file, labelled; resolved ones are
-  folded. Reply, or Quote on a comment, opens the same comment box in the
-  thread; a comment or reply you post shows in place.
+  author, avatar, time and markdown. File comments and outdated threads show
+  at their file, outdated ones over the lines they were written on; long
+  threads, bot comments and resolved threads are folded. Reply, Ask about
+  this, or Quote on a comment opens the same comment box in the thread; a
+  comment or reply you post shows in place.
 - **New commits**: when a PR moves past its guide, the row reads New commits
   and the guide stays readable under "N new commits since this guide was
   written". Update guide asks the same review thread to read only the new

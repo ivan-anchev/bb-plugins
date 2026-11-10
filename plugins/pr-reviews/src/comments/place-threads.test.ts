@@ -30,9 +30,9 @@ const at = (commit: string, end: LineRef, start: LineRef | null = null): LineAnc
 let nextId = 0;
 function thread(subject: ReviewThread["subject"], { path = PATH, outdated = false } = {}): ReviewThread {
   const id = ++nextId;
-  return { id: `PRRT_${id}`, path, resolved: false, outdated, subject, comments: [{ id, url: `https://github.com/o/r/pull/1#discussion_r${id}`, author: "octocat", body: "Why?", createdAt: "2026-11-10T08:00:00Z" }] };
+  return { id: `PRRT_${id}`, path, resolvedBy: null, outdated, subject, comments: [{ id, url: `https://github.com/o/r/pull/1#discussion_r${id}`, author: { login: "octocat", bot: false }, body: "Why?", createdAt: "2026-11-10T08:00:00Z" }] };
 }
-const onLines = (...anchors: LineAnchor[]) => ({ kind: "lines" as const, anchors });
+const onLines = (...anchors: LineAnchor[]) => ({ kind: "lines" as const, anchors, excerpt: [] });
 
 test("a thread at this commit goes under the row of its last line, on that row's hunk", () => {
   const added = thread(onLines(at(HEAD, ref("new", 21))));
@@ -41,9 +41,9 @@ test("a thread at this commit goes under the row of its last line, on that row's
 
   assert.deepEqual(placeThreads([added, removed, range], PATH, HEAD, ROWS), {
     lines: [
-      { thread: added, at: ref("new", 21), hunk: 1, lines: at(HEAD, ref("new", 21)) },
-      { thread: removed, at: ref("old", 5), hunk: 0, lines: at(HEAD, ref("old", 5)) },
-      { thread: range, at: ref("new", 22), hunk: 1, lines: at(HEAD, ref("new", 22), ref("old", 20)) },
+      { thread: added, at: ref("new", 21), hunk: 1 },
+      { thread: removed, at: ref("old", 5), hunk: 0 },
+      { thread: range, at: ref("new", 22), hunk: 1 },
     ],
     file: [],
   });
@@ -52,13 +52,13 @@ test("a thread at this commit goes under the row of its last line, on that row's
 test("a thread on the old side of an unchanged line goes under that row, anchored as the diff draws it", () => {
   const leftColumn = thread(onLines(at(HEAD, ref("old", 6))));
 
-  assert.deepEqual(placeThreads([leftColumn], PATH, HEAD, ROWS).lines, [{ thread: leftColumn, at: ref("new", 5), hunk: 0, lines: at(HEAD, ref("old", 6)) }]);
+  assert.deepEqual(placeThreads([leftColumn], PATH, HEAD, ROWS).lines, [{ thread: leftColumn, at: ref("new", 5), hunk: 0 }]);
 });
 
 test("a diff at the commit a thread was written on places it by the lines it was written on", () => {
   const moved = thread(onLines(at(HEAD, ref("new", 22)), at(OLDER, ref("new", 20))));
 
-  assert.deepEqual(placeThreads([moved], PATH, OLDER, ROWS).lines, [{ thread: moved, at: ref("new", 20), hunk: 1, lines: at(OLDER, ref("new", 20)) }]);
+  assert.deepEqual(placeThreads([moved], PATH, OLDER, ROWS).lines, [{ thread: moved, at: ref("new", 20), hunk: 1 }]);
 });
 
 test("a file thread, an outdated one, and one only on another commit's lines go at the file, each said why", () => {
@@ -71,8 +71,8 @@ test("a file thread, an outdated one, and one only on another commit's lines go 
     lines: [],
     file: [
       { thread: file, why: "file" },
-      { thread: outdated, why: "outdated", last: written },
-      { thread: newer, why: "elsewhere", last: at(HEAD, ref("new", 21)) },
+      { thread: outdated, why: "outdated" },
+      { thread: newer, why: "elsewhere" },
     ],
   });
 });
@@ -80,7 +80,7 @@ test("a file thread, an outdated one, and one only on another commit's lines go 
 test("a thread whose last line this diff doesn't draw goes at the file, not nowhere", () => {
   const offDiff = thread(onLines(at(HEAD, ref("new", 30))));
 
-  assert.deepEqual(placeThreads([offDiff], PATH, HEAD, ROWS), { lines: [], file: [{ thread: offDiff, why: "elsewhere", last: at(HEAD, ref("new", 30)) }] });
+  assert.deepEqual(placeThreads([offDiff], PATH, HEAD, ROWS), { lines: [], file: [{ thread: offDiff, why: "elsewhere" }] });
 });
 
 test("other files' threads are left out", () => {
@@ -93,6 +93,6 @@ test("a guide hunk draws the threads on its own lines, and its file's only as th
   const file = thread({ kind: "file" });
   const placed = placeThreads([first, second, file], PATH, HEAD, ROWS);
 
-  assert.deepEqual(threadsOfHunk(placed, 1, true), { lines: [{ thread: second, at: ref("new", 21), hunk: 1, lines: at(HEAD, ref("new", 21)) }], file: [{ thread: file, why: "file" }] });
-  assert.deepEqual(threadsOfHunk(placed, 0, false), { lines: [{ thread: first, at: ref("old", 5), hunk: 0, lines: at(HEAD, ref("old", 5)) }], file: [] });
+  assert.deepEqual(threadsOfHunk(placed, 1, true), { lines: [{ thread: second, at: ref("new", 21), hunk: 1 }], file: [{ thread: file, why: "file" }] });
+  assert.deepEqual(threadsOfHunk(placed, 0, false), { lines: [{ thread: first, at: ref("old", 5), hunk: 0 }], file: [] });
 });

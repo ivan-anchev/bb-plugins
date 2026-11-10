@@ -23,3 +23,18 @@
   --trees-status-modified-override: var(--muted-foreground);
   --trees-status-renamed-override: var(--muted-foreground);
 }
+
+/* A GitHub review thread in a diff is one recessed surface ("Tint"): no border, no dividers; the
+   open comment box is the only raised one. bb puts `.dark` on the page for its dark theme. */
+:root {
+  --pr-reviews-thread-tint: color-mix(in oklab, var(--foreground) 3.5%, var(--background));
+  --pr-reviews-thread-tint-hover: color-mix(in oklab, var(--foreground) 6.5%, var(--background));
+}
+.dark {
+  --pr-reviews-thread-tint: color-mix(in oklab, var(--foreground) 5.5%, var(--background));
+  --pr-reviews-thread-tint-hover: color-mix(in oklab, var(--foreground) 9%, var(--background));
+}
+/* The footer's ghost buttons hover to the tint's own step, not the page's hover state. */
+.pr-reviews-thread-foot button:hover {
+  background: var(--pr-reviews-thread-tint-hover);
+}

@@ -3,12 +3,13 @@
 // rules live only in review-state.ts, and ends by refreshing the repo's reads.
 import { experimental_PluginRpcRefusal as Refusal, type BbPluginApi } from "@get-bb/plugin-sdk";
 import type { CodeQuote } from "../comments/comment-schema.ts";
+import type { ReviewThread } from "../comments/thread-schema.ts";
 import { repoTag, reviewThreadOf, type PrDetail, type PrHeadKey, type ReviewState } from "../contract.ts";
 import { parsePrDiff } from "../diff/parse-pr-diff.ts";
 import type { PrDiffSnapshot, snapshotPrDiff } from "../github/gh.ts";
 import type { fetchPrCommits } from "../github/pr-commits.ts";
 import type { Repo } from "../github/repo.ts";
-import { askMessage, linesQuestionMessage, nudgeMessage, reviewPrompt, updateMessage, type PromptFacts } from "./prompt.ts";
+import { askMessage, linesQuestionMessage, nudgeMessage, reviewPrompt, threadQuestionMessage, updateMessage, type PromptFacts } from "./prompt.ts";
 import type { ReviewReader } from "./review-reader.ts";
 import type { ReviewSettings } from "./settings.ts";
 import type { Store } from "./store.ts";
@@ -188,12 +189,17 @@ export function createReviews({ bb, store, settings, reader, github }: Deps) {
   // Asks the PR's review thread, whatever state the review is in: every state but "none" has one.
   // The state is read here, not taken from the page, so a page that is out of date can't pick a
   // thread that is no longer the PR's.
-  async function askAboutLines({ repo, number }: PrRef, quote: CodeQuote, question: string): Promise<void> {
+  async function askReviewThread({ repo, number }: PrRef, message: string): Promise<void> {
     const { review } = await reader.pullRequest(repo, number);
     const threadId = reviewThreadOf(review);
     if (threadId === null) throw new Refusal({ code: "conflict", message: "This pull request has no review thread yet. Start a review first." });
-    await send(threadId, linesQuestionMessage(quote, question));
+    await send(threadId, message);
   }
 
-  return { start, update, cancel, nudge, ask, askAboutLines };
+  const askAboutLines = (pr: PrRef, quote: CodeQuote, question: string) => askReviewThread(pr, linesQuestionMessage(quote, question));
+
+  /** The same, about one of the PR's GitHub review threads, as the reader sees it. */
+  const askAboutGitHubThread = (pr: PrRef, thread: ReviewThread, question: string) => askReviewThread(pr, threadQuestionMessage(thread, question));
+
+  return { start, update, cancel, nudge, ask, askAboutLines, askAboutGitHubThread };
 }

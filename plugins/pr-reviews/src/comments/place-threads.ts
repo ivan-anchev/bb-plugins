@@ -4,17 +4,16 @@
 import type { DiffRow } from "../diff/diff-rows.ts";
 import type { LineRef } from "./comment-schema.ts";
 import { refOf } from "./line-span.ts";
-import type { LineAnchor, ReviewThread } from "./thread-schema.ts";
+import type { ReviewThread } from "./thread-schema.ts";
 
-/** A thread under the row of its last line: `at` is that row's anchor, `hunk` the row's hunk, `lines` the lines it is on in this diff. */
-export type LineThread = { thread: ReviewThread; at: LineRef; hunk: number | null; lines: LineAnchor };
+/** A thread under the row of its last line: `at` is that row's anchor, `hunk` the row's hunk. */
+export type LineThread = { thread: ReviewThread; at: LineRef; hunk: number | null };
 
 /**
  * A thread at its file. `file`: it is on the whole file. `outdated`: GitHub no longer has its lines
  * in the PR's diff. `elsewhere`: its lines are in the diff at another commit than this one.
- * Both of the last carry the lines GitHub last had it on, when it has them.
  */
-export type FileThread = { thread: ReviewThread; why: "file" } | { thread: ReviewThread; why: "outdated" | "elsewhere"; last: LineAnchor | null };
+export type FileThread = { thread: ReviewThread; why: "file" | "outdated" | "elsewhere" };
 
 export type PlacedThreads = { lines: LineThread[]; file: FileThread[] };
 
@@ -32,8 +31,8 @@ export function placeThreads(threads: readonly ReviewThread[], path: string, com
     const { anchors } = thread.subject;
     const anchor = anchors.find((candidate) => candidate.commit === commit);
     const row = anchor === undefined ? undefined : rows.find((candidate) => candidate[anchor.end.side] === anchor.end.line);
-    if (anchor !== undefined && row !== undefined) placed.lines.push({ thread, at: refOf(row), hunk: row.hunk, lines: anchor });
-    else placed.file.push({ thread, why: thread.outdated ? "outdated" : "elsewhere", last: anchors[0] ?? null });
+    if (row !== undefined) placed.lines.push({ thread, at: refOf(row), hunk: row.hunk });
+    else placed.file.push({ thread, why: thread.outdated ? "outdated" : "elsewhere" });
   }
   return placed;
 }

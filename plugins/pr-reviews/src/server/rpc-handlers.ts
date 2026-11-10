@@ -132,6 +132,11 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
       return {};
     },
 
+    async askAboutGitHubThread({ thread, question, ...input }) {
+      await reviews.askAboutGitHubThread(await prRef(input), thread, question);
+      return {};
+    },
+
     comments: async ({ projectId, number }) => readPrComments(await repoOf(projectId), number),
 
     // The repo is the project's, read here: the app names only the project and the PR.

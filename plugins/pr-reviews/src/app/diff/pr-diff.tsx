@@ -9,13 +9,13 @@ import type { DiffLineAnnotation, SelectedLineRange } from "@pierre/diffs";
 import { FileDiff } from "@pierre/diffs/react";
 import type { LineRef } from "../../comments/comment-schema.ts";
 import { refOf, spanBetween, type LineSpan } from "../../comments/line-span.ts";
-import type { LineThread, PlacedThreads } from "../../comments/place-threads.ts";
+import type { FileThread, LineThread, PlacedThreads } from "../../comments/place-threads.ts";
 import type { ReviewThread } from "../../comments/thread-schema.ts";
 import { diffRowsOf } from "../../diff/diff-rows.ts";
 import type { DiffFile } from "../../diff/diff-schema.ts";
 import { CommentBox, type BoxSubject } from "../comments/comment-box.tsx";
-import { ReviewThreadCard, type ThreadPlace } from "../comments/review-thread.tsx";
-import type { PrHeadTarget } from "../queries.ts";
+import { ReviewThreadCard } from "../comments/review-thread.tsx";
+import { usePullRequest, type PrHeadTarget } from "../queries.ts";
 import { DiffErrorBoundary } from "./diff-error-boundary.tsx";
 import { DIFF_TEXT_CLASS, fileDiffOf, useDiffOptions, type DiffSettings } from "./diff-options.ts";
 import { highlightOf, type LineBox } from "./line-selection.ts";
@@ -37,7 +37,7 @@ type PrDiffProps = {
   settings: DiffSettings;
   /** Several notes on one line draw in their order. */
   notes: readonly LineNote[];
-  /** This file's review threads in this diff (place-threads.ts); under a line, after its notes. */
+  /** This file's review threads in this diff (place-threads.ts); under a line, above its notes. */
   threads: PlacedThreads;
 };
 
@@ -64,6 +64,8 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
   const fileDiff = useMemo(() => fileDiffOf(file, newContent), [file, newContent]);
   const rows = useMemo(() => diffRowsOf(file, newContent), [file, newContent]);
   const { box } = lines;
+  // The page draws only once the PR is read; this is the same cache entry.
+  const prAuthor = usePullRequest(head.projectId, head.number).data?.pr.author ?? null;
   const span = useMemo(() => (box?.kind !== "lines" ? null : spanBetween(file.path, head.headSha, rows, ...refsOf(box.at))), [file.path, head.headSha, rows, box]);
   const annotations = useMemo(
     () => annotationsOf(notes, threads.lines, box?.kind !== "lines" || span === null ? null : { kind: "box", span, box }),
@@ -83,10 +85,11 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
       onClose={selection.close}
     />
   );
-  const threadCard = (thread: ReviewThread, place: ThreadPlace) => (
+  const threadCard = (thread: ReviewThread, atFile: FileThread | null) => (
     <ReviewThreadCard
       thread={thread}
-      place={place}
+      atFile={atFile}
+      prAuthor={prAuthor}
       box={box?.kind === "reply" && box.threadId === thread.id ? commentBox(box, { kind: "reply", thread }) : null}
       onReply={({ quote, from }) => selection.openForReply({ threadId: thread.id, quote, from })}
     />
@@ -97,9 +100,9 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
     // than on the page body (REVIEW.md).
     <div ref={root} tabIndex={-1} className="outline-none">
       {threads.file.length > 0 && (
-        <div className="grid gap-2 border-b border-border px-3 py-3">
+        <div className="grid gap-2.5 px-2.5 pt-2.5 pb-3">
           {threads.file.map((placed) => (
-            <div key={placed.thread.id}>{threadCard(placed.thread, { kind: "file", placed })}</div>
+            <div key={placed.thread.id}>{threadCard(placed.thread, placed)}</div>
           ))}
         </div>
       )}
@@ -114,7 +117,7 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
         renderAnnotation={({ metadata }) => (
           <div className={NOTE_CLASS}>
             {metadata.kind === "note" && metadata.note.render((request) => selection.openFromFinding({ ...request, at: metadata.note.at }))}
-            {metadata.kind === "thread" && threadCard(metadata.placed.thread, { kind: "lines", lines: metadata.placed.lines })}
+            {metadata.kind === "thread" && threadCard(metadata.placed.thread, null)}
             {metadata.kind === "box" && commentBox(metadata.box, { kind: "lines", span: metadata.span, finding: metadata.box.finding })}
           </div>
         )}
@@ -126,7 +129,7 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
 // why: a note is slotted into the diff's rows and would inherit their code font, `white-space:
 // pre` and the code theme's colour; it reads as the page's text.
 // Its padding lines it up with the code's text.
-const NOTE_CLASS = "pt-2 pr-3 pb-3 pl-2 font-sans whitespace-normal text-foreground";
+const NOTE_CLASS = "grid gap-3 pt-3 px-2.5 pb-3.5 font-sans whitespace-normal text-foreground";
 
 // Pierre's sides are the diff's columns: deletions is the old side, additions the new.
 const sideOfPierre = (side: SelectedLineRange["side"]): LineRef["side"] => (side === "deletions" ? "old" : "new");
@@ -136,12 +139,12 @@ const refsOf = ({ start, side, end, endSide = side }: SelectedLineRange): [LineR
   { side: sideOfPierre(endSide), line: end },
 ];
 
-// Notes first, then threads, the box last: annotations on one line share one slot in order, so the
-// box sits under any finding or thread on its last line.
+// Threads first, then notes, the box last: annotations on one line share one slot in order, so
+// GitHub's threads sit above a guide's findings, and the box under both on its last line.
 function annotationsOf(notes: readonly LineNote[], threads: readonly LineThread[], drawn: Extract<Annotation, { kind: "box" }> | null): DiffLineAnnotation<Annotation>[] {
   const noted = [
-    ...notes.map((note): DiffLineAnnotation<Annotation> => ({ side: pierreSideOf(note.at), lineNumber: note.at.line, metadata: { kind: "note", note } })),
     ...threads.map((placed): DiffLineAnnotation<Annotation> => ({ side: pierreSideOf(placed.at), lineNumber: placed.at.line, metadata: { kind: "thread", placed } })),
+    ...notes.map((note): DiffLineAnnotation<Annotation> => ({ side: pierreSideOf(note.at), lineNumber: note.at.line, metadata: { kind: "note", note } })),
   ];
   if (drawn === null) return noted;
   const last = refOf(drawn.span.rows[drawn.span.rows.length - 1]);

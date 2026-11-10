@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request with Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (Write and Preview tabs, Ask about this to ask the review thread, Comment to post a GitHub review comment on an explicit click; review threads never post), how the PR's GitHub review threads show in every diff (under their lines, or at their file marked File, Outdated or Other commit; resolved ones folded) with Reply and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request with Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (Write and Preview tabs, Ask about this to ask the review thread, Comment to post a GitHub review comment on an explicit click; review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -197,30 +197,32 @@ box, stays where it is.
 
 Every review thread GitHub has on the PR shows in each diff that holds it: the
 Changes tab's file diff and the guide step whose hunk has its lines. A thread
-sits under its last line, after any finding there, and names its lines when it
-covers more than one ("lines 5–12 (new)"). Each comment shows its author's
-avatar and name, how long ago it was written (a link to it on GitHub, with the
-exact time on hover), and its markdown, in GitHub's order.
+sits under its last line, above any finding there, as one tinted block with no
+border. Each comment shows its author's avatar and name, `author` after the
+PR author's, `bot` after an app's, how long ago it was written (the exact time
+on hover), and its markdown, in GitHub's order. **Quote** and a link to the
+comment on GitHub show when you hover or focus the comment.
 
-Threads that are on no line of the diff show above it, at their file, each
-labelled:
+- **A long thread** (more than three comments) shows its first and latest
+  comments, with **N more** between them to show the rest.
+- **A bot's comment** is clamped to three lines, with **Show more**.
+- **A resolved thread** is one row, "Resolved · name · first line", with the
+  number of comments when there is more than one; the row opens it. Open, its
+  footer says "Resolved by X", with **Collapse**.
 
-- **File**: a comment on the whole file.
-- **Outdated**: GitHub no longer has its lines in the PR's diff. It shows the
-  lines and commit it was written on.
-- **Other commit**: its lines are in the diff at another commit than the one
-  shown, such as a guide written before new commits. It shows where GitHub has
-  it now.
+Threads on no line of the diff show above it, at their file. A comment on the
+whole file needs no label. An **Outdated** thread, whose lines GitHub no longer
+has in the PR's diff, shows the lines it was written on under that word. A
+thread on another commit's lines than the diff shows, such as a guide written
+before new commits, says "On another commit" the same way. In a guide, a
+file's threads at the file show on its first hunk in each step.
 
-In a guide, a file's threads at the file show on its first hunk in each step.
-A **Resolved** thread is folded to one row with its first comment's author and
-first line; **Show** unfolds it.
-
-**Reply**, under a thread, opens the diff's one comment box there, keeping any
-text it held. **Quote** on a comment does the same and adds the comment as a
-`> ` quote after that text, as GitHub's Quote reply does. In a thread the box
-has no Ask about this; its button is **Reply** (⌘↵), which posts your text as a
-reply in that thread.
+**Reply** and **Ask about this**, under a thread, open the diff's one comment
+box there, keeping any text it held. **Quote** on a comment does the same and
+adds the comment as a `> ` quote after that text, as GitHub's Quote reply does.
+In a thread the box's buttons are **Ask about this**, which sends the review
+thread your question with the GitHub thread's comments, and **Reply** (⌘↵),
+which posts your text as a reply in that thread.
 
 The PR's conversation comments, on no file, are read too but not shown yet.
 

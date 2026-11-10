@@ -6,28 +6,41 @@ import { lineRefSchema } from "./comment-schema.ts";
 
 /**
  * One comment as the plugin shows it. `id` is GitHub's number for it in its own kind: a review
- * comment's is what a reply names. `author` is a login; a deleted account's is "ghost", as on GitHub.
- * `createdAt` is ISO 8601.
+ * comment's is what a reply names. `author.login` is a deleted account's "ghost", as on GitHub;
+ * `author.bot`: an app wrote it. `createdAt` is ISO 8601.
  */
-export const githubCommentSchema = z.object({ id: z.number().int(), url: z.string(), author: z.string(), body: z.string(), createdAt: z.string() });
+export const githubCommentSchema = z.object({
+  id: z.number().int(),
+  url: z.string(),
+  author: z.object({ login: z.string(), bot: z.boolean() }),
+  body: z.string(),
+  createdAt: z.string(),
+});
 export type GitHubComment = z.infer<typeof githubCommentSchema>;
 
 /** The lines a thread is on in the diff at `commit`: `end` is GitHub's line and side, `start` null for one line. */
 const lineAnchorSchema = z.object({ commit: z.string(), start: lineRefSchema.nullable(), end: lineRefSchema });
 export type LineAnchor = z.infer<typeof lineAnchorSchema>;
 
+/** One line of a thread's code as GitHub kept it, with its diff prefix and its number on each side it is on. */
+const excerptLineSchema = z.object({ text: z.string(), old: z.number().int().nullable(), new: z.number().int().nullable() });
+
 /**
  * A review thread on one file: on the whole file, or on lines. A thread on lines knows them at
  * each commit GitHub has them at, newest first: where they are at the PR's head unless the thread
- * is outdated, then where it was written. A diff at another commit shows it at its file.
- * `comments` are in GitHub's order, the thread's first comment first.
+ * is outdated, then where it was written. A diff at another commit shows it at its file, with
+ * `excerpt`: the lines it was written on, as GitHub kept them. `resolvedBy` is who resolved it,
+ * null while it is open. `comments` are in GitHub's order, the thread's first comment first.
  */
 export const reviewThreadSchema = z.object({
   id: z.string(),
   path: z.string(),
-  resolved: z.boolean(),
+  resolvedBy: z.string().nullable(),
   outdated: z.boolean(),
-  subject: z.discriminatedUnion("kind", [z.object({ kind: z.literal("file") }), z.object({ kind: z.literal("lines"), anchors: z.array(lineAnchorSchema) })]),
+  subject: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("file") }),
+    z.object({ kind: z.literal("lines"), anchors: z.array(lineAnchorSchema), excerpt: z.array(excerptLineSchema) }),
+  ]),
   comments: z.array(githubCommentSchema).min(1),
 });
 export type ReviewThread = z.infer<typeof reviewThreadSchema>;
