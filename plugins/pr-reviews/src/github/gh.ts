@@ -9,7 +9,8 @@ import type { PrCommits } from "./pr-commits.ts";
 import type { Repo } from "./repo.ts";
 import { latestReviewsSchema, reviewRequestsSchema, toReviewers } from "./reviewers.ts";
 
-const LIST_LIMIT = 200;
+// Cap the sidebar list: PRs past the 100th page in from "Load more" (later).
+const LIST_LIMIT = 100;
 const SUMMARY_FIELDS = ["number", "title", "author", "updatedAt", "headRefOid"];
 const DETAIL_FIELDS = [...SUMMARY_FIELDS, "body", "url", "headRefName", "baseRefName", "state", "isDraft", "commits", "additions", "deletions", "statusCheckRollup", "reviewRequests", "latestReviews", "labels"];
 
@@ -67,7 +68,8 @@ export const parsePrDetail = (json: unknown): PrDetail => toDetail(ghDetailSchem
 
 export async function listOpenPrs(repo: Repo): Promise<PrSummary[]> {
   const json = await runGh(["pr", "list", "-R", repo, "--state", "open", "--limit", String(LIST_LIMIT), "--json", SUMMARY_FIELDS.join(",")]);
-  return z.array(ghSummarySchema).parse(JSON.parse(json)).map(toSummary);
+  const summaries = z.array(ghSummarySchema).parse(JSON.parse(json));
+  return summaries.map(toSummary);
 }
 
 export async function viewPr(repo: Repo, number: number): Promise<PrDetail> {
