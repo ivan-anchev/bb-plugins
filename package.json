@@ -29,7 +29,8 @@
     "typecheck": "tsc -p . && node scripts/each-plugin.ts typecheck",
     "test": "node --test 'scripts/**/*.test.ts' && node scripts/each-plugin.ts test",
     "build": "node scripts/each-plugin.ts build",
-    "check": "npm run manifests:check && npm run typecheck && npm test && npm run build"
+    "build:standalone": "node scripts/standalone-build.ts",
+    "check": "npm run manifests:check && npm run typecheck && npm test && npm run build && npm run build:standalone"
   },
   "devDependencies": {
     "@types/node": "^22.18.0",

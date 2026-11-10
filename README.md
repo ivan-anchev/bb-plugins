@@ -37,5 +37,5 @@ npm install
 npm run new -- my-plugin          # scaffold plugins/my-plugin with `bb plugin new`
 bb plugin install ./plugins/my-plugin
 bb plugin dev plugins/my-plugin   # rebuild and reload on save
-npm run check                     # manifests, typecheck, tests, build (what CI runs)
+npm run check                     # manifests, typecheck, tests, build, standalone build (what CI runs)
 ```

@@ -37,10 +37,10 @@
     ]
   },
   "dependencies": {
+    "@get-bb/plugin-sdk": "0.6.104",
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@get-bb/plugin-sdk": "0.6.104",
     "@radix-ui/react-dropdown-menu": "^2.1.20",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
