@@ -58,8 +58,9 @@ export const fileLineCountsOf = (file: DiffFile): LineCounts => lineCountsOf(fil
 export const diffSideSchema = z.enum(["new", "old"]);
 export type DiffSide = z.infer<typeof diffSideSchema>;
 
-/** One line of a hunk with its line number on each side; null on the side it is not on. */
-export type NumberedLine = { text: string; old: number | null; new: number | null };
+/** One line of a hunk, with its diff prefix and its line number on each side; null on the side it is not on. */
+export const numberedLineSchema = z.object({ text: z.string(), old: z.number().int().nullable(), new: z.number().int().nullable() });
+export type NumberedLine = z.infer<typeof numberedLineSchema>;
 
 /** The hunk's lines numbered from its header. The `\ No newline` marker is on neither side. */
 export function numberedLines(hunk: Hunk): NumberedLine[] {

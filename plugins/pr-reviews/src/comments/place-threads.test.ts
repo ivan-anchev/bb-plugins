@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { diffRowsOf } from "../diff/diff-rows.ts";
-import type { DiffFile } from "../diff/diff-schema.ts";
+import { hunkIdOf, WHOLE_FILE, type DiffFile } from "../diff/diff-schema.ts";
 import type { LineRef } from "./comment-schema.ts";
-import { placeThreads, threadsOfHunk } from "./place-threads.ts";
+import { placeThreads, threadsOfUnit } from "./place-threads.ts";
 import type { LineAnchor, ReviewThread } from "./thread-schema.ts";
 
 const PATH = "src/shifted.ts";
@@ -93,6 +93,32 @@ test("a guide hunk draws the threads on its own lines, and its file's only as th
   const file = thread({ kind: "file" });
   const placed = placeThreads([first, second, file], PATH, HEAD, ROWS);
 
-  assert.deepEqual(threadsOfHunk(placed, 1, true), { lines: [{ thread: second, at: ref("new", 21), hunk: 1 }], file: [{ thread: file, why: "file" }] });
-  assert.deepEqual(threadsOfHunk(placed, 0, false), { lines: [{ thread: first, at: ref("old", 5), hunk: 0 }], file: [] });
+  const [hunk0, hunk1] = FILE.hunks.map(hunkIdOf);
+
+  assert.deepEqual(threadsOfUnit(placed, FILE, hunk1, true), { lines: [{ thread: second, at: ref("new", 21), hunk: 1 }], file: [{ thread: file, why: "file" }] });
+  assert.deepEqual(threadsOfUnit(placed, FILE, hunk0, false), { lines: [{ thread: first, at: ref("old", 5), hunk: 0 }], file: [] });
+});
+
+const BINARY: DiffFile = { path: PATH, previousPath: null, status: "modified", binary: true, hunks: [] };
+const RENAMED: DiffFile = { path: PATH, previousPath: "src/before.ts", status: "renamed", binary: false, hunks: [] };
+
+test("a file with no text diff, binary or a rename only, has every thread at its file, and its whole-file unit draws them all", () => {
+  const file = thread({ kind: "file" });
+  const outdated = thread(onLines(at(OLDER, ref("new", 3))), { outdated: true });
+  const atHead = thread(onLines(at(HEAD, ref("new", 3))));
+
+  for (const noText of [BINARY, RENAMED]) {
+    const placed = placeThreads([file, outdated, atHead], PATH, HEAD, diffRowsOf(noText, null));
+    const atFile = {
+      lines: [],
+      file: [
+        { thread: file, why: "file" },
+        { thread: outdated, why: "outdated" },
+        { thread: atHead, why: "elsewhere" },
+      ],
+    };
+
+    assert.deepEqual(placed, atFile, noText.binary ? "binary" : "rename only");
+    assert.deepEqual(threadsOfUnit(placed, noText, WHOLE_FILE, false), atFile, "the whole-file unit is the file's only one, first in a step or not");
+  }
 });

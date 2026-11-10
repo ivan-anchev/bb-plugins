@@ -37,7 +37,7 @@ export function StepPage({ place, total, title, files, findings, head }: StepPag
   // why memoised: each hunk's diff is handed its findings as line annotations, and new ones make it draw again.
   const findingsByHunk = useMemo(() => step.hunks.map((entry) => findingsOn(findings, entry)), [step, findings]);
   const firstHunks = useRef(new Map<string, HTMLElement>());
-  // Each hunk's diff reads the same entry; a failed read shows once, above them.
+  // Each hunk's diff draws its threads from this read; a failed read shows once, above them.
   const comments = useComments({ projectId: head.projectId, number: head.number });
   return (
     <article className="grid max-w-[880px] grid-cols-[minmax(0,1fr)] gap-x-10 px-7 pb-10 @min-[900px]:max-w-[1440px] @min-[900px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
@@ -61,6 +61,7 @@ export function StepPage({ place, total, title, files, findings, head }: StepPag
             entry={entry}
             findings={findingsByHunk[i]}
             head={head}
+            comments={comments.data}
             withFileThreads={isFirstOfFile(step, i)}
           />
         ))}

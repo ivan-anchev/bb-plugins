@@ -178,9 +178,7 @@ function HiddenBody({ item, files, head }: { item: HiddenItem; files: DiffFile[]
     case "hunk":
       return (
         <div className="pt-1 pb-2.5">
-          <div className="overflow-hidden rounded-lg bg-muted/40">
-            <HunkDiff file={fileOf(files, item.file)} hunk={item.hunk} head={head} />
-          </div>
+          <HunkDiff file={fileOf(files, item.file)} hunk={item.hunk} head={head} />
         </div>
       );
     case "files":

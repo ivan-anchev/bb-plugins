@@ -1,7 +1,8 @@
 // Every diff the plugin draws: one PR file, or one hunk of it, at the commit the page shows, in
 // bb's host-shared Pierre diff with bb's theme. Things drawn under a line, such as a guide's
 // findings, come in as notes. GitHub's review threads come placed: under their last line, or
-// above the diff at their file. The lines the reader selects, from the gutter or a finding's
+// above the diff at their file. A file with no text hunks (binary, a rename, an empty or mode-only
+// change) draws only its threads at its file. The lines the reader selects, from the gutter or a finding's
 // buttons, get the diff's one comment box under their last line; a thread's Reply gets it in the
 // thread.
 import { useMemo, useRef, type ReactNode } from "react";
@@ -28,7 +29,7 @@ export type OpenBox = (request: Omit<FindingBoxRequest, "at">) => void;
 export type LineNote = { at: LineRef; render(openBox: OpenBox): ReactNode };
 
 type PrDiffProps = {
-  /** The file with the hunks to draw: all of them on the Changes tab, one in a guide step. */
+  /** The file with the hunks to draw: all of them on the Changes tab, one in a guide step, none for a file with no text hunks. */
   file: DiffFile;
   /** The PR and the commit this diff is at: the commit a comment or a question about its lines names. */
   head: PrHeadTarget;
@@ -99,29 +100,33 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
     // why a focus target: when the box unmounts with focus inside it, focus lands here rather
     // than on the page body (REVIEW.md).
     <div ref={root} tabIndex={-1} className="outline-none">
+      {/* why `minmax(0,1fr)`: an implicit `auto` track grows to an outdated thread's widest code line,
+          so the excerpt would widen the thread, not scroll in it. */}
       {threads.file.length > 0 && (
-        <div className="grid gap-2.5 px-2.5 pt-2.5 pb-3">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-2.5 px-2.5 pt-2.5 pb-3">
           {threads.file.map((placed) => (
             <div key={placed.thread.id}>{threadCard(placed.thread, placed)}</div>
           ))}
         </div>
       )}
-      <FileDiff<Annotation>
-        className={DIFF_TEXT_CLASS}
-        fileDiff={fileDiff}
-        options={options}
-        // why always passed, null included: it makes the selection controlled, so the highlight is
-        // always this state.
-        selectedLines={highlightOf(lines)}
-        lineAnnotations={annotations}
-        renderAnnotation={({ metadata }) => (
-          <div className={NOTE_CLASS}>
-            {metadata.kind === "note" && metadata.note.render((request) => selection.openFromFinding({ ...request, at: metadata.note.at }))}
-            {metadata.kind === "thread" && threadCard(metadata.placed.thread, null)}
-            {metadata.kind === "box" && commentBox(metadata.box, { kind: "lines", span: metadata.span, finding: metadata.box.finding })}
-          </div>
-        )}
-      />
+      {file.hunks.length > 0 && (
+        <FileDiff<Annotation>
+          className={DIFF_TEXT_CLASS}
+          fileDiff={fileDiff}
+          options={options}
+          // why always passed, null included: it makes the selection controlled, so the highlight is
+          // always this state.
+          selectedLines={highlightOf(lines)}
+          lineAnnotations={annotations}
+          renderAnnotation={({ metadata }) => (
+            <div className={NOTE_CLASS}>
+              {metadata.kind === "note" && metadata.note.render((request) => selection.openFromFinding({ ...request, at: metadata.note.at }))}
+              {metadata.kind === "thread" && threadCard(metadata.placed.thread, null)}
+              {metadata.kind === "box" && commentBox(metadata.box, { kind: "lines", span: metadata.span, finding: metadata.box.finding })}
+            </div>
+          )}
+        />
+      )}
     </div>
   );
 }

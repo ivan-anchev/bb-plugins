@@ -2,6 +2,7 @@
 // the conversation's comments. Parsed once from gh (github/pr-comments.ts); pure zod, shared by the
 // server and the app.
 import { z } from "zod";
+import { numberedLineSchema } from "../diff/diff-schema.ts";
 import { lineRefSchema } from "./comment-schema.ts";
 
 /**
@@ -22,9 +23,6 @@ export type GitHubComment = z.infer<typeof githubCommentSchema>;
 const lineAnchorSchema = z.object({ commit: z.string(), start: lineRefSchema.nullable(), end: lineRefSchema });
 export type LineAnchor = z.infer<typeof lineAnchorSchema>;
 
-/** One line of a thread's code as GitHub kept it, with its diff prefix and its number on each side it is on. */
-const excerptLineSchema = z.object({ text: z.string(), old: z.number().int().nullable(), new: z.number().int().nullable() });
-
 /**
  * A review thread on one file: on the whole file, or on lines. A thread on lines knows them at
  * each commit GitHub has them at, newest first: where they are at the PR's head unless the thread
@@ -39,7 +37,7 @@ export const reviewThreadSchema = z.object({
   outdated: z.boolean(),
   subject: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("file") }),
-    z.object({ kind: z.literal("lines"), anchors: z.array(lineAnchorSchema), excerpt: z.array(excerptLineSchema) }),
+    z.object({ kind: z.literal("lines"), anchors: z.array(lineAnchorSchema), excerpt: z.array(numberedLineSchema) }),
   ]),
   comments: z.array(githubCommentSchema).min(1),
 });

@@ -2,6 +2,7 @@
 // on, or at the file, said why. A thread is never dropped: one whose lines this diff doesn't
 // draw shows at its file. Pure.
 import type { DiffRow } from "../diff/diff-rows.ts";
+import { hunkIdOf, WHOLE_FILE, type DiffFile, type HunkId } from "../diff/diff-schema.ts";
 import type { LineRef } from "./comment-schema.ts";
 import { refOf } from "./line-span.ts";
 import type { ReviewThread } from "./thread-schema.ts";
@@ -37,8 +38,13 @@ export function placeThreads(threads: readonly ReviewThread[], path: string, com
   return placed;
 }
 
-/** The threads one hunk of the file draws: those on its lines, and the file's own when `withFile` (the file's first hunk shown). */
-export const threadsOfHunk = (placed: PlacedThreads, hunk: number, withFile: boolean): PlacedThreads => ({
-  lines: placed.lines.filter((thread) => thread.hunk === hunk),
-  file: withFile ? placed.file : [],
-});
+/**
+ * The threads one guide unit of `file` draws: a hunk draws those on its lines, and the file's own
+ * when `withFile` (the file's first unit shown). A file with no text hunks (binary, a rename, an
+ * empty or mode-only change) is one whole-file unit, which draws all the file's threads.
+ */
+export function threadsOfUnit(placed: PlacedThreads, file: DiffFile, unit: HunkId, withFile: boolean): PlacedThreads {
+  if (unit === WHOLE_FILE) return placed;
+  const hunk = file.hunks.findIndex((candidate) => hunkIdOf(candidate) === unit);
+  return { lines: placed.lines.filter((thread) => thread.hunk === hunk), file: withFile ? placed.file : [] };
+}

@@ -83,7 +83,8 @@ tab is opened, not when the page opens.
 - **The diff**: the selected file's path over its diff, drawn with bb's own
   diff engine and code theme, so it looks like bb's diff view.
   A binary file, a file renamed without changes, or a file with no changed
-  lines shows a sentence saying so instead. Once the file's text at the PR's
+  lines shows a sentence saying so instead, with the file's review threads
+  under it. Once the file's text at the PR's
   head has loaded (`gh api`, for a modified or renamed file of up to 1 MB),
   clicking "N unmodified lines" between hunks shows those lines; until then,
   or when that read fails, the diff shows as the patch draws it.
@@ -208,14 +209,18 @@ comment on GitHub show when you hover or focus the comment.
 - **A bot's comment** is clamped to three lines, with **Show more**.
 - **A resolved thread** is one row, "Resolved · name · first line", with the
   number of comments when there is more than one; the row opens it. Open, its
-  footer says "Resolved by X", with **Collapse**.
+  footer says "Resolved by X", with **Collapse**. A thread GitHub reopens shows
+  open again on the next read.
 
 Threads on no line of the diff show above it, at their file. A comment on the
 whole file needs no label. An **Outdated** thread, whose lines GitHub no longer
-has in the PR's diff, shows the lines it was written on under that word. A
+has in the PR's diff, shows the lines it was written on under that word; when they are wider than the
+thread, Tab to them and scroll them with the arrow keys. A
 thread on another commit's lines than the diff shows, such as a guide written
 before new commits, says "On another commit" the same way. In a guide, a
-file's threads at the file show on its first hunk in each step.
+file's threads at the file show on its first hunk in each step; a file with no
+text changes shows them under its one line, in a step or under "Not in this
+guide".
 
 **Reply** and **Ask about this**, under a thread, open the diff's one comment
 box there, keeping any text it held. **Quote** on a comment does the same and

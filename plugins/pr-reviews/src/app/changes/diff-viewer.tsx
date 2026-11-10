@@ -1,9 +1,9 @@
 // The Changes tab's viewer (code-explorer's diff-viewer patch path): the selected file's path over
 // its diff, drawn like bb's own with the file's review threads in it, or a notice where the diff
-// would be empty. The diff pane is the
+// would be empty, with the file's threads under it. The diff pane is the
 // viewer's one scroll region and its one tab stop, in every state, the prompt included.
 import { useMemo, type ReactNode, type Ref } from "react";
-import { NO_THREADS, placeThreads } from "../../comments/place-threads.ts";
+import { NO_THREADS, placeThreads, type PlacedThreads } from "../../comments/place-threads.ts";
 import { diffRowsOf } from "../../diff/diff-rows.ts";
 import type { DiffFile } from "../../diff/diff-schema.ts";
 import type { DiffSettings } from "../diff/diff-options.ts";
@@ -34,13 +34,36 @@ export function DiffViewer({ ref, file, head, settings }: DiffViewerProps) {
 
 type FileDiffProps = { file: DiffFile; head: PrHeadTarget; settings: DiffSettings };
 
+// The PR's comments arrive after the diff draws, and with them the file's threads, whether or not
+// the file has a text diff: a binary or rename-only file's are all at its file, under its notice.
+// Placed on the hunks' rows, which every thread GitHub has on this commit is on, so expanding the
+// unchanged lines moves none. A failed read shows above the diff, which keeps its last threads.
 function FileDiff({ file, head, settings }: FileDiffProps) {
+  const comments = useComments({ projectId: head.projectId, number: head.number });
+  const threads = useMemo(
+    () => (comments.data === undefined ? NO_THREADS : placeThreads(comments.data.threads, file.path, head.headSha, diffRowsOf(file, null))),
+    [comments.data, file, head.headSha],
+  );
+  return (
+    <>
+      <ReadError read={comments} what="the PR's comments" />
+      <FileBody file={file} head={head} settings={settings} threads={threads} />
+    </>
+  );
+}
+
+function FileBody({ file, head, settings, threads }: FileDiffProps & { threads: PlacedThreads }) {
   const source = diffSourceOf(file);
   switch (source.kind) {
     case "notice":
-      return <Notice>{source.message}</Notice>;
+      return (
+        <>
+          <Notice>{source.message}</Notice>
+          <PrDiff file={file} head={head} newContent={null} settings={settings} notes={NO_NOTES} threads={threads} />
+        </>
+      );
     case "patch":
-      return <PatchDiff file={file} expandable={source.expandable} head={head} settings={settings} />;
+      return <PatchDiff file={file} expandable={source.expandable} head={head} settings={settings} threads={threads} />;
     default:
       return source satisfies never;
   }
@@ -48,23 +71,17 @@ function FileDiff({ file, head, settings }: FileDiffProps) {
 
 const NO_NOTES: readonly LineNote[] = [];
 
+type PatchDiffProps = FileDiffProps & { expandable: boolean; threads: PlacedThreads };
+
 // The patch draws at once. The file's text at the head arrives after, and with it the controls to
-// expand the unchanged lines between hunks; the PR's comments arrive too, and with them the file's
-// threads. A failed or refused read (a file over 1 MB) shows above the diff, which keeps drawing
-// from the patch. Refresh and reselecting the file re-read it after a failure.
-function PatchDiff({ file, expandable, head, settings }: FileDiffProps & { expandable: boolean }) {
+// expand the unchanged lines between hunks. A failed or refused read (a file over 1 MB) shows
+// above the diff, which keeps drawing from the patch. Refresh and reselecting the file re-read it
+// after a failure.
+function PatchDiff({ file, expandable, head, settings, threads }: PatchDiffProps) {
   const content = useFileContent({ projectId: head.projectId, sha: head.headSha, path: file.path }, expandable);
-  const comments = useComments({ projectId: head.projectId, number: head.number });
-  // Placed on the hunks' rows, which every thread GitHub has on this commit is on, so expanding
-  // the unchanged lines moves none.
-  const threads = useMemo(
-    () => (comments.data === undefined ? NO_THREADS : placeThreads(comments.data.threads, file.path, head.headSha, diffRowsOf(file, null))),
-    [comments.data, file, head.headSha],
-  );
   return (
     <>
       <ReadError read={content} what="this file's unchanged lines" />
-      <ReadError read={comments} what="the PR's comments" />
       <PrDiff file={file} head={head} newContent={content.data?.content ?? null} settings={settings} notes={NO_NOTES} threads={threads} />
     </>
   );

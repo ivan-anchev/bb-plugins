@@ -9,6 +9,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { FileThread } from "../../comments/place-threads.ts";
 import { quoteReplyText, type GitHubComment, type ReviewThread } from "../../comments/thread-schema.ts";
+import { isFolded } from "./thread-fold.ts";
 import type { NumberedLine } from "../../diff/diff-schema.ts";
 import { timeAgo } from "../relative-time.ts";
 import { Avatar } from "../ui/avatar.tsx";
@@ -30,9 +31,11 @@ type ReviewThreadCardProps = {
   onReply: OpenReply;
 };
 
+// Whether the thread is resolved comes from each read, so one GitHub reopens shows open on the
+// next. Only the reader's choice to open a resolved thread is kept.
 export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: ReviewThreadCardProps) {
-  const [open, setOpen] = useState(thread.resolvedBy === null);
-  if (!open) return <ResolvedRow thread={thread} onOpen={() => setOpen(true)} />;
+  const [expanded, setExpanded] = useState(false);
+  if (isFolded(thread, expanded)) return <ResolvedRow thread={thread} onOpen={() => setExpanded(true)} />;
   return (
     <section aria-label={`Review thread by ${thread.comments[0].author.login}`} className={`${SURFACE} pt-3 pr-3.5 pb-3 pl-3`}>
       {atFile !== null && atFile.why !== "file" && <Original thread={thread} why={atFile.why} />}
@@ -48,7 +51,7 @@ export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: Rev
           {thread.resolvedBy !== null && (
             <>
               <span className="ml-auto text-xs text-muted-foreground">Resolved by {thread.resolvedBy}</span>
-              <Button variant="ghost" size="small" aria-expanded onClick={() => setOpen(false)}>
+              <Button variant="ghost" size="small" aria-expanded onClick={() => setExpanded(false)}>
                 Collapse
               </Button>
             </>
@@ -173,10 +176,19 @@ function Original({ thread, why }: { thread: ReviewThread; why: "outdated" | "el
     <>
       <p className="mb-1.5 text-xs leading-[18px] text-subtle-foreground">{why === "outdated" ? "Outdated" : "On another commit"}</p>
       {excerpt.length > 0 && (
-        <div className="mb-3.5 overflow-x-auto rounded-md bg-background font-mono text-xs leading-5">
-          {excerpt.map((line, index) => (
-            <ExcerptRow key={index} line={line} />
-          ))}
+        // A tab stop of its own: long lines scroll sideways, and the keys scroll only the focused element.
+        <div
+          role="region"
+          aria-label="Code the thread was written on"
+          tabIndex={0}
+          className="mb-3.5 overflow-x-auto rounded-md bg-background font-mono text-xs leading-5 outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          {/* One width for every row, the widest line's, so each row's tint runs to the end when scrolled. */}
+          <div className="w-max min-w-full">
+            {excerpt.map((line, index) => (
+              <ExcerptRow key={index} line={line} />
+            ))}
+          </div>
         </div>
       )}
     </>
@@ -190,7 +202,7 @@ const ROW_TONE: Record<string, string> = {
 
 function ExcerptRow({ line }: { line: NumberedLine }) {
   return (
-    <div className={`grid w-max min-w-full grid-cols-[40px_minmax(0,1fr)] ${ROW_TONE[line.text[0]] ?? ""}`}>
+    <div className={`grid grid-cols-[40px_minmax(0,1fr)] ${ROW_TONE[line.text[0]] ?? ""}`}>
       <span className="pr-2.5 text-right text-subtle-foreground select-none">{line.new ?? line.old}</span>
       <span className="pr-3 whitespace-pre">{line.text.slice(1)}</span>
     </div>
