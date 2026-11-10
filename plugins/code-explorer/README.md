@@ -6,9 +6,10 @@ Colored file-type icons on file links and `@file` mentions in bb's chat. See
 
 ## Install
 
+Code Explorer is not listed in the marketplace. Install it straight from git:
+
 ```sh
-bb marketplace add git:github.com/ivan-anchev/bb-plugins@main
-bb plugin install code-explorer@ivan-anchev
+bb plugin install git:https://github.com/ivan-anchev/bb-plugins.git@^0.2.0 --tag-prefix code-explorer/ --plugin code-explorer
 ```
 
 ## Credits

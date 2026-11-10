@@ -75,7 +75,7 @@ function renderMarketplace(repo: RepoConfig, plugins: Plugin[]) {
     name,
     displayName,
     description,
-    plugins: plugins.map((plugin) => ({
+    plugins: plugins.filter((plugin) => plugin.manifest.bbMarketplace.listed).map((plugin) => ({
       id: plugin.id,
       displayName: plugin.manifest.bb.name,
       description: plugin.manifest.bb.description,
