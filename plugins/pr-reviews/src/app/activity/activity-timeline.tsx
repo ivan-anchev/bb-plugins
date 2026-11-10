@@ -1,32 +1,36 @@
 // The Summary tab's activity, oldest first, as the fold reads it (activity-fold.ts): a muted day
 // divider over each day, messages on the page, and each run of lines in one recessed tinted block
-// ("Tint"). A folded line is a button that opens in place and keeps focus; a review line opens to
-// its whole review, which splits the block, with Collapse under it. A review's threads are rows in
-// a tinted group, each opening the Changes tab at its thread. Which lines are open is the reader's
-// one piece of state; everything else comes from the current read (REVIEW.md).
-import { useMemo, useState, type ReactNode } from "react";
+// ("Tint"), drawn row by row (activity-rows.ts). A folded line is a button that opens in place and
+// keeps focus; a review line opens to its whole review, which splits the block, with Collapse under
+// it. A review's threads are rows in a tinted group, each opening the Changes tab at its thread.
+// Which lines are open is the reader's one piece of state; everything else comes from the current
+// read (REVIEW.md).
+import { useMemo, useState, type ReactNode, type Ref, type RefCallback } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { quoteReplyText, type GitHubComment, type ReviewThread } from "../../comments/thread-schema.ts";
 import type { ReviewVerdict } from "../../comments/timeline-schema.ts";
 import { firstLineOf, GitHubCommentView, QUIET_BUTTON, TimeAgo } from "../comments/github-comment.tsx";
 import { MERGED } from "../page/pr-header.tsx";
-import { useFocusHandOff, type FocusHandOff } from "../ui/focus-hand-off.ts";
+import { useFocusHandOff } from "../ui/focus-hand-off.ts";
 import { mergeRefs } from "../ui/merge-refs.ts";
 import { EntryWords, glyphOf, SHA, Who } from "./activity-entry.tsx";
-import { lastTimeOf, type ActivityBlock, type ActivityDay, type ActivityLine, type MergedItem, type ReviewWithThreads, type RunEntry } from "./activity-fold.ts";
+import { lastTimeOf, type ActivityDay, type MergedItem, type ReviewWithThreads, type RunEntry } from "./activity-fold.ts";
+import { rowsOf, type ActivityRow, type ReviewForm, type TintEdges } from "./activity-rows.ts";
 import { ActivityGlyph, type ActivityGlyphName } from "./activity-glyph.tsx";
 import { dayLabelOf, runSummaryOf, threadLocationOf, threadStateOf } from "./activity-words.ts";
 
 type TimelineProps = {
   days: ActivityDay[];
   prAuthor: string;
+  /** The paths the PR's diff changes: a thread on any other file has no Changes tab to open. */
+  changedPaths: ReadonlySet<string>;
   /** Quote on a message: its text as a quote for the composer. */
   onQuote(quote: string): void;
   /** A thread's row: show it in the Changes tab. */
   onShowThread(thread: ReviewThread): void;
 };
 
-/** What a block needs besides its own data: who wrote the PR, what is open, and the actions. */
+/** What a row needs besides its own data: who wrote the PR, the diff's paths, what is open, and the actions. */
 type Context = Omit<TimelineProps, "days"> & { opened: ReadonlySet<string>; onToggle(key: string): void };
 
 export function ActivityTimeline({ days, ...actions }: TimelineProps) {
@@ -39,8 +43,8 @@ export function ActivityTimeline({ days, ...actions }: TimelineProps) {
       {days.map((day) => (
         <li key={day.date} className="grid grid-cols-[minmax(0,1fr)]">
           <h3 className="mt-[26px] mb-1 text-xs leading-5 font-medium text-subtle-foreground">{dayLabelOf(day.date, now)}</h3>
-          {day.blocks.map((block) => (
-            <Block key={keyOf(block)} block={block} context={context} />
+          {rowsOf(day.blocks, opened).map((row) => (
+            <Row key={row.key} row={row} context={context} />
           ))}
         </li>
       ))}
@@ -54,50 +58,44 @@ function toggled(set: ReadonlySet<string>, key: string): ReadonlySet<string> {
   return next;
 }
 
-function keyOf(block: ActivityBlock): string {
-  switch (block.kind) {
+function Row({ row, context }: { row: ActivityRow; context: Context }) {
+  switch (row.kind) {
     case "comment":
-      return block.item.id;
+      return <Message comment={row.item.comment} verb={null} context={context} />;
     case "review":
-      return block.review.id;
-    case "lines":
-      return lineKeyOf(block.lines[0]);
-    default:
-      return block satisfies never;
-  }
-}
-
-function lineKeyOf(line: ActivityLine): string {
-  switch (line.kind) {
+      return <ReviewRow review={row.review} form={row.form} tint={row.tint} context={context} />;
     case "run":
-      return line.key;
-    case "review":
-      return line.review.id;
+      return (
+        <div className={tintOf(row.tint)}>
+          {row.entries.length === 1 ? <EntryLine entry={row.entries[0]} /> : <RunLine entries={row.entries} open={context.opened.has(row.key)} onToggle={() => context.onToggle(row.key)} />}
+        </div>
+      );
     case "merged":
-      return line.item.id;
+      return (
+        <div className={tintOf(row.tint)}>
+          <MergedLine item={row.item} />
+        </div>
+      );
     default:
-      return line satisfies never;
+      return row satisfies never;
   }
 }
 
-function Block({ block, context }: { block: ActivityBlock; context: Context }) {
-  switch (block.kind) {
-    case "comment":
-      return <Message comment={block.item.comment} verb={null} context={context} />;
-    case "review":
-      return <ReviewMessage review={block} context={context} />;
-    case "lines":
-      return <Lines lines={block.lines} context={context} />;
-    default:
-      return block satisfies never;
-  }
+// A line's share of its tinted block: the block's rounded ends and padding are its first and last
+// rows'. A row on the page has none.
+function tintOf(tint: TintEdges | null): string | undefined {
+  if (tint === null) return undefined;
+  const top = tint.first ? "mt-1 rounded-t-[10px] pt-1" : "";
+  const bottom = tint.last ? "mb-1 rounded-b-[10px] pb-1" : "";
+  return `-mx-3 grid grid-cols-[minmax(0,1fr)] bg-(--pr-reviews-thread-tint) px-3 ${top} ${bottom}`;
 }
 
 /** A message on the page: a conversation comment, or a review with its threads under it. */
-function Message({ comment, verb, context, children }: { comment: GitHubComment; verb: ReactNode; context: Context; children?: ReactNode }) {
+function Message({ ref, comment, verb, context, children }: { ref?: Ref<HTMLElement>; comment: GitHubComment; verb: ReactNode; context: Context; children?: ReactNode }) {
   return (
     <div className="py-2.5">
       <GitHubCommentView
+        ref={ref}
         comment={comment}
         density="page"
         byPrAuthor={comment.author.login === context.prAuthor}
@@ -110,41 +108,76 @@ function Message({ comment, verb, context, children }: { comment: GitHubComment;
   );
 }
 
-function ReviewMessage({ review: { review, threads }, context, children }: { review: ReviewWithThreads; context: Context; children?: ReactNode }) {
+// A review in its form (activity-rows.ts). Its row stays as the form changes, whether the reader
+// opens or collapses its line or a refresh resolves or reopens a thread, and hands focus from the
+// form that leaves to the one that comes: to the line, to Collapse, or to the message, which holds
+// focus but is no tab stop. Each form is keyed, so a change of form always replaces it whole.
+function ReviewRow({ review, form, tint, context }: { review: ReviewWithThreads; form: ReviewForm; tint: TintEdges | null; context: Context }) {
+  const focus = useFocusHandOff();
+  const formRef = useMemo(() => mergeRefs(focus.from, focus.to), [focus]);
+  const onToggle = () => context.onToggle(review.review.id);
   return (
-    <Message comment={review.comment} verb={<Verdict verdict={review.verdict} />} context={context}>
-      {threads.length > 0 && <Digest threads={threads} onShowThread={context.onShowThread} />}
+    <div className={tintOf(tint)}>
+      {form === "line" ? (
+        <ReviewLine key={form} ref={formRef} review={review} onOpen={onToggle} />
+      ) : (
+        <div key={form} ref={focus.from}>
+          <ReviewMessage ref={form === "message" ? focus.to : undefined} review={review} context={context}>
+            {form === "opened" && (
+              <button ref={focus.to} type="button" aria-expanded onClick={onToggle} className={`${QUIET_BUTTON} col-start-2 mt-1 -ml-2 justify-self-start px-2 py-0.5`}>
+                Collapse
+              </button>
+            )}
+          </ReviewMessage>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReviewMessage({ ref, review: { review, threads }, context, children }: { ref?: Ref<HTMLElement>; review: ReviewWithThreads; context: Context; children?: ReactNode }) {
+  return (
+    <Message ref={ref} comment={review.comment} verb={<Verdict verdict={review.verdict} />} context={context}>
+      {threads.length > 0 && <Digest threads={threads} context={context} />}
       {children}
     </Message>
   );
 }
 
 // A review's threads: one row each, its file and line, its first line, and whether it is resolved
-// or outdated. The whole row opens the Changes tab at the thread.
-function Digest({ threads, onShowThread }: { threads: ReviewThread[]; onShowThread(thread: ReviewThread): void }) {
+// or outdated. The whole row opens the Changes tab at the thread, unless its file has left the diff:
+// then it is text, which says so.
+function Digest({ threads, context }: { threads: ReviewThread[]; context: Context }) {
   return (
     <ul aria-label="Review threads" className="col-start-2 mt-2 -ml-2 grid grid-cols-[minmax(0,1fr)] rounded-lg bg-(--pr-reviews-thread-tint) p-0.5">
       {threads.map((thread) => {
-        const state = threadStateOf(thread);
+        const inDiff = context.changedPaths.has(thread.path);
+        const state = [threadStateOf(thread), inDiff ? "" : "not in this diff"].filter((words) => words !== "").join(" · ");
+        const row = (
+          <>
+            {/* Display only: `whitespace-pre` keeps the path's spaces as they are. */}
+            <span className="font-mono text-xs whitespace-pre text-foreground">{threadLocationOf(thread)}</span>
+            <span className="min-w-0 flex-1 truncate">{snippetOf(thread.comments[0].body)}</span>
+            {state !== "" && <span className="shrink-0">{state}</span>}
+          </>
+        );
         return (
           <li key={thread.id} className="grid">
-            <button
-              type="button"
-              title={`${thread.path}: show in Changes`}
-              onClick={() => onShowThread(thread)}
-              className="flex min-h-7 min-w-0 cursor-pointer items-baseline gap-2.5 rounded-md px-2 py-1 text-left text-[12.5px] leading-5 text-muted-foreground transition-colors duration-150 ease-out hover:bg-(--pr-reviews-thread-tint-hover) hover:duration-0 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
-            >
-              {/* Display only: `whitespace-pre` keeps the path's spaces as they are. */}
-              <span className="font-mono text-xs whitespace-pre text-foreground">{threadLocationOf(thread)}</span>
-              <span className="min-w-0 flex-1 truncate">{snippetOf(thread.comments[0].body)}</span>
-              {state !== "" && <span className="shrink-0">{state}</span>}
-            </button>
+            {inDiff ? (
+              <button type="button" title={`${thread.path}: show in Changes`} onClick={() => context.onShowThread(thread)} className={`${DIGEST_ROW} cursor-pointer text-left transition-colors duration-150 ease-out hover:bg-(--pr-reviews-thread-tint-hover) hover:duration-0 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none`}>
+                {row}
+              </button>
+            ) : (
+              <div className={DIGEST_ROW}>{row}</div>
+            )}
           </li>
         );
       })}
     </ul>
   );
 }
+
+const DIGEST_ROW = "flex min-h-7 min-w-0 items-baseline gap-2.5 rounded-md px-2 py-1 text-[12.5px] leading-5 text-muted-foreground";
 
 // The first line as words: markdown's code ticks and bold marks read as noise in a one-line row.
 const snippetOf = (body: string) => firstLineOf(body).replace(/`|\*\*/g, "");
@@ -157,57 +190,6 @@ const VERDICTS = {
 } as const satisfies Record<ReviewVerdict, { words: string; tone: string; glyph: ActivityGlyphName }>;
 
 const Verdict = ({ verdict }: { verdict: ReviewVerdict }) => <span className={`shrink-0 text-xs ${VERDICTS[verdict].tone}`}>{VERDICTS[verdict].words}</span>;
-
-// Lines in tinted blocks. A review line the reader opened shows as its review, between the blocks
-// before and after it. One focus hand-off serves every review line here: only the one the reader
-// pressed changes, so its line hands focus to its Collapse, and Collapse back to its line.
-function Lines({ lines, context }: { lines: ActivityLine[]; context: Context }) {
-  const focus = useFocusHandOff();
-  const segments = useMemo(() => segmentsOf(lines, context.opened), [lines, context.opened]);
-  return segments.map((segment) =>
-    segment.kind === "lines" ? (
-      <div key={lineKeyOf(segment.lines[0])} className="-mx-3 my-1 grid grid-cols-[minmax(0,1fr)] rounded-[10px] bg-(--pr-reviews-thread-tint) px-3 py-1">
-        {segment.lines.map((line) => (
-          <Line key={lineKeyOf(line)} line={line} focus={focus} context={context} />
-        ))}
-      </div>
-    ) : (
-      <div key={segment.review.review.id} ref={focus.from}>
-        <ReviewMessage review={segment.review} context={context}>
-          <button ref={focus.to} type="button" aria-expanded onClick={() => context.onToggle(segment.review.review.id)} className={`${QUIET_BUTTON} col-start-2 mt-1 -ml-2 justify-self-start px-2 py-0.5`}>
-            Collapse
-          </button>
-        </ReviewMessage>
-      </div>
-    ),
-  );
-}
-
-type Segment = { kind: "lines"; lines: ActivityLine[] } | { kind: "review"; review: ReviewWithThreads };
-
-function segmentsOf(lines: ActivityLine[], opened: ReadonlySet<string>): Segment[] {
-  const segments: Segment[] = [];
-  for (const line of lines) {
-    const last = segments.at(-1);
-    if (line.kind === "review" && opened.has(line.review.id)) segments.push({ kind: "review", review: line });
-    else if (last?.kind === "lines") last.lines.push(line);
-    else segments.push({ kind: "lines", lines: [line] });
-  }
-  return segments;
-}
-
-function Line({ line, focus, context }: { line: ActivityLine; focus: FocusHandOff; context: Context }) {
-  switch (line.kind) {
-    case "run":
-      return line.entries.length === 1 ? <EntryLine entry={line.entries[0]} /> : <RunLine entries={line.entries} open={context.opened.has(line.key)} onToggle={() => context.onToggle(line.key)} />;
-    case "review":
-      return <ReviewLine review={line} focus={focus} onOpen={() => context.onToggle(line.review.id)} />;
-    case "merged":
-      return <MergedLine item={line.item} />;
-    default:
-      return line satisfies never;
-  }
-}
 
 const LINE = "grid grid-cols-[24px_minmax(0,1fr)] items-start gap-x-3 py-1 text-[12.5px] leading-5 text-muted-foreground";
 const LINE_BUTTON = `${LINE} w-full cursor-pointer rounded-md text-left transition-colors duration-150 ease-out hover:text-foreground hover:duration-0 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none`;
@@ -265,7 +247,8 @@ function RunLine({ entries, open, onToggle }: { entries: RunEntry[]; open: boole
 }
 
 // "X approved · 5d ago", or "X reviewed · 1 resolved thread · 6d ago ›", which opens to the review.
-function ReviewLine({ review: { review, threads }, focus, onOpen }: { review: ReviewWithThreads; focus: FocusHandOff; onOpen(): void }) {
+// A line with no threads holds focus, without being a tab stop, for the form it replaced.
+function ReviewLine({ ref, review: { review, threads }, onOpen }: { ref: RefCallback<HTMLElement>; review: ReviewWithThreads; onOpen(): void }) {
   const verdict = VERDICTS[review.verdict];
   const words = (
     <span>
@@ -275,10 +258,9 @@ function ReviewLine({ review: { review, threads }, focus, onOpen }: { review: Re
     </span>
   );
   const glyph = <Glyph name={verdict.glyph} tone={review.verdict === "approved" ? verdict.tone : undefined} />;
-  const ref = useMemo(() => mergeRefs(focus.from, focus.to), [focus]);
   if (threads.length === 0) {
     return (
-      <div className={LINE}>
+      <div ref={ref} tabIndex={-1} className={`${LINE} rounded-md focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none`}>
         {glyph}
         {words}
       </div>

@@ -7,7 +7,7 @@ import type { ReviewThread } from "../../comments/thread-schema.ts";
 import { timeOf, type TimelineItem } from "../../comments/timeline-schema.ts";
 
 type ItemOf<Kind extends TimelineItem["kind"]> = Extract<TimelineItem, { kind: Kind }>;
-type CommentItem = ItemOf<"comment">;
+export type CommentItem = ItemOf<"comment">;
 type ReviewItem = ItemOf<"review">;
 export type MergedItem = ItemOf<"merged">;
 type LabelItem = ItemOf<"labeled">;
@@ -95,11 +95,24 @@ function blocksOf(items: TimelineItem[], threadsById: ReadonlyMap<string, Review
       case "merged":
         addLine({ kind: "merged", item });
         break;
-      default: {
+      case "commit":
+      case "labeled":
+      case "renamed":
+      case "review-requested":
+      case "review-dismissed":
+      case "assigned":
+      case "milestoned":
+      case "force-pushed":
+      case "base-changed":
+      case "referenced":
+      case "status": {
         const run = openRun(blocks);
         if (run === null) addLine({ kind: "run", key: item.id, items: [item] });
         else run.items.push(item);
+        break;
       }
+      default:
+        item satisfies never;
     }
   }
   return blocks.map((block) => (block.kind === "lines" ? { kind: "lines", lines: block.lines.map(completed) } : block));

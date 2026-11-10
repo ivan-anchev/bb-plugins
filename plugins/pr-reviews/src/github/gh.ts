@@ -15,7 +15,9 @@ import { parseHostCommandFailure, runHostCommand } from "./host-command.ts";
 import type { PrCommits } from "./pr-commits.ts";
 import {
   allPages,
+  CHANGED_PATHS_QUERY,
   graphqlArgs,
+  parseChangedPathsPage,
   parseThreadCommentsPage,
   parseThreadsPage,
   prVariables,
@@ -120,10 +122,16 @@ export async function readFileAt(repo: Repo, sha: string, path: string): Promise
   return Buffer.from(file.content, "base64").toString("utf8");
 }
 
-/** Every review thread on the PR and every item of its timeline, all pages of each. */
+/** Every review thread on the PR, every item of its timeline and the paths it changes, all pages of each. */
 export async function readPrComments(repo: Repo, number: number): Promise<PrComments> {
-  const [threads, nodes] = await Promise.all([reviewThreadsOf(repo, number), timelineOf(repo, number)]);
-  return { threads, timeline: toTimeline(nodes, await reviewCommentsOf(nodes), threads) };
+  const [threads, nodes, changedPaths] = await Promise.all([reviewThreadsOf(repo, number), timelineOf(repo, number), changedPathsOf(repo, number)]);
+  return { threads, timeline: toTimeline(nodes, await reviewCommentsOf(nodes), threads), changedPaths };
+}
+
+async function changedPathsOf(repo: Repo, number: number): Promise<string[]> {
+  const pr = prVariables(repo, number);
+  const files = await allPages(null, async (cursor) => parseChangedPathsPage(await graphql(CHANGED_PATHS_QUERY, { ...pr, cursor })));
+  return files.map((file) => file.path);
 }
 
 async function reviewThreadsOf(repo: Repo, number: number): Promise<ReviewThread[]> {

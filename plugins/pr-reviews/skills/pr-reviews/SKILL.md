@@ -88,7 +88,9 @@ day:
 - **A review's threads** show under it as rows in a tinted group: the file name
   and line in monospace, the thread's first line, and "resolved", "outdated" or
   both when they apply. A row opens the **Changes** tab at that file, with the
-  thread opened, in view and focused.
+  thread opened, in view and focused; if the Changes filters hide the file,
+  they are cleared. A thread on a file the diff no longer changes is plain
+  text, with "not in this diff" after its state, and opens nothing.
 - **Commits and events** (labels, title changes, review requests, assignees,
   milestones, force-pushes, base branch changes, mentions, ready for review,
   draft, closed, reopened, branch deleted or restored, auto-merge) between two
@@ -104,7 +106,9 @@ day:
 
 Lines between two messages sit together in one recessed tinted block. Which
 lines you opened is kept while the page is open; whether a review folds comes
-from each read, so a thread GitHub reopens shows its review open again.
+from each read, so a thread GitHub reopens shows its review open again. When a
+read changes how a review shows while focus is in it, focus moves to the line,
+the review or Collapse that replaces it.
 
 At the foot, the comment box comments on the PR's conversation: write, preview,
 then **Comment** (⌘↵) posts it (see "Commenting on GitHub"). **Quote** on a

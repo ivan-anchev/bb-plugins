@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { allPages, graphqlArgs, parseThreadsPage, prVariables, THREADS_QUERY, toThread } from "./pr-comments.ts";
+import { allPages, graphqlArgs, parseChangedPathsPage, parseThreadsPage, prVariables, THREADS_QUERY, toThread } from "./pr-comments.ts";
 import type { ReviewThread } from "../comments/thread-schema.ts";
 import { repoSchema } from "./repo.ts";
 
@@ -141,4 +141,27 @@ test("graphql args: the query and text by -f, the PR number by -F, and no cursor
     ...["-f", "owner=ivan-anchev", "-f", "name=bb-plugins", "-F", "number=71"],
   ]);
   assert.deepEqual(graphqlArgs(THREADS_QUERY, { ...pr, cursor: "Y3Vyc29y" }).slice(-2), ["-f", "cursor=Y3Vyc29y"]);
+});
+
+// withastro/astro#18616's CHANGED_PATHS_QUERY, recorded with `gh api graphql`.
+test("changed paths: each file the PR changes by its path, as GitHub names it", () => {
+  const page = parseChangedPathsPage(fixture("files-astro-18616"));
+  assert.equal(page.pageInfo.hasNextPage, false);
+  assert.deepEqual(
+    page.nodes.map((file) => file.path),
+    [
+      ".changeset/true-parks-retire.md",
+      "packages/astro/package.json",
+      "packages/astro/src/cli/add/index.ts",
+      "packages/astro/src/cli/definitions.ts",
+      "packages/astro/src/cli/dev/index.ts",
+      "packages/astro/src/cli/flags.ts",
+      "packages/astro/src/cli/index.ts",
+      "packages/astro/src/cli/infra/mri-cli-argument-parser.ts",
+      "packages/astro/src/events/session.ts",
+      "packages/astro/test/units/cli/argument-parser.contract.ts",
+      "packages/astro/test/units/cli/argument-parser.test.ts",
+      "pnpm-lock.yaml",
+    ],
+  );
 });

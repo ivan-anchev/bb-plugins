@@ -5,6 +5,7 @@ import type { TimelineItem } from "../../comments/timeline-schema.ts";
 import { parseThreadsPage, toThread } from "../../github/pr-comments.ts";
 import { isReview, parseTimelinePage, toTimeline } from "../../github/pr-timeline.ts";
 import { activityOf, lastTimeOf, type ActivityBlock, type ActivityLine, type RunEntry } from "./activity-fold.ts";
+import { rowsOf, type ActivityRow } from "./activity-rows.ts";
 import { dayLabelOf, runSummaryOf, threadLocationOf, threadStateOf } from "./activity-words.ts";
 
 // Days are the reader's local ones; these read in UTC.
@@ -135,6 +136,28 @@ test("a review whose threads a refresh reopens reads as a message again", () => 
 
   assert.deepEqual(blocksOf(THREADS), [["astro-factory commented line"]]);
   assert.deepEqual(blocksOf(reopened), ["astro-factory commented message (1 thread)"]);
+});
+
+test("a review keeps its row in every form, as a refresh resolves or reopens its threads and as the reader opens it", () => {
+  const review = TIMELINE.find((item) => item.kind === "review")!;
+  const reopened = THREADS.map((thread) => ({ ...thread, resolvedBy: null }));
+  const rowOf = (threads: typeof THREADS, opened: ReadonlySet<string> = new Set()) =>
+    rowsOf(activityOf([review], threads)[0].blocks, opened).map((row) => [row.key, row.kind === "review" ? row.form : row.kind]);
+
+  assert.deepEqual(rowOf(THREADS), [[review.id, "line"]]);
+  assert.deepEqual(rowOf(reopened), [[review.id, "message"]]);
+  assert.deepEqual(rowOf(THREADS, new Set([review.id])), [[review.id, "opened"]]);
+  assert.deepEqual(rowOf(reopened, new Set([review.id])), [[review.id, "message"]], "a review on the page has no line to open");
+});
+
+test("a tinted block's rows draw its top and bottom, and a review the reader opens splits it", () => {
+  const [day] = activityOf(TIMELINE, THREADS);
+  const tintWord = (row: ActivityRow) => (row.tint === null ? "page" : `${row.tint.first ? "top" : ""}${row.tint.last ? "bottom" : ""}` || "middle");
+  const tintsWith = (opened: ReadonlySet<string>) => rowsOf(day.blocks, opened).map(tintWord);
+  const firstReviewLine = rowsOf(day.blocks, new Set()).find((row) => row.kind === "review")!;
+
+  assert.deepEqual(tintsWith(new Set()), ["topbottom", "page", "top", "middle", "middle", "middle", "middle", "middle", "middle", "middle", "bottom", "page"]);
+  assert.deepEqual(tintsWith(new Set([firstReviewLine.key])), ["topbottom", "page", "topbottom", "page", "top", "middle", "middle", "middle", "middle", "middle", "bottom", "page"]);
 });
 
 test("a day reads with its weekday, and its year only when it is not this year's", () => {

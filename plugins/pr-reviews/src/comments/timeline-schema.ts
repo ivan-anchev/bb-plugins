@@ -53,14 +53,29 @@ export function timeOf(item: TimelineItem): string {
     case "comment":
     case "review":
       return item.comment.createdAt;
-    default:
+    case "commit":
+    case "labeled":
+    case "renamed":
+    case "review-requested":
+    case "review-dismissed":
+    case "assigned":
+    case "milestoned":
+    case "merged":
+    case "force-pushed":
+    case "base-changed":
+    case "referenced":
+    case "status":
       return item.createdAt;
+    default:
+      return item satisfies never;
   }
 }
 
 /**
  * Every comment on a PR, in GitHub's order: its review threads, and its timeline, which holds the
- * conversation's comments and the reviews that opened the threads.
+ * conversation's comments and the reviews that opened the threads. `changedPaths`: the files the
+ * PR's diff changes, named as a thread names its file, byte for byte; a thread on any other file
+ * has left the diff.
  */
-export const prCommentsSchema = z.object({ threads: z.array(reviewThreadSchema), timeline: z.array(timelineItemSchema) });
+export const prCommentsSchema = z.object({ threads: z.array(reviewThreadSchema), timeline: z.array(timelineItemSchema), changedPaths: z.array(z.string()) });
 export type PrComments = z.infer<typeof prCommentsSchema>;

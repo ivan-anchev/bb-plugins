@@ -40,7 +40,7 @@ const handlers = handlersWith([PROJECT]);
 
 const TARGET = { projectId: "proj_1", number: 40 };
 // The tag the comments read carries for this PR: what each post must invalidate for it to show.
-const READ_TAGS = prReviewsContract.comments.tags!(TARGET, { threads: [], timeline: [] });
+const READ_TAGS = prReviewsContract.comments.tags!(TARGET, { threads: [], timeline: [], changedPaths: [] });
 // The app calling, as the Changes tab and the guide do.
 const FROM_APP = { experimental_caller: { kind: "client" }, experimental_signal: new AbortController().signal } as const;
 const call = async <Input, Output>(handler: (input: Input, context: typeof FROM_APP) => Output | Promise<Output>, input: Input) => handler(input, FROM_APP);

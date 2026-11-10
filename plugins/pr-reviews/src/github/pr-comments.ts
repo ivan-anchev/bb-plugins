@@ -18,6 +18,9 @@ export const THREADS_QUERY = `${PR} reviewThreads(first: ${PAGE}, after: $cursor
   id isResolved resolvedBy { login } isOutdated path subjectType line startLine diffSide startDiffSide originalLine originalStartLine
   comments(first: ${PAGE}) { ${REVIEW_COMMENTS} } } } } } }`;
 
+/** The paths of the files the PR changes, as GitHub names them, which is how a thread names its file. */
+export const CHANGED_PATHS_QUERY = `${PR} files(first: ${PAGE}, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { path } } } } }`;
+
 /** The rest of a thread with more comments than its first page holds. */
 export const THREAD_COMMENTS_QUERY = `query($id: ID!, $cursor: String) { node(id: $id) { ... on PullRequestReviewThread {
   comments(first: ${PAGE}, after: $cursor) { ${REVIEW_COMMENTS} } } } }`;
@@ -31,7 +34,7 @@ export function graphqlArgs(query: string, variables: Record<string, string | nu
   return ["api", "graphql", "-f", `query=${query}`, ...fields];
 }
 
-/** The PR variables of THREADS_QUERY and TIMELINE_QUERY. */
+/** The PR variables of THREADS_QUERY, CHANGED_PATHS_QUERY and TIMELINE_QUERY. */
 export function prVariables(repo: Repo, number: number) {
   const [owner, name] = repo.split("/");
   return { owner, name, number };
@@ -91,6 +94,10 @@ export const pullRequestOf = <Shape extends z.ZodRawShape>(shape: Shape) => z.ob
 
 /** One page of THREADS_QUERY's response. */
 export const parseThreadsPage = (json: unknown): Connection<GhThread> => pullRequestOf({ reviewThreads: connectionOf(ghThreadSchema) }).parse(json).data.repository.pullRequest.reviewThreads;
+
+/** One page of CHANGED_PATHS_QUERY's response. */
+export const parseChangedPathsPage = (json: unknown): Connection<{ path: string }> =>
+  pullRequestOf({ files: connectionOf(z.object({ path: z.string() })) }).parse(json).data.repository.pullRequest.files;
 
 /** One page of THREAD_COMMENTS_QUERY's response. */
 export const parseThreadCommentsPage = (json: unknown): Connection<GhReviewComment> =>

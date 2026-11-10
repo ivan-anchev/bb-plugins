@@ -41,7 +41,7 @@ const STAT_COLORS: Record<StatPart["tone"], string> = {
 };
 
 export function changesTreeOf(files: readonly DiffFile[]): ChangesTreeInput {
-  const filesByTreePath = filesByCollisionFreePath(files);
+  const filesByTreePath = filesByTreePathOf(files);
   const entries = [...filesByTreePath];
 
   return {
@@ -54,7 +54,8 @@ export function changesTreeOf(files: readonly DiffFile[]): ChangesTreeInput {
   };
 }
 
-function filesByCollisionFreePath(files: readonly DiffFile[]): Map<string, DiffFile> {
+/** Each file by its tree path: its own, unless it collides with a folder's. */
+export function filesByTreePathOf(files: readonly DiffFile[]): Map<string, DiffFile> {
   const directories = new Set(files.flatMap((file) => ancestorDirectoriesOf(file.path)));
   const takenPaths = new Set([...directories, ...files.map((file) => file.path)]);
   return new Map(

@@ -7,8 +7,9 @@
 // open when it arrives. Until then the panel shows the read's state in one region, and focus there
 // moves to the diff pane that replaces it.
 //
-// A thread the reader asked to see from the Summary tab selects its file once the diff is read.
-// Focus waits in the read's region or the diff pane until the thread takes it.
+// A thread the reader asked to see from the Summary tab selects its file once the diff is read,
+// clearing the filters if they hide it. Focus waits in the read's region or the diff pane until the
+// thread takes it. A thread whose file has left the diff ends the request there, in the diff pane.
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { PrChanges } from "../../contract.ts";
 import type { DiffFile } from "../../diff/diff-schema.ts";
@@ -19,9 +20,10 @@ import { Notice } from "../ui/notice.tsx";
 import { useRememberedState } from "../use-remembered-state.ts";
 import { changeSummaryOf } from "./change-stats.ts";
 import { DiffViewer } from "./diff-viewer.tsx";
-import { extensionCountsOf, filterChangedFiles, isFiltering, kindCountsOf } from "./file-filter.ts";
+import { extensionCountsOf, filterChangedFiles, isFiltering, kindCountsOf, NO_FILTERS } from "./file-filter.ts";
 import { ChangesHeader } from "./header/changes-header.tsx";
 import { ReadState } from "./read-state.tsx";
+import { revealTargetOf } from "./reveal-target.ts";
 import { SplitView } from "./split/split-view.tsx";
 import { ThreadRevealProvider, type ThreadReveal } from "./thread-reveal.ts";
 import { changesTreeOf } from "./tree/tree-input.ts";
@@ -48,11 +50,19 @@ export function ChangesPanel({ target, changes, loading, readError, reveal, onRe
   const [selectedPath, setSelectedPath] = useRememberedState(rememberedSelections, memoryKey, null);
   // Set during render, so the file is selected in the render the diff arrives in.
   const [selectedFor, setSelectedFor] = useState(0);
-  if (reveal !== null && changes !== null && reveal.asked !== selectedFor) {
-    setSelectedFor(reveal.asked);
-    const revealed = treePathOf(tree.filesByTreePath, reveal.path);
-    if (revealed !== null) setSelectedPath(revealed);
+  const revealing = reveal !== null && changes !== null && reveal.asked !== selectedFor ? { asked: reveal.asked, ...revealTargetOf(reveal.path, tree.filesByTreePath, changes.files) } : null;
+  if (revealing !== null && revealing.kind !== "absent") {
+    setSelectedFor(revealing.asked);
+    if (revealing.kind === "filtered-out") {
+      controls.pathQuery.onChange(null);
+      controls.filters.onChange(NO_FILTERS);
+    }
+    setSelectedPath(revealing.treePath);
   }
+  const unrevealable = revealing?.kind === "absent";
+  useLayoutEffect(() => {
+    if (unrevealable) onRevealed();
+  }, [unrevealable, onRevealed]);
   const shownFile = selectedPath === null ? undefined : tree.filesByTreePath.get(selectedPath);
   const model = useTreeModel({
     memoryKey,
@@ -96,12 +106,6 @@ export function ChangesPanel({ target, changes, loading, readError, reveal, onRe
       )}
     </>
   );
-}
-
-// The tree's path for a file of the diff: its own, unless it collides with a folder's.
-function treePathOf(filesByTreePath: ReadonlyMap<string, DiffFile>, path: string): string | null {
-  for (const [treePath, file] of filesByTreePath) if (file.path === path) return treePath;
-  return null;
 }
 
 // why: the row the reader pressed is on the Summary tab, which hides as the Changes tab shows, and
