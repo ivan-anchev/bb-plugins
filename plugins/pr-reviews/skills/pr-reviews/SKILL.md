@@ -72,9 +72,8 @@ labels has no side panel. The panel never changes anything on GitHub. It comes
 with the PR's own read, so Refresh updates it. With no side panel, or on a page
 narrower than 600px, the description takes the whole width.
 
-**Changes** shows the PR's whole diff, base to head, as GitHub serves it now,
-laid out like Code Explorer's Changes view. It needs no guide: it works on any
-PR, before a review starts. It reads the diff (`gh pr diff`) the first time the
+**Changes** shows the PR's whole diff, base to head, as GitHub serves it now.
+It needs no guide: it works on any PR, before a review starts. It reads the diff (`gh pr diff`) the first time the
 tab is opened, not when the page opens.
 
 - **The tree**: every changed file in its folders, with its `+N −M` (an added
@@ -254,7 +253,7 @@ A guide opens on **What this PR does**:
 The bar at the bottom reads **Start the walkthrough · N steps**. Each step
 shows its title, its explanation, **For you to decide** when the agent left the
 reader a decision, then its hunks: each one diff, drawn with bb's own diff
-engine and code theme (as Code Explorer's diffs are), under its file path. A hunk the agent
+engine and code theme, under its file path. A hunk the agent
 collapsed is one line, its path and reason, with Show. A file with no text
 changes (a binary file, a pure rename) is one line saying so.
 

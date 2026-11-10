@@ -18,12 +18,11 @@ GitHub.
   PR's whole diff, with its `+N −M` on the tab; and **Guide**, which keeps its
   step while you switch and marks a ready guide with a dot.
 - **Changes**: every changed file in a tree with its `+N −M`, beside the
-  selected file's diff, drawn like bb's own, laid out like Code Explorer's
-  Changes view. Click "N unmodified lines" to show the lines between hunks.
-  Filter by path (globs, `!` to exclude), by kind, extension or
-  deleted files; switch between Unified and Split, wrap lines, and collapse or
-  expand every folder. It needs no guide, and reads the diff only once you
-  open the tab.
+  selected file's diff, drawn like bb's own. Click "N unmodified lines" to
+  show the lines between hunks. Filter by path (globs, `!` to exclude), by
+  kind, extension or deleted files; switch between Unified and Split, wrap
+  lines, and collapse or expand every folder. It needs no guide, and reads
+  the diff only once you open the tab.
 - **Start review**: starts a review thread in a new worktree, with your
   Review instructions from Settings → PR Reviews. The page shows it writing,
   with the time so far, Review chat and Cancel, and asks it to finish if it

@@ -1,0 +1,148 @@
+/* Colored file-type icons beside chat file links and @-mentions. */
+
+.ce-chat-file-icon-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.ce-chat-file-icon {
+  color: var(--ce-file-icon-gray);
+}
+
+.ce-chat-file-icon > svg {
+  fill: currentColor;
+}
+
+/* Text-like, not an inline block: the word joiner it holds keeps the icon on the file name's line. */
+.ce-chat-file-icon[data-placement="link"] {
+  position: relative;
+  padding-left: 1.25em;
+}
+
+.ce-chat-file-icon[data-placement="link"] > svg {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 1em;
+  height: 1em;
+  transform: translateY(-50%);
+}
+
+.ce-chat-file-icon[data-placement="mention"] {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.ce-chat-file-icon[data-placement="mention"] > svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+/* bb's generic file glyph, which the typed icon replaces. */
+.ce-chat-file-icon[data-placement="mention"] + svg {
+  display: none;
+}
+
+/* The palette and token colors of @pierre/trees (Apache-2.0), which does not export them. */
+:root {
+  --ce-file-icon-gray: light-dark(#84848a, #adadb1);
+  --ce-file-icon-red: light-dark(#d52c36, #ff6762);
+  --ce-file-icon-vermilion: light-dark(#ff8c5b, #d5512f);
+  --ce-file-icon-orange: light-dark(#d47628, #ffa359);
+  --ce-file-icon-yellow: light-dark(#d5a910, #ffd452);
+  --ce-file-icon-green: light-dark(#199f43, #5ecc71);
+  --ce-file-icon-teal: light-dark(#17a5af, #64d1db);
+  --ce-file-icon-cyan: light-dark(#1ca1c7, #68cdf2);
+  --ce-file-icon-blue: light-dark(#1a85d4, #69b1ff);
+  --ce-file-icon-indigo: light-dark(#693acf, #9d6afb);
+  --ce-file-icon-purple: light-dark(#a631be, #d568ea);
+  --ce-file-icon-pink: light-dark(#d32a61, #ff678d);
+  --ce-file-icon-mauve: light-dark(#594c5b, #79697b);
+}
+
+.ce-chat-file-icon[data-icon-token="astro"],
+.ce-chat-file-icon[data-icon-token="database"],
+.ce-chat-file-icon[data-icon-token="vite"] {
+  color: var(--ce-file-icon-purple);
+}
+
+.ce-chat-file-icon[data-icon-token="babel"],
+.ce-chat-file-icon[data-icon-token="browserslist"],
+.ce-chat-file-icon[data-icon-token="javascript"] {
+  color: var(--ce-file-icon-yellow);
+}
+
+.ce-chat-file-icon[data-icon-token="bash"],
+.ce-chat-file-icon[data-icon-token="markdown"],
+.ce-chat-file-icon[data-icon-token="svgo"],
+.ce-chat-file-icon[data-icon-token="vue"] {
+  color: var(--ce-file-icon-green);
+}
+
+.ce-chat-file-icon[data-icon-token="biome"],
+.ce-chat-file-icon[data-icon-token="c"],
+.ce-chat-file-icon[data-icon-token="cpp"],
+.ce-chat-file-icon[data-icon-token="docker"],
+.ce-chat-file-icon[data-icon-token="python"],
+.ce-chat-file-icon[data-icon-token="typescript"],
+.ce-chat-file-icon[data-icon-token="vscode"],
+.ce-chat-file-icon[data-icon-token="webpack"] {
+  color: var(--ce-file-icon-blue);
+}
+
+.ce-chat-file-icon[data-icon-token="bootstrap"],
+.ce-chat-file-icon[data-icon-token="css"],
+.ce-chat-file-icon[data-icon-token="eslint"],
+.ce-chat-file-icon[data-icon-token="terraform"],
+.ce-chat-file-icon[data-icon-token="wasm"] {
+  color: var(--ce-file-icon-indigo);
+}
+
+.ce-chat-file-icon[data-icon-token="bun"] {
+  color: var(--ce-file-icon-mauve);
+}
+
+.ce-chat-file-icon[data-icon-token="claude"],
+.ce-chat-file-icon[data-icon-token="html"],
+.ce-chat-file-icon[data-icon-token="json"],
+.ce-chat-file-icon[data-icon-token="rust"],
+.ce-chat-file-icon[data-icon-token="svg"],
+.ce-chat-file-icon[data-icon-token="swift"],
+.ce-chat-file-icon[data-icon-token="zig"],
+.ce-chat-file-icon[data-icon-token="zip"] {
+  color: var(--ce-file-icon-orange);
+}
+
+.ce-chat-file-icon[data-icon-token="git"] {
+  color: var(--ce-file-icon-vermilion);
+}
+
+.ce-chat-file-icon[data-icon-token="go"],
+.ce-chat-file-icon[data-icon-token="oxc"],
+.ce-chat-file-icon[data-icon-token="react"],
+.ce-chat-file-icon[data-icon-token="tailwind"] {
+  color: var(--ce-file-icon-cyan);
+}
+
+.ce-chat-file-icon[data-icon-token="graphql"],
+.ce-chat-file-icon[data-icon-token="image"],
+.ce-chat-file-icon[data-icon-token="sass"] {
+  color: var(--ce-file-icon-pink);
+}
+
+.ce-chat-file-icon[data-icon-token="mcp"],
+.ce-chat-file-icon[data-icon-token="prettier"],
+.ce-chat-file-icon[data-icon-token="table"] {
+  color: var(--ce-file-icon-teal);
+}
+
+.ce-chat-file-icon[data-icon-token="npm"],
+.ce-chat-file-icon[data-icon-token="postcss"],
+.ce-chat-file-icon[data-icon-token="ruby"],
+.ce-chat-file-icon[data-icon-token="svelte"],
+.ce-chat-file-icon[data-icon-token="yml"] {
+  color: var(--ce-file-icon-red);
+}
