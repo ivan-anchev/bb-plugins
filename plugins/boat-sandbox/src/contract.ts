@@ -1,4 +1,4 @@
-// What the app and the server share: the provider id and the one RPC method the chip calls.
+// What the app and the server share: the provider id and the RPC methods the chip and the sidebar call.
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { launchChoices } from "./launch.ts";
@@ -14,12 +14,18 @@ const launchChoicesReply = z.discriminatedUnion("status", [
 
 export type LaunchChoicesReply = z.output<typeof launchChoicesReply>;
 
-// Untagged: boat changes snapshots and environments out of band, so there is nothing to invalidate
+// launchChoices is untagged: boat changes snapshots and environments out of band, so there is nothing to invalidate
 // on; the chip reads again whenever its menu opens.
 export const boatSandboxContract = defineRpcContract({
   launchChoices: {
     input: z.object({}),
     output: launchChoicesReply,
     experimental_description: "boat templates, environments and defaults for a new thread sandbox",
+  },
+  // Keyed by bb host id. Untagged: a host's machine provider is fixed when bb creates it, so an answer never goes stale.
+  boatHosts: {
+    input: z.object({ keys: z.array(z.string()) }),
+    output: z.record(z.string(), z.boolean()),
+    experimental_description: "whether each bb host is a boat sandbox machine",
   },
 });
