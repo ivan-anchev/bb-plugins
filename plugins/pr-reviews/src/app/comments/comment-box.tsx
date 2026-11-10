@@ -162,7 +162,7 @@ function Composer({ subject, head, draft, sent, onDraft, onSettled, onClose, pr,
   };
 
   return (
-    <div ref={group} role="group" aria-label="Comment box" onKeyDown={onKeyDown} className={`${BOX_CLASS} transition-[border-color] duration-150 ease-out focus-within:border-[color-mix(in_oklch,var(--ring)_22%,var(--border))] motion-reduce:transition-none`}>
+    <div ref={group} role="group" aria-label="Comment box" onKeyDown={onKeyDown} className={BOX_CLASS}>
       <div className="flex items-center pt-2 pr-2 pl-2.5">
         <WriteTabs tabs={tabs} onWrite={() => textarea.current!.focus()} />
         <div className="ml-auto">
