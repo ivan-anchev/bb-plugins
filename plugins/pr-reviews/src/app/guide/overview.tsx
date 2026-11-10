@@ -6,6 +6,7 @@ import type { GuideRecord } from "../../contract.ts";
 import { fileOf, type DiffFile } from "../../diff/diff-schema.ts";
 import type { Finding, Guide, HiddenItem } from "../../guide/guide-schema.ts";
 import { stepNumberOfFinding, type VisibleFinding, type VisibleStep } from "../../guide/walkthrough.ts";
+import type { PrHeadTarget } from "../queries.ts";
 import { timeAgo } from "../relative-time.ts";
 import { Button } from "../ui/button.tsx";
 import { Prose } from "../ui/prose.tsx";
@@ -17,6 +18,8 @@ import { ShowToggle } from "./show-toggle.tsx";
 type OverviewProps = {
   record: GuideRecord;
   files: DiffFile[];
+  /** The PR at the guide's head, where the hidden hunks' diffs are. */
+  head: PrHeadTarget;
   /** The findings the view options show; none while the findings switch is off. */
   findings: VisibleFinding[];
   /** The steps shown, which a finding's link counts in. */
@@ -27,7 +30,7 @@ type OverviewProps = {
   onShowTests(): void;
 };
 
-export function Overview({ record, files, findings, steps, onOpenStep, hiddenTests, onShowTests }: OverviewProps) {
+export function Overview({ record, files, head, findings, steps, onOpenStep, hiddenTests, onShowTests }: OverviewProps) {
   const { overview, hidden } = record.guide;
   return (
     <>
@@ -47,7 +50,7 @@ export function Overview({ record, files, findings, steps, onOpenStep, hiddenTes
         <Section title="Not in this guide">
           <div className="grid gap-0.5">
             {hidden.map((item, i) => (
-              <HiddenRow key={i} item={item} files={files} />
+              <HiddenRow key={i} item={item} files={files} head={head} />
             ))}
             {hiddenTests > 0 && <HiddenTestsRow count={hiddenTests} onShow={onShowTests} />}
           </div>
@@ -111,7 +114,7 @@ function FindingRow({ finding, step, onOpenStep }: FindingRowProps) {
 }
 
 // One left-out item: what it is and why, with Show expanding its diff or its list of files.
-function HiddenRow({ item, files }: { item: HiddenItem; files: DiffFile[] }) {
+function HiddenRow({ item, files, head }: { item: HiddenItem; files: DiffFile[]; head: PrHeadTarget }) {
   const [open, setOpen] = useState(false);
   return (
     <div>
@@ -120,7 +123,7 @@ function HiddenRow({ item, files }: { item: HiddenItem; files: DiffFile[] }) {
         action={<ShowToggle open={open} subject={subjectOf(item)} onToggle={() => setOpen(!open)} />}
         reason={<Prose text={item.reason} className={REASON} />}
       />
-      {open && <HiddenBody item={item} files={files} />}
+      {open && <HiddenBody item={item} files={files} head={head} />}
     </div>
   );
 }
@@ -170,13 +173,13 @@ function HiddenLabel({ item }: { item: HiddenItem }) {
   return <span className={isManyFiles(item) ? "text-[13.5px]" : "break-all font-mono text-[12.5px]"}>{subjectOf(item)}</span>;
 }
 
-function HiddenBody({ item, files }: { item: HiddenItem; files: DiffFile[] }) {
+function HiddenBody({ item, files, head }: { item: HiddenItem; files: DiffFile[]; head: PrHeadTarget }) {
   switch (item.kind) {
     case "hunk":
       return (
         <div className="pt-1 pb-2.5">
           <div className="overflow-hidden rounded-lg bg-muted/40">
-            <HunkDiff file={fileOf(files, item.file)} hunk={item.hunk} />
+            <HunkDiff file={fileOf(files, item.file)} hunk={item.hunk} head={head} />
           </div>
         </div>
       );

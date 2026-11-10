@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { Guide } from "../../guide/guide-schema.ts";
 import { testHunkCount, type ViewOptions } from "../../guide/walkthrough.ts";
-import { useGuide, type GuideTarget } from "../queries.ts";
+import { useGuide, type PrHeadTarget } from "../queries.ts";
 import { IconButton } from "../ui/icon-button.tsx";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover.tsx";
 
@@ -25,11 +25,11 @@ export function useViewOptions(): ViewOptionsState {
   };
 }
 
-type GuideViewOptionsProps = { target: GuideTarget; viewOptions: ViewOptionsState };
+type GuideViewOptionsProps = { head: PrHeadTarget; viewOptions: ViewOptionsState };
 
 /** The tab bar's action on the Guide tab of a PR with a guide. It shows once the guide has loaded. */
-export function GuideViewOptions({ target, viewOptions }: GuideViewOptionsProps) {
-  const guide = useGuide(target);
+export function GuideViewOptions({ head, viewOptions }: GuideViewOptionsProps) {
+  const guide = useGuide(head);
   if (guide.data === undefined) return null;
   return <ViewOptionsButton guide={guide.data.record.guide} {...viewOptions} />;
 }

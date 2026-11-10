@@ -2,12 +2,12 @@
 // explanation, "For you to decide" when the agent left the reader a decision, and the files the
 // step touches. It stays in view while the diffs on the right scroll: the step's hunks in order,
 // each with its findings. Below about 900px of page width the columns stack, story first.
-import { useRef, type Ref } from "react";
+import { useMemo, useRef, type Ref } from "react";
 import { fileOf, type DiffFile } from "../../diff/diff-schema.ts";
 import type { GuideStep } from "../../guide/guide-schema.ts";
 import { stepFilesOf } from "../../guide/step-files.ts";
 import { findingsOn, type VisibleFinding } from "../../guide/walkthrough.ts";
-import type { GuideTarget } from "../queries.ts";
+import type { PrHeadTarget } from "../queries.ts";
 import { Prose } from "../ui/prose.tsx";
 import { HunkBlock } from "./hunk-block.tsx";
 import { PageTitle, PROSE } from "./page-text.tsx";
@@ -24,15 +24,17 @@ type StepPageProps = {
   title: Ref<HTMLHeadingElement>;
   files: DiffFile[];
   findings: VisibleFinding[];
-  target: GuideTarget;
+  head: PrHeadTarget;
 };
 
 // The columns' own top padding, not the page's, so the sticky story lines up with the diffs.
 // `100cqh` is the scroll region's height (guide-view.tsx makes it a size container).
 // The story's own track is `minmax(0,1fr)`: an implicit `auto` track grows to its widest child's
 // min-content, and a file row's min-content is its whole unwrapped path.
-export function StepPage({ place, total, title, files, findings, target }: StepPageProps) {
+export function StepPage({ place, total, title, files, findings, head }: StepPageProps) {
   const step = place.step.step;
+  // why memoised: each hunk's diff is handed its findings as line annotations, and new ones make it draw again.
+  const findingsByHunk = useMemo(() => step.hunks.map((entry) => findingsOn(findings, entry)), [step, findings]);
   const firstHunks = useRef(new Map<string, HTMLElement>());
   return (
     <article className="grid max-w-[880px] grid-cols-[minmax(0,1fr)] gap-x-10 px-7 pb-10 @min-[900px]:max-w-[1440px] @min-[900px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
@@ -53,8 +55,8 @@ export function StepPage({ place, total, title, files, findings, target }: StepP
             ref={isFirstOfFile(step, i) ? firstHunkRef(firstHunks.current, entry.file) : undefined}
             file={fileOf(files, entry.file)}
             entry={entry}
-            findings={findingsOn(findings, entry)}
-            target={target}
+            findings={findingsByHunk[i]}
+            head={head}
           />
         ))}
       </div>

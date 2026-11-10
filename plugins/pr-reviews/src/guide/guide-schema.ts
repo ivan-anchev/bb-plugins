@@ -2,13 +2,12 @@
 // plus the head the guide is for); Guide is the canonical stored form, which only
 // validateSubmission produces.
 import { z } from "zod";
-import { hunkIdSchema } from "../diff/diff-schema.ts";
+import { diffSideSchema, hunkIdSchema } from "../diff/diff-schema.ts";
 
 const text = z.string().trim().min(1);
 // A file is named by its exact path, which may begin or end with spaces: never trimmed.
 const path = z.string().min(1);
 const prioritySchema = z.enum(["p0", "p1", "p2"]);
-const sideSchema = z.enum(["new", "old"]);
 
 // ---- wire format: the tool's parameters ----
 
@@ -54,7 +53,7 @@ export const submitReviewInputSchema = z.strictObject({
     z.strictObject({
       file: path,
       line: z.number().int().positive().describe("A line inside one of the file's hunks."),
-      side: sideSchema.optional().describe('"old" only for a removed line; defaults to "new".'),
+      side: diffSideSchema.optional().describe('"old" only for a removed line; defaults to "new".'),
       priority: prioritySchema,
       title: text,
       body: text,
@@ -87,7 +86,7 @@ export type HiddenItem = z.infer<typeof hiddenItemSchema>;
 const findingSchema = z.object({
   file: z.string(),
   line: z.number().int().positive(),
-  side: sideSchema,
+  side: diffSideSchema,
   /** The hunk whose range holds `line` on `side`, resolved at validation. */
   hunk: hunkIdSchema,
   priority: prioritySchema,

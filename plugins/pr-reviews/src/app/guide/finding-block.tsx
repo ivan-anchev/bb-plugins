@@ -3,15 +3,15 @@
 // review thread. The thread answers in the thread; this page stays as it is.
 import { useId, useRef, useState } from "react";
 import type { VisibleFinding } from "../../guide/walkthrough.ts";
-import { useAskAboutFinding, type GuideTarget } from "../queries.ts";
+import { useAskAboutFinding, type PrHeadTarget } from "../queries.ts";
 import { Button } from "../ui/button.tsx";
 import { DESTRUCTIVE_TEXT_ON_MUTED } from "../ui/destructive-text-on-muted.ts";
 import { Prose } from "../ui/prose.tsx";
 import { Priority } from "./priority.tsx";
 
-type FindingBlockProps = { shown: VisibleFinding; target: GuideTarget };
+type FindingBlockProps = { shown: VisibleFinding; head: PrHeadTarget };
 
-export function FindingBlock({ shown, target }: FindingBlockProps) {
+export function FindingBlock({ shown, head }: FindingBlockProps) {
   const { finding } = shown;
   return (
     <div className="px-2 pt-1 pb-1.5">
@@ -21,7 +21,7 @@ export function FindingBlock({ shown, target }: FindingBlockProps) {
           <Prose text={finding.title} className="min-w-0 font-semibold" />
         </div>
         <Prose text={finding.body} className="max-w-[78ch] text-muted-foreground" />
-        <AskAboutThis shown={shown} target={target} />
+        <AskAboutThis shown={shown} head={head} />
       </section>
     </div>
   );
@@ -29,7 +29,7 @@ export function FindingBlock({ shown, target }: FindingBlockProps) {
 
 // "Ask about this" stays put while the question is open, so focus can always come back to it.
 // The draft and an error stay until a send succeeds; Cancel only folds the question away.
-function AskAboutThis({ shown, target }: FindingBlockProps) {
+function AskAboutThis({ shown, head }: FindingBlockProps) {
   const ask = useAskAboutFinding();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -50,7 +50,7 @@ function AskAboutThis({ shown, target }: FindingBlockProps) {
   const send = () => {
     const question = draft;
     void ask
-      .mutate({ ...target, findingIndex: shown.index, question })
+      .mutate({ ...head, findingIndex: shown.index, question })
       .then(() => {
         setSent(true);
         setDraft((current) => (current === question ? "" : current));

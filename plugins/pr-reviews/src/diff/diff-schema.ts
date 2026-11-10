@@ -54,6 +54,10 @@ export function lineCountsOf(lines: readonly string[]): LineCounts {
 /** The lines the whole file adds and removes. A file with no text hunks has none. */
 export const fileLineCountsOf = (file: DiffFile): LineCounts => lineCountsOf(file.hunks.flatMap((hunk) => hunk.lines));
 
+/** A side of a file's diff: "old" is the base, where removed lines are; "new" the head, with added and context lines. */
+export const diffSideSchema = z.enum(["new", "old"]);
+export type DiffSide = z.infer<typeof diffSideSchema>;
+
 /** One line of a hunk with its line number on each side; null on the side it is not on. */
 export type NumberedLine = { text: string; old: number | null; new: number | null };
 

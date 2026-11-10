@@ -1,10 +1,10 @@
 // The Guide tab once a guide exists: the overview first, then one step at a time, with the
 // controller pinned under the scrolling page.
-import { useRef, type ReactNode, type Ref } from "react";
+import { useMemo, useRef, type ReactNode, type Ref } from "react";
 import type { GuideRecord } from "../../contract.ts";
 import type { DiffFile } from "../../diff/diff-schema.ts";
 import { hiddenTestHunkCount, visibleFindings } from "../../guide/walkthrough.ts";
-import { useGuide, type GuideTarget } from "../queries.ts";
+import { useGuide, type PrHeadTarget } from "../queries.ts";
 import { Notice } from "../ui/notice.tsx";
 import { ReadError } from "../ui/read-error.tsx";
 import { Controller } from "./controller.tsx";
@@ -15,10 +15,13 @@ import { useStepKeys, useWalkthrough } from "./use-walkthrough.ts";
 import type { ViewOptionsState } from "./view-options.tsx";
 
 /** `shown`: whether the Guide tab is on screen; the page keeps the guide mounted under another tab. */
-type GuideViewProps = { target: GuideTarget; viewOptions: ViewOptionsState; shown: boolean };
+type GuideViewProps = { head: PrHeadTarget; viewOptions: ViewOptionsState; shown: boolean };
 
-export function GuideView({ target, viewOptions, shown }: GuideViewProps) {
-  const guide = useGuide(target);
+export function GuideView({ head: { projectId, number, headSha }, viewOptions, shown }: GuideViewProps) {
+  // why by value: the page builds its head afresh on every render, and a step's diffs, handed
+  // findings that hold it, would draw again each time.
+  const head = useMemo(() => ({ projectId, number, headSha }), [projectId, number, headSha]);
+  const guide = useGuide(head);
   const error = <ReadError read={guide} what="the guide" />;
   // Until a guide arrives the page holds the read's state; after, a failed re-read sits above it.
   if (guide.data === undefined) {
@@ -32,21 +35,22 @@ export function GuideView({ target, viewOptions, shown }: GuideViewProps) {
   return (
     <>
       {error}
-      <LoadedGuide target={target} record={guide.data.record} files={guide.data.files} viewOptions={viewOptions} shown={shown} />
+      <LoadedGuide head={head} record={guide.data.record} files={guide.data.files} viewOptions={viewOptions} shown={shown} />
     </>
   );
 }
 
-type LoadedGuideProps = { target: GuideTarget; record: GuideRecord; files: DiffFile[]; viewOptions: ViewOptionsState; shown: boolean };
+type LoadedGuideProps = { head: PrHeadTarget; record: GuideRecord; files: DiffFile[]; viewOptions: ViewOptionsState; shown: boolean };
 
-function LoadedGuide({ target, record, files, viewOptions, shown }: LoadedGuideProps) {
+function LoadedGuide({ head, record, files, viewOptions, shown }: LoadedGuideProps) {
   const scroll = useRef<HTMLDivElement>(null);
   const title = useRef<HTMLHeadingElement>(null);
   const walkthrough = useWalkthrough(record.guide, viewOptions, { scroll, title });
   useStepKeys(walkthrough, shown);
   const { place, setOptions } = walkthrough;
   const { options } = viewOptions;
-  const findings = visibleFindings(record.guide, options);
+  // Memoised: a step's diffs draw these findings, and draw again for new ones.
+  const findings = useMemo(() => visibleFindings(record.guide, options), [record.guide, options]);
   return (
     <>
       {/* It stays mounted across pages, so a step move keeps focus on it. */}
@@ -58,6 +62,7 @@ function LoadedGuide({ target, record, files, viewOptions, shown }: LoadedGuideP
             <Overview
               record={record}
               files={files}
+              head={head}
               findings={findings}
               steps={walkthrough.steps}
               onOpenStep={walkthrough.goToStep}
@@ -66,7 +71,7 @@ function LoadedGuide({ target, record, files, viewOptions, shown }: LoadedGuideP
             />
           </article>
         ) : (
-          <StepPage key={place.step.index} place={place} total={walkthrough.steps.length} title={title} files={files} findings={findings} target={target} />
+          <StepPage key={place.step.index} place={place} total={walkthrough.steps.length} title={title} files={files} findings={findings} head={head} />
         )}
       </GuidePage>
       <Controller walkthrough={walkthrough} />

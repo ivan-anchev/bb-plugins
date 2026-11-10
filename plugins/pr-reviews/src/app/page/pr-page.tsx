@@ -73,17 +73,17 @@ function guideTabOf(target: PrTarget, pr: PrDetail, review: ReviewState, viewOpt
     // A stale guide is still worth reading: it shows under a banner offering Update guide.
     case "ready":
     case "stale": {
-      const guide = { ...target, headSha: review.guideHeadSha };
+      const head = { ...target, headSha: review.guideHeadSha };
       return {
         status: { kind: "ready" },
         panel: (
           <>
             {review.kind === "stale" && <StaleBanner target={target} pr={pr} guideHeadSha={review.guideHeadSha} />}
             {/* Keyed: a new guide is a new view. */}
-            <GuideView key={review.guideHeadSha} target={guide} viewOptions={viewOptions} shown={shown} />
+            <GuideView key={review.guideHeadSha} head={head} viewOptions={viewOptions} shown={shown} />
           </>
         ),
-        barEnd: <GuideViewOptions target={guide} viewOptions={viewOptions} />,
+        barEnd: <GuideViewOptions head={head} viewOptions={viewOptions} />,
       };
     }
     default:
