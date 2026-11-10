@@ -17,7 +17,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p .",
-    "test": "node --test 'src/**/*.test.ts'",
+    "test": "node --test --experimental-test-module-mocks 'src/**/*.test.ts'",
     "build": "bb plugin build"
   },
   "engines": {

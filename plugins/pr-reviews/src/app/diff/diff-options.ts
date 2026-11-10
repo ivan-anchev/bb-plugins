@@ -69,28 +69,32 @@ const NOTE_ROWS = "[data-line-annotation],[data-gutter-buffer=annotation]{--diff
  */
 // why processFile and never loadDiffFiles or hydratePartialDiff: bb renders in a shared worker
 // pool that can't take a function option, and its build shim doesn't export hydratePartialDiff.
-// why one name on both sides, a rename's too: with no `diff --git` line Pierre compares the two
-// names, and two names make it a rename; the bare path, never git's a/ b/ prefixes.
+// why the file's path set as its name, never read back from the patch: the Pierre bb 0.49 runs
+// reads a header's name raw, so a quoted path keeps its quotes, and a bare one loses what Pierre
+// trims or ends a name at. The name is also what Pierre picks the code's language by: one ending
+// in `"` is plain text, and the code goes uncoloured.
 export function fileDiffOf(file: DiffFile, newContent: string | null): FileDiffMetadata {
-  const oldName = file.status === "added" ? "/dev/null" : file.path;
-  const newName = file.status === "deleted" ? "/dev/null" : file.path;
-  const patch = `--- ${headerNameOf(oldName)}\n+++ ${headerNameOf(newName)}\n${filePatchOf(file)}`;
-  if (newContent === null) return getSingularPatch(patch);
+  const patch = patchOf(file);
+  if (newContent === null) return { ...getSingularPatch(patch), name: file.path };
   const parsed = processFile(patch, {
-    oldFile: { name: oldName, contents: oldContentOf(file, newContent) },
-    newFile: { name: newName, contents: newContent },
+    oldFile: { name: file.path, contents: oldContentOf(file, newContent) },
+    newFile: { name: file.path, contents: newContent },
     throwOnError: true,
   });
   if (parsed === undefined) throw new Error(`Pierre found no file in the patch of ${file.path}`);
-  return parsed;
+  return { ...parsed, name: file.path };
 }
 
-// why the path quoted: Pierre trims a header's name and ends it at a tab or line break, so a raw
-// path can lose a leading or trailing space, a BOM, or all after a tab. A quoted name it reads
-// back exactly, once `"`, `\`, tabs and line breaks in it are escaped.
-const QUOTED_ESCAPES: Record<string, string> = { '"': '\\"', "\\": "\\\\", "\t": "\\t", "\n": "\\n", "\r": "\\r" };
-
-/** A side's name as a patch header writes it: a path quoted, `/dev/null` (no git path is absolute) bare. */
-function headerNameOf(name: string): string {
-  return name === "/dev/null" ? name : `"${name.replace(/["\\\t\n\r]/g, (char) => QUOTED_ESCAPES[char])}"`;
+/**
+ * The file's patch with headers that say only which side is missing: `/dev/null`, or a name
+ * every Pierre reads the same.
+ */
+// why one name on both sides, a rename's too: with no `diff --git` line Pierre compares the two
+// names, and two names make it a rename.
+function patchOf(file: DiffFile): string {
+  const oldName = file.status === "added" ? "/dev/null" : SIDE_NAME;
+  const newName = file.status === "deleted" ? "/dev/null" : SIDE_NAME;
+  return `--- ${oldName}\n+++ ${newName}\n${filePatchOf(file)}`;
 }
+
+const SIDE_NAME = "file";
