@@ -1,21 +1,30 @@
-// The Summary tab: the author's description, and on its right the side panel with the PR's
-// reviewers, checks and labels. Below 600px the side panel drops away, and a PR with none of them
-// has no side panel: either way the description takes the width. It scrolls with its tab panel.
+// The Summary tab: the author's description with the PR's activity under it, and on its right the
+// side panel with the PR's reviewers, checks and labels. Below 600px the side panel drops away, and
+// a PR with none of them has no side panel: either way the description takes the width. It scrolls
+// with its tab panel.
+import type { ReviewThread } from "../../comments/thread-schema.ts";
 import type { PrDetail } from "../../contract.ts";
+import { ActivitySection } from "../activity/activity-section.tsx";
 import { PROSE_TYPE } from "../guide/page-text.tsx";
+import type { PrTarget } from "../queries.ts";
 import { Prose } from "../ui/prose.tsx";
 import { directImages } from "./direct-images.ts";
 import { hasSidePanel, SidePanel, useSidePanelFocus } from "./side-panel.tsx";
 
 // The layout tops out at the Guide overview's width (880px) plus the gap and the side panel, so the
 // description runs as wide as the overview's text and the side panel stays beside it on a wide panel.
-export function SummaryTab({ pr }: { pr: PrDetail }) {
+type SummaryTabProps = { target: PrTarget; pr: PrDetail; onShowThread(thread: ReviewThread): void };
+
+export function SummaryTab({ target, pr, onShowThread }: SummaryTabProps) {
   const sidePanel = hasSidePanel(pr);
   const sidePanelFocus = useSidePanelFocus();
   return (
     <div ref={sidePanelFocus.tab} className="@container">
       <div className={`grid max-w-[1136px] items-start gap-9 px-7 pt-6 pb-16 ${sidePanel ? WITH_SIDE_PANEL : "grid-cols-[minmax(0,1fr)]"}`}>
-        <Description author={pr.author} body={pr.body} />
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-10">
+          <Description body={pr.body} />
+          <ActivitySection target={target} pr={pr} onShowThread={onShowThread} />
+        </div>
         {sidePanel && <SidePanel pr={pr} focus={sidePanelFocus} />}
       </div>
     </div>
@@ -24,11 +33,10 @@ export function SummaryTab({ pr }: { pr: PrDetail }) {
 
 const WITH_SIDE_PANEL = "grid-cols-[minmax(0,1fr)_220px] @max-[600px]:grid-cols-[minmax(0,1fr)]";
 
-function Description({ author, body }: { author: string; body: string }) {
+function Description({ body }: { body: string }) {
   if (body.trim() === "") return <p className="text-sm text-muted-foreground">No description provided.</p>;
   return (
     <section ref={directImages} aria-label="Description" className={CONTAIN_BODY}>
-      <p className="text-xs text-subtle-foreground">{author} wrote</p>
       <Prose text={body} className={`${PROSE_TYPE} ${FULL_SIZE_IMAGES}`} />
     </section>
   );

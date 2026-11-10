@@ -5,11 +5,13 @@ import { useState } from "react";
 import { useChanges, type PrTarget } from "../queries.ts";
 import { ReadError } from "../ui/read-error.tsx";
 import { ChangesPanel } from "./changes-panel.tsx";
+import type { ThreadReveal } from "./thread-reveal.ts";
 
-/** `shown`: whether the Changes tab is on screen; the page keeps it mounted under another tab. */
-type ChangesTabProps = { target: PrTarget; shown: boolean };
+/** `shown`: whether the Changes tab is on screen; the page keeps it mounted under another tab.
+ *  `reveal`: a thread the Summary tab asked to show, until `onRevealed`. */
+type ChangesTabProps = { target: PrTarget; shown: boolean; reveal: ThreadReveal | null; onRevealed(): void };
 
-export function ChangesTab({ target, shown }: ChangesTabProps) {
+export function ChangesTab({ target, shown, reveal, onRevealed }: ChangesTabProps) {
   const changes = useChanges(target, useShownOnce(shown));
   return (
     <ChangesPanel
@@ -17,6 +19,8 @@ export function ChangesTab({ target, shown }: ChangesTabProps) {
       changes={changes.data ?? null}
       loading={changes.isLoading}
       readError={<ReadError read={changes} what="the changes" />}
+      reveal={reveal}
+      onRevealed={onRevealed}
     />
   );
 }

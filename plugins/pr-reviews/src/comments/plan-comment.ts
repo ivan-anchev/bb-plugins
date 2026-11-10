@@ -1,5 +1,6 @@
 // What a comment on some lines becomes on GitHub, built exactly: a line comment when GitHub can
-// anchor to the lines, else a file comment that quotes them. And a reply in a review thread. The
+// anchor to the lines, else a file comment that quotes them. And a reply in a review thread, and a
+// comment on the PR's conversation. The
 // comment box checks the plan as the reader writes, and Comment or Reply sends its request as is.
 // Pure.
 import { commitsSince, shortSha, type PrDetail } from "../contract.ts";
@@ -57,9 +58,22 @@ export type ReplyRequest = { commentId: number; body: string };
 
 /** What Reply would post in the thread with this text, trimmed; or why it can't be posted. */
 export function checkReply(thread: ReviewThread, text: string): { request: ReplyRequest } | BlockedComment {
+  const checked = bodyOf(text);
+  return "blocked" in checked ? checked : { request: { commentId: thread.comments[0].id, body: checked.body } };
+}
+
+/** A comment on the PR's conversation exactly as GitHub is asked to post it. */
+export type ConversationRequest = { body: string };
+
+/** What Comment would post on the PR's conversation with this text, trimmed; or why it can't be posted. */
+export function checkConversationComment(text: string): { request: ConversationRequest } | BlockedComment {
+  const checked = bodyOf(text);
+  return "blocked" in checked ? checked : { request: checked };
+}
+
+function bodyOf(text: string): ConversationRequest | BlockedComment {
   const body = text.trim();
-  if (body.length > GITHUB_BODY_LIMIT) return { blocked: `${tooLong(body)} Shorten it.` };
-  return { request: { commentId: thread.comments[0].id, body } };
+  return body.length > GITHUB_BODY_LIMIT ? { blocked: `${tooLong(body)} Shorten it.` } : { body };
 }
 
 const tooLong = (body: string) => `This comment is ${body.length.toLocaleString("en")} characters, and GitHub takes at most ${GITHUB_BODY_LIMIT.toLocaleString("en")}.`;

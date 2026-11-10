@@ -3,9 +3,9 @@
 // letter, so a failure shows no broken image and moves nothing.
 import { useState } from "react";
 
-type AvatarProps = { login: string; size: 16 | 20 };
+type AvatarProps = { login: string; size: 16 | 20 | 24 };
 
-const SIZES = { 16: "size-4 text-[9px]", 20: "size-5 text-[10px]" } as const satisfies Record<AvatarProps["size"], string>;
+const SIZES = { 16: "size-4 text-[9px]", 20: "size-5 text-[10px]", 24: "size-6 text-[11px]" } as const satisfies Record<AvatarProps["size"], string>;
 
 export function Avatar({ login, size }: AvatarProps) {
   const [failed, setFailed] = useState(false);

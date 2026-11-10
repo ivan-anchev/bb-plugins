@@ -75,9 +75,11 @@ export function openedFromFinding(lines: DiffLines, range: SelectedLineRange, fi
  * any draft, as on GitHub, so a draft the reader is writing is never replaced.
  */
 export function openedForReply(lines: DiffLines, threadId: string, quote: string): DiffLines {
-  const draft = isBlank(lines.draft) ? quote : quote === "" ? lines.draft : `${lines.draft.trimEnd()}\n\n${quote}`;
-  return { picking: null, box: openAt(lines.box, { kind: "reply", threadId }), draft };
+  return { picking: null, box: openAt(lines.box, { kind: "reply", threadId }), draft: withQuote(lines.draft, quote) };
 }
+
+/** A draft with a quote ("" for none) after it, as GitHub's Quote reply adds one. */
+export const withQuote = (draft: string, quote: string) => (isBlank(draft) ? quote : quote === "" ? draft : `${draft.trimEnd()}\n\n${quote}`);
 
 /**
  * A request went with `sent`. If that is still the draft, the box is done: it shows the outcome
@@ -87,13 +89,18 @@ export function openedForReply(lines: DiffLines, threadId: string, quote: string
 export function settled(lines: DiffLines, outcome: BoxOutcome, sent: string): DiffLines {
   const { box } = lines;
   if (box === null) return lines;
-  if (lines.draft !== sent) return { ...lines, box: { ...box, stage: { kind: "writing", sent: outcome } } };
-  return { ...lines, box: { ...unlit(box), stage: { kind: "done", outcome } }, draft: "" };
+  const stage = stageAfter(lines.draft, outcome, sent);
+  if (stage.kind === "writing") return { ...lines, box: { ...box, stage } };
+  return { ...lines, box: { ...unlit(box), stage }, draft: "" };
 }
+
+/** A request went with `sent`: done if that is still the draft, else still writing, saying it went. */
+export const stageAfter = (draft: string, outcome: BoxOutcome, sent: string): BoxStage => (draft === sent ? { kind: "done", outcome } : { kind: "writing", sent: outcome });
 
 export const isBlank = (text: string) => text.trim() === "";
 
-const WRITING: BoxStage = { kind: "writing", sent: null };
+/** A box with nothing sent yet. */
+export const WRITING: BoxStage = { kind: "writing", sent: null };
 
 function openAt(box: LineBox | null, place: BoxPlace): LineBox {
   return { ...place, opened: (box?.opened ?? 0) + 1, stage: WRITING };

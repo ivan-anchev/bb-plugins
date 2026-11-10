@@ -8,6 +8,8 @@ export type FocusHandOff = { from: RefCallback<HTMLElement>; to: RefCallback<HTM
 // why ref callbacks: React detaches a ref before it removes the element, so `from`'s cleanup still
 // sees whether the region holds focus, and attaches one after it inserts the element, so `to` can
 // take that focus in the same commit. Both are stable, so neither runs again on a re-render.
+// Several regions can leave in one commit (a block that splits remounts its lines); any one that
+// held focus hands it off, whatever order they leave in.
 export function useFocusHandOff(): FocusHandOff {
   return useMemo(() => {
     let handingOff = false;
@@ -15,7 +17,7 @@ export function useFocusHandOff(): FocusHandOff {
       from: (region) => {
         if (region === null) return;
         return () => {
-          handingOff = region.contains(document.activeElement);
+          if (region.contains(document.activeElement)) handingOff = true;
         };
       },
       to: (target) => {

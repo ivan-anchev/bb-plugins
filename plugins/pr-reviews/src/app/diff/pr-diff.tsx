@@ -79,7 +79,8 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
       key={opened.opened}
       subject={subject}
       head={head}
-      box={opened}
+      stage={opened.stage}
+      takeFocus
       draft={lines.draft}
       onDraft={selection.setDraft}
       onSettled={selection.settle}

@@ -53,3 +53,5 @@ export const useAskAboutGitHubThread = () => experimental_useRpcMutation({ contr
 export const usePostComment = () => experimental_useRpcMutation({ contract, method: "postComment" });
 
 export const useReplyToThread = () => experimental_useRpcMutation({ contract, method: "replyToThread" });
+
+export const usePostConversationComment = () => experimental_useRpcMutation({ contract, method: "postConversationComment" });
