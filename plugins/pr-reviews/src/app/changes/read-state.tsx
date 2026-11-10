@@ -1,8 +1,6 @@
-// The Changes tab's content region before the diff is read, loading or failed, and the hand-off of
-// its focus to the diff pane that replaces it, so focus never drops to the page (REVIEW.md).
-import { useMemo, type ReactNode, type Ref, type RefCallback } from "react";
-
-type FocusHandOff = { from: RefCallback<HTMLElement>; to: RefCallback<HTMLElement> };
+// The Changes tab's content region before the diff is read, loading or failed. Its focus passes to
+// the diff pane that replaces it (useFocusHandOff).
+import type { ReactNode, Ref } from "react";
 
 /** The tab's one tab stop for its content while there is no tree and diff yet: they bring their own. */
 export function ReadState({ ref, children }: { ref: Ref<HTMLDivElement>; children: ReactNode }) {
@@ -17,26 +15,4 @@ export function ReadState({ ref, children }: { ref: Ref<HTMLDivElement>; childre
       {children}
     </div>
   );
-}
-
-// why ref callbacks: React detaches a ref before it removes the element, so `from`'s cleanup still
-// sees whether the region holds focus, and attaches one after it inserts the element, so `to` can
-// take that focus in the same commit. Both are stable, so neither runs again on a re-render.
-export function useFocusHandOff(): FocusHandOff {
-  return useMemo(() => {
-    let handingOff = false;
-    return {
-      from: (region) => {
-        if (region === null) return;
-        return () => {
-          handingOff = region.contains(document.activeElement);
-        };
-      },
-      to: (target) => {
-        if (target === null || !handingOff) return;
-        handingOff = false;
-        target.focus();
-      },
-    };
-  }, []);
 }

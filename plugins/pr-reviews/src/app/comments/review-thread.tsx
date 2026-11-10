@@ -5,15 +5,16 @@
 // thread is one row that opens it. A thread at its file that lost its lines says "Outdated" over
 // the lines it was written on. No borders, pills or dividers: spacing separates the comments, and
 // the comment box is the only raised surface (app.css holds the tint).
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { FileThread } from "../../comments/place-threads.ts";
 import { quoteReplyText, type GitHubComment, type ReviewThread } from "../../comments/thread-schema.ts";
-import { isFolded } from "./thread-fold.ts";
+import { foldOf, type Opened } from "./thread-fold.ts";
 import type { NumberedLine } from "../../diff/diff-schema.ts";
 import { timeAgo } from "../relative-time.ts";
 import { Avatar } from "../ui/avatar.tsx";
 import { Button } from "../ui/button.tsx";
+import { useFocusHandOff, type FocusHandOff } from "../ui/focus-hand-off.ts";
 import { IconLink } from "../ui/icon-button.tsx";
 import { Prose } from "../ui/prose.tsx";
 
@@ -31,15 +32,27 @@ type ReviewThreadCardProps = {
   onReply: OpenReply;
 };
 
-// Whether the thread is resolved comes from each read, so one GitHub reopens shows open on the
-// next. Only the reader's choice to open a resolved thread is kept.
+// How the thread folds comes from each read (foldOf); only what the reader opened is kept. Focus
+// stays in the thread as it folds and unfolds (REVIEW.md): the resolved row hands it to Collapse
+// and back, and "N more" to the first comment it hid.
 export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: ReviewThreadCardProps) {
-  const [expanded, setExpanded] = useState(false);
-  if (isFolded(thread, expanded)) return <ResolvedRow thread={thread} onOpen={() => setExpanded(true)} />;
+  const [opened, setOpened] = useState<Opened>({ thread: false, middle: false });
+  const resolvedFocus = useFocusHandOff();
+  const middleFocus = useFocusHandOff();
+  const fold = foldOf(thread, opened);
+  if (fold.kind === "row") return <ResolvedRow thread={thread} focus={resolvedFocus} onOpen={() => setOpened({ ...opened, thread: true })} />;
   return (
-    <section aria-label={`Review thread by ${thread.comments[0].author.login}`} className={`${SURFACE} pt-3 pr-3.5 pb-3 pl-3`}>
+    <section ref={resolvedFocus.from} aria-label={`Review thread by ${thread.comments[0].author.login}`} className={`${SURFACE} pt-3 pr-3.5 pb-3 pl-3`}>
       {atFile !== null && atFile.why !== "file" && <Original thread={thread} why={atFile.why} />}
-      <Comments thread={thread} prAuthor={prAuthor} onQuote={(comment, from) => onReply({ quote: quoteReplyText(comment.body), from })} />
+      <Comments
+        thread={thread}
+        shown={fold.shown}
+        hidden={fold.hidden}
+        focus={middleFocus}
+        prAuthor={prAuthor}
+        onShowAll={() => setOpened({ ...opened, middle: true })}
+        onQuote={(comment, from) => onReply({ quote: quoteReplyText(comment.body), from })}
+      />
       {box === null ? (
         <div className="pr-reviews-thread-foot mt-2 -mb-1 ml-5 flex items-center gap-1">
           <Button variant="ghost" size="small" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
@@ -51,7 +64,7 @@ export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: Rev
           {thread.resolvedBy !== null && (
             <>
               <span className="ml-auto text-xs text-muted-foreground">Resolved by {thread.resolvedBy}</span>
-              <Button variant="ghost" size="small" aria-expanded onClick={() => setExpanded(false)}>
+              <Button ref={resolvedFocus.to} variant="ghost" size="small" aria-expanded onClick={() => setOpened({ ...opened, thread: false })}>
                 Collapse
               </Button>
             </>
@@ -66,21 +79,33 @@ export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: Rev
 
 const SURFACE = "min-w-0 rounded-[10px] bg-(--pr-reviews-thread-tint) text-[13px] leading-5";
 
-// A thread longer than this shows its first and latest comments, with the rest behind "N more".
-const SHOWN_WHOLE = 3;
+type CommentsProps = {
+  thread: ReviewThread;
+  /** The comments the fold shows, and how many it hides after the first. */
+  shown: GitHubComment[];
+  hidden: number;
+  /** From "N more" to the second comment, the first it hid. */
+  focus: FocusHandOff;
+  prAuthor: string | null;
+  onShowAll(): void;
+  onQuote(comment: GitHubComment, from: HTMLElement): void;
+};
 
-function Comments({ thread, prAuthor, onQuote }: { thread: ReviewThread; prAuthor: string | null; onQuote(comment: GitHubComment, from: HTMLElement): void }) {
-  const { comments } = thread;
-  const [whole, setWhole] = useState(comments.length <= SHOWN_WHOLE);
-  const shown = whole ? comments : [comments[0], comments[comments.length - 1]];
+function Comments({ thread, shown, hidden, focus, prAuthor, onShowAll, onQuote }: CommentsProps) {
+  const [, second] = thread.comments;
   return (
     <ol className="grid gap-3.5">
       {shown.map((comment, index) => (
         <li key={comment.id} className="grid gap-3.5">
-          <Comment comment={comment} byPrAuthor={comment.author.login === prAuthor} onQuote={(from) => onQuote(comment, from)} />
-          {!whole && index === 0 && (
-            <button type="button" onClick={() => setWhole(true)} className={`${QUIET_BUTTON} -my-1 ml-[22px] justify-self-start px-2 py-0.5`}>
-              {comments.length - 2} more
+          <Comment
+            ref={comment === second ? focus.to : undefined}
+            comment={comment}
+            byPrAuthor={comment.author.login === prAuthor}
+            onQuote={(from) => onQuote(comment, from)}
+          />
+          {hidden > 0 && index === 0 && (
+            <button ref={focus.from} type="button" onClick={onShowAll} className={`${QUIET_BUTTON} -my-1 ml-[22px] justify-self-start px-2 py-0.5`}>
+              {hidden} more
             </button>
           )}
         </li>
@@ -92,11 +117,14 @@ function Comments({ thread, prAuthor, onQuote }: { thread: ReviewThread; prAutho
 const QUIET_BUTTON =
   "cursor-pointer rounded-md text-xs leading-5 text-muted-foreground transition-colors duration-150 ease-out hover:bg-state-hover hover:text-foreground hover:duration-0 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none";
 
-// Quote and the link to GitHub show on hover or focus, and always where there is no hover.
-function Comment({ comment, byPrAuthor, onQuote }: { comment: GitHubComment; byPrAuthor: boolean; onQuote(from: HTMLElement): void }) {
+type CommentProps = { ref?: Ref<HTMLElement>; comment: GitHubComment; byPrAuthor: boolean; onQuote(from: HTMLElement): void };
+
+// Quote and the link to GitHub show on hover or focus, and always where there is no hover. The
+// comment is no tab stop, but can hold focus, so "N more" can hand its focus to it.
+function Comment({ ref, comment, byPrAuthor, onQuote }: CommentProps) {
   const { author } = comment;
   return (
-    <article className="group/comment grid grid-cols-[20px_minmax(0,1fr)] gap-x-2.5">
+    <article ref={ref} tabIndex={-1} className="group/comment grid grid-cols-[20px_minmax(0,1fr)] gap-x-2.5 rounded-md outline-offset-4 focus-visible:outline-1 focus-visible:outline-ring">
       <Avatar login={author.login} size={20} />
       <div className="flex min-h-5 min-w-0 items-center gap-1.5">
         <span className="min-w-0 truncate font-medium">{author.login}</span>
@@ -146,12 +174,14 @@ function ClampedBody({ body }: { body: string }) {
 }
 
 // "Resolved · name · first line", and the count when there are replies. The whole row opens it.
-function ResolvedRow({ thread, onOpen }: { thread: ReviewThread; onOpen(): void }) {
+// `focus`: Collapse hands its focus to the row, and the row to Collapse.
+function ResolvedRow({ thread, focus, onOpen }: { thread: ReviewThread; focus: FocusHandOff; onOpen(): void }) {
   const [first] = thread.comments;
   const count = thread.comments.length;
   return (
-    <section aria-label={`Resolved review thread by ${first.author.login}`} className={SURFACE}>
+    <section ref={focus.from} aria-label={`Resolved review thread by ${first.author.login}`} className={SURFACE}>
       <button
+        ref={focus.to}
         type="button"
         aria-expanded={false}
         onClick={onOpen}
