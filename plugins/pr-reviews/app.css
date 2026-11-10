@@ -34,6 +34,12 @@
   --pr-reviews-thread-tint: color-mix(in oklab, var(--foreground) 5.5%, var(--background));
   --pr-reviews-thread-tint-hover: color-mix(in oklab, var(--foreground) 9%, var(--background));
 }
+/* The comment box's ring: bb's composer ring (`border-border`), with a step of foreground so it
+   still reads on the tint. A theme may draw `--border` fainter than the tint (white 3% in a dark
+   theme over a 5.5% tint), and then the box has no edge. */
+:root {
+  --pr-reviews-box-ring: color-mix(in oklab, var(--foreground) 8%, var(--border));
+}
 /* The footer's ghost buttons hover to the tint's own step, not the page's hover state. */
 .pr-reviews-thread-foot button:hover {
   background: var(--pr-reviews-thread-tint-hover);

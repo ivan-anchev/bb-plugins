@@ -100,11 +100,11 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
   return (
     // why a focus target: when the box unmounts with focus inside it, focus lands here rather
     // than on the page body (REVIEW.md).
-    <div ref={root} tabIndex={-1} className="outline-none">
+    <div ref={root} tabIndex={-1} className={`outline-none ${THREAD_EDGE}`}>
       {/* why `minmax(0,1fr)`: an implicit `auto` track grows to an outdated thread's widest code line,
           so the excerpt would widen the thread, not scroll in it. */}
       {threads.file.length > 0 && (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-2.5 px-2.5 pt-2.5 pb-3">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-2.5 pt-2.5 pr-2.5 pb-3 pl-(--pr-reviews-thread-edge)">
           {threads.file.map((placed) => (
             <div key={placed.thread.id}>{threadCard(placed.thread, placed)}</div>
           ))}
@@ -120,7 +120,7 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
           selectedLines={highlightOf(lines)}
           lineAnnotations={annotations}
           renderAnnotation={({ metadata }) => (
-            <div className={NOTE_CLASS}>
+            <div className={metadata.kind === "thread" ? THREAD_NOTE_CLASS : NOTE_CLASS}>
               {metadata.kind === "note" && metadata.note.render((request) => selection.openFromFinding({ ...request, at: metadata.note.at }))}
               {metadata.kind === "thread" && threadCard(metadata.placed.thread, null)}
               {metadata.kind === "box" && commentBox(metadata.box, { kind: "lines", span: metadata.span, finding: metadata.box.finding })}
@@ -135,7 +135,16 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
 // why: a note is slotted into the diff's rows and would inherit their code font, `white-space:
 // pre` and the code theme's colour; it reads as the page's text.
 // Its padding lines it up with the code's text.
-const NOTE_CLASS = "grid gap-3 pt-3 px-2.5 pb-3.5 font-sans whitespace-normal text-foreground";
+const NOTE_BASE = "grid gap-3 pt-3 pr-2.5 pb-3.5 font-sans whitespace-normal text-foreground";
+const NOTE_CLASS = `${NOTE_BASE} pl-2.5`;
+
+// A review thread's avatars line up with the line numbers, on a line and at the file alike. Pierre
+// insets its numbers 2ch from the diff's left edge, 14.4px at DIFF_TEXT_CLASS's 12px, and a thread
+// card's avatars sit 10px inside it (review-thread.tsx): the card starts 4.4px in.
+const THREAD_EDGE = "[--pr-reviews-thread-edge:4.4px]";
+
+// Under a line the card reaches back across the gutter, which the diff's options raise it over.
+const THREAD_NOTE_CLASS = `${NOTE_BASE} ml-[calc(var(--pr-reviews-thread-edge)-var(--diffs-column-number-width))]`;
 
 // Pierre's sides are the diff's columns: deletions is the old side, additions the new.
 const sideOfPierre = (side: SelectedLineRange["side"]): LineRef["side"] => (side === "deletions" ? "old" : "new");

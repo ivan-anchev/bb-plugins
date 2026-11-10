@@ -4,7 +4,9 @@
 // latest comments with "N more" between; a bot's comment is clamped to three lines; a resolved
 // thread is one row that opens it. A thread at its file that lost its lines says "Outdated" over
 // the lines it was written on. No borders, pills or dividers: spacing separates the comments, and
-// the comment box is the only raised surface (app.css holds the tint).
+// the comment box is the only raised surface (app.css holds the tint). The box sits 6px in from the
+// card's edges, its corners concentric with the card's; the avatars sit 10px in, which a diff lines
+// up with its line numbers (pr-diff.tsx).
 import { useMemo, useState, type ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { FileThread } from "../../comments/place-threads.ts";
@@ -49,43 +51,44 @@ export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: Rev
       ref={sectionRef}
       tabIndex={-1}
       aria-label={`Review thread by ${thread.comments[0].author.login}`}
-      className={`${SURFACE} pt-3 pr-3.5 pb-3 pl-3 outline-none focus-visible:ring-1 focus-visible:ring-ring`}
+      className={`${SURFACE} rounded-[18px] px-1.5 pt-3 pb-1.5 outline-none focus-visible:ring-1 focus-visible:ring-ring`}
     >
-      {atFile !== null && atFile.why !== "file" && <Original thread={thread} why={atFile.why} />}
-      <Comments
-        thread={thread}
-        shown={fold.shown}
-        hidden={fold.hidden}
-        focus={middleFocus}
-        prAuthor={prAuthor}
-        onShowAll={() => setOpened({ ...opened, middle: true })}
-        onQuote={(comment, from) => onReply({ quote: quoteReplyText(comment.body), from })}
-      />
-      {box === null ? (
-        <div className="pr-reviews-thread-foot mt-2 -mb-1 ml-5 flex items-center gap-1">
-          <Button variant="ghost" size="small" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
-            Reply
-          </Button>
-          <Button variant="ghost" size="small" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
-            Ask about this
-          </Button>
-          {thread.resolvedBy !== null && (
-            <>
-              <span className="ml-auto text-xs text-muted-foreground">Resolved by {thread.resolvedBy}</span>
-              <Button ref={resolvedFocus.to} variant="ghost" size="small" aria-expanded onClick={() => setOpened({ ...opened, thread: false })}>
-                Collapse
-              </Button>
-            </>
-          )}
-        </div>
-      ) : (
-        <div className="mt-3">{box}</div>
-      )}
+      <div className="px-1">
+        {atFile !== null && atFile.why !== "file" && <Original thread={thread} why={atFile.why} />}
+        <Comments
+          thread={thread}
+          shown={fold.shown}
+          hidden={fold.hidden}
+          focus={middleFocus}
+          prAuthor={prAuthor}
+          onShowAll={() => setOpened({ ...opened, middle: true })}
+          onQuote={(comment, from) => onReply({ quote: quoteReplyText(comment.body), from })}
+        />
+        {box === null && (
+          <div className="pr-reviews-thread-foot mt-2 mb-0.5 ml-5 flex items-center gap-1">
+            <Button variant="ghost" size="small" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
+              Reply
+            </Button>
+            <Button variant="ghost" size="small" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
+              Ask about this
+            </Button>
+            {thread.resolvedBy !== null && (
+              <>
+                <span className="ml-auto text-xs text-muted-foreground">Resolved by {thread.resolvedBy}</span>
+                <Button ref={resolvedFocus.to} variant="ghost" size="small" aria-expanded onClick={() => setOpened({ ...opened, thread: false })}>
+                  Collapse
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+      {box !== null && <div className="mt-3">{box}</div>}
     </section>
   );
 }
 
-const SURFACE = "min-w-0 rounded-[10px] bg-(--pr-reviews-thread-tint) text-[13px] leading-5";
+const SURFACE = "min-w-0 bg-(--pr-reviews-thread-tint) text-[13px] leading-5";
 
 type CommentsProps = {
   thread: ReviewThread;
@@ -129,7 +132,7 @@ function ResolvedRow({ thread, focus, onOpen }: { thread: ReviewThread; focus: F
   const [first] = thread.comments;
   const count = thread.comments.length;
   return (
-    <section ref={focus.from} aria-label={`Resolved review thread by ${first.author.login}`} className={SURFACE}>
+    <section ref={focus.from} aria-label={`Resolved review thread by ${first.author.login}`} className={`${SURFACE} rounded-[10px]`}>
       <button
         ref={focus.to}
         type="button"
