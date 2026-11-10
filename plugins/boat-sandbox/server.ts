@@ -3,6 +3,7 @@ import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { trackActivity } from "./src/activity.ts";
 import { createBoatAccess } from "./src/boat/access.ts";
 import { createStartGate } from "./src/boat/start-gate.ts";
+import { boatHostsRpcHandlers } from "./src/boat-hosts.ts";
 import { launchRpcHandlers } from "./src/catalog/read.ts";
 import { boatCli } from "./src/cli.ts";
 import { boatSandboxContract, PROVIDER_ID } from "./src/contract.ts";
@@ -21,7 +22,7 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
   const ownerId = await loadOwnerId(bb.storage.kv);
   const idle = createIdleClock(bb.storage.kv);
   bb.cli.register(boatCli({ boat, machineEnvironment: () => bb.sdk.system.machineEnvironment() }, { bb, idle, ownerId }));
-  bb.rpc.register(boatSandboxContract, launchRpcHandlers(boat));
+  bb.rpc.register(boatSandboxContract, { ...launchRpcHandlers(boat), ...boatHostsRpcHandlers(bb.sdk.hosts) });
 
   bb.experimental_machines.register(
     boatMachineProvider({

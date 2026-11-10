@@ -41,6 +41,13 @@ export const defineBoatSettings = (bb: BbPluginApi) =>
         "The boat environment new machines start in when a thread names none; it decides the sign-ins, GitHub token and secrets the sandbox gets. `bb boat templates` lists them. Empty uses boat's default environment.",
       default: "",
     },
+    // Read by the app only; the server never looks at it.
+    sidebarIcon: {
+      type: "boolean",
+      label: "Boat icon in the sidebar",
+      description: "Mark each thread that runs on a boat sandbox with a boat icon on its sidebar row.",
+      default: true,
+    },
   });
 
 export type BoatSettings = ReturnType<typeof defineBoatSettings>;

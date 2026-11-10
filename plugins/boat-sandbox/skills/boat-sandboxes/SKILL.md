@@ -471,6 +471,13 @@ Settings → boat Sandbox, or `bb plugin config boat-sandbox`:
   `bb boat status`.
   `bb plugin config boat-sandbox unset defaultEnvironment` goes back to boat's
   default.
+- **Boat icon in the sidebar** (`sidebarIcon`, default on). Marks each thread
+  that runs on a boat sandbox with a boat icon on its sidebar row. A child
+  thread on the same sandbox as its parent shows none, since it sits under its
+  parent's row; a child on another sandbox, or under a parent bb does not
+  list, shows its own. bb draws that row line only while its thread row
+  metadata experiment is on and Organize → Rows → Metadata is turned on. Takes
+  effect at once, without a reload.
 
 bb reads the plugin's status only when the plugin loads, so after any fix (a
 new key, a setting, the wallet, the network) run

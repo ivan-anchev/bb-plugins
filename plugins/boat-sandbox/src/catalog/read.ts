@@ -37,6 +37,6 @@ export async function resolveOnBoat(session: BoatSession, inputs: MachineInputs,
   return resolveLaunch(inputs, await readLaunchChoices(session, signal));
 }
 
-export const launchRpcHandlers = (access: BoatAccess): ExperimentalPluginRpcHandlersWithContext<typeof boatSandboxContract> => ({
+export const launchRpcHandlers = (access: BoatAccess): Pick<ExperimentalPluginRpcHandlersWithContext<typeof boatSandboxContract>, "launchChoices"> => ({
   launchChoices: async (_input, { experimental_signal: signal }) => readLaunchChoicesReply(await access.configuration(signal), signal),
 });
