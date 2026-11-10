@@ -1,5 +1,5 @@
 // Create only, never resume: a sandbox started from a saved snapshot may carry the bb identity of the
-// machine it was saved from. That machine's daemon unit is enabled with lingering on (spike), so it
+// machine it was saved from. That machine's daemon unit is enabled with lingering on, so it
 // starts at boot as the old host, and bb's daemon CLI refuses another host's identity in its data
 // directory, which also holds that machine's checkouts.
 //

@@ -3,16 +3,16 @@
   "type": "sandbox.created",
   "status": "provisioning",
   "ttlSeconds": 3600,
-  "from": "bb-spike-tpl",
+  "from": "bb-fixture-tpl",
   "sandbox": {
     "id": "bx_qwucu7ya",
-    "name": "bb-spike-c",
+    "name": "bb-fixture-c",
     "state": "provisioned",
     "error": null,
     "dataExpiredAt": null,
     "stoppedAt": null,
     "labels": {
-      "bb-spike": "1"
+      "bb-fixture": "1"
     },
     "health": "ok",
     "healthReason": null,

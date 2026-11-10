@@ -5,13 +5,13 @@
   "status": "forking",
   "sandbox": {
     "id": "bx_288ztdh7",
-    "name": "bb-spike-b fork",
+    "name": "bb-fixture-b fork",
     "state": "provisioning",
     "error": null,
     "dataExpiredAt": null,
     "stoppedAt": null,
     "labels": {
-      "bb-spike": "1"
+      "bb-fixture": "1"
     },
     "health": "ok",
     "healthReason": null,

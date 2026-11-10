@@ -158,7 +158,7 @@ export function boatMachineProvider(deps: ProviderDeps): PluginMachineProviderDe
  * then): the environment must be the launch's, and a sandbox in an environment that passes logins must
  * hold them. The second check is the one that catches no-env: a `from` create inherits the no-env of the
  * snapshot's source sandbox even when it names an environment, and then reports that environment with
- * `holdsCreatorLogins: false` (live, 2026-11-09). Its first turn would only say `/login`.
+ * `holdsCreatorLogins: false`. Its first turn would only say `/login`.
  */
 function expectEnvironment(sandbox: Sandbox, launch: Launch, environment: SandboxEnvironment): void {
   const source = launch.template === null ? "" : ` from template ${launch.template}`;

@@ -26,7 +26,7 @@
   },
   "bb": {
     "name": "boat Sandbox",
-    "description": "Run bb threads on on-demand boat.dev sandboxes that stop when idle, resume on the same disk, and start from the boat saved snapshot, environment and size you pick in the composer, with bb's GitHub login or else boat's.",
+    "description": "Experimental: it may break with a bb update. Run bb threads on on-demand boat.dev sandboxes that stop when idle, resume on the same disk, and start from the boat saved snapshot, environment and size you pick in the composer, with bb's GitHub login or else boat's.",
     "branding": {
       "icon": "./boat.svg"
     },
@@ -37,10 +37,10 @@
     ]
   },
   "dependencies": {
+    "@get-bb/plugin-sdk": "0.6.104",
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@get-bb/plugin-sdk": "0.6.104",
     "@radix-ui/react-dropdown-menu": "^2.1.20",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",

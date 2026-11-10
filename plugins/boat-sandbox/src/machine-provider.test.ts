@@ -19,7 +19,7 @@ const NODE_TOOLS: SavedSnapshot = { name: "node-tools", status: "ready", error: 
 /** base (boat's default, passes everything) and customer-demos (safe for third parties, AI proxy placeholders). */
 const ENVIRONMENTS = wireEnvironmentList.parse(JSON.parse(readFileSync(new URL("./boat/fixtures/environments.json", import.meta.url), "utf8")));
 
-/** boat in memory: Idempotency-Keys and labels behave as on the live API (spike Q1, Q9). */
+/** boat in memory: Idempotency-Keys and labels behave as on boat's API. */
 function fakeBoat() {
   const sandboxes = new Map<SandboxId, Sandbox>();
   const byIdempotencyKey = new Map<string, Sandbox>();

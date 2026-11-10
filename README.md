@@ -23,7 +23,7 @@ bb plugin install git:https://github.com/ivan-anchev/bb-plugins.git@^0.1.0 --tag
 
 | Plugin | What it does |
 | --- | --- |
-| [`boat-sandbox`](plugins/boat-sandbox) | Run bb threads on on-demand boat.dev sandboxes, with template, environment and size choices. |
+| [`boat-sandbox`](plugins/boat-sandbox) | Experimental: it may break with a bb update. Run bb threads on on-demand boat.dev sandboxes, with template, environment and size choices. |
 | [Code Explorer](plugins/code-explorer) | Browse the environment's files and git changes as a tree with colored per-file-type icons, and read any file or its diff beside the tree. |
 | [`bot-wake`](plugins/bot-wake) | Wakes your Grok Bots by webhook when a bb thread needs attention: an open question or approval, a finished turn, or a failure. |
 | [PR Reviews](plugins/pr-reviews) | Browse a GitHub project's open pull requests and review each change with its full diff and a step-by-step guided review. |
@@ -37,5 +37,5 @@ npm install
 npm run new -- my-plugin          # scaffold plugins/my-plugin with `bb plugin new`
 bb plugin install ./plugins/my-plugin
 bb plugin dev plugins/my-plugin   # rebuild and reload on save
-npm run check                     # manifests, typecheck, tests, build (what CI runs)
+npm run check                     # manifests, typecheck, tests, build, standalone build (what CI runs)
 ```

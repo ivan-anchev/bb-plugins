@@ -1,4 +1,13 @@
+Experimental: it may break with a bb update.
+
 boat Sandbox gives bb threads their own cloud computer on boat.dev. A sandbox starts when a thread needs one, stops after it has been idle, and resumes later on the same disk, so the work on it is still there. You pick what each one starts from: a template (a boat saved snapshot you made, with your tools already installed) and a boat environment (which decides the sign-ins, GitHub token and secrets it gets).
+
+## What you need
+
+- A boat.dev account on a personal wallet, with zero data retention off.
+- A boat API key made with `boat api-key create bb --preset ci`.
+- A Git remote on the bb project, which the sandbox clones.
+- A bb server reachable from the internet (bb Connect), so the sandbox can connect back to it.
 
 ## What you get
 

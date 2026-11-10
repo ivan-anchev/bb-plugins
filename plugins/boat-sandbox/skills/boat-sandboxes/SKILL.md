@@ -168,10 +168,10 @@ boat snapshot rm node-tools                 # delete it on boat
   `systemctl --user disable --now $(cd ~/.config/systemd/user && ls bb-host-daemon-*.service)`.
 - **Saved from a `--no-env` sandbox** (`boat new --no-env`). boat makes every
   sandbox from it no-env too, even though the create names an environment
-  (boat then reports that environment but attaches none of its logins;
-  checked live on 2026-11-09), so it would get no sign-ins. The create fails
-  with `… as a no-env sandbox, so it would get no sign-ins …` and bb deletes
-  the sandbox. Save the template again from a sandbox in an environment.
+  (boat then reports that environment but attaches none of its logins), so
+  it would get no sign-ins. The create fails with
+  `… as a no-env sandbox, so it would get no sign-ins …` and bb deletes the
+  sandbox. Save the template again from a sandbox in an environment.
 - Any size can start from any template; the template's own size is only shown.
 - boat's trial accounts cannot save snapshots; `bb boat templates` then lists
   only the stock image.
@@ -284,8 +284,8 @@ stdin, which boat's API does not offer, so the plugin writes it with boat's
 Files API into a `0700` directory under `/tmp` and the command deletes it
 before running. `boat history` lists `umask 077 && mkdir /tmp/bb-stdin.<uuid>`
 and `{ rm -rf …; exec 'sh' '-c' …; } < /tmp/bb-stdin.<uuid>/in`, never the
-file's content; checked live on 2026-11-08 across every history entry and its
-stored output, and the sandbox's journal and `/var/log`.
+file's content. The secret appears in no history entry or its stored output,
+nor in the sandbox's journal or `/var/log`.
 
 Every sandbox is named `bb <thread-id>` and labelled `bb.boat/owner` (a random
 id per bb server), `bb.boat/role=machine` and `bb.boat/key` (the thread id).
@@ -307,9 +307,9 @@ plugin runs a boat stop, which saves the disk. `bb machine list --all` then show
 shows the sandbox `stopped`. A suspended machine costs no machine time.
 
 A background agent (Claude Code's Agent tool with `run_in_background`) keeps
-its thread `active` until it reports back, so it counts as busy (checked live
-on 2026-11-08). A command the agent left running in the background after its
-turn ended does not: a forgotten dev server must not keep a sandbox billing.
+its thread `active` until it reports back, so it counts as busy. A command
+the agent left running in the background after its turn ended does not: a
+forgotten dev server must not keep a sandbox billing.
 
 **A follow-up resumes it.** A message to the thread (`bb thread tell`, or the
 composer) is queued with `Waiting for boat <sandbox-id> to be ready` while bb
@@ -556,7 +556,7 @@ boat Sandbox refuses two accounts, and says so in `bb boat status`:
 - **Zero data retention on.** A stop deletes the sandbox, so bb could never
   resume one. Use a key from an account without it.
 - **An organization wallet.** The key bills an organization, which boat
-  Sandbox does not support yet. `boat org switch personal` moves the account's
+  Sandbox does not support. `boat org switch personal` moves the account's
   active wallet back to the personal one.
 
 A rejected key (`401`/`403`) and an unreachable boat each print their own line

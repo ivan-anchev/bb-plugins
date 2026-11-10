@@ -1,5 +1,5 @@
 // bb core's command channel into a boat sandbox. boat's commands API ignores `stdin` and keeps every
-// command's text and output for 90 days (spike Q2), and core sends the enrollment secret on stdin, so
+// command's text and output for 90 days, and core sends the enrollment secret on stdin, so
 // stdin travels as a file in a private directory and never as command text.
 import { randomUUID } from "node:crypto";
 import type { MachineExecutor } from "@get-bb/plugin-sdk";
