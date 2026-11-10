@@ -8,6 +8,7 @@ import type { FileDiffOptions } from "@pierre/diffs/react";
 import type { DiffFile } from "../../diff/diff-schema.ts";
 import { filePatchOf } from "../../diff/hunk-patch.ts";
 import { oldContentOf } from "../../diff/old-content.ts";
+import type { LineGestures } from "./use-line-selection.ts";
 
 /** The reader's diff settings, which the Changes header edits. */
 export type DiffSettings = { view: DiffViewMode; overflow: CodeOverflowMode };
@@ -17,10 +18,17 @@ export const DEFAULT_DIFF_SETTINGS: DiffSettings = { view: "unified", overflow: 
 /** bb's diff text size, set on the diff's element because Pierre reads it from CSS variables. */
 export const DIFF_TEXT_CLASS = "[--diffs-font-size:12px] [--diffs-line-height:18px]";
 
-/** Pierre's options for a diff: bb's code theme and the chrome of bb's own diff, in the reader's settings. */
+/**
+ * Pierre's options for a diff: bb's code theme and the chrome of bb's own diff, in the reader's
+ * settings, with lines picked from the gutter numbers and reported to `gestures`.
+ */
 // why memoised: a new options object makes Pierre re-render every row, which on a large file
-// drops a drag in progress. Only a theme or settings change makes a new one.
-export function useDiffOptions<Annotation>(settings: DiffSettings): FileDiffOptions<Annotation, undefined> {
+// drops a drag in progress. Only a theme or settings change makes a new one, so `gestures` must be
+// stable.
+// why the gesture's start, change and end, not onLineSelected: the diff's selection is controlled,
+// and Pierre draws a controlled selection only once it is handed back, so the highlight follows a
+// drag only when each step is. onLineSelected also fires again for every range handed back.
+export function useDiffOptions<Annotation>(settings: DiffSettings, gestures: LineGestures): FileDiffOptions<Annotation, undefined> {
   const code = useCodeTheme();
   return useMemo(
     () => ({
@@ -31,10 +39,14 @@ export function useDiffOptions<Annotation>(settings: DiffSettings): FileDiffOpti
       disableFileHeader: true,
       expansionLineCount: 30,
       lineHoverHighlight: "number",
+      enableLineSelection: true,
+      onLineSelectionStart: gestures.picking,
+      onLineSelectionChange: gestures.picking,
+      onLineSelectionEnd: gestures.picked,
       // why no gutter utility: setting both of Pierre's gutter APIs throws, which takes down the
       // whole plugin page.
     }),
-    [code.name, code.mode, settings.view, settings.overflow],
+    [code.name, code.mode, settings.view, settings.overflow, gestures],
   );
 }
 

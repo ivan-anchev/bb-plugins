@@ -4,8 +4,7 @@
 import { useId, useRef, useState } from "react";
 import type { VisibleFinding } from "../../guide/walkthrough.ts";
 import { useAskAboutFinding, type PrHeadTarget } from "../queries.ts";
-import { Button } from "../ui/button.tsx";
-import { DESTRUCTIVE_TEXT_ON_MUTED } from "../ui/destructive-text-on-muted.ts";
+import { DraftBox } from "../ui/draft-box.tsx";
 import { Prose } from "../ui/prose.tsx";
 import { Priority } from "./priority.tsx";
 
@@ -49,7 +48,7 @@ function AskAboutThis({ shown, head }: FindingBlockProps) {
   // closes only while it still holds the sent text.
   const send = () => {
     const question = draft;
-    void ask
+    return ask
       .mutate({ ...head, findingIndex: shown.index, question })
       .then(() => {
         setSent(true);
@@ -81,36 +80,19 @@ function AskAboutThis({ shown, head }: FindingBlockProps) {
         </span>
       </div>
       {open && (
-        <div ref={editor} id={questionId} className="mt-1 grid gap-1.5">
-          <label htmlFor={`${questionId}-text`} className="sr-only">
-            Question for the review thread
-          </label>
-          <textarea
-            ref={textarea}
-            id={`${questionId}-text`}
-            autoFocus
-            rows={2}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder="Ask the review thread about this…"
-            className="min-h-[52px] w-full resize-y rounded-md bg-background px-2.5 py-2 text-[13px] leading-[19px] text-foreground outline-none placeholder:text-subtle-foreground focus-visible:ring-1 focus-visible:ring-ring"
-          />
-          <div className="flex items-center justify-end gap-1.5">
-            {ask.error !== null && (
-              <p role="alert" className={`mr-auto text-xs ${DESTRUCTIVE_TEXT_ON_MUTED}`}>
-                {ask.error.message}
-              </p>
-            )}
-            <Button variant="ghost" size="small" onClick={close}>
-              Cancel
-            </Button>
-            {/* why aria-disabled while sending: a disabled button drops the focus a click on it gave,
-                and the question gives focus back only from inside itself. */}
-            <Button variant="primary" size="small" onClick={ask.isPending ? undefined : send} aria-disabled={ask.isPending} disabled={draft.trim() === ""}>
-              Send
-            </Button>
-          </div>
-        </div>
+        <DraftBox
+          id={questionId}
+          ref={editor}
+          textareaRef={textarea}
+          label="Question for the review thread"
+          placeholder="Ask the review thread about this…"
+          value={draft}
+          onChange={setDraft}
+          onEscapeEmpty={close}
+          onCancel={close}
+          error={ask.error?.message ?? null}
+          action={{ label: "Send", pending: ask.isPending, run: send }}
+        />
       )}
     </>
   );

@@ -19,7 +19,8 @@ export function ReviewChatIconButton() {
   return <IconButton icon="SideChat" label="Review chat" onClick={openReviewChat} />;
 }
 
-function useOpenReviewChat(): () => void {
+/** Opens the Review chat tab, or selects it when it is open. */
+export function useOpenReviewChat(): () => void {
   const panel = experimental_useAppPanel();
   return () => panel.openTab({ tab: REVIEW_CHAT_TAB });
 }

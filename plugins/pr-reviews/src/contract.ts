@@ -2,6 +2,7 @@
 // Shared by server.ts and app.tsx: pure zod, no SDK runtime beyond defineRpcContract.
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
+import { codeQuoteSchema } from "./comments/comment-schema.ts";
 import { diffFileSchema } from "./diff/diff-schema.ts";
 import { guideSchema } from "./guide/guide-schema.ts";
 import { repoSchema, type Repo } from "./github/repo.ts";
@@ -202,6 +203,11 @@ export const prReviewsContract = defineRpcContract({
   /** Sends the reader's question about one finding of a guide, named by its index, to the guide's review thread. */
   askAboutFinding: {
     input: prRefSchema.extend({ headSha: z.string(), findingIndex: z.number().int().nonnegative(), question: z.string().trim().min(1) }),
+    output: empty,
+  },
+  /** Sends the reader's question about lines they selected in a diff, quoted, to the PR's review thread. */
+  askAboutLines: {
+    input: prRefSchema.extend({ quote: codeQuoteSchema, question: z.string().trim().min(1) }),
     output: empty,
   },
 });
