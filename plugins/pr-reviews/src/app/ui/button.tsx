@@ -1,9 +1,13 @@
 import type { ComponentProps } from "react";
 
 const VARIANTS = {
-  primary: "bg-primary text-primary-foreground hover:bg-primary/88",
+  // The ring stands off by a pixel of the background: flush, it is the fill's own colour and can't be seen.
+  primary: "bg-primary text-primary-foreground hover:bg-primary/88 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
   secondary: "bg-secondary text-secondary-foreground hover:bg-state-active",
   ghost: "text-muted-foreground hover:bg-state-hover hover:text-foreground",
+  // A quiet action on a raised or recessed surface, such as a finding's: the page's background
+  // inside a hairline of the border colour, with its icon a step back from the label.
+  outline: "bg-background text-foreground inset-ring inset-ring-border hover:bg-[color-mix(in_oklab,var(--foreground)_4%,var(--background))] [&_svg]:text-muted-foreground",
 } as const;
 
 const SIZES = {

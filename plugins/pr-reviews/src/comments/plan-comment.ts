@@ -1,12 +1,12 @@
 // What a comment on some lines becomes on GitHub, built exactly: a line comment when GitHub can
-// anchor to the lines, else a file comment that quotes them. The preview shows the plan and Post
-// sends its request as is. Pure.
-import { shortSha } from "../contract.ts";
+// anchor to the lines, else a file comment that quotes them. The comment box checks the plan as
+// the reader writes, and Comment sends its request as is. Pure.
+import { commitsSince, shortSha, type PrDetail } from "../contract.ts";
 import type { Finding } from "../guide/guide-schema.ts";
-import type { CodeQuote, CommentRequest } from "./comment-schema.ts";
+import { GITHUB_BODY_LIMIT, type CodeQuote, type CommentRequest } from "./comment-schema.ts";
 import { inOneHunk, linesLabel, quoteOf, type LineSpan } from "./line-span.ts";
 
-/** `why`: for a file comment, why the lines could not carry a line comment. Display only. */
+/** `why`: for a file comment, why the lines could not carry a line comment ("some of these lines …"). Display only. */
 export type CommentPlan = { request: CommentRequest; why: string | null };
 
 /** Why nothing can be posted on these lines: there is no request to post. */
@@ -32,14 +32,32 @@ export function planComment(span: LineSpan, commitInPr: boolean, text: string): 
   return { request: { kind: "line", commit: span.commit, path: span.path, start, end: quote.end, body }, why: null };
 }
 
+/**
+ * What Comment would post on these lines with this text, checked against the PR as last read: the
+ * request, and a note on where it goes only when that isn't obvious (an older commit than the
+ * PR's latest, or a file comment); or why it can't be posted.
+ */
+export type CommentCheck = { request: CommentRequest; note: string | null } | BlockedComment;
+
+export function checkComment(span: LineSpan, pr: PrDetail, text: string): CommentCheck {
+  const since = commitsSince(pr, span.commit);
+  const planned = planComment(span, since !== null, text);
+  if ("blocked" in planned) return planned;
+  const { request, why } = planned;
+  if (request.body.length > GITHUB_BODY_LIMIT) {
+    return { blocked: `This comment is ${request.body.length.toLocaleString("en")} characters, and GitHub takes at most ${GITHUB_BODY_LIMIT.toLocaleString("en")}. Shorten it, or select fewer lines.` };
+  }
+  const notes = [since === 0 ? null : `Comments on commit ${shortSha(span.commit)}, not the latest.`, why === null ? null : `Posts as a file comment: ${why}.`];
+  const note = notes.filter((line) => line !== null).join(" ");
+  return { request, note: note === "" ? null : note };
+}
+
 /** A finding as a comment: its title in bold, then its body. The guide's priority stays out. */
 export const findingCommentText = (finding: Finding): string => `**${finding.title}**\n\n${finding.body}`;
 
+// GitHub anchors a line comment only inside one hunk.
 function whyNotOneHunk({ rows }: LineSpan): string {
-  const reason = rows.some((row) => row.hunk === null)
-    ? "Some of these lines are unchanged lines outside the PR's changes"
-    : "These lines run across more than one hunk of the diff";
-  return `${reason}, and GitHub anchors a line comment only inside one hunk. It posts as a comment on the file, quoting them.`;
+  return rows.some((row) => row.hunk === null) ? "some of these lines are outside the PR's changes" : "these lines span more than one hunk";
 }
 
 // `path`, lines …, at abc1234:  then the rows in a diff fence, then the reader's words.

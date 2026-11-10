@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { SelectedLineRange } from "@pierre/diffs";
-import { selectionPicked, type LineSelection } from "./diff/line-selection.ts";
+import { linesPicked, NO_LINES, settled, type DiffLines } from "./diff/line-selection.ts";
 import { lifetime, type Lifetime } from "./lifetime.ts";
 
 const LINES_5_7: SelectedLineRange = { start: 5, end: 7, side: "additions" };
@@ -33,47 +33,34 @@ test("mounted again, as StrictMode does, the owner is live again", () => {
   assert.deepEqual(calls, ["ran"]);
 });
 
-// The selection panel's ask box, as AskAboutLines wires it: each box is mounted with its own
-// lifetime, and its Send's success opens Review chat and clears the lines, through that lifetime.
-// A box, and the draft it holds, stays mounted exactly while its selection does.
-test("a question sent from a box that was then cancelled leaves a newer selection, its box and its draft alone", async () => {
-  let selection: LineSelection = null;
-  let chatOpened = 0;
+// The comment box, as pr-diff.tsx and comment-box.tsx wire it: the box is drawn afresh, with its
+// own lifetime, each time it opens, and a send's reply settles the box through that lifetime.
+test("a reply to a box that has since moved to other lines leaves the moved box and its draft alone", async () => {
+  let lines: DiffLines = NO_LINES;
   const openBox = () => {
-    selection = selection && { ...selection, panel: "ask" };
     const life = lifetime();
     life.begin();
     return life;
   };
-  const send = (box: Lifetime, reply: Promise<void>) =>
-    reply.then(
-      box.bind(() => {
-        chatOpened++;
-        selection = null;
-      }),
-    );
+  const send = (box: Lifetime, reply: Promise<void>, sent: string) => reply.then(box.bind(() => (lines = settled(lines, { kind: "asked" }, sent))));
 
-  selection = selectionPicked(selection, LINES_5_7);
+  lines = { ...linesPicked(lines, LINES_5_7), draft: "Question A" };
   const first = openBox();
   let answerFirst!: () => void;
-  const firstSent = send(first, new Promise<void>((resolve) => (answerFirst = resolve)));
-  // Cancel while the send is in flight: the box unmounts, back to the action row.
+  const firstSent = send(first, new Promise<void>((resolve) => (answerFirst = resolve)), "Question A");
+  // Other lines while the send is in flight: the box moves there, drawn afresh, with the draft.
+  lines = { ...linesPicked(lines, LINES_20_22), draft: "Draft B, not sent" };
   first.end();
-  selection = selection && { ...selection, panel: "actions" };
-  // Other lines, and a new box with a question not sent yet.
-  selection = selectionPicked(selection, LINES_20_22);
   const second = openBox();
-  const secondSelection = selection;
+  const moved = lines;
 
   answerFirst();
   await firstSent;
 
-  assert.equal(selection, secondSelection);
-  assert.deepEqual(selection, { range: LINES_20_22, panel: "ask" });
-  assert.equal(chatOpened, 0);
+  assert.equal(lines, moved);
+  assert.deepEqual([lines.box?.at, lines.box?.stage, lines.draft], [LINES_20_22, { kind: "writing", sent: null }, "Draft B, not sent"]);
 
-  await send(second, Promise.resolve());
+  await send(second, Promise.resolve(), "Draft B, not sent");
 
-  assert.equal(selection, null);
-  assert.equal(chatOpened, 1);
+  assert.deepEqual([lines.box?.stage, lines.draft], [{ kind: "done", outcome: { kind: "asked" } }, ""]);
 });

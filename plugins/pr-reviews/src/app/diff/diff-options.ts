@@ -20,7 +20,8 @@ export const DIFF_TEXT_CLASS = "[--diffs-font-size:12px] [--diffs-line-height:18
 
 /**
  * Pierre's options for a diff: bb's code theme and the chrome of bb's own diff, in the reader's
- * settings, with lines picked from the gutter numbers and reported to `gestures`.
+ * settings, with lines picked from the gutter (its numbers, and the "+" bb's own diff shows on the
+ * hovered line) and reported to `gestures`.
  */
 // why memoised: a new options object makes Pierre re-render every row, which on a large file
 // drops a drag in progress. Only a theme or settings change makes a new one, so `gestures` must be
@@ -43,12 +44,23 @@ export function useDiffOptions<Annotation>(settings: DiffSettings, gestures: Lin
       onLineSelectionStart: gestures.picking,
       onLineSelectionChange: gestures.picking,
       onLineSelectionEnd: gestures.picked,
-      // why no gutter utility: setting both of Pierre's gutter APIs throws, which takes down the
-      // whole plugin page.
+      // why the built-in "+" and never `renderGutterUtility`: setting both of Pierre's gutter APIs
+      // throws, which takes down the whole plugin page. Its click handler is what makes a press
+      // and drag from the "+" select lines; it reports the same range as the gesture's end.
+      enableGutterUtility: true,
+      onGutterUtilityClick: gestures.picked,
+      unsafeCSS: NOTE_ROWS,
     }),
     [code.name, code.mode, settings.view, settings.overflow, gestures],
   );
 }
+
+// The rows Pierre slots notes into, the box and findings, are on the page's background, as the
+// prototype draws them. Pierre's own backdrop for them is a step off its code background, and in
+// bb's dark theme it is the very colour of a finding's recessed card, which then has no edge.
+// Pierre also tints a note's row, with its gutter, as part of a selection: only the code lines
+// read as selected.
+const NOTE_ROWS = "[data-line-annotation],[data-gutter-buffer=annotation]{--diffs-annotation-bg:var(--background);--diffs-computed-selected-line-bg:var(--diffs-computed-diff-line-bg)}";
 
 /**
  * The file's diff for Pierre: its patch at first, then, once `newContent` is read, both whole

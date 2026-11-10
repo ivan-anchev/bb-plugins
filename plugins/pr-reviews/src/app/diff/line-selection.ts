@@ -1,44 +1,90 @@
-// The lines selected in one diff, and what is open under them. Pure transitions; the hook in
-// use-line-selection.ts holds the state and wires the diff's gestures, the keys and clicks.
+// The lines selected in one diff, and the one comment box under them. Pure transitions; the hook
+// in use-line-selection.ts holds the state and wires the diff's gestures and the box's actions.
 import type { SelectedLineRange } from "@pierre/diffs";
 
-/** A box an action opened under the selected lines: a question for the review thread, or a GitHub comment. */
-export type LineBox = "ask" | "comment";
-
-/** Under the selected lines: the action row, or the box one of its actions opened. */
-export type LinePanel = "actions" | LineBox;
+/** What a request did: the posted comment, or a sent question. */
+export type BoxOutcome = { kind: "commented"; url: string; body: string } | { kind: "asked" };
 
 /**
- * `range` is the diff's own report, kept as is so the highlight is exactly what the reader
- * dragged; it becomes rows only where it is read (line-span.ts). `panel` is null while the reader
- * is still picking the lines (a press, a drag in progress): nothing opens under them until they
- * let go, so a drag never runs into a row that appeared under its last line.
+ * `writing`: the box holds the draft. `sent` is a request that went while the reader changed the
+ * draft: the box says it went and keeps the changed text, which is still unsent. `done`: the
+ * draft that went was the draft, so the box shows the outcome where the text was.
  */
-export type LineSelection = { range: SelectedLineRange; panel: LinePanel | null } | null;
+export type BoxStage = { kind: "writing"; sent: BoxOutcome | null } | { kind: "done"; outcome: BoxOutcome };
 
-/** The selection while the reader picks lines: the press of a click or a shift-click, each step of a drag. */
-export const selectionWhilePicking = (current: LineSelection, range: SelectedLineRange | null): LineSelection => next(current, range, null);
+/**
+ * The diff's one box. `at` is the diff's own report of the lines, kept as is so the highlight is
+ * exactly what the reader picked; it becomes rows only where it is read (line-span.ts).
+ * `opened` changes every time the box opens, so it is drawn afresh and takes focus. `finding` is
+ * the finding whose button opened the box, while the box is still on that finding's line.
+ * `lit`: whether its lines are highlighted. A box that is done, or whose lines the reader
+ * deselected while it held a draft, stays where it is with nothing highlighted.
+ */
+export type LineBox = { at: SelectedLineRange; opened: number; finding: number | null; stage: BoxStage; lit: boolean };
 
-/** The selection once the reader lets go: the action row under the lines, or nothing when the gesture cleared them. */
-export const selectionPicked = (current: LineSelection, range: SelectedLineRange | null): LineSelection => next(current, range, "actions");
+/**
+ * `picking`: the lines of a press or a drag still in progress. The box stays where it is until
+ * the reader lets go, so a drag never runs into rows that moved under it. `draft` follows the box
+ * from lines to lines.
+ */
+export type DiffLines = { picking: SelectedLineRange | null; box: LineBox | null; draft: string };
 
-/** Whether a box is open under the lines: it keeps them, and a stray click never discards it. */
-export const hasOpenBox = (selection: LineSelection) => selection !== null && selection.panel !== null && selection.panel !== "actions";
+export const NO_LINES: DiffLines = { picking: null, box: null, draft: "" };
 
-// An open box keeps its lines: the reader picks others after closing it.
-function next(current: LineSelection, range: SelectedLineRange | null, panel: "actions" | null): LineSelection {
-  if (hasOpenBox(current)) return current;
-  if (range === null) return null;
-  if (current !== null && current.panel === panel && sameRange(current.range, range)) return current;
-  return { range, panel };
+/** The lines Pierre highlights: those being picked, else the box's while they are lit. */
+export const highlightOf = ({ picking, box }: DiffLines): SelectedLineRange | null => picking ?? (box !== null && box.lit ? box.at : null);
+
+/** Each step of a press, a shift-click or a drag. */
+export function linesPicking(lines: DiffLines, range: SelectedLineRange | null): DiffLines {
+  return sameRange(lines.picking, range) ? lines : { ...lines, picking: range };
 }
 
 /**
- * Lines with no box open under them: Esc or a click outside the diff clears them. With nothing
- * selected, Esc is bb's own; with a box open, the box holds Esc (ui/hold-escape.ts) and keeps its lines.
+ * The reader let go. The box opens under the picked lines with the draft, or stays when they are
+ * its own. A gesture that cleared the lines (pressing the one selected line) closes an empty box;
+ * a box holding a draft stays, so a draft is only ever discarded on purpose.
  */
-export const hasBareLines = (selection: LineSelection) => selection !== null && !hasOpenBox(selection);
+export function linesPicked(lines: DiffLines, range: SelectedLineRange | null): DiffLines {
+  const { box } = lines;
+  if (range === null) {
+    if (isBlank(lines.draft)) return NO_LINES;
+    return { ...lines, picking: null, box: box && { ...box, lit: false } };
+  }
+  if (box !== null && box.stage.kind === "writing" && box.lit && sameRange(box.at, range)) return lines.picking === null ? lines : { ...lines, picking: null };
+  return { ...lines, picking: null, box: openAt(box, range, null) };
+}
+
+/**
+ * A finding's button: its line is selected and the box opens under it. `prefill` fills only an
+ * empty draft, so a draft the reader is writing is never replaced.
+ */
+export function openedFromFinding(lines: DiffLines, range: SelectedLineRange, finding: number, prefill: string): DiffLines {
+  return { picking: null, box: openAt(lines.box, range, finding), draft: isBlank(lines.draft) ? prefill : lines.draft };
+}
+
+/**
+ * A request went with `sent`. If that is still the draft, the box is done: it shows the outcome
+ * and its lines are no longer selected. A draft changed while it went is unsent, so the box stays
+ * open with it, and says the request went.
+ */
+export function settled(lines: DiffLines, outcome: BoxOutcome, sent: string): DiffLines {
+  const { box } = lines;
+  if (box === null) return lines;
+  if (lines.draft !== sent) return { ...lines, box: { ...box, stage: { kind: "writing", sent: outcome } } };
+  return { ...lines, box: { ...box, stage: { kind: "done", outcome }, lit: false }, draft: "" };
+}
+
+export const isBlank = (text: string) => text.trim() === "";
+
+const WRITING: BoxStage = { kind: "writing", sent: null };
+
+function openAt(box: LineBox | null, at: SelectedLineRange, finding: number | null): LineBox {
+  return { at, opened: (box?.opened ?? 0) + 1, finding, stage: WRITING, lit: true };
+}
 
 // The ranges Pierre reports are built one way (`endSide` only when it differs from `side`), so
 // equal ranges have equal fields.
-const sameRange = (a: SelectedLineRange, b: SelectedLineRange) => a.start === b.start && a.end === b.end && a.side === b.side && a.endSide === b.endSide;
+function sameRange(a: SelectedLineRange | null, b: SelectedLineRange | null): boolean {
+  if (a === null || b === null) return a === b;
+  return a.start === b.start && a.end === b.end && a.side === b.side && a.endSide === b.endSide;
+}
