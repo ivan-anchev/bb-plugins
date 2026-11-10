@@ -13,6 +13,7 @@ import { usePostComment, usePullRequest, type PrHeadTarget } from "../queries.ts
 import { Button } from "../ui/button.tsx";
 import { DESTRUCTIVE_TEXT_ON_MUTED } from "../ui/destructive-text-on-muted.ts";
 import { DraftBox } from "../ui/draft-box.tsx";
+import { useHoldEscape } from "../ui/hold-escape.ts";
 
 type CommentComposerProps = {
   /** The lines the comment is on, at the commit the reader views. */
@@ -52,6 +53,7 @@ type Step =
 function Composer({ span, head, initialText, startAt, onCancel, onDone, read }: CommentComposerProps & { read: PrRead }) {
   const post = usePostComment();
   const life = useLifetime();
+  useHoldEscape();
   const [state, setState] = useState<Step>(() => (startAt === "review" ? previewOf(span, read, initialText) : { step: "editing", text: initialText }));
   // why a latch beside the "posting" step: the step arrives with the next render, so a quick
   // second click would post twice.
@@ -101,7 +103,8 @@ function Composer({ span, head, initialText, startAt, onCancel, onDone, read }: 
   }
 
   return (
-    // why every Esc stops here: bb's own Esc leaves the page, and the draft with it.
+    // why every Esc in the box stops here as well as at the hold: Done takes the hold with it
+    // before the event gets that far, and bb's own Esc would leave the page.
     <div onKeyDown={(event: KeyboardEvent) => escapeIn(event, state.step === "posted" ? onDone : null)}>{renderStep()}</div>
   );
 }

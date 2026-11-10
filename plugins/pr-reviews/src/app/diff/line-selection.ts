@@ -34,16 +34,10 @@ function next(current: LineSelection, range: SelectedLineRange | null, panel: "a
 }
 
 /**
- * What Esc does. With nothing selected it is bb's own Esc. With lines selected and no box open it
- * clears them. With a box open it is the box's, which closes only an empty box, so a draft is never
- * lost to Esc; either way it must not reach bb, whose Esc leaves the PR page.
+ * Lines with no box open under them: Esc or a click outside the diff clears them. With nothing
+ * selected, Esc is bb's own; with a box open, the box holds Esc (ui/hold-escape.ts) and keeps its lines.
  */
-export type EscapeAction = "none" | "clear" | "box";
-
-export function escapeActionOf(selection: LineSelection): EscapeAction {
-  if (selection === null) return "none";
-  return hasOpenBox(selection) ? "box" : "clear";
-}
+export const hasBareLines = (selection: LineSelection) => selection !== null && !hasOpenBox(selection);
 
 // The ranges Pierre reports are built one way (`endSide` only when it differs from `side`), so
 // equal ranges have equal fields.

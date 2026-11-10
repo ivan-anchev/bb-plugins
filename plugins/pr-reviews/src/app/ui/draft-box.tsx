@@ -3,6 +3,7 @@
 import { useEffect, useRef, type Ref, type RefObject } from "react";
 import { Button } from "./button.tsx";
 import { DESTRUCTIVE_TEXT_ON_MUTED } from "./destructive-text-on-muted.ts";
+import { useHoldEscape } from "./hold-escape.ts";
 
 type DraftBoxProps = {
   /** The box's element: the id a toggle's `aria-controls` names, and the ref its owner checks focus against. */
@@ -29,6 +30,7 @@ type DraftBoxProps = {
 export function DraftBox({ id, ref, textareaRef, label, placeholder, value, onChange, onEscapeEmpty, onCancel, error, action }: DraftBoxProps) {
   // why an effect, not autoFocus: autoFocus loses to the button whose click opened the box (spike §5).
   useEffect(() => textareaRef.current!.focus(), [textareaRef]);
+  useHoldEscape();
   // why a latch beside `pending`: `pending` arrives with the next render, so a quick second click
   // would run the action twice.
   const running = useRef(false);
@@ -45,7 +47,8 @@ export function DraftBox({ id, ref, textareaRef, label, placeholder, value, onCh
       className="mt-1 grid gap-1.5"
       onKeyDown={(event) => {
         if (event.key !== "Escape") return;
-        // bb's own Esc leaves the page, and a draft with it; it skips an event whose default was prevented.
+        // why here as well as the hold: an Esc that closes the box takes its hold with it before
+        // the event gets that far, and bb's own Esc would leave the page.
         event.preventDefault();
         if (value === "") onEscapeEmpty();
       }}

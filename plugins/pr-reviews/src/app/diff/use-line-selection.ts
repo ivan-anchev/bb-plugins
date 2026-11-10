@@ -2,7 +2,7 @@
 // outside the diff.
 import { useCallback, useEffect, useMemo, useState, type RefObject } from "react";
 import type { SelectedLineRange } from "@pierre/diffs";
-import { escapeActionOf, hasOpenBox, selectionPicked, selectionWhilePicking, type EscapeAction, type LineBox, type LineSelection } from "./line-selection.ts";
+import { hasBareLines, selectionPicked, selectionWhilePicking, type LineBox, type LineSelection } from "./line-selection.ts";
 
 /** What the diff reports as the reader picks lines. Stable: it is part of the diff's memoised options. */
 export type LineGestures = { picking(range: SelectedLineRange | null): void; picked(range: SelectedLineRange | null): void };
@@ -25,8 +25,9 @@ export function useLineSelection(root: RefObject<HTMLDivElement | null>) {
   }, [root]);
   const forget = useCallback(() => setSelection(null), []);
 
-  useEscape(escapeActionOf(selection), clear);
-  useClickAway(root, selection !== null && !hasOpenBox(selection), forget);
+  const bare = hasBareLines(selection);
+  useEscape(bare, clear);
+  useClickAway(root, bare, forget);
 
   return {
     selection,
@@ -38,21 +39,20 @@ export function useLineSelection(root: RefObject<HTMLDivElement | null>) {
 }
 
 // why capture on window, and preventDefault: bb's own Esc leaves the PR page, and it skips an event
-// whose default was prevented (spike §4). With no box open, Esc clears the lines here; a box's Esc
-// goes on to the box. With nothing selected no listener is attached, and bb's Esc works as before.
-function useEscape(action: EscapeAction, clear: () => void) {
+// whose default was prevented (spike §4). Only bare lines: with nothing selected no listener is
+// attached, and bb's Esc works as before; an open box holds Esc itself (ui/hold-escape.ts).
+function useEscape(active: boolean, clear: () => void) {
   useEffect(() => {
-    if (action === "none") return;
+    if (!active) return;
     const listener = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
-      if (action === "box") return;
       event.stopPropagation();
       clear();
     };
     window.addEventListener("keydown", listener, true);
     return () => window.removeEventListener("keydown", listener, true);
-  }, [action, clear]);
+  }, [active, clear]);
 }
 
 // Only lines with no box open: an open box is never discarded by a stray click. A click inside the

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { SelectedLineRange } from "@pierre/diffs";
-import { escapeActionOf, selectionPicked, selectionWhilePicking, type LineSelection } from "./line-selection.ts";
+import { hasBareLines, selectionPicked, selectionWhilePicking, type LineSelection } from "./line-selection.ts";
 
 const LINE_5: SelectedLineRange = { start: 5, end: 5, side: "additions" };
 const LINES_5_7: SelectedLineRange = { start: 5, end: 7, side: "additions" };
@@ -55,10 +55,10 @@ test("while a box is open, a question or a comment, gestures keep its lines: the
   }
 });
 
-test("Esc is bb's own with nothing selected, clears lines with no box open, and is the box's while one is", () => {
-  assert.equal(escapeActionOf(null), "none");
-  assert.equal(escapeActionOf({ range: LINE_5, panel: null }), "clear");
-  assert.equal(escapeActionOf({ range: LINE_5, panel: "actions" }), "clear");
-  assert.equal(escapeActionOf({ range: LINE_5, panel: "ask" }), "box");
-  assert.equal(escapeActionOf({ range: LINE_5, panel: "comment" }), "box");
+test("Esc and a click away clear lines with no box open; nothing selected or an open box is left to them", () => {
+  assert.equal(hasBareLines(null), false);
+  assert.equal(hasBareLines({ range: LINE_5, panel: null }), true);
+  assert.equal(hasBareLines({ range: LINE_5, panel: "actions" }), true);
+  assert.equal(hasBareLines({ range: LINE_5, panel: "ask" }), false);
+  assert.equal(hasBareLines({ range: LINE_5, panel: "comment" }), false);
 });
