@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { resolveSettings, type BoatSettingsValues } from "./settings.ts";
 
 // The values bb hands the plugin on a fresh install: defaults, no secret.
-const DEFAULTS: BoatSettingsValues = { apiKey: undefined, idleMinutes: 15, defaultPreset: "default", defaultTemplate: "", defaultEnvironment: "" };
+const DEFAULTS: BoatSettingsValues = { apiKey: undefined, idleMinutes: 15, defaultPreset: "default", defaultTemplate: "", defaultEnvironment: "", sidebarIcon: true };
 
 test("no key is a setup problem whose fix names the settings path", () => {
   for (const apiKey of [undefined, "", "   "]) {

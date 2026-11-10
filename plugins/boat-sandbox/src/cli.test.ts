@@ -206,7 +206,7 @@ function accessToBoat(answer: { status: number } | { failure: Error }): BoatAcce
     if ("failure" in answer) throw answer.failure;
     return new Response(JSON.stringify({ code: "unauthorized", message: "no" }), { status: answer.status });
   });
-  return createBoatAccess({ get: async () => ({ apiKey: "boat_abc", idleMinutes: 15, defaultPreset: "default", defaultTemplate: "", defaultEnvironment: "" }) });
+  return createBoatAccess({ get: async () => ({ apiKey: "boat_abc", idleMinutes: 15, defaultPreset: "default", defaultTemplate: "", defaultEnvironment: "", sidebarIcon: true }) });
 }
 
 // The chip blocks submit on an `unavailable` reply and never on a thrown read.
