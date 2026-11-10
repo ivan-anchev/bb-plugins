@@ -56,11 +56,12 @@
     {
       "id": "code-explorer",
       "displayName": "Code Explorer",
-      "description": "Browse the environment's files and git changes as a tree with colored per-file-type icons, see how a change splits into code, tests, mocks, generated files and docs, and read any file or its diff beside the tree.",
+      "description": "Puts a colored file-type icon in front of every file link and @file mention in chat, so app.tsx reads as React and README.md as Markdown at a glance.",
       "icon": "Folder",
       "tags": [
         "files",
-        "git"
+        "icons",
+        "chat"
       ],
       "author": {
         "name": "Ivan Anchev",

@@ -1,15 +1,6 @@
 import { definePluginApp } from "@get-bb/plugin-sdk/app";
-import { FilesTab } from "./src/files-tab.tsx";
-import "./app.css";
+import { chatFileIcons } from "./src/chat-file-icons.ts";
 
 export default definePluginApp((app) => {
-  app.slots.experimental_tab({
-    context: { kind: "thread" },
-    availability: "fixed",
-    id: "files",
-    title: "Files",
-    icon: "Folder",
-    component: FilesTab,
-    layout: "flush",
-  });
+  app.contentScripts.register(chatFileIcons);
 });

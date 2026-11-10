@@ -17,6 +17,14 @@ bb marketplace add git:github.com/ivan-anchev/bb-plugins@main
 bb plugin install pr-reviews@ivan-anchev
 ```
 
+## Credits
+
+The file tree and its icons are [`@pierre/trees`](https://www.npmjs.com/package/@pierre/trees)
+(Apache-2.0). The path filter matches with [`picomatch`](https://www.npmjs.com/package/picomatch)
+(MIT). The change kind rules in `src/guide/change-kind.ts` are ported from
+[T3 Code](https://github.com/pingdotgg/t3code)'s
+`packages/shared/src/changedFileKind.ts` (MIT, © 2026 T3 Tools Inc.).
+
 ## Develop
 
 ```sh

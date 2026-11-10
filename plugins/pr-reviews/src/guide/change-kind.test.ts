@@ -1,4 +1,4 @@
-// Copied verbatim from plugins/code-explorer/src/changes/change-kind.test.ts.
+// Tests for change-kind.ts, whose rules are ported from T3 Code.
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { changeKindOf, type ChangeKind } from "./change-kind.ts";

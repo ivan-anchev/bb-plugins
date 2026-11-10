@@ -1,4 +1,5 @@
-// Copied verbatim from plugins/code-explorer/src/changes/change-kind.ts, plus isTestOrMock at the end.
+// Ported from T3 Code's packages/shared/src/changedFileKind.ts (MIT, © 2026 T3 Tools Inc.),
+// plus isTestOrMock at the end.
 export const CHANGE_KINDS = ["code", "tests", "mocks", "generated", "docs"] as const;
 
 export type ChangeKind = (typeof CHANGE_KINDS)[number];
