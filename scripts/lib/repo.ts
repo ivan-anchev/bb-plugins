@@ -27,6 +27,9 @@ const pluginPackageSchema = z.object({
   scripts: z.record(z.string(), z.string()).default({}),
   dependencies: z.record(z.string(), z.string()).default({}),
   devDependencies: z.record(z.string(), z.string()).default({}),
+  // Repo-only: `listed: false` keeps a plugin out of marketplace.json. It stays in
+  // .bb/plugins.json, so a direct `bb plugin install git:… --plugin <id>` still works.
+  bbMarketplace: z.object({ listed: z.boolean() }).default({ listed: true }),
   bb: z.object({
     name: z.string().min(1),
     description: z.string().min(1),

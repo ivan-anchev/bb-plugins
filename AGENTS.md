@@ -19,6 +19,9 @@ development section first.
   the result into this repo, and regenerates the manifests.
 - **Keep `bb.description` and `PLUGIN_OVERVIEW.md` in agreement.** They are one
   claim in two lengths; change both in the same commit.
+- **Unlist a plugin with `"bbMarketplace": { "listed": false }`** in its
+  `package.json`. It leaves `marketplace.json` but stays in `.bb/plugins.json`,
+  so it still installs directly from git.
 - **Release by tag only.** Tags are `<id>/vX.Y.Z` and are never moved or
   reused. `npm run release -- <id>` creates one; pushing it is a deliberate,
   separate step.

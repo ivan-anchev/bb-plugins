@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-code-explorer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "private": true,
   "license": "MIT",
@@ -23,6 +23,9 @@
   "engines": {
     "bb": ">=0.48",
     "bbPluginSdk": ">=0.6.104"
+  },
+  "bbMarketplace": {
+    "listed": false
   },
   "bb": {
     "name": "Code Explorer",

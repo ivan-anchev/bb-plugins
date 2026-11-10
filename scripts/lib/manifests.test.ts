@@ -13,7 +13,7 @@ const repo: RepoConfig = {
   },
 };
 
-function pluginFixture(id: string, overrides: { version?: string; icon?: string; keywords?: string[] } = {}): Plugin {
+function pluginFixture(id: string, overrides: { version?: string; icon?: string; keywords?: string[]; listed?: boolean } = {}): Plugin {
   return {
     id,
     dir: `plugins/${id}`,
@@ -24,6 +24,7 @@ function pluginFixture(id: string, overrides: { version?: string; icon?: string;
       scripts: {},
       dependencies: {},
       devDependencies: {},
+      bbMarketplace: { listed: overrides.listed ?? true },
       bb: { name: `Name of ${id}`, description: `What ${id} does.`, branding: { icon: overrides.icon ?? "Zap" } },
     },
   };
@@ -71,4 +72,16 @@ test("a file icon becomes a URL relative to marketplace.json; a named icon passe
 test("package keywords become store tags, minus the bb-plugin marker", () => {
   const files = renderManifests(repo, [pluginFixture("notes", { keywords: ["bb-plugin", "notes", "interface"] })]);
   assert.deepEqual(parsed(files, MARKETPLACE_PATH).plugins[0].tags, ["notes", "interface"]);
+});
+
+test("an unlisted plugin stays in the collection but not in the marketplace", () => {
+  const files = renderManifests(repo, [pluginFixture("notes"), pluginFixture("private", { listed: false })]);
+  assert.deepEqual(
+    parsed(files, COLLECTION_PATH).plugins.map((entry: { name: string }) => entry.name),
+    ["notes", "private"],
+  );
+  assert.deepEqual(
+    parsed(files, MARKETPLACE_PATH).plugins.map((entry: { id: string }) => entry.id),
+    ["notes"],
+  );
 });
