@@ -1,12 +1,12 @@
-// A review thread from GitHub where a diff draws it, as one recessed tinted surface ("Tint"): its
-// comments in order, each with its author, avatar, time and markdown, then Reply and Ask about
-// this, which open the diff's one comment box under the thread. A long thread shows its first and
-// latest comments with "N more" between; a bot's comment is clamped to three lines; a resolved
-// thread is one row that opens it. A thread at its file that lost its lines says "Outdated" over
-// the lines it was written on. No borders, pills or dividers: spacing separates the comments, and
-// the comment box is the only raised surface (app.css holds the tint). The box sits 6px in from the
-// card's 12px corners, so its own are 6px, concentric with them; the avatars sit 10px in, which a
-// diff lines up with its line numbers (pr-diff.tsx).
+// A review thread from GitHub where a diff draws it, as one tinted card ("Tint"): its comments in
+// order, each with its author, avatar, time and markdown, then Reply and Ask about this, which open
+// the diff's one comment box under the thread. A long thread shows its first and latest comments
+// with "N more" between; a bot's comment is clamped to three lines; a resolved thread is one row
+// that opens it. A thread at its file that lost its lines says "Outdated" over the lines it was
+// written on. No pills or dividers: spacing separates the comments, a ring draws the card's edge,
+// and the comment box is the only raised surface (app.css holds the tint and both rings).
+// Everything sits one 6px inset from the card's 12px corners: the avatars, which a diff lines up
+// with its line numbers (pr-diff.tsx), and the box, whose corners are 6px, concentric with the card's.
 import { useMemo, useState, type ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { FileThread } from "../../comments/place-threads.ts";
@@ -51,9 +51,9 @@ export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: Rev
       ref={sectionRef}
       tabIndex={-1}
       aria-label={`Review thread by ${thread.comments[0].author.login}`}
-      className={`${SURFACE} rounded-[12px] px-1.5 pt-2.5 pb-1.5 outline-none focus-visible:ring-1 focus-visible:ring-ring`}
+      className={`${SURFACE} grid gap-2 rounded-[12px] p-1.5 outline-none focus-visible:ring-1 focus-visible:ring-ring`}
     >
-      <div className="px-1">
+      <div className="grid gap-3">
         {atFile !== null && atFile.why !== "file" && <Original thread={thread} why={atFile.why} />}
         <Comments
           thread={thread}
@@ -64,31 +64,31 @@ export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: Rev
           onShowAll={() => setOpened({ ...opened, middle: true })}
           onQuote={(comment, from) => onReply({ quote: quoteReplyText(comment.body), from })}
         />
-        {box === null && (
-          <div className="pr-reviews-thread-foot mt-1.5 mb-0.5 ml-5 flex items-center gap-1">
-            <Button variant="ghost" size="small" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
-              Reply
-            </Button>
-            <Button variant="ghost" size="small" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
-              Ask about this
-            </Button>
-            {thread.resolvedBy !== null && (
-              <>
-                <span className="ml-auto text-xs text-muted-foreground">Resolved by {thread.resolvedBy}</span>
-                <Button ref={resolvedFocus.to} variant="ghost" size="small" aria-expanded onClick={() => setOpened({ ...opened, thread: false })}>
-                  Collapse
-                </Button>
-              </>
-            )}
-          </div>
-        )}
       </div>
-      {box !== null && <div className="mt-2.5 [--pr-reviews-box-radius:6px]">{box}</div>}
+      {box === null && (
+        <div className="pr-reviews-thread-foot ml-5 flex items-center gap-1">
+          <Button variant="ghost" size="small" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
+            Reply
+          </Button>
+          <Button variant="ghost" size="small" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
+            Ask about this
+          </Button>
+          {thread.resolvedBy !== null && (
+            <>
+              <span className="ml-auto text-xs text-muted-foreground">Resolved by {thread.resolvedBy}</span>
+              <Button ref={resolvedFocus.to} variant="ghost" size="small" aria-expanded onClick={() => setOpened({ ...opened, thread: false })}>
+                Collapse
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+      {box !== null && <div className="[--pr-reviews-box-radius:6px]">{box}</div>}
     </section>
   );
 }
 
-const SURFACE = "min-w-0 bg-(--pr-reviews-thread-tint) text-[13px] leading-5";
+const SURFACE = "min-w-0 bg-(--pr-reviews-thread-tint) shadow-(--pr-reviews-thread-ring) text-[13px] leading-5";
 
 type CommentsProps = {
   thread: ReviewThread;
@@ -156,15 +156,15 @@ function ResolvedRow({ thread, focus, onOpen }: { thread: ReviewThread; focus: F
 function Original({ thread, why }: { thread: ReviewThread; why: "outdated" | "elsewhere" }) {
   const excerpt = thread.subject.kind === "lines" ? thread.subject.excerpt : [];
   return (
-    <>
-      <p className="mb-1.5 text-xs leading-[18px] text-subtle-foreground">{why === "outdated" ? "Outdated" : "On another commit"}</p>
+    <div className="grid gap-1.5">
+      <p className="text-xs leading-[18px] text-subtle-foreground">{why === "outdated" ? "Outdated" : "On another commit"}</p>
       {excerpt.length > 0 && (
         // A tab stop of its own: long lines scroll sideways, and the keys scroll only the focused element.
         <div
           role="region"
           aria-label="Code the thread was written on"
           tabIndex={0}
-          className="mb-3.5 overflow-x-auto rounded-md bg-background font-mono text-xs leading-5 outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="overflow-x-auto rounded-md bg-background font-mono text-xs leading-5 outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
           {/* One width for every row, the widest line's, so each row's tint runs to the end when scrolled. */}
           <div className="w-max min-w-full">
@@ -174,7 +174,7 @@ function Original({ thread, why }: { thread: ReviewThread; why: "outdated" | "el
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
