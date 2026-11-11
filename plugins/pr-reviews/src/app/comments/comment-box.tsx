@@ -163,7 +163,7 @@ function Composer({ subject, head, draft, sent, onDraft, onSettled, onClose, pr,
 
   return (
     <div ref={group} role="group" aria-label="Comment box" onKeyDown={onKeyDown} className={BOX_CLASS}>
-      <div className="flex items-center pt-2 pr-2 pl-2.5">
+      <div className="flex items-center px-2 pt-2">
         <WriteTabs tabs={tabs} onWrite={() => textarea.current!.focus()} />
         <div className="ml-auto">
           <IconButton icon="X" label="Discard" size="dismiss" onClick={onClose} />
@@ -250,8 +250,11 @@ function labelOf(subject: BoxSubject): string {
   return `Comment or question about ${subject.span.rows.length === 1 ? "this line" : "these lines"}`;
 }
 
-/** Write and Preview share type, padding and minimum height, so switching moves nothing. */
-const TEXT_CLASS = "block w-full min-h-[76px] px-[18px] pt-2 pb-1 text-[13px] leading-[22px] text-foreground outline-none";
+/**
+ * Write and Preview share type, padding and minimum height, so switching moves nothing. The minimum
+ * is the textarea's three rows: 3 × 22px of line, and 8px + 4px of padding.
+ */
+const TEXT_CLASS = "block w-full min-h-[78px] px-[18px] pt-2 pb-1 text-[13px] leading-[22px] text-foreground outline-none";
 
 /**
  * The textarea's focus, height and selection. It takes focus with the caret at the end when the
