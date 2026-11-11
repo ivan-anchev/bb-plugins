@@ -5,7 +5,7 @@
 // the logic lives in the modules it calls.
 import { experimental_PluginRpcRefusal as Refusal, type BbPluginApi, type ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { commentsTag, PROJECTS_TAG, prReviewsContract, type GitHubProject, type UnreadableProject } from "../contract.ts";
+import { commentsTag, PROJECTS_TAG, prReviewsContract, repoTag, type GitHubProject, type UnreadableProject } from "../contract.ts";
 import { parsePrDiff } from "../diff/parse-pr-diff.ts";
 import {
   addReviewComment,
@@ -83,11 +83,13 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
     }
   }
 
-  // The PR's comments re-read once GitHub has submitted or discarded the review. A refusal leaves
-  // the read as it is, so Finish review stays open with GitHub's words beside the reader's summary.
+  // The PR's comments, and the PR with its reviewers' states, re-read once GitHub has submitted or
+  // discarded the review. A refusal leaves both as they are, so Finish review stays open with
+  // GitHub's words beside the reader's summary.
   async function reviewed(target: { projectId: string; number: number }, write: () => Promise<void>): Promise<Record<string, never>> {
+    const repo = await repoOf(target.projectId);
     await write();
-    bb.rpc.experimental_invalidate([commentsTag(target)]);
+    bb.rpc.experimental_invalidate([commentsTag(target), repoTag(repo)]);
     return {};
   }
 

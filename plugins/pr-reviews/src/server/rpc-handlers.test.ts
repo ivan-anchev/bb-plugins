@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 import type { CommentRequest } from "../comments/comment-schema.ts";
-import { commentsTag, prReviewsContract } from "../contract.ts";
+import { commentsTag, prReviewsContract, repoTag } from "../contract.ts";
+import { repoSchema } from "../github/repo.ts";
 
 // GitHub stands in: each post records what it was asked, and its order against bb's invalidations.
 const events: string[] = [];
@@ -52,6 +53,8 @@ const handlers = handlersWith([PROJECT]);
 const TARGET = { projectId: "proj_1", number: 40 };
 // The tag the comments read carries for this PR: what each post must invalidate for it to show.
 const READ_TAGS = prReviewsContract.comments.tags!(TARGET, { threads: [], timeline: [], changedPaths: [], viewer: { author: false, pendingReviewId: null } });
+// The tag the PR read, which carries its reviewers' states, has for the project's repo.
+const PR_TAG = repoTag(repoSchema.parse("ivan-anchev/bb-plugins"));
 // The app calling, as the Changes tab and the guide do.
 const FROM_APP = { experimental_caller: { kind: "client" }, experimental_signal: new AbortController().signal } as const;
 const call = async <Input, Output>(handler: (input: Input, context: typeof FROM_APP) => Output | Promise<Output>, input: Input) => handler(input, FROM_APP);
@@ -92,7 +95,7 @@ test("a project with no GitHub remote posts nothing and re-reads nothing", async
   assert.deepEqual(events, []);
 });
 
-test("a comment and a reply go into the pending review, which is submitted or discarded, each then re-reading the PR's comments", async () => {
+test("a comment and a reply go into the pending review, each then re-reading the PR's comments; submitting or discarding it re-reads the PR too", async () => {
   const request: CommentRequest = { kind: "line", commit: "ff2bc97", path: "src/a.ts", start: { side: "new", line: 10 }, end: { side: "new", line: 12 }, body: "Why?" };
   events.length = 0;
 
@@ -109,9 +112,9 @@ test("a comment and a reply go into the pending review, which is submitted or di
     `reply-in-review ${JSON.stringify(["PRRT_1", "PRR_1", "And this?"])}`,
     `invalidate ${READ_TAGS.join(",")}`,
     `submit ${JSON.stringify(["PRR_1", "REQUEST_CHANGES", ""])}`,
-    `invalidate ${READ_TAGS.join(",")}`,
+    `invalidate ${[...READ_TAGS, PR_TAG].join(",")}`,
     `discard ${JSON.stringify(["PRR_2"])}`,
-    `invalidate ${READ_TAGS.join(",")}`,
+    `invalidate ${[...READ_TAGS, PR_TAG].join(",")}`,
   ]);
   assert.deepEqual(results, [{}, {}, {}, {}]);
 });

@@ -126,7 +126,8 @@ function SubmitPopover({ target, reviewId, author, pending, panel, onDone }: Sub
           onKeyDown={(keyEvent) => {
             if (keyEvent.key !== "Enter" || !(keyEvent.metaKey || keyEvent.ctrlKey)) return;
             keyEvent.preventDefault();
-            onSubmit();
+            // The shortcut is Submit review's, so it does nothing while the discard confirmation hides that button.
+            if (!confirmingDiscard) onSubmit();
           }}
         >
           <p className="text-[13px] font-semibold">Finish your review</p>
