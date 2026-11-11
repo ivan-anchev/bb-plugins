@@ -1,8 +1,9 @@
 // The comment box: a diff's one box, under its selected lines or in one of its review threads, or
 // the Summary tab's composer. Write in markdown, preview it, then ask the review thread about the
-// lines, comment on them on GitHub, reply in the thread, or comment on the PR's conversation. A
-// diff's draft is the diff's, so it follows the box from place to place. Once the box has done its
-// job it shows the outcome in the same shell, where the text was.
+// lines, comment on them on GitHub, reply in the thread, or comment on the PR's conversation; or
+// add the comment or reply to the reader's pending review (box-actions.ts). A diff's draft is the
+// diff's, so it follows the box from place to place. Once the box has done its job it shows the
+// outcome in the same shell, where the text was.
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { experimental_Icon as Icon, experimental_PluginRpcCallError as RpcCallError } from "@get-bb/plugin-sdk/app";
 import { reviewThreadOf, type PrDetail, type ReviewState } from "../../contract.ts";
@@ -13,9 +14,12 @@ import type { ReviewThread } from "../../comments/thread-schema.ts";
 import { isBlank, type BoxOutcome, type BoxStage } from "../diff/line-selection.ts";
 import { useLifetime } from "../lifetime.ts";
 import {
+  useAddReplyToReview,
+  useAddToReview,
   useAskAboutFinding,
   useAskAboutGitHubThread,
   useAskAboutLines,
+  useComments,
   usePostComment,
   usePostConversationComment,
   usePullRequest,
@@ -27,6 +31,7 @@ import { useHoldEscape } from "../ui/hold-escape.ts";
 import { IconButton } from "../ui/icon-button.tsx";
 import { Prose } from "../ui/prose.tsx";
 import { Tooltip } from "../ui/tooltip.tsx";
+import { githubActionsOf, NOT_AT_HEAD, type GitHubActions } from "./box-actions.ts";
 import { problemsOf, type Action, type Failure } from "./box-problems.ts";
 import { BOX_CLASS, DoneBox, SentNote } from "./done-box.tsx";
 import { markdownShortcut } from "./markdown-keys.ts";
@@ -101,6 +106,11 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
   const postComment = usePostComment();
   const reply = useReplyToThread();
   const postConversationComment = usePostConversationComment();
+  const addToReview = useAddToReview();
+  const addReplyToReview = useAddReplyToReview();
+  const target = { projectId: head.projectId, number: head.number };
+  // The same cache entry as the diff's threads: the reader's review comes with them.
+  const viewer = useComments(target).data?.viewer;
   // why a latch beside `sending`: the state arrives with the next render, so a quick second click
   // would send twice.
   const latch = useRef(false);
@@ -111,9 +121,16 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
   const hasThread = reviewThreadOf(review) !== null;
   // A comment on the conversation is about nothing the review thread could answer.
   const asks = subject.kind !== "conversation";
+  const atHead = subject.kind !== "lines" || subject.span.commit === pr.headSha;
+  const actions = githubActionsOf(subject.kind, viewer, atHead);
+  // With a review pending, Add to review is the box's only way to GitHub, so it says why it can't go.
+  const notAtHead = actions.kind === "review" && !atHead;
+  const blocked = "blocked" in check ? check.blocked : notAtHead ? NOT_AT_HEAD : null;
+  const write = notAtHead ? null : reviewWriteOf(actions, post);
   const canAsk = asks && hasThread && !isBlank(draft) && sending === null;
   const canComment = post !== null && !isBlank(draft) && sending === null;
-  const problems = problemsOf("blocked" in check ? check.blocked : null, failure, draft);
+  const canReview = write !== null && !isBlank(draft) && sending === null;
+  const problems = problemsOf(blocked, failure, draft);
   const words = WORDS[subject.kind];
 
   const run = (action: Action, send: () => Promise<BoxOutcome>) => {
@@ -135,7 +152,6 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
       )
       .finally(() => (latch.current = false));
   };
-  const target = { projectId: head.projectId, number: head.number };
   const ask = () => {
     if (!canAsk) return;
     // A box a finding's button opened, still on its line, asks about the finding, so the thread
@@ -151,6 +167,24 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
     if (!canComment) return;
     run("comment", async () => ({ kind: "commented", url: (await send(post)).url }));
   };
+  const addToTheReview = () => {
+    if (!canReview) return;
+    run("review", async () => {
+      switch (write.kind) {
+        case "comment":
+          await addToReview.mutate({ ...target, request: write.request, reviewId: write.reviewId });
+          break;
+        case "reply":
+          await addReplyToReview.mutate({ ...target, threadId: write.threadId, reviewId: write.reviewId, body: write.body });
+          break;
+        default:
+          write satisfies never;
+      }
+      return { kind: "reviewed" };
+    });
+  };
+  // ⌘↵ is the primary button's.
+  const primary = actions.kind === "review" ? addToTheReview : comment;
   const send = (post: Post) => {
     switch (post.kind) {
       case "comment":
@@ -176,7 +210,7 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
     if (!hasMod(event)) return;
     if (event.key === "Enter") {
       event.preventDefault();
-      comment();
+      primary();
       return;
     }
     const field = textarea.current!;
@@ -247,24 +281,44 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
               {sending === "ask" ? "Sending…" : "Ask about this"}
             </Button>
           )}
-          <Tooltip content={`${words.post} on GitHub (${COMMENT_KEYS})`} placement="top-end">
-            {(describedBy) => (
-              <Button variant="primary" size="small" aria-disabled={!canComment} aria-describedby={describedBy} onClick={comment}>
-                <Icon name="GithubLogo" className="size-3.5" aria-hidden />
-                {sending === "comment" ? words.posting : words.post}
-              </Button>
-            )}
-          </Tooltip>
+          {actions.kind === "both" && (
+            <Tooltip content="Start a pending review on GitHub. It's published when you submit the review." placement="top-end">
+              {(describedBy) => (
+                <Button variant="secondary" size="small" aria-disabled={!canReview} aria-describedby={describedBy} onClick={addToTheReview}>
+                  {sending === "review" ? ADDING : ADD_TO_REVIEW}
+                </Button>
+              )}
+            </Tooltip>
+          )}
+          {actions.kind === "review" ? (
+            <Tooltip content={`Add to your pending review on GitHub (${COMMENT_KEYS})`} placement="top-end">
+              {(describedBy) => (
+                <Button variant="primary" size="small" aria-disabled={!canReview} aria-describedby={describedBy} onClick={addToTheReview}>
+                  <Icon name="GithubLogo" className="size-3.5" aria-hidden />
+                  {sending === "review" ? ADDING : ADD_TO_REVIEW}
+                </Button>
+              )}
+            </Tooltip>
+          ) : (
+            <Tooltip content={`${words.post} on GitHub (${COMMENT_KEYS})`} placement="top-end">
+              {(describedBy) => (
+                <Button variant="primary" size="small" aria-disabled={!canComment} aria-describedby={describedBy} onClick={comment}>
+                  <Icon name="GithubLogo" className="size-3.5" aria-hidden />
+                  {sending === "comment" ? words.posting : words.post}
+                </Button>
+              )}
+            </Tooltip>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-/** What the primary button posts: a review comment on the lines, a reply in the thread, or a comment on the conversation. */
+/** What the primary button posts: a review comment on the lines, a reply in the thread (`threadId`, its node id), or a comment on the conversation. */
 type Post =
   | { kind: "comment"; request: CommentRequest; note: string | null }
-  | { kind: "reply"; request: ReplyRequest; note: null }
+  | { kind: "reply"; request: ReplyRequest; threadId: string; note: null }
   | { kind: "conversation"; request: ConversationRequest; note: null };
 
 function postOf(subject: BoxSubject, pr: PrDetail, draft: string): Post | BlockedComment {
@@ -275,7 +329,7 @@ function postOf(subject: BoxSubject, pr: PrDetail, draft: string): Post | Blocke
     }
     case "reply": {
       const check = checkReply(subject.thread, draft);
-      return "blocked" in check ? check : { kind: "reply", request: check.request, note: null };
+      return "blocked" in check ? check : { kind: "reply", request: check.request, threadId: subject.thread.id, note: null };
     }
     case "conversation": {
       const check = checkConversationComment(draft);
@@ -285,6 +339,30 @@ function postOf(subject: BoxSubject, pr: PrDetail, draft: string): Post | Blocke
       return subject satisfies never;
   }
 }
+
+/**
+ * What Add to review writes: a comment in the pending review, or in one GitHub starts (null); or a
+ * reply, which joins only a pending review, since without one GitHub would publish it.
+ */
+type ReviewWrite = { kind: "comment"; request: CommentRequest; reviewId: string | null } | { kind: "reply"; threadId: string; reviewId: string; body: string };
+
+function reviewWriteOf(actions: GitHubActions, post: Post | null): ReviewWrite | null {
+  if (post === null || actions.kind === "publish") return null;
+  const reviewId = actions.kind === "review" ? actions.reviewId : null;
+  switch (post.kind) {
+    case "comment":
+      return { kind: "comment", request: post.request, reviewId };
+    case "reply":
+      return reviewId === null ? null : { kind: "reply", threadId: post.threadId, reviewId, body: post.request.body };
+    case "conversation":
+      return null;
+    default:
+      return post satisfies never;
+  }
+}
+
+const ADD_TO_REVIEW = "Add to review";
+const ADDING = "Adding…";
 
 const WORDS = {
   lines: { placeholder: "Ask about these lines, or leave a comment", post: "Comment", posting: "Commenting…" },

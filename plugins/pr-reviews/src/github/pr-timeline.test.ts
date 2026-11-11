@@ -55,6 +55,7 @@ test("astro#18616: a commit, a bot's comment, and a label added then removed", (
     author: { login: "changeset-bot", bot: true },
     body: "### 🦋 Changeset detecte",
     createdAt: "2026-11-04T14:34:04Z",
+    pending: false,
   });
   assert.deepEqual(
     [added, removed].map(({ id, ...event }) => event),
@@ -108,6 +109,7 @@ test("PR #40: a conversation comment, as a canonical comment", () => {
     author: { login: "ivan-anchev", bot: false },
     body: "test",
     createdAt: "2026-11-08T08:34:16Z",
+    pending: false,
   });
 });
 

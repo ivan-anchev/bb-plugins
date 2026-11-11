@@ -1,23 +1,32 @@
 // The PR header, a masthead: the PR's state tile, the title, and the identity row (`#number`,
-// author, `base ← head`) on the left; icon actions (Review chat when a review thread exists, then
-// GitHub) on the right. The PR's line counts are on the Changes tab.
+// author, `base ← head`) on the left; on the right, Finish review while the reader has a pending
+// review on GitHub, then icon actions (Review chat when a review thread exists, then GitHub). The
+// PR's line counts are on the Changes tab.
+import { useRef } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { PrDetail, PrState } from "../../contract.ts";
+import type { PrTarget } from "../queries.ts";
 import { ReviewChatIconButton } from "../review-chat/review-chat-button.tsx";
 import { IconLink } from "../ui/icon-button.tsx";
 import { PrIdentity } from "./pr-identity.tsx";
+import { ReviewSubmit } from "./review-submit.tsx";
 
-type PrHeaderProps = { pr: PrDetail; hasReviewThread: boolean };
+type PrHeaderProps = { target: PrTarget; pr: PrDetail; hasReviewThread: boolean };
 
-export function PrHeader({ pr, hasReviewThread }: PrHeaderProps) {
+// The title takes focus when Finish review goes while holding it, once the review is in.
+export function PrHeader({ target, pr, hasReviewThread }: PrHeaderProps) {
+  const title = useRef<HTMLHeadingElement>(null);
   return (
     <header className="shrink-0 px-7 pt-4 pb-3.5">
       <div className={MASTHEAD}>
         <PrStateTile state={pr.state} />
-        <h1 className="text-[17px] leading-6 font-semibold text-pretty break-words [grid-area:title]">{pr.title}</h1>
+        <h1 ref={title} tabIndex={-1} className="text-[17px] leading-6 font-semibold text-pretty break-words outline-none [grid-area:title]">
+          {pr.title}
+        </h1>
         {/* -my-0.5 centers the 28px buttons on the title's 24px first line; -mr-1.5 lines the last
             glyph, not its hit area, up with the header's right edge. */}
         <div className="-my-0.5 -mr-1.5 flex gap-1 justify-self-end [grid-area:actions]">
+          <ReviewSubmit target={target} focusAfter={title} />
           {hasReviewThread && <ReviewChatIconButton />}
           <IconLink icon="Github" label="Open on GitHub" href={pr.url} />
         </div>

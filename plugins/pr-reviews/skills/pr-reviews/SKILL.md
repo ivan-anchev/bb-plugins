@@ -217,7 +217,9 @@ wrote. The box has:
   ⌘B, ⌘I, ⌘E and ⌘K (Ctrl on Windows and Linux) wrap the selected text in
   bold, italic, `code` or a link.
 - **×** to discard: the text and the selection go.
-- **Ask about this** and **Comment** at the bottom. Both need some text.
+- **Ask about this** and **Comment** at the bottom. Both need some text. On a
+  PR you didn't write, **Add to review** sits between them (see "Reviewing on
+  GitHub").
 
 Esc in an empty box closes it and clears the lines; a box with text ignores
 Esc, so a draft is never lost to it. While the box is open, Esc elsewhere on
@@ -247,8 +249,9 @@ Every review thread GitHub has on the PR shows in each diff that holds it: the
 Changes tab's file diff and the guide step whose hunk has its lines. A thread
 sits under its last line, above any finding there, as one tinted block with no
 border. Each comment shows its author's avatar and name, `author` after the
-PR author's, `bot` after an app's, how long ago it was written (the exact time
-on hover), and its markdown, in GitHub's order. **Quote** and a link to the
+PR author's, `bot` after an app's, an amber **Pending** for a comment in your
+pending review, which only you can see until you submit it, how long ago it was
+written (the exact time on hover), and its markdown, in GitHub's order. **Quote** and a link to the
 comment on GitHub show when you hover or focus the comment.
 
 - **A long thread** (more than three comments) shows its first and latest
@@ -274,14 +277,16 @@ box there, keeping any text it held. **Quote** on a comment does the same and
 adds the comment as a `> ` quote after that text, as GitHub's Quote reply does.
 In a thread the box's buttons are **Ask about this**, which sends the review
 thread your question with the GitHub thread's comments, and **Reply** (⌘↵),
-which posts your text as a reply in that thread.
+which posts your text as a reply in that thread. While you have a pending
+review, **Reply** is **Add to review**, which adds the reply to it.
 
 ## Commenting on GitHub
 
 PR Reviews posts to GitHub only a review comment, reply or conversation
 comment you wrote or picked, when you click **Comment** or **Reply** (or press
-⌘↵, Ctrl+↵ off a Mac) in a comment box, from any tab. It posts nothing else: no
-review, approval or edit. Review threads never post. A conversation comment,
+⌘↵, Ctrl+↵ off a Mac) in a comment box, from any tab, and a review you add to
+and submit yourself (see "Reviewing on GitHub"). It posts nothing else: no
+edit, and no review or approval you didn't submit. Review threads never post. A conversation comment,
 from the Summary tab's box, goes to the PR's conversation, on no file.
 
 The comment goes through `gh` as your account, on the commit the diff shows,
@@ -318,6 +323,37 @@ often lines no longer in that commit's diff), no network, or a comment too
 long to hand to `gh`. When GitHub doesn't answer within a minute the comment
 may have been posted, so it says to check the PR before posting again, and
 never retries by itself.
+
+## Reviewing on GitHub
+
+On a PR you didn't write, the comment box on lines (in the Changes tab and in
+a guide) also offers **Add to review**, as GitHub's "Start a review" does. It
+adds your comment to your pending review on GitHub, starting one if you have
+none, or joining the one you have, even one started on github.com. No one else
+sees it until you submit the review; the comment shows in its thread marked
+**Pending**, and the box reads "Added to your review". GitHub puts a review
+comment on the PR's latest commit, so Add to review shows only on a diff of it.
+
+While you have a pending review:
+
+- **Finish review**, with the number of pending comments, sits at the top of
+  the page, beside Review chat, on every tab. It opens a summary field
+  (optional) and **Comment**, **Approve** or **Request changes**, then
+  **Submit review**, which publishes the review and its comments; or **Discard
+  review**, which asks once, then deletes the review and its comments. On your
+  own PR it offers Comment only, since GitHub refuses the others. The summary
+  stays when the popover closes, and while it holds text Esc does not leave
+  the PR. Once GitHub has it, the control says "Review submitted" or "Review
+  discarded" until the comments are read again, then goes.
+- The comment box offers only **Add to review** (⌘↵), on lines and in a
+  thread: GitHub refuses a comment or reply on its own then, as GitHub.com
+  does. On lines of an older commit it is disabled, with the reason.
+- If GitHub refuses the submit (a review submitted or discarded elsewhere, or
+  no network), its words show in Finish review and your summary stays.
+
+A review started elsewhere shows after Refresh. A Comment that GitHub refuses
+because a review went pending elsewhere says to add it to your review instead,
+and the box then offers Add to review.
 
 ## Reading a guide
 
@@ -508,8 +544,11 @@ tab, and to pin a reviewed commit's diff) for the project's `owner/name` on the
 machine that runs bb, and `git remote get-url origin` for a
 project whose remote bb did not record. On Start review and Update guide it
 also runs `git fetch` in the project's default checkout, which only adds the refs under
-`refs/pr-reviews/`. Its one write is `gh api --method POST
-repos/<owner>/<name>/pulls/<number>/comments`, run when you click Comment in
-the comment box. The diff pinned for each reviewed commit, each review run, and each guide are
+`refs/pr-reviews/`. Its writes are `gh api --method POST` to the PR's review
+comments, replies and issue comments, run when you click Comment or Reply in
+the comment box, and `gh api graphql` mutations for your pending review
+(`addPullRequestReviewThread`, `addPullRequestReviewThreadReply`,
+`submitPullRequestReview`, `deletePullRequestReview`), run when you click Add
+to review, Submit review or Discard. The diff pinned for each reviewed commit, each review run, and each guide are
 kept in the plugin's own SQLite database (`plugins/pr-reviews/data.db` in bb's data
 directory).

@@ -1,0 +1,252 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "reviewThreads": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0xMVQxNjozNDo0NFrOtkOCpQ=="
+          },
+          "nodes": [
+            {
+              "id": "PRRT_kwDOVq1kJs62QZ7i",
+              "isResolved": false,
+              "resolvedBy": null,
+              "isOutdated": false,
+              "path": "gamma.txt",
+              "subjectType": "LINE",
+              "line": 15,
+              "startLine": 15,
+              "diffSide": "RIGHT",
+              "startDiffSide": null,
+              "originalLine": 15,
+              "originalStartLine": null,
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0xMVQxNjozNDo0NlrPAAAAAQ6jMko="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4540333092,
+                    "url": "https://github.com/ivan-anchev/pr-reviews-review-mode-sandbox/pull/2#discussion_r4540333092",
+                    "body": "c1",
+                    "createdAt": "2026-11-11T16:16:37Z",
+                    "author": {
+                      "__typename": "User",
+                      "login": "ivan-anchev"
+                    },
+                    "state": "SUBMITTED",
+                    "pullRequestReview": {
+                      "id": "PRR_kwDOVq1kJs8AAAABXWRxxg"
+                    },
+                    "commit": {
+                      "oid": "1ac7a55987e5c4c3c832cbfbd641001ac56cf93a"
+                    },
+                    "originalCommit": {
+                      "oid": "1ac7a55987e5c4c3c832cbfbd641001ac56cf93a"
+                    },
+                    "diffHunk": "@@ -12,8 +12,8 @@ gamma line 11\n gamma line 12\n gamma line 13\n gamma line 14\n-gamma line 15\n-gamma line 16\n+gamma line 15 EDIT2"
+                  },
+                  {
+                    "databaseId": 4540543562,
+                    "url": "https://github.com/ivan-anchev/pr-reviews-review-mode-sandbox/pull/2#discussion_r4540543562",
+                    "body": "Pending reply",
+                    "createdAt": "2026-11-11T16:34:46Z",
+                    "author": {
+                      "__typename": "User",
+                      "login": "ivan-anchev"
+                    },
+                    "state": "PENDING",
+                    "pullRequestReview": {
+                      "id": "PRR_kwDOVq1kJs8AAAABXWhFPA"
+                    },
+                    "commit": {
+                      "oid": "1ac7a55987e5c4c3c832cbfbd641001ac56cf93a"
+                    },
+                    "originalCommit": {
+                      "oid": "1ac7a55987e5c4c3c832cbfbd641001ac56cf93a"
+                    },
+                    "diffHunk": "@@ -12,8 +12,8 @@ gamma line 11\n gamma line 12\n gamma line 13\n gamma line 14\n-gamma line 15\n-gamma line 16\n+gamma line 15 EDIT2"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_kwDOVq1kJs62QaSK",
+              "isResolved": false,
+              "resolvedBy": null,
+              "isOutdated": false,
+              "path": "gamma.txt",
+              "subjectType": "LINE",
+              "line": 16,
+              "startLine": 16,
+              "diffSide": "RIGHT",
+              "startDiffSide": null,
+              "originalLine": 16,
+              "originalStartLine": null,
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0xMVQxNjoxNjo0OVrPAAAAAQ6gBcE="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4540335553,
+                    "url": "https://github.com/ivan-anchev/pr-reviews-review-mode-sandbox/pull/2#discussion_r4540335553",
+                    "body": "c",
+                    "createdAt": "2026-11-11T16:16:49Z",
+                    "author": {
+                      "__typename": "User",
+                      "login": "ivan-anchev"
+                    },
+                    "state": "SUBMITTED",
+                    "pullRequestReview": {
+                      "id": "PRR_kwDOVq1kJs8AAAABXWSAoA"
+                    },
+                    "commit": {
+                      "oid": "1ac7a55987e5c4c3c832cbfbd641001ac56cf93a"
+                    },
+                    "originalCommit": {
+                      "oid": "1ac7a55987e5c4c3c832cbfbd641001ac56cf93a"
+                    },
+                    "diffHunk": "@@ -12,8 +12,8 @@ gamma line 11\n gamma line 12\n gamma line 13\n gamma line 14\n-gamma line 15\n-gamma line 16\n+gamma line 15 EDIT2\n+gamma line 16 EDIT2"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_kwDOVq1kJs62QaWH",
+              "isResolved": false,
+              "resolvedBy": null,
+              "isOutdated": false,
+              "path": "gamma.txt",
+              "subjectType": "LINE",
+              "line": 16,
+              "startLine": 16,
+              "diffSide": "RIGHT",
+              "startDiffSide": null,
+              "originalLine": 16,
+              "originalStartLine": null,
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0xMVQxNjoxNjo1MlrPAAAAAQ6gB44="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4540336014,
+                    "url": "https://github.com/ivan-anchev/pr-reviews-review-mode-sandbox/pull/2#discussion_r4540336014",
+                    "body": "c",
+                    "createdAt": "2026-11-11T16:16:52Z",
+                    "author": {
+                      "__typename": "User",
+                      "login": "ivan-anchev"
+                    },
+                    "state": "SUBMITTED",
+                    "pullRequestReview": {
+                      "id": "PRR_kwDOVq1kJs8AAAABXWSC7A"
+                    },
+                    "commit": {
+                      "oid": "1ac7a55987e5c4c3c832cbfbd641001ac56cf93a"
+                    },
+                    "originalCommit": {
+                      "oid": "1ac7a55987e5c4c3c832cbfbd641001ac56cf93a"
+                    },
+                    "diffHunk": "@@ -12,8 +12,8 @@ gamma line 11\n gamma line 12\n gamma line 13\n gamma line 14\n-gamma line 15\n-gamma line 16\n+gamma line 15 EDIT2\n+gamma line 16 EDIT2"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_kwDOVq1kJs62QoCf",
+              "isResolved": false,
+              "resolvedBy": null,
+              "isOutdated": false,
+              "path": "gamma.txt",
+              "subjectType": "LINE",
+              "line": 3,
+              "startLine": 3,
+              "diffSide": "RIGHT",
+              "startDiffSide": null,
+              "originalLine": 3,
+              "originalStartLine": null,
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0xMVQxNjoyNToyNVrPAAAAAQ6hdZA="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4540429712,
+                    "url": "https://github.com/ivan-anchev/pr-reviews-review-mode-sandbox/pull/2#discussion_r4540429712",
+                    "body": "probe pending thread",
+                    "createdAt": "2026-11-11T16:25:25Z",
+                    "author": {
+                      "__typename": "User",
+                      "login": "ivan-anchev"
+                    },
+                    "state": "SUBMITTED",
+                    "pullRequestReview": {
+                      "id": "PRR_kwDOVq1kJs8AAAABXWZBrA"
+                    },
+                    "commit": {
+                      "oid": "1ac7a55987e5c4c3c832cbfbd641001ac56cf93a"
+                    },
+                    "originalCommit": {
+                      "oid": "1ac7a55987e5c4c3c832cbfbd641001ac56cf93a"
+                    },
+                    "diffHunk": "@@ -1,6 +1,6 @@\n gamma line 1\n gamma line 2\n-gamma line 3\n+gamma line 3 EDIT2"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_kwDOVq1kJs62Q4Kl",
+              "isResolved": false,
+              "resolvedBy": null,
+              "isOutdated": false,
+              "path": "gamma.txt",
+              "subjectType": "LINE",
+              "line": 16,
+              "startLine": 15,
+              "diffSide": "RIGHT",
+              "startDiffSide": "RIGHT",
+              "originalLine": 16,
+              "originalStartLine": 15,
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0xMVQxNjozNDo0NFrPAAAAAQ6jMPI="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4540543218,
+                    "url": "https://github.com/ivan-anchev/pr-reviews-review-mode-sandbox/pull/2#discussion_r4540543218",
+                    "body": "Pending range comment",
+                    "createdAt": "2026-11-11T16:34:44Z",
+                    "author": {
+                      "__typename": "User",
+                      "login": "ivan-anchev"
+                    },
+                    "state": "PENDING",
+                    "pullRequestReview": {
+                      "id": "PRR_kwDOVq1kJs8AAAABXWhFPA"
+                    },
+                    "commit": {
+                      "oid": "1ac7a55987e5c4c3c832cbfbd641001ac56cf93a"
+                    },
+                    "originalCommit": {
+                      "oid": "1ac7a55987e5c4c3c832cbfbd641001ac56cf93a"
+                    },
+                    "diffHunk": "@@ -12,8 +12,8 @@ gamma line 11\n gamma line 12\n gamma line 13\n gamma line 14\n-gamma line 15\n-gamma line 16\n+gamma line 15 EDIT2\n+gamma line 16 EDIT2"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

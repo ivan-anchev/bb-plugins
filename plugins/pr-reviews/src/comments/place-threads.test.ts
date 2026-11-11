@@ -30,7 +30,7 @@ const at = (commit: string, end: LineRef, start: LineRef | null = null): LineAnc
 let nextId = 0;
 function thread(subject: ReviewThread["subject"], { path = PATH, outdated = false } = {}): ReviewThread {
   const id = ++nextId;
-  return { id: `PRRT_${id}`, path, resolvedBy: null, outdated, subject, comments: [{ id, url: `https://github.com/o/r/pull/1#discussion_r${id}`, author: { login: "octocat", bot: false }, body: "Why?", createdAt: "2026-11-10T08:00:00Z" }] };
+  return { id: `PRRT_${id}`, path, resolvedBy: null, outdated, subject, comments: [{ id, url: `https://github.com/o/r/pull/1#discussion_r${id}`, author: { login: "octocat", bot: false }, body: "Why?", createdAt: "2026-11-10T08:00:00Z", pending: false }] };
 }
 const onLines = (...anchors: LineAnchor[]) => ({ kind: "lines" as const, anchors, excerpt: [] });
 
