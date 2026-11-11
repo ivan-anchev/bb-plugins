@@ -104,7 +104,7 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
       {/* why `minmax(0,1fr)`: an implicit `auto` track grows to an outdated thread's widest code line,
           so the excerpt would widen the thread, not scroll in it. */}
       {threads.file.length > 0 && (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-2.5 pt-2.5 pr-2.5 pb-3 pl-(--pr-reviews-thread-edge)">
+        <div className={`grid grid-cols-[minmax(0,1fr)] gap-2 pr-2.5 pl-(--pr-reviews-thread-edge) ${THREAD_GAP}`}>
           {threads.file.map((placed) => (
             <div key={placed.thread.id}>{threadCard(placed.thread, placed)}</div>
           ))}
@@ -134,9 +134,12 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
 
 // why: a note is slotted into the diff's rows and would inherit their code font, `white-space:
 // pre` and the code theme's colour; it reads as the page's text.
+const NOTE_BASE = "grid gap-3 pr-2.5 font-sans whitespace-normal text-foreground";
 // Its padding lines it up with the code's text.
-const NOTE_BASE = "grid gap-3 pt-3 pr-2.5 pb-3.5 font-sans whitespace-normal text-foreground";
-const NOTE_CLASS = `${NOTE_BASE} pl-2.5`;
+const NOTE_CLASS = `${NOTE_BASE} pt-3 pb-3.5 pl-2.5`;
+
+// A review thread sits close to the code, 4px from the rows around it, under a line and at the file alike.
+const THREAD_GAP = "py-1";
 
 // A review thread's avatars line up with the line numbers, on a line and at the file alike. Pierre
 // insets its numbers 2ch from the diff's left edge, 14.4px at DIFF_TEXT_CLASS's 12px, and a thread
@@ -144,7 +147,7 @@ const NOTE_CLASS = `${NOTE_BASE} pl-2.5`;
 const THREAD_EDGE = "[--pr-reviews-thread-edge:4.4px]";
 
 // Under a line the card reaches back across the gutter, which the diff's options raise it over.
-const THREAD_NOTE_CLASS = `${NOTE_BASE} ml-[calc(var(--pr-reviews-thread-edge)-var(--diffs-column-number-width))]`;
+const THREAD_NOTE_CLASS = `${NOTE_BASE} ${THREAD_GAP} ml-[calc(var(--pr-reviews-thread-edge)-var(--diffs-column-number-width))]`;
 
 // Pierre's sides are the diff's columns: deletions is the old side, additions the new.
 const sideOfPierre = (side: SelectedLineRange["side"]): LineRef["side"] => (side === "deletions" ? "old" : "new");

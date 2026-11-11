@@ -78,22 +78,35 @@ function AnnotatedDiff({ file, hunk, findings, head, comments, withFileThreads }
       ),
     [findings],
   );
-  return <PrDiff file={drawn} head={head} newContent={null} settings={DEFAULT_DIFF_SETTINGS} notes={notes} threads={threads} />;
+  return (
+    <div className={FLUSH_DIFF}>
+      <PrDiff file={drawn} head={head} newContent={null} settings={DEFAULT_DIFF_SETTINGS} notes={notes} threads={threads} />
+    </div>
+  );
 }
 
-const FILE_ROW = "flex items-baseline gap-3 px-3 pt-2.5 pb-2 text-[12.5px]";
+// A guide's diff has no band of the code's background above its first row and below its last.
+const FLUSH_DIFF = "[--diffs-gap-block:0px]";
+
+// The file row stays at the top of the guide's page while its diff scrolls under it, on the
+// block's own tint made opaque (bg-muted/40 over the page).
+const FILE_ROW =
+  "sticky top-0 z-10 flex items-baseline gap-3 bg-[color-mix(in_srgb,var(--muted)_40%,var(--background))] px-3 pt-2.5 pb-2 text-[12.5px]";
 const ROW_NOTE = "ml-auto text-right text-subtle-foreground";
 
 type BlockRef = { ref?: Ref<HTMLElement> };
 
 // tabIndex -1: a jump from the step's file list focuses the block, which is not a tab stop. The
-// scroll margin keeps the jump's landing clear of the page's top edge.
+// scroll margin keeps the jump's landing clear of the page's top edge, and anything in the block
+// that scrolls into view, such as a focused button, clear of the sticky file row.
+// why overflow-clip, not hidden: hidden makes the block a scroll container, and the file row would
+// stick inside it, which never scrolls, rather than in the page.
 function Block({ ref, children }: BlockRef & { children: ReactNode }) {
   return (
     <section
       ref={ref}
       tabIndex={-1}
-      className="scroll-mt-[18px] overflow-hidden rounded-lg bg-muted/40 outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      className="scroll-mt-[18px] overflow-clip rounded-lg bg-muted/40 outline-none focus-visible:ring-1 focus-visible:ring-ring [&_*]:scroll-mt-12"
     >
       {children}
     </section>

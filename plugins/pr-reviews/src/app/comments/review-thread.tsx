@@ -5,8 +5,8 @@
 // thread is one row that opens it. A thread at its file that lost its lines says "Outdated" over
 // the lines it was written on. No borders, pills or dividers: spacing separates the comments, and
 // the comment box is the only raised surface (app.css holds the tint). The box sits 6px in from the
-// card's edges, its corners concentric with the card's; the avatars sit 10px in, which a diff lines
-// up with its line numbers (pr-diff.tsx).
+// card's 12px corners, so its own are 6px, concentric with them; the avatars sit 10px in, which a
+// diff lines up with its line numbers (pr-diff.tsx).
 import { useMemo, useState, type ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { FileThread } from "../../comments/place-threads.ts";
@@ -51,7 +51,7 @@ export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: Rev
       ref={sectionRef}
       tabIndex={-1}
       aria-label={`Review thread by ${thread.comments[0].author.login}`}
-      className={`${SURFACE} rounded-[18px] px-1.5 pt-3 pb-1.5 outline-none focus-visible:ring-1 focus-visible:ring-ring`}
+      className={`${SURFACE} rounded-[12px] px-1.5 pt-2.5 pb-1.5 outline-none focus-visible:ring-1 focus-visible:ring-ring`}
     >
       <div className="px-1">
         {atFile !== null && atFile.why !== "file" && <Original thread={thread} why={atFile.why} />}
@@ -65,7 +65,7 @@ export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: Rev
           onQuote={(comment, from) => onReply({ quote: quoteReplyText(comment.body), from })}
         />
         {box === null && (
-          <div className="pr-reviews-thread-foot mt-2 mb-0.5 ml-5 flex items-center gap-1">
+          <div className="pr-reviews-thread-foot mt-1.5 mb-0.5 ml-5 flex items-center gap-1">
             <Button variant="ghost" size="small" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
               Reply
             </Button>
@@ -83,7 +83,7 @@ export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: Rev
           </div>
         )}
       </div>
-      {box !== null && <div className="mt-3">{box}</div>}
+      {box !== null && <div className="mt-2.5 [--pr-reviews-box-radius:6px]">{box}</div>}
     </section>
   );
 }
@@ -105,9 +105,9 @@ type CommentsProps = {
 function Comments({ thread, shown, hidden, focus, prAuthor, onShowAll, onQuote }: CommentsProps) {
   const [, second] = thread.comments;
   return (
-    <ol className="grid gap-3.5">
+    <ol className="grid gap-3">
       {shown.map((comment, index) => (
-        <li key={comment.id} className="grid gap-3.5">
+        <li key={comment.id} className="grid gap-3">
           <GitHubCommentView
             ref={comment === second ? focus.to : undefined}
             comment={comment}

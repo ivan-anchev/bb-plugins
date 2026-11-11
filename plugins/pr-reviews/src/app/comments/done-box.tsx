@@ -9,8 +9,11 @@ import type { BoxOutcome } from "../diff/line-selection.ts";
 import { useOpenReviewChat } from "../review-chat/review-chat-button.tsx";
 import { Button, buttonClass } from "../ui/button.tsx";
 
-/** The box's shell, writing or done: one ring in every state, focused or not, as bb's composer has (app.css). */
-export const BOX_CLASS = "rounded-xl border border-(--pr-reviews-box-ring) bg-background shadow-[0_1px_2px_rgb(0_0_0/.04),0_6px_16px_-8px_rgb(0_0_0/.14)]";
+/**
+ * The box's shell, writing or done: one ring in every state, focused or not, as bb's composer has
+ * (app.css). Its corners are 12px, or what a surface it sits in sets in `--pr-reviews-box-radius`.
+ */
+export const BOX_CLASS = "rounded-[var(--pr-reviews-box-radius,12px)] border border-(--pr-reviews-box-ring) bg-background shadow-[0_1px_2px_rgb(0_0_0/.04),0_6px_16px_-8px_rgb(0_0_0/.14)]";
 
 /** `takeFocus`: the composer this replaces had focus, which would otherwise drop to the page body. */
 type DoneBoxProps = { outcome: BoxOutcome; takeFocus: boolean; onDone(): void };
