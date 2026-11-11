@@ -1,10 +1,12 @@
 // What a comment on some lines becomes on GitHub, built exactly: a line comment when GitHub can
-// anchor to the lines, else a file comment that quotes them. The comment box checks the plan as
-// the reader writes, and Comment sends its request as is. Pure.
+// anchor to the lines, else a file comment that quotes them. And a reply in a review thread. The
+// comment box checks the plan as the reader writes, and Comment or Reply sends its request as is.
+// Pure.
 import { commitsSince, shortSha, type PrDetail } from "../contract.ts";
 import type { Finding } from "../guide/guide-schema.ts";
 import { GITHUB_BODY_LIMIT, type CodeQuote, type CommentRequest } from "./comment-schema.ts";
 import { inOneHunk, linesLabel, quoteOf, type LineSpan } from "./line-span.ts";
+import type { ReviewThread } from "./thread-schema.ts";
 
 /** `why`: for a file comment, why the lines could not carry a line comment ("some of these lines …"). Display only. */
 export type CommentPlan = { request: CommentRequest; why: string | null };
@@ -44,13 +46,23 @@ export function checkComment(span: LineSpan, pr: PrDetail, text: string): Commen
   const planned = planComment(span, since !== null, text);
   if ("blocked" in planned) return planned;
   const { request, why } = planned;
-  if (request.body.length > GITHUB_BODY_LIMIT) {
-    return { blocked: `This comment is ${request.body.length.toLocaleString("en")} characters, and GitHub takes at most ${GITHUB_BODY_LIMIT.toLocaleString("en")}. Shorten it, or select fewer lines.` };
-  }
+  if (request.body.length > GITHUB_BODY_LIMIT) return { blocked: `${tooLong(request.body)} Shorten it, or select fewer lines.` };
   const notes = [since === 0 ? null : `Comments on commit ${shortSha(span.commit)}, not the latest.`, why === null ? null : `Posts as a file comment: ${why}.`];
   const note = notes.filter((line) => line !== null).join(" ");
   return { request, note: note === "" ? null : note };
 }
+
+/** A reply exactly as GitHub is asked to post it: in the thread that its first comment, `commentId`, opens. */
+export type ReplyRequest = { commentId: number; body: string };
+
+/** What Reply would post in the thread with this text, trimmed; or why it can't be posted. */
+export function checkReply(thread: ReviewThread, text: string): { request: ReplyRequest } | BlockedComment {
+  const body = text.trim();
+  if (body.length > GITHUB_BODY_LIMIT) return { blocked: `${tooLong(body)} Shorten it.` };
+  return { request: { commentId: thread.comments[0].id, body } };
+}
+
+const tooLong = (body: string) => `This comment is ${body.length.toLocaleString("en")} characters, and GitHub takes at most ${GITHUB_BODY_LIMIT.toLocaleString("en")}.`;
 
 /** A finding as a comment: its title in bold, then its body. The guide's priority stays out. */
 export const findingCommentText = (finding: Finding): string => `**${finding.title}**\n\n${finding.body}`;

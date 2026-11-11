@@ -26,6 +26,12 @@ export const useChanges = (target: PrTarget, enabled: boolean) => experimental_u
 /** One file's text at a commit. `enabled`: false reads nothing, for a file whose diff can't expand. */
 export const useFileContent = (input: FileAtCommit, enabled: boolean) => experimental_useRpcQuery({ contract, method: "fileContent", input, enabled });
 
+/**
+ * Every comment GitHub has on the PR. The Changes tab and each guide diff read the same entry; a
+ * post re-reads it (its tag), so a new comment or reply shows in place.
+ */
+export const useComments = (target: PrTarget) => experimental_useRpcQuery({ contract, method: "comments", input: target });
+
 export const useSelectProject = () => experimental_useRpcMutation({ contract, method: "selectProject" });
 
 type ReviewAction = "startReview" | "cancelReview" | "nudgeReview" | "updateGuide";
@@ -42,4 +48,8 @@ export const useAskAboutFinding = () => experimental_useRpcMutation({ contract, 
 
 export const useAskAboutLines = () => experimental_useRpcMutation({ contract, method: "askAboutLines" });
 
+export const useAskAboutGitHubThread = () => experimental_useRpcMutation({ contract, method: "askAboutGitHubThread" });
+
 export const usePostComment = () => experimental_useRpcMutation({ contract, method: "postComment" });
+
+export const useReplyToThread = () => experimental_useRpcMutation({ contract, method: "replyToThread" });

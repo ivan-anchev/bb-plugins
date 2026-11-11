@@ -1,15 +1,28 @@
-// The only module that runs `gh`. It parses gh's JSON once into the canonical PR types, posts the
-// review comments a reader chose to, and maps every process failure to a refusal the app can show
+// The only module that runs `gh`. It parses gh's JSON once into the canonical PR types, reads the
+// PR's comments, posts the comments a reader chose to, and maps every process failure to a refusal the app can show
 // beside its data or a kept draft.
 import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import type { CommentRequest } from "../comments/comment-schema.ts";
+import type { PrComments, ReviewThread } from "../comments/thread-schema.ts";
 import type { PrDetail, PrSummary } from "../contract.ts";
 import { statusCheckRollupSchema } from "./checks.ts";
-import { commentApiArgs } from "./comment-args.ts";
+import { commentApiArgs, conversationCommentApiArgs, replyApiArgs } from "./comment-args.ts";
 import { ghPostRefusalFor, ghRefusalFor } from "./gh-refusal.ts";
 import { parseHostCommandFailure, runHostCommand } from "./host-command.ts";
 import type { PrCommits } from "./pr-commits.ts";
+import {
+  allPages,
+  CONVERSATION_QUERY,
+  graphqlArgs,
+  parseConversationPage,
+  parseThreadCommentsPage,
+  parseThreadsPage,
+  prVariables,
+  THREAD_COMMENTS_QUERY,
+  THREADS_QUERY,
+  toThread,
+} from "./pr-comments.ts";
 import type { Repo } from "./repo.ts";
 import { latestReviewsSchema, reviewRequestsSchema, toReviewers } from "./reviewers.ts";
 
@@ -107,6 +120,30 @@ export async function readFileAt(repo: Repo, sha: string, path: string): Promise
   return Buffer.from(file.content, "base64").toString("utf8");
 }
 
+/** Every review thread on the PR and every comment of its conversation, all pages of each. */
+export async function readPrComments(repo: Repo, number: number): Promise<PrComments> {
+  const [threads, conversation] = await Promise.all([reviewThreadsOf(repo, number), conversationOf(repo, number)]);
+  return { threads, conversation };
+}
+
+async function reviewThreadsOf(repo: Repo, number: number): Promise<ReviewThread[]> {
+  const pr = prVariables(repo, number);
+  const threads = await allPages(null, async (cursor) => parseThreadsPage(await graphql(THREADS_QUERY, { ...pr, cursor })));
+  return Promise.all(
+    threads.map(async (thread) => {
+      const comments = await allPages(thread.comments, async (cursor) => parseThreadCommentsPage(await graphql(THREAD_COMMENTS_QUERY, { id: thread.id, cursor })));
+      return toThread(thread, comments);
+    }),
+  );
+}
+
+async function conversationOf(repo: Repo, number: number) {
+  const pr = prVariables(repo, number);
+  return allPages(null, async (cursor) => parseConversationPage(await graphql(CONVERSATION_QUERY, { ...pr, cursor })));
+}
+
+const graphql = async (query: string, variables: Record<string, string | number | null>): Promise<unknown> => JSON.parse(await runGh(graphqlArgs(query, variables)));
+
 async function commitsOf(repo: Repo, number: number): Promise<PrCommits> {
   const json = await runGh(["pr", "view", String(number), "-R", repo, "--json", "headRefOid,baseRefOid"]);
   const { headRefOid, baseRefOid } = z.object({ headRefOid: z.string(), baseRefOid: z.string() }).parse(JSON.parse(json));
@@ -124,9 +161,16 @@ async function runGh(args: string[]): Promise<string> {
 const postedCommentSchema = z.object({ html_url: z.string() });
 
 /** Posts the review comment exactly as requested. Resolves to its page on GitHub. */
-export async function postComment(repo: Repo, number: number, request: CommentRequest): Promise<{ url: string }> {
-  const json = await runGhPost(commentApiArgs(repo, number, request));
-  return { url: postedCommentSchema.parse(JSON.parse(json)).html_url };
+export const postComment = (repo: Repo, number: number, request: CommentRequest) => post(commentApiArgs(repo, number, request));
+
+/** Posts a reply in the review thread that `commentId`, its first comment, opens. */
+export const postReply = (repo: Repo, number: number, commentId: number, body: string) => post(replyApiArgs(repo, number, commentId, body));
+
+/** Posts a comment on the PR's conversation, on no file. */
+export const postConversationComment = (repo: Repo, number: number, body: string) => post(conversationCommentApiArgs(repo, number, body));
+
+async function post(args: string[]): Promise<{ url: string }> {
+  return { url: postedCommentSchema.parse(JSON.parse(await runGhPost(args))).html_url };
 }
 
 // why its own mapping: a POST that timed out may have reached GitHub (ghPostRefusalFor).

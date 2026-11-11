@@ -23,3 +23,44 @@
   --trees-status-modified-override: var(--muted-foreground);
   --trees-status-renamed-override: var(--muted-foreground);
 }
+
+/* A GitHub review thread in a diff is one tinted card ("Tint"), no dividers inside; the open comment
+   box is the only raised surface in it. The card's edge is a ring shadow, not a border: a 1px ring
+   with a soft layered shadow in the light theme, and in the dark one, where shadows don't show on a
+   near-black page, a lone white ring. The box's ring (below) is the stronger of the two, so the
+   box still reads as the card's one raised surface. bb puts `.dark` on the page for its dark theme. */
+:root {
+  --pr-reviews-thread-tint: color-mix(in oklab, var(--foreground) 3.5%, var(--background));
+  --pr-reviews-thread-tint-hover: color-mix(in oklab, var(--foreground) 6.5%, var(--background));
+  --pr-reviews-thread-ring: 0 0 0 1px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04), 0 2px 6px -2px rgb(0 0 0 / 0.06);
+}
+.dark {
+  --pr-reviews-thread-tint: color-mix(in oklab, var(--foreground) 5.5%, var(--background));
+  --pr-reviews-thread-tint-hover: color-mix(in oklab, var(--foreground) 9%, var(--background));
+  --pr-reviews-thread-ring: 0 0 0 1px rgb(255 255 255 / 0.08);
+}
+/* The comment box's ring: bb's composer ring (`border-border`), with a step of foreground so it
+   still reads on the tint, and reads stronger than the card's ring 6px outside it. A theme may draw
+   `--border` fainter than the tint (white 3% in a dark theme over a 5.5% tint), and then the box
+   has no edge. */
+:root {
+  --pr-reviews-box-ring: color-mix(in oklab, var(--foreground) 14%, var(--border));
+}
+/* The comment box's Write/Preview segmented control: a track recessed a step into the box, and a
+   thumb raised out of it. In the light theme the thumb is the box's own white, lifted by a hairline
+   ring and a 1px shadow. In the dark one, where shadows don't show, it is the theme's selected
+   state (`--state-active`, translucent) over the track, inside a lone white ring: bb's dark theme
+   draws its muted text nearly as bright as its foreground, so the thumb carries the selection. */
+:root {
+  --pr-reviews-segment-track: color-mix(in oklab, var(--foreground) 6%, var(--background));
+  --pr-reviews-segment-thumb: var(--background);
+  --pr-reviews-segment-thumb-ring: 0 0 0 1px rgb(0 0 0 / 0.07), 0 1px 2px rgb(0 0 0 / 0.08);
+}
+.dark {
+  --pr-reviews-segment-thumb: var(--state-active);
+  --pr-reviews-segment-thumb-ring: 0 0 0 1px rgb(255 255 255 / 0.06);
+}
+/* The footer's ghost buttons hover to the tint's own step, not the page's hover state. */
+.pr-reviews-thread-foot button:hover {
+  background: var(--pr-reviews-thread-tint-hover);
+}

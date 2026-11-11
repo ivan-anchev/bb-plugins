@@ -58,7 +58,7 @@ test("a reply to a box that has since moved to other lines leaves the moved box 
   await firstSent;
 
   assert.equal(lines, moved);
-  assert.deepEqual([lines.box?.at, lines.box?.stage, lines.draft], [LINES_20_22, { kind: "writing", sent: null }, "Draft B, not sent"]);
+  assert.deepEqual([lines.box?.kind === "lines" && lines.box.at, lines.box?.stage, lines.draft], [LINES_20_22, { kind: "writing", sent: null }, "Draft B, not sent"]);
 
   await send(second, Promise.resolve(), "Draft B, not sent");
 

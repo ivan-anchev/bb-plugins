@@ -1,5 +1,6 @@
 // The comment box once it has done its job, in the same shell so the result lands where the text
-// was: the posted comment with its link, or word that the question went to the review thread.
+// was: word that the comment posted, with its link (the comment itself shows in its thread), or
+// that the question went to the review thread.
 // And the same word in a box still being written, for a request that went while the reader
 // changed its text.
 import { useEffect, useRef } from "react";
@@ -7,10 +8,12 @@ import { experimental_Icon as Icon, UrlLink } from "@get-bb/plugin-sdk/app";
 import type { BoxOutcome } from "../diff/line-selection.ts";
 import { useOpenReviewChat } from "../review-chat/review-chat-button.tsx";
 import { Button, buttonClass } from "../ui/button.tsx";
-import { Prose } from "../ui/prose.tsx";
 
-/** The box's shell, writing or done. */
-export const BOX_CLASS = "rounded-xl border border-border bg-background shadow-[0_1px_2px_rgb(0_0_0/.04),0_6px_16px_-8px_rgb(0_0_0/.14)]";
+/**
+ * The box's shell, writing or done: one ring in every state, focused or not, as bb's composer has
+ * (app.css). Its corners are 12px, or what a surface it sits in sets in `--pr-reviews-box-radius`.
+ */
+export const BOX_CLASS = "rounded-[var(--pr-reviews-box-radius,12px)] border border-(--pr-reviews-box-ring) bg-background shadow-[0_1px_2px_rgb(0_0_0/.04),0_6px_16px_-8px_rgb(0_0_0/.14)]";
 
 /** `takeFocus`: the composer this replaces had focus, which would otherwise drop to the page body. */
 type DoneBoxProps = { outcome: BoxOutcome; takeFocus: boolean; onDone(): void };
@@ -34,7 +37,7 @@ export function DoneBox({ outcome, takeFocus, onDone }: DoneBoxProps) {
         onDone();
       }}
     >
-      <div className={`flex min-h-9 flex-wrap items-center gap-2 pt-2 pr-2 pl-[18px] ${outcome.kind === "asked" ? "pb-2" : ""}`}>
+      <div className="flex min-h-9 flex-wrap items-center gap-2 pt-2 pr-2 pb-2 pl-[18px]">
         <p role="status" className="flex items-center gap-1.5 text-[13px] font-medium text-foreground">
           <Icon name="Check" className="size-3.5 text-success-foreground" aria-hidden />
           {outcome.kind === "commented" ? "Commented" : "Sent to the review thread"}
@@ -56,11 +59,6 @@ export function DoneBox({ outcome, takeFocus, onDone }: DoneBoxProps) {
           </Button>
         </div>
       </div>
-      {outcome.kind === "commented" && (
-        <div className="px-[18px] pt-1.5 pb-3.5 text-[13px] leading-[22px] text-foreground">
-          <Prose text={outcome.body} />
-        </div>
-      )}
     </div>
   );
 }

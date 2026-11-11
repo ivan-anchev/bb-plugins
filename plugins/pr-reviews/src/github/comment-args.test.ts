@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { repoSchema } from "./repo.ts";
-import { commentApiArgs } from "./comment-args.ts";
+import { commentApiArgs, conversationCommentApiArgs, replyApiArgs } from "./comment-args.ts";
 
 const REPO = repoSchema.parse("ivan-anchev/bb-plugins");
 const COMMIT = "3f9c2ab0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6";
@@ -36,4 +36,14 @@ test("text that -F would read as a file or a number goes by -f, whole, as one ar
   assert.deepEqual(args.slice(4, 6), ["-f", `body=${body}`]);
   assert.deepEqual(args.slice(8, 10), ["-f", "path=123"]);
   assert.deepEqual(args.flatMap((arg, index) => (arg === "-F" ? [args[index + 1]] : [])), []);
+});
+
+test("a reply: the thread's first comment in the path, the body by -f and nothing else", () => {
+  const body = "@octocat > quoted\n\nAgreed.";
+  assert.deepEqual(replyApiArgs(REPO, 41, 2512345678, body), ["api", "--method", "POST", "repos/ivan-anchev/bb-plugins/pulls/41/comments/2512345678/replies", "-f", `body=${body}`]);
+});
+
+test("a conversation comment goes to the PR's issue, the body by -f and nothing else", () => {
+  const body = "> Looks good\n\nThanks!";
+  assert.deepEqual(conversationCommentApiArgs(REPO, 41, body), ["api", "--method", "POST", "repos/ivan-anchev/bb-plugins/issues/41/comments", "-f", `body=${body}`]);
 });
