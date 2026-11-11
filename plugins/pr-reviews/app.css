@@ -46,6 +46,19 @@
 :root {
   --pr-reviews-box-ring: color-mix(in oklab, var(--foreground) 14%, var(--border));
 }
+/* The comment box's Write/Preview segmented control: a track recessed a step into the box, and a
+   thumb raised out of it. In the light theme the thumb is the box's own white, lifted by a hairline
+   ring and a 1px shadow. In the dark one, where shadows don't show, it is a step lighter than the
+   track inside a lone white ring. */
+:root {
+  --pr-reviews-segment-track: color-mix(in oklab, var(--foreground) 6%, var(--background));
+  --pr-reviews-segment-thumb: var(--background);
+  --pr-reviews-segment-thumb-ring: 0 0 0 1px rgb(0 0 0 / 0.07), 0 1px 2px rgb(0 0 0 / 0.08);
+}
+.dark {
+  --pr-reviews-segment-thumb: color-mix(in oklab, var(--foreground) 13%, var(--background));
+  --pr-reviews-segment-thumb-ring: 0 0 0 1px rgb(255 255 255 / 0.06);
+}
 /* The footer's ghost buttons hover to the tint's own step, not the page's hover state. */
 .pr-reviews-thread-foot button:hover {
   background: var(--pr-reviews-thread-tint-hover);
