@@ -24,21 +24,27 @@
   --trees-status-renamed-override: var(--muted-foreground);
 }
 
-/* A GitHub review thread in a diff is one recessed surface ("Tint"): no border, no dividers; the
-   open comment box is the only raised one. bb puts `.dark` on the page for its dark theme. */
+/* A GitHub review thread in a diff is one tinted card ("Tint"), no dividers inside; the open comment
+   box is the only raised surface in it. The card's edge is a ring shadow, not a border: a 1px ring
+   with a soft layered shadow in the light theme, and in the dark one, where shadows don't show on a
+   near-black page, a lone white ring. The box's ring (below) is the stronger of the two, so the
+   box still reads as the card's one raised surface. bb puts `.dark` on the page for its dark theme. */
 :root {
   --pr-reviews-thread-tint: color-mix(in oklab, var(--foreground) 3.5%, var(--background));
   --pr-reviews-thread-tint-hover: color-mix(in oklab, var(--foreground) 6.5%, var(--background));
+  --pr-reviews-thread-ring: 0 0 0 1px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04), 0 2px 6px -2px rgb(0 0 0 / 0.06);
 }
 .dark {
   --pr-reviews-thread-tint: color-mix(in oklab, var(--foreground) 5.5%, var(--background));
   --pr-reviews-thread-tint-hover: color-mix(in oklab, var(--foreground) 9%, var(--background));
+  --pr-reviews-thread-ring: 0 0 0 1px rgb(255 255 255 / 0.08);
 }
 /* The comment box's ring: bb's composer ring (`border-border`), with a step of foreground so it
-   still reads on the tint. A theme may draw `--border` fainter than the tint (white 3% in a dark
-   theme over a 5.5% tint), and then the box has no edge. */
+   still reads on the tint, and reads stronger than the card's ring 6px outside it. A theme may draw
+   `--border` fainter than the tint (white 3% in a dark theme over a 5.5% tint), and then the box
+   has no edge. */
 :root {
-  --pr-reviews-box-ring: color-mix(in oklab, var(--foreground) 8%, var(--border));
+  --pr-reviews-box-ring: color-mix(in oklab, var(--foreground) 14%, var(--border));
 }
 /* The footer's ghost buttons hover to the tint's own step, not the page's hover state. */
 .pr-reviews-thread-foot button:hover {
