@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request with Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (Write and Preview tabs, Ask about this to ask the review thread, Comment to post a GitHub review comment on an explicit click; review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request with Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (Write and Preview tabs, a Send as switch of Ask to ask the review thread, Comment to post a GitHub review comment and Review to add it to a pending review, and one send button; nothing posts before you send, and review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -217,9 +217,19 @@ wrote. The box has:
   ⌘B, ⌘I, ⌘E and ⌘K (Ctrl on Windows and Linux) wrap the selected text in
   bold, italic, `code` or a link.
 - **×** to discard: the text and the selection go.
-- **Ask about this** and **Comment** at the bottom. Both need some text. On a
-  PR you didn't write, **Add to review** sits between them (see "Reviewing on
-  GitHub").
+- **Send as** at the bottom right, a switch of what your text goes as:
+  **Ask** (the review thread), **Comment** (GitHub, at once) and, on a PR you
+  didn't write, **Review** (your pending GitHub review; see "Reviewing on
+  GitHub"). ← and → move between the ones that can send. One that can't stays
+  greyed out, its tooltip saying why. The box opens on the one you last picked
+  in any box, where it can send; otherwise on Comment, or on Review while you
+  have a pending review. The placeholder says what your text goes as. In a box
+  under 470px wide the switch shows icons alone, each naming itself in its
+  tooltip.
+- The round **send** button after it (⌘↵, Ctrl+↵ off a Mac) sends your text
+  as the switch says; its tooltip names the action, such as "Comment (⌘↵)".
+  It needs some text. The Summary tab's box has no switch: one **Comment**
+  button.
 
 Esc in an empty box closes it and clears the lines; a box with text ignores
 Esc, so a draft is never lost to it. While the box is open, Esc elsewhere on
@@ -227,15 +237,16 @@ the page, after a click outside it, does nothing; with nothing open, Esc does
 what it always does. Pressing the one selected line's number again closes an
 empty box; a box with text stays where it is, with nothing selected.
 
-**Ask about this** messages the review thread, queued behind anything it is
+Sent as **Ask**, your text goes to the review thread, queued behind anything it is
 doing: the file, the lines and their sides, the commit the diff shows, the
 selected lines themselves (marked as untrusted PR data) and your text, as
 markdown. The box then says "Sent to the review thread", with **Open Review
 chat**, where the answer arrives, and **Done**. With no review thread yet Ask is
-disabled and the box says "Start a review first". If the send fails, the text
-stays in the box with the error beside the buttons until you change the text.
+disabled, its tooltip saying to start an agent review. If the send fails, the
+text stays in the box with the error beside the switch until you change the
+text.
 
-If you change the text while Ask or Comment is still sending, the box stays
+If you change the text while it is still sending, the box stays
 open with your new text, unsent. A line above the buttons says the earlier text
 went ("Commented with your earlier text." with **View on GitHub ↗**, or "Sent
 your earlier text to the review thread." with **Open Review chat**), and Esc
@@ -273,18 +284,19 @@ text changes shows them under its one line, in a step or under "Not in this
 guide".
 
 **Reply** and **Ask about this**, under a thread, open the diff's one comment
-box there, keeping any text it held. **Quote** on a comment does the same and
-adds the comment as a `> ` quote after that text, as GitHub's Quote reply does.
-In a thread the box's buttons are **Ask about this**, which sends the review
-thread your question with the GitHub thread's comments, and **Reply** (⌘↵),
-which posts your text as a reply in that thread. While you have a pending
-review, **Reply** is **Add to review**, which adds the reply to it.
+box there, keeping any text it held, on Comment (or Review, if you last
+picked it) and on Ask. **Quote** on a comment does the same on the mode you
+last picked, and adds the comment as a `> ` quote after that text, as GitHub's
+Quote reply does. In a thread, **Ask** sends the review thread your question
+with the GitHub thread's comments, and **Comment** posts your text as a reply
+in that thread. While you have a pending review, **Review** adds the reply to
+it.
 
 ## Commenting on GitHub
 
 PR Reviews posts to GitHub only a review comment, reply or conversation
-comment you wrote or picked, when you click **Comment** or **Reply** (or press
-⌘↵, Ctrl+↵ off a Mac) in a comment box, from any tab, and a review you add to
+comment you wrote or picked, when you send it as **Comment** from a comment
+box (the send button, or ⌘↵, Ctrl+↵ off a Mac), from any tab, and a review you add to
 and submit yourself (see "Reviewing on GitHub"). It posts nothing else: no
 edit, and no review or approval you didn't submit. Review threads never post. A conversation comment,
 from the Summary tab's box, goes to the PR's conversation, on no file.
@@ -327,12 +339,12 @@ never retries by itself.
 ## Reviewing on GitHub
 
 On a PR you didn't write, the comment box on lines (in the Changes tab and in
-a guide) also offers **Add to review**, as GitHub's "Start a review" does. It
+a guide) also offers **Review** in Send as, as GitHub's "Start a review" does. It
 adds your comment to your pending review on GitHub, starting one if you have
 none, or joining the one you have, even one started on github.com. No one else
 sees it until you submit the review; the comment shows in its thread marked
 **Pending**, and the box reads "Added to your review". GitHub puts a review
-comment on the PR's latest commit, so Add to review shows only on a diff of it.
+comment on the PR's latest commit, so Review shows only on a diff of it.
 
 While you have a pending review:
 
@@ -345,15 +357,16 @@ While you have a pending review:
   stays when the popover closes, and while it holds text Esc does not leave
   the PR. Once GitHub has it, the control says "Review submitted" or "Review
   discarded" until the comments are read again, then goes.
-- The comment box offers only **Add to review** (⌘↵), on lines and in a
-  thread: GitHub refuses a comment or reply on its own then, as GitHub.com
-  does. On lines of an older commit it is disabled, with the reason.
+- The comment box opens on **Review**, on lines and in a thread, and
+  **Comment** is greyed out: GitHub refuses a comment or reply on its own
+  then, as GitHub.com does. On lines of an older commit Review is greyed out
+  too, its tooltip giving the reason.
 - If GitHub refuses the submit (a review submitted or discarded elsewhere, or
   no network), its words show in Finish review and your summary stays.
 
 A review started elsewhere shows after Refresh. A Comment that GitHub refuses
 because a review went pending elsewhere says to add it to your review instead,
-and the box then offers Add to review.
+and the box then opens on Review.
 
 ## Reading a guide
 
@@ -384,10 +397,11 @@ sits under that removed line, and the replaced pair keeps its word
 highlighting. Findings on the same line stack in the order the thread gave
 them. Both buttons select the finding's line and open the diff's comment box
 under the finding (see Selecting lines and the comment box). **Ask about this**
-opens it empty; asking from it, while the box is still on that line, sends the
+opens it empty, on Ask; asking from it, while the box is still on that line, sends the
 question quoting the finding, so the thread knows which one. **Comment** fills
 the box with the finding's title in bold over its body, unless the box already
-holds your text, and posts it as Commenting on GitHub describes. Closing the box
+holds your text, on Comment (or Review, if you last picked it), and sends it
+as Commenting on GitHub describes. Closing the box
 returns focus to the finding's button.
 
 The view-options icon at the right end of the tab bar, shown on the Guide tab

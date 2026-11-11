@@ -1,6 +1,6 @@
 // A review thread from GitHub where a diff draws it, as one tinted card ("Tint"): its comments in
 // order, each with its author, avatar, time and markdown, then Reply and Ask about this, which open
-// the diff's one comment box under the thread. A long thread shows its first and latest comments
+// the diff's one comment box under the thread, on the Send as mode each names. A long thread shows its first and latest comments
 // with "N more" between; a bot's comment is clamped to three lines; a resolved thread is one row
 // that opens it. A thread at its file that lost its lines says "Outdated" over the lines it was
 // written on. No pills or dividers: spacing separates the comments, a ring draws the card's edge,
@@ -18,6 +18,7 @@ import { useThreadReveal } from "../changes/thread-reveal.ts";
 import { useFocusHandOff, type FocusHandOff } from "../ui/focus-hand-off.ts";
 import { mergeRefs } from "../ui/merge-refs.ts";
 import { firstLineOf, GitHubCommentView, QUIET_BUTTON } from "./github-comment.tsx";
+import { pickForNextBox } from "./send-as.tsx";
 
 /** Reply, Ask about this, or a comment's Quote (`quote` "" for none), from its button. */
 export type OpenReply = (request: { quote: string; from: HTMLElement }) => void;
@@ -67,10 +68,24 @@ export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: Rev
       </div>
       {box === null && (
         <div className="pr-reviews-thread-foot ml-5 flex items-center gap-1">
-          <Button variant="ghost" size="small" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
+          <Button
+            variant="ghost"
+            size="small"
+            onClick={(event) => {
+              pickForNextBox("github");
+              onReply({ quote: "", from: event.currentTarget });
+            }}
+          >
             Reply
           </Button>
-          <Button variant="ghost" size="small" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
+          <Button
+            variant="ghost"
+            size="small"
+            onClick={(event) => {
+              pickForNextBox("ask");
+              onReply({ quote: "", from: event.currentTarget });
+            }}
+          >
             Ask about this
           </Button>
           {thread.resolvedBy !== null && (

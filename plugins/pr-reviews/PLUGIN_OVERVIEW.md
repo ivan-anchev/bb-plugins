@@ -63,15 +63,15 @@ post to GitHub.
   finding as the comment to post on its line.
 - **One comment box per diff**: hover a line and click the gutter's +, or
   drag from it, to select lines in any diff; a box opens under them with Write
-  and Preview tabs for markdown. Pick other lines and it moves there with your
-  text.
-- **Ask about lines**: Ask about this sends the review thread your question
+  and Preview tabs for markdown, and a Send as switch (Ask, Comment, Review)
+  beside one send button. Pick other lines and it moves there with your text.
+- **Ask about lines**: sent as Ask, your question goes to the review thread
   with the quoted lines; the answer is in Review chat.
-- **Comment on GitHub**: Comment posts your text as a review comment on the
-  lines and links to it; nothing is posted before that click. Lines GitHub
+- **Comment on GitHub**: sent as Comment, your text posts as a review comment
+  on the lines and the box links to it; nothing is posted before you send. Lines GitHub
   can't anchor to become a file comment quoting them, and the box says so, as
   it does for a comment on an older commit than the PR's latest.
-- **Review mode**: on a PR you didn't write, Add to review keeps the comment
+- **Review mode**: on a PR you didn't write, sending as Review keeps the comment
   in your pending GitHub review, marked Pending, until you submit it. Finish
   review, at the top of every tab, submits it as a comment, an approval or a
   request for changes, with an optional summary, or discards it.
@@ -95,7 +95,7 @@ post to GitHub.
 
 PR Reviews reads pull requests with the GitHub CLI (`gh`) on the machine that
 runs bb, so `gh` must be installed and signed in there. It writes to GitHub
-only when you click Comment, Reply or Add to review in a comment box, or submit or discard your
+only when you send a comment box's text as Comment or Review, or submit or discard your
 review, as your `gh` account; it never approves or requests changes unless you submit a review that
 does, and never edits anything. Review threads
 never reach GitHub at all: before one starts, PR Reviews fetches the PR's commits

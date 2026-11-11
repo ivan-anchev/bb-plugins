@@ -1,9 +1,11 @@
 // A finding under its line in a step's diff: the priority word, the title and the body, then its
 // two actions. Each selects the finding's line and opens the diff's comment box under the
-// finding: "Ask about this" empty, to ask the review thread about the finding, and "Comment"
-// with the finding as the comment, to post on GitHub.
+// finding, on the Send as mode it names: "Ask about this" empty, on Ask, to ask the review thread
+// about the finding, and "Comment" with the finding as the comment, on the reader's way to GitHub
+// (Comment, or Review). Only the box sends.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { findingCommentText } from "../../comments/plan-comment.ts";
+import { pickForNextBox } from "../comments/send-as.tsx";
 import type { VisibleFinding } from "../../guide/walkthrough.ts";
 import type { OpenBox } from "../diff/pr-diff.tsx";
 import { Button } from "../ui/button.tsx";
@@ -22,11 +24,25 @@ export function FindingBlock({ shown: { finding, index }, openBox }: FindingBloc
       </div>
       <Prose text={finding.body} className="max-w-[72ch] text-muted-foreground" />
       <div className="mt-2 flex flex-wrap gap-1.5">
-        <Button variant="outline" size="small" onClick={(event) => openBox({ finding: index, prefill: "", from: event.currentTarget })}>
+        <Button
+          variant="outline"
+          size="small"
+          onClick={(event) => {
+            pickForNextBox("ask");
+            openBox({ finding: index, prefill: "", from: event.currentTarget });
+          }}
+        >
           <Icon name="SideChat" className="size-3.5" aria-hidden />
           Ask about this
         </Button>
-        <Button variant="outline" size="small" onClick={(event) => openBox({ finding: index, prefill: findingCommentText(finding), from: event.currentTarget })}>
+        <Button
+          variant="outline"
+          size="small"
+          onClick={(event) => {
+            pickForNextBox("github");
+            openBox({ finding: index, prefill: findingCommentText(finding), from: event.currentTarget });
+          }}
+        >
           <Icon name="GithubLogo" className="size-3.5" aria-hidden />
           Comment
         </Button>
