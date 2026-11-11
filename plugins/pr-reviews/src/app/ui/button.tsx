@@ -4,6 +4,8 @@ const VARIANTS = {
   // The ring stands off by a pixel of the background: flush, it is the fill's own colour and can't be seen.
   primary: "bg-primary text-primary-foreground hover:bg-primary/88 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
   secondary: "bg-secondary text-secondary-foreground hover:bg-state-active",
+  // An action that deletes, such as discarding a pending review, once the reader has confirmed it.
+  destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/88 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
   ghost: "text-muted-foreground hover:bg-state-hover hover:text-foreground",
   // A quiet action on a raised or recessed surface, such as a finding's: the page's background
   // inside a hairline of the border colour, with its icon a step back from the label.

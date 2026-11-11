@@ -2,7 +2,8 @@
 // Shared by server.ts and app.tsx: pure zod, no SDK runtime beyond defineRpcContract.
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { codeQuoteSchema, commentBodySchema, commentRequestSchema } from "./comments/comment-schema.ts";
+import { codeQuoteSchema, commentBodySchema, commentRequestSchema, GITHUB_BODY_LIMIT } from "./comments/comment-schema.ts";
+import { reviewEventSchema } from "./comments/review-schema.ts";
 import { reviewThreadSchema } from "./comments/thread-schema.ts";
 import { prCommentsSchema } from "./comments/timeline-schema.ts";
 import { diffFileSchema } from "./diff/diff-schema.ts";
@@ -231,4 +232,15 @@ export const prReviewsContract = defineRpcContract({
   replyToThread: { input: prRefSchema.extend({ commentId: z.number().int(), body: commentBodySchema }), output: postedSchema },
   /** Posts a comment on the PR's conversation, on no file: what a quote reply to a conversation comment posts. */
   postConversationComment: { input: prRefSchema.extend({ body: commentBodySchema }), output: postedSchema },
+  /**
+   * Adds a review comment to the reader's pending review `reviewId` (the comments read's), or to
+   * one GitHub starts for it when null. Nothing is published until the review is submitted.
+   */
+  addToReview: { input: prRefSchema.extend({ request: commentRequestSchema, reviewId: z.string().nullable() }), output: empty },
+  /** Adds a reply in the review thread `threadId` (its node id) to the pending review `reviewId`. */
+  addReplyToReview: { input: prRefSchema.extend({ threadId: z.string(), reviewId: z.string(), body: commentBodySchema }), output: empty },
+  /** Submits the pending review, publishing its comments, with an optional summary (`body` "" for none). */
+  submitReview: { input: prRefSchema.extend({ reviewId: z.string(), event: reviewEventSchema, body: z.string().max(GITHUB_BODY_LIMIT) }), output: empty },
+  /** Deletes the pending review and every comment in it. */
+  discardReview: { input: prRefSchema.extend({ reviewId: z.string() }), output: empty },
 });

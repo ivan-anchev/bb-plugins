@@ -1,9 +1,10 @@
 // The only module that runs `gh`. It parses gh's JSON once into the canonical PR types, reads the
-// PR's comments and timeline, posts the comments a reader chose to, and maps every process failure to a refusal the app can show
-// beside its data or a kept draft.
+// PR's comments and timeline, posts the comments a reader chose to, writes their pending review,
+// and maps every process failure to a refusal the app can show beside its data or a kept draft.
 import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import type { CommentRequest } from "../comments/comment-schema.ts";
+import type { ReviewEvent } from "../comments/review-schema.ts";
 import type { ReviewThread } from "../comments/thread-schema.ts";
 import type { PrComments } from "../comments/timeline-schema.ts";
 import type { PrDetail, PrSummary } from "../contract.ts";
@@ -12,11 +13,13 @@ import { commentApiArgs, conversationCommentApiArgs, replyApiArgs } from "./comm
 import { ghPostRefusalFor, ghRefusalFor } from "./gh-refusal.ts";
 import { ghLabelSchema } from "./label.ts";
 import { parseHostCommandFailure, runHostCommand } from "./host-command.ts";
+import { addReplyArgs, addThreadArgs, discardArgs, parseAddedThread, parsePrNode, parseViewerReview, prNodeArgs, submitArgs, viewerReviewArgs } from "./pending-review.ts";
 import type { PrCommits } from "./pr-commits.ts";
 import {
   allPages,
   CHANGED_PATHS_QUERY,
   graphqlArgs,
+  liveComments,
   parseChangedPathsPage,
   parseThreadCommentsPage,
   parseThreadsPage,
@@ -122,10 +125,15 @@ export async function readFileAt(repo: Repo, sha: string, path: string): Promise
   return Buffer.from(file.content, "base64").toString("utf8");
 }
 
-/** Every review thread on the PR, every item of its timeline and the paths it changes, all pages of each. */
+/** Every review thread on the PR, every item of its timeline and the paths it changes, all pages of each, and the reader's own review. */
 export async function readPrComments(repo: Repo, number: number): Promise<PrComments> {
-  const [threads, nodes, changedPaths] = await Promise.all([reviewThreadsOf(repo, number), timelineOf(repo, number), changedPathsOf(repo, number)]);
-  return { threads, timeline: toTimeline(nodes, await reviewCommentsOf(nodes), threads), changedPaths };
+  const [threads, nodes, changedPaths, viewer] = await Promise.all([
+    reviewThreadsOf(repo, number),
+    timelineOf(repo, number),
+    changedPathsOf(repo, number),
+    graphqlRead(viewerReviewArgs(repo, number)).then(parseViewerReview),
+  ]);
+  return { threads, timeline: toTimeline(nodes, await reviewCommentsOf(nodes), threads), changedPaths, viewer };
 }
 
 async function changedPathsOf(repo: Repo, number: number): Promise<string[]> {
@@ -137,12 +145,13 @@ async function changedPathsOf(repo: Repo, number: number): Promise<string[]> {
 async function reviewThreadsOf(repo: Repo, number: number): Promise<ReviewThread[]> {
   const pr = prVariables(repo, number);
   const threads = await allPages(null, async (cursor) => parseThreadsPage(await graphql(THREADS_QUERY, { ...pr, cursor })));
-  return Promise.all(
+  const read = await Promise.all(
     threads.map(async (thread) => {
-      const comments = await allPages(thread.comments, async (cursor) => parseThreadCommentsPage(await graphql(THREAD_COMMENTS_QUERY, { id: thread.id, cursor })));
-      return toThread(thread, comments);
+      const comments = liveComments(await allPages(thread.comments, async (cursor) => parseThreadCommentsPage(await graphql(THREAD_COMMENTS_QUERY, { id: thread.id, cursor }))));
+      return comments.length === 0 ? [] : [toThread(thread, comments)];
     }),
   );
+  return read.flat();
 }
 
 async function timelineOf(repo: Repo, number: number): Promise<GhTimelineNode[]> {
@@ -161,7 +170,9 @@ async function reviewCommentsOf(nodes: GhTimelineNode[]): Promise<Map<string, nu
   return new Map(reviews);
 }
 
-const graphql = async (query: string, variables: Record<string, string | number | null>): Promise<unknown> => JSON.parse(await runGh(graphqlArgs(query, variables)));
+const graphql = async (query: string, variables: Record<string, string | number | null>): Promise<unknown> => graphqlRead(graphqlArgs(query, variables));
+
+const graphqlRead = async (args: string[]): Promise<unknown> => JSON.parse(await runGh(args));
 
 async function commitsOf(repo: Repo, number: number): Promise<PrCommits> {
   const json = await runGh(["pr", "view", String(number), "-R", repo, "--json", "headRefOid,baseRefOid"]);
@@ -192,11 +203,41 @@ async function post(args: string[]): Promise<{ url: string }> {
   return { url: postedCommentSchema.parse(JSON.parse(await runGhPost(args))).html_url };
 }
 
-// why its own mapping: a POST that timed out may have reached GitHub (ghPostRefusalFor).
-async function runGhPost(args: string[]): Promise<string> {
+const ADDED_UNSURE = "The comment may have been added to your review: Refresh before adding it again.";
+
+/**
+ * Adds a line or file comment to the reader's pending review (`reviewId`), or to one GitHub starts
+ * for it (null). GitHub puts it on the PR's head, so a comment on another commit is refused.
+ */
+export async function addReviewComment(repo: Repo, number: number, request: CommentRequest, reviewId: string | null): Promise<void> {
+  const pr = parsePrNode(await graphqlRead(prNodeArgs(repo, number)));
+  if (pr.headRefOid !== request.commit) {
+    throw new Refusal({ code: "conflict", message: "The pull request has new commits since you read it. Refresh, then add your comment to the review." });
+  }
+  const placed = parseAddedThread(JSON.parse(await runGhPost(addThreadArgs(pr.id, reviewId, request), ADDED_UNSURE)));
+  if (!placed) throw new Refusal({ code: "invalid", message: "GitHub couldn't place a comment on these lines, so it isn't in your review. Refresh, then select the lines again." });
+}
+
+/** Adds a reply in the review thread `threadId` to the pending review `reviewId`. */
+export async function addReviewReply(threadId: string, reviewId: string, body: string): Promise<void> {
+  await runGhPost(addReplyArgs(threadId, reviewId, body), ADDED_UNSURE);
+}
+
+/** Submits the pending review `reviewId` as `event`, with `body` ("" for none) as its summary. */
+export async function submitReview(reviewId: string, event: ReviewEvent, body: string): Promise<void> {
+  await runGhPost(submitArgs(reviewId, event, body), "The review may have been submitted: Refresh before submitting it again.");
+}
+
+/** Deletes the pending review `reviewId` and its comments. */
+export async function discardReview(reviewId: string): Promise<void> {
+  await runGhPost(discardArgs(reviewId), "The review may have been discarded: Refresh to see.");
+}
+
+// why its own mapping: a write that timed out may have reached GitHub (ghPostRefusalFor).
+async function runGhPost(args: string[], unsure?: string): Promise<string> {
   try {
     return await runHostCommand("gh", args);
   } catch (error) {
-    throw ghPostRefusalFor(parseHostCommandFailure(error));
+    throw ghPostRefusalFor(parseHostCommandFailure(error), unsure);
   }
 }

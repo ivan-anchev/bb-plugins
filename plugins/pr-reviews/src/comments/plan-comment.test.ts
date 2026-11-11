@@ -173,8 +173,8 @@ const THREAD: ReviewThread = {
   outdated: false,
   subject: { kind: "file" },
   comments: [
-    { id: 41, url: "https://github.com/o/r/pull/1#discussion_r41", author: { login: "octocat", bot: false }, body: "Why?", createdAt: "2026-11-10T08:00:00Z" },
-    { id: 42, url: "https://github.com/o/r/pull/1#discussion_r42", author: { login: "hubot", bot: false }, body: "Because.", createdAt: "2026-11-10T09:00:00Z" },
+    { id: 41, url: "https://github.com/o/r/pull/1#discussion_r41", author: { login: "octocat", bot: false }, body: "Why?", createdAt: "2026-11-10T08:00:00Z", pending: false },
+    { id: 42, url: "https://github.com/o/r/pull/1#discussion_r42", author: { login: "hubot", bot: false }, body: "Because.", createdAt: "2026-11-10T09:00:00Z", pending: false },
   ],
 };
 

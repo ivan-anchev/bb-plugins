@@ -25,20 +25,31 @@ export function ghRefusalFor(failure: HostCommandFailure): Refusal {
   }
   // why GitHub's own words: a 422 names what it refused (a line it could not resolve, a commit not
   // in the PR), which no fixed message here can.
-  if (status === 422) return invalid(`GitHub refused the comment: ${githubWordsOf(failure)}. The lines may no longer be in this commit's diff.`);
+  if (status === 422) {
+    const words = githubWordsOf(failure);
+    if (PENDING_REVIEW.test(words)) return invalid("You have a pending review on this pull request, so GitHub takes comments only into it. Add this to your review instead.");
+    return invalid(`GitHub refused the comment: ${words}. The lines may no longer be in this commit's diff.`);
+  }
+  // A GraphQL request fails with HTTP 200 and GitHub's reasons in its response, such as a review
+  // it won't submit.
+  const graphqlErrors = graphqlErrorsOf(failure.stdout);
+  if (graphqlErrors !== null) return invalid(`GitHub refused it: ${graphqlErrors}`);
   return invalid(firstLine(stderr) ?? "The GitHub CLI failed.");
 }
 
 /**
- * A failed POST. One the timeout stopped may have reached GitHub, and posting again would post
- * twice, so it says so and is never retried; the reader checks the PR and decides.
+ * A failed write. One the timeout stopped may have reached GitHub, and writing again would post
+ * twice, so it says so (`unsure`) and is never retried; the reader checks the PR and decides.
  */
-export function ghPostRefusalFor(failure: HostCommandFailure): Refusal {
-  if (failure.killed) return invalid("GitHub didn't answer in time. The comment may have been posted: check the pull request before posting again.");
+export function ghPostRefusalFor(failure: HostCommandFailure, unsure = "The comment may have been posted: check the pull request before posting again."): Refusal {
+  if (failure.killed) return invalid(`GitHub didn't answer in time. ${unsure}`);
   return ghRefusalFor(failure);
 }
 
 const invalid = (message: string) => new Refusal({ code: "invalid", message });
+
+// GitHub's words when a comment is posted on its own while the reader has a pending review.
+const PENDING_REVIEW = /one pending review per pull request/;
 
 // gh prints GitHub's error response on stdout and only its top message on stderr.
 const githubErrorSchema = z.object({
@@ -61,4 +72,12 @@ function jsonOrNull(text: string): unknown {
   } catch {
     return null;
   }
+}
+
+const graphqlResponseSchema = z.object({ errors: z.array(z.object({ message: z.string() })).min(1) });
+
+// "Could not approve for pull request review. Can not approve your own pull request", each error's.
+function graphqlErrorsOf(stdout: string): string | null {
+  const response = graphqlResponseSchema.safeParse(jsonOrNull(stdout));
+  return response.success ? response.data.errors.map((error) => error.message).join(" ") : null;
 }

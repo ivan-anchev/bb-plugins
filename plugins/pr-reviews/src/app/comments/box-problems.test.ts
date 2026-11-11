@@ -11,9 +11,10 @@ test("a failure shows while its draft is the draft, and goes once the draft chan
   assert.deepEqual(problemsOf(null, REFUSED, "Ship it now"), []);
 });
 
-test("a block on the draft as it is now replaces a failed comment", () => {
+test("a block on the draft as it is now replaces a failed comment or review comment", () => {
   assert.deepEqual(problemsOf(TOO_LONG, REFUSED, "x".repeat(66_000)), [TOO_LONG], "the draft grew too long after a refusal");
   assert.deepEqual(problemsOf(GONE, REFUSED, "Ship it"), [GONE], "the commit went while the refused draft stayed the same");
+  assert.deepEqual(problemsOf(GONE, { ...REFUSED, action: "review" }, "Ship it"), [GONE]);
 });
 
 test("a failed question stays beside a block, which is about commenting", () => {

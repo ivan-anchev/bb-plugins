@@ -5,7 +5,9 @@ through the change step by step. Its Summary shows the PR's activity, as
 GitHub's Conversation tab does, and every diff shows the PR's GitHub review
 threads where they belong. It posts to GitHub only the review comments,
 replies and conversation comments you write or pick from the guide, on your
-click; review threads never post to GitHub.
+click, and on a PR you didn't write it batches them into a pending review you
+submit as a comment, approval or request for changes; review threads never
+post to GitHub.
 
 ## What you get
 
@@ -61,14 +63,18 @@ click; review threads never post to GitHub.
   finding as the comment to post on its line.
 - **One comment box per diff**: hover a line and click the gutter's +, or
   drag from it, to select lines in any diff; a box opens under them with Write
-  and Preview tabs for markdown. Pick other lines and it moves there with your
-  text.
-- **Ask about lines**: Ask about this sends the review thread your question
+  and Preview tabs for markdown, and a Send as switch (Ask, Comment, Review)
+  beside one send button. Pick other lines and it moves there with your text.
+- **Ask about lines**: sent as Ask, your question goes to the review thread
   with the quoted lines; the answer is in Review chat.
-- **Comment on GitHub**: Comment posts your text as a review comment on the
-  lines and links to it; nothing is posted before that click. Lines GitHub
+- **Comment on GitHub**: sent as Comment, your text posts as a review comment
+  on the lines and the box links to it; nothing is posted before you send. Lines GitHub
   can't anchor to become a file comment quoting them, and the box says so, as
   it does for a comment on an older commit than the PR's latest.
+- **Review mode**: on a PR you didn't write, sending as Review keeps the comment
+  in your pending GitHub review, marked Pending, until you submit it. Finish
+  review, at the top of every tab, submits it as a comment, an approval or a
+  request for changes, with an optional summary, or discards it.
 - **GitHub's comments in place**: each review thread shows under its lines in
   the Changes tab and in the guide step that holds them, with each comment's
   author, avatar, time and markdown. File comments and outdated threads show
@@ -89,7 +95,9 @@ click; review threads never post to GitHub.
 
 PR Reviews reads pull requests with the GitHub CLI (`gh`) on the machine that
 runs bb, so `gh` must be installed and signed in there. It writes to GitHub
-only when you click Comment or Reply in a comment box, as your `gh` account; it never approves, requests changes or edits anything. Review threads
+only when you send a comment box's text as Comment or Review, or submit or discard your
+review, as your `gh` account; it never approves or requests changes unless you submit a review that
+does, and never edits anything. Review threads
 never reach GitHub at all: before one starts, PR Reviews fetches the PR's commits
 into the project's repository with `git fetch`, and the thread reads them
 there. So Start review needs the project's default checkout on the machine

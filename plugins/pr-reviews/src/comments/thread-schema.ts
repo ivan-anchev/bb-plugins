@@ -8,7 +8,8 @@ import { lineRefSchema } from "./comment-schema.ts";
 /**
  * One comment as the plugin shows it. `id` is GitHub's number for it in its own kind: a review
  * comment's is what a reply names. `author.login` is a deleted account's "ghost", as on GitHub;
- * `author.bot`: an app wrote it. `createdAt` is ISO 8601.
+ * `author.bot`: an app wrote it. `createdAt` is ISO 8601. `pending`: a review comment in the
+ * reader's pending review, which only they can see until they submit it.
  */
 export const githubCommentSchema = z.object({
   id: z.number().int(),
@@ -16,6 +17,7 @@ export const githubCommentSchema = z.object({
   author: z.object({ login: z.string(), bot: z.boolean() }),
   body: z.string(),
   createdAt: z.string(),
+  pending: z.boolean(),
 });
 export type GitHubComment = z.infer<typeof githubCommentSchema>;
 

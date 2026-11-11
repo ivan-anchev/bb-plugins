@@ -15,6 +15,8 @@ type TooltipProps = {
   /** Layout classes for the hover area, which is the trigger's box in its parent: "min-w-0" lets a
    *  truncating trigger shrink in a flex row. */
   className?: string;
+  /** Classes on the popup, such as a container query that hides it where the trigger shows its name. */
+  popupClassName?: string;
   /** Renders the trigger; pass `describedBy` to its `aria-describedby`. */
   children: (describedBy: string) => ReactNode;
 };
@@ -27,7 +29,7 @@ const PLACEMENTS = {
   "bottom-end": "top-full right-0 pt-1.5",
 } as const satisfies Record<Placement, string>;
 
-export function Tooltip({ content, placement = "top", className = "", children }: TooltipProps) {
+export function Tooltip({ content, placement = "top", className = "", popupClassName = "", children }: TooltipProps) {
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -49,7 +51,7 @@ export function Tooltip({ content, placement = "top", className = "", children }
       onBlur={() => setFocused(false)}
     >
       {children(id)}
-      <span role="tooltip" id={id} hidden={!open} className={`absolute z-50 ${PLACEMENTS[placement]}`}>
+      <span role="tooltip" id={id} hidden={!open} className={`absolute z-50 ${PLACEMENTS[placement]} ${popupClassName}`}>
         <span className="block w-max max-w-[320px] rounded-md bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-md ring-1 ring-foreground/8 animate-in fade-in-0 zoom-in-95 motion-reduce:animate-none">
           {content}
         </span>

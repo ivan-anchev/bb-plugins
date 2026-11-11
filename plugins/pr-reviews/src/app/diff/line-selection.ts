@@ -3,8 +3,8 @@
 // diff's gestures and the box's actions.
 import type { SelectedLineRange } from "@pierre/diffs";
 
-/** What a request did: the posted comment or reply, or a sent question. */
-export type BoxOutcome = { kind: "commented"; url: string } | { kind: "asked" };
+/** What a request did: the posted comment or reply, a sent question, or a comment or reply added to the reader's pending review. */
+export type BoxOutcome = { kind: "commented"; url: string } | { kind: "asked" } | { kind: "reviewed" };
 
 /**
  * `writing`: the box holds the draft. `sent` is a request that went while the reader changed the

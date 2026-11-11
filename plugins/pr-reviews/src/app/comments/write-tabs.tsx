@@ -1,9 +1,9 @@
-// The comment box's Write and Preview switch: a segmented control, drawn as bb's own Preview/Raw
-// switch in its file preview is (a 6px track, 2px in, round 4px segments), on a recessed track with
-// a raised thumb that slides to the selected segment. It is still the ARIA tabs pattern, like the PR
-// page's own tabs (page/pr-tabs.tsx): it switches the one panel under it between two views. One tab
-// stop, ← → Home End to move, and a tab is selected as it is focused.
+// The comment box's Write and Preview switch: a segmented control (ui/segmented.tsx). It is still
+// the ARIA tabs pattern, like the PR page's own tabs (page/pr-tabs.tsx): it switches the one panel
+// under it between two views. One tab stop, ← → Home End to move, and a tab is selected as it is
+// focused.
 import { useId, useState, type KeyboardEvent } from "react";
+import { SEGMENT_CLASS, SegmentThumb, TRACK_CLASS } from "../ui/segmented.tsx";
 
 export type Tab = "write" | "preview";
 
@@ -32,13 +32,7 @@ type WriteTabsProps = {
   onWrite(): void;
 };
 
-// The segments are equal widths, so the thumb is half the track and slides by its own width. Its
-// colours and edge are app.css's `--pr-reviews-segment-*` tokens.
-const TRACK_CLASS = "relative grid grid-cols-2 rounded-md bg-(--pr-reviews-segment-track) p-0.5";
-const THUMB_CLASS =
-  "absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-sm bg-(--pr-reviews-segment-thumb) shadow-(--pr-reviews-segment-thumb-ring) transition-transform duration-150 ease-out motion-reduce:transition-none";
-const TAB_CLASS =
-  "relative inline-flex h-5 cursor-pointer items-center justify-center rounded-sm px-2 text-xs font-medium text-muted-foreground transition-colors duration-150 ease-out hover:text-foreground hover:duration-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring aria-selected:text-foreground motion-reduce:transition-none";
+const TAB_CLASS = `${SEGMENT_CLASS} h-5 aria-selected:text-foreground`;
 
 export function WriteTabs({ tabs, onWrite }: WriteTabsProps) {
   const select = (to: Tab) => {
@@ -55,7 +49,7 @@ export function WriteTabs({ tabs, onWrite }: WriteTabsProps) {
   };
   return (
     <div role="tablist" aria-label="Write or preview" className={TRACK_CLASS} onKeyDown={onKeyDown}>
-      <span aria-hidden className={`${THUMB_CLASS} ${tabs.tab === "preview" ? "translate-x-full" : ""}`} />
+      <SegmentThumb at={TABS.findIndex(({ id }) => id === tabs.tab)} of={TABS.length} />
       {TABS.map(({ id, label }) => (
         <button
           key={id}

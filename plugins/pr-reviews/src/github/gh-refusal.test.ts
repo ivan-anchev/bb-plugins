@@ -8,6 +8,8 @@ import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 // Each fixture is the rejection of a real gh run against the throwaway PR #59 of
 // ivan-anchev/bb-plugins (or a repo or PR that does not exist), saved field for field: exit code,
 // killed, stdout, stderr. Recorded with gh 2.97.0.
+// graphql-submit-refused and comment-while-review-pending-422 are from PR #2 of the private sandbox
+// ivan-anchev/pr-reviews-review-mode-sandbox, with a pending review open.
 const recorded = (name: string) => parseHostCommandFailure(JSON.parse(readFileSync(new URL(`./fixtures/gh-failures/${name}.json`, import.meta.url), "utf8")));
 
 const refusalOf = (refusalOrFailure: Refusal | HostCommandFailure) => {
@@ -86,4 +88,18 @@ test("a post the timeout stopped may have been posted: it says so, and a post th
     message: "GitHub didn't answer in time. The comment may have been posted: check the pull request before posting again.",
   });
   assert.deepEqual(refusalOf(ghPostRefusalFor(recorded("unauthorized-401"))), refusalOf(ghRefusalFor(recorded("unauthorized-401"))));
+});
+
+test("a GraphQL request GitHub refuses gives GitHub's own words from its response", () => {
+  assert.deepEqual(refusalOf(recorded("graphql-submit-refused")), {
+    code: "invalid",
+    message: "GitHub refused it: Could not comment for pull request review. You need to leave a comment indicating the requested changes.",
+  });
+});
+
+test("a comment on its own while the reader has a pending review says to add it to the review", () => {
+  assert.deepEqual(refusalOf(recorded("comment-while-review-pending-422")), {
+    code: "invalid",
+    message: "You have a pending review on this pull request, so GitHub takes comments only into it. Add this to your review instead.",
+  });
 });

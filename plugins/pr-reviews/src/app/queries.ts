@@ -55,3 +55,11 @@ export const usePostComment = () => experimental_useRpcMutation({ contract, meth
 export const useReplyToThread = () => experimental_useRpcMutation({ contract, method: "replyToThread" });
 
 export const usePostConversationComment = () => experimental_useRpcMutation({ contract, method: "postConversationComment" });
+
+export const useAddToReview = () => experimental_useRpcMutation({ contract, method: "addToReview" });
+
+export const useAddReplyToReview = () => experimental_useRpcMutation({ contract, method: "addReplyToReview" });
+
+export const useSubmitReview = () => experimental_useRpcMutation({ contract, method: "submitReview" });
+
+export const useDiscardReview = () => experimental_useRpcMutation({ contract, method: "discardReview" });

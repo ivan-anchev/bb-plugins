@@ -54,7 +54,7 @@ function ReviewPage({ target, pr, review, viewOptions }: ReviewPageProps) {
   const onRevealed = useCallback(() => setReveal(null), []);
   return (
     <>
-      <PrHeader pr={pr} hasReviewThread={reviewThreadOf(review) !== null} />
+      <PrHeader target={target} pr={pr} hasReviewThread={reviewThreadOf(review) !== null} />
       <PrTabs
         selected={tab}
         onSelect={setTab}

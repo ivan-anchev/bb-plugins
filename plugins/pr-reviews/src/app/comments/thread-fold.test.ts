@@ -9,6 +9,7 @@ const comment = (id: number): GitHubComment => ({
   author: { login: "octocat", bot: false },
   body: `Comment ${id}`,
   createdAt: "2026-11-10T08:00:00Z",
+  pending: false,
 });
 const withComments = (thread: ReviewThread, count: number): ReviewThread => ({ ...thread, comments: Array.from({ length: count }, (_, index) => comment(index + 1)) });
 
