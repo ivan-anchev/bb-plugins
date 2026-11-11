@@ -1,17 +1,27 @@
-// A diff's one comment box, under its selected lines or in one of its review threads: write in
-// markdown, preview it, then ask the review thread about the lines, comment on them on GitHub, or
-// reply in the thread. The draft is the diff's, so it follows the box from place to place. Once the
-// box has done its job it shows the outcome in the same shell, where the text was.
+// The comment box: a diff's one box, under its selected lines or in one of its review threads, or
+// the Summary tab's composer. Write in markdown, preview it, then ask the review thread about the
+// lines, comment on them on GitHub, reply in the thread, or comment on the PR's conversation. A
+// diff's draft is the diff's, so it follows the box from place to place. Once the box has done its
+// job it shows the outcome in the same shell, where the text was.
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { experimental_Icon as Icon, experimental_PluginRpcCallError as RpcCallError } from "@get-bb/plugin-sdk/app";
 import { reviewThreadOf, type PrDetail, type ReviewState } from "../../contract.ts";
 import type { CommentRequest } from "../../comments/comment-schema.ts";
 import { quoteOf, type LineSpan } from "../../comments/line-span.ts";
-import { checkComment, checkReply, type BlockedComment, type ReplyRequest } from "../../comments/plan-comment.ts";
+import { checkComment, checkConversationComment, checkReply, type BlockedComment, type ConversationRequest, type ReplyRequest } from "../../comments/plan-comment.ts";
 import type { ReviewThread } from "../../comments/thread-schema.ts";
-import { isBlank, type BoxOutcome, type LineBox } from "../diff/line-selection.ts";
+import { isBlank, type BoxOutcome, type BoxStage } from "../diff/line-selection.ts";
 import { useLifetime } from "../lifetime.ts";
-import { useAskAboutFinding, useAskAboutGitHubThread, useAskAboutLines, usePostComment, usePullRequest, useReplyToThread, type PrHeadTarget } from "../queries.ts";
+import {
+  useAskAboutFinding,
+  useAskAboutGitHubThread,
+  useAskAboutLines,
+  usePostComment,
+  usePostConversationComment,
+  usePullRequest,
+  useReplyToThread,
+  type PrHeadTarget,
+} from "../queries.ts";
 import { Button } from "../ui/button.tsx";
 import { useHoldEscape } from "../ui/hold-escape.ts";
 import { IconButton } from "../ui/icon-button.tsx";
@@ -22,13 +32,18 @@ import { BOX_CLASS, DoneBox, SentNote } from "./done-box.tsx";
 import { markdownShortcut } from "./markdown-keys.ts";
 import { useWriteTabs, WriteTabs } from "./write-tabs.tsx";
 
-/** What the box is about: the lines under it, at the commit the reader views, or the review thread it replies in. */
-export type BoxSubject = { kind: "lines"; span: LineSpan; finding: number | null } | { kind: "reply"; thread: ReviewThread };
+/**
+ * What the box is about: the lines under it, at the commit the reader views, the review thread it
+ * replies in, or the PR's conversation, where it only comments.
+ */
+export type BoxSubject = { kind: "lines"; span: LineSpan; finding: number | null } | { kind: "reply"; thread: ReviewThread } | { kind: "conversation" };
 
 type CommentBoxProps = {
   subject: BoxSubject;
   head: PrHeadTarget;
-  box: LineBox;
+  stage: BoxStage;
+  /** The box takes focus as it is drawn: it was opened, rather than drawn with the page. */
+  takeFocus: boolean;
   draft: string;
   onDraft(draft: string): void;
   /** The question was sent, or the comment posted: `sent` is the text that went. */
@@ -40,12 +55,13 @@ type CommentBoxProps = {
 // The page draws only once the PR is read, and this is the same cache entry, so it is there.
 export function CommentBox({ onSettled, ...props }: CommentBoxProps) {
   const pull = usePullRequest(props.head.projectId, props.head.number);
-  useHoldEscape();
+  // The composer is always there: it holds Esc only while it holds a draft.
+  useHoldEscape(props.subject.kind !== "conversation" || !isBlank(props.draft));
   // why remember it: Done takes focus only from a composer that had it, which goes as Done comes.
   // Focus the reader has taken elsewhere meanwhile, such as into another diff's box, stays there.
   const [focusDone, setFocusDone] = useState(false);
   if (pull.data === undefined) return null;
-  const { stage } = props.box;
+  const { stage } = props;
   if (stage.kind === "done") return <DoneBox outcome={stage.outcome} takeFocus={focusDone} onDone={props.onClose} />;
   const settle = (outcome: BoxOutcome, sent: string, hadFocus: boolean) => {
     setFocusDone(hadFocus);
@@ -59,7 +75,7 @@ const MAC = /Mac|iPhone|iPad/.test(navigator.platform);
 const hasMod = (event: KeyboardEvent) => (MAC ? event.metaKey : event.ctrlKey) && !event.altKey;
 const COMMENT_KEYS = MAC ? "⌘↵" : "Ctrl+↵";
 
-type ComposerProps = Omit<CommentBoxProps, "onSettled"> & {
+type ComposerProps = Omit<CommentBoxProps, "onSettled" | "stage"> & {
   /** A request that went while the reader changed the draft, which the box still holds. */
   sent: BoxOutcome | null;
   /** `hadFocus`: focus was in the box when the reply came. */
@@ -71,19 +87,20 @@ type ComposerProps = Omit<CommentBoxProps, "onSettled"> & {
 // Every action takes the draft as it is, markdown included. A failure stays beside the kept draft
 // until the draft changes. A reply that lands after the box has moved or closed changes nothing:
 // the box is no longer the one that sent it.
-function Composer({ subject, head, draft, sent, onDraft, onSettled, onClose, pr, review }: ComposerProps) {
+function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, onClose, pr, review }: ComposerProps) {
   const tabs = useWriteTabs();
   const [sending, setSending] = useState<Action | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const group = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
-  const caret = useTextarea(textarea, draft, tabs.tab === "write");
+  const caret = useTextarea(textarea, draft, tabs.tab === "write", takeFocus);
   const life = useLifetime();
   const askLines = useAskAboutLines();
   const askFinding = useAskAboutFinding();
   const askThread = useAskAboutGitHubThread();
   const postComment = usePostComment();
   const reply = useReplyToThread();
+  const postConversationComment = usePostConversationComment();
   // why a latch beside `sending`: the state arrives with the next render, so a quick second click
   // would send twice.
   const latch = useRef(false);
@@ -92,7 +109,9 @@ function Composer({ subject, head, draft, sent, onDraft, onSettled, onClose, pr,
   const check = postOf(subject, pr, draft);
   const post = "blocked" in check ? null : check;
   const hasThread = reviewThreadOf(review) !== null;
-  const canAsk = hasThread && !isBlank(draft) && sending === null;
+  // A comment on the conversation is about nothing the review thread could answer.
+  const asks = subject.kind !== "conversation";
+  const canAsk = asks && hasThread && !isBlank(draft) && sending === null;
   const canComment = post !== null && !isBlank(draft) && sending === null;
   const problems = problemsOf("blocked" in check ? check.blocked : null, failure, draft);
   const words = WORDS[subject.kind];
@@ -130,10 +149,19 @@ function Composer({ subject, head, draft, sent, onDraft, onSettled, onClose, pr,
   };
   const comment = () => {
     if (!canComment) return;
-    run("comment", async () => {
-      const { url } = post.kind === "comment" ? await postComment.mutate({ ...target, request: post.request }) : await reply.mutate({ ...target, ...post.request });
-      return { kind: "commented", url };
-    });
+    run("comment", async () => ({ kind: "commented", url: (await send(post)).url }));
+  };
+  const send = (post: Post) => {
+    switch (post.kind) {
+      case "comment":
+        return postComment.mutate({ ...target, request: post.request });
+      case "reply":
+        return reply.mutate({ ...target, ...post.request });
+      case "conversation":
+        return postConversationComment.mutate({ ...target, ...post.request });
+      default:
+        return post satisfies never;
+    }
   };
 
   // why on the box, not the textarea: Esc and ⌘↵ are the box's wherever in it focus is. Esc is
@@ -165,9 +193,11 @@ function Composer({ subject, head, draft, sent, onDraft, onSettled, onClose, pr,
     <div ref={group} role="group" aria-label="Comment box" onKeyDown={onKeyDown} className={BOX_CLASS}>
       <div className="flex items-center px-2 pt-2">
         <WriteTabs tabs={tabs} onWrite={() => textarea.current!.focus()} />
-        <div className="ml-auto">
-          <IconButton icon="X" label="Discard" size="dismiss" onClick={onClose} />
-        </div>
+        {asks && (
+          <div className="ml-auto">
+            <IconButton icon="X" label="Discard" size="dismiss" onClick={onClose} />
+          </div>
+        )}
       </div>
       <div hidden={tabs.tab !== "write"} {...tabs.panelProps("write")}>
         <label htmlFor={ids.text} className="sr-only">
@@ -203,6 +233,7 @@ function Composer({ subject, head, draft, sent, onDraft, onSettled, onClose, pr,
             ))}
           </div>
         ) : (
+          asks &&
           !hasThread && (
             <p id={ids.noThread} className="mr-auto text-xs text-subtle-foreground">
               Start a review first
@@ -211,9 +242,11 @@ function Composer({ subject, head, draft, sent, onDraft, onSettled, onClose, pr,
         )}
         <div className="ml-auto flex shrink-0 gap-1">
           {/* why aria-disabled, not disabled: the buttons stay focusable, and Ask's reason is read with it. */}
-          <Button variant="ghost" size="small" aria-disabled={!canAsk} aria-describedby={hasThread || problems.length > 0 ? undefined : ids.noThread} onClick={ask}>
-            {sending === "ask" ? "Sending…" : "Ask about this"}
-          </Button>
+          {asks && (
+            <Button variant="ghost" size="small" aria-disabled={!canAsk} aria-describedby={hasThread || problems.length > 0 ? undefined : ids.noThread} onClick={ask}>
+              {sending === "ask" ? "Sending…" : "Ask about this"}
+            </Button>
+          )}
           <Tooltip content={`${words.post} on GitHub (${COMMENT_KEYS})`} placement="top-end">
             {(describedBy) => (
               <Button variant="primary" size="small" aria-disabled={!canComment} aria-describedby={describedBy} onClick={comment}>
@@ -228,26 +261,48 @@ function Composer({ subject, head, draft, sent, onDraft, onSettled, onClose, pr,
   );
 }
 
-/** What the primary button posts: a review comment on the lines, or a reply in the thread. */
-type Post = { kind: "comment"; request: CommentRequest; note: string | null } | { kind: "reply"; request: ReplyRequest; note: null };
+/** What the primary button posts: a review comment on the lines, a reply in the thread, or a comment on the conversation. */
+type Post =
+  | { kind: "comment"; request: CommentRequest; note: string | null }
+  | { kind: "reply"; request: ReplyRequest; note: null }
+  | { kind: "conversation"; request: ConversationRequest; note: null };
 
 function postOf(subject: BoxSubject, pr: PrDetail, draft: string): Post | BlockedComment {
-  if (subject.kind === "reply") {
-    const check = checkReply(subject.thread, draft);
-    return "blocked" in check ? check : { kind: "reply", request: check.request, note: null };
+  switch (subject.kind) {
+    case "lines": {
+      const check = checkComment(subject.span, pr, draft);
+      return "blocked" in check ? check : { kind: "comment", ...check };
+    }
+    case "reply": {
+      const check = checkReply(subject.thread, draft);
+      return "blocked" in check ? check : { kind: "reply", request: check.request, note: null };
+    }
+    case "conversation": {
+      const check = checkConversationComment(draft);
+      return "blocked" in check ? check : { kind: "conversation", request: check.request, note: null };
+    }
+    default:
+      return subject satisfies never;
   }
-  const check = checkComment(subject.span, pr, draft);
-  return "blocked" in check ? check : { kind: "comment", ...check };
 }
 
 const WORDS = {
   lines: { placeholder: "Ask about these lines, or leave a comment", post: "Comment", posting: "Commenting…" },
   reply: { placeholder: "Reply, or ask about this thread", post: "Reply", posting: "Replying…" },
+  conversation: { placeholder: "Comment on this pull request", post: "Comment", posting: "Commenting…" },
 } as const satisfies Record<BoxSubject["kind"], { placeholder: string; post: string; posting: string }>;
 
 function labelOf(subject: BoxSubject): string {
-  if (subject.kind === "reply") return `Reply or question about the thread by ${subject.thread.comments[0].author.login}`;
-  return `Comment or question about ${subject.span.rows.length === 1 ? "this line" : "these lines"}`;
+  switch (subject.kind) {
+    case "lines":
+      return `Comment or question about ${subject.span.rows.length === 1 ? "this line" : "these lines"}`;
+    case "reply":
+      return `Reply or question about the thread by ${subject.thread.comments[0].author.login}`;
+    case "conversation":
+      return "Comment on this pull request";
+    default:
+      return subject satisfies never;
+  }
 }
 
 /**
@@ -258,11 +313,11 @@ const TEXT_CLASS = "block w-full min-h-[78px] px-[18px] pt-2 pb-1 text-[13px] le
 
 /**
  * The textarea's focus, height and selection. It takes focus with the caret at the end when the
- * box opens, grows with its text to its max height and then scrolls, and `select` places the
- * selection once the text a shortcut changed is drawn. `shown`: the Write tab is selected; a
- * hidden textarea has no height to measure.
+ * box opens (`takeFocus`), grows with its text to its max height and then scrolls, and `select`
+ * places the selection once the text a shortcut changed is drawn. `shown`: the Write tab is
+ * selected; a hidden textarea has no height to measure.
  */
-function useTextarea(textarea: RefObject<HTMLTextAreaElement | null>, text: string, shown: boolean) {
+function useTextarea(textarea: RefObject<HTMLTextAreaElement | null>, text: string, shown: boolean, takeFocus: boolean) {
   const pending = useRef<[number, number] | null>(null);
   // why wait for a size, not autoFocus or a plain effect: the box is a note Pierre slots into its
   // shadow root on its own render, after this one. Until then the textarea is not drawn: it can't
@@ -273,12 +328,13 @@ function useTextarea(textarea: RefObject<HTMLTextAreaElement | null>, text: stri
       if (field.getClientRects().length === 0) return;
       drawn.disconnect();
       fitHeight(field);
+      if (!takeFocus) return;
       field.focus();
       field.setSelectionRange(field.value.length, field.value.length);
     });
     drawn.observe(field);
     return () => drawn.disconnect();
-  }, [textarea]);
+  }, [textarea, takeFocus]);
   useLayoutEffect(() => {
     if (!shown) return;
     const field = textarea.current!;

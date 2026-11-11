@@ -1,0 +1,248 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "timelineItems": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": "Y3Vyc29yOnYyOpPPAAABocZkjWgCqzIxMTM4NTExMjEz"
+          },
+          "nodes": [
+            {
+              "__typename": "PullRequestCommit",
+              "id": "PURC_lADOVjmb-s8AAAABNhtOfdoAKDY4YWIxZjAyZDI4MDQyZDIyYTRhYzA5OTVlNGI5ODkwYmNkMmZmMDA",
+              "url": "https://github.com/ivan-anchev/bb-plugins/pull/40/commits/68ab1f02d28042d22a4ac0995e4b9890bcd2ff00",
+              "commit": {
+                "oid": "68ab1f02d28042d22a4ac0995e4b9890bcd2ff00",
+                "messageHeadline": "Add generative-ui: OpenUI components inline in chat",
+                "committedDate": "2026-11-07T14:16:44Z"
+              }
+            },
+            {
+              "__typename": "PullRequestCommit",
+              "id": "PURC_lADOVjmb-s8AAAABNhtOfdoAKGZmMmJjOTc4NTdkYTcyMDU0ZTk5NTg3MDg2ZGRmMDIyZDA1MTJkZjc",
+              "url": "https://github.com/ivan-anchev/bb-plugins/pull/40/commits/ff2bc97857da72054e99587086ddf022d0512df7",
+              "commit": {
+                "oid": "ff2bc97857da72054e99587086ddf022d0512df7",
+                "messageHeadline": "Send one answer per double-click in UI blocks",
+                "committedDate": "2026-11-07T14:39:34Z"
+              }
+            },
+            {
+              "__typename": "IssueComment",
+              "id": "IC_kwDOVjmb-s8AAAABkIC71A",
+              "databaseId": 6719323092,
+              "url": "https://github.com/ivan-anchev/bb-plugins/pull/40#issuecomment-6719323092",
+              "body": "test",
+              "createdAt": "2026-11-08T08:34:16Z",
+              "author": {
+                "__typename": "User",
+                "login": "ivan-anchev"
+              }
+            },
+            {
+              "__typename": "PullRequestReview",
+              "id": "PRR_kwDOVjmb-s8AAAABWrukZw",
+              "databaseId": 5817214055,
+              "url": "https://github.com/ivan-anchev/bb-plugins/pull/40#pullrequestreview-5817214055",
+              "body": "testing",
+              "createdAt": "2026-11-08T08:34:46Z",
+              "author": {
+                "__typename": "User",
+                "login": "ivan-anchev"
+              },
+              "state": "COMMENTED",
+              "submittedAt": "2026-11-08T08:34:46Z",
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": null
+                },
+                "nodes": []
+              }
+            },
+            {
+              "__typename": "LabeledEvent",
+              "id": "LE_lADOVjmb-s8AAAABdSYMo88AAAAIQvt8Ag",
+              "createdAt": "2026-11-08T08:35:05Z",
+              "actor": {
+                "login": "ivan-anchev"
+              },
+              "label": {
+                "name": "bug",
+                "color": "d73a4a"
+              }
+            },
+            {
+              "__typename": "LabeledEvent",
+              "id": "LE_lADOVjmb-s8AAAABdSYMo88AAAAIQvt8Fw",
+              "createdAt": "2026-11-08T08:35:05Z",
+              "actor": {
+                "login": "ivan-anchev"
+              },
+              "label": {
+                "name": "documentation",
+                "color": "0075ca"
+              }
+            },
+            {
+              "__typename": "LabeledEvent",
+              "id": "LE_lADOVjmb-s8AAAABdSYMo88AAAAIQvt8NQ",
+              "createdAt": "2026-11-08T08:35:05Z",
+              "actor": {
+                "login": "ivan-anchev"
+              },
+              "label": {
+                "name": "help wanted",
+                "color": "008672"
+              }
+            },
+            {
+              "__typename": "CrossReferencedEvent",
+              "id": "CRE_kwDOVjmb-s8AAAAEzRiQzA",
+              "createdAt": "2026-11-08T09:25:32Z",
+              "actor": {
+                "login": "ivan-anchev"
+              },
+              "isCrossRepository": false,
+              "source": {
+                "number": 43,
+                "title": "Show reviewers, checks and labels in the PR side panel",
+                "url": "https://github.com/ivan-anchev/bb-plugins/pull/43",
+                "repository": {
+                  "nameWithOwner": "ivan-anchev/bb-plugins"
+                }
+              }
+            },
+            {
+              "__typename": "CrossReferencedEvent",
+              "id": "CRE_kwDOVjmb-s8AAAAEzi-r8A",
+              "createdAt": "2026-11-08T12:21:01Z",
+              "actor": {
+                "login": "ivan-anchev"
+              },
+              "isCrossRepository": false,
+              "source": {
+                "number": 44,
+                "title": "Add a Changes tab to the PR page",
+                "url": "https://github.com/ivan-anchev/bb-plugins/pull/44",
+                "repository": {
+                  "nameWithOwner": "ivan-anchev/bb-plugins"
+                }
+              }
+            },
+            {
+              "__typename": "CrossReferencedEvent",
+              "id": "CRE_kwDOVjmb-s8AAAAE34YLKg",
+              "createdAt": "2026-11-09T20:48:48Z",
+              "actor": {
+                "login": "ivan-anchev"
+              },
+              "isCrossRepository": false,
+              "source": {
+                "number": 66,
+                "title": "Draw pr-reviews diffs with Pierre, findings under their lines",
+                "url": "https://github.com/ivan-anchev/bb-plugins/pull/66",
+                "repository": {
+                  "nameWithOwner": "ivan-anchev/bb-plugins"
+                }
+              }
+            },
+            {
+              "__typename": "PullRequestReview",
+              "id": "PRR_kwDOVjmb-s8AAAABXBdIPg",
+              "databaseId": 5839996990,
+              "url": "https://github.com/ivan-anchev/bb-plugins/pull/40#pullrequestreview-5839996990",
+              "body": "",
+              "createdAt": "2026-11-10T10:02:59Z",
+              "author": {
+                "__typename": "User",
+                "login": "ivan-anchev"
+              },
+              "state": "COMMENTED",
+              "submittedAt": "2026-11-10T10:02:59Z",
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0xMFQxMDowMjo1OVrPAAAAAQ2fT-w="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4523511788
+                  }
+                ]
+              }
+            },
+            {
+              "__typename": "PullRequestReview",
+              "id": "PRR_kwDOVjmb-s8AAAABXBde5A",
+              "databaseId": 5840002788,
+              "url": "https://github.com/ivan-anchev/bb-plugins/pull/40#pullrequestreview-5840002788",
+              "body": "",
+              "createdAt": "2026-11-10T10:03:28Z",
+              "author": {
+                "__typename": "User",
+                "login": "ivan-anchev"
+              },
+              "state": "COMMENTED",
+              "submittedAt": "2026-11-10T10:03:28Z",
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0xMFQxMDowMzoyOFrPAAAAAQ2fYcY="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4523516358
+                  }
+                ]
+              }
+            },
+            {
+              "__typename": "PullRequestReview",
+              "id": "PRR_kwDOVjmb-s8AAAABXBeKuA",
+              "databaseId": 5840014008,
+              "url": "https://github.com/ivan-anchev/bb-plugins/pull/40#pullrequestreview-5840014008",
+              "body": "",
+              "createdAt": "2026-11-10T10:04:24Z",
+              "author": {
+                "__typename": "User",
+                "login": "ivan-anchev"
+              },
+              "state": "COMMENTED",
+              "submittedAt": "2026-11-10T10:04:24Z",
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0xMFQxMDowNDoyNFrPAAAAAQ2fg_A="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4523525104
+                  }
+                ]
+              }
+            },
+            {
+              "__typename": "CrossReferencedEvent",
+              "id": "CRE_kwDOVjmb-s8AAAAE6_QVbQ",
+              "createdAt": "2026-11-10T16:57:21Z",
+              "actor": {
+                "login": "ivan-anchev"
+              },
+              "isCrossRepository": false,
+              "source": {
+                "number": 80,
+                "title": "Show GitHub's review threads in pr-reviews, and reply to them in place",
+                "url": "https://github.com/ivan-anchev/bb-plugins/pull/80",
+                "repository": {
+                  "nameWithOwner": "ivan-anchev/bb-plugins"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

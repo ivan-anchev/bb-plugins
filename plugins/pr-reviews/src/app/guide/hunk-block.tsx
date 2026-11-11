@@ -3,7 +3,7 @@
 // no text hunks is the row with a one-line note, over the file's threads.
 import { useMemo, useState, type ReactNode, type Ref } from "react";
 import { NO_THREADS, placeThreads, threadsOfUnit } from "../../comments/place-threads.ts";
-import type { PrComments } from "../../comments/thread-schema.ts";
+import type { PrComments } from "../../comments/timeline-schema.ts";
 import { diffRowsOf } from "../../diff/diff-rows.ts";
 import { hunkOf, WHOLE_FILE, type DiffFile, type HunkId } from "../../diff/diff-schema.ts";
 import type { GuideHunk } from "../../guide/guide-schema.ts";

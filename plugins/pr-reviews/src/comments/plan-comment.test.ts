@@ -6,7 +6,7 @@ import { hunkIdOf, type DiffFile } from "../diff/diff-schema.ts";
 import type { Finding } from "../guide/guide-schema.ts";
 import { GITHUB_BODY_LIMIT, type LineRef } from "./comment-schema.ts";
 import { spanBetween } from "./line-span.ts";
-import { checkComment, checkReply, findingCommentText, planComment } from "./plan-comment.ts";
+import { checkComment, checkConversationComment, checkReply, findingCommentText, planComment } from "./plan-comment.ts";
 import type { ReviewThread } from "./thread-schema.ts";
 
 const PATH = "src/a.ts";
@@ -184,4 +184,9 @@ test("a reply goes to the thread's first comment, with the reader's words trimme
 
 test("a reply over GitHub's limit is blocked, not sent", () => {
   assert.deepEqual(checkReply(THREAD, "x".repeat(GITHUB_BODY_LIMIT + 1)), { blocked: "This comment is 65,537 characters, and GitHub takes at most 65,536. Shorten it." });
+});
+
+test("a conversation comment is the reader's words trimmed, a quote included, and one over GitHub's limit is blocked", () => {
+  assert.deepEqual(checkConversationComment("> Why?\n\nBecause. \n"), { request: { body: "> Why?\n\nBecause." } });
+  assert.deepEqual(checkConversationComment("x".repeat(GITHUB_BODY_LIMIT + 1)), { blocked: "This comment is 65,537 characters, and GitHub takes at most 65,536. Shorten it." });
 });

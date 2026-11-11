@@ -1,0 +1,52 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "files": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": "MTI"
+          },
+          "nodes": [
+            {
+              "path": ".changeset/true-parks-retire.md"
+            },
+            {
+              "path": "packages/astro/package.json"
+            },
+            {
+              "path": "packages/astro/src/cli/add/index.ts"
+            },
+            {
+              "path": "packages/astro/src/cli/definitions.ts"
+            },
+            {
+              "path": "packages/astro/src/cli/dev/index.ts"
+            },
+            {
+              "path": "packages/astro/src/cli/flags.ts"
+            },
+            {
+              "path": "packages/astro/src/cli/index.ts"
+            },
+            {
+              "path": "packages/astro/src/cli/infra/mri-cli-argument-parser.ts"
+            },
+            {
+              "path": "packages/astro/src/events/session.ts"
+            },
+            {
+              "path": "packages/astro/test/units/cli/argument-parser.contract.ts"
+            },
+            {
+              "path": "packages/astro/test/units/cli/argument-parser.test.ts"
+            },
+            {
+              "path": "pnpm-lock.yaml"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

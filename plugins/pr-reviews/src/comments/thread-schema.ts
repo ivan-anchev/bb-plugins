@@ -1,5 +1,5 @@
-// The canonical shapes of the comments GitHub already has on a PR: review threads on its files and
-// the conversation's comments. Parsed once from gh (github/pr-comments.ts); pure zod, shared by the
+// The canonical shapes of the comments GitHub already has on a PR: one comment, and the review
+// threads on its files. Parsed once from gh (github/pr-comments.ts); pure zod, shared by the
 // server and the app.
 import { z } from "zod";
 import { numberedLineSchema } from "../diff/diff-schema.ts";
@@ -42,10 +42,6 @@ export const reviewThreadSchema = z.object({
   comments: z.array(githubCommentSchema).min(1),
 });
 export type ReviewThread = z.infer<typeof reviewThreadSchema>;
-
-/** Every comment on a PR: its review threads, and its conversation (the comments on no file), each in GitHub's order. */
-export const prCommentsSchema = z.object({ threads: z.array(reviewThreadSchema), conversation: z.array(githubCommentSchema) });
-export type PrComments = z.infer<typeof prCommentsSchema>;
 
 /** A comment's text as a quote that opens a reply, as GitHub's Quote reply writes it: each line behind `> `, then a blank line. */
 export function quoteReplyText(body: string): string {

@@ -3,9 +3,11 @@
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { codeQuoteSchema, commentBodySchema, commentRequestSchema } from "./comments/comment-schema.ts";
-import { prCommentsSchema, reviewThreadSchema } from "./comments/thread-schema.ts";
+import { reviewThreadSchema } from "./comments/thread-schema.ts";
+import { prCommentsSchema } from "./comments/timeline-schema.ts";
 import { diffFileSchema } from "./diff/diff-schema.ts";
 import { guideSchema } from "./guide/guide-schema.ts";
+import { labelSchema } from "./github/label.ts";
 import { repoSchema, type Repo } from "./github/repo.ts";
 
 const prNumberSchema = z.number().int().positive();
@@ -59,10 +61,6 @@ const reviewerSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("team"), name: z.string() }),
 ]);
 export type Reviewer = z.infer<typeof reviewerSchema>;
-
-/** A GitHub label; `color` is a CSS hex color, `#rrggbb`. */
-const labelSchema = z.object({ name: z.string(), color: z.string() });
-export type Label = z.infer<typeof labelSchema>;
 
 /** GitHub's state of a PR, where an open draft is DRAFT. */
 const prStateSchema = z.enum(["OPEN", "DRAFT", "CLOSED", "MERGED"]);
@@ -223,7 +221,7 @@ export const prReviewsContract = defineRpcContract({
     output: empty,
   },
   /**
-   * Every comment GitHub has on the PR: its review threads and its conversation. Tagged per PR:
+   * Every comment GitHub has on the PR: its review threads and its timeline. Tagged per PR:
    * each post below re-reads it, so the comment shows in place.
    */
   comments: { input: prRefSchema, output: prCommentsSchema, tags: (input) => [commentsTag(input)] },

@@ -7,18 +7,17 @@
 // and the comment box is the only raised surface (app.css holds the tint and both rings).
 // Everything sits one 6px inset from the card's 12px corners: the avatars, which a diff lines up
 // with its line numbers (pr-diff.tsx), and the box, whose corners are 6px, concentric with the card's.
-import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { FileThread } from "../../comments/place-threads.ts";
 import { quoteReplyText, type GitHubComment, type ReviewThread } from "../../comments/thread-schema.ts";
 import { foldOf, type Opened } from "./thread-fold.ts";
 import type { NumberedLine } from "../../diff/diff-schema.ts";
-import { timeAgo } from "../relative-time.ts";
-import { Avatar } from "../ui/avatar.tsx";
 import { Button } from "../ui/button.tsx";
+import { useThreadReveal } from "../changes/thread-reveal.ts";
 import { useFocusHandOff, type FocusHandOff } from "../ui/focus-hand-off.ts";
-import { IconLink } from "../ui/icon-button.tsx";
-import { Prose } from "../ui/prose.tsx";
+import { mergeRefs } from "../ui/merge-refs.ts";
+import { firstLineOf, GitHubCommentView, QUIET_BUTTON } from "./github-comment.tsx";
 
 /** Reply, Ask about this, or a comment's Quote (`quote` "" for none), from its button. */
 export type OpenReply = (request: { quote: string; from: HTMLElement }) => void;
@@ -36,15 +35,24 @@ type ReviewThreadCardProps = {
 
 // How the thread folds comes from each read (foldOf); only what the reader opened is kept. Focus
 // stays in the thread as it folds and unfolds (REVIEW.md): the resolved row hands it to Collapse
-// and back, and "N more" to the first comment it hid.
+// and back, and "N more" to the first comment it hid. A thread the reader asked to see from the
+// Summary tab opens, as if they had opened it, and takes focus once drawn.
 export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: ReviewThreadCardProps) {
   const [opened, setOpened] = useState<Opened>({ thread: false, middle: false });
   const resolvedFocus = useFocusHandOff();
   const middleFocus = useFocusHandOff();
+  const reveal = useThreadReveal(thread.id);
+  if (reveal.asked && !opened.thread) setOpened({ ...opened, thread: true });
+  const sectionRef = useMemo(() => mergeRefs(resolvedFocus.from, reveal.target), [resolvedFocus.from, reveal.target]);
   const fold = foldOf(thread, opened);
   if (fold.kind === "row") return <ResolvedRow thread={thread} focus={resolvedFocus} onOpen={() => setOpened({ ...opened, thread: true })} />;
   return (
-    <section ref={resolvedFocus.from} aria-label={`Review thread by ${thread.comments[0].author.login}`} className={`${SURFACE} grid gap-2 rounded-[12px] p-1.5`}>
+    <section
+      ref={sectionRef}
+      tabIndex={-1}
+      aria-label={`Review thread by ${thread.comments[0].author.login}`}
+      className={`${SURFACE} grid gap-2 rounded-[12px] p-1.5 outline-none focus-visible:ring-1 focus-visible:ring-ring`}
+    >
       <div className="grid gap-3">
         {atFile !== null && atFile.why !== "file" && <Original thread={thread} why={atFile.why} />}
         <Comments
@@ -100,9 +108,10 @@ function Comments({ thread, shown, hidden, focus, prAuthor, onShowAll, onQuote }
     <ol className="grid gap-3">
       {shown.map((comment, index) => (
         <li key={comment.id} className="grid gap-3">
-          <Comment
+          <GitHubCommentView
             ref={comment === second ? focus.to : undefined}
             comment={comment}
+            density="thread"
             byPrAuthor={comment.author.login === prAuthor}
             onQuote={(from) => onQuote(comment, from)}
           />
@@ -114,65 +123,6 @@ function Comments({ thread, shown, hidden, focus, prAuthor, onShowAll, onQuote }
         </li>
       ))}
     </ol>
-  );
-}
-
-const QUIET_BUTTON =
-  "cursor-pointer rounded-md text-xs leading-5 text-muted-foreground transition-colors duration-150 ease-out hover:bg-state-hover hover:text-foreground hover:duration-0 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none";
-
-type CommentProps = { ref?: Ref<HTMLElement>; comment: GitHubComment; byPrAuthor: boolean; onQuote(from: HTMLElement): void };
-
-// Quote and the link to GitHub show on hover or focus, and always where there is no hover. The
-// comment is no tab stop, but can hold focus, so "N more" can hand its focus to it.
-function Comment({ ref, comment, byPrAuthor, onQuote }: CommentProps) {
-  const { author } = comment;
-  return (
-    <article ref={ref} tabIndex={-1} className="group/comment grid grid-cols-[20px_minmax(0,1fr)] gap-x-2.5 rounded-md outline-offset-4 focus-visible:outline-1 focus-visible:outline-ring">
-      <Avatar login={author.login} size={20} />
-      <div className="flex min-h-5 min-w-0 items-center gap-1.5">
-        <span className="min-w-0 truncate font-medium">{author.login}</span>
-        {byPrAuthor && <span className="shrink-0 text-xs text-muted-foreground">author</span>}
-        {author.bot && <span className="shrink-0 text-xs text-muted-foreground">bot</span>}
-        <span title={new Date(comment.createdAt).toLocaleString()} className="shrink-0 text-xs text-subtle-foreground">
-          {timeAgo(comment.createdAt, Date.now())}
-        </span>
-        <div className="-my-1 ml-auto flex items-center opacity-0 transition-opacity duration-150 group-focus-within/comment:opacity-100 group-hover/comment:opacity-100 [@media(hover:none)]:opacity-100">
-          <Button variant="ghost" size="small" aria-label={`Quote reply to ${author.login}`} onClick={(event) => onQuote(event.currentTarget)}>
-            Quote
-          </Button>
-          <IconLink icon="ArrowUpRight" label="Open on GitHub" href={comment.url} />
-        </div>
-      </div>
-      <div className="col-start-2 mt-0.5 min-w-0 max-w-[80ch]">{author.bot ? <ClampedBody body={comment.body} /> : <Prose text={comment.body} />}</div>
-    </article>
-  );
-}
-
-// A bot's comment, often long and generated, folds to three lines with Show more, and is never
-// hidden whole. The button shows only when the body is taller than the fold.
-// why a ResizeObserver, not a layout effect: a thread under a line is a note Pierre slots into its
-// shadow root after this render, so the body has no height to measure until it is drawn.
-function ClampedBody({ body }: { body: string }) {
-  const text = useRef<HTMLDivElement>(null);
-  const [overflows, setOverflows] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-  useEffect(() => {
-    const field = text.current!;
-    const drawn = new ResizeObserver(() => setOverflows(field.scrollHeight > field.clientHeight + 1));
-    drawn.observe(field);
-    return () => drawn.disconnect();
-  }, []);
-  return (
-    <>
-      <div ref={text} className={expanded ? "" : "max-h-[60px] overflow-hidden"}>
-        <Prose text={body} />
-      </div>
-      {(overflows || expanded) && (
-        <button type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)} className={`${QUIET_BUTTON} -ml-2 mt-1 px-2 py-0.5`}>
-          {expanded ? "Show less" : "Show more"}
-        </button>
-      )}
-    </>
   );
 }
 
@@ -241,5 +191,3 @@ function ExcerptRow({ line }: { line: NumberedLine }) {
     </div>
   );
 }
-
-const firstLineOf = (body: string) => body.trim().split("\n")[0];

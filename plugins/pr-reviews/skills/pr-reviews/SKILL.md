@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request with Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (Write and Preview tabs, Ask about this to ask the review thread, Comment to post a GitHub review comment on an explicit click; review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request with Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (Write and Preview tabs, Ask about this to ask the review thread, Comment to post a GitHub review comment on an explicit click; review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -49,9 +49,10 @@ own. Switching tabs keeps the guide where you left it, on the same step and
 scroll position, and Changes on the same file, scroll position and open
 folders. With focus on a tab, ← and → (and Home and End) move between the tabs.
 
-**Summary** shows the PR's own description, rendered as markdown under
-"<author> wrote", or "No description provided." when the PR has none. Beside it,
-a side panel shows the PR's details as GitHub has them, read only:
+**Summary** shows the PR's own description, rendered as markdown, or "No
+description provided." when the PR has none, and under it the PR's **Activity**
+(see "Activity" below). Beside them, a side panel shows the PR's details as
+GitHub has them, read only:
 
 - **Reviewers**: everyone asked for a review that is still outstanding (a team
   shows as the team), and everyone whose latest review approved, requested
@@ -71,6 +72,52 @@ A section with nothing in it is left out, and a PR with no reviewers, checks or
 labels has no side panel. The panel never changes anything on GitHub. It comes
 with the PR's own read, so Refresh updates it. With no side panel, or on a page
 narrower than 600px, the description takes the whole width.
+
+### Activity
+
+Under the description, **Activity** shows what happened on the PR, oldest
+first, the way GitHub's Conversation tab does, under a muted divider for each
+day:
+
+- **Conversation comments** and **reviews with a body or an open thread** sit on
+  the page: the avatar, the name, `author` after the PR author's, `bot` after an
+  app's, a review's verdict (`approved` in green, `requested changes` in red,
+  else `reviewed`), how long ago, and the markdown. A bot's body is clamped to
+  three lines with **Show more**; nobody else's is. **Quote** and a link to
+  GitHub show on hover or focus.
+- **A review's threads** show under it as rows in a tinted group: the file name
+  and line in monospace, the thread's first line, and "resolved", "outdated" or
+  both when they apply. A row opens the **Changes** tab at that file, with the
+  thread opened, in view and focused; if the Changes filters hide the file,
+  they are cleared. A thread on a file the diff no longer changes is plain
+  text, with "not in this diff" after its state, and opens nothing.
+- **Commits and events** (labels, title changes, review requests, assignees,
+  milestones, force-pushes, base branch changes, mentions, ready for review,
+  draft, closed, reopened, branch deleted or restored, auto-merge) between two
+  messages fold into one line, such as "1 commit and 2 label changes · 6d ago",
+  with no names until you open it. Enter or a click opens and closes it in
+  place. A label added and later removed in the same run counts as one change.
+  A run of one shows that commit or event in full.
+- **A review with only a verdict** is one line, "X approved · 5d ago". A review
+  whose threads are all resolved is one line too, "X reviewed · 1 resolved
+  thread · 6d ago", which opens to the whole review, with **Collapse**.
+- **The merge** is one line with the merged glyph, "X merged into main". The
+  close a merge causes is left out.
+
+Lines between two messages sit together in one recessed tinted block. Which
+lines you opened is kept while the page is open; whether a review folds comes
+from each read, so a thread GitHub reopens shows its review open again. When a
+read changes how a review shows while focus is in it, focus moves to the line,
+the review or Collapse that replaces it.
+
+At the foot, the comment box comments on the PR's conversation: write, preview,
+then **Comment** (⌘↵) posts it (see "Commenting on GitHub"). **Quote** on a
+message adds it to the box as a `> ` quote after any text there, and takes you
+to the box; nothing posts before Comment. The posted comment shows in the
+activity when it re-reads.
+
+Activity comes from the same read as the review threads, so Refresh updates it,
+and a failed read shows its error above the activity already shown.
 
 **Changes** shows the PR's whole diff, base to head, as GitHub serves it now.
 It needs no guide: it works on any PR, before a review starts. It reads the diff (`gh pr diff`) the first time the
@@ -229,14 +276,13 @@ In a thread the box's buttons are **Ask about this**, which sends the review
 thread your question with the GitHub thread's comments, and **Reply** (⌘↵),
 which posts your text as a reply in that thread.
 
-The PR's conversation comments, on no file, are read too but not shown yet.
-
 ## Commenting on GitHub
 
-PR Reviews posts to GitHub only a review comment or reply you wrote or picked,
-when you click **Comment** or **Reply** (or press ⌘↵, Ctrl+↵ off a Mac) in the
-comment box, from either tab. It posts nothing else: no review, approval or
-edit. Review threads never post.
+PR Reviews posts to GitHub only a review comment, reply or conversation
+comment you wrote or picked, when you click **Comment** or **Reply** (or press
+⌘↵, Ctrl+↵ off a Mac) in a comment box, from any tab. It posts nothing else: no
+review, approval or edit. Review threads never post. A conversation comment,
+from the Summary tab's box, goes to the PR's conversation, on no file.
 
 The comment goes through `gh` as your account, on the commit the diff shows,
 which GitHub may later mark outdated. The box then reads "Commented", with

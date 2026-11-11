@@ -1,10 +1,11 @@
 PR Reviews adds a **PR Reviews** app to bb's left rail. It lists a GitHub
 project's open pull requests and opens each one on a page with its whole diff
 in a file tree and a guided review, written by a review thread, that walks you
-through the change step by step. Every diff shows the PR's GitHub review
-threads where they belong. It posts to GitHub only the review comments and
-replies you write or pick from the guide, on your click; review threads never
-post to GitHub.
+through the change step by step. Its Summary shows the PR's activity, as
+GitHub's Conversation tab does, and every diff shows the PR's GitHub review
+threads where they belong. It posts to GitHub only the review comments,
+replies and conversation comments you write or pick from the guide, on your
+click; review threads never post to GitHub.
 
 ## What you get
 
@@ -15,9 +16,17 @@ post to GitHub.
 - **A page per pull request**: an icon for whether it is open, a draft,
   merged or closed, its title, author, `base ← branch`, and Review chat and
   GitHub icon buttons, above three tabs: **Summary**, the author's own
-  description beside the PR's reviewers, checks and labels; **Changes**, the
+  description and the PR's activity beside its reviewers, checks and labels; **Changes**, the
   PR's whole diff, with its `+N −M` on the tab; and **Guide**, which keeps its
   step while you switch and marks a ready guide with a dot.
+- **Activity**: under the description, the PR's whole GitHub activity, oldest
+  first by day, as GitHub's Conversation tab shows it: conversation comments
+  and reviews on the page, each review's threads as rows that open the Changes
+  tab at the thread, and the commits and events between them folded into one
+  line, such as "1 commit and 2 label changes", that opens in place. Approvals
+  and reviews whose threads are all resolved are one line each. A composer at
+  the foot comments on the PR's conversation; Quote on a message quotes it
+  there.
 - **Changes**: every changed file in a tree with its `+N −M`, beside the
   selected file's diff, drawn like bb's own. Click "N unmodified lines" to
   show the lines between hunks. Filter by path (globs, `!` to exclude), by
@@ -80,7 +89,7 @@ post to GitHub.
 
 PR Reviews reads pull requests with the GitHub CLI (`gh`) on the machine that
 runs bb, so `gh` must be installed and signed in there. It writes to GitHub
-only when you click Comment or Reply in the comment box, as your `gh` account; it never approves, requests changes or edits anything. Review threads
+only when you click Comment or Reply in a comment box, as your `gh` account; it never approves, requests changes or edits anything. Review threads
 never reach GitHub at all: before one starts, PR Reviews fetches the PR's commits
 into the project's repository with `git fetch`, and the thread reads them
 there. So Start review needs the project's default checkout on the machine

@@ -17,7 +17,7 @@ export function holdEscape(target: EventTarget): () => void {
 
 // why the document, bubbling: everything on the page acts on the Esc first (the box's own keys, a
 // menu, whose Radix layer skips an Esc already prevented), and bb's, on the window, comes after.
-/** Holds Esc while the calling box is open. */
-export function useHoldEscape(): void {
-  useEffect(() => holdEscape(document), []);
+/** Holds Esc while the calling box is open and `held`. */
+export function useHoldEscape(held: boolean): void {
+  useEffect(() => (held ? holdEscape(document) : undefined), [held]);
 }

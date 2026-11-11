@@ -36,7 +36,7 @@ const MASTHEAD = "grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3 g
 // why a purple of our own: bb has no purple token. GitHub's merged purple mixed a quarter toward
 // the foreground reads 5.04:1 on its tinted tile in the dark theme and 4.79:1 in light, over the
 // 3:1 a graphic needs.
-const MERGED = "text-[color-mix(in_oklab,#8957e5_75%,var(--foreground))]";
+export const MERGED = "text-[color-mix(in_oklab,#8957e5_75%,var(--foreground))]";
 
 const STATE_TILES = {
   OPEN: { label: "Open", icon: "GitPullRequest", color: "text-success-foreground" },

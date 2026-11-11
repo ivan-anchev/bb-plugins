@@ -1,21 +1,23 @@
 // The only module that runs `gh`. It parses gh's JSON once into the canonical PR types, reads the
-// PR's comments, posts the comments a reader chose to, and maps every process failure to a refusal the app can show
+// PR's comments and timeline, posts the comments a reader chose to, and maps every process failure to a refusal the app can show
 // beside its data or a kept draft.
 import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import type { CommentRequest } from "../comments/comment-schema.ts";
-import type { PrComments, ReviewThread } from "../comments/thread-schema.ts";
+import type { ReviewThread } from "../comments/thread-schema.ts";
+import type { PrComments } from "../comments/timeline-schema.ts";
 import type { PrDetail, PrSummary } from "../contract.ts";
 import { statusCheckRollupSchema } from "./checks.ts";
 import { commentApiArgs, conversationCommentApiArgs, replyApiArgs } from "./comment-args.ts";
 import { ghPostRefusalFor, ghRefusalFor } from "./gh-refusal.ts";
+import { ghLabelSchema } from "./label.ts";
 import { parseHostCommandFailure, runHostCommand } from "./host-command.ts";
 import type { PrCommits } from "./pr-commits.ts";
 import {
   allPages,
-  CONVERSATION_QUERY,
+  CHANGED_PATHS_QUERY,
   graphqlArgs,
-  parseConversationPage,
+  parseChangedPathsPage,
   parseThreadCommentsPage,
   parseThreadsPage,
   prVariables,
@@ -23,6 +25,7 @@ import {
   THREADS_QUERY,
   toThread,
 } from "./pr-comments.ts";
+import { isReview, parseReviewCommentsPage, parseTimelinePage, REVIEW_COMMENTS_QUERY, TIMELINE_QUERY, toTimeline, type GhTimelineNode } from "./pr-timeline.ts";
 import type { Repo } from "./repo.ts";
 import { latestReviewsSchema, reviewRequestsSchema, toReviewers } from "./reviewers.ts";
 
@@ -59,8 +62,7 @@ const ghDetailSchema = ghSummarySchema.extend({
   statusCheckRollup: statusCheckRollupSchema,
   reviewRequests: reviewRequestsSchema,
   latestReviews: latestReviewsSchema,
-  // gh gives a label's color as hex without the `#`.
-  labels: z.array(z.object({ name: z.string(), color: z.string() }).transform(({ name, color }) => ({ name, color: `#${color}` }))),
+  labels: z.array(ghLabelSchema),
 });
 
 const toDetail = (pr: z.infer<typeof ghDetailSchema>): PrDetail => ({
@@ -120,10 +122,16 @@ export async function readFileAt(repo: Repo, sha: string, path: string): Promise
   return Buffer.from(file.content, "base64").toString("utf8");
 }
 
-/** Every review thread on the PR and every comment of its conversation, all pages of each. */
+/** Every review thread on the PR, every item of its timeline and the paths it changes, all pages of each. */
 export async function readPrComments(repo: Repo, number: number): Promise<PrComments> {
-  const [threads, conversation] = await Promise.all([reviewThreadsOf(repo, number), conversationOf(repo, number)]);
-  return { threads, conversation };
+  const [threads, nodes, changedPaths] = await Promise.all([reviewThreadsOf(repo, number), timelineOf(repo, number), changedPathsOf(repo, number)]);
+  return { threads, timeline: toTimeline(nodes, await reviewCommentsOf(nodes), threads), changedPaths };
+}
+
+async function changedPathsOf(repo: Repo, number: number): Promise<string[]> {
+  const pr = prVariables(repo, number);
+  const files = await allPages(null, async (cursor) => parseChangedPathsPage(await graphql(CHANGED_PATHS_QUERY, { ...pr, cursor })));
+  return files.map((file) => file.path);
 }
 
 async function reviewThreadsOf(repo: Repo, number: number): Promise<ReviewThread[]> {
@@ -137,9 +145,20 @@ async function reviewThreadsOf(repo: Repo, number: number): Promise<ReviewThread
   );
 }
 
-async function conversationOf(repo: Repo, number: number) {
+async function timelineOf(repo: Repo, number: number): Promise<GhTimelineNode[]> {
   const pr = prVariables(repo, number);
-  return allPages(null, async (cursor) => parseConversationPage(await graphql(CONVERSATION_QUERY, { ...pr, cursor })));
+  return allPages(null, async (cursor) => parseTimelinePage(await graphql(TIMELINE_QUERY, { ...pr, cursor })));
+}
+
+// Each review's comment ids, all pages, by the review's node id.
+async function reviewCommentsOf(nodes: GhTimelineNode[]): Promise<Map<string, number[]>> {
+  const reviews = await Promise.all(
+    nodes.filter(isReview).map(async (review): Promise<[string, number[]]> => {
+      const comments = await allPages(review.comments, async (cursor) => parseReviewCommentsPage(await graphql(REVIEW_COMMENTS_QUERY, { id: review.id, cursor })));
+      return [review.id, comments.map((comment) => comment.databaseId)];
+    }),
+  );
+  return new Map(reviews);
 }
 
 const graphql = async (query: string, variables: Record<string, string | number | null>): Promise<unknown> => JSON.parse(await runGh(graphqlArgs(query, variables)));

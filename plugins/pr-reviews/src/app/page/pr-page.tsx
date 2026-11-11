@@ -1,9 +1,11 @@
 // navPanel component: the chosen PR's page, its header above the Summary, Changes and Guide tabs.
 // The Guide tab shows one screen per review state.
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
+import type { ReviewThread } from "../../comments/thread-schema.ts";
 import { reviewThreadOf, type PrDetail, type ReviewState } from "../../contract.ts";
 import { ChangesTab } from "../changes/changes-tab.tsx";
+import type { ThreadReveal } from "../changes/thread-reveal.ts";
 import { usePullRequest, type PrTarget } from "../queries.ts";
 import { GuideView } from "../guide/guide-view.tsx";
 import { GuideViewOptions, useViewOptions, type ViewOptionsState } from "../guide/view-options.tsx";
@@ -38,9 +40,18 @@ function PullRequestPage({ projectId, number }: { projectId: string; number: num
 type ReviewPageProps = { target: PrTarget; pr: PrDetail; review: ReviewState; viewOptions: ViewOptionsState };
 
 // One header and one tab bar for every review state, so their buttons keep keyboard focus while the
-// state changes. A PR opens on Summary: the page is keyed by PR, so the tab is too.
+// state changes. A PR opens on Summary: the page is keyed by PR, so the tab is too. A review
+// thread's row in the Summary tab's activity opens the Changes tab at that thread.
 function ReviewPage({ target, pr, review, viewOptions }: ReviewPageProps) {
   const [tab, setTab] = useState<PrTab>("summary");
+  const [reveal, setReveal] = useState<ThreadReveal | null>(null);
+  const asks = useRef(0);
+  const showThread = (thread: ReviewThread) => {
+    asks.current += 1;
+    setReveal({ path: thread.path, threadId: thread.id, asked: asks.current });
+    setTab("changes");
+  };
+  const onRevealed = useCallback(() => setReveal(null), []);
   return (
     <>
       <PrHeader pr={pr} hasReviewThread={reviewThreadOf(review) !== null} />
@@ -48,10 +59,10 @@ function ReviewPage({ target, pr, review, viewOptions }: ReviewPageProps) {
         selected={tab}
         onSelect={setTab}
         tabs={{
-          summary: { status: { kind: "none" }, panel: <SummaryTab pr={pr} />, barEnd: null },
+          summary: { status: { kind: "none" }, panel: <SummaryTab target={target} pr={pr} onShowThread={showThread} />, barEnd: null },
           changes: {
             status: { kind: "lines", added: pr.additions, removed: pr.deletions },
-            panel: <ChangesTab target={target} shown={tab === "changes"} />,
+            panel: <ChangesTab target={target} shown={tab === "changes"} reveal={reveal} onRevealed={onRevealed} />,
             barEnd: null,
           },
           guide: guideTabOf(target, pr, review, viewOptions, tab === "guide"),

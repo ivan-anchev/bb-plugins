@@ -1,0 +1,219 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "reviewThreads": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0wNVQxNDoxMzoyM1rOtBqLGg=="
+          },
+          "nodes": [
+            {
+              "id": "PRRT_kwDOFL76Q86zpDt0",
+              "isResolved": true,
+              "resolvedBy": {
+                "login": "florian-lefebvre"
+              },
+              "isOutdated": true,
+              "path": "packages/language-tools/astro-check/src/index.ts",
+              "subjectType": "LINE",
+              "line": null,
+              "startLine": null,
+              "diffSide": "RIGHT",
+              "startDiffSide": null,
+              "originalLine": 50,
+              "originalStartLine": null,
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0wNFQxNDozNzo0M1rPAAAAAQpd8-E="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4468896737,
+                    "url": "https://github.com/withastro/astro/pull/18616#discussion_r4468896737",
+                    "body": "`[medium][correctness]`: `astro check --help` now runs diagnostics instead of showing help\n\nBefore this change, `parseArgsAsCheckConfig` used yargs' built-in `.help()` and `.version()` handlers. With `--help`/`-h` or `--version`, yargs printed the output and exited the process.\n\nNow the function just returns `{ help: true, ... }`. Help output only exists in `bin/astro-check.js`, so it is skipped when the package is called from `packages/astro/src/cli/check/index.ts`:\n\n- That code skips `sync` when `flags.help` is set (line 43).\n- It then calls `parseArgsAsCheckConfig(process.argv)` and passes the result straight to `checker(config)`.\n\nSo `astro check --help` now runs a full type-check (and `--watch` stays running) instead of printing usage. This also affects users who upgrade `@astrojs/check` without upgrading `astro`, because the two are versioned separately. `--version` has the same problem in both entry points: it now runs a check instead of printing the version.\n\nSuggested fix: put the help (and version) handling inside `@astrojs/check`, for example in a shared helper or an exported help printer, and have the Astro `check` command use it when `flags.help` is true. Add a test that `astro check --help` does not call the checker.",
+                    "createdAt": "2026-11-04T14:37:43Z",
+                    "author": {
+                      "__typename": "Bot",
+                      "login": "astro-factory"
+                    },
+                    "commit": {
+                      "oid": "c0404b76f92a7e399e7334191b31cf82e0218168"
+                    },
+                    "originalCommit": {
+                      "oid": "40fb88ddb5c55c32a883b6360cf318cbc26afc5f"
+                    },
+                    "diffHunk": "@@ -3,19 +3,66 @@ import path from 'node:path';\n import { AstroCheck } from '@astrojs/language-server';\n import { watch } from 'chokidar';\n import { bold, dim, red, yellow } from 'kleur/colors';\n-import yargs from 'yargs';\n-import { hideBin } from 'yargs/helpers';\n+import mri from 'mri';\n import { options } from './options.js';\n import { isInIgnoredDirectory } from './watch.js';\n \n+type FlagValue<Option> = Option extends { type: 'boolean' }\n+\t? boolean\n+\t: Option extends { type: 'string' }\n+\t\t? Option extends { default: undefined }\n+\t\t\t? string | undefined\n+\t\t\t: string\n+\t\t: Option extends { choices: readonly (infer Choice)[] }\n+\t\t\t? Choice\n+\t\t\t: never;\n+\n+export type Flags = {\n+\t[Key in keyof typeof options]: FlagValue<(typeof options)[Key]>;\n+} & { help?: boolean };\n+\n+function camelCase(option: string): string {\n+\treturn option.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());\n+}\n+\n+function kebabCase(option: string): string {\n+\treturn option.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);\n+}\n+\n /**\n  * Given a list of arguments from the command line (such as `process.argv`), return parsed and processed options\n  */\n-export function parseArgsAsCheckConfig(args: string[]) {\n-\treturn yargs(hideBin(args)).options(options).parseSync();\n-}\n+export function parseArgsAsCheckConfig(args: string[]): Flags {\n+\tconst entries = Object.entries(options);\n+\tconst boolean = entries.flatMap(([name, option]) =>\n+\t\t'type' in option && option.type === 'boolean' ? [name, kebabCase(name)] : [],\n+\t);\n+\tboolean.push('help', 'h');\n+\tconst string = entries.flatMap(([name, option]) =>\n+\t\t('type' in option && option.type === 'string') || 'choices' in option\n+\t\t\t? [name, kebabCase(name)]\n+\t\t\t: [],\n+\t);\n+\tconst alias = Object.fromEntries([\n+\t\t...entries.flatMap(([name, option]) => ('alias' in option ? [[option.alias, name]] : [])),\n+\t\t['h', 'help'],\n+\t]);\n+\tconst parsed = mri(args.slice(2), { boolean, string, alias });"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_kwDOFL76Q86zpUzl",
+              "isResolved": true,
+              "resolvedBy": {
+                "login": "florian-lefebvre"
+              },
+              "isOutdated": true,
+              "path": "packages/language-tools/astro-check/src/index.ts",
+              "subjectType": "LINE",
+              "line": null,
+              "startLine": null,
+              "diffSide": "RIGHT",
+              "startDiffSide": null,
+              "originalLine": 36,
+              "originalStartLine": null,
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0wNFQxNDo0NzoyN1rPAAAAAQpftQM="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4469011715,
+                    "url": "https://github.com/withastro/astro/pull/18616#discussion_r4469011715",
+                    "body": "`[medium][correctness]`: New @astrojs/check makes `astro check --help` run diagnostics on existing Astro releases\n\nBefore this change, `parseArgsAsCheckConfig` used yargs, which printed help and called `process.exit` when it saw `--help`. Every released `astro` depends on that. Their `cli/check/index.ts` skips sync when `flags.help` is set, calls `parseArgsAsCheckConfig(process.argv)`, and then calls `checker(config)` without checking `config.help`.\n\nNow the function just returns `{ help: true, ... }`. Printing help is left to callers, and only this PR's updated `astro` and the `astro-check` bin do that.\n\n`@astrojs/check` ships as a patch (0.9.x) and declares no `astro` peer range. Projects that pick up the new `@astrojs/check` but stay on a current `astro` will see `astro check --help` log \"Getting diagnostics…\" and run a full type check, possibly exiting non-zero, instead of showing help.\n\nTo fix this, keep help handling inside `@astrojs/check` so old callers still work. For example, `parseArgsAsCheckConfig` (or the exported `check`) could print help and return or exit when `help` is set. The alternative is to make the cross-package dependency explicit, for example by changing how `astro` calls `@astrojs/check` and treating this as a coordinated, non-patch change.",
+                    "createdAt": "2026-11-04T14:47:27Z",
+                    "author": {
+                      "__typename": "Bot",
+                      "login": "astro-factory"
+                    },
+                    "commit": {
+                      "oid": "c0404b76f92a7e399e7334191b31cf82e0218168"
+                    },
+                    "originalCommit": {
+                      "oid": "7fbdd52f23f8e8d352e7bb17bc58e0222c9fc905"
+                    },
+                    "diffHunk": "@@ -3,19 +3,81 @@ import path from 'node:path';\n import { AstroCheck } from '@astrojs/language-server';\n import { watch } from 'chokidar';\n import { bold, dim, red, yellow } from 'kleur/colors';\n-import yargs from 'yargs';\n-import { hideBin } from 'yargs/helpers';\n+import mri from 'mri';\n import { options } from './options.js';\n import { isInIgnoredDirectory } from './watch.js';\n \n+type FlagValue<Option> = Option extends { type: 'boolean' }\n+\t? boolean\n+\t: Option extends { type: 'string' }\n+\t\t? Option extends { default: undefined }\n+\t\t\t? string | undefined\n+\t\t\t: string\n+\t\t: Option extends { choices: readonly (infer Choice)[] }\n+\t\t\t? Choice\n+\t\t\t: never;\n+\n+export type Flags = {\n+\t[Key in keyof typeof options]: FlagValue<(typeof options)[Key]>;\n+} & { help?: boolean; version?: boolean };\n+\n+function camelCase(option: string): string {\n+\treturn option.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());\n+}\n+\n+function kebabCase(option: string): string {\n+\treturn option.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);\n+}\n+\n /**\n  * Given a list of arguments from the command line (such as `process.argv`), return parsed and processed options\n  */\n-export function parseArgsAsCheckConfig(args: string[]) {\n-\treturn yargs(hideBin(args)).options(options).parseSync();\n+export function parseArgsAsCheckConfig(args: string[]): Flags {\n+\tconst entries = Object.entries(options);"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_kwDOFL76Q86zpmrf",
+              "isResolved": true,
+              "resolvedBy": {
+                "login": "florian-lefebvre"
+              },
+              "isOutdated": true,
+              "path": "packages/language-tools/astro-check/src/index.ts",
+              "subjectType": "LINE",
+              "line": null,
+              "startLine": null,
+              "diffSide": "RIGHT",
+              "startDiffSide": null,
+              "originalLine": 60,
+              "originalStartLine": null,
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0wNFQxNDo1NzowM1rPAAAAAQphfZU="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4469128597,
+                    "url": "https://github.com/withastro/astro/pull/18616#discussion_r4469128597",
+                    "body": "`[low][error-handling]`: Invalid choice values now crash the standalone CLI with a stack trace\n\nBefore this change, yargs handled an out-of-range choice like `astro-check --minimumSeverity fatal` by printing a usage message and exiting with code 1. Now `parseArgsAsCheckConfig` throws a plain `Error`, and `bin/astro-check.js` calls it at the top level with nothing to catch it. Users get an unhandled exception and a Node stack trace instead of a readable CLI error. Repeated values that become arrays hit the same path. The `astro check` path is fine because `throwAndExit` catches the error there.\n\nTo fix this, catch the parse error in `bin/astro-check.js`, print the message (and maybe the help text), then exit with code 1. The bin tests should include an invalid-choice case.",
+                    "createdAt": "2026-11-04T14:57:03Z",
+                    "author": {
+                      "__typename": "Bot",
+                      "login": "astro-factory"
+                    },
+                    "commit": {
+                      "oid": "c0404b76f92a7e399e7334191b31cf82e0218168"
+                    },
+                    "originalCommit": {
+                      "oid": "c8101eb452cff9c4c65b499b15281ce6a5638f17"
+                    },
+                    "diffHunk": "@@ -3,27 +3,104 @@ import path from 'node:path';\n import { AstroCheck } from '@astrojs/language-server';\n import { watch } from 'chokidar';\n import { bold, dim, red, yellow } from 'kleur/colors';\n-import yargs from 'yargs';\n-import { hideBin } from 'yargs/helpers';\n+import mri from 'mri';\n import { options } from './options.js';\n import { isInIgnoredDirectory } from './watch.js';\n \n+type FlagValue<Option> = Option extends { type: 'boolean' }\n+\t? boolean\n+\t: Option extends { type: 'string' }\n+\t\t? Option extends { default: undefined }\n+\t\t\t? string | undefined\n+\t\t\t: string\n+\t\t: Option extends { choices: readonly (infer Choice)[] }\n+\t\t\t? Choice\n+\t\t\t: never;\n+\n+export type Flags = {\n+\t[Key in keyof typeof options]: FlagValue<(typeof options)[Key]>;\n+} & { help?: boolean; version?: boolean };\n+\n+function camelCase(option: string): string {\n+\treturn option.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());\n+}\n+\n+function kebabCase(option: string): string {\n+\treturn option.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);\n+}\n+\n /**\n  * Given a list of arguments from the command line (such as `process.argv`), return parsed and processed options\n  */\n-export function parseArgsAsCheckConfig(args: string[]) {\n-\treturn yargs(hideBin(args)).options(options).parseSync();\n+export function parseArgsAsCheckConfig(args: string[]): Flags {\n+\tconst entries = Object.entries(options);\n+\tconst boolean = entries.flatMap(([name, option]) =>\n+\t\t'type' in option && option.type === 'boolean' ? [name, kebabCase(name)] : [],\n+\t);\n+\tboolean.push('help', 'h', 'version', 'v');\n+\tconst string = entries.flatMap(([name, option]) =>\n+\t\t('type' in option && option.type === 'string') || 'choices' in option\n+\t\t\t? [name, kebabCase(name)]\n+\t\t\t: [],\n+\t);\n+\tconst alias = Object.fromEntries([\n+\t\t...entries.flatMap(([name, option]) => ('alias' in option ? [[option.alias, name]] : [])),\n+\t\t['h', 'help'],\n+\t\t['v', 'version'],\n+\t]);\n+\tconst parsed = mri(args.slice(2), { boolean, string, alias });\n+\tconst flags = Object.fromEntries(\n+\t\tObject.entries(parsed).map(([name, value]) => [camelCase(name), value]),\n+\t);\n+\n+\tfor (const [name, option] of entries) {\n+\t\tif (flags[name] === undefined) flags[name] = option.default;\n+\t\tif ('choices' in option && !option.choices.includes(flags[name])) {\n+\t\t\tthrow new Error(\n+\t\t\t\t`Invalid value for --${kebabCase(name)}: ${String(flags[name])}. Expected one of: ${option.choices.join(', ')}.`,"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_kwDOFL76Q86zpx_W",
+              "isResolved": true,
+              "resolvedBy": {
+                "login": "florian-lefebvre"
+              },
+              "isOutdated": true,
+              "path": "packages/language-tools/astro-check/src/index.ts",
+              "subjectType": "LINE",
+              "line": null,
+              "startLine": null,
+              "diffSide": "RIGHT",
+              "startDiffSide": null,
+              "originalLine": 70,
+              "originalStartLine": null,
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0wNFQxNTowMjoxOFrPAAAAAQpisFQ="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4469207124,
+                    "url": "https://github.com/withastro/astro/pull/18616#discussion_r4469207124",
+                    "body": "`[low][correctness]`: `--help` output no longer shows aliases, choices, defaults, or `--version`\n\nWhen you run `astro-check --help` or `astro check --help`, the old yargs output listed each option's type, default, accepted values (`[choices: \"error\", \"warning\", \"hint\"]`) and aliases (`-w`), plus `--version`. The new `printHelp` only prints `--name  description`. So `--watch` and `--version` show up with no description, there is no mention of `-w`, and `--minimumFailingSeverity`/`--minimumSeverity` don't show their allowed values or defaults. The parser still enforces those choices, but users can no longer find them through help. That goes against the PR's stated goal of preserving aliases, defaults, and severity choices.\n\nFix: build the help lines from the same `options` metadata the parser uses. Include aliases, `choices`, and non-`undefined` defaults, and add a `-v, --version` line. Extend the existing bin help test to assert that the severity choices appear.",
+                    "createdAt": "2026-11-04T15:02:18Z",
+                    "author": {
+                      "__typename": "Bot",
+                      "login": "astro-factory"
+                    },
+                    "commit": {
+                      "oid": "c0404b76f92a7e399e7334191b31cf82e0218168"
+                    },
+                    "originalCommit": {
+                      "oid": "c0404b76f92a7e399e7334191b31cf82e0218168"
+                    },
+                    "diffHunk": "@@ -3,27 +3,104 @@ import path from 'node:path';\n import { AstroCheck } from '@astrojs/language-server';\n import { watch } from 'chokidar';\n import { bold, dim, red, yellow } from 'kleur/colors';\n-import yargs from 'yargs';\n-import { hideBin } from 'yargs/helpers';\n+import mri from 'mri';\n import { options } from './options.js';\n import { isInIgnoredDirectory } from './watch.js';\n \n+type FlagValue<Option> = Option extends { type: 'boolean' }\n+\t? boolean\n+\t: Option extends { type: 'string' }\n+\t\t? Option extends { default: undefined }\n+\t\t\t? string | undefined\n+\t\t\t: string\n+\t\t: Option extends { choices: readonly (infer Choice)[] }\n+\t\t\t? Choice\n+\t\t\t: never;\n+\n+export type Flags = {\n+\t[Key in keyof typeof options]: FlagValue<(typeof options)[Key]>;\n+} & { help?: boolean; version?: boolean };\n+\n+function camelCase(option: string): string {\n+\treturn option.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());\n+}\n+\n+function kebabCase(option: string): string {\n+\treturn option.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);\n+}\n+\n /**\n  * Given a list of arguments from the command line (such as `process.argv`), return parsed and processed options\n  */\n-export function parseArgsAsCheckConfig(args: string[]) {\n-\treturn yargs(hideBin(args)).options(options).parseSync();\n+export function parseArgsAsCheckConfig(args: string[]): Flags {\n+\tconst entries = Object.entries(options);\n+\tconst boolean = entries.flatMap(([name, option]) =>\n+\t\t'type' in option && option.type === 'boolean' ? [name, kebabCase(name)] : [],\n+\t);\n+\tboolean.push('help', 'h', 'version', 'v');\n+\tconst string = entries.flatMap(([name, option]) =>\n+\t\t('type' in option && option.type === 'string') || 'choices' in option\n+\t\t\t? [name, kebabCase(name)]\n+\t\t\t: [],\n+\t);\n+\tconst alias = Object.fromEntries([\n+\t\t...entries.flatMap(([name, option]) => ('alias' in option ? [[option.alias, name]] : [])),\n+\t\t['h', 'help'],\n+\t\t['v', 'version'],\n+\t]);\n+\tconst parsed = mri(args.slice(2), { boolean, string, alias });\n+\tconst flags = Object.fromEntries(\n+\t\tObject.entries(parsed).map(([name, value]) => [camelCase(name), value]),\n+\t);\n+\n+\tfor (const [name, option] of entries) {\n+\t\tif (flags[name] === undefined) flags[name] = option.default;\n+\t\tif ('choices' in option && !option.choices.includes(flags[name])) {\n+\t\t\tthrow new Error(\n+\t\t\t\t`Invalid value for --${kebabCase(name)}: ${String(flags[name])}. Expected one of: ${option.choices.join(', ')}.`,\n+\t\t\t);\n+\t\t}\n+\t}\n+\n+\treturn flags as Flags;\n+}\n+\n+function printHelp() {\n+\tconst optionsHelp = Object.entries(options).map(\n+\t\t([name, option]) => `  --${name}  ${'description' in option ? (option.description ?? '') : ''}`,"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_kwDOFL76Q860Gosa",
+              "isResolved": false,
+              "resolvedBy": null,
+              "isOutdated": false,
+              "path": ".changeset/true-parks-retire.md",
+              "subjectType": "FILE",
+              "line": 1,
+              "startLine": null,
+              "diffSide": "RIGHT",
+              "startDiffSide": null,
+              "originalLine": 1,
+              "originalStartLine": null,
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false,
+                  "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0xMS0wNVQxNDoxMzoyM1rPAAAAAQseHc8="
+                },
+                "nodes": [
+                  {
+                    "databaseId": 4481490383,
+                    "url": "https://github.com/withastro/astro/pull/18616#discussion_r4481490383",
+                    "body": "If no changes are exposed to users, the changeset shoulnd't be added. ",
+                    "createdAt": "2026-11-05T14:13:23Z",
+                    "author": {
+                      "__typename": "User",
+                      "login": "ematipico"
+                    },
+                    "commit": {
+                      "oid": "8b30d97901c304a40bb99f30f3aea480fcfa2f3d"
+                    },
+                    "originalCommit": {
+                      "oid": "8b30d97901c304a40bb99f30f3aea480fcfa2f3d"
+                    },
+                    "diffHunk": ""
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
