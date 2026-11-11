@@ -24,7 +24,7 @@
   --trees-status-renamed-override: var(--muted-foreground);
   /* A file's review-thread mark (thread-marks.ts): the row's brightest mark while a thread is open,
      receding once all are resolved. --subtle-foreground still reads 4.27:1 on a selected row, over
-     the 3:1 an icon needs. */
+     the 3:1 a non-text mark needs. */
   --pr-reviews-thread-mark-open: var(--foreground);
   --pr-reviews-thread-mark-resolved: var(--subtle-foreground);
 }

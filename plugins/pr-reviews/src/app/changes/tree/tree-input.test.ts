@@ -120,7 +120,6 @@ describe("changesTreeOf", () => {
         { text: "+3", color: "var(--diff-added)" },
         { text: "\u00a0" },
         { text: "−1", color: "var(--diff-removed)" },
-        { text: "\u00a0" },
         { text: "•", color: "var(--pr-reviews-thread-mark-open)" },
       ],
     });

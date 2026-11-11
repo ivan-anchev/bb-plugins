@@ -1,5 +1,5 @@
-// The review-thread mark on the Changes tab's file tree rows: a speech bubble on each file with any
-// of the PR's review threads, wherever its diff places them (on a line, at the file, outdated),
+// The review-thread mark on the Changes tab's file tree rows: a dot on each file with any of the
+// PR's review threads, wherever its diff places them (on a line, at the file, outdated),
 // titled with how many. Pure.
 import type { ReviewThread } from "../../../comments/thread-schema.ts";
 import type { DiffFile } from "../../../diff/diff-schema.ts";
@@ -34,16 +34,15 @@ function markOf({ threads, open }: ThreadTally): ThreadMark {
   };
 }
 
-// The tree's stylesheet for the mark, which draws its "•" as a 12px speech bubble in its colour,
-// pinned to the end of the row's decoration: the line stats keep its room clear and, when they
-// drop out whole (tree-view.tsx), the bubble stays.
-// why a text part drawn as an icon: a tree row has one decoration, text or an icon, and the line
-// stats are text. The rule finds the mark by the colour its inline style names.
+// The tree's stylesheet for the mark, which draws its "•" as the 6px dot the git lane draws on
+// folders (hidden in this tree, tree-view.tsx), in its colour and with the same nudge onto the text's
+// x-height. It is pinned to the end of the row's decoration, a row gap after the line stats, which
+// keep its room clear: when they drop out whole (tree-view.tsx), the dot stays.
+// why a text part drawn as a dot: a tree row has one decoration, text or an icon, and the line stats
+// are text. The rule finds the mark by the colour its inline style names.
 const MARK = 'span[style*="--pr-reviews-thread-mark"]';
-const BUBBLE =
-  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='round'><path d='M2.75 3.75a1 1 0 0 1 1-1h8.5a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1H6.5l-3.75 2.5z'/></svg>";
 export const THREAD_MARK_CSS =
-  `[data-type=item]:has(${MARK}){--pr-reviews-pinned-decoration:12px}` +
+  `[data-type=item]:has(${MARK}){--pr-reviews-pinned-decoration:calc(6px + var(--trees-item-row-gap))}` +
   `[data-item-section=decoration]:has(${MARK}){position:relative;min-width:var(--pr-reviews-pinned-decoration)}` +
   `[data-item-section=decoration]>span:has(>${MARK}){padding-right:var(--pr-reviews-pinned-decoration)}` +
-  `[data-item-section=decoration] ${MARK}{position:absolute;inset-block:0;right:0;margin-block:auto;width:var(--pr-reviews-pinned-decoration);height:var(--pr-reviews-pinned-decoration);font-size:0;background-color:currentColor;mask:url("data:image/svg+xml,${encodeURIComponent(BUBBLE)}") center/contain no-repeat}`;
+  `[data-item-section=decoration] ${MARK}{position:absolute;inset-block:0;right:0;margin-block:auto;width:6px;height:6px;overflow:hidden;text-indent:100%;border-radius:50%;background-color:currentColor;transform:translateY(calc(.65ex - 50%))}`;

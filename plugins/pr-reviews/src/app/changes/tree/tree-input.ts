@@ -90,14 +90,18 @@ function iconsKeepingOriginalNames(renamed: readonly [string, DiffFile][]): File
   return { ...TREE_ICONS, byFileName: { ...TREE_ICONS.byFileName, ...Object.fromEntries(iconsByTreeName) } };
 }
 
-// The mark comes last, so the marks of a column of rows line up against the git status.
+// The mark comes last, so the marks of a column of rows line up against the git status. Its stylesheet
+// spaces it from the stats (thread-marks.ts).
 function decorationOf(path: string, file: DiffFile, mark: ThreadMark | undefined): [string, FileTreeRowDecoration][] {
   const stats = fileStatPartsOf(file);
-  const parts = [...stats.map((part) => ({ text: part.text, color: STAT_COLORS[part.tone] })), ...(mark === undefined ? [] : [mark.part])];
+  const statParts = stats.flatMap((part, index) => [
+    ...(index === 0 ? [] : [{ text: NO_BREAK_SPACE }]),
+    { text: part.text, color: STAT_COLORS[part.tone] },
+  ]);
+  const parts = [...statParts, ...(mark === undefined ? [] : [mark.part])];
   if (parts.length === 0) return [];
   const title = [...(stats.length === 0 ? [] : [plainTextOf(stats)]), ...(mark === undefined ? [] : [mark.title])].join(" · ");
-  const spacedParts = parts.flatMap((part, index) => [...(index === 0 ? [] : [{ text: NO_BREAK_SPACE }]), part]);
-  return [[path, { text: title, title, parts: spacedParts }]];
+  return [[path, { text: title, title, parts }]];
 }
 
 function baseNameOf(path: string): string {

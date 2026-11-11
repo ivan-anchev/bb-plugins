@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request with Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree, with a speech bubble on each file that has review threads, beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (Write and Preview tabs, Ask about this to ask the review thread, Comment to post a GitHub review comment on an explicit click; review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request with Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree, with a dot on each file that has review threads, beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (Write and Preview tabs, Ask about this to ask the review thread, Comment to post a GitHub review comment on an explicit click; review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -126,14 +126,14 @@ tab is opened, not when the page opens.
 - **The tree**: every changed file in its folders, with its `+N −M` (an added
   file shows only `+N`, a deleted one only `−M`, a binary file "Binary") and a
   letter for how it changed (A, M, D or R). A file with any of the PR's
-  review threads (on a line, on the whole file, or outdated) shows a speech
-  bubble after its `+N −M`: bright while any thread is open, dimmed once all
-  are resolved. Hover it for the count, such as "3 comment threads, 1
-  resolved". A long name truncates in the middle to keep its `+N −M` and
-  bubble whole; in a tree too narrow for that, the row hides the whole
-  `+N −M` and keeps the bubble.
+  review threads (on a line, on the whole file, or outdated) shows a dot
+  after its `+N −M`: bright while any thread is open, dimmed once all are
+  resolved. Hover it for the count, such as "3 comment threads, 1
+  resolved". Folders show no dot. A long name truncates in the middle to keep
+  its `+N −M` and dot whole; in a tree too narrow for that, the row hides the
+  whole `+N −M` and keeps the dot.
   If reading the PR's comments fails, the error shows once above the tree and
-  diff, and the bubbles and threads already shown stay. Click a file, or move
+  diff, and the dots and threads already shown stay. Click a file, or move
   to it with the arrow keys and press Enter or Space, to show its diff.
 - **The diff**: the selected file's path over its diff, drawn with bb's own
   diff engine and code theme, so it looks like bb's diff view.
