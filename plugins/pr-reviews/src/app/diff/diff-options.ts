@@ -49,7 +49,7 @@ export function useDiffOptions<Annotation>(settings: DiffSettings, gestures: Lin
       // and drag from the "+" select lines; it reports the same range as the gesture's end.
       enableGutterUtility: true,
       onGutterUtilityClick: gestures.picked,
-      unsafeCSS: NOTE_ROWS,
+      unsafeCSS: NOTE_ROWS + FLUSH_CODE,
     }),
     [code.name, code.mode, settings.view, settings.overflow, gestures],
   );
@@ -64,6 +64,13 @@ export function useDiffOptions<Annotation>(settings: DiffSettings, gestures: Lin
 // before the code, drawn as a border in the code's background, would cross the row as a dark line.
 const NOTE_ROWS =
   "[data-line-annotation],[data-gutter-buffer=annotation]{--diffs-annotation-bg:var(--background);--diffs-computed-selected-line-bg:var(--diffs-computed-diff-line-bg)}[data-line-annotation]{z-index:4}[data-gutter-buffer=annotation]{border-right-color:transparent}";
+
+// A diff has no band of the code's background above its first row and below its last: the code
+// starts right under the path bar, the file's threads or the guide's file row. Only that padding
+// goes. Its `--diffs-gap-block` also spaces an "N unmodified lines" separator from the rows around
+// it, and with that at zero the separator would sit flush on the code. In a split diff that wraps,
+// the padding is on the two columns' grid.
+const FLUSH_CODE = "[data-code],[data-diff-type=split][data-overflow=wrap]{padding-block:0}";
 
 /**
  * The file's diff for Pierre: its patch at first, then, once `newContent` is read, both whole

@@ -27,9 +27,10 @@ click; review threads never post to GitHub.
   and reviews whose threads are all resolved are one line each. A composer at
   the foot comments on the PR's conversation; Quote on a message quotes it
   there.
-- **Changes**: every changed file in a tree with its `+N −M`, beside the
-  selected file's diff, drawn like bb's own. Click "N unmodified lines" to
-  show the lines between hunks. Filter by path (globs, `!` to exclude), by
+- **Changes**: every changed file in a tree with its `+N −M`, and a speech
+  bubble on each file with review threads, beside the selected file's diff,
+  drawn like bb's own. Click "N unmodified lines" to show the lines between
+  hunks. Filter by path (globs, `!` to exclude), by
   kind, extension or deleted files; switch between Unified and Split, wrap
   lines, and collapse or expand every folder. It needs no guide, and reads
   the diff only once you open the tab.

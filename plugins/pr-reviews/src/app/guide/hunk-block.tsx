@@ -78,15 +78,8 @@ function AnnotatedDiff({ file, hunk, findings, head, comments, withFileThreads }
       ),
     [findings],
   );
-  return (
-    <div className={FLUSH_DIFF}>
-      <PrDiff file={drawn} head={head} newContent={null} settings={DEFAULT_DIFF_SETTINGS} notes={notes} threads={threads} />
-    </div>
-  );
+  return <PrDiff file={drawn} head={head} newContent={null} settings={DEFAULT_DIFF_SETTINGS} notes={notes} threads={threads} />;
 }
-
-// A guide's diff has no band of the code's background above its first row and below its last.
-const FLUSH_DIFF = "[--diffs-gap-block:0px]";
 
 // The file row stays at the top of the guide's page while its diff scrolls under it, on the
 // block's own tint made opaque (bg-muted/40 over the page).

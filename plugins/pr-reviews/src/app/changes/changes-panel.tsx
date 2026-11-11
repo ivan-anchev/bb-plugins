@@ -1,6 +1,7 @@
 // The Changes tab's panel (ported from code-explorer's changes-tree): the header over the file tree
 // and the selected file's diff, side by side. The filters narrow the tree; the summary and the
-// menus' counts stay the whole PR's. The selected file is remembered per PR.
+// menus' counts stay the whole PR's. The selected file is remembered per PR. A file with review
+// threads carries a mark in the tree.
 //
 // REVIEW.md, stable chrome: the header and the tree model are mounted from the first render, before
 // the diff is read, so a header control focused or a menu opened while it loads stays focused or
@@ -11,12 +12,14 @@
 // clearing the filters if they hide it. Focus waits in the read's region or the diff pane until the
 // thread takes it. A thread whose file has left the diff ends the request there, in the diff pane.
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { ReviewThread } from "../../comments/thread-schema.ts";
 import type { PrChanges } from "../../contract.ts";
 import type { DiffFile } from "../../diff/diff-schema.ts";
-import type { PrTarget } from "../queries.ts";
+import { useComments, type PrTarget } from "../queries.ts";
 import { useFocusHandOff } from "../ui/focus-hand-off.ts";
 import { mergeRefs } from "../ui/merge-refs.ts";
 import { Notice } from "../ui/notice.tsx";
+import { ReadError } from "../ui/read-error.tsx";
 import { useRememberedState } from "../use-remembered-state.ts";
 import { changeSummaryOf } from "./change-stats.ts";
 import { DiffViewer } from "./diff-viewer.tsx";
@@ -26,7 +29,7 @@ import { ReadState } from "./read-state.tsx";
 import { revealTargetOf } from "./reveal-target.ts";
 import { SplitView } from "./split/split-view.tsx";
 import { ThreadRevealProvider, type ThreadReveal } from "./thread-reveal.ts";
-import { changesTreeOf } from "./tree/tree-input.ts";
+import { changesTreeOf, rowDecorationsOf } from "./tree/tree-input.ts";
 import { TreeView, useTreeModel } from "./tree/tree-view.tsx";
 import { useChangesControls } from "./use-changes-controls.ts";
 
@@ -36,6 +39,8 @@ import { useChangesControls } from "./use-changes-controls.ts";
 type ChangesPanelProps = { target: PrTarget; changes: PrChanges | null; loading: boolean; readError: ReactNode; reveal: ThreadReveal | null; onRevealed(): void };
 
 const NO_FILES: readonly DiffFile[] = [];
+
+const NO_REVIEW_THREADS: readonly ReviewThread[] = [];
 
 const rememberedSelections = new Map<string, string | null>();
 
@@ -47,6 +52,11 @@ export function ChangesPanel({ target, changes, loading, readError, reveal, onRe
   const changedFiles = changes?.files ?? NO_FILES;
   const shownFiles = useMemo(() => filterChangedFiles(changedFiles, pathQuery, filters), [changedFiles, pathQuery, filters]);
   const tree = useMemo(() => changesTreeOf(shownFiles), [shownFiles]);
+  // The PR's comments mark the tree and draw the selected file's threads (the diff viewer reads the
+  // same cache entry). A failed read shows once, above both, which keep their last threads.
+  const comments = useComments(target);
+  const threads = comments.data?.threads ?? NO_REVIEW_THREADS;
+  const decorations = useMemo(() => rowDecorationsOf(tree.filesByTreePath, threads), [tree.filesByTreePath, threads]);
   const [selectedPath, setSelectedPath] = useRememberedState(rememberedSelections, memoryKey, null);
   // Set during render, so the file is selected in the render the diff arrives in.
   const [selectedFor, setSelectedFor] = useState(0);
@@ -69,7 +79,7 @@ export function ChangesPanel({ target, changes, loading, readError, reveal, onRe
     paths: tree.paths,
     gitStatus: tree.gitStatus,
     icons: tree.icons,
-    decorations: tree.decorations,
+    decorations,
     selectedPath: shownFile === undefined ? null : selectedPath,
   });
   const focusHandOff = useFocusHandOff();
@@ -93,6 +103,7 @@ export function ChangesPanel({ target, changes, loading, readError, reveal, onRe
       ) : (
         <ThreadRevealProvider value={revealRequest}>
           {readError}
+          <ReadError read={comments} what="the PR's comments" />
           <SplitView
             tree={
               <>

@@ -5,6 +5,7 @@ import { useEffect, useRef, type RefObject } from "react";
 import type { FileTree as TreeModel, FileTreeIconConfig, GitStatusEntry } from "@pierre/trees";
 import { FileTree, useFileTree } from "@pierre/trees/react";
 import { expandedDirectoriesOf } from "./tree-expansion.ts";
+import { THREAD_MARK_CSS } from "./thread-marks.ts";
 import type { RowDecorations } from "./tree-input.ts";
 import { keepOnlySelected } from "./tree-selection.ts";
 
@@ -21,6 +22,17 @@ type TreeViewProps = { model: TreeModel; label: string; onSelectFile(path: strin
 
 const rememberedExpansion = new Map<string, readonly string[]>();
 
+// A row's decoration (its `+N −M`) shows whole or not at all, so a clipped stat never sits beside
+// the review-thread mark and reads as a count. The name gives way first: it truncates down to a few
+// characters (its shrink outweighs the decoration's). Past that the decoration wraps onto a second
+// line, under the row's height, which hides it. A part pinned outside that wrap (the mark, in
+// thread-marks.ts) stays, and takes its room from the name's few characters.
+const WHOLE_DECORATIONS =
+  "[data-item-section=content]{flex-shrink:10000;min-width:calc(3rem - var(--pr-reviews-pinned-decoration,0px))}" +
+  "[data-item-section=decoration]{flex:1 1 auto;flex-wrap:wrap;height:var(--trees-row-height)}" +
+  '[data-item-section=decoration]::before{content:"";height:100%}' +
+  "[data-item-section=decoration]>span{flex-shrink:0;max-width:none}";
+
 export function useTreeModel({ memoryKey, paths, gitStatus, icons, decorations, selectedPath }: TreeModelOptions): TreeModel {
   const shownDecorations = useRef(decorations);
   const { model } = useFileTree({
@@ -33,6 +45,7 @@ export function useTreeModel({ memoryKey, paths, gitStatus, icons, decorations, 
     density: "compact",
     flattenEmptyDirectories: true,
     search: false,
+    unsafeCSS: WHOLE_DECORATIONS + THREAD_MARK_CSS,
   });
   useRowPresentation(model, icons, decorations, shownDecorations);
   useSyncedPaths(model, paths, memoryKey);

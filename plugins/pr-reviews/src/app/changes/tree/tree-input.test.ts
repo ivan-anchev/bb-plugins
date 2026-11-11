@@ -3,7 +3,8 @@ import { describe, test } from "node:test";
 import { FileTree, createFileTreeIconResolver } from "@pierre/trees";
 import type { DiffFile } from "../../../diff/diff-schema.ts";
 import { diffFile } from "../diff-file.fixture.ts";
-import { changesTreeOf } from "./tree-input.ts";
+import type { ReviewThread } from "../../../comments/thread-schema.ts";
+import { changesTreeOf, filesByTreePathOf, rowDecorationsOf } from "./tree-input.ts";
 
 describe("changesTreeOf", () => {
   const change = (path: string, status: DiffFile["status"]): DiffFile => diffFile(path, { status });
@@ -74,14 +75,17 @@ describe("changesTreeOf", () => {
   }
 
   test("decorates each changed row with its line stats in bb's diff colors", () => {
-    const tree = changesTreeOf([
-      diffFile("README.md", { added: 3, removed: 1 }),
-      diffFile("notes.md", { status: "added", added: 4, removed: 0 }),
-      diffFile("pixel.png", { binary: true, added: 0, removed: 0 }),
-      diffFile("empty.txt", { status: "added", added: 0, removed: 0 }),
-    ]);
+    const decorations = rowDecorationsOf(
+      filesByTreePathOf([
+        diffFile("README.md", { added: 3, removed: 1 }),
+        diffFile("notes.md", { status: "added", added: 4, removed: 0 }),
+        diffFile("pixel.png", { binary: true, added: 0, removed: 0 }),
+        diffFile("empty.txt", { status: "added", added: 0, removed: 0 }),
+      ]),
+      [],
+    );
 
-    assert.deepEqual(tree.decorations.get("README.md"), {
+    assert.deepEqual(decorations.get("README.md"), {
       text: "+3 −1",
       title: "+3 −1",
       parts: [
@@ -90,17 +94,41 @@ describe("changesTreeOf", () => {
         { text: "−1", color: "var(--diff-removed)" },
       ],
     });
-    assert.deepEqual(tree.decorations.get("notes.md"), {
+    assert.deepEqual(decorations.get("notes.md"), {
       text: "+4",
       title: "+4",
       parts: [{ text: "+4", color: "var(--diff-added)" }],
     });
-    assert.deepEqual(tree.decorations.get("pixel.png"), {
+    assert.deepEqual(decorations.get("pixel.png"), {
       text: "Binary",
       title: "Binary",
       parts: [{ text: "Binary", color: "var(--muted-foreground)" }],
     });
-    assert.equal(tree.decorations.has("empty.txt"), false);
+    assert.equal(decorations.has("empty.txt"), false);
+  });
+
+  test("puts a file's review-thread mark after its line stats, and names both in the title", () => {
+    const decorations = rowDecorationsOf(
+      filesByTreePathOf([diffFile("README.md", { added: 3, removed: 1 }), diffFile("empty.txt", { status: "added", added: 0, removed: 0 })]),
+      [threadOn("README.md"), threadOn("README.md"), threadOn("empty.txt")],
+    );
+
+    assert.deepEqual(decorations.get("README.md"), {
+      text: "+3 −1 · 2 comment threads",
+      title: "+3 −1 · 2 comment threads",
+      parts: [
+        { text: "+3", color: "var(--diff-added)" },
+        { text: "\u00a0" },
+        { text: "−1", color: "var(--diff-removed)" },
+        { text: "\u00a0" },
+        { text: "•", color: "var(--pr-reviews-thread-mark-open)" },
+      ],
+    });
+    assert.deepEqual(decorations.get("empty.txt"), {
+      text: "1 comment thread",
+      title: "1 comment thread",
+      parts: [{ text: "•", color: "var(--pr-reviews-thread-mark-open)" }],
+    });
   });
 
   test("keeps the real file's icon on a distinct tree path", () => {
@@ -115,3 +143,14 @@ describe("changesTreeOf", () => {
     );
   });
 });
+
+function threadOn(path: string): ReviewThread {
+  return {
+    id: `PRRT_${path}`,
+    path,
+    resolvedBy: null,
+    outdated: false,
+    subject: { kind: "file" },
+    comments: [{ id: 1, url: "https://github.com/o/r/pull/1#discussion_r1", author: { login: "octocat", bot: false }, body: "Why?", createdAt: "2026-11-10T08:00:00Z" }],
+  };
+}

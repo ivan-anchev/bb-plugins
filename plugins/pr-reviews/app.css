@@ -22,6 +22,11 @@
      dark theme, under the 4.5:1 a status letter needs. --muted-foreground reads 6.20:1 there. */
   --trees-status-modified-override: var(--muted-foreground);
   --trees-status-renamed-override: var(--muted-foreground);
+  /* A file's review-thread mark (thread-marks.ts): the row's brightest mark while a thread is open,
+     receding once all are resolved. --subtle-foreground still reads 4.27:1 on a selected row, over
+     the 3:1 an icon needs. */
+  --pr-reviews-thread-mark-open: var(--foreground);
+  --pr-reviews-thread-mark-resolved: var(--subtle-foreground);
 }
 
 /* A GitHub review thread in a diff is one tinted card ("Tint"), no dividers inside; the open comment

@@ -37,19 +37,15 @@ type FileDiffProps = { file: DiffFile; head: PrHeadTarget; settings: DiffSetting
 // The PR's comments arrive after the diff draws, and with them the file's threads, whether or not
 // the file has a text diff: a binary or rename-only file's are all at its file, under its notice.
 // Placed on the hunks' rows, which every thread GitHub has on this commit is on, so expanding the
-// unchanged lines moves none. A failed read shows above the diff, which keeps its last threads.
+// unchanged lines moves none. A failed read shows above the tree and diff (changes-panel.tsx), and
+// the diff keeps its last threads.
 function FileDiff({ file, head, settings }: FileDiffProps) {
   const comments = useComments({ projectId: head.projectId, number: head.number });
   const threads = useMemo(
     () => (comments.data === undefined ? NO_THREADS : placeThreads(comments.data.threads, file.path, head.headSha, diffRowsOf(file, null))),
     [comments.data, file, head.headSha],
   );
-  return (
-    <>
-      <ReadError read={comments} what="the PR's comments" />
-      <FileBody file={file} head={head} settings={settings} threads={threads} />
-    </>
-  );
+  return <FileBody file={file} head={head} settings={settings} threads={threads} />;
 }
 
 function FileBody({ file, head, settings, threads }: FileDiffProps & { threads: PlacedThreads }) {
