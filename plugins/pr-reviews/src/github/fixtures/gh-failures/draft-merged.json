@@ -1,0 +1,7 @@
+{
+  "code": 1,
+  "killed": false,
+  "signal": null,
+  "stdout": "",
+  "stderr": "X Pull request octo-org/widgets#7 is closed. Only draft pull requests can be marked as \"ready for review\"\n"
+}

@@ -76,3 +76,6 @@ export const usePostComment = () => experimental_useRpcMutation({ contract, meth
 export const useReplyToThread = () => experimental_useRpcMutation({ contract, method: "replyToThread" });
 
 export const usePostConversationComment = () => experimental_useRpcMutation({ contract, method: "postConversationComment" });
+
+/** Changes a PR's state on GitHub. The server re-reads the PR's repo, so the header and the sidebar row follow. */
+export const useChangePrState = () => experimental_useRpcMutation({ contract, method: "changePrState" });

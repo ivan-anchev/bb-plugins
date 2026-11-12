@@ -1,0 +1,7 @@
+{
+  "code": 1,
+  "killed": false,
+  "signal": null,
+  "stdout": "",
+  "stderr": "X Pull request ivan-anchev/bb-pr-state-test-ffb758#3 (Document the queue depth gauge) can't be closed because it was already merged\n"
+}

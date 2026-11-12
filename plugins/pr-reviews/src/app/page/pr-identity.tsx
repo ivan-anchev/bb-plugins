@@ -1,5 +1,5 @@
-// The PR header's identity row: `#number`, the author's GitHub avatar and login, and the branches
-// GitHub's way round, `base ← head`.
+// The PR header's identity row: the author's GitHub avatar and login, and the branches GitHub's way
+// round, `base ← head`. The PR's number is beside the state pill above it.
 import type { ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { PrDetail } from "../../contract.ts";
@@ -8,7 +8,6 @@ import { Avatar } from "../ui/avatar.tsx";
 export function PrIdentity({ pr }: { pr: PrDetail }) {
   return (
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-muted-foreground">
-      <span className="font-medium tabular-nums">#{pr.number}</span>
       <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
         <Avatar login={pr.author} size={16} />
         {pr.author}

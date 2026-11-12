@@ -1,15 +1,15 @@
 // The only module that runs `gh`. It parses gh's JSON once into the canonical PR types, reads the
-// PR's comments and timeline, posts the comments a reader chose to, and maps every process failure to a refusal the app can show
+// PR's comments and timeline, posts the comments a reader chose to, changes a PR's state, and maps every process failure to a refusal the app can show
 // beside its data or a kept draft.
 import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import type { CommentRequest } from "../comments/comment-schema.ts";
 import type { ReviewThread } from "../comments/thread-schema.ts";
 import type { PrComments } from "../comments/timeline-schema.ts";
-import type { PrDetail, PrSummary } from "../contract.ts";
+import type { PrDetail, PrSummary, StateChange } from "../contract.ts";
 import { statusCheckRollupSchema } from "./checks.ts";
 import { commentApiArgs, conversationCommentApiArgs, replyApiArgs } from "./comment-args.ts";
-import { ghPostRefusalFor, ghRefusalFor } from "./gh-refusal.ts";
+import { ghPostRefusalFor, ghRefusalFor, ghStateRefusalFor } from "./gh-refusal.ts";
 import { ghLabelSchema } from "./label.ts";
 import { parseHostCommandFailure, runHostCommand } from "./host-command.ts";
 import { INBOX_QUERY, inboxVariables, parseInboxSearch, parseStackContext, stackContextQuery, type FoundPr, type GitHubPr } from "./inbox-search.ts";
@@ -29,6 +29,7 @@ import {
 import { isReview, parseReviewCommentsPage, parseTimelinePage, REVIEW_COMMENTS_QUERY, TIMELINE_QUERY, toTimeline, type GhTimelineNode } from "./pr-timeline.ts";
 import type { Repo } from "./repo.ts";
 import { latestReviewsSchema, reviewRequestsSchema, toReviewers } from "./reviewers.ts";
+import { stateChangeArgs } from "./state-args.ts";
 
 const LIST_LIMIT = 200;
 const SUMMARY_FIELDS = ["number", "title", "author", "updatedAt", "headRefOid"];
@@ -212,5 +213,14 @@ async function runGhPost(args: string[]): Promise<string> {
     return await runHostCommand("gh", args);
   } catch (error) {
     throw ghPostRefusalFor(parseHostCommandFailure(error));
+  }
+}
+
+/** Makes the state change as the reader's account. A PR already in the state it leads to is left as it is. */
+export async function changePrState(repo: Repo, number: number, change: StateChange): Promise<void> {
+  try {
+    await runHostCommand("gh", stateChangeArgs(repo, number, change));
+  } catch (error) {
+    throw ghStateRefusalFor(parseHostCommandFailure(error));
   }
 }

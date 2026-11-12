@@ -1,12 +1,16 @@
-// What a failed gh run tells the reader: a refusal the app shows beside its data, or beside a kept
-// draft. Pure; its test runs it on failures recorded from real gh runs (fixtures/gh-failures).
+// What a failed gh run tells the reader: a refusal the app shows beside its data, beside a kept
+// draft, or in the state menu. Pure; its test runs it on failures recorded from real gh runs
+// (fixtures/gh-failures).
 import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { firstLine, type HostCommandFailure } from "./host-command.ts";
 
 // gh api ends an HTTP failure's stderr with "(HTTP 422)"; gh pr commands carry no status.
 const HTTP_STATUS = /\(HTTP (\d{3})\)/;
-const NETWORK = /error connecting to|could not resolve host|no such host|dial tcp|connection refused|i\/o timeout|TLS handshake/i;
+// "unexpected EOF": the connection dropped before GitHub answered.
+const NETWORK = /error connecting to|could not resolve host|no such host|dial tcp|connection refused|i\/o timeout|TLS handshake|unexpected EOF/i;
+// gh pr commands print GitHub's GraphQL error, which carries no HTTP status, for a missing permission.
+const NO_PERMISSION = /does not have the correct permissions|Resource not accessible by/;
 
 export function ghRefusalFor(failure: HostCommandFailure): Refusal {
   const { code, stderr } = failure;
@@ -19,14 +23,15 @@ export function ghRefusalFor(failure: HostCommandFailure): Refusal {
   }
   if (status === 429 || (status === 403 && /rate limit/i.test(stderr))) return invalid("GitHub is limiting requests right now. Wait a minute and try again.");
   if (status === 403 && /locked/i.test(stderr)) return new Refusal({ code: "forbidden", message: "This conversation is locked on GitHub, so only collaborators can comment." });
-  if (status === 403) return new Refusal({ code: "forbidden", message: "Your GitHub account doesn't have permission to do that in this repository." });
+  if (status === 403 || NO_PERMISSION.test(stderr)) return new Refusal({ code: "forbidden", message: "Your GitHub account doesn't have permission to do that in this repository." });
   if (status === 404 || stderr.includes("Could not resolve to a PullRequest")) {
     return new Refusal({ code: "not_found", message: "GitHub has no such pull request, or your account can't see it." });
   }
   // why GitHub's own words: a 422 names what it refused (a line it could not resolve, a commit not
   // in the PR), which no fixed message here can.
   if (status === 422) return invalid(`GitHub refused the comment: ${githubWordsOf(failure)}. The lines may no longer be in this commit's diff.`);
-  return invalid(firstLine(stderr) ?? "The GitHub CLI failed.");
+  // gh pr commands mark a failure with a leading "X ".
+  return invalid(firstLine(stderr)?.replace(/^X /, "") ?? "The GitHub CLI failed.");
 }
 
 /**
@@ -35,6 +40,21 @@ export function ghRefusalFor(failure: HostCommandFailure): Refusal {
  */
 export function ghPostRefusalFor(failure: HostCommandFailure): Refusal {
   if (failure.killed) return invalid("GitHub didn't answer in time. The comment may have been posted: check the pull request before posting again.");
+  return ghRefusalFor(failure);
+}
+
+/**
+ * A failed state change. One the timeout stopped may have reached GitHub, so it says so and is never
+ * retried, as a post. GitHub refuses a change the PR's state no longer allows, when the PR changed
+ * on GitHub after the page read it.
+ */
+export function ghStateRefusalFor(failure: HostCommandFailure): Refusal {
+  if (failure.killed) return invalid("GitHub didn't answer in time. The state may have changed: Refresh to check before trying again.");
+  if (failure.stderr.includes("because it was already merged")) return invalid("This pull request is already merged, so its state can't change. Refresh to see it.");
+  // why not "closed": gh prints the same "is closed" line for a merged PR.
+  if (failure.stderr.includes("Only draft pull requests can be marked")) {
+    return invalid("This pull request is no longer open on GitHub, so it can't be marked ready or converted to draft. Refresh to see it.");
+  }
   return ghRefusalFor(failure);
 }
 

@@ -66,6 +66,10 @@ export type Reviewer = z.infer<typeof reviewerSchema>;
 const prStateSchema = z.enum(["OPEN", "DRAFT", "CLOSED", "MERGED"]);
 export type PrState = z.infer<typeof prStateSchema>;
 
+/** A change of a PR's state the page offers: mark a draft ready, convert to draft, close, reopen. */
+const stateChangeSchema = z.enum(["ready", "draft", "close", "reopen"]);
+export type StateChange = z.infer<typeof stateChangeSchema>;
+
 const prDetailSchema = prSummarySchema.extend({
   body: z.string(),
   url: z.string(),
@@ -198,7 +202,7 @@ export type Section = z.infer<typeof sectionSchema>;
 const inboxSchema = z.object({ sections: z.array(sectionSchema), unreadable: z.array(unreadableProjectSchema) });
 
 /** Every PR a section shows, stack-mates listed elsewhere included. */
-const prsOf = (section: Section): InboxPr[] => section.items.flatMap((item) => (item.kind === "pr" ? [item.pr] : item.members));
+export const prsOf = (section: Section): InboxPr[] => section.items.flatMap((item) => (item.kind === "pr" ? [item.pr] : item.members));
 
 /** When the reader last opened a PR's page, epoch ms, and the project it opened in. */
 const visitSchema = z.object({ projectId: z.string(), repo: repoSchema, number: prNumberSchema, openedAt: z.number() });
@@ -216,6 +220,7 @@ const empty = z.object({});
 /** A comment the plugin posted: its page on GitHub. */
 const postedSchema = z.object({ url: z.string() });
 export const VISITS_TAG = "visits";
+export const INBOX_TAG = "inbox";
 export const repoTag = (repo: Repo) => `repo:${repoKey(repo)}`;
 export const guideTag = ({ repo, number, headSha }: PrHeadKey) => `guide:${repo}#${number}@${headSha}`;
 export const commentsTag = ({ projectId, number }: z.infer<typeof prRefSchema>) => `comments:${projectId}#${number}`;
@@ -223,12 +228,13 @@ export const commentsTag = ({ projectId, number }: z.infer<typeof prRefSchema>) 
 export const prReviewsContract = defineRpcContract({
   /**
    * The sidebar: the reader's PRs across every bb project with a GitHub remote, in sections. Tagged
-   * by every repo it lists, so the thread events that refresh a repo's reads refresh it too.
+   * by every repo it lists, so the thread events that refresh a repo's reads refresh it too, and by
+   * its own tag, which a state change refreshes whether or not the sidebar lists the PR's repo.
    */
   inbox: {
     input: empty,
     output: inboxSchema,
-    tags: (_input, output) => [...new Set(output.sections.flatMap(prsOf).map((pr) => repoTag(pr.repo)))],
+    tags: (_input, output) => [INBOX_TAG, ...new Set(output.sections.flatMap(prsOf).map((pr) => repoTag(pr.repo)))],
   },
   /** When the reader last opened each PR, for the sidebar's new-activity dot and the rail badge's project. */
   visits: { input: empty, output: z.object({ visits: z.array(visitSchema) }), tags: () => [VISITS_TAG] },
@@ -289,4 +295,10 @@ export const prReviewsContract = defineRpcContract({
   replyToThread: { input: prRefSchema.extend({ commentId: z.number().int(), body: commentBodySchema }), output: postedSchema },
   /** Posts a comment on the PR's conversation, on no file: what a quote reply to a conversation comment posts. */
   postConversationComment: { input: prRefSchema.extend({ body: commentBodySchema }), output: postedSchema },
+  /**
+   * Changes the PR's state on GitHub, on the reader's choice. Re-reads the PR's repo and the
+   * sidebar, so the page header and the sidebar row show the new state, and the sidebar again
+   * once GitHub's search lists it.
+   */
+  changePrState: { input: prRefSchema.extend({ change: stateChangeSchema }), output: empty },
 });

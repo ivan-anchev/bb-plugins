@@ -26,7 +26,7 @@
   },
   "bb": {
     "name": "PR Reviews",
-    "description": "A PR Reviews app on the left rail that lists your pull requests across every GitHub project, in Authored by me, Needs my review and Recently merged, with stacked pull requests as trees, and opens each one on a page with its whole diff in a file tree and a guided review, written by a review thread, that walks you through the change step by step. Its Summary shows the PR's activity, as GitHub's Conversation tab does, and every diff shows the PR's GitHub review threads where they belong. It posts to GitHub only the review comments, replies and conversation comments you write or pick from the guide, on your click; review threads never post to GitHub.",
+    "description": "A PR Reviews app on the left rail that lists your pull requests across every GitHub project, in Authored by me, Needs my review and Recently merged, with stacked pull requests as trees, and opens each one on a page with its whole diff in a file tree and a guided review, written by a review thread, that walks you through the change step by step. Its Summary shows the PR's activity, as GitHub's Conversation tab does, and every diff shows the PR's GitHub review threads where they belong. It posts to GitHub only the review comments, replies and conversation comments you write or pick from the guide, on your click, and changes a pull request's state only from the state pill on its page; review threads never post to GitHub.",
     "branding": {
       "icon": "GitPullRequest"
     },

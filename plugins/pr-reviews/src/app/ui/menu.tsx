@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { CheckboxItem, Content, Item, ItemIndicator, Label, Portal, Root, Separator, Trigger } from "@radix-ui/react-dropdown-menu";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { PORTAL_SCOPE } from "./portal-scope.ts";
@@ -25,11 +25,22 @@ export function MenuContent({ align, className = "", children }: MenuContentProp
   );
 }
 
-type MenuItemProps = { onSelect(): void; disabled?: boolean; children: ReactNode };
+/**
+ * `keepOpen`: the menu stays open after the choice, for one that shows its progress in place. The
+ * rest go to Radix's item, such as a press-and-hold's handlers.
+ */
+type MenuItemProps = Omit<ComponentProps<typeof Item>, "className" | "onSelect"> & { onSelect(): void; keepOpen?: boolean };
 
-export function MenuItem({ onSelect, disabled = false, children }: MenuItemProps) {
+export function MenuItem({ onSelect, keepOpen = false, children, ...item }: MenuItemProps) {
   return (
-    <Item onSelect={onSelect} disabled={disabled} className={`${ITEM_CLASS} justify-between gap-2 px-2`}>
+    <Item
+      {...item}
+      onSelect={(event) => {
+        if (keepOpen) event.preventDefault();
+        onSelect();
+      }}
+      className={`${ITEM_CLASS} justify-between gap-2 px-2`}
+    >
       {children}
     </Item>
   );

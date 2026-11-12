@@ -1,0 +1,7 @@
+{
+  "code": 1,
+  "killed": false,
+  "signal": null,
+  "stdout": "",
+  "stderr": "Post \"https://api.github.com/repos/octo-org/widgets/pulls/7/comments\": unexpected EOF\n"
+}

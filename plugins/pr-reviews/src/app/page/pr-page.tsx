@@ -4,6 +4,7 @@ import { useCallback, useRef, useState, type RefObject } from "react";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import type { ReviewThread } from "../../comments/thread-schema.ts";
 import { reviewThreadOf, type PrDetail, type ReviewState } from "../../contract.ts";
+import type { Repo } from "../../github/repo.ts";
 import { ChangesTab } from "../changes/changes-tab.tsx";
 import type { ThreadReveal } from "../changes/thread-reveal.ts";
 import { usePullRequest, useRecordVisit, type PrTarget } from "../queries.ts";
@@ -40,7 +41,7 @@ function PullRequestPage({ projectId, number }: { projectId: string; number: num
       <ReadError read={pull} what="this pull request" />
       <VisitError visit={visit} onLeaveWithFocus={focusPage} />
       {pull.isLoading && <Notice>Loading pull request…</Notice>}
-      {pull.data !== undefined && <ReviewPage target={{ projectId, number }} pr={pull.data.pr} review={pull.data.review} viewOptions={viewOptions} title={title} />}
+      {pull.data !== undefined && <ReviewPage target={{ projectId, number }} repo={pull.data.repo} pr={pull.data.pr} review={pull.data.review} viewOptions={viewOptions} title={title} />}
     </div>
   );
 }
@@ -72,12 +73,12 @@ function VisitError({ visit, onLeaveWithFocus }: { visit: ReturnType<typeof useR
   );
 }
 
-type ReviewPageProps = { target: PrTarget; pr: PrDetail; review: ReviewState; viewOptions: ViewOptionsState; title: RefObject<HTMLHeadingElement | null> };
+type ReviewPageProps = { target: PrTarget; repo: Repo; pr: PrDetail; review: ReviewState; viewOptions: ViewOptionsState; title: RefObject<HTMLHeadingElement | null> };
 
 // One header and one tab bar for every review state, so their buttons keep keyboard focus while the
 // state changes. A PR opens on Summary: the page is keyed by PR, so the tab is too. A review
 // thread's row in the Summary tab's activity opens the Changes tab at that thread.
-function ReviewPage({ target, pr, review, viewOptions, title }: ReviewPageProps) {
+function ReviewPage({ target, repo, pr, review, viewOptions, title }: ReviewPageProps) {
   const [tab, setTab] = useState<PrTab>("summary");
   const [reveal, setReveal] = useState<ThreadReveal | null>(null);
   const asks = useRef(0);
@@ -89,7 +90,7 @@ function ReviewPage({ target, pr, review, viewOptions, title }: ReviewPageProps)
   const onRevealed = useCallback(() => setReveal(null), []);
   return (
     <>
-      <PrHeader pr={pr} hasReviewThread={reviewThreadOf(review) !== null} title={title} />
+      <PrHeader target={target} repo={repo} pr={pr} hasReviewThread={reviewThreadOf(review) !== null} title={title} />
       <PrTabs
         selected={tab}
         onSelect={setTab}

@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
+import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 import type { CommentRequest } from "../comments/comment-schema.ts";
 import { lastOpenedProject } from "../app/last-opened.ts";
-import { commentsTag, prReviewsContract, repoTag, VISITS_TAG, type InboxPr, type Visit } from "../contract.ts";
+import { commentsTag, INBOX_TAG, prReviewsContract, repoTag, VISITS_TAG, type InboxPr, type Visit } from "../contract.ts";
+import type { FoundPr } from "../github/inbox-search.ts";
 import { repoSchema } from "../github/repo.ts";
 
 // GitHub stands in: each post records what it was asked, and its order against bb's invalidations.
@@ -12,6 +14,14 @@ const posted = (what: string) => async (...args: unknown[]) => {
   return { url: `https://github.com/ivan-anchev/bb-plugins/pull/40#${what}` };
 };
 const notCalled = async () => assert.fail("not part of these tests");
+// PR 41 stands for one GitHub refuses to change.
+const REFUSED_PR = 41;
+const changedState = async (...args: [string, number, string]) => {
+  events.push(`state ${JSON.stringify(args)}`);
+  if (args[1] === REFUSED_PR) throw new Refusal({ code: "forbidden", message: "Your GitHub account doesn't have permission to do that in this repository." });
+};
+// The PRs GitHub's search finds, as the sidebar reads them.
+let searchFinds: FoundPr[] = [];
 // The visits the store was asked to save, in the order the writes landed.
 const saved: Visit[] = [];
 mock.module("../github/gh.ts", {
@@ -19,9 +29,10 @@ mock.module("../github/gh.ts", {
     postComment: posted("comment"),
     postReply: posted("reply"),
     postConversationComment: posted("conversation"),
+    changePrState: changedState,
     readPrComments: notCalled,
     listOpenPrs: notCalled,
-    readInbox: notCalled,
+    readInbox: async () => ({ found: searchFinds, stackMates: [] }),
     readFileAt: notCalled,
     snapshotPrDiff: notCalled,
   },
@@ -30,12 +41,15 @@ const { createRpcHandlers } = await import("./rpc-handlers.ts");
 
 const PROJECT = { id: "proj_1", name: "bb-plugins", gitRemoteUrl: "https://github.com/ivan-anchev/bb-plugins.git", sources: [] };
 
+// The cleanup each set of handlers registered for when the plugin is disposed.
+const disposeHooks: (() => void | Promise<void>)[] = [];
 // `list`: bb's project list, read once per call that names a project.
 const handlersWith = (projects: (typeof PROJECT)[], list: () => Promise<(typeof PROJECT)[]> = async () => projects) =>
   createRpcHandlers({
     bb: {
       sdk: { projects: { list } },
       rpc: { experimental_invalidate: (tags) => void events.push(`invalidate ${tags.join(",")}`) },
+      onDispose: (hook) => void disposeHooks.push(hook),
     },
     store: {
       guide: () => assert.fail("not part of these tests"),
@@ -52,6 +66,20 @@ const handlersWith = (projects: (typeof PROJECT)[], list: () => Promise<(typeof 
 const handlers = handlersWith([PROJECT]);
 
 const TARGET = { projectId: "proj_1", number: 40 };
+// The target PR as GitHub's search reports it.
+const pullRequest40 = {
+  repo: repoSchema.parse("ivan-anchev/bb-plugins"),
+  number: 40,
+  title: "Change a PR's state",
+  author: "octocat",
+  state: "OPEN",
+  updatedAt: "2026-11-12T10:00:00Z",
+  mergedAt: null,
+  baseRefName: "main",
+  headRefName: "pr-state",
+  ciFailing: false,
+  changesRequested: false,
+} as const satisfies FoundPr["pr"];
 // The tag the comments read carries for this PR: what each post must invalidate for it to show.
 const READ_TAGS = prReviewsContract.comments.tags!(TARGET, { threads: [], timeline: [], changedPaths: [] });
 // The app calling, as the Changes tab and the guide do.
@@ -80,7 +108,11 @@ test("the inbox lists GitHub's spelling of a repo under the tag a remote spelled
     section: "review",
   };
   const tags = prReviewsContract.inbox.tags!({}, { sections: [{ key: "review", count: 1, items: [{ kind: "pr", pr, stack: null }] }], unreadable: [] });
-  assert.deepEqual(tags, [repoTag(repoSchema.parse("Octo-Org/Widgets"))]);
+  assert.deepEqual(tags, [INBOX_TAG, repoTag(repoSchema.parse("Octo-Org/Widgets"))]);
+});
+
+test("an inbox that lists no PR keeps its own tag, so a state change still re-reads it", () => {
+  assert.deepEqual(prReviewsContract.inbox.tags!({}, { sections: [], unreadable: [] }), [INBOX_TAG]);
 });
 
 test("a review comment, a reply and a conversation comment each post to the project's repo, then re-read the PR's comments", async () => {
@@ -112,6 +144,52 @@ test("a project with no GitHub remote posts nothing and re-reads nothing", async
 
   await assert.rejects(call(handlersWith([]).replyToThread, { ...TARGET, commentId: 1, body: "x" }), /no GitHub remote/);
   assert.deepEqual(events, []);
+});
+
+test("a state change runs in the project's repo, re-reads the repo's PRs and the sidebar, and the sidebar again once search lists the new state", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const plugin = handlersWith([PROJECT]);
+  const searchLists = (state: InboxPr["state"]): FoundPr[] => [{ section: "authored", pr: { ...pullRequest40, state } }];
+  const nextRead = async () => {
+    t.mock.timers.tick(3_000);
+    await new Promise(setImmediate);
+  };
+  events.length = 0;
+  searchFinds = searchLists("OPEN");
+
+  await call(plugin.changePrState, { ...TARGET, change: "draft" });
+  assert.deepEqual(events, [`state ${JSON.stringify(["ivan-anchev/bb-plugins", 40, "draft"])}`, `invalidate ${repoTag(repoSchema.parse("ivan-anchev/bb-plugins"))},${INBOX_TAG}`]);
+
+  await nextRead();
+  assert.equal(events.length, 2);
+  searchFinds = searchLists("DRAFT");
+  await nextRead();
+  assert.deepEqual(events.slice(2), [`invalidate ${INBOX_TAG}`]);
+  await nextRead();
+  assert.equal(events.length, 3);
+});
+
+test("disposing the plugin stops a state change's sidebar re-reads", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  disposeHooks.length = 0;
+  const plugin = handlersWith([PROJECT]);
+  events.length = 0;
+  searchFinds = [{ section: "authored", pr: { ...pullRequest40, state: "CLOSED" } }];
+
+  await call(plugin.changePrState, { ...TARGET, change: "close" });
+  await Promise.all(disposeHooks.map((hook) => hook()));
+  t.mock.timers.tick(3_000);
+  await new Promise(setImmediate);
+
+  assert.equal(disposeHooks.length, 1);
+  assert.equal(events.length, 2);
+});
+
+test("a state change GitHub refuses re-reads nothing", async () => {
+  events.length = 0;
+
+  await assert.rejects(call(handlers.changePrState, { ...TARGET, number: REFUSED_PR, change: "close" }), /doesn't have permission/);
+  assert.deepEqual(events, [`state ${JSON.stringify(["ivan-anchev/bb-plugins", REFUSED_PR, "close"])}`]);
 });
 
 test("opening a PR page records the visit in its project and the PR's repo, then re-reads the visits", async (t) => {
