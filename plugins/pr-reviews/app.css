@@ -64,3 +64,76 @@
 .pr-reviews-thread-foot button:hover {
   background: var(--pr-reviews-thread-tint-hover);
 }
+
+/* Prose's block spacing (src/app/ui/prose.tsx): GitHub's markdown rhythm, in place of bb's chat
+   margins, which leave `<details>` flush against its neighbours. Every block keeps one gap below
+   it and none above, so gaps never collapse unevenly; a heading takes 1.5 gaps above and one below,
+   so it sits with the text it heads.
+   - The gap is 1em of the Prose root, registered as a length so it resolves there, once: a heading
+     with its own size still gets the root's gap. The 14px description and the 13px comment box
+     each get GitHub's proportions.
+   - A list item, a blockquote and an open `<details>` space their own blocks the same way, and
+     each container's first and last blocks sit flush with its edges, so a body that starts with a
+     heading or ends in a list or `<details>` keeps the spacing its parent gives it.
+   - List items sit a quarter gap apart, and nested lists close up to their item. A loose list, one
+     written with blank lines, spaces its items a full gap, as its paragraphs.
+   - Unlayered, so it wins over bb's Markdown utilities without a specificity race. */
+@property --pr-reviews-prose-gap {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+.pr-reviews-prose {
+  --pr-reviews-prose-gap: 1em;
+}
+:is(.pr-reviews-prose, .pr-reviews-prose :is(li, blockquote, details)) > :is(p, ul, ol, blockquote, details, pre, table, div, img) {
+  margin-block: 0 var(--pr-reviews-prose-gap);
+}
+.pr-reviews-prose :is(h1, h2, h3, h4, h5, h6) {
+  margin-block: calc(var(--pr-reviews-prose-gap) * 1.5) var(--pr-reviews-prose-gap);
+}
+.pr-reviews-prose hr {
+  margin-block: calc(var(--pr-reviews-prose-gap) * 1.5);
+}
+.pr-reviews-prose li {
+  margin-block: 0;
+}
+.pr-reviews-prose li + li {
+  margin-top: calc(var(--pr-reviews-prose-gap) / 4);
+}
+.pr-reviews-prose :is(ul, ol):has(> li > p) > li + li {
+  margin-top: var(--pr-reviews-prose-gap);
+}
+/* A task list drops its bullets and hangs each checkbox in the list's indent, as GitHub does. A
+   loose task list puts each checkbox in its item's first paragraph. */
+.pr-reviews-prose li:has(> input[type="checkbox"]:first-child, > p:first-child > input[type="checkbox"]:first-child) {
+  list-style: none;
+}
+.pr-reviews-prose :is(li, li > p:first-child) > input[type="checkbox"]:first-child {
+  margin-inline: -1.4em 0.4em;
+}
+.pr-reviews-prose details > summary {
+  margin: 0;
+}
+.pr-reviews-prose details[open] > summary {
+  margin-bottom: calc(var(--pr-reviews-prose-gap) / 2);
+}
+/* bb draws every image as a block with margins of its own. Here an image takes the spacing of
+   where it sits: on its own line (GitHub's uploader writes `<img>`) it is a block like any other,
+   and in a paragraph, linked or not, it sits flush with the paragraph's edges. Images in a row,
+   which GitHub draws a space apart on one line, stack a quarter gap apart: about a space's width,
+   and the gap between a list's items. */
+.pr-reviews-prose img {
+  margin-block: 0;
+}
+.pr-reviews-prose p > :is(img, a:has(> img)) + img,
+.pr-reviews-prose p > :is(img, a:has(> img)) + a > img {
+  margin-top: calc(var(--pr-reviews-prose-gap) / 4);
+}
+:is(.pr-reviews-prose, .pr-reviews-prose :is(li, blockquote, details)) > :first-child,
+.pr-reviews-prose details > summary + * {
+  margin-top: 0;
+}
+:is(.pr-reviews-prose, .pr-reviews-prose :is(li, blockquote, details)) > :last-child {
+  margin-bottom: 0;
+}
