@@ -1,26 +1,22 @@
-// The Summary tab's activity, oldest first, as the fold reads it (activity-fold.ts): a muted day
-// divider over each day, messages on the page, and each run of lines in one recessed tinted block
-// ("Tint"), drawn row by row (activity-rows.ts). A folded line is a button that opens in place and
-// keeps focus; a review line opens to its whole review, which splits the block, with Collapse under
-// it. A review's threads are rows in a tinted group, each opening the Changes tab at its thread.
-// Which lines are open is the reader's one piece of state; everything else comes from the current
-// read (REVIEW.md).
-import { useMemo, useState, type ReactNode, type Ref, type RefCallback } from "react";
-import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
+// The Summary tab's activity, oldest first, as the fold reads it (activity-fold.ts): messages on the
+// page, and every other part a line (activity-line.tsx) whose glyph a thin connector joins to the
+// lines next to it. The connector stops at each message, never running behind one. A review line
+// with threads opens to its body, if it has one, and its threads as rows, each opening the Changes
+// tab at its thread. Which lines are open is the reader's one piece of state; everything else
+// comes from the current read (REVIEW.md).
+import { useMemo, useState, type ReactNode, type Ref } from "react";
 import { quoteReplyText, type GitHubComment, type ReviewThread } from "../../comments/thread-schema.ts";
 import type { ReviewVerdict } from "../../comments/timeline-schema.ts";
-import { firstLineOf, GitHubCommentView, QUIET_BUTTON, TimeAgo } from "../comments/github-comment.tsx";
-import { MERGED } from "../page/pr-header.tsx";
+import { firstLineOf, GitHubCommentView } from "../comments/github-comment.tsx";
 import { useFocusHandOff } from "../ui/focus-hand-off.ts";
 import { mergeRefs } from "../ui/merge-refs.ts";
-import { EntryWords, glyphOf, SHA, Who } from "./activity-entry.tsx";
-import { lastTimeOf, type ActivityDay, type MergedItem, type ReviewWithThreads, type RunEntry } from "./activity-fold.ts";
-import { rowsOf, type ActivityRow, type ReviewForm, type TintEdges } from "./activity-rows.ts";
-import { ActivityGlyph, type ActivityGlyphName } from "./activity-glyph.tsx";
-import { dayLabelOf, runSummaryOf, threadLocationOf, threadStateOf } from "./activity-words.ts";
+import { Prose } from "../ui/prose.tsx";
+import { connectorsOf, keyOf, type ActivityPart, type ReviewWithThreads } from "./activity-fold.ts";
+import { FoldItems, Line } from "./activity-line.tsx";
+import { foldItemsOf, threadLocationOf, threadStateOf, VERDICT_WORDS } from "./activity-words.ts";
 
 type TimelineProps = {
-  days: ActivityDay[];
+  parts: ActivityPart[];
   prAuthor: string;
   /** The paths the PR's diff changes: a thread on any other file has no Changes tab to open. */
   changedPaths: ReadonlySet<string>;
@@ -30,27 +26,32 @@ type TimelineProps = {
   onShowThread(thread: ReviewThread): void;
 };
 
-/** What a row needs besides its own data: who wrote the PR, the diff's paths, what is open, and the actions. */
-type Context = Omit<TimelineProps, "days"> & { opened: ReadonlySet<string>; onToggle(key: string): void };
+/** What a part needs besides its own data: who wrote the PR, the diff's paths, what is open, and the actions. */
+type Context = Omit<TimelineProps, "parts"> & { opened: ReadonlySet<string>; onToggle(key: string): void };
 
-export function ActivityTimeline({ days, ...actions }: TimelineProps) {
+export function ActivityTimeline({ parts, ...actions }: TimelineProps) {
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const onToggle = (key: string) => setOpened((current) => toggled(current, key));
   const context = { ...actions, opened, onToggle };
-  const now = new Date();
+  const connectors = connectorsOf(parts);
   return (
-    <ol className="grid grid-cols-[minmax(0,1fr)]">
-      {days.map((day) => (
-        <li key={day.date} className="grid grid-cols-[minmax(0,1fr)]">
-          <h3 className="mt-[26px] mb-1 text-xs leading-5 font-medium text-subtle-foreground">{dayLabelOf(day.date, now)}</h3>
-          {rowsOf(day.blocks, opened).map((row) => (
-            <Row key={row.key} row={row} context={context} />
-          ))}
-        </li>
-      ))}
+    <ol className="mt-2 grid grid-cols-[minmax(0,1fr)]">
+      {parts.map((part, index) => {
+        const connector = connectors[index];
+        return (
+          <li key={keyOf(part)} className="relative grid grid-cols-[minmax(0,1fr)]">
+            {connector?.up && <span aria-hidden className={`top-0 h-[9px] ${CONNECTOR}`} />}
+            {connector?.down && <span aria-hidden className={`top-[27px] bottom-0 ${CONNECTOR}`} />}
+            <Part part={part} context={context} />
+          </li>
+        );
+      })}
     </ol>
   );
 }
+
+// Down the gutter's middle, clear of the 14px glyph centred 18px down a line.
+const CONNECTOR = "absolute left-3 w-px -translate-x-1/2 bg-subtle-foreground/20";
 
 function toggled(set: ReadonlySet<string>, key: string): ReadonlySet<string> {
   const next = new Set(set);
@@ -58,36 +59,29 @@ function toggled(set: ReadonlySet<string>, key: string): ReadonlySet<string> {
   return next;
 }
 
-function Row({ row, context }: { row: ActivityRow; context: Context }) {
-  switch (row.kind) {
+function Part({ part, context }: { part: ActivityPart; context: Context }) {
+  switch (part.kind) {
     case "comment":
-      return <Message comment={row.item.comment} verb={null} context={context} />;
+      return <Message comment={part.item.comment} verb={null} context={context} />;
     case "review":
-      return <ReviewRow review={row.review} form={row.form} tint={row.tint} context={context} />;
-    case "run":
-      return (
-        <div className={tintOf(row.tint)}>
-          {row.entries.length === 1 ? <EntryLine entry={row.entries[0]} /> : <RunLine entries={row.entries} open={context.opened.has(row.key)} onToggle={() => context.onToggle(row.key)} />}
-        </div>
-      );
-    case "merged":
-      return (
-        <div className={tintOf(row.tint)}>
-          <MergedLine item={row.item} />
-        </div>
-      );
+    case "review-message":
+      return <ReviewRow review={part} context={context} />;
+    case "opened":
+    case "commits":
+    case "force-pushes":
+    case "labels":
+    case "label-pair":
+    case "review-requests":
+    case "mentions":
+    case "event":
+    case "merged": {
+      const items = foldItemsOf(part);
+      const key = keyOf(part);
+      return <Line line={part} fold={items === null ? null : <FoldItems items={items} />} open={context.opened.has(key)} onToggle={() => context.onToggle(key)} />;
+    }
     default:
-      return row satisfies never;
+      return part satisfies never;
   }
-}
-
-// A line's share of its tinted block: the block's rounded ends and padding are its first and last
-// rows'. A row on the page has none.
-function tintOf(tint: TintEdges | null): string | undefined {
-  if (tint === null) return undefined;
-  const top = tint.first ? "mt-1 rounded-t-[10px] pt-1" : "";
-  const bottom = tint.last ? "mb-1 rounded-b-[10px] pb-1" : "";
-  return `-mx-3 grid grid-cols-[minmax(0,1fr)] bg-(--pr-reviews-thread-tint) px-3 ${top} ${bottom}`;
 }
 
 /** A message on the page: a conversation comment, or a review with its threads under it. */
@@ -108,38 +102,32 @@ function Message({ ref, comment, verb, context, children }: { ref?: Ref<HTMLElem
   );
 }
 
-// A review in its form (activity-rows.ts). Its row stays as the form changes, whether the reader
-// opens or collapses its line or a refresh resolves or reopens a thread, and hands focus from the
-// form that leaves to the one that comes: to the line, to Collapse, or to the message, which holds
+// A review as a message or a line. Its row stays as a refresh moves it from one to the other, as
+// when a thread is resolved or reopened, and hands focus from the form that leaves, wherever in it
+// focus is (a line's fold too), to the one that comes: to the line, or to the message, which holds
 // focus but is no tab stop. Each form is keyed, so a change of form always replaces it whole.
-function ReviewRow({ review, form, tint, context }: { review: ReviewWithThreads; form: ReviewForm; tint: TintEdges | null; context: Context }) {
+function ReviewRow({ review, context }: { review: Extract<ActivityPart, { kind: "review" | "review-message" }>; context: Context }) {
   const focus = useFocusHandOff();
-  const formRef = useMemo(() => mergeRefs(focus.from, focus.to), [focus]);
-  const onToggle = () => context.onToggle(review.review.id);
+  const key = review.review.id;
+  if (review.kind === "review") {
+    const fold = review.threads.length === 0 ? null : <ReviewFold review={review} context={context} />;
+    return (
+      <div key={review.kind} ref={focus.from} className="grid grid-cols-[minmax(0,1fr)]">
+        <Line ref={focus.to} line={review} fold={fold} open={context.opened.has(key)} onToggle={() => context.onToggle(key)} />
+      </div>
+    );
+  }
   return (
-    <div className={tintOf(tint)}>
-      {form === "line" ? (
-        <ReviewLine key={form} ref={formRef} review={review} onOpen={onToggle} />
-      ) : (
-        <div key={form} ref={focus.from}>
-          <ReviewMessage ref={form === "message" ? focus.to : undefined} review={review} context={context}>
-            {form === "opened" && (
-              <button ref={focus.to} type="button" aria-expanded onClick={onToggle} className={`${QUIET_BUTTON} col-start-2 mt-1 -ml-2 justify-self-start px-2 py-0.5`}>
-                Collapse
-              </button>
-            )}
-          </ReviewMessage>
-        </div>
-      )}
+    <div key={review.kind} ref={focus.from}>
+      <ReviewMessage ref={focus.to} review={review} context={context} />
     </div>
   );
 }
 
-function ReviewMessage({ ref, review: { review, threads }, context, children }: { ref?: Ref<HTMLElement>; review: ReviewWithThreads; context: Context; children?: ReactNode }) {
+function ReviewMessage({ ref, review: { review, threads }, context }: { ref?: Ref<HTMLElement>; review: ReviewWithThreads; context: Context }) {
   return (
     <Message ref={ref} comment={review.comment} verb={<Verdict verdict={review.verdict} />} context={context}>
       {threads.length > 0 && <Digest threads={threads} context={context} />}
-      {children}
     </Message>
   );
 }
@@ -155,6 +143,23 @@ function Digest({ threads, context }: { threads: ReviewThread[]; context: Contex
         </li>
       ))}
     </ul>
+  );
+}
+
+// A review line, opened under its words: its body, if it has one, then its threads.
+function ReviewFold({ review: { review, threads }, context }: { review: ReviewWithThreads; context: Context }) {
+  const hasBody = review.comment.body.trim() !== "";
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)] pb-1.5 pl-9">
+      {hasBody && <Prose text={review.comment.body} className="pb-1 text-sm leading-[22px]" />}
+      <ul aria-label="Review threads" className="-ml-2 grid grid-cols-[minmax(0,1fr)]">
+        {threads.map((thread) => (
+          <li key={thread.id} className="grid">
+            <DigestRow thread={thread} context={context} />
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -191,105 +196,11 @@ const DIGEST_ROW = "flex min-h-7 min-w-0 items-baseline gap-2.5 rounded-md px-2 
 // The first line as words: markdown's code ticks and bold marks read as noise in a one-line row.
 const snippetOf = (body: string) => firstLineOf(body).replace(/`|\*\*/g, "");
 
-const VERDICTS = {
-  approved: { words: "approved", tone: "text-success-foreground", glyph: "approved" },
-  "changes-requested": { words: "requested changes", tone: "text-destructive-text", glyph: "changes-requested" },
-  commented: { words: "reviewed", tone: "text-muted-foreground", glyph: "review" },
-  dismissed: { words: "reviewed", tone: "text-muted-foreground", glyph: "review" },
-} as const satisfies Record<ReviewVerdict, { words: string; tone: string; glyph: ActivityGlyphName }>;
+const VERDICT_TONES = {
+  approved: "text-success-foreground",
+  "changes-requested": "text-destructive-text",
+  commented: "text-muted-foreground",
+  dismissed: "text-muted-foreground",
+} as const satisfies Record<ReviewVerdict, string>;
 
-const Verdict = ({ verdict }: { verdict: ReviewVerdict }) => <span className={`shrink-0 text-xs ${VERDICTS[verdict].tone}`}>{VERDICTS[verdict].words}</span>;
-
-const LINE = "grid grid-cols-[24px_minmax(0,1fr)] items-start gap-x-3 py-1 text-[12.5px] leading-5 text-muted-foreground";
-const LINE_BUTTON = `${LINE} w-full cursor-pointer rounded-md text-left transition-colors duration-150 ease-out hover:text-foreground hover:duration-0 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none`;
-
-function Glyph({ name, tone = "text-subtle-foreground" }: { name: ActivityGlyphName; tone?: string }) {
-  return (
-    <span className={`grid h-5 place-items-center ${tone}`}>
-      <ActivityGlyph name={name} />
-    </span>
-  );
-}
-
-const Chevron = ({ open }: { open: boolean }) => <Icon name={open ? "ChevronDown" : "ChevronRight"} aria-hidden className="ml-0.5 inline size-3.5 align-[-2px] text-subtle-foreground" />;
-
-// A run of one is its own line, with its time.
-function EntryLine({ entry }: { entry: RunEntry }) {
-  return (
-    <div className={LINE}>
-      <Glyph name={glyphOf(entry)} />
-      <span>
-        <EntryWords entry={entry} /> · <TimeAgo at={lastTimeOf([entry])} />
-      </span>
-    </div>
-  );
-}
-
-// "1 commit and 2 label changes · 6d ago ›". The button stays where it is as its list opens under
-// it, so it keeps focus.
-function RunLine({ entries, open, onToggle }: { entries: RunEntry[]; open: boolean; onToggle(): void }) {
-  return (
-    <>
-      <button type="button" aria-expanded={open} onClick={onToggle} className={LINE_BUTTON}>
-        <Glyph name={glyphOf(entries[0])} />
-        <span>
-          {runSummaryOf(entries)} · <TimeAgo at={lastTimeOf(entries)} />
-          <Chevron open={open} />
-        </span>
-      </button>
-      {open && (
-        <ul className="grid gap-0.5 pb-1.5 pl-9 text-[12.5px] leading-5 text-muted-foreground">
-          {entries.map((entry) => (
-            <li key={entry.kind === "item" ? entry.item.id : entry.added.id} className="flex items-start gap-1.5">
-              <span className="grid h-5 place-items-center text-subtle-foreground">
-                <ActivityGlyph name={glyphOf(entry)} />
-              </span>
-              <span className="min-w-0">
-                <EntryWords entry={entry} />
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </>
-  );
-}
-
-// "X approved · 5d ago", or "X reviewed · 1 resolved thread · 6d ago ›", which opens to the review.
-// A line with no threads holds focus, without being a tab stop, for the form it replaced.
-function ReviewLine({ ref, review: { review, threads }, onOpen }: { ref: RefCallback<HTMLElement>; review: ReviewWithThreads; onOpen(): void }) {
-  const verdict = VERDICTS[review.verdict];
-  const words = (
-    <span>
-      <Who login={review.comment.author.login} /> <span className={verdict.tone}>{verdict.words}</span>
-      {threads.length > 0 && ` · ${threads.length} resolved thread${threads.length === 1 ? "" : "s"}`} · <TimeAgo at={review.comment.createdAt} />
-      {threads.length > 0 && <Chevron open={false} />}
-    </span>
-  );
-  const glyph = <Glyph name={verdict.glyph} tone={review.verdict === "approved" ? verdict.tone : undefined} />;
-  if (threads.length === 0) {
-    return (
-      <div ref={ref} tabIndex={-1} className={`${LINE} rounded-md focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none`}>
-        {glyph}
-        {words}
-      </div>
-    );
-  }
-  return (
-    <button ref={ref} type="button" aria-expanded={false} onClick={onOpen} className={LINE_BUTTON}>
-      {glyph}
-      {words}
-    </button>
-  );
-}
-
-function MergedLine({ item }: { item: MergedItem }) {
-  return (
-    <div className={LINE}>
-      <Glyph name="merged" tone={MERGED} />
-      <span>
-        <Who login={item.actor} /> merged into <span className={`${SHA} text-foreground`}>{item.base}</span> · <TimeAgo at={item.createdAt} />
-      </span>
-    </div>
-  );
-}
+const Verdict = ({ verdict }: { verdict: ReviewVerdict }) => <span className={`shrink-0 text-xs ${VERDICT_TONES[verdict]}`}>{VERDICT_WORDS[verdict]}</span>;

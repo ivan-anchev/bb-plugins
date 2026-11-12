@@ -9,6 +9,7 @@ const PR_42 = {
   author: { id: "MDQ6VXNlcjQ2MDUwMjk3", is_bot: false, login: "ivan-anchev", name: "Ivan Anchev" },
   updatedAt: "2026-11-08T07:06:33Z",
   headRefOid: "ec618b08a91e3f5e179ba46d1e43c6f6aeddfb53",
+  createdAt: "2026-11-07T20:41:09Z",
   body: "## Goal",
   url: "https://github.com/ivan-anchev/bb-plugins/pull/42",
   headRefName: "bb/add-summary-and-guide-tabs-thr_ejw2au8a9j",
@@ -49,8 +50,9 @@ function review(login: string, state: string) {
 const user = (login: string) => ({ __typename: "User", login });
 const team = (name: string) => ({ __typename: "Team", name, slug: `ivan-anchev/${name.toLowerCase()}` });
 
-test("maps PR #42: its checks with names, outcomes and details pages, its commenting reviewer, no labels", () => {
+test("maps PR #42: when it opened, its checks with names, outcomes and details pages, its commenting reviewer, no labels", () => {
   const pr = parsePrDetail(PR_42);
+  assert.equal(pr.createdAt, "2026-11-07T20:41:09Z");
   assert.deepEqual(pr.checks, [
     { name: "check", outcome: "passing", url: "https://github.com/ivan-anchev/bb-plugins/actions/runs/42456126179/job/128655411994" },
     { name: "Devin Review", outcome: "passing", url: "https://app.devin.ai/review/ivan-anchev/bb-plugins/pull/42" },
