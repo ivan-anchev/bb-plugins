@@ -1,0 +1,456 @@
+{
+  "data": {
+    "authoredOpen": {
+      "nodes": [
+        {
+          "number": 67,
+          "title": "Atlas change 67",
+          "isDraft": false,
+          "state": "OPEN",
+          "updatedAt": "2026-08-21T03:52:22Z",
+          "mergedAt": null,
+          "closedAt": null,
+          "baseRefName": "topic-1",
+          "headRefName": "topic-2",
+          "reviewDecision": null,
+          "repository": {
+            "nameWithOwner": "octo-org/atlas"
+          },
+          "author": {
+            "login": "ivan-anchev"
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "SUCCESS"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "number": 65,
+          "title": "Atlas change 65",
+          "isDraft": false,
+          "state": "OPEN",
+          "updatedAt": "2026-08-21T03:52:07Z",
+          "mergedAt": null,
+          "closedAt": null,
+          "baseRefName": "topic-3",
+          "headRefName": "topic-4",
+          "reviewDecision": null,
+          "repository": {
+            "nameWithOwner": "octo-org/atlas"
+          },
+          "author": {
+            "login": "ivan-anchev"
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "SUCCESS"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "number": 66,
+          "title": "Atlas change 66",
+          "isDraft": false,
+          "state": "OPEN",
+          "updatedAt": "2026-08-21T03:52:05Z",
+          "mergedAt": null,
+          "closedAt": null,
+          "baseRefName": "topic-4",
+          "headRefName": "topic-1",
+          "reviewDecision": null,
+          "repository": {
+            "nameWithOwner": "octo-org/atlas"
+          },
+          "author": {
+            "login": "ivan-anchev"
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "SUCCESS"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "number": 64,
+          "title": "Atlas change 64",
+          "isDraft": false,
+          "state": "OPEN",
+          "updatedAt": "2026-08-21T03:52:01Z",
+          "mergedAt": null,
+          "closedAt": null,
+          "baseRefName": "topic-5",
+          "headRefName": "topic-3",
+          "reviewDecision": null,
+          "repository": {
+            "nameWithOwner": "octo-org/atlas"
+          },
+          "author": {
+            "login": "ivan-anchev"
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "SUCCESS"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "number": 63,
+          "title": "Atlas change 63",
+          "isDraft": false,
+          "state": "OPEN",
+          "updatedAt": "2026-08-21T03:52:00Z",
+          "mergedAt": null,
+          "closedAt": null,
+          "baseRefName": "main",
+          "headRefName": "topic-5",
+          "reviewDecision": null,
+          "repository": {
+            "nameWithOwner": "octo-org/atlas"
+          },
+          "author": {
+            "login": "ivan-anchev"
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "SUCCESS"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "number": 83,
+          "title": "Close the Changes-tab diff gap in pr-reviews and mark commented files in its tree",
+          "isDraft": true,
+          "state": "OPEN",
+          "updatedAt": "2026-11-12T10:41:09Z",
+          "mergedAt": null,
+          "closedAt": null,
+          "baseRefName": "main",
+          "headRefName": "pr-reviews-changes-gap-tree-marks",
+          "reviewDecision": null,
+          "repository": {
+            "nameWithOwner": "ivan-anchev/bb-plugins"
+          },
+          "author": {
+            "login": "ivan-anchev"
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "SUCCESS"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "number": 42,
+          "title": "Beacon change 42",
+          "isDraft": false,
+          "state": "OPEN",
+          "updatedAt": "2026-06-17T08:57:19Z",
+          "mergedAt": null,
+          "closedAt": null,
+          "baseRefName": "topic-1",
+          "headRefName": "topic-2",
+          "reviewDecision": null,
+          "repository": {
+            "nameWithOwner": "Octo-Labs/beacon"
+          },
+          "author": {
+            "login": "ivan-anchev"
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": null
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "authoredClosed": {
+      "nodes": [
+        {
+          "number": 81,
+          "title": "[throwaway test] pr-reviews Summary timeline QA (will be closed)",
+          "isDraft": false,
+          "state": "CLOSED",
+          "updatedAt": "2026-11-10T17:52:15Z",
+          "mergedAt": null,
+          "closedAt": "2026-11-10T17:52:12Z",
+          "baseRefName": "main",
+          "headRefName": "throwaway/qa-summary-20261110-1954",
+          "reviewDecision": null,
+          "repository": {
+            "nameWithOwner": "ivan-anchev/bb-plugins"
+          },
+          "author": {
+            "login": "ivan-anchev"
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "SUCCESS"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "number": 79,
+          "title": "[throwaway test] pr-reviews GitHub comments QA (will be closed)",
+          "isDraft": false,
+          "state": "CLOSED",
+          "updatedAt": "2026-11-10T15:57:21Z",
+          "mergedAt": null,
+          "closedAt": "2026-11-10T15:57:17Z",
+          "baseRefName": "main",
+          "headRefName": "throwaway/qa-github-comments-20261110-1744",
+          "reviewDecision": null,
+          "repository": {
+            "nameWithOwner": "ivan-anchev/bb-plugins"
+          },
+          "author": {
+            "login": "ivan-anchev"
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "SUCCESS"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "review": {
+      "nodes": [
+        {
+          "number": 51,
+          "title": "chore(deps): bump zod from 4.4.3 to 4.6.6",
+          "isDraft": false,
+          "state": "OPEN",
+          "updatedAt": "2026-11-03T19:07:33Z",
+          "mergedAt": null,
+          "closedAt": null,
+          "baseRefName": "main",
+          "headRefName": "dependabot/npm_and_yarn/zod-4.6.6",
+          "reviewDecision": null,
+          "repository": {
+            "nameWithOwner": "ivan-anchev/ngx-zero"
+          },
+          "author": {
+            "login": "dependabot"
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "FAILURE"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "number": 50,
+          "title": "chore(deps-dev): bump vite from 7.3.6 to 7.3.7",
+          "isDraft": false,
+          "state": "OPEN",
+          "updatedAt": "2026-10-23T12:33:25Z",
+          "mergedAt": null,
+          "closedAt": null,
+          "baseRefName": "main",
+          "headRefName": "dependabot/npm_and_yarn/vite-7.3.7",
+          "reviewDecision": null,
+          "repository": {
+            "nameWithOwner": "ivan-anchev/ngx-zero"
+          },
+          "author": {
+            "login": "dependabot"
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "SUCCESS"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "number": 49,
+          "title": "chore(deps): bump hono from 4.12.34 to 4.13.11",
+          "isDraft": false,
+          "state": "OPEN",
+          "updatedAt": "2026-10-21T03:16:45Z",
+          "mergedAt": null,
+          "closedAt": null,
+          "baseRefName": "main",
+          "headRefName": "dependabot/npm_and_yarn/hono-4.13.11",
+          "reviewDecision": null,
+          "repository": {
+            "nameWithOwner": "ivan-anchev/ngx-zero"
+          },
+          "author": {
+            "login": "dependabot"
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "SUCCESS"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "mergedAuthored": {
+      "nodes": [
+        {
+          "number": 82,
+          "title": "Show the PR's GitHub activity as a timeline on the pr-reviews Summary tab",
+          "isDraft": false,
+          "state": "MERGED",
+          "updatedAt": "2026-11-11T15:05:23Z",
+          "mergedAt": "2026-11-11T15:05:22Z",
+          "closedAt": "2026-11-11T15:05:22Z",
+          "baseRefName": "main",
+          "headRefName": "pr-reviews-summary-activity",
+          "reviewDecision": null,
+          "repository": {
+            "nameWithOwner": "ivan-anchev/bb-plugins"
+          },
+          "author": {
+            "login": "ivan-anchev"
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "SUCCESS"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "number": 80,
+          "title": "Show GitHub's review threads in pr-reviews, and reply to them in place",
+          "isDraft": false,
+          "state": "MERGED",
+          "updatedAt": "2026-11-11T15:02:25Z",
+          "mergedAt": "2026-11-11T15:02:25Z",
+          "closedAt": "2026-11-11T15:02:25Z",
+          "baseRefName": "main",
+          "headRefName": "pr-reviews-github-comments",
+          "reviewDecision": null,
+          "repository": {
+            "nameWithOwner": "ivan-anchev/bb-plugins"
+          },
+          "author": {
+            "login": "ivan-anchev"
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "SUCCESS"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "number": 78,
+          "title": "Take Code Explorer off the marketplace and keep it installable from git",
+          "isDraft": false,
+          "state": "MERGED",
+          "updatedAt": "2026-11-10T13:50:01Z",
+          "mergedAt": "2026-11-10T13:49:58Z",
+          "closedAt": "2026-11-10T13:49:58Z",
+          "baseRefName": "main",
+          "headRefName": "bb/unlist-code-explorer-thr_4giss63gs4",
+          "reviewDecision": null,
+          "repository": {
+            "nameWithOwner": "ivan-anchev/bb-plugins"
+          },
+          "author": {
+            "login": "ivan-anchev"
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "state": "SUCCESS"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "mergedReviewed": {
+      "nodes": []
+    }
+  }
+}

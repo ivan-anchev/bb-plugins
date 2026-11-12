@@ -1,8 +1,8 @@
-// The plugin's SQLite: the diff pinned for each reviewed head, the review runs, and the
-// guides. Every SQL statement lives here.
+// The plugin's SQLite: the diff pinned for each reviewed head, the review runs, the guides, and
+// when the reader last opened each PR. Every SQL statement lives here.
 import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import type { GuideRecord, PrHeadKey } from "../contract.ts";
+import type { GuideRecord, PrHeadKey, Visit } from "../contract.ts";
 import type { DiffFile } from "../diff/diff-schema.ts";
 import { parsePrDiff } from "../diff/parse-pr-diff.ts";
 import { guideSchema } from "../guide/guide-schema.ts";
@@ -24,6 +24,9 @@ const MIGRATIONS = [
   `CREATE TABLE guides (repo TEXT NOT NULL, number INTEGER NOT NULL, head_sha TEXT NOT NULL,
      thread_id TEXT NOT NULL, model TEXT, submitted_at INTEGER NOT NULL, guide TEXT NOT NULL,
      PRIMARY KEY (repo, number, head_sha))`,
+  // NOCASE: one repo, however a remote spells it (repoKey).
+  `CREATE TABLE visits (repo TEXT NOT NULL COLLATE NOCASE, number INTEGER NOT NULL, project_id TEXT NOT NULL,
+     opened_at INTEGER NOT NULL, PRIMARY KEY (repo, number))`,
 ];
 
 export type Store = ReturnType<typeof openStore>;
@@ -90,6 +93,20 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
       const row = db().prepare("SELECT * FROM guides WHERE repo = ? AND number = ? AND head_sha = ?").get(repo, number, headSha);
       return row === undefined ? null : toGuideRecord(row);
     },
+
+    // Only the PR's latest visit counts, whatever order the writes land in.
+    saveVisit({ projectId, repo, number, openedAt }: Visit): void {
+      db()
+        .prepare(
+          `INSERT INTO visits VALUES (?, ?, ?, ?) ON CONFLICT (repo, number) DO UPDATE
+             SET project_id = excluded.project_id, opened_at = excluded.opened_at WHERE excluded.opened_at > visits.opened_at`,
+        )
+        .run(repo, number, projectId, openedAt);
+    },
+
+    visits(): Visit[] {
+      return db().prepare("SELECT * FROM visits").all().map(toVisit);
+    },
   };
 }
 
@@ -128,4 +145,11 @@ function toGuideRecord(row: unknown): GuideRecord {
 
 function headOf({ repo, number, head_sha, thread_id, submitted_at }: z.infer<typeof guideHeadRowSchema>): GuideHead {
   return { key: { repo, number, headSha: head_sha }, threadId: thread_id, submittedAt: submitted_at };
+}
+
+const visitRowSchema = z.object({ repo: repoSchema, number: z.number(), project_id: z.string(), opened_at: z.number() });
+
+function toVisit(row: unknown): Visit {
+  const { repo, number, project_id, opened_at } = visitRowSchema.parse(row);
+  return { projectId: project_id, repo, number, openedAt: opened_at };
 }

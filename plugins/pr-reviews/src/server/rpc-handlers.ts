@@ -1,19 +1,17 @@
 // RPC handlers: resolve the project to its GitHub repo, read GitHub through gh with each PR's
-// review state, read stored guides, a PR's live diff and its comments, remember the chosen
-// project, hand review actions to `reviews`, and post the comments a reader chose to. A thin shell;
-// the logic lives in the modules it calls.
+// review state, read the sidebar's PRs across projects, stored guides, a PR's live diff and its
+// comments, record the PR pages the reader opens, hand review actions to `reviews`, and post the
+// comments a reader chose to. A thin shell; the logic lives in the modules it calls.
 import { experimental_PluginRpcRefusal as Refusal, type BbPluginApi, type ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
-import { z } from "zod";
-import { commentsTag, PROJECTS_TAG, prReviewsContract, type GitHubProject, type UnreadableProject } from "../contract.ts";
+import { commentsTag, prReviewsContract, VISITS_TAG, type GitHubProject, type UnreadableProject } from "../contract.ts";
 import { parsePrDiff } from "../diff/parse-pr-diff.ts";
-import { listOpenPrs, postComment, postConversationComment, postReply, readFileAt, readPrComments, snapshotPrDiff, type PrDiffSnapshot } from "../github/gh.ts";
+import { listOpenPrs, postComment, postConversationComment, postReply, readFileAt, readInbox, readPrComments, snapshotPrDiff, type PrDiffSnapshot } from "../github/gh.ts";
 import { projectRepo, type ProjectRepo } from "../github/project-repo.ts";
 import type { Repo } from "../github/repo.ts";
+import { buildSections, inboxPrs } from "./inbox.ts";
 import type { ReviewReader } from "./review-reader.ts";
 import type { PrRef, Reviews } from "./reviews.ts";
 import type { Store } from "./store.ts";
-
-const SELECTED_PROJECT_KEY = "selected-project";
 
 // A deleted project reads as one without a remote.
 const NO_REMOTE: ProjectRepo = { kind: "none" };
@@ -24,10 +22,9 @@ type Handlers = ExperimentalPluginRpcHandlersWithContext<typeof prReviewsContrac
 type Bb = {
   sdk: { projects: { list(): Promise<readonly ({ id: string; name: string } & Parameters<typeof projectRepo>[0])[]> } };
   rpc: Pick<BbPluginApi["rpc"], "experimental_invalidate">;
-  storage: { kv: Pick<BbPluginApi["storage"]["kv"], "get" | "set"> };
 };
 
-type Deps = { bb: Bb; store: Pick<Store, "guide" | "snapshotFiles">; reader: ReviewReader; reviews: Reviews };
+type Deps = { bb: Bb; store: Pick<Store, "guide" | "snapshotFiles" | "saveVisit" | "visits">; reader: ReviewReader; reviews: Reviews };
 
 export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handlers {
   // One project's unreadable remote is reported beside the others, never failing the read.
@@ -64,16 +61,22 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
     return result;
   }
 
-  async function rememberedProjectId(): Promise<string | undefined> {
-    return z.string().optional().parse(await bb.storage.kv.get(SELECTED_PROJECT_KEY));
-  }
-
   return {
-    async projects() {
-      const [{ projects, unreadable }, remembered] = await Promise.all([githubProjects(), rememberedProjectId()]);
-      // A remembered project that was deleted, or lost its GitHub remote, reads as none chosen.
-      const selected = projects.find((project) => project.id === remembered);
-      return { projects, unreadable, selectedProjectId: selected?.id ?? null };
+    async inbox() {
+      const { projects, unreadable } = await githubProjects();
+      const { found, stackMates } = await readInbox([...new Set(projects.map((project) => project.repo))], Date.now());
+      return { sections: buildSections(inboxPrs(found, stackMates, projects)), unreadable };
+    },
+
+    visits: async () => ({ visits: store.visits() }),
+
+    // Timed at the opening, before the remote read: a page opened earlier, whose project's remote
+    // reads slower, still records the earlier visit.
+    async recordVisit({ projectId, number }) {
+      const openedAt = Date.now();
+      store.saveVisit({ projectId, repo: await repoOf(projectId), number, openedAt });
+      bb.rpc.experimental_invalidate([VISITS_TAG]);
+      return {};
     },
 
     async pullRequests({ projectId }) {
@@ -100,12 +103,6 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
 
     async fileContent({ projectId, sha, path }) {
       return { content: await readFileAt(await repoOf(projectId), sha, path) };
-    },
-
-    async selectProject({ projectId }) {
-      await bb.storage.kv.set(SELECTED_PROJECT_KEY, projectId);
-      bb.rpc.experimental_invalidate([PROJECTS_TAG]);
-      return {};
     },
 
     startReview: async (input) => reviews.start(await prRef(input)),

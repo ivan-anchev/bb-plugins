@@ -4,6 +4,12 @@ import { z } from "zod";
 export const repoSchema = z.string().regex(/^[\w.-]+\/[\w.-]+$/).brand<"Repo">();
 export type Repo = z.infer<typeof repoSchema>;
 
+/**
+ * A repo's identity. GitHub matches owner and name in any case, and a remote need not spell them
+ * as GitHub does, so two spellings of one repo compare, key and tag by this.
+ */
+export const repoKey = (repo: Repo): string => repo.toLowerCase();
+
 // The remote shapes git writes for github.com:
 //   git@github.com:owner/name(.git)
 //   ssh://git@github.com/owner/name(.git)

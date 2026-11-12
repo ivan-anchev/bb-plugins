@@ -1,7 +1,8 @@
 # PR Reviews
 
-A **PR Reviews** app on bb's left rail that lists a GitHub project's open pull
-requests and opens each one as a guided review. See `PLUGIN_OVERVIEW.md` for
+A **PR Reviews** app on bb's left rail that lists your pull requests across
+every GitHub project, in sections with stacks as trees, and opens each one as
+a guided review. See `PLUGIN_OVERVIEW.md` for
 the user-facing description and `skills/pr-reviews/SKILL.md` for what the app
 shows.
 

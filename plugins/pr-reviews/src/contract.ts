@@ -8,7 +8,7 @@ import { prCommentsSchema } from "./comments/timeline-schema.ts";
 import { diffFileSchema } from "./diff/diff-schema.ts";
 import { guideSchema } from "./guide/guide-schema.ts";
 import { labelSchema } from "./github/label.ts";
-import { repoSchema, type Repo } from "./github/repo.ts";
+import { repoKey, repoSchema, type Repo } from "./github/repo.ts";
 
 const prNumberSchema = z.number().int().positive();
 
@@ -137,10 +137,10 @@ const guideRecordSchema = z.object({
 });
 export type GuideRecord = z.infer<typeof guideRecordSchema>;
 
-const githubProjectSchema = z.object({ id: z.string(), name: z.string(), repo: repoSchema });
-export type GitHubProject = z.infer<typeof githubProjectSchema>;
+/** A bb project whose remote is on GitHub. */
+export type GitHubProject = { id: string; name: string; repo: Repo };
 
-// A project whose remote could not be read. The picker leaves it out and shows why.
+// A project whose remote could not be read. The sidebar leaves its PRs out and shows why.
 const unreadableProjectSchema = z.object({ id: z.string(), name: z.string(), message: z.string() });
 export type UnreadableProject = z.infer<typeof unreadableProjectSchema>;
 
@@ -148,6 +148,61 @@ const prRowSchema = prSummarySchema.extend({ review: reviewStateSchema });
 export type PrRow = z.infer<typeof prRowSchema>;
 
 const prRefSchema = z.object({ projectId: z.string(), number: prNumberSchema });
+
+/** The sidebar's sections, in the order it shows them. */
+export const SECTION_KEYS = ["authored", "review", "merged"] as const;
+const sectionKeySchema = z.enum(SECTION_KEYS);
+export type SectionKey = z.infer<typeof sectionKeySchema>;
+
+/**
+ * A PR as the sidebar lists it, with the bb project it opens in. `section` is where it is listed,
+ * or null for a stack-mate listed in no section.
+ */
+const inboxPrSchema = z.object({
+  projectId: z.string(),
+  repo: repoSchema,
+  number: prNumberSchema,
+  title: z.string(),
+  author: z.string(),
+  state: prStateSchema,
+  /** ISO 8601, like `mergedAt`, which is null until the PR merges. */
+  updatedAt: z.string(),
+  mergedAt: z.string().nullable(),
+  baseRefName: z.string(),
+  headRefName: z.string(),
+  ciFailing: z.boolean(),
+  changesRequested: z.boolean(),
+  section: sectionKeySchema.nullable(),
+});
+export type InboxPr = z.infer<typeof inboxPrSchema>;
+
+/** Where a PR sits in its stack: `index` counts from 1 at the bottom, the PR the others build on. */
+const stackPositionSchema = z.object({ index: z.number().int().positive(), size: z.number().int().positive() });
+export type StackPosition = z.infer<typeof stackPositionSchema>;
+
+/**
+ * One entry of a section: a PR, with its place in a stack when it is the only one of its stack
+ * in the section, or a stack with two or more of its PRs in the section, bottom first, holding
+ * its PRs listed elsewhere or nowhere too.
+ */
+const sectionItemSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("pr"), pr: inboxPrSchema, stack: stackPositionSchema.nullable() }),
+  z.object({ kind: z.literal("stack"), members: z.array(inboxPrSchema) }),
+]);
+export type SectionItem = z.infer<typeof sectionItemSchema>;
+
+/** A section's entries, most recent first, and how many PRs it lists. */
+const sectionSchema = z.object({ key: sectionKeySchema, count: countSchema, items: z.array(sectionItemSchema) });
+export type Section = z.infer<typeof sectionSchema>;
+
+const inboxSchema = z.object({ sections: z.array(sectionSchema), unreadable: z.array(unreadableProjectSchema) });
+
+/** Every PR a section shows, stack-mates listed elsewhere included. */
+const prsOf = (section: Section): InboxPr[] => section.items.flatMap((item) => (item.kind === "pr" ? [item.pr] : item.members));
+
+/** When the reader last opened a PR's page, epoch ms, and the project it opened in. */
+const visitSchema = z.object({ projectId: z.string(), repo: repoSchema, number: prNumberSchema, openedAt: z.number() });
+export type Visit = z.infer<typeof visitSchema>;
 
 /** The PR's whole diff and the head it reflects: the `changes` read. */
 const prChangesSchema = z.object({ headSha: z.string(), files: z.array(diffFileSchema) });
@@ -160,21 +215,25 @@ export type FileAtCommit = z.infer<typeof fileAtCommitSchema>;
 const empty = z.object({});
 /** A comment the plugin posted: its page on GitHub. */
 const postedSchema = z.object({ url: z.string() });
-export const PROJECTS_TAG = "projects";
-export const repoTag = (repo: Repo) => `repo:${repo}`;
+export const VISITS_TAG = "visits";
+export const repoTag = (repo: Repo) => `repo:${repoKey(repo)}`;
 export const guideTag = ({ repo, number, headSha }: PrHeadKey) => `guide:${repo}#${number}@${headSha}`;
 export const commentsTag = ({ projectId, number }: z.infer<typeof prRefSchema>) => `comments:${projectId}#${number}`;
 
 export const prReviewsContract = defineRpcContract({
-  projects: {
+  /**
+   * The sidebar: the reader's PRs across every bb project with a GitHub remote, in sections. Tagged
+   * by every repo it lists, so the thread events that refresh a repo's reads refresh it too.
+   */
+  inbox: {
     input: empty,
-    output: z.object({
-      projects: z.array(githubProjectSchema),
-      unreadable: z.array(unreadableProjectSchema),
-      selectedProjectId: z.string().nullable(),
-    }),
-    tags: () => [PROJECTS_TAG],
+    output: inboxSchema,
+    tags: (_input, output) => [...new Set(output.sections.flatMap(prsOf).map((pr) => repoTag(pr.repo)))],
   },
+  /** When the reader last opened each PR, for the sidebar's new-activity dot and the rail badge's project. */
+  visits: { input: empty, output: z.object({ visits: z.array(visitSchema) }), tags: () => [VISITS_TAG] },
+  /** The PR page opened: records the visit. */
+  recordVisit: { input: prRefSchema, output: empty },
   pullRequests: {
     input: z.object({ projectId: z.string() }),
     output: z.object({ repo: repoSchema, rows: z.array(prRowSchema) }),
@@ -199,7 +258,6 @@ export const prReviewsContract = defineRpcContract({
   changes: { input: prRefSchema, output: prChangesSchema },
   /** One file's text at one commit of the project's repo, for the Changes tab's diff to expand its unchanged lines. Untagged, like `changes`. */
   fileContent: { input: fileAtCommitSchema, output: z.object({ content: z.string() }) },
-  selectProject: { input: z.object({ projectId: z.string() }), output: empty },
   startReview: { input: prRefSchema, output: z.object({ threadId: z.string() }) },
   cancelReview: { input: prRefSchema, output: empty },
   nudgeReview: { input: prRefSchema, output: empty },

@@ -19,7 +19,7 @@ export function StatusGlyph({ name }: { name: StatusGlyphName }) {
 // why: bb has no darker variant of --attention for small marks. On white it is 2.35:1, under the
 // 3:1 a graphic needs; a quarter of the foreground keeps its hue and reads 3.47:1 in light, and
 // barely moves it in dark (9.8:1).
-const ATTENTION = "text-[color-mix(in_oklab,var(--attention)_75%,var(--foreground))]";
+export const ATTENTION = "text-[color-mix(in_oklab,var(--attention)_75%,var(--foreground))]";
 
 // The mark is drawn in the page colour, so it reads as cut out of the disc in either theme.
 const MARK = {

@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app shows (a GitHub project's open pull requests in a sidebar, a page per pull request with Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (Write and Preview tabs, Ask about this to ask the review thread, Comment to post a GitHub review comment on an explicit click; review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app shows (a sidebar of your pull requests across every GitHub project, in Authored by me, Needs my review and Recently merged sections with stacked pull requests as trees and one attention dot per row, a page per pull request with Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (Write and Preview tabs, Ask about this to ask the review thread, Comment to post a GitHub review comment on an explicit click; review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -11,25 +11,59 @@ setting, and no CLI command.
 
 ## The sidebar
 
-Opening PR Reviews replaces the thread list with:
+Opening PR Reviews replaces the thread list with your pull requests across
+every bb project whose git remote is on github.com
+(`git@github.com:owner/name.git`, `ssh://git@github.com/owner/name`, or
+`https://github.com/owner/name`). The remote is the one bb recorded for the
+project. When bb recorded none (a project created before its `origin`
+existed), PR Reviews reads `git remote get-url origin` in the project's default
+checkout instead. There is no project picker. Three sections always show, in
+this order, each with a sticky heading and its count; an empty one shows one
+quiet line instead:
 
-- **A project picker** at the top. It lists only the bb projects whose git
-  remote is on github.com (`git@github.com:owner/name.git`,
-  `ssh://git@github.com/owner/name`, or `https://github.com/owner/name`). The
-  remote is the one bb recorded for the project. When bb recorded none (a
-  project created before its `origin` existed), PR Reviews reads
-  `git remote get-url origin` in the project's default checkout instead. The
-  last project chosen is remembered and opens again the next time PR Reviews
-  opens.
-- **The project's open pull requests**, in the order `gh pr list` returns them (newest first), up to 200.
-  Each row shows `#number` and the title, then the author's GitHub login, how
-  long ago the PR was last updated, and its review state: **Guide ready** when
-  it has a guide for its current commit, **New commits** when its newest guide
-  is for an older commit, **Writing guide…** while a review thread is working
-  on it, otherwise **No guide**.
+- **Authored by me**: your open pull requests, drafts included, and the ones
+  you closed without merging in the last 7 days. Most recently updated first.
+- **Needs my review**: open, non-draft pull requests by others that request a
+  review from you or a team you are on (GitHub's `review-requested:@me`). Most
+  recently updated first.
+- **Recently merged**: pull requests you authored or reviewed that merged in
+  the last 7 days. Most recently merged first.
 
-The rail entry shows a badge with the number of open pull requests in the
-remembered project that read **Guide ready**, and no badge at zero.
+Each search reads up to 100 pull requests. Each row is one line: the author's
+GitHub avatar (two initials when it has none), the title, cut to one line, and
+at the end a coloured icon for a merged (purple), closed (red) or draft (grey)
+pull request; an open one shows none. Rows show no number and no guide state.
+Hovering a row, focusing it with the keyboard, or opening it shows the repo's
+name at its end; the row's tooltip names the title, `owner/name #number` and
+the author.
+
+A row may carry one dot on its avatar's corner, the first of: **CI failing**
+(red), **Changes requested** (amber), **New activity** (white in the dark
+theme): GitHub updated the pull request after you last opened its page in PR
+Reviews. A pull request you never opened has new activity only in Needs my
+review. Merged and closed pull requests carry no dot. The tooltip and a screen
+reader name the dot in words. If PR Reviews cannot record that you opened a
+page, the page says so above its header with **Try again**.
+
+**Stacks.** A pull request whose base branch is another pull request's head
+branch, in the same repo, sits on it. When a section lists two or more pull
+requests of one stack, they show as a tree under a heading **Stack #N** (N is
+the bottom pull request, the one the others build on) with how many of the
+stack's pull requests the section lists ("3 of 5"). The tree lists the whole
+stack, bottom first, so a merged bottom stays in place; a pull request of the
+stack listed in another section, or in none, is a dim row that says where it is
+listed (**Yours**, **Review**, or its merged icon). When a section lists only
+one pull request of a stack, it is a plain row with its place, such as `1/7`.
+The stack's other pull requests come from each listed repo's open pull
+requests (up to 100) and its 20 most recently merged ones.
+
+Clicking a row, dim ones included, opens that pull request's page in the first
+bb project (in bb's project order) with its repo. A repo that no bb project has
+lists nothing.
+
+The rail entry shows a badge with the number of open pull requests that have a
+guide for their current commit, in the project of the pull request page you
+opened last, and no badge at zero.
 
 ## The page
 
@@ -164,8 +198,8 @@ dot once a guide exists, a spinner while the review thread writes one:
   guide, and clicking Cancel again retries.
 - **The review finished without a guide**, when the review thread for the PR's
   current commit stopped without submitting one: **Ask it to submit the
-  guide** messages the thread to finish (the row reads Writing guide… while it
-  answers), and **Review chat** shows what it said.
+  guide** messages the thread to finish (the page reads Writing the guide while
+  it answers), and **Review chat** shows what it said.
 - **The guide**, once one exists (see "Reading a guide" below).
 - **The guide with new commits**, when the PR's newest guide is for an older
   commit: the guide shows as usual under a banner, "N new commits since this
@@ -173,7 +207,7 @@ dot once a guide exists, a spinner while the review thread writes one:
   force push removed the guide's commit from the PR, the banner reads "The PR
   changed since this guide was written". New commits show after a Refresh.
 
-The page and the rows follow the review thread on their own; no refresh is
+The page and the badge follow the review thread on their own; no refresh is
 needed. Archiving or deleting a review thread returns the PR to No guide yet.
 
 ## Review chat
@@ -431,8 +465,8 @@ every hunk in the new hunk list it carries. From then on, that thread's
 `submit_review` calls are accepted only for the new head, and checked against
 its diff; a call its earlier turn makes for the old head is refused.
 
-The row reads Writing guide… while the thread works, then Guide ready, and the
-guide's byline names the new commit. The older guide is kept: it is stored by
+The page reads Writing the guide while the thread works, then shows the guide,
+and the guide's byline names the new commit. The older guide is kept: it is stored by
 its commit, and no submission can overwrite it once Update guide (or Start
 review) has asked for a newer one, even after a Cancel. If the thread that wrote the guide was
 archived or deleted, Update guide starts a new review instead, exactly as Start
@@ -473,8 +507,8 @@ A call for any other commit, or from a thread whose review was cancelled or
 replaced by a newer review, is refused ("this thread is not writing a guide for
 "<headSha>" in PR Reviews"); the refusal never names the run's commit.
 
-When a guide is accepted, the row turns to Guide ready, the page shows the
-guide, and the badge counts it, without a refresh.
+When a guide is accepted, the page shows the guide and the badge counts it,
+without a refresh.
 
 ## Settings
 
@@ -485,11 +519,13 @@ here. A blank field sends nothing.
 
 ## Refresh and errors
 
-The **Refresh** button in the page's title bar re-reads the projects, the
-pull request list, the open PR, its diff once the Changes tab has read it, its
+The **Refresh** button in the page's title bar re-reads the sidebar's pull
+requests, the open PR, its diff once the Changes tab has read it, its
 guide, and the selected file's text. Clicking the PR that is already open does
 the same as Refresh. When a read fails, its error shows above
-whatever was already on screen, and the old list stays. Typical errors:
+whatever was already on screen, and the old sidebar stays. GitHub-side
+changes (new pull requests, merges, reviews, CI) show after a Refresh; review
+threads starting or stopping re-read the sidebar on their own. Typical errors:
 
 - "PR Reviews needs the GitHub CLI": `gh` is not installed or not on the
   login shell's `PATH`.
@@ -497,7 +533,7 @@ whatever was already on screen, and the old list stays. Typical errors:
 - "Could not read the git remote of <project>": `git remote get-url origin`
   failed in that project's default checkout for a reason other than a missing
   checkout, a folder that is not a git repository, or a missing `origin` (those
-  just leave the project out of the picker). The message is git's own, for
+  just leave the project out of the sidebar). The message is git's own, for
   example a broken `.git/config` or a permission error. The other projects
   still list.
 
@@ -505,11 +541,13 @@ whatever was already on screen, and the old list stays. Typical errors:
 
 PR Reviews runs `gh pr list`, `gh pr view` and `gh pr diff` (for the Changes
 tab, and to pin a reviewed commit's diff) for the project's `owner/name` on the
-machine that runs bb, and `git remote get-url origin` for a
+machine that runs bb; for the sidebar, one `gh api graphql` call with one search
+per section over every project's repo, and one more for the open and recently
+merged pull requests of the repos it found; and `git remote get-url origin` for a
 project whose remote bb did not record. On Start review and Update guide it
 also runs `git fetch` in the project's default checkout, which only adds the refs under
 `refs/pr-reviews/`. Its one write is `gh api --method POST
 repos/<owner>/<name>/pulls/<number>/comments`, run when you click Comment in
-the comment box. The diff pinned for each reviewed commit, each review run, and each guide are
-kept in the plugin's own SQLite database (`plugins/pr-reviews/data.db` in bb's data
+the comment box. The diff pinned for each reviewed commit, each review run, each guide, and
+when you last opened each pull request are kept in the plugin's own SQLite database (`plugins/pr-reviews/data.db` in bb's data
 directory).
