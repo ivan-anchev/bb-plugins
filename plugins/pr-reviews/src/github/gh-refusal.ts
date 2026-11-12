@@ -7,7 +7,8 @@ import { firstLine, type HostCommandFailure } from "./host-command.ts";
 
 // gh api ends an HTTP failure's stderr with "(HTTP 422)"; gh pr commands carry no status.
 const HTTP_STATUS = /\(HTTP (\d{3})\)/;
-const NETWORK = /error connecting to|could not resolve host|no such host|dial tcp|connection refused|i\/o timeout|TLS handshake/i;
+// "unexpected EOF": the connection dropped before GitHub answered.
+const NETWORK = /error connecting to|could not resolve host|no such host|dial tcp|connection refused|i\/o timeout|TLS handshake|unexpected EOF/i;
 // gh pr commands print GitHub's GraphQL error, which carries no HTTP status, for a missing permission.
 const NO_PERMISSION = /does not have the correct permissions|Resource not accessible by/;
 
@@ -50,8 +51,9 @@ export function ghPostRefusalFor(failure: HostCommandFailure): Refusal {
 export function ghStateRefusalFor(failure: HostCommandFailure): Refusal {
   if (failure.killed) return invalid("GitHub didn't answer in time. The state may have changed: Refresh to check before trying again.");
   if (failure.stderr.includes("because it was already merged")) return invalid("This pull request is already merged, so its state can't change. Refresh to see it.");
+  // why not "closed": gh prints the same "is closed" line for a merged PR.
   if (failure.stderr.includes("Only draft pull requests can be marked")) {
-    return invalid("This pull request is closed on GitHub, so it can't be marked ready or converted to draft. Refresh to see it.");
+    return invalid("This pull request is no longer open on GitHub, so it can't be marked ready or converted to draft. Refresh to see it.");
   }
   return ghRefusalFor(failure);
 }

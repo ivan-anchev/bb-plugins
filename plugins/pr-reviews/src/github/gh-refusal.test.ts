@@ -8,7 +8,9 @@ import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 // Each fixture is the rejection of a real gh run against the throwaway PR #59 of
 // ivan-anchev/bb-plugins (or a repo or PR that does not exist), or, for the state changes, against
 // a merged PR of a throwaway repo since deleted, saved field for field: exit code, killed, stdout,
-// stderr. Recorded with gh 2.97.0.
+// stderr. Recorded with gh 2.97.0. draft-merged and ready-closed ran against a merged and a closed
+// public PR, and the *-eof fixtures through a proxy that drops every connection; their repo is
+// renamed octo-org/widgets.
 const recorded = (name: string) => parseHostCommandFailure(JSON.parse(readFileSync(new URL(`./fixtures/gh-failures/${name}.json`, import.meta.url), "utf8")));
 
 const refusalOf = (refusalOrFailure: Refusal | HostCommandFailure) => {
@@ -24,8 +26,13 @@ test("gh not installed, and a comment too long for the OS to pass to it", () => 
   assert.deepEqual(refusalOf(recorded("too-long-e2big")), { code: "invalid", message: "The comment is too long to pass to the GitHub CLI. Shorten it, or select fewer lines." });
 });
 
-test("no network", () => {
-  assert.deepEqual(refusalOf(recorded("network")), { code: "invalid", message: "Couldn't reach GitHub. Check the connection and try again." });
+test("no network, and a connection dropped before GitHub answered", () => {
+  const unreachable = { code: "invalid", message: "Couldn't reach GitHub. Check the connection and try again." };
+
+  assert.deepEqual(refusalOf(recorded("network")), unreachable);
+  assert.deepEqual(refusalOf(recorded("network-eof")), unreachable);
+  assert.deepEqual(refusalOf(ghPostRefusalFor(recorded("post-network-eof"))), unreachable);
+  assert.deepEqual(refusalOf(ghStateRefusalFor(recorded("network-eof"))), unreachable);
 });
 
 test("not signed in, and a token GitHub refuses (401), both read as not signed in", () => {
@@ -94,10 +101,13 @@ test("a state change the PR's state on GitHub no longer allows says why, without
 
   assert.deepEqual(refusalOf(ghStateRefusalFor(recorded("close-merged"))), merged);
   assert.deepEqual(refusalOf(ghStateRefusalFor(recorded("reopen-merged"))), merged);
-  assert.deepEqual(refusalOf(ghStateRefusalFor(recorded("draft-closed"))), {
-    code: "invalid",
-    message: "This pull request is closed on GitHub, so it can't be marked ready or converted to draft. Refresh to see it.",
-  });
+});
+
+// gh prints the same "is closed" line for a merged PR as for a closed one, for ready and draft alike.
+test("marking ready or converting to draft a PR no longer open says so, whether it was closed or merged", () => {
+  const notOpen = { code: "invalid", message: "This pull request is no longer open on GitHub, so it can't be marked ready or converted to draft. Refresh to see it." };
+
+  for (const name of ["ready-merged", "draft-merged", "ready-closed"]) assert.deepEqual(refusalOf(ghStateRefusalFor(recorded(name))), notOpen);
 });
 
 test("a state change the timeout stopped may have gone through: it says so; one that failed otherwise maps as any run", () => {
