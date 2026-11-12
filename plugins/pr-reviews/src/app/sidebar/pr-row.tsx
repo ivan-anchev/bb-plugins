@@ -1,4 +1,4 @@
-// A sidebar row: one 28px line of author avatar, title, and a trailing status icon for a merged,
+// A sidebar row: one 32px line of author avatar, title, and a trailing status icon for a merged,
 // closed or draft PR. The repo name shows on hover, keyboard focus and the open row. A listed row
 // may carry one attention dot on its avatar; a stack-mate listed elsewhere is a dim, shorter row
 // that says where it is listed. The words a screen reader needs ride along out of sight.
@@ -23,14 +23,14 @@ const ATTENTION_LOOK = {
 export function ListedRow({ pr, current, onOpen, attention, stack }: RowProps & { attention: Attention | null; stack: StackPosition | null }) {
   const words = [stack === null ? null : `stacked PR ${stack.index} of ${stack.size}`, attention === null ? null : ATTENTION_LOOK[attention].label];
   return (
-    <RowButton pr={pr} current={current} onOpen={onOpen} words={words} className="h-7">
+    <RowButton pr={pr} current={current} onOpen={onOpen} words={words} className="h-8">
       <span className="relative shrink-0">
         <Avatar login={pr.author} size={16} />
         {attention !== null && (
           <span aria-hidden className={`absolute -top-[3px] -right-[3px] size-[7px] rounded-full bg-current ring-2 ring-sidebar ${ATTENTION_LOOK[attention].color}`} />
         )}
       </span>
-      <span className="truncate text-[13px] leading-[18px]">{pr.title}</span>
+      <span className="truncate text-sm leading-5">{pr.title}</span>
       <Trail pr={pr}>
         {stack !== null && (
           <span aria-hidden className="inline-flex items-center gap-[3px] text-[11px] leading-4 text-subtle-foreground tabular-nums">
@@ -48,11 +48,11 @@ export function StackMateRow({ pr, current, onOpen }: RowProps) {
   const where = pr.section === null ? "Not in your sections" : `In ${SECTION_TEXT[pr.section].title}`;
   const tag = pr.section === null ? null : SECTION_TEXT[pr.section].tag;
   return (
-    <RowButton pr={pr} current={current} onOpen={onOpen} words={[where]} className="h-6">
+    <RowButton pr={pr} current={current} onOpen={onOpen} words={[where]} className="h-7">
       <span className="shrink-0 opacity-50">
         <Avatar login={pr.author} size={16} />
       </span>
-      <span className="truncate text-xs leading-4 text-subtle-foreground group-hover/row:text-muted-foreground group-aria-[current=page]/row:text-muted-foreground">
+      <span className="truncate text-[13px] leading-[18px] text-subtle-foreground group-hover/row:text-muted-foreground group-aria-[current=page]/row:text-muted-foreground">
         {pr.title}
       </span>
       <Trail pr={pr}>{tag !== null && <span aria-hidden className="text-[11px] leading-4 whitespace-nowrap text-subtle-foreground">{tag}</span>}</Trail>
