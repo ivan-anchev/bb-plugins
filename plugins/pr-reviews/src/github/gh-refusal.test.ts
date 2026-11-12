@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { ghPostRefusalFor, ghRefusalFor } from "./gh-refusal.ts";
+import { ghPostRefusalFor, ghRefusalFor, ghStateRefusalFor } from "./gh-refusal.ts";
 import { parseHostCommandFailure, type HostCommandFailure } from "./host-command.ts";
 import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 
 // Each fixture is the rejection of a real gh run against the throwaway PR #59 of
-// ivan-anchev/bb-plugins (or a repo or PR that does not exist), saved field for field: exit code,
-// killed, stdout, stderr. Recorded with gh 2.97.0.
+// ivan-anchev/bb-plugins (or a repo or PR that does not exist), or, for the state changes, against
+// a merged PR of a throwaway repo since deleted, saved field for field: exit code, killed, stdout,
+// stderr. Recorded with gh 2.97.0.
 const recorded = (name: string) => parseHostCommandFailure(JSON.parse(readFileSync(new URL(`./fixtures/gh-failures/${name}.json`, import.meta.url), "utf8")));
 
 const refusalOf = (refusalOrFailure: Refusal | HostCommandFailure) => {
@@ -86,4 +87,39 @@ test("a post the timeout stopped may have been posted: it says so, and a post th
     message: "GitHub didn't answer in time. The comment may have been posted: check the pull request before posting again.",
   });
   assert.deepEqual(refusalOf(ghPostRefusalFor(recorded("unauthorized-401"))), refusalOf(ghRefusalFor(recorded("unauthorized-401"))));
+});
+
+test("a state change the PR's state on GitHub no longer allows says why, without gh's mark", () => {
+  const merged = { code: "invalid", message: "This pull request is already merged, so its state can't change. Refresh to see it." };
+
+  assert.deepEqual(refusalOf(ghStateRefusalFor(recorded("close-merged"))), merged);
+  assert.deepEqual(refusalOf(ghStateRefusalFor(recorded("reopen-merged"))), merged);
+  assert.deepEqual(refusalOf(ghStateRefusalFor(recorded("draft-closed"))), {
+    code: "invalid",
+    message: "This pull request is closed on GitHub, so it can't be marked ready or converted to draft. Refresh to see it.",
+  });
+});
+
+test("a state change the timeout stopped may have gone through: it says so; one that failed otherwise maps as any run", () => {
+  assert.deepEqual(refusalOf(ghStateRefusalFor(recorded("timed-out"))), {
+    code: "invalid",
+    message: "GitHub didn't answer in time. The state may have changed: Refresh to check before trying again.",
+  });
+  for (const name of ["not-signed-in", "network", "pr-view-not-found"]) {
+    assert.deepEqual(refusalOf(ghStateRefusalFor(recorded(name))), refusalOf(ghRefusalFor(recorded(name))));
+  }
+});
+
+// Not recorded: every token at hand can change the throwaway repo's PRs. These follow the shape gh
+// pr prints for a GraphQL error, "GraphQL: <GitHub's message> (<mutation>)", with no HTTP status.
+test("no permission to change a PR's state (shape-only fixtures)", () => {
+  const noPermission = { code: "forbidden", message: "Your GitHub account doesn't have permission to do that in this repository." };
+  const failure = (stderr: string) => parseHostCommandFailure({ code: 1, stderr });
+
+  assert.deepEqual(refusalOf(ghStateRefusalFor(failure("GraphQL: octocat does not have the correct permissions to execute `ClosePullRequest` (closePullRequest)\n"))), noPermission);
+  assert.deepEqual(refusalOf(ghStateRefusalFor(failure("GraphQL: Resource not accessible by integration (markPullRequestReadyForReview)\n"))), noPermission);
+});
+
+test("a gh pr failure nothing else matches shows its first line without gh's mark", () => {
+  assert.equal(ghRefusalFor(parseHostCommandFailure({ code: 1, stderr: "X Pull request octo-org/widgets#7 can't be changed today\n" })).message, "Pull request octo-org/widgets#7 can't be changed today");
 });

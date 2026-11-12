@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app shows (a sidebar of your pull requests across every GitHub project, in Authored by me, Needs my review and Recently merged sections with stacked pull requests as trees, one attention dot per row and a Filter that hides the sections you don't watch, a page per pull request with Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (Write and Preview tabs, Ask about this to ask the review thread, Comment to post a GitHub review comment on an explicit click; review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app shows (a sidebar of your pull requests across every GitHub project, in Authored by me, Needs my review and Recently merged sections with stacked pull requests as trees, one attention dot per row and a Filter that hides the sections you don't watch, a page per pull request with a state pill that changes its state on GitHub (ready for review, convert to draft, close by press and hold, reopen), Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (Write and Preview tabs, Ask about this to ask the review thread, Comment to post a GitHub review comment on an explicit click; review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -78,14 +78,36 @@ opened last, and no badge at zero.
 
 ## The page
 
-Clicking a row opens that PR's page. Its header shows the PR's state as an
-icon before the title (green Open, grey Draft, purple Merged, red Closed; hover
-it for the name), the title over `#number`, the author's GitHub avatar and
-login, and `base-branch ← head-branch`; and icon buttons, each named by its
+Clicking a row opens that PR's page. Its header shows the PR's state as a pill
+on its own line (green Open, grey Draft, purple Merged, red Closed) with
+`owner/repo #number` beside it, then the title over the author's GitHub avatar
+and login and `base-branch ← head-branch`; and icon buttons, each named by its
 tooltip:
 **Review chat** (opens the review thread's chat beside the page; shown once a
 review has started, see "Review chat" below) and **Open on GitHub** (opens the
 PR on github.com).
+
+### Changing the state
+
+The pill opens a menu of the changes GitHub allows: click it, or focus it and
+press Enter, Space or ↓ (the arrows move, Esc closes it). Each row names the
+state it leads to on a chip. An open PR offers **Convert to draft** and **Hold
+to close**; a draft, **Ready for review** and **Hold to close**; a closed PR,
+**Reopen** (a closed draft comes back as GitHub decides, as a draft). Close runs
+only after you hold its row about 0.7 seconds, with the pointer or with Enter or
+Space, as a red wash fills it; a shorter press says "Keep holding to close".
+The others run on one choice. A merged PR's pill is not a button; hovering it
+says "Merged pull requests can't change state".
+
+While `gh` runs, the chosen row says so ("Converting to draft…") and the menu
+stays open. Once GitHub has the change the menu closes, and the pill and the
+sidebar row show the new state without a Refresh; the sidebar row can take a
+few seconds longer, while GitHub's search catches up. If GitHub refuses, the
+reason shows under the rows and nothing changes: not signed in to `gh`, no
+permission, no network, a PR your account can't see, or a PR merged or closed
+on GitHub since the page read it (Refresh to see it). When GitHub doesn't
+answer within a minute the change may still have happened, so it says to
+Refresh and check before trying again, and never retries by itself.
 
 Under the header sit three tabs, **Summary**, **Changes** and **Guide**; a PR
 opens on Summary. The Changes tab carries the PR's lines added and removed,
@@ -325,8 +347,10 @@ which posts your text as a reply in that thread.
 
 PR Reviews posts to GitHub only a review comment, reply or conversation
 comment you wrote or picked, when you click **Comment** or **Reply** (or press
-⌘↵, Ctrl+↵ off a Mac) in a comment box, from any tab. It posts nothing else: no
-review, approval or edit. Review threads never post. A conversation comment,
+⌘↵, Ctrl+↵ off a Mac) in a comment box, from any tab. The only other change it
+makes on GitHub is a PR's state, when you choose it from the header's state
+pill (see "Changing the state"). It posts nothing else: no review, approval,
+merge or edit. Review threads never post. A conversation comment,
 from the Summary tab's box, goes to the PR's conversation, on no file.
 
 The comment goes through `gh` as your account, on the commit the diff shows,
@@ -536,7 +560,8 @@ guide, and the selected file's text. Clicking the PR that is already open does
 the same as Refresh. When a read fails, its error shows above
 whatever was already on screen, and the old sidebar stays. GitHub-side
 changes (new pull requests, merges, reviews, CI) show after a Refresh; review
-threads starting or stopping re-read the sidebar on their own. Typical errors:
+threads starting or stopping, and a state change made from the pill, re-read
+the sidebar on their own. Typical errors:
 
 - "PR Reviews needs the GitHub CLI": `gh` is not installed or not on the
   login shell's `PATH`.
@@ -557,8 +582,12 @@ per section over every project's repo, and one more for the open and recently
 merged pull requests of the repos it found; and `git remote get-url origin` for a
 project whose remote bb did not record. On Start review and Update guide it
 also runs `git fetch` in the project's default checkout, which only adds the refs under
-`refs/pr-reviews/`. Its one write is `gh api --method POST
-repos/<owner>/<name>/pulls/<number>/comments`, run when you click Comment in
-the comment box. The diff pinned for each reviewed commit, each review run, each guide, and
+`refs/pr-reviews/`. Its writes are `gh api --method POST` to
+`repos/<owner>/<name>/pulls/<number>/comments` (a review comment, or a reply
+under `…/comments/<id>/replies`) or `repos/<owner>/<name>/issues/<number>/comments`
+(a conversation comment), run when you click Comment or Reply; and
+`gh pr ready <number>`, `gh pr ready <number> --undo`, `gh pr close <number>`
+or `gh pr reopen <number>` with `-R <owner>/<name>`, run when you choose a
+change from the state pill. The diff pinned for each reviewed commit, each review run, each guide, and
 when you last opened each pull request are kept in the plugin's own SQLite database (`plugins/pr-reviews/data.db` in bb's data
 directory).
