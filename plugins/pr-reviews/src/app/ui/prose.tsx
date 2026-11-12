@@ -9,12 +9,12 @@ import { Markdown } from "@get-bb/plugin-sdk/app";
 //   colour still wins.
 // - inline code gets a tint of the foreground instead of bb's `bg-muted/70`, which vanishes on a
 //   `bg-muted` block. At 8% it matches bb's chip on the page background.
-// - the first and last blocks lose their outer margins, so a body that ends in a list or a code
-//   block keeps the spacing its parent gives it.
+// - the space between blocks is `pr-reviews-prose` in app.css, not bb's chat margins: GitHub's
+//   markdown rhythm, scaled to the type size the parent sets.
 const FIT_TO_PARENT = [
+  "pr-reviews-prose",
   "text-[length:inherit] leading-[inherit] text-inherit [&_:is(p,ul,ol,li,h1,h2,h3,h4)]:text-inherit",
   "[&_:not(pre)>code]:bg-foreground/8",
-  "[&>:first-child]:mt-0 [&>:last-child]:mb-0",
 ].join(" ");
 
 export function Prose({ text, className = "" }: { text: string; className?: string }) {
