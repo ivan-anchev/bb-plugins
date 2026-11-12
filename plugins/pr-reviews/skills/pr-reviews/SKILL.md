@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app shows (a sidebar of your pull requests across every GitHub project, in Authored by me, Needs my review and Recently merged sections with stacked pull requests as trees and one attention dot per row, a page per pull request with Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (Write and Preview tabs, Ask about this to ask the review thread, Comment to post a GitHub review comment on an explicit click; review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app shows (a sidebar of your pull requests across every GitHub project, in Authored by me, Needs my review and Recently merged sections with stacked pull requests as trees, one attention dot per row and a Filter that hides the sections you don't watch, a page per pull request with Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (Write and Preview tabs, Ask about this to ask the review thread, Comment to post a GitHub review comment on an explicit click; review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -17,9 +17,9 @@ every bb project whose git remote is on github.com
 `https://github.com/owner/name`). The remote is the one bb recorded for the
 project. When bb recorded none (a project created before its `origin`
 existed), PR Reviews reads `git remote get-url origin` in the project's default
-checkout instead. There is no project picker. Three sections always show, in
-this order, each with a sticky heading and its count; an empty one shows one
-quiet line instead:
+checkout instead. There is no project picker. Three sections show, in this
+order, each with a sticky heading and its count; an empty one shows one quiet
+line instead:
 
 - **Authored by me**: your open pull requests, drafts included, and the ones
   you closed without merging in the last 7 days. Most recently updated first.
@@ -28,6 +28,16 @@ quiet line instead:
   recently updated first.
 - **Recently merged**: pull requests you authored or reviewed that merged in
   the last 7 days. Most recently merged first.
+
+**Filter sections.** The Filter icon at the top right of the sidebar opens a
+menu, **Show sections**, with one checkbox per section and its count, and
+**Show all sections**. Unchecking a section hides it; the menu stays open
+while you toggle. While any section is hidden the Filter icon shows pressed,
+with a dot. Hiding all three leaves one line, "All sections are hidden.", with
+**Show all**. The choice is kept in this browser across reloads, not on the
+bb server, so another browser or computer starts with all three shown.
+A stack-mate row still says where it is listed (**Yours**, **Review**) when
+that section is hidden.
 
 Each search reads up to 100 pull requests. Each row is one line: the author's
 GitHub avatar (two initials when it has none), the title, cut to one line, and

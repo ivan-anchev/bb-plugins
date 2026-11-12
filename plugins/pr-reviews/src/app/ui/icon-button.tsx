@@ -8,7 +8,8 @@ import { Tooltip } from "./tooltip.tsx";
 const ICON_ACTION_CLASS =
   "relative inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md transition-colors duration-150 hover:bg-state-hover hover:text-foreground hover:duration-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-default disabled:bg-transparent disabled:text-muted-foreground disabled:opacity-50 aria-pressed:bg-state-active aria-pressed:text-foreground data-[state=open]:bg-state-active data-[state=open]:text-foreground";
 
-// "dismiss": the smaller, quieter × that closes a box from its top row.
+// "dismiss": smaller and quieter, for the × that closes a box from its top row, or a control that
+// should not outweigh the list it sits over, such as the sidebar's Filter.
 const SIZES = {
   default: "size-7 text-muted-foreground",
   dismiss: "size-6 text-subtle-foreground",

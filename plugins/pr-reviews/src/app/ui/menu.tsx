@@ -58,6 +58,16 @@ export function MenuCheckboxItem({ checked, onCheckedChange, keepOpen = false, c
   );
 }
 
+/** An item's label with how many things it stands for, the count pushed to the end. */
+export function MenuCountedLabel({ label, count }: { label: string; count: number }) {
+  return (
+    <span className="flex w-full items-center justify-between gap-6">
+      <span>{label}</span>
+      <span className="rounded-full bg-muted px-1.5 text-muted-foreground tabular-nums">{count}</span>
+    </span>
+  );
+}
+
 export function MenuLabel({ children }: { children: ReactNode }) {
   return <Label className="px-2 py-[0.3125rem] text-xs font-medium text-muted-foreground">{children}</Label>;
 }
