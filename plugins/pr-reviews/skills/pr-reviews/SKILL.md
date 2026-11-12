@@ -50,7 +50,8 @@ branch, in the same repo, sits on it. When a section lists two or more pull
 requests of one stack, they show as a tree under a heading **Stack #N** (N is
 the bottom pull request, the one the others build on) with how many of the
 stack's pull requests the section lists ("3 of 5"). The tree lists the whole
-stack, bottom first, so a merged bottom stays in place; a pull request of the
+stack, top first with the bottom pull request last, so a merged bottom stays in
+place; a pull request of the
 stack listed in another section, or in none, is a dim row that says where it is
 listed (**Yours**, **Review**, or its merged icon). When a section lists only
 one pull request of a stack, it is a plain row with its place, such as `1/7`.
