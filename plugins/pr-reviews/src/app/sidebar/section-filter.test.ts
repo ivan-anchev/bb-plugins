@@ -33,6 +33,18 @@ test("only this key's data counts", () => {
   assert.deepEqual(readHiddenSections(storage({ "bb-plugin-pr-reviews.sidebar.hidden-sections.v0": '["merged"]' })), []);
 });
 
+test("storage that throws on read hides no section", () => {
+  const denied = { ...storage(), getItem: () => { throw new DOMException("Storage access denied", "SecurityError"); } };
+  assert.deepEqual(readHiddenSections(denied), []);
+});
+
+test("storage that throws on write warns instead of throwing", (t) => {
+  const warn = t.mock.method(console, "warn", () => {});
+  const full = { ...storage(), setItem: () => { throw new DOMException("Storage quota exceeded", "QuotaExceededError"); } };
+  writeHiddenSections(full, ["merged"]);
+  assert.equal(warn.mock.callCount(), 1);
+});
+
 test("hiding and showing a section keeps sidebar order", () => {
   assert.deepEqual(withSectionShown(["merged"], "authored", false), ["authored", "merged"]);
   assert.deepEqual(withSectionShown(["authored", "merged"], "authored", true), ["merged"]);
