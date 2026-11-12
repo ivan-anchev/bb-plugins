@@ -1,20 +1,22 @@
 // The PR header, a masthead: the PR's state tile, the title, and the identity row (`#number`,
 // author, `base ← head`) on the left; icon actions (Review chat when a review thread exists, then
 // GitHub) on the right. The PR's line counts are on the Changes tab.
+import type { Ref } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { PrDetail, PrState } from "../../contract.ts";
 import { ReviewChatIconButton } from "../review-chat/review-chat-button.tsx";
 import { IconLink } from "../ui/icon-button.tsx";
 import { PrIdentity } from "./pr-identity.tsx";
 
-type PrHeaderProps = { pr: PrDetail; hasReviewThread: boolean };
+/** `title`: the heading, which takes focus when a control above it, such as a notice's, leaves. */
+type PrHeaderProps = { pr: PrDetail; hasReviewThread: boolean; title: Ref<HTMLHeadingElement> };
 
-export function PrHeader({ pr, hasReviewThread }: PrHeaderProps) {
+export function PrHeader({ pr, hasReviewThread, title }: PrHeaderProps) {
   return (
     <header className="shrink-0 px-7 pt-4 pb-3.5">
       <div className={MASTHEAD}>
         <PrStateTile state={pr.state} />
-        <h1 className="text-[17px] leading-6 font-semibold text-pretty break-words [grid-area:title]">{pr.title}</h1>
+        <h1 ref={title} tabIndex={-1} className="outline-none text-[17px] leading-6 font-semibold text-pretty break-words [grid-area:title]">{pr.title}</h1>
         {/* -my-0.5 centers the 28px buttons on the title's 24px first line; -mr-1.5 lines the last
             glyph, not its hit area, up with the header's right edge. */}
         <div className="-my-0.5 -mr-1.5 flex gap-1 justify-self-end [grid-area:actions]">
@@ -38,7 +40,7 @@ const MASTHEAD = "grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3 g
 // 3:1 a graphic needs.
 export const MERGED = "text-[color-mix(in_oklab,#8957e5_75%,var(--foreground))]";
 
-const STATE_TILES = {
+export const STATE_TILES = {
   OPEN: { label: "Open", icon: "GitPullRequest", color: "text-success-foreground" },
   DRAFT: { label: "Draft", icon: "GitPullRequestDraft", color: "text-muted-foreground" },
   MERGED: { label: "Merged", icon: "GitMerge", color: MERGED },

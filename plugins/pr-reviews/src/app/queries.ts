@@ -1,9 +1,14 @@
 // Typed hooks over the contract. The same method and input share one cache entry, so the
 // sidebar, the page and the Refresh button read, and refetch, the same data.
+import { useEffect, useState } from "react";
 import { experimental_useRpcMutation, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { prReviewsContract as contract, type FileAtCommit } from "../contract.ts";
 
-export const useProjects = () => experimental_useRpcQuery({ contract, method: "projects", input: {} });
+/** The sidebar's sections across every project. */
+export const useInbox = () => experimental_useRpcQuery({ contract, method: "inbox", input: {} });
+
+/** When, and in which project, the reader last opened each PR. */
+export const useVisits = () => experimental_useRpcQuery({ contract, method: "visits", input: {} });
 
 /** A null project reads nothing: the read stays disabled until there is one. */
 export const usePullRequests = (projectId: string | null) =>
@@ -32,7 +37,23 @@ export const useFileContent = (input: FileAtCommit, enabled: boolean) => experim
  */
 export const useComments = (target: PrTarget) => experimental_useRpcQuery({ contract, method: "comments", input: target });
 
-export const useSelectProject = () => experimental_useRpcMutation({ contract, method: "selectProject" });
+/**
+ * Records that the PR's page opened. An effect: the visit is a side effect of showing the page,
+ * once per PR shown. A failed write stays in `error`, through any retry still pending, until
+ * `retry` records the visit.
+ */
+export function useRecordVisit({ projectId, number }: PrTarget) {
+  const visit = experimental_useRpcMutation({ contract, method: "recordVisit" });
+  // why state set while rendering: a new write clears the mutation's error as it starts, and the
+  // notice showing it must stay up, with focus on its Try again, until the retry settles.
+  const [error, setError] = useState(visit.error);
+  if (!visit.isPending && visit.error !== error) setError(visit.error);
+  // The hook's error state reports a failure; the rejection itself carries nothing more.
+  const record = () => void visit.mutate({ projectId, number }).catch(() => undefined);
+  // `record` stays out of the deps: it is new each render, and a new one is no new visit.
+  useEffect(record, [projectId, number]);
+  return { retry: record, isPending: visit.isPending, error };
+}
 
 type ReviewAction = "startReview" | "cancelReview" | "nudgeReview" | "updateGuide";
 

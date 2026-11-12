@@ -12,6 +12,7 @@ import { commentApiArgs, conversationCommentApiArgs, replyApiArgs } from "./comm
 import { ghPostRefusalFor, ghRefusalFor } from "./gh-refusal.ts";
 import { ghLabelSchema } from "./label.ts";
 import { parseHostCommandFailure, runHostCommand } from "./host-command.ts";
+import { INBOX_QUERY, inboxVariables, parseInboxSearch, parseStackContext, stackContextQuery, type FoundPr, type GitHubPr } from "./inbox-search.ts";
 import type { PrCommits } from "./pr-commits.ts";
 import {
   allPages,
@@ -87,6 +88,19 @@ export const parsePrDetail = (json: unknown): PrDetail => toDetail(ghDetailSchem
 export async function listOpenPrs(repo: Repo): Promise<PrSummary[]> {
   const json = await runGh(["pr", "list", "-R", repo, "--state", "open", "--limit", String(LIST_LIMIT), "--json", SUMMARY_FIELDS.join(",")]);
   return z.array(ghSummarySchema).parse(JSON.parse(json)).map(toSummary);
+}
+
+/**
+ * The PRs the sidebar's searches find in `repos` at `now` (epoch ms), and the open and recently
+ * merged PRs of the repos they are in, which hold their stack-mates. Two gh calls at most.
+ */
+export async function readInbox(repos: Repo[], now: number): Promise<{ found: FoundPr[]; stackMates: GitHubPr[] }> {
+  // No repo qualifier would search all of GitHub.
+  if (repos.length === 0) return { found: [], stackMates: [] };
+  const found = parseInboxSearch(await graphql(INBOX_QUERY, inboxVariables(repos, now)));
+  const foundRepos = [...new Set(found.map(({ pr }) => pr.repo))];
+  if (foundRepos.length === 0) return { found, stackMates: [] };
+  return { found, stackMates: parseStackContext(await graphql(stackContextQuery(foundRepos), {})) };
 }
 
 export async function viewPr(repo: Repo, number: number): Promise<PrDetail> {

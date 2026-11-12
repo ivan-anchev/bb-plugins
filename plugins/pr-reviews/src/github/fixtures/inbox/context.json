@@ -1,0 +1,694 @@
+{
+  "data": {
+    "r0": {
+      "open": {
+        "nodes": [
+          {
+            "number": 67,
+            "title": "Atlas change 67",
+            "isDraft": false,
+            "state": "OPEN",
+            "updatedAt": "2026-08-21T03:52:22Z",
+            "mergedAt": null,
+            "baseRefName": "topic-1",
+            "headRefName": "topic-2",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "octo-org/atlas"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": {
+                      "state": "SUCCESS"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 65,
+            "title": "Atlas change 65",
+            "isDraft": false,
+            "state": "OPEN",
+            "updatedAt": "2026-08-21T03:52:07Z",
+            "mergedAt": null,
+            "baseRefName": "topic-3",
+            "headRefName": "topic-4",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "octo-org/atlas"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": {
+                      "state": "SUCCESS"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 66,
+            "title": "Atlas change 66",
+            "isDraft": false,
+            "state": "OPEN",
+            "updatedAt": "2026-08-21T03:52:05Z",
+            "mergedAt": null,
+            "baseRefName": "topic-4",
+            "headRefName": "topic-1",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "octo-org/atlas"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": {
+                      "state": "SUCCESS"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 64,
+            "title": "Atlas change 64",
+            "isDraft": false,
+            "state": "OPEN",
+            "updatedAt": "2026-08-21T03:52:01Z",
+            "mergedAt": null,
+            "baseRefName": "topic-5",
+            "headRefName": "topic-3",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "octo-org/atlas"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": {
+                      "state": "SUCCESS"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 63,
+            "title": "Atlas change 63",
+            "isDraft": false,
+            "state": "OPEN",
+            "updatedAt": "2026-08-21T03:52:00Z",
+            "mergedAt": null,
+            "baseRefName": "main",
+            "headRefName": "topic-5",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "octo-org/atlas"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": {
+                      "state": "SUCCESS"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "merged": {
+        "nodes": [
+          {
+            "number": 59,
+            "title": "Atlas change 59",
+            "isDraft": false,
+            "state": "MERGED",
+            "updatedAt": "2026-08-20T14:42:37Z",
+            "mergedAt": "2026-08-20T14:41:30Z",
+            "baseRefName": "main",
+            "headRefName": "topic-6",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "octo-org/atlas"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": {
+                      "state": "SUCCESS"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 62,
+            "title": "Atlas change 62",
+            "isDraft": false,
+            "state": "MERGED",
+            "updatedAt": "2026-08-20T14:42:05Z",
+            "mergedAt": "2026-08-20T14:42:04Z",
+            "baseRefName": "main",
+            "headRefName": "topic-7",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "octo-org/atlas"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": {
+                      "state": "SUCCESS"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 61,
+            "title": "Atlas change 61",
+            "isDraft": false,
+            "state": "MERGED",
+            "updatedAt": "2026-08-20T14:41:51Z",
+            "mergedAt": "2026-08-20T14:41:48Z",
+            "baseRefName": "main",
+            "headRefName": "topic-8",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "octo-org/atlas"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": {
+                      "state": "SUCCESS"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "r1": {
+      "open": {
+        "nodes": [
+          {
+            "number": 47,
+            "title": "Beacon change 47",
+            "isDraft": true,
+            "state": "OPEN",
+            "updatedAt": "2026-11-11T07:06:18Z",
+            "mergedAt": null,
+            "baseRefName": "topic-3",
+            "headRefName": "topic-4",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "Octo-Labs/beacon"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 90,
+            "title": "Beacon change 90",
+            "isDraft": false,
+            "state": "OPEN",
+            "updatedAt": "2026-10-21T09:25:59Z",
+            "mergedAt": null,
+            "baseRefName": "main",
+            "headRefName": "topic-5",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "Octo-Labs/beacon"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": {
+                      "state": "SUCCESS"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 80,
+            "title": "Beacon change 80",
+            "isDraft": false,
+            "state": "OPEN",
+            "updatedAt": "2026-08-12T15:58:18Z",
+            "mergedAt": null,
+            "baseRefName": "main",
+            "headRefName": "topic-6",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "Octo-Labs/beacon"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 60,
+            "title": "Beacon change 60",
+            "isDraft": true,
+            "state": "OPEN",
+            "updatedAt": "2026-06-19T18:23:08Z",
+            "mergedAt": null,
+            "baseRefName": "topic-7",
+            "headRefName": "topic-8",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "Octo-Labs/beacon"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 59,
+            "title": "Beacon change 59",
+            "isDraft": true,
+            "state": "OPEN",
+            "updatedAt": "2026-06-19T18:20:07Z",
+            "mergedAt": null,
+            "baseRefName": "topic-9",
+            "headRefName": "topic-7",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "Octo-Labs/beacon"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 58,
+            "title": "Beacon change 58",
+            "isDraft": true,
+            "state": "OPEN",
+            "updatedAt": "2026-06-19T17:58:27Z",
+            "mergedAt": null,
+            "baseRefName": "topic-10",
+            "headRefName": "topic-11",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "Octo-Labs/beacon"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 57,
+            "title": "Beacon change 57",
+            "isDraft": true,
+            "state": "OPEN",
+            "updatedAt": "2026-06-19T17:57:57Z",
+            "mergedAt": null,
+            "baseRefName": "topic-10",
+            "headRefName": "topic-12",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "Octo-Labs/beacon"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 56,
+            "title": "Beacon change 56",
+            "isDraft": true,
+            "state": "OPEN",
+            "updatedAt": "2026-06-19T17:53:15Z",
+            "mergedAt": null,
+            "baseRefName": "topic-13",
+            "headRefName": "topic-10",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "Octo-Labs/beacon"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 55,
+            "title": "Beacon change 55",
+            "isDraft": true,
+            "state": "OPEN",
+            "updatedAt": "2026-06-19T17:48:35Z",
+            "mergedAt": null,
+            "baseRefName": "topic-9",
+            "headRefName": "topic-13",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "Octo-Labs/beacon"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 42,
+            "title": "Beacon change 42",
+            "isDraft": false,
+            "state": "OPEN",
+            "updatedAt": "2026-06-17T08:57:19Z",
+            "mergedAt": null,
+            "baseRefName": "topic-1",
+            "headRefName": "topic-2",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "Octo-Labs/beacon"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 48,
+            "title": "Beacon change 48",
+            "isDraft": true,
+            "state": "OPEN",
+            "updatedAt": "2026-06-16T16:38:34Z",
+            "mergedAt": null,
+            "baseRefName": "topic-4",
+            "headRefName": "topic-14",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "Octo-Labs/beacon"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 46,
+            "title": "Beacon change 46",
+            "isDraft": true,
+            "state": "OPEN",
+            "updatedAt": "2026-06-16T16:22:25Z",
+            "mergedAt": null,
+            "baseRefName": "topic-15",
+            "headRefName": "topic-3",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "Octo-Labs/beacon"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 45,
+            "title": "Beacon change 45",
+            "isDraft": true,
+            "state": "OPEN",
+            "updatedAt": "2026-06-16T16:14:28Z",
+            "mergedAt": null,
+            "baseRefName": "topic-16",
+            "headRefName": "topic-15",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "Octo-Labs/beacon"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 44,
+            "title": "Beacon change 44",
+            "isDraft": true,
+            "state": "OPEN",
+            "updatedAt": "2026-06-16T16:06:21Z",
+            "mergedAt": null,
+            "baseRefName": "topic-17",
+            "headRefName": "topic-16",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "Octo-Labs/beacon"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 43,
+            "title": "Beacon change 43",
+            "isDraft": true,
+            "state": "OPEN",
+            "updatedAt": "2026-06-16T15:51:34Z",
+            "mergedAt": null,
+            "baseRefName": "topic-2",
+            "headRefName": "topic-17",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "Octo-Labs/beacon"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": null
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "merged": {
+        "nodes": [
+          {
+            "number": 89,
+            "title": "Beacon change 89",
+            "isDraft": false,
+            "state": "MERGED",
+            "updatedAt": "2026-08-12T09:48:21Z",
+            "mergedAt": "2026-08-12T09:48:20Z",
+            "baseRefName": "main",
+            "headRefName": "topic-18",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "Octo-Labs/beacon"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": null
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "number": 87,
+            "title": "Beacon change 87",
+            "isDraft": false,
+            "state": "MERGED",
+            "updatedAt": "2026-08-12T09:28:19Z",
+            "mergedAt": "2026-08-12T09:28:17Z",
+            "baseRefName": "topic-19",
+            "headRefName": "topic-20",
+            "reviewDecision": null,
+            "repository": {
+              "nameWithOwner": "Octo-Labs/beacon"
+            },
+            "author": {
+              "login": "ivan-anchev"
+            },
+            "commits": {
+              "nodes": [
+                {
+                  "commit": {
+                    "statusCheckRollup": {
+                      "state": "SUCCESS"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

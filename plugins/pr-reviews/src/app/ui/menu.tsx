@@ -65,7 +65,3 @@ export function MenuLabel({ children }: { children: ReactNode }) {
 export function MenuSeparator() {
   return <Separator className="-mx-1 my-1 h-px bg-muted" />;
 }
-
-export function MenuCheck({ shown }: { shown: boolean }) {
-  return <Icon name="Check" className={`size-3.5 shrink-0 ${shown ? "opacity-100" : "opacity-0"}`} aria-hidden />;
-}

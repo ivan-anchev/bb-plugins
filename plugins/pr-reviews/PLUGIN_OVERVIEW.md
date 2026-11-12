@@ -1,5 +1,7 @@
-PR Reviews adds a **PR Reviews** app to bb's left rail. It lists a GitHub
-project's open pull requests and opens each one on a page with its whole diff
+PR Reviews adds a **PR Reviews** app to bb's left rail. It lists your pull
+requests across every GitHub project, in Authored by me, Needs my review and
+Recently merged, with stacked pull requests as trees, and opens each one on a
+page with its whole diff
 in a file tree and a guided review, written by a review thread, that walks you
 through the change step by step. Its Summary shows the PR's activity, as
 GitHub's Conversation tab does, and every diff shows the PR's GitHub review
@@ -9,10 +11,19 @@ click; review threads never post to GitHub.
 
 ## What you get
 
-- **Your GitHub projects**: the sidebar's picker lists the bb projects whose
-  git remote is on github.com, and remembers the one you chose last.
-- **Open pull requests**: each row shows the PR's number, title, author, when
-  it was last updated, and its review state in words.
+- **Your pull requests, everywhere**: one sidebar for every bb project whose
+  git remote is on github.com, no picker. **Authored by me** (open, and closed
+  in the last 7 days), **Needs my review** (review requested from you or your
+  team) and **Recently merged** (yours or reviewed by you, last 7 days), each
+  with its count and a quiet line when empty.
+- **Compact rows**: one line each, the author's avatar, the title, and a
+  coloured icon for merged, closed or draft. The repo's name shows on hover,
+  focus and the open row. At most one dot on the avatar asks for attention:
+  CI failing, else changes requested, else new activity since you last opened
+  it.
+- **Stacks as trees**: pull requests built on each other show under "Stack
+  #N" (the bottom one) with "3 of 5", bottom first; the stack's pull requests
+  listed elsewhere stay in place as dim rows.
 - **A page per pull request**: an icon for whether it is open, a draft,
   merged or closed, its title, author, `base ← branch`, and Review chat and
   GitHub icon buttons, above three tabs: **Summary**, the author's own
@@ -40,8 +51,7 @@ click; review threads never post to GitHub.
 - **A checked guide**: the thread hands in its guide with the `submit_review`
   tool, which only review threads get. PR Reviews rejects a guide that leaves
   out a hunk of the diff, lists one twice, or has more than 7 steps, and says
-  exactly what to fix. The row then reads Guide ready, and the rail badge
-  counts the ready guides.
+  exactly what to fix. The rail badge then counts the ready guides.
 - **Review chat**: review threads stay out of bb's thread sidebar. Review
   chat opens the PR's review thread beside its page, the whole conversation
   live with a composer, so you can watch it work and ask it anything. Ask
@@ -76,14 +86,13 @@ click; review threads never post to GitHub.
   threads, bot comments and resolved threads are folded. Reply, Ask about
   this, or Quote on a comment opens the same comment box in the thread; a
   comment or reply you post shows in place.
-- **New commits**: when a PR moves past its guide, the row reads New commits
-  and the guide stays readable under "N new commits since this guide was
+- **New commits**: when a PR moves past its guide, the guide stays readable under "N new commits since this guide was
   written". Update guide asks the same review thread to read only the new
   commits and hand in a complete guide for the new head.
 - **View options**: switches to show tests and mocks (hidden by default) and
   findings (shown by default).
 - **Errors beside your data**: if GitHub can't be read, the error shows above
-  the list you already had. Refresh, or click the open PR again, to retry.
+  the sidebar you already had. Refresh, or click the open PR again, to retry.
 
 ## How it works
 
