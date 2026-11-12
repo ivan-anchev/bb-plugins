@@ -119,7 +119,7 @@ test("the recorded responses: atlas's five-PR stack, beacon's bottom alone with 
     { id: "proj_beacon", name: "beacon", repo: repoSchema.parse("Octo-Labs/beacon") },
     { id: "proj_ngx", name: "ngx-zero", repo: repoSchema.parse("ivan-anchev/ngx-zero") },
   ];
-  const [authored, review, merged] = buildSections(inboxPrs(parseInboxSearch(fixture("search")), parseStackContext(fixture("context")), projects));
+  const [authored, review, merged] = buildSections(inboxPrs(parseInboxSearch(fixture("search"), Date.parse("2026-11-12T10:00:00Z")), parseStackContext(fixture("context")), projects));
 
   assert.deepEqual(outline(authored), ["#83", "#81", "#79", "[#63 #64 #65 #66 #67]", "#42 (1/7)"]);
   assert.equal(authored.count, 9);

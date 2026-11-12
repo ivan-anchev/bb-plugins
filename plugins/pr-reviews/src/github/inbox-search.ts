@@ -11,11 +11,11 @@ export type GitHubPr = Omit<InboxPr, "projectId" | "section">;
 /** A PR one of the section searches found, and the section that search fills. */
 export type FoundPr = { section: SectionKey; pr: GitHubPr };
 
-// GitHub's largest page. A section past it lists its most recently updated 100.
+// GitHub's largest page. A search past it reads its most recently updated 100.
 const FIRST = 100;
-// Closed and merged PRs stay listed this long. Search dates are whole days.
-const RECENT_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
+// Closed and merged PRs stay listed this long after they close or merge.
+const RECENT_MS = 7 * DAY_MS;
 // How many of a repo's merged PRs to read for stack-mates: a stack's merged bottom merged recently.
 const RECENTLY_MERGED = 20;
 
@@ -28,26 +28,40 @@ const searchNameSchema = z.enum(["authoredOpen", "authoredClosed", "review", "me
 type SearchName = z.infer<typeof searchNameSchema>;
 const SEARCH_NAMES = searchNameSchema.options;
 
-/** Each search, the section it fills and its qualifiers. Definitions: decisions.md #4–#6. */
-const SEARCHES: Record<SearchName, { section: SectionKey; qualifiers(since: string): string }> = {
-  authoredOpen: { section: "authored", qualifiers: () => "is:open author:@me" },
-  authoredClosed: { section: "authored", qualifiers: (since) => `is:closed is:unmerged author:@me closed:>=${since}` },
-  review: { section: "review", qualifiers: () => "is:open draft:false review-requested:@me -author:@me" },
-  mergedAuthored: { section: "merged", qualifiers: (since) => `is:merged author:@me merged:>=${since}` },
-  mergedReviewed: { section: "merged", qualifiers: (since) => `is:merged reviewed-by:@me merged:>=${since}` },
+/**
+ * Each search, the section it fills, its qualifiers, and for a closed or merged one the time it
+ * ended at, which must be in the last RECENT_MS. Definitions: decisions.md #4–#6.
+ */
+const SEARCHES: Record<SearchName, { section: SectionKey; qualifiers: string; endedAt?: "closedAt" | "mergedAt" }> = {
+  authoredOpen: { section: "authored", qualifiers: "is:open author:@me" },
+  authoredClosed: { section: "authored", qualifiers: "is:closed is:unmerged author:@me", endedAt: "closedAt" },
+  review: { section: "review", qualifiers: "is:open draft:false review-requested:@me -author:@me" },
+  mergedAuthored: { section: "merged", qualifiers: "is:merged author:@me", endedAt: "mergedAt" },
+  mergedReviewed: { section: "merged", qualifiers: "is:merged reviewed-by:@me", endedAt: "mergedAt" },
 };
 
 /** Every section search in one query, each search string a variable named after it. */
 export const INBOX_QUERY = `${PR_FIELDS}
+fragment FoundPr on PullRequest { ...InboxPr closedAt }
 query(${SEARCH_NAMES.map((name) => `$${name}: String!`).join(", ")}) {
-  ${SEARCH_NAMES.map((name) => `${name}: search(query: $${name}, type: ISSUE, first: ${FIRST}) { nodes { ...InboxPr } }`).join("\n  ")}
+  ${SEARCH_NAMES.map((name) => `${name}: search(query: $${name}, type: ISSUE, first: ${FIRST}) { nodes { ...FoundPr } }`).join("\n  ")}
 }`;
 
-/** INBOX_QUERY's variables at `now` (epoch ms): each search over `repos`, closed or merged in the last RECENT_DAYS where it asks. */
+/**
+ * INBOX_QUERY's variables at `now` (epoch ms): each search over `repos`. GitHub's `closed:` misses
+ * some closed PRs, so a closed or merged search asks instead for PRs updated since the day before
+ * the window opens: closing or merging updates a PR, and the spare day covers whatever time zone
+ * GitHub reads the date in. parseInboxSearch cuts the result to the window.
+ */
 export function inboxVariables(repos: Repo[], now: number): Record<string, string> {
-  const since = new Date(now - RECENT_DAYS * DAY_MS).toISOString().slice(0, 10);
+  const updatedSince = `updated:>=${new Date(now - RECENT_MS - DAY_MS).toISOString().slice(0, 10)}`;
   const scope = repos.map((repo) => `repo:${repo}`).join(" ");
-  return Object.fromEntries(SEARCH_NAMES.map((name) => [name, `is:pr ${SEARCHES[name].qualifiers(since)} sort:updated-desc ${scope}`]));
+  return Object.fromEntries(
+    SEARCH_NAMES.map((name) => {
+      const { qualifiers, endedAt } = SEARCHES[name];
+      return [name, `is:pr ${qualifiers}${endedAt === undefined ? "" : ` ${updatedSince}`} sort:updated-desc ${scope}`];
+    }),
+  );
 }
 
 /** One query for the open and recently merged PRs of each repo. A Repo is `owner/name` of word characters, dots and dashes, so it is safe to inline. */
@@ -98,11 +112,20 @@ const toGitHubPr = (pr: z.infer<typeof ghPrSchema>): GitHubPr => ({
 });
 
 const nodesSchema = z.object({ nodes: z.array(ghPrSchema) });
+const foundNodesSchema = z.object({ nodes: z.array(ghPrSchema.extend({ closedAt: z.string().nullable() })) });
 
-/** INBOX_QUERY's response: every PR found, with the section of the search that found it. */
-export function parseInboxSearch(json: unknown): FoundPr[] {
-  const data = z.object({ data: z.record(searchNameSchema, nodesSchema) }).parse(json).data;
-  return SEARCH_NAMES.flatMap((name) => data[name].nodes.map((pr) => ({ section: SEARCHES[name].section, pr: toGitHubPr(pr) })));
+/**
+ * INBOX_QUERY's response at `now` (epoch ms): every PR found, with the section of the search that
+ * found it; a closed or merged one only if it closed or merged in the last RECENT_MS.
+ */
+export function parseInboxSearch(json: unknown, now: number): FoundPr[] {
+  const data = z.object({ data: z.record(searchNameSchema, foundNodesSchema) }).parse(json).data;
+  const inWindow = (time: string | null) => time !== null && Date.parse(time) >= now - RECENT_MS;
+  return SEARCH_NAMES.flatMap((name) => {
+    const { section, endedAt } = SEARCHES[name];
+    const kept = data[name].nodes.filter((pr) => endedAt === undefined || inWindow(pr[endedAt]));
+    return kept.map((pr) => ({ section, pr: toGitHubPr(pr) }));
+  });
 }
 
 /** stackContextQuery's response: every repo's open and recently merged PRs. */

@@ -97,7 +97,7 @@ export async function listOpenPrs(repo: Repo): Promise<PrSummary[]> {
 export async function readInbox(repos: Repo[], now: number): Promise<{ found: FoundPr[]; stackMates: GitHubPr[] }> {
   // No repo qualifier would search all of GitHub.
   if (repos.length === 0) return { found: [], stackMates: [] };
-  const found = parseInboxSearch(await graphql(INBOX_QUERY, inboxVariables(repos, now)));
+  const found = parseInboxSearch(await graphql(INBOX_QUERY, inboxVariables(repos, now)), now);
   const foundRepos = [...new Set(found.map(({ pr }) => pr.repo))];
   if (foundRepos.length === 0) return { found, stackMates: [] };
   return { found, stackMates: parseStackContext(await graphql(stackContextQuery(foundRepos), {})) };
