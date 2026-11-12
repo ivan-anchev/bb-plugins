@@ -1,6 +1,7 @@
 // A stack in a section, drawn as a tree: a quiet "Stack #<bottom PR>" heading with how many of
-// its PRs the section lists, then every PR of the stack, bottom first, hung on an elbow rail. Its
-// PRs listed elsewhere, or nowhere, stay in place as dim rows. The rail brightens while a row of
+// its PRs the section lists, then every PR of the stack hung on an elbow rail, top first, so the
+// bottom PR, the one the others build on, sits at the bottom. Its PRs listed elsewhere, or
+// nowhere, stay in place as dim rows. The rail brightens while a row of
 // the stack is hovered or open.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { InboxPr, SectionKey } from "../../contract.ts";
@@ -28,7 +29,7 @@ export function StackTree({ members, section, visits, isOpen, open }: StackTreeP
           {here} of {members.length}
         </span>
       </li>
-      {members.map((pr) => (
+      {[...members].reverse().map((pr) => (
         <li key={pr.number} className={MEMBER}>
           {pr.section === section ? (
             <ListedRow pr={pr} stack={null} attention={attentionOf(pr, section, visits)} current={isOpen(pr)} onOpen={() => open(pr)} />
