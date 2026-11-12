@@ -139,7 +139,7 @@ function Digest({ threads, context }: { threads: ReviewThread[]; context: Contex
     <ul aria-label="Review threads" className="col-start-2 mt-2 -ml-2 grid grid-cols-[minmax(0,1fr)] rounded-lg bg-(--pr-reviews-thread-tint) p-0.5">
       {threads.map((thread) => (
         <li key={thread.id} className="grid">
-          <DigestRow thread={thread} context={context} />
+          <DigestRow thread={thread} wraps={false} context={context} />
         </li>
       ))}
     </ul>
@@ -152,10 +152,10 @@ function ReviewFold({ review: { review, threads }, context }: { review: ReviewWi
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] pb-1.5 pl-9">
       {hasBody && <Prose text={review.comment.body} className="pb-1 text-sm leading-[22px]" />}
-      <ul aria-label="Review threads" className="-ml-2 grid grid-cols-[minmax(0,1fr)]">
+      <ul aria-label="Review threads" className="@container -ml-2 grid grid-cols-[minmax(0,1fr)]">
         {threads.map((thread) => (
           <li key={thread.id} className="grid">
-            <DigestRow thread={thread} context={context} />
+            <DigestRow thread={thread} wraps context={context} />
           </li>
         ))}
       </ul>
@@ -165,8 +165,10 @@ function ReviewFold({ review: { review, threads }, context }: { review: ReviewWi
 
 // The whole row opens the Changes tab at the thread, unless its file has left the diff: then it is
 // text, which says so. A refresh can move a file in or out of the diff, so the row hands focus from
-// the form that leaves to the one that comes; the text holds focus without being a tab stop.
-function DigestRow({ thread, context }: { thread: ReviewThread; context: Context }) {
+// the form that leaves to the one that comes; the text holds focus without being a tab stop. A row
+// that wraps keeps its one line while its list is wide, and when narrow puts the location and state
+// on a line with the first line of the thread under them, so none of it is cut off.
+function DigestRow({ thread, wraps, context }: { thread: ReviewThread; wraps: boolean; context: Context }) {
   const focus = useFocusHandOff();
   const formRef = useMemo(() => mergeRefs(focus.from, focus.to), [focus]);
   const inDiff = context.changedPaths.has(thread.path);
@@ -175,16 +177,17 @@ function DigestRow({ thread, context }: { thread: ReviewThread; context: Context
     <>
       {/* Display only: `whitespace-pre` keeps the path's spaces as they are. */}
       <span className="font-mono text-xs whitespace-pre text-foreground">{threadLocationOf(thread)}</span>
-      <span className="min-w-0 flex-1 truncate">{snippetOf(thread.comments[0].body)}</span>
+      <span className={wraps ? `${SNIPPET} ${NARROW_SNIPPET}` : SNIPPET}>{snippetOf(thread.comments[0].body)}</span>
       {state !== "" && <span className="shrink-0">{state}</span>}
     </>
   );
+  const layout = wraps ? `${DIGEST_ROW} ${NARROW_ROW}` : DIGEST_ROW;
   return inDiff ? (
-    <button ref={formRef} type="button" title={`${thread.path}: show in Changes`} onClick={() => context.onShowThread(thread)} className={`${DIGEST_ROW} cursor-pointer text-left transition-colors duration-150 ease-out hover:bg-(--pr-reviews-thread-tint-hover) hover:duration-0 ${FOCUS_RING}`}>
+    <button ref={formRef} type="button" title={`${thread.path}: show in Changes`} onClick={() => context.onShowThread(thread)} className={`${layout} cursor-pointer text-left transition-colors duration-150 ease-out hover:bg-(--pr-reviews-thread-tint-hover) hover:duration-0 ${FOCUS_RING}`}>
       {row}
     </button>
   ) : (
-    <div ref={formRef} tabIndex={-1} className={`${DIGEST_ROW} ${FOCUS_RING}`}>
+    <div ref={formRef} tabIndex={-1} className={`${layout} ${FOCUS_RING}`}>
       {row}
     </div>
   );
@@ -192,6 +195,10 @@ function DigestRow({ thread, context }: { thread: ReviewThread; context: Context
 
 const FOCUS_RING = "focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none";
 const DIGEST_ROW = "flex min-h-7 min-w-0 items-baseline gap-2.5 rounded-md px-2 py-1 text-[12.5px] leading-5 text-muted-foreground";
+const SNIPPET = "min-w-0 flex-1 truncate";
+// Below the width a row's location, first line and state share comfortably.
+const NARROW_ROW = "@max-[480px]:flex-wrap @max-[480px]:gap-y-0.5";
+const NARROW_SNIPPET = "@max-[480px]:order-last @max-[480px]:basis-full";
 
 // The first line as words: markdown's code ticks and bold marks read as noise in a one-line row.
 const snippetOf = (body: string) => firstLineOf(body).replace(/`|\*\*/g, "");
