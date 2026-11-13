@@ -52,11 +52,17 @@ From left to right:
 2. The project's tile: its initial on a colour hashed from the project id, the
    same colour every time.
 3. The title, fading out at its end when it doesn't fit.
-4. A pill with how many threads run under it (its own background agents plus
+4. Its pull request, when the thread's branch has one: the pull request glyph
+   (a draft's own glyph for a draft) and its number, green while open, grey as
+   a draft, violet once merged, red when closed. Hover it for its state and
+   title. It comes from bb's GitHub PR Status plugin; with that plugin off, or
+   `gh` unavailable, no badge shows.
+5. A pill with how many threads run under it (its own background agents plus
    every running subthread), when any do.
-5. The corner, which holds exactly one of:
+6. The corner, which holds exactly one of:
    - a state glyph: a dashed ring for working, connecting (blue) or waiting on
-     background work; a speech bubble for awaiting input; a green check for
+     background work; a speech bubble for awaiting input; an amber shield for
+     pending approval (the agent asks leave to run something); a green check for
      done (an unread finished turn); a red mark for failed; a yellow alarm
      clock for woke from sleep;
    - on Asleep, how soon it wakes, rounded up: `45m`, `3h`, `2d`;
@@ -90,6 +96,11 @@ its toast, Delete always asks, and failures show bb's error toast.
 background work.** The menu says "Stop it first: its agent is still working"
 under the item. Stop the thread, or let it finish, and Archive is available
 again. A thread awaiting input, done, failed or connecting can be archived.
+
+Zeron's **Stop waiting** (release a thread from waiting on a background command
+while the command keeps running) is not in the menu: bb has no call that does
+that. bb's Stop ends the background command too, so the menu leaves it out
+rather than offer a Stop under another name.
 
 ## The corner's Archive button
 

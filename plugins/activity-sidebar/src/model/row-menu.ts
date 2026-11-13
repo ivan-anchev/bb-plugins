@@ -1,7 +1,9 @@
 // A row's menu as data, in Zeron's order and words (Z:screens/shell/sidebar.luau:1156-1270): Rename, Pin,
 // Copy ▸, Sleep ▸ (or Wake), a rule, Archive (or Unarchive), Delete…. Every bb entry runs bb's own bound
 // action, so bb's confirmations, Undo toast and errors stay; this only chooses which, in what order,
-// under which name. Sleep is the list's own.
+// under which name. Sleep is the list's own. Zeron's Stop waiting (Z:screens/shell/sidebar.luau:1193-1211)
+// is left out: it releases the wait and leaves the background process running, and bb's only call near
+// it, `threads.stop`, ends the process too (checked live on bb 0.49).
 import type { PluginBoundThreadAction, PluginThreadActionEntry } from "@get-bb/plugin-sdk/app";
 import type { RowModel } from "./activity.ts";
 import { sleepPresets } from "./sleep.ts";
