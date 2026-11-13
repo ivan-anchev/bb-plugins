@@ -2,18 +2,19 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildActivity } from "../model/activity.ts";
 import { thread } from "../model/fixtures.ts";
+import { view } from "./fixtures.ts";
 import { listItems, type ListItem } from "./items.ts";
 import { layoutItems, METRICS, visibleKeys } from "./layout.ts";
 
-const title = (key: "pinned" | "activity"): ListItem => ({ kind: "title", key: `t:${key}`, label: key });
-const notice: ListItem = { kind: "notice", key: "notice", text: "Loading threads…" };
+const title = (key: "pinned" | "activity"): ListItem => ({ kind: "title", key: `t:${key}`, section: key, label: key, open: true, count: null });
+const notice: ListItem = { kind: "notice", key: "n:list", text: "Loading threads…", retry: false };
 const spacer: ListItem = { kind: "spacer", key: "spacer" };
 
 /** n rows keyed s:t0 … s:t{n-1}, top to bottom. */
 function rows(n: number): ListItem[] {
   const threads = Array.from({ length: n }, (_, i) => thread(`t${i}`, { latestAttentionAt: n - i }));
-  const sections = buildActivity({ threads, projects: [], sleeps: new Map(), now: 0, activeThreadId: null });
-  return listItems(sections, "ready").filter((item) => item.kind === "row");
+  const sections = buildActivity({ threads, projects: [], sleeps: new Map(), now: 0, activeThreadId: null, filter: null });
+  return listItems(sections, view()).filter((item) => item.kind === "row");
 }
 
 test("titles are 24, rows 30, with the gap between and the padding around", () => {

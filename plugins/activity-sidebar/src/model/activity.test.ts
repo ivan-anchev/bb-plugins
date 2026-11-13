@@ -8,7 +8,7 @@ import { project, thread, WORKING } from "./fixtures.ts";
 const NOW = 10 * 3_600_000;
 
 function build(threads: PluginSidebarThread[], extra: Partial<ActivityInput> = {}) {
-  return buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), now: NOW, activeThreadId: null, ...extra });
+  return buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), now: NOW, activeThreadId: null, filter: null, ...extra });
 }
 
 function ids(sections: ReturnType<typeof build>, key: SectionKey): string[] {
@@ -17,24 +17,96 @@ function ids(sections: ReturnType<typeof build>, key: SectionKey): string[] {
   return section.rows.map((r) => r.thread.id);
 }
 
-test("only parent, visible, active threads get a row", () => {
+test("only parent, visible threads get a row", () => {
   const sections = build([
     thread("parent"),
     thread("child", { parentThreadId: "parent" }),
     thread("helper", { isHidden: true }),
-    thread("archived", { isArchived: true }),
+    thread("archived-child", { parentThreadId: "parent", isArchived: true, archivedAt: 1 }),
   ]);
   assert.deepEqual(ids(sections, "activity"), ["parent"]);
   assert.deepEqual(ids(sections, "pinned"), []);
+  assert.deepEqual(ids(sections, "archived"), []);
 });
 
-test("Activity ranks by when each thread last came back, latest first, working threads included", () => {
+test("the sections come in order: Pinned, Activity, then the shelves Working, Asleep, Archived", () => {
+  assert.deepEqual(
+    build([]).map((s) => s.key),
+    ["pinned", "activity", "working", "asleep", "archived"],
+  );
+});
+
+test("Activity ranks by when each thread last came back, latest first", () => {
+  const sections = build([thread("old", { latestAttentionAt: 1_000 }), thread("new", { latestAttentionAt: 3_000 }), thread("mid", { latestAttentionAt: 2_000 })]);
+  assert.deepEqual(ids(sections, "activity"), ["new", "mid", "old"]);
+});
+
+test("a thread under way leaves Activity for Working, latest first; a pinned one stays pinned", () => {
+  const waiting = { indicator: "background-command" } as const;
   const sections = build([
-    thread("old", { latestAttentionAt: 1_000 }),
-    thread("new", { latestAttentionAt: 3_000 }),
-    thread("busy", { latestAttentionAt: 2_000, ...WORKING }),
+    thread("idle", { latestAttentionAt: 3_000 }),
+    thread("busy-old", { latestAttentionAt: 1_000, ...WORKING }),
+    thread("busy-new", { latestAttentionAt: 2_000, ...waiting }),
+    thread("pinned-busy", { isPinned: true, pinnedAt: 1, ...WORKING }),
+    thread("asks", { indicator: "waiting-for-input" }),
   ]);
-  assert.deepEqual(ids(sections, "activity"), ["new", "busy", "old"]);
+  assert.deepEqual(ids(sections, "working"), ["busy-new", "busy-old"]);
+  assert.deepEqual(ids(sections, "activity"), ["idle", "asks"]);
+  assert.deepEqual(ids(sections, "pinned"), ["pinned-busy"]);
+});
+
+test("an archived parent sits in Archived, latest archived first, its corner saying when it was archived", () => {
+  const sections = build([
+    thread("first", { isArchived: true, archivedAt: NOW - 2 * 3_600_000, latestAttentionAt: NOW, ...WORKING }),
+    thread("last", { isArchived: true, archivedAt: NOW - 5 * 60_000, isPinned: true, pinnedAt: 1 }),
+  ]);
+  assert.deepEqual(ids(sections, "archived"), ["last", "first"]);
+  assert.deepEqual(ids(sections, "pinned"), []);
+  assert.deepEqual(ids(sections, "working"), []);
+  assert.deepEqual(
+    sections[4].rows.map((r) => r.corner),
+    [
+      { kind: "time", text: "5m" },
+      { kind: "time", text: "2h" },
+    ],
+  );
+});
+
+test("a thread asleep until later sits in Asleep, the soonest to wake first", () => {
+  const sleeps = new Map<string, SleepRecord>([
+    ["late", { threadId: "late", until: NOW + 7_200_000 }],
+    ["soon", { threadId: "soon", until: NOW + 60_000 }],
+  ]);
+  const sections = build([thread("late", { latestAttentionAt: 9 }), thread("soon", { latestAttentionAt: 1 }), thread("awake")], { sleeps });
+  assert.deepEqual(ids(sections, "asleep"), ["soon", "late"]);
+  assert.deepEqual(ids(sections, "activity"), ["awake"]);
+});
+
+test("the project filter narrows every section to its project", () => {
+  const theirs = { projectId: "prj_b" };
+  const sections = build(
+    [
+      thread("mine"),
+      thread("theirs", theirs),
+      thread("my-pin", { isPinned: true, pinnedAt: 1 }),
+      thread("their-pin", { isPinned: true, pinnedAt: 1, ...theirs }),
+      thread("my-busy", WORKING),
+      thread("their-busy", { ...WORKING, ...theirs }),
+      thread("my-old", { isArchived: true, archivedAt: 1 }),
+      thread("their-old", { isArchived: true, archivedAt: 1, ...theirs }),
+    ],
+    { filter: "prj_b" },
+  );
+  assert.deepEqual(
+    sections.map((s) => [s.key, s.rows.map((r) => r.thread.id)]),
+    [
+      ["pinned", ["their-pin"]],
+      ["activity", ["theirs"]],
+      ["working", ["their-busy"]],
+      ["asleep", []],
+      ["archived", ["their-old"]],
+    ],
+  );
 });
 
 test("reading a thread neither moves its row nor resets its time", () => {
@@ -74,8 +146,8 @@ test("manually ordered pins follow their keys, as bb's list does", () => {
 });
 
 test("the corner holds the state, else the time", () => {
-  const [, activity] = build([thread("idle", { latestAttentionAt: NOW - 5 * 60_000 }), thread("busy", { latestAttentionAt: NOW, ...WORKING })]);
-  const corners = Object.fromEntries(activity.rows.map((r) => [r.thread.id, r.corner]));
+  const sections = build([thread("idle", { latestAttentionAt: NOW - 5 * 60_000 }), thread("busy", { latestAttentionAt: NOW, ...WORKING })]);
+  const corners = Object.fromEntries(sections.flatMap((s) => s.rows).map((r) => [r.thread.id, r.corner]));
   assert.deepEqual(corners, { busy: { kind: "state", state: "working" }, idle: { kind: "time", text: "5m" } });
 });
 
@@ -89,7 +161,7 @@ test("a row is strong with a state or when it is the open thread or holds it", (
     ],
     { activeThreadId: "open-child" },
   );
-  const rows = Object.fromEntries(sections[1].rows.map((r) => [r.thread.id, { strong: r.strong, current: r.current }]));
+  const rows = Object.fromEntries(sections.flatMap((s) => s.rows).map((r) => [r.thread.id, { strong: r.strong, current: r.current }]));
   assert.deepEqual(rows, {
     quiet: { strong: false, current: false },
     busy: { strong: true, current: false },
@@ -99,6 +171,7 @@ test("a row is strong with a state or when it is the open thread or holds it", (
 
 test("a row carries its project's name and hue, and what runs under it", () => {
   const [, activity] = build([thread("p"), thread("k", { parentThreadId: "p", ...WORKING }), thread("stray", { projectId: "prj_gone" })]);
+  assert.equal(activity.key, "activity");
   const byId = Object.fromEntries(activity.rows.map((r) => [r.thread.id, r]));
   assert.equal(byId.p.project.name, "bb-plugins");
   assert.equal(byId.p.runningUnder, 1);
