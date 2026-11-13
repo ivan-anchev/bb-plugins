@@ -1,6 +1,6 @@
 // One parent thread's row, Zeron's SessionRow: the agent's mark in a 30 slot, the project tile, the
-// title fading out, the subagents pill and the corner. Right-click (or the Menu key) opens its menu;
-// under the pointer the corner offers Archive, whatever the thread's state; a double-click or the menu's Rename renames it in place;
+// title fading out, its pull request, the subagents pill and the corner (an approval asked shows as one).
+// Right-click (or the Menu key) opens its menu; under the pointer the corner offers Archive, whatever the thread's state; a double-click or the menu's Rename renames it in place;
 // the menu's Sleep ▸ Custom… opens the row's own dialog.
 import {
   experimental_Icon as Icon,
@@ -11,13 +11,17 @@ import {
 } from "@get-bb/plugin-sdk/app";
 import { Root, Trigger } from "@radix-ui/react-context-menu";
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react";
-import type { RowModel } from "../../model/activity.ts";
+import { useAsk } from "../../data/use-asks.ts";
+import type { PullRequest } from "../../data/pull-request/github-pr-status.ts";
+import { usePullRequest } from "../../data/pull-request/use-pull-request.ts";
+import type { Corner as CornerModel, RowModel } from "../../model/activity.ts";
 import type { RowMenu } from "../../model/row-menu.ts";
-import { STATE_NAME } from "../../model/state.ts";
+import { STATE_NAME, withAsk, type AskKind } from "../../model/state.ts";
 import { Corner } from "../corner.tsx";
 import { ProjectTile } from "../project-tile.tsx";
 import { syncMinute } from "../../data/use-minute.ts";
 import { SleepDialog } from "../sleep-dialog.tsx";
+import { PrBadge } from "./pr-badge.tsx";
 import { RowMenuContent, useRowMenu, type RowSleep } from "./row-menu.tsx";
 import { TitleEditor } from "./title-editor.tsx";
 
@@ -30,6 +34,9 @@ export function Row({ row, sleep, onNavigate }: { row: RowModel; sleep: RowSleep
   const [sleepingCustom, setSleepingCustom] = useState(false);
   const menu = useRowMenu(row, sleep, { requestRename: rename.request, sleepCustom: () => setSleepingCustom(true) });
   const jump = shortcut?.label ?? null;
+  const ask = useAsk(t);
+  const corner = askedCorner(row.corner, ask);
+  const pr = usePullRequest(t.environment?.id ?? null);
 
   const body = (title: ReactNode) => (
     <>
@@ -43,13 +50,14 @@ export function Row({ row, sleep, onNavigate }: { row: RowModel; sleep: RowSleep
           <ProjectTile name={row.project.name} hue={row.project.hue} />
           {title}
         </span>
+        {pr !== null && <PrBadge pr={pr} />}
         {row.runningUnder > 0 && (
           <span className="as-pill" title={`${row.runningUnder} running under it`} aria-hidden>
             <i />
             {row.runningUnder > 99 ? "99+" : row.runningUnder}
           </span>
         )}
-        <Corner corner={row.corner} jump={jump} />
+        <Corner corner={corner} jump={jump} />
       </span>
     </>
   );
@@ -81,7 +89,7 @@ export function Row({ row, sleep, onNavigate }: { row: RowModel; sleep: RowSleep
                 tabIndex={-1}
                 data-strong={row.strong || undefined}
                 aria-current={row.current ? "page" : undefined}
-                aria-label={spoken(row)}
+                aria-label={spoken(row, corner, pr)}
                 aria-keyshortcuts={shortcut?.ariaKeyshortcuts}
                 data-sidebar-thread-shortcut-target=""
                 // why: bb's host assigns jump keys only to target anchors that also name their thread.
@@ -212,14 +220,21 @@ function FadingTitle({ text }: { text: string }) {
   );
 }
 
-/** "Fix the login flow, Working, bb-plugins, 2 running under it". */
-function spoken(row: RowModel): string {
-  const bits = [row.thread.displayTitle, spokenCorner(row.corner), row.project.name];
+/** The corner once the row knows what its thread asks: an approval shows as one. */
+function askedCorner(corner: CornerModel, ask: AskKind | null): CornerModel {
+  return corner.kind === "state" ? { kind: "state", state: withAsk(corner.state, ask) } : corner;
+}
+
+/** "Fix the login flow, Working, bb-plugins, pull request 12, open, 2 running under it". */
+function spoken(row: RowModel, corner: CornerModel, pr: PullRequest | null): string {
+  const bits = [row.thread.displayTitle, spokenCorner(corner), row.project.name];
+  // why: Zeron's badge label (Z:ds/locale_en.luau:334).
+  if (pr !== null) bits.push(`pull request ${pr.number}, ${pr.state}`);
   if (row.runningUnder > 0) bits.push(`${row.runningUnder} running under it`);
   return bits.join(", ");
 }
 
-function spokenCorner(corner: RowModel["corner"]): string {
+function spokenCorner(corner: CornerModel): string {
   switch (corner.kind) {
     case "state":
       return STATE_NAME[corner.state];

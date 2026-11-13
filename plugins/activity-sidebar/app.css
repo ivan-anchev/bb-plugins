@@ -382,6 +382,41 @@
 .as-tile[data-hue="pink"] { --as-tile-bg: #d6629e; --as-tile-ink: #fff3f8; }
 .as-tile[data-hue="cyan"] { --as-tile-bg: #09a6b7; --as-tile-ink: #eff9fb; }
 
+/* Its pull request: its glyph and number in its state's ink, on a 10% wash of it; never wraps, so the
+   title fades before it. Dark inks are Zeron's PR hues (ds/palettes zeron.pr.*) at full strength; each
+   light ink keeps that hue and chroma (OKLCH) at the lightness where the number reads at 4.5:1 on the
+   light selected row under its own wash, as Zeron's palettes.ensure moves an ink until it reads. */
+.as-pr {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.as-pr::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0.1;
+}
+.as-pr > * {
+  position: relative;
+}
+.as-pr[data-state="open"] { color: light-dark(#015e22, #73c580); }
+.as-pr[data-state="draft"] { color: light-dark(#525257, #aaaab0); }
+.as-pr[data-state="merged"] { color: light-dark(#59409d, #ad98fe); }
+.as-pr[data-state="closed"] { color: light-dark(#952828, #f9837b); }
+
 /* Threads running under it: the working dot and a count on its wash. */
 .as-pill {
   position: relative;

@@ -1,5 +1,5 @@
 // The one Zeron state a thread shows (Zeron: ds/status.luau), from bb's resolved indicator.
-import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
+import type { PluginBrowserBbSdk, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import type { SleepRecord } from "../contract.ts";
 
 export type ZState = "working" | "connecting" | "waiting" | "input" | "approval" | "done" | "failed" | "woke";
@@ -30,7 +30,7 @@ export function baseState(thread: PluginSidebarThread): ZState | null {
   const indicator = thread.indicator;
   switch (indicator) {
     case "waiting-for-input":
-      // why: bb's row can't tell an approval from a question; issue 05 refines it per row.
+      // why: bb's row can't tell an approval from a question; a mounted row reads which (withAsk).
       return "input";
     case "unread-error":
     case "queued-failed":
@@ -64,4 +64,23 @@ export function stateOf(thread: PluginSidebarThread, sleep: SleepRecord | undefi
   const base = baseState(thread);
   if (sleep !== undefined && sleep.until <= now && (base === null || base === "done")) return "woke";
   return base;
+}
+
+/** What a thread waiting for you asks: leave to run something, or an answer. */
+export type AskKind = "approval" | "question";
+
+/** One of a thread's interactions, as bb lists them. */
+type Interaction = Awaited<ReturnType<PluginBrowserBbSdk["threads"]["interactions"]["list"]>>[number];
+
+/** Of an interaction, what tells an approval from a question. */
+type Asked = { status: Interaction["status"]; payload: { kind: Interaction["payload"]["kind"] } };
+
+/** An approval when any pending interaction asks for one (Zeron: ds/status "approval"); else a question. */
+export function askOf(interactions: readonly Asked[]): AskKind {
+  return interactions.some((i) => i.status === "pending" && i.payload.kind === "approval") ? "approval" : "question";
+}
+
+/** The state a row shows once it knows what is asked: Awaiting Input turns Pending Approval; nothing else moves. */
+export function withAsk(state: ZState, ask: AskKind | null): ZState {
+  return state === "input" && ask === "approval" ? "approval" : state;
 }
