@@ -16,7 +16,7 @@ const HOUR = 3_600_000;
 /** The one row a thread makes, as the list builds it, with its sleep if any. */
 function rowOf(t: PluginSidebarThread, sleep: SleepRecord | null = null): RowModel {
   const sleeps = new Map(sleep === null ? [] : [[t.id, sleep]]);
-  const sections = buildActivity({ threads: [t], projects: [project("prj_a", "bb-plugins")], sleeps, now: NOW, activeThreadId: null, filter: null });
+  const sections = buildActivity({ threads: [t], projects: [project("prj_a", "bb-plugins")], sleeps, now: NOW, activeThreadId: null, filter: null }).sections;
   const row = sections.flatMap((s) => s.rows)[0];
   assert.ok(row);
   return row;

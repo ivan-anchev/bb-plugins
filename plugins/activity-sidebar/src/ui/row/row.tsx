@@ -194,14 +194,14 @@ function CornerAction({ action }: { action: NonNullable<RowMenu["hoverAction"]> 
 }
 
 /** The agent's artwork from bb's provider directory; bb's fallback glyph while it loads. */
-function AgentMark({ providerId }: { providerId: string }) {
+export function AgentMark({ providerId }: { providerId: string }) {
   const { providers } = useProviders();
   const provider = providers.find((p) => p.id === providerId) ?? { id: providerId };
   return <ProviderIcon providerKind="agent" provider={provider} aria-hidden />;
 }
 
 /** Text that doesn't fit fades out at its end, never cut to "…"; measured whenever its box resizes. */
-function FadingTitle({ text }: { text: string }) {
+export function FadingTitle({ text }: { text: string }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [over, setOver] = useState(false);
   useLayoutEffect(() => {

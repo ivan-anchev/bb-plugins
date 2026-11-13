@@ -7,7 +7,7 @@ import { LOADED, view } from "./fixtures.ts";
 import { listItems, sleepsStatus, type ListItem } from "./items.ts";
 
 function sections(threads = [thread("a", { latestAttentionAt: 2 }), thread("b", { latestAttentionAt: 1 })]) {
-  return buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), now: 0, activeThreadId: null, filter: null });
+  return buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), now: 0, activeThreadId: null, filter: null }).sections;
 }
 
 /** n archived parents, the latest archived first: x0, x1, … */
@@ -119,7 +119,7 @@ test("a refresh of the sleeps that fails after one that loaded keeps their shelf
   assert.equal(sleepsStatus({ data: retained, error: null }), "ready");
   assert.equal(sleepsStatus({ data: retained, error: failed }), "error");
 
-  const asleep = buildActivity({ threads: [thread("a"), thread("b")], projects: [project("prj_a", "bb-plugins")], sleeps: new Map([["b", retained.sleeps[0]]]), now: 0, activeThreadId: null, filter: null });
+  const asleep = buildActivity({ threads: [thread("a"), thread("b")], projects: [project("prj_a", "bb-plugins")], sleeps: new Map([["b", retained.sleeps[0]]]), now: 0, activeThreadId: null, filter: null }).sections;
   const items = listItems(asleep, view({ sleeps: sleepsStatus({ data: retained, error: failed }), open: open("activity", "asleep") }));
   assert.deepEqual(keys(items), ["n:sleeps", "t:activity", "s:a", "spacer", "t:asleep", "s:b"]);
   assert.deepEqual(items[0], { kind: "notice", key: "n:sleeps", text: "Couldn't load sleep times", retry: true });
@@ -127,7 +127,15 @@ test("a refresh of the sleeps that fails after one that loaded keeps their shelf
 
 test("Asleep stands between Working and Archived while something sleeps", () => {
   const threads = [thread("a"), thread("busy", WORKING), thread("zz"), thread("old", { isArchived: true, archivedAt: 1 })];
-  const built = buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map([["zz", { threadId: "zz", until: 5 }]]), now: 0, activeThreadId: null, filter: null });
+  const built = buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map([["zz", { threadId: "zz", until: 5 }]]), now: 0, activeThreadId: null, filter: null }).sections;
   assert.deepEqual(keys(listItems(built, view({ open: open("activity") }))), ["t:activity", "s:a", "spacer", "t:working", "t:asleep", "t:archived"]);
   assert.deepEqual(titles(listItems(built, view({ open: open() }))).slice(-2), [["Asleep", "1"], ["Archived", "1"]]);
+});
+
+test("a row item says which section it stands in", () => {
+  const items = listItems(sections([thread("idle"), thread("busy", WORKING)]), view());
+  assert.deepEqual(
+    items.flatMap((i) => (i.kind === "row" ? [[i.row.thread.id, i.section]] : [])),
+    [["idle", "activity"], ["busy", "working"]],
+  );
 });

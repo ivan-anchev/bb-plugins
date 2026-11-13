@@ -1,6 +1,6 @@
 ---
 name: activity-sidebar
-description: Explain the Activity Sidebar plugin, which replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it, the Working, Asleep and Archived shelves folded at its foot and a project filter, each row showing the thread's agent, project initial, title, running subthreads and its state or age, with a right-click menu (including Sleep and Wake) and a hover Archive button. Use when the user asks what the Activity list shows, why a thread is or isn't in it, what a row's corner glyph means, what the shelves and the filter do, how Sleep works and when a sleeping thread wakes, what a row's menu and its hover Archive button do, or how to switch back to bb's own list.
+description: Explain the Activity Sidebar plugin, which replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it, the Working, Asleep and Archived shelves folded at its foot and a project filter, each row showing the thread's agent, project initial, title, running subthreads and its state or age, with a right-click menu (including Sleep and Wake), a hover Archive button and a hover card with the thread's details and subthread tree. Use when the user asks what the Activity list shows, why a thread is or isn't in it, what a row's corner glyph means, what the shelves and the filter do, how Sleep works and when a sleeping thread wakes, what a row's menu, its hover Archive button and its hover card do, or how to switch back to bb's own list.
 ---
 
 # Activity Sidebar
@@ -142,6 +142,44 @@ words under its title.
   sleep", "Couldn't wake this chat" (Wake, or a sleeper waking early), or
   "Couldn't mark this chat as seen" (clearing Woke on opening). The row goes
   back to how it was, and the list doesn't try that write again.
+
+## The hover card
+
+Rest the pointer on a row for about half a second, or move keyboard focus to
+it with ↑/↓, and its card opens to the right of the row, kept inside the
+window. It shows:
+
+- the title, up to three lines;
+- its state and since when: "Working · for 4m" (counted from when the list
+  first saw it start, so opening the thread doesn't reset it), "Completed ·
+  5m ago", "Asleep · wakes at 9:00 AM", or just "3h ago";
+- the machine it runs on (left out when bb doesn't know it), its project, and
+  its branch, with "· worktree off main" for a worktree;
+- its pull request's title and badge, when it has one;
+- its subthreads as a tree, each a small row: agent mark, title, and its state
+  or how long ago it moved. Subthreads in the thread's own checkout hang off it
+  directly; those in another checkout hang under that branch's head ("worktree
+  · 2"), worktrees on one branch counted together. Busy subthreads, and the
+  path down to them, come first; of the quiet ones only the two latest per
+  place show; the tree stops at 12 lines. The header counts every subthread
+  and those running. Click a subthread to open it; "Show all N" (when some are
+  left out) opens the thread itself.
+
+The card has no latest-message text. Once one card is open, resting on another
+row swaps it at once, and within 0.4 s of one closing the next opens at once.
+The pointer can travel diagonally across other rows to reach the card; it
+switches only if the pointer stops on another row. The card stays while the
+pointer or keyboard focus is on its row or on the card; once both have left,
+it closes after a moment. Escape (wherever focus is), a click or right-click
+in the list, and scrolling close it, and so does its row leaving (filtered
+out, archived, put to sleep or moved to another shelf). There is no card on a
+phone-width screen.
+
+From the keyboard: with a row focused and its card open, Tab moves into the
+card's subthreads and Enter opens one. Shift+Tab off the first, or Escape,
+goes back to the row; Tab past the last goes on to what follows the list. When
+the card closes with focus in it, focus goes back to its row, or to the next
+row when its own has left the list.
 
 ## Renaming
 

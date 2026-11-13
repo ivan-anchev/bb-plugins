@@ -7,7 +7,8 @@ project. Each row shows the thread's agent, its project's coloured initial, its
 title, how many threads run under it, and its state or how long ago it last
 moved. Right-click a row for its menu (rename, pin, copy, sleep or wake,
 archive, delete); under the pointer, its corner offers Archive. A thread put to
-sleep waits on Asleep until its time, then comes back to the top.
+sleep waits on Asleep until its time, then comes back to the top. Rest on a row
+for its card, with a tree of its subthreads.
 
 Unlisted while it is built in slices; install it from this repository.
 
@@ -33,4 +34,7 @@ the bb you install it on. Try it on a throwaway server
   reader's choices kept in local storage.
 - `src/data/pull-request/`: a row's pull request, read from bb's GitHub PR Status plugin.
 - `src/ui/`: the slot component, the windowed scroller and the shelf titles.
+- `src/card/`: the hover card's pure rules: when it shows (`CardIntent`), its
+  state line, and its subthread tree.
 - `src/ui/row/`: the row, its menu, its pull request badge and its rename field.
+- `src/ui/card/`: the hover card, its body and its subthread tree.

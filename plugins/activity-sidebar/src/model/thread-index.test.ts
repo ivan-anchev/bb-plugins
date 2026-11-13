@@ -29,3 +29,10 @@ test("rootOf climbs to the parentless ancestor", () => {
   assert.equal(index.rootOf("kid-hidden"), null, "hidden threads are not in the index");
   assert.equal(index.rootOf("unknown"), null);
 });
+
+test("childrenOf and below leave hidden and archived threads out", () => {
+  const index = indexThreads(TREE);
+  assert.deepEqual(index.childrenOf("root").map((t) => t.id), ["kid-running", "kid-idle"]);
+  assert.deepEqual(index.below("root").map((t) => t.id), ["kid-running", "kid-idle", "grandkid-waiting", "grandkid-done"]);
+  assert.deepEqual(index.childrenOf("other"), []);
+});
