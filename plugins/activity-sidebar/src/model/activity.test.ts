@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import type { SleepRecord } from "../contract.ts";
-import { buildActivity, type ActivityInput, type SectionKey } from "./activity.ts";
+import { buildActivity, sleepersAskingForYou, type ActivityInput, type SectionKey } from "./activity.ts";
 import { project, thread, WORKING } from "./fixtures.ts";
 
 const NOW = 10 * 3_600_000;
@@ -176,4 +176,74 @@ test("a row carries its project's name and hue, and what runs under it", () => {
   assert.equal(byId.p.project.name, "bb-plugins");
   assert.equal(byId.p.runningUnder, 1);
   assert.equal(byId.stray.project.name, "No project");
+});
+
+const H = 3_600_000;
+const asleep = (id: string, until: number): [string, SleepRecord] => [id, { threadId: id, until }];
+
+test("a sleeper's corner says how soon it wakes, unless its state has more to say", () => {
+  const sleeps = new Map([asleep("quiet", NOW + 45 * 60_000), asleep("later", NOW + 3 * H), asleep("busy", NOW + 2 * 24 * H)]);
+  const sections = build([thread("quiet"), thread("later"), thread("busy", WORKING)], { sleeps });
+  const rows = sections.find((s) => s.key === "asleep")?.rows ?? [];
+  assert.deepEqual(
+    rows.map((r) => [r.thread.id, r.corner, r.asleepUntil]),
+    [
+      ["quiet", { kind: "wakes", text: "45m" }, NOW + 45 * 60_000],
+      ["later", { kind: "wakes", text: "3h" }, NOW + 3 * H],
+      ["busy", { kind: "state", state: "working" }, NOW + 2 * 24 * H],
+    ],
+  );
+});
+
+test("at its time a sleeper comes back to the list, ranked by when it woke, with the Woke glyph", () => {
+  const sleeps = new Map([asleep("sleeper", NOW - 60_000)]);
+  const sections = build([thread("sleeper", { latestAttentionAt: NOW - 5 * H }), thread("moved", { latestAttentionAt: NOW - 2 * 60_000 })], { sleeps });
+  assert.deepEqual(ids(sections, "asleep"), []);
+  assert.deepEqual(ids(sections, "activity"), ["sleeper", "moved"]);
+  assert.deepEqual(sections[1].rows[0].corner, { kind: "state", state: "woke" });
+  assert.equal(sections[1].rows[0].asleepUntil, null);
+});
+
+test("a sleeper that asks for you wakes early: back on the list, ranked as woken now, showing what it asks", () => {
+  for (const indicator of ["waiting-for-input", "unread-error"] as const) {
+    const sleeps = new Map([asleep("asks", NOW + 3 * H)]);
+    const sections = build([thread("asks", { indicator, latestAttentionAt: NOW - 5 * H }), thread("moved", { latestAttentionAt: NOW - 60_000 })], { sleeps });
+    assert.deepEqual(ids(sections, "asleep"), [], indicator);
+    assert.deepEqual(ids(sections, "activity"), ["asks", "moved"], indicator);
+    assert.equal(sections[1].rows[0].asleepUntil, null);
+  }
+});
+
+test("a sleeper that finishes or works stays asleep; only asking for you wakes it", () => {
+  const sleeps = new Map([asleep("done", NOW + H), asleep("busy", NOW + 2 * H)]);
+  const sections = build([thread("done", { indicator: "unread-success" }), thread("busy", WORKING)], { sleeps });
+  assert.deepEqual(ids(sections, "asleep"), ["done", "busy"]);
+  assert.deepEqual(ids(sections, "working"), []);
+});
+
+test("a pinned or archived thread ignores its sleep: no Asleep, no Woke", () => {
+  const sleeps = new Map([asleep("pin-asleep", NOW + H), asleep("pin-woke", NOW - H), asleep("old-woke", NOW - H)]);
+  const sections = build(
+    [thread("pin-asleep", { isPinned: true, pinnedAt: 2 }), thread("pin-woke", { isPinned: true, pinnedAt: 1 }), thread("old-woke", { isArchived: true, archivedAt: NOW - 60_000 })],
+    { sleeps },
+  );
+  assert.deepEqual(ids(sections, "pinned"), ["pin-asleep", "pin-woke"]);
+  assert.deepEqual(ids(sections, "asleep"), []);
+  assert.ok(sections.flatMap((s) => s.rows).every((r) => r.corner.kind === "time"));
+});
+
+test("the sleepers asking for you are the ones whose sleep ends now, whatever the filter", () => {
+  const sleeps = new Map([asleep("asks", NOW + H), asleep("theirs-asks", NOW + H), asleep("quiet", NOW + H), asleep("woke-asks", NOW - H), asleep("pinned-asks", NOW + H)]);
+  const asks = { indicator: "waiting-for-input" } as const;
+  const threads = [
+    thread("asks", asks),
+    thread("theirs-asks", { ...asks, projectId: "prj_b" }),
+    thread("quiet"),
+    thread("woke-asks", asks),
+    thread("pinned-asks", { ...asks, isPinned: true, pinnedAt: 1 }),
+  ];
+  assert.deepEqual(sleepersAskingForYou({ threads, sleeps, now: NOW }), [
+    { threadId: "asks", until: NOW + H },
+    { threadId: "theirs-asks", until: NOW + H },
+  ]);
 });

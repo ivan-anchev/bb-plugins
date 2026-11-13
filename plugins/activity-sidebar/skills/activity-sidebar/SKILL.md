@@ -1,6 +1,6 @@
 ---
 name: activity-sidebar
-description: Explain the Activity Sidebar plugin, which replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it, the Working and Archived shelves folded at its foot and a project filter, each row showing the thread's agent, project initial, title, running subthreads and its state or age, with a right-click menu and a hover Archive button. Use when the user asks what the Activity list shows, why a thread is or isn't in it, what a row's corner glyph means, what the shelves and the filter do, what a row's menu and its hover Archive button do, or how to switch back to bb's own list.
+description: Explain the Activity Sidebar plugin, which replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it, the Working, Asleep and Archived shelves folded at its foot and a project filter, each row showing the thread's agent, project initial, title, running subthreads and its state or age, with a right-click menu (including Sleep and Wake) and a hover Archive button. Use when the user asks what the Activity list shows, why a thread is or isn't in it, what a row's corner glyph means, what the shelves and the filter do, how Sleep works and when a sleeping thread wakes, what a row's menu and its hover Archive button do, or how to switch back to bb's own list.
 ---
 
 # Activity Sidebar
@@ -21,6 +21,8 @@ commands and no settings.
     on background work that will wake them). When a turn starts, the thread
     leaves Activity for Working; when it ends, it returns to the top of
     Activity.
+  - **Asleep**: threads put to sleep (see Sleep below), the soonest to wake
+    first, each showing how soon it wakes.
   - **Archived**: bb's archived parent threads, latest archived first, each
     showing how long ago it was archived.
 
@@ -55,7 +57,9 @@ From left to right:
 5. The corner, which holds exactly one of:
    - a state glyph: a dashed ring for working, connecting (blue) or waiting on
      background work; a speech bubble for awaiting input; a green check for
-     done (an unread finished turn); a red mark for failed;
+     done (an unread finished turn); a red mark for failed; a yellow alarm
+     clock for woke from sleep;
+   - on Asleep, how soon it wakes, rounded up: `45m`, `3h`, `2d`;
    - otherwise how long ago the thread last moved: `now`, `5m`, `3h`, `2d`,
      `1w`.
 
@@ -73,8 +77,10 @@ Right-click a row, or focus it and press the Menu key or Shift+F10. There is no
 1. **Rename**: edits the title in place (see below).
 2. **Pin** or **Unpin**. Archived rows have no Pin.
 3. **Copy** ▸ **bb thread link** or **Thread ID**. A toast confirms the copy.
-4. **Archive**, or **Unarchive** on the Archived shelf.
-5. **Delete…**
+4. **Sleep** ▸ its times, or **Wake** while it sleeps. Pinned and archived
+   rows have neither.
+5. **Archive**, or **Unarchive** on the Archived shelf.
+6. **Delete…**
 
 Each entry runs bb's own action, so bb's own behaviour stays: archiving a
 thread with subthreads asks first and counts them, an archive offers Undo in
@@ -95,6 +101,36 @@ modifier is held, the corner shows the jump key instead.
 Unlike the menu, the button works while the agent is working, as in Zeron.
 bb archives the thread at once and stops its agent. If the thread has
 subthreads, bb asks first and warns "This will stop current work."
+
+## Sleep
+
+Sleep puts a thread out of the way until a time. Its submenu lists, soonest
+first, each as "name · when": **In 1 hour**, **In 3 hours**, **This evening**
+(6:00 PM, while still ahead), **Tomorrow** (9:00 AM) and **Next week** (Mon
+9:00 AM; on a Monday, the one a week on). Times already past are left out, and
+two that fall on the same minute show once. **Custom…** opens a dialog on
+tomorrow at 9:00 AM; it accepts only a time still ahead and says the moment in
+words under its title.
+
+- The thread moves to **Asleep** at once and its corner counts down.
+- At its time it returns to the top of Activity, ranked by when it woke, with
+  the yellow **Woke** glyph. The list checks once a minute, so this can take up
+  to a minute. Opening the thread clears the glyph.
+- **Wake** in a sleeping row's menu brings it back now, with the Woke glyph.
+- A sleeping thread that asks you something, needs an approval or fails wakes
+  early and for good: it shows what it asks, and once answered it shows Woke
+  rather than going back to sleep. One that only works or finishes stays
+  asleep.
+- Pinned and archived threads don't sleep.
+- Sleep times live in the plugin's own database on the bb server, so a reload
+  or another client shows the same shelf. bb itself, its CLI and `bb thread
+  list` know nothing of them. If they can't be read, the list shows every
+  thread with "Couldn't load sleep times · Retry" above it; a read that fails
+  after one that worked keeps the shelf as last read and shows the same line.
+- A write the server refuses says so in a toast: "Couldn't put this chat to
+  sleep", "Couldn't wake this chat" (Wake, or a sleeper waking early), or
+  "Couldn't mark this chat as seen" (clearing Woke on opening). The row goes
+  back to how it was, and the list doesn't try that write again.
 
 ## Renaming
 

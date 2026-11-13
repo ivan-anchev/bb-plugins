@@ -9,14 +9,34 @@ import {
 } from "@get-bb/plugin-sdk/app";
 import { Content, Item, Portal, Separator, Sub, SubContent, SubTrigger } from "@radix-ui/react-context-menu";
 import { toast } from "sonner";
+import { useMinute } from "../../data/use-minute.ts";
 import type { RowModel } from "../../model/activity.ts";
 import { CORE_KEYS, rowMenu, type MenuAction, type MenuEntry, type RowMenu } from "../../model/row-menu.ts";
 import { PORTAL_SCOPE } from "../portal-scope.ts";
+import { sleepGlyph } from "./sleep-glyphs.tsx";
 
-/** The row's menu from bb's own bound actions; Rename opens the row's own editor. */
-export function useRowMenu(row: RowModel, requestRename: (threadId: string) => void): RowMenu {
-  const bound = useThreadActions(toActionTarget(row.thread), { keys: CORE_KEYS, requestRename });
-  return rowMenu(row, bound, { copyId: () => void copyThreadId(row.thread.id) });
+/** What a row's Sleep and Wake do: the list owns the sleeps. */
+export type RowSleep = { sleep(threadId: string, until: number): void; wake(threadId: string): void };
+
+/** What the row opens itself: its title editor (Rename) and its Custom… dialog. */
+type RowOwn = { requestRename(threadId: string): void; sleepCustom(): void };
+
+/** The row's menu from bb's own bound actions, the list's Sleep and the row's own Rename and Custom…. */
+export function useRowMenu(row: RowModel, sleep: RowSleep, own: RowOwn): RowMenu {
+  const id = row.thread.id;
+  const bound = useThreadActions(toActionTarget(row.thread), { keys: CORE_KEYS, requestRename: own.requestRename });
+  const now = useMinute();
+  return rowMenu(
+    row,
+    bound,
+    {
+      copyId: () => void copyThreadId(id),
+      sleep: (until) => sleep.sleep(id, until),
+      wake: () => sleep.wake(id),
+      sleepCustom: own.sleepCustom,
+    },
+    now,
+  );
 }
 
 /** The open menu. `onCloseAutoFocus` lets the row take focus for its editor instead of the trigger. */
@@ -72,11 +92,12 @@ function ActionItem({ action }: { action: MenuAction }) {
   );
 }
 
-/** Zeron's glyph: 16 in an 18 box. */
-function Glyph({ icon }: { icon: string }) {
+/** Zeron's glyph: 16 in an 18 box; none, no box (Sleep's times). Sleep's own two, else bb's. */
+function Glyph({ icon }: { icon: string | null }) {
+  if (icon === null) return null;
   return (
     <span className="as-action-glyph" aria-hidden>
-      <Icon name={icon} />
+      {sleepGlyph(icon) ?? <Icon name={icon} />}
     </span>
   );
 }
