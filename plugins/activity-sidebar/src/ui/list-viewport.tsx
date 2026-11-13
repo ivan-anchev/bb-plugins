@@ -5,7 +5,7 @@ import { heirOf } from "../list/focus.ts";
 import type { ListItem } from "../list/items.ts";
 import type { SectionKey } from "../model/activity.ts";
 import { layoutItems, METRICS, visibleKeys, type Layout, type LayoutEntry } from "../list/layout.ts";
-import { Row } from "./row.tsx";
+import { Row } from "./row/row.tsx";
 import { MoreRow, Notice, SectionTitle } from "./shelf-title.tsx";
 
 /** What the items do when pressed; the viewport only places them. */

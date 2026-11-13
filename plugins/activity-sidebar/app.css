@@ -164,7 +164,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 28px;
+  min-height: 28px;
   padding: 0 8px;
   border-radius: 6px;
   color: var(--muted-foreground);
@@ -206,7 +206,71 @@
   background: var(--border);
 }
 
+/* --- A row's menu (right-click, the Menu key): Zeron's ds/menu, 232 wide, glyphs 16 in 18 ------- */
+.as-row-menu {
+  width: 232px;
+  min-width: 0;
+  max-height: var(--radix-context-menu-content-available-height);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.as-action {
+  color: var(--foreground);
+}
+.as-action[data-state="open"] {
+  background: var(--state-hover);
+}
+.as-action-glyph {
+  flex: 0 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--muted-foreground);
+}
+.as-action-glyph > * {
+  width: 16px;
+  height: 16px;
+}
+.as-action-words {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 5px 0;
+}
+/* A disabled item's reason, under its label. */
+.as-action-why {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--subtle-foreground);
+}
+.as-action-chevron {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: var(--subtle-foreground);
+}
+.as-action[data-danger],
+.as-action[data-danger] .as-action-glyph {
+  color: var(--destructive-text);
+}
+.as-action[data-danger][data-highlighted] {
+  background: color-mix(in oklch, var(--destructive) 14%, transparent);
+  color: var(--destructive-text);
+}
+.as-action[data-disabled],
+.as-action[data-disabled] .as-action-glyph {
+  color: color-mix(in oklch, var(--subtle-foreground) 65%, transparent);
+}
+
 /* --- A thread's row: its 30 slot, its words, the flat wash ------------------------------------- */
+/* The row and, laid over its corner, the button the pointer finds there. */
+.as-rowbox {
+  position: relative;
+}
 .as-row {
   display: flex;
   align-items: center;
@@ -218,7 +282,11 @@
   user-select: none;
   outline: none;
 }
-.as-row:hover {
+/* why: on the box, so the wash stays while the pointer is on the corner's button, the menu is open or
+   the title is being renamed. */
+.as-rowbox:hover .as-row,
+.as-rowbox[data-state="open"] .as-row,
+.as-row[data-editing] {
   background: var(--state-hover);
 }
 .as-row:active {
@@ -378,6 +446,61 @@
   line-height: 14px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* Under the pointer, the corner's Archive (Unarchive on the shelf): 22 square, 3 past the corner's
+   16 either side, in its place; what rests there stays, unseen, so the row doesn't reflow. While the
+   jump modifier is held, the jump key has the corner instead. */
+.as-corner-action {
+  all: unset;
+  box-sizing: border-box;
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.as-corner-action > * {
+  width: 14px;
+  height: 14px;
+}
+.as-rowbox:hover .as-corner-action {
+  display: flex;
+}
+.as-rowbox:hover:has(.as-corner-action) .as-rest {
+  visibility: hidden;
+}
+.as-rowbox[data-jumping] .as-corner-action {
+  display: none;
+}
+.as-corner-action:hover {
+  background: var(--state-hover);
+  color: var(--foreground);
+}
+.as-corner-action[aria-disabled] {
+  color: color-mix(in oklch, var(--subtle-foreground) 65%, transparent);
+  cursor: default;
+}
+.as-corner-action[aria-disabled]:hover {
+  background: none;
+}
+
+/* A title renamed in place: the field over it, in the strong row's ink. */
+.as-title-input {
+  all: unset;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 20px;
+  font: inherit;
+  font-weight: 500;
+  color: var(--foreground);
+  cursor: text;
 }
 
 /* A state's glyph in its hue: the palette's 400s; working and waiting wear the secondary ink. */
