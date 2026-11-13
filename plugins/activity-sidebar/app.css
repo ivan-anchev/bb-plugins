@@ -1,0 +1,238 @@
+/* Zeron's Activity sidebar on bb's theme. Sizes are Zeron's (ds/session_row, ds/sidebar); surfaces,
+   text and type are bb's tokens; only the state hues and the project tiles are Zeron's literals.
+   bb does not scope a plugin's stylesheet, so every class carries the `as-` prefix. */
+
+/* --- The scroller: items absolutely placed at their computed y (src/list/layout.ts) ----------- */
+.as-scroller {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 18px;
+  outline: none;
+}
+.as-scroller::-webkit-scrollbar {
+  display: none;
+}
+.as-scroller:focus-visible {
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+.as-item {
+  position: absolute;
+  top: 0;
+  left: 8px;
+  right: 8px;
+}
+
+/* --- A section's title: quiet small words ------------------------------------------------------ */
+.as-section-title,
+.as-notice {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 500;
+  color: var(--subtle-foreground);
+  white-space: nowrap;
+}
+
+/* --- A thread's row: its 30 slot, its words, the flat wash ------------------------------------- */
+.as-row {
+  display: flex;
+  align-items: center;
+  height: 30px;
+  border-radius: 8px;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+}
+.as-row:hover {
+  background: var(--state-hover);
+}
+.as-row:active {
+  background: var(--state-active);
+}
+.as-row[aria-current="page"] {
+  background: var(--surface-selected);
+}
+.as-row:focus-visible {
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+.as-slot {
+  flex: 0 0 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+}
+/* The agent's mark: faint at rest, firm while the thread asks to be seen. */
+.as-mark {
+  display: flex;
+  width: 14px;
+  height: 14px;
+  opacity: 0.5;
+  transform: translateY(-0.5px);
+}
+.as-mark > * {
+  width: 14px;
+  height: 14px;
+}
+.as-row[data-strong] .as-mark {
+  opacity: 0.9;
+}
+.as-line {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 8px;
+}
+.as-lead {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* Text that doesn't fit fades out at its end, never cut to "…". */
+.as-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+.as-title[data-over] {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent);
+}
+.as-row[data-strong] .as-title {
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+/* A project's tile: its initial on its hue's 500, inked in its 50 (Zeron's palette). */
+.as-tile {
+  flex: 0 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--as-tile-bg);
+  color: var(--as-tile-ink);
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 600;
+  transform: translateY(-0.5px);
+}
+.as-tile[data-hue="violet"] { --as-tile-bg: #9579ee; --as-tile-ink: #f7f6fe; }
+.as-tile[data-hue="blue"] { --as-tile-bg: #4b8ff3; --as-tile-ink: #f2f7fe; }
+.as-tile[data-hue="emerald"] { --as-tile-bg: #27ac7a; --as-tile-ink: #effaf4; }
+.as-tile[data-hue="sky"] { --as-tile-bg: #149dd2; --as-tile-ink: #eff9fe; }
+.as-tile[data-hue="amber"] { --as-tile-bg: #d68d0a; --as-tile-ink: #fef6ec; }
+.as-tile[data-hue="rose"] { --as-tile-bg: #e25e76; --as-tile-ink: #fef4f5; }
+.as-tile[data-hue="lime"] { --as-tile-bg: #86b241; --as-tile-ink: #f4f9ef; }
+.as-tile[data-hue="teal"] { --as-tile-bg: #18aa99; --as-tile-ink: #effaf7; }
+.as-tile[data-hue="orange"] { --as-tile-bg: #e07434; --as-tile-ink: #fef5f0; }
+.as-tile[data-hue="indigo"] { --as-tile-bg: #7584f4; --as-tile-ink: #f4f6fe; }
+.as-tile[data-hue="pink"] { --as-tile-bg: #d6629e; --as-tile-ink: #fff3f8; }
+.as-tile[data-hue="cyan"] { --as-tile-bg: #09a6b7; --as-tile-ink: #eff9fb; }
+
+/* Threads running under it: the working dot and a count on its wash. */
+.as-pill {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.as-pill::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0.1;
+}
+.as-pill > i {
+  position: relative;
+  display: block;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+/* --- The corner: its state, else its time; one of them, never both ----------------------------- */
+.as-corner {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 16px;
+  height: 16px;
+}
+.as-rest {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.as-corner[data-jump] .as-rest {
+  visibility: hidden;
+}
+.as-jump {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  height: 16px;
+}
+.as-hint {
+  color: var(--subtle-foreground);
+  font-size: 11px;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A state's glyph in its hue: the palette's 400s; working and waiting wear the secondary ink. */
+.as-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+.as-state[data-state="working"],
+.as-state[data-state="waiting"] { color: var(--muted-foreground); }
+.as-state[data-state="connecting"] { color: #74acfe; }
+.as-state[data-state="input"] { color: #93a3fe; }
+.as-state[data-state="approval"] { color: #e9a64b; }
+.as-state[data-state="done"] { color: #5dc496; }
+.as-state[data-state="failed"] { color: #f9837b; }
+.as-state[data-state="woke"] { color: #d7bd54; }
+.as-ring {
+  display: block;
+}

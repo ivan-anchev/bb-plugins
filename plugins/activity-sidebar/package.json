@@ -1,0 +1,46 @@
+{
+  "name": "bb-plugin-activity-sidebar",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "keywords": [
+    "bb-plugin",
+    "sidebar",
+    "threads"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ivan-anchev/bb-plugins.git",
+    "directory": "plugins/activity-sidebar"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "node --test 'src/**/*.test.ts'",
+    "build": "bb plugin build"
+  },
+  "engines": {
+    "bb": ">=0.48",
+    "bbPluginSdk": ">=0.6.104"
+  },
+  "bbMarketplace": {
+    "listed": false
+  },
+  "bb": {
+    "name": "Activity Sidebar",
+    "description": "Replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it. Each row shows the thread's agent, its project's coloured initial, its title, how many threads run under it, and its state or how long ago it last moved.",
+    "branding": {
+      "icon": "Activity"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx"
+  },
+  "dependencies": {
+    "@get-bb/plugin-sdk": "0.6.104"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "typescript": "^5.7.0"
+  }
+}

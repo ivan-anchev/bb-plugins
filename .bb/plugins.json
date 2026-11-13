@@ -4,6 +4,10 @@
   "name": "ivan-anchev",
   "plugins": [
     {
+      "name": "activity-sidebar",
+      "source": "./plugins/activity-sidebar"
+    },
+    {
       "name": "boat-sandbox",
       "source": "./plugins/boat-sandbox"
     },
