@@ -1,8 +1,9 @@
 // A Zeron state's glyph, 14 in a 16 box on a row (12 in the hover card), in its state's hue
 // (app.css `.as-state[data-state]`).
-// Under-way states draw the ring; issue 08 animates it, so here it is its still frame.
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+// Under-way states draw the working ring (ui/motion/ring.ts).
+import { useRef, type ReactNode } from "react";
 import { STATE_NAME, type ZState } from "../model/state.ts";
+import { useRing } from "./motion/ring.ts";
 
 export function StateGlyph({ state, size = 14 }: { state: ZState; size?: 12 | 14 }) {
   return (
@@ -17,7 +18,7 @@ function glyph(state: ZState, size: number): ReactNode {
     case "working":
     case "connecting":
     case "waiting":
-      return <StillRing size={size} />;
+      return <Ring size={size} />;
     case "input":
       return (
         <Icon size={size}>
@@ -69,35 +70,9 @@ function Icon({ size, children }: { size: number; children: ReactNode }) {
   );
 }
 
-/** Zeron's ring at rest (ds/status RING): eight even dashes on the 24 grid, in the box's colour. */
-function StillRing({ size }: { size: number }) {
+/** Zeron's working ring (ds/status RING), turning on the shared clock, in the box's colour. */
+function Ring({ size }: { size: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  useLayoutEffect(() => {
-    const canvas = ref.current;
-    if (canvas !== null) drawRestFrame(canvas, size);
-  }, [size]);
+  useRing(ref, size);
   return <canvas ref={ref} className="as-ring" style={{ width: size, height: size }} aria-hidden />;
-}
-
-const HALF_DASH = 10.95; // degrees either side of a dash's centre
-const DEG = Math.PI / 180;
-
-function drawRestFrame(canvas: HTMLCanvasElement, size: number): void {
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = size * dpr;
-  canvas.height = size * dpr;
-  const ctx = canvas.getContext("2d");
-  // why: a 2d context is null only when the canvas already holds another kind; this one never does.
-  if (ctx === null) return;
-  const u = size / 24;
-  ctx.scale(dpr, dpr);
-  ctx.strokeStyle = getComputedStyle(canvas).color;
-  ctx.lineWidth = 2 * u;
-  ctx.lineCap = "round";
-  for (let i = 0; i < 8; i++) {
-    const mid = 45 * i - 90;
-    ctx.beginPath();
-    ctx.arc(size / 2, size / 2, 10 * u, (mid - HALF_DASH) * DEG, (mid + HALF_DASH) * DEG);
-    ctx.stroke();
-  }
 }
