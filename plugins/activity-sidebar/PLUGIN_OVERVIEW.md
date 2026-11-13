@@ -1,10 +1,11 @@
 Replaces bb's thread list with one Activity list of every parent thread from
-every project, latest first, with pinned threads above it and the Working and
-Archived shelves folded at its foot. A filter narrows it to one project. Each
-row shows the thread's agent, its project's coloured initial, its title, how
-many threads run under it, and its state or how long ago it last moved.
-Right-click a row for its menu (rename, pin, copy, archive, delete); under the
-pointer, its corner offers Archive.
+every project, latest first, with pinned threads above it and the Working,
+Asleep and Archived shelves folded at its foot. A filter narrows it to one
+project. Each row shows the thread's agent, its project's coloured initial, its
+title, how many threads run under it, and its state or how long ago it last
+moved. Right-click a row for its menu (rename, pin, copy, sleep or wake,
+archive, delete); under the pointer, its corner offers Archive. A thread put to
+sleep waits on Asleep until its time, then comes back to the top.
 
 ## What you get
 
@@ -14,8 +15,8 @@ pointer, its corner offers Archive.
   Subthreads and bb's hidden helper threads never get
   a row of their own.
 - **Shelves** at the foot of the list: **Working** holds the threads under way
-  (running, or waiting on background work), and **Archived** holds bb's
-  archived threads. They start folded, showing how many they hold; while bb
+  (running, or waiting on background work), **Asleep** the threads put to
+  sleep, soonest to wake first, and **Archived** holds bb's archived threads. They start folded, showing how many they hold; while bb
   has more archived threads than it has loaded, the count reads `50+`. Opened,
   Archived shows its latest 10 and loads more 25 at a time.
 - Click any section's title to fold or unfold it. The filter button at the end
@@ -30,11 +31,19 @@ pointer, its corner offers Archive.
   highlighted. Clicking a row opens the thread; dragging it out to the main
   area opens it in a split.
 - Right-click a row (or press the Menu key or Shift+F10 on it) for its menu:
-  Rename, Pin or Unpin, Copy (the bb thread link or the thread ID), Archive or
-  Unarchive, and Delete…. As in bb's own menu, Delete always asks first,
+  Rename, Pin or Unpin, Copy (the bb thread link or the thread ID), Sleep (or
+  Wake), Archive or Unarchive, and Delete…. As in bb's own menu, Delete always asks first,
   Archive asks only when the thread has subthreads, and archiving offers Undo.
   The menu won't archive a thread whose agent is still working until it
   stops.
+- **Sleep** puts a thread away until a time: in 1 hour, in 3 hours, this
+  evening, tomorrow at 9, next Monday at 9, or a moment you pick with Custom….
+  It waits on Asleep, its corner saying how soon it wakes (`45m`, `3h`, `2d`).
+  At its time it comes back to the top of Activity with a yellow alarm glyph,
+  which opening the thread clears. It wakes early, for good, when it asks you
+  something or fails, and Wake brings it back at once. Pinned and archived
+  threads don't sleep. Sleep times are kept by the plugin's server, so every
+  client shows the same; bb itself and its CLI know nothing of them.
 - Under the pointer, a row's corner becomes an Archive button (Unarchive on the
   Archived shelf). As in Zeron, it works even while the agent does, and bb
   stops the agent. Double-click a row to rename it in place.
@@ -42,6 +51,7 @@ pointer, its corner offers Archive.
 ## How it works
 
 The list reads bb's own live sidebar data, so it costs no extra request and
-updates exactly when bb's list would. It draws only the rows on screen. The New
+updates exactly when bb's list would. Sleep times are one small read from the
+plugin's own database, refreshed on every client when one changes. It draws only the rows on screen. The New
 thread button, search, navigation and footer stay bb's. To go back to bb's list,
 choose it under Settings → Appearance → Sidebar.

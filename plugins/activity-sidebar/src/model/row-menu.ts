@@ -1,8 +1,10 @@
-// A row's menu as data, in Zeron's order and words (Z:screens/shell/sidebar.luau:1213-1270): Rename, Pin,
-// Copy ▸, a rule, Archive (or Unarchive), Delete…. Every bb entry runs bb's own bound action, so bb's
-// confirmations, Undo toast and errors stay; this only chooses which, in what order, under which name.
+// A row's menu as data, in Zeron's order and words (Z:screens/shell/sidebar.luau:1156-1270): Rename, Pin,
+// Copy ▸, Sleep ▸ (or Wake), a rule, Archive (or Unarchive), Delete…. Every bb entry runs bb's own bound
+// action, so bb's confirmations, Undo toast and errors stay; this only chooses which, in what order,
+// under which name. Sleep is the list's own.
 import type { PluginBoundThreadAction, PluginThreadActionEntry } from "@get-bb/plugin-sdk/app";
 import type { RowModel } from "./activity.ts";
+import { sleepPresets } from "./sleep.ts";
 
 /** bb's own actions the menu uses, as bb 0.49 registers them (checked against its registrations). */
 const CORE = {
@@ -19,22 +21,28 @@ export const CORE_KEYS: readonly string[] = Object.values(CORE);
 /** Zeron's reason a working thread can't be archived (Z:locales/en.json shell.sidebar.menu.archive_working). */
 const STILL_WORKING = "Stop it first: its agent is still working";
 
-/** One item; `why`, when set, says on a muted second line why it is disabled. */
-export type MenuAction = { kind: "action"; key: string; label: string; icon: string; danger: boolean; why: string | null; disabled: boolean; run(): void };
-export type MenuEntry = MenuAction | { kind: "submenu"; key: string; label: string; icon: string; entries: readonly MenuAction[] } | { kind: "rule"; key: string };
+/**
+ * One item; `icon` null draws no glyph slot (Sleep's times). `why`, when set, says on a muted second
+ * line why it is disabled.
+ */
+export type MenuAction = { kind: "action"; key: string; label: string; icon: string | null; danger: boolean; why: string | null; disabled: boolean; run(): void };
+/** One of bb's own actions: each has its glyph. */
+type BbAction = MenuAction & { icon: string };
+type MenuRule = { kind: "rule"; key: string };
+export type MenuEntry = MenuAction | { kind: "submenu"; key: string; label: string; icon: string; entries: readonly (MenuAction | MenuRule)[] } | MenuRule;
 
 /** The menu, and what the row's corner offers under the pointer: Archive, or Unarchive on the shelf. */
-export type RowMenu = { entries: readonly MenuEntry[]; hoverAction: MenuAction | null };
+export type RowMenu = { entries: readonly MenuEntry[]; hoverAction: BbAction | null };
 
 /** What the menu does itself rather than through bb. */
-type OwnActions = { copyId(): void };
+type OwnActions = { copyId(): void; sleep(until: number): void; wake(): void; sleepCustom(): void };
 
 /**
- * The row's menu from bb's bound actions. An action bb doesn't offer drops its entry. The menu's
- * Archive is disabled while the agent works or waits on background work (Zeron's rule,
- * Z:screens/shell/sidebar.luau:1245); the corner's is not (Z:ds/sidebar.luau:1416-1420).
+ * The row's menu from bb's bound actions, Sleep's times counted from `now`. An action bb doesn't offer
+ * drops its entry. The menu's Archive is disabled while the agent works or waits on background work
+ * (Zeron's rule, Z:screens/shell/sidebar.luau:1245); the corner's is not (Z:ds/sidebar.luau:1416-1420).
  */
-export function rowMenu(row: RowModel, bound: readonly PluginThreadActionEntry[], own: OwnActions): RowMenu {
+export function rowMenu(row: RowModel, bound: readonly PluginThreadActionEntry[], own: OwnActions, now: number): RowMenu {
   const t = row.thread;
   const actions = new Map(bound.map((e) => [e.key, e.action]));
   const bb = (key: string, label: string, icon: string, why: string | null = null) => fromBb(key, actions.get(key), label, icon, why);
@@ -46,6 +54,7 @@ export function rowMenu(row: RowModel, bound: readonly PluginThreadActionEntry[]
     // why: an archived thread can't hold a pin (prototype sessionMenu); Zeron's one glyph for both.
     t.isArchived ? null : bb(CORE.pin, t.isPinned ? "Unpin" : "Pin", "Pin"),
     { kind: "submenu", key: "copy", label: "Copy", icon: "Copy", entries: copies },
+    sleepEntry(row, own, now),
     { kind: "rule", key: "rule" },
     archive(isBusy(row) ? STILL_WORKING : null),
     bb(CORE.delete, "Delete…", "Trash2"),
@@ -58,12 +67,26 @@ export function rowMenu(row: RowModel, bound: readonly PluginThreadActionEntry[]
 
 // ------------------------------------------------------------------ layer 2
 
+/**
+ * Asleep, Wake; otherwise Sleep ▸ with Zeron's times, each "{name} · {when}", then Custom…
+ * (Z:screens/shell/sidebar.luau:1156-1191). A pin holds its row in place and Archived has left the
+ * work, so neither offers Sleep.
+ */
+function sleepEntry(row: RowModel, own: OwnActions, now: number): MenuEntry | null {
+  const t = row.thread;
+  if (t.isPinned || t.isArchived) return null;
+  if (row.asleepUntil !== null) return ownAction("wake", "Wake", "Sun", own.wake);
+  const times = sleepPresets(new Date(now)).map((p) => ownAction(`sleep:${p.label}`, `${p.label} · ${p.when}`, null, () => own.sleep(p.until)));
+  const entries = [...times, { kind: "rule", key: "sleep:rule" } as const, ownAction("sleep:custom", "Custom…", null, own.sleepCustom)];
+  return { kind: "submenu", key: "sleep", label: "Sleep", icon: "Moon", entries };
+}
+
 /** Zeron's guard reads working or waiting only, not connecting (Z:screens/shell/sidebar.luau:1245). */
 function isBusy(row: RowModel): boolean {
   return row.corner.kind === "state" && (row.corner.state === "working" || row.corner.state === "waiting");
 }
 
-function fromBb(key: string, action: PluginBoundThreadAction | undefined, label: string, icon: string, why: string | null): MenuAction | null {
+function fromBb(key: string, action: PluginBoundThreadAction | undefined, label: string, icon: string, why: string | null): BbAction | null {
   if (action === undefined) return null;
   return {
     kind: "action",
@@ -77,7 +100,7 @@ function fromBb(key: string, action: PluginBoundThreadAction | undefined, label:
   };
 }
 
-function ownAction(key: string, label: string, icon: string, run: () => void): MenuAction {
+function ownAction(key: string, label: string, icon: string | null, run: () => void): MenuAction {
   return { kind: "action", key, label, icon, danger: false, why: null, disabled: false, run };
 }
 
