@@ -1,6 +1,6 @@
 ---
 name: activity-sidebar
-description: Explain the Activity Sidebar plugin, which replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it, the Working, Asleep and Archived shelves folded at its foot and a project filter, each row showing the thread's agent, project initial, title, running subthreads and its state or age, with a right-click menu (including Sleep and Wake), a hover Archive button and a hover card with the thread's details and subthread tree. Use when the user asks what the Activity list shows, why a thread is or isn't in it, what a row's corner glyph means, what the shelves and the filter do, how Sleep works and when a sleeping thread wakes, what a row's menu, its hover Archive button and its hover card do, or how to switch back to bb's own list.
+description: Explain the Activity Sidebar plugin, which replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it, the Working, Asleep and Archived shelves folded at its foot and a project filter, each row showing the thread's agent, project initial, title, running subthreads and its state or age, with a right-click menu (including Sleep and Wake), a hover Archive button and a hover card with the thread's details, its plan while it works and its subthread tree. Use when the user asks what the Activity list shows, why a thread is or isn't in it, what a row's corner glyph means, what the shelves and the filter do, how Sleep works and when a sleeping thread wakes, what a row's menu, its hover Archive button and its hover card do, or how to switch back to bb's own list.
 ---
 
 # Activity Sidebar
@@ -156,6 +156,16 @@ window. It shows:
 - the machine it runs on (left out when bb doesn't know it), its project, and
   its branch, with "· worktree off main" for a worktree;
 - its pull request's title and badge, when it has one;
+- while it works, its plan: bb's to-do list for the thread (filled by an agent
+  that keeps one, e.g. Claude Code's task tools), as "Todo 3/9" and its steps,
+  each a green check (done), the working ring (in progress) or a faint ring
+  (pending). Past six steps it shows three, the step in progress and one
+  either side, with "2 earlier" / "4 later"; pressing either shows the whole
+  plan while the card stays open. The plan follows the agent live: a step it
+  completes shows completed in the open card. No plan, or a thread that isn't
+  working, shows no Todo section. When reading the plan fails, the section
+  says so with Retry: "Couldn't load the plan", or "Couldn't update the plan"
+  above the steps last read, which may be out of date;
 - its subthreads as a tree, each a small row: agent mark, title, and its state
   or how long ago it moved. Subthreads in the thread's own checkout hang off it
   directly; those in another checkout hang under that branch's head ("worktree
@@ -176,8 +186,10 @@ out, archived, put to sleep or moved to another shelf). There is no card on a
 phone-width screen.
 
 From the keyboard: with a row focused and its card open, Tab moves into the
-card's subthreads and Enter opens one. Shift+Tab off the first, or Escape,
-goes back to the row; Tab past the last goes on to what follows the list. When
+card's plan folds, Retry and subthreads; Enter unfolds the plan or opens a subthread. Shift+Tab off the first, or Escape,
+goes back to the row; Tab past the last goes on to what follows the list. When the plan changes under focus
+(a fold the next step no longer needs, a Retry that worked), focus stays in the card, on the plan, or on the
+card itself once the plan has gone. When
 the card closes with focus in it, focus goes back to its row, or to the next
 row when its own has left the list.
 
