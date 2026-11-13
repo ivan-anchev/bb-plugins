@@ -29,7 +29,8 @@ the bb you install it on. Try it on a throwaway server
 - `src/list/`: pure flattening into list items and their computed layout.
 - `src/contract.ts`: the app/server RPC contract and its one record, a sleep.
 - `src/server/`: the sleeps' SQLite store and their RPC handlers.
-- `src/data/`: the clock, the sleeps read and writes, and the reader's choices
-  kept in local storage.
+- `src/data/`: the clock, the sleeps read and writes, what a thread asks, and the
+  reader's choices kept in local storage.
+- `src/data/pull-request/`: a row's pull request, read from bb's GitHub PR Status plugin.
 - `src/ui/`: the slot component, the windowed scroller and the shelf titles.
-- `src/ui/row/`: the row, its menu and its rename field.
+- `src/ui/row/`: the row, its menu, its pull request badge and its rename field.
