@@ -44,6 +44,22 @@ commands and no settings.
 - The folds and the filter are kept in this browser's local storage, so they
   survive a reload but aren't shared with other clients.
 
+## Motion
+
+- A row that changes place glides there (180 to 240 ms, longer for longer
+  moves): a thread starting work slides down into Working, and finishing, back
+  to the top. A row that arrives in a section opens in and fades in; one that
+  leaves (archived, deleted, put to sleep) fades and closes, and the rows
+  around it slide to close the gap.
+- Unfolding a section opens it over 260 ms, its rows fading in once there is
+  room; folding fades them out first, then closes.
+- The working ring turns: eight dashes stretch around it, then rest, every
+  ring on screen in step.
+- With the system's Reduce motion on, nothing moves: rows take their places at
+  once, the hover card appears without a fade, and the rings stand still.
+  Turning it on mid-move stops the move where it is and shows the list as it
+  now stands.
+
 ## A row
 
 From left to right:
@@ -60,7 +76,7 @@ From left to right:
 5. A pill with how many threads run under it (its own background agents plus
    every running subthread), when any do.
 6. The corner, which holds exactly one of:
-   - a state glyph: a dashed ring for working, connecting (blue) or waiting on
+   - a state glyph: a turning dashed ring for working, connecting (blue) or waiting on
      background work; a speech bubble for awaiting input; an amber shield for
      pending approval (the agent asks leave to run something); a green check for
      done (an unread finished turn); a red mark for failed; a yellow alarm

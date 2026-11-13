@@ -22,11 +22,19 @@
 .as-scroller:focus-visible {
   box-shadow: inset 0 0 0 1.5px var(--ring);
 }
+.as-content {
+  position: relative;
+  overflow: clip;
+}
 .as-item {
   position: absolute;
   top: 0;
   left: 8px;
   right: 8px;
+}
+/* A row leaving, drawn where it stood while it fades and closes (src/ui/motion/use-layout-motion.ts). */
+.as-ghost {
+  pointer-events: none;
 }
 
 /* --- A section's title: quiet small words, brighter under the pointer, no caret; folded, how many

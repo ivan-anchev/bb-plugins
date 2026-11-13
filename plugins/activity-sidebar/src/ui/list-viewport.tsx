@@ -1,11 +1,13 @@
 // The scroller: lays the items out, mounts only what is on screen, and owns the list's keyboard.
-// Every item is absolutely placed at its computed y.
+// Every item is absolutely placed at its computed y; ui/motion carries it there from where it stood.
 import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { heirOf } from "../list/focus.ts";
 import type { ListItem, NoticeKey } from "../list/items.ts";
 import type { SectionKey } from "../model/activity.ts";
 import { layoutItems, METRICS, visibleKeys, type Layout, type LayoutEntry } from "../list/layout.ts";
+import type { Ghost } from "../list/motion-plan.ts";
 import { cardKeyOf, HoverCard, type CardData } from "./card/hover-card.tsx";
+import { useLayoutMotion } from "./motion/use-layout-motion.ts";
 import { Row } from "./row/row.tsx";
 import type { RowSleep } from "./row/row-menu.tsx";
 import { MoreRow, Notice, SectionTitle } from "./shelf-title.tsx";
@@ -33,10 +35,12 @@ export function ListViewport({ items, card, ...actions }: Props) {
   const layout = useMemo(() => layoutItems(items, height), [items, height]);
   const stopKeys = useMemo(() => stopsOf(layout).map((entry) => entry.key), [layout]);
   const focus = useStopFocus(nodes, stopKeys, scroller);
+  const motion = useLayoutMotion(layout, nodes, { top, height });
 
   // why: the focused item stays mounted when it scrolls away or while its menu is open, so focus never
-  // drops to the page, and a closing menu can hand focus back to its trigger.
-  const mounted = new Set(visibleKeys(layout, top, height));
+  // drops to the page, and a closing menu can hand focus back to its trigger. An item on its way across
+  // the view stays mounted until it lands, so one gliding out of view is seen going.
+  const mounted = new Set([...visibleKeys(layout, top, height), ...motion.passing]);
   if (focus.key !== null) mounted.add(focus.key);
 
   return (
@@ -55,14 +59,21 @@ export function ListViewport({ items, card, ...actions }: Props) {
         }}
         onKeyDown={(e) => moveFocus(e, layout, focus, scroller)}
       >
-        <div style={{ height: layout.height }} />
-        {layout.entries
-          .filter((entry) => mounted.has(entry.key))
-          .map((entry) => (
-            <Placed key={entry.key} entry={entry} nodes={nodes} onFocus={() => focus.hold(entry.key)}>
-              {renderItem(entry.item, actions)}
-            </Placed>
+        {/* why: clipped to the layout's height, so what moves never changes how far the list scrolls. */}
+        <div className="as-content" style={{ height: layout.height }}>
+          {layout.entries
+            .filter((entry) => mounted.has(entry.key))
+            .map((entry) => (
+              <Placed key={entry.key} entry={entry} nodes={nodes} onFocus={() => focus.hold(entry.key)}>
+                {renderItem(entry.item, actions)}
+              </Placed>
+            ))}
+          {motion.ghosts.map((ghost) => (
+            <Gone key={`ghost:${ghost.entry.key}`} ghost={ghost} nodeRef={motion.ghostRef(ghost.entry.key)}>
+              {renderItem(ghost.entry.item, actions)}
+            </Gone>
           ))}
+        </div>
         {/* why: in here, so focus leaving the card (portaled; it adds nothing here) bubbles to onBlur above, as a menu's does. */}
         {card !== null && <HoverCard scroller={scroller} items={items} data={card} listFocus={focus} onNavigate={actions.onNavigate} />}
       </div>
@@ -108,6 +119,15 @@ function Placed({ entry, nodes, onFocus, children }: { entry: LayoutEntry; nodes
         else nodes.delete(entry.key);
       }}
     >
+      {children}
+    </div>
+  );
+}
+
+/** A leaver as it stood, closing away: out of reach of the pointer, the keyboard and screen readers. */
+function Gone({ ghost, nodeRef, children }: { ghost: Ghost; nodeRef(node: HTMLElement | null): void; children: ReactNode }) {
+  return (
+    <div className="as-item as-ghost" aria-hidden inert style={{ transform: `translateY(${ghost.entry.y}px)`, height: ghost.entry.h }} ref={nodeRef}>
       {children}
     </div>
   );
