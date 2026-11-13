@@ -5,7 +5,9 @@ project. Each row shows the thread's agent, its project's coloured initial, its
 title, its pull request, how many threads run under it, and its state or how
 long ago it last moved. Right-click a row for its menu (rename, pin, copy, sleep or wake,
 archive, delete); under the pointer, its corner offers Archive. A thread put to
-sleep waits on Asleep until its time, then comes back to the top.
+sleep waits on Asleep until its time, then comes back to the top. Rest on a row
+for its card: its state and since when, machine, project, branch, pull request
+and a tree of its subthreads to open.
 
 ## What you get
 
@@ -45,6 +47,16 @@ sleep waits on Asleep until its time, then comes back to the top.
   something or fails, and Wake brings it back at once. Pinned and archived
   threads don't sleep. Sleep times are kept by the plugin's server, so every
   client shows the same; bb itself and its CLI know nothing of them.
+- Rest the pointer on a row (or move keyboard focus to it) and, after a
+  moment, its card opens beside it: the full title, its state and since when
+  ("Working · for 4m", "Asleep · wakes at 9:00 AM", "Completed · 5m ago"), the
+  machine, project and branch it runs on ("· worktree off main"), its pull
+  request, and its subthreads as a small tree, busy ones first. Click a
+  subthread to open it, or "Show all" to open the thread. Once a card is open,
+  moving to another row swaps it at once, and the pointer can cross other rows
+  on its way to the card. From a focused row, Tab reaches its subthreads and
+  Escape comes back. Escape, a click, a right-click or a scroll puts it away.
+  There is no card on a phone-width screen.
 - Under the pointer, a row's corner becomes an Archive button (Unarchive on the
   Archived shelf). As in Zeron, it works even while the agent does, and bb
   stops the agent. Double-click a row to rename it in place.

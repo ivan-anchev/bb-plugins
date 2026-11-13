@@ -5,6 +5,7 @@ import { heirOf } from "../list/focus.ts";
 import type { ListItem, NoticeKey } from "../list/items.ts";
 import type { SectionKey } from "../model/activity.ts";
 import { layoutItems, METRICS, visibleKeys, type Layout, type LayoutEntry } from "../list/layout.ts";
+import { cardKeyOf, HoverCard, type CardData } from "./card/hover-card.tsx";
 import { Row } from "./row/row.tsx";
 import type { RowSleep } from "./row/row-menu.tsx";
 import { MoreRow, Notice, SectionTitle } from "./shelf-title.tsx";
@@ -21,9 +22,10 @@ type ItemActions = {
   filterMenu: ReactNode;
 };
 
-type Props = ItemActions & { items: readonly ListItem[] };
+/** `card`: what the hover card reads; null where no card shows (a compact viewport). */
+type Props = ItemActions & { items: readonly ListItem[]; card: CardData | null };
 
-export function ListViewport({ items, ...actions }: Props) {
+export function ListViewport({ items, card, ...actions }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const nodes = useRef(new Map<string, HTMLElement>()).current;
   const height = useHeight(scroller);
@@ -38,29 +40,33 @@ export function ListViewport({ items, ...actions }: Props) {
   if (focus.key !== null) mounted.add(focus.key);
 
   return (
-    <div
-      ref={scroller}
-      className="as-scroller"
-      tabIndex={0}
-      aria-label="Threads"
-      onScroll={(e) => setTop(e.currentTarget.scrollTop)}
-      onFocus={(e) => {
-        if (e.target === e.currentTarget) focus.hold(null);
-      }}
-      onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget)) focus.hold(null);
-      }}
-      onKeyDown={(e) => moveFocus(e, layout, focus, scroller)}
-    >
-      <div style={{ height: layout.height }} />
-      {layout.entries
-        .filter((entry) => mounted.has(entry.key))
-        .map((entry) => (
-          <Placed key={entry.key} entry={entry} nodes={nodes} onFocus={() => focus.hold(entry.key)}>
-            {renderItem(entry.item, actions)}
-          </Placed>
-        ))}
-    </div>
+    <>
+      <div
+        ref={scroller}
+        className="as-scroller"
+        tabIndex={0}
+        aria-label="Threads"
+        onScroll={(e) => setTop(e.currentTarget.scrollTop)}
+        onFocus={(e) => {
+          if (e.target === e.currentTarget) focus.hold(null);
+        }}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget)) focus.hold(null);
+        }}
+        onKeyDown={(e) => moveFocus(e, layout, focus, scroller)}
+      >
+        <div style={{ height: layout.height }} />
+        {layout.entries
+          .filter((entry) => mounted.has(entry.key))
+          .map((entry) => (
+            <Placed key={entry.key} entry={entry} nodes={nodes} onFocus={() => focus.hold(entry.key)}>
+              {renderItem(entry.item, actions)}
+            </Placed>
+          ))}
+        {/* why: in here, so focus leaving the card (portaled; it adds nothing here) bubbles to onBlur above, as a menu's does. */}
+        {card !== null && <HoverCard scroller={scroller} items={items} data={card} listFocus={focus} onNavigate={actions.onNavigate} />}
+      </div>
+    </>
   );
 }
 
@@ -86,13 +92,15 @@ function renderItem(item: ListItem, actions: ItemActions): ReactNode {
 
 /**
  * An item at its y, registered under its key so the keyboard can focus it. React bubbles focus through
- * portals, so `onFocus` also fires for a menu the item opens.
+ * portals, so `onFocus` also fires for a menu the item opens. A row carries its card key, which the
+ * hover card finds it by.
  */
 function Placed({ entry, nodes, onFocus, children }: { entry: LayoutEntry; nodes: Map<string, HTMLElement>; onFocus(): void; children: ReactNode }) {
   return (
     <div
       className="as-item"
       data-key={entry.key}
+      data-card={entry.item.kind === "row" ? cardKeyOf(entry.item) : undefined}
       onFocus={onFocus}
       style={{ transform: `translateY(${entry.y}px)`, height: entry.h }}
       ref={(node) => {
@@ -108,16 +116,19 @@ function Placed({ entry, nodes, onFocus, children }: { entry: LayoutEntry; nodes
 type StopFocus = {
   /** The key of the item holding focus, or the item the keyboard is moving focus to. */
   key: string | null;
-  /** Focus entered the item under `key` (itself or a menu it portals), or left the list (null). */
+  /** Focus entered the item under `key` (itself, a menu it portals, or its hover card), or left the list (null). */
   hold(key: string | null): void;
   moveTo(key: string): void;
+  /** Focus back onto the item holding it, from a portaled part of it that went (its hover card). */
+  refocus(): void;
 };
 
 /**
  * Follows focus by key, not index, so an item keeps focus when the list reorders around it. When the
  * focused item leaves the list (its thread archived or deleted elsewhere, its section folded), focus
  * passes to its neighbour, or to the scroller once none is left. A null key means focus is outside the
- * list: nothing moves. Focus in a menu an item portals (the project filter) is still that item's.
+ * list: nothing moves. Focus in a menu an item portals (the project filter) or in a row's hover card is
+ * still that item's.
  */
 function useStopFocus(nodes: Map<string, HTMLElement>, stopKeys: readonly string[], scroller: RefObject<HTMLElement | null>): StopFocus {
   const [key, setKey] = useState<string | null>(null);
@@ -137,8 +148,7 @@ function useStopFocus(nodes: Map<string, HTMLElement>, stopKeys: readonly string
   useLayoutEffect(() => {
     if (!moving.current || key === null) return;
     moving.current = false;
-    // why: a row is its link; a title, "Show more" or a notice is its first button.
-    nodes.get(key)?.querySelector<HTMLElement>("a, button")?.focus({ preventScroll: true });
+    focusItem(nodes, key);
   }, [key, nodes]);
 
   return {
@@ -148,7 +158,15 @@ function useStopFocus(nodes: Map<string, HTMLElement>, stopKeys: readonly string
       moving.current = true;
       setKey(next);
     },
+    refocus() {
+      if (key !== null) focusItem(nodes, key);
+    },
   };
+}
+
+/** A row is its link; a title, "Show more" or a notice is its first button. */
+function focusItem(nodes: Map<string, HTMLElement>, key: string) {
+  nodes.get(key)?.querySelector<HTMLElement>("a, button")?.focus({ preventScroll: true });
 }
 
 /**

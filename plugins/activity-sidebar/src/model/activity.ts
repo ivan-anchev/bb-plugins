@@ -5,7 +5,7 @@ import type { SleepRecord } from "../contract.ts";
 import { hueOf, type Hue } from "./project-hue.ts";
 import { wakesIn } from "./sleep.ts";
 import { NEEDS_YOU, stateOf, UNDER_WAY, type ZState } from "./state.ts";
-import { indexThreads } from "./thread-index.ts";
+import { indexThreads, type ThreadIndex } from "./thread-index.ts";
 import { ago } from "./time.ts";
 
 export type SectionKey = "pinned" | "activity" | "working" | "asleep" | "archived";
@@ -31,6 +31,9 @@ export type RowModel = {
 
 export type Section = { key: SectionKey; rows: readonly RowModel[] };
 
+/** The sections, and the index of who hangs under whom they were built from (the hover card's tree). */
+export type ActivityModel = { sections: readonly Section[]; index: ThreadIndex };
+
 export type ActivityInput = {
   threads: readonly PluginSidebarThread[];
   projects: readonly PluginSidebarProject[];
@@ -45,7 +48,7 @@ export type ActivityInput = {
  * Every section in SECTION_KEYS order, each holding its rows top to bottom: Pinned in bb's pin order,
  * Asleep soonest to wake first, the rest latest first.
  */
-export function buildActivity(input: ActivityInput): readonly Section[] {
+export function buildActivity(input: ActivityInput): ActivityModel {
   const index = indexThreads(input.threads);
   const currentRoot = input.activeThreadId === null ? null : index.rootOf(input.activeThreadId);
   const projectNames = new Map(input.projects.map((p) => [p.id, p.name]));
@@ -74,7 +77,7 @@ export function buildActivity(input: ActivityInput): readonly Section[] {
     };
   };
 
-  return SECTION_KEYS.map((key) => {
+  const sections = SECTION_KEYS.map((key) => {
     const members = placed.filter((p) => p.section === key);
     const ordered =
       key === "pinned"
@@ -82,6 +85,7 @@ export function buildActivity(input: ActivityInput): readonly Section[] {
         : members.sort((a, b) => rankOf(b, key, input.now) - rankOf(a, key, input.now) || compare(a.thread.id, b.thread.id));
     return { key, rows: ordered.map(toRow) };
   });
+  return { sections, index };
 }
 
 /**
@@ -93,6 +97,11 @@ export function sleepersAskingForYou(input: Pick<ActivityInput, "threads" | "sle
     const sleep = sleepOf(t, input.sleeps);
     return sleep !== undefined && sleep.until > input.now && asksForYou(stateOf(t, sleep, input.now)) ? [sleep] : [];
   });
+}
+
+/** When the row last moved, as its corner says: archived, when it was archived; else when it came back. */
+export function lastMoved(t: PluginSidebarThread): number {
+  return t.isArchived ? (t.archivedAt ?? t.updatedAt) : t.latestAttentionAt;
 }
 
 // ------------------------------------------------------------------ layer 2
@@ -143,10 +152,6 @@ function cornerOf(t: PluginSidebarThread, state: ZState | null, asleepUntil: num
   return { kind: "time", text: ago(lastMoved(t), now) };
 }
 
-/** When the row last moved, as its corner says: archived, when it was archived; else when it came back. */
-function lastMoved(t: PluginSidebarThread): number {
-  return t.isArchived ? (t.archivedAt ?? t.updatedAt) : t.latestAttentionAt;
-}
 
 /**
  * bb's own pin order (its bundled thread list): two manual keys by key ascending; otherwise the

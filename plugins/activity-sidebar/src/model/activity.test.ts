@@ -8,7 +8,7 @@ import { project, thread, WORKING } from "./fixtures.ts";
 const NOW = 10 * 3_600_000;
 
 function build(threads: PluginSidebarThread[], extra: Partial<ActivityInput> = {}) {
-  return buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), now: NOW, activeThreadId: null, filter: null, ...extra });
+  return buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), now: NOW, activeThreadId: null, filter: null, ...extra }).sections;
 }
 
 function ids(sections: ReturnType<typeof build>, key: SectionKey): string[] {
