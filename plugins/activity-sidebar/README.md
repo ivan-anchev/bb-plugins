@@ -8,7 +8,7 @@ title, how many threads run under it, and its state or how long ago it last
 moved. Right-click a row for its menu (rename, pin, copy, sleep or wake,
 archive, delete); under the pointer, its corner offers Archive. A thread put to
 sleep waits on Asleep until its time, then comes back to the top. Rest on a row
-for its card, with a tree of its subthreads.
+for its card, with its plan while it works and a tree of its subthreads.
 
 Unlisted while it is built in slices; install it from this repository.
 
@@ -30,11 +30,11 @@ the bb you install it on. Try it on a throwaway server
 - `src/list/`: pure flattening into list items and their computed layout.
 - `src/contract.ts`: the app/server RPC contract and its one record, a sleep.
 - `src/server/`: the sleeps' SQLite store and their RPC handlers.
-- `src/data/`: the clock, the sleeps read and writes, what a thread asks, and the
-  reader's choices kept in local storage.
+- `src/data/`: the clock, the sleeps read and writes, what a thread asks, a
+  working thread's plan, and the reader's choices kept in local storage.
 - `src/data/pull-request/`: a row's pull request, read from bb's GitHub PR Status plugin.
 - `src/ui/`: the slot component, the windowed scroller and the shelf titles.
 - `src/card/`: the hover card's pure rules: when it shows (`CardIntent`), its
-  state line, and its subthread tree.
+  state line, its plan's fold, and its subthread tree.
 - `src/ui/row/`: the row, its menu, its pull request badge and its rename field.
-- `src/ui/card/`: the hover card, its body and its subthread tree.
+- `src/ui/card/`: the hover card, its body, its plan and its subthread tree.

@@ -1,20 +1,23 @@
 // What the hover card says (P:1223-1257, Z:ds/session_card.luau): its title, up to three lines; its
-// state line; its machine, project and branch ("· worktree off main"); its pull request; its subthread
-// tree. No latest message. The one read only the card pays for: a worktree's base branch.
+// state line; its machine, project and branch ("· worktree off main"); its pull request; while it is
+// under way, its plan; its subthread tree. No latest message. The reads only the card pays for: a
+// worktree's base branch, and the plan.
 import { useSdk, type PluginBrowserBbSdk, type PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import type { ReactNode } from "react";
 import { stateLine, type StateLine } from "../../card/state-line.ts";
 import { subthreadLines } from "../../card/subthread-tree.ts";
 import { useAsk } from "../../data/use-asks.ts";
 import { useMinute } from "../../data/use-minute.ts";
+import { usePlan } from "../../data/use-plan.ts";
 import { usePullRequest } from "../../data/pull-request/use-pull-request.ts";
 import { useRead } from "../../data/use-read.ts";
-import { withAsk } from "../../model/state.ts";
+import { UNDER_WAY, withAsk } from "../../model/state.ts";
 import { PrBadge } from "../row/pr-badge.tsx";
 import { sleepGlyph } from "../row/sleep-glyphs.tsx";
 import { StateGlyph } from "../state-glyph.tsx";
 import { CardGlyph } from "./card-glyphs.tsx";
 import type { CardData, RowItem } from "./hover-card.tsx";
+import { PlanSection } from "./plan-section.tsx";
 import { SubthreadSection } from "./subthread-section.tsx";
 
 type Props = { item: RowItem; data: CardData; onOpen(threadId: string): void };
@@ -27,6 +30,7 @@ export function CardBody({ item, data, onOpen }: Props) {
   const pr = usePullRequest(t.environment?.id ?? null);
   const base = useBaseBranch(t);
   const state = row.corner.kind === "state" ? withAsk(row.corner.state, ask) : null;
+  const plan = usePlan(state !== null && UNDER_WAY.has(state) ? t.id : null);
   const line = stateLine(row, state, data.underWaySince.get(t.id) ?? t.updatedAt, now);
   const branch = t.environment?.branchName ?? null;
   const tree = data.index.childrenOf(t.id).length > 0 ? subthreadLines(data.index, t) : null;
@@ -53,6 +57,7 @@ export function CardBody({ item, data, onOpen }: Props) {
           </Line>
         )}
       </div>
+      <PlanSection read={plan} />
       {tree !== null && (
         <>
           <div className="as-card-rule" />

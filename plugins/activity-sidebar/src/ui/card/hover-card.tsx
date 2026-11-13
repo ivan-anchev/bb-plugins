@@ -225,16 +225,19 @@ function useCardIntent(
 /**
  * Shift+Tab off the card's first button lands on its row. Tab off its last goes on from the row, as if
  * the card sat right after it: focus moves to the row and the browser's own Tab carries on from there.
+ * Focus can also rest on the card or its plan (where it goes when an update takes the button it was on);
+ * from there too, with no button ahead, the keyboard leaves the card the same way.
  */
 function tabOut(e: ReactKeyboardEvent<HTMLElement>, listFocus: ListFocus) {
-  if (e.key !== "Tab" || e.ctrlKey || e.metaKey || e.altKey) return;
-  const stops = tabStops(e.currentTarget);
-  if (e.target !== (e.shiftKey ? stops[0] : stops.at(-1))) return;
+  if (e.key !== "Tab" || e.ctrlKey || e.metaKey || e.altKey || !(e.target instanceof Node)) return;
+  const from = e.target;
+  const ahead = e.shiftKey ? Node.DOCUMENT_POSITION_PRECEDING : Node.DOCUMENT_POSITION_FOLLOWING;
+  if (tabStops(e.currentTarget).some((stop) => from.compareDocumentPosition(stop) & ahead)) return;
   if (e.shiftKey) e.preventDefault();
   listFocus.refocus();
 }
 
-/** The card's buttons: its mini rows and "Show all". */
+/** The card's buttons: its mini rows, "Show all", the plan's folds and Retry. */
 function tabStops(card: HTMLElement): HTMLElement[] {
   return Array.from(card.querySelectorAll<HTMLElement>("button"));
 }
