@@ -4,11 +4,8 @@ import { experimental_Icon as Icon, type PluginSidebarProject } from "@get-bb/pl
 import { Content, ItemIndicator, Portal, RadioGroup, RadioItem, Root, Separator, Trigger } from "@radix-ui/react-dropdown-menu";
 import type { ReactNode } from "react";
 import { hueOf } from "../model/project-hue.ts";
+import { PORTAL_SCOPE } from "./portal-scope.ts";
 import { ProjectTile } from "./project-tile.tsx";
-
-declare const __BB_PLUGIN_ID__: string;
-// The attributes bb's overlay layer expects on a plugin's portaled overlay.
-const PORTAL_SCOPE = { "data-bb-portaled-overlay": "", "data-bb-plugin-root": "", "data-bb-plugin": __BB_PLUGIN_ID__ };
 
 const ALL = "";
 
