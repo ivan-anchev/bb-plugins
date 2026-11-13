@@ -1,6 +1,6 @@
 // The sidebar as one flat list of items, top to bottom: section titles, rows, the spacer, "Show more",
 // notices. Pure. The prototype's Faithful shape (prototype.html `faithful`, `archivedSection`).
-import type { PluginSidebarThreadsState } from "@get-bb/plugin-sdk/app";
+import type { ExperimentalRpcQueryState, PluginSidebarThreadsState } from "@get-bb/plugin-sdk/app";
 import type { RowModel, Section, SectionKey } from "../model/activity.ts";
 
 export type ListItem =
@@ -11,9 +11,25 @@ export type ListItem =
   | { kind: "spacer"; key: "spacer" }
   /** How many more archived rows a press shows; null when only the server knows (no archived count API). */
   | { kind: "more"; key: "more:archived"; n: number | null }
-  | { kind: "notice"; key: "n:list" | "n:archived"; text: string; retry: boolean };
+  | { kind: "notice"; key: NoticeKey; text: string; retry: boolean };
+
+/** The list's own notice, Archived's page, or the sleeps read; a Retry says which to read again. */
+export type NoticeKey = "n:list" | "n:archived" | "n:sleeps";
 
 export type ListStatus = PluginSidebarThreadsState["status"];
+
+/** The plugin's read of every thread's sleep. */
+export type SleepsStatus = "loading" | "ready" | "error";
+
+/**
+ * The sleeps read as the list takes it: loading until the first read, then ready, unless the last read
+ * failed. why: a failed refresh keeps the last sleeps (the SDK retains `data`), so the rows stay, but
+ * the list still says the read failed and offers Retry.
+ */
+export function sleepsStatus(read: Pick<ExperimentalRpcQueryState<unknown>, "data" | "error">): SleepsStatus {
+  if (read.error !== null) return "error";
+  return read.data === undefined ? "loading" : "ready";
+}
 
 /** The archived pager as the shelf reads it (bb's `experimental_archived`). */
 export type ArchivePager = Pick<NonNullable<PluginSidebarThreadsState["experimental_archived"]>, "status" | "hasNextPage" | "isFetchingNextPage" | "isFetchNextPageError">;
@@ -21,6 +37,7 @@ export type ArchivePager = Pick<NonNullable<PluginSidebarThreadsState["experimen
 /** The reader's view of the sections: what is open, how far Archived is unrolled, what it is narrowed to. */
 export type ListView = {
   status: ListStatus;
+  sleeps: SleepsStatus;
   open: ReadonlySet<SectionKey>;
   /** Archived rows shown while it is open: 10, then 25 more a press. */
   archivedShown: number;
@@ -36,7 +53,8 @@ const LABEL: Record<SectionKey, string> = { pinned: "Pinned", activity: "Activit
 const SHELVES = ["working", "asleep", "archived"] as const satisfies readonly SectionKey[];
 
 export function listItems(sections: readonly Section[], view: ListView): ListItem[] {
-  if (view.status === "loading") return [listNotice("Loading threads…")];
+  // why: until the sleeps are read too, a sleeper would flash in Activity before leaving for Asleep.
+  if (view.status === "loading" || view.sleeps === "loading") return [listNotice("Loading threads…")];
   if (view.status === "error") return [listNotice("Couldn't load threads")];
 
   const rows = (key: SectionKey) => sections.find((s) => s.key === key)?.rows ?? [];
@@ -48,7 +66,14 @@ export function listItems(sections: readonly Section[], view: ListView): ListIte
   // why: Pinned stands only while something is pinned; Activity always stands, empty or not.
   const top: SectionKey[] = rows("pinned").length > 0 ? ["pinned", "activity"] : ["activity"];
   const spacer: ListItem[] = shelves.length > 0 ? [{ kind: "spacer", key: "spacer" }] : [];
-  return [...top.flatMap((key) => sectionItems(key, rows(key), view)), ...spacer, ...shelves.flatMap((key) => sectionItems(key, rows(key), view))];
+  // why: without the sleeps every thread still lists, sleepers among them; the notice says why and offers Retry.
+  const sleepsNotice: ListItem[] = view.sleeps === "error" ? [{ kind: "notice", key: "n:sleeps", text: "Couldn't load sleep times", retry: true }] : [];
+  return [
+    ...sleepsNotice,
+    ...top.flatMap((key) => sectionItems(key, rows(key), view)),
+    ...spacer,
+    ...shelves.flatMap((key) => sectionItems(key, rows(key), view)),
+  ];
 }
 
 // ------------------------------------------------------------------ layer 2

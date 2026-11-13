@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
+import { experimental_PluginRpcCallError, type PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { buildActivity, type SectionKey } from "../model/activity.ts";
 import { project, thread, WORKING } from "../model/fixtures.ts";
 import { LOADED, view } from "./fixtures.ts";
-import { listItems, type ListItem } from "./items.ts";
+import { listItems, sleepsStatus, type ListItem } from "./items.ts";
 
 function sections(threads = [thread("a", { latestAttentionAt: 2 }), thread("b", { latestAttentionAt: 1 })]) {
   return buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), now: 0, activeThreadId: null, filter: null });
@@ -99,4 +99,35 @@ test("the filter names its project in Activity's title", () => {
 test("loading and error show one notice in place of the rows", () => {
   assert.deepEqual(listItems(sections(), view({ status: "loading" })), [{ kind: "notice", key: "n:list", text: "Loading threads…", retry: false }]);
   assert.deepEqual(listItems(sections(), view({ status: "error" })), [{ kind: "notice", key: "n:list", text: "Couldn't load threads", retry: false }]);
+});
+
+test("until the sleeps are read the list says Loading, so no sleeper flashes in Activity", () => {
+  assert.deepEqual(listItems(sections(), view({ sleeps: "loading" })), [{ kind: "notice", key: "n:list", text: "Loading threads…", retry: false }]);
+  assert.deepEqual(listItems(sections(), view({ status: "loading", sleeps: "ready" })), [{ kind: "notice", key: "n:list", text: "Loading threads…", retry: false }]);
+});
+
+test("sleeps that failed to load leave the rows and a notice with Retry above them", () => {
+  const items = listItems(sections(), view({ sleeps: "error" }));
+  assert.deepEqual(items[0], { kind: "notice", key: "n:sleeps", text: "Couldn't load sleep times", retry: true });
+  assert.deepEqual(keys(items), ["n:sleeps", "t:activity", "s:a", "s:b"]);
+});
+
+test("a refresh of the sleeps that fails after one that loaded keeps their shelf and says so, with Retry", () => {
+  const retained = { sleeps: [{ threadId: "b", until: 5 }] };
+  const failed = new experimental_PluginRpcCallError({ code: "transport_error", message: "Failed to fetch" });
+  assert.equal(sleepsStatus({ data: undefined, error: null }), "loading");
+  assert.equal(sleepsStatus({ data: retained, error: null }), "ready");
+  assert.equal(sleepsStatus({ data: retained, error: failed }), "error");
+
+  const asleep = buildActivity({ threads: [thread("a"), thread("b")], projects: [project("prj_a", "bb-plugins")], sleeps: new Map([["b", retained.sleeps[0]]]), now: 0, activeThreadId: null, filter: null });
+  const items = listItems(asleep, view({ sleeps: sleepsStatus({ data: retained, error: failed }), open: open("activity", "asleep") }));
+  assert.deepEqual(keys(items), ["n:sleeps", "t:activity", "s:a", "spacer", "t:asleep", "s:b"]);
+  assert.deepEqual(items[0], { kind: "notice", key: "n:sleeps", text: "Couldn't load sleep times", retry: true });
+});
+
+test("Asleep stands between Working and Archived while something sleeps", () => {
+  const threads = [thread("a"), thread("busy", WORKING), thread("zz"), thread("old", { isArchived: true, archivedAt: 1 })];
+  const built = buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map([["zz", { threadId: "zz", until: 5 }]]), now: 0, activeThreadId: null, filter: null });
+  assert.deepEqual(keys(listItems(built, view({ open: open("activity") }))), ["t:activity", "s:a", "spacer", "t:working", "t:asleep", "t:archived"]);
+  assert.deepEqual(titles(listItems(built, view({ open: open() }))).slice(-2), [["Asleep", "1"], ["Archived", "1"]]);
 });

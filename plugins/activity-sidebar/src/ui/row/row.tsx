@@ -1,6 +1,7 @@
 // One parent thread's row, Zeron's SessionRow: the agent's mark in a 30 slot, the project tile, the
 // title fading out, the subagents pill and the corner. Right-click (or the Menu key) opens its menu;
-// under the pointer the corner offers Archive, whatever the thread's state; a double-click or the menu's Rename renames it in place.
+// under the pointer the corner offers Archive, whatever the thread's state; a double-click or the menu's Rename renames it in place;
+// the menu's Sleep ▸ Custom… opens the row's own dialog.
 import {
   experimental_Icon as Icon,
   experimental_ProviderIcon as ProviderIcon,
@@ -11,20 +12,23 @@ import {
 import { Root, Trigger } from "@radix-ui/react-context-menu";
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import type { RowModel } from "../../model/activity.ts";
-import type { MenuAction } from "../../model/row-menu.ts";
+import type { RowMenu } from "../../model/row-menu.ts";
 import { STATE_NAME } from "../../model/state.ts";
 import { Corner } from "../corner.tsx";
 import { ProjectTile } from "../project-tile.tsx";
-import { RowMenuContent, useRowMenu } from "./row-menu.tsx";
+import { syncMinute } from "../../data/use-minute.ts";
+import { SleepDialog } from "../sleep-dialog.tsx";
+import { RowMenuContent, useRowMenu, type RowSleep } from "./row-menu.tsx";
 import { TitleEditor } from "./title-editor.tsx";
 
-export function Row({ row, onNavigate }: { row: RowModel; onNavigate(): void }) {
+export function Row({ row, sleep, onNavigate }: { row: RowModel; sleep: RowSleep; onNavigate(): void }) {
   const t = row.thread;
   const shortcut = useSidebarThreadShortcut(t.id);
   const { splitProps } = useSidebarThreadSplit(t.id);
   const link = useRef<HTMLAnchorElement>(null);
   const rename = useRename(link);
-  const menu = useRowMenu(row, rename.request);
+  const [sleepingCustom, setSleepingCustom] = useState(false);
+  const menu = useRowMenu(row, sleep, { requestRename: rename.request, sleepCustom: () => setSleepingCustom(true) });
   const jump = shortcut?.label ?? null;
 
   const body = (title: ReactNode) => (
@@ -51,42 +55,64 @@ export function Row({ row, onNavigate }: { row: RowModel; onNavigate(): void }) 
   );
 
   // why: the corner's button lies over the link, not in it, so pressing it never opens the thread.
+  // why: the menu opens on the present minute, so Sleep's times are counted from now (Zeron reads the clock as it opens).
+  // why: the dialog is the row's, so focus in it is the row's to the list: a row that leaves with its
+  // sleep hands focus on to its heir, and one that stays takes it back when the dialog closes.
   return (
-    <Root>
-      <Trigger asChild disabled={rename.editing}>
-        <div className="as-rowbox" data-jumping={jump === null ? undefined : ""}>
-          {rename.editing ? (
-            <div className="as-row" data-editing="" data-strong={row.strong || undefined} aria-current={row.current ? "page" : undefined}>
-              {body(<TitleEditor threadId={t.id} title={t.displayTitle} onDone={rename.stop} />)}
-            </div>
-          ) : (
-            // why: tabIndex -1: the scroller is the list's one tab stop and ↑/↓ move between rows.
-            // The host routes a plain click on href in place; onNavigate closes the mobile drawer.
-            <a
-              ref={link}
-              href={t.href}
-              className="as-row"
-              tabIndex={-1}
-              data-strong={row.strong || undefined}
-              aria-current={row.current ? "page" : undefined}
-              aria-label={spoken(row)}
-              aria-keyshortcuts={shortcut?.ariaKeyshortcuts}
-              data-sidebar-thread-shortcut-target=""
-              // why: bb's host assigns jump keys only to target anchors that also name their thread.
-              data-sidebar-thread-id={t.id}
-              onClick={onNavigate}
-              onDoubleClick={rename.start}
-              onKeyDown={openMenuFromKeyboard}
-              {...splitProps}
-            >
-              {body(<FadingTitle text={t.displayTitle} />)}
-            </a>
-          )}
-          {menu.hoverAction !== null && !rename.editing && <CornerAction action={menu.hoverAction} />}
-        </div>
-      </Trigger>
-      <RowMenuContent entries={menu.entries} onCloseAutoFocus={rename.onCloseAutoFocus} />
-    </Root>
+    <>
+      <Root
+        onOpenChange={(open) => {
+          if (open) syncMinute();
+        }}
+      >
+        <Trigger asChild disabled={rename.editing}>
+          <div className="as-rowbox" data-jumping={jump === null ? undefined : ""}>
+            {rename.editing ? (
+              <div className="as-row" data-editing="" data-strong={row.strong || undefined} aria-current={row.current ? "page" : undefined}>
+                {body(<TitleEditor threadId={t.id} title={t.displayTitle} onDone={rename.stop} />)}
+              </div>
+            ) : (
+              // why: tabIndex -1: the scroller is the list's one tab stop and ↑/↓ move between rows.
+              // The host routes a plain click on href in place; onNavigate closes the mobile drawer.
+              <a
+                ref={link}
+                href={t.href}
+                className="as-row"
+                tabIndex={-1}
+                data-strong={row.strong || undefined}
+                aria-current={row.current ? "page" : undefined}
+                aria-label={spoken(row)}
+                aria-keyshortcuts={shortcut?.ariaKeyshortcuts}
+                data-sidebar-thread-shortcut-target=""
+                // why: bb's host assigns jump keys only to target anchors that also name their thread.
+                data-sidebar-thread-id={t.id}
+                onClick={onNavigate}
+                onDoubleClick={rename.start}
+                onKeyDown={openMenuFromKeyboard}
+                {...splitProps}
+              >
+                {body(<FadingTitle text={t.displayTitle} />)}
+              </a>
+            )}
+            {menu.hoverAction !== null && !rename.editing && <CornerAction action={menu.hoverAction} />}
+          </div>
+        </Trigger>
+        <RowMenuContent entries={menu.entries} onCloseAutoFocus={rename.onCloseAutoFocus} />
+      </Root>
+      <SleepDialog
+        open={sleepingCustom}
+        onOpenChange={setSleepingCustom}
+        onSleep={(until) => {
+          sleep.sleep(t.id, until);
+          setSleepingCustom(false);
+        }}
+        onCloseAutoFocus={(event) => {
+          // why: the dialog has no Trigger to return to. A row that left with its sleep has no link.
+          event.preventDefault();
+          link.current?.focus({ preventScroll: true });
+        }}
+      />
+    </>
   );
 }
 
@@ -141,7 +167,7 @@ function openMenuFromKeyboard(e: KeyboardEvent<HTMLAnchorElement>) {
 }
 
 /** Under the pointer, the corner's Archive (Unarchive on the shelf) in the same box. */
-function CornerAction({ action }: { action: MenuAction }) {
+function CornerAction({ action }: { action: NonNullable<RowMenu["hoverAction"]> }) {
   return (
     <button
       type="button"
@@ -188,8 +214,21 @@ function FadingTitle({ text }: { text: string }) {
 
 /** "Fix the login flow, Working, bb-plugins, 2 running under it". */
 function spoken(row: RowModel): string {
-  const when = row.corner.kind === "state" ? STATE_NAME[row.corner.state] : row.corner.text === "now" ? "just now" : `${row.corner.text} ago`;
-  const bits = [row.thread.displayTitle, when, row.project.name];
+  const bits = [row.thread.displayTitle, spokenCorner(row.corner), row.project.name];
   if (row.runningUnder > 0) bits.push(`${row.runningUnder} running under it`);
   return bits.join(", ");
+}
+
+function spokenCorner(corner: RowModel["corner"]): string {
+  switch (corner.kind) {
+    case "state":
+      return STATE_NAME[corner.state];
+    case "wakes":
+      return `wakes in ${corner.text}`;
+    case "time":
+      return corner.text === "now" ? "just now" : `${corner.text} ago`;
+    default:
+      corner satisfies never;
+      return "";
+  }
 }

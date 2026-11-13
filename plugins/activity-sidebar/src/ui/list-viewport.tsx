@@ -2,18 +2,21 @@
 // Every item is absolutely placed at its computed y.
 import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { heirOf } from "../list/focus.ts";
-import type { ListItem } from "../list/items.ts";
+import type { ListItem, NoticeKey } from "../list/items.ts";
 import type { SectionKey } from "../model/activity.ts";
 import { layoutItems, METRICS, visibleKeys, type Layout, type LayoutEntry } from "../list/layout.ts";
 import { Row } from "./row/row.tsx";
+import type { RowSleep } from "./row/row-menu.tsx";
 import { MoreRow, Notice, SectionTitle } from "./shelf-title.tsx";
 
 /** What the items do when pressed; the viewport only places them. */
 type ItemActions = {
   onNavigate(): void;
+  sleep: RowSleep;
   onToggle(section: SectionKey): void;
   onShowMoreArchived(): void;
-  onRetryArchived(): void;
+  /** A notice's Retry: read again what it says failed. */
+  onRetry(notice: NoticeKey): void;
   /** Sits at the end of Activity's title. */
   filterMenu: ReactNode;
 };
@@ -66,13 +69,13 @@ export function ListViewport({ items, ...actions }: Props) {
 function renderItem(item: ListItem, actions: ItemActions): ReactNode {
   switch (item.kind) {
     case "row":
-      return <Row row={item.row} onNavigate={actions.onNavigate} />;
+      return <Row row={item.row} sleep={actions.sleep} onNavigate={actions.onNavigate} />;
     case "title":
       return <SectionTitle item={item} onToggle={() => actions.onToggle(item.section)} action={item.section === "activity" ? actions.filterMenu : null} />;
     case "more":
       return <MoreRow n={item.n} onPress={actions.onShowMoreArchived} />;
     case "notice":
-      return <Notice text={item.text} onRetry={item.retry ? actions.onRetryArchived : null} />;
+      return <Notice text={item.text} onRetry={item.retry ? () => actions.onRetry(item.key) : null} />;
     case "spacer":
       return null;
     default:

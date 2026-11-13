@@ -3,7 +3,8 @@
 import type { PluginSidebarProject, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import type { SleepRecord } from "../contract.ts";
 import { hueOf, type Hue } from "./project-hue.ts";
-import { stateOf, UNDER_WAY, type ZState } from "./state.ts";
+import { wakesIn } from "./sleep.ts";
+import { NEEDS_YOU, stateOf, UNDER_WAY, type ZState } from "./state.ts";
 import { indexThreads } from "./thread-index.ts";
 import { ago } from "./time.ts";
 
@@ -12,8 +13,8 @@ export type SectionKey = "pinned" | "activity" | "working" | "asleep" | "archive
 /** Every section, top to bottom; the last three are the shelves at the foot. */
 export const SECTION_KEYS: readonly SectionKey[] = ["pinned", "activity", "working", "asleep", "archived"];
 
-/** The row's trailing box: its state's glyph ELSE its time, never both. */
-export type Corner = { kind: "state"; state: ZState } | { kind: "time"; text: string };
+/** The row's trailing box: its state's glyph ELSE its time (on Asleep, how soon it wakes), never both. */
+export type Corner = { kind: "state"; state: ZState } | { kind: "time"; text: string } | { kind: "wakes"; text: string };
 
 export type RowModel = {
   thread: PluginSidebarThread;
@@ -24,6 +25,8 @@ export type RowModel = {
   current: boolean;
   runningUnder: number;
   project: { name: string; hue: Hue };
+  /** When it wakes, while it sleeps on the Asleep shelf; null otherwise. */
+  asleepUntil: number | null;
 };
 
 export type Section = { key: SectionKey; rows: readonly RowModel[] };
@@ -50,22 +53,24 @@ export function buildActivity(input: ActivityInput): readonly Section[] {
   const placed = input.threads
     .filter((t) => isListed(t) && (input.filter === null || t.projectId === input.filter))
     .map((thread) => {
-      const sleep = input.sleeps.get(thread.id);
+      const sleep = sleepOf(thread, input.sleeps);
       // why: an archived thread has left the work; its row says when it left, not what it last did.
       const state = thread.isArchived ? null : stateOf(thread, sleep, input.now);
       return { thread, sleep, state, section: sectionOf(thread, sleep, state, input.now) };
     });
 
-  const toRow = ({ thread, state }: (typeof placed)[number]): RowModel => {
+  const toRow = ({ thread, sleep, state, section }: (typeof placed)[number]): RowModel => {
     const current = thread.id === input.activeThreadId || thread.id === currentRoot;
     const name = projectNames.get(thread.projectId) ?? "No project";
+    const asleepUntil = section === "asleep" && sleep !== undefined ? sleep.until : null;
     return {
       thread,
-      corner: state === null ? { kind: "time", text: ago(lastMoved(thread), input.now) } : { kind: "state", state },
+      corner: cornerOf(thread, state, asleepUntil, input.now),
       strong: state !== null || current,
       current,
       runningUnder: index.runningUnder(thread.id),
       project: { name, hue: hueOf(thread.projectId) },
+      asleepUntil,
     };
   };
 
@@ -74,8 +79,19 @@ export function buildActivity(input: ActivityInput): readonly Section[] {
     const ordered =
       key === "pinned"
         ? members.sort((a, b) => byPinOrder(a.thread, b.thread))
-        : members.sort((a, b) => rankOf(b.thread, b.sleep, key) - rankOf(a.thread, a.sleep, key) || compare(a.thread.id, b.thread.id));
+        : members.sort((a, b) => rankOf(b, key, input.now) - rankOf(a, key, input.now) || compare(a.thread.id, b.thread.id));
     return { key, rows: ordered.map(toRow) };
+  });
+}
+
+/**
+ * The sleepers asking for you: their sleep ends now, for good, so they show Woke once answered and
+ * never slip back to Asleep (Zeron: its host wakes it early, Z:account/sessions.luau:36-38).
+ */
+export function sleepersAskingForYou(input: Pick<ActivityInput, "threads" | "sleeps" | "now">): SleepRecord[] {
+  return input.threads.filter(isListed).flatMap((t) => {
+    const sleep = sleepOf(t, input.sleeps);
+    return sleep !== undefined && sleep.until > input.now && asksForYou(stateOf(t, sleep, input.now)) ? [sleep] : [];
   });
 }
 
@@ -86,28 +102,45 @@ function isListed(t: PluginSidebarThread): boolean {
   return t.parentThreadId === null && !t.isHidden;
 }
 
+/** Only an active, unpinned thread sleeps: a pin holds its row in place, and Archived has left the work. */
+function sleepOf(t: PluginSidebarThread, sleeps: ReadonlyMap<string, SleepRecord>): SleepRecord | undefined {
+  return t.isArchived || t.isPinned ? undefined : sleeps.get(t.id);
+}
+
+function asksForYou(state: ZState | null): boolean {
+  return state !== null && NEEDS_YOU.has(state);
+}
+
 /**
  * Archived first, then Pinned (a pin holds its row in place whatever it does), then Asleep until its
- * time, then Working while under way (Zeron: screens/shell/activity.luau:48-59); the rest is Activity.
+ * time unless it asks for you, then Working while under way (Zeron: screens/shell/activity.luau:48-59);
+ * the rest is Activity.
  */
 function sectionOf(t: PluginSidebarThread, sleep: SleepRecord | undefined, state: ZState | null, now: number): SectionKey {
   if (t.isArchived) return "archived";
   if (t.isPinned) return "pinned";
-  if (sleep !== undefined && sleep.until > now) return "asleep";
+  if (sleep !== undefined && sleep.until > now && !asksForYou(state)) return "asleep";
   if (state !== null && UNDER_WAY.has(state)) return "working";
   return "activity";
 }
 
 /**
  * Higher stands nearer the top. Asleep: the soonest to wake. Archived: the latest archived. The rest:
- * when it last came back, its own last move or waking from sleep (Zeron: activity.luau:63-68). bb's
- * attention time is the move: it advances when a turn ends or fails, never when the thread is read
- * (`updatedAt` does both).
+ * when it last came back, its own last move or waking from sleep (Zeron: activity.luau:63-68); one
+ * that woke early, asking for you, woke now. bb's attention time is the move: it advances when a turn
+ * ends or fails, never when the thread is read (`updatedAt` does both).
  */
-function rankOf(t: PluginSidebarThread, sleep: SleepRecord | undefined, section: SectionKey): number {
+function rankOf({ thread, sleep }: { thread: PluginSidebarThread; sleep: SleepRecord | undefined }, section: SectionKey, now: number): number {
   if (section === "asleep") return -(sleep?.until ?? 0);
-  if (section === "archived") return lastMoved(t);
-  return Math.max(t.latestAttentionAt, sleep?.until ?? 0);
+  if (section === "archived") return lastMoved(thread);
+  return Math.max(thread.latestAttentionAt, sleep === undefined ? 0 : Math.min(sleep.until, now));
+}
+
+/** Its state's glyph; else, asleep, how soon it wakes (Z:screens/shell/sidebar.luau:548); else when it last moved. */
+function cornerOf(t: PluginSidebarThread, state: ZState | null, asleepUntil: number | null, now: number): Corner {
+  if (state !== null) return { kind: "state", state };
+  if (asleepUntil !== null) return { kind: "wakes", text: wakesIn(asleepUntil, now) };
+  return { kind: "time", text: ago(lastMoved(t), now) };
 }
 
 /** When the row last moved, as its corner says: archived, when it was archived; else when it came back. */
