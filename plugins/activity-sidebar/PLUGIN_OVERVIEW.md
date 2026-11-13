@@ -1,6 +1,10 @@
 Replaces bb's thread list with one Activity list of every parent thread from
 every project, latest first, with pinned threads above it and the Working and
-Archived shelves folded at its foot. A filter narrows it to one project.
+Archived shelves folded at its foot. A filter narrows it to one project. Each
+row shows the thread's agent, its project's coloured initial, its title, how
+many threads run under it, and its state or how long ago it last moved.
+Right-click a row for its menu (rename, pin, copy, archive, delete); under the
+pointer, its corner offers Archive.
 
 ## What you get
 
@@ -25,6 +29,15 @@ Archived shelves folded at its foot. A filter narrows it to one project.
 - The open thread's row, or its parent's when a subthread is open, is
   highlighted. Clicking a row opens the thread; dragging it out to the main
   area opens it in a split.
+- Right-click a row (or press the Menu key or Shift+F10 on it) for its menu:
+  Rename, Pin or Unpin, Copy (the bb thread link or the thread ID), Archive or
+  Unarchive, and Delete…. As in bb's own menu, Delete always asks first,
+  Archive asks only when the thread has subthreads, and archiving offers Undo.
+  The menu won't archive a thread whose agent is still working until it
+  stops.
+- Under the pointer, a row's corner becomes an Archive button (Unarchive on the
+  Archived shelf). As in Zeron, it works even while the agent does, and bb
+  stops the agent. Double-click a row to rename it in place.
 
 ## How it works
 

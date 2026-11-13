@@ -28,7 +28,7 @@
   },
   "bb": {
     "name": "Activity Sidebar",
-    "description": "Replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it and the Working and Archived shelves folded at its foot. A filter narrows it to one project. Each row shows the thread's agent, its project's coloured initial, its title, how many threads run under it, and its state or how long ago it last moved.",
+    "description": "Replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it and the Working and Archived shelves folded at its foot. A filter narrows it to one project. Each row shows the thread's agent, its project's coloured initial, its title, how many threads run under it, and its state or how long ago it last moved. Right-click a row for its menu (rename, pin, copy, archive, delete); under the pointer, its corner offers Archive.",
     "branding": {
       "icon": "Activity"
     },
@@ -39,9 +39,11 @@
     "@get-bb/plugin-sdk": "0.6.104"
   },
   "devDependencies": {
+    "@radix-ui/react-context-menu": "^2.4.1",
     "@radix-ui/react-dropdown-menu": "^2.1.20",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
+    "sonner": "^2.0.8",
     "typescript": "^5.7.0"
   }
 }

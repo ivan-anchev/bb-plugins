@@ -1,6 +1,6 @@
 ---
 name: activity-sidebar
-description: Explain the Activity Sidebar plugin, which replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it, the Working and Archived shelves folded at its foot and a project filter, each row showing the thread's agent, project initial, title, running subthreads and its state or age. Use when the user asks what the Activity list shows, why a thread is or isn't in it, what a row's corner glyph means, what the shelves and the filter do, or how to switch back to bb's own list.
+description: Explain the Activity Sidebar plugin, which replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it, the Working and Archived shelves folded at its foot and a project filter, each row showing the thread's agent, project initial, title, running subthreads and its state or age, with a right-click menu and a hover Archive button. Use when the user asks what the Activity list shows, why a thread is or isn't in it, what a row's corner glyph means, what the shelves and the filter do, what a row's menu and its hover Archive button do, or how to switch back to bb's own list.
 ---
 
 # Activity Sidebar
@@ -64,6 +64,44 @@ While bb's jump modifier (⌘) is held, the corner shows the row's jump key.
 The open thread's row is highlighted; when a subthread is open, its parent's
 row is. A row with a state, or the open one, has a brighter, medium-weight
 title.
+
+## A row's menu
+
+Right-click a row, or focus it and press the Menu key or Shift+F10. There is no
+⋯ button. The menu holds, in this order:
+
+1. **Rename**: edits the title in place (see below).
+2. **Pin** or **Unpin**. Archived rows have no Pin.
+3. **Copy** ▸ **bb thread link** or **Thread ID**. A toast confirms the copy.
+4. **Archive**, or **Unarchive** on the Archived shelf.
+5. **Delete…**
+
+Each entry runs bb's own action, so bb's own behaviour stays: archiving a
+thread with subthreads asks first and counts them, an archive offers Undo in
+its toast, Delete always asks, and failures show bb's error toast.
+
+**The menu's Archive is disabled while the thread is working or waiting on
+background work.** The menu says "Stop it first: its agent is still working"
+under the item. Stop the thread, or let it finish, and Archive is available
+again. A thread awaiting input, done, failed or connecting can be archived.
+
+## The corner's Archive button
+
+Under the pointer, a row's corner swaps its state or time for an Archive
+button in the same place (Unarchive on the Archived shelf). Pressing it runs
+the same action as the menu and never opens the thread. While bb's jump
+modifier is held, the corner shows the jump key instead.
+
+Unlike the menu, the button works while the agent is working, as in Zeron.
+bb archives the thread at once and stops its agent. If the thread has
+subthreads, bb asks first and warns "This will stop current work."
+
+## Renaming
+
+Double-click a row, or choose Rename from its menu, and the title becomes a
+field with the whole title selected. Enter or clicking away keeps a changed
+name; Escape, or an empty field, keeps the old one. Titles are cut at 200
+characters.
 
 ## Using it
 
