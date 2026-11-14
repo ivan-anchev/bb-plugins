@@ -100,40 +100,24 @@ title.
 ## A row's menu
 
 Right-click a row, or focus it and press the Menu key or Shift+F10. There is no
-⋯ button. The menu holds, in this order:
+⋯ button. The menu is bb's own thread menu, the one bb's list opens, so it holds
+the same items in the same order and behaves the same: Rename edits the title
+in place (see below), archiving a thread with subthreads asks first, an archive
+offers Undo, Delete always asks, and failures show bb's error toast.
 
-1. **Rename**: edits the title in place (see below).
-2. **Pin** or **Unpin**. Archived rows have no Pin.
-3. **Copy** ▸ **bb thread link** or **Thread ID**. A toast confirms the copy.
-4. **Sleep** ▸ its times, or **Wake** while it sleeps. Pinned and archived
-   rows have neither.
-5. **Archive**, or **Unarchive** on the Archived shelf.
-6. **Delete…**
-
-Each entry runs bb's own action, so bb's own behaviour stays: archiving a
-thread with subthreads asks first and counts them, an archive offers Undo in
-its toast, Delete always asks, and failures show bb's error toast.
-
-**The menu's Archive is disabled while the thread is working or waiting on
-background work.** The menu says "Stop it first: its agent is still working"
-under the item. Stop the thread, or let it finish, and Archive is available
-again. A thread awaiting input, done, failed or connecting can be archived.
-
-Zeron's **Stop waiting** (release a thread from waiting on a background command
-while the command keeps running) is not in the menu: bb has no call that does
-that. bb's Stop ends the background command too, so the menu leaves it out
-rather than offer a Stop under another name.
+The list adds one item to it: **Sleep** ▸ its times, or **Wake** while the
+thread sleeps (see Sleep below). Pinned and archived rows have neither.
 
 ## The corner's Archive button
 
 Under the pointer, a row's corner swaps its state or time for an Archive
 button in the same place (Unarchive on the Archived shelf). Pressing it runs
-the same action as the menu and never opens the thread. While bb's jump
+bb's own Archive, as the menu's does, and never opens the thread. While bb's jump
 modifier is held, the corner shows the jump key instead.
 
-Unlike the menu, the button works while the agent is working, as in Zeron.
-bb archives the thread at once and stops its agent. If the thread has
-subthreads, bb asks first and warns "This will stop current work."
+It works while the agent is working, as in Zeron: bb archives the thread at
+once and stops its agent. If the thread has subthreads, bb asks first and warns
+"This will stop current work."
 
 ## Sleep
 

@@ -17,10 +17,10 @@ const GLYPHS: Record<string, ReactNode> = {
 };
 
 /** The glyph named, when it is one of Sleep's; null for bb's own icons. */
-export function sleepGlyph(name: string): ReactNode | null {
+export function sleepGlyph(name: string, className?: string): ReactNode | null {
   const glyph = GLYPHS[name];
   return glyph === undefined ? null : (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
       {glyph}
     </svg>
   );
