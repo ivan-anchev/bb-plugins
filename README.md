@@ -23,6 +23,7 @@ bb plugin install git:https://github.com/ivan-anchev/bb-plugins.git@^0.1.0 --tag
 
 | Plugin | What it does |
 | --- | --- |
+| [Activity Sidebar](plugins/activity-sidebar) | Experimental: it may break with a bb update. One Activity list of every parent thread from every project in place of bb's thread list, with Working, Asleep and Archived shelves, sleep, and a hover card per thread. |
 | [`boat-sandbox`](plugins/boat-sandbox) | Experimental: it may break with a bb update. Run bb threads on on-demand boat.dev sandboxes, with template, environment and size choices. |
 | [`bot-wake`](plugins/bot-wake) | Wakes your Grok Bots by webhook when a bb thread needs attention: an open question or approval, a finished turn, or a failure. |
 | [`homepage`](plugins/homepage) | A grid of cards under the new-thread composer, starting with Activity: six months of your merged GitHub PRs, with threads started, PRs merged and lines changed. |

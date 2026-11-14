@@ -1,16 +1,29 @@
-# bb-plugin-activity-sidebar
+# Activity Sidebar
+
+Experimental: it may break with a bb update. It relies on bb's experimental plugin APIs.
 
 Replaces bb's thread list with one Activity list of every parent thread from
 every project, latest first, with pinned threads above it and the Working,
 Asleep and Archived shelves folded at its foot. A filter narrows it to one
-project. Each row shows the thread's agent, its project's coloured initial, its
-title, how many threads run under it, and its state or how long ago it last
-moved. Right-click a row for its menu (rename, pin, copy, sleep or wake,
-archive, delete); under the pointer, its corner offers Archive. A thread put to
-sleep waits on Asleep until its time, then comes back to the top. Rest on a row
-for its card, with its plan while it works and a tree of its subthreads.
+project, and rows are one line or two. Each row shows the thread's agent, its
+project's coloured initial, its title, its pull request, how many threads run
+under it, and its state or how long ago it last moved. Right-click a row for its
+menu (rename, pin, copy, sleep or wake, archive, delete); under the pointer, its
+corner offers Archive. A thread put to sleep waits on Asleep until its time,
+then comes back to the top. Rest on a row for its card, with its plan while it
+works and a tree of its subthreads. See `PLUGIN_OVERVIEW.md` for the full
+description and `skills/activity-sidebar/SKILL.md` for how each part behaves.
 
-Unlisted while it is built in slices; install it from this repository.
+## Install
+
+```sh
+bb marketplace add git:github.com/ivan-anchev/bb-plugins@main
+bb plugin install activity-sidebar@ivan-anchev
+```
+
+It takes bb's thread-list slot, so it replaces the sidebar of the bb you install
+it on. To go back to bb's own list, pick it under Settings → Appearance →
+Sidebar.
 
 ## Develop
 
