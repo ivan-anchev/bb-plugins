@@ -82,9 +82,9 @@ From left to right:
    the row and, after a beat, a title that doesn't fit runs through to its
    end; it slides back when the pointer leaves. With Reduce motion on, it
    stays still.
-4. Its pull request, when the thread's branch has one: the pull request glyph
-   (a draft's own glyph for a draft) and its number, green while open, grey as
-   a draft, violet once merged, red when closed. Hover it for its state and
+4. Its pull request, when the thread's branch has one: its state's glyph and
+   its number, green while open, grey as a draft, violet once merged (the merge
+   glyph), red when closed (the crossed-out glyph). Hover it for its state and
    title. It comes from bb's GitHub PR Status plugin; with that plugin off, or
    `gh` unavailable, no badge shows.
 5. A pill with how many threads run under it (its own background agents plus
