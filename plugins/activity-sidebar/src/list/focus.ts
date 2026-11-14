@@ -1,8 +1,8 @@
-// Where keyboard focus goes when the row holding it leaves the list. Pure.
+// Where keyboard focus goes when the item holding it leaves the list. Pure.
 
 /**
- * The row that inherits focus from `gone`: the first row after it that is still listed, else the
- * nearest one before it, else null (nothing is left). `before` is the row order focus last saw.
+ * The item that inherits focus from `gone`: the first item after it that is still listed, else the
+ * nearest one before it, else null (nothing is left). `before` is the order focus last saw.
  */
 export function heirOf(before: readonly string[], gone: string, listed: ReadonlySet<string>): string | null {
   const at = before.indexOf(gone);

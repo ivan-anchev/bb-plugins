@@ -47,6 +47,7 @@ function naturalHeight(item: ListItem): number {
     case "title":
       return METRICS.title;
     case "row":
+    case "more":
     case "notice":
       return METRICS.row;
     case "spacer":

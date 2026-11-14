@@ -10,6 +10,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { RowModel } from "../model/activity.ts";
 import { STATE_NAME } from "../model/state.ts";
 import { Corner } from "./corner.tsx";
+import { ProjectTile } from "./project-tile.tsx";
 
 export function Row({ row, onNavigate }: { row: RowModel; onNavigate(): void }) {
   const t = row.thread;
@@ -40,9 +41,7 @@ export function Row({ row, onNavigate }: { row: RowModel; onNavigate(): void }) 
       </span>
       <span className="as-line">
         <span className="as-lead">
-          <span className="as-tile" data-hue={row.project.hue} aria-hidden>
-            {initial(row.project.name)}
-          </span>
+          <ProjectTile name={row.project.name} hue={row.project.hue} />
           <FadingTitle text={t.displayTitle} />
         </span>
         {row.runningUnder > 0 && (
@@ -84,10 +83,6 @@ function FadingTitle({ text }: { text: string }) {
       {text}
     </span>
   );
-}
-
-function initial(name: string): string {
-  return (name.at(0) ?? "?").toUpperCase();
 }
 
 /** "Fix the login flow, Working, bb-plugins, 2 running under it". */
