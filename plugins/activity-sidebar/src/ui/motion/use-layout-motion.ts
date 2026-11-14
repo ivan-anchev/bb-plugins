@@ -1,7 +1,7 @@
 // Plays the list's motion (list/motion-plan.ts) on the placed items with the Web Animations API. Each
 // item's wrapper owns its translateY(y); a move is added on top of it (`composite: "add"`), so a row can
-// glide in the order and slide for the room around it at once (P:717-728), and a move cut short by the
-// next one carries on from where it was seen. With Reduce motion nothing moves (P:692), and turning it on
+// glide in the order and slide for the room around it at once, and a move cut short by the
+// next one carries on from where it was seen. With Reduce motion nothing moves, and turning it on
 // stops what does. What is under way, and so what stays mounted, is ./flight.ts.
 import { useLayoutEffect, useRef, useState } from "react";
 import type { Layout } from "../../list/layout.ts";
@@ -89,7 +89,7 @@ function play(plan: MotionPlan, nodes: ReadonlyMap<string, HTMLElement>, ghostNo
 
 /**
  * The content closing up under a view scrolled to its end drops the scroll at once; the view comes down
- * with the room as it closes instead, as the prototype's shrinking fold pulls it (P:755): every item
+ * with the room as it closes instead, as the prototype's shrinking fold pulls it: every item
  * starts `drop` higher, where it was seen, and settles on the leavers' closing.
  */
 function followDrop(drop: number, plan: MotionPlan, items: readonly HTMLElement[]): Animation[] {

@@ -261,7 +261,7 @@ function askedCorner(corner: CornerModel, ask: AskKind | null): CornerModel {
 /** "Fix the login flow, Working, bb-plugins, pull request 12, open, 2 running under it". */
 function spoken(row: RowModel, corner: CornerModel, pr: PullRequest | null): string {
   const bits = [row.thread.displayTitle, spokenCorner(corner), row.project.name];
-  // why: Zeron's badge label (Z:ds/locale_en.luau:334).
+  // why: Zeron's badge label.
   if (pr !== null) bits.push(`pull request ${pr.number}, ${pr.state}`);
   if (row.runningUnder > 0) bits.push(`${row.runningUnder} running under it`);
   return bits.join(", ");

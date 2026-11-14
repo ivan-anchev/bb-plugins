@@ -1,9 +1,9 @@
-// A row's menu as data, in Zeron's order and words (Z:screens/shell/sidebar.luau:1156-1270): Rename, Pin,
+// A row's menu as data, in Zeron's order and words: Rename, Pin,
 // Copy ▸, Sleep ▸ (or Wake), a rule, Archive (or Unarchive), Delete…. Every bb entry runs bb's own bound
 // action, so bb's confirmations, Undo toast and errors stay; this only chooses which, in what order,
-// under which name. Sleep is the list's own. Zeron's Stop waiting (Z:screens/shell/sidebar.luau:1193-1211)
+// under which name. Sleep is the list's own. Zeron's Stop waiting
 // is left out: it releases the wait and leaves the background process running, and bb's only call near
-// it, `threads.stop`, ends the process too (checked live on bb 0.49).
+// it, `threads.stop`, ends the process too.
 import type { PluginBoundThreadAction, PluginThreadActionEntry } from "@get-bb/plugin-sdk/app";
 import type { RowModel } from "./activity.ts";
 import { sleepPresets } from "./sleep.ts";
@@ -20,7 +20,7 @@ const CORE = {
 /** The keys to ask `experimental_useThreadActions` for. */
 export const CORE_KEYS: readonly string[] = Object.values(CORE);
 
-/** Zeron's reason a working thread can't be archived (Z:locales/en.json shell.sidebar.menu.archive_working). */
+/** Zeron's reason a working thread can't be archived. */
 const STILL_WORKING = "Stop it first: its agent is still working";
 
 /**
@@ -42,7 +42,7 @@ type OwnActions = { copyId(): void; sleep(until: number): void; wake(): void; sl
 /**
  * The row's menu from bb's bound actions, Sleep's times counted from `now`. An action bb doesn't offer
  * drops its entry. The menu's Archive is disabled while the agent works or waits on background work
- * (Zeron's rule, Z:screens/shell/sidebar.luau:1245); the corner's is not (Z:ds/sidebar.luau:1416-1420).
+ * (Zeron's rule); the corner's is not.
  */
 export function rowMenu(row: RowModel, bound: readonly PluginThreadActionEntry[], own: OwnActions, now: number): RowMenu {
   const t = row.thread;
@@ -70,8 +70,8 @@ export function rowMenu(row: RowModel, bound: readonly PluginThreadActionEntry[]
 // ------------------------------------------------------------------ layer 2
 
 /**
- * Asleep, Wake; otherwise Sleep ▸ with Zeron's times, each "{name} · {when}", then Custom…
- * (Z:screens/shell/sidebar.luau:1156-1191). A pin holds its row in place and Archived has left the
+ * Asleep, Wake; otherwise Sleep ▸ with Zeron's times, each "{name} · {when}", then Custom….
+ * A pin holds its row in place and Archived has left the
  * work, so neither offers Sleep.
  */
 function sleepEntry(row: RowModel, own: OwnActions, now: number): MenuEntry | null {
@@ -83,7 +83,7 @@ function sleepEntry(row: RowModel, own: OwnActions, now: number): MenuEntry | nu
   return { kind: "submenu", key: "sleep", label: "Sleep", icon: "Moon", entries };
 }
 
-/** Zeron's guard reads working or waiting only, not connecting (Z:screens/shell/sidebar.luau:1245). */
+/** Zeron's guard reads working or waiting only, not connecting. */
 function isBusy(row: RowModel): boolean {
   return row.corner.kind === "state" && (row.corner.state === "working" || row.corner.state === "waiting");
 }

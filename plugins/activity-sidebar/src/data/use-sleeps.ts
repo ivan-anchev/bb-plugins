@@ -35,7 +35,7 @@ export function useSleeps(): Sleeps {
   const records = read.data?.sleeps ?? NONE;
   const sleeps = useMemo(() => new Map(records.map((s) => [s.threadId, s])), [records]);
   const setSleep = (threadId: string, until: number | null) => write.mutate({ threadId, until });
-  // A write the server refused says so: never a click, or a wake, that silently undoes itself (Z:screens/shell/activity.luau:70-82).
+  // A write the server refused says so: never a click, or a wake, that silently undoes itself.
   const said = (title: string) => () => void toast.error(title);
   return {
     sleeps,

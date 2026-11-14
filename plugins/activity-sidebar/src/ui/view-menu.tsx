@@ -1,4 +1,4 @@
-// The button at the end of Activity's title: the list's view (the prototype's ⋯ menu, P:952-978). Compact
+// The button at the end of Activity's title: the list's view (the prototype's ⋯ menu). Compact
 // first, a line a row or two; then the project every section is narrowed to, or all of them.
 // bb's host shims Radix, so this menu shares its overlay layer (focus, dismiss, stacking).
 import { experimental_Icon as Icon, type PluginSidebarProject } from "@get-bb/plugin-sdk/app";

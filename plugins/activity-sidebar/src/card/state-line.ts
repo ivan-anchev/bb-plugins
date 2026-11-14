@@ -1,5 +1,5 @@
 // The card's first line under its title: the thread's state and since when, or how soon it wakes, or
-// how long ago it moved (P:1232-1240). Pure.
+// how long ago it moved. Pure.
 import { lastMoved, type RowModel } from "../model/activity.ts";
 import { STATE_NAME, UNDER_WAY, type ZState } from "../model/state.ts";
 import { ago, clock } from "../model/time.ts";
@@ -22,7 +22,7 @@ export function stateLine(row: RowModel, state: ZState | null, underWaySince: nu
 
 // ------------------------------------------------------------------ layer 2
 
-/** "just now" under a minute, else "5m ago" (Z:ds/session_card.luau:86-87). */
+/** "just now" under a minute, else "5m ago". */
 function since(at: number, now: number): string {
   const text = ago(at, now);
   return text === "now" ? "just now" : `${text} ago`;

@@ -1,8 +1,8 @@
 // How the list moves from one layout to the next, as data: what glides to its new place, what slides
 // aside for the room others open or close, what opens in, what closes away. Pure; ui/motion plays it.
-// Zeron's sidebar motion as the prototype reproduces it: rows taking new places (P:677-734), a section
-// folding (P:736-758). Constants P:643-649 = Z:ds/sidebar.luau:298-299 (SLIDE, FADE), 720-724 (the
-// fold's GO, COME, CLOSE, OPEN), Z:ds/motion.luau (EASE, duration).
+// Zeron's sidebar motion as the prototype reproduces it: rows taking new places, a section
+// folding. The constants are Zeron's: SLIDE and FADE, the fold's GO, COME, CLOSE and OPEN, and its
+// motion's EASE and duration.
 import type { SectionKey } from "../model/activity.ts";
 import type { ListItem } from "./items.ts";
 import { layoutItems, METRICS, type Layout, type LayoutEntry } from "./layout.ts";
@@ -17,7 +17,7 @@ const GO = 90;
 const COME = 180;
 const COME_AFTER = 140;
 
-/** A glide's length by how far it goes: 180, longer by √(distance / 256), at most 240 (Z:ds/motion.luau duration). */
+/** A glide's length by how far it goes: 180, longer by √(distance / 256), at most 240. */
 export function glideMs(distance: number): number {
   return 180 * Math.min(Math.max(Math.sqrt(Math.abs(distance) / 256), 1), 240 / 180);
 }
@@ -33,7 +33,7 @@ export type Move = { key: string; segments: readonly Segment[] };
 /**
  * An item new to a section, opening top to bottom where it lands, then fading in. `window`: the share of
  * `reveal` its opening takes. Alone, all of it; a section unfolding opens as one, its edge crossing each
- * row in turn (P:746).
+ * row in turn.
  */
 export type Arrival = { key: string; reveal: Timing; window: readonly [number, number]; fade: Timing };
 
@@ -51,7 +51,7 @@ export const STILL: MotionPlan = { moves: [], arrivals: [], ghosts: [] };
  * rows glide to their new places, come and go in their sections, and the rest slide.
  */
 export function planMotion(prev: Layout, next: Layout): MotionPlan {
-  // why: a resize moves nothing, and the first rows after the loading notice appear at once (P:998, build()).
+  // why: a resize moves nothing, and the first rows after the loading notice appear at once.
   if (prev.viewport !== next.viewport || prev.entries.some((e) => e.key === "n:list")) return STILL;
 
   const before = byKey(prev.entries);
@@ -66,7 +66,7 @@ export function planMotion(prev: Layout, next: Layout): MotionPlan {
   // why: every next item is in the mid frame; it only adds the leavers.
   const room = (e: LayoutEntry) => mid.get(e.key)!.y - e.y;
   const arrivingKeys = new Set(arriving.map((e) => e.key));
-  // A section unfolding opens as one: its rows ride where its first one does, under its title (P:744-746).
+  // A section unfolding opens as one: its rows ride where its first one does, under its title.
   const slideOf = (e: LayoutEntry) => (fold !== null && arrivingKeys.has(e.key) ? room(arriving[0]) : room(e));
   const block = span(arriving);
   const moves = next.entries.flatMap((e) => moveOf(e, before.get(e.key), mid.get(e.key)!, slideOf(e), t.slide));
@@ -87,7 +87,7 @@ export function planMotion(prev: Layout, next: Layout): MotionPlan {
 type Fold = { section: SectionKey; opening: boolean };
 type Timings = Record<"slide" | "reveal" | "fadeIn" | "collapse" | "fadeOut", Timing>;
 
-/** Rows and "Show more" glide and come and go; titles and notices only ride the room others open (P:680). */
+/** Rows and "Show more" glide and come and go; titles and notices only ride the room others open. */
 function glides(item: ListItem): boolean {
   return item.kind === "row" || item.kind === "more";
 }
@@ -134,7 +134,7 @@ function timing(ms: number, easing: string, delay = 0): Timing {
 }
 
 /**
- * The frame the prototype measures right after building (P:709-716): the next layout with the arrivals at
+ * The frame the prototype measures right after building: the next layout with the arrivals at
  * no height (less the gap, so they take no room) and each leaver still in, at its full height.
  */
 function midFrame(prev: Layout, next: Layout, arriving: readonly LayoutEntry[], leaving: readonly LayoutEntry[]): Map<string, LayoutEntry> {
@@ -149,7 +149,7 @@ function midFrame(prev: Layout, next: Layout, arriving: readonly LayoutEntry[], 
 
 /**
  * Where a leaver goes back in: after what stood before it, when that is still in its section, else first
- * under its section's title; nowhere when its section is gone (P:698-707).
+ * under its section's title; nowhere when its section is gone.
  */
 function ghostIndex(items: readonly ListItem[], gone: LayoutEntry, prev: Layout): number | null {
   const section = sectionOf(gone.item);

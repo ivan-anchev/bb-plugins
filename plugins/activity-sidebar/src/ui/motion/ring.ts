@@ -1,7 +1,7 @@
-// The working ring (Z:ds/status.luau:89-159 RING, P:760-806): eight dashes on the 24 grid. An unseen lead
+// The working ring: eight dashes on the 24 grid. An unseen lead
 // runs two laps in one eased sweep; dashes near it stretch and lean toward it, stronger as they stretch;
 // home, they settle even and rest 900 ms. 30 frames a second, every ring on one clock so all stand at
-// the same point of their run (Z:ds/status.luau in_phase). Still with Reduce motion.
+// the same point of their run. Still with Reduce motion.
 // The geometry is pure (ringDashes); one shared requestAnimationFrame clock draws every mounted canvas.
 import { useLayoutEffect, type RefObject } from "react";
 import { onReducedMotionChange, reducedMotion } from "./reduced-motion.ts";
@@ -107,7 +107,7 @@ function phase(now: number): number {
 /**
  * Device-pixel sharp; ink from the canvas's own CSS `color` (its state's hue), read each frame so a theme
  * switch reaches a turning ring. A stretched dash leans `lift` toward white on a light ink (a dark theme's),
- * toward black on a dark one (Z:ds/status.luau:150-156).
+ * toward black on a dark one.
  */
 function draw({ canvas, size }: Ring, ms: number, still: boolean): void {
   const dpr = window.devicePixelRatio || 1;

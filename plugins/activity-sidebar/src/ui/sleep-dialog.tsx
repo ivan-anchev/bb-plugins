@@ -1,5 +1,5 @@
-// Sleep → Custom…: a day and a time of your own, from a minute ahead, opening on tomorrow at 9
-// (Z:screens/shell/sidebar.luau:1523-1565). bb's host shims Radix, so the dialog shares its overlay layer.
+// Sleep → Custom…: a day and a time of your own, from a minute ahead, opening on tomorrow at 9.
+// bb's host shims Radix, so the dialog shares its overlay layer.
 import { Close, Content, Description, Overlay, Portal, Root, Title } from "@radix-ui/react-dialog";
 import { useState, type FormEvent } from "react";
 import { useMinute } from "../data/use-minute.ts";
