@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { thread } from "./fixtures.ts";
-import { baseState, stateOf, type ZState } from "./state.ts";
+import { askOf, baseState, stateOf, withAsk, type ZState } from "./state.ts";
 
 const EXPECTED: Record<PluginSidebarThread["indicator"], ZState | null> = {
   "waiting-for-input": "input",
@@ -45,4 +45,30 @@ test("a woken sleeper shows Woke unless it has something more to say", () => {
   assert.equal(stateOf(thread("t", { indicator: "waiting-for-input" }), sleep, 2_000), "input");
   assert.equal(stateOf(thread("t"), sleep, 500), null, "still asleep");
   assert.equal(stateOf(thread("t", { indicator: "unread-success" }), undefined, 2_000), "done");
+});
+
+test("an approval asked turns Awaiting Input into Pending Approval; a question, or not knowing yet, leaves it", () => {
+  assert.equal(withAsk("input", "approval"), "approval");
+  assert.equal(withAsk("input", "question"), "input");
+  assert.equal(withAsk("input", null), "input");
+});
+
+test("what is asked moves no other state", () => {
+  const others: ZState[] = ["working", "connecting", "waiting", "done", "failed", "woke"];
+  for (const state of others) assert.equal(withAsk(state, "approval"), state, state);
+});
+
+test("a thread asks for approval when any pending interaction is one", () => {
+  const question = { status: "pending", payload: { kind: "user_question" } } as const;
+  const approval = { status: "pending", payload: { kind: "approval" } } as const;
+  assert.equal(askOf([question, approval]), "approval");
+  assert.equal(askOf([approval]), "approval");
+});
+
+test("a thread asks a question when no pending interaction is an approval", () => {
+  assert.equal(askOf([{ status: "pending", payload: { kind: "user_question" } }]), "question");
+  assert.equal(askOf([{ status: "pending", payload: { kind: "plugin" } }]), "question");
+  // why: an approval already answered no longer asks.
+  assert.equal(askOf([{ status: "resolved", payload: { kind: "approval" } }, { status: "pending", payload: { kind: "user_question" } }]), "question");
+  assert.equal(askOf([]), "question");
 });

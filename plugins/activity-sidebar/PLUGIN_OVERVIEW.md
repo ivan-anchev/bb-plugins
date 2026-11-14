@@ -2,8 +2,8 @@ Replaces bb's thread list with one Activity list of every parent thread from
 every project, latest first, with pinned threads above it and the Working,
 Asleep and Archived shelves folded at its foot. A filter narrows it to one
 project. Each row shows the thread's agent, its project's coloured initial, its
-title, how many threads run under it, and its state or how long ago it last
-moved. Right-click a row for its menu (rename, pin, copy, sleep or wake,
+title, its pull request, how many threads run under it, and its state or how
+long ago it last moved. Right-click a row for its menu (rename, pin, copy, sleep or wake,
 archive, delete); under the pointer, its corner offers Archive. A thread put to
 sleep waits on Asleep until its time, then comes back to the top.
 
@@ -24,9 +24,10 @@ sleep waits on Asleep until its time, then comes back to the top.
   then reads "Activity · project". The folds and the filter are remembered in
   this browser.
 - One line per thread: the thread's agent, its project's coloured initial, its
-  title (fading out where it doesn't fit), how many threads run under it, and
+  title (fading out where it doesn't fit), its branch's pull request (number,
+  coloured open, draft, merged or closed), how many threads run under it, and
   in its corner either its state (working, connecting, waiting, awaiting input,
-  done, failed) or how long ago it last moved.
+  pending approval, done, failed) or how long ago it last moved.
 - The open thread's row, or its parent's when a subthread is open, is
   highlighted. Clicking a row opens the thread; dragging it out to the main
   area opens it in a split.
@@ -51,7 +52,10 @@ sleep waits on Asleep until its time, then comes back to the top.
 ## How it works
 
 The list reads bb's own live sidebar data, so it costs no extra request and
-updates exactly when bb's list would. Sleep times are one small read from the
+updates exactly when bb's list would. Pull requests come from bb's GitHub PR
+Status plugin, one batched read for the rows on screen; a thread waiting for
+you is asked what it waits on (an approval or an answer) while its row is on
+screen. Sleep times are one small read from the
 plugin's own database, refreshed on every client when one changes. It draws only the rows on screen. The New
 thread button, search, navigation and footer stay bb's. To go back to bb's list,
 choose it under Settings → Appearance → Sidebar.
