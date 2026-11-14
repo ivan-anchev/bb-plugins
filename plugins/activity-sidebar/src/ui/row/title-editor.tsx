@@ -1,11 +1,11 @@
-// A row's title, renamed in place (Zeron: ds/sidebar.luau:1260-1310): the title selected, Enter or
+// A row's title, renamed in place: the title selected, Enter or
 // leaving keeps a changed name, Escape or an empty field keeps the old one. `onDone` says whether a
 // key ended it (Enter, Escape) rather than focus leaving.
 import { useSdk } from "@get-bb/plugin-sdk/app";
 import { useLayoutEffect, useRef } from "react";
 import { toast } from "sonner";
 
-/** Zeron's longest title (Z:screens/shell/sidebar.luau:1574). */
+/** Zeron's longest title. */
 const MAX_TITLE = 200;
 
 export function TitleEditor({ threadId, title, onDone }: { threadId: string; title: string; onDone(byKey: boolean): void }) {

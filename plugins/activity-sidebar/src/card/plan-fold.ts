@@ -1,4 +1,4 @@
-// The card's plan, as Zeron's todo panel has it (P:1259-1289, Z:ds/composer_dock.luau:1645-1700): "Todo
+// The card's plan, as Zeron's todo panel has it: "Todo
 // done/total", then the steps in their order. Past six it folds to three, the step in progress and one
 // either side, with "N earlier" / "N later" opening the rest. Pure.
 import type { PluginBrowserBbSdk } from "@get-bb/plugin-sdk/app";
@@ -12,7 +12,6 @@ export type PlanStep = { id: string; text: string; state: StepState };
 /** What the card shows: the count, and the steps shown with how many are folded before and after them. */
 export type PlanView = { done: number; total: number; earlier: number; steps: readonly PlanStep[]; later: number };
 
-// Z:ds/composer_dock.luau:170
 const FOLD_PAST = 6;
 const FOLD_TO = 3;
 

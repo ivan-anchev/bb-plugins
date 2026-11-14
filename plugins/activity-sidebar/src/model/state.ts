@@ -1,13 +1,13 @@
-// The one Zeron state a thread shows (Zeron: ds/status.luau), from bb's resolved indicator.
+// The one Zeron state a thread shows, from bb's resolved indicator.
 import type { PluginBrowserBbSdk, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import type { SleepRecord } from "../contract.ts";
 
 export type ZState = "working" | "connecting" | "waiting" | "input" | "approval" | "done" | "failed" | "woke";
 
-/** Under way: running, or waiting on work that will wake it (Zeron: screens/shell/activity.luau). */
+/** Under way: running, or waiting on work that will wake it. */
 export const UNDER_WAY: ReadonlySet<ZState> = new Set(["working", "connecting", "waiting"]);
 
-/** Asking for you: a sleeper in one wakes early (Zeron: account/sessions.luau:36-38, screens/shell/activity.luau:3-4). */
+/** Asking for you: a sleeper in one wakes early. */
 export const NEEDS_YOU: ReadonlySet<ZState> = new Set(["input", "approval", "failed"]);
 
 /** Zeron's long names, for tooltips and accessible names. */

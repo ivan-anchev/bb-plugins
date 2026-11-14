@@ -1,5 +1,4 @@
-// A project's tile hue: Zeron's hash of the project's key (screens/shell/project_default.luau
-// hue_of). bb's project has no repository identity, so the key is the project id, Zeron's own
+// A project's tile hue: Zeron's hash of the project's key. bb's project has no repository identity, so the key is the project id, Zeron's own
 // fallback. The tile colours live in app.css as `.as-tile[data-hue]`.
 
 // Zeron's order (DEFAULT_HUES), kept so a project's hue never changes.
