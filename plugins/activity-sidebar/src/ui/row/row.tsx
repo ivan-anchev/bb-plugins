@@ -200,12 +200,13 @@ function CornerAction({ action }: { action: NonNullable<RowMenu["hoverAction"]> 
   );
 }
 
-/** Regular's second line (Zeron's `SessionRow.second_line`): its branch's glyph leading while it has one, then where it runs and on what branch. */
+/** Regular's second line (Zeron's `SessionRow.second_line`): its branch's glyph leading while it has one, then its machine and branch. */
 function DetailLine({ detail }: { detail: RowDetail }) {
+  const words = [detail.machine, detail.branch].filter((w) => w !== null);
   return (
     <span className="as-detail">
       {detail.branch !== null && <CardGlyph name="branch" />}
-      <FadingTitle text={detail.branch === null ? detail.where : `${detail.where} · ${detail.branch}`} />
+      {words.length > 0 && <FadingTitle text={words.join(" · ")} />}
     </span>
   );
 }
