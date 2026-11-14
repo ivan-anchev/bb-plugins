@@ -193,3 +193,123 @@ test("with no key the card says why in one message, and sampling does nothing", 
   assert.deepEqual(reply, { status: "unavailable", message: "No boat API key is set. Fix it in Settings → boat Sandbox." });
   assert.equal(fetch.mock.callCount(), 0);
 });
+
+/** boat's 30 dashboard days up to 2026-11-14, as the live account read them: machine time Nov 8–12 only. */
+const DASHBOARD_DAYS = Array.from({ length: 30 }, (_, i) => {
+  const day = new Date(Date.parse("2026-10-16T00:00:00Z") + i * 86_400_000).toISOString().slice(0, 10);
+  const machineDollars = { "2026-11-08": 0.03, "2026-11-09": 0.3, "2026-11-10": 0.36, "2026-11-11": 0.21, "2026-11-12": 0.35 }[day] ?? 0;
+  return { day, machineDollars, startDollars: 0, otherDollars: 0, starts: 0 };
+});
+
+/** boat with a meter that reads `meter()`, $1 by default, and its account API answering `wallet()`. */
+function boatWithWallet(wallet: () => Response | Promise<Response>, meter: () => number | Promise<number> = () => 1) {
+  mock.method(globalThis, "fetch", async (url: string) => {
+    if (url.endsWith("/me")) return Response.json(ME);
+    if (url.endsWith("/limits")) return Response.json(LIMITS);
+    if (url === "https://boat.dev/api/boat/billing/wallet") return wallet();
+    const dollars = await meter();
+    return Response.json({ sandboxes: [], pageInfo: { nextCursor: null }, deletedCost: { since: "2026-11-01T00:00:00.000Z", seconds: 0, dollars } });
+  });
+}
+
+const chart = (reply: SpendCardReply) => (reply.status === "ready" ? reply.days.map((day) => day.dollars) : null);
+
+test("a backfill fills the days before recording began with boat's machine time, and leaves today as recorded", async () => {
+  midMonth();
+  boatWithWallet(() => Response.json({ status: { spending: { days: DASHBOARD_DAYS } } }));
+  const card = cardWith();
+  await card.sample(signal());
+
+  const reply = await card.backfill(signal());
+  const days = chart(await card.read(signal()));
+
+  assert.deepEqual(reply, { status: "filled", days: 29 });
+  assert.deepEqual(days?.slice(-7), [0.03, 0.3, 0.36, 0.21, 0.35, 0, 0]);
+  assert.equal(days?.includes(null), false);
+});
+
+test("a key without the account.admin scope is told so, and the chart stays as it was", async () => {
+  midMonth();
+  boatWithWallet(() => Response.json({ code: "scope", message: "This key lacks account.admin." }, { status: 403 }));
+  const card = cardWith();
+  await card.sample(signal());
+
+  const reply = await card.backfill(signal());
+
+  assert.deepEqual(reply, {
+    status: "unavailable",
+    message: "Backfill needs a boat API key with the account.admin scope. Change the key in Settings → boat Sandbox.",
+  });
+  assert.equal(chart(await card.read(signal()))?.filter((dollars) => dollars === null).length, 29);
+});
+
+test("any other failure of boat's daily spend says it is unavailable, and the chart stays as it was", async () => {
+  midMonth();
+  const card = cardWith();
+  const failures: [() => Response | Promise<Response>, string][] = [
+    [() => Response.json({ code: "not_found", message: "Not found" }, { status: 404 }), "HTTP 404"],
+    [() => Response.json({ status: { spending: { days: [{ date: "2026-11-10", dollars: 0.36 }] } } }), "boat changed its reply"],
+    [() => Promise.reject(new TypeError("fetch failed")), "boat couldn’t be reached"],
+  ];
+
+  for (const [wallet, why] of failures) {
+    mock.restoreAll();
+    boatWithWallet(wallet);
+    await card.sample(signal());
+
+    const reply = await card.backfill(signal());
+
+    assert.deepEqual(reply, { status: "unavailable", message: `Couldn’t backfill: boat’s daily spend is unavailable (${why}).` });
+    assert.equal(chart(await card.read(signal()))?.filter((dollars) => dollars === null).length, 29);
+  }
+});
+
+test("a backfill cancelled while it waits behind a reading writes nothing", async () => {
+  midMonth();
+  let meter: Promise<number> = Promise.resolve(1);
+  boatWithWallet(() => Response.json({ status: { spending: { days: DASHBOARD_DAYS } } }), () => meter);
+  const card = cardWith();
+  await card.sample(signal());
+  let release!: (dollars: number) => void;
+  meter = new Promise((resolve) => (release = resolve));
+  const reading = card.sample(signal());
+  const call = new AbortController();
+
+  const backfilled = card.backfill(call.signal);
+  // why the wait: boat answers the backfill, which then queues behind the held reading.
+  await delay(50);
+  call.abort();
+  release(1);
+
+  await reading;
+  await assert.rejects(backfilled, { name: "AbortError" });
+  assert.equal(chart(await card.read(signal()))?.filter((dollars) => dollars === null).length, 29);
+});
+
+test("a backfill cancelled while it reads the stored days writes nothing", async () => {
+  midMonth();
+  boatWithWallet(() => Response.json({ status: { spending: { days: DASHBOARD_DAYS } } }));
+  const kv = memoryKv();
+  const call = new AbortController();
+  let cancelOnRead = false;
+  const card = createSpendCard({
+    access: createBoatAccess({ get: async () => SETTINGS }),
+    kv: {
+      ...kv,
+      get: async <T>(key: string) => {
+        const value = await kv.get<T>(key);
+        if (cancelOnRead) call.abort();
+        return value;
+      },
+    },
+    ownerId: OWNER,
+  });
+  await card.sample(signal());
+
+  cancelOnRead = true;
+  const backfilled = card.backfill(call.signal);
+
+  await assert.rejects(backfilled, { name: "AbortError" });
+  cancelOnRead = false;
+  assert.equal(chart(await card.read(signal()))?.filter((dollars) => dollars === null).length, 29);
+});

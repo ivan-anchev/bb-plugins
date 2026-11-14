@@ -87,7 +87,32 @@
 .bs-bar[data-today] { background: color-mix(in oklch, var(--bs-accent) 55%, var(--card)); }
 .bs-bar[data-today][data-zero] { background: var(--bs-well); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--foreground) 35%, transparent); }
 .bs-bar[data-active] { outline: 1.5px solid var(--foreground); outline-offset: 1px; }
-.bs-axis { display: flex; justify-content: space-between; }
+/* The first day, the backfill button while some days are unrecorded, and today. */
+.bs-axis { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
+.bs-today { grid-column: 3; justify-self: end; }
+
+/* why above the tooltip: the tooltip covers the axis captions and could sit on the button (spend-chart.tsx). */
+.bs-backfill { grid-column: 2; position: relative; z-index: 2; }
+.bs-backfill-button {
+  all: unset;
+  position: relative;
+  display: block;
+  border-radius: 4px;
+  color: var(--muted-foreground);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklch, var(--muted-foreground) 40%, transparent);
+  text-underline-offset: 2px;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+/* A taller hit area than the 16px caption line. */
+.bs-backfill-button::before { content: ""; position: absolute; inset: -6px -6px; }
+@media (hover: hover) {
+  .bs-backfill-button:not([aria-disabled]):hover { color: var(--foreground); }
+}
+.bs-backfill-button[aria-disabled] { text-decoration: none; cursor: default; }
+.bs-backfill-button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 .bs-tip {
   position: absolute;

@@ -201,6 +201,26 @@ export const wireSandboxMeter = z.object({ cost: monthCost, billingMultiplier: z
 export const wireMeteredSandboxList = wireSandboxList.extend({ deletedCost: monthCost });
 
 /**
+ * `GET /api/boat/billing/wallet`, boat's undocumented account API behind its dashboard's Spending
+ * chart: `status.spending.days` holds the last 30 UTC days, oldest first, today last, each split into
+ * `machineDollars`, `startDollars` and `otherDollars`. Only machine time is read, deleted sandboxes'
+ * included, the same as the meter `cost` counts.
+ */
+export const wireDailySpend = z
+  .object({
+    status: z.object({
+      spending: z.object({ days: z.array(z.object({ day: z.iso.date(), machineDollars: z.number() })) }),
+    }),
+  })
+  .transform(({ status }) => status.spending.days.map(({ day, machineDollars }): DaySpend => ({ day, dollars: machineDollars })));
+
+/** A UTC day (`2026-11-10`) and the wallet's machine time that day, at list price. */
+export interface DaySpend {
+  day: string;
+  dollars: number;
+}
+
+/**
  * One NDJSON line of `POST /sandboxes/{id}/commands` with `stream: true` (OAS `CommandStreamFrame`):
  * `started`, then output chunks, then exactly one `exit` or `error`. `exitCode` is null when a
  * signal ended the command; `retryable` on `error` means the command provably never ran.

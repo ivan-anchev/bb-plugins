@@ -63,6 +63,7 @@ function accountWith(account: Account): { access: BoatAccess; machineEnvironment
     get: unused,
     list: unused,
     meter: unused,
+    dailySpend: unused,
     create: unused,
     remove: unused,
     stop: unused,

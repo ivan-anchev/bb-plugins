@@ -1,6 +1,8 @@
 // Thirty days of spend, a bar a UTC day, today last and lighter; a day with nothing spent or recorded
-// is a 3px well. The pointer or the arrow keys pick a day, and a tooltip over the axis reads it.
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+// is a 3px well. The pointer or the arrow keys pick a day, and a tooltip over the axis reads it. While
+// some days are unrecorded, the axis offers to backfill them.
+import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import type { SpendDay } from "../../spend/history.ts";
 import { dayLabel, daySpend } from "./format.ts";
 
@@ -10,7 +12,19 @@ const FLOOR = 4;
 /** Within this of either side the tooltip anchors to that side, not the day's centre, so it stays in the card. */
 const EDGE = 72;
 
-export function SpendChart({ days }: { days: readonly SpendDay[] }) {
+/** The axis's backfill button while some days are unrecorded. */
+export interface Backfill {
+  /** `Backfill 30 days`, `Backfilling…`, `Filled 3 days`. */
+  label: string;
+  /** A press does nothing while one is under way or its result shows. */
+  busy: boolean;
+  /** Why the last press failed, in one line under the chart. */
+  failure: string | null;
+  /** Resolves true when every unrecorded day was filled, so the button goes. */
+  run(): Promise<boolean>;
+}
+
+export function SpendChart({ days, backfill }: { days: readonly SpendDay[]; backfill: Backfill | null }) {
   const max = Math.max(...days.map((day) => day.dollars ?? 0));
   const scrub = useScrub(days.length, (i) => describe(days[i]!, i === days.length - 1));
   return (
@@ -32,13 +46,43 @@ export function SpendChart({ days }: { days: readonly SpendDay[] }) {
           />
         ))}
       </div>
-      <div className="bs-axis bs-caption" aria-hidden>
-        <span>{dayLabel(days[0]!.day)}</span>
-        <span>Today</span>
+      <div className="bs-axis bs-caption">
+        <span aria-hidden>{dayLabel(days[0]!.day)}</span>
+        {backfill !== null && (
+          // why on enter: the tooltip can cover the button, which sits above it; reaching the button closes it.
+          <span className="bs-backfill" aria-live="polite" onPointerEnter={scrub.close}>
+            <button type="button" className="bs-backfill-button" aria-disabled={backfill.busy || undefined} onClick={press}>
+              {backfill.label}
+            </button>
+          </span>
+        )}
+        <span className="bs-today" aria-hidden>
+          Today
+        </span>
       </div>
       {scrub.tooltip}
+      {backfill !== null && backfill.failure !== null && (
+        <p className="bs-caption bs-stale" role="alert">
+          <Icon name="AlertTriangle" className="bs-stale-icon" aria-hidden />
+          <span>{backfill.failure}</span>
+        </p>
+      )}
     </div>
   );
+
+  /**
+   * A keyboard press that fills every day takes the button away, so focus still on it moves on to the
+   * plot. Focus the user took elsewhere while the backfill ran stays there.
+   */
+  async function press(e: MouseEvent<HTMLButtonElement>) {
+    if (backfill === null || backfill.busy) return;
+    const button = e.currentTarget;
+    const fromKeyboard = button.matches(":focus-visible");
+    const filledAll = await backfill.run();
+    // why the body too: the button may already be gone, and focus dropped with it to the page.
+    const stayed = document.activeElement === button || document.activeElement === document.body;
+    if (filledAll && fromKeyboard && stayed) scrub.focus();
+  }
 }
 
 /** A share of the plot, not pixels: the stylesheet sets the plot's height, taller when the card splits. */
@@ -138,5 +182,5 @@ function useScrub(count: number, read: (i: number) => string) {
     </>
   );
 
-  return { rootProps, plotProps, active, tooltip };
+  return { rootProps, plotProps, active, tooltip, close: () => pick(null), focus: () => plotRef.current?.focus() };
 }
