@@ -33,7 +33,7 @@ import { stateChangeArgs } from "./state-args.ts";
 
 const LIST_LIMIT = 200;
 const SUMMARY_FIELDS = ["number", "title", "author", "updatedAt", "headRefOid"];
-const DETAIL_FIELDS = [...SUMMARY_FIELDS, "body", "url", "headRefName", "baseRefName", "state", "isDraft", "commits", "additions", "deletions", "statusCheckRollup", "reviewRequests", "latestReviews", "labels"];
+const DETAIL_FIELDS = [...SUMMARY_FIELDS, "createdAt", "body", "url", "headRefName", "baseRefName", "state", "isDraft", "commits", "additions", "deletions", "statusCheckRollup", "reviewRequests", "latestReviews", "labels"];
 
 const ghSummarySchema = z.object({
   number: z.number(),
@@ -52,6 +52,7 @@ const toSummary = (pr: z.infer<typeof ghSummarySchema>): PrSummary => ({
 });
 
 const ghDetailSchema = ghSummarySchema.extend({
+  createdAt: z.string(),
   body: z.string(),
   url: z.string(),
   headRefName: z.string(),
@@ -69,6 +70,7 @@ const ghDetailSchema = ghSummarySchema.extend({
 
 const toDetail = (pr: z.infer<typeof ghDetailSchema>): PrDetail => ({
   ...toSummary(pr),
+  createdAt: pr.createdAt,
   body: pr.body,
   url: pr.url,
   headRefName: pr.headRefName,
