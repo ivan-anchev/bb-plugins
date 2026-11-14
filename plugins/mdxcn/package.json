@@ -1,0 +1,56 @@
+{
+  "name": "bb-plugin-mdxcn",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Agents draw mdxcn figures in chat: callouts, steps, terminals, tables, KPIs, charts, timelines and more, from a fenced block.",
+  "keywords": [
+    "bb-plugin",
+    "mdxcn",
+    "markdown",
+    "charts",
+    "figures"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ivan-anchev/bb-plugins.git",
+    "directory": "plugins/mdxcn"
+  },
+  "engines": {
+    "bb": ">=0.48",
+    "bbPluginSdk": ">=0.6.132"
+  },
+  "bb": {
+    "name": "mdxcn",
+    "description": "Agents draw mdxcn figures in chat: callouts, steps, terminals, tables, KPIs, charts, timelines and more, from a fenced block.",
+    "branding": {
+      "icon": "Shapes"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "node --test 'src/*.test.ts' '*.test.ts'",
+    "build": "bb plugin build"
+  },
+  "dependencies": {
+    "motion": "^13.1.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.6.132",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.3.0",
+    "clsx": "^2.1.1",
+    "esbuild": "^0.28.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwind-merge": "^3.7.0",
+    "typescript": "^5.7.0"
+  }
+}

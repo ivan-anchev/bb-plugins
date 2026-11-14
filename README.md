@@ -25,6 +25,7 @@ bb plugin install git:https://github.com/ivan-anchev/bb-plugins.git@^0.1.0 --tag
 | --- | --- |
 | [`boat-sandbox`](plugins/boat-sandbox) | Experimental: it may break with a bb update. Run bb threads on on-demand boat.dev sandboxes, with template, environment and size choices. |
 | [`bot-wake`](plugins/bot-wake) | Wakes your Grok Bots by webhook when a bb thread needs attention: an open question or approval, a finished turn, or a failure. |
+| [`mdxcn`](plugins/mdxcn) | Agents draw [mdxcn](https://mdxcn.dev) figures in chat: callouts, steps, terminals, tables, KPIs, charts, timelines and more, from a fenced block. |
 | [PR Reviews](plugins/pr-reviews) | Browse a GitHub project's open pull requests and review each change with its full diff and a step-by-step guided review. |
 | [`proactive-visuals`](plugins/proactive-visuals) | Agents answer data with an inline chart, without being asked. |
 | [`subagents-strip`](plugins/subagents-strip) | A live strip above the composer that counts the thread's subagents and child threads and opens into one row per subagent that expands to its report and latest steps. |

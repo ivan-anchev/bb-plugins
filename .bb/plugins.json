@@ -16,6 +16,10 @@
       "source": "./plugins/code-explorer"
     },
     {
+      "name": "mdxcn",
+      "source": "./plugins/mdxcn"
+    },
+    {
       "name": "pr-reviews",
       "source": "./plugins/pr-reviews"
     },
