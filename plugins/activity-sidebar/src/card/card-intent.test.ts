@@ -335,6 +335,19 @@ test("a crossing that stops between the rows and the card closes the card after 
   assert.deepEqual(h.shown, ["a", null]);
 });
 
+test("a crossing that leaves the sidebar for the main pane closes the card after the grace; the crossed row never takes it", () => {
+  const h = opened("a", 100, 10);
+  crossB(h);
+  h.at(1100, 790, null); // past the card, out of the triangle: the main pane
+  h.intent.move();
+  mock.timers.tick(GRACE - 1);
+  assert.deepEqual(h.shown, ["a"]);
+  mock.timers.tick(1);
+  assert.deepEqual(h.shown, ["a", null]);
+  mock.timers.tick(SETTLE + DWELL);
+  assert.deepEqual(h.shown, ["a", null], "nor does b's open once the pointer is gone");
+});
+
 test("a crossing that stops between the rows and the card keeps the card while focus is on its row", () => {
   const h = focusOpened("a");
   crossB(h);

@@ -6,8 +6,8 @@ import { Playing, type Played } from "./playing.ts";
 function animation() {
   let finish!: () => void;
   let abort!: (e: Error) => void;
-  const finished = new Promise<Animation>((resolve, reject) => {
-    finish = () => resolve({} as Animation);
+  const finished = new Promise<void>((resolve, reject) => {
+    finish = resolve;
     abort = reject;
   });
   const a = {
