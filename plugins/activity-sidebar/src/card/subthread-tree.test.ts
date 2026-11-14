@@ -22,7 +22,7 @@ function kid(id: string, parent: string, at: number, extra: Partial<PluginSideba
 
 function tree(threads: PluginSidebarThread[]) {
   const root = thread("root", { environment: MAIN });
-  return subthreadLines(indexThreads([root, ...threads]), root);
+  return subthreadLines(indexThreads([root, ...threads], new Set()), root);
 }
 
 /** Each line as "id" for a thread or "@branch×threads" for a place, indented one space per trunk. */

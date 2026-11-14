@@ -17,7 +17,7 @@ export const SHOWN: SectionKey[] = ["pinned", "activity", "working", "asleep"];
 
 /** The list's layout of `threads` in a sidebar `viewport` tall, Archived folded unless `open` says otherwise. */
 export function layout(threads: readonly PluginSidebarThread[], open: readonly SectionKey[] = SHOWN, viewport = 800): Layout {
-  const sections = buildActivity({ threads, projects: [], sleeps: new Map(), now: 0, activeThreadId: null, filter: null }).sections;
+  const sections = buildActivity({ threads, projects: [], sleeps: new Map(), held: new Set(), now: 0, activeThreadId: null, filter: null }).sections;
   return layoutItems(listItems(sections, view({ open: new Set(open) })), viewport);
 }
 

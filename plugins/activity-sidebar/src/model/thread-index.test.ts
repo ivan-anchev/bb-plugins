@@ -15,7 +15,7 @@ const TREE = [
 ];
 
 test("runningUnder counts own background agents and every running descendant", () => {
-  const index = indexThreads(TREE);
+  const index = indexThreads(TREE, new Set());
   // 2 background agents + kid-running + grandkid-waiting; hidden and archived kids don't count.
   assert.equal(index.runningUnder("root"), 4);
   assert.equal(index.runningUnder("kid-idle"), 1);
@@ -23,7 +23,7 @@ test("runningUnder counts own background agents and every running descendant", (
 });
 
 test("rootOf climbs to the parentless ancestor", () => {
-  const index = indexThreads(TREE);
+  const index = indexThreads(TREE, new Set());
   assert.equal(index.rootOf("grandkid-done"), "root");
   assert.equal(index.rootOf("root"), "root");
   assert.equal(index.rootOf("kid-hidden"), null, "hidden threads are not in the index");
@@ -31,7 +31,7 @@ test("rootOf climbs to the parentless ancestor", () => {
 });
 
 test("childrenOf and below leave hidden and archived threads out", () => {
-  const index = indexThreads(TREE);
+  const index = indexThreads(TREE, new Set());
   assert.deepEqual(index.childrenOf("root").map((t) => t.id), ["kid-running", "kid-idle"]);
   assert.deepEqual(index.below("root").map((t) => t.id), ["kid-running", "kid-idle", "grandkid-waiting", "grandkid-done"]);
   assert.deepEqual(index.childrenOf("other"), []);

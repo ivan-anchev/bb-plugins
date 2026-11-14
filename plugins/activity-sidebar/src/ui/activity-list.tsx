@@ -8,8 +8,10 @@ import { useLocalChoice } from "../data/use-local-choice.ts";
 import { useMinute } from "../data/use-minute.ts";
 import { useSleepUpkeep } from "../data/use-sleep-upkeep.ts";
 import { useSleeps } from "../data/use-sleeps.ts";
+import { useHandoffs } from "../handoff/use-handoffs.ts";
 import { ARCHIVED_FIRST, ARCHIVED_STEP, listItems, type NoticeKey } from "../list/items.ts";
 import { buildActivity, type SectionKey } from "../model/activity.ts";
+import type { ThreadIndex } from "../model/thread-index.ts";
 import { ListViewport } from "./list-viewport.tsx";
 import { ViewMenu } from "./view-menu.tsx";
 
@@ -20,6 +22,7 @@ export function ActivityList({ activeThreadId, isCompactViewport, onNavigate }: 
   const live = experimental_useSidebarThreads(LIFECYCLES);
   const archive = archivePager(live.experimental_archived);
   const sleeps = useSleeps();
+  const held = useHandoffs(live.threads);
   const now = useMinute();
   const [open, setOpen] = useLocalChoice("open-sections", parseOpen);
   const [filter, setFilter] = useLocalChoice("project-filter", parseFilter);
@@ -30,15 +33,15 @@ export function ActivityList({ activeThreadId, isCompactViewport, onNavigate }: 
   // why: a project removed since the choice was made narrows nothing.
   const chosen = live.projects.find((p) => p.id === filter) ?? null;
   const model = useMemo(
-    () => buildActivity({ threads: live.threads, projects: live.projects, sleeps: sleeps.sleeps, now, activeThreadId, filter: chosen?.id ?? null }),
-    [live.threads, live.projects, sleeps.sleeps, now, activeThreadId, chosen],
+    () => buildActivity({ threads: live.threads, projects: live.projects, sleeps: sleeps.sleeps, held, now, activeThreadId, filter: chosen?.id ?? null }),
+    [live.threads, live.projects, sleeps.sleeps, held, now, activeThreadId, chosen],
   );
   const items = useMemo(
     () => listItems(model.sections, { status: live.status, sleeps: sleeps.status, open: new Set(open), archivedShown, archive, filterName: chosen?.name ?? null, compact }),
     [model, live.status, sleeps.status, open, archivedShown, archive, chosen, compact],
   );
 
-  const since = useUnderWaySince(live.threads);
+  const since = useUnderWaySince(live.threads, model.index);
   // why: no hover at compact width (Zeron shows no card on the rail or in a flyout).
   const card = useMemo(() => (isCompactViewport ? null : { index: model.index, underWaySince: since }), [isCompactViewport, model.index, since]);
 
@@ -70,12 +73,12 @@ export function ActivityList({ activeThreadId, isCompactViewport, onNavigate }: 
 
 // ------------------------------------------------------------------ layer 2
 
-/** Since when each thread has been under way, carried over from one live update to the next. */
-function useUnderWaySince(threads: readonly PluginSidebarThread[]): ReadonlyMap<string, number> {
-  const [seen, setSeen] = useState(() => ({ threads, since: underWaySince(new Map(), threads) }));
-  // why: React's "adjust state when a prop changes": each live update builds on the last sightings.
-  if (seen.threads === threads) return seen.since;
-  const next = { threads, since: underWaySince(seen.since, threads) };
+/** Since when each thread has been under way, carried over from one live update (or hold released) to the next. */
+function useUnderWaySince(threads: readonly PluginSidebarThread[], index: ThreadIndex): ReadonlyMap<string, number> {
+  const [seen, setSeen] = useState(() => ({ index, since: underWaySince(new Map(), threads, index) }));
+  // why: React's "adjust state when a prop changes": each new index builds on the last sightings.
+  if (seen.index === index) return seen.since;
+  const next = { index, since: underWaySince(seen.since, threads, index) };
   setSeen(next);
   return next.since;
 }
