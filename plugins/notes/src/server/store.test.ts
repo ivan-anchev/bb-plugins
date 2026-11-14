@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { noteIdSchema, type Note } from "../contract.ts";
+import { attachmentIdSchema, noteIdSchema, type Attachment, type Note } from "../contract.ts";
 import { memoryStorage } from "./memory-storage.ts";
 import { openStore } from "./store.ts";
 
@@ -11,7 +11,11 @@ function freshStore() {
 }
 
 function note(n: number, text: string): Note {
-  return { id: noteIdSchema.parse(`note_00000000-0000-4000-8000-${String(n).padStart(12, "0")}`), createdAt: 1_000 * n, quote: null, body: { text, mentions: [] } };
+  return { id: noteIdSchema.parse(`note_00000000-0000-4000-8000-${String(n).padStart(12, "0")}`), createdAt: 1_000 * n, quote: null, body: { text, mentions: [] }, attachments: [] };
+}
+
+function attachment(n: number, mimeType: Attachment["mimeType"]): Attachment {
+  return { id: attachmentIdSchema.parse(`att_00000000-0000-4000-8000-${String(n).padStart(12, "0")}`), name: `file-${n}`, mimeType, sizeBytes: 1_000 * n };
 }
 
 test("a saved note reads back exactly as it was written", () => {
@@ -100,5 +104,35 @@ test("deleting a note that is already gone changes nothing", () => {
   assert.deepEqual(
     store.activeNotes().map((n) => n.body.text),
     ["kept"],
+  );
+});
+
+test("a note's attachments read back with it, in the order they were attached", () => {
+  const { store } = freshStore();
+  const withFiles: Note = { ...note(1, ""), attachments: [attachment(2, "video/mp4"), attachment(1, "image/png"), attachment(3, "video/quicktime")] };
+  store.insert(withFiles);
+  store.insert(note(2, "no files"));
+
+  assert.deepEqual(store.activeNotes(), [note(2, "no files"), withFiles]);
+});
+
+test("an attachment is found by its id until its note is deleted", () => {
+  const { store } = freshStore();
+  store.insert({ ...note(1, "with a file"), attachments: [attachment(1, "image/webp")] });
+
+  assert.deepEqual(store.attachment(attachment(1, "image/webp").id), attachment(1, "image/webp"));
+  assert.deepEqual(store.delete(note(1, "").id), [attachment(1, "image/webp").id]);
+  assert.equal(store.attachment(attachment(1, "image/webp").id), null);
+});
+
+test("a note whose attachment rows fail to insert is not saved at all", () => {
+  const { store } = freshStore();
+  store.insert({ ...note(1, "first"), attachments: [attachment(1, "image/png")] });
+
+  // why the same attachment id: its primary key refuses the second row, after the note's row went in.
+  assert.throws(() => store.insert({ ...note(2, "second"), attachments: [attachment(1, "image/png")] }), /UNIQUE/);
+  assert.deepEqual(
+    store.activeNotes().map((n) => n.body.text),
+    ["first"],
   );
 });

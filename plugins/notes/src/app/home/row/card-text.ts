@@ -1,11 +1,15 @@
 // The words a note shows on the card's two lines.
-import type { Note, NoteBody } from "../../../contract.ts";
+import { attachmentKind, type Attachment, type Note, type NoteBody } from "../../../contract.ts";
 
-/** Line 1: what the user wrote, else the passage they quoted, in quotation marks. */
+/**
+ * Line 1: what the user wrote, else the passage they quoted, in quotation marks, else what they
+ * attached ("2 screenshots").
+ */
 export function noteLine(note: Note): string {
   const body = oneLine(note.body.text);
-  if (body !== "" || note.quote === null) return body;
-  return `“${oneLine(note.quote.text)}”`;
+  if (body !== "") return body;
+  if (note.quote !== null) return `“${oneLine(note.quote.text)}”`;
+  return attachmentsLabel(note.attachments);
 }
 
 /**
@@ -20,6 +24,13 @@ export function sourceTitle(note: Note): string | null {
 function firstLinkedTitle({ text, mentions }: NoteBody): string | null {
   const [first] = mentions;
   return first === undefined ? null : text.slice(first.from + 1, first.to);
+}
+
+/** "1 screenshot", "2 recordings", or "3 attachments" when images and videos are mixed. */
+function attachmentsLabel(attachments: readonly Attachment[]): string {
+  const kinds = new Set(attachments.map(({ mimeType }) => attachmentKind(mimeType)));
+  const noun = kinds.size > 1 ? "attachment" : kinds.has("video") ? "recording" : "screenshot";
+  return `${attachments.length} ${noun}${attachments.length === 1 ? "" : "s"}`;
 }
 
 /** A note written over several lines reads as one. */

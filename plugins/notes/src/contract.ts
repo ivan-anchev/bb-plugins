@@ -43,19 +43,53 @@ const noteBodySchema = z
   );
 export type NoteBody = z.infer<typeof noteBodySchema>;
 
+// why branded, and the pattern: the id is also the file's name on disk and the media route's ?id=,
+// so only `att_<uuid>` ever reaches a path.
+export const attachmentIdSchema = z.string().regex(/^att_[0-9a-f-]{36}$/).brand<"AttachmentId">();
+
+/** The images and videos a note may hold. No SVG (it can run script) and no HEIC (browsers can't draw it). */
+export const mediaMimeSchema = z.enum(["image/png", "image/jpeg", "image/gif", "image/webp", "video/mp4", "video/quicktime", "video/webm"]);
+export type MediaMime = z.infer<typeof mediaMimeSchema>;
+
+/** 100 MB a file: a screen recording fits. */
+export const MAX_FILE_BYTES = 100 * 1024 * 1024;
+
+/** An image or video saved with a note; its bytes are served at `mediaUrl(id)`. */
+export const attachmentSchema = z.object({
+  id: attachmentIdSchema,
+  name: z.string().min(1),
+  mimeType: mediaMimeSchema,
+  sizeBytes: z.number().int().positive(),
+});
+export type Attachment = z.infer<typeof attachmentSchema>;
+
+// why no `kind` field: it is the MIME type's prefix, and a second field could disagree with it.
+export function attachmentKind(mimeType: MediaMime): "image" | "video" {
+  return mimeType.startsWith("video/") ? "video" : "image";
+}
+
 /** An active note. Archived notes never leave the server, so there is no `archivedAt` here. */
 export const noteSchema = z.object({
   id: noteIdSchema,
   createdAt: z.number().int(),
   quote: quoteSchema.nullable(),
   body: noteBodySchema,
+  /** In the order they were attached. */
+  attachments: z.array(attachmentSchema),
 });
 export type Note = z.infer<typeof noteSchema>;
 
+/** A file attached in the Spotlight, on its way to the server: its bytes in base64, without a data: prefix. */
+const newFileSchema = z.object({ name: z.string().min(1), mimeType: mediaMimeSchema, base64: z.string() });
+export type NewFile = z.infer<typeof newFileSchema>;
+
+/** At most this many files on one note. */
+export const MAX_FILES = 20;
+
 const newNoteSchema = z
-  .object({ quote: quoteSchema.nullable(), body: noteBodySchema })
+  .object({ quote: quoteSchema.nullable(), body: noteBodySchema, files: z.array(newFileSchema).max(MAX_FILES) })
   // why here, not only in the form: the server is the boundary, and an empty note is an illegal state.
-  .refine((note) => note.quote !== null || note.body.text.trim() !== "", "A note needs some text");
+  .refine((note) => note.quote !== null || note.body.text.trim() !== "" || note.files.length > 0, "A note needs some text or a file");
 export type NewNote = z.infer<typeof newNoteSchema>;
 
 export const notesContract = defineRpcContract({
