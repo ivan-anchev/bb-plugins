@@ -11,6 +11,7 @@ import { Anchor, Content, Portal, Root } from "@radix-ui/react-popover";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 import { CardIntent, type CardIntentDeps, type Point, type Under } from "../../card/card-intent.ts";
 import type { ListItem } from "../../list/items.ts";
+import type { LayoutEntry } from "../../list/layout.ts";
 import type { ThreadIndex } from "../../model/thread-index.ts";
 import { PORTAL_SCOPE } from "../portal-scope.ts";
 import { CardBody } from "./card-body.tsx";
@@ -36,12 +37,15 @@ export type ListFocus = {
   refocus(): void;
 };
 
-type Props = { scroller: RefObject<HTMLElement | null>; items: readonly ListItem[]; data: CardData; listFocus: ListFocus; onNavigate(): void };
+/** A row where the list lays it out: `y` from the list's top, `h` its height. */
+type PlacedRow = { item: RowItem; y: number; h: number };
+
+type Props = { scroller: RefObject<HTMLElement | null>; entries: readonly LayoutEntry[]; data: CardData; listFocus: ListFocus; onNavigate(): void };
 
 /** The card shown, and the one fading out behind it; null, none. */
 type Shown = { current: string | null; leaving: string | null };
 
-export function HoverCard({ scroller, items, data, listFocus, onNavigate }: Props) {
+export function HoverCard({ scroller, entries, data, listFocus, onNavigate }: Props) {
   const [shown, setShown] = useState<Shown>({ current: null, leaving: null });
   const card = useRef<HTMLDivElement>(null);
   const latestFocus = useRef(listFocus);
@@ -53,7 +57,7 @@ export function HoverCard({ scroller, items, data, listFocus, onNavigate }: Prop
     returnFocus: () => latestFocus.current.refocus(),
   });
   const navigate = useBbNavigate();
-  const current = rowItem(items, shown.current);
+  const current = placedRow(entries, shown.current);
 
   // It goes with its row: filtered out, folded away, moved to another section, deleted. Focus that was in
   // it still counts as there: React turns events off while it commits, so the card's removal reports no
@@ -71,11 +75,13 @@ export function HoverCard({ scroller, items, data, listFocus, onNavigate }: Prop
   // why: one array, so a card keeps its instance (and plays its exit) as it turns from shown to leaving.
   const cards = [shown.leaving, shown.current].filter((key, i, all): key is string => key !== null && all.indexOf(key) === i);
   return cards.map((key) => {
-    const item = rowItem(items, key);
+    const placed = placedRow(entries, key);
+    if (placed === null) return null;
+    const { item } = placed;
     const isCurrent = key === shown.current;
-    return item === null ? null : (
+    return (
       <Root key={key} open={isCurrent}>
-        <RowAnchor scroller={scroller} cardKey={key} item={item} />
+        <RowAnchor scroller={scroller} cardKey={key} y={placed.y} h={placed.h} />
         <Portal>
           <Content
             {...PORTAL_SCOPE}
@@ -115,10 +121,11 @@ export function HoverCard({ scroller, items, data, listFocus, onNavigate }: Prop
 // ------------------------------------------------------------------ layer 2
 
 /**
- * The row's box, read each time Radix places the card. A new anchor per item, so a row that glides
- * (its section reordering) takes its card along. The last box read stands in once the row unmounts.
+ * The row's box, read each time Radix places the card. A new anchor when the row's place changes, so
+ * Radix places the card again; it reads the row where its glide starts, not where it lands. The last
+ * box read stands in once the row unmounts.
  */
-function RowAnchor({ scroller, cardKey, item }: { scroller: RefObject<HTMLElement | null>; cardKey: string; item: RowItem }) {
+function RowAnchor({ scroller, cardKey, y, h }: { scroller: RefObject<HTMLElement | null>; cardKey: string; y: number; h: number }) {
   const anchor = useMemo(() => {
     let last = new DOMRect();
     const getBoundingClientRect = () => {
@@ -127,8 +134,10 @@ function RowAnchor({ scroller, cardKey, item }: { scroller: RefObject<HTMLElemen
       return last;
     };
     return { current: { getBoundingClientRect } };
-    // why: `item` is a new object whenever its row's model changes, which is when it may have moved.
-  }, [scroller, cardKey, item]);
+    // why: keyed on the row's place, not its model. A new anchor restarts Floating UI's autoUpdate, which
+    // forces style and layout, and the click that opens a row changes its model in the very commit bb
+    // lays the opened thread out in.
+  }, [scroller, cardKey, y, h]);
   return <Anchor virtualRef={anchor} />;
 }
 
@@ -270,7 +279,8 @@ function isOnCard(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('.as-card[data-state="open"]') !== null;
 }
 
-function rowItem(items: readonly ListItem[], key: string | null): RowItem | null {
+function placedRow(entries: readonly LayoutEntry[], key: string | null): PlacedRow | null {
   if (key === null) return null;
-  return items.find((item): item is RowItem => item.kind === "row" && cardKeyOf(item) === key) ?? null;
+  for (const { item, y, h } of entries) if (item.kind === "row" && cardKeyOf(item) === key) return { item, y, h };
+  return null;
 }
