@@ -1,6 +1,6 @@
 ---
 name: activity-sidebar
-description: Explain the Activity Sidebar plugin, which replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it, the Working, Asleep and Archived shelves folded at its foot and a project filter, each row showing the thread's agent, project initial, title, running subthreads and its state or age, with a right-click menu (including Sleep and Wake), a hover Archive button and a hover card with the thread's details, its plan while it works and its subthread tree. Use when the user asks what the Activity list shows, why a thread is or isn't in it, what a row's corner glyph means, what the shelves and the filter do, how Sleep works and when a sleeping thread wakes, what a row's menu, its hover Archive button and its hover card do, or how to switch back to bb's own list.
+description: Explain the Activity Sidebar plugin, which replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it, the Working, Asleep and Archived shelves folded at its foot, a project filter and a Compact switch for one or two lines a row, each row showing the thread's agent, project initial, title, running subthreads and its state or age, with a right-click menu (including Sleep and Wake), a hover Archive button and a hover card with the thread's details, its plan while it works and its subthread tree. Use when the user asks what the Activity list shows, why a thread is or isn't in it, what a row's corner glyph means, what the shelves, the filter and the Compact switch do, how Sleep works and when a sleeping thread wakes, what a row's menu, its hover Archive button and its hover card do, or how to switch back to bb's own list.
 ---
 
 # Activity Sidebar
@@ -29,7 +29,7 @@ commands and no settings.
   An empty shelf is left out. When the list is longer than the sidebar, the
   shelves follow Activity and you scroll down to them.
 
-## Folding and the project filter
+## Folding, the project filter and Compact
 
 - Click a section's title to fold or unfold it. Pinned and Activity start
   open; the shelves start folded. A folded title shows how many threads it
@@ -38,10 +38,13 @@ commands and no settings.
 - Opened, Archived shows its latest 10 and a "Show 25 more" row. Past what is
   loaded, it reads "Show more" and loads the next page. If a page fails to
   load, the shelf says "Couldn't load archived threads · Retry".
-- The filter button at the end of Activity's title narrows Pinned, Activity
+- The view button at the end of Activity's title narrows Pinned, Activity
   and every shelf to one project; the title then reads "Activity · project".
   Choose "All projects" to show everything again.
-- The folds and the filter are kept in this browser's local storage, so they
+- The same menu's Compact switch picks the density. On (the default), a row
+  is one line. Off, each row grows to two: under its title, its branch behind
+  a branch glyph, then its machine, each when bb names one.
+- The folds, the filter and the density are kept in this browser's local storage, so they
   survive a reload but aren't shared with other clients.
 
 ## Motion
@@ -67,7 +70,10 @@ From left to right:
 1. The agent's mark, faint unless the row has a state or is open.
 2. The project's tile: its initial on a colour hashed from the project id, the
    same colour every time.
-3. The title, fading out at its end when it doesn't fit.
+3. The title, fading out at its end when it doesn't fit. Rest the pointer on
+   the row and, after a beat, a title that doesn't fit runs through to its
+   end; it slides back when the pointer leaves. With Reduce motion on, it
+   stays still.
 4. Its pull request, when the thread's branch has one: the pull request glyph
    (a draft's own glyph for a draft) and its number, green while open, grey as
    a draft, violet once merged, red when closed. Hover it for its state and

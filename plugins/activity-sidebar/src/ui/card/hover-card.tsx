@@ -2,7 +2,7 @@
 // pointer and focus events delegated on the scroller, and by the pointer's moves anywhere while a card
 // shows. Radix Popover (shimmed by the host, so it shares bb's overlay layer) places it beside that row,
 // kept inside the window, and closes it on Escape wherever focus is. A card leaving fades out while the
-// next fades in (Z:screens/shell/init.luau:677-678). The keyboard reaches it from its row: Tab goes in,
+// next fades in. The keyboard reaches it from its row: Tab goes in,
 // first to its body, which the arrow keys then scroll, and on through its buttons. Shift+Tab off its
 // first stop or Escape comes back, and Tab off its last goes on to what follows the list. Focus in the
 // card is its row's to the list.
@@ -11,6 +11,7 @@ import { Anchor, Content, Portal, Root } from "@radix-ui/react-popover";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 import { CardIntent, type CardIntentDeps, type Point, type Under } from "../../card/card-intent.ts";
 import type { ListItem } from "../../list/items.ts";
+import type { LayoutEntry } from "../../list/layout.ts";
 import type { ThreadIndex } from "../../model/thread-index.ts";
 import { PORTAL_SCOPE } from "../portal-scope.ts";
 import { CardBody } from "./card-body.tsx";
@@ -22,7 +23,7 @@ export type RowItem = Extract<ListItem, { kind: "row" }>;
 
 /**
  * A row in its place: its section and thread. A row that moves to another section (archived, put to
- * sleep, done working) is another row, so its card goes with the old one (Z:ds/sidebar.luau:1238-1240).
+ * sleep, done working) is another row, so its card goes with the old one.
  */
 export function cardKeyOf(item: RowItem): string {
   return `${item.section}/${item.row.thread.id}`;
@@ -36,12 +37,15 @@ export type ListFocus = {
   refocus(): void;
 };
 
-type Props = { scroller: RefObject<HTMLElement | null>; items: readonly ListItem[]; data: CardData; listFocus: ListFocus; onNavigate(): void };
+/** A row where the list lays it out: `y` from the list's top, `h` its height. */
+type PlacedRow = { item: RowItem; y: number; h: number };
+
+type Props = { scroller: RefObject<HTMLElement | null>; entries: readonly LayoutEntry[]; data: CardData; listFocus: ListFocus; onNavigate(): void };
 
 /** The card shown, and the one fading out behind it; null, none. */
 type Shown = { current: string | null; leaving: string | null };
 
-export function HoverCard({ scroller, items, data, listFocus, onNavigate }: Props) {
+export function HoverCard({ scroller, entries, data, listFocus, onNavigate }: Props) {
   const [shown, setShown] = useState<Shown>({ current: null, leaving: null });
   const card = useRef<HTMLDivElement>(null);
   const latestFocus = useRef(listFocus);
@@ -53,7 +57,7 @@ export function HoverCard({ scroller, items, data, listFocus, onNavigate }: Prop
     returnFocus: () => latestFocus.current.refocus(),
   });
   const navigate = useBbNavigate();
-  const current = rowItem(items, shown.current);
+  const current = placedRow(entries, shown.current);
 
   // It goes with its row: filtered out, folded away, moved to another section, deleted. Focus that was in
   // it still counts as there: React turns events off while it commits, so the card's removal reports no
@@ -71,11 +75,13 @@ export function HoverCard({ scroller, items, data, listFocus, onNavigate }: Prop
   // why: one array, so a card keeps its instance (and plays its exit) as it turns from shown to leaving.
   const cards = [shown.leaving, shown.current].filter((key, i, all): key is string => key !== null && all.indexOf(key) === i);
   return cards.map((key) => {
-    const item = rowItem(items, key);
+    const placed = placedRow(entries, key);
+    if (placed === null) return null;
+    const { item } = placed;
     const isCurrent = key === shown.current;
-    return item === null ? null : (
+    return (
       <Root key={key} open={isCurrent}>
-        <RowAnchor scroller={scroller} cardKey={key} item={item} />
+        <RowAnchor scroller={scroller} cardKey={key} y={placed.y} h={placed.h} />
         <Portal>
           <Content
             {...PORTAL_SCOPE}
@@ -115,10 +121,11 @@ export function HoverCard({ scroller, items, data, listFocus, onNavigate }: Prop
 // ------------------------------------------------------------------ layer 2
 
 /**
- * The row's box, read each time Radix places the card. A new anchor per item, so a row that glides
- * (its section reordering) takes its card along. The last box read stands in once the row unmounts.
+ * The row's box, read each time Radix places the card. A new anchor when the row's place changes, so
+ * Radix places the card again; it reads the row where its glide starts, not where it lands. The last
+ * box read stands in once the row unmounts.
  */
-function RowAnchor({ scroller, cardKey, item }: { scroller: RefObject<HTMLElement | null>; cardKey: string; item: RowItem }) {
+function RowAnchor({ scroller, cardKey, y, h }: { scroller: RefObject<HTMLElement | null>; cardKey: string; y: number; h: number }) {
   const anchor = useMemo(() => {
     let last = new DOMRect();
     const getBoundingClientRect = () => {
@@ -127,8 +134,10 @@ function RowAnchor({ scroller, cardKey, item }: { scroller: RefObject<HTMLElemen
       return last;
     };
     return { current: { getBoundingClientRect } };
-    // why: `item` is a new object whenever its row's model changes, which is when it may have moved.
-  }, [scroller, cardKey, item]);
+    // why: keyed on the row's place, not its model. A new anchor restarts Floating UI's autoUpdate, which
+    // forces style and layout, and the click that opens a row changes its model in the very commit bb
+    // lays the opened thread out in.
+  }, [scroller, cardKey, y, h]);
   return <Anchor virtualRef={anchor} />;
 }
 
@@ -157,17 +166,18 @@ function useCardIntent(
   useEffect(() => {
     const el = scroller.current;
     if (el === null) return;
-    const over = (e: MouseEvent) => {
+    // why: a touch has no hover; its tap opens the row, and a card it opened would be left standing.
+    const over = (e: PointerEvent) => {
       const key = cardKeyAt(e.target);
-      if (key === null) return;
+      if (key === null || e.pointerType === "touch") return;
       pointer.current = { x: e.clientX, y: e.clientY };
       intent.overRow(key);
     };
     // why: the pointer is not tracked here: an out event already reports the next spot, and the safe
-    // triangle starts where the pointer last stood in the row (P:1407).
-    const out = (e: MouseEvent) => {
+    // triangle starts where the pointer last stood in the row.
+    const out = (e: PointerEvent) => {
       const key = cardKeyAt(e.target);
-      if (key === null || cardKeyAt(e.relatedTarget) === key || isOnCard(e.relatedTarget)) return;
+      if (key === null || e.pointerType === "touch" || cardKeyAt(e.relatedTarget) === key || isOnCard(e.relatedTarget)) return;
       intent.leaveRow(key);
     };
     // why: only focus the keyboard moved rests on a row; a click's focus comes with a press, which puts
@@ -193,8 +203,8 @@ function useCardIntent(
     };
     const cold = () => intent.cold();
 
-    el.addEventListener("mouseover", over);
-    el.addEventListener("mouseout", out);
+    el.addEventListener("pointerover", over);
+    el.addEventListener("pointerout", out);
     el.addEventListener("focusin", focusIn);
     el.addEventListener("focusout", focusOut);
     el.addEventListener("keydown", tabIn);
@@ -202,8 +212,8 @@ function useCardIntent(
     el.addEventListener("pointerdown", cold, true);
     el.addEventListener("contextmenu", cold, true);
     return () => {
-      el.removeEventListener("mouseover", over);
-      el.removeEventListener("mouseout", out);
+      el.removeEventListener("pointerover", over);
+      el.removeEventListener("pointerout", out);
       el.removeEventListener("focusin", focusIn);
       el.removeEventListener("focusout", focusOut);
       el.removeEventListener("keydown", tabIn);
@@ -215,7 +225,7 @@ function useCardIntent(
   }, [scroller, intent]);
 
   // why: a crossing on its way to the card can end anywhere, the main pane included. Followed over the
-  // whole page, as the prototype does (P:1379), the pointer leaving both the row and the card always lets
+  // whole page, as the prototype does, the pointer leaving both the row and the card always lets
   // the card go; followed only over the list, its last spot there stays and the crossed row takes the card.
   useEffect(() => {
     if (!showing) return;
@@ -269,7 +279,8 @@ function isOnCard(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('.as-card[data-state="open"]') !== null;
 }
 
-function rowItem(items: readonly ListItem[], key: string | null): RowItem | null {
+function placedRow(entries: readonly LayoutEntry[], key: string | null): PlacedRow | null {
   if (key === null) return null;
-  return items.find((item): item is RowItem => item.kind === "row" && cardKeyOf(item) === key) ?? null;
+  for (const { item, y, h } of entries) if (item.kind === "row" && cardKeyOf(item) === key) return { item, y, h };
+  return null;
 }

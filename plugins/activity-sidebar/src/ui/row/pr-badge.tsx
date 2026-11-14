@@ -1,9 +1,9 @@
-// A row's pull request, Zeron's badge (Z:ds/session_row.luau:285-306): its glyph and number in its
+// A row's pull request, Zeron's badge: its glyph and number in its
 // state's ink on a 10% wash of it, legible on every row surface in light and dark (app.css `.as-pr`);
 // its state and title a tooltip.
 import type { PullRequest } from "../../data/pull-request/github-pr-status.ts";
 
-/** Zeron's state names (Z:ds/locale_en.luau:328-331). */
+/** Zeron's state names. */
 const PR_STATE_NAME: Record<PullRequest["state"], string> = { open: "Open", draft: "Draft", merged: "Merged", closed: "Closed" };
 
 export function PrBadge({ pr }: { pr: PullRequest }) {

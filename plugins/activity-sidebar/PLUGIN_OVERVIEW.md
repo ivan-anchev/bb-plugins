@@ -1,7 +1,9 @@
+Experimental: it may break with a bb update.
+
 Replaces bb's thread list with one Activity list of every parent thread from
 every project, latest first, with pinned threads above it and the Working,
 Asleep and Archived shelves folded at its foot. A filter narrows it to one
-project. Each row shows the thread's agent, its project's coloured initial, its
+project, and rows are one line or two. Each row shows the thread's agent, its project's coloured initial, its
 title, its pull request, how many threads run under it, and its state or how
 long ago it last moved. Right-click a row for its menu (rename, pin, copy, sleep or wake,
 archive, delete); under the pointer, its corner offers Archive. A thread put to
@@ -21,15 +23,18 @@ its plan while it works, and a tree of its subthreads to open.
   sleep, soonest to wake first, and **Archived** holds bb's archived threads. They start folded, showing how many they hold; while bb
   has more archived threads than it has loaded, the count reads `50+`. Opened,
   Archived shows its latest 10 and loads more 25 at a time.
-- Click any section's title to fold or unfold it. The filter button at the end
+- Click any section's title to fold or unfold it. The view button at the end
   of Activity's title narrows every section to one project, and the title
-  then reads "Activity · project". The folds and the filter are remembered in
-  this browser.
-- One line per thread: the thread's agent, its project's coloured initial, its
-  title (fading out where it doesn't fit), its branch's pull request (number,
+  then reads "Activity · project". Its Compact switch picks one line a row
+  (the default) or two. The folds, the filter and the density are remembered
+  in this browser.
+- A row shows the thread's agent, its project's coloured initial, its
+  title (fading out where it doesn't fit, and running through to its end
+  under the pointer), its branch's pull request (number,
   coloured open, draft, merged or closed), how many threads run under it, and
   in its corner either its state (working, connecting, waiting, awaiting input,
-  pending approval, done, failed) or how long ago it last moved.
+  pending approval, done, failed) or how long ago it last moved. With Compact
+  off, a second line says its branch and its machine.
 - The open thread's row, or its parent's when a subthread is open, is
   highlighted. Clicking a row opens the thread; dragging it out to the main
   area opens it in a split.

@@ -1,4 +1,4 @@
-// What the hover card says (P:1223-1257, Z:ds/session_card.luau): its title, up to three lines; its
+// What the hover card says: its title, up to three lines; its
 // state line; its machine, project and branch ("· worktree off main"); its pull request; while it is
 // under way, its plan; its subthread tree. No latest message. The reads only the card pays for: a
 // worktree's base branch, and the plan. The title and lines stay put; the plan and tree under them
@@ -48,7 +48,7 @@ export function CardBody({ item, data, onOpen }: Props) {
           {line.lead}
           {line.note !== null && <i> · {line.note}</i>}
         </Line>
-        {/* why: an unknown machine is left unsaid, as Zeron's card leaves a device it can't name (Z:ds/session_card.luau:89-95). */}
+        {/* why: an unknown machine is left unsaid, as Zeron's card leaves a device it can't name. */}
         {t.host !== null && <Line glyph={<CardGlyph name="laptop" />}>{t.host.name}</Line>}
         <Line glyph={<CardGlyph name="folder" />}>{row.project.name}</Line>
         {branch !== null && (
@@ -80,7 +80,7 @@ export function CardBody({ item, data, onOpen }: Props) {
 
 /**
  * A line: a 12 glyph and its words, cut with "…" at the card's edge. `after` stays whole after them:
- * the branch gives way before where it runs, which is short and new (P:1247-1249).
+ * the branch gives way before where it runs, which is short and new.
  */
 function Line({ glyph, after = null, children }: { glyph: ReactNode; after?: ReactNode; children: ReactNode }) {
   return (

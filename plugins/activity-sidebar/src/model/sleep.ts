@@ -1,5 +1,5 @@
-// Sleep's choices and how a sleeper's corner reads, ported from Zeron (Z:screens/shell/activity.luau
-// presets :117-160, wakes_in :92-103). Times are epoch ms; days and hours are the reader's local ones.
+// Sleep's choices and how a sleeper's corner reads, ported from Zeron's
+// presets and wake times. Times are epoch ms; days and hours are the reader's local ones.
 import { clock, weekday } from "./time.ts";
 
 export type SleepPreset = { label: string; when: string; until: number };
@@ -39,14 +39,14 @@ export function wakesIn(until: number, now: number): string {
   return `${Math.ceil(left / DAY)}d`;
 }
 
-/** Tomorrow at 9 local time, where Custom… opens (Z:screens/shell/sidebar.luau:1183-1186). */
+/** Tomorrow at 9 local time, where Custom… opens. */
 export function tomorrowMorning(now: Date): number {
   return wallClock(now, 1, 9);
 }
 
 /**
  * Custom…'s moment from a `datetime-local` value ("2026-11-14T09:00", local time), or null when it is
- * empty or not ahead of `now`: a time that has passed puts nothing to sleep (Z:screens/shell/sidebar.luau:1543-1550).
+ * empty or not ahead of `now`: a time that has passed puts nothing to sleep.
  */
 export function customUntil(value: string, now: number): number | null {
   const until = new Date(value).getTime();

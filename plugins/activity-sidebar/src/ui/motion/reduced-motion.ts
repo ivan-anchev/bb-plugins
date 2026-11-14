@@ -1,4 +1,4 @@
-// The system's Reduce motion, the one place the list and the ring ask (Z:ds/motion.luau reduced).
+// The system's Reduce motion, the one place the list and the ring ask.
 import { useSyncExternalStore } from "react";
 
 let query: MediaQueryList | null = null;

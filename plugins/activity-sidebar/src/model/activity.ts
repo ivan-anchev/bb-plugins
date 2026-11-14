@@ -25,9 +25,14 @@ export type RowModel = {
   current: boolean;
   runningUnder: number;
   project: { name: string; hue: Hue };
+  /** The regular row's second line (Zeron's `SessionRow.detail`, less the project the row's mark already shows). */
+  detail: RowDetail;
   /** When it wakes, while it sleeps on the Asleep shelf; null otherwise. */
   asleepUntil: number | null;
 };
+
+/** The machine it runs on and its branch, each null when bb names none. */
+export type RowDetail = { machine: string | null; branch: string | null };
 
 export type Section = { key: SectionKey; rows: readonly RowModel[] };
 
@@ -73,6 +78,7 @@ export function buildActivity(input: ActivityInput): ActivityModel {
       current,
       runningUnder: index.runningUnder(thread.id),
       project: { name, hue: hueOf(thread.projectId) },
+      detail: detailOf(thread),
       asleepUntil,
     };
   };
@@ -90,7 +96,7 @@ export function buildActivity(input: ActivityInput): ActivityModel {
 
 /**
  * The sleepers asking for you: their sleep ends now, for good, so they show Woke once answered and
- * never slip back to Asleep (Zeron: its host wakes it early, Z:account/sessions.luau:36-38).
+ * never slip back to Asleep (Zeron: its host wakes it early).
  */
 export function sleepersAskingForYou(input: Pick<ActivityInput, "threads" | "sleeps" | "now">): SleepRecord[] {
   return input.threads.filter(isListed).flatMap((t) => {
@@ -122,7 +128,7 @@ function asksForYou(state: ZState | null): boolean {
 
 /**
  * Archived first, then Pinned (a pin holds its row in place whatever it does), then Asleep until its
- * time unless it asks for you, then Working while under way (Zeron: screens/shell/activity.luau:48-59);
+ * time unless it asks for you, then Working while under way;
  * the rest is Activity.
  */
 function sectionOf(t: PluginSidebarThread, sleep: SleepRecord | undefined, state: ZState | null, now: number): SectionKey {
@@ -135,7 +141,7 @@ function sectionOf(t: PluginSidebarThread, sleep: SleepRecord | undefined, state
 
 /**
  * Higher stands nearer the top. Asleep: the soonest to wake. Archived: the latest archived. The rest:
- * when it last came back, its own last move or waking from sleep (Zeron: activity.luau:63-68); one
+ * when it last came back, its own last move or waking from sleep; one
  * that woke early, asking for you, woke now. bb's attention time is the move: it advances when a turn
  * ends or fails, never when the thread is read (`updatedAt` does both).
  */
@@ -145,11 +151,15 @@ function rankOf({ thread, sleep }: { thread: PluginSidebarThread; sleep: SleepRe
   return Math.max(thread.latestAttentionAt, sleep === undefined ? 0 : Math.min(sleep.until, now));
 }
 
-/** Its state's glyph; else, asleep, how soon it wakes (Z:screens/shell/sidebar.luau:548); else when it last moved. */
+/** Its state's glyph; else, asleep, how soon it wakes; else when it last moved. */
 function cornerOf(t: PluginSidebarThread, state: ZState | null, asleepUntil: number | null, now: number): Corner {
   if (state !== null) return { kind: "state", state };
   if (asleepUntil !== null) return { kind: "wakes", text: wakesIn(asleepUntil, now) };
   return { kind: "time", text: ago(lastMoved(t), now) };
+}
+
+function detailOf(t: PluginSidebarThread): RowDetail {
+  return { machine: t.host?.name ?? null, branch: t.environment?.branchName ?? null };
 }
 
 

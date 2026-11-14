@@ -1,4 +1,4 @@
-// The card's subthreads (P:1333-1352): "Subthreads 5 · 2 running", then each line a small row of the
+// The card's subthreads: "Subthreads 5 · 2 running", then each line a small row of the
 // sidebar's own (its agent's mark, its title fading out, its state ELSE its time) hung on 1-point
 // hairlines; a press opens that subthread. Checkouts elsewhere head their rows with their branch.
 // "Show all N" opens the parent when lines were left out.
@@ -96,7 +96,7 @@ const CH = 24; // a line's height
 const BEND = 4; // the elbow's radius
 
 /** The line's hairlines: outer trunks running on past it, its own trunk bending into it, and on below
- * unless it is the last (P:1333-1338). */
+ * unless it is the last. */
 function Rails({ rail }: { rail: Rail }) {
   const x = rail.at + 0.5;
   const mid = CH / 2;
@@ -111,7 +111,7 @@ function Rails({ rail }: { rail: Rail }) {
   );
 }
 
-/** Z: the checkout's branch, else what it is (P:401). */
+/** The checkout's branch, else what it is, as Zeron names it. */
 function placeName(c: Checkout): string {
   return c.branch ?? (c.kind === "workspace" ? "Personal workspace" : "No branch");
 }

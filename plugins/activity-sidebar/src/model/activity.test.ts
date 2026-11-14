@@ -247,3 +247,15 @@ test("the sleepers asking for you are the ones whose sleep ends now, whatever th
     { threadId: "theirs-asks", until: NOW + H },
   ]);
 });
+
+test("a row's detail says its machine and its branch, each when bb names one", () => {
+  const env = { id: "env_1", name: "env_1", branchName: "fix/login", path: null, isWorktree: true, providerId: null, workspaceDisplayKind: null };
+  const activity = build([
+    thread("a", { latestAttentionAt: 2, host: { id: "h", name: "MacBook" }, environment: env }),
+    thread("b", { latestAttentionAt: 1 }),
+  ]).find((s) => s.key === "activity");
+  assert.ok(activity);
+  const [placed, bare] = activity.rows.map((r) => r.detail);
+  assert.deepEqual(placed, { machine: "MacBook", branch: "fix/login" });
+  assert.deepEqual(bare, { machine: null, branch: null });
+});

@@ -6,8 +6,11 @@ import type { RowModel, Section, SectionKey } from "../model/activity.ts";
 export type ListItem =
   /** `count` is how many it holds, said only while folded; null while open. */
   | { kind: "title"; key: `t:${SectionKey}`; section: SectionKey; label: string; open: boolean; count: string | null }
-  /** `section`: where it stands, so what belongs to the row in its place (its hover card) can tell it moved. */
-  | { kind: "row"; key: `s:${string}`; row: RowModel; section: SectionKey }
+  /**
+   * `section`: where it stands, so what belongs to the row in its place (its hover card) can tell it moved.
+   * `tall`: a regular row, its detail on a second line (Zeron's two densities).
+   */
+  | { kind: "row"; key: `s:${string}`; row: RowModel; section: SectionKey; tall: boolean }
   /** Fills the room the rest leave, so the shelves after it stand at the view's foot. */
   | { kind: "spacer"; key: "spacer" }
   /** How many more archived rows a press shows; null when only the server knows (no archived count API). */
@@ -45,6 +48,8 @@ export type ListView = {
   archive: ArchivePager;
   /** The project every section is narrowed to, by name; null for every project. */
   filterName: string | null;
+  /** A line a row; otherwise two, its detail under its title. */
+  compact: boolean;
 };
 
 export const ARCHIVED_FIRST = 10;
@@ -87,12 +92,12 @@ function sectionItems(key: SectionKey, rows: readonly RowModel[], view: ListView
   const title: ListItem = { kind: "title", key: `t:${key}`, section: key, label, open, count };
   if (!open) return [title];
   if (key === "archived") return [title, ...archivedBody(rows, view)];
-  return [title, ...rows.map((row) => rowItem(row, key))];
+  return [title, ...rows.map((row) => rowItem(row, key, view))];
 }
 
 /** The first rows shown, then "Show n more", a page loading, or the page that failed with Retry. */
 function archivedBody(rows: readonly RowModel[], view: ListView): ListItem[] {
-  const shown = rows.slice(0, view.archivedShown).map((row) => rowItem(row, "archived"));
+  const shown = rows.slice(0, view.archivedShown).map((row) => rowItem(row, "archived", view));
   const { archive } = view;
   if (archive.status === "error" || archive.isFetchNextPageError) return [...shown, archivedNotice("Couldn't load archived threads", true)];
   if (archive.isFetchingNextPage) return [...shown, archivedNotice("Loading…", false)];
@@ -103,8 +108,8 @@ function archivedBody(rows: readonly RowModel[], view: ListView): ListItem[] {
   return loadedBeyond > 0 ? [...shown, more(loadedBeyond)] : shown;
 }
 
-function rowItem(row: RowModel, section: SectionKey): ListItem {
-  return { kind: "row", key: `s:${row.thread.id}`, row, section };
+function rowItem(row: RowModel, section: SectionKey, view: ListView): ListItem {
+  return { kind: "row", key: `s:${row.thread.id}`, row, section, tall: !view.compact };
 }
 
 function more(n: number | null): ListItem {

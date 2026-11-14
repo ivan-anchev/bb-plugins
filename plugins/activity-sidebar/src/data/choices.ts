@@ -1,4 +1,4 @@
-// The two choices the reader makes on this list, as stored: the open sections and the project filter.
+// The choices the reader makes on this list, as stored: the open sections, the project filter and the density.
 import { SECTION_KEYS, type SectionKey } from "../model/activity.ts";
 
 /** Pinned and Activity open, the shelves folded: the list Zeron opens with. */
@@ -12,4 +12,9 @@ export function parseOpen(stored: unknown): readonly SectionKey[] {
 /** The project id every section is narrowed to; null for every project. */
 export function parseFilter(stored: unknown): string | null {
   return typeof stored === "string" ? stored : null;
+}
+
+/** A line a row (the prototype's default) unless two were chosen. */
+export function parseCompact(stored: unknown): boolean {
+  return typeof stored === "boolean" ? stored : true;
 }

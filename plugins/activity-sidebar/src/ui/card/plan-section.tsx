@@ -1,6 +1,6 @@
-// The card's plan (P:1259-1289): "Todo 3/9", then its steps, done a check, the one in progress the
+// The card's plan: "Todo 3/9", then its steps, done a check, the one in progress the
 // working ring, pending a quiet point; folded past six to "N earlier", three steps, "N later". Either
-// button opens the whole plan (`open`, held by the card: Z:ds/composer_dock.luau:1647, 1735-1741).
+// button opens the whole plan (`open`, held by the card).
 // A read that failed says so above the plan it leaves in place, with Retry.
 import type { ReactNode } from "react";
 import { foldPlan, type PlanStep, type PlanView, type StepState } from "../../card/plan-fold.ts";
@@ -88,7 +88,7 @@ function stepGlyph(state: StepState): ReactNode {
   }
 }
 
-/** "2 earlier" / "4 later" (Z:ds/locale_en.luau:657-658). */
+/** "2 earlier" / "4 later". */
 function Fold({ count, later, onOpen }: { count: number; later: boolean; onOpen(): void }) {
   const which = later ? "later" : "earlier";
   return (

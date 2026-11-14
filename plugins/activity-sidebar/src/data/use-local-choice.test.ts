@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseFilter, parseOpen } from "./choices.ts";
+import { parseCompact, parseFilter, parseOpen } from "./choices.ts";
 import { readChoice, writeChoice, type ChoiceStorage } from "./use-local-choice.ts";
 
 function memory(): ChoiceStorage & { saved: Map<string, string> } {
@@ -54,4 +54,13 @@ test("storage the browser denies reads as nothing stored and only warns on save"
   assert.deepEqual(readChoice(denied, "k", parseOpen), ["pinned", "activity"]);
   writeChoice(denied, "k", ["activity"]);
   assert.equal(warn.mock.callCount(), 1);
+});
+
+test("the list is compact until two lines a row were chosen; anything else stored reads as compact", () => {
+  const storage = memory();
+  assert.equal(readChoice(storage, "activity-sidebar.compact", parseCompact), true);
+  writeChoice(storage, "activity-sidebar.compact", false);
+  assert.equal(readChoice(storage, "activity-sidebar.compact", parseCompact), false);
+  writeChoice(storage, "activity-sidebar.compact", "no");
+  assert.equal(readChoice(storage, "activity-sidebar.compact", parseCompact), true);
 });

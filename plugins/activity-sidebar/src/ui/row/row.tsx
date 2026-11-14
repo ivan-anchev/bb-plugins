@@ -1,5 +1,6 @@
 // One parent thread's row, Zeron's SessionRow: the agent's mark in a 30 slot, the project tile, the
-// title fading out, its pull request, the subagents pill and the corner (an approval asked shows as one).
+// title fading out, its pull request, the subagents pill and the corner (an approval asked shows as one);
+// tall, its detail on a second line.
 // Right-click (or the Menu key) opens its menu; under the pointer the corner offers Archive, whatever the thread's state; a double-click or the menu's Rename renames it in place;
 // the menu's Sleep ▸ Custom… opens the row's own dialog.
 import {
@@ -10,13 +11,14 @@ import {
   useSidebarThreadShortcut,
 } from "@get-bb/plugin-sdk/app";
 import { Root, Trigger } from "@radix-ui/react-context-menu";
-import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { useAsk } from "../../data/use-asks.ts";
 import type { PullRequest } from "../../data/pull-request/github-pr-status.ts";
 import { usePullRequest } from "../../data/pull-request/use-pull-request.ts";
-import type { Corner as CornerModel, RowModel } from "../../model/activity.ts";
+import type { Corner as CornerModel, RowDetail, RowModel } from "../../model/activity.ts";
 import type { RowMenu } from "../../model/row-menu.ts";
 import { STATE_NAME, withAsk, type AskKind } from "../../model/state.ts";
+import { CardGlyph } from "../card/card-glyphs.tsx";
 import { Corner } from "../corner.tsx";
 import { ProjectTile } from "../project-tile.tsx";
 import { syncMinute } from "../../data/use-minute.ts";
@@ -25,7 +27,8 @@ import { PrBadge } from "./pr-badge.tsx";
 import { RowMenuContent, useRowMenu, type RowSleep } from "./row-menu.tsx";
 import { TitleEditor } from "./title-editor.tsx";
 
-export function Row({ row, sleep, onNavigate }: { row: RowModel; sleep: RowSleep; onNavigate(): void }) {
+/** `tall`: a regular row, its detail on a second line under its title. */
+export function Row({ row, tall, sleep, onNavigate }: { row: RowModel; tall: boolean; sleep: RowSleep; onNavigate(): void }) {
   const t = row.thread;
   const shortcut = useSidebarThreadShortcut(t.id);
   const { splitProps } = useSidebarThreadSplit(t.id);
@@ -45,19 +48,22 @@ export function Row({ row, sleep, onNavigate }: { row: RowModel; sleep: RowSleep
           <AgentMark providerId={t.providerId} />
         </span>
       </span>
-      <span className="as-line">
-        <span className="as-lead">
-          <ProjectTile name={row.project.name} hue={row.project.hue} />
-          {title}
-        </span>
-        {pr !== null && <PrBadge pr={pr} />}
-        {row.runningUnder > 0 && (
-          <span className="as-pill" title={`${row.runningUnder} running under it`} aria-hidden>
-            <i />
-            {row.runningUnder > 99 ? "99+" : row.runningUnder}
+      <span className="as-words">
+        <span className="as-line">
+          <span className="as-lead">
+            <ProjectTile name={row.project.name} hue={row.project.hue} />
+            {title}
           </span>
-        )}
-        <Corner corner={corner} jump={jump} />
+          {pr !== null && <PrBadge pr={pr} />}
+          {row.runningUnder > 0 && (
+            <span className="as-pill" title={`${row.runningUnder} running under it`} aria-hidden>
+              <i />
+              {row.runningUnder > 99 ? "99+" : row.runningUnder}
+            </span>
+          )}
+          <Corner corner={corner} jump={jump} />
+        </span>
+        {tall && <DetailLine detail={row.detail} />}
       </span>
     </>
   );
@@ -76,7 +82,7 @@ export function Row({ row, sleep, onNavigate }: { row: RowModel; sleep: RowSleep
         <Trigger asChild disabled={rename.editing}>
           <div className="as-rowbox" data-jumping={jump === null ? undefined : ""}>
             {rename.editing ? (
-              <div className="as-row" data-editing="" data-strong={row.strong || undefined} aria-current={row.current ? "page" : undefined}>
+              <div className="as-row" data-editing="" data-tall={tall || undefined} data-strong={row.strong || undefined} aria-current={row.current ? "page" : undefined}>
                 {body(<TitleEditor threadId={t.id} title={t.displayTitle} onDone={rename.stop} />)}
               </div>
             ) : (
@@ -86,6 +92,7 @@ export function Row({ row, sleep, onNavigate }: { row: RowModel; sleep: RowSleep
                 ref={link}
                 href={t.href}
                 className="as-row"
+                data-tall={tall || undefined}
                 tabIndex={-1}
                 data-strong={row.strong || undefined}
                 aria-current={row.current ? "page" : undefined}
@@ -193,6 +200,18 @@ function CornerAction({ action }: { action: NonNullable<RowMenu["hoverAction"]> 
   );
 }
 
+/** Regular's second line (Zeron's `SessionRow.second_line`): its branch behind the branch glyph, then its machine. */
+function DetailLine({ detail }: { detail: RowDetail }) {
+  // why: the glyph labels the branch, so the branch leads; the machine, said less often, fades first.
+  const words = [detail.branch, detail.machine].filter((w) => w !== null);
+  return (
+    <span className="as-detail">
+      {detail.branch !== null && <CardGlyph name="branch" />}
+      {words.length > 0 && <FadingTitle text={words.join(" · ")} />}
+    </span>
+  );
+}
+
 /** The agent's artwork from bb's provider directory; bb's fallback glyph while it loads. */
 export function AgentMark({ providerId }: { providerId: string }) {
   const { providers } = useProviders();
@@ -200,24 +219,38 @@ export function AgentMark({ providerId }: { providerId: string }) {
   return <ProviderIcon providerKind="agent" provider={provider} aria-hidden />;
 }
 
-/** Text that doesn't fit fades out at its end, never cut to "…"; measured whenever its box resizes. */
+/**
+ * Text that doesn't fit fades out at its end, never cut to "…"; measured whenever its box resizes.
+ * It carries how far it runs past its box, so a row's title can run through to its end under the pointer (app.css).
+ */
 export function FadingTitle({ text }: { text: string }) {
   const ref = useRef<HTMLSpanElement>(null);
-  const [over, setOver] = useState(false);
+  const [over, setOver] = useState(0);
   useLayoutEffect(() => {
     const el = ref.current;
     if (el === null) return;
-    const measure = () => setOver(el.scrollWidth > el.clientWidth);
+    const measure = () => setOver(Math.max(0, el.scrollWidth - el.clientWidth));
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
   }, [text]);
   return (
-    <span ref={ref} className="as-title" data-over={over || undefined}>
-      {text}
+    <span ref={ref} className="as-title" data-over={over > 0 || undefined} style={over > 0 ? runStyle(over) : undefined}>
+      <span className="as-title-text">{text}</span>
     </span>
   );
+}
+
+/** The fade at a title's end, which its last words run past to read crisp. */
+const FADE = 24;
+/** How fast a title runs under the pointer, in px a second: slow enough to read as it moves. */
+const RUN_SPEED = 45;
+
+/** How far the title runs (its overflow and the fade) and for how long, for app.css's `.as-title-text`. */
+function runStyle(over: number): CSSProperties & Record<"--as-travel" | "--as-run", string> {
+  const travel = over + FADE;
+  return { "--as-travel": `${travel}px`, "--as-run": `${Math.round((travel / RUN_SPEED) * 1000)}ms` };
 }
 
 /** The corner once the row knows what its thread asks: an approval shows as one. */
@@ -228,7 +261,7 @@ function askedCorner(corner: CornerModel, ask: AskKind | null): CornerModel {
 /** "Fix the login flow, Working, bb-plugins, pull request 12, open, 2 running under it". */
 function spoken(row: RowModel, corner: CornerModel, pr: PullRequest | null): string {
   const bits = [row.thread.displayTitle, spokenCorner(corner), row.project.name];
-  // why: Zeron's badge label (Z:ds/locale_en.luau:334).
+  // why: Zeron's badge label.
   if (pr !== null) bits.push(`pull request ${pr.number}, ${pr.state}`);
   if (row.runningUnder > 0) bits.push(`${row.runningUnder} running under it`);
   return bits.join(", ");
