@@ -17,7 +17,7 @@ export function StaleBanner({ target, pr, guideHeadSha }: StaleBannerProps) {
           {update.error.message}
         </p>
       )}
-      <Button variant="secondary" size="small" disabled={update.isPending} onClick={update.run}>
+      <Button variant="secondary" size="sm" disabled={update.isPending} onClick={update.run}>
         Update guide
       </Button>
     </div>

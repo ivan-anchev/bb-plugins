@@ -104,7 +104,7 @@ function FindingRow({ finding, step, onOpenStep }: FindingRowProps) {
       {step !== null && (
         // The negative margins keep the row's height and line the link up with the text column's edge.
         <div className="-my-1.5 -mr-2.5">
-          <Button variant="ghost" size="small" aria-label={`Step ${step}: ${finding.title}`} onClick={() => onOpenStep(step)}>
+          <Button variant="ghost" size="sm" aria-label={`Step ${step}: ${finding.title}`} onClick={() => onOpenStep(step)}>
             Step {step}
           </Button>
         </div>
@@ -135,7 +135,7 @@ function HiddenTestsRow({ count, onShow }: { count: number; onShow(): void }) {
     <NotInGuideRow
       label={<span className="text-sm">Tests and mocks</span>}
       action={
-        <Button variant="ghost" size="small" aria-label="Show tests and mocks" onClick={onShow}>
+        <Button variant="ghost" size="sm" aria-label="Show tests and mocks" onClick={onShow}>
           Show
         </Button>
       }

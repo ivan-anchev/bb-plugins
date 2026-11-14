@@ -13,7 +13,7 @@ export function Controller({ walkthrough }: { walkthrough: Walkthrough }) {
   return (
     <nav aria-label="Walkthrough" className="flex shrink-0 items-center justify-center gap-1.5 px-6 pt-2.5 pb-3.5">
       {place.kind === "overview" ? (
-        <Button variant="primary" onClick={next}>
+        <Button variant="default" onClick={next}>
           Start the walkthrough · {total} {total === 1 ? "step" : "steps"}
         </Button>
       ) : (
@@ -42,8 +42,8 @@ function Arrow({ icon, label, leadsTo, shortcut, onClick }: ArrowProps) {
       }
     >
       {(describedBy) => (
-        <Button variant="ghost" aria-label={label} aria-describedby={describedBy} onClick={onClick}>
-          <Icon name={icon} className="size-4" aria-hidden />
+        <Button variant="ghost" size="icon" aria-label={label} aria-describedby={describedBy} onClick={onClick}>
+          <Icon name={icon} aria-hidden />
         </Button>
       )}
     </Tooltip>

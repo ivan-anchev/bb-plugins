@@ -20,7 +20,7 @@ export function NoneScreen({ target }: { target: PrTarget }) {
       title="No guide yet"
       error={start.error}
       actions={
-        <Button variant="primary" disabled={start.isPending} onClick={start.run}>
+        <Button variant="default" disabled={start.isPending} onClick={start.run}>
           Start review
         </Button>
       }
@@ -64,7 +64,7 @@ export function NoGuideScreen({ target, review }: { target: PrTarget; review: No
       error={nudge.error}
       actions={
         <>
-          <Button variant="primary" disabled={nudge.isPending} onClick={nudge.run}>
+          <Button variant="default" disabled={nudge.isPending} onClick={nudge.run}>
             Ask it to submit the guide
           </Button>
           <ReviewChatButton variant="secondary" />

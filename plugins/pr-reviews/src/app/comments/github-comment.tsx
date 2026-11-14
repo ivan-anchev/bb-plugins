@@ -52,7 +52,7 @@ export function GitHubCommentView({ ref, comment, density, byPrAuthor, verb, onQ
         <TimeAgo at={comment.createdAt} className="shrink-0 text-xs text-subtle-foreground" />
         <div className="-my-1 ml-auto flex items-center opacity-0 transition-opacity duration-150 group-focus-within/comment:opacity-100 group-hover/comment:opacity-100 [@media(hover:none)]:opacity-100">
           {hasBody && (
-            <Button variant="ghost" size="small" aria-label={`Quote reply to ${author.login}`} onClick={(event) => onQuote(event.currentTarget)}>
+            <Button variant="ghost" size="sm" aria-label={`Quote reply to ${author.login}`} onClick={(event) => onQuote(event.currentTarget)}>
               Quote
             </Button>
           )}

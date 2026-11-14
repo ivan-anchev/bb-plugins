@@ -22,12 +22,12 @@ export function FindingBlock({ shown: { finding, index }, openBox }: FindingBloc
       </div>
       <Prose text={finding.body} className="max-w-[72ch] text-muted-foreground" />
       <div className="mt-2 flex flex-wrap gap-1.5">
-        <Button variant="outline" size="small" onClick={(event) => openBox({ finding: index, prefill: "", from: event.currentTarget })}>
-          <Icon name="SideChat" className="size-3.5" aria-hidden />
+        <Button variant="outline" size="sm" onClick={(event) => openBox({ finding: index, prefill: "", from: event.currentTarget })}>
+          <Icon name="SideChat" aria-hidden />
           Ask about this
         </Button>
-        <Button variant="outline" size="small" onClick={(event) => openBox({ finding: index, prefill: findingCommentText(finding), from: event.currentTarget })}>
-          <Icon name="GithubLogo" className="size-3.5" aria-hidden />
+        <Button variant="outline" size="sm" onClick={(event) => openBox({ finding: index, prefill: findingCommentText(finding), from: event.currentTarget })}>
+          <Icon name="GithubLogo" aria-hidden />
           Comment
         </Button>
       </div>

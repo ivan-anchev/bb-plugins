@@ -42,17 +42,17 @@ export function DoneBox({ outcome, takeFocus, onDone }: DoneBoxProps) {
         </p>
         <div className="ml-auto flex gap-1">
           {outcome.kind === "commented" ? (
-            <UrlLink href={outcome.url} className={buttonClass("ghost", "small")}>
+            <UrlLink href={outcome.url} className={buttonClass("ghost", "sm")}>
               View on GitHub
-              <Icon name="ArrowUpRight" className="size-3.5" aria-hidden />
+              <Icon name="ArrowUpRight" aria-hidden />
             </UrlLink>
           ) : (
-            <Button variant="ghost" size="small" onClick={openReviewChat}>
-              <Icon name="SideChat" className="size-3.5" aria-hidden />
+            <Button variant="ghost" size="sm" onClick={openReviewChat}>
+              <Icon name="SideChat" aria-hidden />
               Open Review chat
             </Button>
           )}
-          <Button ref={done} variant="ghost" size="small" onClick={onDone}>
+          <Button ref={done} variant="ghost" size="sm" onClick={onDone}>
             Done
           </Button>
         </div>

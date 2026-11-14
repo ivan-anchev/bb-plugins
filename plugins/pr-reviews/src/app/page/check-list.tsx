@@ -51,7 +51,7 @@ function MoreDisclosure({ more, toggle }: { more: Check[]; toggle: RefObject<HTM
       </div>
       {/* -ml-2.5 lines the label, not the button's padding, up with the rows. */}
       <div className="mt-1 -ml-2.5">
-        <Button ref={toggle} variant="ghost" size="small" aria-expanded={open} aria-controls={listId} onClick={() => setOpen(!open)}>
+        <Button ref={toggle} variant="ghost" size="sm" aria-expanded={open} aria-controls={listId} onClick={() => setOpen(!open)}>
           {open ? "Hide" : `Show ${more.length} more`}
         </Button>
       </div>

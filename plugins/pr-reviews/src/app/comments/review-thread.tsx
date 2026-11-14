@@ -66,16 +66,16 @@ export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: Rev
       </div>
       {box === null && (
         <div className="ml-5 flex items-center gap-1">
-          <Button variant="ghost" size="small" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
+          <Button variant="ghost" size="sm" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
             Reply
           </Button>
-          <Button variant="ghost" size="small" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
+          <Button variant="ghost" size="sm" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
             Ask about this
           </Button>
           {thread.resolvedBy !== null && (
             <>
               <span className="ml-auto text-xs text-muted-foreground">Resolved by {thread.resolvedBy}</span>
-              <Button ref={resolvedFocus.to} variant="ghost" size="small" aria-expanded onClick={() => setOpened({ ...opened, thread: false })}>
+              <Button ref={resolvedFocus.to} variant="ghost" size="sm" aria-expanded onClick={() => setOpened({ ...opened, thread: false })}>
                 Collapse
               </Button>
             </>

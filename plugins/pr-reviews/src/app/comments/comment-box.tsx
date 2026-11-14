@@ -243,14 +243,14 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
         <div className="ml-auto flex shrink-0 gap-1">
           {/* why aria-disabled, not disabled: the buttons stay focusable, and Ask's reason is read with it. */}
           {asks && (
-            <Button variant="ghost" size="small" aria-disabled={!canAsk} aria-describedby={hasThread || problems.length > 0 ? undefined : ids.noThread} onClick={ask}>
+            <Button variant="ghost" size="sm" aria-disabled={!canAsk} aria-describedby={hasThread || problems.length > 0 ? undefined : ids.noThread} onClick={ask}>
               {sending === "ask" ? "Sending…" : "Ask about this"}
             </Button>
           )}
           <Tooltip content={`${words.post} on GitHub (${COMMENT_KEYS})`} placement="top-end">
             {(describedBy) => (
-              <Button variant="primary" size="small" aria-disabled={!canComment} aria-describedby={describedBy} onClick={comment}>
-                <Icon name="GithubLogo" className="size-3.5" aria-hidden />
+              <Button variant="default" size="sm" aria-disabled={!canComment} aria-describedby={describedBy} onClick={comment}>
+                <Icon name="GithubLogo" aria-hidden />
                 {sending === "comment" ? words.posting : words.post}
               </Button>
             )}

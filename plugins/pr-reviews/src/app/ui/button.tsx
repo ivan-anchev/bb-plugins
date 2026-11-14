@@ -1,18 +1,26 @@
 import type { ComponentProps } from "react";
 
+// bb's own Button, class for class (the plugin SDK does not export it).
+const BASE =
+  "inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-colors duration-150 hover:duration-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_[data-icon-root]]:pointer-events-none [&_[data-icon-root]]:size-4 [&_[data-icon-root]]:shrink-0";
+
+// why aria-disabled too: some buttons stay focusable while inert, so a reason can be read with them.
+const ARIA_DISABLED = "aria-disabled:cursor-default aria-disabled:opacity-50";
+
 const VARIANTS = {
-  // The ring stands off by a pixel of the background: flush, it is the fill's own colour and can't be seen.
-  primary: "bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
-  secondary: "bg-secondary text-secondary-foreground hover:bg-state-active",
-  ghost: "text-muted-foreground hover:bg-state-hover hover:text-foreground",
-  // A quiet action on a raised or recessed surface, such as a finding's: the page's background
-  // inside a hairline of the border colour, with its icon a step back from the label.
-  outline: "bg-background text-foreground inset-ring inset-ring-border hover:bg-state-hover [&_svg]:text-muted-foreground",
+  default: "bg-foreground text-background hover:bg-foreground/90",
+  secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+  outline: "border border-input bg-transparent hover:bg-state-hover hover:text-foreground",
+  ghost:
+    "hover:bg-state-hover hover:text-foreground aria-pressed:bg-state-active aria-pressed:text-foreground aria-pressed:hover:bg-state-active data-[state=open]:bg-state-active data-[state=open]:text-foreground data-[state=open]:hover:bg-state-active",
 } as const;
 
+// bb's base sets text-sm and its tailwind-merge drops it for sm; without the merge, it lives on
+// default so the two sizes never fight over the font size.
 const SIZES = {
-  default: "h-8 px-3 text-sm",
-  small: "h-7 px-2.5 text-xs",
+  default: "h-9 px-4 py-2 text-sm",
+  sm: "h-8 rounded-md px-3 text-xs",
+  icon: "h-9 w-9 text-sm",
 } as const;
 
 type Variant = keyof typeof VARIANTS;
@@ -20,7 +28,7 @@ type Size = keyof typeof SIZES;
 
 /** A button's look, for an element that acts like one but is not a <button>, such as a link. */
 export function buttonClass(variant: Variant, size: Size = "default"): string {
-  return `inline-flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md font-medium transition-[background-color,color,scale] duration-150 ease-out hover:duration-0 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50 disabled:active:scale-100 aria-disabled:cursor-default aria-disabled:opacity-50 aria-disabled:active:scale-100 motion-reduce:transition-none motion-reduce:active:scale-100 ${SIZES[size]} ${VARIANTS[variant]}`;
+  return `${BASE} ${ARIA_DISABLED} ${SIZES[size]} ${VARIANTS[variant]}`;
 }
 
 export type ButtonProps = Omit<ComponentProps<"button">, "type" | "className"> & { variant: Variant; size?: Size };
