@@ -13,7 +13,7 @@ const spacer: ListItem = { kind: "spacer", key: "spacer" };
 /** n rows keyed s:t0 … s:t{n-1}, top to bottom. */
 function rows(n: number): ListItem[] {
   const threads = Array.from({ length: n }, (_, i) => thread(`t${i}`, { latestAttentionAt: n - i }));
-  const sections = buildActivity({ threads, projects: [], sleeps: new Map(), now: 0, activeThreadId: null, filter: null });
+  const sections = buildActivity({ threads, projects: [], sleeps: new Map(), now: 0, activeThreadId: null, filter: null }).sections;
   return listItems(sections, view()).filter((item) => item.kind === "row");
 }
 

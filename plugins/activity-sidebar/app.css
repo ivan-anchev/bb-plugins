@@ -647,3 +647,261 @@
 .as-dialog-input:focus-visible {
   box-shadow: 0 0 0 1px var(--ring);
 }
+
+/* --- The hover card (Z:ds/session_card, P:1076-1134): bb's popover surface, Zeron's 284 wide, 12 in,
+   its title then quiet lines, each a 12 glyph and its words; under a rule, its subthread tree. In over
+   140, out over 100 (Z:screens/shell/init.luau:677-678). -------------------------------------------- */
+.as-card {
+  position: relative;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 284px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: var(--shadow-md);
+  font-family: var(--font-sans);
+  outline: none;
+}
+/* The way over from the row: the 10 between them counts as the card. */
+.as-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -11px;
+  width: 11px;
+}
+.as-card[data-state="open"] {
+  animation: as-card-in 140ms cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+.as-card[data-state="closed"] {
+  animation: as-card-out 100ms cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+  pointer-events: none;
+}
+@keyframes as-card-in {
+  from { opacity: 0; }
+}
+@keyframes as-card-out {
+  to { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .as-card[data-state] {
+    animation: none;
+  }
+}
+.as-card-title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+.as-card-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.as-card-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 14px;
+}
+.as-card-g {
+  flex: 0 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  color: var(--subtle-foreground);
+}
+.as-card-g > svg,
+.as-card-glyph {
+  width: 12px;
+  height: 12px;
+}
+.as-card-g .as-state {
+  width: 12px;
+  height: 12px;
+}
+.as-card-t {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 14px;
+}
+.as-card-line i {
+  color: var(--subtle-foreground);
+  font-style: normal;
+}
+/* After the words, whole: where the branch runs, the pull request's badge. */
+.as-card-after {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  margin-left: -4px;
+  font-size: 11px;
+  line-height: 14px;
+  white-space: nowrap;
+}
+.as-card-after .as-pr {
+  margin-left: 4px;
+}
+.as-card-rule {
+  height: 1px;
+  margin: 0 -12px;
+  background: var(--border);
+}
+.as-card-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.as-card-sub-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 16px;
+  color: var(--subtle-foreground);
+  font-size: 11px;
+  font-weight: 500;
+}
+.as-card-sub-head > span:last-child {
+  margin-left: -4px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.as-card-all {
+  all: unset;
+  align-self: flex-start;
+  margin-left: 14px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  color: var(--subtle-foreground);
+  font-size: 11px;
+  line-height: 14px;
+  cursor: pointer;
+}
+.as-card-all:hover {
+  background: var(--state-hover);
+  color: var(--muted-foreground);
+}
+.as-card-all:focus-visible {
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+
+/* A subthread: the sidebar's row, small (24 high, its mark in a 20 slot, 12 type), on 1-point hairlines. */
+.as-mini {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+}
+.as-mini-rails {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.as-mini-rails path {
+  fill: none;
+  stroke: color-mix(in oklab, var(--foreground) 12%, transparent);
+  stroke-width: 1;
+}
+.as-mini-pad {
+  flex: 0 0 auto;
+  height: 24px;
+}
+.as-mini-body {
+  all: unset;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 24px;
+  padding-right: 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 16px;
+}
+button.as-mini-body {
+  cursor: pointer;
+}
+button.as-mini-body:hover {
+  background: var(--state-hover);
+}
+button.as-mini-body:active {
+  background: var(--state-active);
+}
+button.as-mini-body:focus-visible {
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+.as-mini-slot {
+  flex: 0 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--muted-foreground);
+}
+.as-mini-mark {
+  display: flex;
+  width: 12px;
+  height: 12px;
+  opacity: 0.5;
+}
+.as-mini-mark > * {
+  width: 12px;
+  height: 12px;
+}
+.as-mini-body[data-strong] .as-mini-mark {
+  opacity: 0.9;
+}
+.as-mini-body[data-strong] .as-title {
+  color: var(--foreground);
+  font-weight: 500;
+}
+.as-mini .as-title[data-over] {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 20px), transparent);
+}
+.as-mini-corner {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 12px;
+  height: 12px;
+}
+.as-mini-corner .as-state {
+  width: 12px;
+  height: 12px;
+}
+/* A checkout's head: quieter, its branch glyph in the slot. */
+.as-mini[data-place] .as-mini-slot,
+.as-mini[data-place] .as-title {
+  color: var(--subtle-foreground);
+}
+.as-mini[data-place] .as-title {
+  font-size: 11px;
+}

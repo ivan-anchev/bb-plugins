@@ -7,6 +7,10 @@ export type ThreadIndex = {
   runningUnder(id: string): number;
   /** The parentless ancestor of `id`, or `id` itself; null for an id the index doesn't hold. */
   rootOf(id: string): string | null;
+  /** The threads directly under `id`, in the live array's order. */
+  childrenOf(id: string): readonly PluginSidebarThread[];
+  /** Every thread below `id`, each child before its own children. */
+  below(id: string): readonly PluginSidebarThread[];
 };
 
 /** Built once per hook update. Hidden and archived threads are left out, as bb's own list does. */
@@ -28,6 +32,8 @@ export function indexThreads(threads: readonly PluginSidebarThread[]): ThreadInd
       while (thread?.parentThreadId != null && byId.has(thread.parentThreadId)) thread = byId.get(thread.parentThreadId);
       return thread?.id ?? null;
     },
+    childrenOf: (id) => children.get(id) ?? [],
+    below,
   };
 }
 

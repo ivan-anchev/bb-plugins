@@ -1,7 +1,8 @@
 // The slot component: reads the hooks, runs the two pure steps (model, items) and hands the items
 // to the viewport. Owns the reader's choices (folds, filter, how far Archived is unrolled), nothing derived.
-import { experimental_useSidebarThreads, type PluginThreadListProps } from "@get-bb/plugin-sdk/app";
+import { experimental_useSidebarThreads, type PluginSidebarThread, type PluginThreadListProps } from "@get-bb/plugin-sdk/app";
 import { useMemo, useState } from "react";
+import { underWaySince } from "../card/under-way.ts";
 import { parseFilter, parseOpen } from "../data/choices.ts";
 import { useLocalChoice } from "../data/use-local-choice.ts";
 import { useMinute } from "../data/use-minute.ts";
@@ -15,7 +16,7 @@ import { ProjectFilter } from "./project-filter.tsx";
 // why: one read for both lifecycles, so the Archived shelf's first page (and its "n+") loads at mount.
 const LIFECYCLES = { experimental_lifecycles: ["active", "archived"] } as const;
 
-export function ActivityList({ activeThreadId, onNavigate }: PluginThreadListProps) {
+export function ActivityList({ activeThreadId, isCompactViewport, onNavigate }: PluginThreadListProps) {
   const live = experimental_useSidebarThreads(LIFECYCLES);
   const archive = archivePager(live.experimental_archived);
   const sleeps = useSleeps();
@@ -27,21 +28,25 @@ export function ActivityList({ activeThreadId, onNavigate }: PluginThreadListPro
 
   // why: a project removed since the choice was made narrows nothing (Zeron: sidebar.luau only_project).
   const chosen = live.projects.find((p) => p.id === filter) ?? null;
-  const sections = useMemo(
+  const model = useMemo(
     () => buildActivity({ threads: live.threads, projects: live.projects, sleeps: sleeps.sleeps, now, activeThreadId, filter: chosen?.id ?? null }),
     [live.threads, live.projects, sleeps.sleeps, now, activeThreadId, chosen],
   );
   const items = useMemo(
-    () => listItems(sections, { status: live.status, sleeps: sleeps.status, open: new Set(open), archivedShown, archive, filterName: chosen?.name ?? null }),
-    [sections, live.status, sleeps.status, open, archivedShown, archive, chosen],
+    () => listItems(model.sections, { status: live.status, sleeps: sleeps.status, open: new Set(open), archivedShown, archive, filterName: chosen?.name ?? null }),
+    [model, live.status, sleeps.status, open, archivedShown, archive, chosen],
   );
+
+  const since = useUnderWaySince(live.threads);
+  // why: no hover at compact width (Zeron shows no card on the rail or in a flyout, Z:ds/sidebar.luau:1143-1147).
+  const card = useMemo(() => (isCompactViewport ? null : { index: model.index, underWaySince: since }), [isCompactViewport, model.index, since]);
 
   const toggle = (key: SectionKey) => setOpen(open.includes(key) ? open.filter((k) => k !== key) : [...open, key]);
 
   // why: the press reveals rows already loaded first; past them, the next page is asked for.
   const showMoreArchived = () => {
     const next = archivedShown + ARCHIVED_STEP;
-    const loaded = sections.find((s) => s.key === "archived")?.rows.length ?? 0;
+    const loaded = model.sections.find((s) => s.key === "archived")?.rows.length ?? 0;
     if (next > loaded && archive.hasNextPage) void archive.fetchNextPage();
     setArchivedShown(next);
   };
@@ -51,6 +56,7 @@ export function ActivityList({ activeThreadId, onNavigate }: PluginThreadListPro
   return (
     <ListViewport
       items={items}
+      card={card}
       onNavigate={onNavigate}
       sleep={{ sleep: sleeps.sleep, wake: sleeps.wake }}
       onToggle={toggle}
@@ -62,6 +68,16 @@ export function ActivityList({ activeThreadId, onNavigate }: PluginThreadListPro
 }
 
 // ------------------------------------------------------------------ layer 2
+
+/** Since when each thread has been under way, carried over from one live update to the next. */
+function useUnderWaySince(threads: readonly PluginSidebarThread[]): ReadonlyMap<string, number> {
+  const [seen, setSeen] = useState(() => ({ threads, since: underWaySince(new Map(), threads) }));
+  // why: React's "adjust state when a prop changes": each live update builds on the last sightings.
+  if (seen.threads === threads) return seen.since;
+  const next = { threads, since: underWaySince(seen.since, threads) };
+  setSeen(next);
+  return next.since;
+}
 
 /** The archived pager; bb returns it whenever the archived lifecycle is requested, as here. */
 function archivePager<T>(pager: T | null): T {

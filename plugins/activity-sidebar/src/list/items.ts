@@ -6,7 +6,8 @@ import type { RowModel, Section, SectionKey } from "../model/activity.ts";
 export type ListItem =
   /** `count` is how many it holds, said only while folded; null while open. */
   | { kind: "title"; key: `t:${SectionKey}`; section: SectionKey; label: string; open: boolean; count: string | null }
-  | { kind: "row"; key: `s:${string}`; row: RowModel }
+  /** `section`: where it stands, so what belongs to the row in its place (its hover card) can tell it moved. */
+  | { kind: "row"; key: `s:${string}`; row: RowModel; section: SectionKey }
   /** Fills the room the rest leave, so the shelves after it stand at the view's foot. */
   | { kind: "spacer"; key: "spacer" }
   /** How many more archived rows a press shows; null when only the server knows (no archived count API). */
@@ -86,12 +87,12 @@ function sectionItems(key: SectionKey, rows: readonly RowModel[], view: ListView
   const title: ListItem = { kind: "title", key: `t:${key}`, section: key, label, open, count };
   if (!open) return [title];
   if (key === "archived") return [title, ...archivedBody(rows, view)];
-  return [title, ...rows.map(rowItem)];
+  return [title, ...rows.map((row) => rowItem(row, key))];
 }
 
 /** The first rows shown, then "Show n more", a page loading, or the page that failed with Retry. */
 function archivedBody(rows: readonly RowModel[], view: ListView): ListItem[] {
-  const shown = rows.slice(0, view.archivedShown).map(rowItem);
+  const shown = rows.slice(0, view.archivedShown).map((row) => rowItem(row, "archived"));
   const { archive } = view;
   if (archive.status === "error" || archive.isFetchNextPageError) return [...shown, archivedNotice("Couldn't load archived threads", true)];
   if (archive.isFetchingNextPage) return [...shown, archivedNotice("Loading…", false)];
@@ -102,8 +103,8 @@ function archivedBody(rows: readonly RowModel[], view: ListView): ListItem[] {
   return loadedBeyond > 0 ? [...shown, more(loadedBeyond)] : shown;
 }
 
-function rowItem(row: RowModel): ListItem {
-  return { kind: "row", key: `s:${row.thread.id}`, row };
+function rowItem(row: RowModel, section: SectionKey): ListItem {
+  return { kind: "row", key: `s:${row.thread.id}`, row, section };
 }
 
 function more(n: number | null): ListItem {
