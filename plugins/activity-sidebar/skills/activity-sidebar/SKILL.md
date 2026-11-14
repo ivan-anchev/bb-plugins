@@ -42,8 +42,8 @@ commands and no settings.
   and every shelf to one project; the title then reads "Activity · project".
   Choose "All projects" to show everything again.
 - The same menu's Compact switch picks the density. On (the default), a row
-  is one line. Off, each row grows to two: under its title, its machine and
-  its branch, each when bb names one, led by a branch glyph.
+  is one line. Off, each row grows to two: under its title, its branch behind
+  a branch glyph, then its machine, each when bb names one.
 - The folds, the filter and the density are kept in this browser's local storage, so they
   survive a reload but aren't shared with other clients.
 
