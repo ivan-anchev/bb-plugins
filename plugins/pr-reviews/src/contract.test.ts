@@ -7,6 +7,7 @@ const pr = (commits: string[]): PrDetail => ({
   title: "Fixture",
   author: "ivan-anchev",
   updatedAt: "2026-11-07T00:00:00Z",
+  createdAt: "2026-11-06T00:00:00Z",
   headSha: commits.at(-1) ?? "",
   body: "",
   url: "https://github.com/ivan-anchev/bb-plugins/pull/23",
