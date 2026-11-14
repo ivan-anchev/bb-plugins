@@ -1,22 +1,22 @@
 // One parent thread's row, Zeron's SessionRow: the agent's mark in a 30 slot, the project tile, the
 // title fading out, its pull request, the subagents pill and the corner (an approval asked shows as one);
 // tall, its detail on a second line.
-// Right-click (or the Menu key) opens its menu; under the pointer the corner offers Archive, whatever the thread's state; a double-click or the menu's Rename renames it in place;
+// Right-click (or the Menu key) opens bb's own thread menu with Sleep added; under the pointer the corner offers
+// bb's Archive, whatever the thread's state; a double-click or the menu's Rename renames it in place;
 // the menu's Sleep ▸ Custom… opens the row's own dialog.
 import {
   experimental_Icon as Icon,
   experimental_ProviderIcon as ProviderIcon,
+  experimental_ThreadActionsContextMenu as ThreadActionsContextMenu,
   experimental_useProviders as useProviders,
   experimental_useSidebarThreadSplit as useSidebarThreadSplit,
   useSidebarThreadShortcut,
 } from "@get-bb/plugin-sdk/app";
-import { Root, Trigger } from "@radix-ui/react-context-menu";
 import { useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { useAsk } from "../../data/use-asks.ts";
 import type { PullRequest } from "../../data/pull-request/github-pr-status.ts";
 import { usePullRequest } from "../../data/pull-request/use-pull-request.ts";
 import type { Corner as CornerModel, RowDetail, RowModel } from "../../model/activity.ts";
-import type { RowMenu } from "../../model/row-menu.ts";
 import { STATE_NAME, withAsk, type AskKind } from "../../model/state.ts";
 import { CardGlyph } from "../card/card-glyphs.tsx";
 import { Corner } from "../corner.tsx";
@@ -24,7 +24,7 @@ import { ProjectTile } from "../project-tile.tsx";
 import { syncMinute } from "../../data/use-minute.ts";
 import { SleepDialog } from "../sleep-dialog.tsx";
 import { PrBadge } from "./pr-badge.tsx";
-import { RowMenuContent, useRowMenu, type RowSleep } from "./row-menu.tsx";
+import { useRowActions, type RowActions, type RowSleep } from "./row-menu.tsx";
 import { TitleEditor } from "./title-editor.tsx";
 
 /** `tall`: a regular row, its detail on a second line under its title. */
@@ -35,7 +35,8 @@ export function Row({ row, tall, sleep, onNavigate }: { row: RowModel; tall: boo
   const link = useRef<HTMLAnchorElement>(null);
   const rename = useRename(link);
   const [sleepingCustom, setSleepingCustom] = useState(false);
-  const menu = useRowMenu(row, sleep, { requestRename: rename.request, sleepCustom: () => setSleepingCustom(true) });
+  const [menuOpen, setMenuOpen] = useState(false);
+  const actions = useRowActions(row, sleep, () => setSleepingCustom(true));
   const jump = shortcut?.label ?? null;
   const ask = useAsk(t);
   const corner = askedCorner(row.corner, ask);
@@ -74,46 +75,49 @@ export function Row({ row, tall, sleep, onNavigate }: { row: RowModel; tall: boo
   // sleep hands focus on to its heir, and one that stays takes it back when the dialog closes.
   return (
     <>
-      <Root
+      <ThreadActionsContextMenu
+        thread={actions.target}
+        inline={actions.inline}
+        requestRename={rename.request}
+        disabled={rename.editing}
+        onCloseAutoFocus={rename.onCloseAutoFocus}
         onOpenChange={(open) => {
           if (open) syncMinute();
+          setMenuOpen(open);
         }}
       >
-        <Trigger asChild disabled={rename.editing}>
-          <div className="as-rowbox" data-jumping={jump === null ? undefined : ""}>
-            {rename.editing ? (
-              <div className="as-row" data-editing="" data-tall={tall || undefined} data-strong={row.strong || undefined} aria-current={row.current ? "page" : undefined}>
-                {body(<TitleEditor threadId={t.id} title={t.displayTitle} onDone={rename.stop} />)}
-              </div>
-            ) : (
-              // why: tabIndex -1: the scroller is the list's one tab stop and ↑/↓ move between rows.
-              // The host routes a plain click on href in place; onNavigate closes the mobile drawer.
-              <a
-                ref={link}
-                href={t.href}
-                className="as-row"
-                data-tall={tall || undefined}
-                tabIndex={-1}
-                data-strong={row.strong || undefined}
-                aria-current={row.current ? "page" : undefined}
-                aria-label={spoken(row, corner, pr)}
-                aria-keyshortcuts={shortcut?.ariaKeyshortcuts}
-                data-sidebar-thread-shortcut-target=""
-                // why: bb's host assigns jump keys only to target anchors that also name their thread.
-                data-sidebar-thread-id={t.id}
-                onClick={onNavigate}
-                onDoubleClick={rename.start}
-                onKeyDown={openMenuFromKeyboard}
-                {...splitProps}
-              >
-                {body(<FadingTitle text={t.displayTitle} />)}
-              </a>
-            )}
-            {menu.hoverAction !== null && !rename.editing && <CornerAction action={menu.hoverAction} />}
-          </div>
-        </Trigger>
-        <RowMenuContent entries={menu.entries} onCloseAutoFocus={rename.onCloseAutoFocus} />
-      </Root>
+        <div className="as-rowbox" data-jumping={jump === null ? undefined : ""} data-menu={menuOpen || undefined}>
+          {rename.editing ? (
+            <div className="as-row" data-editing="" data-tall={tall || undefined} data-strong={row.strong || undefined} aria-current={row.current ? "page" : undefined}>
+              {body(<TitleEditor threadId={t.id} title={t.displayTitle} onDone={rename.stop} />)}
+            </div>
+          ) : (
+            // why: tabIndex -1: the scroller is the list's one tab stop and ↑/↓ move between rows.
+            // The host routes a plain click on href in place; onNavigate closes the mobile drawer.
+            <a
+              ref={link}
+              href={t.href}
+              className="as-row"
+              data-tall={tall || undefined}
+              tabIndex={-1}
+              data-strong={row.strong || undefined}
+              aria-current={row.current ? "page" : undefined}
+              aria-label={spoken(row, corner, pr)}
+              aria-keyshortcuts={shortcut?.ariaKeyshortcuts}
+              data-sidebar-thread-shortcut-target=""
+              // why: bb's host assigns jump keys only to target anchors that also name their thread.
+              data-sidebar-thread-id={t.id}
+              onClick={onNavigate}
+              onDoubleClick={rename.start}
+              onKeyDown={openMenuFromKeyboard}
+              {...splitProps}
+            >
+              {body(<FadingTitle text={t.displayTitle} />)}
+            </a>
+          )}
+          {actions.corner !== null && !rename.editing && <CornerAction action={actions.corner} />}
+        </div>
+      </ThreadActionsContextMenu>
       <SleepDialog
         open={sleepingCustom}
         onOpenChange={setSleepingCustom}
@@ -172,7 +176,7 @@ function useRename(link: RefObject<HTMLAnchorElement | null>): Rename {
 
 /**
  * The Menu key or Shift+F10 on a focused row opens its menu under the row's start, as a right-click
- * would. Radix's context menu opens only on `contextmenu`, which not every browser sends for these keys.
+ * would. bb's context menu opens only on `contextmenu`, which not every browser sends for these keys.
  */
 function openMenuFromKeyboard(e: KeyboardEvent<HTMLAnchorElement>) {
   if (e.key !== "ContextMenu" && !(e.shiftKey && e.key === "F10")) return;
@@ -182,7 +186,7 @@ function openMenuFromKeyboard(e: KeyboardEvent<HTMLAnchorElement>) {
 }
 
 /** Under the pointer, the corner's Archive (Unarchive on the shelf) in the same box. */
-function CornerAction({ action }: { action: NonNullable<RowMenu["hoverAction"]> }) {
+function CornerAction({ action }: { action: NonNullable<RowActions["corner"]> }) {
   return (
     <button
       type="button"
@@ -192,7 +196,7 @@ function CornerAction({ action }: { action: NonNullable<RowMenu["hoverAction"]> 
       title={action.label}
       aria-disabled={action.disabled || undefined}
       onClick={() => {
-        if (!action.disabled) action.run();
+        if (!action.disabled) void action.run();
       }}
     >
       <Icon name={action.icon} aria-hidden />

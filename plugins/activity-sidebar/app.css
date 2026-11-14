@@ -248,66 +248,6 @@
   background: var(--border);
 }
 
-/* --- A row's menu (right-click, the Menu key): Zeron's ds/menu, 232 wide, glyphs 16 in 18 ------- */
-.as-row-menu {
-  width: 232px;
-  min-width: 0;
-  max-height: var(--radix-context-menu-content-available-height);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.as-action {
-  color: var(--foreground);
-}
-.as-action[data-state="open"] {
-  background: var(--state-hover);
-}
-.as-action-glyph {
-  flex: 0 0 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  color: var(--muted-foreground);
-}
-.as-action-glyph > * {
-  width: 16px;
-  height: 16px;
-}
-.as-action-words {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 5px 0;
-}
-/* A disabled item's reason, under its label. */
-.as-action-why {
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--subtle-foreground);
-}
-.as-action-chevron {
-  flex: 0 0 auto;
-  width: 14px;
-  height: 14px;
-  color: var(--subtle-foreground);
-}
-.as-action[data-danger],
-.as-action[data-danger] .as-action-glyph {
-  color: var(--destructive-text);
-}
-.as-action[data-danger][data-highlighted] {
-  background: color-mix(in oklch, var(--destructive) 14%, transparent);
-  color: var(--destructive-text);
-}
-.as-action[data-disabled],
-.as-action[data-disabled] .as-action-glyph {
-  color: color-mix(in oklch, var(--subtle-foreground) 65%, transparent);
-}
-
 /* --- A thread's row: its 30 slot, its words, the flat wash ------------------------------------- */
 /* The row and, laid over its corner, the button the pointer finds there. */
 .as-rowbox {
@@ -326,7 +266,7 @@
 }
 /* why: on the box, so the wash stays while the pointer is on the corner's button, the menu is open or
    the title is being renamed. */
-.as-rowbox[data-state="open"] .as-row,
+.as-rowbox[data-menu] .as-row,
 .as-row[data-editing] {
   background: var(--state-hover);
 }

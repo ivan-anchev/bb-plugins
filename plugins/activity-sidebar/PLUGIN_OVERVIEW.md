@@ -5,8 +5,8 @@ every project, latest first, with pinned threads above it and the Working,
 Asleep and Archived shelves folded at its foot. A filter narrows it to one
 project, and rows are one line or two. Each row shows the thread's agent, its project's coloured initial, its
 title, its pull request, how many threads run under it, and its state or how
-long ago it last moved. Right-click a row for its menu (rename, pin, copy, sleep or wake,
-archive, delete); under the pointer, its corner offers Archive. A thread put to
+long ago it last moved. Right-click a row for bb's own thread menu, with Sleep (or
+Wake) added; under the pointer, its corner offers Archive. A thread put to
 sleep waits on Asleep until its time, then comes back to the top. Rest on a row
 for its card: its state and since when, machine, project, branch, pull request,
 its plan while it works, and a tree of its subthreads to open.
@@ -38,12 +38,9 @@ its plan while it works, and a tree of its subthreads to open.
 - The open thread's row, or its parent's when a subthread is open, is
   highlighted. Clicking a row opens the thread; dragging it out to the main
   area opens it in a split.
-- Right-click a row (or press the Menu key or Shift+F10 on it) for its menu:
-  Rename, Pin or Unpin, Copy (the bb thread link or the thread ID), Sleep (or
-  Wake), Archive or Unarchive, and Delete…. As in bb's own menu, Delete always asks first,
-  Archive asks only when the thread has subthreads, and archiving offers Undo.
-  The menu won't archive a thread whose agent is still working until it
-  stops.
+- Right-click a row (or press the Menu key or Shift+F10 on it) for bb's own
+  thread menu, the same one bb's list opens, with **Sleep** (or **Wake**) added
+  to it.
 - **Sleep** puts a thread away until a time: in 1 hour, in 3 hours, this
   evening, tomorrow at 9, next Monday at 9, or a moment you pick with Custom….
   It waits on Asleep, its corner saying how soon it wakes (`45m`, `3h`, `2d`).

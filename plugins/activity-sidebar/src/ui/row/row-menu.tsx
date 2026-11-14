@@ -1,111 +1,37 @@
-// A row's right-click menu (Zeron has no ⋯ on rows): the entries from src/model/row-menu.ts drawn in
-// Zeron's menu metrics with bb's surfaces. bb's host shims Radix, so the menu shares its overlay layer.
+// A row's right-click menu is bb's own thread menu, with Sleep (or Wake) added. Under the pointer, the
+// row's corner offers bb's Archive (Unarchive on the shelf).
 import {
-  experimental_copyToClipboard as copyToClipboard,
-  experimental_Icon as Icon,
   experimental_useThreadActions as useThreadActions,
+  type PluginBoundThreadAction,
   type PluginSidebarThread,
+  type PluginThreadActionsInlineItem,
   type PluginThreadActionTarget,
 } from "@get-bb/plugin-sdk/app";
-import { Content, Item, Portal, Separator, Sub, SubContent, SubTrigger } from "@radix-ui/react-context-menu";
-import { toast } from "sonner";
 import { useMinute } from "../../data/use-minute.ts";
 import type { RowModel } from "../../model/activity.ts";
-import { CORE_KEYS, rowMenu, type MenuAction, type MenuEntry, type RowMenu } from "../../model/row-menu.ts";
-import { PORTAL_SCOPE } from "../portal-scope.ts";
-import { sleepGlyph } from "./sleep-glyphs.tsx";
+import { sleepItem } from "../../model/sleep-action.ts";
 
 /** What a row's Sleep and Wake do: the list owns the sleeps. */
 export type RowSleep = { sleep(threadId: string, until: number): void; wake(threadId: string): void };
 
-/** What the row opens itself: its title editor (Rename) and its Custom… dialog. */
-type RowOwn = { requestRename(threadId: string): void; sleepCustom(): void };
+/** bb's Archive, which also unarchives an archived thread. */
+const ARCHIVE = "bb--core/archive";
 
-/** The row's menu from bb's own bound actions, the list's Sleep and the row's own Rename and Custom…. */
-export function useRowMenu(row: RowModel, sleep: RowSleep, own: RowOwn): RowMenu {
+/** What bb's menu needs from the row, and the corner's action. */
+export type RowActions = {
+  target: PluginThreadActionTarget;
+  inline: readonly PluginThreadActionsInlineItem[];
+  corner: PluginBoundThreadAction | null;
+};
+
+/** The row's Sleep counted from the present minute; `sleepCustom` opens the row's own dialog. */
+export function useRowActions(row: RowModel, sleep: RowSleep, sleepCustom: () => void): RowActions {
   const id = row.thread.id;
-  const bound = useThreadActions(toActionTarget(row.thread), { keys: CORE_KEYS, requestRename: own.requestRename });
+  const target = toActionTarget(row.thread);
+  const corner = useThreadActions(target, { keys: [ARCHIVE] })[0]?.action ?? null;
   const now = useMinute();
-  return rowMenu(
-    row,
-    bound,
-    {
-      copyId: () => void copyThreadId(id),
-      sleep: (until) => sleep.sleep(id, until),
-      wake: () => sleep.wake(id),
-      sleepCustom: own.sleepCustom,
-    },
-    now,
-  );
-}
-
-/** The open menu. `onCloseAutoFocus` lets the row take focus for its editor instead of the trigger. */
-export function RowMenuContent({ entries, onCloseAutoFocus }: { entries: readonly MenuEntry[]; onCloseAutoFocus(event: Event): void }) {
-  return (
-    <Portal>
-      <Content {...PORTAL_SCOPE} className="as-menu as-row-menu border" collisionPadding={8} onCloseAutoFocus={onCloseAutoFocus}>
-        {entries.map(renderEntry)}
-      </Content>
-    </Portal>
-  );
-}
-
-// ------------------------------------------------------------------ layer 2
-
-function renderEntry(entry: MenuEntry) {
-  switch (entry.kind) {
-    case "rule":
-      return <Separator key={entry.key} className="as-menu-separator" />;
-    case "submenu":
-      return (
-        <Sub key={entry.key}>
-          <SubTrigger className="as-menu-item as-action">
-            <Glyph icon={entry.icon} />
-            <span className="as-menu-label">{entry.label}</span>
-            <Icon name="ChevronRight" className="as-action-chevron" aria-hidden />
-          </SubTrigger>
-          <Portal>
-            <SubContent {...PORTAL_SCOPE} className="as-menu as-row-menu border" sideOffset={4} alignOffset={-5} collisionPadding={8}>
-              {entry.entries.map(renderEntry)}
-            </SubContent>
-          </Portal>
-        </Sub>
-      );
-    case "action":
-      return <ActionItem key={entry.key} action={entry} />;
-    default:
-      entry satisfies never;
-      return null;
-  }
-}
-
-/** A disabled item says why on a muted second line under its label (Zeron's ds/menu). */
-function ActionItem({ action }: { action: MenuAction }) {
-  return (
-    <Item className="as-menu-item as-action" disabled={action.disabled} data-danger={action.danger || undefined} onSelect={action.run}>
-      <Glyph icon={action.icon} />
-      <span className="as-action-words">
-        <span className="as-menu-label">{action.label}</span>
-        {action.disabled && action.why !== null && <span className="as-action-why">{action.why}</span>}
-      </span>
-    </Item>
-  );
-}
-
-/** Zeron's glyph: 16 in an 18 box; none, no box (Sleep's times). Sleep's own two, else bb's. */
-function Glyph({ icon }: { icon: string | null }) {
-  if (icon === null) return null;
-  return (
-    <span className="as-action-glyph" aria-hidden>
-      {sleepGlyph(icon) ?? <Icon name={icon} />}
-    </span>
-  );
-}
-
-/** Through bb's own clipboard writer, worded as bb's "Thread link copied". */
-async function copyThreadId(id: string) {
-  if (await copyToClipboard({ text: id })) toast.success("Thread ID copied");
-  else toast.error("Failed to copy thread ID");
+  const item = sleepItem(row, { sleep: (until) => sleep.sleep(id, until), wake: () => sleep.wake(id), sleepCustom }, now);
+  return { target, inline: item === null ? [] : [item], corner };
 }
 
 /** The fields bb's own actions read, copied from the sidebar row as bb's own list does. */
