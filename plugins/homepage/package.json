@@ -1,0 +1,48 @@
+{
+  "name": "bb-plugin-homepage",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "A grid of cards under the new-thread composer. The first, Activity, is six months of your merged GitHub PRs as a calendar grid, with the threads you started, PRs merged and lines changed; its data refreshes in the background, so it opens instantly.",
+  "keywords": [
+    "bb-plugin",
+    "homepage",
+    "github",
+    "activity"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ivan-anchev/bb-plugins.git",
+    "directory": "plugins/homepage"
+  },
+  "engines": {
+    "bb": ">=0.48",
+    "bbPluginSdk": ">=0.6.104"
+  },
+  "bb": {
+    "name": "Homepage",
+    "description": "A grid of cards under the new-thread composer. The first, Activity, is six months of your merged GitHub PRs as a calendar grid, with the threads you started, PRs merged and lines changed; its data refreshes in the background, so it opens instantly.",
+    "branding": {
+      "icon": "LayoutDashboard"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "node --test '*/*.test.ts'",
+    "build": "bb plugin build"
+  },
+  "dependencies": {
+    "@get-bb/plugin-sdk": "0.6.104",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "hono": "^4.11.9",
+    "typescript": "^5.7.0"
+  }
+}

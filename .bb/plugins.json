@@ -16,6 +16,10 @@
       "source": "./plugins/code-explorer"
     },
     {
+      "name": "homepage",
+      "source": "./plugins/homepage"
+    },
+    {
       "name": "mdxcn",
       "source": "./plugins/mdxcn"
     },

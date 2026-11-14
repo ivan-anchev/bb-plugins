@@ -1,0 +1,10 @@
+/* The homepage grid. Cards are hp-/ag-… prefixed per card; a card that should
+   take the whole row sets grid-column: 1 / -1. */
+.hp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+/* bb draws the section title as an <h2>; each card carries its own header. */
+[id="plugin-homepage:homepage:cards"] > h2 { display: none; }

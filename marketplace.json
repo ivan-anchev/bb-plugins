@@ -54,6 +54,29 @@
       }
     },
     {
+      "id": "homepage",
+      "displayName": "Homepage",
+      "description": "A grid of cards under the new-thread composer. The first, Activity, is six months of your merged GitHub PRs as a calendar grid, with the threads you started, PRs merged and lines changed; its data refreshes in the background, so it opens instantly.",
+      "icon": "LayoutDashboard",
+      "tags": [
+        "homepage",
+        "github",
+        "activity"
+      ],
+      "author": {
+        "name": "Ivan Anchev",
+        "github": "ivan-anchev"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/ivan-anchev/bb-plugins.git",
+          "subdir": "plugins/homepage",
+          "range": "0.x",
+          "tagPrefix": "homepage/"
+        }
+      }
+    },
+    {
       "id": "mdxcn",
       "displayName": "mdxcn",
       "description": "Agents draw mdxcn figures in chat: callouts, steps, terminals, tables, KPIs, charts, timelines and more, from a fenced block.",
