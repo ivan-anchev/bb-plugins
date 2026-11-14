@@ -27,7 +27,7 @@ export function ActivityList({ activeThreadId, isCompactViewport, onNavigate }: 
   const [archivedShown, setArchivedShown] = useState(ARCHIVED_FIRST);
   useSleepUpkeep({ threads: live.threads, sleeps, now, activeThreadId });
 
-  // why: a project removed since the choice was made narrows nothing (Zeron: sidebar.luau only_project).
+  // why: a project removed since the choice was made narrows nothing.
   const chosen = live.projects.find((p) => p.id === filter) ?? null;
   const model = useMemo(
     () => buildActivity({ threads: live.threads, projects: live.projects, sleeps: sleeps.sleeps, now, activeThreadId, filter: chosen?.id ?? null }),
@@ -39,7 +39,7 @@ export function ActivityList({ activeThreadId, isCompactViewport, onNavigate }: 
   );
 
   const since = useUnderWaySince(live.threads);
-  // why: no hover at compact width (Zeron shows no card on the rail or in a flyout, Z:ds/sidebar.luau:1143-1147).
+  // why: no hover at compact width (Zeron shows no card on the rail or in a flyout).
   const card = useMemo(() => (isCompactViewport ? null : { index: model.index, underWaySince: since }), [isCompactViewport, model.index, since]);
 
   const toggle = (key: SectionKey) => setOpen(open.includes(key) ? open.filter((k) => k !== key) : [...open, key]);

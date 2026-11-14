@@ -1,7 +1,7 @@
 // When the hover card shows, and for which row. One machine per list, so the card hands off warm from
 // row to row and the pointer can cross other rows on its way to it. No DOM, no React: the list feeds it
-// pointer and focus facts and it says which row's card is shown. Ported from the prototype
-// (P:1138-1412), which follows Zeron (ds/sidebar.luau:1142-1196, screens/shell/init.luau:581-680).
+// pointer and focus facts and it says which row's card is shown. Ported from the prototype,
+// which follows Zeron.
 // Zeron's card takes no keyboard; here focus holds a card as the pointer does, so a keyboard reader can
 // keep it open and work its rows (REVIEW.md: a popup stays while hovered or while its trigger has focus).
 
@@ -63,7 +63,7 @@ export class CardIntent {
   /** The pointer came onto a row. */
   overRow(row: string): void {
     this.pointer = row;
-    // why: crossing another row on the way to the open card is not resting on it (P:1394-1399).
+    // why: crossing another row on the way to the open card is not resting on it.
     if (this.shown !== null && this.shown !== row && this.headingToCard()) {
       clearTimeout(this.graceTimer);
       this.passing = row;
@@ -139,7 +139,7 @@ export class CardIntent {
     this.dwellTimer = setTimeout(() => this.show(row), DWELL);
   }
 
-  /** Still on its way: wait. Stopped SETTLE ms, or turned away: take what is under it (P:1359-1378). */
+  /** Still on its way: wait. Stopped SETTLE ms, or turned away: take what is under it. */
   private settle(): void {
     clearTimeout(this.settleTimer);
     if (this.deps.probe().onCard) {
@@ -214,8 +214,8 @@ export class CardIntent {
 }
 
 /**
- * Strictly inside the triangle from `exit` to the card's near edge, reaching 8 past its top and bottom
- * (P:1380-1388). On an edge, its apex included, is not on the way.
+ * Strictly inside the triangle from `exit` to the card's near edge, reaching 8 past its top and bottom.
+ * On an edge, its apex included, is not on the way.
  */
 export function insideTriangle(exit: Point, card: CardEdge, p: Point): boolean {
   const top = { x: card.left, y: card.top - 8 };

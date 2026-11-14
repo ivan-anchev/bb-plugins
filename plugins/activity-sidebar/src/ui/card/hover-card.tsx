@@ -2,7 +2,7 @@
 // pointer and focus events delegated on the scroller, and by the pointer's moves anywhere while a card
 // shows. Radix Popover (shimmed by the host, so it shares bb's overlay layer) places it beside that row,
 // kept inside the window, and closes it on Escape wherever focus is. A card leaving fades out while the
-// next fades in (Z:screens/shell/init.luau:677-678). The keyboard reaches it from its row: Tab goes in,
+// next fades in. The keyboard reaches it from its row: Tab goes in,
 // first to its body, which the arrow keys then scroll, and on through its buttons. Shift+Tab off its
 // first stop or Escape comes back, and Tab off its last goes on to what follows the list. Focus in the
 // card is its row's to the list.
@@ -23,7 +23,7 @@ export type RowItem = Extract<ListItem, { kind: "row" }>;
 
 /**
  * A row in its place: its section and thread. A row that moves to another section (archived, put to
- * sleep, done working) is another row, so its card goes with the old one (Z:ds/sidebar.luau:1238-1240).
+ * sleep, done working) is another row, so its card goes with the old one.
  */
 export function cardKeyOf(item: RowItem): string {
   return `${item.section}/${item.row.thread.id}`;
@@ -174,7 +174,7 @@ function useCardIntent(
       intent.overRow(key);
     };
     // why: the pointer is not tracked here: an out event already reports the next spot, and the safe
-    // triangle starts where the pointer last stood in the row (P:1407).
+    // triangle starts where the pointer last stood in the row.
     const out = (e: PointerEvent) => {
       const key = cardKeyAt(e.target);
       if (key === null || e.pointerType === "touch" || cardKeyAt(e.relatedTarget) === key || isOnCard(e.relatedTarget)) return;
@@ -225,7 +225,7 @@ function useCardIntent(
   }, [scroller, intent]);
 
   // why: a crossing on its way to the card can end anywhere, the main pane included. Followed over the
-  // whole page, as the prototype does (P:1379), the pointer leaving both the row and the card always lets
+  // whole page, as the prototype does, the pointer leaving both the row and the card always lets
   // the card go; followed only over the list, its last spot there stays and the crossed row takes the card.
   useEffect(() => {
     if (!showing) return;

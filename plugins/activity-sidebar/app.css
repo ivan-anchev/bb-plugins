@@ -208,7 +208,7 @@
   width: 14px;
   height: 14px;
 }
-/* A menu row's switch (the prototype's, P:196-201), in bb's ink: on, its primary. */
+/* A menu row's switch (the prototype's), in bb's ink: on, its primary. */
 .as-switch {
   position: relative;
   flex: 0 0 26px;
@@ -387,7 +387,7 @@
   gap: 8px;
   padding-right: 8px;
 }
-/* Regular's second line (Zeron's PULL, P:109): pulled up under the title, quiet, its branch glyph leading. */
+/* Regular's second line (Zeron's PULL): pulled up under the title, quiet, its branch glyph leading. */
 .as-detail {
   display: flex;
   align-items: center;
@@ -754,9 +754,9 @@
   box-shadow: 0 0 0 1px var(--ring);
 }
 
-/* --- The hover card (Z:ds/session_card, P:1076-1134): bb's popover surface, Zeron's 284 wide, 12 in,
+/* --- The hover card: bb's popover surface, Zeron's 284 wide, 12 in,
    its title then quiet lines, each a 12 glyph and its words; under a rule, its subthread tree. In over
-   140, out over 100 (Z:screens/shell/init.luau:677-678). Never taller than the window, 8 from each
+   140, out over 100. Never taller than the window, 8 from each
    edge. -------------------------------------------------------------------------------------------- */
 .as-card {
   position: relative;
@@ -921,7 +921,7 @@
 }
 
 /* Under the lines, the plan and the subthreads: past the card's height they scroll, out to its edges,
-   each end fading as deep as there is more past it, up to 16 (Z:ds/composer_dock.luau:32-33, 193-205).
+   each end fading as deep as there is more past it, up to 16.
    The fades follow the scroll itself; with nothing to scroll there is no timeline and no fade. Focus
    moved to a control in it brings it into view clear of the fades. */
 @property --as-fade-top {
@@ -966,7 +966,7 @@
   from { --as-fade-bottom: 16px; }
 }
 
-/* The plan (P:1119-1131, Z:ds/composer_dock.luau:1066-1112): each step a 12 glyph and its words, which
+/* The plan: each step a 12 glyph and its words, which
    wrap; the step in progress firm, the done ones faint. */
 .as-card-plan {
   display: flex;
@@ -1017,7 +1017,7 @@
   line-height: 16px;
   font-weight: 500;
 }
-/* The fold sits 2 shorter than "Show all N" (P:1130). */
+/* The fold sits 2 shorter than "Show all N". */
 .as-card-fold {
   padding: 2px 6px;
 }

@@ -14,7 +14,7 @@ export function parseFilter(stored: unknown): string | null {
   return typeof stored === "string" ? stored : null;
 }
 
-/** A line a row (the prototype's default, P:326) unless two were chosen. */
+/** A line a row (the prototype's default) unless two were chosen. */
 export function parseCompact(stored: unknown): boolean {
   return typeof stored === "boolean" ? stored : true;
 }

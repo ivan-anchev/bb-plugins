@@ -1,4 +1,4 @@
-// The hover card's subthread tree as lines (P:1291-1352): every subthread in a state and the path to
+// The hover card's subthread tree as lines: every subthread in a state and the path to
 // it, then the two latest of each place; checkouts on one branch are one place, said once; twelve lines
 // at most. Each line carries where its hairline rail runs. Pure over the list's ThreadIndex.
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
@@ -29,7 +29,7 @@ const ROOT_AT = 6;
 const STEP = 8;
 const SLOT = 20;
 
-/** Zeron's URGENCY (P:298), most pressing first; a thread in no state sorts after every state. */
+/** Zeron's URGENCY, most pressing first; a thread in no state sorts after every state. */
 const URGENCY: Record<ZState, number> = { approval: 1, input: 2, failed: 3, working: 5, waiting: 6, connecting: 7, done: 9, woke: 9 };
 const QUIET = 99;
 
@@ -41,7 +41,7 @@ export function subthreadLines(index: ThreadIndex, parent: PluginSidebarThread):
   return {
     lines: shown,
     total: all.length,
-    // why: every subthread under way, as the row's pill counts them, not only its children (P:1311).
+    // why: every subthread under way, as the row's pill counts them, not only its children.
     running: all.filter(isUnderWay).length,
     hidden: all.length - shown.filter((l) => l.kind === "thread").length,
   };
@@ -60,7 +60,7 @@ type Place = { checkout: Checkout; list: readonly PluginSidebarThread[]; keep: r
 
 /**
  * The lines under `node`. Its subthreads in its own checkout hang straight off it; those elsewhere hang
- * under one head per place, so where the work runs is said once (P:1296-1330).
+ * under one head per place, so where the work runs is said once.
  */
 function walk(index: ThreadIndex, node: PluginSidebarThread, at: number, through: readonly number[], out: TreeLine[]): void {
   const kids = index.childrenOf(node.id);
@@ -113,7 +113,7 @@ function byPlace(index: ThreadIndex, kids: readonly PluginSidebarThread[], ownEn
 
 /**
  * In a state, or on the path to one: kept, the most pressing first, so the cut never hides them behind
- * quiet ones. Of the quiet, the two latest (P:1293-1297).
+ * quiet ones. Of the quiet, the two latest.
  */
 function choose(index: ThreadIndex, list: readonly PluginSidebarThread[]): PluginSidebarThread[] {
   const rank = (t: PluginSidebarThread) => Math.min(urgency(t), ...index.below(t.id).map(urgency));
@@ -122,7 +122,7 @@ function choose(index: ThreadIndex, list: readonly PluginSidebarThread[]): Plugi
   return sorted.filter((t) => rank(t) !== QUIET || quiet.has(t));
 }
 
-/** A head with none of its rows left after the cut goes with them (P:1331). */
+/** A head with none of its rows left after the cut goes with them. */
 function dropTrailingPlaces(lines: TreeLine[]): TreeLine[] {
   let end = lines.length;
   while (end > 0 && lines[end - 1].kind === "place") end--;
