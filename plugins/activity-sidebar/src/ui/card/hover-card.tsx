@@ -1,9 +1,11 @@
 // The list's hover card. CardIntent (src/card/card-intent.ts) decides which row's card shows, fed by
-// pointer and focus events delegated on the scroller; Radix Popover (shimmed by the host, so it shares
-// bb's overlay layer) places it beside that row, kept inside the window, and closes it on Escape
-// wherever focus is. A card leaving fades out while the next fades in (Z:screens/shell/init.luau:677-678).
-// The keyboard reaches it from its row: Tab goes in, Shift+Tab off its first button or Escape comes back,
-// and Tab off its last goes on to what follows the list. Focus in the card is its row's to the list.
+// pointer and focus events delegated on the scroller, and by the pointer's moves anywhere while a card
+// shows. Radix Popover (shimmed by the host, so it shares bb's overlay layer) places it beside that row,
+// kept inside the window, and closes it on Escape wherever focus is. A card leaving fades out while the
+// next fades in (Z:screens/shell/init.luau:677-678). The keyboard reaches it from its row: Tab goes in,
+// first to its body, which the arrow keys then scroll, and on through its buttons. Shift+Tab off its
+// first stop or Escape comes back, and Tab off its last goes on to what follows the list. Focus in the
+// card is its row's to the list.
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import { Anchor, Content, Portal, Root } from "@radix-ui/react-popover";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
@@ -46,7 +48,7 @@ export function HoverCard({ scroller, items, data, listFocus, onNavigate }: Prop
   useLayoutEffect(() => {
     latestFocus.current = listFocus;
   });
-  const intent = useCardIntent(scroller, card, {
+  const intent = useCardIntent(scroller, card, shown.current !== null, {
     onChange: (key) => setShown((was) => ({ current: key, leaving: was.current ?? was.leaving })),
     returnFocus: () => latestFocus.current.refocus(),
   });
@@ -131,13 +133,15 @@ function RowAnchor({ scroller, cardKey, item }: { scroller: RefObject<HTMLElemen
 }
 
 /**
- * One CardIntent for the list, fed by events delegated on the scroller: the pointer over, out of and
- * across rows; keyboard focus resting on a row as the pointer would, and Tab taking it into the row's
- * card; a press, a right-click or a scroll putting it away cold. No listener and no timer outlives the list.
+ * One CardIntent for the list, fed by events delegated on the scroller: the pointer over and out of
+ * rows; keyboard focus resting on a row as the pointer would, and Tab taking it into the row's card; a
+ * press, a right-click or a scroll putting it away cold. While a card shows, the pointer's moves anywhere
+ * on the page. No listener and no timer outlives the list.
  */
 function useCardIntent(
   scroller: RefObject<HTMLElement | null>,
   card: RefObject<HTMLElement | null>,
+  showing: boolean,
   deps: Pick<CardIntentDeps, "onChange" | "returnFocus">,
 ): CardIntent {
   const pointer = useRef<Point>({ x: 0, y: 0 });
@@ -153,13 +157,10 @@ function useCardIntent(
   useEffect(() => {
     const el = scroller.current;
     if (el === null) return;
-    const track = (e: MouseEvent) => {
-      pointer.current = { x: e.clientX, y: e.clientY };
-    };
     const over = (e: MouseEvent) => {
       const key = cardKeyAt(e.target);
       if (key === null) return;
-      track(e);
+      pointer.current = { x: e.clientX, y: e.clientY };
       intent.overRow(key);
     };
     // why: the pointer is not tracked here: an out event already reports the next spot, and the safe
@@ -168,10 +169,6 @@ function useCardIntent(
       const key = cardKeyAt(e.target);
       if (key === null || cardKeyAt(e.relatedTarget) === key || isOnCard(e.relatedTarget)) return;
       intent.leaveRow(key);
-    };
-    const move = (e: MouseEvent) => {
-      track(e);
-      intent.move();
     };
     // why: only focus the keyboard moved rests on a row; a click's focus comes with a press, which puts
     // the card away, and holds nothing.
@@ -198,7 +195,6 @@ function useCardIntent(
 
     el.addEventListener("mouseover", over);
     el.addEventListener("mouseout", out);
-    el.addEventListener("mousemove", move);
     el.addEventListener("focusin", focusIn);
     el.addEventListener("focusout", focusOut);
     el.addEventListener("keydown", tabIn);
@@ -208,7 +204,6 @@ function useCardIntent(
     return () => {
       el.removeEventListener("mouseover", over);
       el.removeEventListener("mouseout", out);
-      el.removeEventListener("mousemove", move);
       el.removeEventListener("focusin", focusIn);
       el.removeEventListener("focusout", focusOut);
       el.removeEventListener("keydown", tabIn);
@@ -219,14 +214,27 @@ function useCardIntent(
     };
   }, [scroller, intent]);
 
+  // why: a crossing on its way to the card can end anywhere, the main pane included. Followed over the
+  // whole page, as the prototype does (P:1379), the pointer leaving both the row and the card always lets
+  // the card go; followed only over the list, its last spot there stays and the crossed row takes the card.
+  useEffect(() => {
+    if (!showing) return;
+    const move = (e: MouseEvent) => {
+      pointer.current = { x: e.clientX, y: e.clientY };
+      intent.move();
+    };
+    document.addEventListener("mousemove", move);
+    return () => document.removeEventListener("mousemove", move);
+  }, [showing, intent]);
+
   return intent;
 }
 
 /**
- * Shift+Tab off the card's first button lands on its row. Tab off its last goes on from the row, as if
+ * Shift+Tab off the card's first stop lands on its row. Tab off its last goes on from the row, as if
  * the card sat right after it: focus moves to the row and the browser's own Tab carries on from there.
- * Focus can also rest on the card or its plan (where it goes when an update takes the button it was on);
- * from there too, with no button ahead, the keyboard leaves the card the same way.
+ * Focus can also rest on the card itself (where it goes when an update leaves the body with nothing to
+ * show); from there too, with no stop ahead, the keyboard leaves the card the same way.
  */
 function tabOut(e: ReactKeyboardEvent<HTMLElement>, listFocus: ListFocus) {
   if (e.key !== "Tab" || e.ctrlKey || e.metaKey || e.altKey || !(e.target instanceof Node)) return;
@@ -237,9 +245,12 @@ function tabOut(e: ReactKeyboardEvent<HTMLElement>, listFocus: ListFocus) {
   listFocus.refocus();
 }
 
-/** The card's buttons: its mini rows, "Show all", the plan's folds and Retry. */
+/**
+ * Where Tab stops in the card, in order: its body, which scrolls, then the body's buttons (mini rows,
+ * "Show all", the plan's folds and Retry). A card with neither plan nor subthreads hides its body.
+ */
 function tabStops(card: HTMLElement): HTMLElement[] {
-  return Array.from(card.querySelectorAll<HTMLElement>("button"));
+  return Array.from(card.querySelectorAll<HTMLElement>('[tabindex="0"], button')).filter((stop) => stop.checkVisibility());
 }
 
 function underPointer(point: Point): Under {

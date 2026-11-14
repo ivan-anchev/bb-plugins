@@ -191,6 +191,11 @@ window. It shows:
   and those running. Click a subthread to open it; "Show all N" (when some are
   left out) opens the thread itself.
 
+The card is never taller than the window. When an open plan and the subthreads
+would run past it, the title and its lines stay put and the plan and subthreads
+scroll under them, their edges fading where there is more to scroll. Scrolling
+inside the card keeps it open.
+
 The card has no latest-message text. Once one card is open, resting on another
 row swaps it at once, and within 0.4 s of one closing the next opens at once.
 The pointer can travel diagonally across other rows to reach the card; it
@@ -202,10 +207,11 @@ out, archived, put to sleep or moved to another shelf). There is no card on a
 phone-width screen.
 
 From the keyboard: with a row focused and its card open, Tab moves into the
-card's plan folds, Retry and subthreads; Enter unfolds the plan or opens a subthread. Shift+Tab off the first, or Escape,
-goes back to the row; Tab past the last goes on to what follows the list. When the plan changes under focus
-(a fold the next step no longer needs, a Retry that worked), focus stays in the card, on the plan, or on the
-card itself once the plan has gone. When
+card: first to the plan and subthreads as a whole, which ↑, ↓, Page Up, Page Down,
+Home and End scroll, then to its plan folds, Retry and subthreads; Enter unfolds the plan or opens a subthread. Shift+Tab off the first, or Escape,
+goes back to the row; Tab past the last goes on to what follows the list. When the plan or subthreads change
+under focus (a fold the next step no longer needs, a Retry that worked, the plan ending), focus stays in the
+card: on the plan and subthreads as a whole, or on the card itself once neither is left. When
 the card closes with focus in it, focus goes back to its row, or to the next
 row when its own has left the list.
 
