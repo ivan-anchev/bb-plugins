@@ -3,19 +3,20 @@
 import { experimental_useSidebarThreads, type PluginSidebarThread, type PluginThreadListProps } from "@get-bb/plugin-sdk/app";
 import { useMemo, useState } from "react";
 import { underWaySince } from "../card/under-way.ts";
-import { parseCompact, parseFilter, parseOpen } from "../data/choices.ts";
-import { useLocalChoice } from "../data/use-local-choice.ts";
+import { parseCompact, parseFilter, parseOpen } from "../data/local-choice/choices.ts";
+import { useLocalChoice } from "../data/local-choice/use-local-choice.ts";
+import { useArchivedCount } from "../data/use-archived-count.ts";
 import { useMinute } from "../data/use-minute.ts";
 import { useSleepUpkeep } from "../data/use-sleep-upkeep.ts";
 import { useSleeps } from "../data/use-sleeps.ts";
 import { useHandoffs } from "../handoff/use-handoffs.ts";
-import { ARCHIVED_FIRST, ARCHIVED_STEP, listItems, type NoticeKey } from "../list/items.ts";
+import { ARCHIVED_FIRST, ARCHIVED_STEP, listItems, retryNotice, type NoticeKey } from "../list/items.ts";
 import { buildActivity, type SectionKey } from "../model/activity.ts";
 import type { ThreadIndex } from "../model/thread-index.ts";
 import { ListViewport } from "./list-viewport.tsx";
 import { ViewMenu } from "./view-menu.tsx";
 
-// why: one read for both lifecycles, so the Archived shelf's first page (and its "n+") loads at mount.
+// why: one read for both lifecycles, so the Archived shelf's first page has loaded by the time it opens.
 const LIFECYCLES = { experimental_lifecycles: ["active", "archived"] } as const;
 
 export function ActivityList({ activeThreadId, isCompactViewport, onNavigate }: PluginThreadListProps) {
@@ -32,13 +33,15 @@ export function ActivityList({ activeThreadId, isCompactViewport, onNavigate }: 
 
   // why: a project removed since the choice was made narrows nothing.
   const chosen = live.projects.find((p) => p.id === filter) ?? null;
+  const archivedCount = useArchivedCount(chosen?.id ?? null);
   const model = useMemo(
     () => buildActivity({ threads: live.threads, projects: live.projects, sleeps: sleeps.sleeps, held, now, activeThreadId, filter: chosen?.id ?? null }),
     [live.threads, live.projects, sleeps.sleeps, held, now, activeThreadId, chosen],
   );
   const items = useMemo(
-    () => listItems(model.sections, { status: live.status, sleeps: sleeps.status, open: new Set(open), archivedShown, archive, filterName: chosen?.name ?? null, compact }),
-    [model, live.status, sleeps.status, open, archivedShown, archive, chosen, compact],
+    () =>
+      listItems(model.sections, { status: live.status, sleeps: sleeps.status, open: new Set(open), archivedShown, archive, archivedCount: archivedCount.count, filterName: chosen?.name ?? null, compact }),
+    [model, live.status, sleeps.status, open, archivedShown, archive, archivedCount.count, chosen, compact],
   );
 
   const since = useUnderWaySince(live.threads, model.index);
@@ -55,7 +58,8 @@ export function ActivityList({ activeThreadId, isCompactViewport, onNavigate }: 
     setArchivedShown(next);
   };
 
-  const retry = (notice: NoticeKey) => (notice === "n:sleeps" ? sleeps.refetch() : void archive.fetchNextPage());
+  const retry = (notice: NoticeKey) =>
+    retryNotice(notice, { sleeps: sleeps.refetch, archivedCount: archivedCount.refetch, archivedPage: () => void archive.fetchNextPage() });
 
   return (
     <ListViewport
