@@ -29,7 +29,7 @@ export function NotesCard() {
       {list !== undefined && (list.length === 0 ? <EmptyLine /> : <NoteList notes={list} />)}
       <footer className="nt-foot nt-caption">
         {list !== undefined && list.length > 0 && <span>Pick notes to start a thread</span>}
-        <button type="button" className="nt-link" onClick={spotlight.compose}>
+        <button type="button" className="nt-link" onClick={() => spotlight.compose(null)}>
           New note<kbd className="nt-foot-kbd">⇧⌘J</kbd>
         </button>
       </footer>

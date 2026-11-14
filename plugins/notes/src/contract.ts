@@ -18,6 +18,7 @@ const quoteSchema = z.object({
   /** The message's `experimental_messageSeq`: the `msg` of a message link. */
   messageSeq: z.number().int().nonnegative(),
 });
+export type Quote = z.infer<typeof quoteSchema>;
 
 /** The user's own words. */
 const noteBodySchema = z.object({

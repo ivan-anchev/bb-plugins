@@ -1,6 +1,6 @@
 ---
 name: notes
-description: Explain the Notes plugin, which saves short personal notes in bb from a Spotlight opened with ⇧⌘J or the sidebar-footer notes icon, and lists them in a Notes card on the New thread screen. Use when the user asks how to write a note, where their notes are, why ⇧⌘J does nothing, or why the Notes card is empty or says it couldn't read notes.
+description: Explain the Notes plugin, which saves short personal notes in bb from a Spotlight opened with ⇧⌘J, the sidebar-footer notes icon, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), and lists them in a Notes card on the New thread screen. Use when the user asks how to write or quote a note, where their notes are, why ⇧⌘J does nothing, what the source chip opens, or why the Notes card is empty or says it couldn't read notes.
 ---
 
 # Notes
@@ -18,6 +18,24 @@ agent tools and no settings; an agent cannot read or write notes.
   Focus goes back where it was.
 - If saving fails, the box stays open with the text and one line saying why.
 
+## Saving a passage from a reply
+
+- Highlight text in an assistant reply and choose **Add to notes** in the
+  menu that appears over the selection. The Spotlight opens titled "Save
+  selection to notes" with exactly the highlighted text and a source chip
+  naming the thread. Typing is optional: ⌘↵ saves the quote on its own.
+- **Add to notes** is also in the action bar under every message. On an
+  assistant reply it quotes the whole reply, as its markdown source; on a
+  user message it opens a blank note.
+- The chip is bb's own thread mention for that message
+  (`@thread:<id>#msg=<seq>`): clicking it opens the thread scrolled to the
+  quoted message, from any screen. The Spotlight stays open over it with the
+  draft; Esc closes it. Checked live on bb 0.49.
+- A note keeps the thread's title as it was when saved, so it still names its
+  thread after the thread is renamed, archived or deleted. If the sidebar's
+  threads have not loaded yet when the Spotlight opens (or the thread is
+  archived), the title is the thread's id.
+
 ## The shortcut
 
 The command is listed in Settings → Keyboard as "Plugin: notes · New note",
@@ -29,8 +47,9 @@ Shortcuts do not run while a bb dialog is open, the Spotlight included.
 ## The Notes card
 
 On the New thread screen, under the composer. It lists active notes newest
-first, four at a time: line 1 is the note on one line, line 2 the thread it
-came from ("No thread" for a note typed from scratch). "N more" shows the rest
+first, four at a time: line 1 is the note on one line (a quote saved without
+words shows the quote in “ ”), line 2 the thread the quote came from ("No
+thread" for a note typed from scratch). "N more" shows the rest
 and "Show fewer" folds them. A new note appears within about two seconds with
 no reload. When the plugin cannot read its database the card says "Couldn't
 read notes" with the reason, beside any notes it already showed.

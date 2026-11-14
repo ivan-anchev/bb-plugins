@@ -13,10 +13,10 @@ function render(): ReturnType<typeof useSpotlightState> {
 }
 
 test("closing an opening that was dismissed and reopened leaves the new one open", () => {
-  spotlight.compose();
+  spotlight.compose(null);
   const first = render();
   spotlight.close(first); // dismissed while its save was still in flight
-  spotlight.compose();
+  spotlight.compose(null);
   const second = render();
 
   spotlight.close(first); // the first opening's save finishes
