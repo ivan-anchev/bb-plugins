@@ -2,8 +2,8 @@
 // torn down none of them reports landing to it. No DOM: it needs only an animation's `finished` and
 // `cancel`. use-layout-motion.ts keeps one per list.
 
-/** What of a Web Animation this needs. */
-export type Played = Pick<Animation, "finished" | "cancel">;
+/** What of a Web Animation this needs: when it settles (never what it settles with), and stopping it. */
+export type Played = { readonly finished: Promise<unknown>; cancel(): void };
 
 export class Playing {
   private readonly running = new Set<Played>();
