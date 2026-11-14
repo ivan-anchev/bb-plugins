@@ -12,11 +12,13 @@ function run(...updates: PluginSidebarThread[][]): Handoffs {
   return updates.reduce((last, threads, i) => nextHandoffs(last, threads, i * 1_000), NO_HANDOFFS);
 }
 
-test("a thread whose wait ends is held, then takes up its next turn without ever leaving Working", () => {
+test("a thread whose wait ends is held, through a short turn and a second wake, never leaving Working", () => {
   const ended = run([thread("p", WAITING)], [thread("p", DONE)]);
   assert.deepEqual([...ended.held], [["p", 1_000 + HANDOFF_MS]]);
   const woke = nextHandoffs(ended, [thread("p", WORKING)], 2_000);
-  assert.equal(woke.held.size, 0, "working again, the hold is done");
+  assert.equal(woke.held.get("p"), 1_000 + HANDOFF_MS, "working inside the window keeps the hold");
+  const settledAgain = nextHandoffs(woke, [thread("p", DONE)], 3_000);
+  assert.equal(settledAgain.held.get("p"), 1_000 + HANDOFF_MS, "the first wake's short turn ends; the report's wake is still to come");
 });
 
 test("a subthread that reports back ending is a wait ending for its parent", () => {
@@ -35,9 +37,11 @@ test("a hold lasts through quiet updates, then ends at its time", () => {
   assert.equal(nextRelease(released), null);
 });
 
-test("a turn that simply ends, or a wait that ends asking for you, is never held", () => {
+test("a turn that simply ends is never held; a wait that ends asking for you or failing drops the hold", () => {
   const plain = run([thread("p", WORKING)], [thread("p", DONE)]);
   assert.equal(plain.held.size, 0, "working to done is a real finish");
   const asks = run([thread("p", WAITING)], [thread("p", { indicator: "waiting-for-input" })]);
   assert.equal(asks.held.size, 0);
+  const fails = run([thread("p", WAITING)], [thread("p", DONE)], [thread("p", { indicator: "unread-error" })]);
+  assert.equal(fails.held.size, 0);
 });

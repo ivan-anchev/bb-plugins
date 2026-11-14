@@ -1,12 +1,13 @@
-// The moment between a wait ending and the wake it brings. A thread waiting on background work or a
-// subthread (bb wakes the parent when it ends) settles for a second or two before its next turn starts;
-// held on Working through that gap, its row doesn't flash Completed on Activity and jump back. Pure: the
-// last hand-offs, the live threads and the clock in.
+// The moments after a wait ends. A thread waiting on background work or a subthread (bb wakes the
+// parent when it ends) settles for a second or two before its next turn starts, and may be woken twice
+// (its own background wait ending, then bb's report), with a short turn between. Held on Working through
+// that window, its row doesn't flash Completed on Activity and jump back. Pure: the last hand-offs, the
+// live threads and the clock in.
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
-import { settled } from "../model/state.ts";
+import { NEEDS_YOU } from "../model/state.ts";
 import { indexThreads } from "../model/thread-index.ts";
 
-/** How long a thread whose wait ended stays Waiting for its next turn; the gap is a second or two. */
+/** How long after its wait ends a settled thread still reads Waiting; the wakes come within a second or two. */
 export const HANDOFF_MS = 10_000;
 
 /** Who was Waiting at the last update, and who is held until when. */
@@ -15,8 +16,9 @@ export type Handoffs = { waiting: ReadonlySet<string>; held: ReadonlyMap<string,
 export const NO_HANDOFFS: Handoffs = { waiting: new Set(), held: new Map() };
 
 /**
- * The hand-offs at `now`: a thread that was Waiting and has settled is held for HANDOFF_MS; a hold ends
- * at its time, or as soon as the thread does anything else (works, asks, fails, waits again).
+ * The hand-offs at `now`: a thread that was Waiting and no longer is, is held for HANDOFF_MS. A turn
+ * inside the window keeps the hold (the state shows Working; settling again shows Waiting); the hold
+ * ends at its time, when the thread waits again, or as soon as it asks for you or fails.
  */
 export function nextHandoffs(last: Handoffs, threads: readonly PluginSidebarThread[], now: number): Handoffs {
   // why: bb's states, unheld, say who waits now; a hold must never feed its own renewal.
@@ -26,7 +28,7 @@ export function nextHandoffs(last: Handoffs, threads: readonly PluginSidebarThre
   for (const thread of threads) {
     const state = index.liveState(thread);
     if (state === "waiting") waiting.add(thread.id);
-    else if (settled(state)) {
+    else if (state === null || !NEEDS_YOU.has(state)) {
       const until = last.waiting.has(thread.id) ? now + HANDOFF_MS : last.held.get(thread.id);
       if (until !== undefined && until > now) held.set(thread.id, until);
     }

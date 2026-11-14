@@ -21,10 +21,11 @@ commands and no settings.
     on what will wake them: background work, or a subthread still under way
     whose end bb reports back to it). When a turn starts, the thread leaves
     Activity for Working; when it ends with nothing left to wake it, it
-    returns to the top of Activity. A thread whose wait just ended stays
-    Waiting on Working for up to 10 seconds while the wake starts its next
-    turn, so an orchestrator that waits on its subthreads doesn't flash
-    Completed on Activity between rounds. A subthread with parent
+    returns to the top of Activity. A thread whose wait just ended stays on
+    Working for 10 seconds while the wakes it brings start its next turn (a
+    short reply in between doesn't send it to Activity), so an orchestrator
+    that waits on its subthreads doesn't flash Completed on Activity between
+    rounds. Asking for you or failing ends that early. A subthread with parent
     notifications set to `stuck` or `off` doesn't hold its parent.
   - **Asleep**: threads put to sleep (see Sleep below), the soonest to wake
     first, each showing how soon it wakes.
