@@ -14,6 +14,7 @@
 
   position: relative;
   isolation: isolate;
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -70,6 +71,8 @@
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
+  /* why a full-height row: bar heights are shares of the plot (spend-chart.tsx). */
+  grid-template-rows: 100%;
   align-items: end;
   gap: 3px;
   height: 64px;
@@ -106,6 +109,23 @@
 /* why pointer events once shown: the pointer can rest on the tooltip and it stays (it is the chart's child). */
 .bs-tip[data-show] { opacity: 1; pointer-events: auto; }
 .bs-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---- the chart and the running list ------------------------------------ */
+/* Stacked; on a card at least 720 wide (688 inside its padding) the chart sits left of the list.
+   After the chart's rules, so the wide plot's height overrides its 64. */
+.bs-body { display: flex; flex-direction: column; gap: 12px; }
+@container (min-width: 688px) {
+  .bs-body {
+    display: grid;
+    grid-template-columns: minmax(0, 56fr) minmax(0, 44fr);
+    column-gap: 32px;
+    align-items: start;
+  }
+  /* why 115: with the 6 gap and 16 axis below, the axis captions share a line with the list's
+     fourth 30px row ("N more running") under its 24 title. Beside the one-paragraph empty note
+     (no .bs-list) the plot keeps its 64, so no tall empty column opens under the note. */
+  .bs-body:has(.bs-list) .bs-plot { height: 115px; }
+}
 
 /* ---- the running list: Activity sidebar's compact rows ----------------- */
 /* why -8: the 30 slot then centres each row's mark under the header's icon. */

@@ -1,5 +1,6 @@
 // homepageSection: boat spend under the new-thread composer. A header with the 30-day total, the
-// daily chart, the boats running now and the money left; or one line saying why there is none.
+// daily chart, the boats running now (beside the chart on a wide card) and the money left; or one line
+// saying why there is none.
 import { experimental_Icon as Icon, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import type { ReactNode } from "react";
 import { boatSandboxContract as contract, type SpendCardReply } from "../../contract.ts";
@@ -45,8 +46,10 @@ function ReadyCard({ reply, failure }: { reply: Ready; failure: string | null })
         </p>
       )}
       {owed && <OwedNotice dollars={reply.balance.dollars} />}
-      <SpendChart days={reply.days} />
-      <RunningList boats={reply.running} readAt={reply.readAt} live={failure === null} />
+      <div className="bs-body">
+        <SpendChart days={reply.days} />
+        <RunningList boats={reply.running} readAt={reply.readAt} live={failure === null} />
+      </div>
       <div className="bs-foot bs-caption">
         <span data-owed={owed || undefined}>{usd(reply.balance.dollars)} {owed ? "owed" : "left"}</span>
         {reply.renewsAt !== null && <span className="bs-end">Renews {dayLabel(reply.renewsAt)}</span>}

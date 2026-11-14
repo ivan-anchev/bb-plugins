@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } fr
 import type { SpendDay } from "../../spend/history.ts";
 import { dayLabel, daySpend } from "./format.ts";
 
-const HEIGHT = 64;
 const WELL = 3;
 /** The shortest bar that still reads as spend. */
 const FLOOR = 4;
@@ -42,8 +41,9 @@ export function SpendChart({ days }: { days: readonly SpendDay[] }) {
   );
 }
 
-const barHeight = (dollars: number | null, max: number): number =>
-  !dollars ? WELL : Math.max(FLOOR, (dollars / max) * HEIGHT);
+/** A share of the plot, not pixels: the stylesheet sets the plot's height, taller when the card splits. */
+const barHeight = (dollars: number | null, max: number): string =>
+  !dollars ? `${WELL}px` : `max(${FLOOR}px, ${(dollars / max) * 100}%)`;
 
 /** `Nov 10 · $0.36`, `Today · No spend`, `Oct 20 · Not recorded`. */
 function describe(day: SpendDay, today: boolean): string {
