@@ -1,10 +1,51 @@
-/* The homepage grid. Cards are hp-/ag-… prefixed per card; a card that should
-   take the whole row sets grid-column: 1 / -1. */
-.hp-grid {
+/* Homepage's layout of bb's homepage sections, and the chrome its cards share.
+   Each card adds its own ag-… prefixed classes on top of .hp-card. */
+
+/* bb stacks every plugin's homepage section in one parent. When PR Reviews'
+   card is there too, that parent becomes a two-column grid wider than the
+   composer: Activity left, PR Reviews right, both first; every other section
+   keeps a full row. The rule names sections by id, never bb's class names,
+   and without PR Reviews nothing changes. */
+:has(> [id="plugin-homepage:homepage:activity"]):has(> [id="plugin-homepage:pr-reviews:pull-requests"]) {
+  /* Up to 1040px with a 16px gutter each side of bb's page, never narrower
+     than the composer, centred under it. why: 100cqw is bb's page, the
+     nearest ancestor size container; the composer's column is 760px at most. */
+  --hp-width: max(100%, min(1040px, 100cqw - 32px));
+  width: var(--hp-width);
+  margin-inline: calc((100% - var(--hp-width)) / 2);
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px 12px;
+
+  /* why margin 0: bb spaces the stack with sibling margins, which would push one column down. */
+  & > * { grid-column: 1 / -1; margin: 0; }
+  /* A one-cell grid stretches its card to the row's height, so both cards match. */
+  & > [id="plugin-homepage:homepage:activity"] { grid-column: auto; order: -2; display: grid; }
+  & > [id="plugin-homepage:pr-reviews:pull-requests"] { grid-column: auto; order: -1; display: grid; }
+
+  /* One column on a narrow page: the grid would drop under 560px. */
+  @container (width < 592px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
-/* bb draws the section title as an <h2>; each card carries its own header. */
-[id="plugin-homepage:homepage:cards"] > h2 { display: none; }
+.hp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--border);
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 18px;
+  -webkit-font-smoothing: antialiased;
+}
+.hp-head { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+.hp-icon { width: 14px; height: 14px; flex: none; color: var(--muted-foreground); }
+.hp-caption { font-size: 12px; line-height: 16px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+
+/* bb draws the section title as an <h2>; the card carries its own header. */
+[id="plugin-homepage:homepage:activity"] > h2 { display: none; }

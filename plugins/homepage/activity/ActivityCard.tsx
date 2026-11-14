@@ -15,9 +15,9 @@ export function ActivityCard(props: { days: readonly Day[]; today: number; capti
   });
 
   return (
-    <div className="ag-card" ref={scrub.rootRef}>
-      <div className="ag-head">
-        <Icon name="GithubLogo" className="ag-icon" aria-hidden />
+    <div className="hp-card ag-card" ref={scrub.rootRef}>
+      <div className="hp-head">
+        <Icon name="GithubLogo" className="hp-icon" aria-hidden />
         <span>Activity</span>
       </div>
 
@@ -42,8 +42,8 @@ export function ActivityCard(props: { days: readonly Day[]; today: number; capti
       </div>
 
       <div className="ag-foot">
-        <span className="ag-caption">{props.caption}</span>
-        <span className="ag-caption ag-range">
+        <span className="hp-caption">{props.caption}</span>
+        <span className="hp-caption ag-range">
           {monthFormat.format(days[0]!.start)} – {monthFormat.format(today)}
         </span>
       </div>

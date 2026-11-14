@@ -6,7 +6,10 @@ description: Explain the Homepage plugin's cards under bb's new-thread composer,
 # Homepage
 
 The Homepage plugin draws a grid of cards under the composer on bb's New thread
-screen. It has no commands and no settings. Its first card is Activity.
+screen. It has no commands and no settings. Its first card is Activity. When
+the PR Reviews plugin is installed, its pull requests card sits beside
+Activity, and the two stack when the page is narrow; that card belongs to PR
+Reviews.
 
 ## Activity
 

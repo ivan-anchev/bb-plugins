@@ -1,10 +1,10 @@
 {
   "name": "bb-plugin-homepage",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "A grid of cards under the new-thread composer. The first, Activity, is six months of your merged GitHub PRs as a calendar grid, with the threads you started, PRs merged and lines changed; its data refreshes in the background, so it opens instantly.",
+  "description": "Cards under the new-thread composer. The first, Activity, is six months of your merged GitHub PRs as a calendar grid, with the threads you started, PRs merged and lines changed; its data refreshes in the background, so it opens instantly. With PR Reviews installed, its pull requests card sits beside Activity.",
   "keywords": [
     "bb-plugin",
     "homepage",
@@ -22,7 +22,7 @@
   },
   "bb": {
     "name": "Homepage",
-    "description": "A grid of cards under the new-thread composer. The first, Activity, is six months of your merged GitHub PRs as a calendar grid, with the threads you started, PRs merged and lines changed; its data refreshes in the background, so it opens instantly.",
+    "description": "Cards under the new-thread composer. The first, Activity, is six months of your merged GitHub PRs as a calendar grid, with the threads you started, PRs merged and lines changed; its data refreshes in the background, so it opens instantly. With PR Reviews installed, its pull requests card sits beside Activity.",
     "branding": {
       "icon": "LayoutDashboard"
     },

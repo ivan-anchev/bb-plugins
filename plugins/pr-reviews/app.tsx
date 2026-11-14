@@ -1,4 +1,5 @@
 import { definePluginApp } from "@get-bb/plugin-sdk/app";
+import { PrCard } from "./src/app/home/pr-card.tsx";
 import { PrPage } from "./src/app/page/pr-page.tsx";
 import { RefreshButton } from "./src/app/page/refresh-button.tsx";
 import { useReadyGuidesBadge } from "./src/app/ready-badge.ts";
@@ -19,4 +20,6 @@ export default definePluginApp((app) => {
     headerContent: RefreshButton,
   });
   app.slots.experimental_tab(reviewChatTab);
+  // why: bb draws this title as an <h2> above the section; app.css hides it, the card has its own.
+  app.slots.homepageSection({ id: "pull-requests", title: "Pull requests", component: PrCard });
 });

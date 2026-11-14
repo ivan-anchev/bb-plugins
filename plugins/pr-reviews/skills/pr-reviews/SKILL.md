@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app shows (a sidebar of your pull requests across every GitHub project, in Authored by me, Needs my review and Recently merged sections with stacked pull requests as trees, one attention dot per row and a Filter that hides the sections you don't watch, a page per pull request with a state pill that changes its state on GitHub (ready for review, convert to draft, close by press and hold, reopen), Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (Write and Preview tabs, Ask about this to ask the review thread, Comment to post a GitHub review comment on an explicit click; review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app and its card on the new-thread screen show (a sidebar of your pull requests across every GitHub project, in Authored by me, Needs my review and Recently merged sections with stacked pull requests as trees, one attention dot per row and a Filter that hides the sections you don't watch, a page per pull request with a state pill that changes its state on GitHub (ready for review, convert to draft, close by press and hold, reopen), Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (Write and Preview tabs, Ask about this to ask the review thread, Comment to post a GitHub review comment on an explicit click; review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -75,6 +75,26 @@ lists nothing.
 The rail entry shows a badge with the number of open pull requests that have a
 guide for their current commit, in the project of the pull request page you
 opened last, and no badge at zero.
+
+## The homepage card
+
+The new-thread screen shows a card under the composer with one of the
+sidebar's sections, **Needs my review** by default. Its title is a menu:
+click it to switch to **Authored by me** or **Recently merged**, each with its
+count. The choice holds until bb reloads. The card lists the section's first
+three PRs, in the sidebar's order, and in the header how many it lists in all.
+
+Each row is the title, then a badge at the right with the PR's number and
+state icon, coloured as the page's state pill: green open, grey draft, purple
+merged, red closed. Under the title,
+`owner/repo · avatar author · age`; the avatar carries the sidebar's one
+attention dot (CI failing, changes requested, or new activity). The age is
+since the PR merged in Recently merged, else since it last changed. Clicking a row opens that PR's page.
+
+It reads the same data as the sidebar, so the two always agree; an empty
+section shows the sidebar's empty line. The Homepage plugin, when installed,
+places it beside its Activity card; without it, the card has its own row under
+the composer.
 
 ## The page
 
