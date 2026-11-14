@@ -74,7 +74,7 @@ export function StepPage({ place, total, title, files, findings, head }: StepPag
 function StepCounter({ number, total }: { number: number; total: number }) {
   const pad = (count: number) => String(count).padStart(2, "0");
   return (
-    <p className="text-[13px] tabular-nums text-muted-foreground">
+    <p className="text-sm tabular-nums text-muted-foreground">
       {pad(number)} <span className="text-subtle-foreground">/ {pad(total)}</span>
     </p>
   );
@@ -83,7 +83,7 @@ function StepCounter({ number, total }: { number: number; total: number }) {
 // A tinted block, no border (the spec's visual rules).
 function ForYou({ text }: { text: string }) {
   return (
-    <section className="grid max-w-[75ch] gap-1 rounded-lg bg-timeline-accent/10 px-3.5 py-3 text-[13.5px] leading-5">
+    <section className="grid max-w-[75ch] gap-1 rounded-lg bg-timeline-accent/10 px-3.5 py-3 text-sm leading-5">
       <h3 className="font-semibold">For you to decide</h3>
       <Prose text={text} />
     </section>

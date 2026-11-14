@@ -39,7 +39,7 @@ export function DoneBox({ outcome, takeFocus, onDone }: DoneBoxProps) {
       }}
     >
       <div className="flex min-h-9 flex-wrap items-center gap-2 pt-2 pr-2 pb-2 pl-[18px]">
-        <p role="status" className="flex items-center gap-1.5 text-[13px] font-medium text-foreground">
+        <p role="status" className="flex items-center gap-1.5 text-sm font-medium text-foreground">
           <Icon name="Check" className="size-3.5 text-success" aria-hidden />
           {outcome.kind === "commented" ? "Commented" : "Sent to the review thread"}
         </p>

@@ -31,11 +31,11 @@ export function PrCard() {
   const prs = section === undefined ? [] : prsOf(section).filter((pr) => pr.section === key);
 
   return (
-    <div className="flex min-w-0 flex-col gap-3 rounded-xl bg-(--card) px-4 py-3.5 text-[13px] leading-[18px] text-foreground shadow-[0_0_0_1px_var(--border)]">
+    <div className="flex min-w-0 flex-col gap-3 rounded-xl bg-(--card) px-4 py-3.5 text-sm text-foreground shadow-[0_0_0_1px_var(--border)]">
       <div className="flex items-center gap-1.5">
         <SectionSwitcher current={key} sections={sections} onChange={setKey} />
         {section !== undefined && section.count > 0 && (
-          <span className="ml-auto rounded-full bg-muted px-1.5 text-xs leading-[18px] text-muted-foreground tabular-nums">{section.count}</span>
+          <span className="ml-auto rounded-full bg-muted px-1.5 text-xs text-muted-foreground tabular-nums">{section.count}</span>
         )}
       </div>
       <ReadError read={inbox} what="pull requests" />
@@ -91,7 +91,7 @@ function Row({ pr, section, visits }: { pr: InboxPr; section: SectionKey; visits
       className="grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 rounded-lg px-2 py-1.5 text-left transition-colors duration-150 hover:bg-state-hover hover:duration-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
       <span className="truncate">{pr.title}</span>
-      <span className="inline-flex items-center gap-1 rounded-md px-1.5 text-[11px] leading-[18px] font-medium text-foreground tabular-nums inset-ring inset-ring-border">
+      <span className="inline-flex items-center gap-1 rounded-md px-1.5 text-xs font-medium text-foreground tabular-nums inset-ring inset-ring-border">
         <Icon name={state.icon} className={`size-3 shrink-0 ${state.color}`} aria-hidden />
         {pr.number}
       </span>

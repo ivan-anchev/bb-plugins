@@ -144,7 +144,7 @@ const STATUS_WORDS = {
 
 export const Who = ({ login }: { login: string }) => <b className="font-medium text-foreground">{login}</b>;
 
-export const SHA = "font-mono text-[11.5px]";
+export const SHA = "font-mono text-xs";
 
 // The label's own colour as a dot, as the side panel's chips show it.
 function LabelName({ label }: { label: Label }) {

@@ -21,7 +21,7 @@ export function ActivitySection({ target, pr, onShowThread }: ActivitySectionPro
   const changedPaths = useMemo(() => new Set(comments.data?.changedPaths), [comments.data]);
   return (
     <section aria-labelledby={heading} className="grid grid-cols-[minmax(0,1fr)]">
-      <h2 id={heading} className="text-[15px] leading-6 font-semibold text-foreground">
+      <h2 id={heading} className="text-base leading-6 font-semibold text-foreground">
         Activity
       </h2>
       <ReadError read={comments} what="the activity" />

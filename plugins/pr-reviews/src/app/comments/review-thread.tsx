@@ -88,7 +88,7 @@ export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: Rev
   );
 }
 
-const SURFACE = "min-w-0 bg-card border border-border text-[13px] leading-5";
+const SURFACE = "min-w-0 bg-card border border-border text-sm leading-5";
 
 type CommentsProps = {
   thread: ReviewThread;
@@ -138,7 +138,7 @@ function ResolvedRow({ thread, focus, onOpen }: { thread: ReviewThread; focus: F
         type="button"
         aria-expanded={false}
         onClick={onOpen}
-        className="flex min-h-8 w-full cursor-pointer items-center gap-2 rounded-[10px] px-3 py-1.5 text-left text-[12.5px] leading-5 text-muted-foreground transition-colors duration-150 ease-out hover:bg-state-hover hover:text-foreground hover:duration-0 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+        className="flex min-h-8 w-full cursor-pointer items-center gap-2 rounded-[10px] px-3 py-1.5 text-left text-xs leading-5 text-muted-foreground transition-colors duration-150 ease-out hover:bg-state-hover hover:text-foreground hover:duration-0 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
       >
         <span className="shrink-0">Resolved ·</span>
         <span className="shrink-0 font-medium text-foreground">{first.author.login}</span>
@@ -157,7 +157,7 @@ function Original({ thread, why }: { thread: ReviewThread; why: "outdated" | "el
   const excerpt = thread.subject.kind === "lines" ? thread.subject.excerpt : [];
   return (
     <div className="grid gap-1.5">
-      <p className="text-xs leading-[18px] text-subtle-foreground">{why === "outdated" ? "Outdated" : "On another commit"}</p>
+      <p className="text-xs text-subtle-foreground">{why === "outdated" ? "Outdated" : "On another commit"}</p>
       {excerpt.length > 0 && (
         // A tab stop of its own: long lines scroll sideways, and the keys scroll only the focused element.
         <div

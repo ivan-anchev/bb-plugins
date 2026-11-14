@@ -11,7 +11,7 @@ const VARIANTS = {
 } as const;
 
 const SIZES = {
-  default: "h-8 px-3 text-[13px]",
+  default: "h-8 px-3 text-sm",
   small: "h-7 px-2.5 text-xs",
 } as const;
 

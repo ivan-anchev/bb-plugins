@@ -19,7 +19,7 @@ type Density = "thread" | "page";
 
 const DENSITY = {
   thread: { grid: "grid-cols-[20px_minmax(0,1fr)] gap-x-2.5", head: "min-h-5", avatar: 20, body: "max-w-[80ch]" },
-  page: { grid: "grid-cols-[24px_minmax(0,1fr)] gap-x-3", head: "min-h-6 text-[13px]", avatar: 24, body: "text-sm leading-[22px]" },
+  page: { grid: "grid-cols-[24px_minmax(0,1fr)] gap-x-3", head: "min-h-6 text-sm", avatar: 24, body: "text-sm" },
 } as const satisfies Record<Density, { grid: string; head: string; avatar: 20 | 24; body: string }>;
 
 type GitHubCommentViewProps = {

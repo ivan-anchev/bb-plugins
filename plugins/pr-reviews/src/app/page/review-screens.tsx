@@ -83,7 +83,7 @@ function Screen({ title, error, actions, children }: ScreenProps) {
     <div className="flex min-h-0 flex-1 overflow-y-auto px-7 pb-16">
       <section className="m-auto grid w-full max-w-[440px] justify-items-start gap-3 p-6">
         <h2 className="flex items-center gap-2.5 text-base font-semibold">{title}</h2>
-        <p className="text-[13px] leading-5 text-muted-foreground">{children}</p>
+        <p className="text-sm leading-5 text-muted-foreground">{children}</p>
         <div className="mt-1 flex flex-wrap items-center gap-2">{actions}</div>
         {error !== null && (
           <p role="alert" className="text-xs text-destructive-text">

@@ -185,7 +185,7 @@ function DigestRow({ thread, context }: { thread: ReviewThread; context: Context
 }
 
 const FOCUS_RING = "focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none";
-const DIGEST_ROW = "flex min-h-7 min-w-0 items-baseline gap-2.5 rounded-md px-2 py-1 text-[12.5px] leading-5 text-muted-foreground";
+const DIGEST_ROW = "flex min-h-7 min-w-0 items-baseline gap-2.5 rounded-md px-2 py-1 text-xs leading-5 text-muted-foreground";
 
 // The first line as words: markdown's code ticks and bold marks read as noise in a one-line row.
 const snippetOf = (body: string) => firstLineOf(body).replace(/`|\*\*/g, "");
@@ -199,7 +199,7 @@ const VERDICTS = {
 
 const Verdict = ({ verdict }: { verdict: ReviewVerdict }) => <span className={`shrink-0 text-xs ${VERDICTS[verdict].tone}`}>{VERDICTS[verdict].words}</span>;
 
-const LINE = "grid grid-cols-[24px_minmax(0,1fr)] items-start gap-x-3 py-1 text-[12.5px] leading-5 text-muted-foreground";
+const LINE = "grid grid-cols-[24px_minmax(0,1fr)] items-start gap-x-3 py-1 text-xs leading-5 text-muted-foreground";
 const LINE_BUTTON = `${LINE} w-full cursor-pointer rounded-md text-left transition-colors duration-150 ease-out hover:text-foreground hover:duration-0 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none`;
 
 function Glyph({ name, tone = "text-subtle-foreground" }: { name: ActivityGlyphName; tone?: string }) {
@@ -237,7 +237,7 @@ function RunLine({ entries, open, onToggle }: { entries: RunEntry[]; open: boole
         </span>
       </button>
       {open && (
-        <ul className="grid gap-0.5 pb-1.5 pl-9 text-[12.5px] leading-5 text-muted-foreground">
+        <ul className="grid gap-0.5 pb-1.5 pl-9 text-xs leading-5 text-muted-foreground">
           {entries.map((entry) => (
             <li key={entry.kind === "item" ? entry.item.id : entry.added.id} className="flex items-start gap-1.5">
               <span className="grid h-5 place-items-center text-subtle-foreground">

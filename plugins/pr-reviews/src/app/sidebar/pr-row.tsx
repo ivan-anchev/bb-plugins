@@ -27,7 +27,7 @@ export function ListedRow({ pr, current, onOpen, attention, stack }: RowProps & 
       <span className="truncate text-sm leading-5">{pr.title}</span>
       <Trail pr={pr}>
         {stack !== null && (
-          <span aria-hidden className="inline-flex items-center gap-[3px] text-[11px] leading-4 text-subtle-foreground tabular-nums">
+          <span aria-hidden className="inline-flex items-center gap-[3px] text-xs leading-4 text-subtle-foreground tabular-nums">
             <Icon name="Layers" className="size-3" aria-hidden />
             {stack.index}/{stack.size}
           </span>
@@ -61,10 +61,10 @@ export function StackMateRow({ pr, current, onOpen }: RowProps) {
       <span className="shrink-0 opacity-50">
         <Avatar login={pr.author} size={16} />
       </span>
-      <span className="truncate text-[13px] leading-[18px] text-subtle-foreground group-hover/row:text-muted-foreground group-aria-[current=page]/row:text-muted-foreground">
+      <span className="truncate text-sm text-subtle-foreground group-hover/row:text-muted-foreground group-aria-[current=page]/row:text-muted-foreground">
         {pr.title}
       </span>
-      <Trail pr={pr}>{tag !== null && <span aria-hidden className="text-[11px] leading-4 whitespace-nowrap text-subtle-foreground">{tag}</span>}</Trail>
+      <Trail pr={pr}>{tag !== null && <span aria-hidden className="text-xs leading-4 whitespace-nowrap text-subtle-foreground">{tag}</span>}</Trail>
     </RowButton>
   );
 }
@@ -95,7 +95,7 @@ function Trail({ pr, children }: { pr: InboxPr; children: ReactNode }) {
     <span className="flex min-w-0 items-center gap-1.5">
       <span
         aria-hidden
-        className="hidden max-w-[92px] truncate text-[11.5px] leading-4 text-subtle-foreground group-hover/row:block group-focus-visible/row:block group-aria-[current=page]/row:block"
+        className="hidden max-w-[92px] truncate text-xs leading-4 text-subtle-foreground group-hover/row:block group-focus-visible/row:block group-aria-[current=page]/row:block"
       >
         {pr.repo.split("/")[1]}
       </span>

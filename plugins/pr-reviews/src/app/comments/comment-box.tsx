@@ -309,7 +309,7 @@ function labelOf(subject: BoxSubject): string {
  * Write and Preview share type, padding and minimum height, so switching moves nothing. The minimum
  * is the textarea's three rows: 3 × 22px of line, and 8px + 4px of padding.
  */
-const TEXT_CLASS = "block w-full min-h-[78px] px-[18px] pt-2 pb-1 text-[13px] leading-[22px] text-foreground outline-none";
+const TEXT_CLASS = "block w-full min-h-[78px] px-[18px] pt-2 pb-1 text-sm text-foreground outline-none";
 
 /**
  * The textarea's focus, height and selection. It takes focus with the caret at the end when the

@@ -27,7 +27,7 @@ export function PrHeader({ target, repo, pr, hasReviewThread, title }: PrHeaderP
         </span>
       </div>
       <div className={MASTHEAD}>
-        <h1 ref={title} tabIndex={-1} className="outline-none text-[17px] leading-6 font-semibold text-pretty break-words [grid-area:title]">{pr.title}</h1>
+        <h1 ref={title} tabIndex={-1} className="outline-none text-base leading-6 font-semibold text-pretty break-words [grid-area:title]">{pr.title}</h1>
         {/* -my-0.5 centers the 28px buttons on the title's 24px first line; -mr-1.5 lines the last
             glyph, not its hit area, up with the header's right edge. */}
         <div className="-my-0.5 -mr-1.5 flex gap-1 justify-self-end [grid-area:actions]">
@@ -71,7 +71,7 @@ const CHANGES = {
 
 // The pill is a neutral control: only its icon carries the state's color. It stays at every width,
 // since it is the header's only mark of the state.
-const PILL = "inline-flex h-7 items-center gap-1.5 rounded-lg pl-2 text-[13px] leading-4 font-semibold text-foreground inset-ring inset-ring-border";
+const PILL = "inline-flex h-7 items-center gap-1.5 rounded-lg pl-2 text-sm leading-4 font-semibold text-foreground inset-ring inset-ring-border";
 
 function StatePill({ target, state }: { target: PrTarget; state: PrState }) {
   if (state === "MERGED") {
@@ -166,7 +166,7 @@ function ChangeRow({ change, text, running }: { change: StateChange; text: strin
         {running && <Spinner size="small" />}
         {text}
       </span>
-      <span aria-hidden className="relative inline-flex h-[18px] items-center gap-1 rounded-full pr-1.5 pl-[5px] text-[11px] font-medium text-foreground inset-ring inset-ring-border">
+      <span aria-hidden className="relative inline-flex h-[18px] items-center gap-1 rounded-full pr-1.5 pl-[5px] text-xs font-medium text-foreground inset-ring inset-ring-border">
         <Icon name={icon} className={`size-[11px] ${color}`} />
         {label}
       </span>

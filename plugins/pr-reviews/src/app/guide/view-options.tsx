@@ -62,7 +62,7 @@ function Switch({ label, checked, onChange }: SwitchProps) {
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className="group flex min-h-9 cursor-pointer touch-manipulation items-center justify-between gap-2.5 rounded-md px-2 text-left text-[13px] outline-none hover:bg-state-hover focus-visible:ring-1 focus-visible:ring-ring"
+      className="group flex min-h-9 cursor-pointer touch-manipulation items-center justify-between gap-2.5 rounded-md px-2 text-left text-sm outline-none hover:bg-state-hover focus-visible:ring-1 focus-visible:ring-ring"
     >
       {label}
       <span

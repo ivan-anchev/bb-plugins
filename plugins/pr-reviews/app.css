@@ -29,8 +29,8 @@
    it and none above, so gaps never collapse unevenly; a heading takes 1.5 gaps above and one below,
    so it sits with the text it heads.
    - The gap is 1em of the Prose root, registered as a length so it resolves there, once: a heading
-     with its own size still gets the root's gap. The 14px description and the 13px comment box
-     each get GitHub's proportions.
+     with its own size still gets the root's gap. The description and the comment box each get
+     GitHub's proportions at their own type size.
    - A list item, a blockquote and an open `<details>` space their own blocks the same way, and
      each container's first and last blocks sit flush with its edges, so a body that starts with a
      heading or ends in a list or `<details>` keeps the spacing its parent gives it.

@@ -85,7 +85,7 @@ function rowKeys(checks: Check[]): string[] {
   });
 }
 
-const ROW = "flex min-h-[26px] min-w-0 items-center gap-2 text-[12.5px]";
+const ROW = "flex min-h-[26px] min-w-0 items-center gap-2 text-xs";
 
 function CheckRow({ check }: { check: Check }) {
   const content: ReactNode = (

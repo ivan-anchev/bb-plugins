@@ -26,7 +26,7 @@ export function StackTree({ members, section, visits, isOpen, open }: StackTreeP
       <li aria-hidden className="grid h-6 grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2 pr-2 pl-2.5 text-xs leading-4 text-muted-foreground">
         <Icon name="Layers" className="size-[13px] justify-self-center text-subtle-foreground" aria-hidden />
         <span className="truncate">Stack #{bottom.number}</span>
-        <span className="text-[11px] text-subtle-foreground tabular-nums">
+        <span className="text-xs text-subtle-foreground tabular-nums">
           {here} of {members.length}
         </span>
       </li>

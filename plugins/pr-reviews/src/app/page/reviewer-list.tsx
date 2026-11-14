@@ -25,7 +25,7 @@ export function ReviewerList({ reviewers }: { reviewers: Reviewer[] }) {
 function ReviewerRow({ reviewer }: { reviewer: Reviewer }) {
   const status = STATUS_LOOKS[statusOf(reviewer)];
   return (
-    <li className="flex min-h-[26px] items-center gap-2 text-[12.5px]">
+    <li className="flex min-h-[26px] items-center gap-2 text-xs">
       <StatusGlyph name={status.glyph} />
       {reviewer.kind === "user" ? <Avatar login={reviewer.login} size={20} /> : <TeamGlyph />}
       <span className="min-w-0 truncate">{nameOf(reviewer)}</span>

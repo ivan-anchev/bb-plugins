@@ -49,7 +49,7 @@ export function HunkDiff({ file, hunk, head }: { file: DiffFile; hunk: HunkId; h
       {/* Above the surface, not on it: the error text passes contrast on the page, not on the recessed surface. */}
       <ReadError read={comments} what="the PR's comments" />
       <div className="overflow-hidden rounded-lg bg-surface-recessed-solid">
-        {hunk === WHOLE_FILE && <p className="px-3 py-2.5 text-[12.5px] text-subtle-foreground">{wholeFileNoteOf(file)}</p>}
+        {hunk === WHOLE_FILE && <p className="px-3 py-2.5 text-xs text-subtle-foreground">{wholeFileNoteOf(file)}</p>}
         <AnnotatedDiff file={file} hunk={hunk} findings={NO_FINDINGS} head={head} comments={comments.data} withFileThreads={false} />
       </div>
     </>
@@ -90,7 +90,7 @@ const FLUSH_DIFF = "[--diffs-gap-block:0px]";
 
 // The file row stays at the top of the guide's page while its diff scrolls under it. Its block's
 // surface is the solid recessed one, so the row hides the code passing under it.
-const FILE_ROW = "sticky top-0 z-10 flex items-baseline gap-3 bg-surface-recessed-solid px-3 pt-2.5 pb-2 text-[12.5px]";
+const FILE_ROW = "sticky top-0 z-10 flex items-baseline gap-3 bg-surface-recessed-solid px-3 pt-2.5 pb-2 text-xs";
 const ROW_NOTE = "ml-auto text-right text-subtle-foreground";
 
 type BlockRef = { ref?: Ref<HTMLElement> };

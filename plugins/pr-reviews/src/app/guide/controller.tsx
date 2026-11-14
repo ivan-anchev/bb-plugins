@@ -19,7 +19,7 @@ export function Controller({ walkthrough }: { walkthrough: Walkthrough }) {
       ) : (
         <>
           <Arrow icon="ChevronLeft" label="Previous" leadsTo={place.previousTitle} shortcut="←" onClick={previous} />
-          <span aria-live="polite" className="min-w-16 text-center text-[13px] tabular-nums text-muted-foreground">
+          <span aria-live="polite" className="min-w-16 text-center text-sm tabular-nums text-muted-foreground">
             {place.number} / {total}
           </span>
           <Arrow icon="ChevronRight" label="Next" leadsTo={place.nextTitle ?? "Back to the overview"} shortcut="→" onClick={next} />

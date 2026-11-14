@@ -79,7 +79,7 @@ function BeforeAfter({ behaviour }: { behaviour: Behaviour }) {
 // The last item is where the sequence lands, so it reads in full colour.
 function Sequence({ items }: { items: string[] }) {
   return (
-    <ol className="grid list-decimal gap-1.5 pl-[18px] text-[13.5px] leading-5 text-muted-foreground [&>li:last-child]:text-foreground">
+    <ol className="grid list-decimal gap-1.5 pl-[18px] text-sm leading-5 text-muted-foreground [&>li:last-child]:text-foreground">
       {items.map((item, i) => (
         <li key={i}>
           <Prose text={item} />
@@ -97,7 +97,7 @@ type FindingRowProps = { finding: Finding; step: number | null; onOpenStep(numbe
 function FindingRow({ finding, step, onOpenStep }: FindingRowProps) {
   return (
     <div className="grid grid-cols-[1fr_auto] items-baseline gap-x-4 py-2">
-      <span className="flex min-w-0 items-baseline gap-2 text-[13.5px]">
+      <span className="flex min-w-0 items-baseline gap-2 text-sm">
         <Priority priority={finding.priority} />
         <Prose text={finding.title} className="min-w-0" />
       </span>
@@ -133,7 +133,7 @@ function HiddenRow({ item, files, head }: { item: HiddenItem; files: DiffFile[];
 function HiddenTestsRow({ count, onShow }: { count: number; onShow(): void }) {
   return (
     <NotInGuideRow
-      label={<span className="text-[13.5px]">Tests and mocks</span>}
+      label={<span className="text-sm">Tests and mocks</span>}
       action={
         <Button variant="ghost" size="small" aria-label="Show tests and mocks" onClick={onShow}>
           Show
@@ -148,7 +148,7 @@ function HiddenTestsRow({ count, onShow }: { count: number; onShow(): void }) {
   );
 }
 
-const REASON = "col-start-1 text-[12.5px] leading-[18px] text-muted-foreground";
+const REASON = "col-start-1 text-xs text-muted-foreground";
 
 function NotInGuideRow({ label, action, reason }: { label: ReactNode; action: ReactNode; reason: ReactNode }) {
   return (
@@ -170,7 +170,7 @@ function subjectOf(item: HiddenItem): string {
 }
 
 function HiddenLabel({ item }: { item: HiddenItem }) {
-  return <span className={isManyFiles(item) ? "text-[13.5px]" : "break-all font-mono text-[12.5px]"}>{subjectOf(item)}</span>;
+  return <span className={isManyFiles(item) ? "text-sm" : "break-all font-mono text-xs"}>{subjectOf(item)}</span>;
 }
 
 function HiddenBody({ item, files, head }: { item: HiddenItem; files: DiffFile[]; head: PrHeadTarget }) {
@@ -199,7 +199,7 @@ function HiddenBody({ item, files, head }: { item: HiddenItem; files: DiffFile[]
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="mt-2.5 grid content-start gap-2">
-      <h3 className="text-[13px] font-semibold text-muted-foreground">{title}</h3>
+      <h3 className="text-sm font-semibold text-muted-foreground">{title}</h3>
       {children}
     </section>
   );

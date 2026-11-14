@@ -28,5 +28,5 @@ export function PrIdentity({ pr }: { pr: PrDetail }) {
 // Plain monospace text in the row's muted color. Hover lifts it to the foreground color, not a heavier
 // weight, so the name keeps its width and nothing beside it moves. Decoration only: no link, no focus stop.
 function Branch({ children }: { children: ReactNode }) {
-  return <code className="min-w-0 break-all font-mono text-[11.5px] transition-colors duration-150 ease-out hover:text-foreground motion-reduce:transition-none">{children}</code>;
+  return <code className="min-w-0 break-all font-mono text-xs transition-colors duration-150 ease-out hover:text-foreground motion-reduce:transition-none">{children}</code>;
 }
