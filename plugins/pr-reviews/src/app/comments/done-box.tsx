@@ -10,11 +10,8 @@ import { useOpenReviewChat } from "../review-chat/review-chat-button.tsx";
 import { Button, buttonClass } from "../ui/button.tsx";
 import { LINK } from "../ui/link.ts";
 
-/**
- * The box's shell, writing or done: a field's edge, in the focus ring's colour while it has focus.
- * Its corners are 12px, or what a surface it sits in sets in `--pr-reviews-box-radius`.
- */
-export const BOX_CLASS = "rounded-[var(--pr-reviews-box-radius,12px)] border border-input bg-background shadow-[0_1px_2px_rgb(0_0_0/.04),0_6px_16px_-8px_rgb(0_0_0/.14)] focus-within:border-ring";
+/** The box's shell, writing or done: a field's edge, in the focus ring's colour while it has focus. */
+export const BOX_CLASS = "rounded-md border border-input bg-background focus-within:border-ring";
 
 /** `takeFocus`: the composer this replaces had focus, which would otherwise drop to the page body. */
 type DoneBoxProps = { outcome: BoxOutcome; takeFocus: boolean; onDone(): void };

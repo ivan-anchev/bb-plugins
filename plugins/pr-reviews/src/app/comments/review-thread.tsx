@@ -4,8 +4,8 @@
 // with "N more" between; a bot's comment is clamped to three lines; a resolved thread is one row
 // that opens it. A thread at its file that lost its lines says "Outdated" over the lines it was
 // written on. No pills or dividers: spacing separates the comments, a border draws the card's edge,
-// and the comment box is the only field in it. Everything sits one 6px inset from the card's 12px
-// corners: the avatars, and the box, whose corners are 6px, concentric with the card's.
+// and the comment box is the only field in it. Everything sits one 6px inset from the card's edge:
+// the avatars and the box.
 import { useMemo, useState, type ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { FileThread } from "../../comments/place-threads.ts";
@@ -50,7 +50,7 @@ export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: Rev
       ref={sectionRef}
       tabIndex={-1}
       aria-label={`Review thread by ${thread.comments[0].author.login}`}
-      className={`${SURFACE} grid gap-2 rounded-[12px] p-1.5 outline-none focus-visible:ring-1 focus-visible:ring-ring`}
+      className={`${SURFACE} grid gap-2 rounded-lg p-1.5 outline-none focus-visible:ring-1 focus-visible:ring-ring`}
     >
       <div className="grid gap-3">
         {atFile !== null && atFile.why !== "file" && <Original thread={thread} why={atFile.why} />}
@@ -82,7 +82,7 @@ export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: Rev
           )}
         </div>
       )}
-      {box !== null && <div className="[--pr-reviews-box-radius:6px]">{box}</div>}
+      {box}
     </section>
   );
 }
@@ -131,13 +131,13 @@ function ResolvedRow({ thread, focus, onOpen }: { thread: ReviewThread; focus: F
   const [first] = thread.comments;
   const count = thread.comments.length;
   return (
-    <section ref={focus.from} aria-label={`Resolved review thread by ${first.author.login}`} className={`${SURFACE} rounded-[10px]`}>
+    <section ref={focus.from} aria-label={`Resolved review thread by ${first.author.login}`} className={`${SURFACE} rounded-lg`}>
       <button
         ref={focus.to}
         type="button"
         aria-expanded={false}
         onClick={onOpen}
-        className="flex min-h-8 w-full cursor-pointer items-center gap-2 rounded-[10px] px-3 py-1.5 text-left text-xs leading-5 text-muted-foreground transition-colors duration-150 ease-out hover:bg-state-hover hover:text-foreground hover:duration-0 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+        className="flex min-h-8 w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-1.5 text-left text-xs leading-5 text-muted-foreground transition-colors duration-150 ease-out hover:bg-state-hover hover:text-foreground hover:duration-0 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
       >
         <span className="shrink-0">Resolved ·</span>
         <span className="shrink-0 font-medium text-foreground">{first.author.login}</span>

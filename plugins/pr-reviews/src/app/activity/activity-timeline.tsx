@@ -84,8 +84,8 @@ function Row({ row, context }: { row: ActivityRow; context: Context }) {
 // rows'. A row on the page has none.
 function tintOf(tint: TintEdges | null): string | undefined {
   if (tint === null) return undefined;
-  const top = tint.first ? "mt-1 rounded-t-[10px] pt-1" : "";
-  const bottom = tint.last ? "mb-1 rounded-b-[10px] pb-1" : "";
+  const top = tint.first ? "mt-1 rounded-t-lg pt-1" : "";
+  const bottom = tint.last ? "mb-1 rounded-b-lg pb-1" : "";
   return `-mx-3 grid grid-cols-[minmax(0,1fr)] bg-card px-3 ${top} ${bottom}`;
 }
 

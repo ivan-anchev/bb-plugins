@@ -55,15 +55,9 @@ export function useDiffOptions<Annotation>(settings: DiffSettings, gestures: Lin
   );
 }
 
-// The rows Pierre slots notes into, the box and findings, are on the page's background, as the
-// prototype draws them. Pierre's own backdrop for them is a step off its code background, and in
-// bb's dark theme it is the very colour of a finding's recessed card, which then has no edge.
-// Pierre also tints a note's row, with its gutter, as part of a selection: only the code lines
-// read as selected. A note's row is drawn over the gutter (Pierre's is z-index 3), which a review
-// thread reaches back across to line its avatars up with the line numbers. The gutter's 2px gap
-// before the code, drawn as a border in the code's background, would cross the row as a dark line.
-const NOTE_ROWS =
-  "[data-line-annotation],[data-gutter-buffer=annotation]{--diffs-annotation-bg:var(--background);--diffs-computed-selected-line-bg:var(--diffs-computed-diff-line-bg)}[data-line-annotation]{z-index:4}[data-gutter-buffer=annotation]{border-right-color:transparent}";
+// Pierre tints the rows it slots notes into (the box, findings and review threads), gutter
+// included, as part of a selection: only the code lines read as selected.
+const NOTE_ROWS = "[data-line-annotation],[data-gutter-buffer=annotation]{--diffs-computed-selected-line-bg:var(--diffs-computed-diff-line-bg)}";
 
 /**
  * The file's diff for Pierre: its patch at first, then, once `newContent` is read, both whole

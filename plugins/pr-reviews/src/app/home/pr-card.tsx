@@ -31,7 +31,7 @@ export function PrCard() {
   const prs = section === undefined ? [] : prsOf(section).filter((pr) => pr.section === key);
 
   return (
-    <div className="flex min-w-0 flex-col gap-3 rounded-xl bg-(--card) px-4 py-3.5 text-sm text-foreground shadow-[0_0_0_1px_var(--border)]">
+    <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3.5 text-sm text-foreground">
       <div className="flex items-center gap-1.5">
         <SectionSwitcher current={key} sections={sections} onChange={setKey} />
         {section !== undefined && section.count > 0 && (

@@ -106,7 +106,7 @@ function TabList({ selected, onSelect, tabs, ids }: TabListProps) {
 }
 
 const TAB_CLASS =
-  "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-[7px] px-2.5 text-sm font-medium text-muted-foreground transition-colors duration-150 ease-out hover:bg-state-hover hover:text-foreground hover:duration-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring aria-selected:bg-state-active aria-selected:text-foreground motion-reduce:transition-none";
+  "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-sm font-medium text-muted-foreground transition-colors duration-150 ease-out hover:bg-state-hover hover:text-foreground hover:duration-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring aria-selected:bg-state-active aria-selected:text-foreground motion-reduce:transition-none";
 
 // → and ← wrap around; Home and End go to the first and the last tab. Undefined for any other key.
 function tabAfterKey(key: string, selected: PrTab): PrTab | undefined {
