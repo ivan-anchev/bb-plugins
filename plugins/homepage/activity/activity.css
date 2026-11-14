@@ -1,5 +1,6 @@
-/* The activity card. Every class is ag- prefixed; colours come from bb's
-   theme tokens, and the one accent is the theme's --timeline-accent. */
+/* The activity card, on top of homepage.css's .hp-card. Every class is ag-
+   prefixed; colours come from bb's theme tokens, and the one accent is the
+   theme's --timeline-accent. */
 
 .ag-card {
   --ag-accent: var(--timeline-accent);
@@ -11,26 +12,11 @@
   --ag-l3: color-mix(in oklch, var(--ag-accent) 78%, var(--ag-ground));
   --ag-l4: var(--ag-accent);
 
-  grid-column: 1 / -1; /* the grid needs the homepage's full width */
   position: relative;
   isolation: isolate;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  background: var(--ag-ground);
-  box-shadow: 0 0 0 1px var(--border);
-  color: var(--foreground);
-  font-size: 13px;
-  line-height: 18px;
-  -webkit-font-smoothing: antialiased;
 }
 
-.ag-head { display: flex; align-items: center; gap: 6px; font-weight: 500; }
-.ag-icon { width: 14px; height: 14px; flex: none; color: var(--muted-foreground); }
-.ag-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap; }
-.ag-caption { font-size: 12px; line-height: 16px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.ag-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap; margin-top: auto; }
 .ag-range { margin-left: auto; white-space: nowrap; }
 
 /* ---- the grid ---------------------------------------------------------- */

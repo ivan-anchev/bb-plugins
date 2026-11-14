@@ -8,10 +8,18 @@ GitHub's Conversation tab does, and every diff shows the PR's GitHub review
 threads where they belong. It posts to GitHub only the review comments,
 replies and conversation comments you write or pick from the guide, on your
 click, and changes a pull request's state only from the state pill on its
-page; review threads never post to GitHub.
+page; review threads never post to GitHub. A card on the new-thread screen
+shows the PRs waiting on your review, or your own.
 
 ## What you get
 
+- **Your PRs on the new-thread screen**: a card under the composer with the
+  first three PRs of Needs my review, and how many it lists in all. Click its
+  title to switch to Authored by me or Recently merged. Each row is the
+  title and a badge of the PR's number coloured by its state (open, draft,
+  merged, closed), over the repository, the author's avatar with the sidebar's
+  attention dot, the author's name, and the age. Click one to open its page. With the Homepage
+  plugin installed, the card sits beside its Activity card.
 - **Your pull requests, everywhere**: one sidebar for every bb project whose
   git remote is on github.com, no picker. **Authored by me** (open, and closed
   in the last 7 days), **Needs my review** (review requested from you or your

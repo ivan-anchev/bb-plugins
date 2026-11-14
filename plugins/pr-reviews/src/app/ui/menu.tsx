@@ -1,12 +1,12 @@
 import type { ComponentProps, ReactNode } from "react";
-import { CheckboxItem, Content, Item, ItemIndicator, Label, Portal, Root, Separator, Trigger } from "@radix-ui/react-dropdown-menu";
+import { CheckboxItem, Content, Item, ItemIndicator, Label, Portal, RadioGroup, RadioItem, Root, Separator, Trigger } from "@radix-ui/react-dropdown-menu";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { PORTAL_SCOPE } from "./portal-scope.ts";
 
 const ITEM_CLASS =
   "relative flex cursor-default select-none items-center rounded-sm py-[0.3125rem] text-xs outline-none transition-none focus:bg-state-hover focus:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
 
-export { Root as Menu, Trigger as MenuTrigger };
+export { Root as Menu, Trigger as MenuTrigger, RadioGroup as MenuRadioGroup };
 
 type MenuContentProps = { align: "start" | "end"; className?: string; children: ReactNode };
 
@@ -59,13 +59,30 @@ export function MenuCheckboxItem({ checked, onCheckedChange, keepOpen = false, c
       }}
       className={`${ITEM_CLASS} pl-2 pr-8`}
     >
-      <span className="absolute right-2 flex size-3.5 items-center justify-center">
-        <ItemIndicator>
-          <Icon name="Check" className="size-3.5" aria-hidden />
-        </ItemIndicator>
-      </span>
+      <CheckIndicator />
       {children}
     </CheckboxItem>
+  );
+}
+
+/** One choice of a `MenuRadioGroup`, its check on the chosen one. */
+export function MenuRadioItem({ value, children }: { value: string; children: ReactNode }) {
+  return (
+    <RadioItem value={value} className={`${ITEM_CLASS} pl-2 pr-8`}>
+      <CheckIndicator />
+      {children}
+    </RadioItem>
+  );
+}
+
+// The check at a checkbox or radio item's right edge, shown while it is checked.
+function CheckIndicator() {
+  return (
+    <span className="absolute right-2 flex size-3.5 items-center justify-center">
+      <ItemIndicator>
+        <Icon name="Check" className="size-3.5" aria-hidden />
+      </ItemIndicator>
+    </span>
   );
 }
 

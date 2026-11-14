@@ -1,4 +1,4 @@
-A grid of cards under the new-thread composer, so starting a thread also shows where your work stands. The first card is **Activity**: six months of your GitHub work at a glance.
+Cards under the new-thread composer, so starting a thread also shows where your work stands. The first card is **Activity**: six months of your GitHub work at a glance. With the PR Reviews plugin installed, its **pull requests** card sits beside Activity, and the two stack when the window is narrow.
 
 ## What you get
 

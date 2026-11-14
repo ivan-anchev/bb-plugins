@@ -20,9 +20,15 @@ export default function plugin(bb: BbPluginApi): void {
 
   // Warm on every server start, then every 30 minutes, so opening New thread never waits on GitHub.
   bb.background.service("warm-activity", {
+    // why: the refresh is not awaited. Awaiting it meant a reload mid-refresh (GitHub can take 15 s)
+    // aborted the signal before the listener below existed, so the run never ended and bb refused
+    // to reload the plugin until the server restarted.
     async start(signal) {
-      await snapshot.refresh();
-      await new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }));
+      snapshot.refresh().catch((error: unknown) => bb.log.warn(`Activity refresh failed: ${String(error)}`));
+      await new Promise((resolve) => {
+        if (signal.aborted) resolve(undefined);
+        else signal.addEventListener("abort", resolve, { once: true });
+      });
     },
   });
   bb.background.schedule("refresh-activity", "*/30 * * * *", () => snapshot.refresh().then(() => undefined));

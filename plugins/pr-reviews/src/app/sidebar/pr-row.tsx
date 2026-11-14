@@ -24,12 +24,7 @@ export function ListedRow({ pr, current, onOpen, attention, stack }: RowProps & 
   const words = [stack === null ? null : `stacked PR ${stack.index} of ${stack.size}`, attention === null ? null : ATTENTION_LOOK[attention].label];
   return (
     <RowButton pr={pr} current={current} onOpen={onOpen} words={words} className="h-8">
-      <span className="relative shrink-0">
-        <Avatar login={pr.author} size={16} />
-        {attention !== null && (
-          <span aria-hidden className={`absolute -top-[3px] -right-[3px] size-[7px] rounded-full bg-current ring-2 ring-sidebar ${ATTENTION_LOOK[attention].color}`} />
-        )}
-      </span>
+      <AttentionAvatar login={pr.author} attention={attention} ring="ring-sidebar" />
       <span className="truncate text-sm leading-5">{pr.title}</span>
       <Trail pr={pr}>
         {stack !== null && (
@@ -42,6 +37,21 @@ export function ListedRow({ pr, current, onOpen, attention, stack }: RowProps & 
     </RowButton>
   );
 }
+
+/** The author's avatar with a row's attention dot, ringed in `ring`, the surface it sits on. */
+export function AttentionAvatar({ login, attention, ring }: { login: string; attention: Attention | null; ring: string }) {
+  return (
+    <span className="relative shrink-0">
+      <Avatar login={login} size={16} />
+      {attention !== null && (
+        <span aria-hidden className={`absolute -top-[3px] -right-[3px] size-[7px] rounded-full bg-current ring-2 ${ring} ${ATTENTION_LOOK[attention].color}`} />
+      )}
+    </span>
+  );
+}
+
+/** The words a screen reader hears for a row's attention dot. */
+export const attentionLabel = (attention: Attention) => ATTENTION_LOOK[attention].label;
 
 /** A stack-mate of the section's PRs that is listed in another section, or in none. */
 export function StackMateRow({ pr, current, onOpen }: RowProps) {

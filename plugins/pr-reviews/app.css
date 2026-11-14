@@ -137,3 +137,7 @@
 :is(.pr-reviews-prose, .pr-reviews-prose :is(li, blockquote, details)) > :last-child {
   margin-bottom: 0;
 }
+
+/* The homepage card (src/app/home) carries its own header; bb draws the section title as an <h2>.
+   The homepage plugin, when installed, lays this section out beside its Activity card. */
+[id="plugin-homepage:pr-reviews:pull-requests"] > h2 { display: none; }

@@ -1,12 +1,27 @@
 # bb-plugin-homepage
 
-A `homepageSection` under the new-thread composer that lays out a grid of cards
-(`HomeSection.tsx`, `homepage.css`). Each card lives in its own folder with its
-UI, its server-side data, and its tests, and adds one read to `contract.ts`. A
-card that needs the full row sets `grid-column: 1 / -1`.
+Cards under the new-thread composer. Each card is its own `homepageSection`,
+lives in its own folder with its UI, its server-side data, and its tests, adds
+one read to `contract.ts`, and wears the shared `.hp-card` chrome from
+`homepage.css`.
 
 bb draws every homepage section's title as an `<h2>`; `homepage.css` hides it by
 the section's id, because each card carries its own header.
+
+## Layout
+
+bb stacks every plugin's homepage section in one parent. When PR Reviews'
+`pull-requests` card is on the page too, `homepage.css` turns that parent
+into a two-column grid: Activity left, PR Reviews right, both ahead of every
+other section, which keeps a full row. Section ids are
+`plugin-homepage:<plugin id>:<section id>`; the rule selects the parent with
+`:has()` on those ids and never names bb's classes. Without PR Reviews nothing
+changes.
+
+The grid is wider than the composer: up to 1040px, centred under it with a 16px
+gutter each side of bb's page, sized with `cqw` against the page's size
+container (bb caps the composer's column at 760px). It drops to one column when
+the page is narrower than 592px.
 
 ## Cards
 
