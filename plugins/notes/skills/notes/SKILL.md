@@ -1,6 +1,6 @@
 ---
 name: notes
-description: Explain the Notes plugin, which saves short personal notes in bb from a Spotlight opened with ⇧⌘J, the sidebar-footer notes icon, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), links threads in a note by typing @, attaches images and videos by paste, drop or 📎, and lists notes in a Notes card on the New thread screen, where clicking one opens it read-only with Delete and ticking some and choosing Start thread puts them in the new-thread composer and archives them. Use when the user asks how to write, quote or link a note, how to read, edit or delete one, where their notes are, why ⇧⌘J does nothing, what the source chip opens, why a thread is missing from the @ picker, why a file was refused or where attached files are stored, what Start thread puts in the composer, where used notes went, why a file shows as a path instead of an attachment, or why the Notes card is empty or says it couldn't read notes.
+description: Explain the Notes plugin, which saves short personal notes in bb from a Spotlight opened with ⇧⌘J, the sidebar-footer notes icon, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), links threads in a note by typing @, attaches images and videos by paste, drop or 📎, and lists notes in a Notes card on the New thread screen, where clicking one opens it read-only with Delete and ticking some and choosing Start thread puts them in the new-thread composer and archives them. Use when the user asks how to write, quote or link a note, how to read, edit or delete one, where their notes are, why ⇧⌘J does nothing, what the source chip opens, why a thread is missing from the @ picker, why a file was refused or where attached files are stored, what Start thread puts in the composer, where used notes went, why a file shows as a path instead of an attachment, why the Notes card is empty or says it couldn't read notes, where the card sits among the homepage cards, or why part of it stopped working after a bb update.
 ---
 
 # Notes
@@ -86,18 +86,22 @@ Shortcuts do not run while a bb dialog is open, the Spotlight included.
 
 ## The Notes card
 
-On the New thread screen, under the composer. It lists active notes newest
-first, four at a time: line 1 is the note on one line (a quote saved without
-words shows the quote in “ ”), line 2 the thread the quote came from, else the
-first thread the note links with @ ("No thread" for a note with neither). A
-note with files shows up to three of them as small thumbs fanned at the row's
-end, "+N" for the rest; a video shows its first frame with a play badge, or a
-plain tile with the badge when the browser can't decode it (such as an HEVC or
-ProRes .mov). The fan opens a little under the pointer, not on touch screens or
-with reduced motion on. "N more" shows the rest and "Show fewer" folds them. Each row has a checkbox
-for Start thread (below). A new note appears within about two seconds with
-no reload. When the plugin cannot read its database the card says "Couldn't
-read notes" with the reason, beside any notes it already showed.
+On the New thread screen, under the composer. With the Homepage plugin's cards
+and PR Reviews installed, Notes sits on the second row: beside boat spend
+(about 1 to 1.75) when boat-sandbox is installed, else beside Burn, and in one
+column on a narrow page. Otherwise bb stacks it with the other sections. It
+lists active notes newest first, four at a time: line 1 is the note on one line
+(a quote saved without words shows the quote in “ ”), line 2 the thread the
+quote came from, else the first thread the note links with @ ("No thread" for a
+note with neither). A note with files shows up to three of them as small thumbs
+fanned at the row's end, "+N" for the rest; a video shows its first frame with
+a play badge, or a plain tile with the badge when the browser can't decode it
+(such as an HEVC or ProRes .mov). The fan opens a little under the pointer, not
+on touch screens or with reduced motion on. "N more" shows the rest and "Show
+fewer" folds them. Each row has a checkbox for Start thread (below). A new note
+appears within about two seconds with no reload. When the plugin cannot read
+its database the card says "Couldn't read notes" with the reason, beside any
+notes it already showed.
 
 ## Starting a thread from notes
 
@@ -151,3 +155,15 @@ When the plugin loads it removes files in `media/` that no note holds (left by
 a save that failed), and logs how many. Notes survive `bb plugin reload
 notes`, bb restarts and browser reloads. `bb plugin logs notes` shows the
 plugin's server log, including the media folder's path.
+
+## Experimental
+
+Most of the plugin rests on bb surfaces still marked `experimental_`: the
+overlay the Spotlight opens in (`experimental_appOverlay`), the sidebar footer
+(`experimental_sidebarFooter`), the thread list behind the @ picker
+(`experimental_useSidebarThreads`), a message's `experimental_messageSeq`
+behind the source chip, and the rpc hooks, icons and image lightbox the card
+and Spotlight use. A bb update can change or break them before the plugin
+catches up; it was built against bb 0.49. If one stops working after an
+update, `bb plugin logs notes` and the browser console are the first places to
+look.
