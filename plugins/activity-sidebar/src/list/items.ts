@@ -1,10 +1,11 @@
 // The sidebar as one flat list of items, top to bottom: section titles, rows, the spacer, "Show more",
 // notices. Pure. The prototype's Faithful shape (prototype.html `faithful`, `archivedSection`).
 import type { ExperimentalRpcQueryState, PluginSidebarThreadsState } from "@get-bb/plugin-sdk/app";
+import type { ArchivedCount } from "../contract.ts";
 import type { RowModel, Section, SectionKey } from "../model/activity.ts";
 
 export type ListItem =
-  /** `count` is how many it holds, said only while folded; null while open. */
+  /** `count` is how many it holds, said only while folded; null while open, or while Archived's count is unknown. */
   | { kind: "title"; key: `t:${SectionKey}`; section: SectionKey; label: string; open: boolean; count: string | null }
   /**
    * `section`: where it stands, so what belongs to the row in its place (its hover card) can tell it moved.
@@ -13,12 +14,12 @@ export type ListItem =
   | { kind: "row"; key: `s:${string}`; row: RowModel; section: SectionKey; tall: boolean }
   /** Fills the room the rest leave, so the shelves after it stand at the view's foot. */
   | { kind: "spacer"; key: "spacer" }
-  /** How many more archived rows a press shows; null when only the server knows (no archived count API). */
+  /** How many more archived rows a press shows; null when only the server knows. */
   | { kind: "more"; key: "more:archived"; n: number | null }
   | { kind: "notice"; key: NoticeKey; text: string; retry: boolean };
 
-/** The list's own notice, Archived's page, or the sleeps read; a Retry says which to read again. */
-export type NoticeKey = "n:list" | "n:archived" | "n:sleeps";
+/** The list's own notice, Archived's page, Archived's count, or the sleeps read; a Retry says which to read again. */
+export type NoticeKey = "n:list" | "n:archived" | "n:archived-count" | "n:sleeps";
 
 export type ListStatus = PluginSidebarThreadsState["status"];
 
@@ -35,6 +36,39 @@ export function sleepsStatus(read: Pick<ExperimentalRpcQueryState<unknown>, "dat
   return read.data === undefined ? "loading" : "ready";
 }
 
+/** Archived parents the shelf would list in the filter, loaded or not; or that the read is on its way, or failed. */
+export type ArchivedCountState = number | "loading" | "error";
+
+/**
+ * The Archived count for the chosen project, or for every project. A failed read is "error" even with
+ * an earlier count retained. why: no number beats a guess, and the loaded rows are no count (they come in pages).
+ */
+export function archivedCountFor(read: Pick<ExperimentalRpcQueryState<ArchivedCount>, "data" | "error">, filter: string | null): ArchivedCountState {
+  if (read.error !== null) return "error";
+  if (read.data === undefined) return "loading";
+  return filter === null ? read.data.total : (read.data.byProject[filter] ?? 0);
+}
+
+/** The reads a notice's Retry can make again. */
+type RetryReads = { sleeps(): void; archivedCount(): void; archivedPage(): void };
+
+/** A notice's Retry: read again what it says failed. */
+export function retryNotice(notice: NoticeKey, reads: RetryReads): void {
+  switch (notice) {
+    case "n:sleeps":
+      return reads.sleeps();
+    case "n:archived-count":
+      return reads.archivedCount();
+    case "n:archived":
+      return reads.archivedPage();
+    case "n:list":
+      // why: the list's own notices are built without Retry, so none asks for one.
+      return;
+    default:
+      notice satisfies never;
+  }
+}
+
 /** The archived pager as the shelf reads it (bb's `experimental_archived`). */
 export type ArchivePager = Pick<NonNullable<PluginSidebarThreadsState["experimental_archived"]>, "status" | "hasNextPage" | "isFetchingNextPage" | "isFetchNextPageError">;
 
@@ -46,6 +80,7 @@ export type ListView = {
   /** Archived rows shown while it is open: 10, then 25 more a press. */
   archivedShown: number;
   archive: ArchivePager;
+  archivedCount: ArchivedCountState;
   /** The project every section is narrowed to, by name; null for every project. */
   filterName: string | null;
   /** A line a row; otherwise two, its detail under its title. */
@@ -64,10 +99,11 @@ export function listItems(sections: readonly Section[], view: ListView): ListIte
   if (view.status === "error") return [listNotice("Couldn't load threads")];
 
   const rows = (key: SectionKey) => sections.find((s) => s.key === key)?.rows ?? [];
-  // why: Archived stands while the server holds threads not loaded yet, or its first page failed, so
-  // its count ("0+") and Retry stay reachable before any row has loaded.
-  const archivedPending = view.archive.hasNextPage || view.archive.status === "error";
-  const shelves = SHELVES.filter((key) => rows(key).length > 0 || (key === "archived" && archivedPending));
+  // why: Archived stands while the server holds archived parents, loaded or not, or its count or first
+  // page failed, so its count and Retry stay reachable before any row has loaded.
+  const { archivedCount } = view;
+  const archivedStands = archivedCount === "error" || (typeof archivedCount === "number" && archivedCount > 0) || view.archive.status === "error";
+  const shelves = SHELVES.filter((key) => rows(key).length > 0 || (key === "archived" && archivedStands));
 
   // why: Pinned stands only while something is pinned; Activity always stands, empty or not.
   const top: SectionKey[] = rows("pinned").length > 0 ? ["pinned", "activity"] : ["activity"];
@@ -87,12 +123,18 @@ export function listItems(sections: readonly Section[], view: ListView): ListIte
 function sectionItems(key: SectionKey, rows: readonly RowModel[], view: ListView): ListItem[] {
   const open = view.open.has(key);
   const label = key === "activity" && view.filterName !== null ? `Activity · ${view.filterName}` : LABEL[key];
-  const known = `${rows.length}`;
-  const count = open ? null : key === "archived" && view.archive.hasNextPage ? `${known}+` : known;
+  // why: Archived's rows load in pages, so it says the server's count, never how many have loaded.
+  const held = key === "archived" ? view.archivedCount : rows.length;
+  const count = open || typeof held !== "number" ? null : `${held}`;
   const title: ListItem = { kind: "title", key: `t:${key}`, section: key, label, open, count };
+  if (key === "archived") return [title, ...countFailed(view), ...(open ? archivedBody(rows, view) : [])];
   if (!open) return [title];
-  if (key === "archived") return [title, ...archivedBody(rows, view)];
   return [title, ...rows.map((row) => rowItem(row, key, view))];
+}
+
+/** Under Archived's title, folded or open: why it names no number, with Retry. */
+function countFailed(view: ListView): ListItem[] {
+  return view.archivedCount === "error" ? [{ kind: "notice", key: "n:archived-count", text: "Couldn't count archived threads", retry: true }] : [];
 }
 
 /** The first rows shown, then "Show n more", a page loading, or the page that failed with Retry. */

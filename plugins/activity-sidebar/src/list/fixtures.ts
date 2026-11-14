@@ -1,4 +1,5 @@
-// Test views: every section open unless a test says otherwise, every archived thread loaded. Test layouts
+// Test views: every section open unless a test says otherwise, every archived thread loaded, Archived's
+// count not read. Test layouts
 // of quiet threads, for the list's motion.
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { buildActivity, type SectionKey } from "../model/activity.ts";
@@ -10,7 +11,7 @@ export const LOADED: ArchivePager = { status: "ready", hasNextPage: false, isFet
 
 export function view(overrides: Partial<ListView> = {}): ListView {
   const open: SectionKey[] = ["pinned", "activity", "working", "asleep", "archived"];
-  return { status: "ready", sleeps: "ready", open: new Set(open), archivedShown: 10, archive: LOADED, filterName: null, compact: true, ...overrides };
+  return { status: "ready", sleeps: "ready", open: new Set(open), archivedShown: 10, archive: LOADED, archivedCount: "loading", filterName: null, compact: true, ...overrides };
 }
 
 export const SHOWN: SectionKey[] = ["pinned", "activity", "working", "asleep"];
