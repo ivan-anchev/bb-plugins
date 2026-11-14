@@ -75,7 +75,7 @@ export function ListViewport({ items, card, ...actions }: Props) {
           ))}
         </div>
         {/* why: in here, so focus leaving the card (portaled; it adds nothing here) bubbles to onBlur above, as a menu's does. */}
-        {card !== null && <HoverCard scroller={scroller} items={items} data={card} listFocus={focus} onNavigate={actions.onNavigate} />}
+        {card !== null && <HoverCard scroller={scroller} entries={layout.entries} data={card} listFocus={focus} onNavigate={actions.onNavigate} />}
       </div>
     </>
   );
