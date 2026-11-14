@@ -28,6 +28,10 @@
       "source": "./plugins/mdxcn"
     },
     {
+      "name": "office-quote",
+      "source": "./plugins/office-quote"
+    },
+    {
       "name": "pr-reviews",
       "source": "./plugins/pr-reviews"
     },
