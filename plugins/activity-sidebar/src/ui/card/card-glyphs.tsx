@@ -37,13 +37,10 @@ const PATHS = {
       <path d="M22 19H12m10-7H12m10-7H12" />
     </g>
   ),
-  // Z:ds/icon_svgs.luau:155
+  // why: Zeron has no Subthreads heading. The prototype borrowed its side-chat glyph (Z:ds/icon_svgs.luau:155),
+  // which draws a pointer arrow; a trunk with two branches says "threads under this one", as the tree below it does.
   subthreads: (
-    <path
-      strokeWidth={1.5}
-      strokeLinejoin="round"
-      d="M3.50746 5.41564L8.63387 20.2487C9.08538 21.5551 10.9137 21.6073 11.439 20.3288L13.7897 14.6076C13.942 14.2368 14.2363 13.9425 14.6071 13.7902L20.3283 11.4395C21.6068 10.9142 21.5546 9.08587 20.2482 8.63436L5.41515 3.50795C4.23246 3.0992 3.09871 4.23295 3.50746 5.41564Z"
-    />
+    <path strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" d="M21 12h-8M21 6H8M21 18h-8M3 6v4a2 2 0 0 0 2 2h3M3 10v6a2 2 0 0 0 2 2h3" />
   ),
 } satisfies Record<string, ReactNode>;
 

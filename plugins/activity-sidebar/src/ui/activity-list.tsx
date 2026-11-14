@@ -1,9 +1,9 @@
 // The slot component: reads the hooks, runs the two pure steps (model, items) and hands the items
-// to the viewport. Owns the reader's choices (folds, filter, how far Archived is unrolled), nothing derived.
+// to the viewport. Owns the reader's choices (folds, filter, density, how far Archived is unrolled), nothing derived.
 import { experimental_useSidebarThreads, type PluginSidebarThread, type PluginThreadListProps } from "@get-bb/plugin-sdk/app";
 import { useMemo, useState } from "react";
 import { underWaySince } from "../card/under-way.ts";
-import { parseFilter, parseOpen } from "../data/choices.ts";
+import { parseCompact, parseFilter, parseOpen } from "../data/choices.ts";
 import { useLocalChoice } from "../data/use-local-choice.ts";
 import { useMinute } from "../data/use-minute.ts";
 import { useSleepUpkeep } from "../data/use-sleep-upkeep.ts";
@@ -11,7 +11,7 @@ import { useSleeps } from "../data/use-sleeps.ts";
 import { ARCHIVED_FIRST, ARCHIVED_STEP, listItems, type NoticeKey } from "../list/items.ts";
 import { buildActivity, type SectionKey } from "../model/activity.ts";
 import { ListViewport } from "./list-viewport.tsx";
-import { ProjectFilter } from "./project-filter.tsx";
+import { ViewMenu } from "./view-menu.tsx";
 
 // why: one read for both lifecycles, so the Archived shelf's first page (and its "n+") loads at mount.
 const LIFECYCLES = { experimental_lifecycles: ["active", "archived"] } as const;
@@ -23,6 +23,7 @@ export function ActivityList({ activeThreadId, isCompactViewport, onNavigate }: 
   const now = useMinute();
   const [open, setOpen] = useLocalChoice("open-sections", parseOpen);
   const [filter, setFilter] = useLocalChoice("project-filter", parseFilter);
+  const [compact, setCompact] = useLocalChoice("compact", parseCompact);
   const [archivedShown, setArchivedShown] = useState(ARCHIVED_FIRST);
   useSleepUpkeep({ threads: live.threads, sleeps, now, activeThreadId });
 
@@ -33,8 +34,8 @@ export function ActivityList({ activeThreadId, isCompactViewport, onNavigate }: 
     [live.threads, live.projects, sleeps.sleeps, now, activeThreadId, chosen],
   );
   const items = useMemo(
-    () => listItems(model.sections, { status: live.status, sleeps: sleeps.status, open: new Set(open), archivedShown, archive, filterName: chosen?.name ?? null }),
-    [model, live.status, sleeps.status, open, archivedShown, archive, chosen],
+    () => listItems(model.sections, { status: live.status, sleeps: sleeps.status, open: new Set(open), archivedShown, archive, filterName: chosen?.name ?? null, compact }),
+    [model, live.status, sleeps.status, open, archivedShown, archive, chosen, compact],
   );
 
   const since = useUnderWaySince(live.threads);
@@ -62,7 +63,7 @@ export function ActivityList({ activeThreadId, isCompactViewport, onNavigate }: 
       onToggle={toggle}
       onShowMoreArchived={showMoreArchived}
       onRetry={retry}
-      filterMenu={<ProjectFilter projects={live.projects} chosen={chosen} onChoose={setFilter} />}
+      viewMenu={<ViewMenu projects={live.projects} chosen={chosen} onChoose={setFilter} compact={compact} onCompact={setCompact} />}
     />
   );
 }

@@ -157,17 +157,18 @@ function useCardIntent(
   useEffect(() => {
     const el = scroller.current;
     if (el === null) return;
-    const over = (e: MouseEvent) => {
+    // why: a touch has no hover; its tap opens the row, and a card it opened would be left standing.
+    const over = (e: PointerEvent) => {
       const key = cardKeyAt(e.target);
-      if (key === null) return;
+      if (key === null || e.pointerType === "touch") return;
       pointer.current = { x: e.clientX, y: e.clientY };
       intent.overRow(key);
     };
     // why: the pointer is not tracked here: an out event already reports the next spot, and the safe
     // triangle starts where the pointer last stood in the row (P:1407).
-    const out = (e: MouseEvent) => {
+    const out = (e: PointerEvent) => {
       const key = cardKeyAt(e.target);
-      if (key === null || cardKeyAt(e.relatedTarget) === key || isOnCard(e.relatedTarget)) return;
+      if (key === null || e.pointerType === "touch" || cardKeyAt(e.relatedTarget) === key || isOnCard(e.relatedTarget)) return;
       intent.leaveRow(key);
     };
     // why: only focus the keyboard moved rests on a row; a click's focus comes with a press, which puts
@@ -193,8 +194,8 @@ function useCardIntent(
     };
     const cold = () => intent.cold();
 
-    el.addEventListener("mouseover", over);
-    el.addEventListener("mouseout", out);
+    el.addEventListener("pointerover", over);
+    el.addEventListener("pointerout", out);
     el.addEventListener("focusin", focusIn);
     el.addEventListener("focusout", focusOut);
     el.addEventListener("keydown", tabIn);
@@ -202,8 +203,8 @@ function useCardIntent(
     el.addEventListener("pointerdown", cold, true);
     el.addEventListener("contextmenu", cold, true);
     return () => {
-      el.removeEventListener("mouseover", over);
-      el.removeEventListener("mouseout", out);
+      el.removeEventListener("pointerover", over);
+      el.removeEventListener("pointerout", out);
       el.removeEventListener("focusin", focusIn);
       el.removeEventListener("focusout", focusOut);
       el.removeEventListener("keydown", tabIn);

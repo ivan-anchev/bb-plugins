@@ -21,7 +21,7 @@ type ItemActions = {
   /** A notice's Retry: read again what it says failed. */
   onRetry(notice: NoticeKey): void;
   /** Sits at the end of Activity's title. */
-  filterMenu: ReactNode;
+  viewMenu: ReactNode;
 };
 
 /** `card`: what the hover card reads; null where no card shows (a compact viewport). */
@@ -86,9 +86,9 @@ export function ListViewport({ items, card, ...actions }: Props) {
 function renderItem(item: ListItem, actions: ItemActions): ReactNode {
   switch (item.kind) {
     case "row":
-      return <Row row={item.row} sleep={actions.sleep} onNavigate={actions.onNavigate} />;
+      return <Row row={item.row} tall={item.tall} sleep={actions.sleep} onNavigate={actions.onNavigate} />;
     case "title":
-      return <SectionTitle item={item} onToggle={() => actions.onToggle(item.section)} action={item.section === "activity" ? actions.filterMenu : null} />;
+      return <SectionTitle item={item} onToggle={() => actions.onToggle(item.section)} action={item.section === "activity" ? actions.viewMenu : null} />;
     case "more":
       return <MoreRow n={item.n} onPress={actions.onShowMoreArchived} />;
     case "notice":

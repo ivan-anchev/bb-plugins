@@ -10,7 +10,7 @@ export const LOADED: ArchivePager = { status: "ready", hasNextPage: false, isFet
 
 export function view(overrides: Partial<ListView> = {}): ListView {
   const open: SectionKey[] = ["pinned", "activity", "working", "asleep", "archived"];
-  return { status: "ready", sleeps: "ready", open: new Set(open), archivedShown: 10, archive: LOADED, filterName: null, ...overrides };
+  return { status: "ready", sleeps: "ready", open: new Set(open), archivedShown: 10, archive: LOADED, filterName: null, compact: true, ...overrides };
 }
 
 export const SHOWN: SectionKey[] = ["pinned", "activity", "working", "asleep"];
