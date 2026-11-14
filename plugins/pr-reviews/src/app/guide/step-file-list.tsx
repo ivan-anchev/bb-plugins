@@ -29,7 +29,7 @@ function FileRow({ file, onJump }: { file: StepFile; onJump(path: string): void 
       title={file.path}
       aria-label={`${file.path}${tag === null ? "" : `, ${tag.label.toLowerCase()} file`}: ${file.added} added, ${file.removed} removed`}
       onClick={() => onJump(file.path)}
-      className="flex min-h-9 w-full cursor-pointer touch-manipulation items-center gap-2.5 rounded-lg bg-muted/40 px-3 text-left text-[13px] outline-none transition-colors duration-150 ease-out hover:bg-state-hover focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset motion-reduce:transition-none"
+      className="flex min-h-9 w-full cursor-pointer touch-manipulation items-center gap-2.5 rounded-lg bg-surface-recessed px-3 text-left text-[13px] outline-none transition-colors duration-150 ease-out hover:bg-state-hover focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset motion-reduce:transition-none"
     >
       <FileIcon path={file.path} />
       <span className="flex min-w-0 flex-1 items-baseline gap-1.5 whitespace-pre">

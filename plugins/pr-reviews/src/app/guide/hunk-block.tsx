@@ -46,9 +46,9 @@ export function HunkDiff({ file, hunk, head }: { file: DiffFile; hunk: HunkId; h
   const comments = useComments({ projectId: head.projectId, number: head.number });
   return (
     <>
-      {/* Above the surface, not on it: the error text passes contrast on the page, not on muted. */}
+      {/* Above the surface, not on it: the error text passes contrast on the page, not on the recessed surface. */}
       <ReadError read={comments} what="the PR's comments" />
-      <div className="overflow-hidden rounded-lg bg-muted/40">
+      <div className="overflow-hidden rounded-lg bg-surface-recessed-solid">
         {hunk === WHOLE_FILE && <p className="px-3 py-2.5 text-[12.5px] text-subtle-foreground">{wholeFileNoteOf(file)}</p>}
         <AnnotatedDiff file={file} hunk={hunk} findings={NO_FINDINGS} head={head} comments={comments.data} withFileThreads={false} />
       </div>
@@ -88,10 +88,9 @@ function AnnotatedDiff({ file, hunk, findings, head, comments, withFileThreads }
 // A guide's diff has no band of the code's background above its first row and below its last.
 const FLUSH_DIFF = "[--diffs-gap-block:0px]";
 
-// The file row stays at the top of the guide's page while its diff scrolls under it, on the
-// block's own tint made opaque (bg-muted/40 over the page).
-const FILE_ROW =
-  "sticky top-0 z-10 flex items-baseline gap-3 bg-[color-mix(in_srgb,var(--muted)_40%,var(--background))] px-3 pt-2.5 pb-2 text-[12.5px]";
+// The file row stays at the top of the guide's page while its diff scrolls under it. Its block's
+// surface is the solid recessed one, so the row hides the code passing under it.
+const FILE_ROW = "sticky top-0 z-10 flex items-baseline gap-3 bg-surface-recessed-solid px-3 pt-2.5 pb-2 text-[12.5px]";
 const ROW_NOTE = "ml-auto text-right text-subtle-foreground";
 
 type BlockRef = { ref?: Ref<HTMLElement> };
@@ -106,7 +105,7 @@ function Block({ ref, children }: BlockRef & { children: ReactNode }) {
     <section
       ref={ref}
       tabIndex={-1}
-      className="scroll-mt-[18px] overflow-clip rounded-lg bg-muted/40 outline-none focus-visible:ring-1 focus-visible:ring-ring [&_*]:scroll-mt-12"
+      className="scroll-mt-[18px] overflow-clip rounded-lg bg-surface-recessed-solid outline-none focus-visible:ring-1 focus-visible:ring-ring [&_*]:scroll-mt-12"
     >
       {children}
     </section>

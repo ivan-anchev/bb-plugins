@@ -35,7 +35,7 @@ export function PrCard() {
       <div className="flex items-center gap-1.5">
         <SectionSwitcher current={key} sections={sections} onChange={setKey} />
         {section !== undefined && section.count > 0 && (
-          <span className="ml-auto rounded-full bg-foreground/8 px-1.5 text-xs leading-[18px] text-muted-foreground tabular-nums">{section.count}</span>
+          <span className="ml-auto rounded-full bg-muted px-1.5 text-xs leading-[18px] text-muted-foreground tabular-nums">{section.count}</span>
         )}
       </div>
       <ReadError read={inbox} what="pull requests" />
@@ -91,8 +91,8 @@ function Row({ pr, section, visits }: { pr: InboxPr; section: SectionKey; visits
       className="grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 rounded-lg px-2 py-1.5 text-left transition-colors duration-150 hover:bg-state-hover hover:duration-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
       <span className="truncate">{pr.title}</span>
-      <span className={`inline-flex items-center gap-1 rounded-md bg-[color-mix(in_oklab,currentColor_12%,transparent)] px-1.5 text-[11px] leading-[18px] font-medium tabular-nums ${state.color}`}>
-        <Icon name={state.icon} className="size-3 shrink-0" aria-hidden />
+      <span className="inline-flex items-center gap-1 rounded-md px-1.5 text-[11px] leading-[18px] font-medium text-foreground tabular-nums inset-ring inset-ring-border">
+        <Icon name={state.icon} className={`size-3 shrink-0 ${state.color}`} aria-hidden />
         {pr.number}
       </span>
       <span className="col-span-2 flex min-w-0 items-center gap-1 text-xs leading-4 whitespace-nowrap text-muted-foreground">

@@ -132,7 +132,7 @@ function StatusMark({ status }: { status: TabStatus }) {
     case "ready":
       return (
         <>
-          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-success-foreground" />
+          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-success" />
           <span className="sr-only">, ready</span>
         </>
       );

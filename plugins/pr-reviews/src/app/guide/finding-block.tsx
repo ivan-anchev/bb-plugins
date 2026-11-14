@@ -12,10 +12,10 @@ import { Priority } from "./priority.tsx";
 
 type FindingBlockProps = { shown: VisibleFinding; openBox: OpenBox };
 
-// The surface is recessed, with no border or bar: the priority word is its only colour.
+// A card under its line, with no bar: the priority word is its only colour.
 export function FindingBlock({ shown: { finding, index }, openBox }: FindingBlockProps) {
   return (
-    <section aria-label={`Finding: ${finding.title}`} className="grid gap-1 rounded-[10px] bg-[color-mix(in_oklab,var(--foreground)_5%,var(--background))] px-3.5 py-3 text-[13px] leading-5">
+    <section aria-label={`Finding: ${finding.title}`} className="grid gap-1 rounded-[10px] border border-border bg-card px-3.5 py-3 text-[13px] leading-5">
       <div className="flex items-baseline gap-2">
         <Priority priority={finding.priority} />
         <Prose text={finding.title} className="min-w-0 font-semibold" />

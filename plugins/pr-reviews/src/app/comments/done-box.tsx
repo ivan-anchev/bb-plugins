@@ -8,12 +8,13 @@ import { experimental_Icon as Icon, UrlLink } from "@get-bb/plugin-sdk/app";
 import type { BoxOutcome } from "../diff/line-selection.ts";
 import { useOpenReviewChat } from "../review-chat/review-chat-button.tsx";
 import { Button, buttonClass } from "../ui/button.tsx";
+import { LINK } from "../ui/link.ts";
 
 /**
- * The box's shell, writing or done: one ring in every state, focused or not, as bb's composer has
- * (app.css). Its corners are 12px, or what a surface it sits in sets in `--pr-reviews-box-radius`.
+ * The box's shell, writing or done: a field's edge, in the focus ring's colour while it has focus.
+ * Its corners are 12px, or what a surface it sits in sets in `--pr-reviews-box-radius`.
  */
-export const BOX_CLASS = "rounded-[var(--pr-reviews-box-radius,12px)] border border-(--pr-reviews-box-ring) bg-background shadow-[0_1px_2px_rgb(0_0_0/.04),0_6px_16px_-8px_rgb(0_0_0/.14)]";
+export const BOX_CLASS = "rounded-[var(--pr-reviews-box-radius,12px)] border border-input bg-background shadow-[0_1px_2px_rgb(0_0_0/.04),0_6px_16px_-8px_rgb(0_0_0/.14)] focus-within:border-ring";
 
 /** `takeFocus`: the composer this replaces had focus, which would otherwise drop to the page body. */
 type DoneBoxProps = { outcome: BoxOutcome; takeFocus: boolean; onDone(): void };
@@ -39,7 +40,7 @@ export function DoneBox({ outcome, takeFocus, onDone }: DoneBoxProps) {
     >
       <div className="flex min-h-9 flex-wrap items-center gap-2 pt-2 pr-2 pb-2 pl-[18px]">
         <p role="status" className="flex items-center gap-1.5 text-[13px] font-medium text-foreground">
-          <Icon name="Check" className="size-3.5 text-success-foreground" aria-hidden />
+          <Icon name="Check" className="size-3.5 text-success" aria-hidden />
           {outcome.kind === "commented" ? "Commented" : "Sent to the review thread"}
         </p>
         <div className="ml-auto flex gap-1">
@@ -68,7 +69,7 @@ export function SentNote({ outcome }: { outcome: BoxOutcome }) {
   const openReviewChat = useOpenReviewChat();
   return (
     <p role="status" className="flex flex-wrap items-center gap-x-1.5 px-[18px] pt-1 text-xs text-muted-foreground">
-      <Icon name="Check" className="size-3.5 text-success-foreground" aria-hidden />
+      <Icon name="Check" className="size-3.5 text-success" aria-hidden />
       {outcome.kind === "commented" ? (
         <>
           Commented with your earlier text.
@@ -89,4 +90,4 @@ export function SentNote({ outcome }: { outcome: BoxOutcome }) {
   );
 }
 
-const LINK_CLASS = "cursor-pointer rounded-sm font-medium text-foreground decoration-foreground/35 underline-offset-[3px] hover:underline focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none";
+const LINK_CLASS = `cursor-pointer font-medium text-foreground ${LINK}`;

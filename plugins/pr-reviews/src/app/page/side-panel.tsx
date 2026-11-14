@@ -74,7 +74,7 @@ export function useSidePanelFocus(): SidePanelFocus {
 function PanelSection({ title, status, children }: { title: string; status?: ReactNode; children: ReactNode }) {
   const headingId = useId();
   return (
-    <section aria-labelledby={headingId} className="border-t border-border/60 py-3.5 first:border-t-0 first:pt-0">
+    <section aria-labelledby={headingId} className="border-t border-border py-3.5 first:border-t-0 first:pt-0">
       <div className="mb-2 flex items-baseline justify-between gap-3">
         <h2 id={headingId} className="text-xs font-medium text-muted-foreground">
           {title}

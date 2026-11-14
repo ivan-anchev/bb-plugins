@@ -7,6 +7,7 @@ import type { InboxPr } from "../../contract.ts";
 import { useInbox, useVisits } from "../queries.ts";
 import { PANEL_PATH, parseRoute, routeSubPath } from "../routes.ts";
 import { Notice } from "../ui/notice.tsx";
+import { LINK } from "../ui/link.ts";
 import { ReadError } from "../ui/read-error.tsx";
 import { visitsByPr } from "./attention.ts";
 import { InboxSection } from "./inbox-section.tsx";
@@ -69,7 +70,7 @@ function AllSectionsHidden({ onShowAll }: { onShowAll(): void }) {
       <button
         type="button"
         onClick={onShowAll}
-        className="cursor-pointer rounded-sm font-medium text-foreground decoration-foreground/35 underline-offset-[3px] hover:underline focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+        className={`cursor-pointer font-medium text-foreground ${LINK}`}
       >
         Show all
       </button>

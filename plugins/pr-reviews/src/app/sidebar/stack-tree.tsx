@@ -11,7 +11,8 @@ import { ListedRow, StackMateRow } from "./pr-row.tsx";
 
 type StackTreeProps = RowActions & { members: InboxPr[]; section: SectionKey; visits: Visits };
 
-const RAIL = "[--rail:color-mix(in_oklab,var(--foreground)_20%,transparent)] has-[button:hover]:[--rail:color-mix(in_oklab,var(--foreground)_42%,transparent)] has-[[aria-current=page]]:[--rail:color-mix(in_oklab,var(--foreground)_42%,transparent)]";
+// The rail's colour, for its line, tick and elbow: the border, or the muted foreground while lit.
+const RAIL = "[--rail:var(--border)] has-[button:hover]:[--rail:var(--muted-foreground)] has-[[aria-current=page]]:[--rail:var(--muted-foreground)]";
 
 // A vertical line down each row's left, a tick into the row, and on the last row an elbow instead.
 const MEMBER =

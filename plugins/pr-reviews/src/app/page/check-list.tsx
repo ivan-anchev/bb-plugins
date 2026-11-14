@@ -5,6 +5,7 @@ import { useId, useState, type ReactNode, type RefObject } from "react";
 import { UrlLink } from "@get-bb/plugin-sdk/app";
 import { leadingOutcome, summarizeChecks, type Check, type CheckOutcome } from "../../contract.ts";
 import { Button } from "../ui/button.tsx";
+import { LINK } from "../ui/link.ts";
 import { CheckOutcomeIcon } from "./check-outcome-icon.tsx";
 
 const ALWAYS_SHOWN = 3;
@@ -98,7 +99,7 @@ function CheckRow({ check }: { check: Check }) {
   return (
     <UrlLink
       href={check.url}
-      className={`${ROW} rounded-sm decoration-foreground/35 underline-offset-[3px] hover:underline focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none`}
+      className={`${ROW} ${LINK}`}
     >
       {content}
     </UrlLink>

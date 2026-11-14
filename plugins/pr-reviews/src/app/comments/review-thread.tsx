@@ -3,8 +3,8 @@
 // the diff's one comment box under the thread. A long thread shows its first and latest comments
 // with "N more" between; a bot's comment is clamped to three lines; a resolved thread is one row
 // that opens it. A thread at its file that lost its lines says "Outdated" over the lines it was
-// written on. No pills or dividers: spacing separates the comments, a ring draws the card's edge,
-// and the comment box is the only raised surface (app.css holds the tint and both rings).
+// written on. No pills or dividers: spacing separates the comments, a border draws the card's edge,
+// and the comment box is the only field in it.
 // Everything sits one 6px inset from the card's 12px corners: the avatars, which a diff lines up
 // with its line numbers (pr-diff.tsx), and the box, whose corners are 6px, concentric with the card's.
 import { useMemo, useState, type ReactNode } from "react";
@@ -66,7 +66,7 @@ export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: Rev
         />
       </div>
       {box === null && (
-        <div className="pr-reviews-thread-foot ml-5 flex items-center gap-1">
+        <div className="ml-5 flex items-center gap-1">
           <Button variant="ghost" size="small" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
             Reply
           </Button>
@@ -88,7 +88,7 @@ export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: Rev
   );
 }
 
-const SURFACE = "min-w-0 bg-(--pr-reviews-thread-tint) shadow-(--pr-reviews-thread-ring) text-[13px] leading-5";
+const SURFACE = "min-w-0 bg-card border border-border text-[13px] leading-5";
 
 type CommentsProps = {
   thread: ReviewThread;
@@ -138,7 +138,7 @@ function ResolvedRow({ thread, focus, onOpen }: { thread: ReviewThread; focus: F
         type="button"
         aria-expanded={false}
         onClick={onOpen}
-        className="flex min-h-8 w-full cursor-pointer items-center gap-2 rounded-[10px] px-3 py-1.5 text-left text-[12.5px] leading-5 text-muted-foreground transition-colors duration-150 ease-out hover:bg-(--pr-reviews-thread-tint-hover) hover:text-foreground hover:duration-0 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+        className="flex min-h-8 w-full cursor-pointer items-center gap-2 rounded-[10px] px-3 py-1.5 text-left text-[12.5px] leading-5 text-muted-foreground transition-colors duration-150 ease-out hover:bg-state-hover hover:text-foreground hover:duration-0 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
       >
         <span className="shrink-0">Resolved ·</span>
         <span className="shrink-0 font-medium text-foreground">{first.author.login}</span>
@@ -179,8 +179,8 @@ function Original({ thread, why }: { thread: ReviewThread; why: "outdated" | "el
 }
 
 const ROW_TONE: Record<string, string> = {
-  "+": "bg-[color-mix(in_oklab,var(--diff-added)_16%,var(--background))]",
-  "-": "bg-[color-mix(in_oklab,var(--diff-removed)_16%,var(--background))]",
+  "+": "bg-diff-added/12",
+  "-": "bg-diff-removed/12",
 };
 
 function ExcerptRow({ line }: { line: NumberedLine }) {

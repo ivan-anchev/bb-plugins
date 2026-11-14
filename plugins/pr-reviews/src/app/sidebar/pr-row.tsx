@@ -6,7 +6,6 @@ import type { ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { InboxPr, StackPosition } from "../../contract.ts";
 import { STATE_TILES } from "../page/pr-header.tsx";
-import { ATTENTION } from "../page/status-glyph.tsx";
 import { Avatar } from "../ui/avatar.tsx";
 import type { Attention } from "./attention.ts";
 import { SECTION_TEXT } from "./section-text.ts";
@@ -15,7 +14,7 @@ type RowProps = { pr: InboxPr; current: boolean; onOpen(): void };
 
 const ATTENTION_LOOK = {
   "ci-failing": { label: "CI failing", color: "text-destructive-text" },
-  "changes-requested": { label: "Changes requested", color: ATTENTION },
+  "changes-requested": { label: "Changes requested", color: "text-attention" },
   "new-activity": { label: "New activity", color: "text-foreground" },
 } as const satisfies Record<Attention, { label: string; color: string }>;
 

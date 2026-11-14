@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { UrlLink } from "@get-bb/plugin-sdk/app";
 import { shortSha } from "../../contract.ts";
 import type { Label } from "../../github/label.ts";
+import { LINK } from "../ui/link.ts";
 import type { RunEntry, RunItem } from "./activity-fold.ts";
 import type { ActivityGlyphName } from "./activity-glyph.tsx";
 
@@ -144,8 +145,6 @@ const STATUS_WORDS = {
 export const Who = ({ login }: { login: string }) => <b className="font-medium text-foreground">{login}</b>;
 
 export const SHA = "font-mono text-[11.5px]";
-
-const LINK = "rounded-sm decoration-foreground/35 underline-offset-[3px] hover:underline focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none";
 
 // The label's own colour as a dot, as the side panel's chips show it.
 function LabelName({ label }: { label: Label }) {

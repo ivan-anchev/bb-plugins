@@ -46,15 +46,10 @@ export function PrHeader({ target, repo, pr, hasReviewThread, title }: PrHeaderP
 // branches rather than leaving a column empty.
 const MASTHEAD = "grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-0.5 [grid-template-areas:'title_actions'_'identity_identity']";
 
-// why a purple of our own: bb has no purple token. GitHub's merged purple mixed a quarter toward
-// the foreground reads 5.04:1 on its tinted tile in the dark theme and 4.79:1 in light, over the
-// 3:1 a graphic needs.
-export const MERGED = "text-[color-mix(in_oklab,#8957e5_75%,var(--foreground))]";
-
 export const STATE_TILES = {
-  OPEN: { label: "Open", icon: "GitPullRequest", color: "text-success-foreground" },
+  OPEN: { label: "Open", icon: "GitPullRequest", color: "text-success" },
   DRAFT: { label: "Draft", icon: "GitPullRequestDraft", color: "text-muted-foreground" },
-  MERGED: { label: "Merged", icon: "GitMerge", color: MERGED },
+  MERGED: { label: "Merged", icon: "GitMerge", color: "text-pr-merged" },
   CLOSED: { label: "Closed", icon: "GitPullRequestClosed", color: "text-destructive-text" },
 } as const satisfies Record<PrState, { label: string; icon: string; color: string }>;
 
@@ -74,22 +69,17 @@ const CHANGES = {
   reopen: { label: "Reopen", doing: "Reopening…", to: "OPEN" },
 } as const satisfies Record<StateChange, { label: string; doing: string; to: PrState }>;
 
-// The pill names the state in its color, on a wash of that color. It stays at every width, since
-// it is the header's only mark of the state.
-const PILL = "inline-flex h-7 items-center gap-1.5 rounded-lg pl-2 text-[13px] leading-4 font-semibold bg-[color-mix(in_oklab,currentColor_15%,transparent)]";
-
-// why state words mixed toward the foreground: in the state's own color, on its wash, open's green
-// reads 3.55:1 in bb's light theme and closed's red 3.94:1 on the menu in the grok theme. Mixed,
-// each reads 4.5:1 or more in both. The icons keep the pure color.
-const STATE_WORDS = "text-[color-mix(in_oklab,currentColor_70%,var(--foreground))]";
+// The pill is a neutral control: only its icon carries the state's color. It stays at every width,
+// since it is the header's only mark of the state.
+const PILL = "inline-flex h-7 items-center gap-1.5 rounded-lg pl-2 text-[13px] leading-4 font-semibold text-foreground inset-ring inset-ring-border";
 
 function StatePill({ target, state }: { target: PrTarget; state: PrState }) {
   if (state === "MERGED") {
     const { label, icon, color } = STATE_TILES.MERGED;
     return (
-      <span title="Merged pull requests can't change state" className={`${PILL} pr-2.5 ${color}`}>
-        <Icon name={icon} aria-hidden className="size-4" />
-        <span className={STATE_WORDS}>{label}</span>
+      <span title="Merged pull requests can't change state" className={`${PILL} pr-2.5`}>
+        <Icon name={icon} aria-hidden className={`size-4 ${color}`} />
+        {label}
       </span>
     );
   }
@@ -119,11 +109,11 @@ function StateMenu({ target, state }: { target: PrTarget; state: keyof typeof CH
         <button
           type="button"
           aria-label={`State: ${label}. Change state`}
-          className={`${PILL} cursor-pointer pr-1.5 transition-[background-color,scale] duration-150 ease-out hover:bg-[color-mix(in_oklab,currentColor_23%,transparent)] hover:duration-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.97] data-[state=open]:bg-[color-mix(in_oklab,currentColor_23%,transparent)] motion-reduce:transition-none motion-reduce:active:scale-100 ${color}`}
+          className={`${PILL} cursor-pointer pr-1.5 transition-[background-color,scale] duration-150 ease-out hover:bg-state-hover hover:duration-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.97] data-[state=open]:bg-state-active motion-reduce:transition-none motion-reduce:active:scale-100`}
         >
-          <Icon name={icon} aria-hidden className="size-4" />
-          <span className={STATE_WORDS}>{label}</span>
-          <Icon name="ChevronDown" aria-hidden className="size-3.5 opacity-75" />
+          <Icon name={icon} aria-hidden className={`size-4 ${color}`} />
+          {label}
+          <Icon name="ChevronDown" aria-hidden className="size-3.5 text-muted-foreground" />
         </button>
       </MenuTrigger>
       <MenuContent align="start" className="w-60">
@@ -160,7 +150,7 @@ function CloseItem({ running, onRun }: { running: boolean; onRun(change: StateCh
       <span
         aria-hidden
         style={hold.holding ? { transitionDuration: `${HOLD_MS}ms` } : undefined}
-        className={`absolute inset-0 origin-left rounded-sm bg-[color-mix(in_oklab,var(--destructive-text)_22%,transparent)] transition-transform ${hold.holding ? "scale-x-100 ease-linear" : "scale-x-0 duration-150 ease-out"}`}
+        className={`absolute inset-0 origin-left rounded-sm bg-destructive/15 transition-transform ${hold.holding ? "scale-x-100 ease-linear" : "scale-x-0 duration-150 ease-out"}`}
       />
       <ChangeRow change="close" text={text} running={running} />
     </MenuItem>
@@ -176,9 +166,9 @@ function ChangeRow({ change, text, running }: { change: StateChange; text: strin
         {running && <Spinner size="small" />}
         {text}
       </span>
-      <span aria-hidden className={`relative inline-flex h-[18px] items-center gap-1 rounded-full pr-1.5 pl-[5px] text-[11px] font-medium bg-[color-mix(in_oklab,currentColor_14%,transparent)] ${color}`}>
-        <Icon name={icon} className="size-[11px]" />
-        <span className={STATE_WORDS}>{label}</span>
+      <span aria-hidden className="relative inline-flex h-[18px] items-center gap-1 rounded-full pr-1.5 pl-[5px] text-[11px] font-medium text-foreground inset-ring inset-ring-border">
+        <Icon name={icon} className={`size-[11px] ${color}`} />
+        {label}
       </span>
     </>
   );

@@ -10,7 +10,6 @@ import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { quoteReplyText, type GitHubComment, type ReviewThread } from "../../comments/thread-schema.ts";
 import type { ReviewVerdict } from "../../comments/timeline-schema.ts";
 import { firstLineOf, GitHubCommentView, QUIET_BUTTON, TimeAgo } from "../comments/github-comment.tsx";
-import { MERGED } from "../page/pr-header.tsx";
 import { useFocusHandOff } from "../ui/focus-hand-off.ts";
 import { mergeRefs } from "../ui/merge-refs.ts";
 import { EntryWords, glyphOf, SHA, Who } from "./activity-entry.tsx";
@@ -87,7 +86,7 @@ function tintOf(tint: TintEdges | null): string | undefined {
   if (tint === null) return undefined;
   const top = tint.first ? "mt-1 rounded-t-[10px] pt-1" : "";
   const bottom = tint.last ? "mb-1 rounded-b-[10px] pb-1" : "";
-  return `-mx-3 grid grid-cols-[minmax(0,1fr)] bg-(--pr-reviews-thread-tint) px-3 ${top} ${bottom}`;
+  return `-mx-3 grid grid-cols-[minmax(0,1fr)] bg-card px-3 ${top} ${bottom}`;
 }
 
 /** A message on the page: a conversation comment, or a review with its threads under it. */
@@ -148,7 +147,7 @@ function ReviewMessage({ ref, review: { review, threads }, context, children }: 
 // or outdated.
 function Digest({ threads, context }: { threads: ReviewThread[]; context: Context }) {
   return (
-    <ul aria-label="Review threads" className="col-start-2 mt-2 -ml-2 grid grid-cols-[minmax(0,1fr)] rounded-lg bg-(--pr-reviews-thread-tint) p-0.5">
+    <ul aria-label="Review threads" className="col-start-2 mt-2 -ml-2 grid grid-cols-[minmax(0,1fr)] rounded-lg bg-card p-0.5">
       {threads.map((thread) => (
         <li key={thread.id} className="grid">
           <DigestRow thread={thread} context={context} />
@@ -175,7 +174,7 @@ function DigestRow({ thread, context }: { thread: ReviewThread; context: Context
     </>
   );
   return inDiff ? (
-    <button ref={formRef} type="button" title={`${thread.path}: show in Changes`} onClick={() => context.onShowThread(thread)} className={`${DIGEST_ROW} cursor-pointer text-left transition-colors duration-150 ease-out hover:bg-(--pr-reviews-thread-tint-hover) hover:duration-0 ${FOCUS_RING}`}>
+    <button ref={formRef} type="button" title={`${thread.path}: show in Changes`} onClick={() => context.onShowThread(thread)} className={`${DIGEST_ROW} cursor-pointer text-left transition-colors duration-150 ease-out hover:bg-state-hover hover:duration-0 ${FOCUS_RING}`}>
       {row}
     </button>
   ) : (
@@ -192,7 +191,7 @@ const DIGEST_ROW = "flex min-h-7 min-w-0 items-baseline gap-2.5 rounded-md px-2 
 const snippetOf = (body: string) => firstLineOf(body).replace(/`|\*\*/g, "");
 
 const VERDICTS = {
-  approved: { words: "approved", tone: "text-success-foreground", glyph: "approved" },
+  approved: { words: "approved", tone: "text-success", glyph: "approved" },
   "changes-requested": { words: "requested changes", tone: "text-destructive-text", glyph: "changes-requested" },
   commented: { words: "reviewed", tone: "text-muted-foreground", glyph: "review" },
   dismissed: { words: "reviewed", tone: "text-muted-foreground", glyph: "review" },
@@ -286,7 +285,7 @@ function ReviewLine({ ref, review: { review, threads }, onOpen }: { ref: RefCall
 function MergedLine({ item }: { item: MergedItem }) {
   return (
     <div className={LINE}>
-      <Glyph name="merged" tone={MERGED} />
+      <Glyph name="merged" tone="text-pr-merged" />
       <span>
         <Who login={item.actor} /> merged into <span className={`${SHA} text-foreground`}>{item.base}</span> · <TimeAgo at={item.createdAt} />
       </span>

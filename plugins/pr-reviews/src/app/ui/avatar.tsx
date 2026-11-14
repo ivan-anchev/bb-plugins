@@ -11,7 +11,7 @@ const SIZES = { 16: "size-4 text-[7px]", 20: "size-5 text-[8px]", 24: "size-6 te
 export function Avatar({ login, size }: AvatarProps) {
   const [failed, setFailed] = useState(false);
   return (
-    <span className={`grid shrink-0 place-items-center overflow-hidden rounded-full bg-muted font-medium text-muted-foreground ring-1 ring-foreground/8 ${SIZES[size]}`}>
+    <span className={`grid shrink-0 place-items-center overflow-hidden rounded-full bg-muted font-medium text-muted-foreground ring-1 ring-border ${SIZES[size]}`}>
       {failed ? (
         <span aria-hidden className="leading-none tracking-[0.02em]">{initialsOf(login)}</span>
       ) : (
