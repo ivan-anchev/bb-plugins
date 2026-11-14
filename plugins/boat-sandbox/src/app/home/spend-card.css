@@ -35,7 +35,9 @@
 .bs-total { font-weight: 400; color: var(--muted-foreground); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .bs-total b { font-weight: 500; color: var(--foreground); }
 .bs-reason { text-wrap: pretty; }
-.bs-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; }
+/* why margin-top auto: on a card stretched to the top row's height (spend-card.tsx) the footer stays at
+   the bottom and the space opens above it. */
+.bs-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; margin-top: auto; }
 .bs-foot [data-owed] { color: var(--bs-warn); }
 
 /* A failed refresh, over the numbers it left in place. */
