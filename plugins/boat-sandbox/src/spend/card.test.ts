@@ -194,12 +194,8 @@ test("with no key the card says why in one message, and sampling does nothing", 
   assert.equal(fetch.mock.callCount(), 0);
 });
 
-/** boat's 30 dashboard days up to 2026-11-14, as the live account read them: machine time Nov 8–12 only. */
-const DASHBOARD_DAYS = Array.from({ length: 30 }, (_, i) => {
-  const day = new Date(Date.parse("2026-10-16T00:00:00Z") + i * 86_400_000).toISOString().slice(0, 10);
-  const machineDollars = { "2026-11-08": 0.03, "2026-11-09": 0.3, "2026-11-10": 0.36, "2026-11-11": 0.21, "2026-11-12": 0.35 }[day] ?? 0;
-  return { day, machineDollars, startDollars: 0, otherDollars: 0, starts: 0 };
-});
+/** boat's account API reply for the live account on 2026-11-14: Nov 8–12 carry machine time. */
+const WALLET = readFileSync(new URL("../boat/fixtures/billing-wallet.json", import.meta.url), "utf8");
 
 /** boat with a meter that reads `meter()`, $1 by default, and its account API answering `wallet()`. */
 function boatWithWallet(wallet: () => Response | Promise<Response>, meter: () => number | Promise<number> = () => 1) {
@@ -216,7 +212,7 @@ const chart = (reply: SpendCardReply) => (reply.status === "ready" ? reply.days.
 
 test("a backfill fills the days before recording began with boat's machine time, and leaves today as recorded", async () => {
   midMonth();
-  boatWithWallet(() => Response.json({ status: { spending: { days: DASHBOARD_DAYS } } }));
+  boatWithWallet(() => new Response(WALLET));
   const card = cardWith();
   await card.sample(signal());
 
@@ -248,7 +244,7 @@ test("any other failure of boat's daily spend says it is unavailable, and the ch
   const card = cardWith();
   const failures: [() => Response | Promise<Response>, string][] = [
     [() => Response.json({ code: "not_found", message: "Not found" }, { status: 404 }), "HTTP 404"],
-    [() => Response.json({ status: { spending: { days: [{ date: "2026-11-10", dollars: 0.36 }] } } }), "boat changed its reply"],
+    [() => Response.json({ spending: { days: [{ date: "2026-11-10", dollars: 0.36 }] } }), "boat changed its reply"],
     [() => Promise.reject(new TypeError("fetch failed")), "boat couldn’t be reached"],
   ];
 
@@ -267,7 +263,7 @@ test("any other failure of boat's daily spend says it is unavailable, and the ch
 test("a backfill cancelled while it waits behind a reading writes nothing", async () => {
   midMonth();
   let meter: Promise<number> = Promise.resolve(1);
-  boatWithWallet(() => Response.json({ status: { spending: { days: DASHBOARD_DAYS } } }), () => meter);
+  boatWithWallet(() => new Response(WALLET), () => meter);
   const card = cardWith();
   await card.sample(signal());
   let release!: (dollars: number) => void;
@@ -288,7 +284,7 @@ test("a backfill cancelled while it waits behind a reading writes nothing", asyn
 
 test("a backfill cancelled while it reads the stored days writes nothing", async () => {
   midMonth();
-  boatWithWallet(() => Response.json({ status: { spending: { days: DASHBOARD_DAYS } } }));
+  boatWithWallet(() => new Response(WALLET));
   const kv = memoryKv();
   const call = new AbortController();
   let cancelOnRead = false;

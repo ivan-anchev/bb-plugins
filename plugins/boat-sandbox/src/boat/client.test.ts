@@ -112,42 +112,30 @@ test("savedSnapshots reads every saved snapshot with no query parameters, which 
   assert.deepEqual(snapshots[0], { name: "tpl-test", status: "ready", error: null, savedFrom: "small", savedAt: "2026-11-09T09:50:26.018Z" });
 });
 
-/** `GET /api/boat/billing/wallet` shaped like the live account's on 2026-11-14, trimmed to three days. */
-const WALLET = {
-  balanceDollars: 0,
-  overagePrices: { vmHourDollars: 0.036 },
-  status: {
-    balanceDollars: 0,
-    cards: [],
-    spending: {
-      days: [
-        { day: "2026-11-10", machineDollars: 0.36, startDollars: 0, otherDollars: 0, starts: 0 },
-        { day: "2026-11-11", machineDollars: 0.21, startDollars: 0.5, otherDollars: 0.1, starts: 3, label: "a field boat added later" },
-        { day: "2026-11-12", machineDollars: 0.35, startDollars: 0, otherDollars: 0, starts: 0 },
-      ],
-      payments: [],
-    },
-  },
-  wallet: null,
-};
-
 test("dailySpend reads machine time per day from boat's account API, ignoring the fields it doesn't use", async () => {
+  // The live account's reply on 2026-11-14.
+  const fixture = readFileSync(new URL("./fixtures/billing-wallet.json", import.meta.url), "utf8");
   const urls: string[] = [];
-  mock.method(globalThis, "fetch", async (url: string) => (urls.push(url), Response.json(WALLET)));
+  mock.method(globalThis, "fetch", async (url: string) => (urls.push(url), new Response(fixture, { status: 200 })));
 
   const days = await createBoatClient("boat_test").dailySpend(AbortSignal.timeout(10_000));
 
   assert.deepEqual(urls, ["https://boat.dev/api/boat/billing/wallet"]);
-  assert.deepEqual(days, [
+  assert.equal(days.length, 30);
+  assert.deepEqual(days.slice(-7), [
+    { day: "2026-11-08", dollars: 0.03 },
+    { day: "2026-11-09", dollars: 0.3 },
     { day: "2026-11-10", dollars: 0.36 },
     { day: "2026-11-11", dollars: 0.21 },
     { day: "2026-11-12", dollars: 0.35 },
+    { day: "2026-11-13", dollars: 0 },
+    { day: "2026-11-14", dollars: 0 },
   ]);
 });
 
 test("dailySpend refuses a day without its date or its machine dollars", async () => {
   for (const broken of [{ machineDollars: 0.36 }, { day: "2026-11-10" }, { day: "Nov 10", machineDollars: 0.36 }]) {
-    mock.method(globalThis, "fetch", async () => Response.json({ status: { spending: { days: [broken] } } }));
+    mock.method(globalThis, "fetch", async () => Response.json({ spending: { days: [broken] } }));
 
     await assert.rejects(createBoatClient("boat_test").dailySpend(AbortSignal.timeout(10_000)), { name: "ZodError" });
   }
