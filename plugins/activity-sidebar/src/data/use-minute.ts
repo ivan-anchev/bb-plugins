@@ -33,3 +33,12 @@ const snapshot = () => now;
 export function useMinute(): number {
   return useSyncExternalStore(subscribe, snapshot);
 }
+
+/**
+ * Moves the shared clock to the present and returns it. A write stamped with it (Wake, a sleep ended
+ * early) reads as already past on the next render, not a minute later.
+ */
+export function syncMinute(): number {
+  tick();
+  return now;
+}

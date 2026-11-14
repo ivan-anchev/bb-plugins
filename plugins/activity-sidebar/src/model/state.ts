@@ -7,6 +7,9 @@ export type ZState = "working" | "connecting" | "waiting" | "input" | "approval"
 /** Under way: running, or waiting on work that will wake it (Zeron: screens/shell/activity.luau). */
 export const UNDER_WAY: ReadonlySet<ZState> = new Set(["working", "connecting", "waiting"]);
 
+/** Asking for you: a sleeper in one wakes early (Zeron: account/sessions.luau:36-38, screens/shell/activity.luau:3-4). */
+export const NEEDS_YOU: ReadonlySet<ZState> = new Set(["input", "approval", "failed"]);
+
 /** Zeron's long names, for tooltips and accessible names. */
 export const STATE_NAME: Record<ZState, string> = {
   working: "Working",
