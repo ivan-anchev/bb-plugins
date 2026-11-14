@@ -12,16 +12,26 @@ the section's id, because each card carries its own header.
 
 bb stacks every plugin's homepage section in one parent. When PR Reviews'
 `pull-requests` card is on the page too, `homepage.css` turns that parent
-into a two-column grid: Activity left, PR Reviews right, both ahead of every
-other section, which keeps a full row. Section ids are
+into wrapping rows of cards:
+
+1. Activity and PR Reviews, half each.
+2. Burn's narrow column (`--hp-narrow`: 30% of the row, 280–340px; 312px on
+   a full row), then boat-sandbox's `spend` card taking the width left.
+
+Every other section keeps a full row after them. Section ids are
 `plugin-homepage:<plugin id>:<section id>`; the rule selects the parent with
 `:has()` on those ids and never names bb's classes. Without PR Reviews nothing
 changes.
 
-The grid is wider than the composer: up to 1040px, centred under it with a 16px
-gutter each side of bb's page, sized with `cqw` against the page's size
-container (bb caps the composer's column at 760px). It drops to one column when
-the page is narrower than 592px.
+It is flex, not grid, because the rows split differently (halves, then wide
+and narrow) and a missing section must leave no empty cell. Each placed
+section is a one-cell grid, so its card stretches to its row's height: Burn
+is as tall as boat spend beside it, which takes the top row's height.
+
+The rows are wider than the composer: up to 1040px, centred under it with a
+16px gutter each side of bb's page, sized with `cqw` against the page's size
+container (bb caps the composer's column at 760px). Every card takes a full
+row when the page is narrower than 592px.
 
 ## Cards
 
@@ -56,6 +66,40 @@ Chosen from a prototype round on the new-thread screen (November 2026):
 - The card shows the last saved snapshot and refreshes in the background.
   Reading GitHub live took about 15 s per open, and a single aliased query
   saved only about 1 s.
+
+### Burn (`burn/`)
+
+Spend and tokens from the [Burn](https://github.com/kalindudc/burn) plugin
+(id `burn`) over its rolling 7 or 30 days, picked with a Week/Month switch,
+each with its change against the same length of time before.
+
+- The app's rpc hooks call only their own plugin, so the `burnSpend` rpc
+  proxies to Burn's `spend` through `bb.sdk.plugins.callRpc`, with
+  `projectId: null` (every project). It parses only `total`, `previousTotal`,
+  `tokens` and `previousTokens` (`burnTotalsSchema`); Burn is 0.x and the rest
+  of its reply can change.
+- Nothing is cached here: Burn keeps its own numbers. The card loads both
+  ranges at once, reads the one on show again when it comes into view and
+  every minute while the page is visible.
+- `burn/spend.ts` turns a failed call into one line: Burn not installed
+  (404 `unknown plugin`), turned off or starting (503 `not running`), too
+  old or too new for the request (`unknown_method`, `invalid_input`), a reply
+  missing the four numbers (Zod), or anything else, clipped.
+- `burn/format.ts` holds the money, token and change rules; `BurnCard.tsx`
+  is the card alone, given a view (loading, ready, unavailable).
+
+### Burn: design decisions
+
+Chosen from a prototype round (November 2026), the "Vertical" design:
+
+- Two metrics, Spent over Tokens, at the card's foot, with no divider.
+  Each value has its change on the same baseline.
+- The change is Burn's Spend page's (`extensions/bb/spend/usage.tsx`,
+  `Change`) without "vs previous 7 days": the switch names the period. The
+  full sentence is the change's tooltip and its screen-reader text.
+- Turned down: daily bars, a cumulative pace line, a per-project table or
+  switch, captions and footers (date ranges, thread counts, cache %, top
+  thread), metrics side by side, and the change on its own line.
 
 ## Develop
 

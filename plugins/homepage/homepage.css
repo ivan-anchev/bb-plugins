@@ -2,30 +2,42 @@
    Each card adds its own ag-… prefixed classes on top of .hp-card. */
 
 /* bb stacks every plugin's homepage section in one parent. When PR Reviews'
-   card is there too, that parent becomes a two-column grid wider than the
-   composer: Activity left, PR Reviews right, both first; every other section
-   keeps a full row. The rule names sections by id, never bb's class names,
-   and without PR Reviews nothing changes. */
+   card is there too, that parent becomes rows of cards wider than the
+   composer. Row 1: Activity and PR Reviews, half each. Row 2: Burn's narrow
+   column, then boat spend taking what is left. Every other section keeps
+   a full row after them. The rule names sections by id, never bb's class
+   names, and without PR Reviews nothing changes.
+   why flex, not grid: rows split differently (halves, then wide and narrow),
+   and a section that isn't installed leaves no empty cell. */
 :has(> [id="plugin-homepage:homepage:activity"]):has(> [id="plugin-homepage:pr-reviews:pull-requests"]) {
   /* Up to 1040px with a 16px gutter each side of bb's page, never narrower
      than the composer, centred under it. why: 100cqw is bb's page, the
      nearest ancestor size container; the composer's column is 760px at most. */
   --hp-width: max(100%, min(1040px, 100cqw - 32px));
+  /* A narrow card's width: 312px on the full 1040px row. */
+  --hp-narrow: clamp(280px, 30%, 340px);
   width: var(--hp-width);
   margin-inline: calc((100% - var(--hp-width)) / 2);
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
   gap: 24px 12px;
 
-  /* why margin 0: bb spaces the stack with sibling margins, which would push one column down. */
-  & > * { grid-column: 1 / -1; margin: 0; }
-  /* A one-cell grid stretches its card to the row's height, so both cards match. */
-  & > [id="plugin-homepage:homepage:activity"] { grid-column: auto; order: -2; display: grid; }
-  & > [id="plugin-homepage:pr-reviews:pull-requests"] { grid-column: auto; order: -1; display: grid; }
+  /* why margin 0: bb spaces the stack with sibling margins, which would push one card down.
+     why display grid: a one-cell grid stretches its card to the row's height, so a row's cards match. */
+  & > * { flex: 1 1 100%; min-width: 0; margin: 0; }
+  /* why 7px, not 6: half of the 12px gap, plus a pixel so rounding never wraps PR Reviews. Both grow
+     back to equal halves. */
+  & > [id="plugin-homepage:homepage:activity"] { flex: 1 1 calc(50% - 7px); order: -4; display: grid; }
+  & > [id="plugin-homepage:pr-reviews:pull-requests"] { flex: 1 1 calc(50% - 7px); order: -3; display: grid; }
+  /* why a 200px basis: too wide to join row 1, narrow enough to keep Burn beside it on the
+     narrowest two-column page. */
+  & > [id="plugin-homepage:homepage:burn"] { flex: 0 0 var(--hp-narrow); order: -2; display: grid; }
+  & > [id="plugin-homepage:boat-sandbox:spend"] { flex: 1 1 200px; order: -1; display: grid; }
 
-  /* One column on a narrow page: the grid would drop under 560px. */
+  /* One column on a narrow page: two cards would drop under 280px. After the rules above, so it wins. */
   @container (width < 592px) {
-    grid-template-columns: minmax(0, 1fr);
+    & > [id] { flex: 1 1 100%; }
   }
 }
 
@@ -48,4 +60,5 @@
 .hp-caption { font-size: 12px; line-height: 16px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
 
 /* bb draws the section title as an <h2>; the card carries its own header. */
-[id="plugin-homepage:homepage:activity"] > h2 { display: none; }
+[id="plugin-homepage:homepage:activity"] > h2,
+[id="plugin-homepage:homepage:burn"] > h2 { display: none; }
