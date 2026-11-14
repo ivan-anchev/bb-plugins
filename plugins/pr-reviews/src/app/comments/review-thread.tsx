@@ -4,9 +4,8 @@
 // with "N more" between; a bot's comment is clamped to three lines; a resolved thread is one row
 // that opens it. A thread at its file that lost its lines says "Outdated" over the lines it was
 // written on. No pills or dividers: spacing separates the comments, a border draws the card's edge,
-// and the comment box is the only field in it.
-// Everything sits one 6px inset from the card's 12px corners: the avatars, which a diff lines up
-// with its line numbers (pr-diff.tsx), and the box, whose corners are 6px, concentric with the card's.
+// and the comment box is the only field in it. Everything sits one 6px inset from the card's 12px
+// corners: the avatars, and the box, whose corners are 6px, concentric with the card's.
 import { useMemo, useState, type ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { FileThread } from "../../comments/place-threads.ts";
@@ -116,7 +115,7 @@ function Comments({ thread, shown, hidden, focus, prAuthor, onShowAll, onQuote }
             onQuote={(from) => onQuote(comment, from)}
           />
           {hidden > 0 && index === 0 && (
-            <button ref={focus.from} type="button" onClick={onShowAll} className={`${QUIET_BUTTON} -my-1 ml-[22px] justify-self-start px-2 py-0.5`}>
+            <button ref={focus.from} type="button" onClick={onShowAll} className={`${QUIET_BUTTON} -my-1 ml-5.5 justify-self-start px-2 py-0.5`}>
               {hidden} more
             </button>
           )}

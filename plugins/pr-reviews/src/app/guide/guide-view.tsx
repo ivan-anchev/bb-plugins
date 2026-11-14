@@ -57,7 +57,7 @@ function LoadedGuide({ head, record, files, viewOptions, shown }: LoadedGuidePro
       <GuidePage ref={scroll}>
         {/* Keyed by page: each page opens fresh, with its rows folded again. */}
         {place.kind === "overview" ? (
-          <article key="overview" className="grid max-w-[880px] grid-cols-[minmax(0,1fr)] content-start gap-[18px] px-7 pt-[18px] pb-10">
+          <article key="overview" className="grid max-w-[880px] grid-cols-[minmax(0,1fr)] content-start gap-4 px-6 pt-4 pb-10">
             <PageTitle ref={title}>{place.title}</PageTitle>
             <Overview
               record={record}

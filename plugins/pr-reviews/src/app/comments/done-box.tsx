@@ -38,7 +38,7 @@ export function DoneBox({ outcome, takeFocus, onDone }: DoneBoxProps) {
         onDone();
       }}
     >
-      <div className="flex min-h-9 flex-wrap items-center gap-2 pt-2 pr-2 pb-2 pl-[18px]">
+      <div className="flex min-h-9 flex-wrap items-center gap-2 pt-2 pr-2 pb-2 pl-4">
         <p role="status" className="flex items-center gap-1.5 text-sm font-medium text-foreground">
           <Icon name="Check" className="size-3.5 text-success" aria-hidden />
           {outcome.kind === "commented" ? "Commented" : "Sent to the review thread"}
@@ -68,7 +68,7 @@ export function DoneBox({ outcome, takeFocus, onDone }: DoneBoxProps) {
 export function SentNote({ outcome }: { outcome: BoxOutcome }) {
   const openReviewChat = useOpenReviewChat();
   return (
-    <p role="status" className="flex flex-wrap items-center gap-x-1.5 px-[18px] pt-1 text-xs text-muted-foreground">
+    <p role="status" className="flex flex-wrap items-center gap-x-1.5 px-4 pt-1 text-xs text-muted-foreground">
       <Icon name="Check" className="size-3.5 text-success" aria-hidden />
       {outcome.kind === "commented" ? (
         <>

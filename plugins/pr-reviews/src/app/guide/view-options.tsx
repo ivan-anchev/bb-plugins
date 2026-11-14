@@ -67,9 +67,9 @@ function Switch({ label, checked, onChange }: SwitchProps) {
       {label}
       <span
         aria-hidden
-        className="relative h-[15px] w-[26px] shrink-0 rounded-full bg-muted transition-colors duration-150 ease-out group-aria-checked:bg-primary motion-reduce:transition-none"
+        className="relative h-4 w-7 shrink-0 rounded-full bg-muted transition-colors duration-150 ease-out group-aria-checked:bg-primary motion-reduce:transition-none"
       >
-        <span className="absolute top-[3px] left-[3px] size-[9px] rounded-full bg-muted-foreground transition-transform duration-150 ease-out group-aria-checked:translate-x-[11px] group-aria-checked:bg-primary-foreground motion-reduce:transition-none" />
+        <span className="absolute top-0.5 left-0.5 size-3 rounded-full bg-muted-foreground transition-transform duration-150 ease-out group-aria-checked:translate-x-3 group-aria-checked:bg-primary-foreground motion-reduce:transition-none" />
       </span>
     </button>
   );

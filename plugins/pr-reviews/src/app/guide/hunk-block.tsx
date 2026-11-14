@@ -105,7 +105,7 @@ function Block({ ref, children }: BlockRef & { children: ReactNode }) {
     <section
       ref={ref}
       tabIndex={-1}
-      className="scroll-mt-[18px] overflow-clip rounded-lg bg-surface-recessed-solid outline-none focus-visible:ring-1 focus-visible:ring-ring [&_*]:scroll-mt-12"
+      className="scroll-mt-4 overflow-clip rounded-lg bg-surface-recessed-solid outline-none focus-visible:ring-1 focus-visible:ring-ring [&_*]:scroll-mt-12"
     >
       {children}
     </section>

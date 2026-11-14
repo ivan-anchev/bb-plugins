@@ -20,7 +20,7 @@ export function SummaryTab({ target, pr, onShowThread }: SummaryTabProps) {
   const sidePanelFocus = useSidePanelFocus();
   return (
     <div ref={sidePanelFocus.tab} className="@container">
-      <div className={`grid max-w-[1136px] items-start gap-9 px-7 pt-6 pb-16 ${sidePanel ? WITH_SIDE_PANEL : "grid-cols-[minmax(0,1fr)]"}`}>
+      <div className={`grid max-w-[1136px] items-start gap-9 px-6 pt-6 pb-16 ${sidePanel ? WITH_SIDE_PANEL : "grid-cols-[minmax(0,1fr)]"}`}>
         <div className="grid grid-cols-[minmax(0,1fr)] gap-10">
           <Description body={pr.body} />
           <ActivitySection target={target} pr={pr} onShowThread={onShowThread} />

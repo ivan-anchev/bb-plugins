@@ -27,7 +27,7 @@ export function ListedRow({ pr, current, onOpen, attention, stack }: RowProps & 
       <span className="truncate text-sm leading-5">{pr.title}</span>
       <Trail pr={pr}>
         {stack !== null && (
-          <span aria-hidden className="inline-flex items-center gap-[3px] text-xs leading-4 text-subtle-foreground tabular-nums">
+          <span aria-hidden className="inline-flex items-center gap-1 text-xs leading-4 text-subtle-foreground tabular-nums">
             <Icon name="Layers" className="size-3" aria-hidden />
             {stack.index}/{stack.size}
           </span>
@@ -43,7 +43,7 @@ export function AttentionAvatar({ login, attention, ring }: { login: string; att
     <span className="relative shrink-0">
       <Avatar login={login} size={16} />
       {attention !== null && (
-        <span aria-hidden className={`absolute -top-[3px] -right-[3px] size-[7px] rounded-full bg-current ring-2 ${ring} ${ATTENTION_LOOK[attention].color}`} />
+        <span aria-hidden className={`absolute -top-0.5 -right-0.5 size-2 rounded-full bg-current ring-2 ${ring} ${ATTENTION_LOOK[attention].color}`} />
       )}
     </span>
   );

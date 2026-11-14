@@ -1,6 +1,6 @@
 // The slim row above the sidebar's sections: a Filter menu that shows and hides each section. It
 // scrolls with the list, so the sticky section headings stay as they are. The small, quiet button
-// sits 3px in so its icon lines up with the rows' status icons.
+// sits a step in, over the rows' status icons.
 import type { Ref } from "react";
 import type { Section, SectionKey } from "../../contract.ts";
 import { IconButton } from "../ui/icon-button.tsx";
@@ -18,7 +18,7 @@ type SidebarControlsProps = {
 export function SidebarControls({ sections, hidden, onChange, filterButton }: SidebarControlsProps) {
   const filtering = hidden.length > 0;
   return (
-    <div className="flex justify-end pr-[3px]">
+    <div className="flex justify-end pr-1">
       <Menu>
         <MenuTrigger asChild>
           <IconButton ref={filterButton} icon="Filter" label="Filter sections" size="dismiss" aria-pressed={filtering} indicator={filtering} />

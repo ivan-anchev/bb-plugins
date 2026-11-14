@@ -100,11 +100,11 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
   return (
     // why a focus target: when the box unmounts with focus inside it, focus lands here rather
     // than on the page body (REVIEW.md).
-    <div ref={root} tabIndex={-1} className={`outline-none ${THREAD_EDGE}`}>
+    <div ref={root} tabIndex={-1} className="outline-none">
       {/* why `minmax(0,1fr)`: an implicit `auto` track grows to an outdated thread's widest code line,
           so the excerpt would widen the thread, not scroll in it. */}
       {threads.file.length > 0 && (
-        <div className={`grid grid-cols-[minmax(0,1fr)] gap-2 pl-(--pr-reviews-thread-edge) ${THREAD_GAP}`}>
+        <div className={`grid grid-cols-[minmax(0,1fr)] gap-2 ${THREAD_GAP}`}>
           {threads.file.map((placed) => (
             <div key={placed.thread.id}>{threadCard(placed.thread, placed)}</div>
           ))}
@@ -138,18 +138,10 @@ const NOTE_BASE = "grid gap-3 font-sans whitespace-normal text-foreground";
 // Its padding lines it up with the code's text.
 const NOTE_CLASS = `${NOTE_BASE} pt-3 pr-2.5 pb-3.5 pl-2.5`;
 
-// A review thread sits in the band on the page's background with an even 8px around it: from the
-// rows above and below, and the diff's right edge, under a line and at the file alike. Its left
-// edge is THREAD_EDGE.
-const THREAD_GAP = "py-2 pr-2";
+// A review thread sits in the band with an even 8px around it, under a line and at the file alike.
+const THREAD_GAP = "p-2";
 
-// A review thread's avatars line up with the line numbers, on a line and at the file alike. Pierre
-// insets its numbers 2ch from the diff's left edge, 14.4px at DIFF_TEXT_CLASS's 12px, and a thread
-// card's avatars sit 6px inside it (review-thread.tsx): the card starts 8.4px in, the band's 8px.
-const THREAD_EDGE = "[--pr-reviews-thread-edge:8.4px]";
-
-// Under a line the card reaches back across the gutter, which the diff's options raise it over.
-const THREAD_NOTE_CLASS = `${NOTE_BASE} ${THREAD_GAP} ml-[calc(var(--pr-reviews-thread-edge)-var(--diffs-column-number-width))]`;
+const THREAD_NOTE_CLASS = `${NOTE_BASE} ${THREAD_GAP}`;
 
 // Pierre's sides are the diff's columns: deletions is the old side, additions the new.
 const sideOfPierre = (side: SelectedLineRange["side"]): LineRef["side"] => (side === "deletions" ? "old" : "new");

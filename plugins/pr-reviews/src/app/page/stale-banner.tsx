@@ -8,7 +8,7 @@ type StaleBannerProps = { target: PrTarget; pr: PrDetail; guideHeadSha: string }
 export function StaleBanner({ target, pr, guideHeadSha }: StaleBannerProps) {
   const update = useReviewAction("updateGuide", target);
   return (
-    <div className="mx-7 mt-3 mb-1 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg bg-warning/10 px-3 py-2 text-sm">
+    <div className="mx-6 mt-3 mb-1 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg bg-warning/10 px-3 py-2 text-sm">
       <p role="status" className="min-w-0 flex-1">
         {sinceGuide(commitsSince(pr, guideHeadSha))}
       </p>

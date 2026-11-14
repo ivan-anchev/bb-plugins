@@ -11,7 +11,7 @@ export function Controller({ walkthrough }: { walkthrough: Walkthrough }) {
   const total = steps.length;
   if (total === 0) return null;
   return (
-    <nav aria-label="Walkthrough" className="flex shrink-0 items-center justify-center gap-1.5 px-7 pt-2.5 pb-3.5">
+    <nav aria-label="Walkthrough" className="flex shrink-0 items-center justify-center gap-1.5 px-6 pt-2.5 pb-3.5">
       {place.kind === "overview" ? (
         <Button variant="primary" onClick={next}>
           Start the walkthrough · {total} {total === 1 ? "step" : "steps"}

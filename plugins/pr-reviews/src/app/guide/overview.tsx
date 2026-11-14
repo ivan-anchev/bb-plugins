@@ -79,7 +79,7 @@ function BeforeAfter({ behaviour }: { behaviour: Behaviour }) {
 // The last item is where the sequence lands, so it reads in full colour.
 function Sequence({ items }: { items: string[] }) {
   return (
-    <ol className="grid list-decimal gap-1.5 pl-[18px] text-sm leading-5 text-muted-foreground [&>li:last-child]:text-foreground">
+    <ol className="grid list-decimal gap-1.5 pl-4 text-sm leading-5 text-muted-foreground [&>li:last-child]:text-foreground">
       {items.map((item, i) => (
         <li key={i}>
           <Prose text={item} />

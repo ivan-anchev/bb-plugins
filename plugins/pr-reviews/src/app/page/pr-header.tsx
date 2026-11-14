@@ -19,7 +19,7 @@ type PrHeaderProps = { target: PrTarget; repo: Repo; pr: PrDetail; hasReviewThre
 
 export function PrHeader({ target, repo, pr, hasReviewThread, title }: PrHeaderProps) {
   return (
-    <header className="shrink-0 px-7 pt-4 pb-3.5">
+    <header className="shrink-0 px-6 pt-4 pb-3.5">
       <div className="mb-2 flex flex-wrap items-center gap-x-2.5 gap-y-1">
         <StatePill target={target} state={pr.state} />
         <span className="text-xs text-muted-foreground">
@@ -166,8 +166,8 @@ function ChangeRow({ change, text, running }: { change: StateChange; text: strin
         {running && <Spinner size="small" />}
         {text}
       </span>
-      <span aria-hidden className="relative inline-flex h-[18px] items-center gap-1 rounded-full pr-1.5 pl-[5px] text-xs font-medium text-foreground inset-ring inset-ring-border">
-        <Icon name={icon} className={`size-[11px] ${color}`} />
+      <span aria-hidden className="relative inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-xs font-medium text-foreground inset-ring inset-ring-border">
+        <Icon name={icon} className={`size-3 ${color}`} />
         {label}
       </span>
     </>

@@ -4,7 +4,7 @@ import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { PORTAL_SCOPE } from "./portal-scope.ts";
 
 const ITEM_CLASS =
-  "relative flex cursor-default select-none items-center rounded-sm py-[0.3125rem] text-xs outline-none transition-none focus:bg-state-hover focus:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
+  "relative flex cursor-default select-none items-center rounded-sm py-1.5 text-xs outline-none transition-none focus:bg-state-hover focus:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
 
 export { Root as Menu, Trigger as MenuTrigger, RadioGroup as MenuRadioGroup };
 
@@ -97,7 +97,7 @@ export function MenuCountedLabel({ label, count }: { label: string; count: numbe
 }
 
 export function MenuLabel({ children }: { children: ReactNode }) {
-  return <Label className="px-2 py-[0.3125rem] text-xs font-medium text-muted-foreground">{children}</Label>;
+  return <Label className="px-2 py-1.5 text-xs font-medium text-muted-foreground">{children}</Label>;
 }
 
 export function MenuSeparator() {

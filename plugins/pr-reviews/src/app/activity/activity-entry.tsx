@@ -150,7 +150,7 @@ export const SHA = "font-mono text-xs";
 function LabelName({ label }: { label: Label }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-foreground">
-      <span aria-hidden className="size-[7px] shrink-0 rounded-full" style={{ backgroundColor: label.color }} />
+      <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ backgroundColor: label.color }} />
       {label.name}
     </span>
   );

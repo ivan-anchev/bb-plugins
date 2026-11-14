@@ -41,7 +41,7 @@ export function ActivityTimeline({ days, ...actions }: TimelineProps) {
     <ol className="grid grid-cols-[minmax(0,1fr)]">
       {days.map((day) => (
         <li key={day.date} className="grid grid-cols-[minmax(0,1fr)]">
-          <h3 className="mt-[26px] mb-1 text-xs leading-5 font-medium text-subtle-foreground">{dayLabelOf(day.date, now)}</h3>
+          <h3 className="mt-6 mb-1 text-xs leading-5 font-medium text-subtle-foreground">{dayLabelOf(day.date, now)}</h3>
           {rowsOf(day.blocks, opened).map((row) => (
             <Row key={row.key} row={row} context={context} />
           ))}

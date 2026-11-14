@@ -90,8 +90,8 @@ function LabelChips({ labels }: { labels: Label[] }) {
   return (
     <ul className="flex flex-wrap gap-1.5">
       {labels.map((label) => (
-        <li key={label.name} className="inline-flex h-[22px] max-w-full items-center gap-1.5 rounded-full px-2 text-xs text-foreground ring-1 ring-border ring-inset">
-          <span aria-hidden className="size-[7px] shrink-0 rounded-full" style={{ backgroundColor: label.color }} />
+        <li key={label.name} className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-full px-2 text-xs text-foreground ring-1 ring-border ring-inset">
+          <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ backgroundColor: label.color }} />
           <span className="truncate">{label.name}</span>
         </li>
       ))}
