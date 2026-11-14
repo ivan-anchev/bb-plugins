@@ -30,6 +30,13 @@ const PATHS = {
       <circle cx="18" cy="6.25" r="2.25" />
     </g>
   ),
+  // Z:ds/icon_svgs.luau:54
+  checklist: (
+    <g strokeWidth={1.5} strokeLinecap="round">
+      <path strokeLinejoin="round" d="M2 5.5L3.214 7L7.5 3M2 12.5L3.214 14L7.5 10M2 19.5L3.214 21L7.5 17" />
+      <path d="M22 19H12m10-7H12m10-7H12" />
+    </g>
+  ),
   // Z:ds/icon_svgs.luau:155
   subthreads: (
     <path

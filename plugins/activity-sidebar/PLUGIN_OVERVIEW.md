@@ -6,8 +6,8 @@ title, its pull request, how many threads run under it, and its state or how
 long ago it last moved. Right-click a row for its menu (rename, pin, copy, sleep or wake,
 archive, delete); under the pointer, its corner offers Archive. A thread put to
 sleep waits on Asleep until its time, then comes back to the top. Rest on a row
-for its card: its state and since when, machine, project, branch, pull request
-and a tree of its subthreads to open.
+for its card: its state and since when, machine, project, branch, pull request,
+its plan while it works, and a tree of its subthreads to open.
 
 ## What you get
 
@@ -51,7 +51,9 @@ and a tree of its subthreads to open.
   moment, its card opens beside it: the full title, its state and since when
   ("Working · for 4m", "Asleep · wakes at 9:00 AM", "Completed · 5m ago"), the
   machine, project and branch it runs on ("· worktree off main"), its pull
-  request, and its subthreads as a small tree, busy ones first. Click a
+  request, its plan while it works ("Todo 3/9", folded past six steps to the
+  one in progress and its neighbours, "2 earlier" and "4 later" opening the
+  rest), and its subthreads as a small tree, busy ones first. Click a
   subthread to open it, or "Show all" to open the thread. Once a card is open,
   moving to another row swaps it at once, and the pointer can cross other rows
   on its way to the card. From a focused row, Tab reaches its subthreads and

@@ -781,12 +781,15 @@
   font-size: 11px;
   font-weight: 500;
 }
-.as-card-sub-head > span:last-child {
+/* The count after the words; a plan not read yet has none. */
+.as-card-sub-head > span:not(.as-card-g) {
   margin-left: -4px;
   font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
-.as-card-all {
+/* "Show all N" under the subthreads, and the plan's "N earlier" / "N later". */
+.as-card-all,
+.as-card-fold {
   all: unset;
   align-self: flex-start;
   margin-left: 14px;
@@ -797,12 +800,70 @@
   line-height: 14px;
   cursor: pointer;
 }
-.as-card-all:hover {
+.as-card-all:hover,
+.as-card-fold:hover {
   background: var(--state-hover);
   color: var(--muted-foreground);
 }
-.as-card-all:focus-visible {
+.as-card-all:focus-visible,
+.as-card-fold:focus-visible {
   box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+
+/* The plan (P:1119-1131, Z:ds/composer_dock.luau:1066-1112): each step a 12 glyph and its words, which
+   wrap; the step in progress firm, the done ones faint. */
+.as-card-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  outline: none;
+}
+.as-card-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 20px;
+  padding: 2px 0;
+}
+.as-card-step .as-card-g {
+  height: 16px;
+}
+.as-card-step-t {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+.as-card-step[data-state="done"] .as-card-step-t {
+  color: var(--subtle-foreground);
+}
+.as-card-step[data-state="doing"] .as-card-step-t {
+  color: var(--foreground);
+  font-weight: 500;
+}
+/* A pending step: a faint empty ring. */
+.as-card-point {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--foreground) 18%, transparent);
+}
+/* A read that failed, set as the list's notice (.as-notice) and in line with the steps' words (12 glyph +
+   8 gap in); Retry is .as-retry. */
+.as-card-failed {
+  display: flex;
+  gap: 4px;
+  margin-left: 20px;
+  color: var(--subtle-foreground);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+}
+/* The fold sits 2 shorter than "Show all N" (P:1130). */
+.as-card-fold {
+  padding: 2px 6px;
 }
 
 /* A subthread: the sidebar's row, small (24 high, its mark in a 20 slot, 12 type), on 1-point hairlines. */
