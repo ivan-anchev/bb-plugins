@@ -546,7 +546,10 @@
   cursor: text;
 }
 
-/* A state's glyph in its hue: the palette's 400s; working and waiting wear the secondary ink. */
+/* A state's glyph in its hue: on dark, Zeron's own; on light, the same OKLCH hue and chroma (chroma down
+   to sRGB's edge where it must), darkened until it reads 3:1 on every surface it sits on, rows at rest,
+   hovered and selected, and the card (captures/09/contrast/solve.mjs). Working and waiting wear the
+   secondary ink. */
 .as-state {
   display: flex;
   align-items: center;
@@ -556,12 +559,12 @@
 }
 .as-state[data-state="working"],
 .as-state[data-state="waiting"] { color: var(--muted-foreground); }
-.as-state[data-state="connecting"] { color: #74acfe; }
-.as-state[data-state="input"] { color: #93a3fe; }
-.as-state[data-state="approval"] { color: #e9a64b; }
-.as-state[data-state="done"] { color: #5dc496; }
-.as-state[data-state="failed"] { color: #f9837b; }
-.as-state[data-state="woke"] { color: #d7bd54; }
+.as-state[data-state="connecting"] { color: light-dark(#4378c6, #74acfe); }
+.as-state[data-state="input"] { color: light-dark(#6571c8, #93a3fe); }
+.as-state[data-state="approval"] { color: light-dark(#a66b03, #e9a64b); }
+.as-state[data-state="done"] { color: light-dark(#0f885e, #5dc496); }
+.as-state[data-state="failed"] { color: light-dark(#c5544f, #f9837b); }
+.as-state[data-state="woke"] { color: light-dark(#8e7701, #d7bd54); }
 .as-ring {
   display: block;
 }
@@ -658,7 +661,8 @@
 
 /* --- The hover card (Z:ds/session_card, P:1076-1134): bb's popover surface, Zeron's 284 wide, 12 in,
    its title then quiet lines, each a 12 glyph and its words; under a rule, its subthread tree. In over
-   140, out over 100 (Z:screens/shell/init.luau:677-678). -------------------------------------------- */
+   140, out over 100 (Z:screens/shell/init.luau:677-678). Never taller than the window, 8 from each
+   edge. -------------------------------------------------------------------------------------------- */
 .as-card {
   position: relative;
   z-index: 50;
@@ -666,6 +670,7 @@
   flex-direction: column;
   gap: 8px;
   width: 284px;
+  max-height: calc(100vh - 16px);
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -703,6 +708,7 @@
   }
 }
 .as-card-title {
+  flex: none;
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
@@ -714,6 +720,7 @@
   overflow-wrap: anywhere;
 }
 .as-card-lines {
+  flex: none;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -818,13 +825,58 @@
   box-shadow: inset 0 0 0 1.5px var(--ring);
 }
 
+/* Under the lines, the plan and the subthreads: past the card's height they scroll, out to its edges,
+   each end fading as deep as there is more past it, up to 16 (Z:ds/composer_dock.luau:32-33, 193-205).
+   The fades follow the scroll itself; with nothing to scroll there is no timeline and no fade. Focus
+   moved to a control in it brings it into view clear of the fades. */
+@property --as-fade-top {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --as-fade-bottom {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+.as-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  margin: 0 -12px -12px;
+  padding: 0 12px 12px;
+  border-radius: 0 0 7px 7px;
+  outline: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-block: 16px;
+  -webkit-mask-image: linear-gradient(transparent, #000 var(--as-fade-top), #000 calc(100% - var(--as-fade-bottom)), transparent);
+  mask-image: linear-gradient(transparent, #000 var(--as-fade-top), #000 calc(100% - var(--as-fade-bottom)), transparent);
+  animation: as-fade-top linear both, as-fade-bottom linear both;
+  animation-timeline: scroll(self), scroll(self);
+  animation-range: 0 16px, calc(100% - 16px) 100%;
+}
+.as-card-body:empty {
+  display: none;
+}
+/* Its one tab stop, from which the arrow keys scroll it: ringed inside the card's edge, round at its foot. */
+.as-card-body:focus-visible {
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+@keyframes as-fade-top {
+  to { --as-fade-top: 16px; }
+}
+@keyframes as-fade-bottom {
+  from { --as-fade-bottom: 16px; }
+}
+
 /* The plan (P:1119-1131, Z:ds/composer_dock.luau:1066-1112): each step a 12 glyph and its words, which
    wrap; the step in progress firm, the done ones faint. */
 .as-card-plan {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  outline: none;
 }
 .as-card-step {
   display: flex;
@@ -851,12 +903,13 @@
   color: var(--foreground);
   font-weight: 500;
 }
-/* A pending step: a faint empty ring. */
+/* A pending step: an empty ring in the faint ink, which reads 3:1 (Zeron's is its faint hairline,
+   border.strong, under 2:1). */
 .as-card-point {
   width: 9px;
   height: 9px;
   border-radius: 999px;
-  box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--foreground) 18%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--subtle-foreground);
 }
 /* A read that failed, set as the list's notice (.as-notice) and in line with the steps' words (12 glyph +
    8 gap in); Retry is .as-retry. */

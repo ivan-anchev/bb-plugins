@@ -1,19 +1,20 @@
 // The card's plan (P:1259-1289): "Todo 3/9", then its steps, done a check, the one in progress the
 // working ring, pending a quiet point; folded past six to "N earlier", three steps, "N later". Either
-// button opens the whole plan for as long as the card stays open (Z:ds/composer_dock.luau:1647, 1735-1741).
+// button opens the whole plan (`open`, held by the card: Z:ds/composer_dock.luau:1647, 1735-1741).
 // A read that failed says so above the plan it leaves in place, with Retry.
-import { useLayoutEffect, useRef, useState, type FocusEvent, type ReactNode, type RefObject } from "react";
+import type { ReactNode } from "react";
 import { foldPlan, type PlanStep, type PlanView, type StepState } from "../../card/plan-fold.ts";
 import type { PlanRead } from "../../data/use-plan.ts";
 import { StateGlyph } from "../state-glyph.tsx";
 import { CardGlyph } from "./card-glyphs.tsx";
 
-export function PlanSection({ read }: { read: PlanRead }) {
-  const [open, setOpen] = useState(false);
+type Props = { read: PlanRead; open: boolean; onUnfold(): void };
+
+export function PlanSection({ read, open, onUnfold }: Props) {
   const plan = read.todos === null ? null : foldPlan(read.todos, open);
   // why: a failed read shows even with no plan read yet: bb's plan is unknown then, not absent.
   if (plan === null && !read.failed) return null;
-  return <Plan plan={plan} failed={read.failed} onRetry={read.retry} onUnfold={() => setOpen(true)} />;
+  return <Plan plan={plan} failed={read.failed} onRetry={read.retry} onUnfold={onUnfold} />;
 }
 
 // ------------------------------------------------------------------ layer 2
@@ -21,11 +22,10 @@ export function PlanSection({ read }: { read: PlanRead }) {
 type PlanProps = { plan: PlanView | null; failed: boolean; onRetry(): void; onUnfold(): void };
 
 function Plan({ plan, failed, onRetry, onUnfold }: PlanProps) {
-  const kept = useFocusKept();
   return (
     <>
       <div className="as-card-rule" />
-      <div {...kept} className="as-card-plan" tabIndex={-1}>
+      <div className="as-card-plan">
         <div className="as-card-sub-head">
           <span className="as-card-g">
             <CardGlyph name="checklist" />
@@ -50,37 +50,6 @@ function Plan({ plan, failed, onRetry, onUnfold }: PlanProps) {
       </div>
     </>
   );
-}
-
-/**
- * Focus in the plan stays in the card when an update takes the control it is on: the fold pressed, a
- * fold the agent's next step makes needless, a Retry that worked. The plan takes it while it shows, the
- * card once the plan goes. Focus that left the plan is never moved.
- */
-function useFocusKept(): { ref: RefObject<HTMLDivElement | null>; onFocus(e: FocusEvent): void; onBlur(e: FocusEvent): void } {
-  const ref = useRef<HTMLDivElement>(null);
-  /** What has focus in the plan; null while focus is elsewhere. */
-  const holder = useRef<Element | null>(null);
-  // why: React hears no blur while it commits, so a holder gone from the page is one an update took.
-  // Focus merely moving on (the page has no focus for that instant) leaves the holder in place.
-  useLayoutEffect(() => {
-    if (holder.current !== null && !holder.current.isConnected) ref.current?.focus();
-  });
-  useLayoutEffect(() => {
-    const card = ref.current?.closest<HTMLElement>(".as-card");
-    return () => {
-      if (holder.current !== null) card?.focus();
-    };
-  }, []);
-  return {
-    ref,
-    onFocus: (e) => {
-      holder.current = e.target;
-    },
-    onBlur: (e) => {
-      if (!e.currentTarget.contains(e.relatedTarget)) holder.current = null;
-    },
-  };
 }
 
 /** Over a plan shown, it may be out of date; with none, whether there is one is unknown. */

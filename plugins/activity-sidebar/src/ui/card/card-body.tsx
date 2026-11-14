@@ -1,9 +1,10 @@
 // What the hover card says (P:1223-1257, Z:ds/session_card.luau): its title, up to three lines; its
 // state line; its machine, project and branch ("· worktree off main"); its pull request; while it is
 // under way, its plan; its subthread tree. No latest message. The reads only the card pays for: a
-// worktree's base branch, and the plan.
+// worktree's base branch, and the plan. The title and lines stay put; the plan and tree under them
+// scroll when the card would run past the window (app.css `.as-card-body`), from the keyboard too.
 import { useSdk, type PluginBrowserBbSdk, type PluginSidebarThread } from "@get-bb/plugin-sdk/app";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { stateLine, type StateLine } from "../../card/state-line.ts";
 import { subthreadLines } from "../../card/subthread-tree.ts";
 import { useAsk } from "../../data/use-asks.ts";
@@ -19,6 +20,7 @@ import { CardGlyph } from "./card-glyphs.tsx";
 import type { CardData, RowItem } from "./hover-card.tsx";
 import { PlanSection } from "./plan-section.tsx";
 import { SubthreadSection } from "./subthread-section.tsx";
+import { useFocusKept } from "./use-focus-kept.ts";
 
 type Props = { item: RowItem; data: CardData; onOpen(threadId: string): void };
 
@@ -31,6 +33,9 @@ export function CardBody({ item, data, onOpen }: Props) {
   const base = useBaseBranch(t);
   const state = row.corner.kind === "state" ? withAsk(row.corner.state, ask) : null;
   const plan = usePlan(state !== null && UNDER_WAY.has(state) ? t.id : null);
+  // why: unfolding is held here, not in the plan, so it renders this component, where the body's focus keeping looks.
+  const [planOpen, setPlanOpen] = useState(false);
+  const kept = useFocusKept();
   const line = stateLine(row, state, data.underWaySince.get(t.id) ?? t.updatedAt, now);
   const branch = t.environment?.branchName ?? null;
   const tree = data.index.childrenOf(t.id).length > 0 ? subthreadLines(data.index, t) : null;
@@ -57,13 +62,16 @@ export function CardBody({ item, data, onOpen }: Props) {
           </Line>
         )}
       </div>
-      <PlanSection read={plan} />
-      {tree !== null && (
-        <>
-          <div className="as-card-rule" />
-          <SubthreadSection tree={tree} now={now} onOpen={onOpen} onShowAll={() => onOpen(t.id)} />
-        </>
-      )}
+      {/* why: the keyboard scrolls only what has focus; a plan of words alone has no button to give it. */}
+      <div {...kept} className="as-card-body" tabIndex={0}>
+        <PlanSection read={plan} open={planOpen} onUnfold={() => setPlanOpen(true)} />
+        {tree !== null && (
+          <>
+            <div className="as-card-rule" />
+            <SubthreadSection tree={tree} now={now} onOpen={onOpen} onShowAll={() => onOpen(t.id)} />
+          </>
+        )}
+      </div>
     </>
   );
 }
