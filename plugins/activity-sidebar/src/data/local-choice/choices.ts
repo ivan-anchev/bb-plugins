@@ -1,5 +1,5 @@
 // The choices the reader makes on this list, as stored: the open sections, the project filter and the density.
-import { SECTION_KEYS, type SectionKey } from "../model/activity.ts";
+import { SECTION_KEYS, type SectionKey } from "../../model/activity.ts";
 
 /** Pinned and Activity open, the shelves folded: the list Zeron opens with. */
 const OPEN_AT_FIRST: readonly SectionKey[] = ["pinned", "activity"];

@@ -18,7 +18,8 @@ function harness() {
       else rows.set(threadId, until);
     },
   };
-  const handlers = createRpcHandlers({ rpc: { experimental_invalidate: (tags) => void events.push(`invalidate ${tags.join(",")}`) }, store });
+  const archived = { read: async () => ({ total: 2, byProject: { prj_a: 2 } }) };
+  const handlers = createRpcHandlers({ rpc: { experimental_invalidate: (tags) => void events.push(`invalidate ${tags.join(",")}`) }, store, archived });
   return { handlers, events };
 }
 
@@ -36,5 +37,11 @@ test("the read returns every record and invalidates nothing", async () => {
   await handlers.setSleep({ threadId: "thr_a", until: 5_000 }, CONTEXT);
   events.length = 0;
   assert.deepEqual(await handlers.sleeps({}, CONTEXT), { sleeps: [{ threadId: "thr_a", until: 5_000 }] });
+  assert.deepEqual(events, []);
+});
+
+test("the archived count is the counter's, and reading it invalidates nothing", async () => {
+  const { handlers, events } = harness();
+  assert.deepEqual(await handlers.archivedCount({}, CONTEXT), { total: 2, byProject: { prj_a: 2 } });
   assert.deepEqual(events, []);
 });

@@ -20,8 +20,9 @@ its plan while it works, and a tree of its subthreads to open.
   a row of their own.
 - **Shelves** at the foot of the list: **Working** holds the threads under way
   (running, or waiting on background work), **Asleep** the threads put to
-  sleep, soonest to wake first, and **Archived** holds bb's archived threads. They start folded, showing how many they hold; while bb
-  has more archived threads than it has loaded, the count reads `50+`. Opened,
+  sleep, soonest to wake first, and **Archived** holds bb's archived threads. They start folded, showing how many they hold.
+  Archived counts every archived parent thread, loaded or not (only the
+  chosen project's while the list is narrowed to one). Opened,
   Archived shows its latest 10 and loads more 25 at a time.
 - Click any section's title to fold or unfold it. The view button at the end
   of Activity's title narrows every section to one project, and the title

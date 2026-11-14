@@ -4,7 +4,7 @@ import { experimental_PluginRpcCallError, type PluginSidebarThread } from "@get-
 import { buildActivity, type SectionKey } from "../model/activity.ts";
 import { project, thread, WORKING } from "../model/fixtures.ts";
 import { LOADED, view } from "./fixtures.ts";
-import { listItems, sleepsStatus, type ListItem } from "./items.ts";
+import { archivedCountFor, listItems, retryNotice, sleepsStatus, type ListItem, type NoticeKey } from "./items.ts";
 
 function sections(threads = [thread("a", { latestAttentionAt: 2 }), thread("b", { latestAttentionAt: 1 })]) {
   return buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), now: 0, activeThreadId: null, filter: null }).sections;
@@ -38,7 +38,7 @@ test("the shelves stand after a spacer, Working then Archived; an empty shelf is
 });
 
 test("a folded section is its title with its count; open, its title says no count", () => {
-  const items = listItems(sections([thread("idle"), thread("busy", WORKING), thread("busy2", WORKING), ...archived(3)]), view({ open: open("activity") }));
+  const items = listItems(sections([thread("idle"), thread("busy", WORKING), thread("busy2", WORKING), ...archived(3)]), view({ open: open("activity"), archivedCount: 3 }));
   assert.deepEqual(keys(items), ["t:activity", "s:idle", "spacer", "t:working", "t:archived"]);
   assert.deepEqual(titles(items), [
     ["Activity", null],
@@ -51,13 +51,56 @@ test("a folded section is its title with its count; open, its title says no coun
   );
 });
 
-test("Archived counts n+ while the server holds more pages, and stands before any page has loaded", () => {
+test("folded Archived says the server's count, not how many rows have loaded, before and after more pages", () => {
   const more = { ...LOADED, hasNextPage: true };
-  assert.deepEqual(titles(listItems(sections(archived(50)), view({ open: open(), archive: more }))), [
-    ["Activity", "0"],
-    ["Archived", "50+"],
-  ]);
-  assert.deepEqual(keys(listItems(sections([]), view({ open: open(), archive: more }))), ["t:activity", "spacer", "t:archived"]);
+  assert.deepEqual(titles(listItems(sections(archived(12)), view({ open: open(), archive: more, archivedCount: 20 }))).at(-1), ["Archived", "20"]);
+  assert.deepEqual(titles(listItems(sections(archived(20)), view({ open: open(), archivedCount: 20 }))).at(-1), ["Archived", "20"]);
+});
+
+test("Archived stands on its count before any row has loaded, and not when nothing is archived", () => {
+  assert.deepEqual(keys(listItems(sections([]), view({ open: open(), archivedCount: 20 }))), ["t:activity", "spacer", "t:archived"]);
+  assert.deepEqual(keys(listItems(sections([]), view({ open: open(), archive: { ...LOADED, hasNextPage: true }, archivedCount: 0 }))), ["t:activity"]);
+});
+
+test("while the count is unknown Archived names no number, and stands only on its rows or a failed page", () => {
+  assert.deepEqual(titles(listItems(sections(archived(3)), view({ open: open(), archive: { ...LOADED, hasNextPage: true } }))).at(-1), ["Archived", null]);
+  assert.deepEqual(keys(listItems(sections([]), view({ open: open(), archive: { ...LOADED, hasNextPage: true } }))), ["t:activity"]);
+  assert.deepEqual(keys(listItems(sections([]), view({ open: open(), archive: { ...LOADED, status: "error" } }))), ["t:activity", "spacer", "t:archived"]);
+});
+
+test("the count read gives every project's total, or the chosen project's; loading until read, error once a read failed", () => {
+  const data = { total: 20, byProject: { prj_a: 12, prj_b: 8 } };
+  const failed = new experimental_PluginRpcCallError({ code: "transport_error", message: "Failed to fetch" });
+  assert.equal(archivedCountFor({ data: undefined, error: null }, null), "loading");
+  assert.equal(archivedCountFor({ data, error: null }, null), 20);
+  assert.equal(archivedCountFor({ data, error: null }, "prj_a"), 12);
+  assert.equal(archivedCountFor({ data, error: null }, "prj_none"), 0);
+  assert.equal(archivedCountFor({ data: undefined, error: failed }, null), "error");
+  assert.equal(archivedCountFor({ data, error: failed }, "prj_a"), "error");
+});
+
+test("a failed count stands Archived with no number and a notice under its title with Retry, folded or open", () => {
+  const notice: ListItem = { kind: "notice", key: "n:archived-count", text: "Couldn't count archived threads", retry: true };
+  const folded = listItems(sections([]), view({ open: open(), archivedCount: "error" }));
+  assert.deepEqual(keys(folded), ["t:activity", "spacer", "t:archived", "n:archived-count"]);
+  assert.deepEqual(titles(folded).at(-1), ["Archived", null]);
+  assert.deepEqual(folded.at(-1), notice);
+  const opened = listItems(sections(archived(2)), view({ archivedCount: "error" }));
+  assert.deepEqual(keys(opened).slice(-4), ["t:archived", "n:archived-count", "s:x0", "s:x1"]);
+});
+
+test("a notice's Retry reads again what it says failed: the count's, the count read alone", () => {
+  const asked: string[] = [];
+  const reads = { sleeps: () => void asked.push("sleeps"), archivedCount: () => void asked.push("count"), archivedPage: () => void asked.push("page") };
+  const retried = (notice: NoticeKey) => {
+    asked.length = 0;
+    retryNotice(notice, reads);
+    return [...asked];
+  };
+  assert.deepEqual(retried("n:archived-count"), ["count"]);
+  assert.deepEqual(retried("n:archived"), ["page"]);
+  assert.deepEqual(retried("n:sleeps"), ["sleeps"]);
+  assert.deepEqual(retried("n:list"), []);
 });
 
 test("open, Archived shows 10, then offers the next 25 already loaded", () => {
@@ -129,7 +172,7 @@ test("Asleep stands between Working and Archived while something sleeps", () => 
   const threads = [thread("a"), thread("busy", WORKING), thread("zz"), thread("old", { isArchived: true, archivedAt: 1 })];
   const built = buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map([["zz", { threadId: "zz", until: 5 }]]), now: 0, activeThreadId: null, filter: null }).sections;
   assert.deepEqual(keys(listItems(built, view({ open: open("activity") }))), ["t:activity", "s:a", "spacer", "t:working", "t:asleep", "t:archived"]);
-  assert.deepEqual(titles(listItems(built, view({ open: open() }))).slice(-2), [["Asleep", "1"], ["Archived", "1"]]);
+  assert.deepEqual(titles(listItems(built, view({ open: open(), archivedCount: 1 }))).slice(-2), [["Asleep", "1"], ["Archived", "1"]]);
 });
 
 test("a row item says which section it stands in", () => {

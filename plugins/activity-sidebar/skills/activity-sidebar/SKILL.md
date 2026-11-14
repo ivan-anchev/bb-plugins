@@ -33,8 +33,10 @@ commands and no settings.
 
 - Click a section's title to fold or unfold it. Pinned and Activity start
   open; the shelves start folded. A folded title shows how many threads it
-  holds. Archived reads `n+` while bb has more archived threads than it has
-  loaded, since bb has no archived total.
+  holds. Archived counts every archived parent thread bb holds, in the
+  filtered project, however many rows have loaded; until that count arrives
+  its title shows no number. If reading it fails, the title shows no number
+  and "Couldn't count archived threads · Retry" sits under it, folded or not.
 - Opened, Archived shows its latest 10 and a "Show 25 more" row. Past what is
   loaded, it reads "Show more" and loads the next page. If a page fails to
   load, the shelf says "Couldn't load archived threads · Retry".
