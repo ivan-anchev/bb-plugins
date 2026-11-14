@@ -1,3 +1,5 @@
+Experimental: it may break with a bb update.
+
 Replaces bb's thread list with one Activity list of every parent thread from
 every project, latest first, with pinned threads above it and the Working,
 Asleep and Archived shelves folded at its foot. A filter narrows it to one
