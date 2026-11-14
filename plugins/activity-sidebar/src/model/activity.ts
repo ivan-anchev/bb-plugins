@@ -25,9 +25,14 @@ export type RowModel = {
   current: boolean;
   runningUnder: number;
   project: { name: string; hue: Hue };
+  /** The regular row's second line (Zeron's `SessionRow.detail`): where it runs, then its branch. */
+  detail: RowDetail;
   /** When it wakes, while it sleeps on the Asleep shelf; null otherwise. */
   asleepUntil: number | null;
 };
+
+/** `where`: its project, then its machine when bb names one ("bb-plugins · MacBook"); `branch`: null when it has none. */
+export type RowDetail = { where: string; branch: string | null };
 
 export type Section = { key: SectionKey; rows: readonly RowModel[] };
 
@@ -73,6 +78,7 @@ export function buildActivity(input: ActivityInput): ActivityModel {
       current,
       runningUnder: index.runningUnder(thread.id),
       project: { name, hue: hueOf(thread.projectId) },
+      detail: detailOf(thread, name),
       asleepUntil,
     };
   };
@@ -150,6 +156,10 @@ function cornerOf(t: PluginSidebarThread, state: ZState | null, asleepUntil: num
   if (state !== null) return { kind: "state", state };
   if (asleepUntil !== null) return { kind: "wakes", text: wakesIn(asleepUntil, now) };
   return { kind: "time", text: ago(lastMoved(t), now) };
+}
+
+function detailOf(t: PluginSidebarThread, projectName: string): RowDetail {
+  return { where: t.host === null ? projectName : `${projectName} · ${t.host.name}`, branch: t.environment?.branchName ?? null };
 }
 
 

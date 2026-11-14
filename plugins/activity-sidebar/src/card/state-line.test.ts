@@ -15,7 +15,7 @@ const NOW = new Date(2026, 10, 13, 14, 0).getTime();
 const TOMORROW_9 = new Date(2026, 10, 14, 9, 0).getTime();
 
 function row(t: PluginSidebarThread, asleepUntil: number | null = null): RowModel {
-  return { thread: t, corner: { kind: "time", text: "" }, strong: false, current: false, runningUnder: 0, project: { name: "bb-plugins", hue: "blue" }, asleepUntil };
+  return { thread: t, corner: { kind: "time", text: "" }, strong: false, current: false, runningUnder: 0, project: { name: "bb-plugins", hue: "blue" }, detail: { where: "bb-plugins", branch: null }, asleepUntil };
 }
 
 test("under way: its state, and for how long since the list first saw it so", () => {

@@ -65,3 +65,16 @@ test("overscan widens the window on both sides", () => {
 function keys(from: number, to: number): string[] {
   return Array.from({ length: to - from }, (_, i) => `s:t${from + i}`);
 }
+
+test("a tall row is 46, and the rows after it stand lower by the difference", () => {
+  const [a, b] = rows(2).map((item) => (item.kind === "row" ? { ...item, tall: true } : item));
+  const layout = layoutItems([title("activity"), a, b], 0);
+  assert.deepEqual(
+    layout.entries.map((e) => [e.y, e.h]),
+    [
+      [4, 24],
+      [30, 46],
+      [78, 46],
+    ],
+  );
+});
