@@ -11,5 +11,9 @@ export default function plugin(bb: BbPluginApi): void {
   bb.rpc.register(notesContract, {
     notes: () => store.activeNotes(),
     createNote: (input) => notes.create(input),
+    deleteNote: ({ id }) => {
+      notes.remove(id);
+      return {};
+    },
   });
 }

@@ -1,6 +1,6 @@
 ---
 name: notes
-description: Explain the Notes plugin, which saves short personal notes in bb from a Spotlight opened with ⇧⌘J, the sidebar-footer notes icon, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), links threads in a note by typing @, and lists notes in a Notes card on the New thread screen. Use when the user asks how to write, quote or link a note, where their notes are, why ⇧⌘J does nothing, what the source chip opens, why a thread is missing from the @ picker, or why the Notes card is empty or says it couldn't read notes.
+description: Explain the Notes plugin, which saves short personal notes in bb from a Spotlight opened with ⇧⌘J, the sidebar-footer notes icon, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), links threads in a note by typing @, and lists notes in a Notes card on the New thread screen, where clicking one opens it read-only with Delete. Use when the user asks how to write, quote or link a note, how to read, edit or delete one, where their notes are, why ⇧⌘J does nothing, what the source chip opens, why a thread is missing from the @ picker, or why the Notes card is empty or says it couldn't read notes.
 ---
 
 # Notes
@@ -72,6 +72,20 @@ first thread the note links with @ ("No thread" for a note with neither). "N mor
 and "Show fewer" folds them. A new note appears within about two seconds with
 no reload. When the plugin cannot read its database the card says "Couldn't
 read notes" with the reason, beside any notes it already showed.
+
+## Reading and deleting a note
+
+- Click a note's text on the card (or Tab to it and press Enter). The Spotlight
+  opens titled "Note", read-only: the quoted passage with its source chip, then
+  the note's words with each linked thread's "@Title" marked. There is no text
+  box: notes cannot be edited. Esc, **Close** or a click outside closes it, and
+  focus goes back to the row.
+- **Delete** removes the note for good (there is no undo or trash), closes the
+  Spotlight and shows a "Note deleted" toast; the row leaves the card without a
+  reload and focus moves to the card's header. If deleting fails, the Spotlight
+  stays open with one line saying why.
+- A note deleted elsewhere (another window) while it is open closes the
+  Spotlight there too. Deleting a note that is already gone succeeds.
 
 ## Where notes live
 

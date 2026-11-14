@@ -1,5 +1,5 @@
-// What happens when a note is written: it gets an id and a time, lands in the store, and every
-// open card is told to read again.
+// What happens when a note is written or deleted: the store changes, and every open card is told to
+// read again.
 import { randomUUID } from "node:crypto";
 import { noteIdSchema, type NewNote, type Note } from "../contract.ts";
 import type { Store } from "./store.ts";
@@ -13,6 +13,11 @@ export function createNotes({ store, now, onChange }: Deps) {
       store.insert(note);
       onChange();
       return note;
+    },
+
+    remove(id: Note["id"]): void {
+      store.delete(id);
+      onChange();
     },
   };
 }

@@ -1,14 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import Database from "better-sqlite3";
 import { noteIdSchema, type Note } from "../contract.ts";
+import { memoryStorage } from "./memory-storage.ts";
 import { openStore } from "./store.ts";
 
 /** A store over a fresh in-memory database, and that database for what the store can't do yet. */
 function freshStore() {
-  const db = new Database(":memory:");
-  const store = openStore({ database: () => db, migrate: (handle, statements) => statements.forEach((statement) => handle.exec(statement)) });
-  return { db, store };
+  const { db, storage } = memoryStorage();
+  return { db, store: openStore(storage) };
 }
 
 function note(n: number, text: string): Note {
@@ -46,6 +45,14 @@ test("a stored link that does not cover an @ token is refused on read", () => {
   assert.throws(() => store.activeNotes(), /A thread link must cover an @ token/);
 });
 
+test("stored links out of reading order are refused on read", () => {
+  const { store } = freshStore();
+  const text = "see @Spend and @Burn";
+  store.insert({ ...note(1, text), body: { text, mentions: [{ threadId: "thr_burn", from: 15, to: 20 }, { threadId: "thr_spend", from: 4, to: 10 }] } });
+
+  assert.throws(() => store.activeNotes(), /Thread links must be in order/);
+});
+
 test("notes list newest first", () => {
   const { store } = freshStore();
   store.insert(note(1, "first"));
@@ -63,6 +70,32 @@ test("archived notes are not listed", () => {
   store.insert(note(1, "kept"));
   store.insert(note(2, "archived"));
   db.prepare("UPDATE notes SET archived_at = ? WHERE id = ?").run(5_000, note(2, "").id);
+
+  assert.deepEqual(
+    store.activeNotes().map((n) => n.body.text),
+    ["kept"],
+  );
+});
+
+test("a deleted note is gone, and the others stay", () => {
+  const { store } = freshStore();
+  store.insert(note(1, "kept"));
+  store.insert(note(2, "deleted"));
+
+  store.delete(note(2, "").id);
+
+  assert.deepEqual(
+    store.activeNotes().map((n) => n.body.text),
+    ["kept"],
+  );
+});
+
+test("deleting a note that is already gone changes nothing", () => {
+  const { store } = freshStore();
+  store.insert(note(1, "kept"));
+  store.delete(note(2, "").id);
+
+  store.delete(note(2, "").id);
 
   assert.deepEqual(
     store.activeNotes().map((n) => n.body.text),

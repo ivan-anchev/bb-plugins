@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { noteIdSchema } from "../../contract.ts";
 import { spotlight, useSpotlightState } from "./spotlight-store.ts";
 
 /** The Spotlight's state as a component sees it. */
@@ -24,5 +25,16 @@ test("closing an opening that was dismissed and reopened leaves the new one open
   assert.equal(render(), second);
   assert.equal(render().kind, "compose");
   spotlight.close(second);
+  assert.equal(render().kind, "closed");
+});
+
+test("opening a note while a draft is open keeps the draft", () => {
+  spotlight.compose(null);
+  const draft = render();
+
+  spotlight.view(noteIdSchema.parse("note_00000000-0000-4000-8000-000000000001"));
+
+  assert.equal(render(), draft);
+  spotlight.close(draft);
   assert.equal(render().kind, "closed");
 });

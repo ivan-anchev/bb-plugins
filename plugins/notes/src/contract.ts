@@ -34,6 +34,12 @@ const noteBodySchema = z
   .refine(
     ({ text, mentions }) => mentions.every(({ from, to }) => from < to && to <= text.length && text[from] === "@"),
     "A thread link must cover an @ token in the note's text",
+  )
+  // why: the card names the first link, and the view draws the text between links, so links come in
+  // reading order and never share a character.
+  .refine(
+    ({ mentions }) => mentions.every(({ from }, index) => index === 0 || mentions[index - 1].to <= from),
+    "Thread links must be in order and must not overlap",
   );
 export type NoteBody = z.infer<typeof noteBodySchema>;
 
@@ -57,4 +63,6 @@ export const notesContract = defineRpcContract({
   notes: { input: z.object({}), output: z.array(noteSchema), tags: () => [NOTES_TAG] },
   /** Saves a note and returns it. */
   createNote: { input: newNoteSchema, output: noteSchema },
+  /** Deletes a note for good. A note already gone counts as deleted, so a second call succeeds. */
+  deleteNote: { input: z.object({ id: noteIdSchema }), output: z.object({}) },
 });
