@@ -6,6 +6,28 @@
   "description": "bb plugins Ivan Anchev maintains.",
   "plugins": [
     {
+      "id": "activity-sidebar",
+      "displayName": "Activity Sidebar",
+      "description": "Experimental: it may break with a bb update. Replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it and the Working, Asleep and Archived shelves folded at its foot. A filter narrows it to one project, and rows are one line or two. Each row shows the thread's agent, its project's coloured initial, its title, its pull request, how many threads run under it, and its state or how long ago it last moved. Right-click a row for its menu (rename, pin, copy, sleep or wake, archive, delete); under the pointer, its corner offers Archive. A thread put to sleep waits on Asleep until its time, then comes back to the top. Rest on a row for its card: its state and since when, machine, project, branch, pull request, its plan while it works, and a tree of its subthreads to open.",
+      "icon": "Activity",
+      "tags": [
+        "sidebar",
+        "threads"
+      ],
+      "author": {
+        "name": "Ivan Anchev",
+        "github": "ivan-anchev"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/ivan-anchev/bb-plugins.git",
+          "subdir": "plugins/activity-sidebar",
+          "range": "0.x",
+          "tagPrefix": "activity-sidebar/"
+        }
+      }
+    },
+    {
       "id": "boat-sandbox",
       "displayName": "boat Sandbox",
       "description": "Experimental: it may break with a bb update. Run bb threads on on-demand boat.dev sandboxes that stop when idle, resume on the same disk, and start from the boat saved snapshot, environment and size you pick in the composer, with bb's GitHub login or else boat's.",
