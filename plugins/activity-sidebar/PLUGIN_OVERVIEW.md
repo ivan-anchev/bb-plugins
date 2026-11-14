@@ -32,7 +32,7 @@ its plan while it works, and a tree of its subthreads to open.
   coloured open, draft, merged or closed), how many threads run under it, and
   in its corner either its state (working, connecting, waiting, awaiting input,
   pending approval, done, failed) or how long ago it last moved. With Compact
-  off, a second line says its machine and its branch.
+  off, a second line says its branch and its machine.
 - The open thread's row, or its parent's when a subthread is open, is
   highlighted. Clicking a row opens the thread; dragging it out to the main
   area opens it in a split.
