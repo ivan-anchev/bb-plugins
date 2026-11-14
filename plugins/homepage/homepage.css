@@ -18,6 +18,8 @@
   --hp-narrow: clamp(280px, 30%, 340px);
   width: var(--hp-width);
   margin-inline: calc((100% - var(--hp-width)) / 2);
+  /* why 48px: the space bb leaves between the daily quote and the composer, instead of bb's 24px. */
+  margin-top: 48px;
   display: flex;
   flex-wrap: wrap;
   align-items: stretch;
