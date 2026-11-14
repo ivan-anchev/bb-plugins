@@ -1,0 +1,46 @@
+{
+  "name": "bb-plugin-office-quote",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Experimental: it may break with a bb update. A daily The Office quote above the new-thread composer. One random quote per day from a public quotes API, with the character who said it; the composer and the homepage cards move down to make room.",
+  "keywords": [
+    "bb-plugin",
+    "homepage",
+    "the-office"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ivan-anchev/bb-plugins.git",
+    "directory": "plugins/office-quote"
+  },
+  "engines": {
+    "bb": ">=0.48",
+    "bbPluginSdk": ">=0.6.132"
+  },
+  "bb": {
+    "name": "Office Quote",
+    "description": "Experimental: it may break with a bb update. A daily The Office quote above the new-thread composer. One random quote per day from a public quotes API, with the character who said it; the composer and the homepage cards move down to make room.",
+    "branding": {
+      "icon": "Quote"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "node --test '*/*.test.ts'",
+    "build": "bb plugin build"
+  },
+  "dependencies": {
+    "@get-bb/plugin-sdk": "0.6.132",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.7.0"
+  }
+}
