@@ -200,9 +200,10 @@ function CornerAction({ action }: { action: NonNullable<RowMenu["hoverAction"]> 
   );
 }
 
-/** Regular's second line (Zeron's `SessionRow.second_line`): its branch's glyph leading while it has one, then its machine and branch. */
+/** Regular's second line (Zeron's `SessionRow.second_line`): its branch behind the branch glyph, then its machine. */
 function DetailLine({ detail }: { detail: RowDetail }) {
-  const words = [detail.machine, detail.branch].filter((w) => w !== null);
+  // why: the glyph labels the branch, so the branch leads; the machine, said less often, fades first.
+  const words = [detail.branch, detail.machine].filter((w) => w !== null);
   return (
     <span className="as-detail">
       {detail.branch !== null && <CardGlyph name="branch" />}
