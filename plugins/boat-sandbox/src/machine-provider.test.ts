@@ -48,11 +48,12 @@ function fakeBoat() {
   };
   const client: BoatClient = {
     me: async () => wireMe.parse({ user: { id: ACCOUNT, login: "octocat", zeroDataRetention: false, connectionMethods: ["github"] } }),
-    limits: async () => ({ wallet: { kind: "personal" }, starts: { unlimited: true }, startsBlockedBy: null }),
+    limits: async () => ({ wallet: { kind: "personal" }, starts: { unlimited: true }, startsBlockedBy: null, billing: null }),
     savedSnapshots: async () => account.templates,
     environments: async () => account.environments,
     credentialProfiles: () => Promise.reject(new Error("create never reads credential profiles")),
     githubApp: () => Promise.reject(new Error("create never reads the GitHub App")),
+    meter: () => Promise.reject(new Error("create never reads the meter")),
     get: async (id) => sandboxes.get(id) ?? null,
     list: async (labels) =>
       [...sandboxes.values()].filter((sandbox) => Object.entries(labels).every(([key, value]) => sandbox.labels[key] === value)),
@@ -117,7 +118,7 @@ function provider(client: BoatClient, account = ACCOUNT, gate: StartGate = creat
     status: "available",
     facts: {
       account: { id: accountId.parse(account), login: "octocat", zeroDataRetention: false, githubLinked: true },
-      limits: { wallet: { kind: "personal" }, starts: { unlimited: true }, startsBlockedBy: null },
+      limits: { wallet: { kind: "personal" }, starts: { unlimited: true }, startsBlockedBy: null, billing: null },
     },
     client,
     settings: { ok: true, apiKey: "boat_test", idleMs: null, defaults: { template: null, environment: null, preset: "small" } },

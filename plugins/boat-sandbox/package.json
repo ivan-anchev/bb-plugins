@@ -26,7 +26,7 @@
   },
   "bb": {
     "name": "boat Sandbox",
-    "description": "Experimental: it may break with a bb update. Run bb threads on on-demand boat.dev sandboxes that stop when idle, resume on the same disk, and start from the boat saved snapshot, environment and size you pick in the composer, with bb's GitHub login or else boat's.",
+    "description": "Experimental: it may break with a bb update. Run bb threads on on-demand boat.dev sandboxes that stop when idle, resume on the same disk, and start from the boat saved snapshot, environment and size you pick in the composer, with bb's GitHub login or else boat's, and see boat spend, running sandboxes and money left in a New thread card.",
     "branding": {
       "icon": "./boat.svg"
     },

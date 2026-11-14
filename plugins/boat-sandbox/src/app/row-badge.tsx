@@ -1,8 +1,9 @@
 // The boat icon on the metadata line of a sidebar thread row whose thread runs on a boat sandbox.
 import { useMemo } from "react";
 import type { ExperimentalThreadRowMetadataDataInput, ExperimentalThreadRowMetadataProps, PluginEnvironmentProvider } from "@get-bb/plugin-sdk";
-import { experimental_ProviderIcon as ProviderIcon, experimental_useRpcKeyedQuery, useEnvironmentProviders, useSettings } from "@get-bb/plugin-sdk/app";
-import { boatSandboxContract as contract, PROVIDER_ID } from "../contract.ts";
+import { experimental_ProviderIcon as ProviderIcon, experimental_useRpcKeyedQuery, useSettings } from "@get-bb/plugin-sdk/app";
+import { boatSandboxContract as contract } from "../contract.ts";
+import { useBoatProvider } from "./boat-mark.tsx";
 import { boatRowIds } from "./row-marks.ts";
 
 export interface BoatRows {
@@ -21,8 +22,7 @@ export function useBoatRows({ threads }: ExperimentalThreadRowMetadataDataInput)
   const hostIds = useMemo(() => [...new Set(threads.flatMap((thread) => (thread.host === null ? [] : [thread.host.id])))], [threads]);
   const query = experimental_useRpcKeyedQuery({ contract, method: "boatHosts", keys: hostIds, enabled: shown && hostIds.length > 0 });
   const marked = useMemo(() => (shown && query.data !== undefined ? boatRowIds(threads, query.data) : NONE), [shown, threads, query.data]);
-  const { providers } = useEnvironmentProviders();
-  return { marked, provider: providers.find((provider) => provider.id === PROVIDER_ID) ?? null };
+  return { marked, provider: useBoatProvider() };
 }
 
 export function BoatRowBadge({ thread, data }: ExperimentalThreadRowMetadataProps<BoatRows>) {

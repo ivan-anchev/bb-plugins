@@ -1,6 +1,6 @@
 ---
 name: boat-sandboxes
-description: The boat Sandbox plugin, which starts bb threads on new boat.dev sandboxes (`bb thread spawn --environment-provider boat-sandbox --machine-inputs '{"preset":"small"}'`, or boat Sandbox in the new-thread picker), stops them when idle, resumes them on a follow-up, and deletes them with `bb machine remove`. Covers its settings (API key, Stop after idle, Default size, Default template, Default environment), presets, templates (boat saved snapshots, `--machine-inputs '{"template":"<name>"}'`, `bb boat templates`), environments (`--machine-inputs '{"environment":"<name>"}'`, which decide the sign-ins, GitHub token and secrets a sandbox gets), Claude Code and Codex sign-ins from boat, GitHub (bb's forwarded login, else boat's token over HTTPS, SSH remotes included), the AI proxy, start limits, idle stops and resumes, the auto-stop lease, failed creates, drift between bb and boat, leaked sandboxes, `bb boat status`, `bb boat templates` and `bb boat sandboxes`. Use when a user sets up or uses boat.dev sandboxes for bb, or asks why one stopped, resumed, failed or was stopped as an orphan.
+description: The boat Sandbox plugin, which starts bb threads on new boat.dev sandboxes (`bb thread spawn --environment-provider boat-sandbox --machine-inputs '{"preset":"small"}'`, or boat Sandbox in the new-thread picker), stops them when idle, resumes them on a follow-up, and deletes them with `bb machine remove`. Covers its settings (API key, Stop after idle, Default size, Default template, Default environment), presets, templates (boat saved snapshots, `--machine-inputs '{"template":"<name>"}'`, `bb boat templates`), environments (`--machine-inputs '{"environment":"<name>"}'`, which decide the sign-ins, GitHub token and secrets a sandbox gets), Claude Code and Codex sign-ins from boat, GitHub (bb's forwarded login, else boat's token over HTTPS, SSH remotes included), the AI proxy, start limits, idle stops and resumes, the auto-stop lease, failed creates, drift between bb and boat, leaked sandboxes, `bb boat status`, `bb boat templates`, `bb boat sandboxes`, and the boat spend card on the New thread screen (30 days of spend, running sandboxes, money left). Use when a user sets up or uses boat.dev sandboxes for bb, asks why one stopped, resumed, failed or was stopped as an orphan, or asks what the boat spend card shows or why it is blank.
 ---
 
 # boat Sandbox
@@ -369,6 +369,43 @@ puts bb right:
 The plugin looks only at sandboxes carrying this server's owner label, plus,
 by id, any machine's sandbox missing from that list, so another bb server's
 sandboxes on the same boat account are never touched.
+
+## The boat spend card
+
+A card on bb's New thread screen, in its own row under the other homepage cards:
+
+- **Header:** "boat spend" and the last 30 days' total.
+- **Chart:** a bar per UTC day for the last 30 days, today last and lighter. A
+  day with nothing spent, or from before the plugin started recording, is a
+  short well. Hover or focus the chart and use ←/→, Home and End to read a day
+  ("Nov 10 · $0.36", "No spend", or "Not recorded" before recording began).
+  The tooltip stays while the pointer is on it or the chart has focus;
+  Escape closes it.
+- **Running N:** this bb server's sandboxes that are starting or running, most
+  expensive first, with what they cost an hour together. Each row shows the
+  thread's agent, project and title, the sandbox size, and its cost this
+  month, ticking every second while the tab is visible. Three show; "N more
+  running" opens the rest. A row opens its thread.
+- **Footer:** money left (plan time left at boat's price for a `default`
+  machine hour, plus the wallet), or what the wallet owes in warning colour,
+  and when the plan renews. A wallet that owes also shows a notice with a link
+  to boat's billing page.
+
+Spend is machine time at list price, account-wide: every sandbox on the key's
+wallet, deleted ones and ones other tools started included, the same meter as
+boat's `cost`. Snapshots, extra starts and the AI proxy are not counted.
+
+boat reports only this month's total, so the plugin records it every five
+minutes and whenever the card reads, and keeps what it grew by per UTC day.
+History starts empty when the plugin is installed and is never backfilled.
+Each boat account keeps its own history, so a key for another account starts
+that account's from empty. Time the bb server was off lands on the day it
+comes back; the meter's reset on the 1st starts that day from zero. The card
+reads again every minute; a failed read keeps the last numbers, says when they
+were read and why the refresh failed, and stops the running costs ticking
+until a read succeeds. With no key, a key boat refuses, or an
+account boat Sandbox refuses, the card shows one line saying so instead: fix
+it in Settings → boat Sandbox.
 
 ## `bb boat sandboxes`
 

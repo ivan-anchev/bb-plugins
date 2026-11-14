@@ -67,6 +67,7 @@ function world(hosts: FakeHost[], orphans: Sandbox[] = []) {
     environments: unused,
     credentialProfiles: unused,
     githubApp: unused,
+    meter: unused,
     create: unused,
     remove: unused,
     resume: unused,
@@ -88,7 +89,7 @@ function world(hosts: FakeHost[], orphans: Sandbox[] = []) {
   };
   const session: BoatSession = {
     status: "available",
-    facts: { account: { id: ACCOUNT, login: "octocat", zeroDataRetention: false, githubLinked: true }, limits: { wallet: { kind: "personal" }, starts: { unlimited: true }, startsBlockedBy: null } },
+    facts: { account: { id: ACCOUNT, login: "octocat", zeroDataRetention: false, githubLinked: true }, limits: { wallet: { kind: "personal" }, starts: { unlimited: true }, startsBlockedBy: null, billing: null } },
     client,
     settings: { ok: true, apiKey: "boat_test", idleMs: IDLE_MS, defaults: { template: null, environment: null, preset: "small" } },
   };

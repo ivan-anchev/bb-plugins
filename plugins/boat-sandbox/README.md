@@ -5,8 +5,10 @@ Experimental: it may break with a bb update.
 Run bb threads on on-demand [boat.dev](https://boat.dev) sandboxes. A thread
 gets a new sandbox when it starts; the sandbox stops after the thread has been
 idle, resumes on the same disk when the thread gets a follow-up, and is deleted
-when bb removes the machine. See `PLUGIN_OVERVIEW.md` for the user-facing
-description and `skills/boat-sandboxes/SKILL.md` for the settings and commands.
+when bb removes the machine. A card on the New thread screen shows 30 days of
+boat spend, the sandboxes running now and the money left. See
+`PLUGIN_OVERVIEW.md` for the user-facing description and
+`skills/boat-sandboxes/SKILL.md` for the settings and commands.
 
 ## Requirements
 

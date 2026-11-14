@@ -10,8 +10,10 @@ import {
   wireGithubApp,
   wireLimits,
   wireMe,
+  wireMeteredSandboxList,
   wireSandboxEnvelope,
   wireSandboxList,
+  wireSandboxMeter,
   wireSavedSnapshotList,
   type Account,
   type CredentialProfile,
@@ -49,6 +51,22 @@ export class BoatApiError extends Error {
 
 export type Labels = Readonly<Record<string, string>>;
 
+/** A sandbox with its machine time this UTC calendar month, at list price. */
+interface MeteredSandbox {
+  sandbox: Sandbox;
+  monthDollars: number;
+  /** The rate it uses machine time at, against a `default` machine. */
+  billingMultiplier: number;
+}
+
+/** Every sandbox on the key's wallet with its meter, and what the ones deleted this month used. */
+export interface WalletMeter {
+  sandboxes: MeteredSandbox[];
+  deletedDollars: number;
+  /** The 1st of the UTC month boat counted it for, 00:00. */
+  since: number;
+}
+
 export interface CreateSandboxBody {
   name: string;
   type: Preset;
@@ -83,6 +101,8 @@ export interface BoatClient {
   get(id: SandboxId, signal: AbortSignal): Promise<Sandbox | null>;
   /** Every sandbox carrying all of `labels`, in any state, across all pages. */
   list(labels: Labels, signal: AbortSignal): Promise<Sandbox[]>;
+  /** Every sandbox on the key's wallet, in any state, with this month's machine time (`include=cost,deletedCost`). */
+  meter(signal: AbortSignal): Promise<WalletMeter>;
   /** A repeat with the same key and body returns the same sandbox. */
   create(body: CreateSandboxBody, idempotencyKey: string, signal: AbortSignal): Promise<Sandbox>;
   /** Asynchronous on boat's side, but the sandbox is 404 at once. Throws a 404 BoatApiError when it is gone. */
@@ -125,13 +145,21 @@ export function createBoatClient(apiKey: string): BoatClient {
     },
     async list(labels, signal) {
       const found: Sandbox[] = [];
-      let cursor: string | null = null;
-      do {
-        const page = wireSandboxList.parse(await json(`/sandboxes?${listQuery(labels, cursor)}`, { signal }));
-        found.push(...page.sandboxes.map(toSandbox).filter((sandbox) => sandbox !== null));
-        cursor = page.pageInfo.nextCursor;
-      } while (cursor !== null);
+      for await (const page of pages(json, labelQuery(labels), signal))
+        found.push(...wireSandboxList.parse(page).sandboxes.map(toSandbox).filter((sandbox) => sandbox !== null));
       return found;
+    },
+    async meter(signal) {
+      const meter: WalletMeter = { sandboxes: [], deletedDollars: 0, since: Number.POSITIVE_INFINITY };
+      for await (const page of pages(json, new URLSearchParams({ include: "cost,deletedCost" }), signal)) {
+        const { sandboxes, deletedCost } = wireMeteredSandboxList.parse(page);
+        meter.sandboxes.push(...sandboxes.flatMap(toMetered));
+        // Every page carries the same wallet-wide figure.
+        meter.deletedDollars = deletedCost.dollars;
+        // Pages read as the month turns mix two months; the earliest start marks the meter as the old month's.
+        meter.since = Math.min(meter.since, deletedCost.since);
+      }
+      return meter;
     },
     async create(body, idempotencyKey, signal) {
       const created = await json("/sandboxes", {
@@ -219,13 +247,29 @@ function parseJson(text: string): unknown {
   }
 }
 
-// No state filter: boat then lists every state, stopped and failed included.
-const listQuery = (labels: Labels, cursor: string | null): string => {
-  const query = new URLSearchParams({ limit: "200" });
-  for (const [key, value] of Object.entries(labels)) query.append("label", `${key}=${value}`);
-  if (cursor !== null) query.set("cursor", cursor);
-  return query.toString();
-};
+const labelQuery = (labels: Labels): URLSearchParams =>
+  new URLSearchParams(Object.entries(labels).map(([key, value]) => ["label", `${key}=${value}`]));
+
+/** Each page of `GET /sandboxes` with `query`. No state filter: boat then lists every state, stopped and failed included. */
+async function* pages(json: (path: string, options: RequestOptions) => Promise<unknown>, query: URLSearchParams, signal: AbortSignal) {
+  let cursor: string | null = null;
+  do {
+    const paged = new URLSearchParams(query);
+    paged.set("limit", "200");
+    if (cursor !== null) paged.set("cursor", cursor);
+    const page = await json(`/sandboxes?${paged}`, { signal });
+    yield page;
+    cursor = wireSandboxList.parse(page).pageInfo.nextCursor;
+  } while (cursor !== null);
+}
+
+/** A cancelled sandbox is gone and carries no meter. */
+function toMetered(json: unknown): MeteredSandbox[] {
+  const sandbox = toSandbox(json);
+  if (sandbox === null) return [];
+  const { cost, billingMultiplier } = wireSandboxMeter.parse(json);
+  return [{ sandbox, monthDollars: cost.dollars, billingMultiplier }];
+}
 
 /** Sends again while boat says the command never ran: the sandbox is still starting or restoring its disk. */
 async function retryWhileNotRun<T>(signal: AbortSignal, attempt: () => Promise<T>): Promise<T> {
