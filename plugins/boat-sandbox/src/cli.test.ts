@@ -62,6 +62,7 @@ function accountWith(account: Account): { access: BoatAccess; machineEnvironment
     limits: unused,
     get: unused,
     list: unused,
+    meter: unused,
     create: unused,
     remove: unused,
     stop: unused,
@@ -74,7 +75,7 @@ function accountWith(account: Account): { access: BoatAccess; machineEnvironment
     status: "available",
     facts: {
       account: { id: accountId.parse("sandbox_1"), login: "octocat", zeroDataRetention: false, githubLinked },
-      limits: { wallet: { kind: "personal" }, starts: { unlimited: true }, startsBlockedBy: null },
+      limits: { wallet: { kind: "personal" }, starts: { unlimited: true }, startsBlockedBy: null, billing: null },
     },
     client,
     settings: { ok: true, apiKey: "boat_test", idleMs: null, defaults: { template, environment, preset: "default" } },

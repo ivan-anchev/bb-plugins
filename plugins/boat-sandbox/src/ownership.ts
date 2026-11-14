@@ -27,6 +27,10 @@ export const ownerLabels = (ownerId: string): Labels => ({ [OWNER]: ownerId, [RO
 /** The labels of the machine sandbox core asked for with `key`. */
 export const machineLabels = (ownerId: string, key: string): Labels => ({ ...ownerLabels(ownerId), [KEY]: key });
 
+/** The key a machine sandbox of `ownerId`'s server was made with (for a composed create, the thread id); null for any other sandbox. */
+export const machineKeyOf = (labels: Labels, ownerId: string): string | null =>
+  labels[OWNER] === ownerId && labels[ROLE] === "machine" ? (labels[KEY] ?? null) : null;
+
 /** Readable in `boat list`. For a composed create the key is the thread id. */
 export const sandboxName = (key: string): string => `bb ${key}`;
 

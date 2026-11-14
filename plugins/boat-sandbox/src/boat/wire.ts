@@ -33,6 +33,18 @@ export const wireMe = z
 
 const startWindow = z.object({ limit: z.number().int(), used: z.number().int() });
 
+/**
+ * What the plan and the wallet hold: `vmHoursRemaining` is in hours of a `default` machine, which costs
+ * `vmHourDollars` an hour past the plan; `balanceDollars` is below zero while the wallet owes.
+ */
+export interface Billing {
+  walletDollars: number;
+  planHoursLeft: number;
+  /** When the plan's included hours reset; null when boat names no date. */
+  renewsAt: number | null;
+  vmHourDollars: number;
+}
+
 export const wireLimits = z
   .object({
     teamId: z.string().optional(),
@@ -42,6 +54,10 @@ export const wireLimits = z
       z.object({ unlimited: z.literal(true) }),
       z.object({ unlimited: z.literal(false), minute: startWindow, hour: startWindow, day: startWindow }),
     ]),
+    // All three are null or absent on unlimited accounts.
+    wallet: z.object({ balanceDollars: z.number() }).nullish(),
+    planIncluded: z.object({ vmHoursRemaining: z.number(), periodEnd: instant.nullable() }).nullish(),
+    overagePrices: z.object({ vmHourDollars: z.number() }).nullish(),
   })
   .transform((limits) => ({
     wallet: limits.teamId === undefined
@@ -49,6 +65,15 @@ export const wireLimits = z
       : { kind: "organization" as const, teamId: limits.teamId },
     starts: limits.starts,
     startsBlockedBy: limits.canStart ? null : (limits.startBlockedReason ?? "boat gave no reason"),
+    // null on an unlimited account: no plan, wallet or price to count against.
+    billing: limits.wallet && limits.planIncluded && limits.overagePrices
+      ? ({
+          walletDollars: limits.wallet.balanceDollars,
+          planHoursLeft: limits.planIncluded.vmHoursRemaining,
+          renewsAt: limits.planIncluded.periodEnd,
+          vmHourDollars: limits.overagePrices.vmHourDollars,
+        } satisfies Billing)
+      : null,
   }));
 
 /**
@@ -162,6 +187,18 @@ export const wireSandboxList = z.object({
   sandboxes: z.array(z.unknown()),
   pageInfo: z.object({ nextCursor: z.string().nullable() }),
 });
+
+/** Machine time this UTC calendar month at list price (OAS `cost`, `deletedCost`), counted from `since`, the 1st; boat also sends `seconds`. */
+const monthCost = z.object({ since: instant, dollars: z.number() });
+
+/**
+ * One sandbox's meter in a list read with `include=cost`: its `cost`, and `billingMultiplier`, the
+ * rate it uses machine time at (0.5 small, 1 default, 2 large, 50/9 xlarge).
+ */
+export const wireSandboxMeter = z.object({ cost: monthCost, billingMultiplier: z.number() });
+
+/** A page of `GET /sandboxes?include=cost,deletedCost`: `deletedCost` is the deleted sandboxes' time, which no row carries. */
+export const wireMeteredSandboxList = wireSandboxList.extend({ deletedCost: monthCost });
 
 /**
  * One NDJSON line of `POST /sandboxes/{id}/commands` with `stream: true` (OAS `CommandStreamFrame`):
