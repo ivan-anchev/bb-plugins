@@ -92,6 +92,36 @@ const newNoteSchema = z
   .refine((note) => note.quote !== null || note.body.text.trim() !== "" || note.files.length > 0, "A note needs some text or a file");
 export type NewNote = z.infer<typeof newNoteSchema>;
 
+/** A thread pill in a brief: `text.slice(from, to)` is "@" + `label`, the title stored with the note. */
+const briefMentionSchema = z.object({
+  kind: z.literal("thread"),
+  threadId: z.string().min(1),
+  from: z.number().int().nonnegative(),
+  to: z.number().int().positive(),
+  label: z.string().min(1),
+});
+
+/** A file bb holds for the composer's project, as `projects.attachments.upload` returns it. */
+const briefAttachmentSchema = z.object({
+  type: z.enum(["localFile", "localImage"]),
+  path: z.string().min(1),
+  name: z.string().min(1),
+  mimeType: z.string().optional(),
+  sizeBytes: z.number().int().nonnegative().optional(),
+  sourceProjectId: z.string().optional(),
+});
+
+/**
+ * Notes written out for a new thread: the text, its thread pills and the notes' media, already in
+ * the composer's project. Structurally bb's `ComposerDraftReplacement`, so it goes into the composer
+ * as it is.
+ */
+const briefSchema = z.object({ text: z.string(), mentions: z.array(briefMentionSchema), attachments: z.array(briefAttachmentSchema) });
+export type Brief = z.infer<typeof briefSchema>;
+
+/** The notes picked on the card: at least one, at most 100 in one brief. */
+const noteIdsSchema = z.array(noteIdSchema).min(1).max(100);
+
 export const notesContract = defineRpcContract({
   /** Every active note, newest first. */
   notes: { input: z.object({}), output: z.array(noteSchema), tags: () => [NOTES_TAG] },
@@ -99,4 +129,8 @@ export const notesContract = defineRpcContract({
   createNote: { input: newNoteSchema, output: noteSchema },
   /** Deletes a note for good. A note already gone counts as deleted, so a second call succeeds. */
   deleteNote: { input: z.object({ id: noteIdSchema }), output: z.object({}) },
+  /** The notes, oldest first, as a brief whose media is uploaded into the project. Notes already gone are left out. */
+  briefFor: { input: z.object({ noteIds: noteIdsSchema, projectId: z.string().min(1) }), output: briefSchema },
+  /** Takes the notes off the card, keeping their rows and files. Archiving twice keeps the first time. */
+  archiveNotes: { input: z.object({ noteIds: noteIdsSchema }), output: z.object({}) },
 });

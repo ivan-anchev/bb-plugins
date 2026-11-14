@@ -6,7 +6,7 @@ import { experimental_useSidebarThreads } from "@get-bb/plugin-sdk/app";
 import { Overlay, Portal, Root } from "@radix-ui/react-dialog";
 import { useEffect } from "react";
 import type { Note, Quote } from "../../contract.ts";
-import { useHoldEscape } from "../ui/hold-escape.ts";
+import { useHoldEscape } from "../ui/use-hold-escape.ts";
 import { PORTAL_SCOPE } from "../ui/portal-scope.ts";
 import { useNotes } from "../use-notes.ts";
 import { ComposeForm } from "./compose/compose-form.tsx";

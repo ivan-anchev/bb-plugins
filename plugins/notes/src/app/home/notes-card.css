@@ -36,11 +36,40 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Rows: 46px, two lines (6 + 18 + 2 + 14 + 6); the list bleeds 8px so text lines up with the header.
-   The lines are one button, which opens the note. */
+/* Rows: 46px, two lines (6 + 18 + 2 + 14 + 6); the list bleeds 8px so the checkbox lines up with
+   the header's icon. The checkbox picks the note; the lines are one button, which opens it. */
 .nt-list { display: flex; flex-direction: column; margin: 0 -8px; padding: 0; list-style: none; }
 .nt-row { display: flex; border-radius: 8px; }
 @media (hover: hover) { .nt-row:hover { background: var(--state-hover, color-mix(in oklch, var(--foreground) 5%, transparent)); } }
+/* The checkbox: a 30px column the row's height, the 14px box centred on line 1. */
+.nt-pick {
+  all: unset;
+  box-sizing: border-box;
+  flex: none;
+  width: 30px;
+  padding-top: 8px;
+  display: flex;
+  justify-content: center;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.nt-pick:focus-visible { box-shadow: inset 0 0 0 1.5px var(--ring); }
+.nt-check {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  box-shadow: inset 0 0 0 1.5px color-mix(in oklch, var(--foreground) 30%, transparent);
+  color: var(--primary-foreground);
+  transition: background-color 120ms ease-out, box-shadow 120ms ease-out;
+}
+.nt-check svg { width: 10px; height: 10px; stroke-width: 3.25; opacity: 0; transform: scale(0.5); transition: opacity 100ms ease-out, transform 160ms cubic-bezier(0.23, 1, 0.32, 1); }
+.nt-pick[aria-checked="true"] .nt-check { background: var(--primary); box-shadow: none; }
+.nt-pick[aria-checked="true"] .nt-check svg { opacity: 1; transform: none; }
+.nt-row:has(> .nt-pick[aria-checked="true"]) .nt-line1 { color: var(--foreground); }
+@media (prefers-reduced-motion: reduce) { .nt-check, .nt-check svg { transition: none; } }
+
 .nt-text {
   all: unset;
   box-sizing: border-box;
@@ -50,7 +79,7 @@
   flex-direction: column;
   gap: 2px;
   min-height: 46px;
-  padding: 6px 8px;
+  padding: 6px 8px 6px 0;
   border-radius: 8px;
   cursor: pointer;
 }
@@ -70,6 +99,7 @@
   width: 50px; /* the 30px thumb, 4px of shift each side, 6px of lean each side */
   height: 34px;
   margin-right: 6px;
+  cursor: pointer;
 }
 .nt-fan-thumb {
   position: absolute;
@@ -141,10 +171,10 @@
 .nt-empty b { font-weight: 500; color: var(--foreground); }
 
 .nt-foot { margin-top: auto; display: flex; align-items: center; gap: 8px; min-height: 24px; }
+.nt-end { margin-left: auto; }
 .nt-link {
   all: unset;
   position: relative;
-  margin-left: auto;
   border-radius: 4px;
   color: var(--muted-foreground);
   white-space: nowrap;
@@ -154,6 +184,32 @@
 .nt-link::before { content: ""; position: absolute; inset: -6px; }
 @media (hover: hover) { .nt-link:hover { color: var(--foreground); } }
 .nt-link:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.nt-link:disabled { cursor: default; opacity: 0.5; }
+/* Inside an error caption the link reads as the action it is. */
+.nt-retry { color: var(--foreground); text-decoration: underline; text-underline-offset: 2px; }
+/* The footer's one primary action. */
+.nt-go {
+  all: unset;
+  margin-left: auto;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+@media (hover: hover) { .nt-go:not(:disabled):hover { background: color-mix(in oklch, var(--primary) 88%, var(--card)); } }
+.nt-go:not(:disabled):active { transform: scale(0.97); }
+.nt-go:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.nt-go:disabled { cursor: default; opacity: 0.5; }
+/* It rises in as the first note is picked (the footer mounts then). */
+@media (prefers-reduced-motion: no-preference) { .nt-go { animation: nt-go-in 160ms cubic-bezier(0.23, 1, 0.32, 1); } }
+@keyframes nt-go-in { from { opacity: 0; transform: translateY(2px); } }
 .nt-foot-kbd {
   margin-left: 4px;
   padding: 0 4px;

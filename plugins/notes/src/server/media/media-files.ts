@@ -25,6 +25,9 @@ export function openMediaFiles(databasePath: string) {
   return {
     dir,
 
+    /** Where the attachment's bytes are on disk. */
+    path: pathOf,
+
     // why a temp name then rename: a reader never sees half a file, and a crash mid-write leaves a
     // `.tmp-` file no row names, which the next sweep removes.
     async write(id: AttachmentId, bytes: Uint8Array): Promise<void> {

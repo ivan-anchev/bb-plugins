@@ -1,6 +1,6 @@
 ---
 name: notes
-description: Explain the Notes plugin, which saves short personal notes in bb from a Spotlight opened with ⇧⌘J, the sidebar-footer notes icon, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), links threads in a note by typing @, attaches images and videos by paste, drop or 📎, and lists notes in a Notes card on the New thread screen, where clicking one opens it read-only with Delete. Use when the user asks how to write, quote or link a note, how to read, edit or delete one, where their notes are, why ⇧⌘J does nothing, what the source chip opens, why a thread is missing from the @ picker, why a file was refused or where attached files are stored, or why the Notes card is empty or says it couldn't read notes.
+description: Explain the Notes plugin, which saves short personal notes in bb from a Spotlight opened with ⇧⌘J, the sidebar-footer notes icon, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), links threads in a note by typing @, attaches images and videos by paste, drop or 📎, and lists notes in a Notes card on the New thread screen, where clicking one opens it read-only with Delete and ticking some and choosing Start thread puts them in the new-thread composer and archives them. Use when the user asks how to write, quote or link a note, how to read, edit or delete one, where their notes are, why ⇧⌘J does nothing, what the source chip opens, why a thread is missing from the @ picker, why a file was refused or where attached files are stored, what Start thread puts in the composer, where used notes went, why a file shows as a path instead of an attachment, or why the Notes card is empty or says it couldn't read notes.
 ---
 
 # Notes
@@ -94,9 +94,37 @@ note with files shows up to three of them as small thumbs fanned at the row's
 end, "+N" for the rest; a video shows its first frame with a play badge, or a
 plain tile with the badge when the browser can't decode it (such as an HEVC or
 ProRes .mov). The fan opens a little under the pointer, not on touch screens or
-with reduced motion on. "N more" shows the rest and "Show fewer" folds them. A new note appears within about two seconds with
+with reduced motion on. "N more" shows the rest and "Show fewer" folds them. Each row has a checkbox
+for Start thread (below). A new note appears within about two seconds with
 no reload. When the plugin cannot read its database the card says "Couldn't
 read notes" with the reason, beside any notes it already showed.
+
+## Starting a thread from notes
+
+- Each row on the card has a checkbox; clicking the row's thumbs ticks it too.
+  With notes ticked the footer reads "N selected · Clear" and **Start thread**;
+  Clear unticks them all.
+- **Start thread** adds a brief to bb's new-thread composer above the card,
+  after anything already typed there (the typed text, its pills and its
+  attachments stay). The brief reads "Context from N notes:", then each note,
+  oldest first: its passage as a quote with "— from @Thread
+  (@thread:<id>#msg=<seq>)" (a pill for the thread, and bb's link to the
+  message), then the user's words with their @ links as pills. Pills carry the
+  thread titles saved with the note.
+- The notes' images and videos become the draft's attachments. A file over
+  bb's 35 MB attachment limit is not attached; the brief names it instead as
+  "Too large to attach, on disk: <path> (<name>)", the file in the plugin's
+  `media/` folder.
+- The draft is not sent: the user reviews and sends it. bb keeps it across
+  reloads. With "No project" picked, the files go to bb's personal project;
+  Start thread is disabled while bb is still resolving the composer's project.
+- The notes used leave the card: they are archived, not deleted. Their rows and
+  files stay in the database and `media/`, and there is no undo or view of
+  archived notes yet.
+- If the brief fails, one line under the list says why and nothing is
+  archived. If the notes went into the composer but archiving them failed, the
+  card says "Notes are in the composer, but archiving them failed. Try again";
+  Try again archives them without touching the draft.
 
 ## Reading and deleting a note
 

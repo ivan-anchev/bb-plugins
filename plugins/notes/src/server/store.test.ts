@@ -4,7 +4,7 @@ import { attachmentIdSchema, noteIdSchema, type Attachment, type Note } from "..
 import { memoryStorage } from "./memory-storage.ts";
 import { openStore } from "./store.ts";
 
-/** A store over a fresh in-memory database, and that database for what the store can't do yet. */
+/** A store over a fresh in-memory database, and that database for what the store never reads back. */
 function freshStore() {
   const { db, storage } = memoryStorage();
   return { db, store: openStore(storage) };
@@ -70,15 +70,36 @@ test("notes list newest first", () => {
 });
 
 test("archived notes are not listed", () => {
-  const { db, store } = freshStore();
+  const { store } = freshStore();
   store.insert(note(1, "kept"));
   store.insert(note(2, "archived"));
-  db.prepare("UPDATE notes SET archived_at = ? WHERE id = ?").run(5_000, note(2, "").id);
+  store.archive([note(2, "").id], 5_000);
 
   assert.deepEqual(
     store.activeNotes().map((n) => n.body.text),
     ["kept"],
   );
+});
+
+test("notes asked for by id come oldest first, with their attachments, leaving out archived and unknown ids", () => {
+  const { store } = freshStore();
+  const withFile: Note = { ...note(1, "first"), attachments: [attachment(1, "image/png")] };
+  store.insert(note(3, "third"));
+  store.insert(withFile);
+  store.insert(note(2, "archived"));
+  store.archive([note(2, "").id], 5_000);
+
+  assert.deepEqual(store.activeNotesByIds([note(3, "").id, note(2, "").id, note(1, "").id, note(9, "").id]), [withFile, note(3, "third")]);
+});
+
+test("archiving twice keeps the first time", () => {
+  const { db, store } = freshStore();
+  store.insert(note(1, "used"));
+
+  store.archive([note(1, "").id], 5_000);
+  store.archive([note(1, "").id], 9_000);
+
+  assert.deepEqual(db.prepare("SELECT archived_at FROM notes WHERE id = ?").get(note(1, "").id), { archived_at: 5_000 });
 });
 
 test("a deleted note is gone, and the others stay", () => {

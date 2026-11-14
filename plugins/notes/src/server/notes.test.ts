@@ -135,3 +135,17 @@ test("the sweep of a plugin that never stored media removes nothing", async () =
 
   assert.deepEqual(await notes.sweep(Date.now()), []);
 });
+
+test("archiving notes takes them off the card, keeps their files, and tells open cards to read again", async () => {
+  const { notes, store, media, changes } = freshNotes();
+  const kept = await notes.create(typed("kept"));
+  const used = await notes.create(typed("used", [file("used.png", "image/png", "used")]));
+  changes.count = 0;
+
+  notes.archive([used.id]);
+
+  assert.deepEqual(store.activeNotes(), [kept]);
+  assert.deepEqual(await mediaNames(media.dir), [used.attachments[0].id]);
+  assert.equal(store.attachment(used.attachments[0].id)?.name, "used.png");
+  assert.equal(changes.count, 1);
+});

@@ -1,4 +1,4 @@
-// What happens when a note is written or deleted: its rows in SQLite and its files on disk change
+// What happens when a note is written, archived or deleted: its rows in SQLite and its files on disk change
 // together, and every open card is told to read again. The order is chosen so a failure at any step
 // leaves at most a file no row names, which the next load's sweep removes, and never a row whose
 // file is missing.
@@ -30,6 +30,12 @@ export function createNotes({ store, media, now, onChange }: Deps) {
       const fileIds = store.delete(id);
       onChange();
       await media.remove(fileIds);
+    },
+
+    /** Takes the notes off every card. Their rows and files stay. */
+    archive(ids: readonly Note["id"][]): void {
+      store.archive(ids, now());
+      onChange();
     },
 
     /** Removes files older than `before` that no note holds: left by a save that failed or crashed. */
