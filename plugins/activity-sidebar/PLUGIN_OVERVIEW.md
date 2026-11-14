@@ -19,7 +19,9 @@ its plan while it works, and a tree of its subthreads to open.
   Subthreads and bb's hidden helper threads never get
   a row of their own.
 - **Shelves** at the foot of the list: **Working** holds the threads under way
-  (running, or waiting on background work), **Asleep** the threads put to
+  (running, or waiting on background work or on a subthread that reports back
+  to them; a thread whose wait just ended stays there a few seconds while its
+  next turn starts, so it doesn't flash Completed on Activity), **Asleep** the threads put to
   sleep, soonest to wake first, and **Archived** holds bb's archived threads. They start folded, showing how many they hold.
   Archived counts every archived parent thread, loaded or not (only the
   chosen project's while the list is narrowed to one). Opened,

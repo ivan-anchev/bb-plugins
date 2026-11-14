@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { thread } from "./fixtures.ts";
-import { askOf, baseState, stateOf, withAsk, type ZState } from "./state.ts";
+import { askOf, baseState, stateOf, withAsk, withWait, type ZState } from "./state.ts";
 
 const EXPECTED: Record<PluginSidebarThread["indicator"], ZState | null> = {
   "waiting-for-input": "input",
@@ -40,11 +40,20 @@ test("an indicator from a newer bb draws no state", () => {
 
 test("a woken sleeper shows Woke unless it has something more to say", () => {
   const sleep = { threadId: "t", until: 1_000 };
-  assert.equal(stateOf(thread("t"), sleep, 2_000), "woke");
-  assert.equal(stateOf(thread("t", { indicator: "unread-success" }), sleep, 2_000), "woke");
-  assert.equal(stateOf(thread("t", { indicator: "waiting-for-input" }), sleep, 2_000), "input");
-  assert.equal(stateOf(thread("t"), sleep, 500), null, "still asleep");
-  assert.equal(stateOf(thread("t", { indicator: "unread-success" }), undefined, 2_000), "done");
+  assert.equal(stateOf(null, sleep, 2_000), "woke");
+  assert.equal(stateOf("done", sleep, 2_000), "woke");
+  assert.equal(stateOf("input", sleep, 2_000), "input");
+  assert.equal(stateOf("waiting", sleep, 2_000), "waiting", "something will still wake it");
+  assert.equal(stateOf(null, sleep, 500), null, "still asleep");
+  assert.equal(stateOf("done", undefined, 2_000), "done");
+});
+
+test("something to wake it turns a settled turn Waiting; nothing else moves", () => {
+  assert.equal(withWait(null, true), "waiting");
+  assert.equal(withWait("done", true), "waiting");
+  const others: ZState[] = ["working", "connecting", "waiting", "input", "approval", "failed", "woke"];
+  for (const state of others) assert.equal(withWait(state, true), state, state);
+  assert.equal(withWait("done", false), "done");
 });
 
 test("an approval asked turns Awaiting Input into Pending Approval; a question, or not knowing yet, leaves it", () => {

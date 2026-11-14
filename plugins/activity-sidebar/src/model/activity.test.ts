@@ -8,7 +8,7 @@ import { project, thread, WORKING } from "./fixtures.ts";
 const NOW = 10 * 3_600_000;
 
 function build(threads: PluginSidebarThread[], extra: Partial<ActivityInput> = {}) {
-  return buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), now: NOW, activeThreadId: null, filter: null, ...extra }).sections;
+  return buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), held: new Set(), now: NOW, activeThreadId: null, filter: null, ...extra }).sections;
 }
 
 function ids(sections: ReturnType<typeof build>, key: SectionKey): string[] {
@@ -53,6 +53,33 @@ test("a thread under way leaves Activity for Working, latest first; a pinned one
   assert.deepEqual(ids(sections, "working"), ["busy-new", "busy-old"]);
   assert.deepEqual(ids(sections, "activity"), ["idle", "asks"]);
   assert.deepEqual(ids(sections, "pinned"), ["pinned-busy"]);
+});
+
+test("a finished turn waiting on a subthread that reports back stays on Working until the subthread ends", () => {
+  const done = { indicator: "unread-success" } as const;
+  const sections = build([
+    thread("waits", done),
+    thread("kid", { parentThreadId: "waits", ...WORKING }),
+    thread("waits-deeper"),
+    thread("kid-waits", { parentThreadId: "waits-deeper", ...done }),
+    thread("grandkid", { parentThreadId: "kid-waits", indicator: "background-agent" }),
+    thread("quiet-kid", done),
+    thread("silent", { parentThreadId: "quiet-kid", parentNotifications: "stuck", ...WORKING }),
+    thread("finished", done),
+    thread("kid-done", { parentThreadId: "finished", ...done }),
+    thread("asks", { indicator: "waiting-for-input" }),
+    thread("kid-of-asks", { parentThreadId: "asks", ...WORKING }),
+  ]);
+  assert.deepEqual(ids(sections, "working").sort(), ["waits", "waits-deeper"]);
+  assert.deepEqual(ids(sections, "activity").sort(), ["asks", "finished", "quiet-kid"], "a silent subthread, a done one, or a question leave it on Activity");
+  const corner = sections.flatMap((s) => s.rows).find((r) => r.thread.id === "waits")?.corner;
+  assert.deepEqual(corner, { kind: "state", state: "waiting" });
+});
+
+test("a held hand-off keeps a settled thread Waiting on Working", () => {
+  const sections = build([thread("handing-off", { indicator: "unread-success" }), thread("other", { indicator: "unread-success" })], { held: new Set(["handing-off"]) });
+  assert.deepEqual(ids(sections, "working"), ["handing-off"]);
+  assert.deepEqual(ids(sections, "activity"), ["other"]);
 });
 
 test("an archived parent sits in Archived, latest archived first, its corner saying when it was archived", () => {
@@ -170,9 +197,8 @@ test("a row is strong with a state or when it is the open thread or holds it", (
 });
 
 test("a row carries its project's name and hue, and what runs under it", () => {
-  const [, activity] = build([thread("p"), thread("k", { parentThreadId: "p", ...WORKING }), thread("stray", { projectId: "prj_gone" })]);
-  assert.equal(activity.key, "activity");
-  const byId = Object.fromEntries(activity.rows.map((r) => [r.thread.id, r]));
+  const sections = build([thread("p"), thread("k", { parentThreadId: "p", ...WORKING }), thread("stray", { projectId: "prj_gone" })]);
+  const byId = Object.fromEntries(sections.flatMap((s) => s.rows).map((r) => [r.thread.id, r]));
   assert.equal(byId.p.project.name, "bb-plugins");
   assert.equal(byId.p.runningUnder, 1);
   assert.equal(byId.stray.project.name, "No project");

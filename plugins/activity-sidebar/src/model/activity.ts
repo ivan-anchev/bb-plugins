@@ -4,7 +4,7 @@ import type { PluginSidebarProject, PluginSidebarThread } from "@get-bb/plugin-s
 import type { SleepRecord } from "../contract.ts";
 import { hueOf, type Hue } from "./project-hue.ts";
 import { wakesIn } from "./sleep.ts";
-import { NEEDS_YOU, stateOf, UNDER_WAY, type ZState } from "./state.ts";
+import { baseState, NEEDS_YOU, stateOf, UNDER_WAY, type ZState } from "./state.ts";
 import { indexThreads, type ThreadIndex } from "./thread-index.ts";
 import { ago } from "./time.ts";
 
@@ -43,6 +43,8 @@ export type ActivityInput = {
   threads: readonly PluginSidebarThread[];
   projects: readonly PluginSidebarProject[];
   sleeps: ReadonlyMap<string, SleepRecord>;
+  /** The threads whose wait just ended, held on Working for the wake it brings (src/handoff/handoff.ts). */
+  held: ReadonlySet<string>;
   now: number;
   activeThreadId: string | null;
   /** The project every section is narrowed to, or null for every project. */
@@ -54,7 +56,7 @@ export type ActivityInput = {
  * Asleep soonest to wake first, the rest latest first.
  */
 export function buildActivity(input: ActivityInput): ActivityModel {
-  const index = indexThreads(input.threads);
+  const index = indexThreads(input.threads, input.held);
   const currentRoot = input.activeThreadId === null ? null : index.rootOf(input.activeThreadId);
   const projectNames = new Map(input.projects.map((p) => [p.id, p.name]));
 
@@ -63,7 +65,7 @@ export function buildActivity(input: ActivityInput): ActivityModel {
     .map((thread) => {
       const sleep = sleepOf(thread, input.sleeps);
       // why: an archived thread has left the work; its row says when it left, not what it last did.
-      const state = thread.isArchived ? null : stateOf(thread, sleep, input.now);
+      const state = thread.isArchived ? null : stateOf(index.liveState(thread), sleep, input.now);
       return { thread, sleep, state, section: sectionOf(thread, sleep, state, input.now) };
     });
 
@@ -96,12 +98,13 @@ export function buildActivity(input: ActivityInput): ActivityModel {
 
 /**
  * The sleepers asking for you: their sleep ends now, for good, so they show Woke once answered and
- * never slip back to Asleep (Zeron: its host wakes it early).
+ * never slip back to Asleep (Zeron: its host wakes it early). why: bb's own state says it; neither
+ * Sleep nor a wait changes a state that asks for you.
  */
 export function sleepersAskingForYou(input: Pick<ActivityInput, "threads" | "sleeps" | "now">): SleepRecord[] {
   return input.threads.filter(isListed).flatMap((t) => {
     const sleep = sleepOf(t, input.sleeps);
-    return sleep !== undefined && sleep.until > input.now && asksForYou(stateOf(t, sleep, input.now)) ? [sleep] : [];
+    return sleep !== undefined && sleep.until > input.now && asksForYou(baseState(t)) ? [sleep] : [];
   });
 }
 

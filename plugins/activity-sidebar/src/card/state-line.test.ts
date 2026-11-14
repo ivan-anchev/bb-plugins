@@ -3,6 +3,7 @@ import { test } from "node:test";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import type { RowModel } from "../model/activity.ts";
 import { thread, WORKING } from "../model/fixtures.ts";
+import { indexThreads } from "../model/thread-index.ts";
 import { stateLine } from "./state-line.ts";
 import { underWaySince } from "./under-way.ts";
 
@@ -43,13 +44,25 @@ test("in no state: how long ago it moved; archived, how long ago it was archived
 });
 
 test("underWaySince keeps the first sighting while it stays under way and forgets it once it stops", () => {
-  const first = underWaySince(new Map(), [thread("w", { ...WORKING, updatedAt: 100 }), thread("idle", { updatedAt: 50 })]);
+  const first = since(new Map(), [thread("w", { ...WORKING, updatedAt: 100 }), thread("idle", { updatedAt: 50 })]);
   assert.deepEqual([...first], [["w", 100]]);
   // Read while it works: updatedAt moves, the sighting holds.
-  const read = underWaySince(first, [thread("w", { ...WORKING, updatedAt: 900 })]);
+  const read = since(first, [thread("w", { ...WORKING, updatedAt: 900 })]);
   assert.deepEqual([...read], [["w", 100]]);
-  const stopped = underWaySince(read, [thread("w", { updatedAt: 950 })]);
+  const stopped = since(read, [thread("w", { updatedAt: 950 })]);
   assert.deepEqual([...stopped], []);
-  const again = underWaySince(stopped, [thread("w", { ...WORKING, updatedAt: 1000 })]);
+  const again = since(stopped, [thread("w", { ...WORKING, updatedAt: 1000 })]);
   assert.deepEqual([...again], [["w", 1000]], "a new turn starts afresh");
 });
+
+test("underWaySince keeps the sighting through a held hand-off into the next turn", () => {
+  const waiting = since(new Map(), [thread("w", { indicator: "background-command", updatedAt: 100 })]);
+  const handing = since(waiting, [thread("w", { indicator: "unread-success", updatedAt: 500 })], new Set(["w"]));
+  assert.deepEqual([...handing], [["w", 100]]);
+  const working = since(handing, [thread("w", { ...WORKING, updatedAt: 600 })]);
+  assert.deepEqual([...working], [["w", 100]]);
+});
+
+function since(last: ReadonlyMap<string, number>, threads: PluginSidebarThread[], held: ReadonlySet<string> = new Set()) {
+  return underWaySince(last, threads, indexThreads(threads, held));
+}

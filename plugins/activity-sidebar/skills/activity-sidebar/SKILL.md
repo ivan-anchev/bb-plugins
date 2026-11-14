@@ -18,9 +18,15 @@ commands and no settings.
   threads have no row; a parent counts its running subthreads instead.
 - Below a gap that fills the rest of the sidebar, the **shelves**:
   - **Working**: unpinned threads under way (running, connecting, or waiting
-    on background work that will wake them). When a turn starts, the thread
-    leaves Activity for Working; when it ends, it returns to the top of
-    Activity.
+    on what will wake them: background work, or a subthread still under way
+    whose end bb reports back to it). When a turn starts, the thread leaves
+    Activity for Working; when it ends with nothing left to wake it, it
+    returns to the top of Activity. A thread whose wait just ended stays on
+    Working for 10 seconds while the wakes it brings start its next turn (a
+    short reply in between doesn't send it to Activity), so an orchestrator
+    that waits on its subthreads doesn't flash Completed on Activity between
+    rounds. Asking for you or failing ends that early. A subthread with parent
+    notifications set to `stuck` or `off` doesn't hold its parent.
   - **Asleep**: threads put to sleep (see Sleep below), the soonest to wake
     first, each showing how soon it wakes.
   - **Archived**: bb's archived parent threads, latest archived first, each
@@ -85,7 +91,7 @@ From left to right:
    every running subthread), when any do.
 6. The corner, which holds exactly one of:
    - a state glyph: a turning dashed ring for working, connecting (blue) or waiting on
-     background work; a speech bubble for awaiting input; an amber shield for
+     background work or subthreads; a speech bubble for awaiting input; an amber shield for
      pending approval (the agent asks leave to run something); a green check for
      done (an unread finished turn); a red mark for failed; a yellow alarm
      clock for woke from sleep;

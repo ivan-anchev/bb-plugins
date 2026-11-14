@@ -59,11 +59,22 @@ export function baseState(thread: PluginSidebarThread): ZState | null {
   }
 }
 
-/** The state a row shows: a woken sleeper's alarm, unless it has something more to say. */
-export function stateOf(thread: PluginSidebarThread, sleep: SleepRecord | undefined, now: number): ZState | null {
-  const base = baseState(thread);
-  if (sleep !== undefined && sleep.until <= now && (base === null || base === "done")) return "woke";
-  return base;
+/** Its turn is over and it has nothing to say: no state, or Completed. */
+export function settled(state: ZState | null): boolean {
+  return state === null || state === "done";
+}
+
+/**
+ * The state once it is known whether something will wake the thread (a subthread that reports back,
+ * or the moment after its wait ended): a settled turn reads Waiting; nothing else moves.
+ */
+export function withWait(state: ZState | null, waits: boolean): ZState | null {
+  return waits && settled(state) ? "waiting" : state;
+}
+
+/** The state a row shows, from its live state: a woken sleeper's alarm, unless it has something more to say. */
+export function stateOf(live: ZState | null, sleep: SleepRecord | undefined, now: number): ZState | null {
+  return sleep !== undefined && sleep.until <= now && settled(live) ? "woke" : live;
 }
 
 /** What a thread waiting for you asks: leave to run something, or an answer. */
