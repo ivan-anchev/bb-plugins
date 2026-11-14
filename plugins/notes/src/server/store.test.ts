@@ -31,6 +31,21 @@ test("a note with a quote keeps it", () => {
   assert.deepEqual(store.activeNotes(), [quoted]);
 });
 
+test("a note's thread links read back with it", () => {
+  const { store } = freshStore();
+  const linked: Note = { ...note(1, "check @Burn weekly later"), body: { text: "check @Burn weekly later", mentions: [{ threadId: "thr_weekly", from: 6, to: 18 }] } };
+  store.insert(linked);
+
+  assert.deepEqual(store.activeNotes(), [linked]);
+});
+
+test("a stored link that does not cover an @ token is refused on read", () => {
+  const { store } = freshStore();
+  store.insert({ ...note(1, "check Burn weekly"), body: { text: "check Burn weekly", mentions: [{ threadId: "thr_weekly", from: 6, to: 17 }] } });
+
+  assert.throws(() => store.activeNotes(), /A thread link must cover an @ token/);
+});
+
 test("notes list newest first", () => {
   const { store } = freshStore();
   store.insert(note(1, "first"));

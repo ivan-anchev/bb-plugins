@@ -1,6 +1,6 @@
 ---
 name: notes
-description: Explain the Notes plugin, which saves short personal notes in bb from a Spotlight opened with ⇧⌘J, the sidebar-footer notes icon, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), and lists them in a Notes card on the New thread screen. Use when the user asks how to write or quote a note, where their notes are, why ⇧⌘J does nothing, what the source chip opens, or why the Notes card is empty or says it couldn't read notes.
+description: Explain the Notes plugin, which saves short personal notes in bb from a Spotlight opened with ⇧⌘J, the sidebar-footer notes icon, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), links threads in a note by typing @, and lists notes in a Notes card on the New thread screen. Use when the user asks how to write, quote or link a note, where their notes are, why ⇧⌘J does nothing, what the source chip opens, why a thread is missing from the @ picker, or why the Notes card is empty or says it couldn't read notes.
 ---
 
 # Notes
@@ -36,6 +36,25 @@ agent tools and no settings; an agent cannot read or write notes.
   threads have not loaded yet when the Spotlight opens (or the thread is
   archived), the title is the thread's id.
 
+## Linking threads with @
+
+- Type `@` in the Spotlight (or click **@** in its footer) and a picker opens
+  under the text: "Link a thread", with up to five of the user's active
+  threads whose title contains what follows the `@` (case-insensitive).
+  Archived threads are not listed.
+- ↑↓ move the highlight; Enter or Tab (or a click) writes "@Title " into the
+  text and adds a chip under it naming the thread. With no match the picker
+  says "No thread matches …", and Enter breaks the line as usual.
+- Esc closes the picker only; it stays closed until what follows the `@`
+  changes. A second Esc closes the Spotlight.
+- The text is what counts: a thread stays linked while its "@Title" is in the
+  text. Editing or deleting that text unlinks it (its chip goes), and a chip's
+  × removes every "@Title" of that thread. Typing a picked thread's "@Title"
+  again by hand links it again.
+- A saved note keeps each link as a range over its text. On the Notes card,
+  a note without a quote shows the first thread it links on line 2; a quote's
+  thread still comes first.
+
 ## The shortcut
 
 The command is listed in Settings → Keyboard as "Plugin: notes · New note",
@@ -48,8 +67,8 @@ Shortcuts do not run while a bb dialog is open, the Spotlight included.
 
 On the New thread screen, under the composer. It lists active notes newest
 first, four at a time: line 1 is the note on one line (a quote saved without
-words shows the quote in “ ”), line 2 the thread the quote came from ("No
-thread" for a note typed from scratch). "N more" shows the rest
+words shows the quote in “ ”), line 2 the thread the quote came from, else the
+first thread the note links with @ ("No thread" for a note with neither). "N more" shows the rest
 and "Show fewer" folds them. A new note appears within about two seconds with
 no reload. When the plugin cannot read its database the card says "Couldn't
 read notes" with the reason, beside any notes it already showed.
