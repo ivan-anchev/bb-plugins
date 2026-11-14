@@ -1,6 +1,6 @@
 ---
 name: homepage
-description: Explain the Homepage plugin's cards under bb's new-thread composer, starting with Activity, a six-month grid of the user's merged GitHub PRs with the threads they started, PRs merged and lines changed. Use when the user asks what a homepage card shows or counts, why the Activity card is empty or out of date, or why it says gh is missing or not signed in.
+description: Explain the Homepage plugin's cards under bb's new-thread composer. Activity is a six-month grid of the user's merged GitHub PRs with the threads they started, PRs merged and lines changed; Burn shows the Burn plugin's spend and tokens for the last week or month with the change against the period before. Use when the user asks what a homepage card shows or counts, why the Activity card is empty or out of date, why it says gh is missing or not signed in, or why the Burn card's numbers differ from Burn's page or it says Burn is missing or off.
 ---
 
 # Homepage
@@ -9,7 +9,8 @@ The Homepage plugin draws a grid of cards under the composer on bb's New thread
 screen. It has no commands and no settings. Its first card is Activity. When
 the PR Reviews plugin is installed, its pull requests card sits beside
 Activity, and the two stack when the page is narrow; that card belongs to PR
-Reviews.
+Reviews. When the Burn plugin is installed too, a narrow Burn card sits on the
+second row, before boat spend when boat-sandbox is installed.
 
 ## Activity
 
@@ -49,3 +50,38 @@ can take up to 30 minutes to appear.
 - Numbers lag behind GitHub: wait for the next 30-minute refresh. A failed
   refresh keeps the last numbers; `bb plugin logs homepage` shows why it
   failed.
+
+## Burn
+
+### What it shows
+
+- A Week/Month switch. Week is the last 7 days and Month the last 30, rolling,
+  never the calendar week or month. It always covers every project.
+- **Spent**: what the user's agents cost in that time, as Burn prices it:
+  "$4.27" under ten dollars, whole dollars above ("$1,800").
+- **Tokens**: tokens used in that time, such as "5.13B", "235M" or "12K".
+- Beside each, the change against the same length of time just before:
+  "▲ 125%" (up, in the theme's warning colour), "▼ 12%" (down), "same" when it
+  rounds to 0%, or "—" when nothing was spent or used before. Hovering a
+  change reads it in full, such as "▲ 125% vs previous 7 days" or "No spend in
+  the previous 30 days".
+
+### Where the numbers come from
+
+The Homepage plugin's server calls the Burn plugin's `spend` rpc with
+`{ range: "7d" | "30d", projectId: null }` and keeps `total`, `previousTotal`,
+`tokens` and `previousTokens`. They match the totals on Burn's own Spend page
+for the same range with no project picked. Nothing is saved; the card reads
+again when it shows and every minute while it stays open.
+
+### When it looks wrong
+
+- "Install the Burn plugin…": Burn (id `burn`) isn't installed.
+- "Burn is turned off…": enable it in Extensions, or `bb plugin enable burn`.
+- "Burn is starting…" or "Burn isn't running…": check `bb plugin list` and
+  `bb plugin logs burn`.
+- "This version of Burn can't report spend here. Update Burn.": that Burn has
+  no `spend` rpc, or refuses the input; update Burn.
+- "Burn's reply changed shape…": Burn's reply no longer has the four numbers;
+  update Homepage.
+- "Couldn't read Burn: …": Burn's own error; `bb plugin logs burn` has more.
