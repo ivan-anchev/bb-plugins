@@ -208,6 +208,40 @@
   width: 14px;
   height: 14px;
 }
+/* A menu row's switch (the prototype's, P:196-201), in bb's ink: on, its primary. */
+.as-switch {
+  position: relative;
+  flex: 0 0 26px;
+  height: 16px;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--foreground) 14%, transparent);
+  transition: background-color 150ms ease;
+}
+.as-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+  transition: transform 150ms ease, background-color 150ms ease;
+}
+.as-switch[data-on] {
+  background: var(--primary);
+}
+.as-switch[data-on]::after {
+  background: var(--primary-foreground);
+  transform: translateX(10px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .as-switch,
+  .as-switch::after {
+    transition: none;
+  }
+}
 .as-menu-separator {
   height: 1px;
   margin: 4px -4px;
@@ -292,10 +326,21 @@
 }
 /* why: on the box, so the wash stays while the pointer is on the corner's button, the menu is open or
    the title is being renamed. */
-.as-rowbox:hover .as-row,
 .as-rowbox[data-state="open"] .as-row,
 .as-row[data-editing] {
   background: var(--state-hover);
+}
+/* why: only where something hovers. A touch screen keeps no hover, and iOS spends a tap on one that shows
+   or hides anything (the corner's Archive), so the row would open only on a second tap. */
+@media (hover: hover) {
+  .as-rowbox:hover .as-row {
+    background: var(--state-hover);
+  }
+}
+/* A regular row: its detail on a second line, the slot and the first line where a compact row has them. */
+.as-row[data-tall] {
+  height: 46px;
+  align-items: flex-start;
 }
 .as-row:active {
   background: var(--state-active);
@@ -328,13 +373,39 @@
 .as-row[data-strong] .as-mark {
   opacity: 0.9;
 }
-.as-line {
+.as-words {
   flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.as-line {
+  flex: 0 0 30px;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
   padding-right: 8px;
+}
+/* Regular's second line (Zeron's PULL, P:109): pulled up under the title, quiet, its branch glyph leading. */
+.as-detail {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 14px;
+  margin-top: -7px;
+  padding-right: 8px;
+  color: var(--subtle-foreground);
+  font-size: 11px;
+  line-height: 14px;
+}
+.as-detail .as-title {
+  color: inherit;
+}
+.as-detail .as-card-glyph {
+  flex: 0 0 11px;
+  width: 11px;
+  height: 11px;
 }
 .as-lead {
   flex: 1 1 auto;
@@ -353,10 +424,32 @@
   font-weight: 400;
 }
 .as-title[data-over] {
-  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent);
-  mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--as-fade-in), #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 var(--as-fade-in), #000 calc(100% - 24px), transparent);
+  transition: --as-fade-in 160ms ease-out;
 }
-.as-row[data-strong] .as-title {
+.as-title-text {
+  display: inline-block;
+  transition: transform 240ms cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+/* A row's title too long for it runs through to its end under the pointer, after a beat, as fast as
+   it reads (row.tsx runStyle); its start fades as it goes. Leaving, it slides home. */
+@property --as-fade-in {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .as-rowbox:hover .as-line .as-title[data-over] {
+    --as-fade-in: 12px;
+    transition-delay: 500ms;
+  }
+  .as-rowbox:hover .as-line .as-title[data-over] > .as-title-text {
+    transform: translateX(calc(-1 * var(--as-travel)));
+    transition: transform var(--as-run) cubic-bezier(0.45, 0, 0.55, 1) 500ms;
+  }
+}
+.as-row[data-strong] .as-line .as-title {
   color: var(--foreground);
   font-weight: 500;
 }
@@ -513,11 +606,13 @@
   width: 14px;
   height: 14px;
 }
-.as-rowbox:hover .as-corner-action {
-  display: flex;
-}
-.as-rowbox:hover:has(.as-corner-action) .as-rest {
-  visibility: hidden;
+@media (hover: hover) {
+  .as-rowbox:hover .as-corner-action {
+    display: flex;
+  }
+  .as-rowbox:hover:has(.as-corner-action) .as-rest {
+    visibility: hidden;
+  }
 }
 .as-rowbox[data-jumping] .as-corner-action {
   display: none;

@@ -139,3 +139,9 @@ test("a row item says which section it stands in", () => {
     [["idle", "activity"], ["busy", "working"]],
   );
 });
+
+test("rows stand tall, their detail on a second line, unless the list is compact", () => {
+  const tall = (compact: boolean) => listItems(sections(), view({ compact })).flatMap((i) => (i.kind === "row" ? [i.tall] : []));
+  assert.deepEqual(tall(true), [false, false]);
+  assert.deepEqual(tall(false), [true, true]);
+});

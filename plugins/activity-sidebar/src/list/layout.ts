@@ -3,7 +3,7 @@
 // is, which is what windowing and motion need.
 import type { ListItem } from "./items.ts";
 
-export const METRICS = { padTop: 4, padBottom: 8, gap: 2, row: 30, title: 24 } as const;
+export const METRICS = { padTop: 4, padBottom: 8, gap: 2, row: 30, tallRow: 46, title: 24 } as const;
 
 export type LayoutEntry = { key: string; item: ListItem; y: number; h: number };
 
@@ -57,6 +57,7 @@ function naturalHeight(item: ListItem): number {
     case "title":
       return METRICS.title;
     case "row":
+      return item.tall ? METRICS.tallRow : METRICS.row;
     case "more":
     case "notice":
       return METRICS.row;
