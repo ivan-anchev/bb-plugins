@@ -1,0 +1,62 @@
+/* mdxcn's figures colour themselves through a few custom Tailwind tokens. bb's plugin build
+   compiles default-theme utilities only, so those tokens are defined here as plain CSS, drawn
+   from bb's theme so figures follow the user's palette. Scoped to `.mdxcn` (the fence wrapper):
+   bb does not scope a plugin's stylesheet. */
+.mdxcn {
+  --graph-accent: var(--timeline-accent);
+  --graph-accent-2: var(--warning);
+  --graph-accent-3: var(--success);
+  --graph-frame: color-mix(in oklch, var(--foreground) 38%, transparent);
+  --graph-muted: var(--muted-foreground);
+}
+
+.mdxcn .text-graph-accent { color: var(--graph-accent); }
+.mdxcn .text-graph-accent-2 { color: var(--graph-accent-2); }
+.mdxcn .text-graph-accent-3 { color: var(--graph-accent-3); }
+.mdxcn .text-graph-frame { color: var(--graph-frame); }
+.mdxcn .text-graph-muted { color: var(--graph-muted); }
+
+/* mdxcn's `graph-frame`, `graph-rule` and `graph-rule-y` utilities: dashed borders and rules. */
+.mdxcn .graph-frame {
+  background-image:
+    repeating-linear-gradient(to right, var(--graph-frame) 0 2px, transparent 2px 7px),
+    repeating-linear-gradient(to bottom, var(--graph-frame) 0 2px, transparent 2px 7px),
+    repeating-linear-gradient(to right, var(--graph-frame) 0 2px, transparent 2px 7px),
+    repeating-linear-gradient(to bottom, var(--graph-frame) 0 2px, transparent 2px 7px);
+  background-repeat: repeat-x, repeat-y, repeat-x, repeat-y;
+  background-position: 0 0, 100% 0, 0 100%, 0 0;
+  background-size: 100% 1px, 1px 100%, 100% 1px, 1px 100%;
+}
+
+.mdxcn .graph-rule {
+  height: 1px;
+  background-image: repeating-linear-gradient(to right, var(--graph-frame) 0 2px, transparent 2px 7px);
+}
+
+.mdxcn .graph-rule-y {
+  width: 1px;
+  background-image: repeating-linear-gradient(to bottom, var(--graph-frame) 0 2px, transparent 2px 7px);
+}
+
+/* The two variant classes mdxcn's prose styling builds on those tokens. */
+.mdxcn li::before { color: var(--graph-muted); }
+.mdxcn a { text-decoration-color: var(--graph-frame); }
+
+/* Chat Markdown (and themes) style every `pre` in a message as a code block and every inline
+   `code` as a pill. Figures draw their own frame and set code in bold foreground, so both drop
+   that styling. The doubled class outranks `.dark [data-markdown-preview] :not(pre) > code`. */
+div.mdxcn.mdxcn pre {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+div.mdxcn.mdxcn :not(pre) > code {
+  background: none;
+  border-radius: 0;
+  padding: 0;
+  font-size: inherit;
+  color: var(--foreground);
+}
