@@ -1,11 +1,15 @@
-// Whether the Spotlight is open. Module state, because its openers are not components: a command's
-// `run`, a sidebar-footer `onActivate`, and the card's link. The overlay reads it with
-// useSyncExternalStore. Every opening is a new state object, and closing names the opening it
-// closes: a save that finishes after its Spotlight was dismissed and reopened must not close the
-// new draft.
+// Whether the Spotlight is open, and on what. Module state, because its openers are not components:
+// a message action's `run`, a command's `run`, a sidebar-footer `onActivate`, and the card's link.
+// The overlay reads it with useSyncExternalStore. Every opening is a new state object, and closing
+// names the opening it closes: a save that finishes after its Spotlight was dismissed and reopened
+// must not close the new draft.
 import { useSyncExternalStore } from "react";
+import type { Quote } from "../../contract.ts";
 
-type SpotlightState = { kind: "closed" } | { kind: "compose" };
+/** A passage as a message action hands it over, before the Spotlight looks up its thread's title. */
+export type Capture = Omit<Quote, "threadTitle">;
+
+type SpotlightState = { kind: "closed" } | { kind: "compose"; capture: Capture | null };
 
 let state: SpotlightState = { kind: "closed" };
 const listeners = new Set<() => void>();
@@ -23,8 +27,8 @@ function subscribe(listener: () => void): () => void {
 export const spotlight = {
   // why a no-op while open: a second opener (a shortcut that still fires over the modal) must not
   // replace a draft the user is writing.
-  compose(): void {
-    if (state.kind === "closed") set({ kind: "compose" });
+  compose(capture: Capture | null): void {
+    if (state.kind === "closed") set({ kind: "compose", capture });
   },
   close(opening: SpotlightState): void {
     if (state === opening) set({ kind: "closed" });

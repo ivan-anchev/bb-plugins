@@ -43,6 +43,31 @@
 }
 .nt-spot-icon { width: 14px; height: 14px; flex: none; }
 
+/* The quoted passage: 4 lines at most, then its source chip. */
+.nt-quote {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--border);
+}
+.nt-quote-text {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+/* why: themes underline links in markdown but spare mention pills by `[data-prompt-mention]`, which
+   bb 0.49 sets on a reply's pills and not on the one its Markdown draws for a plugin. The extra
+   classes outrank a theme's `[data-markdown-preview] a[href]:not([data-prompt-mention])`. */
+.nt-spot .nt-quote .nt-quote-source a[href] { text-decoration-line: none; }
+
 .nt-spot-text {
   width: 100%;
   min-height: 64px;
