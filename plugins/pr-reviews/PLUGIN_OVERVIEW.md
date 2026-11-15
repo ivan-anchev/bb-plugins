@@ -1,8 +1,8 @@
-PR Reviews adds a **PR Reviews** app to bb's left rail. It lists your pull
-requests across every GitHub project, in Authored by me, Needs my review and
-Recently merged, with stacked pull requests as trees, and opens each one on a
-page with its whole diff
-in a file tree and a guided review, written by a review thread, that walks you
+PR Reviews adds a **PR Reviews** app to bb's left rail. It opens in the main
+pane, keeps bb's thread sidebar visible, and lists your pull requests across
+every GitHub project, in Authored by me, Needs my review and Recently merged,
+with stacked pull requests as trees, and opens each one on a page with its
+whole diff in a file tree and a guided review, written by a review thread, that walks you
 through the change step by step. Its Summary shows the PR's activity, as
 GitHub's Conversation tab does, and every diff shows the PR's GitHub review
 threads where they belong. It posts to GitHub only the review comments,
@@ -20,11 +20,13 @@ shows the PRs waiting on your review, or your own.
   merged, closed), over the repository, the author's avatar with the sidebar's
   attention dot, the author's name, and the age. Click one to open its page. With the Homepage
   plugin installed, the card sits beside its Activity card.
-- **Your pull requests, everywhere**: one sidebar for every bb project whose
-  git remote is on github.com, no picker. **Authored by me** (open, and closed
+- **Your pull requests, everywhere**: one list inside the main pane for every
+  bb project whose git remote is on github.com, no picker. **Authored by me** (open, and closed
   in the last 7 days), **Needs my review** (review requested from you or your
   team) and **Recently merged** (yours or reviewed by you, last 7 days), each
-  with its count and a quiet line when empty.
+  with its count and a quiet line when empty. The list sits beside the selected
+  review in wide panes. In narrow panes, opening a PR shows its review;
+  **Pull requests** above it returns to the list.
 - **Compact rows**: one line each, the author's avatar, the title, and a
   badge with the PR's state icon and number, coloured by state. The repo's name shows on hover,
   focus and the open row. At most one dot on the avatar asks for attention:

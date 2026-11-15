@@ -1,11 +1,10 @@
 import { definePluginApp } from "@get-bb/plugin-sdk/app";
 import { PrCard } from "./src/app/home/pr-card.tsx";
-import { PrPage } from "./src/app/page/pr-page.tsx";
+import { PrPanel } from "./src/app/pr-panel.tsx";
 import { RefreshButton } from "./src/app/page/refresh-button.tsx";
 import { useReadyGuidesBadge } from "./src/app/ready-badge.ts";
 import { reviewChatTab } from "./src/app/review-chat/review-chat-tab.tsx";
 import { PANEL_ID, PANEL_PATH } from "./src/app/routes.ts";
-import { PrSidebar } from "./src/app/sidebar/pr-sidebar.tsx";
 import "./app.css";
 
 export default definePluginApp((app) => {
@@ -14,8 +13,7 @@ export default definePluginApp((app) => {
     title: "PR Reviews",
     icon: "GitPullRequest",
     path: PANEL_PATH,
-    component: PrPage,
-    experimental_sidebar: PrSidebar,
+    component: PrPanel,
     experimental_useBadge: useReadyGuidesBadge,
     headerContent: RefreshButton,
   });
