@@ -1,16 +1,23 @@
-// A sidebar row: one 32px line of author avatar, title, and a trailing status icon for a merged,
-// closed or draft PR. The repo name shows on hover, keyboard focus and the open row. A listed row
-// may carry one attention dot on its avatar; a stack-mate listed elsewhere is a dim, shorter row
-// that says where it is listed. The words a screen reader needs ride along out of sight.
+// A sidebar row: one 32px line of author avatar, title, and a trailing state badge with its
+// number. The title is Activity's: muted at rest, firm on the open row and an attention
+// row, fading where it doesn't fit and running to its end under the pointer. The repo name shows on
+// hover, keyboard focus and the open row. A listed row may carry one attention dot on its avatar; a
+// stack-mate listed elsewhere is a dim, shorter row that says where it is listed. The words a screen reader needs ride along out of sight.
 import type { ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { InboxPr, StackPosition } from "../../contract.ts";
 import { STATE_TILES } from "../page/pr-header.tsx";
 import { Avatar } from "../ui/avatar.tsx";
+import { FadingTitle } from "../ui/fading-title.tsx";
+import { PrStateBadge } from "../ui/pr-state-badge.tsx";
 import type { Attention } from "./attention.ts";
 import { SECTION_TEXT } from "./section-text.ts";
 
 type RowProps = { pr: InboxPr; current: boolean; onOpen(): void };
+
+// Activity's row title: quiet at rest, firm on the open row and on one that asks to be seen.
+const TITLE = "text-[13px] leading-4.5";
+const STRONG = "font-medium text-foreground";
 
 const ATTENTION_LOOK = {
   "ci-failing": { label: "CI failing", color: "text-destructive-text" },
@@ -24,7 +31,7 @@ export function ListedRow({ pr, current, onOpen, attention, stack }: RowProps & 
   return (
     <RowButton pr={pr} current={current} onOpen={onOpen} words={words} className="h-8">
       <AttentionAvatar login={pr.author} attention={attention} ring="ring-sidebar" />
-      <span className="truncate text-sm leading-5">{pr.title}</span>
+      <FadingTitle text={pr.title} className={`${TITLE} ${current || attention !== null ? STRONG : "text-muted-foreground"}`} />
       <Trail pr={pr}>
         {stack !== null && (
           <span aria-hidden className="inline-flex items-center gap-1 text-xs leading-4 text-subtle-foreground tabular-nums">
@@ -61,9 +68,7 @@ export function StackMateRow({ pr, current, onOpen }: RowProps) {
       <span className="shrink-0 opacity-50">
         <Avatar login={pr.author} size={16} />
       </span>
-      <span className="truncate text-sm text-subtle-foreground group-hover/row:text-muted-foreground group-aria-[current=page]/row:text-muted-foreground">
-        {pr.title}
-      </span>
+      <FadingTitle text={pr.title} className={`${TITLE} ${current ? STRONG : "text-subtle-foreground group-hover/row:text-muted-foreground"}`} />
       <Trail pr={pr}>{tag !== null && <span aria-hidden className="text-xs leading-4 whitespace-nowrap text-subtle-foreground">{tag}</span>}</Trail>
     </RowButton>
   );
@@ -73,7 +78,7 @@ type RowButtonProps = RowProps & { words: (string | null)[]; className: string; 
 
 // The open row's click re-reads, as Refresh does; that is the caller's `onOpen`.
 function RowButton({ pr, current, onOpen, words, className, children }: RowButtonProps) {
-  const state = pr.state === "OPEN" ? null : STATE_TILES[pr.state].label;
+  const state = STATE_TILES[pr.state].label;
   const said = words.filter((word) => word !== null);
   return (
     <button
@@ -81,7 +86,7 @@ function RowButton({ pr, current, onOpen, words, className, children }: RowButto
       aria-current={current ? "page" : undefined}
       title={[pr.title, `${pr.repo} #${pr.number} · ${pr.author}`, ...said].join("\n")}
       onClick={onOpen}
-      className={`group/row grid w-full cursor-pointer grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2 rounded-md pr-2 pl-2.5 text-left transition-colors duration-150 hover:bg-state-hover hover:duration-0 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none aria-[current=page]:bg-state-active ${className}`}
+      className={`pr-reviews-title-scope group/row grid w-full cursor-pointer grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2 rounded-md pr-2 pl-2.5 text-left transition-colors duration-150 hover:bg-state-hover hover:duration-0 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none aria-[current=page]:bg-state-active ${className}`}
     >
       {children}
       <span className="sr-only">, {[pr.author, pr.repo, ...said, state].filter((word) => word !== null).join(", ")}</span>
@@ -89,7 +94,7 @@ function RowButton({ pr, current, onOpen, words, className, children }: RowButto
   );
 }
 
-// The repo's name, then the row's own marks, then the status icon.
+// The repo's name, then the row's own marks, then the state badge.
 function Trail({ pr, children }: { pr: InboxPr; children: ReactNode }) {
   return (
     <span className="flex min-w-0 items-center gap-1.5">
@@ -100,7 +105,7 @@ function Trail({ pr, children }: { pr: InboxPr; children: ReactNode }) {
         {pr.repo.split("/")[1]}
       </span>
       {children}
-      {pr.state !== "OPEN" && <Icon name={STATE_TILES[pr.state].icon} aria-hidden className={`size-3.5 shrink-0 ${STATE_TILES[pr.state].color}`} />}
+      <PrStateBadge state={pr.state} number={pr.number} />
     </span>
   );
 }

@@ -26,7 +26,7 @@ shows the PRs waiting on your review, or your own.
   team) and **Recently merged** (yours or reviewed by you, last 7 days), each
   with its count and a quiet line when empty.
 - **Compact rows**: one line each, the author's avatar, the title, and a
-  coloured icon for merged, closed or draft. The repo's name shows on hover,
+  badge with the PR's state icon and number, coloured by state. The repo's name shows on hover,
   focus and the open row. At most one dot on the avatar asks for attention:
   CI failing, else changes requested, else new activity since you last opened
   it.

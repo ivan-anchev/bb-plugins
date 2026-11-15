@@ -1,13 +1,12 @@
 // experimental_sidebar: the reader's PRs across every bb project with a GitHub remote, in three
-// sections (Authored by me, Needs my review, Recently merged), stacks drawn as trees, under a
-// controls bar whose Filter hides the sections the reader does not watch.
+// sections (Authored by me, Needs my review, Recently merged), stacks drawn as trees, with a
+// Filter pinned at the top title's end that hides the sections the reader does not watch.
 import { useRef } from "react";
 import { experimental_useRpcRefresh, useBbNavigate, type PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import type { InboxPr } from "../../contract.ts";
 import { useInbox, useVisits } from "../queries.ts";
 import { PANEL_PATH, parseRoute, routeSubPath } from "../routes.ts";
 import { Notice } from "../ui/notice.tsx";
-import { LINK } from "../ui/link.ts";
 import { ReadError } from "../ui/read-error.tsx";
 import { visitsByPr } from "./attention.ts";
 import { InboxSection } from "./inbox-section.tsx";
@@ -37,7 +36,7 @@ export function PrSidebar({ subPath }: PluginNavPanelProps) {
     isOpen(pr) ? refresh() : navigate.toPluginPanel(PANEL_PATH, { subPath: routeSubPath({ kind: "pr", projectId: pr.projectId, number: pr.number }) });
 
   return (
-    <div className="flex h-full min-h-0 flex-col text-foreground">
+    <div className="pr-reviews-sidebar flex h-full min-h-0 flex-col text-foreground">
       <div className="shrink-0 px-1.5">
         <ReadError read={inbox} what="pull requests" />
         <ReadError read={visits} what="which pull requests you opened" />
@@ -63,14 +62,16 @@ export function PrSidebar({ subPath }: PluginNavPanelProps) {
   );
 }
 
+// Activity's notice: one quiet line in the section titles' type, its action a brighter word.
 function AllSectionsHidden({ onShowAll }: { onShowAll(): void }) {
   return (
-    <p className="px-2.5 py-2 text-xs leading-4 text-subtle-foreground">
-      All sections are hidden.{" "}
+    <p className="flex h-6 items-center gap-1 px-2.5 text-[11px] leading-3.5 font-medium text-subtle-foreground">
+      All sections are hidden
+      <span aria-hidden>·</span>
       <button
         type="button"
         onClick={onShowAll}
-        className={`cursor-pointer font-medium text-foreground ${LINK}`}
+        className="cursor-pointer rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
       >
         Show all
       </button>

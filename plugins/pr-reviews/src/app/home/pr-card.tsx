@@ -1,6 +1,6 @@
 // homepageSection: one of the sidebar's sections as a card under the new-thread composer, Needs my
 // review unless the reader switches it from the title's menu. The three PRs it lists first, each
-// ending in a state badge, its author's avatar carrying the sidebar's attention dot, and how many
+// ending in Activity's state badge, its author's avatar carrying the sidebar's attention dot, and how many
 // it lists in all; a row opens the PR's page. It reads the sidebar's own `inbox` and `visits`, so
 // the two agree.
 import { experimental_Icon as Icon, useBbNavigate } from "@get-bb/plugin-sdk/app";
@@ -13,6 +13,7 @@ import { attentionOf, visitsByPr, type Visits } from "../sidebar/attention.ts";
 import { AttentionAvatar, attentionLabel } from "../sidebar/pr-row.tsx";
 import { SECTION_TEXT } from "../sidebar/section-text.ts";
 import { Menu, MenuContent, MenuCountedLabel, MenuRadioGroup, MenuRadioItem, MenuTrigger } from "../ui/menu.tsx";
+import { PrStateBadge } from "../ui/pr-state-badge.tsx";
 import { ReadError } from "../ui/read-error.tsx";
 import { useRememberedState } from "../use-remembered-state.ts";
 
@@ -81,7 +82,6 @@ function Row({ pr, section, visits }: { pr: InboxPr; section: SectionKey; visits
   const navigate = useBbNavigate();
   const open = () => navigate.toPluginPanel(PANEL_PATH, { subPath: routeSubPath({ kind: "pr", projectId: pr.projectId, number: pr.number }) });
   const attention = attentionOf(pr, section, visits);
-  const state = STATE_TILES[pr.state];
   // A merged PR's age is since it merged, as Recently merged sorts it.
   const age = timeAgo(pr.mergedAt ?? pr.updatedAt, Date.now());
   return (
@@ -91,10 +91,7 @@ function Row({ pr, section, visits }: { pr: InboxPr; section: SectionKey; visits
       className="grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 rounded-lg px-2 py-1.5 text-left transition-colors duration-150 hover:bg-state-hover hover:duration-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
       <span className="truncate">{pr.title}</span>
-      <span className="inline-flex items-center gap-1 rounded-md px-1.5 text-xs font-medium text-foreground tabular-nums inset-ring inset-ring-border">
-        <Icon name={state.icon} className={`size-3 shrink-0 ${state.color}`} aria-hidden />
-        {pr.number}
-      </span>
+      <PrStateBadge state={pr.state} number={pr.number} />
       <span className="col-span-2 flex min-w-0 items-center gap-1 text-xs leading-4 whitespace-nowrap text-muted-foreground">
         <span className="truncate">{pr.repo}</span>
         <span aria-hidden>·</span>
@@ -103,7 +100,7 @@ function Row({ pr, section, visits }: { pr: InboxPr; section: SectionKey; visits
         <span aria-hidden>·</span>
         <span className="shrink-0">{age}</span>
       </span>
-      <span className="sr-only">, {[state.label, attention === null ? null : attentionLabel(attention)].filter((word) => word !== null).join(", ")}</span>
+      <span className="sr-only">, {[STATE_TILES[pr.state].label, attention === null ? null : attentionLabel(attention)].filter((word) => word !== null).join(", ")}</span>
     </button>
   );
 }

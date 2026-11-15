@@ -23,8 +23,12 @@ export function StackTree({ members, section, visits, isOpen, open }: StackTreeP
   const here = members.filter((pr) => pr.section === section).length;
   return (
     <ul role="group" aria-label={`Stack #${bottom.number} in ${bottom.repo}, ${here} of ${members.length} pull requests here`} className={`my-0.5 ${RAIL}`}>
-      <li aria-hidden className="grid h-6 grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2 pr-2 pl-2.5 text-xs leading-4 text-muted-foreground">
-        <Icon name="Layers" className="size-3.5 justify-self-center text-subtle-foreground" aria-hidden />
+      <li aria-hidden className="grid h-6 grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-3 pr-2 pl-2.5 text-xs leading-4 text-muted-foreground">
+        {/* bb's tile for a project or machine in its thread list, on the secondary wash, sized for its
+            padding around this 14px icon; it overhangs the 16px column, centred on it. */}
+        <span className="flex size-5.5 items-center justify-center justify-self-center rounded-md bg-secondary">
+          <Icon name="Layers" className="size-3.5 text-muted-foreground" aria-hidden />
+        </span>
         <span className="truncate">Stack #{bottom.number}</span>
         <span className="text-xs text-subtle-foreground tabular-nums">
           {here} of {members.length}
