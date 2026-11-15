@@ -1,0 +1,92 @@
+/* The Burn card, on top of homepage.css's .hp-card. Every class is bn- prefixed; colours are bb's
+   theme tokens. Its body sits at the card's foot, so on a card stretched to its row's height the
+   space opens between the header and the numbers. */
+
+.bn-head { height: 24px; }
+
+/* ---- Week / Month ------------------------------------------------------ */
+.bn-switch {
+  display: flex;
+  margin-left: auto;
+  padding: 2px;
+  border-radius: 7px;
+  background: color-mix(in oklch, var(--foreground) 5%, transparent);
+}
+.bn-option {
+  appearance: none;
+  position: relative;
+  box-sizing: border-box;
+  height: 20px;
+  margin: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 150ms ease-out, background-color 150ms ease-out, box-shadow 150ms ease-out;
+}
+/* A 32px tall hit area on a 20px button; the outer edges reach 4px past the track. */
+.bn-option::before { content: ""; position: absolute; inset: -6px 0; }
+.bn-option:first-child::before { left: -4px; }
+.bn-option:last-child::before { right: -4px; }
+.bn-option[aria-pressed="true"] {
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / 0.12);
+}
+/* why only where something hovers: a touch screen keeps no hover. */
+@media (hover: hover) {
+  .bn-option[aria-pressed="false"]:hover { color: var(--foreground); }
+}
+.bn-option:active { transform: scale(0.96); }
+.bn-option:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+
+/* ---- the numbers ------------------------------------------------------- */
+.bn-body { display: flex; flex-direction: column; gap: 14px; margin: auto 0 0; }
+.bn-metric { display: flex; flex-direction: column; min-width: 0; }
+.bn-label { margin: 0; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+.bn-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin: 0; }
+.bn-value {
+  font-size: 30px;
+  line-height: 36px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bn-change {
+  position: relative;
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+.bn-change[data-direction="up"] { color: var(--warning-text); }
+.bn-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.bn-reason { margin: 0; text-wrap: pretty; }
+
+/* ---- loading ----------------------------------------------------------- */
+/* The skeleton's lines are the metrics' own (16 and 36 tall), with blocks centred in them. */
+.bn-skel { display: flex; align-items: center; height: 16px; }
+.bn-line.bn-skel { height: 36px; }
+.bn-bone {
+  display: block;
+  flex: none;
+  border-radius: 4px;
+  background: color-mix(in oklch, var(--foreground) 7%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bn-bone { animation: bn-pulse 1.6s ease-in-out infinite; }
+}
+@keyframes bn-pulse {
+  50% { opacity: 0.55; }
+}

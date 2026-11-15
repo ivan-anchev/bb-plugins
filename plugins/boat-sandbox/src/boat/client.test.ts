@@ -111,3 +111,32 @@ test("savedSnapshots reads every saved snapshot with no query parameters, which 
   assert.deepEqual(urls, ["https://boat.dev/api/v1/saved-snapshots"]);
   assert.deepEqual(snapshots[0], { name: "tpl-test", status: "ready", error: null, savedFrom: "small", savedAt: "2026-11-09T09:50:26.018Z" });
 });
+
+test("dailySpend reads machine time per day from boat's account API, ignoring the fields it doesn't use", async () => {
+  // The live account's reply on 2026-11-14.
+  const fixture = readFileSync(new URL("./fixtures/billing-wallet.json", import.meta.url), "utf8");
+  const urls: string[] = [];
+  mock.method(globalThis, "fetch", async (url: string) => (urls.push(url), new Response(fixture, { status: 200 })));
+
+  const days = await createBoatClient("boat_test").dailySpend(AbortSignal.timeout(10_000));
+
+  assert.deepEqual(urls, ["https://boat.dev/api/boat/billing/wallet"]);
+  assert.equal(days.length, 30);
+  assert.deepEqual(days.slice(-7), [
+    { day: "2026-11-08", dollars: 0.03 },
+    { day: "2026-11-09", dollars: 0.3 },
+    { day: "2026-11-10", dollars: 0.36 },
+    { day: "2026-11-11", dollars: 0.21 },
+    { day: "2026-11-12", dollars: 0.35 },
+    { day: "2026-11-13", dollars: 0 },
+    { day: "2026-11-14", dollars: 0 },
+  ]);
+});
+
+test("dailySpend refuses a day without its date or its machine dollars", async () => {
+  for (const broken of [{ machineDollars: 0.36 }, { day: "2026-11-10" }, { day: "Nov 10", machineDollars: 0.36 }]) {
+    mock.method(globalThis, "fetch", async () => Response.json({ spending: { days: [broken] } }));
+
+    await assert.rejects(createBoatClient("boat_test").dailySpend(AbortSignal.timeout(10_000)), { name: "ZodError" });
+  }
+});

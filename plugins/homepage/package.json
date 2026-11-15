@@ -1,15 +1,16 @@
 {
   "name": "bb-plugin-homepage",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "Cards under the new-thread composer. The first, Activity, is six months of your merged GitHub PRs as a calendar grid, with the threads you started, PRs merged and lines changed; its data refreshes in the background, so it opens instantly. With PR Reviews installed, its pull requests card sits beside Activity.",
+  "description": "Cards under the new-thread composer. The first, Activity, is six months of your merged GitHub PRs as a calendar grid, with the threads you started, PRs merged and lines changed; its data refreshes in the background, so it opens instantly. With PR Reviews installed, its pull requests card sits beside Activity. With Burn installed, a Burn card shows your spend and tokens for the last week or month against the period before.",
   "keywords": [
     "bb-plugin",
     "homepage",
     "github",
-    "activity"
+    "activity",
+    "burn"
   ],
   "repository": {
     "type": "git",
@@ -22,7 +23,7 @@
   },
   "bb": {
     "name": "Homepage",
-    "description": "Cards under the new-thread composer. The first, Activity, is six months of your merged GitHub PRs as a calendar grid, with the threads you started, PRs merged and lines changed; its data refreshes in the background, so it opens instantly. With PR Reviews installed, its pull requests card sits beside Activity.",
+    "description": "Cards under the new-thread composer. The first, Activity, is six months of your merged GitHub PRs as a calendar grid, with the threads you started, PRs merged and lines changed; its data refreshes in the background, so it opens instantly. With PR Reviews installed, its pull requests card sits beside Activity. With Burn installed, a Burn card shows your spend and tokens for the last week or month against the period before.",
     "branding": {
       "icon": "LayoutDashboard"
     },

@@ -1,6 +1,8 @@
 // The spend chart's days. boat meters machine time month to date only, so the plugin reads that meter
-// now and then and keeps what it grew by, per UTC day. Pure: card.ts reads and stores the history.
+// now and then and keeps what it grew by, per UTC day; the days before that can be backfilled from
+// boat's own daily numbers. Pure: card.ts reads and stores the history.
 import { z } from "zod";
+import type { DaySpend } from "../boat/wire.ts";
 
 const DAY_MS = 86_400_000;
 /** Days kept: the chart's 30 and a few spare. */
@@ -13,7 +15,7 @@ export interface Reading {
 }
 
 export const spendHistory = z.object({
-  /** When recording began: earlier days are unknown, not free. */
+  /** When the known days begin: recording's start, or the first day backfilled. Earlier days are unknown, not free. */
   since: z.number(),
   last: z.object({ at: z.number(), monthDollars: z.number() }),
   /** Dollars per UTC day (`2026-11-14`) since `since`; a recorded day without an entry spent nothing. */
@@ -46,6 +48,29 @@ export function spendDays(history: SpendHistory | null, now: number, count: numb
     const day = utcDay(now - (count - 1 - i) * DAY_MS);
     return { day, dollars: history === null || day < utcDay(history.since) ? null : (history.days[day] ?? 0) };
   });
+}
+
+/**
+ * Fills the unrecorded days of the `count` UTC days ending with `now`'s from boat's own numbers, walking
+ * back from the day before the known days begin until boat has no number for a day. Known days stay as
+ * they are, and days outside the window are ignored. Today is never filled: it is still being recorded,
+ * so when it is unknown (the clock set back to before recording began) nothing is. The known days then
+ * begin at the first day filled, so a repeat fills nothing.
+ */
+export function backfill(history: SpendHistory, boat: readonly DaySpend[], now: number, count: number): { history: SpendHistory; filled: number } {
+  const boatDollars = new Map(boat.map(({ day, dollars }) => [day, dollars]));
+  const today = utcDay(now);
+  const unknown = spendDays(history, now, count).filter((day) => day.dollars === null);
+  const filled: DaySpend[] = [];
+  for (const { day } of unknown.reverse()) {
+    const dollars = boatDollars.get(day);
+    if (day === today || dollars === undefined) break;
+    filled.push({ day, dollars });
+  }
+  const first = filled.at(-1);
+  if (first === undefined) return { history, filled: 0 };
+  const days = { ...history.days, ...Object.fromEntries(filled.map(({ day, dollars }) => [day, dollars])) };
+  return { history: { ...history, since: Date.parse(first.day), days }, filled: filled.length };
 }
 
 /** `2026-11-14`. */

@@ -48,6 +48,14 @@ const spendCardReply = z.discriminatedUnion("status", [
 
 export type SpendCardReply = z.output<typeof spendCardReply>;
 
+/** How many unrecorded days a backfill filled from boat's own daily numbers, or the one line saying why it couldn't. */
+const backfillSpendReply = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("filled"), days: z.number().int() }),
+  z.object({ status: z.literal("unavailable"), message: z.string() }),
+]);
+
+export type BackfillSpendReply = z.output<typeof backfillSpendReply>;
+
 // launchChoices is untagged: boat changes snapshots and environments out of band, so there is nothing to invalidate
 // on; the chip reads again whenever its menu opens.
 export const boatSandboxContract = defineRpcContract({
@@ -61,6 +69,12 @@ export const boatSandboxContract = defineRpcContract({
     input: z.object({}),
     output: spendCardReply,
     experimental_description: "boat machine spend for the last 30 days, the running boat sandboxes, and the money left",
+  },
+  // The card reads again once it answers.
+  backfillSpend: {
+    input: z.object({}),
+    output: backfillSpendReply,
+    experimental_description: "fill the boat spend chart's unrecorded days with boat's own daily machine spend",
   },
   // Keyed by bb host id. Untagged: a host's machine provider is fixed when bb creates it, so an answer never goes stale.
   boatHosts: {

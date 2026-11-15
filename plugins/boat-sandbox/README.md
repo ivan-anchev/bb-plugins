@@ -13,7 +13,10 @@ boat spend, the sandboxes running now and the money left. See
 ## Requirements
 
 A boat.dev account on a personal wallet with zero data retention off, and an
-API key made with `boat api-key create bb --preset ci`. The bb project needs a
+API key made with `boat api-key create bb --preset ci`. The spend card's
+**Backfill 30 days** action also needs the key to have boat's `account.admin`
+scope: it reads boat's undocumented dashboard route
+`/api/boat/billing/wallet`, which a `ci` key is refused. The bb project needs a
 Git remote, and the bb server must be reachable from the internet (bb Connect).
 
 ## Install

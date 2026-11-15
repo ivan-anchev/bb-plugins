@@ -78,12 +78,13 @@
     {
       "id": "homepage",
       "displayName": "Homepage",
-      "description": "Cards under the new-thread composer. The first, Activity, is six months of your merged GitHub PRs as a calendar grid, with the threads you started, PRs merged and lines changed; its data refreshes in the background, so it opens instantly. With PR Reviews installed, its pull requests card sits beside Activity.",
+      "description": "Cards under the new-thread composer. The first, Activity, is six months of your merged GitHub PRs as a calendar grid, with the threads you started, PRs merged and lines changed; its data refreshes in the background, so it opens instantly. With PR Reviews installed, its pull requests card sits beside Activity. With Burn installed, a Burn card shows your spend and tokens for the last week or month against the period before.",
       "icon": "LayoutDashboard",
       "tags": [
         "homepage",
         "github",
-        "activity"
+        "activity",
+        "burn"
       ],
       "author": {
         "name": "Ivan Anchev",
@@ -119,6 +120,28 @@
           "subdir": "plugins/mdxcn",
           "range": "0.x",
           "tagPrefix": "mdxcn/"
+        }
+      }
+    },
+    {
+      "id": "office-quote",
+      "displayName": "Office Quote",
+      "description": "Experimental: it may break with a bb update. A daily The Office quote above the new-thread composer. One random quote per day from a public quotes API, with the character who said it; the composer and the homepage cards move down to make room.",
+      "icon": "Quote",
+      "tags": [
+        "homepage",
+        "the-office"
+      ],
+      "author": {
+        "name": "Ivan Anchev",
+        "github": "ivan-anchev"
+      },
+      "source": {
+        "git": {
+          "url": "https://github.com/ivan-anchev/bb-plugins.git",
+          "subdir": "plugins/office-quote",
+          "range": "0.x",
+          "tagPrefix": "office-quote/"
         }
       }
     },

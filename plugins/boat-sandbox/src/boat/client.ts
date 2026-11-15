@@ -5,6 +5,7 @@ import { toSandbox, type Sandbox, type SandboxId } from "./sandbox.ts";
 import {
   wireCommandFrame,
   wireCredentialProfileList,
+  wireDailySpend,
   wireEnvironmentList,
   wireError,
   wireGithubApp,
@@ -17,6 +18,7 @@ import {
   wireSavedSnapshotList,
   type Account,
   type CredentialProfile,
+  type DaySpend,
   type GithubApp,
   type Limits,
   type SandboxEnvironment,
@@ -24,6 +26,8 @@ import {
 } from "./wire.ts";
 
 const BASE_URL = "https://boat.dev/api/v1";
+/** boat's account API, which its dashboard reads. Undocumented, so it can change without notice. */
+const ACCOUNT_API_URL = "https://boat.dev/api/boat";
 /** boat holds a command for up to 60 s while the sandbox starts, then answers `409 sandbox_starting`. */
 const NOT_RUN_PATIENCE_MS = 60_000;
 const NOT_RUN_RETRY_MS = 2_000;
@@ -103,6 +107,11 @@ export interface BoatClient {
   list(labels: Labels, signal: AbortSignal): Promise<Sandbox[]>;
   /** Every sandbox on the key's wallet, in any state, with this month's machine time (`include=cost,deletedCost`). */
   meter(signal: AbortSignal): Promise<WalletMeter>;
+  /**
+   * The key's personal wallet's machine time for each of the last 30 UTC days, oldest first, from boat's
+   * undocumented account API (`account.admin`, which a `ci` key lacks).
+   */
+  dailySpend(signal: AbortSignal): Promise<DaySpend[]>;
   /** A repeat with the same key and body returns the same sandbox. */
   create(body: CreateSandboxBody, idempotencyKey: string, signal: AbortSignal): Promise<Sandbox>;
   /** Asynchronous on boat's side, but the sandbox is 404 at once. Throws a 404 BoatApiError when it is gone. */
@@ -123,7 +132,7 @@ export interface BoatClient {
 }
 
 export function createBoatClient(apiKey: string): BoatClient {
-  const call = (path: string, options: RequestOptions = {}) => send(apiKey, path, options);
+  const call = (path: string, options: RequestOptions = {}) => send(apiKey, `${BASE_URL}${path}`, options);
   const json = async (path: string, options?: RequestOptions) => (await call(path, options)).json();
 
   return {
@@ -161,6 +170,7 @@ export function createBoatClient(apiKey: string): BoatClient {
       }
       return meter;
     },
+    dailySpend: async (signal) => wireDailySpend.parse(await (await send(apiKey, `${ACCOUNT_API_URL}/billing/wallet`, { signal })).json()),
     async create(body, idempotencyKey, signal) {
       const created = await json("/sandboxes", {
         method: "POST",
@@ -210,8 +220,8 @@ interface RequestOptions {
 }
 
 /** The one fetch wrapper: bearer auth, JSON in, and every non-2xx thrown as a BoatApiError. */
-async function send(apiKey: string, path: string, { method = "GET", body, headers, signal }: RequestOptions): Promise<Response> {
-  const response = await fetch(`${BASE_URL}${path}`, {
+async function send(apiKey: string, url: string, { method = "GET", body, headers, signal }: RequestOptions): Promise<Response> {
+  const response = await fetch(url, {
     method,
     headers: {
       authorization: `Bearer ${apiKey}`,

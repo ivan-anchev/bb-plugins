@@ -1,14 +1,16 @@
 // The homepage card's read: boat's meter and plan, this server's machines that are up, and the spend
-// days recorded so far. Every read of the meter, the card's or the schedule's, is recorded.
+// days recorded so far. Every read of the meter, the card's or the schedule's, is recorded. A backfill
+// fills the days before recording began from boat's own daily numbers.
 import type { ExperimentalPluginRpcHandlersWithContext, PluginKvStorage } from "@get-bb/plugin-sdk";
+import { z } from "zod";
 import type { BoatAccess } from "../boat/access.ts";
-import type { BoatClient, WalletMeter } from "../boat/client.ts";
+import { BoatApiError, type BoatClient, type WalletMeter } from "../boat/client.ts";
 import { isAwake } from "../boat/sandbox.ts";
-import type { Account, Billing } from "../boat/wire.ts";
-import type { boatSandboxContract, RunningBoat, SpendCardReply } from "../contract.ts";
+import type { Account, Billing, DaySpend } from "../boat/wire.ts";
+import type { BackfillSpendReply, boatSandboxContract, RunningBoat, SpendCardReply } from "../contract.ts";
 import { machineKeyOf } from "../ownership.ts";
 import { describeProblems, type Problem } from "../problem.ts";
-import { record, spendDays, spendHistory, type Reading } from "./history.ts";
+import { backfill, record, spendDays, spendHistory, type Reading, type SpendHistory } from "./history.ts";
 import { balanceOf, dollarsPerHour } from "./money.ts";
 
 const DAYS = 30;
@@ -17,16 +19,25 @@ const historyKey = (account: Account["id"]): string => `spend-history:${account}
 const UNLIMITED = "This boat account has no plan or wallet, so there is no spend to count against.";
 /** Every problem that stops the card, a missing or refused key or an account boat Sandbox refuses, is fixed there. */
 const FIX_IN_SETTINGS = "Fix it in Settings → boat Sandbox.";
+/** boat's daily numbers come from its account API, which a key without `account.admin` (a `ci` key) cannot read. */
+const NEEDS_ADMIN_SCOPE = "Backfill needs a boat API key with the account.admin scope. Change the key in Settings → boat Sandbox.";
 
 interface SpendCard {
   /** The card. Throws when boat cannot be read, so the app keeps its last good numbers. */
   read(signal: AbortSignal): Promise<SpendCardReply>;
   /** Records a reading of the meter; nothing without a key, and throws when boat refuses or cannot be read. */
   sample(signal: AbortSignal): Promise<void>;
+  /** Fills the chart's unrecorded days from boat's own daily numbers; any failure leaves the days as they were. */
+  backfill(signal: AbortSignal): Promise<BackfillSpendReply>;
 }
 
 export function createSpendCard({ access, kv, ownerId }: { access: BoatAccess; kv: PluginKvStorage; ownerId: string }): SpendCard {
   const serially = createQueue();
+
+  const storedHistory = async (account: Account["id"]): Promise<SpendHistory | null> => {
+    const stored = await kv.get<unknown>(historyKey(account));
+    return stored === undefined ? null : spendHistory.parse(stored);
+  };
 
   /**
    * Reads the meter and records it, one look at a time: two reads in flight could land out of order,
@@ -37,8 +48,7 @@ export function createSpendCard({ access, kv, ownerId }: { access: BoatAccess; k
     serially(async () => {
       const meter = await client.meter(signal);
       const reading: Reading = { at: Date.now(), monthDollars: monthToDate(meter) };
-      const stored = await kv.get<unknown>(historyKey(account));
-      const before = stored === undefined ? null : spendHistory.parse(stored);
+      const before = await storedHistory(account);
       if (utcMonth(meter.since) !== utcMonth(reading.at)) return { meter, reading, history: before };
       const history = record(before, reading);
       await kv.set(historyKey(account), history);
@@ -78,15 +88,52 @@ export function createSpendCard({ access, kv, ownerId }: { access: BoatAccess; k
       if (configuration.status !== "available") throw new Error(describeProblems(configuration.problems));
       await look(configuration.client, configuration.facts.account.id, signal);
     },
+    async backfill(signal) {
+      const configuration = await access.configuration(signal);
+      if (configuration.status === "read-failed") return { status: "unavailable", message: configuration.problems[0].message };
+      if (configuration.status !== "available") return { status: "unavailable", message: cardLine(configuration.problems) };
+      let boatDays: DaySpend[];
+      try {
+        boatDays = await configuration.client.dailySpend(signal);
+      } catch (error) {
+        return { status: "unavailable", message: backfillFailure(error) };
+      }
+      const account = configuration.facts.account.id;
+      // In the readings' queue, so a reading cannot land between this read of the history and its write.
+      const filled = await serially(async () => {
+        const before = await storedHistory(account);
+        // A call cancelled while it waited or read, or a plugin reloaded meanwhile, stops before it writes.
+        signal.throwIfAborted();
+        // Nothing recorded yet means no reading has fixed where today's meter starts; the card's next read does.
+        if (before === null) return 0;
+        const after = backfill(before, boatDays, Date.now(), DAYS);
+        if (after.filled > 0) await kv.set(historyKey(account), after.history);
+        return after.filled;
+      });
+      return { status: "filled", days: filled };
+    },
   };
 }
 
-export const spendCardRpcHandlers = (card: SpendCard): Pick<ExperimentalPluginRpcHandlersWithContext<typeof boatSandboxContract>, "spendCard"> => ({
+export const spendCardRpcHandlers = (
+  card: SpendCard,
+): Pick<ExperimentalPluginRpcHandlersWithContext<typeof boatSandboxContract>, "spendCard" | "backfillSpend"> => ({
   spendCard: (_input, { experimental_signal: signal }) => card.read(signal),
+  backfillSpend: (_input, { experimental_signal: signal }) => card.backfill(signal),
 });
 
 /** One short line for the card: what is wrong, and where to fix it. bb's status line carries the full steps. */
 const cardLine = (problems: readonly Problem[]): string => [...problems.map((problem) => problem.message), FIX_IN_SETTINGS].join(" ");
+
+/**
+ * One line for a failed backfill. The route is boat's undocumented dashboard API, so a 404 or a reply
+ * that no longer parses means boat changed it.
+ */
+function backfillFailure(error: unknown): string {
+  if (error instanceof BoatApiError && error.status === 403) return NEEDS_ADMIN_SCOPE;
+  const why = error instanceof BoatApiError ? `HTTP ${error.status}` : error instanceof z.ZodError ? "boat changed its reply" : "boat couldn’t be reached";
+  return `Couldn’t backfill: boat’s daily spend is unavailable (${why}).`;
+}
 
 /** The wallet's machine time this month: every sandbox's, the deleted ones' too. */
 const monthToDate = (meter: WalletMeter): number =>

@@ -68,6 +68,7 @@ function world(hosts: FakeHost[], orphans: Sandbox[] = []) {
     credentialProfiles: unused,
     githubApp: unused,
     meter: unused,
+    dailySpend: unused,
     create: unused,
     remove: unused,
     resume: unused,

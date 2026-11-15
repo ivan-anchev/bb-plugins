@@ -1,0 +1,226 @@
+{
+  "balanceDollars": 0,
+  "autoTopUp": {
+    "enabled": false,
+    "amountDollars": null,
+    "triggerBelowDollars": null,
+    "quote": null
+  },
+  "graceUntil": null,
+  "cards": [],
+  "spending": {
+    "days": [
+      {
+        "day": "2026-10-16",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-10-17",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-10-18",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-10-19",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-10-20",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-10-21",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-10-22",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-10-23",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-10-24",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-10-25",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-10-26",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-10-27",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-10-28",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-10-29",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-10-30",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-10-31",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-11-01",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-11-02",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-11-03",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-11-04",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-11-05",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-11-06",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-11-07",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-11-08",
+        "machineDollars": 0.03,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-11-09",
+        "machineDollars": 0.3,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-11-10",
+        "machineDollars": 0.36,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-11-11",
+        "machineDollars": 0.21,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-11-12",
+        "machineDollars": 0.35,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-11-13",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      },
+      {
+        "day": "2026-11-14",
+        "machineDollars": 0,
+        "startDollars": 0,
+        "starts": 0,
+        "otherDollars": 0
+      }
+    ],
+    "payments": []
+  }
+}
