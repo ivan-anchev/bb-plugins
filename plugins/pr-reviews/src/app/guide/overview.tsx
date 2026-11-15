@@ -9,9 +9,8 @@ import { stepNumberOfFinding, type VisibleFinding, type VisibleStep } from "../.
 import type { PrHeadTarget } from "../queries.ts";
 import { timeAgo } from "../relative-time.ts";
 import { Button } from "../ui/button.tsx";
-import { Prose } from "../ui/prose.tsx";
+import { Prose, READING_TYPE } from "../ui/prose.tsx";
 import { HunkDiff } from "./hunk-block.tsx";
-import { PROSE_TYPE } from "./page-text.tsx";
 import { Priority } from "./priority.tsx";
 import { ShowToggle } from "./show-toggle.tsx";
 
@@ -34,8 +33,8 @@ export function Overview({ record, files, head, findings, steps, onOpenStep, hid
   const { overview, hidden } = record.guide;
   return (
     <>
-      <Prose text={overview.problem} className={PROSE_TYPE} />
-      <Prose text={overview.approach} className={PROSE_TYPE} />
+      <Prose text={overview.problem} className={READING_TYPE} />
+      <Prose text={overview.approach} className={READING_TYPE} />
       {overview.behaviour !== null && <BeforeAfter behaviour={overview.behaviour} />}
       {findings.length > 0 && (
         <Section title="Findings">

@@ -51,6 +51,28 @@
 .pr-reviews-prose :is(h1, h2, h3, h4, h5, h6) {
   margin-block: calc(var(--pr-reviews-prose-gap) * 1.5) var(--pr-reviews-prose-gap);
 }
+
+/* Prose's headings, sized from its body: bb's Markdown sets an h3 or h4 to `text-sm`, which a theme
+   such as Zeron draws at 13px, under a 14px body. A PR's `### What` should never read smaller than
+   the text it heads. The body's size is registered like the gap, so it resolves at the Prose root. */
+@property --pr-reviews-prose-body {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+.pr-reviews-prose {
+  --pr-reviews-prose-body: 1em;
+}
+.pr-reviews-prose :is(h1, h2, h3, h4, h5, h6) {
+  font-size: var(--pr-reviews-prose-body);
+  line-height: 1.5;
+}
+.pr-reviews-prose h1 {
+  font-size: calc(var(--pr-reviews-prose-body) * 1.25);
+}
+.pr-reviews-prose h2 {
+  font-size: calc(var(--pr-reviews-prose-body) * 1.125);
+}
 .pr-reviews-prose hr {
   margin-block: calc(var(--pr-reviews-prose-gap) * 1.5);
 }

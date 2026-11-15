@@ -1,5 +1,5 @@
 // The PR header's identity row: the author's GitHub avatar and login, and the branches GitHub's way
-// round, `base ← head`. The PR's number is beside the state pill above it.
+// round, `base ← head`. The PR's number is beside the state badge above it.
 import type { ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { PrDetail } from "../../contract.ts";

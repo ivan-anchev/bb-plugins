@@ -105,7 +105,7 @@ function Trail({ pr, children }: { pr: InboxPr; children: ReactNode }) {
         {pr.repo.split("/")[1]}
       </span>
       {children}
-      <PrStateBadge state={pr.state} number={pr.number} />
+      <PrStateBadge state={pr.state}>{pr.number}</PrStateBadge>
     </span>
   );
 }
