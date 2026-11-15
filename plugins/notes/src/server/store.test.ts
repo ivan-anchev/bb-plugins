@@ -69,11 +69,16 @@ test("notes list newest first", () => {
   );
 });
 
-test("archived notes are not listed", () => {
-  const { store } = freshStore();
+/** As Start thread left a note before decision 28: its row kept, off the list. */
+function archiveAsBefore(db: ReturnType<typeof freshStore>["db"], id: Note["id"]): void {
+  db.prepare("UPDATE notes SET archived_at = 5000 WHERE id = ?").run(id);
+}
+
+test("notes an earlier version archived are not listed", () => {
+  const { db, store } = freshStore();
   store.insert(note(1, "kept"));
   store.insert(note(2, "archived"));
-  store.archive([note(2, "").id], 5_000);
+  archiveAsBefore(db, note(2, "").id);
 
   assert.deepEqual(
     store.activeNotes().map((n) => n.body.text),
@@ -82,24 +87,14 @@ test("archived notes are not listed", () => {
 });
 
 test("notes asked for by id come oldest first, with their attachments, leaving out archived and unknown ids", () => {
-  const { store } = freshStore();
+  const { db, store } = freshStore();
   const withFile: Note = { ...note(1, "first"), attachments: [attachment(1, "image/png")] };
   store.insert(note(3, "third"));
   store.insert(withFile);
   store.insert(note(2, "archived"));
-  store.archive([note(2, "").id], 5_000);
+  archiveAsBefore(db, note(2, "").id);
 
   assert.deepEqual(store.activeNotesByIds([note(3, "").id, note(2, "").id, note(1, "").id, note(9, "").id]), [withFile, note(3, "third")]);
-});
-
-test("archiving twice keeps the first time", () => {
-  const { db, store } = freshStore();
-  store.insert(note(1, "used"));
-
-  store.archive([note(1, "").id], 5_000);
-  store.archive([note(1, "").id], 9_000);
-
-  assert.deepEqual(db.prepare("SELECT archived_at FROM notes WHERE id = ?").get(note(1, "").id), { archived_at: 5_000 });
 });
 
 test("deleted notes are gone, and the others stay", () => {
@@ -157,4 +152,66 @@ test("a note whose attachment rows fail to insert is not saved at all", () => {
     store.activeNotes().map((n) => n.body.text),
     ["first"],
   );
+});
+
+test("notes put in a draft read back grouped by draft and brief", () => {
+  const { store } = freshStore();
+  [1, 2, 3].forEach((n) => store.insert(note(n, `note ${n}`)));
+
+  store.putInDraft({ composerKey: "draft-3", brief: "Context from 2 notes:", noteIds: [note(1, "").id, note(2, "").id] });
+  store.putInDraft({ composerKey: "thread-x", brief: "Context from 1 note:", noteIds: [note(3, "").id] });
+
+  assert.deepEqual(store.inDrafts(), [
+    { composerKey: "draft-3", brief: "Context from 2 notes:", noteIds: [note(1, "").id, note(2, "").id] },
+    { composerKey: "thread-x", brief: "Context from 1 note:", noteIds: [note(3, "").id] },
+  ]);
+});
+
+test("a note put in a second draft waits only there", () => {
+  const { store } = freshStore();
+  [1, 2].forEach((n) => store.insert(note(n, `note ${n}`)));
+  store.putInDraft({ composerKey: "draft-3", brief: "first brief", noteIds: [note(1, "").id, note(2, "").id] });
+
+  store.putInDraft({ composerKey: "thread-x", brief: "second brief", noteIds: [note(2, "").id] });
+
+  assert.deepEqual(store.inDrafts(), [
+    { composerKey: "draft-3", brief: "first brief", noteIds: [note(1, "").id] },
+    { composerKey: "thread-x", brief: "second brief", noteIds: [note(2, "").id] },
+  ]);
+});
+
+test("only notes on the list can wait in a draft", () => {
+  const { db, store } = freshStore();
+  store.insert(note(1, "listed"));
+  store.insert(note(2, "archived"));
+  archiveAsBefore(db, note(2, "").id);
+
+  store.putInDraft({ composerKey: "draft-3", brief: "brief", noteIds: [note(1, "").id, note(2, "").id, note(9, "").id] });
+
+  assert.deepEqual(store.inDrafts(), [{ composerKey: "draft-3", brief: "brief", noteIds: [note(1, "").id] }]);
+});
+
+test("leaving a draft clears only that draft's marks for that brief", () => {
+  const { store } = freshStore();
+  [1, 2, 3].forEach((n) => store.insert(note(n, `note ${n}`)));
+  store.putInDraft({ composerKey: "draft-3", brief: "brief", noteIds: [note(1, "").id] });
+  store.putInDraft({ composerKey: "draft-3", brief: "newer brief", noteIds: [note(3, "").id] });
+  store.putInDraft({ composerKey: "thread-x", brief: "brief", noteIds: [note(2, "").id] });
+
+  store.leaveDraft({ composerKey: "draft-3", brief: "brief" });
+
+  assert.deepEqual(store.inDrafts(), [
+    { composerKey: "draft-3", brief: "newer brief", noteIds: [note(3, "").id] },
+    { composerKey: "thread-x", brief: "brief", noteIds: [note(2, "").id] },
+  ]);
+});
+
+test("a deleted note no longer waits in a draft", () => {
+  const { store } = freshStore();
+  [1, 2].forEach((n) => store.insert(note(n, `note ${n}`)));
+  store.putInDraft({ composerKey: "draft-3", brief: "brief", noteIds: [note(1, "").id, note(2, "").id] });
+
+  store.delete([note(1, "").id]);
+
+  assert.deepEqual(store.inDrafts(), [{ composerKey: "draft-3", brief: "brief", noteIds: [note(2, "").id] }]);
 });

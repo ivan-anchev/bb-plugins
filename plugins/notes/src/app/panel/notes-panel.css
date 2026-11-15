@@ -100,14 +100,8 @@
   place-items: center;
   box-shadow: inset 0 0 0 1.5px var(--subtle-foreground, var(--muted-foreground));
   color: var(--primary-foreground);
-  opacity: 0;
-  transition: opacity 120ms ease-out, background-color 120ms ease-out, box-shadow 120ms ease-out;
+  transition: background-color 120ms ease-out, box-shadow 120ms ease-out;
 }
-.nt-row:hover .nt-check,
-.nt-pick:focus-visible + .nt-check,
-.nt-pick:checked + .nt-check,
-.nt-panel[data-picking] .nt-check { opacity: 1; }
-@media (hover: none) { .nt-check { opacity: 1; } }
 .nt-check svg { width: 10px; height: 10px; stroke-width: 3.25; opacity: 0; transform: scale(0.5); transition: opacity 100ms ease-out, transform 160ms cubic-bezier(0.23, 1, 0.32, 1); }
 .nt-pick:checked + .nt-check { background: var(--primary); box-shadow: none; }
 .nt-pick:checked + .nt-check svg { opacity: 1; transform: none; }
@@ -116,7 +110,11 @@
 .nt-text { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 6px 8px 6px 0; }
 .nt-line1 { color: var(--muted-foreground); }
 .nt-pick:checked ~ .nt-text .nt-line1 { color: var(--foreground); }
-.nt-line2 { font-size: 11px; line-height: 14px; color: var(--subtle-foreground, var(--muted-foreground)); }
+.nt-line2 { display: flex; gap: 6px; min-width: 0; font-size: 11px; line-height: 14px; color: var(--subtle-foreground, var(--muted-foreground)); }
+/* The source fades when long; In draft never does, so it always reads. */
+.nt-source { flex: 0 1 auto; }
+.nt-in-draft { flex: none; color: var(--muted-foreground); }
+.nt-in-draft::before { content: "·"; margin-right: 6px; color: var(--subtle-foreground, var(--muted-foreground)); }
 
 /* A row's attachments (attachment-fan.tsx): 30px thumbs pivoting on their bottom edge, each turned
    --nt-lean × 5° and shifted --nt-lean × 4px; a 1.5px ring in the surface's colour parts them. The

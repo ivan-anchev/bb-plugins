@@ -1,7 +1,8 @@
 // Attachment bytes on disk: `media/<attachment id>` beside the plugin's data.db, one file each,
-// written once and never rewritten.
+// written once and never rewritten. A file a brief names by its path also gets a second name in
+// `kept/`, which nothing here ever deletes: the message that names it outlives the note.
 import { createReadStream, type Stats } from "node:fs";
-import { mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { link, mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import type { Attachment } from "../../contract.ts";
 
@@ -20,6 +21,7 @@ type AttachmentId = Attachment["id"];
 export function openMediaFiles(databasePath: string) {
   if (!isAbsolute(databasePath)) throw new Error(`Notes can't store media: its database path "${databasePath}" is not absolute`);
   const dir = join(dirname(databasePath), "media");
+  const keptDir = join(dirname(databasePath), "kept");
   const pathOf = (id: AttachmentId) => join(dir, id);
 
   return {
@@ -58,6 +60,18 @@ export function openMediaFiles(databasePath: string) {
           await chunks.return?.();
         },
       });
+    },
+
+    /**
+     * The file under `kept/`, where it outlives its note: neither `remove` nor `sweep` reaches it,
+     * so these files accumulate until the user deletes them. Keeping it twice is fine.
+     * why a hard link, not a copy: no second copy of a large file while the note still holds it.
+     */
+    async keep(id: AttachmentId): Promise<string> {
+      await mkdir(keptDir, { recursive: true });
+      const kept = join(keptDir, id);
+      await link(pathOf(id), kept).catch((error: NodeJS.ErrnoException) => (error.code === "EEXIST" ? undefined : Promise.reject(error)));
+      return kept;
     },
 
     /** Deletes the files; a file already gone is fine. */

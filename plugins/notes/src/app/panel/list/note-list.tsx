@@ -11,12 +11,14 @@ type NoteListProps = {
   ref: RefObject<HTMLDivElement | null>;
   /** Undefined until the first read, when the box stays empty. */
   notes: readonly Note[] | undefined;
+  /** The notes a composer's draft holds. */
+  inDraft: ReadonlySet<Note["id"]>;
   picks: Picks;
   /** What a list with none says. */
   empty: ReactNode;
 };
 
-export function NoteList({ ref: box, notes, picks, empty }: NoteListProps) {
+export function NoteList({ ref: box, notes, inDraft, picks, empty }: NoteListProps) {
   useScrollEdges(box);
   useTopOnNewFirst(box, notes?.[0]?.id);
   return (
@@ -30,6 +32,7 @@ export function NoteList({ ref: box, notes, picks, empty }: NoteListProps) {
             note={note}
             picked={picks.has(note.id)}
             pickable={!picks.held}
+            inDraft={inDraft.has(note.id)}
             onPick={() => picks.toggle(note.id)}
           />
         ))}

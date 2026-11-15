@@ -124,6 +124,17 @@ const pickedIdsSchema = z.array(noteIdSchema).min(1);
 /** At most 100 in one brief. */
 const noteIdsSchema = pickedIdsSchema.max(100);
 
+/** A composer's draft, by the SDK's `PluginComposerApi.key`: the same across reloads. */
+const composerKeySchema = z.string().min(1);
+
+/**
+ * Notes waiting in a composer's draft: New thread or Send to this thread put `brief` (the brief's text)
+ * there, and the notes stay on the list, marked In draft, until that composer sends a message holding
+ * it. A note waits in one draft at a time, the one it went to last.
+ */
+const inDraftSchema = z.object({ composerKey: composerKeySchema, brief: z.string().min(1), noteIds: noteIdsSchema });
+export type InDraft = z.infer<typeof inDraftSchema>;
+
 export const notesContract = defineRpcContract({
   /** Every active note, newest first. */
   notes: { input: z.object({}), output: z.array(noteSchema), tags: () => [NOTES_TAG] },
@@ -133,6 +144,15 @@ export const notesContract = defineRpcContract({
   deleteNotes: { input: z.object({ noteIds: pickedIdsSchema }), output: z.object({}) },
   /** The notes, oldest first, as a brief whose media is uploaded into the project. Notes already gone are left out. */
   briefFor: { input: z.object({ noteIds: noteIdsSchema, projectId: z.string().min(1) }), output: briefSchema },
-  /** Takes the notes off the card, keeping their rows and files. Archiving twice keeps the first time. */
-  archiveNotes: { input: z.object({ noteIds: noteIdsSchema }), output: z.object({}) },
+  /** Every draft notes wait in, each with its brief and its notes. */
+  inDrafts: { input: z.object({}), output: z.array(inDraftSchema), tags: () => [NOTES_TAG] },
+  /** Marks the notes as waiting in the draft. Notes already gone are left out; a note waiting elsewhere moves here. */
+  putInDraft: { input: inDraftSchema, output: z.object({}) },
+  /** The draft no longer holds the brief: its notes stop waiting there. A brief already gone is fine. */
+  leaveDraft: { input: inDraftSchema.pick({ composerKey: true, brief: true }), output: z.object({}) },
+  /**
+   * The composer sent `text`, its draft as it stood: the notes waiting there whose brief it holds are
+   * deleted with their files. Sending again deletes nothing more.
+   */
+  draftSent: { input: z.object({ composerKey: composerKeySchema, text: z.string() }), output: z.object({}) },
 });

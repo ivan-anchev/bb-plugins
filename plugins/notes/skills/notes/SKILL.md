@@ -1,6 +1,6 @@
 ---
 name: notes
-description: Explain the Notes plugin, which keeps short personal notes in bb in a Notes popover opened from the sidebar-footer Notes button, ⇧⌘J, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), with a composer at its bottom that links threads by typing @ and attaches images and videos by paste, drop or 📎, and the same list in a Notes card on the New thread screen, where clicking a note ticks it and ticking some lets the user delete them with one click or choose New thread (from any screen, or ⌘↵) or, on a thread page, Send to this thread (its ▾ menu, or ⇧⌘↵) to put them in that composer and archive them. Use when the user asks how to write, quote or link a note, how to tick, read, edit or delete one, where their notes are, why ⇧⌘J does nothing, what the source chip opens, why a thread is missing from the @ picker, why a file was refused or where attached files are stored, what New thread or Send to this thread puts in the composer, why there is no ▾ menu or Send to this thread, what ⌘↵ or ⇧⌘↵ does in the Notes panel, where used notes went, why a file shows as a path instead of an attachment, why the Notes card is empty or says it couldn't read notes, where the card sits among the homepage cards, or why part of it stopped working after a bb update.
+description: Explain the Notes plugin, which keeps short personal notes in bb in a Notes popover opened from the sidebar-footer Notes button, ⇧⌘J, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), with a composer at its bottom that links threads by typing @ and attaches images and videos by paste, drop or 📎, and the same list in a Notes card on the New thread screen, where clicking a note ticks it and ticking some lets the user delete them with one click or choose New thread (from any screen, or ⌘↵) or, on a thread page, Send to this thread (its ▾ menu, or ⇧⌘↵) to put them in that composer, where they wait marked In draft until that message is sent, which deletes them. Use when the user asks how to write, quote or link a note, how to tick, read, edit or delete one, where their notes are, why ⇧⌘J does nothing, what the source chip opens, why a thread is missing from the @ picker, why a file was refused or where attached files are stored, what New thread or Send to this thread puts in the composer, why there is no ▾ menu or Send to this thread, what ⌘↵ or ⇧⌘↵ does in the Notes panel, what In draft means, where used notes went or why they are still there, why a file shows as a path instead of an attachment, why the Notes card is empty or says it couldn't read notes, where the card sits among the homepage cards, or why part of it stopped working after a bb update.
 ---
 
 # Notes
@@ -130,9 +130,7 @@ reason, beside any notes it already showed.
   the note for Delete and New thread (below); another click unticks it. Its
   checkbox, on the row's first line, does the same.
   Dragging over a row's text to select it does not tick it.
-- The checkbox shows under the pointer, on keyboard focus, once ticked, and on
-  every row while any note is ticked; on touch screens it always shows. Its
-  column stays, so nothing shifts.
+- Every row always shows its checkbox.
 - From the keyboard, Tab reaches each row's checkbox and Space ticks it.
 - A note does not open: the list shows its first line and its thumbs only,
   and notes cannot be edited. Its full text and files go into the composer
@@ -186,26 +184,45 @@ reason, beside any notes it already showed.
 - The notes' images and videos become the draft's attachments, uploaded to the
   composer's project (a thread's own project on a thread page). A file over
   bb's 35 MB attachment limit is not attached; the brief names it instead as
-  "Too large to attach, on disk: <path> (<name>)", the file in the plugin's
-  `media/` folder.
+  "Too large to attach, on disk: <path> (<name>)". The path is in the plugin's
+  `kept/` folder, beside `media/`, so it still works after the message's send
+  deletes the note. Notes never removes files from `kept/`: they accumulate
+  until the user deletes them by hand.
 - The draft is not sent: the user reviews and sends it. bb keeps it across
   reloads. With "No project" picked, the files go to bb's personal project.
   While bb is still resolving the new-thread composer's project, New thread
   waits for it.
-- The notes used leave the list: they are archived, not deleted. Their rows and
-  files stay in the database and `media/`, and there is no undo or view of
-  archived notes yet.
-- The notes are archived before the brief goes into the composer. If the brief
-  or the archive fails, the composer is left as it was, the notes stay and stay
+- The notes used stay on the list, marked "In draft" under their text, while
+  that composer's draft holds the brief. bb keeps drafts across reloads, and so
+  does the mark (it is stored in `data.db`).
+- Sending a message from that composer that still holds the brief, word for
+  word, deletes those notes and their files for good, as Delete does. There is
+  no undo. A queued message counts as sent once bb accepts it.
+- Taking the brief out of the draft, editing any of its text, or clearing the
+  draft clears the mark and keeps the notes; sending the rest deletes nothing.
+  The mark clears only when a bb window saw the brief in that composer's draft
+  and then saw it go, so another window with a different draft for the same
+  composer leaves it alone. A draft left on another thread keeps its notes
+  marked until it is next opened.
+- If the marks can't be read, the panel says "Couldn't read which notes are in
+  a draft: …" with **Retry**, and bb shows an error. Sending still deletes the
+  notes: the server checks the sent draft against its own marks.
+- A note waits in one draft at a time: starting with it again moves its mark to
+  the newer draft, and only a send from there deletes it.
+- The notes are marked before the brief goes into the composer. If the brief or
+  the mark fails, the composer is left as it was, the notes stay and stay
   ticked, and one line says "Couldn't start the thread: …". Starting again
   simply retries. Files uploaded for a failed try may stay in the project's
   attachment store; bb offers no way to remove them.
+- Notes an older version of the plugin archived when starting a thread stay in
+  the database and `media/`, off the list.
 
 ## Where notes live
 
 In the plugin's SQLite database, `data.db` under `~/.bb/plugins/notes/` (bb's
 data directory). Attached files sit beside it in `media/`, one file per
-attachment named by its id (`att_…`), and the browser reads them from the
+attachment named by its id (`att_…`); files a brief named by path also sit in
+`kept/` (see above), and the browser reads them from the
 plugin's route `/api/v1/plugins/notes/http/media?id=att_…` (local requests
 only; Range is supported, so videos seek). Delete removes the notes' files too.
 When the plugin loads it removes files in `media/` that no note holds (left by

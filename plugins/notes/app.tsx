@@ -1,6 +1,8 @@
-// Registration only: the notes icon, the popover and the ways into it, and the homepage card.
+// Registration only: the notes icon, the popover and the ways into it, the homepage card, and the
+// watcher that deletes notes once they are sent.
 import { definePluginApp } from "@get-bb/plugin-sdk/app";
 import { NotesCard } from "./src/app/home/notes-card.tsx";
+import { InDraftWatch } from "./src/app/in-draft/in-draft-watch.tsx";
 import { captureFrom } from "./src/app/popover/capture.ts";
 import { NotesPopover } from "./src/app/popover/notes-popover.tsx";
 import { notesPopover } from "./src/app/popover/popover-store.ts";
@@ -17,6 +19,8 @@ export default definePluginApp((app) => {
 
   // The one owner of the popover: mounted once per window, opened through `notesPopover` from anywhere.
   app.slots.experimental_appOverlay({ id: "notes-popover", component: NotesPopover });
+  // Deletes notes once the composer they were put in sends them: mounted once per window, like the popover.
+  app.slots.experimental_appOverlay({ id: "notes-in-draft", component: InDraftWatch });
 
   // The selection menu on assistant replies, and the action bar under every message.
   app.slots.messageAction({ id: "add-to-notes", title: "Add to notes", icon: NOTE_ICON, run: (context) => notesPopover.capture(captureFrom(context)) });

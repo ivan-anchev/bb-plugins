@@ -10,10 +10,11 @@ screen. It has no commands and no settings. Its first card is Activity. When
 the PR Reviews plugin is installed, its pull requests card sits beside
 Activity, and the two stack when the page is narrow; that card belongs to PR
 Reviews. When the Burn plugin is installed too, a narrow Burn card sits on the
-second row, before boat spend when boat-sandbox is installed, or on the third
-row when Notes is installed. The Notes plugin's card then takes the second row
-beside boat spend, about 1 to 1.75; without boat-sandbox, Notes and Burn share
-the second row. Every card sits in one column when the page is narrow.
+second row, before boat spend when boat-sandbox is installed. When the Notes
+plugin is installed, its card takes that narrow first place on the second row,
+boat spend follows, and Burn comes last on the same row in a narrower column;
+a page too narrow for all three moves Burn under them. Every card sits in one
+column when the page is narrow.
 
 ## Activity
 
