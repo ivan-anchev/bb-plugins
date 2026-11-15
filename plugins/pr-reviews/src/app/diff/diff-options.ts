@@ -49,7 +49,7 @@ export function useDiffOptions<Annotation>(settings: DiffSettings, gestures: Lin
       // and drag from the "+" select lines; it reports the same range as the gesture's end.
       enableGutterUtility: true,
       onGutterUtilityClick: gestures.picked,
-      unsafeCSS: NOTE_ROWS,
+      unsafeCSS: `${NOTE_ROWS}${FULL_WIDTH_NOTES}`,
     }),
     [code.name, code.mode, settings.view, settings.overflow, gestures],
   );
@@ -58,6 +58,15 @@ export function useDiffOptions<Annotation>(settings: DiffSettings, gestures: Lin
 // Pierre tints the rows it slots notes into (the box, findings and review threads), gutter
 // included, as part of a selection: only the code lines read as selected.
 const NOTE_ROWS = "[data-line-annotation],[data-gutter-buffer=annotation]{--diffs-computed-selected-line-bg:var(--diffs-computed-diff-line-bg)}";
+
+// What Pierre slots under a line (a review thread, a finding, the box) spans the gutter too, as a
+// thread at its file does: no strip of the gutter's colour beside it. The note slides left over
+// the sticky gutter by the gutter's width and sits above it; pr-diff.tsx pads the box back in line
+// with the code's text.
+const FULL_WIDTH_NOTES =
+  "[data-line-annotation]{z-index:4}" +
+  "[data-annotation-content]{margin-left:calc(-1 * var(--diffs-column-number-width,0px))}" +
+  "[data-overflow=scroll] [data-annotation-content]{left:0;width:calc(var(--diffs-column-content-width,100%) + var(--diffs-column-number-width,0px))}";
 
 /**
  * The file's diff for Pierre: its patch at first, then, once `newContent` is read, both whole

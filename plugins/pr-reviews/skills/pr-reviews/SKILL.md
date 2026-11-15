@@ -29,20 +29,23 @@ line instead:
 - **Recently merged**: pull requests you authored or reviewed that merged in
   the last 7 days. Most recently merged first.
 
-**Filter sections.** The Filter icon at the top right of the sidebar opens a
-menu, **Show sections**, with one checkbox per section and its count, and
-**Show all sections**. Unchecking a section hides it; the menu stays open
-while you toggle. While any section is hidden the Filter icon shows pressed,
-with a dot. Hiding all three leaves one line, "All sections are hidden.", with
-**Show all**. The choice is kept in this browser across reloads, not on the
+**Filter sections.** The Filter icon at the end of the top section title (it
+stays there as you scroll) opens a menu, **Show sections**, with one checkbox
+per section and its count, and **Show all sections**. Unchecking a section
+hides it; the menu stays open while you toggle. While any section is hidden
+the Filter icon shows brighter. Hiding all three leaves one line, "All
+sections are hidden · Show all". The choice is kept in this browser across reloads, not on the
 bb server, so another browser or computer starts with all three shown.
 A stack-mate row still says where it is listed (**Yours**, **Review**) when
 that section is hidden.
 
 Each search reads up to 100 pull requests. Each row is one line: the author's
-GitHub avatar (two initials when it has none), the title, cut to one line, and
-at the end a coloured icon for a merged (purple), closed (red) or draft (grey)
-pull request; an open one shows none. Rows show no number and no guide state.
+GitHub avatar (two initials when it has none), the title, and at the end a
+badge with the PR's state icon and number on a wash of its state's colour:
+green open, grey draft, purple merged, red closed. A title too long for the row
+fades out at its end and, under the pointer, slides through to its end. The
+title is quiet, and firm on the open row and on a row with an attention dot.
+Rows show no guide state.
 Hovering a row, focusing it with the keyboard, or opening it shows the repo's
 name at its end; the row's tooltip names the title, `owner/name #number` and
 the author.
@@ -171,10 +174,10 @@ neighbouring lines and stops at every message.
 - **The first line** is the PR's opening: "Opened by X", or "Opened as a draft
   by X" when its timeline shows it opened as a draft, with a green glyph.
 - **Conversation comments**, **reviews with an open thread**, and **reviews
-  with a body and no thread** sit on the page: the avatar, the name, `author`
-  after the PR author's, `bot` after an app's, a review's verdict (`approved`
-  in green, `requested changes` in red, else `reviewed`), how long ago, and the
-  markdown. A bot's body is clamped to three lines with **Show more**; nobody
+  with a body and no thread** sit on the page: the avatar, then one line of the
+  name, `author` after the PR author's, `bot` after an app's, a review's
+  verdict (`approved` in green, `requested changes` in red, else `reviewed`)
+  and how long ago, with the markdown under it in a borderless bubble. A bot's body is clamped to three lines with **Show more**; nobody
   else's is. **Quote** and a link to GitHub show on hover or focus.
 - **A review's threads** show under it as rows in a tinted group: the file name
   and line in monospace, the thread's first line, and "resolved", "outdated" or
@@ -224,7 +227,7 @@ tab is opened, not when the page opens.
   file shows only `+N`, a deleted one only `−M`, a binary file "Binary") and a
   letter for how it changed (A, M, D or R). Click a file, or move to it with
   the arrow keys and press Enter or Space, to show its diff.
-- **The diff**: the selected file's path over its diff, drawn with bb's own
+- **The diff**: the selected file's header (its path, and its `+N −M` as bb's own diff shows them) over its diff, drawn with bb's own
   diff engine and code theme, so it looks like bb's diff view.
   A binary file, a file renamed without changes, or a file with no changed
   lines shows a sentence saying so instead, with the file's review threads
@@ -342,11 +345,14 @@ box, stays where it is.
 
 Every review thread GitHub has on the PR shows in each diff that holds it: the
 Changes tab's file diff and the guide step whose hunk has its lines. A thread
-sits under its last line, above any finding there, as one tinted block with no
-border. Each comment shows its author's avatar and name, `author` after the
-PR author's, `bot` after an app's, how long ago it was written (the exact time
-on hover), and its markdown, in GitHub's order. **Quote** and a link to the
-comment on GitHub show when you hover or focus the comment.
+sits under its last line, above any finding there, as a band across the
+whole diff, gutter included. Each comment, in GitHub's order, shows its
+author's avatar, then one line: the name, `author` after the PR author's, `bot`
+after an app's, a warning badge on the first comment of a thread whose lines
+are stale (**Outdated**, or **On another commit**), and how long ago (the exact
+time on hover). Its markdown sits under that line in a borderless
+bubble. **Quote** and a link to the comment on GitHub show when you hover or
+focus the comment.
 
 - **A long thread** (more than three comments) shows its first and latest
   comments, with **N more** between them to show the rest.
@@ -358,10 +364,11 @@ comment on GitHub show when you hover or focus the comment.
 
 Threads on no line of the diff show above it, at their file. A comment on the
 whole file needs no label. An **Outdated** thread, whose lines GitHub no longer
-has in the PR's diff, shows the lines it was written on under that word; when they are wider than the
-thread, Tab to them and scroll them with the arrow keys. A
-thread on another commit's lines than the diff shows, such as a guide written
-before new commits, says "On another commit" the same way. In a guide, a
+has in the PR's diff, opens with the lines it was written on, drawn like the
+diff's code across the band; when they are wider than the band, Tab to them and
+scroll them with the arrow keys. A thread on another commit's lines than the
+diff shows, such as a guide written before new commits, does the same, its badge
+saying "On another commit". In a guide, a
 file's threads at the file show on its first hunk in each step; a file with no
 text changes shows them under its one line, in a step or under "Not in this
 guide".

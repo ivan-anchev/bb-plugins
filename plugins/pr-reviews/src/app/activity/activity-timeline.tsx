@@ -91,7 +91,6 @@ function Message({ ref, comment, verb, context, children }: { ref?: Ref<HTMLElem
       <GitHubCommentView
         ref={ref}
         comment={comment}
-        density="page"
         byPrAuthor={comment.author.login === context.prAuthor}
         verb={verb}
         onQuote={() => context.onQuote(quoteReplyText(comment.body))}

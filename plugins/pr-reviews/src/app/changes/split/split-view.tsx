@@ -1,6 +1,6 @@
 // The Changes tab's resizable tree and viewer (ported from code-explorer's split-view): side by side
 // from a 48rem container, stacked below it, with a divider that drags and takes arrow keys, Home
-// and End. Sizes are remembered for the session.
+// and End. The divider shows only on hover, focus or drag: at rest the tree and the file sit together. Sizes are remembered for the session.
 import {
   useId,
   useLayoutEffect,
@@ -128,7 +128,7 @@ function SplitDivider({ axis, range, frame, treeId, onResize }: SplitDividerProp
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
       onKeyDown={resizeByKey}
-      className={`relative z-10 shrink-0 touch-none select-none bg-border outline-none transition-colors duration-150 before:absolute before:content-[''] hover:bg-ring focus-visible:bg-ring active:bg-ring ${DIVIDER_CLASSES[axis]}`}
+      className={`relative z-10 shrink-0 touch-none select-none bg-transparent outline-none transition-colors duration-150 before:absolute before:content-[''] hover:bg-ring focus-visible:bg-ring active:bg-ring ${DIVIDER_CLASSES[axis]}`}
     />
   );
 }
