@@ -1,8 +1,8 @@
-// The popover's inline form. It rests as one line, "New note…" with a ⇧⌘J hint; the first focus opens
-// it (the quoted passage, if any, a textarea where @ links a thread, thumbs of what is attached, 📎,
-// @, link chips, ⌘↵ and Save) and it stays open until the popover closes. why not collapse on blur:
-// the list under it would move mid-click. Look from prototypes/notes-tray.html, Popover.
-import { experimental_useRpcMutation, experimental_useSidebarThreads } from "@get-bb/plugin-sdk/app";
+// The popover's composer, pinned under the list and always open: the quoted passage, if any, thumbs
+// of what is attached, a textarea where @ links a thread, and a bar of 📎, @, link chips and a round
+// send (⌘↵). It grows upward, and the @ picker opens above it. Look from prototypes/notes-input.html,
+// Composer.
+import { experimental_Icon as Icon, experimental_useRpcMutation, experimental_useSidebarThreads } from "@get-bb/plugin-sdk/app";
 import {
   useImperativeHandle,
   useLayoutEffect,
@@ -32,7 +32,6 @@ export type NoteFormHandle = {
 };
 
 export function NoteForm({ capture, ref }: { capture: Capture | null; ref: Ref<NoteFormHandle> }) {
-  const [open, setOpen] = useState(false);
   // why a key: each save starts the next note from a fresh draft, its files freed, its field focused.
   const [saved, setSaved] = useState(0);
   return (
@@ -40,8 +39,6 @@ export function NoteForm({ capture, ref }: { capture: Capture | null; ref: Ref<N
       key={saved}
       ref={ref}
       capture={capture}
-      open={open}
-      onOpen={() => setOpen(true)}
       focusOnMount={saved > 0}
       onSaved={() => {
         if (capture !== null) notesPopover.clearQuote(capture);
@@ -55,14 +52,12 @@ export function NoteForm({ capture, ref }: { capture: Capture | null; ref: Ref<N
 
 type NoteDraftProps = {
   capture: Capture | null;
-  open: boolean;
-  onOpen(): void;
   focusOnMount: boolean;
   onSaved(): void;
   ref: Ref<NoteFormHandle>;
 };
 
-function NoteDraft({ capture, open, onOpen, focusOnMount, onSaved, ref }: NoteDraftProps) {
+function NoteDraft({ capture, focusOnMount, onSaved, ref }: NoteDraftProps) {
   const field = useRef<HTMLTextAreaElement>(null);
   const quote = useQuote(capture);
   const draft = useDraft(field);
@@ -98,61 +93,47 @@ function NoteDraft({ capture, open, onOpen, focusOnMount, onSaved, ref }: NoteDr
   return (
     <div
       className="nt-form"
-      data-open={open || undefined}
       data-dropping={files.dragging || undefined}
-      // why the whole form: a file dropped on it, even at rest, is attached and opens it.
+      // why the whole form: a file dropped anywhere on it is attached.
       onDragOver={files.onDragOver}
       onDragLeave={files.onDragLeave}
-      onDrop={(event) => {
-        files.onDrop(event);
-        onOpen();
-      }}
+      onDrop={files.onDrop}
     >
+      {picker.isOpen && <ThreadPicker picker={picker} onPick={pick} />}
       <div className="nt-form-box">
-        {open && quote !== null && <QuoteBlock quote={quote} />}
-        <div className="nt-field">
-          <textarea
-            ref={field}
-            className="nt-form-text"
-            rows={1}
-            autoFocus={focusOnMount}
-            aria-label="New note"
-            placeholder={placeholder(open, quote)}
-            value={draft.value.text}
-            onFocus={onOpen}
-            onChange={draft.onChange}
-            onSelect={draft.onSelect}
-            onKeyDown={onKeyDown}
-            onPaste={files.onPaste}
-            {...picker.fieldProps}
-          />
-          {picker.isOpen && <ThreadPicker picker={picker} onPick={pick} />}
+        {quote !== null && <QuoteBlock quote={quote} />}
+        <Thumbs
+          items={files.items}
+          onRemove={(item) => {
+            files.remove(item);
+            // why: the × leaves the page with its thumb, and focus must not fall to the page body.
+            field.current!.focus();
+          }}
+        />
+        <textarea
+          ref={field}
+          className="nt-form-text"
+          rows={1}
+          autoFocus={focusOnMount}
+          aria-label="New note"
+          placeholder={quote === null ? "Write a note…" : "Why does this matter?"}
+          value={draft.value.text}
+          onChange={draft.onChange}
+          onSelect={draft.onSelect}
+          onKeyDown={onKeyDown}
+          onPaste={files.onPaste}
+          {...picker.fieldProps}
+        />
+        <div className="nt-form-bar">
+          <AttachButton onFiles={files.add} />
+          <button type="button" className="nt-icon-button" aria-label="Link a thread" onClick={() => draft.edit(insertAtSign(draft.value))}>
+            @
+          </button>
+          <LinkChips threads={linkedThreads(draft.value.text, picked)} onUnlink={(thread) => draft.edit(removeToken(draft.value, picked, thread))} />
+          <button type="button" className="nt-send" aria-label="Save note (⌘↵)" aria-busy={save.saving} disabled={!save.canSave} onClick={save.run}>
+            <Icon name="ArrowUp" aria-hidden />
+          </button>
         </div>
-        {open ? (
-          <>
-            <Thumbs
-              items={files.items}
-              onRemove={(item) => {
-                files.remove(item);
-                // why: the × leaves the page with its thumb, and focus must not fall to the page body.
-                field.current!.focus();
-              }}
-            />
-            <div className="nt-form-bar">
-              <AttachButton onFiles={files.add} />
-              <button type="button" className="nt-icon-button" aria-label="Link a thread" onClick={() => draft.edit(insertAtSign(draft.value))}>
-                @
-              </button>
-              <LinkChips threads={linkedThreads(draft.value.text, picked)} onUnlink={(thread) => draft.edit(removeToken(draft.value, picked, thread))} />
-              <kbd className="nt-kbd">⌘↵</kbd>
-              <button type="button" className="nt-go" disabled={!save.canSave} onClick={save.run}>
-                {save.saving ? "Saving…" : "Save"}
-              </button>
-            </div>
-          </>
-        ) : (
-          <kbd className="nt-kbd">⇧⌘J</kbd>
-        )}
       </div>
       {files.refused !== null && (
         <p className="nt-caption" role="status">
@@ -166,11 +147,6 @@ function NoteDraft({ capture, open, onOpen, focusOnMount, onSaved, ref }: NoteDr
       )}
     </div>
   );
-}
-
-function placeholder(open: boolean, quote: Quote | null): string {
-  if (!open) return "New note…";
-  return quote === null ? "Write a note… type @ to link a thread" : "Why does this matter? Type @ to link a thread";
 }
 
 /** The capture with its thread's title; until the sidebar's threads have loaded, the thread's id. */

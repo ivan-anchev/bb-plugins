@@ -47,7 +47,7 @@ function show(focus: Focus, openedBy: Opener, quote?: Capture): void {
 }
 
 export const notesPopover = {
-  /** The sidebar-footer button: opens at rest, or closes. */
+  /** The sidebar-footer button: opens with focus on the popover itself, or closes. */
   toggleFromButton(): void {
     if (state.open) set({ open: false });
     else show("panel", "button");

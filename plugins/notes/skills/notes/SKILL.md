@@ -1,6 +1,6 @@
 ---
 name: notes
-description: Explain the Notes plugin, which keeps short personal notes in bb in a Notes popover opened from the sidebar-footer Notes button, ⇧⌘J, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), with a one-line form that links threads by typing @ and attaches images and videos by paste, drop or 📎, and the same list in a Notes card on the New thread screen, where a note opens in place with Delete and ticking some and choosing Start thread (or Add to composer on a thread page) puts them in the composer and archives them. Use when the user asks how to write, quote or link a note, how to read, edit or delete one, where their notes are, why ⇧⌘J does nothing, what the source chip opens, why a thread is missing from the @ picker, why a file was refused or where attached files are stored, what Start thread puts in the composer, why Start thread is disabled, where used notes went, why a file shows as a path instead of an attachment, why the Notes card is empty or says it couldn't read notes, where the card sits among the homepage cards, or why part of it stopped working after a bb update.
+description: Explain the Notes plugin, which keeps short personal notes in bb in a Notes popover opened from the sidebar-footer Notes button, ⇧⌘J, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), with a composer at its bottom that links threads by typing @ and attaches images and videos by paste, drop or 📎, and the same list in a Notes card on the New thread screen, where a note opens in place with Delete and ticking some and choosing Start thread (or Add to composer on a thread page) puts them in the composer and archives them. Use when the user asks how to write, quote or link a note, how to read, edit or delete one, where their notes are, why ⇧⌘J does nothing, what the source chip opens, why a thread is missing from the @ picker, why a file was refused or where attached files are stored, what Start thread puts in the composer, why Start thread is disabled, where used notes went, why a file shows as a path instead of an attachment, why the Notes card is empty or says it couldn't read notes, where the card sits among the homepage cards, or why part of it stopped working after a bb update.
 ---
 
 # Notes
@@ -16,20 +16,24 @@ agent tools and no settings; an agent cannot read or write notes.
   the window's bottom-left corner, 8px in. On a short window it takes the
   height there is.
 - It holds the same list as the Notes card (below): a header with the count
-  and a ×, a "New note…" field, the notes, and a footer for Start thread.
+  and a ×, the notes, a footer for Start thread while notes are ticked, and a
+  composer at the bottom.
 - The footer button and ⇧⌘J both toggle it. Esc first clears ticked notes,
   then closes it; a click outside closes it too. Closing with Esc, × or the
   shortcut puts focus back where it was (on the footer button when it opened
   the popover); a click outside leaves focus where the click put it.
-- The footer button opens it at rest, the field as one line. ⇧⌘J, the card's
-  **New note** link and **Add to notes** open it with the field focused.
+- The footer button opens it with focus on the popover itself. ⇧⌘J, the
+  card's **New note** link and **Add to notes** open it with the composer's
+  field focused.
 
 ## Writing a note
 
-- The field at the top of the popover rests as one line, "New note…" with a
-  ⇧⌘J hint. Focusing it opens the form: a textarea, 📎, @, the linked threads'
-  chips, ⌘↵ and **Save**. It stays open until the popover closes.
-- Type, then press ⌘↵ (Ctrl+Enter) or click **Save**. The note lands at the top
+- The composer at the bottom of the popover is always open, in bb's own
+  composer style: the quote (if any), thumbs of attached files, a "Write a
+  note…" textarea that grows upward, and a bar of 📎, @, the linked threads'
+  chips and a round send button.
+- Type, then press ⌘↵ (Ctrl+Enter) or click the send button (white with an up
+  arrow once there is something to save, grey while empty). The note lands at the top
   of the list with a short highlight, in the popover and on the card; the form
   empties and keeps focus for the next one. An empty form does not save.
 - Closing the popover drops what was typed (Esc, ×, a click outside).
@@ -54,8 +58,8 @@ agent tools and no settings; an agent cannot read or write notes.
 
 ## Linking threads with @
 
-- Type `@` in the form (or click **@** in its bar) and a picker opens under
-  the text: "Link a thread", with up to five of the user's active threads
+- Type `@` in the form (or click **@** in its bar) and a picker opens above
+  the composer: "Link a thread", with up to five of the user's active threads
   whose title contains what follows the `@` (case-insensitive). Archived
   threads are not listed.
 - ↑↓ move the highlight; Enter or Tab (or a click) writes "@Title " into the
@@ -74,16 +78,16 @@ agent tools and no settings; an agent cannot read or write notes.
 ## Attaching images and videos
 
 - Paste a screenshot (⌘V) into the form, drop files on it (its edge lights up
-  while a file is over it; a drop on the resting field opens it), or click 📎.
-  Each file shows as a 40px thumb under the text, a video with a play badge;
+  while a file is over it), or click 📎.
+  Each file shows as a 40px thumb above the text, a video with a play badge;
   its × removes it.
 - Taken: PNG, JPEG, GIF, WebP, MP4, MOV (`video/quicktime`) and WebM, up to
   100 MB each and 20 per note. Anything else is not added and one line says
   why: "HEIC isn’t supported — convert to PNG or JPEG", "rec.mov is over
   100 MB", "A note holds 20 files at most". SVG is refused because it can run
   script.
-- A note can be just its files: **Save** is enabled with files alone, and
-  reads "Saving…" while the files upload. The note is saved whole or not at
+- A note can be just its files: the send button is enabled with files alone,
+  and stays disabled while the files upload. The note is saved whole or not at
   all; if saving fails the draft keeps its files.
 - In the list a note with no words and no quote reads "2 screenshots"
   (images), "1 recording" (videos) or "3 attachments" (both).

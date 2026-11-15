@@ -14,7 +14,7 @@ function render(): ReturnType<typeof usePopoverState> {
 
 const passage = (text: string): Capture => ({ text, threadId: "thr_abc", messageSeq: 3 });
 
-test("the footer button opens at rest and closes again", () => {
+test("the footer button opens on the popover and closes again", () => {
   notesPopover.toggleFromButton();
   const opened = render();
   assert.ok(opened.open);

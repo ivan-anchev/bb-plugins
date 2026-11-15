@@ -1,6 +1,7 @@
 // The Notes panel, one component in two hosts: the homepage card and the sidebar's popover. Header
-// (icon, "Notes", count; the popover adds a close button), the popover's form, the scrolling list,
-// and a footer that turns ticked notes into a thread. Look from prototypes/notes-tray.html, Popover.
+// (icon, "Notes", count; the popover adds a close button), the scrolling list, a footer that turns
+// ticked notes into a thread, and at the bottom the popover's composer. Look from
+// prototypes/notes-tray.html, Popover, and notes-input.html, Composer.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { useRef, type ReactNode, type RefObject } from "react";
 import type { useNotes } from "../use-notes.ts";
@@ -14,11 +15,11 @@ type NotesPanelProps = {
   notes: ReturnType<typeof useNotes>;
   /** The host's own picks: the card and the popover each keep theirs. */
   picks: Picks;
-  /** The popover's inline form, above the list. */
+  /** The popover's composer, at the bottom. */
   form?: ReactNode;
   /** The popover's close button. */
   onClose?(): void;
-  /** The card's "New note" link. */
+  /** The card's "New note" link, in the footer it shows while nothing is picked. */
   onNewNote?(): void;
   /** After Start thread filled the composer. */
   onStarted?(): void;
@@ -37,7 +38,6 @@ export function NotesPanel({ notes, picks, form, onClose, onNewNote, onStarted, 
   return (
     <section className="nt-panel" data-picking={picking || undefined} aria-label="Notes">
       <PanelHeader ref={header} count={list?.length ?? 0} onClose={onClose} />
-      {form}
       {/* A failed read keeps the last notes in `data` and says why beside them. */}
       {notes.error !== null && (
         <p className="nt-caption nt-error" role="status">
@@ -63,8 +63,9 @@ export function NotesPanel({ notes, picks, form, onClose, onNewNote, onStarted, 
           onClear={picks.clear}
         />
       ) : (
-        <IdleFooter hasNotes={list !== undefined && list.length > 0} onNewNote={onNewNote} />
+        onNewNote !== undefined && <IdleFooter hasNotes={list !== undefined && list.length > 0} onNewNote={onNewNote} />
       )}
+      {form}
     </section>
   );
 }
@@ -100,15 +101,13 @@ function StartProblem({ start }: { start: StartThread }) {
   );
 }
 
-function IdleFooter({ hasNotes, onNewNote }: { hasNotes: boolean; onNewNote?(): void }) {
+function IdleFooter({ hasNotes, onNewNote }: { hasNotes: boolean; onNewNote(): void }) {
   return (
     <footer className="nt-foot nt-caption">
       {hasNotes && <span>Tick notes to start a thread</span>}
-      {onNewNote !== undefined && (
-        <button type="button" className="nt-link nt-end" onClick={onNewNote}>
-          New note<kbd className="nt-kbd">⇧⌘J</kbd>
-        </button>
-      )}
+      <button type="button" className="nt-link nt-end" onClick={onNewNote}>
+        New note<kbd className="nt-kbd">⇧⌘J</kbd>
+      </button>
     </footer>
   );
 }
@@ -144,7 +143,7 @@ function EmptyCard() {
 function EmptyPopover() {
   return (
     <>
-      Nothing saved yet. Write one above, or select text in a reply and choose <b>Add to notes</b>.
+      Nothing saved yet. Write one below, or select text in a reply and choose <b>Add to notes</b>.
     </>
   );
 }

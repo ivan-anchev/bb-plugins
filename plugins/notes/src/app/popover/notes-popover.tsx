@@ -1,5 +1,5 @@
 // experimental_appOverlay: the Notes popover. It floats beside the sidebar, its bottom level with the
-// footer's Notes button, on any bb screen: the shared panel with the inline form on top. bb's host
+// footer's Notes button, on any bb screen: the shared panel with the composer at the bottom. bb's host
 // shims Radix, so this popover shares bb's dismiss and focus layers. Esc closes the @ picker, then
 // clears picks, then closes; a click outside closes; focus goes back where it came from.
 import { Anchor, Content, Portal, Root } from "@radix-ui/react-popover";
@@ -103,8 +103,8 @@ function Opening({ state }: { state: OpenState }) {
 type FocusOnRequestProps = { state: OpenState; content: RefObject<HTMLDivElement | null>; form: RefObject<NoteFormHandle | null> };
 
 /**
- * Moves focus on every request: to the form's field (which opens the form) or to the popover itself
- * (the form stays at rest). The first request is the opening's. why a component inside the popover:
+ * Moves focus on every request: to the composer's field or to the popover itself. The first request
+ * is the opening's. why a component inside the popover:
  * its effect runs once the popover's portaled content exists.
  */
 function FocusOnRequest({ state: { focus, focusRequest }, content, form }: FocusOnRequestProps) {

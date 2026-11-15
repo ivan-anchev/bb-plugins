@@ -1,6 +1,6 @@
 /* The Notes panel, shared by the homepage card and the popover (prototypes/notes-tray.html, Popover;
    rows from notes-card-fan.html, Symmetric). Each host sets --nt-surface, the colour under the panel,
-   which the fan's rings and the form's box are drawn against. */
+   which the fan's rings and the thumbs' × are drawn against. */
 
 .nt-panel {
   flex: 1;
@@ -21,7 +21,7 @@
 .nt-count {
   padding: 0 6px;
   border-radius: 99px;
-  background: color-mix(in oklch, var(--foreground) 8%, transparent);
+  background: var(--muted);
   font-size: 12px;
   line-height: 18px;
   font-weight: 400;
@@ -58,8 +58,6 @@
   margin: 0 -8px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklch, var(--foreground) 18%, transparent) transparent;
   -webkit-mask-image: linear-gradient(transparent, #000 var(--nt-fade-top), #000 calc(100% - var(--nt-fade-bottom)), transparent);
   mask-image: linear-gradient(transparent, #000 var(--nt-fade-top), #000 calc(100% - var(--nt-fade-bottom)), transparent);
 }
@@ -78,7 +76,7 @@
 @media (hover: hover) { .nt-row:hover { background: var(--state-hover, color-mix(in oklch, var(--foreground) 5%, transparent)); } }
 /* A note just saved lands with a brief highlight. */
 @media (prefers-reduced-motion: no-preference) { .nt-row[data-new] { animation: nt-new 900ms ease-out; } }
-@keyframes nt-new { from { background: color-mix(in oklch, var(--foreground) 12%, transparent); } }
+@keyframes nt-new { from { background: var(--state-active, color-mix(in oklch, var(--foreground) 8%, transparent)); } }
 
 /* The checkbox: a 30px column the row's height, the 14px box centred on line 1. The box shows only
    under the pointer, on keyboard focus, once ticked, and on every row while anything is picked;
@@ -95,13 +93,15 @@
   cursor: pointer;
 }
 .nt-pick:focus-visible { box-shadow: inset 0 0 0 1.5px var(--ring); }
+/* why --subtle-foreground, not bb's checkbox token --input: --input is 4% white in grok, and an unticked
+   box must stay visible against the row (non-text contrast ≥ 3:1). */
 .nt-check {
   width: 14px;
   height: 14px;
   border-radius: 4px;
   display: grid;
   place-items: center;
-  box-shadow: inset 0 0 0 1.5px color-mix(in oklch, var(--foreground) 30%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--subtle-foreground, var(--muted-foreground));
   color: var(--primary-foreground);
   opacity: 0;
   transition: opacity 120ms ease-out, background-color 120ms ease-out, box-shadow 120ms ease-out;
@@ -248,8 +248,8 @@
 }
 .nt-acts { display: flex; align-items: center; gap: 12px; font-size: 12px; line-height: 16px; }
 
-/* The passage a note quotes, behind its bar, then its source chip: four lines in the form, all of it
-   in an opened note. */
+/* The passage a note quotes, behind its bar, then its source chip: three lines in the form, all of
+   it in an opened note. The bar is the one bb's composer draws on a quote. */
 .nt-quote { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin: 0; }
 .nt-quote-text {
   display: -webkit-box;
@@ -257,8 +257,8 @@
   padding-left: 10px;
   overflow: hidden;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-  box-shadow: inset 2px 0 0 color-mix(in oklch, var(--foreground) 18%, transparent);
+  -webkit-line-clamp: 3;
+  box-shadow: inset 2px 0 0 var(--surface-selected-border, var(--border));
   color: var(--muted-foreground);
 }
 .nt-quote-text[data-whole] { display: block; -webkit-line-clamp: none; white-space: pre-wrap; }
@@ -276,7 +276,8 @@
 .nt-media-open { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
 .nt-media-open:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
 
-/* The footer: a hint and New note at rest; with picks, the count, Clear, and the one primary action. */
+/* The footer: in the card, a hint and New note; with picks, the count, Clear, and the one primary
+   action. */
 .nt-foot { display: flex; align-items: center; gap: 8px; min-height: 24px; }
 /* With picks, a panel too narrow for one line puts the button under the count, still at the right,
    rather than past the panel's edge. */
@@ -314,7 +315,7 @@
 @media (hover: hover) { .nt-go:not(:disabled):hover { background: color-mix(in oklch, var(--primary) 88%, var(--nt-surface)); } }
 .nt-go:not(:disabled):active { transform: scale(0.97); }
 .nt-go:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-.nt-go:disabled { cursor: default; opacity: 0.4; }
+.nt-go:disabled { cursor: default; background: var(--muted); color: var(--subtle-foreground, var(--muted-foreground)); }
 /* The footer's button rises in as the first note is picked (the footer mounts then). */
 @media (prefers-reduced-motion: no-preference) { .nt-picks .nt-go { animation: nt-go-in 160ms cubic-bezier(0.23, 1, 0.32, 1); } }
 @keyframes nt-go-in { from { opacity: 0; transform: translateY(2px); } }
@@ -322,7 +323,7 @@
   margin-left: 4px;
   padding: 0 4px;
   border-radius: 4px;
-  background: color-mix(in oklch, var(--foreground) 8%, transparent);
+  background: var(--muted);
   font-family: inherit;
   font-size: 11px;
   line-height: 16px;

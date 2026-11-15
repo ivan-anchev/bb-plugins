@@ -1,32 +1,27 @@
-/* The popover's inline form (prototypes/notes-tray.html, Popover): at rest one line, the field and
-   its ⇧⌘J hint; open, a column with the quote, the text, thumbs and a bar of 📎, @, chips and Save. */
+/* The popover's composer (prototypes/notes-input.html, Composer): bb's own composer as the theme
+   draws it, pinned under the list. Top to bottom: the quote, thumbs, the text, and a bar of 📎, @,
+   chips and a round send. Fill and rings are the theme's composer tokens, with no focus tint. */
 
 .nt-form { position: relative; flex: none; display: flex; flex-direction: column; gap: 6px; }
 .nt-form-box {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
-  padding: 8px 8px 8px 10px;
-  border-radius: 10px;
-  background: color-mix(in oklch, var(--foreground) 4%, var(--nt-surface));
-  box-shadow: inset 0 0 0 1px var(--border);
-  transition: box-shadow 150ms ease-out;
+  padding: 10px 10px 8px 14px;
+  border-radius: 18px;
+  background: var(--grok-composer, var(--card));
+  box-shadow: inset 0 0 0 0.5px var(--grok-line-strong, var(--border)), 0 0 0 1px var(--grok-line, transparent);
 }
-.nt-form[data-open] .nt-form-box { flex-direction: column; align-items: stretch; }
-.nt-form-box:focus-within { box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--foreground) 22%, transparent); }
 /* A file dragged over the form: the whole form is the drop target. */
 .nt-form[data-dropping] .nt-form-box { box-shadow: inset 0 0 0 1.5px var(--ring); }
-/* The ⇧⌘J hint at rest sits in the box's gap. */
-.nt-form-box > .nt-kbd { margin-left: 0; }
 
-/* The textarea and the @ picker that opens under it. */
-.nt-field { position: relative; flex: 1; min-width: 0; }
+/* The textarea grows upward with its text, up to 140px. */
 .nt-form-text {
   display: block;
   width: 100%;
   min-height: 20px;
   max-height: 140px;
-  padding: 2px 0 0;
+  padding: 0;
   border: 0;
   outline: 0;
   resize: none;
@@ -34,20 +29,23 @@
   background: transparent;
   color: var(--foreground);
   font: inherit;
+  line-height: 20px;
 }
 .nt-form-text::placeholder { color: var(--subtle-foreground, var(--muted-foreground)); }
 
+/* The @ picker opens above the composer, over the list. Its ring is the one the theme gives bb's own
+   menus and listboxes. */
 .nt-picker {
   position: absolute;
-  top: calc(100% + 6px);
+  bottom: calc(100% + 6px);
   left: 0;
   right: 0;
   z-index: 1;
   padding: 4px;
   border-radius: 10px;
   background: var(--popover, var(--card));
-  box-shadow: 0 0 0 1px var(--border), 0 12px 32px rgb(0 0 0 / 0.4);
-  transform-origin: 0 0;
+  box-shadow: 0 0 0 1px var(--grok-line-strong, var(--border)), 0 12px 32px rgb(0 0 0 / 0.4);
+  transform-origin: 0 100%;
 }
 @media (prefers-reduced-motion: no-preference) { .nt-picker { animation: nt-picker-in 120ms cubic-bezier(0.23, 1, 0.32, 1); } }
 @keyframes nt-picker-in { from { opacity: 0; transform: scale(0.96); } }
@@ -99,28 +97,47 @@
 .nt-thumb-remove:focus-visible { outline: 2px solid var(--ring); }
 @media (hover: hover) { .nt-thumb-remove:hover { color: var(--foreground); } }
 
-/* The bar: 📎 and @, then the linked threads' chips, then ⌘↵ and Save at the end. */
-.nt-form-bar { display: flex; align-items: center; gap: 2px; margin-left: -4px; }
-.nt-form-bar .nt-kbd { margin-left: auto; margin-right: 6px; }
-.nt-form-bar .nt-go { margin-left: 0; }
+/* The bar: 📎 and @, then the linked threads' chips, then the round send at the end. */
+.nt-form-bar { display: flex; align-items: center; gap: 2px; margin-left: -6px; }
 .nt-icon-button {
   all: unset;
   position: relative;
   flex: none;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
-  border-radius: 6px;
+  border-radius: 7px;
   color: var(--muted-foreground);
   font-weight: 500;
   cursor: pointer;
 }
 .nt-icon-button svg { width: 14px; height: 14px; }
 @media (hover: hover) { .nt-icon-button:hover { background: var(--state-hover, color-mix(in oklch, var(--foreground) 5%, transparent)); color: var(--foreground); } }
+.nt-icon-button:active { background: var(--state-active, color-mix(in oklch, var(--foreground) 8%, transparent)); }
 .nt-icon-button:focus-visible { box-shadow: inset 0 0 0 1.5px var(--ring); }
 
-.nt-links { display: flex; gap: 4px; min-width: 0; margin: 0 0 0 4px; padding: 0; overflow: hidden; list-style: none; }
+/* Send: white with an up arrow when there is something to save; a quiet muted disc when not. */
+.nt-send {
+  all: unset;
+  flex: none;
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 99px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  cursor: pointer;
+  transition: background-color 150ms ease-out, color 150ms ease-out;
+}
+.nt-send svg { width: 15px; height: 15px; stroke-width: 2.25; }
+.nt-send:not(:disabled):active { transform: scale(0.94); }
+.nt-send:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.nt-send:disabled { cursor: default; background: var(--muted); color: var(--subtle-foreground, var(--muted-foreground)); }
+
+.nt-links { display: flex; gap: 4px; min-width: 0; margin: 0 4px; padding: 0; overflow: hidden; list-style: none; }
 .nt-chip {
   flex: none;
   max-width: 140px;
@@ -130,7 +147,7 @@
   gap: 4px;
   padding: 0 2px 0 6px;
   border-radius: 99px;
-  background: color-mix(in oklch, var(--foreground) 8%, transparent);
+  background: var(--muted);
   font-size: 11px;
   color: var(--muted-foreground);
 }
