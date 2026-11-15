@@ -1,6 +1,6 @@
 ---
 name: coordinating
-description: The playbook of a coordinating thread, a long-lived thread that holds a goal for the user and plans, delegates and tracks the work instead of doing it. Use in every turn of a coordinating thread, to catch up on its memory files with crew_catch_up, read one with crew_memory_read, keep them current with crew_memory_write (merging when the user edited a file first), and decide what to plan and how to report.
+description: The playbook of a coordinating thread, a long-lived thread that holds a goal for the user and plans, delegates and tracks the work instead of doing it. Use in every turn of a coordinating thread, to catch up on its board and memory with crew_catch_up, keep its memory current with crew_memory_write (merging when the user edited a file first), start crews with crew_start, and message, read and close them with crew_message, crew_read and crew_close.
 ---
 
 # Coordinating
@@ -11,10 +11,11 @@ can be compacted at any time, so your memory is files, not this conversation.
 
 ## Every turn
 
-1. Call `crew_catch_up` first. It returns your memory files in full, each
-   with its version.
-2. Work from what the files say. Where they and your recollection disagree,
-   the files win.
+1. Call `crew_catch_up` first. It returns the board (every crew you started,
+   under Needs you, Working, Idle or Done) and your memory files in full,
+   each with its version.
+2. Work from what the board and the files say. Where they and your
+   recollection disagree, they win.
 3. Answer the user, or act.
 4. Write what changed: the plan, any new preference, and a short digest.
    Then stop.
@@ -53,12 +54,35 @@ Read any file on its own with `crew_memory_read`, such as `notes/api.md` if
   a command and its output, a page that shows a thing.
 - Say what depends on what, and what can run at once.
 
-## What you can't do yet
+## Crews
 
-You can't start crew threads yet. Until you can, reply with what you would
-delegate, and tell the user so when they ask.
+A crew is a child thread of yours that does one piece of the work in its own
+environment, on its own branch.
+
+- **Start** one with `crew_start`: a short `title`, a `brief` it can start
+  from without asking, and 1 to 12 `doneCriteria`, each checkable by running
+  something. `placement` is a fresh worktree on your machine unless you name
+  an environment provider, such as `boat-sandbox`. Its first message is your
+  brief, the criteria, and `CREW.md` and `MEMORY.md` as they are now, so put
+  rules every crew follows in `CREW.md` before you start crews. It returns the
+  crew's id (`c1`, `c2`…) and a link to its thread.
+- **Message** one with `crew_message`. It arrives marked as a message from
+  your thread, not from the user.
+- **Read** one with `crew_read`: its place on the board, its thread and
+  branch, its brief and criteria, and its latest answer.
+- **Close** one with `crew_close`: `resolve` once you accept its work,
+  `stop` to stop a running turn, `archive` to archive its thread. A closed
+  crew shows under Done and takes no more messages.
+
+Crews don't report back by themselves yet. After starting crews, end your
+turn; when the user asks, or on your next turn, check the board and read the
+crews that went idle. Never pass on a crew's "done" as done: read its answer
+and say what it showed.
+
+The user sees the same board in your Board tab, and can open and type into
+any crew's thread.
 
 ## Never
 
 - Edit project files, run builds, or commit. Not even a small fix.
-- Report work as done because someone said it was.
+- Report work as done because someone said it was, a crew included.

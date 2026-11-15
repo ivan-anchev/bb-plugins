@@ -1,11 +1,7 @@
 // The Memory page: one coordinating thread's memory folder, its files, and an editor for the one
 // picked. It keeps each file's edit, so switching files loses nothing and a save still settles, and
 // while any draft is open, Esc never leaves the page.
-import {
-  experimental_Icon as Icon,
-  experimental_useRpcQuery,
-  experimental_useSidebarThreads as useSidebarThreads,
-} from "@get-bb/plugin-sdk/app";
+import { experimental_Icon as Icon, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { useState, type Ref } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
 import type { MemoryFile } from "../../model/memory-file.ts";
@@ -13,6 +9,7 @@ import type { CoordinatorId } from "../../model/role.ts";
 import { Button } from "../ui/button.tsx";
 import { useHoldEscape } from "../ui/hold-escape.ts";
 import { ReadFailure } from "../ui/read-failure.tsx";
+import { useThreadTitle } from "../ui/use-thread-title.ts";
 import { MemoryEditor } from "./memory-editor.tsx";
 import { useFileEdits } from "./use-file-edits.ts";
 
@@ -90,12 +87,4 @@ function FileList({ files, open, drafted, onOpen }: { files: readonly MemoryFile
       </ul>
     </nav>
   );
-}
-
-/** The coordinating thread's title as bb shows it, once both reads have it. */
-function useThreadTitle(coordinatorId: CoordinatorId): string | null {
-  const coordinators = experimental_useRpcQuery({ contract, method: "coordinators", input: {} });
-  const { threads } = useSidebarThreads();
-  const threadId = coordinators.data?.coordinators.find((coordinator) => coordinator.id === coordinatorId)?.threadId;
-  return threads.find((thread) => thread.id === threadId)?.displayTitle ?? null;
 }

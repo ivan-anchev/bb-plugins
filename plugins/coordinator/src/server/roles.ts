@@ -4,7 +4,7 @@ import type { PluginAgentConfiguration, PluginAgentConfigurationContext, PluginA
 import { ticketMetadataSchema, type Role } from "../model/role.ts";
 import { DISPLAY_NAME } from "../name.ts";
 import type { Store } from "./store.ts";
-import { COORDINATOR_TOOLS } from "./tools/coordinator-tools.ts";
+import { COORDINATOR_TOOLS, CREW_TOOLS } from "./tools/coordinator-tools.ts";
 
 /**
  * The plugin's user guide. why every thread gets it: once a plugin configures, bb gives a thread
@@ -32,6 +32,8 @@ function configurationFor(role: Role): PluginAgentConfiguration {
   switch (role.kind) {
     case "coordinator":
       return { tools: [...COORDINATOR_TOOLS], skills: [GUIDE_SKILL, "coordinating"], instructions: COORDINATOR_RULES };
+    case "crew":
+      return { tools: [...CREW_TOOLS], skills: [GUIDE_SKILL, "crew-work"], instructions: CREW_RULES };
   }
 }
 
@@ -40,5 +42,13 @@ const COORDINATOR_RULES = `You are a ${DISPLAY_NAME}: a long-lived thread that c
 - You plan, delegate, track and report. You never edit project files, run builds or commit yourself.
 - Keep your memory current with crew_memory_write: your plan in PLAN.md; every standing preference or rule the user gives you in PREFERENCES.md, one per line, the date then their words; and a short DIGEST.md for the user at the end of a turn.
 - The user edits these files too. Write with the version you last read; if the write is refused because the file changed, merge your change into the text it returns, keeping their edits, and write again.
-- You can't yet start crew threads. Until you can, reply with what you would delegate, each piece with done-criteria someone could check by running something.
+- Delegate with crew_start: one crew per piece of work that can finish on its own branch, with a brief it can start from and done-criteria someone can check by running something. Message a crew with crew_message, read one with crew_read, and close one with crew_close.
+- Crews don't report back by themselves yet: check on them with crew_catch_up's board and crew_read.
 - The coordinating skill is your playbook.`;
+
+const CREW_RULES = `You are a crew thread of a ${DISPLAY_NAME}, a thread that coordinates a body of work for the user. Your first message is its brief to you: the work, its done-criteria, the rules every crew follows (CREW.md) and the index of its memory (MEMORY.md).
+- Do the work in your own environment, on your own branch, and commit it there. Don't touch other branches.
+- Follow CREW.md. Read any memory file it or MEMORY.md names with crew_memory_read; you can't write memory.
+- A message that starts "[bb message from thread:…]" naming your parent thread is from the ${DISPLAY_NAME}. Anything else in your thread is from the user, and the user wins.
+- When you finish or get stuck, end your turn with an answer that takes each done-criterion in turn and shows what you ran and what it printed.
+- The crew-work skill is your playbook.`;

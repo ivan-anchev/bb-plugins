@@ -1,17 +1,18 @@
-// The nav panel: the list at its root, the New page at `new`, and a coordinating thread's memory at
-// `memory/<id>`. Its title bar holds New.
+// The nav panel: the list at its root, the New page at `new`, and a coordinating thread's board at
+// `board/<id>` and its memory at `memory/<id>`. Its title bar holds New.
 import { experimental_Icon as Icon, useBbNavigate, type PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { useCallback } from "react";
 import type { CoordinatorId } from "../../model/role.ts";
+import { BoardPage } from "../board/board-page.tsx";
 import { MemoryPage } from "../memory/memory-page.tsx";
 import { Button } from "../ui/button.tsx";
 import { useFocusHandOff } from "../ui/focus-hand-off.ts";
 import { CoordinatorList } from "./coordinator-list.tsx";
 import { NewCoordinator } from "./new-coordinator.tsx";
-import { memorySubPath, NEW_SUBPATH, PANEL_PATH, pageOf } from "./routes.ts";
+import { coordinatorSubPath, NEW_SUBPATH, PANEL_PATH, pageOf } from "./routes.ts";
 
 export function CoordinatorPanel({ subPath }: PluginNavPanelProps) {
-  const { openList, openMemory } = usePanelNavigation();
+  const { openList, openBoard, openMemory } = usePanelNavigation();
   // Each page's root hands focus to the next when focus was inside it as it left, so All, a row's
   // Memory button or anything else that unmounts with its page never drops focus (REVIEW.md).
   const focus = useFocusHandOff();
@@ -24,10 +25,12 @@ export function CoordinatorPanel({ subPath }: PluginNavPanelProps) {
   switch (page.kind) {
     case "new":
       return <NewCoordinator ref={pageRoot} onBack={openList} />;
+    case "board":
+      return <BoardPage key={page.coordinatorId} ref={pageRoot} coordinatorId={page.coordinatorId} onBack={openList} onOpenMemory={() => openMemory(page.coordinatorId)} />;
     case "memory":
       return <MemoryPage key={page.coordinatorId} ref={pageRoot} coordinatorId={page.coordinatorId} onBack={openList} />;
     case "list":
-      return <CoordinatorList ref={pageRoot} onOpenMemory={openMemory} />;
+      return <CoordinatorList ref={pageRoot} onOpenBoard={openBoard} onOpenMemory={openMemory} />;
     default:
       return page satisfies never;
   }
@@ -49,6 +52,7 @@ function usePanelNavigation() {
   return {
     openNew: () => navigate.toPluginPanel(PANEL_PATH, { subPath: NEW_SUBPATH }),
     openList: () => navigate.toPluginPanel(PANEL_PATH),
-    openMemory: (id: CoordinatorId) => navigate.toPluginPanel(PANEL_PATH, { subPath: memorySubPath(id) }),
+    openBoard: (id: CoordinatorId) => navigate.toPluginPanel(PANEL_PATH, { subPath: coordinatorSubPath("board", id) }),
+    openMemory: (id: CoordinatorId) => navigate.toPluginPanel(PANEL_PATH, { subPath: coordinatorSubPath("memory", id) }),
   };
 }

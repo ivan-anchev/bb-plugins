@@ -3,8 +3,9 @@
 import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { coordinatorSchema, type Coordinator } from "../contract.ts";
+import { closedKindSchema, doneCriteriaSchema, placementSchema, type ClosedKind, type Crew, type Placement } from "../model/crew.ts";
 import { memoryRevisionSchema, type MemoryFile, type MemoryRevision, type MemoryVersion } from "../model/memory-file.ts";
-import { roleSchema, type CoordinatorId, type Role } from "../model/role.ts";
+import { coordinatorIdSchema, crewIdSchema, roleSchema, type CoordinatorId, type CrewId, type Role } from "../model/role.ts";
 
 // Append-only: bb.storage.migrate records each statement's hash by its index.
 const MIGRATIONS = [
@@ -18,6 +19,13 @@ const MIGRATIONS = [
   // for the first time; `version` is null while it doesn't exist.
   `CREATE TABLE memory_revisions (coordinator_id TEXT NOT NULL, file TEXT NOT NULL, version TEXT,
      revision INTEGER NOT NULL, PRIMARY KEY (coordinator_id, file))`,
+  // A crew of a coordinating thread, numbered c1, c2… within it. Its thread is its ticket's; a
+  // crew whose ticket is unbound (or that has none) never got a thread. why JSON: the criteria and
+  // placement are read and written whole.
+  `CREATE TABLE crews (coordinator_id TEXT NOT NULL REFERENCES coordinators (id), id TEXT NOT NULL,
+     ticket TEXT UNIQUE REFERENCES roles (ticket), title TEXT NOT NULL, brief TEXT NOT NULL,
+     done_criteria TEXT NOT NULL, placement TEXT NOT NULL, created_at INTEGER NOT NULL,
+     closed_as TEXT, closed_at INTEGER, PRIMARY KEY (coordinator_id, id))`,
 ];
 
 export type Store = ReturnType<typeof openStore>;
@@ -32,6 +40,19 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     return row === undefined ? null : toRole(row);
   }
 
+  function crews(coordinatorId: CoordinatorId, crewId: CrewId | null): Crew[] {
+    return db()
+      .prepare(
+        `SELECT k.coordinator_id AS coordinatorId, k.id, k.title, k.brief, k.done_criteria AS doneCriteria, k.placement,
+                k.created_at AS createdAt, k.closed_as AS closedAs, k.closed_at AS closedAt, r.thread_id AS threadId
+           FROM crews k LEFT JOIN roles r ON r.ticket = k.ticket
+          WHERE k.coordinator_id = ? AND (? IS NULL OR k.id = ?)
+          ORDER BY k.created_at, k.rowid`,
+      )
+      .all(coordinatorId, crewId, crewId)
+      .map(toCrew);
+  }
+
   return {
     /** The coordinator and its unbound ticket, together or not at all. */
     insertCoordinator({ id, ticket, projectId, createdAt }: { id: CoordinatorId; ticket: string; projectId: string; createdAt: number }): void {
@@ -43,11 +64,29 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     },
 
     /**
-     * Gives the ticket's role to the thread. Idempotent: a ticket binds once, so a second call, or a
-     * call naming another thread, changes nothing. Returns whether this call bound it.
+     * The crew and its unbound ticket, together or not at all, numbered after the coordinating
+     * thread's last crew. why one transaction: two starts at once can't take the same number.
      */
-    bindTicket(ticket: string, threadId: string): boolean {
-      return db().prepare("UPDATE roles SET thread_id = ? WHERE ticket = ? AND thread_id IS NULL").run(threadId, ticket).changes === 1;
+    insertCrew(crew: { coordinatorId: CoordinatorId; ticket: string; title: string; brief: string; doneCriteria: string[]; placement: Placement; createdAt: number }): CrewId {
+      return db().transaction(() => {
+        const { count } = z.object({ count: z.number() }).parse(db().prepare("SELECT count(*) AS count FROM crews WHERE coordinator_id = ?").get(crew.coordinatorId));
+        const id = crewIdSchema.parse(`c${count + 1}`);
+        const role: Role = { kind: "crew", coordinatorId: crew.coordinatorId, crewId: id };
+        db().prepare("INSERT INTO roles (ticket, role, created_at) VALUES (?, ?, ?)").run(crew.ticket, JSON.stringify(role), crew.createdAt);
+        db()
+          .prepare("INSERT INTO crews (coordinator_id, id, ticket, title, brief, done_criteria, placement, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+          .run(crew.coordinatorId, id, crew.ticket, crew.title, crew.brief, JSON.stringify(crew.doneCriteria), JSON.stringify(crew.placement), crew.createdAt);
+        return id;
+      })();
+    },
+
+    /**
+     * Gives the ticket's role to the thread, and returns that role. Idempotent: a ticket binds once,
+     * so a second call, or a call naming another thread, changes nothing and returns null.
+     */
+    bindTicket(ticket: string, threadId: string): Role | null {
+      const row = db().prepare("UPDATE roles SET thread_id = ? WHERE ticket = ? AND thread_id IS NULL RETURNING role").get(threadId, ticket);
+      return row === undefined ? null : toRole(row);
     },
 
     /** What tools see: a thread has a role only once its ticket is bound to it. */
@@ -68,6 +107,29 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     /** Whether a coordinating thread with this id was ever started. */
     isCoordinator(id: CoordinatorId): boolean {
       return db().prepare("SELECT 1 FROM coordinators WHERE id = ?").get(id) !== undefined;
+    },
+
+    /** The coordinating thread, once its thread is bound. */
+    coordinator(id: CoordinatorId): Coordinator | null {
+      const row = db()
+        .prepare(
+          `SELECT c.id, r.thread_id AS threadId, c.project_id AS projectId, c.created_at AS createdAt
+             FROM coordinators c JOIN roles r ON r.ticket = c.ticket
+            WHERE c.id = ? AND r.thread_id IS NOT NULL`,
+        )
+        .get(id);
+      return row === undefined ? null : coordinatorSchema.parse(row);
+    },
+
+    /** Every crew of the coordinating thread, in the order they were started. */
+    crews: (coordinatorId: CoordinatorId): Crew[] => crews(coordinatorId, null),
+
+    /** One crew of the coordinating thread, or null when it has no crew by that id. */
+    crew: (coordinatorId: CoordinatorId, crewId: CrewId): Crew | null => crews(coordinatorId, crewId)[0] ?? null,
+
+    /** Records how a crew was closed. A crew closes once: closing it again changes nothing. */
+    closeCrew(coordinatorId: CoordinatorId, crewId: CrewId, kind: ClosedKind, at: number): void {
+      db().prepare("UPDATE crews SET closed_as = ?, closed_at = ? WHERE coordinator_id = ? AND id = ? AND closed_as IS NULL").run(kind, at, coordinatorId, crewId);
     },
 
     /**
@@ -103,3 +165,25 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
 }
 
 const toRole = (row: unknown): Role => roleSchema.parse(JSON.parse(z.object({ role: z.string() }).parse(row).role));
+
+const crewRowSchema = z.object({
+  coordinatorId: coordinatorIdSchema,
+  id: crewIdSchema,
+  title: z.string(),
+  brief: z.string(),
+  doneCriteria: z.string().transform((json) => doneCriteriaSchema.parse(JSON.parse(json))),
+  placement: z.string().transform((json) => placementSchema.parse(JSON.parse(json))),
+  createdAt: z.number(),
+  closedAs: closedKindSchema.nullable(),
+  closedAt: z.number().nullable(),
+  threadId: z.string().nullable(),
+});
+
+function toCrew(row: unknown): Crew {
+  const { closedAs, closedAt, threadId, ...crew } = crewRowSchema.parse(row);
+  return {
+    ...crew,
+    launch: threadId === null ? { kind: "draft" } : { kind: "started", threadId },
+    closed: closedAs === null || closedAt === null ? null : { kind: closedAs, at: closedAt },
+  };
+}

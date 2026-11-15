@@ -40,3 +40,30 @@ export function handFocusToPage(region: HTMLElement | null): (() => void) | unde
     if (region.contains(document.activeElement)) region.parentElement?.closest<HTMLElement>('[tabindex="0"]')?.focus();
   };
 }
+
+/**
+ * Focus kept by rows that move from one list to another, such as a board row whose group changes:
+ * React removes the row from the old list and mounts a new one in the new list, so focus in the old
+ * row moves to the new row with the same key, in the same commit. Each key's ref is stable.
+ */
+export function useFocusKeptByKey(): (key: string) => RefCallback<HTMLElement> {
+  return useMemo(() => {
+    let leaving: string | null = null;
+    const refs = new Map<string, RefCallback<HTMLElement>>();
+    const refOf = (key: string): RefCallback<HTMLElement> => (row) => {
+      if (row === null) return;
+      if (leaving === key) {
+        leaving = null;
+        row.focus();
+      }
+      return () => {
+        if (row.contains(document.activeElement)) leaving = key;
+      };
+    };
+    return (key) => {
+      const ref = refs.get(key) ?? refOf(key);
+      refs.set(key, ref);
+      return ref;
+    };
+  }, []);
+}
