@@ -1,6 +1,6 @@
 ---
 name: horizontal-tabs
-description: Explain the Horizontal Tabs plugin's tab strip at the top of bb's main panel, where each tab holds a whole split layout. Use when the user asks what a tab holds or shows, how to open, switch or close tabs, how to switch tabs from the keyboard or change those shortcuts, why Ctrl+Tab does nothing in a browser, why a tab's title or project initials changed, why no tab is selected, why a maximized pane came back unmaximized, or why the strip is missing.
+description: Explain the Horizontal Tabs plugin's tab strip at the top of bb's main panel, where each tab holds a whole split layout. Use when the user asks what a tab holds or shows, how to open, switch or close tabs, what clicking, middle-clicking or Cmd/Ctrl-clicking a thread in the sidebar does, what bb's next/previous thread and open thread N shortcuts do with tabs, why a thread is open in two tabs, how to switch tabs from the keyboard or change those shortcuts, why Ctrl+Tab does nothing in a browser, why a tab's title or project initials changed, why no tab is selected, why a maximized pane came back unmaximized, or why the strip is missing.
 ---
 
 # Horizontal Tabs
@@ -30,10 +30,45 @@ experimental: a bb update may break it.
 - **Close:** hover a tab and click its `×`, or middle-click the tab. Closing the
   tab on screen shows the tab to its right, or to its left when it was the last
   one. The only tab left can't be closed, so it has no `×`.
+- **Open from the sidebar:** see below.
 - **Switch from the keyboard:** see below.
 - **Change what a tab holds** with bb as usual: open a thread from the sidebar,
   the palette or a link, split, drag a divider, close a pane. The tab on screen
   keeps whatever bb shows, and shows it again when you come back to it.
+
+## Sidebar clicks
+
+Clicking a thread in bb's thread list or in the Activity sidebar goes through
+the tabs first:
+
+| You click a thread that is… | Plain click | Middle-click |
+|---|---|---|
+| open in another tab | that tab, with the thread's pane focused | a new tab |
+| open in the tab on screen | bb focuses its pane | a new tab |
+| open in no tab | bb opens it in the focused pane, the other panes stay | a new tab |
+
+- A new tab opens right of the tab on screen, holding that thread alone, and
+  is selected. It opens even when another tab already has the thread, so the
+  thread is then in both. A middle-click never opens a browser tab.
+- If the thread is in more than one tab, a plain click goes to the tab on
+  screen if it has the thread, else to the leftmost tab that has it.
+- **Cmd-click (macOS) or Ctrl-click (Windows, Linux) stays bb's:** it opens
+  the thread in a new split pane in the tab on screen, which keeps that split.
+  If another tab has the thread, it is then in both tabs.
+- Pressing Enter on a thread row you reached with the keyboard counts as a
+  plain click.
+- bb's Next thread, Previous thread and Open thread 1–9 shortcuts (Settings →
+  Keyboard) open a sidebar row the way a plain click does, so they too go to
+  the tab that has the thread. While the tab on screen is split, bb gives
+  the Open thread keys to Focus chat pane 1–8 instead.
+- Other clicks stay bb's: any click with Shift, Alt, Cmd or Ctrl held, the
+  row's own buttons and menu (Archive, its actions, Open in split), every
+  click while the strip is hidden, and a middle-click on an archived thread or
+  before the sidebar has loaded its threads.
+- Other ways of opening a thread aren't routed through the tabs: the palette,
+  `@thread` links, `bb thread open` and the Activity hover card's Open. bb
+  opens the thread as usual, which can put a thread in two tabs, and the tab
+  on screen keeps what bb shows.
 
 ## Keyboard
 

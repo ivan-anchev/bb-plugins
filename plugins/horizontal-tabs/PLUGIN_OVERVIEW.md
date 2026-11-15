@@ -1,12 +1,13 @@
 Experimental: it may break with a bb update.
 
-Browser-style tabs across the top of bb's main panel, each holding a whole split layout. Clicking a tab brings back its panes at their exact sizes, with the same pane focused. `+` opens a tab on the New thread screen, and `×` or a middle-click closes one. Ctrl+Tab and Ctrl+Shift+Tab step through tabs and Alt+1–9 go to one, all rebindable. Each tab is named after its focused pane's thread and shows the initials of the projects open in it. Each pane keeps its own header below the strip.
+Browser-style tabs across the top of bb's main panel, each holding a whole split layout. Clicking a tab brings back its panes at their exact sizes, with the same pane focused. `+` opens a tab on the New thread screen, and `×` or a middle-click closes one. Ctrl+Tab and Ctrl+Shift+Tab step through tabs and Alt+1–9 go to one, all rebindable. Clicking a thread in the sidebar goes to the tab that has it open, and a middle-click opens it in a new tab; Cmd/Ctrl-click still opens it in a split, as in bb. Each tab is named after its focused pane's thread and shows the initials of the projects open in it. Each pane keeps its own header below the strip.
 
 ## What you get
 
 - **One row for the whole window.** The strip spans the main panel, over a single thread or a split of several, so every pane's own title, maximize and Close pane controls stay where they are, just below it.
 - **A layout per tab.** Keep a review split in one tab and a single thread in another, and switch between them in one click, sizes and focus intact.
 - **Tabs from the keyboard.** Ctrl+Tab and Ctrl+Shift+Tab go to the next and previous tab, wrapping, and Alt+1 to Alt+9 go to tab 1 to 9. A web browser keeps Ctrl+Tab for its own tabs, so there use Alt+N or rebind them in Settings → Keyboard.
+- **Threads from the sidebar.** Click a thread in bb's list or the Activity sidebar and you go to the tab that has it open, with its pane focused. A thread open in no tab replaces the focused pane, as in bb. Middle-click a thread to open it alone in a new tab. Cmd-click (Ctrl-click on Windows and Linux) keeps bb's own open in a split, and the tab keeps that split.
 - **Tabs that follow bb.** Open a thread, split, drag a divider or close a pane the usual way, and the tab on screen keeps it.
 - **Where you are.** The tab on screen is selected on a thread. On Settings, a plugin page or bb's own New thread screen the strip stays with no tab selected, and clicking the tab brings its layout back.
 

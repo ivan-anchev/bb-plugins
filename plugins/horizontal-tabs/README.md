@@ -8,14 +8,17 @@ shows.
 
 - `src/model/`: bb's split layout (`layout.ts`, with bb's own schema) and the
   window's tabs (`tab-set.ts`, with the open, switch and close reducers, and the
-  keyboard's step and nth). Pure.
+  keyboard's step and nth, and locate for sidebar clicks). Pure.
 - `src/controller/`: the one owner of the tabs (`tabs-controller.ts`), this
   window's instance (`tabs.ts`), and the keyboard commands that drive it
   (`commands.ts`).
 - `src/host/`: everything that reaches into bb outside the SDK, each with a
   `why:` comment: bb's layout atom, found in bb's loaded chunks
   (`layout-atom.ts`); reading and showing bb's layout through it
-  (`host-layout.ts`); and the strip's slot in bb's DOM (`strip-mount.ts`).
+  (`host-layout.ts`); the strip's slot in bb's DOM (`strip-mount.ts`); and
+  sidebar row clicks, routed into tabs before bb routes them
+  (`sidebar-clicks.ts`, with the pure rule for which clicks it takes in
+  `sidebar-gesture.ts`).
 - `src/ui/`: the app overlay that feeds bb's changes to the controller and
   portals the strip into the slot, and the strip itself.
 

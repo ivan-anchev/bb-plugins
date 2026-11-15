@@ -1,6 +1,6 @@
 // The window's tabs. The live tab is the one whose layout bb shows; every other tab is parked.
 // Plain JSON, so it can be saved as is. Pure reducers; the controller owns ids and bb.
-import type { Layout } from "./layout.ts";
+import { panes, type Layout, type Pane } from "./layout.ts";
 
 export type Tab = { id: string; layout: Layout };
 /** `tabs` is never empty and `liveId` names one of them. */
@@ -44,6 +44,18 @@ export function step(set: TabSet, id: string, delta: number): Tab {
 /** Tab `n`, counting from 1; undefined past the last tab. */
 export function nth(set: TabSet, n: number): Tab | undefined {
   return set.tabs[n - 1];
+}
+
+/**
+ * The tab and pane showing thread `threadId`: the live tab's first, else the leftmost tab's. Undefined when
+ * no tab shows it.
+ */
+export function locate(set: TabSet, threadId: string): { tab: Tab; pane: Pane } | undefined {
+  for (const tab of [live(set), ...set.tabs]) {
+    const pane = panes(tab.layout).find(({ content }) => content.kind === "thread" && content.threadId === threadId);
+    if (pane !== undefined) return { tab, pane };
+  }
+  return undefined;
 }
 
 /** The tab bb shows. */
