@@ -16,4 +16,4 @@ Jot a note from anywhere in bb without leaving what you are doing. Press ⇧⌘J
 
 Notes live in the plugin's own SQLite database on the bb server, and their files in a `media` folder beside it, so they survive reloads and restarts and never leave your machine. The plugin needs no account or setting.
 
-The Spotlight and the sidebar icon use bb surfaces that are still experimental, so a bb update can change or break them before the plugin catches up.
+The Spotlight, the sidebar icon, the @ picker and the card use bb surfaces that are still experimental, so a bb update can change or break them before the plugin catches up.
