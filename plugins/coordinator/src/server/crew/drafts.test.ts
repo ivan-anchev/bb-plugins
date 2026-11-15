@@ -19,8 +19,9 @@ async function drafted() {
 const edited = (brief: string): NewThreadRequest => ({
   ...newThreadRequest(brief),
   model: "sonnet",
-  reasoningLevel: "medium",
-  executionInputSources: { providerId: "explicit", model: "explicit" },
+  // why unmarked: bb's composer marks a field only once the user touches it, as here the model.
+  reasoningLevel: "low",
+  executionInputSources: { model: "explicit" },
   environment: { type: "reuse", environmentId: "env_9" },
 });
 
@@ -63,13 +64,12 @@ test("an edited draft starts with the edited brief and criterion, on the model a
   await kit.rpc.updateDraft({ coordinatorId, crewId: C1, request: edited("Retry with jittered backoff, at most 5 times."), doneCriteria: ["npm test passes", "a failed delivery is retried 5 times"] });
 
   const { threadId } = await kit.rpc.startDraft({ coordinatorId, crewId: C1 });
-  const { spawnedWith } = kit.thread(threadId);
+  const { spawnedWith, providerId, execution } = kit.thread(threadId);
   const prompt = spawnedWith.prompt ?? assert.fail("spawned without a prompt");
   assert.match(prompt, /## Brief\n\nRetry with jittered backoff, at most 5 times\./);
   assert.match(prompt, /1\. npm test passes\n2\. a failed delivery is retried 5 times/);
   assert.doesNotMatch(prompt, /retried 3 times/);
-  assert.deepEqual([spawnedWith.providerId, spawnedWith.model, spawnedWith.reasoningLevel, spawnedWith.permissionMode], ["claude-code", "sonnet", "medium", "auto"]);
-  assert.deepEqual(spawnedWith.executionInputSources, { providerId: "explicit", model: "explicit" });
+  assert.deepEqual([providerId, execution], ["claude-code", { model: "sonnet", reasoningLevel: "low", serviceTier: "default", permissionMode: "auto" }]);
   assert.deepEqual(spawnedWith.environment, { type: "reuse", environmentId: "env_9" });
   assert.equal(kit.store.roleOfThread(threadId)?.kind, "crew");
   assert.deepEqual((await kit.rpc.board({ coordinatorId })).rows.map((row) => [row.state, row.threadId, row.draft]), [["working", threadId, null]]);

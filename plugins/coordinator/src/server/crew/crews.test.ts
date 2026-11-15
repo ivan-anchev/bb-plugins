@@ -110,13 +110,14 @@ test("the board puts a running crew under Working, one waiting on an approval un
   ]);
 });
 
-test("crew_catch_up shows the board grouped by state, above the memory", async () => {
+test("crew_catch_up shows the updates, then the board grouped by state, then the memory", async () => {
   const { kit, threadId } = await coordinating();
   const crewThreadId = threadIn(textOf(await kit.call("crew_start", RETRIES, threadId)));
   kit.thread(crewThreadId).status = "idle";
 
   const text = textOf(await kit.call("crew_catch_up", {}, threadId));
-  assert.match(text, new RegExp(`^## Board\\n\\n### Idle \\(1\\)\\n- c1 "Add retries", @thread:${crewThreadId} on branch \`bb/${crewThreadId}\`: Its turn ended`));
+  assert.match(text, /^## Updates\n\nNothing new since your last catch-up\.\n\n## Board/);
+  assert.match(text, new RegExp(`## Board\\n\\n### Idle \\(1\\)\\n- c1 "Add retries", @thread:${crewThreadId} on branch \`bb/${crewThreadId}\`: Its turn ended without a handoff`));
   assert.ok(text.indexOf("## Board") < text.indexOf("## MEMORY.md"));
 });
 
@@ -156,9 +157,9 @@ test("a crew thread's status change refreshes its Coordinator's board, and no ot
   const crewThreadId = threadIn(textOf(await kit.call("crew_start", RETRIES, threadId)));
   const before = kit.invalidated().length;
 
-  kit.announce("thread.idle", crewThreadId);
-  kit.announce("experimental_thread.events", crewThreadId);
-  kit.announce("thread.idle", threadId);
+  await kit.emit("thread.active", { thread: kit.ref(crewThreadId) });
+  await kit.emit("experimental_thread.events", { thread: kit.ref(crewThreadId) });
+  await kit.emit("thread.active", { thread: kit.ref(threadId) });
   assert.deepEqual(kit.invalidated().slice(before), [`board:${coordinatorId}`, `board:${coordinatorId}`]);
 });
 

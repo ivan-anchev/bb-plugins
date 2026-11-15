@@ -1,5 +1,6 @@
 // The New page: bb's own new-thread composer, seeded with a fresh worktree and auto permissions.
-// The composer owns the user's choices; the server forwards them unchanged and adds the role.
+// The composer owns the user's choices; the server forwards them, its provider and model marked as
+// chosen, and adds the role.
 import {
   experimental_Icon as Icon,
   experimental_NewThreadComposer as NewThreadComposer,

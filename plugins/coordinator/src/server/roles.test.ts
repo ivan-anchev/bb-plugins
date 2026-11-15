@@ -77,14 +77,14 @@ test("crew_memory_read rejects a name outside the memory folder or not markdown"
   }
 });
 
-test("a crew thread is offered crew_memory_read, its skill and its rules, and nothing else", async () => {
+test("a crew thread is offered crew_memory_read, crew_handoff, its skill and its rules, and nothing else", async () => {
   const kit = harness();
   const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
   const started = await kit.call("crew_start", { title: "Retries", brief: "Retry failed deliveries.", doneCriteria: ["npm test passes"] }, threadId);
   const crewThreadId = /@thread:(\w+)/.exec(textOf(started))?.[1] ?? "";
 
   const configuration = kit.configurationFor(crewThreadId, {});
-  assert.deepEqual(configuration.tools, ["crew_memory_read"]);
+  assert.deepEqual(configuration.tools, ["crew_memory_read", "crew_handoff"]);
   assert.deepEqual(configuration.skills, ["crew-board", "crew-work"]);
   assert.ok(configuration.instructions?.startsWith(`You are a crew thread of a ${DISPLAY_NAME}`));
 });

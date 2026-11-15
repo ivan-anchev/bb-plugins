@@ -29,7 +29,7 @@ export const boardTag = (id: CoordinatorId): string => `board:${id}`;
 
 /**
  * What a draft holds, to show and to seed its editor: its coordinating thread's project, the
- * environment its thread would get now and the model (null: the project's default).
+ * environment its thread would get now and the model (null: the coordinating thread's).
  */
 export const draftSchema = z.object({
   projectId: z.string(),

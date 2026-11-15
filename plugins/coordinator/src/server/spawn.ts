@@ -15,6 +15,13 @@ import type { Store } from "./store.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
 type SpawnArgs = Parameters<Threads["spawn"]>[0];
+type ExecutionOptions = NonNullable<Awaited<ReturnType<Threads["defaultExecutionOptions"]>>>;
+
+/** The coordinating thread as bb lists it: the provider it runs on, and its machine. */
+type CoordinatorThread = { id: string; providerId: string; environmentHostId: string | null };
+
+/** What a spawn runs on, every field chosen: see `picked`. */
+type SpawnExecution = Pick<SpawnArgs, "providerId" | "model" | "reasoningLevel" | "permissionMode" | "serviceTier" | "sessionOptions">;
 
 // The parts of bb spawning uses, as narrow as the code reads them.
 type SpawnBb = {
@@ -23,7 +30,9 @@ type SpawnBb = {
     threads: {
       spawn(args: SpawnArgs): Promise<{ id: string }>;
       getPluginMetadata: Threads["getPluginMetadata"];
-      list(args: { threadIds: string[]; includeHidden: true }): Promise<{ id: string; environmentHostId: string | null }[]>;
+      list(args: { threadIds: string[]; includeHidden: true }): Promise<CoordinatorThread[]>;
+      /** The model, reasoning level and service tier of the thread's latest turn; null before its first. */
+      defaultExecutionOptions(args: { threadId: string }): Promise<Pick<ExecutionOptions, "model" | "reasoningLevel" | "serviceTier"> | null>;
     };
   };
   events: { on(event: "thread.created", handler: (payload: { thread: { id: string; originPluginId: string | null } }) => void | Promise<void>): void };
@@ -67,15 +76,27 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
     return thread.id;
   }
 
-  /** The machine the coordinating thread runs on, where a worktree crew gets its fresh worktree, as a child of a live thread does from bb. */
-  async function hostOf(coordinatorThreadId: string): Promise<string | null> {
-    const [thread] = await bb.sdk.threads.list({ threadIds: [coordinatorThreadId], includeHidden: true });
-    return thread?.environmentHostId ?? null;
+  async function coordinatorThread(threadId: string): Promise<CoordinatorThread> {
+    const [thread] = await bb.sdk.threads.list({ threadIds: [threadId], includeHidden: true });
+    if (thread === undefined) throw new Error(`bb no longer has the coordinating thread ${threadId}.`);
+    return thread;
+  }
+
+  /**
+   * A crew whose draft names no model runs on its coordinating thread's provider and model as they
+   * are now. why not leave it to bb: bb gives a child its parent's only while that provider is
+   * available and the parent has a turn on record, and its own default otherwise.
+   */
+  async function inheritedExecution(coordinator: CoordinatorThread): Promise<SpawnExecution> {
+    const options = await bb.sdk.threads.defaultExecutionOptions({ threadId: coordinator.id });
+    if (options === null) throw new Error("bb has no model on record for the coordinating thread, so the crew has none to inherit. Pick one in its draft's editor.");
+    const { model, reasoningLevel, serviceTier } = options;
+    return { providerId: coordinator.providerId, model, reasoningLevel, serviceTier, permissionMode: CREW_PERMISSION_MODE };
   }
 
   return {
     /**
-     * Starts a coordinating thread from bb's composer, its request forwarded unchanged. Its row,
+     * Starts a coordinating thread from bb's composer, on the provider, model and modes it shows. Its row,
      * ticket and seeded memory exist before the spawn, so its first session and first tool call
      * find them.
      */
@@ -84,7 +105,7 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
       const ticket = randomUUID();
       store.insertCoordinator({ id, ticket, projectId: request.projectId, createdAt: Date.now() });
       memory.of(id).seed(typedText(request));
-      return { threadId: await spawnWith(ticket, request) };
+      return { threadId: await spawnWith(ticket, picked(request)) };
     },
 
     /** Saves a crew as a draft: its row and its unbound ticket. Nothing runs until it is launched. */
@@ -93,12 +114,14 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
     },
 
     /**
-     * Spawns a draft's thread from what is stored, as a child of the coordinating thread. A spawn
-     * that fails leaves it a draft on the board, to be started again.
+     * Spawns a draft's thread from what is stored, as a child of the coordinating thread, on the
+     * model its draft names, else the coordinating thread's. A spawn that fails leaves it a draft on
+     * the board, to be started again.
      */
     async launch(coordinator: Coordinator, crew: Crew): Promise<CrewLaunch> {
       const files = memory.of(coordinator.id);
       try {
+        const parent = await coordinatorThread(coordinator.threadId);
         const threadId = await spawnWith(store.crewTicket(coordinator.id, crew.id), {
           projectId: coordinator.projectId,
           title: crew.title,
@@ -107,9 +130,9 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
           lifecycleOwnerThreadId: coordinator.threadId,
           // why off: bb's own report cuts a crew's answer at 4,000 characters; the plugin owns wakes.
           parentNotifications: "off",
-          permissionMode: CREW_PERMISSION_MODE,
-          ...crew.execution,
-          environment: environmentOf(crew.placement, await hostOf(coordinator.threadId)),
+          ...(crew.execution === null ? await inheritedExecution(parent) : picked(crew.execution)),
+          // why its machine: a worktree crew gets its fresh worktree there, as a child of a live thread does from bb.
+          environment: environmentOf(crew.placement, parent.environmentHostId),
           prompt: crewBrief(crew, { crewRules: files.read(CREW_RULES).text, index: files.read(MEMORY_INDEX).text }),
         });
         return { crewId: crew.id, kind: "started", threadId };
@@ -121,4 +144,14 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
       }
     },
   };
+}
+
+/**
+ * The request with every execution field counted as chosen, so bb runs exactly what the user saw.
+ * why without `executionInputSources`: bb counts every field of a spawn that has none. With one, bb
+ * drops each field it leaves unmarked, and bb's composer leaves a field unmarked until the user
+ * touches it; a dropped permission mode becomes the parent's.
+ */
+function picked<T extends { executionInputSources?: unknown }>({ executionInputSources: _, ...request }: T): Omit<T, "executionInputSources"> {
+  return request;
 }

@@ -5,10 +5,12 @@ import { experimental_PluginRpcRefusal as Refusal, type BbPluginApi } from "@get
 import type { Coordinator } from "../../contract.ts";
 import type { ClosedKind, Crew, DraftEdit } from "../../model/crew.ts";
 import { crewState } from "../../model/crew-state.ts";
+import { handoffIsCurrent, type Handoff } from "../../model/handoff.ts";
 import type { CoordinatorId, CrewId } from "../../model/role.ts";
 import type { CrewLaunch, CrewRequest, Spawner } from "../spawn.ts";
 import type { Store } from "../store.ts";
 import { listedThreads, type BoardBb } from "./board.ts";
+import { latestTurnSeq } from "./handoffs.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
 
@@ -36,12 +38,22 @@ export type CloseOutcome =
 /** What crew_start did: saved the crew as a draft, or spawned its thread. */
 export type StartOutcome = CrewLaunch | { crewId: CrewId; kind: "drafted" };
 
-/** One crew whole, with its row on the board and its thread's latest answer (null: none yet). */
-export type CrewDetail = { crew: Crew; state: ReturnType<typeof crewState>; branch: string | null; output: string | null };
+/**
+ * One crew whole: its row on the board, its latest handoff (null: none) and whether it is current
+ * (null: its thread is gone, so there are no turns to compare), and its thread's latest answer
+ * (null: none yet).
+ */
+export type CrewDetail = {
+  crew: Crew;
+  state: ReturnType<typeof crewState>;
+  branch: string | null;
+  handoff: { handoff: Handoff; current: boolean | null } | null;
+  output: string | null;
+};
 
 type Deps = {
   bb: CrewsBb;
-  store: Pick<Store, "coordinator" | "crew" | "updateDraft" | "closeCrew">;
+  store: Pick<Store, "coordinator" | "crew" | "updateDraft" | "closeCrew" | "latestHandoff">;
   spawner: Pick<Spawner, "saveCrew" | "launch">;
   /** Runs after anything that changes a coordinating thread's board. */
   onChange(id: CoordinatorId): void;
@@ -134,8 +146,17 @@ export function createCrews({ bb, store, spawner, onChange }: Deps) {
 
     async detail(crew: Crew): Promise<CrewDetail> {
       const thread = await threadOf(crew);
-      const output = crew.launch.kind === "started" && thread !== null ? (await bb.sdk.threads.output({ threadId: crew.launch.threadId })).output : null;
-      return { crew, state: crewState(crew, thread), branch: thread?.environmentBranchName ?? null, output };
+      const threadId = crew.launch.kind === "started" && thread !== null ? crew.launch.threadId : null;
+      const output = threadId === null ? null : (await bb.sdk.threads.output({ threadId })).output;
+      const handoff = store.latestHandoff(crew.coordinatorId, crew.id);
+      const current = handoff === null || threadId === null ? null : handoffIsCurrent(handoff, await latestTurnSeq(bb, threadId));
+      return {
+        crew,
+        state: crewState(crew, thread, current === true ? handoff : null),
+        branch: thread?.environmentBranchName ?? null,
+        handoff: handoff === null ? null : { handoff, current },
+        output,
+      };
     },
 
     async close(crew: Crew, action: CloseAction): Promise<CloseOutcome> {

@@ -1,17 +1,21 @@
 // The plugin's agent tools. Every call resolves the caller's role from the plugin's database by its
 // thread id, never from the thread's metadata, which any client, plugin or the thread's own agent
-// can write. A coordinating thread gets them all; a crew thread only reads memory.
-import type { PluginAgentToolContext, PluginAgentToolRegistrationBase, PluginAgentToolResult } from "@get-bb/plugin-sdk";
+// can write. A coordinating thread gets them all; a crew thread reads memory and hands off.
+import type { PluginAgentToolContext, PluginAgentToolResult } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { briefSchema, doneCriteriaSchema, requestedPlacementSchema, type Crew } from "../../model/crew.ts";
+import { briefSchema, doneCriteriaSchema, requestedPlacementSchema, titlesOf, type Crew } from "../../model/crew.ts";
 import { memoryContentSchema, memoryFileSchema, memoryVersionSchema } from "../../model/memory-file.ts";
 import { crewIdSchema, type CoordinatorId, type CrewId, type Role } from "../../model/role.ts";
 import type { BoardReader } from "../crew/board.ts";
 import { isStarted, type Crews } from "../crew/crews.ts";
+import type { Inbox } from "../inbox/inbox.ts";
 import type { MemoryRoot } from "../memory/memory-files.ts";
 import type { Store } from "../store.ts";
 import { boardText, closeText, detailText, startText } from "./crew-text.ts";
+import { HANDOFF } from "./crew-tools.ts";
+import { updatesText } from "./inbox-text.ts";
 import { catchUpText, readText, writeResult } from "./memory-text.ts";
+import { failed, type ToolsBb } from "./tool-kit.ts";
 
 const CATCH_UP = "crew_catch_up";
 const MEMORY_READ = "crew_memory_read";
@@ -23,29 +27,18 @@ const CLOSE = "crew_close";
 
 /** What configure offers a coordinating thread. */
 export const COORDINATOR_TOOLS = [CATCH_UP, MEMORY_READ, MEMORY_WRITE, START, MESSAGE, READ, CLOSE];
-/** What configure offers a crew thread: its coordinating thread's memory, read only. */
-export const CREW_TOOLS = [MEMORY_READ];
-
-// The part of bb the tools use: registering a tool whose parameters are a zod schema.
-type ToolsBb = {
-  agents: {
-    registerTool<Schema extends z.ZodType>(
-      tool: PluginAgentToolRegistrationBase & {
-        parameters: Schema;
-        execute(params: z.output<Schema>, ctx: PluginAgentToolContext): PluginAgentToolResult | Promise<PluginAgentToolResult>;
-      },
-    ): void;
-  };
-};
+/** What configure offers a crew thread: its coordinating thread's memory, read only, and its handoff. */
+export const CREW_TOOLS = [MEMORY_READ, HANDOFF];
 
 type Deps = {
-  store: Pick<Store, "roleOfThread" | "crew">;
+  store: Pick<Store, "roleOfThread" | "crew" | "crews" | "handoff">;
+  inbox: Pick<Inbox, "takeUnread">;
   memory: MemoryRoot;
   crews: Pick<Crews, "start" | "message" | "detail" | "close">;
   board: Pick<BoardReader, "rows">;
 };
 
-export function registerCoordinatorTools(bb: ToolsBb, { store, memory, crews, board }: Deps): void {
+export function registerCoordinatorTools(bb: ToolsBb, { store, inbox, memory, crews, board }: Deps): void {
   /** The caller's coordinating thread, or null when the caller isn't one. */
   function coordinatorOf(threadId: string): CoordinatorId | null {
     const role = store.roleOfThread(threadId);
@@ -71,13 +64,14 @@ export function registerCoordinatorTools(bb: ToolsBb, { store, memory, crews, bo
   bb.agents.registerTool({
     name: CATCH_UP,
     description:
-      "Catch up: returns the board (every crew you started, under Needs you, Working, Idle or Done, with its thread and branch) and your memory files (MEMORY.md, GOAL.md, PLAN.md, PREFERENCES.md, CREW.md, DIGEST.md) in full, each with its version, and names any other memory file. Call it first on every wake.",
+      "Catch up: returns every update since your last catch-up in full (crews' handoffs, crews that failed, wait on the user or stopped without a handoff, and the user's memory edits), then the board (every crew you started, under Needs you, Ready for review, Working, Idle or Done, with its thread and branch) and your memory files (MEMORY.md, GOAL.md, PLAN.md, PREFERENCES.md, CREW.md, DIGEST.md) in full, each with its version, and names any other memory file. Each update is returned once. Call it first on every wake.",
     presentation: { label: { pending: "Catching up", completed: "Caught up" }, icon: { glyph: "Workflow" } },
     parameters: z.object({}),
     execute: forCoordinator(CATCH_UP, async (id) => {
-      // why caught: the memory is still worth reading when bb's thread list can't be.
+      const updates = updatesText(inbox.takeUnread(id), { titles: titlesOf(store.crews(id)), handoff: store.handoff });
+      // why caught: the updates and the memory are still worth reading when bb's thread list can't be.
       const rows = await board.rows(id).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
-      return `${boardText(rows)}\n\n${catchUpText(memory.of(id))}`;
+      return `${updates}\n\n${boardText(rows)}\n\n${catchUpText(memory.of(id))}`;
     }),
   });
 
@@ -135,7 +129,7 @@ export function registerCoordinatorTools(bb: ToolsBb, { store, memory, crews, bo
 
   bb.agents.registerTool({
     name: READ,
-    description: "Read one of your crews whole: where it is on the board and why, its thread and branch, its brief and done-criteria, and its latest answer.",
+    description: "Read one of your crews whole: where it is on the board and why, its thread and branch, its brief and done-criteria, its latest handoff in full, and its latest answer.",
     presentation: { label: { pending: "Reading a crew", completed: "Read a crew" }, icon: { glyph: "FileText" } },
     parameters: z.object({ crewId: crewIdSchema }),
     execute: forCrew(READ, async (crew) => detailText(await crews.detail(crew))),
@@ -162,5 +156,3 @@ function memoryOwner(role: Role): CoordinatorId {
 
 const refused = (tool: string): PluginAgentToolResult =>
   failed(`${tool} is refused: only a coordinating thread can use it, and this thread was not started as one. Carry on without it.`);
-
-const failed = (text: string): PluginAgentToolResult => ({ content: [{ type: "text", text }], isError: true });

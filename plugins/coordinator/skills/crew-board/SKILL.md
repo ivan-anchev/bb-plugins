@@ -1,6 +1,6 @@
 ---
 name: crew-board
-description: Explain the coordinating-thread plugin (package bb-plugin-coordinator). Its panel in bb's navigation rail starts long-lived coordinating threads with bb's own composer and lists them. A coordinating thread keeps its memory as markdown files on the bb server (MEMORY.md, GOAL.md, PLAN.md, PREFERENCES.md, CREW.md, DIGEST.md), which the user edits too without either side overwriting the other, and starts crew threads, child threads that each work on their own branch from a brief and done-criteria, or saves them as drafts the user edits and starts. The Board, a tab in the coordinating thread and a page in the panel, shows the digest and every crew under Needs you, Working, Idle or Done. Use when the user asks how to start a coordinating thread or a crew, what the board, its groups or a row mean, where the memory files are or how to edit them, why a save or a write was refused, why a thread has or lacks the crew_ tools, how to message or close a crew, how to edit or start a draft, or what the plugin can't do yet.
+description: Explain the coordinating-thread plugin (package bb-plugin-coordinator). Its panel in bb's navigation rail starts long-lived coordinating threads with bb's own composer and lists them. A coordinating thread keeps its memory as markdown files on the bb server, which the user edits too without either side overwriting the other, and starts crew threads that each work on their own branch from a brief and done-criteria, or saves them as drafts the user edits and starts. A crew ends with a handoff; the plugin wakes the thread with a short update message, and crew_catch_up returns each update whole. The Board shows the digest and every crew under Needs you, Ready for review, Working, Idle or Done. Use when the user asks how to start a coordinating thread or a crew, what the board, its groups or a row mean, what a handoff or an update message is, why the thread woke, where the memory files are, why a save was refused, which thread has which crew_ tools, how to edit or start a draft, or what the plugin can't do yet.
 ---
 
 # Coordinating threads
@@ -33,7 +33,8 @@ From its first turn the thread has:
   done-criteria;
 - the `coordinating` skill, its playbook;
 - seven tools:
-  - `crew_catch_up` returns the board, then its core memory files in full,
+  - `crew_catch_up` returns every update since its last catch-up in full
+    (below), the board, then its core memory files in full,
     each with its version, in a fixed order, up to 40,000 characters; files
     past that are named so it can read them alone, and so is every other
     memory file.
@@ -49,7 +50,7 @@ From its first turn the thread has:
   Its rules tell it to keep its plan in `PLAN.md`, each standing preference
   you give it in `PREFERENCES.md`, and a digest in `DIGEST.md`.
 
-A crew thread is offered only `crew_memory_read`. Any other thread is offered
+A crew thread is offered only `crew_memory_read` and `crew_handoff`. Any other thread is offered
 none of these tools, and a call from one is refused. A thread's role comes
 from the plugin's own database, so editing a thread's metadata grants nothing.
 
@@ -62,13 +63,18 @@ it with `crew_start`:
   coordinating thread's machine, on its own branch; or, when the coordinating
   thread names one, an environment provider such as `boat-sandbox`. It runs
   with auto permissions.
+- **What it runs on**: the provider and model picked in its draft's editor;
+  otherwise its coordinating thread's provider, model, reasoning level and
+  service tier as they are when it starts. Never bb's default: if bb has no
+  model on record for the coordinating thread, the crew stays a draft and says
+  why.
 - **Its first message**: the brief, the done-criteria (1 to 12, required), and `CREW.md` and `MEMORY.md`
   as they were at that moment. Put rules every crew follows in `CREW.md`.
 - **Its id**: `c1`, `c2`… within its coordinating thread. Its thread is
   titled with the crew's title and sits under the coordinating thread in
   bb's sidebar.
-- **What it gets**: its rules, the `crew-work` skill and `crew_memory_read`.
-  It can't write memory or start crews.
+- **What it gets**: its rules, the `crew-work` skill, `crew_memory_read` and
+  `crew_handoff`. It can't write memory or start crews.
 
 The coordinating thread messages a crew with `crew_message` (it arrives
 marked as from the coordinating thread, not from you), reads it with
@@ -97,7 +103,8 @@ of its brief and two buttons:
   the next one (the text after the caret moves into it), Shift+Enter breaks
   the line, and Backspace at its start joins it to the one above, or removes
   it when it is empty.
-  Until you pick one, the model is the project's default and the environment
+  Until you pick one, the model picker shows the composer's own default, not
+  the coordinating thread's model, and saving stores what it shows. The environment
   is a fresh worktree on the coordinating thread's machine (or the provider it
   named). The composer's own send button stores it all; **Cancel** drops your
   changes, and the next **Edit** starts from what is stored. While it is open,
@@ -125,6 +132,40 @@ again. `crew_catch_up` lists every draft as waiting for you, and `crew_close`
 closes one like any crew. Starting a draft doesn't wake the coordinating
 thread; it sees the crew on its next catch-up.
 
+## Handoffs and updates
+
+bb's own report to the parent is off for crews. Instead, a crew ends its work
+with `crew_handoff`, and the plugin stores everything it sees:
+
+- **A handoff**: `done` (with the commit, required, and a pull request link
+  if there is one), `blocked` or `gave-up`; a one-line summary (up to 120
+  characters); and what it did, its evidence, concerns, deviations and
+  findings (up to 50 items each, each up to 2,000 characters). It is stored
+  whole. Only a crew thread can hand off; a call from any other thread is
+  refused.
+- **A crew failed**, with bb's error.
+- **A crew waits on the user**: a question or an approval in its thread.
+- **A crew ended a turn without a handoff**, with its last answer.
+- **The user saved a memory file** in the Memory editor. The thread's own
+  writes don't count.
+
+Each one wakes the coordinating thread with one short message: the plugin's
+name in brackets, how many updates there are, and one line each, such as
+`- c1 "Add retries" handed off: done` or `- The user edited PLAN.md`. The
+message reaches the thread as if you typed it, so it holds only facts the
+plugin derived and the titles the thread gave its crews: never a crew's
+summary, answer, error or question. Those are in `crew_catch_up`, which
+returns every update since the last catch-up, whole, once.
+
+The message never interrupts a running turn: it waits in the thread's queue
+until the turn ends. While one waits, the next updates wait for it to be
+sent, then get a message of their own. Once `crew_catch_up` has returned
+every update, a message still waiting in the queue is taken back, so the
+thread isn't woken for updates it has read. A send that fails is retried by a
+once-a-minute tick, which also forgets a waiting message bb no longer holds.
+If bb gives up sending a waiting message (its retries spent), the tick takes
+it out of the queue and sends what it announced again.
+
 ## The board
 
 The **Board** tab in a coordinating thread's side panel, and the **Board**
@@ -135,15 +176,20 @@ page from its row in the panel, show the same board:
 - **Crews**, each with its id, title, a one-line headline and its branch,
   grouped:
   - **Needs you**: a draft waiting for you to start it, waiting for your
-    answer or approval in its thread, or its last turn failed.
+    answer or approval in its thread, its last turn failed, or it handed
+    off as blocked ("Blocked: <summary>") or gave up ("Gave up: <summary>").
+  - **Ready for review**: it handed off as done. Nobody has checked the work
+    yet, so the headline reads "Unverified: <summary>".
   - **Working**: its thread is running, starting, waiting to start or
     stopping.
-  - **Idle**: its turn ended and it waits for a message.
+  - **Idle**: its turn ended without a handoff.
   - **Done**: resolved, stopped or archived through `crew_close`, or its
     thread was archived or deleted.
 
-A row with a thread opens it. Rows move between groups as the threads
-change, without a reload. A thread status this plugin doesn't know shows as
+A handoff places its crew until the crew's thread starts another turn: type
+into a crew that handed off and it moves to Working, then to Idle if it ends
+without a new handoff. A row with a thread opens it. Rows move between groups
+as the threads change, without a reload. A thread status this plugin doesn't know shows as
 Idle.
 
 ## Memory files
@@ -163,7 +209,8 @@ The thread may add others, such as `notes/api.md`.
 
 ## Read and edit memory
 
-Press **Memory** on a row in the panel. The page shows the folder's path on
+Press **Memory** on a row in the panel. Each save wakes the coordinating
+thread with "The user edited <file>". The page shows the folder's path on
 the bb server, the files (the core ones first, then the rest by name), and an
 editor for the file you pick. A file you haven't touched shows its latest
 text, including the thread's writes as they land. A dot marks a file with
@@ -187,10 +234,8 @@ and the Memory page read the new text on their next read.
 
 ## Not yet
 
-- Crews don't report back by themselves: bb's own report to the parent is
-  off for them, so the coordinating thread checks the board and reads each
-  crew with `crew_read`. Handoffs come later.
-- The coordinating thread chooses no model for a crew; it gets the project's
-  default unless you pick one in a draft's editor.
-- Saving in the Memory editor doesn't wake the thread; it reads your edit at
-  the start of its next turn.
+- Nobody checks a done handoff yet: it stays Unverified, and the coordinating
+  thread is told to read its evidence before calling the work done.
+- Pull request and CI changes don't wake the thread.
+- The coordinating thread chooses no model for a crew; it gets the
+  coordinating thread's unless you pick one in a draft's editor.
