@@ -36,7 +36,8 @@ export function PrSidebar({ subPath }: PluginNavPanelProps) {
     isOpen(pr) ? refresh() : navigate.toPluginPanel(PANEL_PATH, { subPath: routeSubPath({ kind: "pr", projectId: pr.projectId, number: pr.number }) });
 
   return (
-    <div className="pr-reviews-sidebar flex h-full min-h-0 flex-col text-foreground">
+    // Padding belongs on the content, so sticky headings reach the unpadded scrollport's top.
+    <div className="pr-reviews-sidebar flex h-full min-h-0 flex-col py-3 text-foreground">
       <div className="shrink-0 px-1.5">
         <ReadError read={inbox} what="pull requests" />
         <ReadError read={visits} what="which pull requests you opened" />
