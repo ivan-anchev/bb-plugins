@@ -34,7 +34,11 @@ export function NotesCard() {
         </p>
       )}
       {list !== undefined && (list.length === 0 ? <EmptyLine /> : <NoteList notes={list} selection={selection} />)}
-      <StartProblems start={start} />
+      {start.error !== null && (
+        <p className="nt-caption nt-error" role="status">
+          Couldn’t start the thread: {start.error}
+        </p>
+      )}
       {selection.ids.length === 0 ? (
         <IdleFooter hasNotes={list !== undefined && list.length > 0} />
       ) : (
@@ -89,29 +93,6 @@ function NoteList({ notes, selection }: { notes: readonly Note[]; selection: Sel
   );
 }
 
-/** Why the last Start thread fell short: the brief failed, or the notes went in but stayed on the card. */
-function StartProblems({ start }: { start: StartThread }) {
-  const { error, retryArchive } = start;
-  return (
-    <>
-      {error !== null && (
-        <p className="nt-caption nt-error" role="status">
-          Couldn’t start a thread: {error}
-        </p>
-      )}
-      {retryArchive !== null && (
-        <p className="nt-caption nt-error" role="status">
-          Notes are in the composer, but archiving them failed.{" "}
-          {/* why the header after: this button leaves once the archive succeeds. */}
-          <button type="button" className="nt-link nt-retry" disabled={start.isPending} onClick={() => retryArchive().then(focusCardHeader, () => undefined)}>
-            Try again
-          </button>
-        </p>
-      )}
-    </>
-  );
-}
-
 function IdleFooter({ hasNotes }: { hasNotes: boolean }) {
   return (
     <footer className="nt-foot nt-caption">
@@ -136,7 +117,7 @@ function PickingFooter({ count, start, onStart, onClear }: { count: number; star
   // why: bb's own Esc leaves the page, and the picks with it.
   useHoldEscape(true, clear);
   return (
-    <footer ref={footer} className="nt-foot nt-caption">
+    <footer ref={footer} className="nt-foot nt-picks nt-caption">
       <span>{count} selected</span>
       <span aria-hidden>·</span>
       <button type="button" className="nt-link" onClick={clear}>
