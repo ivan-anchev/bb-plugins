@@ -7,7 +7,7 @@ through the change step by step. Its Summary shows the PR's activity, as
 GitHub's Conversation tab does, and every diff shows the PR's GitHub review
 threads where they belong. It posts to GitHub only the review comments,
 replies and conversation comments you write or pick from the guide, on your
-click, and changes a pull request's state only from the state pill on its
+click, and changes a pull request's state only from the state badge on its
 page; review threads never post to GitHub. A card on the new-thread screen
 shows the PRs waiting on your review, or your own.
 
@@ -33,15 +33,15 @@ shows the PRs waiting on your review, or your own.
 - **Stacks as trees**: pull requests built on each other show under "Stack
   #N" (the bottom one) with "3 of 5", bottom first; the stack's pull requests
   listed elsewhere stay in place as dim rows.
-- **A page per pull request**: a state pill for whether it is open, a draft,
+- **A page per pull request**: a state badge for whether it is open, a draft,
   merged or closed, beside `owner/repo #number`, above its title, author,
   `base ← branch`, and Review chat and GitHub icon buttons, then three tabs: **Summary**, the author's own
   description and the PR's activity beside its reviewers, checks and labels; **Changes**, the
   PR's whole diff, with its `+N −M` on the tab; and **Guide**, which keeps its
   step while you switch and marks a ready guide with a dot.
-- **Change the state in place**: the pill's menu offers what GitHub allows,
+- **Change the state in place**: the badge's menu offers what GitHub allows,
   Ready for review, Convert to draft, Close (press and hold) or Reopen, each
-  naming the state it leads to, and runs it through `gh` as you. The pill and
+  naming the state it leads to, and runs it through `gh` as you. The badge and
   the sidebar row follow without a Refresh; a refusal shows in the menu.
 - **Activity**: under the description, the PR's whole GitHub activity, oldest
   first, as GitHub's Conversation tab shows it, starting from who opened it:

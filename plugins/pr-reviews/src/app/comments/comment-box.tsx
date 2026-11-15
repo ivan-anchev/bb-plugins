@@ -25,7 +25,7 @@ import {
 import { Button } from "../ui/button.tsx";
 import { useHoldEscape } from "../ui/hold-escape.ts";
 import { IconButton } from "../ui/icon-button.tsx";
-import { Prose } from "../ui/prose.tsx";
+import { Prose, READING_TYPE } from "../ui/prose.tsx";
 import { Tooltip } from "../ui/tooltip.tsx";
 import { problemsOf, type Action, type Failure } from "./box-problems.ts";
 import { BOX_CLASS, DoneBox, SentNote } from "./done-box.tsx";
@@ -309,7 +309,7 @@ function labelOf(subject: BoxSubject): string {
  * Write and Preview share type, padding and minimum height, so switching moves nothing. The minimum
  * holds the textarea's three rows and its padding.
  */
-const TEXT_CLASS = "block w-full min-h-20 px-4 pt-2 pb-1 text-sm text-foreground outline-none";
+const TEXT_CLASS = `block w-full min-h-20 px-4 pt-2 pb-1 ${READING_TYPE} text-foreground outline-none`;
 
 /**
  * The textarea's focus, height and selection. It takes focus with the caret at the end when the

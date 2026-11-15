@@ -5,9 +5,8 @@
 import type { ReviewThread } from "../../comments/thread-schema.ts";
 import type { PrDetail } from "../../contract.ts";
 import { ActivitySection } from "../activity/activity-section.tsx";
-import { PROSE_TYPE } from "../guide/page-text.tsx";
 import type { PrTarget } from "../queries.ts";
-import { Prose } from "../ui/prose.tsx";
+import { Prose, READING_TYPE } from "../ui/prose.tsx";
 import { directImages } from "./direct-images.ts";
 import { hasSidePanel, SidePanel, useSidePanelFocus } from "./side-panel.tsx";
 
@@ -37,7 +36,7 @@ function Description({ body }: { body: string }) {
   if (body.trim() === "") return <p className="text-sm text-muted-foreground">No description provided.</p>;
   return (
     <section ref={directImages} aria-label="Description" className={CONTAIN_BODY}>
-      <Prose text={body} className={`${PROSE_TYPE} ${FULL_SIZE_IMAGES}`} />
+      <Prose text={body} className={`${READING_TYPE} ${FULL_SIZE_IMAGES}`} />
     </section>
   );
 }

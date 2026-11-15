@@ -10,7 +10,7 @@ import type { ReviewVerdict } from "../../comments/timeline-schema.ts";
 import { firstLineOf, GitHubCommentView } from "../comments/github-comment.tsx";
 import { useFocusHandOff } from "../ui/focus-hand-off.ts";
 import { mergeRefs } from "../ui/merge-refs.ts";
-import { Prose } from "../ui/prose.tsx";
+import { Prose, READING_TYPE } from "../ui/prose.tsx";
 import { connectorsOf, keyOf, type ActivityPart, type ReviewWithThreads } from "./activity-fold.ts";
 import { FoldItems, Line } from "./activity-line.tsx";
 import { foldItemsOf, threadLocationOf, threadStateOf, VERDICT_WORDS } from "./activity-words.ts";
@@ -150,7 +150,7 @@ function ReviewFold({ review: { review, threads }, context }: { review: ReviewWi
   const hasBody = review.comment.body.trim() !== "";
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] pb-1.5 pl-9">
-      {hasBody && <Prose text={review.comment.body} className="pb-1 text-sm leading-5.5" />}
+      {hasBody && <Prose text={review.comment.body} className={`pb-1 ${READING_TYPE}`} />}
       <ul aria-label="Review threads" className="@container -ml-2 grid grid-cols-[minmax(0,1fr)]">
         {threads.map((thread) => (
           <li key={thread.id} className="grid">

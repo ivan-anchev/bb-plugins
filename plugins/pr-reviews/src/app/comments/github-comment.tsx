@@ -9,7 +9,7 @@ import { timeAgo } from "../relative-time.ts";
 import { Avatar } from "../ui/avatar.tsx";
 import { Button } from "../ui/button.tsx";
 import { IconLink } from "../ui/icon-button.tsx";
-import { Prose } from "../ui/prose.tsx";
+import { Prose, READING_TYPE } from "../ui/prose.tsx";
 
 /** A quiet text button, such as "N more" and Show more. */
 export const QUIET_BUTTON =
@@ -54,7 +54,7 @@ export function GitHubCommentView({ ref, comment, byPrAuthor, verb, onQuote, chi
         </div>
       </div>
       {hasBody && (
-        <div className="col-start-2 min-w-0 rounded-xl bg-surface-recessed px-3.5 py-2.5">
+        <div className={`col-start-2 min-w-0 rounded-xl bg-surface-recessed px-3.5 py-2.5 ${READING_TYPE}`}>
           {author.bot ? <ClampedBody body={comment.body} /> : <Prose text={comment.body} />}
         </div>
       )}

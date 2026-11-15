@@ -91,7 +91,7 @@ function Row({ pr, section, visits }: { pr: InboxPr; section: SectionKey; visits
       className="grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 rounded-lg px-2 py-1.5 text-left transition-colors duration-150 hover:bg-state-hover hover:duration-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
       <span className="truncate">{pr.title}</span>
-      <PrStateBadge state={pr.state} number={pr.number} />
+      <PrStateBadge state={pr.state}>{pr.number}</PrStateBadge>
       <span className="col-span-2 flex min-w-0 items-center gap-1 text-xs leading-4 whitespace-nowrap text-muted-foreground">
         <span className="truncate">{pr.repo}</span>
         <span aria-hidden>·</span>

@@ -1,6 +1,6 @@
-// The PR header, a masthead: the PR's state pill, with `owner/repo #number` beside it, above the
+// The PR header, a masthead: the PR's state badge, with `owner/repo #number` beside it, above the
 // title and the identity row (author, `base ← head`) on the left; icon actions (Review chat when a
-// review thread exists, then GitHub) on the right. The pill opens a menu of the state changes
+// review thread exists, then GitHub) on the right. The badge opens a menu of the state changes
 // GitHub allows. The PR's line counts are on the Changes tab.
 import { Fragment, useState, type Ref } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
@@ -10,6 +10,7 @@ import { useChangePrState, type PrTarget } from "../queries.ts";
 import { ReviewChatIconButton } from "../review-chat/review-chat-button.tsx";
 import { IconLink } from "../ui/icon-button.tsx";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "../ui/menu.tsx";
+import { PrStateBadge } from "../ui/pr-state-badge.tsx";
 import { Spinner } from "../ui/spinner.tsx";
 import { HOLD_MS, useHold } from "../ui/use-hold.ts";
 import { PrIdentity } from "./pr-identity.tsx";
@@ -21,13 +22,13 @@ export function PrHeader({ target, repo, pr, hasReviewThread, title }: PrHeaderP
   return (
     <header className="shrink-0 px-6 pt-4 pb-3.5">
       <div className="mb-2 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-        <StatePill target={target} state={pr.state} />
+        <StateBadge target={target} state={pr.state} />
         <span className="text-xs text-muted-foreground">
           {repo} <span className="font-medium tabular-nums">#{pr.number}</span>
         </span>
       </div>
       <div className={MASTHEAD}>
-        <h1 ref={title} tabIndex={-1} className="outline-none text-base leading-6 font-semibold text-pretty break-words [grid-area:title]">{pr.title}</h1>
+        <h1 ref={title} tabIndex={-1} className="outline-none text-[17px] leading-6 font-semibold text-pretty break-words [grid-area:title]">{pr.title}</h1>
         {/* -my-0.5 centers the 28px buttons on the title's 24px first line; -mr-1.5 lines the last
             glyph, not its hit area, up with the header's right edge. */}
         <div className="-my-0.5 -mr-1.5 flex gap-1 justify-self-end [grid-area:actions]">
@@ -60,7 +61,7 @@ const CHANGES_FROM = {
   CLOSED: ["reopen"],
 } as const satisfies Record<Exclude<PrState, "MERGED">, readonly StateChange[]>;
 
-// Each change's row: its words, its words while gh runs, and the state it leads to, on its chip.
+// Each change's row: its words, its words while gh runs, and the state it leads to, on its badge.
 // GitHub decides what a closed draft reopens as.
 const CHANGES = {
   ready: { label: "Ready for review", doing: "Marking ready for review…", to: "OPEN" },
@@ -69,17 +70,17 @@ const CHANGES = {
   reopen: { label: "Reopen", doing: "Reopening…", to: "OPEN" },
 } as const satisfies Record<StateChange, { label: string; doing: string; to: PrState }>;
 
-// The pill is a neutral control: only its icon carries the state's color. It stays at every width,
-// since it is the header's only mark of the state.
-const PILL = "inline-flex h-7 items-center gap-1.5 rounded-lg pl-2 text-sm leading-4 font-semibold text-foreground inset-ring inset-ring-border";
-
-function StatePill({ target, state }: { target: PrTarget; state: PrState }) {
+// The sidebar's state badge at the header's size, naming the state. It stays at every width, since
+// it is the header's only mark of the state.
+function StateBadge({ target, state }: { target: PrTarget; state: PrState }) {
   if (state === "MERGED") {
-    const { label, icon, color } = STATE_TILES.MERGED;
+    const { label } = STATE_TILES.MERGED;
     return (
-      <span title="Merged pull requests can't change state" className={`${PILL} pr-2.5`}>
-        <Icon name={icon} aria-hidden className={`size-4 ${color}`} />
-        {label}
+      <span title="Merged pull requests can't change state">
+        <PrStateBadge state={state} size="header">
+          {label}
+        </PrStateBadge>
+        <span className="sr-only">State: {label}</span>
       </span>
     );
   }
@@ -87,7 +88,7 @@ function StatePill({ target, state }: { target: PrTarget; state: PrState }) {
 }
 
 // While gh runs, the chosen row says so and the menu stays open; once GitHub has the change the menu
-// closes, and the pill shows the new state when the re-read PR arrives. A refusal shows under the
+// closes, and the badge shows the new state when the re-read PR arrives. A refusal shows under the
 // rows until the menu closes.
 function StateMenu({ target, state }: { target: PrTarget; state: keyof typeof CHANGES_FROM }) {
   const changeState = useChangePrState();
@@ -102,18 +103,24 @@ function StateMenu({ target, state }: { target: PrTarget; state: keyof typeof CH
     setOpen(next);
     if (!next && running === null) changeState.reset();
   };
-  const { label, icon, color } = STATE_TILES[state];
+  const { label } = STATE_TILES[state];
   return (
     <Menu open={open} onOpenChange={onOpenChange}>
       <MenuTrigger asChild>
         <button
           type="button"
           aria-label={`State: ${label}. Change state`}
-          className={`${PILL} cursor-pointer pr-1.5 transition-[background-color,scale] duration-150 ease-out hover:bg-state-hover hover:duration-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.97] data-[state=open]:bg-state-active motion-reduce:transition-none motion-reduce:active:scale-100`}
+          className="group/state cursor-pointer rounded-md transition-[scale] duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100"
         >
-          <Icon name={icon} aria-hidden className={`size-4 ${color}`} />
-          {label}
-          <Icon name="ChevronDown" aria-hidden className="size-3.5 text-muted-foreground" />
+          {/* The wash deepens a step on hover and two while the menu is open. */}
+          <PrStateBadge
+            state={state}
+            size="header"
+            className="pr-1 transition-colors duration-150 ease-out group-hover/state:bg-current/15 group-hover/state:duration-0 group-data-[state=open]/state:bg-current/20 motion-reduce:transition-none"
+          >
+            {label}
+            <Icon name="ChevronDown" className="size-3 opacity-70" />
+          </PrStateBadge>
         </button>
       </MenuTrigger>
       <MenuContent align="start" className="w-60">
@@ -157,19 +164,19 @@ function CloseItem({ running, onRun }: { running: boolean; onRun(change: StateCh
   );
 }
 
-// The chip repeats the row's words as the state they lead to, so it is hidden from a screen reader.
+// The badge repeats the row's words as the state they lead to; the badge hides itself from a screen
+// reader. `relative` lifts both above the close row's hold wash.
 function ChangeRow({ change, text, running }: { change: StateChange; text: string; running: boolean }) {
-  const { label, icon, color } = STATE_TILES[CHANGES[change].to];
+  const to = CHANGES[change].to;
   return (
     <>
       <span className="relative inline-flex items-center gap-1.5">
         {running && <Spinner size="small" />}
         {text}
       </span>
-      <span aria-hidden className="relative inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-xs font-medium text-foreground inset-ring inset-ring-border">
-        <Icon name={icon} className={`size-3 ${color}`} />
-        {label}
-      </span>
+      <PrStateBadge state={to} className="relative">
+        {STATE_TILES[to].label}
+      </PrStateBadge>
     </>
   );
 }

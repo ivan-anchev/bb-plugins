@@ -10,7 +10,7 @@ import type { VisibleFinding } from "../../guide/walkthrough.ts";
 import { COMMENT_INDENT } from "../comments/github-comment.tsx";
 import type { OpenBox } from "../diff/pr-diff.tsx";
 import { Button } from "../ui/button.tsx";
-import { Prose } from "../ui/prose.tsx";
+import { Prose, READING_TYPE } from "../ui/prose.tsx";
 import { Priority, PRIORITIES } from "./priority.tsx";
 
 type FindingBlockProps = { shown: VisibleFinding; openBox: OpenBox };
@@ -27,7 +27,7 @@ export function FindingBlock({ shown: { finding, index }, openBox }: FindingBloc
           <Priority priority={finding.priority} />
           <Prose text={finding.title} className="min-w-0 font-medium" />
         </div>
-        <div className="col-start-2 min-w-0 rounded-xl bg-surface-recessed px-3.5 py-2.5">
+        <div className={`col-start-2 min-w-0 rounded-xl bg-surface-recessed px-3.5 py-2.5 ${READING_TYPE}`}>
           <Prose text={finding.body} />
         </div>
       </div>
