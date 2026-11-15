@@ -57,18 +57,19 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     },
 
     /**
-     * Deletes the note's rows and returns the ids of the attachments it held, whose files can go. A
-     * note already gone leaves nothing to delete, and that is fine.
+     * Deletes the notes' rows, together or not at all, and returns the ids of the attachments they
+     * held, whose files can go. A note already gone leaves nothing to delete, and that is fine.
      */
-    delete(id: Note["id"]): Attachment["id"][] {
+    delete(ids: readonly Note["id"][]): Attachment["id"][] {
+      const list = JSON.stringify(ids);
       return db().transaction(() => {
-        const ids = db()
-          .prepare("SELECT id FROM attachments WHERE note_id = ?")
-          .all(id)
+        const fileIds = db()
+          .prepare("SELECT id FROM attachments WHERE note_id IN (SELECT value FROM json_each(?))")
+          .all(list)
           .map((row) => attachmentIdRowSchema.parse(row).id);
-        db().prepare("DELETE FROM attachments WHERE note_id = ?").run(id);
-        db().prepare("DELETE FROM notes WHERE id = ?").run(id);
-        return ids;
+        db().prepare("DELETE FROM attachments WHERE note_id IN (SELECT value FROM json_each(?))").run(list);
+        db().prepare("DELETE FROM notes WHERE id IN (SELECT value FROM json_each(?))").run(list);
+        return fileIds;
       })();
     },
 

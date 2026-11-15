@@ -119,16 +119,18 @@ const briefAttachmentSchema = z.object({
 const briefSchema = z.object({ text: z.string(), mentions: z.array(briefMentionSchema), attachments: z.array(briefAttachmentSchema) });
 export type Brief = z.infer<typeof briefSchema>;
 
-/** The notes picked on the card: at least one, at most 100 in one brief. */
-const noteIdsSchema = z.array(noteIdSchema).min(1).max(100);
+/** The notes picked in a panel, at least one. Delete takes them all in one call, however many. */
+const pickedIdsSchema = z.array(noteIdSchema).min(1);
+/** At most 100 in one brief. */
+const noteIdsSchema = pickedIdsSchema.max(100);
 
 export const notesContract = defineRpcContract({
   /** Every active note, newest first. */
   notes: { input: z.object({}), output: z.array(noteSchema), tags: () => [NOTES_TAG] },
   /** Saves a note and returns it. */
   createNote: { input: newNoteSchema, output: noteSchema },
-  /** Deletes a note for good. A note already gone counts as deleted, so a second call succeeds. */
-  deleteNote: { input: z.object({ id: noteIdSchema }), output: z.object({}) },
+  /** Deletes the notes and their files for good. A note already gone counts as deleted, so a second call succeeds. */
+  deleteNotes: { input: z.object({ noteIds: pickedIdsSchema }), output: z.object({}) },
   /** The notes, oldest first, as a brief whose media is uploaded into the project. Notes already gone are left out. */
   briefFor: { input: z.object({ noteIds: noteIdsSchema, projectId: z.string().min(1) }), output: briefSchema },
   /** Takes the notes off the card, keeping their rows and files. Archiving twice keeps the first time. */

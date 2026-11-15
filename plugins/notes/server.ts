@@ -26,8 +26,8 @@ export default function plugin(bb: BbPluginApi): void {
   bb.rpc.register(notesContract, {
     notes: () => store.activeNotes(),
     createNote: (input) => notes.create(input),
-    deleteNote: async ({ id }) => {
-      await notes.remove(id);
+    deleteNotes: async ({ noteIds }) => {
+      await notes.remove(noteIds);
       return {};
     },
     briefFor: ({ noteIds, projectId }) =>

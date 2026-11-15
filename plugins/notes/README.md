@@ -18,8 +18,8 @@ the user-facing description and `skills/notes/SKILL.md` for how it behaves.
   the popover. `src/app/media-url.ts`: where the browser reads a file.
   `src/app/quote-block.tsx`: a quoted passage and its source chip.
 - `src/app/panel/`: the Notes panel both hosts render: header, the scrolling
-  list (`list/`), a note opened in place (`detail/`), the picks and Start
-  thread, which fills whichever composer the screen shows.
+  list (`list/`), a note opened in place (`detail/`), the picks, deleting
+  them, and Start thread, which fills whichever composer the screen shows.
 - `src/app/popover/`: the popover, an `experimental_appOverlay` over a small
   module store (`popover-store.ts`) that every opener calls, anchored beside
   the sidebar-footer button (`footer-anchor.ts`).

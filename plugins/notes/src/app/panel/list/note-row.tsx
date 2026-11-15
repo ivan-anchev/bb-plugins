@@ -2,9 +2,8 @@
 // before them picks it for Start thread; at the end, a fan of what it holds. Clicking the lines or
 // the fan opens the note in place under them.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
-import { useRef, useState, type RefObject } from "react";
+import { useState } from "react";
 import type { Note } from "../../../contract.ts";
-import { useHandOffFocus } from "../../ui/use-hand-off-focus.ts";
 import { NoteDetail } from "../detail/note-detail.tsx";
 import { AttachmentFan } from "./attachment-fan.tsx";
 import { noteLine, sourceTitle } from "./card-text.ts";
@@ -13,21 +12,19 @@ import { FadingText } from "./fading-text.tsx";
 type NoteRowProps = {
   note: Note;
   picked: boolean;
+  /** False while the picks are held (a delete on its way). */
+  pickable: boolean;
   onPick(): void;
   open: boolean;
   onOpen(): void;
-  /** Where focus goes when the row leaves holding it (deleted from its own Delete). */
-  focusAfter: RefObject<HTMLElement | null>;
 };
 
-export function NoteRow({ note, picked, onPick, open, onOpen, focusAfter }: NoteRowProps) {
-  const row = useRef<HTMLLIElement>(null);
+export function NoteRow({ note, picked, pickable, onPick, open, onOpen }: NoteRowProps) {
   const fresh = useIsFresh(note);
-  useHandOffFocus(row, focusAfter);
   const line = noteLine(note);
   return (
-    <li ref={row} className="nt-row" data-new={fresh || undefined}>
-      <button type="button" role="checkbox" aria-checked={picked} aria-label={line} className="nt-pick" onClick={onPick}>
+    <li className="nt-row" data-new={fresh || undefined}>
+      <button type="button" role="checkbox" aria-checked={picked} aria-label={line} className="nt-pick" disabled={!pickable} onClick={onPick}>
         <span className="nt-check">
           <Icon name="Check" aria-hidden />
         </span>
