@@ -28,6 +28,10 @@
       "source": "./plugins/mdxcn"
     },
     {
+      "name": "notes",
+      "source": "./plugins/notes"
+    },
+    {
       "name": "office-quote",
       "source": "./plugins/office-quote"
     },

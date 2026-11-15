@@ -1,0 +1,108 @@
+/* The Notes card under the new-thread composer (prototypes/notes-card-fan.html, Symmetric). */
+
+/* bb draws the section title as an <h2>; the card carries its own header. */
+[id="plugin-homepage:notes:notes"] > h2 { display: none; }
+
+/* Homepage's .hp-card chrome (plugins/homepage/homepage.css), copied: every plugin installs standalone. */
+.nt-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--border);
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 18px;
+  -webkit-font-smoothing: antialiased;
+}
+.nt-head { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+.nt-icon { width: 14px; height: 14px; flex: none; color: var(--muted-foreground); }
+.nt-caption { margin: 0; font-size: 12px; line-height: 16px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.nt-error { color: var(--destructive-text, var(--destructive)); }
+.nt-count {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 99px;
+  background: color-mix(in oklch, var(--foreground) 8%, transparent);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 400;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Rows: 46px, two lines (6 + 18 + 2 + 14 + 6); the list bleeds 8px so text lines up with the header. */
+.nt-list { display: flex; flex-direction: column; margin: 0 -8px; padding: 0; list-style: none; }
+.nt-row { display: flex; flex-direction: column; gap: 2px; min-height: 46px; padding: 6px 8px; border-radius: 8px; }
+.nt-line1 { color: var(--muted-foreground); }
+.nt-line2 { font-size: 11px; line-height: 14px; color: var(--subtle-foreground, var(--muted-foreground)); }
+
+.nt-more {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: var(--foreground);
+  cursor: pointer;
+}
+@media (hover: hover) { .nt-more:hover { background: var(--state-hover, color-mix(in oklch, var(--foreground) 5%, transparent)); } }
+.nt-more:focus-visible { box-shadow: inset 0 0 0 1.5px var(--ring); }
+
+.nt-empty { text-wrap: pretty; }
+.nt-empty b { font-weight: 500; color: var(--foreground); }
+
+.nt-foot { margin-top: auto; display: flex; align-items: center; gap: 8px; min-height: 24px; }
+.nt-link {
+  all: unset;
+  position: relative;
+  margin-left: auto;
+  border-radius: 4px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  cursor: pointer;
+}
+/* A bigger target than the words. */
+.nt-link::before { content: ""; position: absolute; inset: -6px; }
+@media (hover: hover) { .nt-link:hover { color: var(--foreground); } }
+.nt-link:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.nt-foot-kbd {
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: color-mix(in oklch, var(--foreground) 8%, transparent);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+}
+
+/* Text that doesn't fit fades out at its end, never cut to "…" (boat spend's rule, fading-text.tsx). */
+.nt-fade { display: block; min-width: 0; overflow: hidden; white-space: nowrap; }
+.nt-fade[data-over] {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--nt-fade-in), #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 var(--nt-fade-in), #000 calc(100% - 24px), transparent);
+  transition: --nt-fade-in 160ms ease-out;
+}
+.nt-fade-text { display: inline-block; transition: transform 240ms cubic-bezier(0.215, 0.61, 0.355, 1); }
+/* Text too long runs through to its end under the pointer, after a beat, as fast as it reads; its
+   start fades as it goes. Leaving, it slides home. */
+@property --nt-fade-in {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .nt-row:hover .nt-fade[data-over] { --nt-fade-in: 12px; transition-delay: 500ms; }
+  .nt-row:hover .nt-fade[data-over] > .nt-fade-text {
+    transform: translateX(calc(-1 * var(--nt-travel)));
+    transition: transform var(--nt-run) cubic-bezier(0.45, 0, 0.55, 1) 500ms;
+  }
+}

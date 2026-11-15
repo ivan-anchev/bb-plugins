@@ -1,0 +1,56 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import Database from "better-sqlite3";
+import { noteIdSchema, type Note } from "../contract.ts";
+import { openStore } from "./store.ts";
+
+/** A store over a fresh in-memory database, and that database for what the store can't do yet. */
+function freshStore() {
+  const db = new Database(":memory:");
+  const store = openStore({ database: () => db, migrate: (handle, statements) => statements.forEach((statement) => handle.exec(statement)) });
+  return { db, store };
+}
+
+function note(n: number, text: string): Note {
+  return { id: noteIdSchema.parse(`note_00000000-0000-4000-8000-${String(n).padStart(12, "0")}`), createdAt: 1_000 * n, quote: null, body: { text, mentions: [] } };
+}
+
+test("a saved note reads back exactly as it was written", () => {
+  const { store } = freshStore();
+  const saved = note(1, "Check the chart before shipping");
+  store.insert(saved);
+
+  assert.deepEqual(store.activeNotes(), [saved]);
+});
+
+test("a note with a quote keeps it", () => {
+  const { store } = freshStore();
+  const quoted: Note = { ...note(1, ""), quote: { text: "Burn reports cents", threadId: "thr_abc", threadTitle: "Burn card", messageSeq: 41 } };
+  store.insert(quoted);
+
+  assert.deepEqual(store.activeNotes(), [quoted]);
+});
+
+test("notes list newest first", () => {
+  const { store } = freshStore();
+  store.insert(note(1, "first"));
+  store.insert(note(3, "third"));
+  store.insert(note(2, "second"));
+
+  assert.deepEqual(
+    store.activeNotes().map((n) => n.body.text),
+    ["third", "second", "first"],
+  );
+});
+
+test("archived notes are not listed", () => {
+  const { db, store } = freshStore();
+  store.insert(note(1, "kept"));
+  store.insert(note(2, "archived"));
+  db.prepare("UPDATE notes SET archived_at = ? WHERE id = ?").run(5_000, note(2, "").id);
+
+  assert.deepEqual(
+    store.activeNotes().map((n) => n.body.text),
+    ["kept"],
+  );
+});
