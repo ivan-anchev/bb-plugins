@@ -4,8 +4,9 @@
 /* bb stacks every plugin's homepage section in one parent. When PR Reviews'
    card is there too, that parent becomes rows of cards wider than the
    composer. Row 1: Activity and PR Reviews, half each. Row 2: Burn's narrow
-   column, then boat spend taking what is left; with Notes, Notes beside boat
-   spend and Burn on row 3. Every other section keeps a full row after them.
+   column, then boat spend taking what is left; with Notes, Notes takes Burn's
+   narrow column, then boat spend, then Burn last, narrower, on the same row.
+   Every other section keeps a full row after them.
    The rule names sections by id, never bb's class names, and without PR
    Reviews nothing changes.
    why flex, not grid: rows split differently (halves, then wide and narrow),
@@ -38,16 +39,12 @@
   & > [id="plugin-homepage:homepage:burn"] { flex: 0 0 var(--hp-narrow); order: -3; display: grid; }
   & > [id="plugin-homepage:boat-sandbox:spend"] { flex: 1 1 200px; order: -2; display: grid; }
 
-  /* With Notes, row 2 is Notes then boat spend at 1:1.75, and Burn wraps to row 3 in its narrow
-     column: the two bases fill the row. Without boat spend, Notes grows beside Burn on row 2.
-     why :where: it adds no specificity, so the narrow-page rule below still wins.
-     why 13px: the 12px gap plus a pixel, as above, so rounding never wraps boat spend.
-     why order -1, not 0: bb's own sections (such as Adopt agent session) sit at 0, and Burn
-     would follow them. */
+  /* With Notes, row 2 is Notes in Burn's narrow column, boat spend taking what is left, and Burn
+     last in a narrower column. A page too narrow for three wraps Burn under them.
+     why :where: it adds no specificity, so the narrow-page rule below still wins. */
   &:where(:has(> [id="plugin-homepage:notes:notes"])) {
-    & > [id="plugin-homepage:notes:notes"] { flex: 1 0 calc((100% - 13px) / 2.75); order: -3; display: grid; }
-    & > [id="plugin-homepage:boat-sandbox:spend"] { flex: 1.75 0 calc((100% - 13px) * 1.75 / 2.75); }
-    & > [id="plugin-homepage:homepage:burn"] { order: -1; }
+    & > [id="plugin-homepage:notes:notes"] { flex: 0 0 var(--hp-narrow); order: -3; display: grid; }
+    & > [id="plugin-homepage:homepage:burn"] { flex: 0 0 clamp(200px, 22%, 240px); order: -1; }
   }
 
   /* One column on a narrow page: two cards would drop under 280px. After the rules above, so it wins. */
