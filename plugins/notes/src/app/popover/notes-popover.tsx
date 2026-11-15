@@ -40,7 +40,7 @@ function Opening({ state }: { state: OpenState }) {
   const form = useRef<NoteFormHandle>(null);
   const notes = useNotes();
   const picks = usePicks(notes.data ?? []);
-  /** Closed by a click outside or by Start thread: focus stays where that put it. */
+  /** Closed by a click outside or by a start: focus stays where that put it. */
   const quiet = useRef(false);
 
   const closeQuietly = () => {
@@ -79,6 +79,11 @@ function Opening({ state }: { state: OpenState }) {
           if (!isNewNoteShortcut(event)) return;
           event.preventDefault();
           notesPopover.close();
+        }}
+        // why: New thread from another screen goes to New thread first, whose composer takes focus;
+        // the popover stays until the draft holds the notes (use-start-thread.ts).
+        onFocusOutside={(event) => {
+          if (picks.held) event.preventDefault();
         }}
         onInteractOutside={(event) => {
           // why: the footer button's own click toggles the popover, and must not reopen it.
