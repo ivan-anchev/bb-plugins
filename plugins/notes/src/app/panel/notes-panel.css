@@ -70,35 +70,31 @@
 .nt-empty { padding: 8px; text-wrap: pretty; }
 .nt-empty b { font-weight: 500; color: var(--foreground); }
 
-/* Rows: 46px, two lines (6 + 18 + 2 + 14 + 6). The checkbox picks the note; the lines and the fan
-   open it in place, under them. */
-.nt-row { display: flex; flex-wrap: wrap; border-radius: 8px; }
+/* Rows: 46px, two lines (6 + 18 + 2 + 14 + 6). The row is its checkbox's label: a click anywhere
+   on it picks the note. */
+.nt-row { border-radius: 8px; }
 @media (hover: hover) { .nt-row:hover { background: var(--state-hover, color-mix(in oklch, var(--foreground) 5%, transparent)); } }
 /* A note just saved lands with a brief highlight. */
 @media (prefers-reduced-motion: no-preference) { .nt-row[data-new] { animation: nt-new 900ms ease-out; } }
 @keyframes nt-new { from { background: var(--state-active, color-mix(in oklch, var(--foreground) 8%, transparent)); } }
+.nt-row-label { position: relative; display: flex; align-items: center; min-height: 46px; border-radius: 8px; cursor: pointer; }
+.nt-row-label:active { background: var(--state-active, color-mix(in oklch, var(--foreground) 8%, transparent)); }
+.nt-row-label:has(> .nt-pick:focus-visible) { box-shadow: inset 0 0 0 1.5px var(--ring); }
+.nt-row-label:has(> .nt-pick:disabled) { cursor: default; background: none; }
 
-/* The checkbox: a 30px column the row's height, the 14px box centred on line 1. The box shows only
-   under the pointer, on keyboard focus, once ticked, and on every row while anything is picked;
-   always on touch screens. The column stays, so nothing shifts. */
-.nt-pick {
-  all: unset;
-  box-sizing: border-box;
-  flex: none;
-  width: 30px;
-  padding-top: 8px;
-  display: flex;
-  justify-content: center;
-  border-radius: 8px;
-  cursor: pointer;
-}
-.nt-pick:focus-visible { box-shadow: inset 0 0 0 1.5px var(--ring); }
-.nt-pick:disabled { cursor: default; }
+/* The checkbox: a native one, hidden under the 14px box drawn in a 30px column and centred on line 1
+   (8px down: the row's 6px padding plus 2px into the 18px line), while the fan centres on the row.
+   The box shows only under the pointer, on keyboard focus, once ticked, and on every row while
+   anything is picked; always on touch screens. The column stays, so nothing shifts. */
+.nt-pick { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
 /* why --subtle-foreground, not bb's checkbox token --input: --input is 4% white in grok, and an unticked
    box must stay visible against the row (non-text contrast ≥ 3:1). */
 .nt-check {
+  flex: none;
   width: 14px;
   height: 14px;
+  align-self: flex-start;
+  margin: 8px 8px 0;
   border-radius: 4px;
   display: grid;
   place-items: center;
@@ -108,33 +104,18 @@
   transition: opacity 120ms ease-out, background-color 120ms ease-out, box-shadow 120ms ease-out;
 }
 .nt-row:hover .nt-check,
-.nt-pick:focus-visible .nt-check,
-.nt-pick[aria-checked="true"] .nt-check,
+.nt-pick:focus-visible + .nt-check,
+.nt-pick:checked + .nt-check,
 .nt-panel[data-picking] .nt-check { opacity: 1; }
 @media (hover: none) { .nt-check { opacity: 1; } }
 .nt-check svg { width: 10px; height: 10px; stroke-width: 3.25; opacity: 0; transform: scale(0.5); transition: opacity 100ms ease-out, transform 160ms cubic-bezier(0.23, 1, 0.32, 1); }
-.nt-pick[aria-checked="true"] .nt-check { background: var(--primary); box-shadow: none; }
-.nt-pick[aria-checked="true"] .nt-check svg { opacity: 1; transform: none; }
-.nt-row:has(> .nt-pick[aria-checked="true"]) .nt-line1 { color: var(--foreground); }
+.nt-pick:checked + .nt-check { background: var(--primary); box-shadow: none; }
+.nt-pick:checked + .nt-check svg { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) { .nt-check, .nt-check svg { transition: none; } }
 
-.nt-text {
-  all: unset;
-  box-sizing: border-box;
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-height: 46px;
-  padding: 6px 8px 6px 0;
-  border-radius: 8px;
-  cursor: pointer;
-}
-.nt-text:active { background: var(--state-active, color-mix(in oklch, var(--foreground) 8%, transparent)); }
-.nt-text:focus-visible { box-shadow: inset 0 0 0 1.5px var(--ring); }
+.nt-text { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 6px 8px 6px 0; }
 .nt-line1 { color: var(--muted-foreground); }
-.nt-text[aria-expanded="true"] .nt-line1 { color: var(--foreground); }
+.nt-pick:checked ~ .nt-text .nt-line1 { color: var(--foreground); }
 .nt-line2 { font-size: 11px; line-height: 14px; color: var(--subtle-foreground, var(--muted-foreground)); }
 
 /* A row's attachments (attachment-fan.tsx): 30px thumbs pivoting on their bottom edge, each turned
@@ -144,12 +125,9 @@
   --nt-fan-spread: 1;
   position: relative;
   flex: none;
-  align-self: flex-start;
-  margin-top: 6px;
   width: 50px; /* the 30px thumb, 4px of shift each side, 6px of lean each side */
   height: 34px;
   margin-right: 6px;
-  cursor: pointer;
 }
 .nt-fan-thumb {
   position: absolute;
@@ -224,33 +202,8 @@
   }
 }
 
-/* A note opened in place: its full text, its media, Open thread and Delete, under the lines. */
-/* Opening scrolls it into view clear of the bottom fade (28px). */
-.nt-detail { flex: 0 0 100%; min-width: 0; padding: 0 10px 10px 30px; display: flex; flex-direction: column; gap: 8px; scroll-margin-bottom: 28px; }
-.nt-full {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 132px;
-  overflow-y: auto;
-  overflow-wrap: anywhere;
-}
-.nt-full:focus-visible { border-radius: 4px; outline: 2px solid var(--ring); outline-offset: 2px; }
-.nt-body { margin: 0; white-space: pre-wrap; color: var(--foreground); text-wrap: pretty; }
-/* A linked thread's "@Title" in a note's words, marked as a chip reads. */
-.nt-mention {
-  padding: 1px 3px;
-  border-radius: 4px;
-  background: var(--muted);
-  color: var(--foreground);
-  font-weight: 500;
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
-}
-.nt-acts { display: flex; align-items: center; gap: 12px; font-size: 12px; line-height: 16px; }
-
-/* The passage a note quotes, behind its bar, then its source chip: three lines in the form, all of
-   it in an opened note. The bar is the one bb's composer draws on a quote. */
+/* The passage a note quotes, behind its bar, then its source chip: three lines in the form. The bar
+   is the one bb's composer draws on a quote. */
 .nt-quote { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin: 0; }
 .nt-quote-text {
   display: -webkit-box;
@@ -262,20 +215,10 @@
   box-shadow: inset 2px 0 0 var(--surface-selected-border, var(--border));
   color: var(--muted-foreground);
 }
-.nt-quote-text[data-whole] { display: block; -webkit-line-clamp: none; white-space: pre-wrap; }
 /* why: themes underline links in markdown but spare mention pills by `[data-prompt-mention]`, which
    bb 0.49 sets on a reply's pills and not on the one its Markdown draws for a plugin. The extra
    classes outrank a theme's `[data-markdown-preview] a[href]:not([data-prompt-mention])`. */
 .nt-panel .nt-quote .nt-quote-source a[href] { text-decoration-line: none; }
-
-/* An opened note's media: 56px tiles; a video plays in place, an image opens the lightbox. */
-.nt-media { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.nt-media-item { position: relative; width: 56px; height: 56px; overflow: hidden; border-radius: 7px; background: var(--muted); }
-/* why a layer above the media: an inset shadow on the box itself is painted under the image. */
-.nt-media-item::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--border); pointer-events: none; }
-.nt-media-item img, .nt-media-item video { display: block; width: 100%; height: 100%; object-fit: cover; }
-.nt-media-open { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
-.nt-media-open:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
 
 /* The footer: in the card, a hint and New note; with picks, the count, Clear, and the one primary
    action. */

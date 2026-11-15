@@ -18,7 +18,7 @@ the user-facing description and `skills/notes/SKILL.md` for how it behaves.
   the popover. `src/app/media-url.ts`: where the browser reads a file.
   `src/app/quote-block.tsx`: a quoted passage and its source chip.
 - `src/app/panel/`: the Notes panel both hosts render: header, the scrolling
-  list (`list/`), a note opened in place (`detail/`), the picks, deleting
+  list (`list/`), where a click on a row ticks its note, the picks, deleting
   them, and starting from them (`start/`): New thread from any screen, and
   on a thread page a split button that adds Send to this thread; ⌘↵ and
   ⇧⌘↵ run them from the panel.

@@ -1,13 +1,13 @@
 // A panel's notes, newest first, scrolling inside a box whose height comes from its host (the
 // card's row, the popover's frame), never from how many notes there are. Its edges fade only where
-// there is more to scroll to. One note at a time is open in place.
-import { useLayoutEffect, useState, type ReactNode, type RefObject } from "react";
+// there is more to scroll to.
+import { useLayoutEffect, type ReactNode, type RefObject } from "react";
 import type { Note } from "../../../contract.ts";
 import type { Picks } from "../use-picks.ts";
 import { NoteRow } from "./note-row.tsx";
 
 type NoteListProps = {
-  /** The scrolling box, which the panel focuses once Delete has taken the picked rows away. */
+  /** The scrolling box, where the panel sends focus while a delete or a start runs. */
   ref: RefObject<HTMLDivElement | null>;
   /** Undefined until the first read, when the box stays empty. */
   notes: readonly Note[] | undefined;
@@ -17,7 +17,6 @@ type NoteListProps = {
 };
 
 export function NoteList({ ref: box, notes, picks, empty }: NoteListProps) {
-  const [openId, setOpenId] = useState<Note["id"] | null>(null);
   useScrollEdges(box);
   useTopOnNewFirst(box, notes?.[0]?.id);
   return (
@@ -32,8 +31,6 @@ export function NoteList({ ref: box, notes, picks, empty }: NoteListProps) {
             picked={picks.has(note.id)}
             pickable={!picks.held}
             onPick={() => picks.toggle(note.id)}
-            open={openId === note.id}
-            onOpen={() => setOpenId(openId === note.id ? null : note.id)}
           />
         ))}
       </ul>
@@ -48,7 +45,7 @@ const EDGE = 2;
 
 /**
  * Marks the box `data-top` / `data-bottom` while there is more above / below; the CSS fades those
- * edges. Measured on scroll, and whenever the box or its list resizes (notes added, a row opened).
+ * edges. Measured on scroll, and whenever the box or its list resizes (notes added or deleted).
  */
 function useScrollEdges(box: RefObject<HTMLDivElement | null>): void {
   useLayoutEffect(() => {

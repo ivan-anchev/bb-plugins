@@ -1,10 +1,9 @@
-// One note in a panel's list, in two lines: the note itself, then the thread it came from. A checkbox
-// before them picks it for New thread or Delete; at the end, a fan of what it holds. Clicking the lines or
-// the fan opens the note in place under them.
+// One note in a panel's list, in two lines: the note itself, then the thread it came from, a fan of
+// what it holds at the end. The row is its checkbox's label, so a click anywhere on it picks the note
+// for New thread or Delete.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
-import { useState } from "react";
+import { useState, type MouseEvent } from "react";
 import type { Note } from "../../../contract.ts";
-import { NoteDetail } from "../detail/note-detail.tsx";
 import { AttachmentFan } from "./attachment-fan.tsx";
 import { noteLine, sourceTitle } from "./card-text.ts";
 import { FadingText } from "./fading-text.tsx";
@@ -12,34 +11,42 @@ import { FadingText } from "./fading-text.tsx";
 type NoteRowProps = {
   note: Note;
   picked: boolean;
-  /** False while the picks are held (a delete on its way). */
+  /** False while the picks are held (a delete or a start on its way). */
   pickable: boolean;
   onPick(): void;
-  open: boolean;
-  onOpen(): void;
 };
 
-export function NoteRow({ note, picked, pickable, onPick, open, onOpen }: NoteRowProps) {
+export function NoteRow({ note, picked, pickable, onPick }: NoteRowProps) {
   const fresh = useIsFresh(note);
   const line = noteLine(note);
   return (
     <li className="nt-row" data-new={fresh || undefined}>
-      <button type="button" role="checkbox" aria-checked={picked} aria-label={line} className="nt-pick" disabled={!pickable} onClick={onPick}>
-        <span className="nt-check">
-          <Icon name="Check" aria-hidden />
+      {/* why a label, not a button stretched over the row: its text stays selectable, and a disabled
+          checkbox (the picks held) makes the whole row inert with it. */}
+      <label className="nt-row-label" onClick={keepSelection}>
+        <input type="checkbox" className="nt-pick" aria-label={line} checked={picked} disabled={!pickable} onChange={onPick} />
+        <span className="nt-check" aria-hidden>
+          <Icon name="Check" />
         </span>
-      </button>
-      <button type="button" className="nt-text" aria-expanded={open} onClick={onOpen}>
-        <FadingText className="nt-line1" text={line} />
-        <FadingText className="nt-line2" text={sourceTitle(note) ?? "No thread"} />
-      </button>
-      <AttachmentFan attachments={note.attachments} onClick={onOpen} />
-      {open && <NoteDetail note={note} />}
+        <span className="nt-text">
+          <FadingText className="nt-line1" text={line} />
+          <FadingText className="nt-line2" text={sourceTitle(note) ?? "No thread"} />
+        </span>
+        <AttachmentFan attachments={note.attachments} />
+      </label>
     </li>
   );
 }
 
 // ------------------------------------------------------------------ layer 2
+
+/**
+ * A drag that selects some of the row's text ends in a click on the row: it copies, so it doesn't
+ * tick. A press on the checkbox itself (Space) always does.
+ */
+function keepSelection(event: MouseEvent<HTMLLabelElement>): void {
+  if (event.target !== event.currentTarget.control && !document.getSelection()!.isCollapsed) event.preventDefault();
+}
 
 /** How long after it was saved a note's row still arrives highlighted. */
 const FRESH_MS = 3000;
