@@ -24,7 +24,7 @@
   },
   "bb": {
     "name": "Notes",
-    "description": "Experimental: it may break with a bb update. Jot a note from anywhere in bb: press ⇧⌘J or click the notes icon in the sidebar footer, type, and press ⌘↵. Type @ to link a thread, and attach screenshots or recordings by pasting, dropping or clicking 📎. Or highlight text in a reply and choose Add to notes to keep that passage with a link back to its message. Your notes wait in a Notes card on the New thread screen: click one to read it or delete it, or tick a few and choose Start thread to put them in the composer above as context for a new thread.",
+    "description": "Experimental: it may break with a bb update. Jot a note from anywhere in bb: click Notes in the sidebar footer or press ⇧⌘J, and a Notes popover opens beside the sidebar with a one-line New note field above your notes. Type and press ⌘↵. Type @ to link a thread, and attach screenshots or recordings by pasting, dropping or clicking 📎. Or highlight text in a reply and choose Add to notes to keep that passage with a link back to its message. The same list is a Notes card on the New thread screen: click a note to open it in place and read or delete it, or tick a few and choose Start thread to put them in the composer as context for a new thread.",
     "branding": {
       "icon": "./sticky-note.svg"
     },
@@ -40,6 +40,7 @@
   },
   "devDependencies": {
     "@radix-ui/react-dialog": "^1.3.1",
+    "@radix-ui/react-popover": "^1.3.1",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",

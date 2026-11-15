@@ -1,4 +1,4 @@
-// A saved note's images and videos in the view. A video plays and seeks in place; an image opens
+// An opened note's images and videos. A video plays and seeks in place; an image opens
 // bb's lightbox, which steps through all of the note's media.
 import { experimental_ImageLightbox as Lightbox } from "@get-bb/plugin-sdk/app";
 import { Content, Root } from "@radix-ui/react-dialog";
@@ -45,10 +45,9 @@ export function NoteMedia({ attachments }: { attachments: readonly Attachment[] 
 // ------------------------------------------------------------------ layer 2
 
 /**
- * bb's lightbox moves focus into itself and keeps it there, but the Spotlight's modal focus trap
- * pulls focus straight back. Radix stacks dialogs: a nested one pauses the trap under it and takes
- * Esc first. So the lightbox opens inside an empty nested dialog, once that dialog has paused the
- * trap, and closing it gives focus back to the thumb that opened it.
+ * The lightbox opens inside an empty nested dialog. Radix stacks layers: one above the popover takes
+ * Esc and outside clicks first, so closing the lightbox leaves the popover open, and closing the
+ * dialog gives focus back to the thumb that opened it.
  */
 function PreviewLayer({ onClose, returnFocus, children }: { onClose(): void; returnFocus(): void; children: ReactNode }) {
   const [trapPaused, setTrapPaused] = useState(false);

@@ -1,7 +1,7 @@
-// The @ thread links of the Spotlight's textarea, as pure rules over its text. The text is the only
+// The @ thread links of the form's textarea, as pure rules over its text. The text is the only
 // truth: a thread is linked while its "@Title" token is in the text. Picking a thread writes the
 // token, deleting the token unlinks it, and saving turns every token into a mention range.
-import type { NoteBody } from "../../../contract.ts";
+import type { NoteBody } from "../../contract.ts";
 
 /** A thread the user picked in this draft: the title its token reads, and the thread it points to. */
 export type PickedThread = { threadId: string; title: string };

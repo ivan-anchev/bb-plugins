@@ -1,4 +1,4 @@
-// GET /api/v1/plugins/notes/http/media?id=att_…: an attachment's bytes, for the Spotlight's <img>
+// GET /api/v1/plugins/notes/http/media?id=att_…: an attachment's bytes, for the panel's <img>
 // and <video>. The id is a query parameter because bb matches a plugin route's path exactly.
 import { attachmentIdSchema } from "../../contract.ts";
 import type { Store } from "../store.ts";

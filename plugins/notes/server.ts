@@ -1,4 +1,4 @@
-// Composition root: the notes store, the media files beside it, the rpc the Spotlight and the card
+// Composition root: the notes store, the media files beside it, the rpc the popover and the card
 // call (Start thread's brief among them), and the route their <img> and <video> read.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { NOTES_TAG, notesContract } from "./src/contract.ts";

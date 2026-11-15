@@ -1,7 +1,7 @@
-// The draft's attachments, one 64px thumb each under the text: a video shows its first frame with a
+// The draft's attachments, one 40px thumb each under the text: a video shows its first frame with a
 // play badge. A thumb's × removes it.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
-import { attachmentKind } from "../../../contract.ts";
+import { attachmentKind } from "../../contract.ts";
 import type { DraftFile } from "./draft-files.ts";
 
 export function Thumbs({ items, onRemove }: { items: readonly DraftFile[]; onRemove(item: DraftFile): void }) {

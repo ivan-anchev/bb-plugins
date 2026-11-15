@@ -1,7 +1,8 @@
 // The images and videos attached to a draft, from the 📎 button, a paste, or a drop anywhere on the
-// Spotlight. Each keeps an object URL for its thumb until it is removed or the Spotlight closes.
+// form. Each keeps an object URL for its thumb until it is removed or the draft ends (saved, or
+// the popover closed).
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
-import { MAX_FILE_BYTES, MAX_FILES, mediaMimeSchema, type MediaMime, type NewFile } from "../../../contract.ts";
+import { MAX_FILE_BYTES, MAX_FILES, mediaMimeSchema, type MediaMime, type NewFile } from "../../contract.ts";
 
 /** A file the server will take: an allow-listed type, under the size cap. */
 export type DraftFile = { file: File; mimeType: MediaMime; url: string };
@@ -25,7 +26,7 @@ export function useDraftFiles() {
   return {
     items,
     refused,
-    /** A file is being dragged over the Spotlight. */
+    /** A file is being dragged over the form. */
     dragging,
     add,
     remove(item: DraftFile) {
@@ -44,7 +45,7 @@ export function useDraftFiles() {
       setDragging(true);
     },
     onDragLeave(event: DragEvent) {
-      // why: moving between the Spotlight's own children fires dragleave too.
+      // why: moving between the form's own children fires dragleave too.
       if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
       setDragging(false);
     },
@@ -98,10 +99,10 @@ function readBase64(file: File): Promise<string> {
   });
 }
 
-/** The draft's object URLs: each is freed when its file is removed, and the rest when the Spotlight closes. */
+/** The draft's object URLs: each is freed when its file is removed, and the rest when the draft ends. */
 function useObjectUrls() {
   const held = useRef(new Set<string>()).current;
-  // why an effect: closing the Spotlight unmounts the draft, and nothing else frees what it holds.
+  // why an effect: saving or closing unmounts the draft, and nothing else frees what it holds.
   useEffect(() => () => held.forEach((url) => URL.revokeObjectURL(url)), [held]);
   return {
     create(file: File): string {

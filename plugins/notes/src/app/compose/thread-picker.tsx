@@ -1,4 +1,4 @@
-// The @ picker under the Spotlight's textarea: the user's active threads whose title holds the
+// The @ picker under the form's textarea: the user's active threads whose title holds the
 // query, five at most. Focus stays in the textarea; it drives the list with ↑↓ Enter Tab.
 import { experimental_PromptMentionIcon as MentionIcon, experimental_useSidebarThreads } from "@get-bb/plugin-sdk/app";
 import { useId, useState, type KeyboardEvent } from "react";

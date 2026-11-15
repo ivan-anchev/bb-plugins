@@ -1,4 +1,4 @@
-// The footer's 📎: picks images and videos from disk.
+// The form's 📎: picks images and videos from disk.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { useRef } from "react";
 

@@ -1,0 +1,150 @@
+/* The popover's inline form (prototypes/notes-tray.html, Popover): at rest one line, the field and
+   its ⇧⌘J hint; open, a column with the quote, the text, thumbs and a bar of 📎, @, chips and Save. */
+
+.nt-form { position: relative; flex: none; display: flex; flex-direction: column; gap: 6px; }
+.nt-form-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--foreground) 4%, var(--nt-surface));
+  box-shadow: inset 0 0 0 1px var(--border);
+  transition: box-shadow 150ms ease-out;
+}
+.nt-form[data-open] .nt-form-box { flex-direction: column; align-items: stretch; }
+.nt-form-box:focus-within { box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--foreground) 22%, transparent); }
+/* A file dragged over the form: the whole form is the drop target. */
+.nt-form[data-dropping] .nt-form-box { box-shadow: inset 0 0 0 1.5px var(--ring); }
+/* The ⇧⌘J hint at rest sits in the box's gap. */
+.nt-form-box > .nt-kbd { margin-left: 0; }
+
+/* The textarea and the @ picker that opens under it. */
+.nt-field { position: relative; flex: 1; min-width: 0; }
+.nt-form-text {
+  display: block;
+  width: 100%;
+  min-height: 20px;
+  max-height: 140px;
+  padding: 2px 0 0;
+  border: 0;
+  outline: 0;
+  resize: none;
+  field-sizing: content;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+}
+.nt-form-text::placeholder { color: var(--subtle-foreground, var(--muted-foreground)); }
+
+.nt-picker {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 1;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--popover, var(--card));
+  box-shadow: 0 0 0 1px var(--border), 0 12px 32px rgb(0 0 0 / 0.4);
+  transform-origin: 0 0;
+}
+@media (prefers-reduced-motion: no-preference) { .nt-picker { animation: nt-picker-in 120ms cubic-bezier(0.23, 1, 0.32, 1); } }
+@keyframes nt-picker-in { from { opacity: 0; transform: scale(0.96); } }
+.nt-picker-label { padding: 6px 8px 4px; font-size: 11px; line-height: 14px; color: var(--muted-foreground); }
+.nt-picker-list { margin: 0; padding: 0; list-style: none; }
+.nt-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.nt-picker-row[aria-selected="true"] { background: var(--state-hover, color-mix(in oklch, var(--foreground) 5%, transparent)); color: var(--foreground); }
+.nt-picker-icon, .nt-chip-icon { width: 14px; height: 14px; flex: none; color: var(--muted-foreground); }
+.nt-chip-icon { width: 11px; height: 11px; }
+.nt-picker-title, .nt-chip-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nt-picker-none { margin: 0; padding: 6px 8px; font-size: 12px; line-height: 16px; color: var(--subtle-foreground, var(--muted-foreground)); }
+
+/* The draft's attachments, one 40px thumb each; × on its corner. */
+.nt-thumbs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 4px 0 0; list-style: none; }
+.nt-thumb { position: relative; width: 40px; height: 40px; border-radius: 6px; background: var(--muted); }
+/* why a layer above the media: an inset shadow on the box itself is painted under the image. */
+.nt-thumb::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--border); pointer-events: none; }
+.nt-thumb img, .nt-thumb video { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
+.nt-thumb-play { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 6px; background: rgb(0 0 0 / 0.25); color: #fff; pointer-events: none; }
+.nt-thumb-play svg { width: 12px; height: 12px; fill: currentColor; }
+.nt-thumb-remove {
+  all: unset;
+  position: absolute;
+  z-index: 1;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 99px;
+  background: var(--nt-surface);
+  box-shadow: 0 0 0 1px var(--border);
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+/* A bigger target than the 18px dot. */
+.nt-thumb-remove::before { content: ""; position: absolute; inset: -4px; }
+.nt-thumb-remove svg { width: 10px; height: 10px; stroke-width: 2.5; }
+.nt-thumb-remove:focus-visible { outline: 2px solid var(--ring); }
+@media (hover: hover) { .nt-thumb-remove:hover { color: var(--foreground); } }
+
+/* The bar: 📎 and @, then the linked threads' chips, then ⌘↵ and Save at the end. */
+.nt-form-bar { display: flex; align-items: center; gap: 2px; margin-left: -4px; }
+.nt-form-bar .nt-kbd { margin-left: auto; margin-right: 6px; }
+.nt-form-bar .nt-go { margin-left: 0; }
+.nt-icon-button {
+  all: unset;
+  position: relative;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  font-weight: 500;
+  cursor: pointer;
+}
+.nt-icon-button svg { width: 14px; height: 14px; }
+@media (hover: hover) { .nt-icon-button:hover { background: var(--state-hover, color-mix(in oklch, var(--foreground) 5%, transparent)); color: var(--foreground); } }
+.nt-icon-button:focus-visible { box-shadow: inset 0 0 0 1.5px var(--ring); }
+
+.nt-links { display: flex; gap: 4px; min-width: 0; margin: 0 0 0 4px; padding: 0; overflow: hidden; list-style: none; }
+.nt-chip {
+  flex: none;
+  max-width: 140px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 2px 0 6px;
+  border-radius: 99px;
+  background: color-mix(in oklch, var(--foreground) 8%, transparent);
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.nt-chip-remove {
+  all: unset;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 99px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.nt-chip-remove svg { width: 10px; height: 10px; }
+@media (hover: hover) { .nt-chip-remove:hover { background: var(--state-hover, color-mix(in oklch, var(--foreground) 8%, transparent)); color: var(--foreground); } }
+.nt-chip-remove:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }

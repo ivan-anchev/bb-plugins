@@ -1,0 +1,28 @@
+/* The Notes popover: the shared panel (notes-panel.css) floating beside the sidebar, 384 × 560,
+   bottom-aligned with the footer's Notes button (prototypes/notes-tray.html, Popover). Radix places
+   it; on a short window it takes the height there is. */
+.nt-popover {
+  --nt-surface: var(--popover, var(--card));
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  width: 384px;
+  height: min(560px, var(--radix-popover-content-available-height));
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--nt-surface);
+  color: var(--popover-foreground, var(--foreground));
+  box-shadow: 0 0 0 1px var(--border), 0 24px 56px rgb(0 0 0 / 0.5), 0 4px 12px rgb(0 0 0 / 0.25);
+  transform-origin: var(--radix-popover-content-transform-origin);
+  outline: none;
+}
+/* In the popover the list takes what the form leaves, down to nothing on a short window. */
+.nt-popover .nt-scroll { min-height: 0; }
+
+/* Grows from its bottom-left corner; leaves faster than it came. */
+@media (prefers-reduced-motion: no-preference) {
+  .nt-popover[data-state="open"] { animation: nt-pop-in 180ms cubic-bezier(0.23, 1, 0.32, 1); }
+  .nt-popover[data-state="closed"] { animation: nt-pop-out 120ms ease-in forwards; }
+}
+@keyframes nt-pop-in { from { opacity: 0; transform: scale(0.96); } }
+@keyframes nt-pop-out { to { opacity: 0; transform: scale(0.97); } }
