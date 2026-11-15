@@ -1,6 +1,6 @@
 ---
 name: notes
-description: Explain the Notes plugin, which keeps short personal notes in bb in a Notes popover opened from the sidebar-footer Notes button, ⇧⌘J, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), with a composer at its bottom that links threads by typing @ and attaches images and videos by paste, drop or 📎, and the same list in a Notes card on the New thread screen, where a note opens in place and ticking some lets the user delete them with one click or choose New thread (from any screen, or ⌘↵) or, on a thread page, Send to this thread (its ▾ menu, or ⇧⌘↵) to put them in that composer and archive them. Use when the user asks how to write, quote or link a note, how to read, edit or delete one, where their notes are, why ⇧⌘J does nothing, what the source chip opens, why a thread is missing from the @ picker, why a file was refused or where attached files are stored, what New thread or Send to this thread puts in the composer, why there is no ▾ menu or Send to this thread, what ⌘↵ or ⇧⌘↵ does in the Notes panel, where used notes went, why a file shows as a path instead of an attachment, why the Notes card is empty or says it couldn't read notes, where the card sits among the homepage cards, or why part of it stopped working after a bb update.
+description: Explain the Notes plugin, which keeps short personal notes in bb in a Notes popover opened from the sidebar-footer Notes button, ⇧⌘J, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), with a composer at its bottom that links threads by typing @ and attaches images and videos by paste, drop or 📎, and the same list in a Notes card on the New thread screen, where clicking a note ticks it and ticking some lets the user delete them with one click or choose New thread (from any screen, or ⌘↵) or, on a thread page, Send to this thread (its ▾ menu, or ⇧⌘↵) to put them in that composer and archive them. Use when the user asks how to write, quote or link a note, how to tick, read, edit or delete one, where their notes are, why ⇧⌘J does nothing, what the source chip opens, why a thread is missing from the @ picker, why a file was refused or where attached files are stored, what New thread or Send to this thread puts in the composer, why there is no ▾ menu or Send to this thread, what ⌘↵ or ⇧⌘↵ does in the Notes panel, where used notes went, why a file shows as a path instead of an attachment, why the Notes card is empty or says it couldn't read notes, where the card sits among the homepage cards, or why part of it stopped working after a bb update.
 ---
 
 # Notes
@@ -124,23 +124,19 @@ on. A new note appears within about two seconds with no reload. When the
 plugin cannot read its database the list says "Couldn't read notes" with the
 reason, beside any notes it already showed.
 
-Each row has a checkbox for Delete and New thread (below). It shows under the pointer,
-on keyboard focus, once ticked, and on every row while any note is ticked;
-on touch screens it always shows. Its column stays, so nothing shifts.
+## Ticking notes
 
-## Reading a note
-
-- Click a note's lines or its thumbs (or Tab to it and press Enter): it opens
-  in place under its row, in the card or the popover. It shows the quoted
-  passage with its source chip, the note's words with each linked thread's
-  "@Title" marked, then its images and videos, and **Open thread** when it
-  came from or links a thread. A long note scrolls in its own box. Click again
-  to fold it. Notes cannot be edited, and an opened note has no Delete: delete
-  from the ticked notes' footer (below).
-- A video plays and seeks in place; an image opens bb's lightbox, where ← → or
-  the arrows step through all of the note's files, and Esc closes the lightbox
-  only. HEVC videos (some iPhone recordings) may not play in bb's browser.
-- **Open thread** opens the quote's thread, else the first linked thread.
+- A click anywhere on a row (its lines, its thumbs, the space between) ticks
+  the note for Delete and New thread (below); another click unticks it. Its
+  checkbox, on the row's first line, does the same.
+  Dragging over a row's text to select it does not tick it.
+- The checkbox shows under the pointer, on keyboard focus, once ticked, and on
+  every row while any note is ticked; on touch screens it always shows. Its
+  column stays, so nothing shifts.
+- From the keyboard, Tab reaches each row's checkbox and Space ticks it.
+- A note does not open: the list shows its first line and its thumbs only,
+  and notes cannot be edited. Its full text and files go into the composer
+  with New thread or Send to this thread.
 
 ## Deleting notes
 
@@ -149,15 +145,15 @@ on touch screens it always shows. Its column stays, so nothing shifts.
 - One click on Delete deletes every ticked note and its files, for good
   (there is no undo, trash or confirm step), in one go however many are
   ticked, and shows "Note deleted" or "N notes deleted".
-- The deleted rows leave the card and the popover without a reload, the ticks
-  clear and focus goes to the list. While deleting, the footer's controls,
-  the checkboxes and Esc wait for it, so the ticks stay as sent; if deleting
+- Focus goes to the list as Delete is clicked, and stays there. The deleted
+  rows leave the card and the popover without a reload and the ticks clear.
+  While deleting, the footer's controls, the rows and Esc wait for it, so the ticks stay as sent; if deleting
   fails, the notes stay, one line says "Couldn't delete: …" and the controls
   work again. Deleting a note already gone succeeds.
 
 ## Starting a thread from notes
 
-- Tick notes with their checkboxes. The footer reads "N selected · Clear" and
+- Tick notes by clicking their rows. The footer reads "N selected · Clear" and
   **New thread**; on a thread page it is a split button, **New thread ▾**.
   Clear unticks them all. The card and the popover keep their own ticks.
 - **New thread** (the button, or the first row of its ▾ menu) adds the brief
@@ -178,7 +174,7 @@ on touch screens it always shows. Its column stays, so nothing shifts.
   click would. In the popover's composer ⌘↵ still saves the note, and bb's own
   composer is untouched; with nothing ticked, or while a start or a delete
   runs, they do nothing.
-- While a start runs, the checkboxes, Clear, Delete, the split button and Esc
+- While a start runs, the rows, Clear, Delete, the split button and Esc
   wait for it, so the ticks stay as sent. The popover closes once the brief is
   in, and focus goes to the composer.
 - The brief goes after anything already typed (the typed text, its pills and
@@ -223,7 +219,7 @@ Most of the plugin rests on bb surfaces still marked `experimental_`: the
 overlay the popover opens in (`experimental_appOverlay`), the sidebar footer
 (`experimental_sidebarFooter`), the thread list behind the @ picker
 (`experimental_useSidebarThreads`), a message's `experimental_messageSeq`
-behind the source chip, and the rpc hooks, icons and image lightbox the card
+behind the source chip, and the rpc hooks and icons the card
 and popover use. The popover finds the footer button by the
 `data-footer-item` attribute bb puts on it, which is not part of the SDK. A bb
 update can change or break them before the plugin catches up; it was built

@@ -64,13 +64,12 @@ export function NotesPanel({ notes, picks, form, onClose, onNewNote, onStarted, 
           picks={picks}
           focusAfter={header}
           start={<StartButton disabled={picks.held} newThread={start.newThread} thisThread={start.thisThread} />}
-          onDelete={() =>
-            picks.submit(
-              // why before the picks clear, and why `?.`: focus is out of the footer before it leaves with
-              // them, and the popover may have closed while the notes were deleting.
-              remove.run(picks.ids, () => box.current?.focus()),
-            )
-          }
+          onDelete={() => {
+            // why: the hold disables Delete, and a disabled button drops focus to the page body; it waits
+            // in the list instead, as for a start, and stays there once the deleted rows have gone.
+            box.current!.focus();
+            picks.submit(remove.run(picks.ids));
+          }}
         />
       ) : (
         onNewNote !== undefined && <IdleFooter hasNotes={list !== undefined && list.length > 0} onNewNote={onNewNote} />

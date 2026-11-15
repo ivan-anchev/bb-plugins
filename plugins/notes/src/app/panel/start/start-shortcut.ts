@@ -19,7 +19,10 @@ export function startShortcut({ key, metaKey, ctrlKey, shiftKey, altKey }: Chord
   return shiftKey || altKey ? "this-thread" : "new-thread";
 }
 
-/** Whether the press went to a field, which keeps its own ⌘↵. */
+/** Inputs that take no typing: a row's checkbox among them, where the start shortcuts must still work. */
+const NOT_TEXT = ":not([type=checkbox], [type=radio], [type=button], [type=submit], [type=reset], [type=file], [type=range], [type=color])";
+
+/** Whether the press went to a field you type in, which keeps its own ⌘↵. */
 export function inTextField(target: EventTarget): boolean {
-  return target instanceof HTMLElement && (target.isContentEditable || target.matches("input, textarea, select"));
+  return target instanceof HTMLElement && (target.isContentEditable || target.matches(`input${NOT_TEXT}, textarea, select`));
 }

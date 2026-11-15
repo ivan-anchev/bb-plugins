@@ -9,17 +9,15 @@ import { mediaUrl } from "../../media-url.ts";
 /** Thumbs drawn; the rest are counted in the badge. */
 const FANNED = 3;
 
-/** `onClick`: opens the note, as its lines do. */
-export function AttachmentFan({ attachments, onClick }: { attachments: readonly Attachment[]; onClick(): void }) {
+export function AttachmentFan({ attachments }: { attachments: readonly Attachment[] }) {
   if (attachments.length === 0) return null;
   const fanned = attachments.slice(0, FANNED);
   const rest = attachments.length - fanned.length;
   // Back to front, so the first attachment paints on top.
   const backToFront = fanned.map((attachment, index) => ({ attachment, lean: lean(index, fanned.length) })).reverse();
   return (
-    // why hidden: the row's text already names the note, the thumbs only show what it holds, and the
-    // row's lines are the keyboard's way to open it.
-    <span className="nt-fan" aria-hidden onClick={onClick}>
+    // why hidden: the row's text already names the note, and the thumbs only show what it holds.
+    <span className="nt-fan" aria-hidden>
       {backToFront.map(({ attachment, lean }) => (
         <span key={attachment.id} className="nt-fan-thumb" style={leanStyle(lean)}>
           {attachmentKind(attachment.mimeType) === "video" ? <VideoThumb attachment={attachment} /> : <img src={mediaUrl(attachment.id)} loading="lazy" alt="" />}

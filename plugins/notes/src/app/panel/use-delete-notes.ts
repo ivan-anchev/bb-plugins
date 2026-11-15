@@ -7,14 +7,13 @@ export function useDeleteNotes() {
   const remove = experimental_useRpcMutation({ contract, method: "deleteNotes" });
 
   /**
-   * Success toasts, the rows leave every list and `onDeleted` runs; a failure keeps the notes and says
-   * why. Resolves whether the notes were deleted, and never rejects.
+   * Success toasts and the rows leave every list; a failure keeps the notes and says why. Resolves
+   * whether the notes were deleted, and never rejects.
    */
-  const run = (noteIds: readonly Note["id"][], onDeleted: () => void): Promise<boolean> =>
+  const run = (noteIds: readonly Note["id"][]): Promise<boolean> =>
     remove.mutate({ noteIds: [...noteIds] }).then(
       () => {
         toast.success(noteIds.length === 1 ? "Note deleted" : `${noteIds.length} notes deleted`);
-        onDeleted();
         return true;
       },
       // why swallowed: the hook keeps the failure in `error`, which the panel shows.
