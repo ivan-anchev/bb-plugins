@@ -1,4 +1,4 @@
-// experimental_sidebar: the reader's PRs across every bb project with a GitHub remote, in three
+// The panel's PR list across every bb project with a GitHub remote, in three
 // sections (Authored by me, Needs my review, Recently merged), stacks drawn as trees, with a
 // Filter pinned at the top title's end that hides the sections the reader does not watch.
 import { useRef } from "react";
@@ -48,7 +48,7 @@ export function PrSidebar({ subPath }: PluginNavPanelProps) {
         {inbox.isLoading && <Notice>Loading pull requests…</Notice>}
       </div>
       {inbox.data !== undefined && (
-        // bb's sidebar scrolls; the section headings stick to it.
+        // The panel's list scrolls; the section headings stick to it.
         <div className="px-1.5 pb-3">
           <SidebarControls sections={inbox.data.sections} hidden={hiddenSections} onChange={setHiddenSections} filterButton={filterButton} />
           {shownSections.length === 0 ? (

@@ -156,10 +156,3 @@
     transition: transform var(--pr-reviews-run) cubic-bezier(0.45, 0, 0.55, 1) 500ms;
   }
 }
-
-/* bb heads a panel's sidebar with the panel's title ("PR Reviews") and offers no way to leave it
-   out; the sidebar's section titles say what it lists, as Activity's do. The selector is bb's
-   markup for that title (its classes in S5's x5), scoped to this plugin's sidebar. */
-[data-testid="plugin-sidebar-body"]:has(.pr-reviews-sidebar) .pl-2.leading-5.text-subtle-foreground\/75 {
-  display: none;
-}
