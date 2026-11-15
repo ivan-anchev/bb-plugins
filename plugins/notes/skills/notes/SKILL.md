@@ -130,9 +130,7 @@ reason, beside any notes it already showed.
   the note for Delete and New thread (below); another click unticks it. Its
   checkbox, on the row's first line, does the same.
   Dragging over a row's text to select it does not tick it.
-- The checkbox shows under the pointer, on keyboard focus, once ticked, and on
-  every row while any note is ticked; on touch screens it always shows. Its
-  column stays, so nothing shifts.
+- Every row always shows its checkbox.
 - From the keyboard, Tab reaches each row's checkbox and Space ticks it.
 - A note does not open: the list shows its first line and its thumbs only,
   and notes cannot be edited. Its full text and files go into the composer
