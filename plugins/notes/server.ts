@@ -1,7 +1,9 @@
 // Composition root: the notes store, the media files beside it, the rpc the Spotlight and the card
-// call, and the route their <img> and <video> read.
+// call (Start thread's brief among them), and the route their <img> and <video> read.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { NOTES_TAG, notesContract } from "./src/contract.ts";
+import { buildBrief } from "./src/server/brief/brief.ts";
+import { uploadForBrief } from "./src/server/brief/upload.ts";
 import { openMediaFiles } from "./src/server/media/media-files.ts";
 import { mediaRoute } from "./src/server/media/media-route.ts";
 import { createNotes } from "./src/server/notes.ts";
@@ -26,6 +28,12 @@ export default function plugin(bb: BbPluginApi): void {
     createNote: (input) => notes.create(input),
     deleteNote: async ({ id }) => {
       await notes.remove(id);
+      return {};
+    },
+    briefFor: ({ noteIds, projectId }) =>
+      buildBrief(store.activeNotesByIds(noteIds), (attachment) => uploadForBrief(bb.sdk.projects.attachments, media, projectId, attachment)),
+    archiveNotes: ({ noteIds }) => {
+      notes.archive(noteIds);
       return {};
     },
   });

@@ -1,5 +1,5 @@
 // Tests only: bb.storage over a fresh in-memory SQLite, the way openStore reads it, and the database
-// itself for what the store can't do (such as archiving, until a later change adds it).
+// itself for what the store never reads back (such as when a note was archived).
 import type { PluginStorage } from "@get-bb/plugin-sdk";
 import Database from "better-sqlite3";
 
