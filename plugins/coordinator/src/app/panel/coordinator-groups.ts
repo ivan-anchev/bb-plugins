@@ -2,7 +2,8 @@
 import type { PluginSidebarThreadsState } from "@get-bb/plugin-sdk/app";
 import type { Coordinator } from "../../contract.ts";
 
-type CoordinatorGroup<Project, Thread> = { project: Project; threads: Thread[] };
+/** A row: the coordinating thread as bb lists it, and the plugin's record of it. */
+type CoordinatorGroup<Project, Thread> = { project: Project; rows: { coordinator: Coordinator; thread: Thread }[] };
 
 /** What the list shows below its read errors. */
 type ListView<Project, Thread> =
@@ -41,8 +42,8 @@ function groupByProject<Project extends { id: string }, Thread extends { id: str
     const thread = threads.find((t) => t.id === coordinator.threadId);
     const project = projects.find((p) => p.id === thread?.projectId);
     if (thread === undefined || project === undefined) continue;
-    const group = groups.get(project.id) ?? { project, threads: [] };
-    group.threads.push(thread);
+    const group = groups.get(project.id) ?? { project, rows: [] };
+    group.rows.push({ coordinator, thread });
     groups.set(project.id, group);
   }
   return [...groups.values()];

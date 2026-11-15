@@ -27,7 +27,7 @@
   },
   "bb": {
     "name": "Coordinator",
-    "description": "Experimental: it may break with a bb update. Start a long-lived coordinating thread for a body of work. Open its panel in the navigation rail and press New: bb's own new-thread composer opens, already set to a fresh worktree and auto permissions, and the goal you type starts the thread. From its first turn it has its rules, its playbook skill and two tools, one to catch up on its memory and one to read a memory file. Its memory is a folder of markdown files on the bb server, seeded with your goal: an index, the goal, a plan, your preferences, rules for its crew and a digest. The panel lists every coordinating thread, by project.",
+    "description": "Experimental: it may break with a bb update. Start a long-lived coordinating thread for a body of work. Open its panel in the navigation rail and press New: bb's own new-thread composer opens, already set to a fresh worktree and auto permissions, and the goal you type starts the thread. From its first turn it has its rules, its playbook skill and three tools: one to catch up on its memory, one to read a memory file and one to write one. Its memory is a folder of markdown files on the bb server, seeded with your goal: an index, the goal, a plan, your preferences, rules for its crew and a digest. The panel lists every coordinating thread, by project, and each one's Memory button opens an editor over the same files that shows the folder's path. Every write names the version it replaces, so neither you nor the thread can silently overwrite the other: a refused save keeps your text beside the newer version.",
     "branding": {
       "icon": "Workflow"
     },

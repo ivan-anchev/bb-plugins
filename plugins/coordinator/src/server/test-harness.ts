@@ -5,7 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgentToolResult } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
+import type { CoordinatorId } from "../model/role.ts";
 import { openMemoryRoot } from "./memory/memory-files.ts";
+import { memoryHandlers } from "./memory/memory-rpc.ts";
 import { memoryStorage } from "./memory-storage.ts";
 import { registerRoles } from "./roles.ts";
 import { createSpawner } from "./spawn.ts";
@@ -27,7 +29,8 @@ type SpawnBehaviour = { created: boolean; answer: "thread" | "lost" };
 
 export function harness(behaviour: SpawnBehaviour = { created: true, answer: "thread" }) {
   const store = openStore(memoryStorage().storage);
-  const memory = openMemoryRoot(join(mkdtempSync(join(tmpdir(), "coordinator-test-")), "data.db"));
+  const memoryWrites: CoordinatorId[] = [];
+  const memory = openMemoryRoot(join(mkdtempSync(join(tmpdir(), "coordinator-test-")), "data.db"), store, (id) => memoryWrites.push(id));
   const metadata = new Map<string, Metadata>();
   const tools = new Map<string, (input: unknown, threadId: string) => Promise<PluginAgentToolResult>>();
   let configure: ((context: PluginAgentConfigurationContext) => PluginAgentConfiguration) | null = null;
@@ -72,6 +75,10 @@ export function harness(behaviour: SpawnBehaviour = { created: true, answer: "th
     store,
     memory,
     spawner,
+    /** The Memory editor's RPC handlers, as server.ts registers them. */
+    rpc: memoryHandlers(store, memory),
+    /** Which coordinators' memory a write changed, in order; each one invalidates its editor's reads. */
+    memoryWrites: () => [...memoryWrites],
     /** How many times a ticket was newly bound. */
     bindings: () => bindings,
     /** The metadata a spawned thread was given. */

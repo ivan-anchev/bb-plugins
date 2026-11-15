@@ -9,12 +9,14 @@ import {
   type PluginSidebarThread,
 } from "@get-bb/plugin-sdk/app";
 import type { Ref } from "react";
-import { coordinatorContract as contract } from "../../contract.ts";
+import { coordinatorContract as contract, type Coordinator } from "../../contract.ts";
+import type { CoordinatorId } from "../../model/role.ts";
 import { DISPLAY_NAME } from "../../name.ts";
+import { Button } from "../ui/button.tsx";
 import { ReadFailure } from "../ui/read-failure.tsx";
 import { listView } from "./coordinator-groups.ts";
 
-export function CoordinatorList({ ref }: { ref: Ref<HTMLDivElement> }) {
+export function CoordinatorList({ ref, onOpenMemory }: { ref: Ref<HTMLDivElement>; onOpenMemory(id: CoordinatorId): void }) {
   const read = experimental_useRpcQuery({ contract, method: "coordinators", input: {} });
   const live = useSidebarThreads();
   const view = listView(read, live);
@@ -33,9 +35,9 @@ export function CoordinatorList({ ref }: { ref: Ref<HTMLDivElement> }) {
                 {group.project.name}
               </h2>
               <ul className="flex flex-col">
-                {group.threads.map((thread) => (
+                {group.rows.map(({ coordinator, thread }) => (
                   <li key={thread.id}>
-                    <Row thread={thread} />
+                    <Row coordinator={coordinator} thread={thread} onOpenMemory={onOpenMemory} />
                   </li>
                 ))}
               </ul>
@@ -46,19 +48,26 @@ export function CoordinatorList({ ref }: { ref: Ref<HTMLDivElement> }) {
   );
 }
 
-function Row({ thread }: { thread: PluginSidebarThread }) {
+/** A row opens its thread; its Memory button opens the thread's memory files. */
+function Row({ coordinator, thread, onOpenMemory }: { coordinator: Coordinator; thread: PluginSidebarThread; onOpenMemory(id: CoordinatorId): void }) {
   const navigate = useBbNavigate();
   return (
-    <button
-      type="button"
-      onClick={() => navigate.toThread(thread.id)}
-      className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-2 text-left text-sm hover:bg-state-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-    >
-      <span className="flex size-4 shrink-0 items-center justify-center">
-        <ThreadStatusGlyph indicator={thread.indicator} size="compact" />
-      </span>
-      <span className="min-w-0 flex-1 truncate">{thread.displayTitle}</span>
-    </button>
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => navigate.toThread(thread.id)}
+        className="flex h-9 min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-md px-2 text-left text-sm hover:bg-state-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        <span className="flex size-4 shrink-0 items-center justify-center">
+          <ThreadStatusGlyph indicator={thread.indicator} size="compact" />
+        </span>
+        <span className="min-w-0 flex-1 truncate">{thread.displayTitle}</span>
+      </button>
+      <Button variant="ghost" size="sm" aria-label={`Memory of ${thread.displayTitle}`} onClick={() => onOpenMemory(coordinator.id)}>
+        <Icon name="FileText" aria-hidden />
+        Memory
+      </Button>
+    </div>
   );
 }
 

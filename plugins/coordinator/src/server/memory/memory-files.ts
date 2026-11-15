@@ -1,36 +1,35 @@
 // A coordinating thread's memory: plain markdown files in `memory/<coordinator id>/` beside the
 // plugin's data.db. bb has no API for a plugin's own files, so they sit beside its database, as
 // Notes' media do. Tools run on the bb server, so every thread reaches the same files.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, join, normalize } from "node:path";
-import { z } from "zod";
+//
+// Two writers share them, the Coordinator and the user, so every write names the version it
+// replaces and is refused when the file has moved on. why no lock: each write reads, compares and
+// renames synchronously, so nothing else in the server runs between its check and its rename. A
+// file edited on the server's disk is simply read on the next call.
+//
+// Every read and write also gives the file's revision, the order the server saw it change in, so
+// the editor can tell which of two sightings is the later. A file edited on disk gets its next
+// revision when it is next read.
+import { createHash, randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
+import { memoryFileSchema, type MemoryFile, type MemorySnapshot, type MemoryVersion, type WriteOutcome } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
+import type { Store } from "../store.ts";
 
-/**
- * A memory file's name, relative to its folder: a `.md` file that stays inside it. Parsed once,
- * where a name comes in, so the files below never see `../x.md`, an absolute path or `notes.txt`.
- */
-export const memoryFileSchema = z
-  .string()
-  .refine(isInsideAndMarkdown, "A memory file is a .md path inside the memory folder, such as PLAN.md or notes/api.md")
-  .brand<"MemoryFile">();
-type MemoryFile = z.infer<typeof memoryFileSchema>;
-
-/** The files every memory starts with, in the order a catch-up reads them. */
-const CORE_FILES = ["MEMORY.md", "GOAL.md", "PLAN.md", "PREFERENCES.md", "CREW.md", "DIGEST.md"].map((name) => memoryFileSchema.parse(name));
-
-/** The most a catch-up returns; a file past it is named, for reading on its own. */
-const CATCH_UP_BUDGET_CHARS = 40_000;
-/** The most one file read returns. */
-const READ_BUDGET_CHARS = 60_000;
+/** The files every memory starts with, in the order a catch-up reads them and the editor lists them. */
+export const CORE_FILES = ["MEMORY.md", "GOAL.md", "PLAN.md", "PREFERENCES.md", "CREW.md", "DIGEST.md"].map((name) => memoryFileSchema.parse(name));
 
 export type MemoryRoot = ReturnType<typeof openMemoryRoot>;
+export type Memory = ReturnType<MemoryRoot["of"]>;
 
 /**
  * `databasePath`: `bb.storage.database().name`. A path that is not absolute would put memory
- * wherever the server happened to start, so it is refused rather than guessed at.
+ * wherever the server happened to start, so it is refused rather than guessed at. `revisions`
+ * counts each file's revisions. `onWritten` runs after every write that changed a file, whoever
+ * made it.
  */
-export function openMemoryRoot(databasePath: string) {
+export function openMemoryRoot(databasePath: string, revisions: Pick<Store, "memoryRevision">, onWritten: (id: CoordinatorId) => void) {
   if (!isAbsolute(databasePath)) throw new Error(`Memory can't be kept: the database path "${databasePath}" is not absolute`);
   const root = join(dirname(databasePath), "memory");
 
@@ -41,40 +40,67 @@ export function openMemoryRoot(databasePath: string) {
     of(id: CoordinatorId) {
       const dir = join(root, id);
       const pathOf = (file: MemoryFile) => join(dir, file);
-      /** The file's text, or null when there is no such file. */
-      const read = (file: MemoryFile) => (existsSync(pathOf(file)) ? readFileSync(pathOf(file), "utf8") : null);
+
+      /** The file's text and version (null: there is no such file), at its revision. */
+      function read(file: MemoryFile): MemorySnapshot {
+        const content = existsSync(pathOf(file)) ? readFileSync(pathOf(file), "utf8") : null;
+        const text = content === null ? null : { content, version: versionOf(content) };
+        return { text, revision: revisions.memoryRevision(id, file, text?.version ?? null) };
+      }
+
+      /**
+       * Replaces the file whole if it is still `baseVersion` (null: if it doesn't exist yet).
+       * Otherwise writes nothing and returns what the file is now.
+       */
+      function write(file: MemoryFile, content: string, baseVersion: MemoryVersion): WriteOutcome {
+        const current = read(file);
+        if ((current.text?.version ?? null) !== baseVersion) return { outcome: "conflict", current };
+        writeWhole(pathOf(file), content);
+        const version = versionOf(content);
+        const revision = revisions.memoryRevision(id, file, version);
+        onWritten(id);
+        return { outcome: "saved", version, revision };
+      }
 
       return {
         dir,
+        read,
+        write,
+
+        /** Every memory file: the core ones that exist, in their order, then the rest by name. */
+        list(): MemoryFile[] {
+          const names = existsSync(dir) ? markdownUnder(dir) : [];
+          const others = names.filter((file) => !CORE_FILES.includes(file)).sort();
+          return [...CORE_FILES.filter((file) => names.includes(file)), ...others];
+        },
 
         /** Writes each core file that doesn't exist yet, so seeding twice changes nothing. */
         seed(goal: string): void {
-          mkdirSync(dir, { recursive: true });
-          for (const [file, text] of seedFiles(goal)) if (!existsSync(pathOf(file))) writeFileSync(pathOf(file), text);
-        },
-
-        /** The core files in a fixed order, as much as the budget allows, naming any it cut. */
-        catchUp(): string {
-          return withinBudget(
-            CORE_FILES.map((file) => ({ file, text: read(file) ?? "(no such file)" })),
-            CATCH_UP_BUDGET_CHARS,
-          );
-        },
-
-        /** One file whole, or as much as the budget allows; null when there is no such file. */
-        read(file: MemoryFile): string | null {
-          const text = read(file);
-          if (text === null || text.length <= READ_BUDGET_CHARS) return text;
-          return `${text.slice(0, READ_BUDGET_CHARS)}\n\n[${file} is cut here: it has ${text.length} characters, and one read returns ${READ_BUDGET_CHARS}.]`;
+          for (const [file, text] of seedFiles(goal)) write(file, text, null);
         },
       };
     },
   };
 }
 
-function isInsideAndMarkdown(name: string): boolean {
-  const path = normalize(name);
-  return !isAbsolute(path) && path !== ".." && !path.startsWith("../") && path.endsWith(".md");
+const versionOf = (content: string): string => createHash("sha256").update(content).digest("hex").slice(0, 16);
+
+// why a temp file and a rename: a rename replaces the file in one step, so a crash leaves the old
+// file whole, never half of the new one. The temp file sits beside it (a rename never crosses a
+// disk) and ends in `.tmp`, so no memory file name can ever name it.
+function writeWhole(path: string, content: string): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const temp = join(dirname(path), `.${basename(path)}.${randomUUID()}.tmp`);
+  writeFileSync(temp, content);
+  renameSync(temp, path);
+}
+
+function markdownUnder(dir: string): MemoryFile[] {
+  return readdirSync(dir, { recursive: true, withFileTypes: true }).flatMap((entry) => {
+    if (!entry.isFile()) return [];
+    const name = memoryFileSchema.safeParse(relative(dir, join(entry.parentPath, entry.name)).split(sep).join("/"));
+    return name.success ? [name.data] : [];
+  });
 }
 
 function seedFiles(goal: string): [MemoryFile, string][] {
@@ -99,20 +125,4 @@ The index of this memory. Each file holds one kind of thing:
     ["DIGEST.md", "# Digest\n\nNothing to report yet.\n"],
   ];
   return files.map(([name, text]) => [memoryFileSchema.parse(name), text]);
-}
-
-function withinBudget(files: { file: MemoryFile; text: string }[], budget: number): string {
-  const sections: string[] = [];
-  const cut: MemoryFile[] = [];
-  let used = 0;
-  for (const { file, text } of files) {
-    const section = `## ${file}\n\n${text.trim()}`;
-    if (used + section.length > budget) cut.push(file);
-    else {
-      sections.push(section);
-      used += section.length;
-    }
-  }
-  if (cut.length > 0) sections.push(`Not shown, to keep this short: ${cut.join(", ")}. Read each on its own.`);
-  return sections.join("\n\n");
 }

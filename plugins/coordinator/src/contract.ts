@@ -3,7 +3,8 @@
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
-import { coordinatorIdSchema } from "./model/role.ts";
+import { memoryContentSchema, memoryFileSchema, memorySnapshotSchema, memoryVersionSchema, writeOutcomeSchema } from "./model/memory-file.ts";
+import { coordinatorIdSchema, type CoordinatorId } from "./model/role.ts";
 
 /** A coordinating thread: its memory is keyed by `id`, its conversation is `threadId`. */
 export const coordinatorSchema = z.object({
@@ -16,6 +17,10 @@ export type Coordinator = z.infer<typeof coordinatorSchema>;
 
 /** Every read of the list carries it; a start or a bind invalidates it. */
 export const COORDINATORS_TAG = "coordinators";
+
+/** Every read of one coordinating thread's memory carries it; any write to its files invalidates it. */
+export const memoryTag = (id: CoordinatorId): string => `memory:${id}`;
+const memoryTags = ({ coordinatorId }: { coordinatorId: CoordinatorId }) => [memoryTag(coordinatorId)];
 
 // why only these fields are checked: the plugin reads only the project and the typed text, which
 // becomes the goal. The rest goes to threads.spawn unchanged (as the composer asks), and bb
@@ -45,5 +50,22 @@ export const coordinatorContract = defineRpcContract({
   startCoordinator: {
     input: z.object({ request: newThreadRequestSchema }),
     output: z.object({ threadId: z.string() }),
+  },
+  /** A coordinating thread's memory folder on the bb server, and the files in it. */
+  memoryList: {
+    input: z.object({ coordinatorId: coordinatorIdSchema }),
+    output: z.object({ dir: z.string(), files: z.array(memoryFileSchema) }),
+    tags: memoryTags,
+  },
+  /** One memory file whole, with its version (null text: it doesn't exist), at its revision. */
+  memoryRead: {
+    input: z.object({ coordinatorId: coordinatorIdSchema, file: memoryFileSchema }),
+    output: memorySnapshotSchema,
+    tags: memoryTags,
+  },
+  /** Replaces a memory file if it is still `baseVersion`, as crew_memory_write does; else writes nothing. */
+  memoryWrite: {
+    input: z.object({ coordinatorId: coordinatorIdSchema, file: memoryFileSchema, content: memoryContentSchema, baseVersion: memoryVersionSchema }),
+    output: writeOutcomeSchema,
   },
 });
