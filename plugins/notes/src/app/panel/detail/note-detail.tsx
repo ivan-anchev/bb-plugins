@@ -1,9 +1,9 @@
 // A note opened in place under its row: the quoted passage with its source chip, the note's words
-// with each linked thread marked, its media, then Open thread and Delete. Notes are not edited.
-import { experimental_useRpcMutation, useBbNavigate } from "@get-bb/plugin-sdk/app";
+// with each linked thread marked, its media, then Open thread. Notes are not edited; they are deleted
+// from the picking footer.
+import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import { Fragment, useLayoutEffect, useRef } from "react";
-import { toast } from "sonner"; // runtime-shimmed to bb's own toast
-import { notesContract, type Note, type NoteBody } from "../../../contract.ts";
+import type { Note, NoteBody } from "../../../contract.ts";
 import { QuoteBlock } from "../../quote-block.tsx";
 import { sourceThread } from "../list/card-text.ts";
 import { bodyParts } from "./body-parts.ts";
@@ -16,7 +16,6 @@ export function NoteDetail({ note }: { note: Note }) {
   useLayoutEffect(() => {
     detail.current!.scrollIntoView({ block: "nearest" });
   }, []);
-  const remove = useDelete(note.id);
   const source = sourceThread(note);
   const navigate = useBbNavigate();
   return (
@@ -30,21 +29,13 @@ export function NoteDetail({ note }: { note: Note }) {
         </div>
       )}
       <NoteMedia attachments={note.attachments} />
-      {remove.error !== null && (
-        <p className="nt-caption nt-error" role="alert">
-          Couldn’t delete: {remove.error}
-        </p>
-      )}
-      <div className="nt-acts">
-        {source !== null && (
+      {source !== null && (
+        <div className="nt-acts">
           <button type="button" className="nt-link" onClick={() => navigate.toThread(source.threadId)}>
             Open thread
           </button>
-        )}
-        <button type="button" className="nt-link" data-danger="" disabled={remove.isPending} onClick={remove.run}>
-          Delete
-        </button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -66,17 +57,4 @@ function BodyText({ body }: { body: NoteBody }) {
       )}
     </p>
   );
-}
-
-/** Delete sends once; success toasts and the row leaves the list, a failure stays and says why. */
-function useDelete(id: Note["id"]) {
-  const remove = experimental_useRpcMutation({ contract: notesContract, method: "deleteNote" });
-  const run = () => {
-    remove.mutate({ id }).then(
-      () => toast.success("Note deleted"),
-      // why swallowed: the hook keeps the failure in `remove.error`, which the detail shows.
-      () => undefined,
-    );
-  };
-  return { isPending: remove.isPending, error: remove.error?.message ?? null, run };
 }

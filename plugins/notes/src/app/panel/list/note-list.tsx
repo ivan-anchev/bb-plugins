@@ -1,20 +1,27 @@
 // A panel's notes, newest first, scrolling inside a box whose height comes from its host (the
 // card's row, the popover's frame), never from how many notes there are. Its edges fade only where
 // there is more to scroll to. One note at a time is open in place.
-import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useLayoutEffect, useState, type ReactNode, type RefObject } from "react";
 import type { Note } from "../../../contract.ts";
 import type { Picks } from "../use-picks.ts";
 import { NoteRow } from "./note-row.tsx";
 
-/** `notes`: undefined until the first read, when the box stays empty. `empty`: what a list with none says. */
-export function NoteList({ notes, picks, empty }: { notes: readonly Note[] | undefined; picks: Picks; empty: ReactNode }) {
-  const box = useRef<HTMLDivElement>(null);
+type NoteListProps = {
+  /** The scrolling box, which the panel focuses once Delete has taken the picked rows away. */
+  ref: RefObject<HTMLDivElement | null>;
+  /** Undefined until the first read, when the box stays empty. */
+  notes: readonly Note[] | undefined;
+  picks: Picks;
+  /** What a list with none says. */
+  empty: ReactNode;
+};
+
+export function NoteList({ ref: box, notes, picks, empty }: NoteListProps) {
   const [openId, setOpenId] = useState<Note["id"] | null>(null);
   useScrollEdges(box);
   useTopOnNewFirst(box, notes?.[0]?.id);
   return (
-    // why a Tab stop: the keyboard scrolls only the focused box. A row deleted with focus in it also
-    // hands focus here.
+    // why a Tab stop: the keyboard scrolls only the focused box.
     <div ref={box} className="nt-scroll" tabIndex={0}>
       <ul className="nt-list">
         {notes?.length === 0 && <li className="nt-caption nt-empty">{empty}</li>}
@@ -23,10 +30,10 @@ export function NoteList({ notes, picks, empty }: { notes: readonly Note[] | und
             key={note.id}
             note={note}
             picked={picks.has(note.id)}
+            pickable={!picks.held}
             onPick={() => picks.toggle(note.id)}
             open={openId === note.id}
             onOpen={() => setOpenId(openId === note.id ? null : note.id)}
-            focusAfter={box}
           />
         ))}
       </ul>

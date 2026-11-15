@@ -93,6 +93,7 @@
   cursor: pointer;
 }
 .nt-pick:focus-visible { box-shadow: inset 0 0 0 1.5px var(--ring); }
+.nt-pick:disabled { cursor: default; }
 /* why --subtle-foreground, not bb's checkbox token --input: --input is 4% white in grok, and an unticked
    box must stay visible against the row (non-text contrast ≥ 3:1). */
 .nt-check {
@@ -279,9 +280,11 @@
 /* The footer: in the card, a hint and New note; with picks, the count, Clear, and the one primary
    action. */
 .nt-foot { display: flex; align-items: center; gap: 8px; min-height: 24px; }
-/* With picks, a panel too narrow for one line puts the button under the count, still at the right,
-   rather than past the panel's edge. */
+/* With picks, a panel too narrow for one line puts Delete and the button under the count, still at
+   the right, rather than past the panel's edge. Whitespace keeps the ghost Delete apart from the
+   primary button, so the two never read as a pair. */
 .nt-picks { flex-wrap: wrap; row-gap: 8px; }
+.nt-picks-acts { margin-left: auto; display: flex; align-items: center; gap: 16px; }
 .nt-link {
   all: unset;
   position: relative;
@@ -294,11 +297,9 @@
 .nt-link::before { content: ""; position: absolute; inset: -6px; }
 @media (hover: hover) { .nt-link:hover { color: var(--foreground); } }
 .nt-link:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-.nt-link[data-danger] { color: var(--destructive-text, var(--destructive)); }
 .nt-link:disabled { cursor: default; opacity: 0.5; }
 .nt-go {
   all: unset;
-  margin-left: auto;
   height: 24px;
   display: inline-flex;
   align-items: center;

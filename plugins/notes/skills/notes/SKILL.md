@@ -1,6 +1,6 @@
 ---
 name: notes
-description: Explain the Notes plugin, which keeps short personal notes in bb in a Notes popover opened from the sidebar-footer Notes button, ⇧⌘J, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), with a composer at its bottom that links threads by typing @ and attaches images and videos by paste, drop or 📎, and the same list in a Notes card on the New thread screen, where a note opens in place with Delete and ticking some and choosing Start thread (or Add to composer on a thread page) puts them in the composer and archives them. Use when the user asks how to write, quote or link a note, how to read, edit or delete one, where their notes are, why ⇧⌘J does nothing, what the source chip opens, why a thread is missing from the @ picker, why a file was refused or where attached files are stored, what Start thread puts in the composer, why Start thread is disabled, where used notes went, why a file shows as a path instead of an attachment, why the Notes card is empty or says it couldn't read notes, where the card sits among the homepage cards, or why part of it stopped working after a bb update.
+description: Explain the Notes plugin, which keeps short personal notes in bb in a Notes popover opened from the sidebar-footer Notes button, ⇧⌘J, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), with a composer at its bottom that links threads by typing @ and attaches images and videos by paste, drop or 📎, and the same list in a Notes card on the New thread screen, where a note opens in place and ticking some lets the user delete them with one click or choose Start thread (or Add to composer on a thread page) to put them in the composer and archive them. Use when the user asks how to write, quote or link a note, how to read, edit or delete one, where their notes are, why ⇧⌘J does nothing, what the source chip opens, why a thread is missing from the @ picker, why a file was refused or where attached files are stored, what Start thread puts in the composer, why Start thread is disabled, where used notes went, why a file shows as a path instead of an attachment, why the Notes card is empty or says it couldn't read notes, where the card sits among the homepage cards, or why part of it stopped working after a bb update.
 ---
 
 # Notes
@@ -16,10 +16,10 @@ agent tools and no settings; an agent cannot read or write notes.
   the window's bottom-left corner, 8px in. On a short window it takes the
   height there is.
 - It holds the same list as the Notes card (below): a header with the count
-  and a ×, the notes, a footer for Start thread while notes are ticked, and a
-  composer at the bottom.
-- The footer button and ⇧⌘J both toggle it. Esc first clears ticked notes,
-  then closes it; a click outside closes it too. Closing with Esc, × or the
+  and a ×, the notes, a footer for Delete and Start thread while notes are
+  ticked, and a composer at the bottom.
+- The footer button and ⇧⌘J both toggle it. Esc first closes the @ picker,
+  then clears ticked notes, then closes it; a click outside closes it too. Closing with Esc, × or the
   shortcut puts focus back where it was (on the footer button when it opened
   the popover); a click outside leaves focus where the click put it.
 - The footer button opens it with focus on the popover itself. ⇧⌘J, the
@@ -124,26 +124,36 @@ on. A new note appears within about two seconds with no reload. When the
 plugin cannot read its database the list says "Couldn't read notes" with the
 reason, beside any notes it already showed.
 
-Each row has a checkbox for Start thread (below). It shows under the pointer,
+Each row has a checkbox for Delete and Start thread (below). It shows under the pointer,
 on keyboard focus, once ticked, and on every row while any note is ticked;
 on touch screens it always shows. Its column stays, so nothing shifts.
 
-## Reading and deleting a note
+## Reading a note
 
 - Click a note's lines or its thumbs (or Tab to it and press Enter): it opens
   in place under its row, in the card or the popover. It shows the quoted
   passage with its source chip, the note's words with each linked thread's
-  "@Title" marked, then its images and videos, **Open thread** when it came
-  from or links a thread, and **Delete**. A long note scrolls in its own box.
-  Click again to fold it. Notes cannot be edited.
+  "@Title" marked, then its images and videos, and **Open thread** when it
+  came from or links a thread. A long note scrolls in its own box. Click again
+  to fold it. Notes cannot be edited, and an opened note has no Delete: delete
+  from the ticked notes' footer (below).
 - A video plays and seeks in place; an image opens bb's lightbox, where ← → or
   the arrows step through all of the note's files, and Esc closes the lightbox
   only. HEVC videos (some iPhone recordings) may not play in bb's browser.
 - **Open thread** opens the quote's thread, else the first linked thread.
-- **Delete** removes the note for good (there is no undo or trash) and shows a
-  "Note deleted" toast; the row leaves the card and the popover without a
-  reload. If deleting fails, one line under the note says why. Deleting a note
-  that is already gone succeeds.
+
+## Deleting notes
+
+- Tick the notes to delete. The footer reads "N selected · Clear", then
+  **Delete** apart from **Start thread** at its right.
+- One click on Delete deletes every ticked note and its files, for good
+  (there is no undo, trash or confirm step), in one go however many are
+  ticked, and shows "Note deleted" or "N notes deleted".
+- The deleted rows leave the card and the popover without a reload, the ticks
+  clear and focus goes to the list. While deleting, the footer's controls,
+  the checkboxes and Esc wait for it, so the ticks stay as sent; if deleting
+  fails, the notes stay, one line says "Couldn't delete: …" and the controls
+  work again. Deleting a note already gone succeeds.
 
 ## Starting a thread from notes
 
@@ -185,7 +195,7 @@ In the plugin's SQLite database, `data.db` under `~/.bb/plugins/notes/` (bb's
 data directory). Attached files sit beside it in `media/`, one file per
 attachment named by its id (`att_…`), and the browser reads them from the
 plugin's route `/api/v1/plugins/notes/http/media?id=att_…` (local requests
-only; Range is supported, so videos seek). Delete removes a note's files too.
+only; Range is supported, so videos seek). Delete removes the notes' files too.
 When the plugin loads it removes files in `media/` that no note holds (left by
 a save that failed), and logs how many. Notes survive `bb plugin reload
 notes`, bb restarts and browser reloads. `bb plugin logs notes` shows the

@@ -72,26 +72,31 @@ test("a note whose rows fail to insert leaves no files behind", async () => {
   assert.deepEqual(await mediaNames(media.dir), []);
 });
 
-test("deleting a note removes it and its files, and tells open cards to read again", async () => {
+test("deleting notes removes their rows and files at once, and tells open cards to read again once", async () => {
   const { notes, store, media, changes } = freshNotes();
   const kept = await notes.create(typed("kept", [file("kept.png", "image/png", "kept")]));
-  const deleted = await notes.create(typed("deleted", [file("gone.png", "image/png", "gone")]));
+  const first = await notes.create(typed("first", [file("one.png", "image/png", "one"), file("two.mp4", "video/mp4", "two")]));
+  const second = await notes.create(typed("second", [file("three.png", "image/png", "three")]));
   changes.count = 0;
 
-  await notes.remove(deleted.id);
+  await notes.remove([first.id, second.id]);
 
   assert.deepEqual(store.activeNotes(), [kept]);
   assert.deepEqual(await mediaNames(media.dir), [kept.attachments[0].id]);
   assert.equal(changes.count, 1);
 });
 
-test("deleting the same note twice succeeds the second time", async () => {
-  const { notes, store } = freshNotes();
-  const deleted = await notes.create(typed("deleted"));
-  await notes.remove(deleted.id);
+test("deleting notes one of which is already gone deletes the rest, and deleting them again succeeds", async () => {
+  const { notes, store, media } = freshNotes();
+  const gone = await notes.create(typed("gone"));
+  const deleted = await notes.create(typed("deleted", [file("gone.png", "image/png", "gone")]));
+  await notes.remove([gone.id]);
 
-  await assert.doesNotReject(notes.remove(deleted.id));
+  await notes.remove([gone.id, deleted.id]);
+  await assert.doesNotReject(notes.remove([gone.id, deleted.id]));
+
   assert.deepEqual(store.activeNotes(), []);
+  assert.deepEqual(await mediaNames(media.dir), []);
 });
 
 test("the sweep removes files older than the load that no note holds, and keeps the rest", async () => {

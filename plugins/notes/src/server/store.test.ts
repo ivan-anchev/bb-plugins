@@ -102,12 +102,13 @@ test("archiving twice keeps the first time", () => {
   assert.deepEqual(db.prepare("SELECT archived_at FROM notes WHERE id = ?").get(note(1, "").id), { archived_at: 5_000 });
 });
 
-test("a deleted note is gone, and the others stay", () => {
+test("deleted notes are gone, and the others stay", () => {
   const { store } = freshStore();
   store.insert(note(1, "kept"));
   store.insert(note(2, "deleted"));
+  store.insert(note(3, "also deleted"));
 
-  store.delete(note(2, "").id);
+  store.delete([note(2, "").id, note(3, "").id]);
 
   assert.deepEqual(
     store.activeNotes().map((n) => n.body.text),
@@ -118,9 +119,9 @@ test("a deleted note is gone, and the others stay", () => {
 test("deleting a note that is already gone changes nothing", () => {
   const { store } = freshStore();
   store.insert(note(1, "kept"));
-  store.delete(note(2, "").id);
+  store.delete([note(2, "").id]);
 
-  store.delete(note(2, "").id);
+  store.delete([note(2, "").id]);
 
   assert.deepEqual(
     store.activeNotes().map((n) => n.body.text),
@@ -142,7 +143,7 @@ test("an attachment is found by its id until its note is deleted", () => {
   store.insert({ ...note(1, "with a file"), attachments: [attachment(1, "image/webp")] });
 
   assert.deepEqual(store.attachment(attachment(1, "image/webp").id), attachment(1, "image/webp"));
-  assert.deepEqual(store.delete(note(1, "").id), [attachment(1, "image/webp").id]);
+  assert.deepEqual(store.delete([note(1, "").id]), [attachment(1, "image/webp").id]);
   assert.equal(store.attachment(attachment(1, "image/webp").id), null);
 });
 

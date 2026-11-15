@@ -26,8 +26,9 @@ export function createNotes({ store, media, now, onChange }: Deps) {
       return note;
     },
 
-    async remove(id: Note["id"]): Promise<void> {
-      const fileIds = store.delete(id);
+    /** Deletes the notes and their files for good, with one change for every open card. */
+    async remove(ids: readonly Note["id"][]): Promise<void> {
+      const fileIds = store.delete(ids);
       onChange();
       await media.remove(fileIds);
     },

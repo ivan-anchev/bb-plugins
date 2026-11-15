@@ -24,7 +24,7 @@
   },
   "bb": {
     "name": "Notes",
-    "description": "Experimental: it may break with a bb update. Jot a note from anywhere in bb: click Notes in the sidebar footer or press ⇧⌘J, and a Notes popover opens beside the sidebar with your notes and a composer at its bottom. Type and press ⌘↵. Type @ to link a thread, and attach screenshots or recordings by pasting, dropping or clicking 📎. Or highlight text in a reply and choose Add to notes to keep that passage with a link back to its message. The same list is a Notes card on the New thread screen: click a note to open it in place and read or delete it, or tick a few and choose Start thread to put them in the composer as context for a new thread.",
+    "description": "Experimental: it may break with a bb update. Jot a note from anywhere in bb: click Notes in the sidebar footer or press ⇧⌘J, and a Notes popover opens beside the sidebar with your notes and a composer at its bottom. Type and press ⌘↵. Type @ to link a thread, and attach screenshots or recordings by pasting, dropping or clicking 📎. Or highlight text in a reply and choose Add to notes to keep that passage with a link back to its message. The same list is a Notes card on the New thread screen: click a note to open it in place and read it. Tick a few to delete them, or choose Start thread to put them in the composer as context for a new thread.",
     "branding": {
       "icon": "./sticky-note.svg"
     },
