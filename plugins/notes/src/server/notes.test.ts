@@ -141,16 +141,78 @@ test("the sweep of a plugin that never stored media removes nothing", async () =
   assert.deepEqual(await notes.sweep(Date.now()), []);
 });
 
-test("archiving notes takes them off the card, keeps their files, and tells open cards to read again", async () => {
+test("notes put in a draft stay on the card, marked, with their files, and open cards read again", async () => {
   const { notes, store, media, changes } = freshNotes();
   const kept = await notes.create(typed("kept"));
   const used = await notes.create(typed("used", [file("used.png", "image/png", "used")]));
   changes.count = 0;
 
-  notes.archive([used.id]);
+  notes.putInDraft({ composerKey: "draft-3", brief: "Context from 1 note:\n\nused", noteIds: [used.id] });
 
-  assert.deepEqual(store.activeNotes(), [kept]);
+  assert.deepEqual(store.activeNotes(), [used, kept]);
+  assert.deepEqual(store.inDrafts(), [{ composerKey: "draft-3", brief: "Context from 1 note:\n\nused", noteIds: [used.id] }]);
   assert.deepEqual(await mediaNames(media.dir), [used.attachments[0].id]);
-  assert.equal(store.attachment(used.attachments[0].id)?.name, "used.png");
+  assert.equal(changes.count, 1);
+});
+
+test("a send that held the brief deletes that draft's notes, their files and their marks, and nothing else", async () => {
+  const { notes, store, media, changes } = freshNotes();
+  const kept = await notes.create(typed("kept"));
+  const used = await notes.create(typed("used", [file("used.png", "image/png", "used")]));
+  const later = await notes.create(typed("later"));
+  const elsewhere = await notes.create(typed("elsewhere"));
+  notes.putInDraft({ composerKey: "draft-3", brief: "Context from 1 note:\n\nused", noteIds: [used.id] });
+  notes.putInDraft({ composerKey: "draft-3", brief: "Context from 1 note:\n\nlater", noteIds: [later.id] });
+  notes.putInDraft({ composerKey: "thread-x", brief: "Context from 1 note:\n\nused", noteIds: [elsewhere.id] });
+  changes.count = 0;
+
+  await notes.sent("draft-3", "Look at this.\n\nContext from 1 note:\n\nused");
+
+  assert.deepEqual(store.activeNotes(), [elsewhere, later, kept]);
+  assert.deepEqual(store.inDrafts(), [
+    { composerKey: "draft-3", brief: "Context from 1 note:\n\nlater", noteIds: [later.id] },
+    { composerKey: "thread-x", brief: "Context from 1 note:\n\nused", noteIds: [elsewhere.id] },
+  ]);
+  assert.deepEqual(await mediaNames(media.dir), []);
+  assert.equal(changes.count, 1);
+});
+
+test("a send without the brief, word for word, deletes nothing and tells no card", async () => {
+  const { notes, store, changes } = freshNotes();
+  const used = await notes.create(typed("used"));
+  notes.putInDraft({ composerKey: "draft-3", brief: "Context from 1 note:\n\nused", noteIds: [used.id] });
+  changes.count = 0;
+
+  await notes.sent("draft-3", "Context from 1 note:\n\nuse");
+  await notes.sent("draft-3", "");
+
+  assert.deepEqual(store.activeNotes(), [used]);
+  assert.equal(store.inDrafts().length, 1);
+  assert.equal(changes.count, 0);
+});
+
+test("the same send told twice deletes once", async () => {
+  const { notes, store, changes } = freshNotes();
+  const used = await notes.create(typed("used"));
+  notes.putInDraft({ composerKey: "draft-3", brief: "brief", noteIds: [used.id] });
+  changes.count = 0;
+
+  await notes.sent("draft-3", "brief");
+  await notes.sent("draft-3", "brief");
+
+  assert.deepEqual(store.activeNotes(), []);
+  assert.equal(changes.count, 1);
+});
+
+test("a draft that dropped the brief lets its notes go: they stay, unmarked, and open cards read again", async () => {
+  const { notes, store, changes } = freshNotes();
+  const used = await notes.create(typed("used"));
+  notes.putInDraft({ composerKey: "draft-3", brief: "Context from 1 note:\n\nused", noteIds: [used.id] });
+  changes.count = 0;
+
+  notes.leaveDraft({ composerKey: "draft-3", brief: "Context from 1 note:\n\nused" });
+
+  assert.deepEqual(store.activeNotes(), [used]);
+  assert.deepEqual(store.inDrafts(), []);
   assert.equal(changes.count, 1);
 });

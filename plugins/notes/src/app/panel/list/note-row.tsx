@@ -1,6 +1,6 @@
-// One note in a panel's list, in two lines: the note itself, then the thread it came from, a fan of
-// what it holds at the end. The row is its checkbox's label, so a click anywhere on it picks the note
-// for New thread or Delete.
+// One note in a panel's list, in two lines: the note itself, then the thread it came from (and In
+// draft while a composer's draft holds it), a fan of what it holds at the end. The row is its
+// checkbox's label, so a click anywhere on it picks the note for New thread or Delete.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { useState, type MouseEvent } from "react";
 import type { Note } from "../../../contract.ts";
@@ -13,10 +13,12 @@ type NoteRowProps = {
   picked: boolean;
   /** False while the picks are held (a delete or a start on its way). */
   pickable: boolean;
+  /** A composer's draft holds the note's brief: sending it deletes the note. */
+  inDraft: boolean;
   onPick(): void;
 };
 
-export function NoteRow({ note, picked, pickable, onPick }: NoteRowProps) {
+export function NoteRow({ note, picked, pickable, inDraft, onPick }: NoteRowProps) {
   const fresh = useIsFresh(note);
   const line = noteLine(note);
   return (
@@ -30,7 +32,10 @@ export function NoteRow({ note, picked, pickable, onPick }: NoteRowProps) {
         </span>
         <span className="nt-text">
           <FadingText className="nt-line1" text={line} />
-          <FadingText className="nt-line2" text={sourceTitle(note) ?? "No thread"} />
+          <span className="nt-line2">
+            <FadingText className="nt-source" text={sourceTitle(note) ?? "No thread"} />
+            {inDraft && <span className="nt-in-draft">In draft</span>}
+          </span>
         </span>
         <AttachmentFan attachments={note.attachments} />
       </label>

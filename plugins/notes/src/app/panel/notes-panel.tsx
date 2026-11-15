@@ -4,7 +4,7 @@
 // composer. Look from prototypes/notes-tray.html, Popover, and notes-input.html, Composer.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { useRef, type ReactNode, type RefObject } from "react";
-import type { useNotes } from "../use-notes.ts";
+import { useInDrafts, type useNotes } from "../use-notes.ts";
 import { NOTE_ICON } from "../ui/note-icon.tsx";
 import { useHandOffFocus } from "../ui/use-hand-off-focus.ts";
 import { NoteList } from "./list/note-list.tsx";
@@ -37,6 +37,7 @@ export function NotesPanel({ notes, picks, form, onClose, onNewNote, onStarted, 
   const box = useRef<HTMLDivElement>(null);
   const start = useStarts({ picks, waitFocus: box, isCurrent, onStarted });
   const remove = useDeleteNotes();
+  const drafts = useInDrafts();
   const list = notes.data;
   const picking = picks.ids.length > 0;
   return (
@@ -48,7 +49,22 @@ export function NotesPanel({ notes, picks, form, onClose, onNewNote, onStarted, 
           Couldn’t read notes: {notes.error.message}
         </p>
       )}
-      <NoteList ref={box} notes={list} picks={picks} empty={form === undefined ? <EmptyCard /> : <EmptyPopover />} />
+      {/* why a retry here: without the marks, a row can't say it waits in a draft. */}
+      {drafts.error !== null && (
+        <p className="nt-caption nt-error" role="status">
+          Couldn’t read which notes are in a draft: {drafts.error.message}{" "}
+          <button type="button" className="nt-link" onClick={() => void drafts.refetch()}>
+            Retry
+          </button>
+        </p>
+      )}
+      <NoteList
+        ref={box}
+        notes={list}
+        inDraft={new Set(drafts.data?.flatMap(({ noteIds }) => noteIds))}
+        picks={picks}
+        empty={form === undefined ? <EmptyCard /> : <EmptyPopover />}
+      />
       {picking && remove.error !== null && (
         <p className="nt-caption nt-error" role="status">
           Couldn’t delete: {remove.error}

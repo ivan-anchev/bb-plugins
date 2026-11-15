@@ -12,5 +12,5 @@ test("Delete takes every picked note in one call, past the brief's 100", () => {
 
 test("a brief still takes at most 100 notes", () => {
   assert.ok(!notesContract.briefFor.input.safeParse({ noteIds: ids(101), projectId: "proj_personal" }).success);
-  assert.ok(!notesContract.archiveNotes.input.safeParse({ noteIds: ids(101) }).success);
+  assert.ok(!notesContract.putInDraft.input.safeParse({ composerKey: "draft", brief: "Context from 101 notes:", noteIds: ids(101) }).success);
 });

@@ -1,7 +1,9 @@
-// The plugin's SQLite: one row per note, one per attachment. Every SQL statement lives here.
+// The plugin's SQLite: one row per note, one per attachment, one per note waiting in a draft. Every
+// SQL statement lives here. why archived_at stays: notes Start thread archived before decision 28
+// are still in users' databases, kept and never listed.
 import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { attachmentIdSchema, attachmentSchema, noteSchema, type Attachment, type Note } from "../contract.ts";
+import { attachmentIdSchema, attachmentSchema, noteIdSchema, noteSchema, type Attachment, type InDraft, type Note } from "../contract.ts";
 
 // Append-only: bb.storage.migrate records each statement's hash by its index.
 const MIGRATIONS = [
@@ -13,6 +15,8 @@ const MIGRATIONS = [
   `CREATE TABLE attachments (id TEXT PRIMARY KEY, note_id TEXT NOT NULL, position INTEGER NOT NULL,
      name TEXT NOT NULL, mime_type TEXT NOT NULL, size_bytes INTEGER NOT NULL)`,
   `CREATE INDEX attachments_by_note ON attachments (note_id, position)`,
+  // A note waiting in a composer's draft, and the brief's text there (contract.ts, InDraft).
+  `CREATE TABLE in_draft (note_id TEXT PRIMARY KEY, composer_key TEXT NOT NULL, brief TEXT NOT NULL)`,
 ];
 
 export type Store = ReturnType<typeof openStore>;
@@ -68,14 +72,38 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
           .all(list)
           .map((row) => attachmentIdRowSchema.parse(row).id);
         db().prepare("DELETE FROM attachments WHERE note_id IN (SELECT value FROM json_each(?))").run(list);
+        db().prepare("DELETE FROM in_draft WHERE note_id IN (SELECT value FROM json_each(?))").run(list);
         db().prepare("DELETE FROM notes WHERE id IN (SELECT value FROM json_each(?))").run(list);
         return fileIds;
       })();
     },
 
-    /** Takes the notes off the card, keeping their rows. why COALESCE: archiving twice keeps the first time. */
-    archive(ids: readonly Note["id"][], at: number): void {
-      db().prepare("UPDATE notes SET archived_at = COALESCE(archived_at, ?) WHERE id IN (SELECT value FROM json_each(?))").run(at, JSON.stringify(ids));
+    /** Every draft notes wait in, each with its brief and its notes. */
+    inDrafts(): InDraft[] {
+      const rows = db().prepare("SELECT note_id, composer_key, brief FROM in_draft ORDER BY rowid").all().map((row) => inDraftRowSchema.parse(row));
+      const drafts = new Map<string, InDraft>();
+      for (const { note_id, composer_key, brief } of rows) {
+        const key = JSON.stringify([composer_key, brief]);
+        const draft = drafts.get(key) ?? { composerKey: composer_key, brief, noteIds: [] };
+        draft.noteIds.push(note_id);
+        drafts.set(key, draft);
+      }
+      return [...drafts.values()];
+    },
+
+    /** Marks the active notes among `noteIds` as waiting in the draft; one waiting elsewhere moves here. */
+    putInDraft({ composerKey, brief, noteIds }: InDraft): void {
+      db()
+        .prepare(
+          `INSERT OR REPLACE INTO in_draft (note_id, composer_key, brief)
+           SELECT id, ?, ? FROM notes WHERE archived_at IS NULL AND id IN (SELECT value FROM json_each(?))`,
+        )
+        .run(composerKey, brief, JSON.stringify(noteIds));
+    },
+
+    /** The notes waiting in that draft with that brief stop waiting. One that moved elsewhere stays there. */
+    leaveDraft({ composerKey, brief }: Pick<InDraft, "composerKey" | "brief">): void {
+      db().prepare("DELETE FROM in_draft WHERE composer_key = ? AND brief = ?").run(composerKey, brief);
     },
   };
 
@@ -97,6 +125,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
 const noteRowSchema = z.object({ id: z.string(), created_at: z.number(), quote: z.string().nullable(), body: z.string() });
 const attachmentRowSchema = z.object({ id: z.string(), note_id: z.string(), name: z.string(), mime_type: z.string(), size_bytes: z.number() });
 const attachmentIdRowSchema = z.object({ id: attachmentIdSchema });
+const inDraftRowSchema = z.object({ note_id: noteIdSchema, composer_key: z.string(), brief: z.string() });
 
 /** `attachments`: every listed note's attachments, by note id, each list in position order. */
 function toNote({ id, created_at, quote, body }: z.infer<typeof noteRowSchema>, attachments: ReadonlyMap<string, Attachment[]>): Note {

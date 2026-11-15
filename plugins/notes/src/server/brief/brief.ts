@@ -10,14 +10,14 @@
 //   Check this before shipping the weekly view
 //
 //   Chart starts mid-card on tall windows. Before / after from @Start the boat chart
-//   Too large to attach, on disk: /Users/…/notes/media/att_… (resize.mov)
+//   Too large to attach, on disk: /Users/…/notes/kept/att_… (resize.mov)
 import type { Attachment, Brief, Note, NoteBody, Quote } from "../../contract.ts";
 
 /** What became of one attachment: in the draft, or too large for bb and named by its path instead. */
 export type BriefMedia = { kind: "attached"; attachment: Brief["attachments"][number] } | { kind: "tooLarge"; path: string; name: string };
 
 export async function buildBrief(notes: readonly Note[], attach: (attachment: Attachment) => Promise<BriefMedia>): Promise<Brief> {
-  if (notes.length === 0) throw new Error("Those notes are gone: deleted, or already in a thread");
+  if (notes.length === 0) throw new Error("Those notes are gone: deleted, or sent in a message");
   const draft = new DraftText();
   const attachments: Brief["attachments"] = [];
   draft.write(`Context from ${notes.length} ${notes.length === 1 ? "note" : "notes"}:`);

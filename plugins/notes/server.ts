@@ -32,8 +32,17 @@ export default function plugin(bb: BbPluginApi): void {
     },
     briefFor: ({ noteIds, projectId }) =>
       buildBrief(store.activeNotesByIds(noteIds), (attachment) => uploadForBrief(bb.sdk.projects.attachments, media, projectId, attachment)),
-    archiveNotes: ({ noteIds }) => {
-      notes.archive(noteIds);
+    inDrafts: () => store.inDrafts(),
+    putInDraft: (draft) => {
+      notes.putInDraft(draft);
+      return {};
+    },
+    leaveDraft: (draft) => {
+      notes.leaveDraft(draft);
+      return {};
+    },
+    draftSent: async ({ composerKey, text }) => {
+      await notes.sent(composerKey, text);
       return {};
     },
   });

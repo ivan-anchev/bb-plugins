@@ -1,15 +1,21 @@
-// What happens when a note is written, archived or deleted: its rows in SQLite and its files on disk change
+// What happens when a note is written, put in a draft or deleted: its rows in SQLite and its files on disk change
 // together, and every open card is told to read again. The order is chosen so a failure at any step
 // leaves at most a file no row names, which the next load's sweep removes, and never a row whose
 // file is missing.
 import { randomUUID } from "node:crypto";
-import { MAX_FILE_BYTES, attachmentIdSchema, noteIdSchema, type Attachment, type NewFile, type NewNote, type Note } from "../contract.ts";
+import { MAX_FILE_BYTES, attachmentIdSchema, noteIdSchema, type Attachment, type InDraft, type NewFile, type NewNote, type Note } from "../contract.ts";
 import type { MediaFiles } from "./media/media-files.ts";
 import type { Store } from "./store.ts";
 
 type Deps = { store: Store; media: MediaFiles; now: () => number; onChange: () => void };
 
 export function createNotes({ store, media, now, onChange }: Deps) {
+  async function remove(ids: readonly Note["id"][]): Promise<void> {
+    const fileIds = store.delete(ids);
+    onChange();
+    await media.remove(fileIds);
+  }
+
   return {
     async create(input: NewNote): Promise<Note> {
       const attachments: Attachment[] = [];
@@ -27,16 +33,28 @@ export function createNotes({ store, media, now, onChange }: Deps) {
     },
 
     /** Deletes the notes and their files for good, with one change for every open card. */
-    async remove(ids: readonly Note["id"][]): Promise<void> {
-      const fileIds = store.delete(ids);
+    remove,
+
+    /** Marks the notes In draft on every card: they wait in that composer's draft until it sends them. */
+    putInDraft(draft: InDraft): void {
+      store.putInDraft(draft);
       onChange();
-      await media.remove(fileIds);
     },
 
-    /** Takes the notes off every card. Their rows and files stay. */
-    archive(ids: readonly Note["id"][]): void {
-      store.archive(ids, now());
+    /** The draft no longer holds the brief: its notes lose their In draft mark on every card. */
+    leaveDraft(draft: Pick<InDraft, "composerKey" | "brief">): void {
+      store.leaveDraft(draft);
       onChange();
+    },
+
+    /**
+     * The composer sent `text`: the notes waiting there whose brief it holds, word for word, are
+     * deleted. why the server judges: it holds every mark, so a send right after the fill, or right
+     * after a reload, finds them before a window's copy of the marks would.
+     */
+    async sent(composerKey: InDraft["composerKey"], text: string): Promise<void> {
+      const held = store.inDrafts().filter((draft) => draft.composerKey === composerKey && text.includes(draft.brief));
+      if (held.length > 0) await remove(held.flatMap(({ noteIds }) => noteIds));
     },
 
     /** Removes files older than `before` that no note holds: left by a save that failed or crashed. */

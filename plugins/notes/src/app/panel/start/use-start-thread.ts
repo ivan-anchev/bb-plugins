@@ -1,6 +1,7 @@
-// Starting from notes: the picked notes leave the list and become a brief appended to a composer,
-// either bb's new-thread composer (from any screen: off New thread, bb goes there first) or the
-// composer of the thread on screen. The user reviews and sends the draft themselves.
+// Starting from notes: the picked notes become a brief appended to a composer, either bb's
+// new-thread composer (from any screen: off New thread, bb goes there first) or the composer of the
+// thread on screen. The user reviews and sends the draft themselves; until then the notes stay on the
+// list, marked In draft, and that send deletes them (in-draft-watch.tsx).
 import {
   experimental_useRpcMutation,
   useBbContext,
@@ -29,19 +30,19 @@ export function useStartThread() {
   const reachNewThread = useReachNewThread(screen);
   const thisThread = useThisThread(screen);
   const brief = experimental_useRpcMutation({ contract, method: "briefFor" });
-  const archive = experimental_useRpcMutation({ contract, method: "archiveNotes" });
+  const mark = experimental_useRpcMutation({ contract, method: "putInDraft" });
 
   /**
-   * Brief, archive, then fill: the draft only ever gets notes that have left the list. If either call
-   * fails the draft is untouched and the notes stay, so starting again simply retries, and no reload
-   * can put the same notes in the draft twice. Once the draft holds the brief, the composer takes
-   * focus, unless `isCurrent` says the host that started it has gone by then.
+   * Brief, mark In draft, then fill: no draft ever holds a brief whose notes the server doesn't know
+   * wait there, so a send straight after the fill, or after a reload, still deletes them. If either
+   * call fails the draft is untouched, so starting again simply retries. Once the draft holds the
+   * brief, the composer takes focus, unless `isCurrent` says the host that started it has gone by then.
    */
   const fill = ({ composer, projectId }: Target, noteIds: NoteIds, { isCurrent }: StartOptions) =>
     brief
       .mutate({ noteIds: [...noteIds], projectId })
       .then(async (draft) => {
-        await archive.mutate({ noteIds: [...noteIds] });
+        await mark.mutate({ composerKey: composer.key, brief: draft.text, noteIds: [...noteIds] });
         return draft;
       })
       .then(
@@ -63,8 +64,8 @@ export function useStartThread() {
   return {
     newThread,
     thisThread: sendHere,
-    // why brief first: a failed brief stops the run before archiving, so an archive error is then stale.
-    error: (brief.error ?? archive.error)?.message ?? null,
+    // why brief first: a failed brief stops the run before marking, so a mark error is then stale.
+    error: (brief.error ?? mark.error)?.message ?? null,
   };
 }
 
