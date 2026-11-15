@@ -5,6 +5,9 @@ import { mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import type { Attachment } from "../../contract.ts";
 
+/** How far a file's time may trail `Date.now()` and still count as written after it. */
+const CLOCK_SLACK_MS = 1_000;
+
 export type MediaFiles = ReturnType<typeof openMediaFiles>;
 
 type AttachmentId = Attachment["id"];
@@ -62,6 +65,8 @@ export function openMediaFiles(databasePath: string) {
     /**
      * Deletes the files last written before `before` that `isKnown` does not claim, and returns their
      * names. A file written since is kept: its note may still be on its way into the database.
+     * why the slack: file times come from the kernel's coarse clock, which runs a few milliseconds
+     * behind `Date.now()` on Linux, so a file written just after `before` can carry an earlier time.
      */
     async sweep(isKnown: (name: string) => boolean, before: number): Promise<string[]> {
       const names = await readdir(dir).catch((error: NodeJS.ErrnoException) => (error.code === "ENOENT" ? [] : Promise.reject(error)));
@@ -70,7 +75,7 @@ export function openMediaFiles(databasePath: string) {
         // why a file may be gone: the previous load's sweep can still be running beside this one.
         const stats = await statIfThere(join(dir, name));
         // why isKnown is asked here, after the awaits: a note saved meanwhile has claimed its file.
-        if (stats === null || stats.mtimeMs >= before || isKnown(name)) continue;
+        if (stats === null || stats.mtimeMs >= before - CLOCK_SLACK_MS || isKnown(name)) continue;
         await rm(join(dir, name), { force: true });
         removed.push(name);
       }
