@@ -9,7 +9,7 @@ import { mediaUrl } from "../../media-url.ts";
 /** Thumbs drawn; the rest are counted in the badge. */
 const FANNED = 3;
 
-/** `onClick`: picks the note, as its checkbox does; the fan is the bigger target. */
+/** `onClick`: opens the note, as its lines do. */
 export function AttachmentFan({ attachments, onClick }: { attachments: readonly Attachment[]; onClick(): void }) {
   if (attachments.length === 0) return null;
   const fanned = attachments.slice(0, FANNED);
@@ -18,7 +18,7 @@ export function AttachmentFan({ attachments, onClick }: { attachments: readonly 
   const backToFront = fanned.map((attachment, index) => ({ attachment, lean: lean(index, fanned.length) })).reverse();
   return (
     // why hidden: the row's text already names the note, the thumbs only show what it holds, and the
-    // row's checkbox is the keyboard's way to pick it.
+    // row's lines are the keyboard's way to open it.
     <span className="nt-fan" aria-hidden onClick={onClick}>
       {backToFront.map(({ attachment, lean }) => (
         <span key={attachment.id} className="nt-fan-thumb" style={leanStyle(lean)}>

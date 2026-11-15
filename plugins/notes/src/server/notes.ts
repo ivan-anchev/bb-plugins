@@ -53,7 +53,7 @@ export function createNotes({ store, media, now, onChange }: Deps) {
 /** Decodes one attached file and writes it under a new id. */
 async function saveFile(media: MediaFiles, file: NewFile): Promise<Attachment> {
   const bytes = Buffer.from(file.base64, "base64");
-  // why after decoding: the Spotlight checks too, but the server is the boundary.
+  // why after decoding: the form checks too, but the server is the boundary.
   if (bytes.byteLength > MAX_FILE_BYTES) throw new Error(`${file.name} is over 100 MB`);
   if (bytes.byteLength === 0) throw new Error(`${file.name} is empty`);
   const id = attachmentIdSchema.parse(`att_${randomUUID()}`);

@@ -2,8 +2,8 @@
 
 Experimental: it may break with a bb update.
 
-Personal notes in bb: a Spotlight opened with ⇧⌘J or the sidebar-footer notes
-icon, and a Notes card on the New thread screen. See `PLUGIN_OVERVIEW.md` for
+Personal notes in bb: a Notes popover opened from the sidebar footer or with
+⇧⌘J, and the same list as a Notes card on the New thread screen. See `PLUGIN_OVERVIEW.md` for
 the user-facing description and `skills/notes/SKILL.md` for how it behaves.
 
 ## Layout
@@ -15,13 +15,19 @@ the user-facing description and `skills/notes/SKILL.md` for how it behaves.
   keeps attachment files beside `data.db` and serves them at `GET /media?id=`
   with Range.
 - `src/app/use-notes.ts`: the one read of the notes list, shared by the card and
-  the Spotlight. `src/app/media-url.ts`: where the browser reads a file.
-- `src/app/spotlight/`: the Spotlight, an `experimental_appOverlay` over a small
-  module store (`spotlight-store.ts`) that every opener calls; `compose/` writes
-  a note, `view/` shows a saved one with Delete.
-- `src/app/home/`: the homepage card and its rows.
-- `src/app/ui/`: helpers copied from pr-reviews and boat-sandbox, because every
-  plugin installs standalone.
+  the popover. `src/app/media-url.ts`: where the browser reads a file.
+  `src/app/quote-block.tsx`: a quoted passage and its source chip.
+- `src/app/panel/`: the Notes panel both hosts render: header, the scrolling
+  list (`list/`), a note opened in place (`detail/`), the picks and Start
+  thread, which fills whichever composer the screen shows.
+- `src/app/popover/`: the popover, an `experimental_appOverlay` over a small
+  module store (`popover-store.ts`) that every opener calls, anchored beside
+  the sidebar-footer button (`footer-anchor.ts`).
+- `src/app/compose/`: the popover's inline form: @ links, files, save.
+- `src/app/home/`: the homepage card, the panel in card chrome.
+- `src/app/ui/`: small helpers (Esc holding, focus hand-off, the shortcut, the
+  icon), some copied from pr-reviews and boat-sandbox, because every plugin
+  installs standalone.
 
 ## Development
 

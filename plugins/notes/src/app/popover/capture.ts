@@ -1,8 +1,8 @@
-// What "Add to notes" on a chat message hands the Spotlight. bb shows the action in two places: the
-// text-selection menu on assistant replies, which passes the highlighted text, and the action bar
-// under every message, which passes none.
+// What "Add to notes" on a chat message hands the popover's form. bb shows the action in two
+// places: the text-selection menu on assistant replies, which passes the highlighted text, and the
+// action bar under every message, which passes none.
 import type { PluginMessageActionContext } from "@get-bb/plugin-sdk";
-import type { Capture } from "./spotlight-store.ts";
+import type { Capture } from "./popover-store.ts";
 
 /**
  * The highlighted text, else a whole assistant reply. A user message quotes nothing: the user's own

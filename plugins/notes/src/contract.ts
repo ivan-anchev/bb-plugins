@@ -79,7 +79,7 @@ export const noteSchema = z.object({
 });
 export type Note = z.infer<typeof noteSchema>;
 
-/** A file attached in the Spotlight, on its way to the server: its bytes in base64, without a data: prefix. */
+/** A file attached in the form, on its way to the server: its bytes in base64, without a data: prefix. */
 const newFileSchema = z.object({ name: z.string().min(1), mimeType: mediaMimeSchema, base64: z.string() });
 export type NewFile = z.infer<typeof newFileSchema>;
 
