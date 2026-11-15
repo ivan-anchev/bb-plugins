@@ -1,7 +1,10 @@
 // A hover-and-focus tooltip whose trigger is the one focus stop (adapted from code-explorer's).
 // REVIEW.md: Escape closes it wherever focus is, it stays open while the pointer is over the
-// trigger or the popup, or while the trigger has focus, and the popup sits inside the hover area
-// so there is no dead gap between them (WCAG 1.4.13).
+// trigger or the popup, or while the trigger has keyboard focus, and the popup sits inside the
+// hover area so there is no dead gap between them (WCAG 1.4.13). Pressing the trigger closes it
+// until the pointer comes back, so it never shows under the menu or popover the press opens.
+// `role="tooltip"` is on the bubble, not the positioning wrapper: themes style that role as the
+// bubble, and on the wrapper they would paint a second box around this one, hover gap and all.
 import { useEffect, useId, useState, type ReactNode } from "react";
 
 type Placement = "top" | "top-end" | "bottom-start" | "bottom-end";
@@ -42,15 +45,18 @@ export function Tooltip({ content, placement = "top", className = "", children }
         setDismissed(false);
       }}
       onPointerLeave={() => setHovered(false)}
-      onFocus={() => {
+      onPointerDown={() => setDismissed(true)}
+      onFocus={(event) => {
+        // A click focuses the trigger too; only keyboard focus (:focus-visible) shows the tooltip.
+        if (!event.target.matches(":focus-visible")) return;
         setFocused(true);
         setDismissed(false);
       }}
       onBlur={() => setFocused(false)}
     >
       {children(id)}
-      <span role="tooltip" id={id} hidden={!open} className={`absolute z-50 ${PLACEMENTS[placement]}`}>
-        <span className="block w-max max-w-[320px] rounded-md bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-md ring-1 ring-border animate-in fade-in-0 zoom-in-95 motion-reduce:animate-none">
+      <span hidden={!open} className={`absolute z-50 ${PLACEMENTS[placement]}`}>
+        <span role="tooltip" id={id} className="block w-max max-w-[320px] rounded-md bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-md ring-1 ring-border animate-in fade-in-0 zoom-in-95 motion-reduce:animate-none">
           {content}
         </span>
       </span>
