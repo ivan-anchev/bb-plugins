@@ -125,10 +125,12 @@ notes it already showed.
 - The notes used leave the card: they are archived, not deleted. Their rows and
   files stay in the database and `media/`, and there is no undo or view of
   archived notes yet.
-- If the brief fails, one line under the list says why and nothing is
-  archived. If the notes went into the composer but archiving them failed, the
-  card says "Notes are in the composer, but archiving them failed. Try again";
-  Try again archives them without touching the draft.
+- The notes are archived before the brief goes into the composer. If the brief
+  or the archive fails, the composer is left as it was, the notes stay on the
+  card and stay ticked, and one line under the list says "Couldn't start the
+  thread: …". Start thread again simply retries. Files uploaded for a failed
+  try may stay in the project's attachment store; bb offers no way to remove
+  them.
 
 ## Reading and deleting a note
 

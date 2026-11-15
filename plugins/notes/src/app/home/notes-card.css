@@ -171,6 +171,9 @@
 .nt-empty b { font-weight: 500; color: var(--foreground); }
 
 .nt-foot { margin-top: auto; display: flex; align-items: center; gap: 8px; min-height: 24px; }
+/* With picks, a card too narrow for one line puts Start thread under the count, still at the right,
+   rather than past the card's edge. */
+.nt-picks { flex-wrap: wrap; row-gap: 8px; }
 .nt-end { margin-left: auto; }
 .nt-link {
   all: unset;
@@ -184,9 +187,6 @@
 .nt-link::before { content: ""; position: absolute; inset: -6px; }
 @media (hover: hover) { .nt-link:hover { color: var(--foreground); } }
 .nt-link:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-.nt-link:disabled { cursor: default; opacity: 0.5; }
-/* Inside an error caption the link reads as the action it is. */
-.nt-retry { color: var(--foreground); text-decoration: underline; text-underline-offset: 2px; }
 /* The footer's one primary action. */
 .nt-go {
   all: unset;
