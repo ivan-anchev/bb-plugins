@@ -43,7 +43,7 @@
 }
 .nt-spot-icon { width: 14px; height: 14px; flex: none; }
 
-/* The quoted passage: 4 lines at most, then its source chip. */
+/* The quoted passage, then its source chip: 4 lines at most while composing, all of it when read. */
 .nt-quote {
   display: flex;
   flex-direction: column;
@@ -63,10 +63,41 @@
   line-height: 1.5;
   color: var(--muted-foreground);
 }
+.nt-quote-text[data-whole] {
+  display: block;
+  -webkit-line-clamp: none;
+  max-height: 180px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.nt-quote-text[data-whole]:focus-visible { border-radius: 4px; outline: 2px solid var(--ring); outline-offset: 2px; }
 /* why: themes underline links in markdown but spare mention pills by `[data-prompt-mention]`, which
    bb 0.49 sets on a reply's pills and not on the one its Markdown draws for a plugin. The extra
    classes outrank a theme's `[data-markdown-preview] a[href]:not([data-prompt-mention])`. */
 .nt-spot .nt-quote .nt-quote-source a[href] { text-decoration-line: none; }
+
+/* A saved note's words in the view, each linked thread's "@Title" marked as a chip reads. */
+.nt-view-text {
+  margin: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--foreground);
+}
+.nt-view-text:focus-visible { border-radius: 4px; outline: 2px solid var(--ring); outline-offset: 2px; }
+.nt-mention {
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: var(--muted);
+  color: var(--foreground);
+  font-weight: 500;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
 
 /* The textarea and the @ picker that opens under it. */
 .nt-field { position: relative; }
@@ -198,10 +229,12 @@
 .nt-icon-button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .nt-button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .nt-button[data-primary] { background: var(--primary); color: var(--primary-foreground); }
+.nt-button[data-danger] { color: var(--destructive-text, var(--destructive)); }
 .nt-button:disabled { background: var(--muted); color: var(--subtle-foreground, var(--muted-foreground)); cursor: default; }
 @media (hover: hover) {
   .nt-button:not([data-primary]):hover { background: var(--accent); color: var(--foreground); }
   .nt-button[data-primary]:not(:disabled):hover { background: color-mix(in oklch, var(--primary) 88%, var(--popover)); }
+  .nt-button[data-danger]:not(:disabled):hover { background: color-mix(in oklch, var(--destructive) 14%, transparent); color: var(--destructive-text, var(--destructive)); }
   .nt-icon-button:hover, .nt-chip-remove:hover { background: var(--accent); color: var(--foreground); }
 }
 

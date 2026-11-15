@@ -1,21 +1,23 @@
 // homepageSection: Notes. Two-line rows (the note; its source thread), 4 of them, then "N more".
 // Look from prototypes/notes-card-fan.html, variant Symmetric.
-import { experimental_Icon as Icon, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
+import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { useState } from "react";
-import { notesContract, type Note } from "../../contract.ts";
+import type { Note } from "../../contract.ts";
 import { spotlight } from "../spotlight/spotlight-store.ts";
 import { NOTE_ICON } from "../ui/note-icon.tsx";
+import { useNotes } from "../use-notes.ts";
+import { CARD_HEADER } from "./card-focus.ts";
 import { NoteRow } from "./row/note-row.tsx";
 
 /** Rows shown before "N more". */
 const SHOWN = 4;
 
 export function NotesCard() {
-  const notes = experimental_useRpcQuery({ contract: notesContract, method: "notes", input: {} });
+  const notes = useNotes();
   const list = notes.data;
   return (
     <section className="nt-card" aria-label="Notes">
-      <header className="nt-head">
+      <header className="nt-head" {...CARD_HEADER}>
         <Icon name={NOTE_ICON} className="nt-icon" aria-hidden />
         <span>Notes</span>
         {list !== undefined && list.length > 0 && <span className="nt-count">{list.length}</span>}

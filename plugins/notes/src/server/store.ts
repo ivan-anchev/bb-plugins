@@ -29,6 +29,11 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
         .prepare("INSERT INTO notes (id, created_at, quote, body) VALUES (?, ?, ?, ?)")
         .run(note.id, note.createdAt, note.quote === null ? null : JSON.stringify(note.quote), JSON.stringify(note.body));
     },
+
+    /** Deletes the note's row. A note already gone leaves nothing to delete, and that is fine. */
+    delete(id: Note["id"]): void {
+      db().prepare("DELETE FROM notes WHERE id = ?").run(id);
+    },
   };
 }
 
