@@ -53,7 +53,7 @@
 }
 
 /* Prose's headings, sized from its body: bb's Markdown sets an h3 or h4 to `text-sm`, which a theme
-   such as Zeron draws at 13px, under a 15px body. A PR's `### What` should never read smaller than
+   such as Zeron draws at 13px, under a 14px body. A PR's `### What` should never read smaller than
    the text it heads. The body's size is registered like the gap, so it resolves at the Prose root. */
 @property --pr-reviews-prose-body {
   syntax: "<length>";
