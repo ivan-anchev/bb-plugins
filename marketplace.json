@@ -126,7 +126,7 @@
     {
       "id": "notes",
       "displayName": "Notes",
-      "description": "Experimental: it may break with a bb update. Jot a note from anywhere in bb: press ⇧⌘J or click the notes icon in the sidebar footer, type, and press ⌘↵. Or highlight text in a reply and choose Add to notes to keep that passage with a link back to its message. Your notes wait in a Notes card on the New thread screen.",
+      "description": "Experimental: it may break with a bb update. Jot a note from anywhere in bb: press ⇧⌘J or click the notes icon in the sidebar footer, type, and press ⌘↵. Type @ to link a thread. Or highlight text in a reply and choose Add to notes to keep that passage with a link back to its message. Your notes wait in a Notes card on the New thread screen.",
       "icon": {
         "url": "./plugins/notes/sticky-note.svg"
       },

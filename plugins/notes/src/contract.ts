@@ -20,12 +20,22 @@ const quoteSchema = z.object({
 });
 export type Quote = z.infer<typeof quoteSchema>;
 
-/** The user's own words. */
-const noteBodySchema = z.object({
-  text: z.string(),
-  // why always empty: @ thread links are not written yet; stored bodies carry the field already.
-  mentions: z.tuple([]),
+/** A thread linked from a note's text: `text.slice(from, to)` is "@" + its title, in UTF-16 offsets. */
+const threadMentionSchema = z.object({
+  threadId: z.string().min(1),
+  from: z.number().int().nonnegative(),
+  to: z.number().int().positive(),
 });
+
+/** The user's own words, and the threads they linked in them with @. */
+const noteBodySchema = z
+  .object({ text: z.string(), mentions: z.array(threadMentionSchema) })
+  // why: a range that misses its "@Title" token would label the card and the brief with other words.
+  .refine(
+    ({ text, mentions }) => mentions.every(({ from, to }) => from < to && to <= text.length && text[from] === "@"),
+    "A thread link must cover an @ token in the note's text",
+  );
+export type NoteBody = z.infer<typeof noteBodySchema>;
 
 /** An active note. Archived notes never leave the server, so there is no `archivedAt` here. */
 export const noteSchema = z.object({
