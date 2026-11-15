@@ -1,4 +1,7 @@
-// One tab: the project tiles of its threads, then its focused pane's title.
+// One tab: the project tiles of its threads, then its focused pane's title. Click shows its layout; × (on
+// hover) and middle-click close it.
+import type { MouseEvent } from "react";
+import { tabs } from "../controller/tabs.ts";
 import type { TabsSnapshot } from "../controller/tabs-controller.ts";
 import { focused, panes, type Layout } from "../model/layout.ts";
 import type { Tab } from "../model/tab-set.ts";
@@ -7,18 +10,61 @@ import { ProjectTile } from "./project-tile.tsx";
 
 type Index = Pick<TabsSnapshot, "threads" | "projects">;
 
-export function TabItem({ tab, selected, tabStop, index }: { tab: Tab; selected: boolean; tabStop: boolean; index: Index }) {
+type Props = {
+  tab: Tab;
+  selected: boolean;
+  tabStop: boolean;
+  /** Null for the last tab, which can't close. */
+  onClose: (() => void) | null;
+  index: Index;
+};
+
+export function TabItem({ tab, selected, tabStop, onClose, index }: Props) {
   const label = labelOf(tab.layout, index);
+  const closeOnMiddleClick = (event: MouseEvent) => {
+    if (event.button === 1 && onClose !== null) onClose();
+  };
   return (
-    <button type="button" role="tab" className="ht-tab" aria-selected={selected} tabIndex={tabStop ? 0 : -1} title={label}>
-      <span className="ht-tiles">
-        {projectsOf(tab.layout, index).map((project) => (
-          <ProjectTile key={project.id} name={project.name} hue={hueOf(project.id)} />
-        ))}
-      </span>
-      <span className="ht-title">{label}</span>
-    </button>
+    <div className="ht-tab" onMouseDown={preventAutoscroll} onAuxClick={closeOnMiddleClick}>
+      <button
+        type="button"
+        role="tab"
+        className="ht-tab-button"
+        aria-selected={selected}
+        tabIndex={tabStop ? 0 : -1}
+        title={label}
+        onClick={() => tabs.activate(tab.id)}
+      >
+        <span className="ht-tiles">
+          {projectsOf(tab.layout, index).map((project) => (
+            <ProjectTile key={project.id} name={project.name} hue={hueOf(project.id)} />
+          ))}
+        </span>
+        <span className="ht-title">{label}</span>
+      </button>
+      {onClose !== null && (
+        // why: a mouse affordance, out of the tab order. Its mousedown is prevented so it never takes focus,
+        // which would drop to the page body when the tab unmounts (REVIEW.md focus rule).
+        <button
+          type="button"
+          className="ht-close"
+          tabIndex={-1}
+          aria-label={`Close ${label}`}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={onClose}
+        >
+          <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden>
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
+      )}
+    </div>
   );
+}
+
+/** A middle-button press would start the browser's autoscroll; the click that follows closes the tab. */
+function preventAutoscroll(event: MouseEvent): void {
+  if (event.button === 1) event.preventDefault();
 }
 
 function labelOf(layout: Layout, index: Index): string {

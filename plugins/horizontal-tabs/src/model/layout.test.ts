@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { focused, layoutSchema, panes, type Layout, type Pane } from "./layout.ts";
+import { focused, layoutSchema, panes, single, withPaneIdsApart, type Layout, type Pane } from "./layout.ts";
 
 function thread(paneId: string, threadId: string): Pane {
   return { type: "pane", paneId, content: { kind: "thread", projectId: "proj_a", threadId } };
@@ -82,4 +82,29 @@ test("rejects a focused pane that isn't in the layout", () => {
 
 test("rejects fields bb's strict schema doesn't know", () => {
   assert.equal(layoutSchema.safeParse({ ...target(), maximized: "pane-a" }).success, false);
+});
+
+const paneIds = (layout: Layout) => panes(layout).map((pane) => pane.paneId);
+
+function pair(left: string, right: string): Layout {
+  return { root: { type: "split", dir: "row", sizes: [0.5, 0.5], children: [thread(left, "thr_x"), thread(right, "thr_y")] }, focusedPaneId: right };
+}
+
+test("withPaneIdsApart renames only the pane ids the other layout uses, and the focus follows its pane", () => {
+  const apart = withPaneIdsApart(target(), pair("pane-c", "pane-z"), "t1");
+  assert.deepEqual(paneIds(apart), ["pane-a", "pane-b", "t1-1"]);
+  assert.equal(apart.focusedPaneId, "t1-1");
+  assert.deepEqual(focused(apart).content, focused(target()).content);
+  assert.equal(layoutSchema.safeParse(apart).success, true);
+});
+
+test("withPaneIdsApart keeps the splits and sizes, and picks ids neither layout uses", () => {
+  const apart = withPaneIdsApart(target(), pair("t1-1", "pane-a"), "t1");
+  assert.deepEqual(paneIds(apart), ["t1-2", "pane-b", "pane-c"]);
+  assert.deepEqual(apart.root.type === "split" ? apart.root.sizes : null, [0.6, 0.4]);
+});
+
+test("withPaneIdsApart leaves the layout as it is with no other layout, or no id in common", () => {
+  assert.deepEqual(withPaneIdsApart(target(), null, "t1"), target());
+  assert.deepEqual(withPaneIdsApart(target(), single({ kind: "new-thread" }, "pane-q"), "t1"), target());
 });

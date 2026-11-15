@@ -36,32 +36,89 @@
   min-width: 0;
 }
 
+/* One tab: its button, then × (hidden until the tab is hovered or holds focus). The tab draws the box, so
+   × sits inside it. */
 .ht-tab {
   display: flex;
   align-items: center;
-  gap: 6px;
   min-width: 0;
   max-width: 240px;
   height: 32px;
-  padding: 0 10px;
   border: 1px solid transparent;
   border-radius: 8px;
-  background: none;
   color: var(--muted-foreground);
-  font: inherit;
-  font-size: 13px;
-  cursor: default;
   app-region: no-drag;
 }
 .ht-tab:hover {
   background: var(--state-hover);
 }
-.ht-tab[aria-selected="true"] {
+.ht-tab:has(> [aria-selected="true"]) {
   border-color: var(--border-seam-vertical);
   background: var(--background);
   color: var(--foreground);
 }
-.ht-tab:focus-visible {
+.ht-tab:has(> .ht-tab-button:focus-visible) {
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+
+.ht-tab-button {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 100%;
+  padding: 0 10px;
+  border: none;
+  border-radius: inherit;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: default;
+}
+.ht-tab-button:focus-visible {
+  outline: none;
+}
+.ht-tab:has(> .ht-close) > .ht-tab-button {
+  padding-right: 2px;
+}
+
+.ht-close,
+.ht-new {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--muted-foreground);
+  cursor: default;
+  app-region: no-drag;
+}
+.ht-close:hover,
+.ht-new:hover {
+  background: var(--state-hover);
+  color: var(--foreground);
+}
+
+.ht-close {
+  width: 20px;
+  height: 20px;
+  margin-right: 6px;
+  border-radius: 5px;
+}
+.ht-tab:not(:hover):not(:focus-within) > .ht-close {
+  visibility: hidden;
+}
+
+.ht-new {
+  width: 28px;
+  height: 28px;
+  margin-left: 4px;
+  border-radius: 7px;
+}
+.ht-new:focus-visible {
   outline: none;
   box-shadow: inset 0 0 0 1.5px var(--ring);
 }
