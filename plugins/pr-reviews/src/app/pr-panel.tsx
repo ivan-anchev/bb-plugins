@@ -13,7 +13,7 @@ export function PrPanel(props: PluginNavPanelProps) {
       <div className="flex min-h-0 min-w-0 flex-1">
         <nav
           aria-label="Pull requests"
-          className={`${showingPr ? "hidden @3xl:flex" : "flex"} min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-background py-3 @3xl:w-72 @3xl:flex-none @3xl:border-r @3xl:border-border`}
+          className={`${showingPr ? "hidden @3xl:flex" : "flex"} min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-background @3xl:w-72 @3xl:flex-none @3xl:border-r @3xl:border-border`}
         >
           <PrSidebar {...props} />
         </nav>
