@@ -1,7 +1,7 @@
-// The Changes tab's viewer (code-explorer's diff-viewer patch path): the selected file's path over
-// its diff, drawn like bb's own with the file's review threads in it, or a notice where the diff
-// would be empty, with the file's threads under it. The diff pane is the
-// viewer's one scroll region and its one tab stop, in every state, the prompt included.
+// The Changes tab's viewer (code-explorer's diff-viewer patch path): the selected file as bb's own
+// Changes panel draws one, a card with its header over its diff and the file's review threads in
+// it, or a notice where the diff would be empty, with the file's threads under it. The diff pane is
+// the viewer's one scroll region and its one tab stop, in every state, the prompt included.
 import { useMemo, type ReactNode, type Ref } from "react";
 import { NO_THREADS, placeThreads, type PlacedThreads } from "../../comments/place-threads.ts";
 import { diffRowsOf } from "../../diff/diff-rows.ts";
@@ -11,7 +11,10 @@ import { PrDiff, type LineNote } from "../diff/pr-diff.tsx";
 import { useComments, useFileContent, type PrHeadTarget } from "../queries.ts";
 import { Notice } from "../ui/notice.tsx";
 import { ReadError } from "../ui/read-error.tsx";
+import { fileStatPartsOf } from "./change-stats.ts";
 import { diffSourceOf } from "./diff-source.ts";
+import { StatText } from "./stat-text.tsx";
+import { FileCard } from "../ui/file-card.tsx";
 
 /** `ref`: the diff pane, whichever file it shows. `head`: the PR at the commit its diff was read at. */
 type DiffViewerProps = { ref: Ref<HTMLDivElement>; file: DiffFile | null; head: PrHeadTarget; settings: DiffSettings };
@@ -19,16 +22,16 @@ type DiffViewerProps = { ref: Ref<HTMLDivElement>; file: DiffFile | null; head: 
 export function DiffViewer({ ref, file, head, settings }: DiffViewerProps) {
   if (file === null) return <DiffPane ref={ref}><Notice>Select a file</Notice></DiffPane>;
   return (
-    <>
-      {/* Display only: `whitespace-pre` keeps the path's spaces as they are. */}
-      <p title={file.path} className="shrink-0 overflow-hidden text-ellipsis whitespace-pre border-b border-border px-3 py-1.5 font-mono text-xs text-muted-foreground">
-        {file.path}
-      </p>
-      {/* Keyed: another file opens at its top. */}
-      <DiffPane key={file.path} ref={ref}>
-        <FileDiff file={file} head={head} settings={settings} />
-      </DiffPane>
-    </>
+    // Keyed: another file opens at its top.
+    <DiffPane key={file.path} ref={ref}>
+      {/* Space above the card inside the pane, not as the pane's padding: a sticky header stops
+          under the pane's padding, and the code would show above it. */}
+      <div className="pt-2">
+        <FileCard path={file.path} end={<StatText parts={fileStatPartsOf(file)} />}>
+          <FileDiff file={file} head={head} settings={settings} />
+        </FileCard>
+      </div>
+    </DiffPane>
   );
 }
 
@@ -90,7 +93,8 @@ function PatchDiff({ file, expandable, head, settings, threads }: PatchDiffProps
 // why a block, not a flex column: the diff would shrink to the pane as a flex item and scroll
 // itself, out of reach of the pane's tab stop, since the keys scroll only the focused element and
 // its ancestors. As a block it takes its full height and the pane scrolls it. The ring sits inside:
-// the pane runs to the split's edges.
+// the pane runs to the split's edges. Its padding is bb's Changes panel's around the file's card,
+// less on the tree's side, where no divider shows, and none on top (DiffViewer).
 function DiffPane({ ref, children }: { ref: Ref<HTMLDivElement>; children: ReactNode }) {
   return (
     <div
@@ -98,7 +102,7 @@ function DiffPane({ ref, children }: { ref: Ref<HTMLDivElement>; children: React
       role="region"
       aria-label="Diff"
       tabIndex={0}
-      className="min-h-0 flex-1 overflow-auto outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
+      className="min-h-0 flex-1 overflow-auto pr-4 pb-3 pl-2 outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
     >
       {children}
     </div>

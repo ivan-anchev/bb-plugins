@@ -32,11 +32,11 @@ type WriteTabsProps = {
   onWrite(): void;
 };
 
-// The segments are equal widths, so the thumb is half the track and slides by its own width. Its
-// colours and edge are app.css's `--pr-reviews-segment-*` tokens.
-const TRACK_CLASS = "relative grid grid-cols-2 rounded-md bg-(--pr-reviews-segment-track) p-0.5";
+// The segments are equal widths, so the thumb is half the track and slides by its own width: the
+// page's background raised out of a muted track.
+const TRACK_CLASS = "relative grid grid-cols-2 rounded-md bg-muted p-0.5";
 const THUMB_CLASS =
-  "absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-sm bg-(--pr-reviews-segment-thumb) shadow-(--pr-reviews-segment-thumb-ring) transition-transform duration-150 ease-out motion-reduce:transition-none";
+  "absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-sm bg-background shadow-xs transition-transform duration-150 ease-out motion-reduce:transition-none";
 const TAB_CLASS =
   "relative inline-flex h-5 cursor-pointer items-center justify-center rounded-sm px-2 text-xs font-medium text-muted-foreground transition-colors duration-150 ease-out hover:text-foreground hover:duration-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring aria-selected:text-foreground motion-reduce:transition-none";
 

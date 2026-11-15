@@ -40,8 +40,8 @@ export function StepPage({ place, total, title, files, findings, head }: StepPag
   // Each hunk's diff draws its threads from this read; a failed read shows once, above them.
   const comments = useComments({ projectId: head.projectId, number: head.number });
   return (
-    <article className="grid max-w-[880px] grid-cols-[minmax(0,1fr)] gap-x-10 px-7 pb-10 @min-[900px]:max-w-[1440px] @min-[900px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-      <div className="grid grid-cols-[minmax(0,1fr)] content-start gap-[18px] pt-[18px] @min-[900px]:sticky @min-[900px]:top-0 @min-[900px]:max-h-[100cqh] @min-[900px]:self-start @min-[900px]:overflow-y-auto @min-[900px]:pb-6">
+    <article className="grid max-w-[880px] grid-cols-[minmax(0,1fr)] gap-x-10 px-6 pb-10 @min-[900px]:max-w-[1440px] @min-[900px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] content-start gap-4 pt-4 @min-[900px]:sticky @min-[900px]:top-0 @min-[900px]:max-h-[100cqh] @min-[900px]:self-start @min-[900px]:overflow-y-auto @min-[900px]:pb-6">
         <hgroup className="grid gap-1">
           <StepCounter number={place.number} total={total} />
           <PageTitle ref={title}>{place.title}</PageTitle>
@@ -51,7 +51,7 @@ export function StepPage({ place, total, title, files, findings, head }: StepPag
         {/* Every listed file has a first hunk on the right, which registered itself on mount. */}
         <StepFileList files={stepFilesOf(step, files)} onJump={(path) => jumpTo(firstHunks.current.get(path)!)} />
       </div>
-      <div className="grid content-start gap-[18px] pt-[18px]">
+      <div className="grid content-start gap-4 pt-4">
         <ReadError read={comments} what="the PR's comments" />
         {step.hunks.map((entry, i) => (
           <HunkBlock
@@ -74,7 +74,7 @@ export function StepPage({ place, total, title, files, findings, head }: StepPag
 function StepCounter({ number, total }: { number: number; total: number }) {
   const pad = (count: number) => String(count).padStart(2, "0");
   return (
-    <p className="text-[13px] tabular-nums text-muted-foreground">
+    <p className="text-sm tabular-nums text-muted-foreground">
       {pad(number)} <span className="text-subtle-foreground">/ {pad(total)}</span>
     </p>
   );
@@ -83,7 +83,7 @@ function StepCounter({ number, total }: { number: number; total: number }) {
 // A tinted block, no border (the spec's visual rules).
 function ForYou({ text }: { text: string }) {
   return (
-    <section className="grid max-w-[75ch] gap-1 rounded-lg bg-timeline-accent/10 px-3.5 py-3 text-[13.5px] leading-5">
+    <section className="grid max-w-[75ch] gap-1 rounded-lg bg-timeline-accent/10 px-3.5 py-3 text-sm leading-5">
       <h3 className="font-semibold">For you to decide</h3>
       <Prose text={text} />
     </section>

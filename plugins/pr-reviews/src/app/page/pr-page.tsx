@@ -65,7 +65,7 @@ function VisitError({ visit, onLeaveWithFocus }: { visit: ReturnType<typeof useR
     <div ref={notice}>
       <Notice tone="error">
         Could not record that you opened this pull request: {visit.error.message}{" "}
-        <Button variant="outline" size="small" aria-disabled={visit.isPending} onClick={visit.isPending ? undefined : visit.retry}>
+        <Button variant="outline" size="sm" aria-disabled={visit.isPending} onClick={visit.isPending ? undefined : visit.retry}>
           Try again
         </Button>
       </Notice>

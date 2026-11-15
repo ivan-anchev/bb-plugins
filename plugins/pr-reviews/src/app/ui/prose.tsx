@@ -7,14 +7,13 @@ import { Markdown } from "@get-bb/plugin-sdk/app";
 // - size, leading and colour come from the parent: bb sets chat type on the root and the foreground
 //   colour on every paragraph, list, list item and heading. A `className` with its own size or
 //   colour still wins.
-// - inline code gets a tint of the foreground instead of bb's `bg-muted/70`, which vanishes on a
-//   `bg-muted` block. At 8% it matches bb's chip on the page background.
+// - inline code sits on the theme's muted surface.
 // - the space between blocks is `pr-reviews-prose` in app.css, not bb's chat margins: GitHub's
 //   markdown rhythm, scaled to the type size the parent sets.
 const FIT_TO_PARENT = [
   "pr-reviews-prose",
   "text-[length:inherit] leading-[inherit] text-inherit [&_:is(p,ul,ol,li,h1,h2,h3,h4)]:text-inherit",
-  "[&_:not(pre)>code]:bg-foreground/8",
+  "[&_:not(pre)>code]:bg-muted",
 ].join(" ");
 
 export function Prose({ text, className = "" }: { text: string; className?: string }) {

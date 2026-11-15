@@ -24,54 +24,13 @@
   --trees-status-renamed-override: var(--muted-foreground);
 }
 
-/* A GitHub review thread in a diff is one tinted card ("Tint"), no dividers inside; the open comment
-   box is the only raised surface in it. The card's edge is a ring shadow, not a border: a 1px ring
-   with a soft layered shadow in the light theme, and in the dark one, where shadows don't show on a
-   near-black page, a lone white ring. The box's ring (below) is the stronger of the two, so the
-   box still reads as the card's one raised surface. bb puts `.dark` on the page for its dark theme. */
-:root {
-  --pr-reviews-thread-tint: color-mix(in oklab, var(--foreground) 3.5%, var(--background));
-  --pr-reviews-thread-tint-hover: color-mix(in oklab, var(--foreground) 6.5%, var(--background));
-  --pr-reviews-thread-ring: 0 0 0 1px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04), 0 2px 6px -2px rgb(0 0 0 / 0.06);
-}
-.dark {
-  --pr-reviews-thread-tint: color-mix(in oklab, var(--foreground) 5.5%, var(--background));
-  --pr-reviews-thread-tint-hover: color-mix(in oklab, var(--foreground) 9%, var(--background));
-  --pr-reviews-thread-ring: 0 0 0 1px rgb(255 255 255 / 0.08);
-}
-/* The comment box's ring: bb's composer ring (`border-border`), with a step of foreground so it
-   still reads on the tint, and reads stronger than the card's ring 6px outside it. A theme may draw
-   `--border` fainter than the tint (white 3% in a dark theme over a 5.5% tint), and then the box
-   has no edge. */
-:root {
-  --pr-reviews-box-ring: color-mix(in oklab, var(--foreground) 14%, var(--border));
-}
-/* The comment box's Write/Preview segmented control: a track recessed a step into the box, and a
-   thumb raised out of it. In the light theme the thumb is the box's own white, lifted by a hairline
-   ring and a 1px shadow. In the dark one, where shadows don't show, it is the theme's selected
-   state (`--state-active`, translucent) over the track, inside a lone white ring: bb's dark theme
-   draws its muted text nearly as bright as its foreground, so the thumb carries the selection. */
-:root {
-  --pr-reviews-segment-track: color-mix(in oklab, var(--foreground) 6%, var(--background));
-  --pr-reviews-segment-thumb: var(--background);
-  --pr-reviews-segment-thumb-ring: 0 0 0 1px rgb(0 0 0 / 0.07), 0 1px 2px rgb(0 0 0 / 0.08);
-}
-.dark {
-  --pr-reviews-segment-thumb: var(--state-active);
-  --pr-reviews-segment-thumb-ring: 0 0 0 1px rgb(255 255 255 / 0.06);
-}
-/* The footer's ghost buttons hover to the tint's own step, not the page's hover state. */
-.pr-reviews-thread-foot button:hover {
-  background: var(--pr-reviews-thread-tint-hover);
-}
-
 /* Prose's block spacing (src/app/ui/prose.tsx): GitHub's markdown rhythm, in place of bb's chat
    margins, which leave `<details>` flush against its neighbours. Every block keeps one gap below
    it and none above, so gaps never collapse unevenly; a heading takes 1.5 gaps above and one below,
    so it sits with the text it heads.
    - The gap is 1em of the Prose root, registered as a length so it resolves there, once: a heading
-     with its own size still gets the root's gap. The 14px description and the 13px comment box
-     each get GitHub's proportions.
+     with its own size still gets the root's gap. The description and the comment box each get
+     GitHub's proportions at their own type size.
    - A list item, a blockquote and an open `<details>` space their own blocks the same way, and
      each container's first and last blocks sit flush with its edges, so a body that starts with a
      heading or ends in a list or `<details>` keeps the spacing its parent gives it.
@@ -141,3 +100,44 @@
 /* The homepage card (src/app/home) carries its own header; bb draws the section title as an <h2>.
    The homepage plugin, when installed, lays this section out beside its Activity card. */
 [id="plugin-homepage:pr-reviews:pull-requests"] > h2 { display: none; }
+
+/* A row title (src/app/ui/fading-title.tsx), as Activity's sidebar draws it: text that doesn't fit
+   fades out over its last 24px, never cut to "…". Under the pointer on its scope it waits a beat,
+   then runs through to its end as fast as it reads, its start fading as it goes; leaving, it slides
+   home. Only where something hovers, and not for reduced motion. */
+@property --pr-reviews-fade-in {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+.pr-reviews-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.pr-reviews-title[data-over] {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--pr-reviews-fade-in), #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 var(--pr-reviews-fade-in), #000 calc(100% - 24px), transparent);
+  transition: --pr-reviews-fade-in 160ms ease-out;
+}
+.pr-reviews-title-text {
+  display: inline-block;
+  transition: transform 240ms cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .pr-reviews-title-scope:hover .pr-reviews-title[data-over] {
+    --pr-reviews-fade-in: 12px;
+    transition-delay: 500ms;
+  }
+  .pr-reviews-title-scope:hover .pr-reviews-title[data-over] > .pr-reviews-title-text {
+    transform: translateX(calc(-1 * var(--pr-reviews-travel)));
+    transition: transform var(--pr-reviews-run) cubic-bezier(0.45, 0, 0.55, 1) 500ms;
+  }
+}
+
+/* bb heads a panel's sidebar with the panel's title ("PR Reviews") and offers no way to leave it
+   out; the sidebar's section titles say what it lists, as Activity's do. The selector is bb's
+   markup for that title (its classes in S5's x5), scoped to this plugin's sidebar. */
+[data-testid="plugin-sidebar-body"]:has(.pr-reviews-sidebar) .pl-2.leading-5.text-subtle-foreground\/75 {
+  display: none;
+}

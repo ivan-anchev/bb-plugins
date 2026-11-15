@@ -17,7 +17,7 @@ export function PopoverContent({ label, children }: PopoverContentProps) {
         aria-label={label}
         align="end"
         sideOffset={4}
-        className="z-50 grid w-60 rounded-lg bg-popover p-1.5 text-popover-foreground shadow-md ring-1 ring-foreground/8 outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 motion-reduce:animate-none"
+        className="z-50 grid w-60 rounded-lg bg-popover p-1.5 text-popover-foreground shadow-md ring-1 ring-border outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 motion-reduce:animate-none"
       >
         {children}
       </Content>

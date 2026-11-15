@@ -1,4 +1,4 @@
-// One sidebar section: a sticky heading with its count, then its PRs and stacks, or one quiet line
+// One sidebar section: a sticky heading with its count, in Activity's section-title type, then its PRs and stacks, or one quiet line
 // when it has none.
 import { useId } from "react";
 import type { InboxPr, Section } from "../../contract.ts";
@@ -7,6 +7,9 @@ import { ListedRow } from "./pr-row.tsx";
 import { SECTION_TEXT } from "./section-text.ts";
 import { StackTree } from "./stack-tree.tsx";
 
+// Activity's section title: quiet small words, then the count.
+const SECTION_TITLE = "text-[11px] leading-3.5 font-medium whitespace-nowrap text-subtle-foreground";
+
 export type RowActions = { isOpen(pr: InboxPr): boolean; open(pr: InboxPr): void };
 
 export function InboxSection({ section, visits, isOpen, open }: RowActions & { section: Section; visits: Visits }) {
@@ -14,9 +17,9 @@ export function InboxSection({ section, visits, isOpen, open }: RowActions & { s
   const { title, empty } = SECTION_TEXT[section.key];
   return (
     <section aria-labelledby={headingId} className="[&+&]:mt-2">
-      <h2 id={headingId} className="sticky top-0 z-10 -mx-1.5 flex items-baseline gap-1.5 bg-sidebar px-4 pt-2 pb-1 text-[11px] leading-4 font-medium text-subtle-foreground">
+      <h2 id={headingId} className={`sticky top-0 z-10 -mx-1.5 flex h-6 items-center gap-2 bg-sidebar px-4 ${SECTION_TITLE}`}>
         {title}
-        <span className="font-normal tabular-nums">{section.count}</span>
+        <span className="tabular-nums">{section.count}</span>
       </h2>
       {section.items.length === 0 ? (
         <p className="px-2.5 pt-1 pb-2 text-xs leading-4 text-subtle-foreground">{empty}</p>

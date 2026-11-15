@@ -20,7 +20,7 @@ export function NoneScreen({ target }: { target: PrTarget }) {
       title="No guide yet"
       error={start.error}
       actions={
-        <Button variant="primary" disabled={start.isPending} onClick={start.run}>
+        <Button variant="default" disabled={start.isPending} onClick={start.run}>
           Start review
         </Button>
       }
@@ -64,7 +64,7 @@ export function NoGuideScreen({ target, review }: { target: PrTarget; review: No
       error={nudge.error}
       actions={
         <>
-          <Button variant="primary" disabled={nudge.isPending} onClick={nudge.run}>
+          <Button variant="default" disabled={nudge.isPending} onClick={nudge.run}>
             Ask it to submit the guide
           </Button>
           <ReviewChatButton variant="secondary" />
@@ -80,10 +80,10 @@ type ScreenProps = { title: ReactNode; error: RpcCallError | null; actions: Reac
 
 function Screen({ title, error, actions, children }: ScreenProps) {
   return (
-    <div className="flex min-h-0 flex-1 overflow-y-auto px-7 pb-16">
+    <div className="flex min-h-0 flex-1 overflow-y-auto px-6 pb-16">
       <section className="m-auto grid w-full max-w-[440px] justify-items-start gap-3 p-6">
         <h2 className="flex items-center gap-2.5 text-base font-semibold">{title}</h2>
-        <p className="text-[13px] leading-5 text-muted-foreground">{children}</p>
+        <p className="text-sm leading-5 text-muted-foreground">{children}</p>
         <div className="mt-1 flex flex-wrap items-center gap-2">{actions}</div>
         {error !== null && (
           <p role="alert" className="text-xs text-destructive-text">

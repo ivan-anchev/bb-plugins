@@ -1,7 +1,8 @@
-// One GitHub comment as the plugin draws it, in a review thread or on the Summary tab's activity:
-// its author's avatar and login, "author" for the PR's author, "bot" for an app, an optional verb
-// (a review's "approved"), its time and its markdown, with Quote and the link to GitHub on the
-// right. A bot's body folds to three lines.
+// One GitHub comment as the plugin draws it, in a review thread or on the Summary tab's activity,
+// as Zeron draws one: the author's avatar, then one line of their login, "author" for the PR's
+// author, "bot" for an app, an optional verb (a review's "approved", a stale thread's badge), and
+// its time, with Quote and the link to GitHub on the right; under it the markdown
+// in a borderless bubble on the recessed surface. A bot's body folds to three lines.
 import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import type { GitHubComment } from "../../comments/thread-schema.ts";
 import { timeAgo } from "../relative-time.ts";
@@ -14,20 +15,14 @@ import { Prose } from "../ui/prose.tsx";
 export const QUIET_BUTTON =
   "cursor-pointer rounded-md text-xs leading-5 text-muted-foreground transition-colors duration-150 ease-out hover:bg-state-hover hover:text-foreground hover:duration-0 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none";
 
-/** `thread`: small, in a review thread's tint. `page`: on the page, as the activity's messages. */
-type Density = "thread" | "page";
-
-const DENSITY = {
-  thread: { grid: "grid-cols-[20px_minmax(0,1fr)] gap-x-2.5", head: "min-h-5", avatar: 20, body: "max-w-[80ch]" },
-  page: { grid: "grid-cols-[24px_minmax(0,1fr)] gap-x-3", head: "min-h-6 text-[13px]", avatar: 24, body: "text-sm leading-[22px]" },
-} as const satisfies Record<Density, { grid: string; head: string; avatar: 20 | 24; body: string }>;
+/** The avatar's column and its gap: a comment's bubble, and what lines up with it, start here. */
+export const COMMENT_INDENT = "ml-9";
 
 type GitHubCommentViewProps = {
   ref?: Ref<HTMLElement>;
   comment: GitHubComment;
-  density: Density;
   byPrAuthor: boolean;
-  /** A word after the author, such as a review's verdict. */
+  /** Words after the author, such as a review's verdict or a stale thread's badge. */
   verb?: ReactNode;
   onQuote(from: HTMLElement): void;
   /** Under the body, in its column: a review's threads. */
@@ -36,30 +31,33 @@ type GitHubCommentViewProps = {
 
 // Quote and the link to GitHub show on hover or focus, and always where there is no hover. The
 // comment is no tab stop, but can hold focus, so "N more" can hand its focus to it. A comment with
-// no body (a review that only opened threads) has nothing to quote.
-export function GitHubCommentView({ ref, comment, density, byPrAuthor, verb, onQuote, children }: GitHubCommentViewProps) {
+// no body (a review that only opened threads) has nothing to quote, and no bubble.
+export function GitHubCommentView({ ref, comment, byPrAuthor, verb, onQuote, children }: GitHubCommentViewProps) {
   const { author } = comment;
-  const sizes = DENSITY[density];
   const hasBody = comment.body.trim() !== "";
   return (
-    <article ref={ref} tabIndex={-1} className={`group/comment grid ${sizes.grid} rounded-md outline-offset-4 focus-visible:outline-1 focus-visible:outline-ring`}>
-      <Avatar login={author.login} size={sizes.avatar} />
-      <div className={`flex min-w-0 items-center gap-1.5 ${sizes.head}`}>
-        <span className="min-w-0 truncate font-medium">{author.login}</span>
-        {byPrAuthor && <span className="shrink-0 text-xs text-muted-foreground">author</span>}
-        {author.bot && <span className="shrink-0 text-xs text-muted-foreground">bot</span>}
+    <article ref={ref} tabIndex={-1} className="group/comment grid grid-cols-[24px_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-md text-sm outline-offset-4 focus-visible:outline-1 focus-visible:outline-ring">
+      <Avatar login={author.login} size={24} />
+      <div className="flex min-h-6 min-w-0 items-center gap-1.5">
+        <span className="min-w-0 shrink-0 truncate font-medium">{author.login}</span>
+        {byPrAuthor && <span className="shrink-0 text-muted-foreground">author</span>}
+        {author.bot && <span className="shrink-0 text-muted-foreground">bot</span>}
         {verb}
-        <TimeAgo at={comment.createdAt} className="shrink-0 text-xs text-subtle-foreground" />
-        <div className="-my-1 ml-auto flex items-center opacity-0 transition-opacity duration-150 group-focus-within/comment:opacity-100 group-hover/comment:opacity-100 [@media(hover:none)]:opacity-100">
+        <TimeAgo at={comment.createdAt} className="shrink-0 text-subtle-foreground" />
+        <div className="-my-1 ml-auto flex shrink-0 items-center opacity-0 transition-opacity duration-150 group-focus-within/comment:opacity-100 group-hover/comment:opacity-100 [@media(hover:none)]:opacity-100">
           {hasBody && (
-            <Button variant="ghost" size="small" aria-label={`Quote reply to ${author.login}`} onClick={(event) => onQuote(event.currentTarget)}>
+            <Button variant="ghost" size="sm" aria-label={`Quote reply to ${author.login}`} onClick={(event) => onQuote(event.currentTarget)}>
               Quote
             </Button>
           )}
           <IconLink icon="ArrowUpRight" label="Open on GitHub" href={comment.url} />
         </div>
       </div>
-      {hasBody && <div className={`col-start-2 mt-0.5 min-w-0 ${sizes.body}`}>{author.bot ? <ClampedBody body={comment.body} /> : <Prose text={comment.body} />}</div>}
+      {hasBody && (
+        <div className="col-start-2 min-w-0 rounded-xl bg-surface-recessed px-3.5 py-2.5">
+          {author.bot ? <ClampedBody body={comment.body} /> : <Prose text={comment.body} />}
+        </div>
+      )}
       {children}
     </article>
   );

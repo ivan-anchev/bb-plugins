@@ -220,9 +220,9 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
           {isBlank(draft) ? <p className="text-subtle-foreground">Nothing to preview</p> : <Prose text={draft} />}
         </div>
       )}
-      {post !== null && post.note !== null && <p className="px-[18px] pt-1 text-xs text-muted-foreground">{post.note}</p>}
+      {post !== null && post.note !== null && <p className="px-4 pt-1 text-xs text-muted-foreground">{post.note}</p>}
       {sent !== null && <SentNote outcome={sent} />}
-      <div className="flex min-h-11 items-center gap-1.5 pt-1.5 pr-2 pb-2 pl-[18px]">
+      <div className="flex min-h-11 items-center gap-1.5 pt-1.5 pr-2 pb-2 pl-4">
         {problems.length > 0 ? (
           <div id={ids.error} role="alert" className="mr-auto grid min-w-0 gap-1">
             {problems.map((problem) => (
@@ -243,14 +243,14 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
         <div className="ml-auto flex shrink-0 gap-1">
           {/* why aria-disabled, not disabled: the buttons stay focusable, and Ask's reason is read with it. */}
           {asks && (
-            <Button variant="ghost" size="small" aria-disabled={!canAsk} aria-describedby={hasThread || problems.length > 0 ? undefined : ids.noThread} onClick={ask}>
+            <Button variant="ghost" size="sm" aria-disabled={!canAsk} aria-describedby={hasThread || problems.length > 0 ? undefined : ids.noThread} onClick={ask}>
               {sending === "ask" ? "Sending…" : "Ask about this"}
             </Button>
           )}
           <Tooltip content={`${words.post} on GitHub (${COMMENT_KEYS})`} placement="top-end">
             {(describedBy) => (
-              <Button variant="primary" size="small" aria-disabled={!canComment} aria-describedby={describedBy} onClick={comment}>
-                <Icon name="GithubLogo" className="size-3.5" aria-hidden />
+              <Button variant="default" size="sm" aria-disabled={!canComment} aria-describedby={describedBy} onClick={comment}>
+                <Icon name="GithubLogo" aria-hidden />
                 {sending === "comment" ? words.posting : words.post}
               </Button>
             )}
@@ -307,9 +307,9 @@ function labelOf(subject: BoxSubject): string {
 
 /**
  * Write and Preview share type, padding and minimum height, so switching moves nothing. The minimum
- * is the textarea's three rows: 3 × 22px of line, and 8px + 4px of padding.
+ * holds the textarea's three rows and its padding.
  */
-const TEXT_CLASS = "block w-full min-h-[78px] px-[18px] pt-2 pb-1 text-[13px] leading-[22px] text-foreground outline-none";
+const TEXT_CLASS = "block w-full min-h-20 px-4 pt-2 pb-1 text-sm text-foreground outline-none";
 
 /**
  * The textarea's focus, height and selection. It takes focus with the caret at the end when the

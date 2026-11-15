@@ -50,7 +50,7 @@ export function Tooltip({ content, placement = "top", className = "", children }
     >
       {children(id)}
       <span role="tooltip" id={id} hidden={!open} className={`absolute z-50 ${PLACEMENTS[placement]}`}>
-        <span className="block w-max max-w-[320px] rounded-md bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-md ring-1 ring-foreground/8 animate-in fade-in-0 zoom-in-95 motion-reduce:animate-none">
+        <span className="block w-max max-w-[320px] rounded-md bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-md ring-1 ring-border animate-in fade-in-0 zoom-in-95 motion-reduce:animate-none">
           {content}
         </span>
       </span>

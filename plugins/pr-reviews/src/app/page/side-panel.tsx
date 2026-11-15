@@ -74,7 +74,7 @@ export function useSidePanelFocus(): SidePanelFocus {
 function PanelSection({ title, status, children }: { title: string; status?: ReactNode; children: ReactNode }) {
   const headingId = useId();
   return (
-    <section aria-labelledby={headingId} className="border-t border-border/60 py-3.5 first:border-t-0 first:pt-0">
+    <section aria-labelledby={headingId} className="border-t border-border py-3.5 first:border-t-0 first:pt-0">
       <div className="mb-2 flex items-baseline justify-between gap-3">
         <h2 id={headingId} className="text-xs font-medium text-muted-foreground">
           {title}
@@ -90,8 +90,8 @@ function LabelChips({ labels }: { labels: Label[] }) {
   return (
     <ul className="flex flex-wrap gap-1.5">
       {labels.map((label) => (
-        <li key={label.name} className="inline-flex h-[22px] max-w-full items-center gap-1.5 rounded-full px-2 text-xs text-foreground ring-1 ring-border ring-inset">
-          <span aria-hidden className="size-[7px] shrink-0 rounded-full" style={{ backgroundColor: label.color }} />
+        <li key={label.name} className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-full px-2 text-xs text-foreground ring-1 ring-border ring-inset">
+          <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ backgroundColor: label.color }} />
           <span className="truncate">{label.name}</span>
         </li>
       ))}

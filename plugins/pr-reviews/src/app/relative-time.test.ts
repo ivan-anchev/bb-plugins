@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { timeAgo } from "./relative-time.ts";
+import { daysAgo, timeAgo } from "./relative-time.ts";
 
 const NOW = Date.parse("2026-11-06T12:00:00Z");
 
@@ -18,5 +18,20 @@ const cases: [at: string, text: string][] = [
 for (const [at, text] of cases) {
   test(`timeAgo(${at}) is ${text}`, () => {
     assert.equal(timeAgo(at, NOW), text);
+  });
+}
+
+// Days from a day to a month back; timeAgo's words either side.
+const dayCases: [at: string, text: string][] = [
+  ["2026-11-06T09:00:00Z", "3h ago"],
+  ["2026-11-05T12:00:00Z", "1d ago"],
+  ["2026-10-29T12:00:00Z", "8d ago"],
+  ["2026-10-08T00:00:00Z", "30d ago"],
+  ["2026-10-07T12:00:00Z", "last mo."],
+];
+
+for (const [at, text] of dayCases) {
+  test(`daysAgo(${at}) is ${text}`, () => {
+    assert.equal(daysAgo(at, NOW), text);
   });
 }

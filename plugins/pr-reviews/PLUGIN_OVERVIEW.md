@@ -26,7 +26,7 @@ shows the PRs waiting on your review, or your own.
   team) and **Recently merged** (yours or reviewed by you, last 7 days), each
   with its count and a quiet line when empty.
 - **Compact rows**: one line each, the author's avatar, the title, and a
-  coloured icon for merged, closed or draft. The repo's name shows on hover,
+  badge with the PR's state icon and number, coloured by state. The repo's name shows on hover,
   focus and the open row. At most one dot on the avatar asks for attention:
   CI failing, else changes requested, else new activity since you last opened
   it.
@@ -44,13 +44,14 @@ shows the PRs waiting on your review, or your own.
   naming the state it leads to, and runs it through `gh` as you. The pill and
   the sidebar row follow without a Refresh; a refusal shows in the menu.
 - **Activity**: under the description, the PR's whole GitHub activity, oldest
-  first by day, as GitHub's Conversation tab shows it: conversation comments
-  and reviews on the page, each review's threads as rows that open the Changes
-  tab at the thread, and the commits and events between them folded into one
-  line, such as "1 commit and 2 label changes", that opens in place. Approvals
-  and reviews whose threads are all resolved are one line each. A composer at
-  the foot comments on the PR's conversation; Quote on a message quotes it
-  there.
+  first, as GitHub's Conversation tab shows it, starting from who opened it:
+  conversation comments and reviews on the page, each review's threads as rows
+  that open the Changes tab at the thread, and every commit and event between
+  them a quiet one-line entry on a timeline, a run of one kind folded into one
+  line, such as "Pushed 3 commits" or "marlin force-pushed 7 times", that opens
+  in place. Approvals and reviews whose threads are all resolved are one line
+  each. A composer at the foot comments on the PR's conversation; Quote on a
+  message quotes it there.
 - **Changes**: every changed file in a tree with its `+N −M`, beside the
   selected file's diff, drawn like bb's own. Click "N unmodified lines" to
   show the lines between hunks. Filter by path (globs, `!` to exclude), by

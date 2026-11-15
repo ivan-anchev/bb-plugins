@@ -8,7 +8,7 @@ type ShowToggleProps = { open: boolean; subject: string; onToggle(): void };
 export function ShowToggle({ open, subject, onToggle }: ShowToggleProps) {
   const verb = open ? "Hide" : "Show";
   return (
-    <Button variant="ghost" size="small" aria-expanded={open} aria-label={`${verb} ${subject}`} onClick={onToggle}>
+    <Button variant="ghost" size="sm" aria-expanded={open} aria-label={`${verb} ${subject}`} onClick={onToggle}>
       {verb}
     </Button>
   );

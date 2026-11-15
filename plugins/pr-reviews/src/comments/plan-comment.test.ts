@@ -118,6 +118,7 @@ const prAt = (commits: string[]): PrDetail => ({
   title: "Fixture",
   author: "ivan-anchev",
   updatedAt: "2026-11-10T09:00:00Z",
+  createdAt: "2026-11-09T09:00:00Z",
   headSha: commits[commits.length - 1],
   body: "",
   url: "https://github.com/ivan-anchev/bb-plugins/pull/23",

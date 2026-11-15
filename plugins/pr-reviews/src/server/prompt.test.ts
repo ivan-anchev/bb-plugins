@@ -18,6 +18,7 @@ const pr: PrDetail = {
   title: "Fixture: pr-reviews live check",
   author: "ivan-anchev",
   updatedAt: "2026-11-06T17:00:00Z",
+  createdAt: "2026-11-05T17:00:00Z",
   headSha: HEAD,
   body: "Throwaway fixture.",
   url: "https://github.com/ivan-anchev/bb-plugins/pull/23",

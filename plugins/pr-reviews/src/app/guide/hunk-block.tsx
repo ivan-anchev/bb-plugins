@@ -1,6 +1,6 @@
-// One hunk of a step: a quiet file row above the hunk's diff, with each finding and review thread
-// under its line. A collapsed hunk is only the row, with the agent's reason and Show; a file with
-// no text hunks is the row with a one-line note, over the file's threads.
+// One hunk of a step in bb's file card: the file's header over the hunk's diff, with each finding
+// and review thread under its line. A collapsed hunk is only the header, with the agent's reason
+// and Show; a file with no text hunks is the header with a one-line note, over the file's threads.
 import { useMemo, useState, type ReactNode, type Ref } from "react";
 import { NO_THREADS, placeThreads, threadsOfUnit } from "../../comments/place-threads.ts";
 import type { PrComments } from "../../comments/timeline-schema.ts";
@@ -15,6 +15,7 @@ import { Prose } from "../ui/prose.tsx";
 import { ReadError } from "../ui/read-error.tsx";
 import { FindingBlock } from "./finding-block.tsx";
 import { ShowToggle } from "./show-toggle.tsx";
+import { FILE_CARD, FileCard } from "../ui/file-card.tsx";
 
 /**
  * `findings` are the hunk's findings the view options show; the guide they belong to is at `head`.
@@ -39,17 +40,16 @@ export function HunkBlock({ file, entry, findings, head, comments, withFileThrea
 }
 
 /**
- * A unit without its file row, on its own tinted surface: the hunk's diff, or the whole-file note,
+ * A unit without its file header, in a file card of its own: the hunk's diff, or the whole-file note,
  * with their threads, and a failed read of the PR's comments above it. The overview's hidden hunks.
  */
 export function HunkDiff({ file, hunk, head }: { file: DiffFile; hunk: HunkId; head: PrHeadTarget }) {
   const comments = useComments({ projectId: head.projectId, number: head.number });
   return (
     <>
-      {/* Above the surface, not on it: the error text passes contrast on the page, not on muted. */}
       <ReadError read={comments} what="the PR's comments" />
-      <div className="overflow-hidden rounded-lg bg-muted/40">
-        {hunk === WHOLE_FILE && <p className="px-3 py-2.5 text-[12.5px] text-subtle-foreground">{wholeFileNoteOf(file)}</p>}
+      <div className={`${FILE_CARD} overflow-hidden`}>
+        {hunk === WHOLE_FILE && <p className="px-3 py-2.5 text-xs text-subtle-foreground">{wholeFileNoteOf(file)}</p>}
         <AnnotatedDiff file={file} hunk={hunk} findings={NO_FINDINGS} head={head} comments={comments.data} withFileThreads={false} />
       </div>
     </>
@@ -88,72 +88,45 @@ function AnnotatedDiff({ file, hunk, findings, head, comments, withFileThreads }
 // A guide's diff has no band of the code's background above its first row and below its last.
 const FLUSH_DIFF = "[--diffs-gap-block:0px]";
 
-// The file row stays at the top of the guide's page while its diff scrolls under it, on the
-// block's own tint made opaque (bg-muted/40 over the page).
-const FILE_ROW =
-  "sticky top-0 z-10 flex items-baseline gap-3 bg-[color-mix(in_srgb,var(--muted)_40%,var(--background))] px-3 pt-2.5 pb-2 text-[12.5px]";
-const ROW_NOTE = "ml-auto text-right text-subtle-foreground";
+const ROW_NOTE = "min-w-0 text-right font-normal text-subtle-foreground";
 
 type BlockRef = { ref?: Ref<HTMLElement> };
 
-// tabIndex -1: a jump from the step's file list focuses the block, which is not a tab stop. The
-// scroll margin keeps the jump's landing clear of the page's top edge, and anything in the block
-// that scrolls into view, such as a focused button, clear of the sticky file row.
-// why overflow-clip, not hidden: hidden makes the block a scroll container, and the file row would
-// stick inside it, which never scrolls, rather than in the page.
-function Block({ ref, children }: BlockRef & { children: ReactNode }) {
-  return (
-    <section
-      ref={ref}
-      tabIndex={-1}
-      className="scroll-mt-[18px] overflow-clip rounded-lg bg-muted/40 outline-none focus-visible:ring-1 focus-visible:ring-ring [&_*]:scroll-mt-12"
-    >
-      {children}
-    </section>
-  );
-}
-
+// A step's file in the shared file card, sticky at the top of the guide's page while its diff
+// scrolls under it. `ref`: the step's file list jumps to the file's first hunk.
 function OpenHunk({ path, body, ref }: { path: string; body: ReactNode } & BlockRef) {
   return (
-    <Block ref={ref}>
-      <p className={FILE_ROW}>
-        <Path path={path} />
-      </p>
+    <FileCard ref={ref} path={path}>
       {body}
-    </Block>
+    </FileCard>
   );
 }
 
 function CollapsedHunk({ path, reason, body, ref }: { path: string; reason: string; body: ReactNode } & BlockRef) {
   const [open, setOpen] = useState(false);
+  const end = (
+    <>
+      <Prose text={reason} className={ROW_NOTE} />
+      {/* The negative margins keep the header's height and line "Show" up with its edge. */}
+      <span className="-my-1.5 -mr-1.5 shrink-0">
+        <ShowToggle open={open} subject={path} onToggle={() => setOpen(!open)} />
+      </span>
+    </>
+  );
   return (
-    <Block ref={ref}>
-      <div className={FILE_ROW}>
-        <Path path={path} />
-        <Prose text={reason} className={ROW_NOTE} />
-        {/* The negative margins keep the row's height and line "Show" up with the row's edge. */}
-        <div className="-my-1.5 -mr-1.5">
-          <ShowToggle open={open} subject={path} onToggle={() => setOpen(!open)} />
-        </div>
-      </div>
-      {open && body}
-    </Block>
+    <FileCard ref={ref} path={path} end={end}>
+      {open ? body : null}
+    </FileCard>
   );
 }
 
 function WholeFile({ file, body, ref }: { file: DiffFile; body: ReactNode } & BlockRef) {
   return (
-    <Block ref={ref}>
-      <p className={FILE_ROW}>
-        <Path path={file.path} />
-        <span className={ROW_NOTE}>{wholeFileNoteOf(file)}</span>
-      </p>
+    <FileCard ref={ref} path={file.path} end={<span className={ROW_NOTE}>{wholeFileNoteOf(file)}</span>}>
       {body}
-    </Block>
+    </FileCard>
   );
 }
-
-const Path = ({ path }: { path: string }) => <span className="min-w-0 break-all font-mono font-semibold">{path}</span>;
 
 // What changed in a file that has no text hunks: binary content, a rename, or an empty or
 // mode-only change.

@@ -5,6 +5,7 @@ import { useId, useState, type ReactNode, type RefObject } from "react";
 import { UrlLink } from "@get-bb/plugin-sdk/app";
 import { leadingOutcome, summarizeChecks, type Check, type CheckOutcome } from "../../contract.ts";
 import { Button } from "../ui/button.tsx";
+import { LINK } from "../ui/link.ts";
 import { CheckOutcomeIcon } from "./check-outcome-icon.tsx";
 
 const ALWAYS_SHOWN = 3;
@@ -50,7 +51,7 @@ function MoreDisclosure({ more, toggle }: { more: Check[]; toggle: RefObject<HTM
       </div>
       {/* -ml-2.5 lines the label, not the button's padding, up with the rows. */}
       <div className="mt-1 -ml-2.5">
-        <Button ref={toggle} variant="ghost" size="small" aria-expanded={open} aria-controls={listId} onClick={() => setOpen(!open)}>
+        <Button ref={toggle} variant="ghost" size="sm" aria-expanded={open} aria-controls={listId} onClick={() => setOpen(!open)}>
           {open ? "Hide" : `Show ${more.length} more`}
         </Button>
       </div>
@@ -84,7 +85,7 @@ function rowKeys(checks: Check[]): string[] {
   });
 }
 
-const ROW = "flex min-h-[26px] min-w-0 items-center gap-2 text-[12.5px]";
+const ROW = "flex min-h-7 min-w-0 items-center gap-2 text-xs";
 
 function CheckRow({ check }: { check: Check }) {
   const content: ReactNode = (
@@ -98,7 +99,7 @@ function CheckRow({ check }: { check: Check }) {
   return (
     <UrlLink
       href={check.url}
-      className={`${ROW} rounded-sm decoration-foreground/35 underline-offset-[3px] hover:underline focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none`}
+      className={`${ROW} ${LINK}`}
     >
       {content}
     </UrlLink>

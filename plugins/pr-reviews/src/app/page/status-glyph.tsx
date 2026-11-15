@@ -16,11 +16,6 @@ export function StatusGlyph({ name }: { name: StatusGlyphName }) {
   );
 }
 
-// why: bb has no darker variant of --attention for small marks. On white it is 2.35:1, under the
-// 3:1 a graphic needs; a quarter of the foreground keeps its hue and reads 3.47:1 in light, and
-// barely moves it in dark (9.8:1).
-export const ATTENTION = "text-[color-mix(in_oklab,var(--attention)_75%,var(--foreground))]";
-
 // The mark is drawn in the page colour, so it reads as cut out of the disc in either theme.
 const MARK = {
   fill: "none",
@@ -34,7 +29,7 @@ const DISC = <circle cx={8} cy={8} r={7} fill="currentColor" />;
 
 const GLYPHS = {
   passed: {
-    color: "text-success-foreground",
+    color: "text-success",
     shape: (
       <>
         {DISC}
@@ -57,7 +52,7 @@ const GLYPHS = {
     shape: <path d="M4.5 1.5h7A3.5 3.5 0 0 1 15 5v3.5a3.5 3.5 0 0 1-3.5 3.5h-3l-4 3v-3A3.5 3.5 0 0 1 1 8.5V5a3.5 3.5 0 0 1 3.5-3.5z" fill="currentColor" />,
   },
   awaiting: {
-    color: ATTENTION,
+    color: "text-attention",
     shape: (
       <>
         <circle cx={8} cy={8} r={6.25} fill="none" stroke="currentColor" strokeWidth={1.5} />
@@ -67,7 +62,7 @@ const GLYPHS = {
   },
   // A faint track with three quarters drawn from twelve o'clock. Static: a check can run for an hour.
   running: {
-    color: ATTENTION,
+    color: "text-attention",
     shape: (
       <>
         <circle cx={8} cy={8} r={6} fill="none" stroke="currentColor" strokeWidth={2} opacity={0.3} />

@@ -62,14 +62,14 @@ function Switch({ label, checked, onChange }: SwitchProps) {
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className="group flex min-h-9 cursor-pointer touch-manipulation items-center justify-between gap-2.5 rounded-md px-2 text-left text-[13px] outline-none hover:bg-state-hover focus-visible:ring-1 focus-visible:ring-ring"
+      className="group flex min-h-9 cursor-pointer touch-manipulation items-center justify-between gap-2.5 rounded-md px-2 text-left text-sm outline-none hover:bg-state-hover focus-visible:ring-1 focus-visible:ring-ring"
     >
       {label}
       <span
         aria-hidden
-        className="relative h-[15px] w-[26px] shrink-0 rounded-full bg-muted transition-colors duration-150 ease-out group-aria-checked:bg-primary motion-reduce:transition-none"
+        className="relative h-4 w-7 shrink-0 rounded-full bg-muted transition-colors duration-150 ease-out group-aria-checked:bg-primary motion-reduce:transition-none"
       >
-        <span className="absolute top-[3px] left-[3px] size-[9px] rounded-full bg-muted-foreground transition-transform duration-150 ease-out group-aria-checked:translate-x-[11px] group-aria-checked:bg-primary-foreground motion-reduce:transition-none" />
+        <span className="absolute top-0.5 left-0.5 size-3 rounded-full bg-muted-foreground transition-transform duration-150 ease-out group-aria-checked:translate-x-3 group-aria-checked:bg-primary-foreground motion-reduce:transition-none" />
       </span>
     </button>
   );

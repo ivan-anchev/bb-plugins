@@ -71,6 +71,8 @@ const stateChangeSchema = z.enum(["ready", "draft", "close", "reopen"]);
 export type StateChange = z.infer<typeof stateChangeSchema>;
 
 const prDetailSchema = prSummarySchema.extend({
+  /** ISO 8601: when it was opened. */
+  createdAt: z.string(),
   body: z.string(),
   url: z.string(),
   headRefName: z.string(),

@@ -100,11 +100,11 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
   return (
     // why a focus target: when the box unmounts with focus inside it, focus lands here rather
     // than on the page body (REVIEW.md).
-    <div ref={root} tabIndex={-1} className={`outline-none ${THREAD_EDGE}`}>
+    <div ref={root} tabIndex={-1} className="outline-none">
       {/* why `minmax(0,1fr)`: an implicit `auto` track grows to an outdated thread's widest code line,
           so the excerpt would widen the thread, not scroll in it. */}
       {threads.file.length > 0 && (
-        <div className={`grid grid-cols-[minmax(0,1fr)] gap-2 pl-(--pr-reviews-thread-edge) ${THREAD_GAP}`}>
+        <div className="grid grid-cols-[minmax(0,1fr)]">
           {threads.file.map((placed) => (
             <div key={placed.thread.id}>{threadCard(placed.thread, placed)}</div>
           ))}
@@ -112,7 +112,8 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
       )}
       {file.hunks.length > 0 && (
         <FileDiff<Annotation>
-          className={DIFF_TEXT_CLASS}
+          // Under threads at the file the code starts at once, with no band of its background between.
+          className={threads.file.length > 0 ? `${DIFF_TEXT_CLASS} [--diffs-gap-block:0px]` : DIFF_TEXT_CLASS}
           fileDiff={fileDiff}
           options={options}
           // why always passed, null included: it makes the selection controlled, so the highlight is
@@ -120,7 +121,7 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
           selectedLines={highlightOf(lines)}
           lineAnnotations={annotations}
           renderAnnotation={({ metadata }) => (
-            <div className={metadata.kind === "thread" ? THREAD_NOTE_CLASS : NOTE_CLASS}>
+            <div className={metadata.kind === "box" ? BOX_NOTE_CLASS : BAND_NOTE_CLASS}>
               {metadata.kind === "note" && metadata.note.render((request) => selection.openFromFinding({ ...request, at: metadata.note.at }))}
               {metadata.kind === "thread" && threadCard(metadata.placed.thread, null)}
               {metadata.kind === "box" && commentBox(metadata.box, { kind: "lines", span: metadata.span, finding: metadata.box.finding })}
@@ -135,21 +136,14 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
 // why: a note is slotted into the diff's rows and would inherit their code font, `white-space:
 // pre` and the code theme's colour; it reads as the page's text.
 const NOTE_BASE = "grid gap-3 font-sans whitespace-normal text-foreground";
-// Its padding lines it up with the code's text.
-const NOTE_CLASS = `${NOTE_BASE} pt-3 pr-2.5 pb-3.5 pl-2.5`;
 
-// A review thread sits in the band on the page's background with an even 8px around it: from the
-// rows above and below, and the diff's right edge, under a line and at the file alike. Its left
-// edge is THREAD_EDGE.
-const THREAD_GAP = "py-2 pr-2";
+// What Pierre slots under a line spans the gutter (diff-options.ts), so each carries a background
+// of its own over it. A review thread or a finding is a band across the diff, edge to edge, as a thread at its file is:
+// the note draws the hairline above it, the band the one below.
+const BAND_NOTE_CLASS = `${NOTE_BASE} border-t border-border`;
 
-// A review thread's avatars line up with the line numbers, on a line and at the file alike. Pierre
-// insets its numbers 2ch from the diff's left edge, 14.4px at DIFF_TEXT_CLASS's 12px, and a thread
-// card's avatars sit 6px inside it (review-thread.tsx): the card starts 8.4px in, the band's 8px.
-const THREAD_EDGE = "[--pr-reviews-thread-edge:8.4px]";
-
-// Under a line the card reaches back across the gutter, which the diff's options raise it over.
-const THREAD_NOTE_CLASS = `${NOTE_BASE} ${THREAD_GAP} ml-[calc(var(--pr-reviews-thread-edge)-var(--diffs-column-number-width))]`;
+// The box sits in a band of the page's background, its padding lining it up with the code's text.
+const BOX_NOTE_CLASS = `${NOTE_BASE} border-y border-border bg-background pt-3 pr-2.5 pb-3.5 pl-[calc(var(--diffs-column-number-width,0px)+0.625rem)]`;
 
 // Pierre's sides are the diff's columns: deletions is the old side, additions the new.
 const sideOfPierre = (side: SelectedLineRange["side"]): LineRef["side"] => (side === "deletions" ? "old" : "new");

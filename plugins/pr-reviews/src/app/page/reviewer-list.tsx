@@ -25,7 +25,7 @@ export function ReviewerList({ reviewers }: { reviewers: Reviewer[] }) {
 function ReviewerRow({ reviewer }: { reviewer: Reviewer }) {
   const status = STATUS_LOOKS[statusOf(reviewer)];
   return (
-    <li className="flex min-h-[26px] items-center gap-2 text-[12.5px]">
+    <li className="flex min-h-7 items-center gap-2 text-xs">
       <StatusGlyph name={status.glyph} />
       {reviewer.kind === "user" ? <Avatar login={reviewer.login} size={20} /> : <TeamGlyph />}
       <span className="min-w-0 truncate">{nameOf(reviewer)}</span>
@@ -38,7 +38,7 @@ function ReviewerRow({ reviewer }: { reviewer: Reviewer }) {
 // bb draws `UserRound`: 24-unit grid, 1.5 stroke, round ends; the one behind shows only its left half.
 function TeamGlyph() {
   return (
-    <span aria-hidden className="grid size-5 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground ring-1 ring-foreground/8">
+    <span aria-hidden className="grid size-5 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground ring-1 ring-border">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" className="size-3">
         <circle cx={14.5} cy={7.5} r={3.5} />
         <path d="M21 20c-.35-3.4-3.1-6-6.5-6S8.35 16.6 8 20" />
