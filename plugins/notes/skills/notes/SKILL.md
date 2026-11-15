@@ -89,8 +89,12 @@ Shortcuts do not run while a bb dialog is open, the Spotlight included.
 On the New thread screen, under the composer. It lists active notes newest
 first, four at a time: line 1 is the note on one line (a quote saved without
 words shows the quote in “ ”), line 2 the thread the quote came from, else the
-first thread the note links with @ ("No thread" for a note with neither). "N more" shows the rest
-and "Show fewer" folds them. A new note appears within about two seconds with
+first thread the note links with @ ("No thread" for a note with neither). A
+note with files shows up to three of them as small thumbs fanned at the row's
+end, "+N" for the rest; a video shows its first frame with a play badge, or a
+plain tile with the badge when the browser can't decode it (such as an HEVC or
+ProRes .mov). The fan opens a little under the pointer, not on touch screens or
+with reduced motion on. "N more" shows the rest and "Show fewer" folds them. A new note appears within about two seconds with
 no reload. When the plugin cannot read its database the card says "Couldn't
 read notes" with the reason, beside any notes it already showed.
 

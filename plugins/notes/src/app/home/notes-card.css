@@ -59,6 +59,68 @@
 .nt-line1 { color: var(--muted-foreground); }
 .nt-line2 { font-size: 11px; line-height: 14px; color: var(--subtle-foreground, var(--muted-foreground)); }
 
+/* A row's attachments (attachment-fan.tsx): 30px thumbs pivoting on their bottom edge, each turned
+   --nt-lean × 5° and shifted --nt-lean × 4px; a 1.5px ring in the row's colour parts them. The fan's
+   box is fixed, so a thumb that fails to load never changes the row's height. */
+.nt-fan {
+  --nt-fan-spread: 1;
+  position: relative;
+  flex: none;
+  align-self: center;
+  width: 50px; /* the 30px thumb, 4px of shift each side, 6px of lean each side */
+  height: 34px;
+  margin-right: 6px;
+}
+.nt-fan-thumb {
+  position: absolute;
+  left: 10px;
+  bottom: 2px;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--muted);
+  box-shadow: 0 0 0 1.5px var(--card), 0 1px 3px rgb(0 0 0 / 0.25);
+  transform-origin: 50% 100%;
+  transform: translateX(calc(var(--nt-lean) * 4px * var(--nt-fan-spread))) rotate(calc(var(--nt-lean) * 5deg * var(--nt-fan-spread)));
+}
+.nt-fan-thumb > img, .nt-fan-thumb > video { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* Over a frame the badge darkens it to read; with no frame (undecodable) it sits on the plain tile. */
+.nt-fan-play { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted-foreground); }
+.nt-fan-thumb > video + .nt-fan-play { background: rgb(0 0 0 / 0.25); color: #fff; }
+.nt-fan-play svg { width: 10px; height: 10px; fill: currentColor; stroke: none; }
+.nt-fan-more {
+  position: absolute;
+  right: 0;
+  top: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--border);
+  font-size: 10px;
+  line-height: 16px;
+  font-weight: 500;
+  text-align: center;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+/* Under the pointer the ring takes the row's hover colour: the same overlay, over the card. */
+@media (hover: hover) {
+  .nt-row:hover .nt-fan-thumb {
+    box-shadow:
+      0 0 0 1.5px var(--state-hover, color-mix(in oklch, var(--foreground) 5%, transparent)),
+      0 0 0 1.5px var(--card),
+      0 1px 3px rgb(0 0 0 / 0.25);
+  }
+}
+/* The hand opens to 1.6× its lean under the pointer; never on touch, never under reduced motion. */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .nt-fan-thumb { transition: transform 220ms cubic-bezier(0.23, 1, 0.32, 1); }
+  .nt-row:hover .nt-fan { --nt-fan-spread: 1.6; }
+}
+
 .nt-more {
   all: unset;
   box-sizing: border-box;
