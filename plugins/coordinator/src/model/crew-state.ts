@@ -27,7 +27,7 @@ export type CrewThread = Pick<ThreadRow, "status" | "hasPendingInteraction">;
 /** `thread` is null when bb no longer lists it: archived or deleted. */
 export function crewState(crew: Crew, thread: CrewThread | null): { state: BoardState; headline: string } {
   if (crew.closed !== null) return { state: "done", headline: CLOSED[crew.closed.kind] };
-  if (crew.launch.kind === "draft") return { state: "needs-you", headline: "Not started: bb never confirmed its thread" };
+  if (crew.launch.kind === "draft") return { state: "needs-you", headline: `Draft: ${crew.title}` };
   if (thread === null) return { state: "done", headline: "Its thread was archived or deleted" };
   if (thread.hasPendingInteraction) return { state: "needs-you", headline: "Waiting for an answer or an approval in its thread" };
   switch (thread.status) {

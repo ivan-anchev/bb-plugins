@@ -5,8 +5,8 @@
 import { randomUUID } from "node:crypto";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
-import type { Coordinator } from "../contract.ts";
-import type { Placement } from "../model/crew.ts";
+import { typedText, type Coordinator } from "../contract.ts";
+import { environmentOf, type Crew, type RequestedPlacement } from "../model/crew.ts";
 import { memoryFileSchema } from "../model/memory-file.ts";
 import { coordinatorIdSchema, ticketMetadataSchema, type CrewId, type Role } from "../model/role.ts";
 import { crewBrief } from "./crew/brief.ts";
@@ -29,12 +29,12 @@ type SpawnBb = {
   events: { on(event: "thread.created", handler: (payload: { thread: { id: string; originPluginId: string | null } }) => void | Promise<void>): void };
 };
 
-type SpawnStore = Pick<Store, "insertCoordinator" | "insertCrew" | "bindTicket" | "crew">;
+type SpawnStore = Pick<Store, "insertCoordinator" | "insertCrew" | "crewTicket" | "bindTicket" | "crew">;
 
 /** What crew_start asks for. */
-export type CrewRequest = { title: string; brief: string; doneCriteria: string[]; placement: Placement };
+export type CrewRequest = Pick<Crew, "title" | "brief" | "doneCriteria"> & { placement: RequestedPlacement };
 
-/** A started crew, or one saved whose thread bb never confirmed: it stays on the board, not started. */
+/** A crew's spawn: its thread, or why bb didn't confirm one, which leaves the crew a draft. */
 export type CrewLaunch = { crewId: CrewId } & ({ kind: "started"; threadId: string } | { kind: "failed"; error: string });
 
 // why auto: a crew works unattended, and a permission prompt on every edit would hold it until the
@@ -67,18 +67,10 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
     return thread.id;
   }
 
-  // A fresh worktree of the default branch on the coordinating thread's machine, as a child of a
-  // live thread gets from bb; or the environment provider the Coordinator named.
-  async function environmentFor(placement: Placement, coordinatorThreadId: string): Promise<SpawnArgs["environment"]> {
-    switch (placement.kind) {
-      case "worktree": {
-        const [thread] = await bb.sdk.threads.list({ threadIds: [coordinatorThreadId], includeHidden: true });
-        const hostId = thread?.environmentHostId ?? undefined;
-        return { type: "host", hostId, workspace: { type: "managed-worktree", baseBranch: { kind: "default" } } };
-      }
-      case "provider":
-        return { type: "provider", environmentProviderId: placement.environmentProviderId, inputs: null };
-    }
+  /** The machine the coordinating thread runs on, where a worktree crew gets its fresh worktree, as a child of a live thread does from bb. */
+  async function hostOf(coordinatorThreadId: string): Promise<string | null> {
+    const [thread] = await bb.sdk.threads.list({ threadIds: [coordinatorThreadId], includeHidden: true });
+    return thread?.environmentHostId ?? null;
   }
 
   return {
@@ -91,42 +83,42 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
       const id = coordinatorIdSchema.parse(randomUUID());
       const ticket = randomUUID();
       store.insertCoordinator({ id, ticket, projectId: request.projectId, createdAt: Date.now() });
-      memory.of(id).seed(goalOf(request));
+      memory.of(id).seed(typedText(request));
       return { threadId: await spawnWith(ticket, request) };
     },
 
+    /** Saves a crew as a draft: its row and its unbound ticket. Nothing runs until it is launched. */
+    saveCrew(coordinator: Coordinator, request: CrewRequest): CrewId {
+      return store.insertCrew({ coordinatorId: coordinator.id, ticket: randomUUID(), ...request, createdAt: Date.now() });
+    },
+
     /**
-     * Starts a crew as a child of the coordinating thread. Its row is saved before the spawn, so a
-     * spawn that fails still leaves it on the board rather than a thread nobody tracks.
+     * Spawns a draft's thread from what is stored, as a child of the coordinating thread. A spawn
+     * that fails leaves it a draft on the board, to be started again.
      */
-    async crew(coordinator: Coordinator, request: CrewRequest): Promise<CrewLaunch> {
-      const ticket = randomUUID();
-      const crewId = store.insertCrew({ coordinatorId: coordinator.id, ticket, ...request, createdAt: Date.now() });
+    async launch(coordinator: Coordinator, crew: Crew): Promise<CrewLaunch> {
       const files = memory.of(coordinator.id);
       try {
-        const threadId = await spawnWith(ticket, {
+        const threadId = await spawnWith(store.crewTicket(coordinator.id, crew.id), {
           projectId: coordinator.projectId,
-          title: request.title,
+          title: crew.title,
           parentThreadId: coordinator.threadId,
           // why: archiving or deleting the coordinating thread takes its crew with it.
           lifecycleOwnerThreadId: coordinator.threadId,
           // why off: bb's own report cuts a crew's answer at 4,000 characters; the plugin owns wakes.
           parentNotifications: "off",
           permissionMode: CREW_PERMISSION_MODE,
-          environment: await environmentFor(request.placement, coordinator.threadId),
-          prompt: crewBrief({ id: crewId, ...request }, { crewRules: files.read(CREW_RULES).text, index: files.read(MEMORY_INDEX).text }),
+          ...crew.execution,
+          environment: environmentOf(crew.placement, await hostOf(coordinator.threadId)),
+          prompt: crewBrief(crew, { crewRules: files.read(CREW_RULES).text, index: files.read(MEMORY_INDEX).text }),
         });
-        return { crewId, kind: "started", threadId };
+        return { crewId: crew.id, kind: "started", threadId };
       } catch (error) {
         // why read again: bb may have made the thread and bound it through thread.created, with only its answer lost.
-        const launch = store.crew(coordinator.id, crewId)?.launch;
-        if (launch?.kind === "started") return { crewId, kind: "started", threadId: launch.threadId };
-        return { crewId, kind: "failed", error: error instanceof Error ? error.message : String(error) };
+        const launch = store.crew(coordinator.id, crew.id)?.launch;
+        if (launch?.kind === "started") return { crewId: crew.id, kind: "started", threadId: launch.threadId };
+        return { crewId: crew.id, kind: "failed", error: error instanceof Error ? error.message : String(error) };
       }
     },
   };
 }
-
-/** The text the user typed; attachments stay in the thread's first message. */
-const goalOf = (request: NewThreadRequest): string =>
-  request.input.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n\n");

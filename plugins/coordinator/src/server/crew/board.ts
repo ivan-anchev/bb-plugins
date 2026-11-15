@@ -2,6 +2,7 @@
 // digest. Read whole on every call; bb's thread events only say when to read again.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { Board, BoardRow } from "../../contract.ts";
+import { environmentOf, type Crew } from "../../model/crew.ts";
 import { crewState, type CrewThread } from "../../model/crew-state.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
@@ -9,7 +10,7 @@ import type { MemoryRoot } from "../memory/memory-files.ts";
 import type { Store } from "../store.ts";
 
 /** A crew's thread as the board reads it. */
-type ListedThread = CrewThread & { id: string; environmentBranchName: string | null; archivedAt: number | null; deletedAt: number | null };
+type ListedThread = CrewThread & { id: string; environmentBranchName: string | null; environmentHostId: string | null; archivedAt: number | null; deletedAt: number | null };
 
 type ListArgs = { threadIds: string[]; includeHidden: true; limit: number };
 
@@ -37,14 +38,20 @@ export async function listedThreads(bb: BoardBb, threadIds: string[]): Promise<M
 
 const DIGEST = memoryFileSchema.parse("DIGEST.md");
 
-export function createBoard(bb: BoardBb, store: Pick<Store, "crews">, memory: MemoryRoot) {
+export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinator">, memory: MemoryRoot) {
   async function rows(id: CoordinatorId): Promise<BoardRow[]> {
+    const coordinator = store.coordinator(id);
+    // why: a coordinating thread starts crews through its tools, which it gets once its thread is bound.
+    if (coordinator === null) return [];
     const crews = store.crews(id);
-    const threads = await listedThreads(bb, crews.flatMap((crew) => (crew.launch.kind === "started" ? [crew.launch.threadId] : [])));
+    // why the coordinating thread too: a draft's editor shows the machine its worktree would be on.
+    const threads = await listedThreads(bb, [coordinator.threadId, ...crews.flatMap((crew) => (crew.launch.kind === "started" ? [crew.launch.threadId] : []))]);
+    const environmentHostId = threads.get(coordinator.threadId)?.environmentHostId ?? null;
     return crews.map((crew) => {
       const threadId = crew.launch.kind === "started" ? crew.launch.threadId : null;
       const thread = threadId === null ? null : (threads.get(threadId) ?? null);
-      return { crewId: crew.id, title: crew.title, threadId, branch: thread?.environmentBranchName ?? null, ...crewState(crew, thread) };
+      const draft = draftOf(crew, { projectId: coordinator.projectId, environmentHostId });
+      return { crewId: crew.id, title: crew.title, threadId, branch: thread?.environmentBranchName ?? null, ...crewState(crew, thread), draft };
     });
   }
 
@@ -62,3 +69,10 @@ export function createBoard(bb: BoardBb, store: Pick<Store, "crews">, memory: Me
 }
 
 export type BoardReader = ReturnType<typeof createBoard>;
+
+/** A crew that is still a draft, as its row shows it and its editor starts from. */
+function draftOf(crew: Crew, coordinator: { projectId: string; environmentHostId: string | null }): BoardRow["draft"] {
+  if (crew.launch.kind !== "draft" || crew.closed !== null) return null;
+  const { brief, doneCriteria, execution, placement } = crew;
+  return { projectId: coordinator.projectId, brief, doneCriteria, execution, environment: environmentOf(placement, coordinator.environmentHostId) };
+}

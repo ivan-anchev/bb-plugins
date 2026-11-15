@@ -9,6 +9,8 @@ import type { CoordinatorId } from "../../model/role.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import { useFocusKeptByKey } from "../ui/focus-hand-off.ts";
 import { ReadFailure } from "../ui/read-failure.tsx";
+import { DraftRow } from "./draft/draft-row.tsx";
+import { DroppedEdit } from "./draft/dropped-edit.tsx";
 
 export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
   const read = experimental_useRpcQuery({ contract, method: "board", input: { coordinatorId } });
@@ -21,7 +23,7 @@ export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
       {read.data !== undefined && (
         <>
           <Digest ids={ids} digest={read.data.digest} />
-          <Crews ids={ids} rows={read.data.rows} />
+          <Crews ids={ids} coordinatorId={coordinatorId} rows={read.data.rows} />
         </>
       )}
     </div>
@@ -53,7 +55,7 @@ function titled(content: string): { title: string; body: string } {
   return match === null ? { title: "Digest", body: content } : { title: match[1]?.trim() ?? "Digest", body: match[2] ?? "" };
 }
 
-function Crews({ ids, rows }: { ids: string; rows: readonly BoardRow[] }) {
+function Crews({ ids, coordinatorId, rows }: { ids: string; coordinatorId: CoordinatorId; rows: readonly BoardRow[] }) {
   const keepFocus = useFocusKeptByKey();
   if (rows.length === 0) {
     return <p className="px-2 text-sm text-muted-foreground">No crews yet. The {DISPLAY_NAME} starts one for each piece of work it delegates.</p>;
@@ -68,7 +70,14 @@ function Crews({ ids, rows }: { ids: string; rows: readonly BoardRow[] }) {
       <ul className="flex flex-col">
         {inState.map((row) => (
           <li key={row.crewId}>
-            <Row ref={keepFocus(row.crewId)} row={row} />
+            {row.draft === null ? (
+              <>
+                <Row ref={keepFocus(row.crewId)} row={row} />
+                <DroppedEdit coordinatorId={coordinatorId} row={row} />
+              </>
+            ) : (
+              <DraftRow ref={keepFocus(row.crewId)} coordinatorId={coordinatorId} row={row} draft={row.draft} />
+            )}
           </li>
         ))}
       </ul>

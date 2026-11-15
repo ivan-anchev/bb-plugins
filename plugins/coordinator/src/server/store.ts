@@ -3,7 +3,7 @@
 import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { coordinatorSchema, type Coordinator } from "../contract.ts";
-import { closedKindSchema, doneCriteriaSchema, placementSchema, type ClosedKind, type Crew, type Placement } from "../model/crew.ts";
+import { closedKindSchema, doneCriteriaSchema, executionSchema, placementSchema, type ClosedKind, type Crew, type DraftEdit, type Placement } from "../model/crew.ts";
 import { memoryRevisionSchema, type MemoryFile, type MemoryRevision, type MemoryVersion } from "../model/memory-file.ts";
 import { coordinatorIdSchema, crewIdSchema, roleSchema, type CoordinatorId, type CrewId, type Role } from "../model/role.ts";
 
@@ -26,6 +26,8 @@ const MIGRATIONS = [
      ticket TEXT UNIQUE REFERENCES roles (ticket), title TEXT NOT NULL, brief TEXT NOT NULL,
      done_criteria TEXT NOT NULL, placement TEXT NOT NULL, created_at INTEGER NOT NULL,
      closed_as TEXT, closed_at INTEGER, PRIMARY KEY (coordinator_id, id))`,
+  // The model the user picked for a draft in bb's composer; null for the project's default.
+  `ALTER TABLE crews ADD COLUMN execution TEXT`,
 ];
 
 export type Store = ReturnType<typeof openStore>;
@@ -43,7 +45,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
   function crews(coordinatorId: CoordinatorId, crewId: CrewId | null): Crew[] {
     return db()
       .prepare(
-        `SELECT k.coordinator_id AS coordinatorId, k.id, k.title, k.brief, k.done_criteria AS doneCriteria, k.placement,
+        `SELECT k.coordinator_id AS coordinatorId, k.id, k.title, k.brief, k.done_criteria AS doneCriteria, k.placement, k.execution,
                 k.created_at AS createdAt, k.closed_as AS closedAs, k.closed_at AS closedAt, r.thread_id AS threadId
            FROM crews k LEFT JOIN roles r ON r.ticket = k.ticket
           WHERE k.coordinator_id = ? AND (? IS NULL OR k.id = ?)
@@ -127,6 +129,19 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     /** One crew of the coordinating thread, or null when it has no crew by that id. */
     crew: (coordinatorId: CoordinatorId, crewId: CrewId): Crew | null => crews(coordinatorId, crewId)[0] ?? null,
 
+    /** The ticket a crew's thread is spawned with. why throw: every crew is inserted with one. */
+    crewTicket(coordinatorId: CoordinatorId, crewId: CrewId): string {
+      const row = db().prepare("SELECT ticket FROM crews WHERE coordinator_id = ? AND id = ?").get(coordinatorId, crewId);
+      return z.object({ ticket: z.string() }).parse(row).ticket;
+    },
+
+    /** Replaces a draft's brief, criteria, model and placement. */
+    updateDraft(coordinatorId: CoordinatorId, crewId: CrewId, edit: DraftEdit): void {
+      db()
+        .prepare("UPDATE crews SET brief = ?, done_criteria = ?, execution = ?, placement = ? WHERE coordinator_id = ? AND id = ?")
+        .run(edit.brief, JSON.stringify(edit.doneCriteria), JSON.stringify(edit.execution), JSON.stringify(edit.placement), coordinatorId, crewId);
+    },
+
     /** Records how a crew was closed. A crew closes once: closing it again changes nothing. */
     closeCrew(coordinatorId: CoordinatorId, crewId: CrewId, kind: ClosedKind, at: number): void {
       db().prepare("UPDATE crews SET closed_as = ?, closed_at = ? WHERE coordinator_id = ? AND id = ? AND closed_as IS NULL").run(kind, at, coordinatorId, crewId);
@@ -173,6 +188,10 @@ const crewRowSchema = z.object({
   brief: z.string(),
   doneCriteria: z.string().transform((json) => doneCriteriaSchema.parse(JSON.parse(json))),
   placement: z.string().transform((json) => placementSchema.parse(JSON.parse(json))),
+  execution: z
+    .string()
+    .nullable()
+    .transform((json) => (json === null ? null : executionSchema.parse(JSON.parse(json)))),
   createdAt: z.number(),
   closedAs: closedKindSchema.nullable(),
   closedAt: z.number().nullable(),

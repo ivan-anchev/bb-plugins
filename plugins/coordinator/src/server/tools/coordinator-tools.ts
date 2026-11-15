@@ -3,7 +3,7 @@
 // can write. A coordinating thread gets them all; a crew thread only reads memory.
 import type { PluginAgentToolContext, PluginAgentToolRegistrationBase, PluginAgentToolResult } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { doneCriteriaSchema, placementSchema, type Crew } from "../../model/crew.ts";
+import { briefSchema, doneCriteriaSchema, requestedPlacementSchema, type Crew } from "../../model/crew.ts";
 import { memoryContentSchema, memoryFileSchema, memoryVersionSchema } from "../../model/memory-file.ts";
 import { crewIdSchema, type CoordinatorId, type CrewId, type Role } from "../../model/role.ts";
 import type { BoardReader } from "../crew/board.ts";
@@ -106,15 +106,16 @@ export function registerCoordinatorTools(bb: ToolsBb, { store, memory, crews, bo
   bb.agents.registerTool({
     name: START,
     description:
-      "Start a crew: a child thread of yours that does one piece of the work in its own environment, on its own branch. Its first message is your brief, the done-criteria, and CREW.md and MEMORY.md as they are now. Returns the crew's id (c1, c2…) and a link to its thread.",
+      "Start a crew: a child thread of yours that does one piece of the work in its own environment, on its own branch. Its first message is your brief, the done-criteria, and CREW.md and MEMORY.md as they are when it starts. Returns the crew's id (c1, c2…) and a link to its thread. With draft: true it only saves the crew as a draft on the user's board, where they start it, or edit it first: use that whenever the user asked you to propose crews and wait for them.",
     presentation: { label: { pending: "Starting a crew", completed: "Started a crew" }, icon: { glyph: "Workflow" } },
     parameters: z.object({
       title: z.string().trim().min(1).max(80).describe("A short name for the piece of work; it titles the crew's thread."),
-      brief: z.string().trim().min(1).max(20_000).describe("Everything the crew needs to start without asking: the goal, the context, the constraints, where to look."),
+      brief: briefSchema.describe("Everything the crew needs to start without asking: the goal, the context, the constraints, where to look."),
       doneCriteria: doneCriteriaSchema.describe("1 to 12 criteria, each checkable by running something: a test, a command and its output, a page that shows a thing."),
-      placement: placementSchema
+      placement: requestedPlacementSchema
         .default({ kind: "worktree" })
         .describe("worktree (the default): a fresh worktree of the default branch on your machine. provider: an environment provider such as boat-sandbox, named by environmentProviderId."),
+      draft: z.boolean().default(false).describe("true: save it as a draft for the user to start, or edit and start, and start no thread now."),
     }),
     execute: forCoordinator(START, async (id, request) => startText(await crews.start(id, request))),
   });
@@ -126,7 +127,7 @@ export function registerCoordinatorTools(bb: ToolsBb, { store, memory, crews, bo
     parameters: z.object({ crewId: crewIdSchema, text: z.string().trim().min(1).max(20_000) }),
     execute: forCrew(MESSAGE, async (crew, { text }) => {
       if (crew.closed !== null) return failed(`${crew.id} is ${crew.closed.kind}, so it takes no more messages. Start a new crew for more work.`);
-      if (!isStarted(crew)) return failed(`${crew.id} has no thread to message: bb never started it.`);
+      if (!isStarted(crew)) return failed(`${crew.id} is a draft with no thread to message: it waits for the user to start it.`);
       const delivery = await crews.message(crew, text);
       return delivery === "sent" ? `Sent to ${crew.id}.` : `Queued for ${crew.id}: it is waiting on the user or busy, and gets your message once it is free.`;
     }),
