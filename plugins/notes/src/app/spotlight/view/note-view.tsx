@@ -1,5 +1,5 @@
 // The Spotlight's view mode: a saved note, read-only (notes are not edited), with Delete. Same
-// frame as compose: the quoted passage with its source chip, then the note's words.
+// frame as compose: the quoted passage with its source chip, the note's words, then its media.
 import { experimental_Icon as Icon, experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
 import { Close, Content, Title } from "@radix-ui/react-dialog";
 import { Fragment, useRef, type RefObject } from "react";
@@ -11,6 +11,7 @@ import { PORTAL_SCOPE } from "../../ui/portal-scope.ts";
 import { useReturnFocus } from "../../ui/return-focus.ts";
 import { QuoteBlock } from "../quote-block.tsx";
 import { bodyParts } from "./body-parts.ts";
+import { NoteMedia } from "./note-media.tsx";
 
 /** `readError`: the notes list failed its latest read, so `note` may be stale; the view says so. */
 export function NoteView({ note, readError, onDeleted }: { note: Note; readError: string | null; onDeleted(): void }) {
@@ -43,6 +44,7 @@ export function NoteView({ note, readError, onDeleted }: { note: Note; readError
       )}
       {note.quote !== null && <QuoteBlock quote={note.quote} whole />}
       {note.body.text !== "" && <BodyText body={note.body} />}
+      <NoteMedia attachments={note.attachments} />
       {remove.error !== null && (
         <p className="nt-spot-error" role="alert">
           Couldn’t delete: {remove.error}

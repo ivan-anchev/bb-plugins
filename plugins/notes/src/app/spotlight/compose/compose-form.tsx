@@ -1,5 +1,6 @@
 // The Spotlight's compose mode: the quoted passage (if any), a textarea where @ links a thread,
-// ⌘↵ to save. Look and keys from prototypes/notes-capture.html, variant Spotlight.
+// images and videos attached with 📎, a paste or a drop, ⌘↵ to save. Look and keys from
+// prototypes/notes-capture.html, variant Spotlight.
 import { experimental_Icon as Icon, experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
 import { Close, Content, Title } from "@radix-ui/react-dialog";
 import { useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type RefObject, type SyntheticEvent } from "react";
@@ -9,16 +10,20 @@ import { NOTE_ICON } from "../../ui/note-icon.tsx";
 import { PORTAL_SCOPE } from "../../ui/portal-scope.ts";
 import { useReturnFocus } from "../../ui/return-focus.ts";
 import { QuoteBlock } from "../quote-block.tsx";
+import { AttachButton } from "./attach-button.tsx";
+import { useDraftFiles, type DraftFiles } from "./draft-files.ts";
 import { LinkChips } from "./link-chips.tsx";
 import { activeQuery, insertAtSign, insertToken, linkedThreads, removeToken, toNoteBody, type Draft, type PickedThread } from "./mention-text.ts";
 import { ThreadPicker, useThreadMatches } from "./thread-picker.tsx";
+import { Thumbs } from "./thumbs.tsx";
 
 export function ComposeForm({ quote, onSaved }: { quote: Quote | null; onSaved(): void }) {
   const field = useRef<HTMLTextAreaElement>(null);
   const draft = useDraft(field);
   const [picked, setPicked] = useState<PickedThread[]>([]);
   const picker = useThreadMatches(activeQuery(draft.value, picked));
-  const save = useSave(quote, toNoteBody(draft.value.text, picked), onSaved);
+  const files = useDraftFiles();
+  const save = useSave(quote, toNoteBody(draft.value.text, picked), files, onSaved);
   const returnFocus = useReturnFocus();
 
   const pick = (thread: PickedThread) => {
@@ -40,8 +45,14 @@ export function ComposeForm({ quote, onSaved }: { quote: Quote | null; onSaved()
     <Content
       {...PORTAL_SCOPE}
       className="nt-spot"
+      data-dropping={files.dragging || undefined}
       aria-describedby={undefined}
       onCloseAutoFocus={returnFocus}
+      // why the whole dialog: a file dropped or pasted anywhere on the Spotlight is attached.
+      onPaste={files.onPaste}
+      onDragOver={files.onDragOver}
+      onDragLeave={files.onDragLeave}
+      onDrop={files.onDrop}
       // why: Esc closes the @ picker first, and the Spotlight only when no picker is open.
       onEscapeKeyDown={(event) => {
         if (!picker.isOpen) return;
@@ -72,12 +83,26 @@ export function ComposeForm({ quote, onSaved }: { quote: Quote | null; onSaved()
         {picker.isOpen && <ThreadPicker picker={picker} onPick={pick} />}
       </div>
       <LinkChips threads={linkedThreads(draft.value.text, picked)} onUnlink={(thread) => draft.edit(removeToken(draft.value, picked, thread))} />
+      <Thumbs
+        items={files.items}
+        onRemove={(item) => {
+          files.remove(item);
+          // why: the × leaves the page with its thumb, and focus must not fall to the page body.
+          field.current!.focus();
+        }}
+      />
+      {files.refused !== null && (
+        <p className="nt-spot-refused" role="status">
+          {files.refused}
+        </p>
+      )}
       {save.error !== null && (
         <p className="nt-spot-error" role="alert">
           Couldn’t save: {save.error}
         </p>
       )}
       <div className="nt-spot-foot">
+        <AttachButton onFiles={files.add} />
         <button type="button" className="nt-icon-button" aria-label="Link a thread" onClick={() => draft.edit(insertAtSign(draft.value))}>
           @
         </button>
@@ -90,7 +115,7 @@ export function ComposeForm({ quote, onSaved }: { quote: Quote | null; onSaved()
           </button>
         </Close>
         <button type="button" className="nt-button" data-primary="" disabled={!save.canSave} onClick={save.run}>
-          Save note
+          {save.saving ? "Saving…" : "Save note"}
         </button>
       </div>
     </Content>
@@ -131,22 +156,36 @@ function useDraft(field: RefObject<HTMLTextAreaElement | null>) {
 }
 
 /**
- * Saving sends the note once; success closes and toasts, a failure keeps the draft and says why. A
- * quote is a note on its own, so with one the text may stay empty.
+ * Saving reads the files, then sends the note once; success closes and toasts, a failure keeps the
+ * draft and says why. A quote or a file is a note on its own, so with one the text may stay empty.
  */
-function useSave(quote: Quote | null, body: NoteBody, onSaved: () => void) {
+function useSave(quote: Quote | null, body: NoteBody, files: DraftFiles, onSaved: () => void) {
   const create = experimental_useRpcMutation({ contract: notesContract, method: "createNote" });
-  const canSave = (quote !== null || body.text !== "") && !create.isPending;
+  const [reading, setReading] = useState(false);
+  const [readError, setReadError] = useState<string | null>(null);
+  const saving = reading || create.isPending;
+  const canSave = (quote !== null || body.text !== "" || files.items.length > 0) && !saving;
   const run = () => {
     if (!canSave) return;
-    create.mutate({ quote, body }).then(
-      () => {
-        onSaved();
-        toast.success("Saved to notes");
+    setReading(true);
+    setReadError(null);
+    files.encode().then(
+      (encoded) => {
+        setReading(false);
+        create.mutate({ quote, body, files: encoded }).then(
+          () => {
+            onSaved();
+            toast.success("Saved to notes");
+          },
+          // why swallowed: the hook keeps the failure in `create.error`, which the form shows.
+          () => undefined,
+        );
       },
-      // why swallowed: the hook keeps the failure in `create.error`, which the form shows.
-      () => undefined,
+      (error: unknown) => {
+        setReading(false);
+        setReadError(error instanceof Error ? error.message : String(error));
+      },
     );
   };
-  return { canSave, error: create.error?.message ?? null, run };
+  return { canSave, saving, error: readError ?? create.error?.message ?? null, run };
 }

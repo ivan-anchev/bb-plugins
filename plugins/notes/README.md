@@ -11,9 +11,11 @@ the user-facing description and `skills/notes/SKILL.md` for how it behaves.
 - `server.ts`, `app.tsx`: composition roots, registrations only.
 - `src/contract.ts`: the note's zod schemas and the rpc contract (tag `notes`).
 - `src/server/`: `store.ts` holds every SQL statement; `notes.ts` writes and
-  deletes notes and invalidates the `notes` tag.
+  deletes notes with their files and invalidates the `notes` tag; `media/`
+  keeps attachment files beside `data.db` and serves them at `GET /media?id=`
+  with Range.
 - `src/app/use-notes.ts`: the one read of the notes list, shared by the card and
-  the Spotlight.
+  the Spotlight. `src/app/media-url.ts`: where the browser reads a file.
 - `src/app/spotlight/`: the Spotlight, an `experimental_appOverlay` over a small
   module store (`spotlight-store.ts`) that every opener calls; `compose/` writes
   a note, `view/` shows a saved one with Delete.

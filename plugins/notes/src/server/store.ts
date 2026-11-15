@@ -1,7 +1,7 @@
-// The plugin's SQLite: one row per note. Every SQL statement lives here.
+// The plugin's SQLite: one row per note, one per attachment. Every SQL statement lives here.
 import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { noteSchema, type Note } from "../contract.ts";
+import { attachmentIdSchema, attachmentSchema, noteSchema, type Attachment, type Note } from "../contract.ts";
 
 // Append-only: bb.storage.migrate records each statement's hash by its index.
 const MIGRATIONS = [
@@ -9,6 +9,10 @@ const MIGRATIONS = [
   `CREATE TABLE notes (id TEXT PRIMARY KEY, created_at INTEGER NOT NULL, archived_at INTEGER,
      quote TEXT, body TEXT NOT NULL)`,
   `CREATE INDEX notes_active ON notes (archived_at, created_at)`,
+  // The attachment's bytes are a file named by its id, beside data.db (media-files.ts).
+  `CREATE TABLE attachments (id TEXT PRIMARY KEY, note_id TEXT NOT NULL, position INTEGER NOT NULL,
+     name TEXT NOT NULL, mime_type TEXT NOT NULL, size_bytes INTEGER NOT NULL)`,
+  `CREATE INDEX attachments_by_note ON attachments (note_id, position)`,
 ];
 
 export type Store = ReturnType<typeof openStore>;
@@ -19,28 +23,80 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
   storage.migrate(db(), MIGRATIONS);
 
   return {
-    /** Every note not archived, newest first. */
+    /** Every note not archived, newest first, each with its attachments in the order they were attached. */
     activeNotes(): Note[] {
-      return db().prepare("SELECT * FROM notes WHERE archived_at IS NULL ORDER BY created_at DESC, rowid DESC").all().map(toNote);
+      const notes = db().prepare("SELECT * FROM notes WHERE archived_at IS NULL ORDER BY created_at DESC, rowid DESC").all();
+      const attachments = byNote(
+        db().prepare("SELECT a.* FROM attachments a JOIN notes n ON n.id = a.note_id WHERE n.archived_at IS NULL ORDER BY a.position").all(),
+      );
+      return notes.map((row) => toNote(row, attachments));
     },
 
+    /** The attachment with this id, or null when no note holds it. */
+    attachment(id: Attachment["id"]): Attachment | null {
+      const row = db().prepare("SELECT * FROM attachments WHERE id = ?").get(id);
+      return row === undefined ? null : toAttachment(row).attachment;
+    },
+
+    /** The note and its attachments, together or not at all. */
     insert(note: Note): void {
-      db()
-        .prepare("INSERT INTO notes (id, created_at, quote, body) VALUES (?, ?, ?, ?)")
-        .run(note.id, note.createdAt, note.quote === null ? null : JSON.stringify(note.quote), JSON.stringify(note.body));
+      const insertNote = db().prepare("INSERT INTO notes (id, created_at, quote, body) VALUES (?, ?, ?, ?)");
+      const insertAttachment = db().prepare(
+        "INSERT INTO attachments (id, note_id, position, name, mime_type, size_bytes) VALUES (?, ?, ?, ?, ?, ?)",
+      );
+      db().transaction(() => {
+        insertNote.run(note.id, note.createdAt, note.quote === null ? null : JSON.stringify(note.quote), JSON.stringify(note.body));
+        note.attachments.forEach((attachment, position) =>
+          insertAttachment.run(attachment.id, note.id, position, attachment.name, attachment.mimeType, attachment.sizeBytes),
+        );
+      })();
     },
 
-    /** Deletes the note's row. A note already gone leaves nothing to delete, and that is fine. */
-    delete(id: Note["id"]): void {
-      db().prepare("DELETE FROM notes WHERE id = ?").run(id);
+    /**
+     * Deletes the note's rows and returns the ids of the attachments it held, whose files can go. A
+     * note already gone leaves nothing to delete, and that is fine.
+     */
+    delete(id: Note["id"]): Attachment["id"][] {
+      return db().transaction(() => {
+        const ids = db()
+          .prepare("SELECT id FROM attachments WHERE note_id = ?")
+          .all(id)
+          .map((row) => attachmentIdRowSchema.parse(row).id);
+        db().prepare("DELETE FROM attachments WHERE note_id = ?").run(id);
+        db().prepare("DELETE FROM notes WHERE id = ?").run(id);
+        return ids;
+      })();
     },
   };
 }
 
-// Database rows are a boundary: parse them into the canonical type.
-const noteRowSchema = z.object({ id: z.string(), created_at: z.number(), quote: z.string().nullable(), body: z.string() });
+// ------------------------------------------------------------------ layer 2
+// Database rows are a boundary: parse them into the canonical types.
 
-function toNote(row: unknown): Note {
+const noteRowSchema = z.object({ id: z.string(), created_at: z.number(), quote: z.string().nullable(), body: z.string() });
+const attachmentRowSchema = z.object({ id: z.string(), note_id: z.string(), name: z.string(), mime_type: z.string(), size_bytes: z.number() });
+const attachmentIdRowSchema = z.object({ id: attachmentIdSchema });
+
+/** `attachments`: every listed note's attachments, by note id, each list in position order. */
+function toNote(row: unknown, attachments: ReadonlyMap<string, Attachment[]>): Note {
   const { id, created_at, quote, body } = noteRowSchema.parse(row);
-  return noteSchema.parse({ id, createdAt: created_at, quote: quote === null ? null : JSON.parse(quote), body: JSON.parse(body) });
+  return noteSchema.parse({
+    id,
+    createdAt: created_at,
+    quote: quote === null ? null : JSON.parse(quote),
+    body: JSON.parse(body),
+    attachments: attachments.get(id) ?? [],
+  });
+}
+
+/** Attachment rows, in the order read, grouped by the note that holds them. */
+function byNote(rows: unknown[]): Map<string, Attachment[]> {
+  const grouped = new Map<string, Attachment[]>();
+  for (const { noteId, attachment } of rows.map(toAttachment)) grouped.set(noteId, [...(grouped.get(noteId) ?? []), attachment]);
+  return grouped;
+}
+
+function toAttachment(row: unknown): { noteId: string; attachment: Attachment } {
+  const { id, note_id, name, mime_type, size_bytes } = attachmentRowSchema.parse(row);
+  return { noteId: note_id, attachment: attachmentSchema.parse({ id, name, mimeType: mime_type, sizeBytes: size_bytes }) };
 }

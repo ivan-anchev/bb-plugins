@@ -1,6 +1,6 @@
 ---
 name: notes
-description: Explain the Notes plugin, which saves short personal notes in bb from a Spotlight opened with ⇧⌘J, the sidebar-footer notes icon, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), links threads in a note by typing @, and lists notes in a Notes card on the New thread screen, where clicking one opens it read-only with Delete. Use when the user asks how to write, quote or link a note, how to read, edit or delete one, where their notes are, why ⇧⌘J does nothing, what the source chip opens, why a thread is missing from the @ picker, or why the Notes card is empty or says it couldn't read notes.
+description: Explain the Notes plugin, which saves short personal notes in bb from a Spotlight opened with ⇧⌘J, the sidebar-footer notes icon, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), links threads in a note by typing @, attaches images and videos by paste, drop or 📎, and lists notes in a Notes card on the New thread screen, where clicking one opens it read-only with Delete. Use when the user asks how to write, quote or link a note, how to read, edit or delete one, where their notes are, why ⇧⌘J does nothing, what the source chip opens, why a thread is missing from the @ picker, why a file was refused or where attached files are stored, or why the Notes card is empty or says it couldn't read notes.
 ---
 
 # Notes
@@ -55,6 +55,27 @@ agent tools and no settings; an agent cannot read or write notes.
   a note without a quote shows the first thread it links on line 2; a quote's
   thread still comes first.
 
+## Attaching images and videos
+
+- Paste a screenshot (⌘V) into the Spotlight, drop files anywhere on it (its
+  edge lights up while a file is over it), or click 📎 in its footer. Each file
+  shows as a 64px thumb under the text, a video with a play badge; its ×
+  removes it.
+- Taken: PNG, JPEG, GIF, WebP, MP4, MOV (`video/quicktime`) and WebM, up to
+  100 MB each and 20 per note. Anything else is not added and one line says
+  why: "HEIC isn’t supported — convert to PNG or JPEG", "rec.mov is over
+  100 MB", "A note holds 20 files at most". SVG is refused because it can run
+  script.
+- A note can be just its files: **Save note** is enabled with files alone, and
+  reads "Saving…" while the files upload. The note is saved whole or not at
+  all; if saving fails the draft keeps its files.
+- On the Notes card a note with no words and no quote reads "2 screenshots"
+  (images), "1 recording" (videos) or "3 attachments" (both).
+- In the read-only view, images and videos sit under the note's words. A video
+  plays and seeks in place; an image opens bb's lightbox, where ← → or the
+  arrows step through all of the note's files, and Esc closes the lightbox
+  only. HEVC videos (some iPhone recordings) may not play in bb's browser.
+
 ## The shortcut
 
 The command is listed in Settings → Keyboard as "Plugin: notes · New note",
@@ -90,5 +111,11 @@ read notes" with the reason, beside any notes it already showed.
 ## Where notes live
 
 In the plugin's SQLite database, `data.db` under `~/.bb/plugins/notes/` (bb's
-data directory). Notes survive `bb plugin reload notes`, bb restarts and
-browser reloads. `bb plugin logs notes` shows the plugin's server log.
+data directory). Attached files sit beside it in `media/`, one file per
+attachment named by its id (`att_…`), and the browser reads them from the
+plugin's route `/api/v1/plugins/notes/http/media?id=att_…` (local requests
+only; Range is supported, so videos seek). Delete removes a note's files too.
+When the plugin loads it removes files in `media/` that no note holds (left by
+a save that failed), and logs how many. Notes survive `bb plugin reload
+notes`, bb restarts and browser reloads. `bb plugin logs notes` shows the
+plugin's server log, including the media folder's path.

@@ -179,6 +179,83 @@
 .nt-chip-remove svg { width: 12px; height: 12px; }
 .nt-chip-remove:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
 
+/* A file dragged over the Spotlight: the whole dialog is the drop target. */
+.nt-spot[data-dropping] { box-shadow: 0 0 0 1.5px var(--ring), var(--shadow-lg); }
+
+/* The draft's attachments, one 64px thumb each; × shows on hover or focus, always on touch. */
+.nt-thumbs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.nt-thumb, .nt-media-item {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--muted);
+}
+/* why a layer above the media: an inset shadow on the box itself is painted under the image. */
+.nt-thumb::after, .nt-media-item::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--border);
+  pointer-events: none;
+}
+.nt-thumb { width: 64px; height: 64px; }
+.nt-thumb img, .nt-thumb video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.nt-thumb-play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(transparent, rgb(0 0 0 / 0.35));
+  color: #fff;
+  pointer-events: none;
+}
+.nt-thumb-play svg { width: 18px; height: 18px; fill: currentColor; filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.6)); }
+.nt-thumb-remove {
+  position: absolute;
+  z-index: 1;
+  top: 3px;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.6);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+.nt-thumb-remove svg { width: 12px; height: 12px; }
+.nt-thumb:hover .nt-thumb-remove, .nt-thumb-remove:focus-visible { opacity: 1; }
+.nt-thumb-remove:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+@media (hover: none) { .nt-thumb-remove { opacity: 1; } }
+
+/* Why files were not attached: HEIC, over 100 MB, more than 20. */
+.nt-spot-refused { margin: 0; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+
+/* A saved note's media in the view: videos play in place, an image opens the lightbox. */
+.nt-media {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 336px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.nt-media-item img, .nt-media-item video { display: block; height: 160px; width: auto; max-width: 100%; object-fit: cover; }
+.nt-media-open { display: block; padding: 0; border: 0; background: none; cursor: zoom-in; }
+.nt-media-open:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+/* why: the Spotlight is a modal dialog, which turns pointer events off on the page under it, and
+   bb's lightbox (experimental_ImageLightbox) opens there, so its buttons and backdrop took no clicks.
+   Of this plugin's portaled overlays, only the lightbox's root is aria-modal. */
+[data-bb-portaled-overlay][data-bb-plugin="notes"][aria-modal="true"] { pointer-events: auto; }
+
 .nt-spot-error { margin: 0; font-size: 12px; line-height: 16px; color: var(--destructive-text, var(--destructive)); }
 
 .nt-spot-foot { display: flex; align-items: center; gap: 4px; }
@@ -209,7 +286,7 @@
 }
 .nt-button:active:not(:disabled) { transform: scale(0.97); }
 
-/* The footer's @: types an @ at the caret. */
+/* The footer's 📎, and its @, which types an @ at the caret. */
 .nt-icon-button {
   display: grid;
   place-items: center;
@@ -225,6 +302,7 @@
   cursor: pointer;
   transition: background-color 150ms ease-out, color 150ms ease-out;
 }
+.nt-icon-button svg { width: 16px; height: 16px; }
 .nt-icon-button:active { transform: scale(0.96); }
 .nt-icon-button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .nt-button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
