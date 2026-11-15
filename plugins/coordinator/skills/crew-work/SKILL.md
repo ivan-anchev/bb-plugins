@@ -55,6 +55,11 @@ then stop:
 Say plainly when a criterion fails or you couldn't check it. Never report
 `done` without having run every check.
 
+After a `done` handoff, an independent verifier usually checks your commit in
+your environment, rerunning what proves each criterion: your coordinator
+hears of your handoff only with its verdict. Leave your environment as it is
+until you hear back. A dirty tree or a moved HEAD fails every criterion.
+
 A turn that ends without a handoff tells your coordinator you stopped without
 reporting, with your last answer attached. If the user types to you after you
 handed off, answer them; if that changes your work, hand off again.

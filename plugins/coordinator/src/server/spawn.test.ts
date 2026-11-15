@@ -9,7 +9,7 @@ const RETRIES = { title: "Add retries", brief: "Retry failed webhook deliveries 
 
 test("a started coordinator holds its role, is listed, and has its goal in GOAL.md", async () => {
   const kit = harness();
-  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
+  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
 
   const role = kit.store.roleOfThread(threadId);
   assert.equal(role?.kind, "coordinator");
@@ -19,7 +19,7 @@ test("a started coordinator holds its role, is listed, and has its goal in GOAL.
 
 test("binding twice, by the spawn answer and by thread.created, binds once", async () => {
   const kit = harness({ created: true, answer: "thread" });
-  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
+  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
 
   assert.equal(kit.bindings(), 1);
   assert.equal(kit.store.roleOfThread(threadId)?.kind, "coordinator");
@@ -27,7 +27,7 @@ test("binding twice, by the spawn answer and by thread.created, binds once", asy
 
 test("a ticket whose spawn answer was lost is bound by thread.created", async () => {
   const kit = harness({ created: true, answer: "lost" });
-  await assert.rejects(kit.spawner.coordinator(newThreadRequest("Migrate the webhook service")), /socket hang up/);
+  await assert.rejects(kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true), /socket hang up/);
 
   assert.equal(kit.store.roleOfThread("thr_1")?.kind, "coordinator");
   assert.deepEqual(kit.store.coordinators().map((c) => c.threadId), ["thr_1"]);
@@ -35,14 +35,14 @@ test("a ticket whose spawn answer was lost is bound by thread.created", async ()
 
 test("the spawn answer binds a thread whose thread.created never came", async () => {
   const kit = harness({ created: false, answer: "thread" });
-  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
+  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
 
   assert.equal(kit.store.roleOfThread(threadId)?.kind, "coordinator");
 });
 
 test("a thread another plugin made binds nothing, even carrying a live ticket", async () => {
   const kit = harness({ created: false, answer: "lost" });
-  await assert.rejects(kit.spawner.coordinator(newThreadRequest("Migrate the webhook service")));
+  await assert.rejects(kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true));
 
   await kit.threadCreated({ id: "thr_other", originPluginId: "another-plugin" }, kit.metadataOf("thr_1"));
   assert.equal(kit.store.roleOfThread("thr_other"), null);
@@ -53,8 +53,8 @@ test("a thread another plugin made binds nothing, even carrying a live ticket", 
 
 test("two coordinators get two rows and two memory folders", async () => {
   const kit = harness();
-  const first = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
-  const second = await kit.spawner.coordinator(newThreadRequest("Retire the cron box"));
+  const first = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
+  const second = await kit.spawner.coordinator(newThreadRequest("Retire the cron box"), true);
 
   const rows = kit.store.coordinators();
   assert.deepEqual(rows.map((c) => c.threadId), [second.threadId, first.threadId]);
@@ -68,7 +68,7 @@ test("two coordinators get two rows and two memory folders", async () => {
 
 test("a Coordinator runs on the provider and model picked in bb's composer, even ones it left unmarked", async () => {
   const kit = harness();
-  const { threadId } = await kit.spawner.coordinator({ ...newThreadRequest("Migrate the webhook service"), executionInputSources: { permissionMode: "explicit" } });
+  const { threadId } = await kit.spawner.coordinator({ ...newThreadRequest("Migrate the webhook service"), executionInputSources: { permissionMode: "explicit" } }, true);
 
   const thread = kit.thread(threadId);
   assert.deepEqual([thread.providerId, thread.execution?.model], ["claude-code", "opus"]);
@@ -89,7 +89,7 @@ test("a crew whose draft names no model runs on its Coordinator's provider and m
 for (const permissionMode of ["accept-edits", "full"] as const) {
   test(`a crew of a Coordinator on ${permissionMode} runs on auto, and on its Coordinator's provider and model`, async () => {
     const kit = harness();
-    const { threadId } = await kit.spawner.coordinator({ ...newThreadRequest("Migrate the webhook service"), permissionMode });
+    const { threadId } = await kit.spawner.coordinator({ ...newThreadRequest("Migrate the webhook service"), permissionMode }, true);
     assert.equal(kit.thread(threadId).execution?.permissionMode, permissionMode);
 
     const crew = kit.thread(threadIn(textOf(await kit.call("crew_start", RETRIES, threadId))));

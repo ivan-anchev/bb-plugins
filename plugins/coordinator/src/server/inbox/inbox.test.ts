@@ -8,9 +8,12 @@ const REPORT = { summary: "Retries land with backoff", did: ["Added exponential 
 const DONE = { status: "done", ...REPORT, headSha: "0123456789abcdef0123456789abcdef01234567" };
 const PLAN = memoryFileSchema.parse("PLAN.md");
 
-/** A Coordinator with crews started under these titles, its thread idle so a doorbell starts a turn. */
+/**
+ * A Coordinator with crews started under these titles, its thread idle so a doorbell starts a turn.
+ * Verification is off, so a done handoff is announced as soon as it is made (verify.test.ts covers it on).
+ */
 async function withCrews(...titles: string[]) {
-  const { kit, threadId, coordinatorId } = await coordinating();
+  const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
   const crewThreads: string[] = [];
   for (const title of titles) crewThreads.push(threadIn(textOf(await kit.call("crew_start", { title, brief: `Do ${title}.`, doneCriteria: ["npm test passes"] }, threadId))));
   kit.thread(threadId).status = "idle";
@@ -29,14 +32,14 @@ test("two crews that hand off at once to an idle Coordinator: one doorbell start
   await settled();
 
   assert.deepEqual(doorbells(), [
-    `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- c1 "Add retries" handed off: done`,
+    `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- c1 "Add retries" handed off: done, unverified`,
     `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- c2 "Dead letters" handed off: blocked`,
   ]);
   assert.equal(kit.queued(threadId).length, 1, "the second waits in bb's queue behind the turn the first started");
 
   const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
   assert.match(caughtUp, /^## Updates\n\n2 updates since your last catch-up, oldest first\./);
-  assert.match(caughtUp, /### c1 "Add retries" handed off: done\n\nAt [^\n]+ Its report, in its own words:\n\nStatus: done \(unverified[^\n]*\)\nSummary: Retries land with backoff\nCommit: 0123456789abcdef0123456789abcdef01234567/);
+  assert.match(caughtUp, /### c1 "Add retries" handed off: done\n\nAt [^\n]+ Its report, in its own words:\n\nStatus: done\nSummary: Retries land with backoff\nCommit: 0123456789abcdef0123456789abcdef01234567[\s\S]*#### Verdict\n\nUnverified: verification was off/);
   assert.match(caughtUp, /### c2 "Dead letters" handed off: blocked\n\n[^\n]+\n\nStatus: blocked\nSummary: Needs a staging key\n\n#### Did\n\n- Added exponential backoff\n\n#### Evidence\n\n- npm test: 12 passing\n\n#### Concerns\n\n- The staging queue is shared\n\n#### Deviations\n\nNone\./);
   assert.ok(caughtUp.indexOf("## Updates") < caughtUp.indexOf("## Board"));
 
@@ -58,7 +61,7 @@ test("two crews that hand off while the Coordinator is busy reach it as one door
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /2 updates since your last catch-up/);
   await settled();
 
-  assert.deepEqual(kit.delivered(threadId).slice(-1), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- c1 "Add retries" handed off: done`]);
+  assert.deepEqual(kit.delivered(threadId).slice(-1), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- c1 "Add retries" handed off: done, unverified`]);
   assert.deepEqual(kit.queued(threadId), [], "the doorbell rung for the second at dispatch was taken back once it was read");
 });
 
@@ -113,7 +116,7 @@ test("an event recorded while the send throws is announced by the next tick", as
 
   kit.sends.failure = null;
   await kit.tick();
-  assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- c1 "Add retries" handed off: done`]);
+  assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- c1 "Add retries" handed off: done, unverified`]);
   assert.deepEqual(kit.store.unannounced(coordinatorId), []);
 });
 
@@ -168,7 +171,7 @@ test("a doorbell bb gave up sending is taken out of its queue by the tick, and w
   await kit.tick();
   assert.deepEqual(kit.queued(threadId), [], "the failed doorbell is taken out of bb's queue");
   assert.equal(kit.store.doorbell(coordinatorId), null);
-  assert.deepEqual(kit.delivered(threadId), [`[${DISPLAY_NAME}] 2 updates. Call crew_catch_up to read them in full.\n- c1 "Add retries" handed off: done\n- c2 "Dead letters" handed off: blocked`]);
+  assert.deepEqual(kit.delivered(threadId), [`[${DISPLAY_NAME}] 2 updates. Call crew_catch_up to read them in full.\n- c1 "Add retries" handed off: done, unverified\n- c2 "Dead letters" handed off: blocked`]);
   assert.match(kit.warnings().join("\n"), /bb gave up sending the doorbell qm_1 [^\n]*: The provider exited before the turn started/);
 });
 

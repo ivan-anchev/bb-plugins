@@ -15,11 +15,11 @@ type ListedThread = CrewThread & { id: string; environmentBranchName: string | n
 
 type ListArgs = { threadIds: string[]; includeHidden: true; limit: number };
 
-/** The part of bb that lists crews' threads. */
-type ListBb = { sdk: { threads: { list(args: ListArgs): Promise<ListedThread[]> } } };
+/** The part of bb that lists threads by id, with the fields its caller reads. */
+type ListBb<Thread> = { sdk: { threads: { list(args: ListArgs): Promise<Thread[]> } } };
 
 /** The part of bb the board reads: crews' threads and their turns. */
-export type BoardBb = ListBb & TurnsBb;
+export type BoardBb = ListBb<ListedThread> & TurnsBb;
 
 // bb lists at most 200 threads by id per call.
 const IDS_PER_LIST = 200;
@@ -29,8 +29,8 @@ const IDS_PER_LIST = 200;
  * id, not by parent: a crew someone moved under another thread is still this coordinating
  * thread's crew. why filter here: bb lists archived threads by id too.
  */
-export async function listedThreads(bb: ListBb, threadIds: string[]): Promise<Map<string, ListedThread>> {
-  const listed = new Map<string, ListedThread>();
+export async function listedThreads<Thread extends { id: string; archivedAt: number | null; deletedAt: number | null }>(bb: ListBb<Thread>, threadIds: string[]): Promise<Map<string, Thread>> {
+  const listed = new Map<string, Thread>();
   for (let start = 0; start < threadIds.length; start += IDS_PER_LIST) {
     const threadIdsOfPage = threadIds.slice(start, start + IDS_PER_LIST);
     for (const thread of await bb.sdk.threads.list({ threadIds: threadIdsOfPage, includeHidden: true, limit: IDS_PER_LIST })) {
@@ -42,7 +42,7 @@ export async function listedThreads(bb: ListBb, threadIds: string[]): Promise<Ma
 
 const DIGEST = memoryFileSchema.parse("DIGEST.md");
 
-export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinator" | "latestHandoff">, memory: MemoryRoot) {
+export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinator" | "latestHandoff" | "verifies">, memory: MemoryRoot) {
   async function rows(id: CoordinatorId): Promise<BoardRow[]> {
     const coordinator = store.coordinator(id);
     // why: a coordinating thread starts crews through its tools, which it gets once its thread is bound.
@@ -57,7 +57,8 @@ export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinat
         const thread = threadId === null ? null : (threads.get(threadId) ?? null);
         const handoff = isOpen(crew) && thread !== null ? await currentHandoff(bb, store, crew) : null;
         const draft = draftOf(crew, { projectId: coordinator.projectId, environmentHostId });
-        return { crewId: crew.id, title: crew.title, threadId, branch: thread?.environmentBranchName ?? null, ...crewState(crew, thread, handoff), draft };
+        const verdict = handoff?.status === "done" ? handoff.verdict : null;
+        return { crewId: crew.id, title: crew.title, threadId, branch: thread?.environmentBranchName ?? null, ...crewState(crew, thread, handoff), verdict, draft };
       }),
     );
   }
@@ -65,12 +66,16 @@ export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinat
   return {
     rows,
 
-    /** The board as the user sees it: the digest, then every crew's row. */
+    /** The board as the user sees it: the verification switch, the digest, then every crew's row. */
     async read(id: CoordinatorId): Promise<Board> {
       const files = memory.of(id);
       const text = files.read(DIGEST).text;
       const modifiedAt = files.modifiedAt(DIGEST);
-      return { digest: text === null || modifiedAt === null ? null : { content: text.content, modifiedAt }, rows: await rows(id) };
+      return {
+        verify: store.verifies(id),
+        digest: text === null || modifiedAt === null ? null : { content: text.content, modifiedAt },
+        rows: await rows(id),
+      };
     },
   };
 }

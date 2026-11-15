@@ -3,11 +3,13 @@
 // bb threads carry no last-activity time.
 import { z } from "zod";
 import type { CoordinatorId, CrewId } from "./role.ts";
+import type { Verdict } from "./verdict.ts";
 
 export const handoffIdSchema = z.uuid().brand<"handoffId">();
 export type HandoffId = z.infer<typeof handoffIdSchema>;
 
-const COMMIT = /^[0-9a-f]{40}$/;
+/** A full commit id, as `git rev-parse HEAD` prints it. */
+export const commitSchema = z.string().regex(/^[0-9a-f]{40}$/);
 
 /** How a crew's work ended. */
 export const handoffStatusSchema = z.enum(["done", "blocked", "gave-up"]);
@@ -33,7 +35,7 @@ export const handoffReportSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("done"),
     ...reportFields,
-    headSha: z.string().regex(COMMIT),
+    headSha: commitSchema,
     prUrl: z.url({ protocol: /^https?$/ }).nullable(),
   }),
   z.object({ status: z.enum(["blocked", "gave-up"]), ...reportFields }),
@@ -53,7 +55,7 @@ export const handoffInputSchema = z
     concerns: itemsSchema.describe("Anything you are unsure of. [] for none."),
     deviations: itemsSchema.describe("Where you departed from the brief, and why. [] for none."),
     findings: itemsSchema.describe("Things you noticed outside your brief. [] for none."),
-    headSha: z.string().regex(COMMIT).optional().describe("done only, and required then: the 40-character output of `git rev-parse HEAD` after your last commit."),
+    headSha: commitSchema.optional().describe("done only, and required then: the 40-character output of `git rev-parse HEAD` after your last commit."),
     prUrl: z.url({ protocol: /^https?$/ }).optional().describe("done only: the pull request you opened, if any."),
   })
   .transform((input, ctx): HandoffReport => {
@@ -63,15 +65,16 @@ export const handoffInputSchema = z
     return z.NEVER;
   });
 
-/** Whether a done handoff has been checked. Until verification exists every one is waived; the board reads this row, never a setting. */
-export const verdictSchema = z.discriminatedUnion("state", [z.object({ state: z.literal("waived") })]);
-type Verdict = z.infer<typeof verdictSchema>;
-
 type Done = Extract<HandoffReport, { status: "done" }>;
 type NotDone = Exclude<HandoffReport, Done>;
 
-/** A stored handoff. `turnSeq` is the sequence of the `turn/started` event of the turn it was made in. */
-export type Handoff = { id: HandoffId; coordinatorId: CoordinatorId; crewId: CrewId; at: number; turnSeq: number } & ((Done & { verdict: Verdict }) | NotDone);
+type Made = { id: HandoffId; coordinatorId: CoordinatorId; crewId: CrewId; at: number; turnSeq: number };
+
+/** A handoff as the crew made it. `turnSeq` is the sequence of the `turn/started` event of the turn it was made in. */
+export type NewHandoff = Made & HandoffReport;
+
+/** A stored handoff: a done one with its verdict, which the store writes with it. */
+export type Handoff = Made & ((Done & { verdict: Verdict }) | NotDone);
 
 /** A handoff is current while its thread has started no later turn. `latestTurnSeq` is null when bb lists no turn. */
 export const handoffIsCurrent = (handoff: Pick<Handoff, "turnSeq">, latestTurnSeq: number | null): boolean => latestTurnSeq === null || latestTurnSeq <= handoff.turnSeq;

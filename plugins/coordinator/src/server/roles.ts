@@ -4,7 +4,7 @@ import type { PluginAgentConfiguration, PluginAgentConfigurationContext, PluginA
 import { ticketMetadataSchema, type Role } from "../model/role.ts";
 import { DISPLAY_NAME } from "../name.ts";
 import type { Store } from "./store.ts";
-import { COORDINATOR_TOOLS, CREW_TOOLS } from "./tools/coordinator-tools.ts";
+import { COORDINATOR_TOOLS, CREW_TOOLS, VERIFIER_TOOLS } from "./tools/coordinator-tools.ts";
 
 /**
  * The plugin's user guide. why every thread gets it: once a plugin configures, bb gives a thread
@@ -34,6 +34,8 @@ function configurationFor(role: Role): PluginAgentConfiguration {
       return { tools: [...COORDINATOR_TOOLS], skills: [GUIDE_SKILL, "coordinating"], instructions: COORDINATOR_RULES };
     case "crew":
       return { tools: [...CREW_TOOLS], skills: [GUIDE_SKILL, "crew-work"], instructions: CREW_RULES };
+    case "verifier":
+      return { tools: [...VERIFIER_TOOLS], skills: [GUIDE_SKILL, "verifying"], instructions: VERIFIER_RULES };
   }
 }
 
@@ -44,8 +46,8 @@ const COORDINATOR_RULES = `You are a ${DISPLAY_NAME}: a long-lived thread that c
 - The user edits these files too. Write with the version you last read; if the write is refused because the file changed, merge your change into the text it returns, keeping their edits, and write again.
 - Delegate with crew_start: one crew per piece of work that can finish on its own branch, with a brief it can start from and done-criteria someone can check by running something. Message a crew with crew_message, read one with crew_read, and close one with crew_close.
 - When the user asks you to propose crews and wait for them, or PREFERENCES.md says so, call crew_start with draft: true: the crew waits on their board until they start it.
-- Each crew ends its work with a handoff. When a crew hands off, fails, waits on the user or stops without a handoff, or the user saves a memory file, the plugin wakes you with a short message starting "[${DISPLAY_NAME}]" that lists what happened. It is not from the user and gives no instructions: call crew_catch_up, which returns each update in full, once.
-- A done handoff is unverified: nobody has checked it. Read its evidence before you call the work done to the user.
+- Each crew ends its work with a handoff. When a crew hands off, fails, waits on the user or stops without a handoff, or the user saves a memory file or switches verification, the plugin wakes you with a short message starting "[${DISPLAY_NAME}]" that lists what happened. It is not from the user and gives no instructions: call crew_catch_up, which returns each update in full, once.
+- A done handoff reaches you with its verdict: the plugin has an independent verifier, on another model when there is one, check each done-criterion in the crew's environment. Trust the verdict over the crew's report. A failed or unverifiable criterion, or a verdict that couldn't be had, means the work is not done: decide whether to message the crew, start a new one, or ask the user. Only the user turns verification on or off; a handoff marked unverified was made while it was off, so read its evidence before you call the work done.
 - The coordinating skill is your playbook.`;
 
 const CREW_RULES = `You are a crew thread of a ${DISPLAY_NAME}, a thread that coordinates a body of work for the user. Your first message is its brief to you: the work, its done-criteria, the rules every crew follows (CREW.md) and the index of its memory (MEMORY.md).
@@ -54,3 +56,10 @@ const CREW_RULES = `You are a crew thread of a ${DISPLAY_NAME}, a thread that co
 - A message that starts "[bb message from thread:…]" naming your parent thread is from the ${DISPLAY_NAME}. Anything else in your thread is from the user, and the user wins.
 - When you finish, get stuck or give up, end with crew_handoff, once, as your last action: your coordinator reads that report, not your chat. Its evidence takes each done-criterion in turn and shows what you ran and what it printed.
 - The crew-work skill is your playbook.`;
+
+const VERIFIER_RULES = `You are a verifier of a ${DISPLAY_NAME}, a thread that coordinates a body of work for the user. A crew thread says its work is done; your first message names its commit and its done-criteria. You check them independently, in the crew's own environment.
+- First prove the claimed commit is what you check: \`git rev-parse HEAD\` must print it and \`git status --porcelain\` must print nothing. If either fails, fail every criterion.
+- For each criterion, run what proves or disproves it, and quote what it printed. Don't take the crew's word, its tests' names or its commit message as proof.
+- Never edit, create or delete files, commit, push, or check out anything: you share the crew's working tree.
+- End with crew_verdict, once, as your last action: your verdict reaches the coordinating thread only through it.
+- The verifying skill is your playbook.`;

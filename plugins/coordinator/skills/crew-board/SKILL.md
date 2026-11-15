@@ -1,6 +1,6 @@
 ---
 name: crew-board
-description: Explain the coordinating-thread plugin (package bb-plugin-coordinator). Its panel in bb's navigation rail starts long-lived coordinating threads with bb's own composer and lists them. A coordinating thread keeps its memory as markdown files on the bb server, which the user edits too without either side overwriting the other, and starts crew threads that each work on their own branch from a brief and done-criteria, or saves them as drafts the user edits and starts. A crew ends with a handoff; the plugin wakes the thread with a short update message, and crew_catch_up returns each update whole. The Board shows the digest and every crew under Needs you, Ready for review, Working, Idle or Done. Use when the user asks how to start a coordinating thread or a crew, what the board, its groups or a row mean, what a handoff or an update message is, why the thread woke, where the memory files are, why a save was refused, which thread has which crew_ tools, how to edit or start a draft, or what the plugin can't do yet.
+description: Explain the coordinating-thread plugin (package bb-plugin-coordinator). The panel in bb's navigation rail starts long-lived coordinating threads with bb's composer and lists them. A coordinating thread keeps its memory as markdown files on the bb server, which the user edits too, and starts crew threads that each work on their own branch from a brief and done-criteria, or saves them as drafts the user edits and starts. A crew ends with a handoff; a done one is checked by an independent hidden verifier before the thread hears of it, unless the user switched verification off. The Board shows the digest and every crew under Needs you, Ready for review, Verifying, Working, Idle or Done with each verdict. Use when the user asks how to start a coordinating thread or a crew, what the board, a group, a row or a verdict means, how verification works or how to turn it off, what a handoff or an update is, why the thread woke, where memory lives, which thread has which crew_ tools, how drafts work, or what is missing.
 ---
 
 # Coordinating threads
@@ -17,7 +17,10 @@ hands each piece to a **crew thread**. It has no CLI commands and no settings.
    sidebar's order), a fresh worktree of its default branch on the machine
    running bb, and **auto** permissions. Change any picker as with any new
    thread.
-4. Type the goal and submit. The new thread opens.
+4. Leave **Verify done handoffs** on (below the composer) to have every done
+   handoff checked before the thread hears of it, or turn it off (see
+   [Verification](#verification)).
+5. Type the goal and submit. The new thread opens.
 
 The panel lists every coordinating thread bb still lists, under its project,
 newest first, with bb's status glyph. A row opens its thread, its **Board**
@@ -50,8 +53,10 @@ From its first turn the thread has:
   Its rules tell it to keep its plan in `PLAN.md`, each standing preference
   you give it in `PREFERENCES.md`, and a digest in `DIGEST.md`.
 
-A crew thread is offered only `crew_memory_read` and `crew_handoff`. Any other thread is offered
-none of these tools, and a call from one is refused. A thread's role comes
+A crew thread is offered only `crew_memory_read` and `crew_handoff`, and a
+verifier thread only `crew_memory_read` and `crew_verdict`. Any other thread
+is offered none of these tools, and a call from one is refused. No tool can
+turn verification on or off. A thread's role comes
 from the plugin's own database, so editing a thread's metadata grants nothing.
 
 ## Crews
@@ -149,13 +154,19 @@ with `crew_handoff`, and the plugin stores everything it sees:
 - **The user saved a memory file** in the Memory editor. The thread's own
   writes don't count.
 
+A `done` handoff is announced only together with its verdict (see
+[Verification](#verification)); a blocked or gave-up one, and everything
+else, at once. The user turning verification on or off is an update too.
+
 Each one wakes the coordinating thread with one short message: the plugin's
 name in brackets, how many updates there are, and one line each, such as
-`- c1 "Add retries" handed off: done` or `- The user edited PLAN.md`. The
+`- c1 "Add retries" handed off: done, failed verification`,
+`- c2 "Dead letters" handed off: blocked` or `- The user edited PLAN.md`. The
 message reaches the thread as if you typed it, so it holds only facts the
 plugin derived and the titles the thread gave its crews: never a crew's
-summary, answer, error or question. Those are in `crew_catch_up`, which
-returns every update since the last catch-up, whole, once.
+summary, answer, error or question, nor a verifier's evidence. Those are in
+`crew_catch_up`, which returns every update since the last catch-up, whole,
+once.
 
 The message never interrupts a running turn: it waits in the thread's queue
 until the turn ends. While one waits, the next updates wait for it to be
@@ -166,25 +177,74 @@ once-a-minute tick, which also forgets a waiting message bb no longer holds.
 If bb gives up sending a waiting message (its retries spent), the tick takes
 it out of the queue and sends what it announced again.
 
+## Verification
+
+Every `done` handoff claims an exact commit. While a coordinating thread's
+**Verify done handoffs** switch is on (the default), the plugin itself starts
+a **verifier** for each one:
+
+- **Where**: a hidden thread, a child of the crew's thread, in the crew's own
+  environment. Archiving the coordinating thread takes it along.
+- **On what model**: the coordinating thread's, if the crew runs on another;
+  else the default model of another provider bb can run there; else another
+  model of the crew's provider; else the crew's own, which the verdict then
+  says. The provider and model are always chosen by the plugin, never left to
+  bb's default.
+- **What it does**: proves `git rev-parse HEAD` is the claimed commit and the
+  tree is clean (otherwise every criterion fails), then runs what proves or
+  disproves each done-criterion and quotes the output. It never edits,
+  commits or pushes, and it gets none of the crew's own report. It ends with
+  `crew_verdict`: each criterion `pass`, `fail` or `unverifiable`, with its
+  evidence, and any findings. A verdict that skips, repeats or invents a
+  criterion, or passes one on another commit, is refused.
+- **Outcome**: derived, never stored. Verified only when every criterion
+  passed; an unverifiable one is not a pass.
+- **No verdict**: a verifier that ends a turn without one is reminded once;
+  a second time, or a verifier bb wouldn't start or whose thread was
+  archived, reads "Couldn't verify" with the reason.
+- **A newer done handoff** from the same crew stops the older verifier, and
+  only the newer handoff is checked and announced.
+- **A verifier that never started** (the plugin reloaded at that moment) is
+  started by the once-a-minute tick.
+
+Turn verification off or on with the switch at the top of the board (or on
+the New page when starting). It applies to handoffs made after it: turning it
+back on doesn't check earlier ones. Each change tells the coordinating
+thread. With it off, a done handoff waits under Ready for review as
+"Unverified: <summary>".
+
 ## The board
 
 The **Board** tab in a coordinating thread's side panel, and the **Board**
 page from its row in the panel, show the same board:
 
+- **Verify done handoffs**: the switch for this coordinating thread.
 - **Digest**: `DIGEST.md`, the coordinating thread's latest summary for you,
   and when it last changed.
 - **Crews**, each with its id, title, a one-line headline and its branch,
   grouped:
   - **Needs you**: a draft waiting for you to start it, waiting for your
-    answer or approval in its thread, its last turn failed, or it handed
-    off as blocked ("Blocked: <summary>") or gave up ("Gave up: <summary>").
-  - **Ready for review**: it handed off as done. Nobody has checked the work
-    yet, so the headline reads "Unverified: <summary>".
+    answer or approval in its thread, its last turn failed, it handed
+    off as blocked ("Blocked: <summary>") or gave up ("Gave up: <summary>"),
+    its done handoff failed verification ("✗ Failed verification:
+    <summary>"), or it couldn't be verified ("Couldn't verify: <summary>").
+  - **Ready for review**: it handed off as done and every criterion passed
+    ("✓ Verified: <summary>"), or it handed off while verification was off
+    ("Unverified: <summary>").
+  - **Verifying**: its verifier is starting or checking ("Verifying:
+    <summary>"). **Verifier** opens the hidden verifier thread.
   - **Working**: its thread is running, starting, waiting to start or
     stopping.
   - **Idle**: its turn ended without a handoff.
   - **Done**: resolved, stopped or archived through `crew_close`, or its
     thread was archived or deleted.
+
+A row placed by a verdict has a **Verdict** button. It opens the verdict
+under the row: how many criteria passed, the commit checked and the provider
+and model it ran on, then each criterion with Pass, Fail or Unverifiable. A
+failed or unverifiable criterion shows its evidence; a passed one folds it
+away until you open it. Findings follow, and **Open verifier thread** opens
+the verifier. A verdict that couldn't be had shows why.
 
 A handoff places its crew until the crew's thread starts another turn: type
 into a crew that handed off and it moves to Working, then to Idle if it ends
@@ -234,8 +294,9 @@ and the Memory page read the new text on their next read.
 
 ## Not yet
 
-- Nobody checks a done handoff yet: it stays Unverified, and the coordinating
-  thread is told to read its evidence before calling the work done.
+- A failed verdict isn't sent back to the crew: the coordinating thread
+  decides what to do with it.
+- A pull request's CI isn't part of a verdict.
 - Pull request and CI changes don't wake the thread.
 - The coordinating thread chooses no model for a crew; it gets the
   coordinating thread's unless you pick one in a draft's editor.

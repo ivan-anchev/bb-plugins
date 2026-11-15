@@ -4,11 +4,12 @@
 // again (on every tick, after a reload) sends only what no doorbell has announced yet.
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
 import { titlesOf } from "../../model/crew.ts";
-import type { Handoff } from "../../model/handoff.ts";
+import type { HandoffId, NewHandoff } from "../../model/handoff.ts";
 import type { InboxEvent, StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { doorbellText } from "../../model/inbox/wake-text.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import type { Store } from "../store.ts";
+import type { Verdict } from "../../model/verdict.ts";
+import type { Store, VerdictFrom } from "../store.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
 type SendArgs = Parameters<Threads["send"]>[0];
@@ -34,7 +35,21 @@ type InboxBb = {
 
 type InboxStore = Pick<
   Store,
-  "coordinator" | "crews" | "insertHandoff" | "insertEvent" | "unannounced" | "coordinatorsToRing" | "announce" | "takeUnread" | "doorbell" | "doorbells" | "clearDoorbell" | "reopenDoorbell"
+  | "coordinator"
+  | "crews"
+  | "handoff"
+  | "insertHandoff"
+  | "settleVerdict"
+  | "setVerify"
+  | "insertEvent"
+  | "unannounced"
+  | "coordinatorsToRing"
+  | "announce"
+  | "takeUnread"
+  | "doorbell"
+  | "doorbells"
+  | "clearDoorbell"
+  | "reopenDoorbell"
 >;
 
 type Doorbell = ReturnType<Store["doorbells"]>[number];
@@ -66,7 +81,7 @@ export function createInbox({ bb, store, onChange }: Deps) {
     ringing.add(id);
     let delivery: "sent" | "queued";
     try {
-      const sent = await bb.sdk.threads.send({ threadId: coordinator.threadId, input: [{ type: "text", text: doorbellText(events, titlesOf(store.crews(id))), mentions: [] }], mode: "queue-if-active" });
+      const sent = await bb.sdk.threads.send({ threadId: coordinator.threadId, input: [{ type: "text", text: doorbellText(events, { titles: titlesOf(store.crews(id)), handoff: store.handoff }), mentions: [] }], mode: "queue-if-active" });
       // why record a send that lands after a dispose: it happened, and announcing it again would ring twice.
       store.announce(id, events.map((event) => event.id), sent.delivery === "queued" ? sent.queuedMessage.id : null, Date.now());
       delivery = sent.delivery;
@@ -155,10 +170,26 @@ export function createInbox({ bb, store, onChange }: Deps) {
   bb.events.on("message.cancelled", settle);
 
   return {
-    /** Stores the handoff, its verdict and its event together, then wakes its coordinating thread. */
-    handoff(handoff: Handoff): void {
-      store.insertHandoff(handoff);
+    /**
+     * Stores the handoff with its verdict, and its event unless a verifier is still to check it, then
+     * wakes its coordinating thread. Returns what the store did (see insertHandoff).
+     */
+    handoff(handoff: NewHandoff): ReturnType<Store["insertHandoff"]> {
+      const inserted = store.insertHandoff(handoff);
       recorded(handoff.coordinatorId);
+      return inserted;
+    },
+
+    /** Settles a waiting verdict and announces its handoff, if it is still where `from` says; says whether it was. */
+    settle(handoffId: HandoffId, from: VerdictFrom, verdict: Extract<Verdict, { state: "returned" | "could-not-run" }>): boolean {
+      const id = store.settleVerdict(handoffId, from, verdict, Date.now());
+      if (id !== null) recorded(id);
+      return id !== null;
+    },
+
+    /** The user's switch: turns verification on or off, and tells the coordinating thread when it changed. */
+    setVerify(id: CoordinatorId, verify: boolean): void {
+      if (store.setVerify(id, verify, Date.now())) recorded(id);
     },
 
     /** Stores the event, then wakes its coordinating thread. A crash between the two is rung by the next tick. */

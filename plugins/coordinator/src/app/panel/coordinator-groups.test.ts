@@ -12,6 +12,7 @@ const coordinator = (n: number, projectId: string): Coordinator => ({
   id: coordinatorIdSchema.parse(`6f1c2a52-6b8e-4c43-9a51-1d6a3c0b7e1${n}`),
   threadId: `thr_${n}`,
   projectId,
+  verify: true,
   createdAt: n,
 });
 

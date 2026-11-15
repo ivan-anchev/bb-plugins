@@ -7,9 +7,11 @@ import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { typedText, type Coordinator } from "../contract.ts";
 import { environmentOf, type Crew, type RequestedPlacement } from "../model/crew.ts";
+import type { Handoff } from "../model/handoff.ts";
 import { memoryFileSchema } from "../model/memory-file.ts";
 import { coordinatorIdSchema, ticketMetadataSchema, type CrewId, type Role } from "../model/role.ts";
 import { crewBrief } from "./crew/brief.ts";
+import { verifierBrief } from "./verify/verifier-brief.ts";
 import type { MemoryRoot } from "./memory/memory-files.ts";
 import type { Store } from "./store.ts";
 
@@ -38,16 +40,29 @@ type SpawnBb = {
   events: { on(event: "thread.created", handler: (payload: { thread: { id: string; originPluginId: string | null } }) => void | Promise<void>): void };
 };
 
-type SpawnStore = Pick<Store, "insertCoordinator" | "insertCrew" | "crewTicket" | "bindTicket" | "crew">;
+type SpawnStore = Pick<Store, "insertCoordinator" | "insertCrew" | "insertVerifierTicket" | "crewTicket" | "bindTicket" | "crew">;
 
 /** What crew_start asks for. */
 export type CrewRequest = Pick<Crew, "title" | "brief" | "doneCriteria"> & { placement: RequestedPlacement };
+
+/** What a verifier runs on: chosen by the plugin, never left to bb's default. */
+export type VerifierExecution = { providerId: string; model: string; reasoningLevel: string };
+
+/** What a verifier checks: one done handoff of a started crew, in the crew's environment. */
+export type VerifierRequest = {
+  coordinator: Coordinator;
+  crew: Crew & { launch: { kind: "started" } };
+  handoff: Extract<Handoff, { status: "done" }>;
+  environmentId: string;
+  execution: VerifierExecution;
+};
 
 /** A crew's spawn: its thread, or why bb didn't confirm one, which leaves the crew a draft. */
 export type CrewLaunch = { crewId: CrewId } & ({ kind: "started"; threadId: string } | { kind: "failed"; error: string });
 
 // why auto: a crew works unattended, and a permission prompt on every edit would hold it until the
-// user answers. The Coordinator starts with auto for the same reason.
+// user answers. The Coordinator starts with auto for the same reason, and so does a verifier, which
+// runs the crew's tests.
 const CREW_PERMISSION_MODE = "auto";
 
 const CREW_RULES = memoryFileSchema.parse("CREW.md");
@@ -100,10 +115,10 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
      * ticket and seeded memory exist before the spawn, so its first session and first tool call
      * find them.
      */
-    async coordinator(request: NewThreadRequest): Promise<{ threadId: string }> {
+    async coordinator(request: NewThreadRequest, verify: boolean): Promise<{ threadId: string }> {
       const id = coordinatorIdSchema.parse(randomUUID());
       const ticket = randomUUID();
-      store.insertCoordinator({ id, ticket, projectId: request.projectId, createdAt: Date.now() });
+      store.insertCoordinator({ id, ticket, projectId: request.projectId, verify, createdAt: Date.now() });
       memory.of(id).seed(typedText(request));
       return { threadId: await spawnWith(ticket, picked(request)) };
     },
@@ -142,6 +157,31 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
         if (launch?.kind === "started") return { crewId: crew.id, kind: "started", threadId: launch.threadId };
         return { crewId: crew.id, kind: "failed", error: error instanceof Error ? error.message : String(error) };
       }
+    },
+
+    /**
+     * Spawns a hidden verifier for a done handoff: a child of the crew's thread in the crew's own
+     * environment, so it checks the very tree the crew committed in. Its verdict starts running
+     * when its ticket binds. Returns its thread.
+     */
+    verifier({ coordinator, crew, handoff, environmentId, execution }: VerifierRequest): Promise<string> {
+      const ticket = randomUUID();
+      store.insertVerifierTicket(ticket, { kind: "verifier", coordinatorId: coordinator.id, crewId: crew.id, handoffId: handoff.id }, Date.now());
+      return spawnWith(ticket, {
+        projectId: coordinator.projectId,
+        title: `Verify ${crew.id}: ${crew.title}`,
+        parentThreadId: crew.launch.threadId,
+        // why: archiving or deleting the coordinating thread takes its verifiers with it.
+        lifecycleOwnerThreadId: coordinator.threadId,
+        // why off: the plugin reads the verdict through crew_verdict, and the crew must not be woken by it.
+        parentNotifications: "off",
+        // why hidden: the board links it; it would only crowd the sidebar.
+        visibility: "hidden",
+        ...execution,
+        permissionMode: CREW_PERMISSION_MODE,
+        environment: { type: "reuse", environmentId },
+        prompt: verifierBrief(crew, handoff),
+      });
     },
   };
 }

@@ -1,10 +1,11 @@
-// The Board's RPC, for a coordinating thread the store knows: its read, and the user's edits and
-// Starts of its drafts.
+// The Board's RPC, for a coordinating thread the store knows: its read, its verification switch,
+// and the user's edits and Starts of its drafts.
 import { experimental_PluginRpcRefusal as Refusal, type PluginRpcHandlers } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { typedText, type coordinatorContract } from "../../contract.ts";
 import { briefSchema, type DraftEdit } from "../../model/crew.ts";
 import type { CoordinatorId } from "../../model/role.ts";
+import type { Inbox } from "../inbox/inbox.ts";
 import type { Store } from "../store.ts";
 import type { BoardReader } from "./board.ts";
 import type { Crews } from "./crews.ts";
@@ -13,9 +14,10 @@ type Deps = {
   store: Pick<Store, "isCoordinator" | "coordinator">;
   board: Pick<BoardReader, "read">;
   crews: Pick<Crews, "updateDraft" | "startDraft">;
+  inbox: Pick<Inbox, "setVerify">;
 };
 
-export function boardHandlers({ store, board, crews }: Deps): PluginRpcHandlers<Pick<typeof coordinatorContract, "board" | "updateDraft" | "startDraft">> {
+export function boardHandlers({ store, board, crews, inbox }: Deps): PluginRpcHandlers<Pick<typeof coordinatorContract, "board" | "setVerify" | "updateDraft" | "startDraft">> {
   // why refuse an unknown id: it would read as a board with no crews.
   function known(id: CoordinatorId): CoordinatorId {
     if (!store.isCoordinator(id)) throw new Refusal({ code: "not_found", message: `There is no coordinating thread ${id}.` });
@@ -24,6 +26,11 @@ export function boardHandlers({ store, board, crews }: Deps): PluginRpcHandlers<
 
   return {
     board: ({ coordinatorId }) => board.read(known(coordinatorId)),
+
+    setVerify: ({ coordinatorId, verify }) => {
+      inbox.setVerify(known(coordinatorId), verify);
+      return {};
+    },
 
     updateDraft: ({ coordinatorId, crewId, request, doneCriteria }) => {
       const coordinator = store.coordinator(known(coordinatorId));

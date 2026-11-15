@@ -1,14 +1,16 @@
-// The board of one coordinating thread: its digest, then its crews grouped Needs you, Ready for
-// review, Working, Idle and Done. The Board tab in the thread and the Board page in the panel both
+// The board of one coordinating thread: its verification switch and its digest, then its crews
+// grouped Needs you, Ready for review, Verifying, Working, Idle and Done. The Board tab in the thread and the Board page in the panel both
 // draw it, from one read; each gives it the scrolling root it sits in.
-import { experimental_Icon as Icon, experimental_useRpcQuery, Markdown, useBbNavigate } from "@get-bb/plugin-sdk/app";
-import { useId, type Ref } from "react";
+import { experimental_useRpcMutation, experimental_useRpcQuery, Markdown } from "@get-bb/plugin-sdk/app";
+import { useId, useState } from "react";
 import { coordinatorContract as contract, type Board as BoardData, type BoardRow } from "../../contract.ts";
 import { BOARD_STATE_LABELS, byState, type BoardState } from "../../model/crew-state.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import { useFocusKeptByKey } from "../ui/focus-hand-off.ts";
 import { ReadFailure } from "../ui/read-failure.tsx";
+import { Switch } from "../ui/switch.tsx";
+import { CrewRow } from "./crew-row.tsx";
 import { DraftRow } from "./draft/draft-row.tsx";
 import { DroppedEdit } from "./draft/dropped-edit.tsx";
 
@@ -17,14 +19,54 @@ export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
   // why: each heading labels its section by id, and a page may show more than one board.
   const ids = useId();
   return (
-    <div className="flex flex-col gap-6">
+    // why a container: the board is as narrow as a side panel in the Board tab, whatever the window's width.
+    <div className="@container flex flex-col gap-6">
       {read.error !== null && <ReadFailure onRetry={() => void read.refetch()}>Could not read the board: {read.error.message}</ReadFailure>}
       {read.data === undefined && read.error === null && <p className="px-2 text-sm text-muted-foreground">Loading the board…</p>}
       {read.data !== undefined && (
         <>
+          <VerifySwitch coordinatorId={coordinatorId} verify={read.data.verify} />
           <Digest ids={ids} digest={read.data.digest} />
           <Crews ids={ids} coordinatorId={coordinatorId} rows={read.data.rows} />
         </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The board's switch for verifying done handoffs. It shows what the user asked for while the change
+ * saves, and the stored value once the board reads it back.
+ */
+function VerifySwitch({ coordinatorId, verify }: { coordinatorId: CoordinatorId; verify: boolean }) {
+  const save = experimental_useRpcMutation({ contract, method: "setVerify" });
+  const [asked, setAsked] = useState<boolean | null>(null);
+  // why during render: once the board reads back what was asked, the stored value takes over.
+  if (asked !== null && asked === verify) setAsked(null);
+  const shown = asked ?? verify;
+
+  function change(next: boolean) {
+    setAsked(next);
+    save.mutate({ coordinatorId, verify: next }).catch(() => setAsked(null));
+  }
+
+  return (
+    <div className="flex flex-col gap-1 px-2">
+      <Switch
+        checked={shown}
+        onChange={change}
+        pending={save.isPending}
+        label="Verify done handoffs"
+        hint={
+          shown
+            ? `A hidden verifier, on another model when there is one, checks each done handoff against its criteria before the ${DISPLAY_NAME} hears of it.`
+            : `Done handoffs reach the ${DISPLAY_NAME} unverified. Turning this on checks handoffs from then on.`
+        }
+      />
+      {save.error !== null && (
+        <p role="alert" className="pl-11 text-xs text-destructive-text">
+          Could not change it: {save.error.message}
+        </p>
       )}
     </div>
   );
@@ -72,7 +114,7 @@ function Crews({ ids, coordinatorId, rows }: { ids: string; coordinatorId: Coord
           <li key={row.crewId}>
             {row.draft === null ? (
               <>
-                <Row ref={keepFocus(row.crewId)} row={row} />
+                <CrewRow ref={keepFocus(row.crewId)} row={row} />
                 <DroppedEdit coordinatorId={coordinatorId} row={row} />
               </>
             ) : (
@@ -88,43 +130,11 @@ function Crews({ ids, coordinatorId, rows }: { ids: string; coordinatorId: Coord
 const DOT: Record<BoardState, string> = {
   "needs-you": "bg-warning",
   "ready-for-review": "bg-pr-merged",
+  verifying: "bg-attention",
   working: "bg-success",
   idle: "bg-muted-foreground",
   done: "border border-muted-foreground",
 };
-
-/** A crew: its id, title, headline and branch. One with a thread opens it. */
-// why a grid: the headline lines up under the title, whatever the id's width.
-const ROW = "grid w-full grid-cols-[2.25rem_minmax(0,1fr)] items-baseline gap-x-2 gap-y-0.5 rounded-md px-2 py-1.5 text-left";
-
-function Row({ ref, row }: { ref: Ref<HTMLButtonElement>; row: BoardRow }) {
-  const navigate = useBbNavigate();
-  const body = (
-    <>
-      <span className="font-mono text-xs text-muted-foreground">{row.crewId}</span>
-      <span className="truncate text-sm">{row.title}</span>
-      <span className="col-start-2 text-xs text-muted-foreground">{row.headline}</span>
-      {row.branch !== null && (
-        <span className="col-start-2 flex min-w-0 items-center gap-1 font-mono text-xs text-muted-foreground">
-          <Icon name="GitBranch" className="size-3 shrink-0" aria-hidden />
-          <span className="truncate">{row.branch}</span>
-        </span>
-      )}
-    </>
-  );
-  const threadId = row.threadId;
-  if (threadId === null) return <div className={ROW}>{body}</div>;
-  return (
-    <button
-      ref={ref}
-      type="button"
-      onClick={() => navigate.toThread(threadId)}
-      className={`${ROW} cursor-pointer hover:bg-state-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring`}
-    >
-      {body}
-    </button>
-  );
-}
 
 /** The time the digest changed: today's as a time, an older one with its date. */
 function updatedAt(modifiedAt: number): string {

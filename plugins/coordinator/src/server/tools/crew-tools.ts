@@ -3,17 +3,17 @@
 // doorbell. The caller's role comes from the plugin's database by its thread id, never from its
 // metadata.
 import { randomUUID } from "node:crypto";
-import { handoffIdSchema, handoffInputSchema, type Handoff } from "../../model/handoff.ts";
+import { handoffIdSchema, handoffInputSchema } from "../../model/handoff.ts";
 import { latestTurnSeq, type TurnsBb } from "../crew/handoffs.ts";
-import type { Inbox } from "../inbox/inbox.ts";
 import type { Store } from "../store.ts";
+import type { Verify } from "../verify/verify.ts";
 import { failed, type ToolsBb } from "./tool-kit.ts";
 
 export const HANDOFF = "crew_handoff";
 
-type Deps = { store: Pick<Store, "roleOfThread" | "crew">; inbox: Pick<Inbox, "handoff"> };
+type Deps = { store: Pick<Store, "roleOfThread" | "crew">; verify: Pick<Verify, "handoff"> };
 
-export function registerCrewTools(bb: ToolsBb & TurnsBb, { store, inbox }: Deps): void {
+export function registerCrewTools(bb: ToolsBb & TurnsBb, { store, verify }: Deps): void {
   bb.agents.registerTool({
     name: HANDOFF,
     description:
@@ -31,12 +31,10 @@ export function registerCrewTools(bb: ToolsBb & TurnsBb, { store, inbox }: Deps)
       const turnSeq = await latestTurnSeq(bb, threadId);
       // why throw: this call runs inside a turn, so bb has its turn/started event.
       if (turnSeq === null) throw new Error("bb lists no turn for this thread, so the handoff can't be tied to one. Try again.");
-      const base = { id: handoffIdSchema.parse(randomUUID()), coordinatorId: crew.coordinatorId, crewId: crew.id, at: Date.now(), turnSeq };
-      const handoff: Handoff = report.status === "done" ? { ...base, ...report, verdict: { state: "waived" } } : { ...base, ...report };
-      inbox.handoff(handoff);
-      return report.status === "done"
-        ? "Handed off. Your coordinator has your report, marked unverified until someone checks it. Stop here."
-        : "Handed off. Your coordinator has your report. Stop here.";
+      const verdict = await verify.handoff({ id: handoffIdSchema.parse(randomUUID()), coordinatorId: crew.coordinatorId, crewId: crew.id, at: Date.now(), turnSeq, ...report });
+      if (verdict === null) return "Handed off. Your coordinator has your report. Stop here.";
+      if (verdict.state === "waived") return "Handed off. Your coordinator has your report, marked unverified: verification is off. Stop here.";
+      return "Handed off. A verifier now checks your commit against the done-criteria in this environment, and your coordinator gets your report with its verdict. Stop here, and change nothing in this environment until you hear back.";
     },
   });
 }

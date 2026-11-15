@@ -4,13 +4,21 @@ import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import type { Crew } from "./crew.ts";
 import type { Handoff } from "./handoff.ts";
+import { outcome, type Outcome } from "./verdict.ts";
 
 /** The board's groups, in the order it shows them. */
-export const boardStateSchema = z.enum(["needs-you", "ready-for-review", "working", "idle", "done"]);
+export const boardStateSchema = z.enum(["needs-you", "ready-for-review", "verifying", "working", "idle", "done"]);
 export type BoardState = z.infer<typeof boardStateSchema>;
 
 /** Each group's name, as the board and crew_catch_up show it. */
-export const BOARD_STATE_LABELS: Record<BoardState, string> = { "needs-you": "Needs you", "ready-for-review": "Ready for review", working: "Working", idle: "Idle", done: "Done" };
+export const BOARD_STATE_LABELS: Record<BoardState, string> = {
+  "needs-you": "Needs you",
+  "ready-for-review": "Ready for review",
+  verifying: "Verifying",
+  working: "Working",
+  idle: "Idle",
+  done: "Done",
+};
 
 /** The rows under each state that has any, in the board's order; rows keep their order. */
 export function byState<Row extends { state: BoardState }>(rows: readonly Row[]): { state: BoardState; rows: Row[] }[] {
@@ -64,14 +72,30 @@ function handedOff(handoff: Handoff): { state: BoardState; headline: string } {
     case "gave-up":
       return { state: "needs-you", headline: `Gave up: ${handoff.summary}` };
     case "done":
-      switch (handoff.verdict.state) {
-        case "waived":
-          return { state: "ready-for-review", headline: `Unverified: ${handoff.summary}` };
-        default:
-          return handoff.verdict.state satisfies never;
-      }
+      return checked(handoff.summary, outcome(handoff.verdict));
     default:
       return handoff satisfies never;
+  }
+}
+
+/** A done handoff, placed by its verdict. The board never reads the switch: a handoff keeps the verdict it was made with. */
+function checked(summary: string, verdict: Outcome): { state: BoardState; headline: string } {
+  switch (verdict) {
+    case "pending":
+      return { state: "verifying", headline: `Verifying: ${summary}` };
+    case "pass":
+      return { state: "ready-for-review", headline: `✓ Verified: ${summary}` };
+    case "fail":
+      return { state: "needs-you", headline: `✗ Failed verification: ${summary}` };
+    case "could-not-run":
+      return { state: "needs-you", headline: `Couldn't verify: ${summary}` };
+    case "unverified":
+      return { state: "ready-for-review", headline: `Unverified: ${summary}` };
+    case "superseded":
+      // why idle: only an earlier handoff is ever replaced, and the board shows a crew's latest. Nothing checks it, so it is not ready.
+      return { state: "idle", headline: `Replaced by a newer handoff: ${summary}` };
+    default:
+      return verdict satisfies never;
   }
 }
 

@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Crew } from "./crew.ts";
-import { crewState, type CrewThread } from "./crew-state.ts";
+import { crewState, type BoardState, type CrewThread } from "./crew-state.ts";
 import { handoffIdSchema, handoffIsCurrent, type Handoff } from "./handoff.ts";
 import { coordinatorIdSchema, crewIdSchema } from "./role.ts";
+import type { CriterionResult, Verdict } from "./verdict.ts";
 
 const crew: Crew = {
   id: crewIdSchema.parse("c1"),
@@ -88,4 +89,33 @@ test("after a handoff, a new turn makes the crew Working, and its end with no ne
 test("a crew waiting on the user or failed Needs you, even with a current handoff", () => {
   assert.equal(crewState(crew, thread("idle", true), done).state, "needs-you");
   assert.equal(crewState(crew, thread("error"), done).headline, "Its last turn failed");
+});
+
+test("an idle crew's done handoff is placed by its verdict, for every verdict state", () => {
+  const checked = (results: CriterionResult[]): Verdict => ({
+    state: "returned",
+    verifierThreadId: "thr_v",
+    headSha: "a".repeat(40),
+    criteria: results.map((result) => ({ criterion: "npm test passes", result, evidence: "npm test: 1 failing" })),
+    findings: [],
+    model: { providerId: "codex", model: "gpt-default" },
+    sameModel: false,
+  });
+  const cases: [Verdict, BoardState, string][] = [
+    [{ state: "queued" }, "verifying", "Verifying: Retries land with backoff"],
+    [{ state: "running", verifierThreadId: "thr_v", nudged: false }, "verifying", "Verifying: Retries land with backoff"],
+    [checked(["pass", "pass"]), "ready-for-review", "✓ Verified: Retries land with backoff"],
+    [checked(["pass", "fail"]), "needs-you", "✗ Failed verification: Retries land with backoff"],
+    [checked(["unverifiable"]), "needs-you", "✗ Failed verification: Retries land with backoff"],
+    [{ state: "could-not-run", verifierThreadId: "thr_v", reason: "its verifier stopped without a verdict" }, "needs-you", "Couldn't verify: Retries land with backoff"],
+    [{ state: "superseded" }, "idle", "Replaced by a newer handoff: Retries land with backoff"],
+    [{ state: "waived" }, "ready-for-review", "Unverified: Retries land with backoff"],
+  ];
+  for (const [verdict, state, headline] of cases) {
+    assert.deepEqual(crewState(crew, thread("idle"), { ...done, verdict }), { state, headline }, JSON.stringify(verdict));
+  }
+});
+
+test("a crew whose verifier is checking its done handoff is still Working once someone types into it", () => {
+  assert.equal(crewState(crew, thread("active"), { ...done, verdict: { state: "running", verifierThreadId: "thr_v", nudged: false } }).state, "working");
 });

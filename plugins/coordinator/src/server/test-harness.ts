@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgentToolResult, PluginThreadEventPayloads } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
+import type { z } from "zod";
 import type { CrewThread } from "../model/crew-state.ts";
 import type { CoordinatorId } from "../model/role.ts";
 import { boardHandlers } from "./crew/board-rpc.ts";
@@ -24,6 +25,9 @@ import { openStore } from "./store.ts";
 import { registerCoordinatorTools } from "./tools/coordinator-tools.ts";
 import { registerCrewTools } from "./tools/crew-tools.ts";
 import type { ToolsBb } from "./tools/tool-kit.ts";
+import { registerVerdictTool } from "./verify/verdict-tool.ts";
+import type { ModelsBb } from "./verify/verifier-model.ts";
+import { createVerify } from "./verify/verify.ts";
 
 const PLUGIN_ID = "coordinator";
 
@@ -32,6 +36,7 @@ type Metadata = Awaited<ReturnType<SpawnBb["sdk"]["threads"]["getPluginMetadata"
 type SpawnArgs = Parameters<SpawnBb["sdk"]["threads"]["spawn"]>[0];
 type CrewsBb = Parameters<typeof createCrews>[0]["bb"];
 type InboxBb = Parameters<typeof createInbox>[0]["bb"];
+type VerifyBb = Parameters<typeof createVerify>[0]["bb"];
 type SendArgs = Parameters<CrewsBb["sdk"]["threads"]["send"]>[0];
 type Delivery = Awaited<ReturnType<InboxBb["sdk"]["threads"]["send"]>>;
 type QueuedMessage = Awaited<ReturnType<InboxBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number];
@@ -67,6 +72,7 @@ type FakeExecution = { model: string; reasoningLevel: string; serviceTier: strin
 type FakeThread = CrewThread & {
   id: string;
   providerId: string;
+  environmentId: string;
   execution: FakeExecution | null;
   environmentBranchName: string | null;
   environmentHostId: string | null;
@@ -105,18 +111,36 @@ function runsOn(args: SpawnArgs, parent: FakeThread | null): { providerId: strin
  */
 type SpawnBehaviour = { created: boolean; answer: "thread" | "lost" };
 
+/** A provider bb can run in every environment, with its models (null: bb can't load them). */
+type FakeProvider = { id: string; available: boolean; models: { model: string; isDefault: boolean; defaultReasoningEffort: string }[] | null };
+
+/** The providers bb has unless a test changes them: Claude Code, as the composer picks it, and Codex. */
+const PROVIDERS: FakeProvider[] = [
+  {
+    id: "claude-code",
+    available: true,
+    models: [
+      { model: "opus", isDefault: true, defaultReasoningEffort: "high" },
+      { model: "sonnet", isDefault: false, defaultReasoningEffort: "medium" },
+    ],
+  },
+  { id: "codex", available: true, models: [{ model: "gpt-default", isDefault: true, defaultReasoningEffort: "low" }] },
+];
+
 /** Whether a stop leaves the thread idle, or still stopping, as bb's unconfirmed interrupt does. */
 type StopBehaviour = "idle" | "stopping";
 
 export function harness(spawns: SpawnBehaviour = { created: true, answer: "thread" }, stops: StopBehaviour = "idle") {
   const behaviour = { ...spawns };
+  /** The providers bb lists, in its order; a test may replace them. */
+  const providers = { list: structuredClone(PROVIDERS) };
   /** Set `failure` to make every send throw it, as bb does when it can't take the message. */
   const sends: { failure: string | null } = { failure: null };
   const store = openStore(memoryStorage().storage);
   const memoryWrites: CoordinatorId[] = [];
   const memory = openMemoryRoot(join(mkdtempSync(join(tmpdir(), "coordinator-test-")), "data.db"), store, (id) => memoryWrites.push(id));
   const metadata = new Map<string, Metadata>();
-  const tools = new Map<string, (input: unknown, threadId: string) => Promise<PluginAgentToolResult>>();
+  const tools = new Map<string, { parameters: z.ZodType; run(input: unknown, threadId: string): Promise<PluginAgentToolResult> }>();
   let configure: ((context: PluginAgentConfigurationContext) => PluginAgentConfiguration) | null = null;
   const handlers: Partial<Handlers> = {};
   // why a generic function: it keeps each event's handlers typed by that event.
@@ -151,11 +175,23 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     for (const handler of handlersOf(event)) await handler(payload);
   }
 
-  const threads: SpawnBb["sdk"]["threads"] & CrewsBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] = {
+  const threads: SpawnBb["sdk"]["threads"] & CrewsBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] & VerifyBb["sdk"]["threads"] = {
     async spawn(args) {
       const id = `thr_${++spawned}`;
       metadata.set(id, args.pluginMetadata ?? {});
-      const thread: FakeThread = { id, status: "active", hasPendingInteraction: false, ...runsOn(args, args.parentThreadId === undefined ? null : fakeThread(args.parentThreadId)), environmentBranchName: `bb/${id}`, environmentHostId: "host_1", archivedAt: null, deletedAt: null, spawnedWith: args, turns: [] };
+      const thread: FakeThread = {
+        id,
+        status: "active",
+        hasPendingInteraction: false,
+        ...runsOn(args, args.parentThreadId === undefined ? null : fakeThread(args.parentThreadId)),
+        environmentId: args.environment?.type === "reuse" ? args.environment.environmentId : `env_${id}`,
+        environmentBranchName: `bb/${id}`,
+        environmentHostId: "host_1",
+        archivedAt: null,
+        deletedAt: null,
+        spawnedWith: args,
+        turns: [],
+      };
       fakeThreads.set(id, thread);
       startTurn(thread);
       if (behaviour.created) await emit("thread.created", { thread: { id, originPluginId: PLUGIN_ID } });
@@ -211,15 +247,22 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   };
   const agents: ToolsBb["agents"] & Parameters<typeof registerRoles>[0]["agents"] = {
     registerTool(tool) {
-      tools.set(tool.name, async (input, threadId) => tool.execute(tool.parameters.parse(input), { threadId, projectId: "prj_1", signal: new AbortController().signal }));
+      tools.set(tool.name, { parameters: tool.parameters, run: async (input, threadId) => tool.execute(tool.parameters.parse(input), { threadId, projectId: "prj_1", signal: new AbortController().signal }) });
     },
     configure(provider) {
       configure = provider;
     },
   };
+  const providersArea: ModelsBb["sdk"]["providers"] = {
+    list: async () => providers.list.map(({ id, available }) => ({ id, available })),
+    async models({ providerId }) {
+      const models = providers.list.find((provider) => provider.id === providerId)?.models ?? null;
+      return models === null ? { modelLoadError: { code: "auth_required", detail: null, providerId }, models: [] } : { modelLoadError: null, models };
+    },
+  };
   const bb = {
     pluginId: PLUGIN_ID,
-    sdk: { threads },
+    sdk: { threads, providers: providersArea },
     log: { warn: (message: string) => void warnings.push(message) },
     onDispose: (hook: () => void) => void disposers.push(hook),
     events: {
@@ -235,9 +278,11 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   const board = createBoard(bb, store, memory);
   const crews = createCrews({ bb, store, spawner, onChange: refreshBoard });
   const inbox = createInbox({ bb, store, onChange: refreshBoard });
+  const verify = createVerify({ bb, store, spawner, inbox });
   registerRoles(bb, store);
   registerCoordinatorTools(bb, { store, inbox, memory, crews, board });
-  registerCrewTools(bb, { store, inbox });
+  registerCrewTools(bb, { store, verify });
+  registerVerdictTool(bb, { store, verify });
   forwardCrewThreadEvents(bb, store, refreshBoard);
   watchCrewThreads({ bb, store, inbox, onChange: refreshBoard });
 
@@ -251,10 +296,17 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     spawns: behaviour,
     /** How bb answers the next sends; a test may change it between them. */
     sends,
+    /** The providers bb lists, in its order; a test may replace them. */
+    providers,
+    /** The inbox, as the tools and the verify step write to it. */
+    inbox,
     /** The app's RPC handlers, as server.ts registers them. */
-    rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, crews }) },
-    /** The schedule's once-a-minute pass. */
-    tick: () => inbox.tick(),
+    rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, crews, inbox }) },
+    /** The schedule's once-a-minute pass, as server.ts runs it. */
+    async tick(): Promise<void> {
+      await verify.reconcile();
+      await inbox.tick();
+    },
     /** A thread bb has, as the plugin can list it, and what it was spawned with. */
     thread: fakeThread,
     /** How many threads bb has spawned. */
@@ -317,19 +369,21 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       if (configure === null) throw new Error("No configure callback");
       return configure(configurationContext(threadId, pluginMetadata));
     },
+    /** Every tool the plugin registered, by name, with its parameters. */
+    tools: () => [...tools].map(([name, { parameters }]) => ({ name, parameters })),
     /** Calls the tool as the thread's agent would. */
     async call(tool: string, input: unknown, threadId: string): Promise<PluginAgentToolResult> {
-      const run = tools.get(tool);
-      if (run === undefined) throw new Error(`No tool ${tool}`);
-      return run(input, threadId);
+      const registered = tools.get(tool);
+      if (registered === undefined) throw new Error(`No tool ${tool}`);
+      return registered.run(input, threadId);
     },
   };
 }
 
-/** A harness with one coordinating thread started, its thread and its id. */
-export async function coordinating(...args: Parameters<typeof harness>) {
-  const kit = harness(...args);
-  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
+/** A harness with one coordinating thread started, verifying its crews' done handoffs unless `verify` is false; its thread and its id. */
+export async function coordinating({ verify = true, spawns, stops }: { verify?: boolean; spawns?: SpawnBehaviour; stops?: StopBehaviour } = {}) {
+  const kit = harness(spawns, stops);
+  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), verify);
   const role = kit.store.roleOfThread(threadId);
   assert.equal(role?.kind, "coordinator");
   return { kit, threadId, coordinatorId: role.coordinatorId };
