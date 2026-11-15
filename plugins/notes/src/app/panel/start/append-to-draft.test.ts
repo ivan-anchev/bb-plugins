@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ComposerDraftSnapshot } from "@get-bb/plugin-sdk/app";
-import type { Brief } from "../../contract.ts";
+import type { Brief } from "../../../contract.ts";
 import { appendToDraft } from "./append-to-draft.ts";
 
 const brief: Brief = {

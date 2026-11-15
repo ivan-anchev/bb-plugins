@@ -1,0 +1,15 @@
+/* The split button (start-button.tsx): two .nt-go halves (notes-panel.css) joined into one pill, a
+   1px seam of the surface between them. */
+.nt-split { display: inline-flex; gap: 1px; }
+.nt-split > .nt-go:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.nt-split-more { padding: 0 5px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.nt-split-more svg { width: 14px; height: 14px; }
+
+/* Its menu: bb's menu, each row's shortcut at the right in muted text. */
+.nt-menu-hint {
+  margin-left: auto;
+  padding-left: 16px;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}

@@ -1,6 +1,6 @@
 ---
 name: notes
-description: Explain the Notes plugin, which keeps short personal notes in bb in a Notes popover opened from the sidebar-footer Notes button, ⇧⌘J, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), with a composer at its bottom that links threads by typing @ and attaches images and videos by paste, drop or 📎, and the same list in a Notes card on the New thread screen, where a note opens in place and ticking some lets the user delete them with one click or choose Start thread (or Add to composer on a thread page) to put them in the composer and archive them. Use when the user asks how to write, quote or link a note, how to read, edit or delete one, where their notes are, why ⇧⌘J does nothing, what the source chip opens, why a thread is missing from the @ picker, why a file was refused or where attached files are stored, what Start thread puts in the composer, why Start thread is disabled, where used notes went, why a file shows as a path instead of an attachment, why the Notes card is empty or says it couldn't read notes, where the card sits among the homepage cards, or why part of it stopped working after a bb update.
+description: Explain the Notes plugin, which keeps short personal notes in bb in a Notes popover opened from the sidebar-footer Notes button, ⇧⌘J, or "Add to notes" on a chat message (a highlighted passage keeps a link to its message), with a composer at its bottom that links threads by typing @ and attaches images and videos by paste, drop or 📎, and the same list in a Notes card on the New thread screen, where a note opens in place and ticking some lets the user delete them with one click or choose New thread (from any screen, or ⌘↵) or, on a thread page, Send to this thread (its ▾ menu, or ⇧⌘↵) to put them in that composer and archive them. Use when the user asks how to write, quote or link a note, how to read, edit or delete one, where their notes are, why ⇧⌘J does nothing, what the source chip opens, why a thread is missing from the @ picker, why a file was refused or where attached files are stored, what New thread or Send to this thread puts in the composer, why there is no ▾ menu or Send to this thread, what ⌘↵ or ⇧⌘↵ does in the Notes panel, where used notes went, why a file shows as a path instead of an attachment, why the Notes card is empty or says it couldn't read notes, where the card sits among the homepage cards, or why part of it stopped working after a bb update.
 ---
 
 # Notes
@@ -16,10 +16,10 @@ agent tools and no settings; an agent cannot read or write notes.
   the window's bottom-left corner, 8px in. On a short window it takes the
   height there is.
 - It holds the same list as the Notes card (below): a header with the count
-  and a ×, the notes, a footer for Delete and Start thread while notes are
+  and a ×, the notes, a footer for Delete and New thread while notes are
   ticked, and a composer at the bottom.
 - The footer button and ⇧⌘J both toggle it. Esc first closes the @ picker,
-  then clears ticked notes, then closes it; a click outside closes it too. Closing with Esc, × or the
+  then closes the New thread ▾ menu, then clears ticked notes, then closes it; a click outside closes it too. Closing with Esc, × or the
   shortcut puts focus back where it was (on the footer button when it opened
   the popover); a click outside leaves focus where the click put it.
 - The footer button opens it with focus on the popover itself. ⇧⌘J, the
@@ -124,7 +124,7 @@ on. A new note appears within about two seconds with no reload. When the
 plugin cannot read its database the list says "Couldn't read notes" with the
 reason, beside any notes it already showed.
 
-Each row has a checkbox for Delete and Start thread (below). It shows under the pointer,
+Each row has a checkbox for Delete and New thread (below). It shows under the pointer,
 on keyboard focus, once ticked, and on every row while any note is ticked;
 on touch screens it always shows. Its column stays, so nothing shifts.
 
@@ -145,7 +145,7 @@ on touch screens it always shows. Its column stays, so nothing shifts.
 ## Deleting notes
 
 - Tick the notes to delete. The footer reads "N selected · Clear", then
-  **Delete** apart from **Start thread** at its right.
+  **Delete** apart from **New thread ▾** at its right.
 - One click on Delete deletes every ticked note and its files, for good
   (there is no undo, trash or confirm step), in one go however many are
   ticked, and shows "Note deleted" or "N notes deleted".
@@ -158,14 +158,29 @@ on touch screens it always shows. Its column stays, so nothing shifts.
 ## Starting a thread from notes
 
 - Tick notes with their checkboxes. The footer reads "N selected · Clear" and
-  **Start thread**; Clear unticks them all. The card and the popover keep
-  their own ticks.
-- Where the brief goes depends on the screen. On the New thread screen,
-  **Start thread** adds it to bb's new-thread composer. On a thread page the
-  popover's button reads **Add to composer** and adds it to that thread's
-  draft. Elsewhere (Tools, Settings) the button is disabled and a line says
-  "Open New thread or a thread to use notes." The popover closes after the
-  brief is in and focus goes to the composer.
+  **New thread**; on a thread page it is a split button, **New thread ▾**.
+  Clear unticks them all. The card and the popover keep their own ticks.
+- **New thread** (the button, or the first row of its ▾ menu) adds the brief
+  to bb's new-thread composer from any screen. On the New thread screen it
+  fills the composer there. From a thread page, Tools or Settings, bb first
+  goes to the New thread screen (the popover stays open meanwhile), then fills
+  its composer; whatever the user had drafted there stays.
+- **Send to this thread**, in the ▾ menu, adds the brief to the draft of the
+  thread on screen and stays on the page. Where no thread is on screen (the
+  New thread screen, Tools, Settings) it is not possible, so the footer shows
+  New thread alone, with no chevron and no menu.
+- The ▾ menu works from the keyboard: Enter, Space or ↓ on the chevron opens
+  it, ↑ ↓ move, Enter picks, and Esc closes it and puts focus back on the
+  chevron. The next Esc clears the ticks. Each row shows its shortcut.
+- **Shortcuts**, while notes are ticked and focus is inside the Notes panel
+  (card or popover) but not in a text field: ⌘↵ (Ctrl+Enter) runs New thread,
+  ⇧⌘↵ or ⌥⌘↵ runs Send to this thread where it is possible. They act as a
+  click would. In the popover's composer ⌘↵ still saves the note, and bb's own
+  composer is untouched; with nothing ticked, or while a start or a delete
+  runs, they do nothing.
+- While a start runs, the checkboxes, Clear, Delete, the split button and Esc
+  wait for it, so the ticks stay as sent. The popover closes once the brief is
+  in, and focus goes to the composer.
 - The brief goes after anything already typed (the typed text, its pills and
   its attachments stay). It reads "Context from N notes:", then each note,
   oldest first: its passage as a quote with "— from @Thread
@@ -178,8 +193,9 @@ on touch screens it always shows. Its column stays, so nothing shifts.
   "Too large to attach, on disk: <path> (<name>)", the file in the plugin's
   `media/` folder.
 - The draft is not sent: the user reviews and sends it. bb keeps it across
-  reloads. With "No project" picked, the files go to bb's personal project;
-  Start thread is disabled while bb is still resolving the composer's project.
+  reloads. With "No project" picked, the files go to bb's personal project.
+  While bb is still resolving the new-thread composer's project, New thread
+  waits for it.
 - The notes used leave the list: they are archived, not deleted. Their rows and
   files stay in the database and `media/`, and there is no undo or view of
   archived notes yet.

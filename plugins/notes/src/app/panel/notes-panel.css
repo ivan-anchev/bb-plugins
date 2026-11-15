@@ -45,7 +45,7 @@
 .nt-close:focus-visible { box-shadow: inset 0 0 0 1.5px var(--ring); }
 
 .nt-caption { margin: 0; font-size: 12px; line-height: 16px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
-.nt-error, .nt-caption[data-error] { color: var(--destructive-text, var(--destructive)); }
+.nt-error { color: var(--destructive-text, var(--destructive)); }
 
 /* The list scrolls inside a box that takes what its host leaves: the card's height comes from its
    row, never from how many notes it holds; 184px is four rows. It bleeds 8px so the checkbox lines up

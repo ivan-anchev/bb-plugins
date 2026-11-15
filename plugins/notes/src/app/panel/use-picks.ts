@@ -1,5 +1,5 @@
-// The notes a panel has ticked for Start thread or Delete. Each host (the card, the popover) keeps its
-// own.
+// The notes a panel has ticked for a start (New thread, Send to this thread) or Delete. Each host
+// (the card, the popover) keeps its own.
 import { useState } from "react";
 import type { Note } from "../../contract.ts";
 

@@ -1,5 +1,5 @@
 // One note in a panel's list, in two lines: the note itself, then the thread it came from. A checkbox
-// before them picks it for Start thread; at the end, a fan of what it holds. Clicking the lines or
+// before them picks it for New thread or Delete; at the end, a fan of what it holds. Clicking the lines or
 // the fan opens the note in place under them.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { useState } from "react";

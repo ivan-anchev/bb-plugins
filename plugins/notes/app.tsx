@@ -7,6 +7,7 @@ import { notesPopover } from "./src/app/popover/popover-store.ts";
 import { NOTE_ICON, NoteIcon } from "./src/app/ui/note-icon.tsx";
 import { NEW_NOTE_SHORTCUT } from "./src/app/ui/shortcut.ts";
 import "./src/app/panel/notes-panel.css";
+import "./src/app/panel/start/start-button.css";
 import "./src/app/compose/note-form.css";
 import "./src/app/popover/notes-popover.css";
 import "./src/app/home/notes-card.css";

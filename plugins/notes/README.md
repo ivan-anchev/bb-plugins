@@ -19,7 +19,9 @@ the user-facing description and `skills/notes/SKILL.md` for how it behaves.
   `src/app/quote-block.tsx`: a quoted passage and its source chip.
 - `src/app/panel/`: the Notes panel both hosts render: header, the scrolling
   list (`list/`), a note opened in place (`detail/`), the picks, deleting
-  them, and Start thread, which fills whichever composer the screen shows.
+  them, and starting from them (`start/`): New thread from any screen, and
+  on a thread page a split button that adds Send to this thread; ⌘↵ and
+  ⇧⌘↵ run them from the panel.
 - `src/app/popover/`: the popover, an `experimental_appOverlay` over a small
   module store (`popover-store.ts`) that every opener calls, anchored beside
   the sidebar-footer button (`footer-anchor.ts`).

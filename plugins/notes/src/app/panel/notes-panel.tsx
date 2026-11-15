@@ -1,16 +1,17 @@
 // The Notes panel, one component in two hosts: the homepage card and the sidebar's popover. Header
 // (icon, "Notes", count; the popover adds a close button), the scrolling list, a footer that deletes
-// ticked notes or turns them into a thread, and at the bottom the popover's composer. Look from
-// prototypes/notes-tray.html, Popover, and notes-input.html, Composer.
+// ticked notes or sends them to a new thread or the one on screen, and at the bottom the popover's
+// composer. Look from prototypes/notes-tray.html, Popover, and notes-input.html, Composer.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { useRef, type ReactNode, type RefObject } from "react";
 import type { useNotes } from "../use-notes.ts";
 import { NOTE_ICON } from "../ui/note-icon.tsx";
 import { useHandOffFocus } from "../ui/use-hand-off-focus.ts";
 import { NoteList } from "./list/note-list.tsx";
+import { StartButton } from "./start/start-button.tsx";
+import { useStarts } from "./start/use-starts.ts";
 import { useDeleteNotes } from "./use-delete-notes.ts";
 import type { Picks } from "./use-picks.ts";
-import { useStartThread } from "./use-start-thread.ts";
 
 type NotesPanelProps = {
   notes: ReturnType<typeof useNotes>;
@@ -22,10 +23,10 @@ type NotesPanelProps = {
   onClose?(): void;
   /** The card's "New note" link, in the footer it shows while nothing is picked. */
   onNewNote?(): void;
-  /** After Start thread filled the composer. */
+  /** After a start filled the composer. */
   onStarted?(): void;
   /**
-   * The popover: whether the opening that ran Start thread is still on screen. Once it is not, the
+   * The popover: whether the opening that ran a start is still on screen. Once it is not, the
    * finished start still fills the draft, but neither focuses the composer nor calls `onStarted`.
    */
   isCurrent?(): boolean;
@@ -34,12 +35,12 @@ type NotesPanelProps = {
 export function NotesPanel({ notes, picks, form, onClose, onNewNote, onStarted, isCurrent = () => true }: NotesPanelProps) {
   const header = useRef<HTMLElement>(null);
   const box = useRef<HTMLDivElement>(null);
-  const start = useStartThread();
+  const start = useStarts({ picks, waitFocus: box, isCurrent, onStarted });
   const remove = useDeleteNotes();
   const list = notes.data;
   const picking = picks.ids.length > 0;
   return (
-    <section className="nt-panel" data-picking={picking || undefined} aria-label="Notes">
+    <section className="nt-panel" data-picking={picking || undefined} aria-label="Notes" onKeyDownCapture={start.onKeyDownCapture}>
       <PanelHeader ref={header} count={list?.length ?? 0} onClose={onClose} />
       {/* A failed read keeps the last notes in `data` and says why beside them. */}
       {notes.error !== null && (
@@ -53,22 +54,16 @@ export function NotesPanel({ notes, picks, form, onClose, onNewNote, onStarted, 
           Couldn’t delete: {remove.error}
         </p>
       )}
-      {picking && <StartProblem start={start} />}
+      {picking && start.error !== null && (
+        <p className="nt-caption nt-error" role="status">
+          Couldn’t start the thread: {start.error}
+        </p>
+      )}
       {picking ? (
         <PickingFooter
           picks={picks}
-          start={start}
-          busy={start.isPending || picks.held}
           focusAfter={header}
-          onStart={() =>
-            start.run(picks.ids, {
-              onFilled: () => {
-                picks.clear();
-                onStarted?.();
-              },
-              isCurrent,
-            })
-          }
+          start={<StartButton disabled={picks.held} newThread={start.newThread} thisThread={start.thisThread} />}
           onDelete={() =>
             picks.submit(
               // why before the picks clear, and why `?.`: focus is out of the footer before it leaves with
@@ -87,8 +82,6 @@ export function NotesPanel({ notes, picks, form, onClose, onNewNote, onStarted, 
 
 // ------------------------------------------------------------------ layer 2
 
-type StartThread = ReturnType<typeof useStartThread>;
-
 function PanelHeader({ ref, count, onClose }: { ref: RefObject<HTMLElement | null>; count: number; onClose?(): void }) {
   return (
     // why focusable by script: the footer that leaves with the picks hands focus here.
@@ -105,17 +98,6 @@ function PanelHeader({ ref, count, onClose }: { ref: RefObject<HTMLElement | nul
   );
 }
 
-/** Why the picked notes can't go anywhere yet: the last failure, or no composer on this screen. */
-function StartProblem({ start }: { start: StartThread }) {
-  const problem = start.error === null ? start.unavailable : `Couldn’t start the thread: ${start.error}`;
-  if (problem === null) return null;
-  return (
-    <p className="nt-caption" data-error={start.error !== null || undefined} role="status">
-      {problem}
-    </p>
-  );
-}
-
 function IdleFooter({ hasNotes, onNewNote }: { hasNotes: boolean; onNewNote(): void }) {
   return (
     <footer className="nt-foot nt-caption">
@@ -128,37 +110,34 @@ function IdleFooter({ hasNotes, onNewNote }: { hasNotes: boolean; onNewNote(): v
 }
 
 type PickingFooterProps = {
+  /** Held while a delete or a start is on its way: every control waits for it. */
   picks: Picks;
-  start: StartThread;
-  /** A delete or a start is on its way: every control waits for it. */
-  busy: boolean;
   focusAfter: RefObject<HTMLElement | null>;
-  onStart(): void;
+  /** The split button. */
+  start: ReactNode;
   onDelete(): void;
 };
 
 /**
- * Shown while notes are picked: "N selected · Clear", then Delete and the button. With a narrow host,
- * Delete and the button wrap together under the count.
+ * Shown while notes are picked: "N selected · Clear", then Delete and the split button. With a
+ * narrow host, Delete and the button wrap together under the count.
  */
-function PickingFooter({ picks, start, busy, focusAfter, onStart, onDelete }: PickingFooterProps) {
+function PickingFooter({ picks, focusAfter, start, onDelete }: PickingFooterProps) {
   const footer = useRef<HTMLElement>(null);
   useHandOffFocus(footer, focusAfter);
   return (
     <footer ref={footer} className="nt-foot nt-picks nt-caption">
       <span>{picks.ids.length} selected</span>
       <span aria-hidden>·</span>
-      <button type="button" className="nt-link" disabled={busy} onClick={picks.clear}>
+      <button type="button" className="nt-link" disabled={picks.held} onClick={picks.clear}>
         Clear
       </button>
       <span className="nt-picks-acts">
         {/* why no confirm step: the user chose one click; the footer's count says what goes. */}
-        <button type="button" className="nt-link" disabled={busy} onClick={onDelete}>
+        <button type="button" className="nt-link" disabled={picks.held} onClick={onDelete}>
           Delete
         </button>
-        <button type="button" className="nt-go" disabled={busy || start.unavailable !== null || !start.ready} onClick={onStart}>
-          {start.label}
-        </button>
+        {start}
       </span>
     </footer>
   );
