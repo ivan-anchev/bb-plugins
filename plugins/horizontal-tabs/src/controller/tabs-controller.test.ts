@@ -308,3 +308,48 @@ test("closing a parked tab leaves bb's layout alone, and the last tab stays", as
   tabs.close(ids[2]);
   assert.deepEqual(snapshotOf(tabs).set.tabs.map((tab) => tab.id), [ids[2]]);
 });
+
+test("stepping shows the next or previous tab, wrapping past either end", async () => {
+  const { host, tabs } = await threeTabs();
+  const shownAfter = async (delta: 1 | -1) => {
+    tabs.step(delta);
+    await host.settle();
+    return focusedThread(host.shown.at(-1));
+  };
+  assert.equal(await shownAfter(1), "thr_alpha");
+  assert.equal(await shownAfter(1), "thr_bravo");
+  assert.equal(await shownAfter(-1), "thr_alpha");
+  assert.equal(await shownAfter(-1), "thr_charlie");
+});
+
+test("from Settings, stepping counts from the tab that was on screen", async () => {
+  const { host, tabs } = await threeTabs();
+  tabs.observe("page");
+  tabs.step(-1);
+  await host.settle();
+  assert.equal(focusedThread(host.shown.at(-1)), "thr_bravo");
+});
+
+test("going to tab N shows it, and to a tab past the last does nothing", async () => {
+  const { host, tabs, ids } = await threeTabs();
+  tabs.goTo(1);
+  await host.settle();
+  assert.equal(snapshotOf(tabs).selectedId, ids[0]);
+  assert.equal(focusedThread(host.shown.at(-1)), "thr_alpha");
+  tabs.goTo(4);
+  assert.equal(host.shown.length, 1);
+  assert.equal(snapshotOf(tabs).selectedId, ids[0]);
+});
+
+test("tells whether there is a tab to step to, and whether tab N exists", async () => {
+  const { tabs } = controller(alpha);
+  assert.equal(tabs.canStep(), false);
+  assert.equal(tabs.has(1), false);
+  tabs.observe("thread");
+  assert.equal(tabs.canStep(), false);
+  assert.equal(tabs.has(1), true);
+  tabs.openNew();
+  assert.equal(tabs.canStep(), true);
+  assert.equal(tabs.has(2), true);
+  assert.equal(tabs.has(3), false);
+});

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { single, type Layout } from "./layout.ts";
-import { adopt, close, makeLive, open, seed, type TabSet } from "./tab-set.ts";
+import { adopt, close, makeLive, nth, open, seed, step, type TabSet } from "./tab-set.ts";
 
 function threadLayout(threadId: string): Layout {
   return single({ kind: "thread", projectId: "proj_a", threadId }, "pane-1");
@@ -69,4 +69,19 @@ test("closing a parked tab keeps the live one", () => {
 
 test("the last tab stays", () => {
   assert.deepEqual(close(tabsOf(1, "t1"), "t1"), tabsOf(1, "t1"));
+});
+
+test("step goes to the neighbour and wraps past either end", () => {
+  const set = tabsOf(3, "t1");
+  assert.equal(step(set, "t1", 1).id, "t2");
+  assert.equal(step(set, "t3", 1).id, "t1");
+  assert.equal(step(set, "t1", -1).id, "t3");
+  assert.equal(step(set, "t2", -1).id, "t1");
+});
+
+test("nth counts from 1 and finds nothing past the last tab", () => {
+  const set = tabsOf(3, "t1");
+  assert.equal(nth(set, 1)?.id, "t1");
+  assert.equal(nth(set, 3)?.id, "t3");
+  assert.equal(nth(set, 4), undefined);
 });

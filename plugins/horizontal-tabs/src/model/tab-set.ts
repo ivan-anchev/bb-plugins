@@ -35,6 +35,17 @@ export function close(set: TabSet, id: string): TabSet {
   return { tabs, liveId: id === set.liveId ? tabs[Math.min(at, tabs.length - 1)].id : set.liveId };
 }
 
+/** The tab `delta` places from tab `id`, wrapping past either end. */
+export function step(set: TabSet, id: string, delta: number): Tab {
+  const count = set.tabs.length;
+  return set.tabs[(((indexOf(set, id) + delta) % count) + count) % count];
+}
+
+/** Tab `n`, counting from 1; undefined past the last tab. */
+export function nth(set: TabSet, n: number): Tab | undefined {
+  return set.tabs[n - 1];
+}
+
 /** The tab bb shows. */
 export function live(set: TabSet): Tab {
   return tabOf(set, set.liveId);

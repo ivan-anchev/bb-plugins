@@ -41,6 +41,14 @@ export function useStripSlot(): HTMLElement | null {
   return useSyncExternalStore(subscribe, () => slot);
 }
 
+/**
+ * The strip is on screen: its slot sits in bb's shell and app.css doesn't hide it, as it does where bb is
+ * compact. Read from the slot, so the compact breakpoint is stated once, in app.css.
+ */
+export function stripShown(): boolean {
+  return slot !== null && slot.checkVisibility();
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
