@@ -4,7 +4,7 @@
 // frame (layout-restore probe L5). Everything bundle-specific lives here and is found by shape, never by
 // minified name: zero or several candidates reject, and the caller reports the reason.
 // Adapted from prototypes/layout-restore/lr-probe/src/split-layout-host.ts (locateHost).
-import { layoutSchema, type Layout } from "../model/layout.ts";
+import { layoutSchema, type Layout } from "../../model/layout.ts";
 
 type LayoutAtom = {
   /** The layout bb holds; null when it holds none, or holds one this plugin can't parse (a newer bb). */

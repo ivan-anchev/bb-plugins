@@ -7,9 +7,10 @@ import {
   useBbNavigate,
   useSidebarSplitLayout,
 } from "@get-bb/plugin-sdk/app";
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { tabs } from "../controller/tabs.ts";
+import type { Nav } from "../controller/tabs-controller.ts";
 import { useScreen } from "../host/screen.ts";
 import { useStripSlot } from "../host/strip-mount.ts";
 import { savedTabs } from "../model/saved.ts";
@@ -17,7 +18,7 @@ import { Strip } from "./strip.tsx";
 
 export function TabsOverlay() {
   const pluginId = experimental_usePluginId();
-  const nav = useBbNavigate();
+  const nav = useLatestNav();
   const { threadId } = useBbContext();
   const screen = useScreen(threadId);
   const split = useSidebarSplitLayout();
@@ -37,4 +38,24 @@ export function TabsOverlay() {
   }, [threads]);
 
   return slot === null ? null : createPortal(<Strip />, slot);
+}
+
+/**
+ * One navigator for the overlay's lifetime that routes with bb's latest one.
+ * why: bb hands out a new navigator on some route changes, and rebinding the tabs to it would abort the show
+ * in flight, cutting off a pane-by-pane show at its own first navigation.
+ */
+function useLatestNav(): Nav {
+  const nav = useBbNavigate();
+  const latest = useRef(nav);
+  useLayoutEffect(() => {
+    latest.current = nav;
+  });
+  return useMemo(
+    () => ({
+      toThread: (...args) => latest.current.toThread(...args),
+      toCompose: (...args) => latest.current.toCompose(...args),
+    }),
+    [],
+  );
 }

@@ -10,15 +10,16 @@ import { adopt, close, live, locate, makeLive, nth, open, prune, seed, step, tab
 /** The routes the controller takes, from the overlay's useBbNavigate. */
 export type Nav = Pick<BbNavigate, "toThread" | "toCompose">;
 
-/** What the controller needs from bb (host/host-layout.ts; a fake in tests). */
+/** What the controller needs from bb (host/layout/host-layout.ts; a fake in tests). */
 export interface HostLayout {
   /** bb's live layout, or null while bb holds none. */
   read(): Layout | null;
   /**
-   * bb shows `layout` and routes to its focused pane. Once `signal` aborts, bb is neither written nor routed
-   * and the promise rejects.
+   * bb shows `layout` and routes to its focused pane: at its exact sizes, or, when bb's layout can't be
+   * written whole, rebuilt pane by pane at equal sizes. Once `signal` aborts, bb is neither written nor
+   * routed and the promise rejects.
    */
-  show(layout: Layout, nav: Nav, signal: AbortSignal): Promise<void>;
+  show(layout: Layout, nav: Nav, signal: AbortSignal): Promise<"exact" | "equal-splits">;
 }
 
 /**
@@ -35,13 +36,15 @@ type Binding = { nav: Nav; saved: SavedTabs; signal: AbortSignal };
 
 /**
  * What the strip renders. `selectedId` is null on routes that show no tab (Settings, plugin pages, bb's own
- * New thread). `threads` and `projects` index the sidebar's active threads, for labels and tiles.
+ * New thread). `threads` and `projects` index the sidebar's active threads, for labels and tiles. `notice`:
+ * a tab was shown at equal sizes, and the user has not dismissed the notice saying so.
  */
 export type TabsSnapshot = {
   set: TabSet;
   selectedId: string | null;
   threads: ReadonlyMap<string, PluginSidebarThread>;
   projects: ReadonlyMap<string, PluginSidebarProject>;
+  notice: boolean;
 };
 
 export function createTabsController(host: HostLayout) {
@@ -58,11 +61,13 @@ export function createTabsController(host: HostLayout) {
   let wanted: Layout | null = null;
   /** A write is in flight. */
   let showing = false;
+  /** The equal-sizes notice, raised by the first tab shown at equal sizes, at most once. */
+  let notice: "unraised" | "raised" | "dismissed" = "unraised";
   const listeners = new Set<() => void>();
 
   function commit(): void {
     if (set === null) return;
-    snapshot = { set, selectedId, threads, projects };
+    snapshot = { set, selectedId, threads, projects, notice: notice === "raised" };
     binding?.saved.save(set);
     listeners.forEach((listener) => listener());
   }
@@ -141,10 +146,14 @@ export function createTabsController(host: HostLayout) {
 
   async function show(layout: Layout, { nav, signal }: Binding): Promise<void> {
     try {
-      await host.show(layout, nav, signal);
+      const shown = await host.show(layout, nav, signal);
+      if (shown === "equal-splits" && notice === "unraised") {
+        notice = "raised";
+        commit();
+      }
     } catch (error) {
       if (signal.aborted) return;
-      // why: issue 06 replaces this with a pane-by-pane fallback; until then the tab adopts what bb shows.
+      // The tab adopts what bb shows.
       wanted = null;
       console.warn("[horizontal-tabs] could not show the tab's layout:", error);
     }
@@ -230,6 +239,12 @@ export function createTabsController(host: HostLayout) {
     routeSidebarClick(threadId: string, gesture: SidebarGesture): boolean {
       if (set === null) return false;
       return gesture === "newTab" ? openThreadTab(set, threadId) : switchToThread(set, threadId);
+    },
+
+    /** The user dismissed the equal-sizes notice; it stays dismissed in this page. */
+    dismissNotice(): void {
+      notice = "dismissed";
+      commit();
     },
 
     /** `+`: a tab right of the live one, on the New thread screen; the thread created there fills it. */

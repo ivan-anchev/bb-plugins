@@ -1,6 +1,6 @@
 ---
 name: horizontal-tabs
-description: Explain the Horizontal Tabs plugin's tab strip at the top of bb's main panel, where each tab holds a whole split layout. Use when the user asks what a tab holds or shows, how to open, switch or close tabs, what clicking, middle-clicking or Cmd/Ctrl-clicking a thread in the sidebar does, what bb's next/previous thread and open thread N shortcuts do with tabs, why a thread is open in two tabs, how to switch tabs from the keyboard or change those shortcuts, why Ctrl+Tab does nothing in a browser, why a tab's title or project initials changed, why no tab is selected, what happens to tabs on a reload or in a new window, why a tab lost a pane or disappeared, why a maximized pane came back unmaximized, or why the strip is missing.
+description: Explain the Horizontal Tabs plugin's tab strip at the top of bb's main panel, where each tab holds a whole split layout. Use when the user asks what a tab holds or shows, how to open, switch or close tabs, what clicking, middle-clicking or Cmd/Ctrl-clicking a thread in the sidebar does, what bb's next/previous thread and open thread N shortcuts do with tabs, why a thread is open in two tabs, how to switch tabs from the keyboard or change those shortcuts, why Ctrl+Tab does nothing in a browser, why a tab's title or project initials changed, why no tab is selected, what happens to tabs on a reload or in a new window, why a tab lost a pane or disappeared, why a maximized pane came back unmaximized, why a tab came back at equal sizes or what the "Exact layout restore unavailable" notice means, or why the strip is missing.
 ---
 
 # Horizontal Tabs
@@ -23,7 +23,8 @@ experimental: a bb update may break it.
 ## Using tabs
 
 - **Switch:** click a tab. bb shows its layout at once, with the same panes, the
-  same sizes and the same focused pane, and opens that pane's thread.
+  same sizes and the same focused pane, and opens that pane's thread. After
+  some bb updates the sizes come back equal instead (see below).
 - **New tab:** `+` at the end of the strip opens a tab right of the current one
   on the New thread screen. Send the first message there and the tab becomes
   that thread.
@@ -130,14 +131,33 @@ that was on screen: click it to get its layout back.
 - **Maximize:** switching tabs always shows every pane of the tab; a pane
   maximized with Ctrl+Shift+E comes back unmaximized, at its sizes.
 
+## When tabs come back at equal sizes
+
+Bringing a tab back at its exact sizes relies on how bb keeps its layout inside,
+which a bb update may change. Tabs then still switch, rebuilt one pane at a time:
+
+- The tab's threads come back in the same order, with the same pane focused,
+  side by side in one row at equal widths. Panes that were stacked top to
+  bottom come back side by side too.
+- New thread and plugin panes beside threads are left out; a `+` tab still
+  comes back on its New thread screen.
+- The tab on screen keeps the equal sizes bb now shows, so its old sizes don't
+  come back later, even once the plugin is updated.
+- You see the panes open and close for a moment instead of one change.
+- The first time it happens in a window, the strip shows "Exact layout restore
+  unavailable; using equal splits" at its right end. Its `×` dismisses it until
+  the window reloads. The browser console shows one "[horizontal-tabs] bb's
+  layout atom can't be located" warning with the reason.
+- Only the window you click in changes; other windows keep their layouts.
+
 ## When the strip is missing
 
 - The window is phone-width (under 768 px) or has a touch pointer: bb has no
   split there, so the strip is hidden.
 - The plugin is disabled, or a bb update moved the place the strip attaches to.
 
-If a bb update changes how bb keeps its layout, clicking a tab may stop
-switching; the browser console then shows a "[horizontal-tabs] could not show
-the tab's layout" warning with the reason.
+If a switch fails all the same, the tab keeps what bb shows, and the browser
+console shows a "[horizontal-tabs] could not show the tab's layout" warning
+with the reason.
 
 The plugin has no settings.
