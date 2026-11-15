@@ -6,6 +6,7 @@
 // why the pane DOM: bb takes 60-300 ms to render a written layout, and clicks land meanwhile. A show lasts
 // until bb's panes carry the written ids, so the controller coalesces those clicks into one more write.
 import type { HostLayout, Nav } from "../controller/tabs-controller.ts";
+import { parseJson } from "../model/json.ts";
 import { focused, layoutSchema, panes, type Layout } from "../model/layout.ts";
 import { currentLayoutAtom, locateLayoutAtom } from "./layout-atom.ts";
 import { paneIdsOnScreen } from "./screen.ts";
@@ -81,15 +82,6 @@ function readStored(): Layout | null {
   // Missing before bb's first layout; bb writes an empty string when it clears its layout.
   const stored = sessionStorage.getItem(KEY);
   if (stored === null) return null;
-  const parsed = storedSchema.safeParse(decode(stored));
+  const parsed = storedSchema.safeParse(parseJson(stored));
   return parsed.success ? parsed.data.layout : null;
-}
-
-/** The stored JSON, or undefined (which the schema rejects) when it is empty or malformed. */
-function decode(stored: string): unknown {
-  try {
-    return JSON.parse(stored);
-  } catch {
-    return undefined;
-  }
 }

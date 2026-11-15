@@ -7,8 +7,11 @@ shows.
 ## Layout
 
 - `src/model/`: bb's split layout (`layout.ts`, with bb's own schema) and the
-  window's tabs (`tab-set.ts`, with the open, switch and close reducers, and the
-  keyboard's step and nth, and locate for sidebar clicks). Pure.
+  window's tabs (`tab-set.ts`, with the open, switch and close reducers, the
+  keyboard's step and nth, locate for sidebar clicks, and prune for archived
+  threads). Pure, except `saved.ts`, which keeps the tabs in sessionStorage and
+  localStorage across reloads (`json.ts` reads stored JSON for it and for bb's
+  layout).
 - `src/controller/`: the one owner of the tabs (`tabs-controller.ts`), this
   window's instance (`tabs.ts`), and the keyboard commands that drive it
   (`commands.ts`).

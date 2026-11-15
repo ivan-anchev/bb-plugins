@@ -102,7 +102,7 @@
     {
       "id": "horizontal-tabs",
       "displayName": "Horizontal Tabs",
-      "description": "Experimental: it may break with a bb update. Browser-style tabs across the top of bb's main panel, each holding a whole split layout. Clicking a tab brings back its panes at their exact sizes, with the same pane focused. + opens a tab on the New thread screen, and × or a middle-click closes one. Ctrl+Tab and Ctrl+Shift+Tab step through tabs and Alt+1–9 go to one, all rebindable. Clicking a thread in the sidebar goes to the tab that has it open, and a middle-click opens it in a new tab; Cmd/Ctrl-click still opens it in a split, as in bb. Each tab is named after its focused pane's thread and shows the initials of the projects open in it. Each pane keeps its own header below the strip.",
+      "description": "Experimental: it may break with a bb update. Browser-style tabs across the top of bb's main panel, each holding a whole split layout. Clicking a tab brings back its panes at their exact sizes, with the same pane focused. + opens a tab on the New thread screen, and × or a middle-click closes one. Ctrl+Tab and Ctrl+Shift+Tab step through tabs and Alt+1–9 go to one, all rebindable. Clicking a thread in the sidebar goes to the tab that has it open, and a middle-click opens it in a new tab; Cmd/Ctrl-click still opens it in a split, as in bb. Each tab is named after its focused pane's thread and shows the initials of the projects open in it. Each window keeps its tabs across reloads, and an archived or deleted thread leaves them. Each pane keeps its own header below the strip.",
       "icon": "PanelTop",
       "tags": [
         "tabs",

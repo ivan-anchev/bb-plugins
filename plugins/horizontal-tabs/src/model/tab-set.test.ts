@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { single, type Layout, type Pane } from "./layout.ts";
-import { adopt, close, locate, makeLive, nth, open, seed, step, type TabSet } from "./tab-set.ts";
+import { adopt, close, locate, makeLive, nth, open, prune, seed, step, type TabSet } from "./tab-set.ts";
 
 function threadLayout(threadId: string): Layout {
   return single({ kind: "thread", projectId: "proj_a", threadId }, "pane-1");
@@ -106,4 +106,17 @@ test("locate finds the tab and pane showing a thread, the live tab first, then f
   assert.equal(found("thr_c"), "t2/t2-1");
   assert.equal(locate({ ...set, liveId: "t2" }, "thr_a")?.tab.id, "t1");
   assert.equal(found("thr_z"), undefined);
+});
+
+test("prune drops gone threads from parked tabs, removes parked tabs left empty, and leaves the live tab to bb", () => {
+  const set = tabsOf(4, "t3");
+  const pruned = prune(set, (threadId) => threadId === "thr_1");
+  assert.deepEqual(pruned, { tabs: [set.tabs[0], set.tabs[2]], liveId: "t3" });
+});
+
+test("prune keeps the panes of threads still there", () => {
+  const pane = (paneId: string, threadId: string): Pane => ({ type: "pane", paneId, content: { kind: "thread", projectId: "proj_a", threadId } });
+  const layout: Layout = { root: { type: "split", dir: "row", sizes: [0.5, 0.5], children: [pane("p1", "thr_a"), pane("p2", "thr_b")] }, focusedPaneId: "p2" };
+  const set: TabSet = { tabs: [{ id: "t1", layout }, { id: "t2", layout: threadLayout("thr_c") }], liveId: "t2" };
+  assert.deepEqual(prune(set, (threadId) => threadId !== "thr_b").tabs[0].layout, { root: pane("p1", "thr_a"), focusedPaneId: "p1" });
 });
