@@ -17,7 +17,7 @@ export function InboxSection({ section, visits, isOpen, open }: RowActions & { s
   const { title, empty } = SECTION_TEXT[section.key];
   return (
     <section aria-labelledby={headingId} className="[&+&]:mt-2">
-      <h2 id={headingId} className={`sticky top-0 z-10 -mx-1.5 flex h-6 items-center gap-2 bg-sidebar px-4 ${SECTION_TITLE}`}>
+      <h2 id={headingId} className={`sticky top-0 z-10 -mx-1.5 flex h-6 items-center gap-2 bg-background px-4 ${SECTION_TITLE}`}>
         {title}
         <span className="tabular-nums">{section.count}</span>
       </h2>
