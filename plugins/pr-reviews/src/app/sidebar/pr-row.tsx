@@ -30,7 +30,7 @@ export function ListedRow({ pr, current, onOpen, attention, stack }: RowProps & 
   const words = [stack === null ? null : `stacked PR ${stack.index} of ${stack.size}`, attention === null ? null : ATTENTION_LOOK[attention].label];
   return (
     <RowButton pr={pr} current={current} onOpen={onOpen} words={words} className="h-8">
-      <AttentionAvatar login={pr.author} attention={attention} ring="ring-sidebar" />
+      <AttentionAvatar login={pr.author} attention={attention} ring="ring-background" />
       <FadingTitle text={pr.title} className={`${TITLE} ${current || attention !== null ? STRONG : "text-muted-foreground"}`} />
       <Trail pr={pr}>
         {stack !== null && (
