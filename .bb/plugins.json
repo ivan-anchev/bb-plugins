@@ -20,6 +20,10 @@
       "source": "./plugins/code-explorer"
     },
     {
+      "name": "coordinator",
+      "source": "./plugins/coordinator"
+    },
+    {
       "name": "homepage",
       "source": "./plugins/homepage"
     },
