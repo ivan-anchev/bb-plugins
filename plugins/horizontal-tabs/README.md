@@ -7,9 +7,11 @@ shows.
 ## Layout
 
 - `src/model/`: bb's split layout (`layout.ts`, with bb's own schema) and the
-  window's tabs (`tab-set.ts`, with the open, switch and close reducers). Pure.
-- `src/controller/`: the one owner of the tabs (`tabs-controller.ts`) and this
-  window's instance (`tabs.ts`).
+  window's tabs (`tab-set.ts`, with the open, switch and close reducers, and the
+  keyboard's step and nth). Pure.
+- `src/controller/`: the one owner of the tabs (`tabs-controller.ts`), this
+  window's instance (`tabs.ts`), and the keyboard commands that drive it
+  (`commands.ts`).
 - `src/host/`: everything that reaches into bb outside the SDK, each with a
   `why:` comment: bb's layout atom, found in bb's loaded chunks
   (`layout-atom.ts`); reading and showing bb's layout through it

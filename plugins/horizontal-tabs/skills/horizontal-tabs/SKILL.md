@@ -1,6 +1,6 @@
 ---
 name: horizontal-tabs
-description: Explain the Horizontal Tabs plugin's tab strip at the top of bb's main panel, where each tab holds a whole split layout. Use when the user asks what a tab holds or shows, how to open, switch or close tabs, why a tab's title or project initials changed, why no tab is selected, why a maximized pane came back unmaximized, or why the strip is missing.
+description: Explain the Horizontal Tabs plugin's tab strip at the top of bb's main panel, where each tab holds a whole split layout. Use when the user asks what a tab holds or shows, how to open, switch or close tabs, how to switch tabs from the keyboard or change those shortcuts, why Ctrl+Tab does nothing in a browser, why a tab's title or project initials changed, why no tab is selected, why a maximized pane came back unmaximized, or why the strip is missing.
 ---
 
 # Horizontal Tabs
@@ -30,9 +30,34 @@ experimental: a bb update may break it.
 - **Close:** hover a tab and click its `×`, or middle-click the tab. Closing the
   tab on screen shows the tab to its right, or to its left when it was the last
   one. The only tab left can't be closed, so it has no `×`.
+- **Switch from the keyboard:** see below.
 - **Change what a tab holds** with bb as usual: open a thread from the sidebar,
   the palette or a link, split, drag a divider, close a pane. The tab on screen
   keeps whatever bb shows, and shows it again when you come back to it.
+
+## Keyboard
+
+| Command | Default shortcut |
+|---|---|
+| Next tab | Ctrl+Tab |
+| Previous tab | Ctrl+Shift+Tab |
+| Go to tab 1 … Go to tab 9 | Alt+1 … Alt+9 |
+
+- Next and Previous wrap: Next on the last tab goes to the first.
+- Go to tab N counts tabs from the left; Alt+9 is the ninth tab, not the last.
+- The shortcuts are Ctrl and Alt on every platform, macOS included. They work
+  while you type in the composer too.
+- With no tab selected (Settings, a plugin page), Next and Previous count
+  from the tab that was on screen last.
+- The palette (Mod+Shift+P) lists them under Horizontal Tabs, only when they
+  can do something: Next and Previous need a second tab, Go to tab N needs an
+  Nth tab, and none are listed while the strip is hidden.
+- **In a web browser, Ctrl+Tab and Ctrl+Shift+Tab never reach bb:** the
+  browser keeps them to switch its own tabs. Alt+1 … Alt+9 work there, or
+  rebind Next and Previous to keys the browser lets through.
+- **Change a shortcut** in Settings → Keyboard, under Plugin commands: the
+  rows read "Plugin: horizontal-tabs". Click a shortcut and press the new keys;
+  the palette shows the new one. Reset puts the default back.
 
 ## No tab selected
 
@@ -57,4 +82,4 @@ If a bb update changes how bb keeps its layout, clicking a tab may stop
 switching; the browser console then shows a "[horizontal-tabs] could not show
 the tab's layout" warning with the reason.
 
-The plugin has no settings or commands yet.
+The plugin has no settings.

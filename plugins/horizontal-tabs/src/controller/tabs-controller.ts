@@ -4,7 +4,7 @@
 // changes tabs, one write at a time.
 import type { BbNavigate, PluginSidebarProject, PluginSidebarThread, PluginSidebarThreadsState } from "@get-bb/plugin-sdk/app";
 import { focused, single, withPaneIdsApart, type Layout } from "../model/layout.ts";
-import { adopt, close, live, makeLive, open, seed, tabOf, type TabSet } from "../model/tab-set.ts";
+import { adopt, close, live, makeLive, nth, open, seed, step, tabOf, type TabSet } from "../model/tab-set.ts";
 
 /** The routes the controller takes, from the overlay's useBbNavigate. */
 export type Nav = Pick<BbNavigate, "toThread" | "toCompose">;
@@ -81,6 +81,12 @@ export function createTabsController(host: HostLayout) {
     commit();
   }
 
+  /** Tab `id` is shown and selected. From Settings or a plugin page this also brings back the live tab. */
+  function activate(id: string): void {
+    if (set === null || id === selectedId) return;
+    present(set, id, id === set.liveId ? null : live(set).layout);
+  }
+
   /**
    * Makes tab `id` of `next` live and has bb show it. `outgoing` is the layout bb shows now, whose pane ids
    * the tab must not reuse; null when bb shows this tab already.
@@ -151,11 +157,28 @@ export function createTabsController(host: HostLayout) {
       commit();
     },
 
-    /** A tab click: bb shows its layout. From Settings or a plugin page this also brings back the live tab. */
-    activate(id: string): void {
-      if (set === null || id === selectedId) return;
-      present(set, id, id === set.liveId ? null : live(set).layout);
+    /** A tab click. */
+    activate,
+
+    /**
+     * Ctrl+Tab and Ctrl+Shift+Tab: the tab `delta` places from the selected one, wrapping. With no tab
+     * selected (Settings, a plugin page) it counts from the live tab.
+     */
+    step(delta: 1 | -1): void {
+      if (set !== null) activate(step(set, selectedId ?? set.liveId, delta).id);
     },
+
+    /** Alt+N: tab `n`, counting from 1, when there is one. */
+    goTo(n: number): void {
+      const tab = set === null ? undefined : nth(set, n);
+      if (tab !== undefined) activate(tab.id);
+    },
+
+    /** There is another tab to step to. */
+    canStep: (): boolean => set !== null && set.tabs.length > 1,
+
+    /** There is a tab `n`, counting from 1. */
+    has: (n: number): boolean => set !== null && nth(set, n) !== undefined,
 
     /** Closes tab `id`; the last tab stays. Closing the live tab shows its right neighbour, else its left. */
     close(id: string): void {
