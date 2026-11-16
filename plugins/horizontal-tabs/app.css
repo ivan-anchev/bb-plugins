@@ -239,12 +239,23 @@
   border-radius: 5px;
 }
 
-.ht-tiles {
+/* A tab's project stack: the front tile, and the ones behind it fanned out to the right, each peeking 5px and
+   turned 3deg further, with a shadow on the edge each tile casts on the one behind it. `--ht-depth` is each
+   tile's place in the stack, 0 in front (ProjectStack). */
+.ht-stack {
   display: flex;
-  gap: 2px;
+  isolation: isolate;
 }
-.ht-tiles:empty {
-  display: none;
+.ht-stack > .ht-tile {
+  position: relative;
+  z-index: calc(-1 * var(--ht-depth));
+  transform: rotate(calc(var(--ht-depth) * 3deg));
+}
+.ht-stack > .ht-tile + .ht-tile {
+  margin-left: calc(5px - var(--ht-tile-size));
+}
+.ht-stack > .ht-tile:not(:last-child) {
+  box-shadow: 1px 0 2px rgb(0 0 0 / 0.4);
 }
 
 .ht-title {
@@ -256,12 +267,13 @@
 
 /* A project's tile: its initial on its hue's 500, inked in its 50 (Zeron's palette, as activity-sidebar). */
 .ht-tile {
-  flex: 0 0 16px;
+  --ht-tile-size: 16px;
+  flex: 0 0 var(--ht-tile-size);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: var(--ht-tile-size);
+  height: var(--ht-tile-size);
   border-radius: 4px;
   background: var(--ht-tile-bg);
   color: var(--ht-tile-ink);
