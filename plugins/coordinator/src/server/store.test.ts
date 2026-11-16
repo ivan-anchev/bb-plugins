@@ -100,3 +100,25 @@ test("a fix round claimed before its findings are sent survives the plugin's rel
     [{ kind: "sent-back", crewId, handoffId, round: 1 }],
   );
 });
+
+test("a provider placement stored in an earlier shape reads as the environment it spawned in", () => {
+  const { db, storage } = memoryStorage();
+  // As the store stood before provider placements were stored as environments.
+  const before = openStore({ ...storage, migrate: (handle, statements) => storage.migrate(handle, statements.slice(0, statements.findIndex((statement) => statement.startsWith("UPDATE crews SET placement")))) });
+  before.insertCoordinator({ id: ID, ticket: "ticket-1", projectId: "prj_1", verify: true, createdAt: 1_000 });
+  const insert = db.prepare("INSERT INTO crews (coordinator_id, id, title, brief, done_criteria, placement, created_at) VALUES (?, ?, 'Retries', 'Retry deliveries.', '[\"npm test passes\"]', ?, ?)");
+  insert.run(ID, "c1", JSON.stringify({ kind: "provider", environmentProviderId: "personal-workspace" }), 2_000);
+  insert.run(ID, "c2", JSON.stringify({ kind: "provider", environmentProviderId: "boat-sandbox", inputs: {}, machine: { machineProviderId: "boat-sandbox", inputs: { preset: "small" } } }), 2_001);
+  insert.run(ID, "c3", JSON.stringify({ kind: "worktree" }), 2_002);
+
+  assert.deepEqual(
+    openStore(storage)
+      .crews(ID)
+      .map((crew) => crew.placement),
+    [
+      { kind: "chosen", environment: { type: "provider", environmentProviderId: "personal-workspace", inputs: null } },
+      { kind: "chosen", environment: { type: "provider", environmentProviderId: "boat-sandbox", inputs: {}, machine: { type: "new", machineProviderId: "boat-sandbox", inputs: { preset: "small" } } } },
+      { kind: "worktree" },
+    ],
+  );
+});

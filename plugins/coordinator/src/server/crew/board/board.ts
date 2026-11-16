@@ -1,16 +1,16 @@
 // The board: each crew of a coordinating thread joined with its thread as bb lists it now, and the
 // digest. Read whole on every call; bb's thread events only say when to read again.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
-import type { Board, BoardRow } from "../../contract.ts";
-import { environmentOf, type Crew } from "../../model/crew.ts";
-import { needsYou, type NeedsYou } from "../../model/board/board-groups.ts";
-import { crewState, type CrewThread } from "../../model/board/crew-state.ts";
-import { warnedFileCount } from "../../model/inbox/own-tree.ts";
-import { memoryFileSchema } from "../../model/memory-file.ts";
-import type { CoordinatorId } from "../../model/role.ts";
-import type { MemoryRoot } from "../memory/memory-files.ts";
-import type { Store } from "../store.ts";
-import { currentHandoff, type TurnsBb } from "./handoffs.ts";
+import type { Board, BoardRow } from "../../../contract.ts";
+import { branchOf, environmentOf, type Crew } from "../../../model/crew.ts";
+import { needsYou, type NeedsYou } from "../../../model/board/board-groups.ts";
+import { crewState, type CrewThread } from "../../../model/board/crew-state.ts";
+import { warnedFileCount } from "../../../model/inbox/own-tree.ts";
+import { memoryFileSchema } from "../../../model/memory-file.ts";
+import type { CoordinatorId } from "../../../model/role.ts";
+import type { MemoryRoot } from "../../memory/memory-files.ts";
+import type { Store } from "../../store.ts";
+import { currentHandoff, type TurnsBb } from "../handoffs.ts";
 
 /** A crew's thread as the board reads it. */
 type ListedThread = CrewThread & { id: string; environmentBranchName: string | null; environmentHostId: string | null; archivedAt: number | null; deletedAt: number | null };
@@ -83,7 +83,7 @@ export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinat
         const draft = draftOf(crew, { projectId: coordinator.projectId, environmentHostId });
         const verdict = handoff?.status === "done" ? handoff.verdict : null;
         const pr = store.prStatus(crew.coordinatorId, crew.id)?.snapshot ?? null;
-        return { crewId: crew.id, title: crew.title, threadId, branch: thread?.environmentBranchName ?? null, ...crewState(crew, thread, handoff, pr), verdict, pr, draft };
+        return { crewId: crew.id, title: crew.title, threadId, branch: thread === null ? null : branchOf(crew, thread), ...crewState(crew, thread, handoff, pr), verdict, pr, draft };
       }),
     );
   }

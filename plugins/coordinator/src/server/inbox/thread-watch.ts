@@ -4,7 +4,7 @@
 // before it touches SQLite.
 import type { PluginLogger, PluginThreadEventPayloads } from "@get-bb/plugin-sdk";
 import type { Crew } from "../../model/crew.ts";
-import { isOpen } from "../crew/board.ts";
+import { isOpen } from "../crew/board/board.ts";
 import { currentHandoff, type TurnsBb } from "../crew/handoffs.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { Store } from "../store.ts";

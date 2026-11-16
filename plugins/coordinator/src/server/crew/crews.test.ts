@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { memoryFileSchema } from "../../model/memory-file.ts";
+import { crewIdSchema } from "../../model/role.ts";
 import { coordinating, isRefusal, newThreadRequest, textOf, threadIn } from "../test-harness.ts";
 
 const RETRIES = { title: "Add retries", brief: "Retry failed webhook deliveries with backoff.", doneCriteria: ["npm test passes", "a failed delivery is retried 3 times"] };
@@ -46,10 +47,53 @@ test("crew_start is refused without done-criteria, and rejected with none, a bla
   assert.deepEqual(kit.store.crews(coordinatorId), []);
 });
 
-test("a provider placement spawns in that environment provider", async () => {
+test("a provider placement spawns as bb's own CLI would, and a sandbox crew gets a new branch from the project's default one", async () => {
   const { kit, threadId } = await coordinating();
-  const result = textOf(await kit.call("crew_start", { ...RETRIES, placement: { kind: "provider", environmentProviderId: "boat-sandbox" } }, threadId));
-  assert.deepEqual(kit.thread(threadIn(result)).spawnedWith.environment, { type: "provider", environmentProviderId: "boat-sandbox", inputs: null });
+  const environmentOf = async (placement: object) => kit.thread(threadIn(textOf(await kit.call("crew_start", { ...RETRIES, placement }, threadId)))).spawnedWith.environment;
+  const ownBranch = { branch: { kind: "new", baseBranch: "main" } };
+  assert.deepEqual(await environmentOf({ kind: "provider", environmentProviderId: "boat-sandbox", machineInputs: { preset: "small" } }), {
+    type: "provider",
+    environmentProviderId: "boat-sandbox",
+    inputs: ownBranch,
+    machine: { type: "new", machineProviderId: "boat-sandbox", inputs: { preset: "small" } },
+  });
+  assert.deepEqual(await environmentOf({ kind: "provider", environmentProviderId: "boat-sandbox" }), {
+    type: "provider",
+    environmentProviderId: "boat-sandbox",
+    inputs: ownBranch,
+    machine: { type: "new", machineProviderId: "boat-sandbox", inputs: {} },
+  });
+  assert.deepEqual(await environmentOf({ kind: "provider", environmentProviderId: "project-checkout" }), { type: "provider", environmentProviderId: "project-checkout", inputs: {} }, "the user's own checkout keeps its branch");
+  assert.deepEqual(await environmentOf({ kind: "provider", environmentProviderId: "personal-workspace" }), { type: "provider", environmentProviderId: "personal-workspace", inputs: null });
+});
+
+test("a sandbox crew is refused when bb records no default branch to start its branch from", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  kit.environments.defaultBranch = null;
+  const result = await kit.call("crew_start", { ...RETRIES, placement: { kind: "provider", environmentProviderId: "boat-sandbox" } }, threadId);
+  assert.ok(isRefusal(result));
+  assert.match(textOf(result), /bb records no default branch for this project/);
+  assert.deepEqual(kit.store.crews(coordinatorId), []);
+});
+
+test("a sandbox crew's draft keeps its environment, and starts in it", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  await kit.call("crew_start", { ...RETRIES, draft: true, placement: { kind: "provider", environmentProviderId: "boat-sandbox", machineInputs: { preset: "small" } } }, threadId);
+  const environment = { type: "provider", environmentProviderId: "boat-sandbox", inputs: { branch: { kind: "new", baseBranch: "main" } }, machine: { type: "new", machineProviderId: "boat-sandbox", inputs: { preset: "small" } } };
+  assert.deepEqual((await kit.rpc.board({ coordinatorId })).rows[0]?.draft?.environment, environment, "the draft's editor opens on it");
+  await kit.rpc.startDraft({ coordinatorId, crewId: crewIdSchema.parse("c1") });
+  assert.deepEqual(kit.thread(`thr_${kit.spawned()}`).spawnedWith.environment, environment);
+});
+
+test("a provider bb doesn't have, or machineInputs for one that makes no machine, is refused and saves nothing", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  const unknown = await kit.call("crew_start", { ...RETRIES, placement: { kind: "provider", environmentProviderId: "boat" } }, threadId);
+  assert.ok(isRefusal(unknown));
+  assert.match(textOf(unknown), /bb has no environment provider boat\. It has: project-checkout, personal-workspace, boat-sandbox\./);
+  const machineless = await kit.call("crew_start", { ...RETRIES, placement: { kind: "provider", environmentProviderId: "project-checkout", machineInputs: { preset: "small" } } }, threadId);
+  assert.ok(isRefusal(machineless));
+  assert.match(textOf(machineless), /project-checkout makes no machine that takes inputs, so leave out machineInputs/);
+  assert.deepEqual(kit.store.crews(coordinatorId), []);
 });
 
 test("crews are numbered in the order started, per Coordinator", async () => {

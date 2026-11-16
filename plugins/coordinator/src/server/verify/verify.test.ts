@@ -560,6 +560,46 @@ test("a verifier that goes idle without a verdict is nudged once, then the row r
   assert.ok(isRefusal(await kit.call("crew_verdict", PASSES, verifierThreadId)), "a verdict after giving up is refused");
 });
 
+test("a verifier whose sandbox was removed before its verdict reads Couldn't verify at the next tick, with no reminder sent", async () => {
+  const { kit, doorbells, row, verdict, verifier, handOff } = await withCrew();
+  await handOff();
+  const verifierThreadId = verifier();
+  // As bb leaves it when the machine is removed: the environment destroyed, the verifier's start failed.
+  kit.environments.destroyed.add(kit.thread(verifierThreadId).environmentId);
+  kit.thread(verifierThreadId).status = "error";
+  await kit.tick();
+  await settled();
+  assert.deepEqual(verdict(), {
+    state: "could-not-run",
+    verifierThreadId,
+    reason: "the crew's environment was removed (a sandbox removed or reaped) before its verifier returned a verdict",
+  });
+  assert.deepEqual(kit.delivered(verifierThreadId), [], "no reminder to a thread that can't run");
+  assert.deepEqual([(await row()).state, (await row()).headline], ["needs-you", "Couldn't verify: Retries land with backoff"]);
+  assert.match(doorbells()[0] ?? "", /handed off: done, could not be verified$/);
+});
+
+test("a reload while the tick reads a quiet verifier's environment leaves its one reminder to the new instance", async () => {
+  const { kit, verdict, verifier, handOff } = await withCrew();
+  await handOff();
+  const verifierThreadId = verifier();
+  await kit.idle(verifierThreadId, "All three pass.");
+  kit.environments.holding = true;
+  void kit.tick();
+  await settled();
+  assert.equal(kit.environments.held.length, 1, "the old instance is reading the environment");
+
+  kit.reload();
+  kit.environments.holding = false;
+  kit.environments.held.splice(0).forEach((release) => release());
+  await settled();
+  assert.deepEqual([verdict(), kit.delivered(verifierThreadId)], [{ state: "running", verifierThreadId, nudged: false }, []], "the old instance neither marks nor sends it");
+
+  await kit.tick();
+  await settled();
+  assert.deepEqual([verdict(), kit.delivered(verifierThreadId).length], [{ state: "running", verifierThreadId, nudged: true }, 1], "the new instance reminds it once");
+});
+
 test("a verifier whose thread is archived is given up on at the next tick", async () => {
   const { kit, verdict, verifier, handOff } = await withCrew();
   await handOff();

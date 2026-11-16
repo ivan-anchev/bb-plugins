@@ -83,6 +83,18 @@ const MIGRATIONS = [
   `CREATE INDEX decisions_of_coordinator ON decisions (coordinator_id)`,
   // Every end of a coordinating thread's turn reads its latest event about its own working tree, and so does its board.
   `CREATE INDEX events_own_tree ON events (coordinator_id, id) WHERE json_extract(event, '$.kind') IN ('coordinator-edited-files', 'coordinator-tree-clean')`,
+  // crew_start's provider placement is stored as the environment bb spawns in, as a draft's chosen
+  // one is. This rewrites the earlier provider shapes into the environment each spawned in: with
+  // no inputs (null), or with the inputs and new machine stored.
+  `UPDATE crews SET placement = json_object('kind', 'chosen', 'environment', json(CASE
+     WHEN json_type(placement, '$.machine') = 'object' THEN json_object('type', 'provider', 'environmentProviderId', json_extract(placement, '$.environmentProviderId'),
+       'inputs', json(json_extract(placement, '$.inputs')), 'machine', json_set(json(json_extract(placement, '$.machine')), '$.type', 'new'))
+     ELSE json_object('type', 'provider', 'environmentProviderId', json_extract(placement, '$.environmentProviderId'), 'inputs', json(json_extract(placement, '$.inputs')))
+   END))
+   WHERE json_extract(placement, '$.kind') = 'provider'`,
+  // The branch a crew's thread had checked out at its latest handoff that bb's git plugin could
+  // read (null: none yet). why stored: reading it at any other time could wake a crew's sandbox.
+  `ALTER TABLE crews ADD COLUMN branch TEXT`,
 ];
 
 /** Where a verdict must still be for a change to apply: queued, or running in this verifier thread. */
@@ -120,7 +132,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
   function crews(coordinatorId: CoordinatorId, crewId: CrewId | null): Crew[] {
     return db()
       .prepare(
-        `SELECT k.coordinator_id AS coordinatorId, k.id, k.title, k.brief, k.done_criteria AS doneCriteria, k.placement, k.execution,
+        `SELECT k.coordinator_id AS coordinatorId, k.id, k.title, k.brief, k.done_criteria AS doneCriteria, k.placement, k.execution, k.branch,
                 k.fix_rounds AS fixRounds, k.created_at AS createdAt, k.closed_as AS closedAs, k.closed_at AS closedAt, r.thread_id AS threadId
            FROM crews k LEFT JOIN roles r ON r.ticket = k.ticket
           WHERE k.coordinator_id = ? AND (? IS NULL OR k.id = ?)
@@ -382,6 +394,11 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
       db()
         .prepare("UPDATE crews SET brief = ?, done_criteria = ?, execution = ?, placement = ? WHERE coordinator_id = ? AND id = ?")
         .run(edit.brief, JSON.stringify(edit.doneCriteria), JSON.stringify(edit.execution), JSON.stringify(edit.placement), coordinatorId, crewId);
+    },
+
+    /** Records the branch the crew's thread had checked out as it handed off. */
+    recordBranch(coordinatorId: CoordinatorId, crewId: CrewId, branch: string): void {
+      db().prepare("UPDATE crews SET branch = ? WHERE coordinator_id = ? AND id = ?").run(branch, coordinatorId, crewId);
     },
 
     /** Records how a crew was closed. A crew closes once: closing it again changes nothing. */
@@ -791,6 +808,7 @@ const crewRowSchema = z.object({
     .string()
     .nullable()
     .transform((json) => (json === null ? null : executionSchema.parse(JSON.parse(json)))),
+  branch: z.string().nullable(),
   fixRounds: z.number().int(),
   createdAt: z.number(),
   closedAs: closedKindSchema.nullable(),

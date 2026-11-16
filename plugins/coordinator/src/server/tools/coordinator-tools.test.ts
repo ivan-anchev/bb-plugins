@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
+import plugin from "../../../server.ts";
 import { coordinatorContract } from "../../contract.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
 import { harness, isRefusal, newThreadRequest, textOf } from "../test-harness.ts";
+import { COORDINATOR_TOOLS, CREW_TOOLS, VERIFIER_TOOLS } from "./coordinator-tools.ts";
 
 const PLAN = memoryFileSchema.parse("PLAN.md");
 
@@ -105,4 +108,10 @@ test("a catch-up past its budget names the files it left out", async () => {
   assert.match(text, /## GOAL\.md/);
   assert.doesNotMatch(text, /## PLAN\.md/);
   assert.match(text, /Not shown, to keep this short: PLAN\.md\./);
+});
+
+test("the plugin loads in the SDK's fake host, which checks every tool's parameters as bb does", () => {
+  const { bb, harness: host } = createFakePluginHost();
+  plugin(bb);
+  assert.deepEqual(new Set(host.registrations.agentTools.map(({ name }) => name)), new Set([...COORDINATOR_TOOLS, ...CREW_TOOLS, ...VERIFIER_TOOLS]));
 });

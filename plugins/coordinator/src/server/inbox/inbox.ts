@@ -11,7 +11,7 @@ import { doorbellText } from "../../model/inbox/wake-text.ts";
 import type { PrSnapshot, PrUnavailable } from "../../model/verdict/pr.ts";
 import type { CoordinatorId, CrewId } from "../../model/role.ts";
 import type { Verdict } from "../../model/verdict/verdict.ts";
-import { threadsById } from "../crew/board.ts";
+import { threadsById } from "../crew/board/board.ts";
 import type { Settlement, Store, VerdictFrom } from "../store.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];

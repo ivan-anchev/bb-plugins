@@ -3,7 +3,10 @@
 // doorbell. The caller's role comes from the plugin's database by its thread id, never from its
 // metadata.
 import { randomUUID } from "node:crypto";
+import type { Crew } from "../../model/crew.ts";
 import { handoffIdSchema, handoffInputSchema } from "../../model/handoff.ts";
+import { listedThreads } from "../crew/board/board.ts";
+import { checkedOutBranch, type CheckedOutBranchBb } from "../crew/checked-out-branch.ts";
 import { latestTurnSeq, type TurnsBb } from "../crew/handoffs.ts";
 import type { Store } from "../store.ts";
 import type { Verify } from "../verify/verify.ts";
@@ -11,9 +14,21 @@ import { failed, type ToolsBb } from "./tool-kit.ts";
 
 export const HANDOFF = "crew_handoff";
 
-type Deps = { store: Pick<Store, "roleOfThread" | "crew">; verify: Pick<Verify, "handoff"> };
+type ListedThread = { id: string; environmentId: string | null; archivedAt: number | null; deletedAt: number | null };
 
-export function registerCrewTools(bb: ToolsBb & TurnsBb, { store, verify }: Deps): void {
+/** The parts of bb the handoff uses: registering it, the thread's turns, its environment and the branch checked out there. */
+type CrewToolsBb = ToolsBb & TurnsBb & CheckedOutBranchBb & { sdk: { threads: { list(args: { threadIds: string[]; includeHidden: true; limit: number }): Promise<ListedThread[]> } } };
+
+type Deps = { store: Pick<Store, "roleOfThread" | "crew" | "recordBranch">; verify: Pick<Verify, "handoff"> };
+
+export function registerCrewTools(bb: CrewToolsBb, { store, verify }: Deps): void {
+  /** Records the branch the crew's thread has checked out, read now, while the crew is awake to hand off. */
+  async function recordBranch(crew: Crew, threadId: string): Promise<void> {
+    const environmentId = (await listedThreads(bb, [threadId])).get(threadId)?.environmentId ?? null;
+    const branch = environmentId === null ? null : await checkedOutBranch(bb, environmentId);
+    if (branch !== null) store.recordBranch(crew.coordinatorId, crew.id, branch);
+  }
+
   bb.agents.registerTool({
     name: HANDOFF,
     description:
@@ -31,6 +46,7 @@ export function registerCrewTools(bb: ToolsBb & TurnsBb, { store, verify }: Deps
       const turnSeq = await latestTurnSeq(bb, threadId);
       // why throw: this call runs inside a turn, so bb has its turn/started event.
       if (turnSeq === null) throw new Error("bb lists no turn for this thread, so the handoff can't be tied to one. Try again.");
+      await recordBranch(crew, threadId);
       const verdict = await verify.handoff({ id: handoffIdSchema.parse(randomUUID()), coordinatorId: crew.coordinatorId, crewId: crew.id, at: Date.now(), turnSeq, ...report });
       if (verdict === null) return "Handed off. Your coordinator has your report. Stop here.";
       if (verdict.state === "waived") return "Handed off. Your coordinator has your report, marked unverified: verification is off. Stop here.";
