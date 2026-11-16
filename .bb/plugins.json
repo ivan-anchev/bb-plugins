@@ -20,10 +20,6 @@
       "source": "./plugins/code-explorer"
     },
     {
-      "name": "coordinator",
-      "source": "./plugins/coordinator"
-    },
-    {
       "name": "homepage",
       "source": "./plugins/homepage"
     },
@@ -46,6 +42,10 @@
     {
       "name": "proactive-visuals",
       "source": "./plugins/proactive-visuals"
+    },
+    {
+      "name": "regional-manager",
+      "source": "./plugins/regional-manager"
     },
     {
       "name": "subagents-strip",
