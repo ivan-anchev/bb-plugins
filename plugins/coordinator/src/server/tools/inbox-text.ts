@@ -7,6 +7,7 @@ import type { InboxEvent, StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { filesText } from "../../model/inbox/own-tree.ts";
 import { askedOf } from "../../model/inbox/wake-text.ts";
 import { intervalText, type Reminder } from "../../model/reminder.ts";
+import { checkoutText } from "../../model/verdict/checkout.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
 import type { CrewId } from "../../model/role.ts";
 import { allPassed, ciVerdictOf, judge, mayHaveReachedCrew, outcome, type Verdict } from "../../model/verdict/verdict.ts";
@@ -180,7 +181,14 @@ function verdictText(verdict: Verdict): string {
       const label = passed ? (ci === null ? "Passed every criterion" : "Verified") : "Failed verification";
       const count = verdict.criteria.filter((check) => check.result === "pass").length;
       const by = `${verdict.model.providerId} ${verdict.model.model}${verdict.sameModel ? ", the crew's own model, as no other was available" : ""}`;
-      const head = [`${label}: ${count} of ${verdict.criteria.length} criteria passed, checked at ${verdict.headSha} by a verifier on ${by}.`, ciLine(verdict, ci), "Each result, with its evidence in the verifier's words:"].filter((part) => part !== "").join(" ");
+      const head = [
+        `${label}: ${count} of ${verdict.criteria.length} criteria passed, checked at ${verdict.headSha} by a verifier on ${by}.`,
+        checkoutText(verdict.headSha, verdict.checkout),
+        ciLine(verdict, ci),
+        "Each result, with its evidence in the verifier's words:",
+      ]
+        .filter((part) => part !== "")
+        .join(" ");
       const checks = verdict.criteria.map((check, i) => `${i + 1}. ${check.result.toUpperCase()}: ${check.criterion}\n   ${check.evidence.replaceAll("\n", "\n   ")}`);
       const findings = verdict.findings.length === 0 ? "Findings: none." : `Findings:\n${verdict.findings.map((finding) => `- ${finding.replaceAll("\n", "\n  ")}`).join("\n")}`;
       return [head, ...checks, findings].join("\n\n");

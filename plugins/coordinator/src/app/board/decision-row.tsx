@@ -1,16 +1,19 @@
 // A decision the coordinating thread put to the user with crew_ask_user. Open, it sits under Needs
 // you with its question, a button for each option and a field for an answer in the user's own
-// words. Answered, it sits under Done with the answer. Answering moves it there, and the board
-// moves focus with it, to the answered row.
+// words, which the browser keeps until it is sent (see answer-draft.ts). Answered, it sits under
+// Done with the answer. Answering moves it there, and the board moves focus with it, to the
+// answered row.
 import { experimental_Icon as Icon, experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
-import { useId, useState, type KeyboardEvent, type Ref } from "react";
+import { useEffect, useId, useState, type KeyboardEvent, type Ref } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
 import { MAX_ANSWER_CHARS, type Decision } from "../../model/decision.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { Button } from "../ui/button.tsx";
 import { GrowingTextarea } from "../ui/growing-textarea.tsx";
 import { useHoldEscape } from "../ui/hold-escape.ts";
+import { useStored } from "../ui/stored.ts";
 import { shortTime } from "../ui/time.ts";
+import { answerDraftKeyOf, answerDraftSchema } from "./answer-draft.ts";
 
 // why: the question and the answer line up past the id, as a crew's title does.
 const ID_COLUMN = "grid grid-cols-[2.25rem_minmax(0,1fr)] items-baseline gap-x-2 gap-y-0.5";
@@ -21,7 +24,14 @@ type DecisionRowProps = { ref: Ref<HTMLDivElement>; coordinatorId: CoordinatorId
 
 export function DecisionRow({ ref, coordinatorId, decision }: DecisionRowProps) {
   const answer = decision.answer;
-  if (answer === null) return <OpenDecision ref={ref} coordinatorId={coordinatorId} decision={decision} />;
+  const { value: typed, store } = useStored(localStorage, answerDraftKeyOf(coordinatorId, decision.id), answerDraftSchema);
+  const answeredWithTyped = answer !== null && typed !== null;
+  // why an effect: the typed answer lives in the browser, and an answered decision, by this answer
+  // or from elsewhere, takes none again.
+  useEffect(() => {
+    if (answeredWithTyped) store(null);
+  }, [answeredWithTyped, store]);
+  if (answer === null) return <OpenDecision ref={ref} decision={decision} coordinatorId={coordinatorId} typed={typed ?? ""} onType={(text) => store(text === "" ? null : text)} />;
   return (
     // why the focus stop: an answer moves the row here, and focus with it, so it lands on what was answered.
     <div ref={ref} tabIndex={-1} className={`${ID_COLUMN} rounded-md px-2 py-1.5 outline-none focus-visible:ring-1 focus-visible:ring-ring`}>
@@ -41,14 +51,19 @@ export function DecisionRow({ ref, coordinatorId, decision }: DecisionRowProps) 
   );
 }
 
+type OpenDecisionProps = DecisionRowProps & {
+  /** What the user typed and hasn't sent, as the browser keeps it. */
+  typed: string;
+  onType(text: string): void;
+};
+
 /**
  * An open decision. Choosing an option, or sending the field, answers it; the field keeps what was
  * typed through a failed send, beside its error, and holds bb's Esc while it has text.
  */
-function OpenDecision({ ref, coordinatorId, decision }: DecisionRowProps) {
+function OpenDecision({ ref, coordinatorId, decision, typed: draft, onType }: OpenDecisionProps) {
   const ids = useId();
   const save = experimental_useRpcMutation({ contract, method: "answerDecision" });
-  const [draft, setDraft] = useState("");
   // The answer sent, from the click until the board reads it back and moves the row to Done.
   const [sent, setSent] = useState<string | null>(null);
   useHoldEscape(draft.trim() !== "");
@@ -101,7 +116,7 @@ function OpenDecision({ ref, coordinatorId, decision }: DecisionRowProps) {
         >
           <GrowingTextarea
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => onType(event.target.value)}
             onKeyDown={onKeyDown}
             readOnly={busy}
             maxLength={MAX_ANSWER_CHARS}

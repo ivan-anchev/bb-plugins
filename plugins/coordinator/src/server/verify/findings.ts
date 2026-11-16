@@ -1,9 +1,12 @@
-// What a verdict found, written for a crew: each done-criterion it didn't pass, with the verifier's
-// evidence, CI's failure on its pull request, and its findings. It reaches a crew twice: as the verifier's message when a failed
-// verdict goes back for its fix round, and in the brief of a fresh crew that supersedes one.
+// What a verdict found, written for a crew: a checkout that wasn't the claimed commit on a clean
+// tree, as bb's git plugin read it, each done-criterion it didn't pass, with the verifier's
+// evidence, CI's failure on its pull request, and its findings. It reaches a crew twice: as the
+// verifier's message when a failed verdict goes back for its fix round, and in the brief of a
+// fresh crew that supersedes one.
 import type { Crew } from "../../model/crew.ts";
+import { checkoutText } from "../../model/verdict/checkout.ts";
 import type { CiVerdict } from "../../model/verdict/pr.ts";
-import { ciVerdictOf, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
+import { ciVerdictOf, failedCheckout, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
 
 type Returned = Extract<Verdict, { state: "returned" }>;
 
@@ -32,19 +35,28 @@ export function supersedingBrief(old: Pick<Crew, "id">, brief: string, verdict: 
   ].join("\n\n");
 }
 
-/** How many done-criteria the verdict didn't pass, and whether CI failed, in words. `ci`: null while the verdict was not settled. */
+/** How many done-criteria the verdict didn't pass, and whether the checkout or CI failed, in words. `ci`: null while the verdict was not settled. */
 function notPassed(verdict: Returned, ci: CiVerdict | null): string {
   const count = verdict.criteria.filter((check) => check.result !== "pass").length;
-  const criteria = count === 0 ? "every done-criterion passed" : `${count} of ${verdict.criteria.length} done-criteria not met`;
-  return ci?.kind === "fail" ? `${criteria}, and CI failed on #${ci.number}` : criteria;
+  const parts = [
+    count === 0 ? "every done-criterion passed" : `${count} of ${verdict.criteria.length} done-criteria not met`,
+    ...(failedCheckout(verdict) === null ? [] : ["the claimed commit wasn't checked out on a clean tree"]),
+    ...(ci?.kind === "fail" ? [`CI failed on #${ci.number}`] : []),
+  ];
+  return parts.length === 1 ? parts.join("") : `${parts.slice(0, -1).join(", ")}, and ${parts.at(-1)}`;
 }
 
-/** Each criterion that didn't pass, numbered as in the brief, with its evidence; then CI's failure; then the findings. */
+/** The checkout, when it wasn't the claimed commit on a clean tree; then each criterion that didn't pass, numbered as in the brief, with its evidence; then CI's failure; then the findings. */
 function whatFailed(verdict: Returned, ci: CiVerdict | null): string {
+  const failed = failedCheckout(verdict);
+  const checkout =
+    failed === null
+      ? []
+      : [`### The commit and the tree\n\n${checkoutText(verdict.headSha, failed)} Commit what belongs to the work and remove what doesn't, so the commit you hand off is checked out on a clean tree.`];
   const checks = verdict.criteria.flatMap((check, i) => (check.result === "pass" ? [] : [`### ${i + 1}. ${check.criterion}\n\n**${RESULT[check.result]}.** The verifier's evidence:\n\n${fenced(check.evidence)}`]));
   const failedCi = ci?.kind === "fail" ? [`### CI failed on #${ci.number}\n\n${ciFailure(ci.failedChecks)} Read the runs on the pull request, fix the cause, and push.`] : [];
   const findings = verdict.findings.length === 0 ? [] : [`### Other findings\n\n${verdict.findings.map((finding) => `- ${finding.replaceAll("\n", "\n  ")}`).join("\n")}`];
-  return [...checks, ...failedCi, ...findings].join("\n\n") || "It found nothing to fix.";
+  return [...checkout, ...checks, ...failedCi, ...findings].join("\n\n") || "It found nothing to fix.";
 }
 
 /** The failed checks, by the names GitHub gives them. */

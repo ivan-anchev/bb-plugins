@@ -121,7 +121,7 @@ test("a CI failure after the crew's fix round reaches the coordinating thread as
   assert.deepEqual(await row(), { state: "needs-you", headline: "✗ CI failed on #41 after its fix round: Retries land with backoff", pr: "#41 open CI fail" });
   // why the catch-up: the coordinating thread is busy with an earlier doorbell by now, so bb holds this one queued.
   const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
-  assert.match(catchUp, /### c1 "Add retries" handed off: done\n[\s\S]*Failed verification: 2 of 2 criteria passed, checked at 0123456789abcdef0123456789abcdef01234567 by a verifier on [^.]*\. CI: failed on #41 at this commit; failed checks, as GitHub names them: test\./);
+  assert.match(catchUp, /### c1 "Add retries" handed off: done\n[\s\S]*Failed verification: 2 of 2 criteria passed, checked at 0123456789abcdef0123456789abcdef01234567 by a verifier on [^.]*\. bb's git plugin read the crew's environment as it handed off: the claimed commit 0123456789abcdef0123456789abcdef01234567 checked out, on a clean working tree\. CI: failed on #41 at this commit; failed checks, as GitHub names them: test\./);
 });
 
 test("a snapshot of another commit does not settle the verdict, even with CI green", async () => {

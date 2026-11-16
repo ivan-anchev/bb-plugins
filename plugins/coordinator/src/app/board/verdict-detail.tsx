@@ -1,8 +1,10 @@
 // A verdict under its row: how many criteria passed, the commit and the model that checked them,
-// what CI said about that commit, then each criterion with its evidence. A failed or unverifiable criterion shows its evidence; a
+// a checkout that wasn't that commit on a clean tree, what CI said about that commit, then each
+// criterion with its evidence. A failed or unverifiable criterion shows its evidence; a
 // passed one keeps it folded, so what needs the user is what they see first.
 import { experimental_Icon as Icon, experimental_ProviderIcon as ProviderIcon, experimental_useProviders as useProviders, useBbNavigate } from "@get-bb/plugin-sdk/app";
-import { allPassed, ciVerdictOf, outcome, type CriterionResult, type ModelRef, type Verdict } from "../../model/verdict/verdict.ts";
+import { checkoutText } from "../../model/verdict/checkout.ts";
+import { allPassed, ciVerdictOf, failedCheckout, outcome, type CriterionResult, type ModelRef, type Verdict } from "../../model/verdict/verdict.ts";
 
 type Judged = Extract<Verdict, { state: "returned" | "could-not-run" }>;
 
@@ -30,6 +32,7 @@ function Returned({ verdict }: { verdict: Extract<Verdict, { state: "returned" }
         <VerifierLink threadId={verdict.verifierThreadId} />
       </div>
       <CheckedBy model={verdict.model} sameModel={verdict.sameModel} headSha={verdict.headSha} />
+      <CheckoutLine verdict={verdict} />
       <CiLine verdict={verdict} />
       <ol className="flex flex-col gap-1">
         {verdict.criteria.map((check, i) => (
@@ -66,6 +69,18 @@ function CouldNotRun({ verdict }: { verdict: Extract<Verdict, { state: "could-no
   );
 }
 
+/** The checkout as bb's git plugin read it, when it wasn't the claimed commit on a clean tree, which fails the verdict whatever its criteria say. */
+function CheckoutLine({ verdict }: { verdict: Extract<Verdict, { state: "returned" }> }) {
+  const failed = failedCheckout(verdict);
+  if (failed === null) return null;
+  return (
+    <p className="flex items-start gap-1.5 text-xs text-destructive-text">
+      <Icon name="X" aria-hidden className="mt-px size-3.5 shrink-0" />
+      <span className="min-w-0 [overflow-wrap:anywhere]">Not the claimed commit on a clean tree. {checkoutText(verdict.headSha, failed)}</span>
+    </p>
+  );
+}
+
 /** What CI said about the commit the verifier checked, once the verdict settled or while it waits for it; nothing when there was none to check. */
 function CiLine({ verdict }: { verdict: Extract<Verdict, { state: "returned" }> }) {
   const ci = ciVerdictOf(verdict);
@@ -94,7 +109,7 @@ function CiLine({ verdict }: { verdict: Extract<Verdict, { state: "returned" }> 
   }
 }
 
-/** The commit the verifier found checked out, and what bb ran it on. */
+/** The commit the verifier checked, and what bb ran it on. */
 function CheckedBy({ model, sameModel, headSha }: { model: ModelRef; sameModel: boolean; headSha: string }) {
   const { providers } = useProviders();
   const provider = providers.find((candidate) => candidate.id === model.providerId);

@@ -10,6 +10,7 @@ import { environmentOf, type Crew } from "../model/crew.ts";
 import type { Handoff } from "../model/handoff.ts";
 import { memoryFileSchema } from "../model/memory-file.ts";
 import { coordinatorIdSchema, ticketMetadataSchema, type CrewId, type Role } from "../model/role.ts";
+import type { Checkout } from "../model/verdict/checkout.ts";
 import { crewBrief } from "./crew/brief.ts";
 import { verifierBrief } from "./verify/verifier-brief.ts";
 import type { MemoryRoot } from "./memory/memory-files.ts";
@@ -48,11 +49,12 @@ export type CrewRequest = Pick<Crew, "title" | "brief" | "doneCriteria" | "place
 /** What a verifier runs on: chosen by the plugin, never left to bb's default. */
 export type VerifierExecution = { providerId: string; model: string; reasoningLevel: string };
 
-/** What a verifier checks: one done handoff of a started crew, in the crew's environment. */
+/** What a verifier checks: one done handoff of a started crew, in the crew's environment, whose checkout the plugin read as it handed off. */
 export type VerifierRequest = {
   coordinator: Coordinator;
   crew: Crew & { launch: { kind: "started" } };
   handoff: Extract<Handoff, { status: "done" }>;
+  checkout: Checkout;
   environmentId: string;
   execution: VerifierExecution;
 };
@@ -164,7 +166,7 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
      * environment, so it checks the very tree the crew committed in. Its verdict starts running
      * when its ticket binds. Returns its thread.
      */
-    verifier({ coordinator, crew, handoff, environmentId, execution }: VerifierRequest): Promise<string> {
+    verifier({ coordinator, crew, handoff, checkout, environmentId, execution }: VerifierRequest): Promise<string> {
       const ticket = randomUUID();
       store.insertVerifierTicket(ticket, { kind: "verifier", coordinatorId: coordinator.id, crewId: crew.id, handoffId: handoff.id }, Date.now());
       return spawnWith(ticket, {
@@ -180,7 +182,7 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
         ...execution,
         permissionMode: CREW_PERMISSION_MODE,
         environment: { type: "reuse", environmentId },
-        prompt: verifierBrief(crew, handoff),
+        prompt: verifierBrief(crew, handoff, checkout),
       });
     },
   };

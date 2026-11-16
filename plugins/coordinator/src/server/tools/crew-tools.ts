@@ -5,9 +5,10 @@
 import { randomUUID } from "node:crypto";
 import type { Crew } from "../../model/crew.ts";
 import { handoffIdSchema, handoffInputSchema } from "../../model/handoff.ts";
+import { checkoutOf, type CheckoutRead } from "../../model/verdict/checkout.ts";
 import { listedThreads } from "../crew/board/board.ts";
-import { checkedOutBranch, type CheckedOutBranchBb } from "../crew/checked-out-branch.ts";
 import { latestTurnSeq, type TurnsBb } from "../crew/handoffs.ts";
+import { gitStatusOf, type GitStatusBb } from "../git-status.ts";
 import type { Store } from "../store.ts";
 import type { Verify } from "../verify/verify.ts";
 import { failed, type ToolsBb } from "./tool-kit.ts";
@@ -16,17 +17,33 @@ export const HANDOFF = "crew_handoff";
 
 type ListedThread = { id: string; environmentId: string | null; archivedAt: number | null; deletedAt: number | null };
 
-/** The parts of bb the handoff uses: registering it, the thread's turns, its environment and the branch checked out there. */
-type CrewToolsBb = ToolsBb & TurnsBb & CheckedOutBranchBb & { sdk: { threads: { list(args: { threadIds: string[]; includeHidden: true; limit: number }): Promise<ListedThread[]> } } };
+/** The parts of bb the handoff uses: registering it, the thread's turns, its environment and bb's git plugin's read of it. */
+type CrewToolsBb = ToolsBb & TurnsBb & GitStatusBb & { sdk: { threads: { list(args: { threadIds: string[]; includeHidden: true; limit: number }): Promise<ListedThread[]> } } };
 
 type Deps = { store: Pick<Store, "roleOfThread" | "crew" | "recordBranch">; verify: Pick<Verify, "handoff"> };
 
 export function registerCrewTools(bb: CrewToolsBb, { store, verify }: Deps): void {
-  /** Records the branch the crew's thread has checked out, read now, while the crew is awake to hand off. */
-  async function recordBranch(crew: Crew, threadId: string): Promise<void> {
+  /**
+   * Reads the crew's environment through bb's git plugin, once, now, while the crew is awake to hand
+   * off: records the branch it has checked out, and returns its checkout for the verdict.
+   */
+  async function readCheckout(crew: Crew, threadId: string): Promise<CheckoutRead> {
     const environmentId = (await listedThreads(bb, [threadId])).get(threadId)?.environmentId ?? null;
-    const branch = environmentId === null ? null : await checkedOutBranch(bb, environmentId);
-    if (branch !== null) store.recordBranch(crew.coordinatorId, crew.id, branch);
+    if (environmentId === null) return { kind: "unread", reason: "the crew's thread has no environment" };
+    const status = await gitStatusOf(bb, environmentId);
+    if (status.kind === "read" && status.branch !== null) store.recordBranch(crew.coordinatorId, crew.id, status.branch);
+    switch (status.kind) {
+      case "read":
+        return status.headSha === null
+          ? { kind: "unread", reason: "it named no commit checked out" }
+          : { kind: "read", checkout: checkoutOf(status.headSha, status.changedFiles, status.changedFileCount) };
+      case "not-git":
+        return { kind: "unread", reason: "the environment is not a git repository" };
+      case "unread":
+        return status;
+      default:
+        return status satisfies never;
+    }
   }
 
   bb.agents.registerTool({
@@ -46,10 +63,11 @@ export function registerCrewTools(bb: CrewToolsBb, { store, verify }: Deps): voi
       const turnSeq = await latestTurnSeq(bb, threadId);
       // why throw: this call runs inside a turn, so bb has its turn/started event.
       if (turnSeq === null) throw new Error("bb lists no turn for this thread, so the handoff can't be tied to one. Try again.");
-      await recordBranch(crew, threadId);
-      const verdict = await verify.handoff({ id: handoffIdSchema.parse(randomUUID()), coordinatorId: crew.coordinatorId, crewId: crew.id, at: Date.now(), turnSeq, ...report });
+      const checkout = await readCheckout(crew, threadId);
+      const verdict = await verify.handoff({ id: handoffIdSchema.parse(randomUUID()), coordinatorId: crew.coordinatorId, crewId: crew.id, at: Date.now(), turnSeq, ...report }, checkout);
       if (verdict === null) return "Handed off. Your coordinator has your report. Stop here.";
       if (verdict.state === "waived") return "Handed off. Your coordinator has your report, marked unverified: verification is off. Stop here.";
+      if (verdict.state === "could-not-run") return `Handed off. Your coordinator has your report, marked couldn't verify: ${verdict.reason}. Stop here.`;
       return "Handed off. A verifier now checks your commit against the done-criteria in this environment, and your coordinator gets your report with its verdict. If it fails, its findings may come back to you here, as a message from the verifier. Stop here, and change nothing in this environment until you hear back.";
     },
   });

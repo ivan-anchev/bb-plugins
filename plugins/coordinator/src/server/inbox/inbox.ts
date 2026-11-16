@@ -10,6 +10,7 @@ import { wakes, type InboxEvent, type StoredEvent } from "../../model/inbox/inbo
 import { doorbellText } from "../../model/inbox/wake-text.ts";
 import type { PrSnapshot, PrUnavailable } from "../../model/verdict/pr.ts";
 import type { CoordinatorId, CrewId } from "../../model/role.ts";
+import type { CheckoutRead } from "../../model/verdict/checkout.ts";
 import type { Verdict } from "../../model/verdict/verdict.ts";
 import { threadsById } from "../crew/board/board.ts";
 import type { Settlement, Store, VerdictFrom } from "../store.ts";
@@ -213,8 +214,8 @@ export function createInbox({ bb, store, onChange }: Deps) {
      * Stores the handoff with its verdict, and its event unless a verifier is still to check it, then
      * wakes its coordinating thread. Returns what the store did (see insertHandoff).
      */
-    handoff(handoff: NewHandoff): ReturnType<Store["insertHandoff"]> {
-      const inserted = store.insertHandoff(handoff);
+    handoff(handoff: NewHandoff, checkout: CheckoutRead): ReturnType<Store["insertHandoff"]> {
+      const inserted = store.insertHandoff(handoff, checkout);
       recorded(handoff.coordinatorId);
       return inserted;
     },

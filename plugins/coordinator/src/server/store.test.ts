@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { handoffIdSchema } from "../model/handoff.ts";
+import { handoffIdSchema, type HandoffId } from "../model/handoff.ts";
 import { coordinatorIdSchema, crewIdSchema } from "../model/role.ts";
 import { memoryStorage } from "./memory-storage.ts";
 import { openStore } from "./store.ts";
@@ -72,7 +72,7 @@ test("a fix round claimed before its findings are sent survives the plugin's rel
 
   const handoffId = handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e");
   const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: "a".repeat(40), prUrl: null };
-  store.insertHandoff({ id: handoffId, coordinatorId: ID, crewId, at: 3_000, turnSeq: 1, status: "done", ...report });
+  store.insertHandoff({ id: handoffId, coordinatorId: ID, crewId, at: 3_000, turnSeq: 1, status: "done", ...report }, { kind: "read", checkout: { headSha: "a".repeat(40), changedFiles: [], changedFileCount: 0 } });
   store.insertVerifierTicket("verifier-1", { kind: "verifier", coordinatorId: ID, crewId, handoffId }, 3_000);
   store.bindTicket("verifier-1", "thr_verifier");
   const failed: Parameters<typeof store.receiveVerdict>[1] = {
@@ -122,3 +122,79 @@ test("a provider placement stored in an earlier shape reads as the environment i
     ],
   );
 });
+
+/** The migrations as they stood before verdicts kept the crew's checkout, and as the release that first read it left them. */
+const beforeCheckouts = (statements: string[]) => statements.slice(0, statements.findIndex((statement) => statement.includes("'$.checkout'")));
+const throughFirstRead = (statements: string[]) => statements.slice(0, beforeCheckouts(statements).length + 1);
+
+const UPGRADED =
+  "the plugin was upgraded while this handoff waited for its verdict, and nothing shows whether its commit and working tree were checked; a new handoff gets verified";
+
+const claimed = "a".repeat(40);
+const report = { status: "done" as const, summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: claimed, prUrl: null };
+const dirty = { headSha: claimed, changedFiles: ["?? notes.txt"], changedFileCount: 1 };
+
+function doneVerdict(store: ReturnType<typeof openStore>, id: HandoffId) {
+  const handoff = store.handoff(id);
+  return handoff?.status === "done" ? handoff.verdict : assert.fail(`no done handoff ${id}`);
+}
+
+for (const via of ["straight", "through the release that first read checkouts"] as const) {
+  test(`upgraded ${via}, a verdict queued or running at the upgrade is couldn't verify, its coordinating thread told and no fix round spent; a returned one is left as it was`, () => {
+    const { db, storage } = memoryStorage();
+    const before = openStore({ ...storage, migrate: (handle, statements) => storage.migrate(handle, beforeCheckouts(statements)) });
+    before.insertCoordinator({ id: ID, ticket: "ticket-1", projectId: "prj_1", verify: true, createdAt: 1_000 });
+    const crewId = before.insertCrew(crewInput("crew-1"));
+    const returned = { state: "returned", verifierThreadId: "thr_v", headSha: claimed, criteria: [{ criterion: "npm test passes", result: "pass", evidence: "# fail 0" }], findings: [], model: { providerId: "codex", model: "gpt-default" }, sameModel: false };
+    const [queued, running, judged] = ["0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d51", "0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d52", "0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d53"].map((id) => handoffIdSchema.parse(id));
+    [{ state: "queued" }, { state: "running", verifierThreadId: "thr_v", nudged: false }, returned].forEach((verdict, i) => {
+      db.prepare("INSERT INTO handoffs (id, coordinator_id, crew_id, report, turn_seq, at) VALUES (?, ?, ?, ?, ?, ?)").run([queued, running, judged][i], ID, crewId, JSON.stringify(report), i + 1, 2_000 + i);
+      db.prepare("INSERT INTO verdicts (handoff_id, verdict) VALUES (?, ?)").run([queued, running, judged][i], JSON.stringify(verdict));
+    });
+    // A handoff that release stored with the checkout bb's git plugin read, still queued: nothing tells it from a made-up one.
+    const read = handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d54");
+    const otherCrew = crewIdSchema.parse("c2");
+    if (via !== "straight") {
+      const released = openStore({ ...storage, migrate: (handle, statements) => storage.migrate(handle, throughFirstRead(statements)) });
+      assert.equal(released.insertCrew(crewInput("crew-2")), otherCrew);
+      released.insertHandoff({ id: read, coordinatorId: ID, crewId: otherCrew, at: Date.now(), turnSeq: 1, ...report }, { kind: "read", checkout: dirty });
+    }
+
+    const store = openStore(storage);
+    const open = via === "straight" ? [queued, running] : [queued, running, read];
+    for (const id of open) assert.deepEqual(doneVerdict(store, id), { state: "could-not-run", verifierThreadId: null, reason: UPGRADED });
+    assert.deepEqual(
+      store.unannounced(ID).map(({ event }) => event),
+      [
+        { kind: "checked", crewId, handoffId: queued },
+        { kind: "checked", crewId, handoffId: running },
+        ...(via === "straight" ? [] : [{ kind: "checked", crewId: otherCrew, handoffId: read }]),
+      ],
+      "its coordinating thread is told of each",
+    );
+    assert.deepEqual(
+      store.crews(ID).map((crew) => crew.fixRounds),
+      via === "straight" ? [0] : [0, 0],
+      "no fix round is spent",
+    );
+    const kept = doneVerdict(store, judged);
+    assert.ok(kept.state === "returned");
+    assert.deepEqual(kept.checkout, { headSha: claimed, changedFiles: [], changedFileCount: 0 }, "a returned verdict keeps the checkout the release gave it");
+  });
+}
+
+for (const install of ["a fresh install", "an upgraded one"] as const) {
+  test(`on ${install}, a checkout bb's git plugin reads after the upgrade is kept, across a reload`, () => {
+    const { storage } = memoryStorage();
+    if (install === "an upgraded one") openStore({ ...storage, migrate: (handle, statements) => storage.migrate(handle, beforeCheckouts(statements)) });
+    const store = openStore(storage);
+    store.insertCoordinator({ id: ID, ticket: "ticket-1", projectId: "prj_1", verify: true, createdAt: 1_000 });
+    const crewId = store.insertCrew(crewInput("crew-1"));
+    const id = handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d55");
+    store.insertHandoff({ id, coordinatorId: ID, crewId, at: 3_000, turnSeq: 1, ...report }, { kind: "read", checkout: dirty });
+
+    const reloaded = openStore(storage);
+    assert.deepEqual(doneVerdict(reloaded, id), { state: "queued", checkout: dirty });
+    assert.deepEqual(reloaded.unannounced(ID), [], "nothing to tell");
+  });
+}

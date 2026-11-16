@@ -257,15 +257,25 @@ a **verifier** for each one:
   model of the crew's provider; else the crew's own, which the verdict then
   says. The provider and model are always chosen by the plugin, never left to
   bb's default.
-- **What it does**: proves `git rev-parse HEAD` is the claimed commit and the
-  tree is clean (otherwise every criterion fails), then runs what proves or
-  disproves each done-criterion and quotes the output. It never edits,
-  commits or pushes, and it gets none of the crew's own report. It ends with
-  `crew_verdict`: each criterion `pass`, `fail` or `unverifiable`, with its
-  evidence, and any findings. A verdict that skips, repeats or invents a
-  criterion, or passes one on another commit, is refused.
-- **Outcome**: derived, never stored. Verified only when every criterion
-  passed, and CI didn't fail on the commit when the crew has a pull request
+- **The commit and the tree**: the plugin checks them itself, not the
+  verifier. As the crew hands off, it reads the crew's environment through
+  bb's git plugin on its machine: HEAD must be the claimed commit, on a clean
+  working tree. The verifier is given that read, labelled as the plugin's,
+  and is told not to judge them again: a provider's per-command sandbox can
+  show files the crew's tree doesn't have, and failed clean work. When the
+  read is wrong (another commit, or changed files), the verdict fails with
+  it as evidence, shown above the criteria, and goes back to the crew like
+  any first failure. When bb's git plugin can't read it (the plugin off, the
+  machine unreachable, not a git repository), no verifier starts: the crew
+  reads "Couldn't verify" under Needs you with the reason, and no fix round
+  is spent.
+- **What it does**: runs what proves or disproves each done-criterion and
+  quotes the output. It never edits, commits or pushes, and it gets none of
+  the crew's own report. It ends with `crew_verdict`: each criterion `pass`,
+  `fail` or `unverifiable`, with its evidence, and any findings. A verdict
+  that skips, repeats or invents a criterion is refused.
+- **Outcome**: derived, never stored. Verified only when the commit and the
+  tree were as claimed, every criterion passed, and CI didn't fail on the commit when the crew has a pull request
   (see [Pull requests and CI](#pull-requests-and-ci)); an unverifiable
   criterion is not a pass.
 - **No verdict**: a verifier that ends a turn without one is reminded once;
@@ -417,7 +427,9 @@ gets an id: `d1`, `d2`… An id is never reused.
 The decision shows on the board under **Needs you**, above the crews there,
 with a button for each option and a field to answer in your own words: Enter
 sends it and Shift+Enter breaks the line, and Esc doesn't leave the page while
-it has text. A send that fails keeps your text, with the error under it. Your
+it has text. A send that fails keeps your text, with the error under it. Text
+you haven't sent stays in the browser, through a resize or a reload, until you
+send it or the decision is answered elsewhere. Your
 answer moves the decision to **Done**, with the answer and when you gave it,
 and wakes the thread; its `crew_catch_up` returns your answer, as the option
 you chose or in your own words, with its question. A decision is answered
@@ -544,8 +556,10 @@ thread with "The user edited <file>". The page shows the folder's path on
 the bb server, the files (the core ones first, then the rest by name), and an
 editor for the file you pick. A file you haven't touched shows its latest
 text, including the thread's writes as they land. A dot marks a file with
-unsaved changes; switching files keeps them. **Save** (or Ctrl/Cmd+S)
-writes the file. While you have unsaved changes, Esc doesn't leave the page.
+unsaved changes; switching files keeps them, and so do a resize, a reload and
+another tab: unsaved text stays in the browser, on the file you had picked,
+until you save it or take the newer version. **Save** (or Ctrl/Cmd+S) writes
+the file. While you have unsaved changes, Esc doesn't leave the page.
 
 Neither side can silently overwrite the other. Every write names the version
 of the file it started from:

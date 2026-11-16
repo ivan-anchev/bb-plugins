@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgentToolResult, PluginThreadEventPayloads } from "@get-bb/plugin-sdk";
+import type { PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgentToolResult, PluginStorage, PluginThreadEventPayloads } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import type { z } from "zod";
 import type { CrewThread } from "../model/board/crew-state.ts";
@@ -97,6 +97,9 @@ type FakeThread = CrewThread & {
 
 /** What bb runs a spawn on when it names no provider or model that bb counts. */
 export const BB_DEFAULT = { providerId: "codex", model: "gpt-default" };
+
+/** The commit bb's git plugin reads checked out in every environment a test doesn't set another for: the one its done handoffs claim. */
+export const HEAD = "0123456789abcdef0123456789abcdef01234567";
 
 /**
  * What bb runs a spawn on, by bb's rule for a create: a requested field counts only when its
@@ -200,7 +203,10 @@ function graphqlAnswer(args: string[], prs: ReadonlyMap<string, FakePr>): string
 /** Whether a stop leaves the thread idle, or still stopping, as bb's unconfirmed interrupt does. */
 type StopBehaviour = "idle" | "stopping";
 
-export function harness(spawns: SpawnBehaviour = { created: true, answer: "thread" }, stops: StopBehaviour = "idle") {
+type Storage = Pick<PluginStorage, "database" | "migrate">;
+
+/** `storage`: the plugin's database, as bb keeps it across reloads; a test may give one an earlier version of the plugin used. */
+export function harness(spawns: SpawnBehaviour = { created: true, answer: "thread" }, stops: StopBehaviour = "idle", storage: Storage = memoryStorage().storage) {
   const behaviour = { ...spawns };
   /** The providers bb lists, in its order; a test may replace them. */
   const providers = { list: structuredClone(PROVIDERS) };
@@ -227,14 +233,16 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   /** The time the tick runs at; a test moves it on. */
   const clock = { now: 1_000_000 };
   /**
-   * bb's git plugin as the watches reach it, by environment id: the branch each has checked out
-   * (absent: none, as when detached), how many files changed in its working tree (absent: none),
+   * bb's git plugin as the plugin reaches it, by environment id: the branch each has checked out
+   * (absent: none, as when detached), the commit (absent: HEAD), how many files changed in its
+   * working tree (absent: none),
    * the ones outside git, the ones whose machine it can't read, and a row a newer bb--git answers
    * instead, in a shape the plugin's contract doesn't name; and the keys of every `status` call.
    * Set `holding` to keep each answer, as read when called, until the test calls its release in `held`.
    */
   const git: {
     checkouts: Map<string, string>;
+    heads: Map<string, string>;
     changedFiles: Map<string, number>;
     nonGit: Set<string>;
     offline: Set<string>;
@@ -244,6 +252,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     held: (() => void)[];
   } = {
     checkouts: new Map(),
+    heads: new Map(),
     changedFiles: new Map(),
     nonGit: new Set(),
     offline: new Set(),
@@ -258,7 +267,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   const threadLists: { failure: Error | null } = { failure: null };
   /** Set `answered` to run as bb answers a thread's model lookup, as when someone acts at that moment. */
   const modelLookups: { answered: ((threadId: string) => void) | null } = { answered: null };
-  const store = openStore(memoryStorage().storage);
+  let store = openStore(storage);
   const memoryWrites: CoordinatorId[] = [];
   const memory = openMemoryRoot(join(mkdtempSync(join(tmpdir(), "coordinator-test-")), "data.db"), store, (id) => memoryWrites.push(id));
   const metadata = new Map<string, Metadata>();
@@ -420,11 +429,13 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     if (git.nonGit.has(environmentId)) return { outcome: "not_applicable", reason: "non_git_environment", message: "The environment is not a git repository" };
     if (git.offline.has(environmentId)) return { outcome: "unavailable", failure: { code: "unknown", workspacePath: "/work/webhooks", message: "The environment's machine is offline" } };
     const branchName = git.checkouts.get(environmentId);
+    const headSha = git.heads.get(environmentId) ?? HEAD;
+    const fileCount = git.changedFiles.get(environmentId) ?? 0;
     return {
       outcome: "available",
       workspace: {
-        checkout: branchName === undefined ? { kind: "detached", headSha: null } : { kind: "branch", branchName, headSha: null },
-        workingTree: { fileCount: git.changedFiles.get(environmentId) ?? 0 },
+        checkout: branchName === undefined ? { kind: "detached", headSha } : { kind: "branch", branchName, headSha },
+        workingTree: { fileCount, files: Array.from({ length: fileCount }, (_, i) => ({ path: `scratch-${i + 1}.txt`, status: "??", insertions: null, deletions: null })) },
       },
     };
   }
@@ -481,7 +492,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   const ref = (threadId: string): ThreadRef => ({ id: threadId, originPluginId: PLUGIN_ID });
 
   return {
-    store,
+    get store() {
+      return store;
+    },
     memory,
     get spawner() {
       return plugin.spawner;
@@ -528,6 +541,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       disposers.splice(0).forEach((hook) => hook());
       for (const registered of Object.values(handlers)) registered.length = 0;
       tools.clear();
+      // why open it again: the reloaded plugin does, which runs the migrations it hasn't, as after an upgrade.
+      store = openStore(storage);
       plugin = wire();
     },
     /** A thread bb has, as the plugin can list it, and what it was spawned with. */
@@ -605,8 +620,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
 }
 
 /** A harness with one coordinating thread started, verifying its crews' done handoffs unless `verify` is false; its thread and its id. */
-export async function coordinating({ verify = true, spawns, stops }: { verify?: boolean; spawns?: SpawnBehaviour; stops?: StopBehaviour } = {}) {
-  const kit = harness(spawns, stops);
+export async function coordinating({ verify = true, spawns, stops, storage }: { verify?: boolean; spawns?: SpawnBehaviour; stops?: StopBehaviour; storage?: Storage } = {}) {
+  const kit = harness(spawns, stops, storage);
   const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), verify);
   const role = kit.store.roleOfThread(threadId);
   assert.equal(role?.kind, "coordinator");

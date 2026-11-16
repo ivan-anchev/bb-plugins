@@ -1,7 +1,9 @@
-// A done handoff's verdict: whether an independent verifier thread checked the work against each
+// A done handoff's verdict: whether the commit the crew claimed was what it left checked out, as the
+// plugin read it, whether an independent verifier thread checked the work against each
 // done-criterion, and what it found. Pass or fail is never stored: `judge` derives it, so the
 // board, the catch-up and the doorbell can't disagree.
 import { z } from "zod";
+import { checkoutProblems, checkoutSchema, type Checkout, type CheckoutRead } from "./checkout.ts";
 import { ciVerdictSchema, type Ci, type CiVerdict } from "./pr.ts";
 
 /** One done-criterion as the verifier judged it. why three: a criterion it couldn't check is not a pass. */
@@ -38,13 +40,14 @@ const settlementSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("checked"), refused: z.string().nullable(), ci: settledCiSchema }),
 ]);
 
+/** Each state up to a returned verdict keeps `checkout`, the crew's environment as bb's git plugin read it when the crew handed off. */
 export const verdictSchema = z.discriminatedUnion("state", [
   /** Verification is on and no verifier has started yet. */
-  z.object({ state: z.literal("queued") }),
+  z.object({ state: z.literal("queued"), checkout: checkoutSchema }),
   /** A verifier thread is checking; `nudged` once it went idle without a verdict and was asked again. */
-  z.object({ state: z.literal("running"), verifierThreadId: verifierThreadIdSchema, nudged: z.boolean() }),
+  z.object({ state: z.literal("running"), verifierThreadId: verifierThreadIdSchema, nudged: z.boolean(), checkout: checkoutSchema }),
   /**
-   * The verifier's verdict: the commit it found checked out, each criterion in the crew's order, and
+   * The verifier's verdict on the claimed commit `headSha`: each criterion in the crew's order, and
    * the model bb ran it on. `sameModel`: no other model was available, so it ran on the crew's own.
    * why a default: a verdict stored before settlements existed was settled as it was stored.
    */
@@ -52,13 +55,14 @@ export const verdictSchema = z.discriminatedUnion("state", [
     state: z.literal("returned"),
     verifierThreadId: verifierThreadIdSchema,
     headSha: z.string(),
+    checkout: checkoutSchema,
     criteria: z.array(z.object({ criterion: z.string(), result: criterionResultSchema, evidence: z.string() })).min(1),
     findings: z.array(z.string()),
     model: modelRefSchema,
     sameModel: z.boolean(),
     settlement: settlementSchema.default({ kind: "checked", refused: null, ci: { kind: "none" } }),
   }),
-  /** No verdict will come: the verifier never started, or stopped without one. Its thread, if it had one. */
+  /** No verdict will come: bb's git plugin couldn't read the crew's environment, or the verifier never started or stopped without one. Its thread, if it had one. */
   z.object({ state: z.literal("could-not-run"), verifierThreadId: verifierThreadIdSchema.nullable(), reason: z.string() }),
   /** A newer done handoff from the same crew replaced this one before its verdict. */
   z.object({ state: z.literal("superseded") }),
@@ -73,6 +77,18 @@ export type Verdict = z.infer<typeof verdictSchema>;
  * checks it.
  */
 type Outcome = "pending" | "waiting-for-ci" | "pass" | "fail" | "could-not-run" | "superseded" | "unverified";
+
+/**
+ * The verdict a done handoff starts with: waived while verification is off, else queued for a
+ * verifier on the checkout read. A checkout bb's git plugin couldn't read can't be verified, and
+ * never counts as the crew's failure, so it goes to the coordinating thread as it is, without a
+ * verifier or a fix round.
+ */
+export function firstVerdict(verifies: boolean, read: CheckoutRead): Verdict {
+  if (!verifies) return { state: "waived" };
+  if (read.kind === "unread") return { state: "could-not-run", verifierThreadId: null, reason: `bb's git plugin couldn't read the crew's commit and working tree as it handed off (${read.reason})` };
+  return { state: "queued", checkout: read.checkout };
+}
 
 export function outcome(verdict: Verdict): Outcome {
   switch (verdict.state) {
@@ -99,8 +115,9 @@ export function outcome(verdict: Verdict): Outcome {
 type Returned = Extract<Verdict, { state: "returned" }>;
 
 /**
- * The one rule for pass or fail: every criterion passed, and CI on the commit didn't fail. It waits
- * while CI is still to come; CI that couldn't be checked, or that reported no checks, is not a failure.
+ * The one rule for pass or fail: the claimed commit was checked out on a clean tree, every
+ * criterion passed, and CI on the commit didn't fail. It waits while CI is still to come; CI that
+ * couldn't be checked, or that reported no checks, is not a failure.
  */
 export function judge(verdict: Returned, ci: Ci): "pass" | "fail" | "waiting-for-ci" {
   if (!allPassed(verdict)) return "fail";
@@ -108,8 +125,14 @@ export function judge(verdict: Returned, ci: Ci): "pass" | "fail" | "waiting-for
   return ci.kind === "fail" ? "fail" : "pass";
 }
 
-/** Whether the verifier passed every criterion, whatever has become of its verdict since. */
-export const allPassed = (verdict: Returned): boolean => verdict.criteria.every((check) => check.result === "pass");
+/** Whether the checkout was as claimed and the verifier passed every criterion, whatever has become of its verdict since. */
+export const allPassed = (verdict: Returned): boolean => failedCheckout(verdict) === null && verdict.criteria.every((check) => check.result === "pass");
+
+/** The plugin's read of the checkout when it wasn't the claimed commit on a clean tree, which fails the verdict; null when it was. */
+export function failedCheckout(verdict: Returned): Checkout | null {
+  const { headSha, checkout } = verdict;
+  return checkoutProblems(headSha, checkout).length > 0 ? checkout : null;
+}
 
 /** What CI said about a settled verdict's commit; null while it is not settled. */
 export function ciVerdictOf(verdict: Returned): CiVerdict | null {

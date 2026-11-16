@@ -1,14 +1,15 @@
 // The Memory page: one coordinating thread's memory folder, its files, and an editor for the one
-// picked. It keeps each file's edit, so switching files loses nothing and a save still settles, and
-// while any draft is open, Esc never leaves the page.
+// picked. It keeps each file's edit, so switching files, bb redrawing the panel or a reload loses
+// nothing and a save still settles, and while any draft is open, Esc never leaves the page.
 import { experimental_Icon as Icon, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
-import { useState, type Ref } from "react";
+import type { Ref } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
-import type { MemoryFile } from "../../model/memory-file.ts";
+import { memoryFileSchema, type MemoryFile } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { Button } from "../ui/button.tsx";
 import { useHoldEscape } from "../ui/hold-escape.ts";
 import { ReadFailure } from "../ui/read-failure.tsx";
+import { useStored } from "../ui/stored.ts";
 import { useThreadTitle } from "../ui/use-thread-title.ts";
 import { MemoryEditor } from "./memory-editor.tsx";
 import { useFileEdits } from "./use-file-edits.ts";
@@ -18,12 +19,15 @@ type MemoryPageProps = { ref: Ref<HTMLDivElement>; coordinatorId: CoordinatorId;
 export function MemoryPage({ ref, coordinatorId, onBack }: MemoryPageProps) {
   const list = experimental_useRpcQuery({ contract, method: "memoryList", input: { coordinatorId } });
   const title = useThreadTitle(coordinatorId);
-  const [picked, setPicked] = useState<MemoryFile | null>(null);
+  // why session storage: the file this tab has open survives bb redrawing the panel and a reload, as its draft does.
+  const picked = useStored(sessionStorage, pickedKeyOf(coordinatorId), memoryFileSchema);
   const edits = useFileEdits(coordinatorId);
-  useHoldEscape(edits.drafted.size > 0);
+  const files = list.data?.files ?? [];
+  const drafted = new Set(files.filter((listed) => edits.of(listed).draft !== null));
+  useHoldEscape(drafted.size > 0);
 
-  // why derived: until the user picks, the open file follows the list's first file.
-  const file = picked ?? list.data?.files[0] ?? null;
+  // why derived: until the user picks a listed file, the open file follows the list's first file.
+  const file = files.find((listed) => listed === picked.value) ?? files[0] ?? null;
 
   return (
     // why the tab stop: the page scrolls, and the keyboard scrolls only what has focus (REVIEW.md).
@@ -47,7 +51,7 @@ export function MemoryPage({ ref, coordinatorId, onBack }: MemoryPageProps) {
         {list.data !== undefined && file === null && <p className="px-3 text-sm text-muted-foreground">The memory folder has no files.</p>}
         {list.data !== undefined && file !== null && (
           <div className="flex flex-1 flex-col gap-4 md:flex-row">
-            <FileList files={list.data.files} open={file} drafted={edits.drafted} onOpen={setPicked} />
+            <FileList files={list.data.files} open={file} drafted={drafted} onOpen={picked.store} />
             <MemoryEditor
               key={file}
               coordinatorId={coordinatorId}
@@ -62,6 +66,9 @@ export function MemoryPage({ ref, coordinatorId, onBack }: MemoryPageProps) {
     </div>
   );
 }
+
+/** Where a tab keeps the file it has open on a coordinating thread's Memory page. */
+const pickedKeyOf = (coordinatorId: CoordinatorId): string => `coordinator-memory-open:${coordinatorId}`;
 
 function FileList({ files, open, drafted, onOpen }: { files: readonly MemoryFile[]; open: MemoryFile; drafted: ReadonlySet<MemoryFile>; onOpen(file: MemoryFile): void }) {
   return (

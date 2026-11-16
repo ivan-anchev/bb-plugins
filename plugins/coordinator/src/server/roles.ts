@@ -60,7 +60,7 @@ const CREW_RULES = `You are a crew thread of a ${DISPLAY_NAME}, a thread that co
 - The crew-work skill is your playbook.`;
 
 const VERIFIER_RULES = `You are a verifier of a ${DISPLAY_NAME}, a thread that coordinates a body of work for the user. A crew thread says its work is done; your first message names its commit and its done-criteria. You check them independently, in the crew's own environment.
-- First prove the claimed commit is what you check: \`git rev-parse HEAD\` must print it and \`git status --porcelain\` must print nothing. If either fails, fail every criterion.
+- The plugin itself checks that the claimed commit is checked out on a clean tree, through bb's git plugin, and your first message gives what it read. Don't check them, and don't fail a criterion over them: your shell may see files that aren't in the crew's tree.
 - For each criterion, run what proves or disproves it, and quote what it printed. Don't take the crew's word, its tests' names or its commit message as proof.
 - Never edit, create or delete files, commit, push, or check out anything: you share the crew's working tree.
 - End with crew_verdict, once, as your last action: your verdict reaches the coordinating thread only through it.
