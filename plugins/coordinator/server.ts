@@ -33,7 +33,7 @@ export default function plugin(bb: BbPluginApi): void {
   const verify = createVerify({ bb, store, spawner, inbox });
 
   registerRoles(bb, store);
-  registerCoordinatorTools(bb, { store, inbox, memory, crews, board });
+  registerCoordinatorTools(bb, { store, inbox, memory, crews, board, onChange: refreshBoard });
   registerCrewTools(bb, { store, verify });
   registerVerdictTool(bb, { store, verify });
   forwardCrewThreadEvents(bb, store, refreshBoard);

@@ -6,11 +6,8 @@ import { useId, useRef, type KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
 import { MAX_CRITERIA, MAX_CRITERION_CHARS } from "../../../model/crew.ts";
 import { Button } from "../../ui/button.tsx";
+import { GrowingTextarea } from "../../ui/growing-textarea.tsx";
 import { added, hasRoom, joined, removed, split, typed, type CriterionField, type Edited } from "./criteria.ts";
-
-// why one class for the field and its sizing copy: the copy sets the height only if every box and
-// text metric matches. bb's own fields: the input edge, a transparent fill, 16px text on touch.
-const FIELD = "col-start-1 row-start-1 rounded-md border px-2.5 py-1.5 text-base leading-6 whitespace-pre-wrap [overflow-wrap:anywhere] sm:text-sm sm:leading-5";
 
 type CriteriaEditorProps = { fields: readonly CriterionField[]; onChange(fields: CriterionField[]): void };
 
@@ -59,28 +56,20 @@ export function CriteriaEditor({ fields, onChange }: CriteriaEditorProps) {
             <span aria-hidden className="mt-px w-4 shrink-0 py-1.5 text-right text-xs leading-6 text-muted-foreground tabular-nums sm:leading-5">
               {index + 1}.
             </span>
-            <div className="grid min-w-0 flex-1">
-              <textarea
-                ref={(textarea) => {
-                  if (textarea === null) return;
-                  textareas.current.set(field.key, textarea);
-                  return () => void textareas.current.delete(field.key);
-                }}
-                value={field.text}
-                rows={1}
-                aria-label={`Done criterion ${index + 1}`}
-                aria-describedby={`${ids}-keys`}
-                maxLength={MAX_CRITERION_CHARS}
-                onChange={(event) => onChange(typed(fields, field.key, event.target.value))}
-                onKeyDown={(event) => onKeyDown(event, index)}
-                placeholder="Checkable by running something"
-                className={`${FIELD} resize-none overflow-hidden border-input bg-transparent text-foreground transition-colors duration-150 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring`}
-              />
-              {/* why a hidden copy: it sizes the grid cell the field fills, so the field grows with its text and rewraps as the page narrows. The space keeps a trailing line break's line. */}
-              <span aria-hidden className={`${FIELD} invisible border-transparent`}>
-                {`${field.text} `}
-              </span>
-            </div>
+            <GrowingTextarea
+              ref={(textarea) => {
+                if (textarea === null) return;
+                textareas.current.set(field.key, textarea);
+                return () => void textareas.current.delete(field.key);
+              }}
+              value={field.text}
+              aria-label={`Done criterion ${index + 1}`}
+              aria-describedby={`${ids}-keys`}
+              maxLength={MAX_CRITERION_CHARS}
+              onChange={(event) => onChange(typed(fields, field.key, event.target.value))}
+              onKeyDown={(event) => onKeyDown(event, index)}
+              placeholder="Checkable by running something"
+            />
             {fields.length > 1 && (
               <Button variant="ghost" size="sm" aria-label={`Remove done criterion ${index + 1}`} onClick={() => apply(removed(fields, index))}>
                 <Icon name="X" aria-hidden />

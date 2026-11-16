@@ -4,7 +4,9 @@ import { defineRpcContract } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
 import { doneCriteriaSchema, environmentSchema, executionSchema } from "./model/crew.ts";
-import { boardStateSchema } from "./model/crew-state.ts";
+import { needsYouSchema } from "./model/board/board-groups.ts";
+import { answerSchema, decisionIdSchema, decisionSchema } from "./model/decision.ts";
+import { boardStateSchema } from "./model/board/crew-state.ts";
 import { memoryContentSchema, memoryFileSchema, memorySnapshotSchema, memoryVersionSchema, writeOutcomeSchema } from "./model/memory-file.ts";
 import { prSnapshotSchema } from "./model/verdict/pr.ts";
 import { coordinatorIdSchema, crewIdSchema, type CoordinatorId } from "./model/role.ts";
@@ -66,13 +68,14 @@ export type BoardRow = z.infer<typeof boardRowSchema>;
 
 /**
  * The board: whether done handoffs are verified, why the latest read of a crew's pull request failed
- * (null: none did), DIGEST.md and when it last changed (null: there is none), then every crew in the
- * order started.
+ * (null: none did), DIGEST.md and when it last changed (null: there is none), every decision put to
+ * the user in the order asked, then every crew in the order started.
  */
 const boardSchema = z.object({
   verify: z.boolean(),
   prUnavailable: z.string().nullable(),
   digest: z.object({ content: z.string(), modifiedAt: z.number() }).nullable(),
+  decisions: z.array(decisionSchema),
   rows: z.array(boardRowSchema),
 });
 export type Board = z.infer<typeof boardSchema>;
@@ -138,6 +141,20 @@ export const coordinatorContract = defineRpcContract({
   setVerify: {
     input: z.object({ coordinatorId: coordinatorIdSchema, verify: z.boolean() }),
     output: z.object({}),
+  },
+  /** Stores the user's answer to a decision and wakes its coordinating thread. A decision is answered once: a second answer is refused. */
+  answerDecision: {
+    input: z.object({ coordinatorId: coordinatorIdSchema, decisionId: decisionIdSchema, answer: answerSchema }),
+    output: z.object({}),
+  },
+  /**
+   * What sits under Needs you on each of these coordinating threads' boards, counted from what its
+   * board reads. Each one reads again when its board does.
+   */
+  needsYou: {
+    input: z.object({ keys: z.array(coordinatorIdSchema) }),
+    output: z.record(z.string(), needsYouSchema),
+    keyTags: (key) => [boardTag(coordinatorIdSchema.parse(key))],
   },
   /** Spawns a draft's crew from what is stored. A second call while one runs joins it; one for a crew that is no longer a draft is refused. */
   startDraft: {

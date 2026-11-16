@@ -1,7 +1,7 @@
 // What the crew tools say to the coordinating thread. A crew is always named by its id, with a
 // link to its thread, so the agent can both act on it and point the user at it.
 import type { BoardRow } from "../../contract.ts";
-import { BOARD_STATE_LABELS, byState } from "../../model/crew-state.ts";
+import { BOARD_STATE_LABELS, byState } from "../../model/board/crew-state.ts";
 import type { CloseOutcome, CrewDetail, StartOutcome, SupersedeOutcome } from "../crew/crews.ts";
 import { handoffText } from "./inbox-text.ts";
 

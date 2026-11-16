@@ -2,16 +2,14 @@
 // how often it repeats (null: once). It is the thread's own words, so its doorbell may quote it.
 // Times are epoch milliseconds, parsed once from what the thread typed.
 import { z } from "zod";
+import { ONE_LINE } from "./one-line.ts";
 
 /** A reminder's id: `r1`, `r2`… across every coordinating thread, never reused. */
 export const reminderIdSchema = z.string().regex(/^r[1-9][0-9]*$/, "A reminder id is r1, r2 and so on").brand<"reminderId">();
 export type ReminderId = z.infer<typeof reminderIdSchema>;
 
-/**
- * why one line: the doorbell gives each update one line, and a line break would start another.
- * U+2028 and U+2029 are line breaks too.
- */
-export const reminderNoteSchema = z.string().trim().min(1).max(500).regex(/^[^\r\n\u2028\u2029]*$/, "A note is one line");
+/** why one line: its doorbell quotes it. */
+export const reminderNoteSchema = z.string().trim().min(1).max(500).regex(ONE_LINE, "A note is one line");
 
 export type Reminder = { id: ReminderId; note: string; dueAt: number; everyMs: number | null };
 

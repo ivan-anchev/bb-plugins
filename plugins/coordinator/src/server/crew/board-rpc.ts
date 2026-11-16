@@ -1,5 +1,6 @@
-// The Board's RPC, for a coordinating thread the store knows: its read, its verification switch,
-// and the user's edits and Starts of its drafts.
+// The Board's RPC, for a coordinating thread the store knows: its read and what of it needs the
+// user, its verification switch, the user's edits and Starts of its drafts, and their answers to its
+// decisions.
 import { experimental_PluginRpcRefusal as Refusal, type PluginRpcHandlers } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { typedText, type coordinatorContract } from "../../contract.ts";
@@ -12,12 +13,14 @@ import type { Crews } from "./crews.ts";
 
 type Deps = {
   store: Pick<Store, "isCoordinator" | "coordinator">;
-  board: Pick<BoardReader, "read">;
+  board: Pick<BoardReader, "read" | "needsYou">;
   crews: Pick<Crews, "updateDraft" | "startDraft">;
-  inbox: Pick<Inbox, "setVerify">;
+  inbox: Pick<Inbox, "setVerify" | "answerDecision">;
 };
 
-export function boardHandlers({ store, board, crews, inbox }: Deps): PluginRpcHandlers<Pick<typeof coordinatorContract, "board" | "setVerify" | "updateDraft" | "startDraft">> {
+type BoardMethods = "board" | "needsYou" | "setVerify" | "updateDraft" | "startDraft" | "answerDecision";
+
+export function boardHandlers({ store, board, crews, inbox }: Deps): PluginRpcHandlers<Pick<typeof coordinatorContract, BoardMethods>> {
   // why refuse an unknown id: it would read as a board with no crews.
   function known(id: CoordinatorId): CoordinatorId {
     if (!store.isCoordinator(id)) throw new Refusal({ code: "not_found", message: `There is no coordinating thread ${id}.` });
@@ -26,6 +29,9 @@ export function boardHandlers({ store, board, crews, inbox }: Deps): PluginRpcHa
 
   return {
     board: ({ coordinatorId }) => board.read(known(coordinatorId)),
+
+    // why no refusal for an unknown id: the keys come from the coordinators read, and one refusal would fail every key read with it.
+    needsYou: async ({ keys }) => Object.fromEntries(await Promise.all(keys.map(async (id) => [id, await board.needsYou(id)] as const))),
 
     setVerify: ({ coordinatorId, verify }) => {
       inbox.setVerify(known(coordinatorId), verify);
@@ -37,6 +43,20 @@ export function boardHandlers({ store, board, crews, inbox }: Deps): PluginRpcHa
       if (coordinator === null) throw new Refusal({ code: "not_found", message: `The coordinating thread ${coordinatorId} has no thread.` });
       crews.updateDraft(coordinatorId, crewId, draftEdit(coordinator.projectId, request, doneCriteria));
       return {};
+    },
+
+    answerDecision: ({ coordinatorId, decisionId, answer }) => {
+      const outcome = inbox.answerDecision(known(coordinatorId), decisionId, answer);
+      switch (outcome) {
+        case "answered":
+          return {};
+        case "already-answered":
+          throw new Refusal({ code: "conflict", message: `${decisionId} was already answered; an answer can't be changed.` });
+        case "unknown":
+          throw new Refusal({ code: "not_found", message: `This coordinating thread has no decision ${decisionId}.` });
+        default:
+          return outcome satisfies never;
+      }
     },
 
     startDraft: async ({ coordinatorId, crewId }) => {

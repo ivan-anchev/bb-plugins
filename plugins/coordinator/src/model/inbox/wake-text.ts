@@ -1,8 +1,9 @@
 // The doorbell: the short message that wakes a coordinating thread. It reaches the thread as a
 // user-role message, so it holds only facts the plugin derived (a crew's id, a handoff's status, a
-// memory file's name) and text the coordinating thread itself wrote: the titles it gave its crews and
-// the notes of its reminders. Anything a crew wrote is read through crew_catch_up, as a tool result,
-// never here.
+// memory file's name) and text the coordinating thread itself wrote: the titles it gave its crews, the
+// notes of its reminders and the questions it asked the user. Anything a crew wrote, and the user's
+// answers, are read through crew_catch_up, as a tool result, never here.
+import type { Decision, DecisionId } from "../decision.ts";
 import type { Handoff, HandoffId } from "../handoff.ts";
 import { PR_CHANGE_WORDS } from "../verdict/pr.ts";
 import type { CrewId } from "../role.ts";
@@ -14,6 +15,7 @@ type Lookups = {
   /** Each crew's title, as the coordinating thread gave it in crew_start. */
   titles: ReadonlyMap<CrewId, string>;
   handoff(id: HandoffId): Handoff | null;
+  decision(id: DecisionId): Decision | null;
 };
 
 export function doorbellText(events: readonly StoredEvent[], lookups: Lookups): string {
@@ -22,10 +24,11 @@ export function doorbellText(events: readonly StoredEvent[], lookups: Lookups): 
   return [`[${DISPLAY_NAME}] ${count}. Call crew_catch_up to read ${events.length === 1 ? "it" : "them"} in full.`, ...lines].join("\n");
 }
 
-function line(event: InboxEvent, { titles, handoff }: Lookups): string {
+function line(event: InboxEvent, { titles, handoff, decision }: Lookups): string {
   if (event.kind === "memory-edited") return `The user edited ${event.file}`;
   if (event.kind === "verification-toggled") return `The user turned verification of done handoffs ${event.verify ? "on" : "off"}`;
   if (event.kind === "reminder") return `Your reminder ${event.reminderId}: ${event.note}`;
+  if (event.kind === "decision-answered") return `The user answered your question ${event.decisionId}: ${askedOf(decision(event.decisionId)).question}`;
   const title = titles.get(event.crewId);
   const crew = title === undefined ? event.crewId : `${event.crewId} "${title}"`;
   switch (event.kind) {
@@ -46,6 +49,12 @@ function line(event: InboxEvent, { titles, handoff }: Lookups): string {
     default:
       return event satisfies never;
   }
+}
+
+/** The decision an event names. why throw: its event is inserted as it is answered, in one transaction. */
+export function askedOf(decision: Decision | null): Decision {
+  if (decision === null) throw new Error("An answered decision is missing.");
+  return decision;
 }
 
 /** What the plugin's check of a done handoff found, in words derived from its verdict alone. */

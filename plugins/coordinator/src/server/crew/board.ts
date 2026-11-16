@@ -3,7 +3,8 @@
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { Board, BoardRow } from "../../contract.ts";
 import { environmentOf, type Crew } from "../../model/crew.ts";
-import { crewState, type CrewThread } from "../../model/crew-state.ts";
+import { needsYou, type NeedsYou } from "../../model/board/board-groups.ts";
+import { crewState, type CrewThread } from "../../model/board/crew-state.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { MemoryRoot } from "../memory/memory-files.ts";
@@ -48,7 +49,7 @@ export async function threadsById<Thread extends ListableThread>(bb: ListBb<Thre
 
 const DIGEST = memoryFileSchema.parse("DIGEST.md");
 
-export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinator" | "latestHandoff" | "verifies" | "prStatus">, memory: MemoryRoot) {
+export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinator" | "latestHandoff" | "verifies" | "prStatus" | "decisions">, memory: MemoryRoot) {
   /** Why the latest read of an open crew's pull request failed, the first one's; null when none did. */
   function prUnavailable(id: CoordinatorId): string | null {
     for (const crew of store.crews(id).filter(isOpen)) {
@@ -82,7 +83,7 @@ export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinat
   return {
     rows,
 
-    /** The board as the user sees it: the verification switch, why PR status is unavailable, the digest, then every crew's row. */
+    /** The board as the user sees it: the verification switch, why PR status is unavailable, the digest, the decisions, then every crew's row. */
     async read(id: CoordinatorId): Promise<Board> {
       const files = memory.of(id);
       const text = files.read(DIGEST).text;
@@ -91,8 +92,14 @@ export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinat
         verify: store.verifies(id),
         prUnavailable: prUnavailable(id),
         digest: text === null || modifiedAt === null ? null : { content: text.content, modifiedAt },
+        decisions: store.decisions(id),
         rows: await rows(id),
       };
+    },
+
+    /** What sits under Needs you on the board, from the same reads as the board's own: its decisions and its crews' rows. */
+    async needsYou(id: CoordinatorId): Promise<NeedsYou> {
+      return needsYou(store.decisions(id), await rows(id));
     },
   };
 }

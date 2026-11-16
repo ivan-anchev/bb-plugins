@@ -4,7 +4,7 @@
 import { experimental_PluginRpcRefusal as Refusal, type BbPluginApi } from "@get-bb/plugin-sdk";
 import type { Coordinator } from "../../contract.ts";
 import type { ClosedKind, Crew, DraftEdit } from "../../model/crew.ts";
-import { crewState } from "../../model/crew-state.ts";
+import { crewState } from "../../model/board/crew-state.ts";
 import { handoffIsCurrent, type Handoff } from "../../model/handoff.ts";
 import { supersedingBrief } from "../verify/findings.ts";
 import type { CoordinatorId, CrewId } from "../../model/role.ts";

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Crew } from "./crew.ts";
+import type { Crew } from "../crew.ts";
 import { crewState, type BoardState, type CrewThread } from "./crew-state.ts";
-import { handoffIdSchema, handoffIsCurrent, type Handoff } from "./handoff.ts";
-import { coordinatorIdSchema, crewIdSchema } from "./role.ts";
-import type { CriterionResult, Verdict } from "./verdict/verdict.ts";
+import { handoffIdSchema, handoffIsCurrent, type Handoff } from "../handoff.ts";
+import { coordinatorIdSchema, crewIdSchema } from "../role.ts";
+import type { CriterionResult, Verdict } from "../verdict/verdict.ts";
 
 const crew: Crew = {
   id: crewIdSchema.parse("c1"),
