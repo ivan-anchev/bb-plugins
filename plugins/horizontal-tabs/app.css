@@ -1,0 +1,110 @@
+/* The tab strip on bb's theme tokens. bb does not scope a plugin's stylesheet, so every class carries the
+   `ht-` prefix. */
+
+/* The slot src/host/strip-mount.ts puts in bb's content shell, a flex column: one fixed row on top, and
+   bb's page below takes the rest. why order: the strip stays on top wherever bb puts its own children. */
+[data-ht-strip-slot] {
+  flex: none;
+  order: -1;
+}
+
+/* Hidden where bb is compact (phone widths, coarse pointers), as bb has no split workspace there. */
+@media (max-width: 767px), (pointer: coarse) {
+  [data-ht-strip-slot] {
+    display: none;
+  }
+}
+
+/* One row as tall as bb's page headers, padded like them, plus the inset bb gives them for its floating
+   chrome (--ht-chrome-inset, src/host/strip-mount.ts).
+   why app-region: on bb Desktop the top row is where the window is dragged; only the controls are not. */
+.ht-strip {
+  display: flex;
+  align-items: center;
+  height: var(--bb-app-chrome-row-height);
+  padding: 0 1rem 0 calc(1rem + var(--ht-chrome-inset, 0px));
+  border-bottom: 1px solid var(--border-seam-vertical);
+  background: var(--sidebar);
+  user-select: none;
+  app-region: drag;
+}
+
+.ht-tablist {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ht-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 240px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 13px;
+  cursor: default;
+  app-region: no-drag;
+}
+.ht-tab:hover {
+  background: var(--state-hover);
+}
+.ht-tab[aria-selected="true"] {
+  border-color: var(--border-seam-vertical);
+  background: var(--background);
+  color: var(--foreground);
+}
+.ht-tab:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+
+.ht-tiles {
+  display: flex;
+  gap: 2px;
+}
+.ht-tiles:empty {
+  display: none;
+}
+
+.ht-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A project's tile: its initial on its hue's 500, inked in its 50 (Zeron's palette, as activity-sidebar). */
+.ht-tile {
+  flex: 0 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--ht-tile-bg);
+  color: var(--ht-tile-ink);
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 600;
+}
+.ht-tile[data-hue="violet"] { --ht-tile-bg: #9579ee; --ht-tile-ink: #f7f6fe; }
+.ht-tile[data-hue="blue"] { --ht-tile-bg: #4b8ff3; --ht-tile-ink: #f2f7fe; }
+.ht-tile[data-hue="emerald"] { --ht-tile-bg: #27ac7a; --ht-tile-ink: #effaf4; }
+.ht-tile[data-hue="sky"] { --ht-tile-bg: #149dd2; --ht-tile-ink: #eff9fe; }
+.ht-tile[data-hue="amber"] { --ht-tile-bg: #d68d0a; --ht-tile-ink: #fef6ec; }
+.ht-tile[data-hue="rose"] { --ht-tile-bg: #e25e76; --ht-tile-ink: #fef4f5; }
+.ht-tile[data-hue="lime"] { --ht-tile-bg: #86b241; --ht-tile-ink: #f4f9ef; }
+.ht-tile[data-hue="teal"] { --ht-tile-bg: #18aa99; --ht-tile-ink: #effaf7; }
+.ht-tile[data-hue="orange"] { --ht-tile-bg: #e07434; --ht-tile-ink: #fef5f0; }
+.ht-tile[data-hue="indigo"] { --ht-tile-bg: #7584f4; --ht-tile-ink: #f4f6fe; }
+.ht-tile[data-hue="pink"] { --ht-tile-bg: #d6629e; --ht-tile-ink: #fff3f8; }
+.ht-tile[data-hue="cyan"] { --ht-tile-bg: #09a6b7; --ht-tile-ink: #eff9fb; }

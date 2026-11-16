@@ -24,6 +24,10 @@
       "source": "./plugins/homepage"
     },
     {
+      "name": "horizontal-tabs",
+      "source": "./plugins/horizontal-tabs"
+    },
+    {
       "name": "mdxcn",
       "source": "./plugins/mdxcn"
     },
