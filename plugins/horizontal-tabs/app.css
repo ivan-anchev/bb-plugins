@@ -15,18 +15,73 @@
   }
 }
 
-/* One row as tall as bb's page headers, padded like them, plus the inset bb gives them for its floating
-   chrome (--ht-chrome-inset, src/host/strip-mount.ts).
+/* While the strip shows (exactly where the query above doesn't hide it), it is the window's top row, so the
+   bars of bb's pages below it go back to being plain bars:
+   - On bb Desktop (macOS) bb draws a bar that touches the window's top edge (the header of a single pane or
+     of each top-row pane of a split, and the right panel's view bar) as the window's title bar: title-bar
+     height, no surface or seam, a drag region. A header gets the look bb gives every other header:
+     h-(--bb-app-chrome-row-height), border-b border-border-seam-vertical/60, bg-surface-scrim, its controls
+     centred as in those headers. The right panel's bar gets the look it has outside a title bar: the same
+     row height, on the panel's surface, which bb starts below the title bar (its aside's ::before).
+   - The row bb pads at the window's top-left to clear its floating chrome loses that padding; the strip
+     carries it (src/host/chrome-inset.ts).
+   - In a split bb marks the focused pane's title with a pill (bg-state-active), which under the strip reads
+     as a second tab. The title's colour still tells the focused pane apart. */
+@media not ((max-width: 767px) or (pointer: coarse)) {
+  [data-app-content-shell]:has(> [data-ht-strip-slot])
+    :is(
+      :has(> [data-testid="app-page-header-content-row"]),
+      [data-testid="thread-secondary-panel-top-chrome"]
+    )[class~="[app-region:drag]"] {
+    --bb-macos-chrome-control-y: initial;
+    box-sizing: border-box;
+    height: var(--bb-app-chrome-row-height);
+    padding-bottom: 0;
+    /* why not `none`: Chrome reads `app-region: none` as no-drag; initial is the none other bars have. */
+    app-region: initial;
+  }
+  [data-app-content-shell]:has(> [data-ht-strip-slot])
+    :has(> [data-testid="app-page-header-content-row"])[class~="[app-region:drag]"] {
+    border-bottom: 1px solid;
+    border-color: color-mix(in oklab, var(--border-seam-vertical) 60%, transparent);
+    background-color: var(--surface-scrim);
+  }
+  [data-app-content-shell]:has(> [data-ht-strip-slot])
+    [class~="[app-region:drag]"] > [data-testid="app-page-header-content-row"] {
+    height: var(--bb-app-chrome-row-height);
+  }
+  [data-app-content-shell]:has(> [data-ht-strip-slot])
+    aside:has([data-testid="thread-secondary-panel-top-chrome"][class~="[app-region:drag]"])::before {
+    top: 0;
+  }
+  [data-app-content-shell]:has(> [data-ht-strip-slot])
+    :is(
+      [data-testid="app-page-header-content-row"],
+      [data-testid="thread-secondary-panel-top-chrome"] > [role="toolbar"]
+    ) {
+    padding-left: 0;
+  }
+  [data-app-content-shell]:has(> [data-ht-strip-slot]) [data-pane-header-focus-tab] {
+    background-color: transparent;
+  }
+}
+
+/* One row as tall as bb's page headers, padded like them. The inset bb gives the top-left one for its
+   floating chrome is the .ht-inset spacer, sized by bb's own classes (src/host/chrome-inset.ts).
    why app-region: on bb Desktop the top row is where the window is dragged; only the controls are not. */
 .ht-strip {
   display: flex;
   align-items: center;
   height: var(--bb-app-chrome-row-height);
-  padding: 0 1rem 0 calc(1rem + var(--ht-chrome-inset, 0px));
+  padding: 0 1rem;
   border-bottom: 1px solid var(--border-seam-vertical);
   background: var(--sidebar);
   user-select: none;
   app-region: drag;
+}
+
+.ht-inset {
+  flex: none;
 }
 
 .ht-tablist {

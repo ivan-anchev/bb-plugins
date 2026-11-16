@@ -1,11 +1,13 @@
-// The strip: a WAI-ARIA tablist of every tab, then `+`, then the equal-sizes notice when it is up. The
-// selected tab, else the live one, is the tablist's one tab stop.
+// The strip: the inset that clears bb's floating chrome, a WAI-ARIA tablist of every tab, then `+`, then the
+// equal-sizes notice when it is up. The selected tab, else the live one, is the tablist's one tab stop.
 import { useLayoutEffect, useRef } from "react";
 import { tabs, useTabs } from "../controller/tabs.ts";
+import { useChromeInset } from "../host/strip-mount.ts";
 import { TabItem } from "./tab.tsx";
 
 export function Strip() {
   const snapshot = useTabs();
+  const inset = useChromeInset();
   const strip = useRef<HTMLDivElement>(null);
   const tablist = useRef<HTMLDivElement>(null);
   /** The strip's control that had focus when a tab was closed or the notice dismissed. */
@@ -34,6 +36,8 @@ export function Strip() {
   };
   return (
     <div ref={strip} className="ht-strip">
+      {/* bb sizes this with its own top-left padding classes (src/host/chrome-inset.ts). */}
+      <span aria-hidden className={`ht-inset ${inset}`} />
       <div ref={tablist} role="tablist" aria-label="Tabs" className="ht-tablist">
         {set.tabs.map((tab) => (
           <TabItem
