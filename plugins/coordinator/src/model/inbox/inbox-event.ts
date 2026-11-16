@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { handoffIdSchema, handoffStatusSchema } from "../handoff.ts";
 import { memoryFileSchema } from "../memory-file.ts";
+import { prChangeSchema, prSnapshotSchema } from "../verdict/pr.ts";
 import { crewIdSchema } from "../role.ts";
 
 export const inboxEventSchema = z.discriminatedUnion("kind", [
@@ -25,6 +26,8 @@ export const inboxEventSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("failed"), crewId: crewIdSchema, error: z.string().nullable() }),
   /** A crew waits on the user's answer or approval in its thread; `question` says what it asks. */
   z.object({ kind: z.literal("needs-input"), crewId: crewIdSchema, question: z.string() }),
+  /** A crew's pull request changed meaningfully (see meaningfulChanges): what changed, and the pull request as read then. */
+  z.object({ kind: z.literal("pr"), crewId: crewIdSchema, pr: prSnapshotSchema, changes: z.array(prChangeSchema).min(1) }),
   /** The user turned verification of done handoffs on or off on the board. */
   z.object({ kind: z.literal("verification-toggled"), verify: z.boolean() }),
   /** The user saved a memory file in the Memory editor. */
@@ -47,6 +50,7 @@ const WAKES: Record<InboxEvent["kind"], boolean> = {
   "idle-without-handoff": true,
   failed: true,
   "needs-input": true,
+  pr: true,
   "verification-toggled": true,
   "memory-edited": true,
 };

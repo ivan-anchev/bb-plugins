@@ -3,7 +3,7 @@
 // bb threads carry no last-activity time.
 import { z } from "zod";
 import type { CoordinatorId, CrewId } from "./role.ts";
-import type { Verdict } from "./verdict.ts";
+import type { Verdict } from "./verdict/verdict.ts";
 
 export const handoffIdSchema = z.uuid().brand<"handoffId">();
 export type HandoffId = z.infer<typeof handoffIdSchema>;

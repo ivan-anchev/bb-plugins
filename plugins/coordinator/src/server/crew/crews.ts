@@ -63,7 +63,7 @@ export type CrewDetail = {
 
 type Deps = {
   bb: CrewsBb;
-  store: Pick<Store, "coordinator" | "crew" | "updateDraft" | "closeCrew" | "latestHandoff" | "latestReturnedVerdict">;
+  store: Pick<Store, "coordinator" | "crew" | "updateDraft" | "closeCrew" | "latestHandoff" | "latestReturnedVerdict" | "prStatus">;
   spawner: Pick<Spawner, "saveCrew" | "launch">;
   /** Runs after anything that changes a coordinating thread's board. */
   onChange(id: CoordinatorId): void;
@@ -191,7 +191,7 @@ export function createCrews({ bb, store, spawner, onChange }: Deps) {
       const current = handoff === null || threadId === null ? null : handoffIsCurrent(handoff, await latestTurnSeq(bb, threadId));
       return {
         crew,
-        state: crewState(crew, thread, current === true ? handoff : null),
+        state: crewState(crew, thread, current === true ? handoff : null, store.prStatus(crew.coordinatorId, crew.id)?.snapshot ?? null),
         branch: thread?.environmentBranchName ?? null,
         handoff: handoff === null ? null : { handoff, current },
         output,

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { handoffIdSchema, type Handoff, type HandoffId } from "../handoff.ts";
 import { memoryFileSchema } from "../memory-file.ts";
 import { coordinatorIdSchema, crewIdSchema } from "../role.ts";
-import type { Verdict } from "../verdict.ts";
+import type { Verdict } from "../verdict/verdict.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import type { InboxEvent, StoredEvent } from "./inbox-event.ts";
 import { doorbellText } from "./wake-text.ts";
@@ -50,7 +50,7 @@ const returned = (results: ("pass" | "fail" | "unverifiable")[]): Verdict => ({
   findings: [WRITTEN],
   model: { providerId: "codex", model: "gpt-default" },
   sameModel: false,
-  settlement: { kind: "checked", refused: null },
+  settlement: { kind: "checked", refused: null, ci: { kind: "none" } },
 });
 
 test("a doorbell names how many updates there are, then one line of plugin facts per update", () => {

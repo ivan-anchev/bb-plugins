@@ -3,8 +3,9 @@
 // memory file's name) and the titles the coordinating thread itself gave its crews. Anything a crew
 // wrote is read through crew_catch_up, as a tool result, never here.
 import type { Handoff, HandoffId } from "../handoff.ts";
+import { PR_CHANGE_WORDS } from "../verdict/pr.ts";
 import type { CrewId } from "../role.ts";
-import { mayHaveReachedCrew, outcome } from "../verdict.ts";
+import { ciVerdictOf, mayHaveReachedCrew, outcome } from "../verdict/verdict.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import type { InboxEvent, StoredEvent } from "./inbox-event.ts";
 
@@ -38,6 +39,8 @@ function line(event: InboxEvent, { titles, handoff }: Lookups): string {
       return `${crew} failed`;
     case "needs-input":
       return `${crew} is waiting on the user in its thread`;
+    case "pr":
+      return `${crew} PR #${event.pr.number}: ${event.changes.map((change) => PR_CHANGE_WORDS[change]).join(", ")}`;
     default:
       return event satisfies never;
   }
@@ -49,16 +52,21 @@ function checkedAs(handoff: Handoff | null): string {
   if (handoff === null) throw new Error("A checked handoff is missing.");
   if (handoff.status !== "done") throw new Error(`The checked handoff ${handoff.id} is ${handoff.status}, not done.`);
   const verdict = outcome(handoff.verdict);
+  const ci = handoff.verdict.state === "returned" ? ciVerdictOf(handoff.verdict) : null;
   switch (verdict) {
     case "pass":
-      return "verified";
-    case "fail":
-      return mayHaveReachedCrew(handoff.verdict) ? "failed verification, findings may or may not have reached it" : "failed verification";
+      if (ci?.kind === "not-checked") return "verified, CI not checked";
+      return ci?.kind === "no-checks" ? "verified, no CI checks" : "verified";
+    case "fail": {
+      const failed = ci?.kind === "fail" ? `failed verification, CI failed on #${ci.number}` : "failed verification";
+      return mayHaveReachedCrew(handoff.verdict) ? `${failed}, findings may or may not have reached it` : failed;
+    }
     case "could-not-run":
       return "could not be verified";
     case "unverified":
       return "unverified";
     case "pending":
+    case "waiting-for-ci":
     case "superseded":
       // why: a checked event is recorded once the verdict is final, which neither of these is.
       return "not checked yet";

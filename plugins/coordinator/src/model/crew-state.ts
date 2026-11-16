@@ -4,10 +4,11 @@ import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import type { Crew } from "./crew.ts";
 import type { Handoff } from "./handoff.ts";
-import { mayHaveReachedCrew, outcome, type Outcome, type Verdict } from "./verdict.ts";
+import type { CiVerdict, PrSnapshot } from "./verdict/pr.ts";
+import { allPassed, ciVerdictOf, mayHaveReachedCrew, outcome, type Verdict } from "./verdict/verdict.ts";
 
 /** The board's groups, in the order it shows them. */
-export const boardStateSchema = z.enum(["needs-you", "ready-for-review", "verifying", "working", "idle", "done"]);
+export const boardStateSchema = z.enum(["needs-you", "ready-for-review", "verifying", "working", "landing", "idle", "done"]);
 export type BoardState = z.infer<typeof boardStateSchema>;
 
 /** Each group's name, as the board and crew_catch_up show it. */
@@ -16,6 +17,7 @@ export const BOARD_STATE_LABELS: Record<BoardState, string> = {
   "ready-for-review": "Ready for review",
   verifying: "Verifying",
   working: "Working",
+  landing: "Landing",
   idle: "Idle",
   done: "Done",
 };
@@ -35,11 +37,13 @@ export type CrewThread = Pick<ThreadRow, "status" | "hasPendingInteraction">;
 
 /**
  * `thread` is null when bb no longer lists it: archived or deleted. `handoff` is the crew's current
- * handoff (see handoffIsCurrent), null when it has none.
+ * handoff (see handoffIsCurrent), null when it has none. `pr` is its pull request as last read
+ * (null: none seen). why a merged one first: its work has landed, whatever its thread does next.
  */
-export function crewState(crew: Crew, thread: CrewThread | null, handoff: Handoff | null): { state: BoardState; headline: string } {
+export function crewState(crew: Crew, thread: CrewThread | null, handoff: Handoff | null, pr: PrSnapshot | null): { state: BoardState; headline: string } {
   if (crew.closed !== null) return { state: "done", headline: CLOSED[crew.closed.kind] };
   if (crew.launch.kind === "draft") return { state: "needs-you", headline: `Draft: ${crew.title}` };
+  if (pr?.state === "merged") return { state: "done", headline: `Merged #${pr.number}` };
   if (thread === null) return { state: "done", headline: "Its thread was archived or deleted" };
   if (thread.hasPendingInteraction) return { state: "needs-you", headline: "Waiting for an answer or an approval in its thread" };
   switch (thread.status) {
@@ -54,7 +58,7 @@ export function crewState(crew: Crew, thread: CrewThread | null, handoff: Handof
     case "stopping":
       return { state: "working", headline: "Stopping" };
     case "idle":
-      return handoff === null ? IDLE : handedOff(handoff, crew.fixRounds);
+      return handoff === null ? IDLE : handedOff(handoff, crew.fixRounds, pr);
     default:
       // why not throw: bb can send a status newer than this plugin's SDK. A thread in it is not
       // known to be working, so it shows as idle until bb says otherwise.
@@ -65,14 +69,14 @@ export function crewState(crew: Crew, thread: CrewThread | null, handoff: Handof
 
 const IDLE = { state: "idle", headline: "Its turn ended without a handoff" } as const;
 
-function handedOff(handoff: Handoff, fixRounds: number): { state: BoardState; headline: string } {
+function handedOff(handoff: Handoff, fixRounds: number, pr: PrSnapshot | null): { state: BoardState; headline: string } {
   switch (handoff.status) {
     case "blocked":
       return { state: "needs-you", headline: `Blocked: ${handoff.summary}` };
     case "gave-up":
       return { state: "needs-you", headline: `Gave up: ${handoff.summary}` };
     case "done":
-      return checked(handoff.summary, outcome(handoff.verdict), failureNote(handoff.verdict, fixRounds));
+      return checked(handoff.summary, handoff.verdict, pr, failureNote(handoff.verdict, fixRounds));
     default:
       return handoff satisfies never;
   }
@@ -89,27 +93,47 @@ function failureNote(verdict: Verdict, fixRounds: number): string {
 }
 
 /**
- * A done handoff, placed by its verdict, with `failureNote` added to a failure. The board never
- * reads the switch: a handoff keeps the verdict it was made with.
+ * A done handoff, placed by its verdict, with `failureNote` added to a failure. Work that passed, or
+ * that nobody checks, is Landing while its pull request is open, else Ready for review. The board
+ * never reads the switch: a handoff keeps the verdict it was made with.
  */
-function checked(summary: string, verdict: Outcome, failureNote: string): { state: BoardState; headline: string } {
-  switch (verdict) {
+function checked(summary: string, verdict: Verdict, pr: PrSnapshot | null, failureNote: string): { state: BoardState; headline: string } {
+  const result = outcome(verdict);
+  const ready = (headline: string) => ({ state: pr?.state === "open" ? "landing" : "ready-for-review", headline }) as const;
+  switch (result) {
     case "pending":
       return { state: "verifying", headline: `Verifying: ${summary}` };
+    case "waiting-for-ci":
+      return { state: "verifying", headline: `Waiting for CI${pr === null ? "" : ` on #${pr.number}`}: ${summary}` };
     case "pass":
-      return { state: "ready-for-review", headline: `✓ Verified: ${summary}` };
+      return ready(`✓ Verified${passNote(ciOfReturned(verdict))}: ${summary}`);
     case "fail":
-      return { state: "needs-you", headline: `✗ Failed verification${failureNote}: ${summary}` };
+      return { state: "needs-you", headline: `${failedAs(verdict)}${failureNote}: ${summary}` };
     case "could-not-run":
       return { state: "needs-you", headline: `Couldn't verify: ${summary}` };
     case "unverified":
-      return { state: "ready-for-review", headline: `Unverified: ${summary}` };
+      return ready(`Unverified: ${summary}`);
     case "superseded":
       // why idle: only an earlier handoff is ever replaced, and the board shows a crew's latest. Nothing checks it, so it is not ready.
       return { state: "idle", headline: `Replaced by a newer handoff: ${summary}` };
     default:
-      return verdict satisfies never;
+      return result satisfies never;
   }
+}
+
+/** What a pass says of CI on its commit when CI didn't pass there: it couldn't be checked, or GitHub reported no checks. */
+function passNote(ci: CiVerdict | null): string {
+  if (ci?.kind === "not-checked") return ", CI not checked";
+  return ci?.kind === "no-checks" ? ", no CI checks" : "";
+}
+
+/** What CI said about a settled verdict's commit; null for any other verdict. */
+const ciOfReturned = (verdict: Verdict) => (verdict.state === "returned" ? ciVerdictOf(verdict) : null);
+
+/** How a failure reads: as CI's, when every criterion passed and CI failed on the commit. */
+function failedAs(verdict: Verdict): string {
+  const ci = ciOfReturned(verdict);
+  return ci?.kind === "fail" && verdict.state === "returned" && allPassed(verdict) ? `✗ CI failed on #${ci.number}` : "✗ Failed verification";
 }
 
 const CLOSED: Record<NonNullable<Crew["closed"]>["kind"], string> = {

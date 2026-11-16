@@ -1,8 +1,8 @@
 // A verdict under its row: how many criteria passed, the commit and the model that checked them,
-// then each criterion with its evidence. A failed or unverifiable criterion shows its evidence; a
+// what CI said about that commit, then each criterion with its evidence. A failed or unverifiable criterion shows its evidence; a
 // passed one keeps it folded, so what needs the user is what they see first.
 import { experimental_Icon as Icon, experimental_ProviderIcon as ProviderIcon, experimental_useProviders as useProviders, useBbNavigate } from "@get-bb/plugin-sdk/app";
-import { outcome, type CriterionResult, type ModelRef, type Verdict } from "../../model/verdict.ts";
+import { allPassed, ciVerdictOf, outcome, type CriterionResult, type ModelRef, type Verdict } from "../../model/verdict/verdict.ts";
 
 type Judged = Extract<Verdict, { state: "returned" | "could-not-run" }>;
 
@@ -17,17 +17,20 @@ export function VerdictDetail({ id, verdict }: { id: string; verdict: Judged }) 
 
 function Returned({ verdict }: { verdict: Extract<Verdict, { state: "returned" }> }) {
   const passed = verdict.criteria.filter((check) => check.result === "pass").length;
-  const verified = outcome(verdict) === "pass";
+  const result = outcome(verdict);
+  // why: one on its way back to the crew failed its criteria, though nobody has been told yet.
+  const look = result === "pending" && !allPassed(verdict) ? FAILED : HEADLINE[result];
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <p className={`flex items-center gap-1.5 text-sm font-medium ${verified ? "" : "text-destructive-text"}`}>
-          <Icon name={verified ? "Check" : "X"} aria-hidden className={`size-4 shrink-0 ${verified ? "text-success" : ""}`} />
+        <p className={`flex items-center gap-1.5 text-sm font-medium ${look.text}`}>
+          <Icon name={look.icon} aria-hidden className={`size-4 shrink-0 ${look.iconTone}`} />
           {passed} of {verdict.criteria.length} {verdict.criteria.length === 1 ? "criterion" : "criteria"} passed
         </p>
         <VerifierLink threadId={verdict.verifierThreadId} />
       </div>
       <CheckedBy model={verdict.model} sameModel={verdict.sameModel} headSha={verdict.headSha} />
+      <CiLine verdict={verdict} />
       <ol className="flex flex-col gap-1">
         {verdict.criteria.map((check, i) => (
           <Criterion key={i} number={i + 1} {...check} />
@@ -61,6 +64,34 @@ function CouldNotRun({ verdict }: { verdict: Extract<Verdict, { state: "could-no
       {verdict.verifierThreadId !== null && <VerifierLink threadId={verdict.verifierThreadId} />}
     </div>
   );
+}
+
+/** What CI said about the commit the verifier checked, once the verdict settled or while it waits for it; nothing when there was none to check. */
+function CiLine({ verdict }: { verdict: Extract<Verdict, { state: "returned" }> }) {
+  const ci = ciVerdictOf(verdict);
+  if (ci === null) {
+    if (verdict.settlement.kind !== "waiting-for-ci") return null;
+    return <p className="text-xs text-muted-foreground">Every criterion passed. Waiting for CI to finish on this commit before it counts.</p>;
+  }
+  switch (ci.kind) {
+    case "none":
+      return null;
+    case "pass":
+      return <p className="text-xs text-muted-foreground">CI passed on #{ci.number} at this commit.</p>;
+    case "no-checks":
+      return <p className="text-xs text-muted-foreground">No CI checks: GitHub reported none on #{ci.number} at this commit, after the wait for them.</p>;
+    case "fail":
+      return (
+        <p className="text-xs text-destructive-text">
+          CI failed on #{ci.number} at this commit
+          {ci.failedChecks.length > 0 && <>: {ci.failedChecks.join(", ")}</>}.
+        </p>
+      );
+    case "not-checked":
+      return <p className="text-xs text-warning-text">CI not checked: {ci.reason}.</p>;
+    default:
+      return ci satisfies never;
+  }
 }
 
 /** The commit the verifier found checked out, and what bb ran it on. */
@@ -107,6 +138,21 @@ function Criterion({ number, criterion, result, evidence }: { number: number; cr
     </li>
   );
 }
+
+type Headline = { icon: string; iconTone: string; text: string };
+const NEUTRAL: Headline = { icon: "Clock", iconTone: "text-muted-foreground", text: "" };
+const FAILED: Headline = { icon: "X", iconTone: "", text: "text-destructive-text" };
+
+// why by outcome: a verdict waiting for CI is neither verified nor failed yet.
+const HEADLINE: Record<ReturnType<typeof outcome>, Headline> = {
+  pass: { icon: "Check", iconTone: "text-success", text: "" },
+  fail: FAILED,
+  "waiting-for-ci": NEUTRAL,
+  pending: NEUTRAL,
+  "could-not-run": FAILED,
+  superseded: NEUTRAL,
+  unverified: NEUTRAL,
+};
 
 // why a pass's label is muted: green text fails contrast on the page, and the icon already says it.
 const LOOK: Record<CriterionResult, { icon: string; iconTone: string; label: string; text: string }> = {

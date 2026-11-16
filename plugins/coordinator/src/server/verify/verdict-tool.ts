@@ -4,7 +4,7 @@
 import { z } from "zod";
 import { MAX_CRITERIA, type Crew } from "../../model/crew.ts";
 import { commitSchema } from "../../model/handoff.ts";
-import { criterionResultSchema } from "../../model/verdict.ts";
+import { criterionResultSchema } from "../../model/verdict/verdict.ts";
 import type { Store } from "../store.ts";
 import { failed, type ToolsBb } from "../tools/tool-kit.ts";
 import type { Verify, VerifierReport } from "./verify.ts";

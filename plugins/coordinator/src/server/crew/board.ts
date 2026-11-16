@@ -42,7 +42,16 @@ export async function listedThreads<Thread extends { id: string; archivedAt: num
 
 const DIGEST = memoryFileSchema.parse("DIGEST.md");
 
-export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinator" | "latestHandoff" | "verifies">, memory: MemoryRoot) {
+export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinator" | "latestHandoff" | "verifies" | "prStatus">, memory: MemoryRoot) {
+  /** Why the latest read of an open crew's pull request failed, the first one's; null when none did. */
+  function prUnavailable(id: CoordinatorId): string | null {
+    for (const crew of store.crews(id).filter(isOpen)) {
+      const unavailable = store.prStatus(crew.coordinatorId, crew.id)?.unavailable ?? null;
+      if (unavailable !== null) return unavailable.reason;
+    }
+    return null;
+  }
+
   async function rows(id: CoordinatorId): Promise<BoardRow[]> {
     const coordinator = store.coordinator(id);
     // why: a coordinating thread starts crews through its tools, which it gets once its thread is bound.
@@ -58,7 +67,8 @@ export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinat
         const handoff = isOpen(crew) && thread !== null ? await currentHandoff(bb, store, crew) : null;
         const draft = draftOf(crew, { projectId: coordinator.projectId, environmentHostId });
         const verdict = handoff?.status === "done" ? handoff.verdict : null;
-        return { crewId: crew.id, title: crew.title, threadId, branch: thread?.environmentBranchName ?? null, ...crewState(crew, thread, handoff), verdict, draft };
+        const pr = store.prStatus(crew.coordinatorId, crew.id)?.snapshot ?? null;
+        return { crewId: crew.id, title: crew.title, threadId, branch: thread?.environmentBranchName ?? null, ...crewState(crew, thread, handoff, pr), verdict, pr, draft };
       }),
     );
   }
@@ -66,13 +76,14 @@ export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinat
   return {
     rows,
 
-    /** The board as the user sees it: the verification switch, the digest, then every crew's row. */
+    /** The board as the user sees it: the verification switch, why PR status is unavailable, the digest, then every crew's row. */
     async read(id: CoordinatorId): Promise<Board> {
       const files = memory.of(id);
       const text = files.read(DIGEST).text;
       const modifiedAt = files.modifiedAt(DIGEST);
       return {
         verify: store.verifies(id),
+        prUnavailable: prUnavailable(id),
         digest: text === null || modifiedAt === null ? null : { content: text.content, modifiedAt },
         rows: await rows(id),
       };

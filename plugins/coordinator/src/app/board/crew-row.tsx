@@ -1,9 +1,10 @@
-// A started crew on the board: its id, title, headline and branch, opening its thread. A row placed
-// by a verdict has a Verdict button that shows the verdict under it; a row under Verifying links its
-// verifier, which is hidden from the sidebar.
+// A started crew on the board: its id, title, headline and branch, opening its thread, then its pull
+// request and CI as last read, linking to GitHub. A row placed by a verdict has a Verdict button that
+// shows the verdict under it; a row under Verifying links its verifier, which is hidden from the sidebar.
 import { experimental_Icon as Icon, useBbNavigate } from "@get-bb/plugin-sdk/app";
 import { useId, useState, type Ref } from "react";
 import type { BoardRow } from "../../contract.ts";
+import type { PrSnapshot } from "../../model/verdict/pr.ts";
 import { Button } from "../ui/button.tsx";
 import { VerdictDetail } from "./verdict-detail.tsx";
 
@@ -37,6 +38,7 @@ export function CrewRow({ ref, row }: { ref: Ref<HTMLButtonElement>; row: BoardR
           </div>
         )}
       </div>
+      {row.pr !== null && <PrLine pr={row.pr} />}
       {judged && open && <VerdictDetail id={`${ids}-verdict`} verdict={verdict} />}
     </div>
   );
@@ -70,3 +72,55 @@ function Summary({ ref, row }: { ref: Ref<HTMLButtonElement>; row: BoardRow }) {
     </button>
   );
 }
+
+/** The crew's pull request as last read: a link to it, its state, its CI on its head commit, and its review. */
+function PrLine({ pr }: { pr: PrSnapshot }) {
+  const state = pr.state === "open" && pr.draft ? DRAFT : PR_STATE[pr.state];
+  const ci = CI[pr.ci];
+  const review = REVIEW[pr.review];
+  return (
+    // why the inset: it lines up under the title, past the row's id column (px-2, the 2.25rem column, gap-x-2).
+    <p className="-mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 pr-2 pb-1.5 pl-[3.25rem] text-xs text-muted-foreground">
+      <a
+        href={pr.url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1 rounded-sm font-mono text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        <Icon name={state.icon} aria-hidden className={`size-3 ${state.tone}`} />#{pr.number}
+        <span className="sr-only"> on GitHub</span>
+      </a>
+      <span>{state.label}</span>
+      <span aria-hidden>·</span>
+      <span className="inline-flex items-center gap-1">
+        <Icon name={ci.icon} aria-hidden className={`size-3 ${ci.tone}`} />
+        {ci.label}
+      </span>
+      {review !== null && (
+        <>
+          <span aria-hidden>·</span>
+          <span>{review}</span>
+        </>
+      )}
+    </p>
+  );
+}
+
+type Look = { label: string; icon: string; tone: string };
+
+// why the words stay muted: a coloured label fails contrast on the page; the icon carries the colour.
+const PR_STATE: Record<PrSnapshot["state"], Look> = {
+  open: { label: "Open", icon: "GitPullRequest", tone: "text-success" },
+  merged: { label: "Merged", icon: "GitMerge", tone: "text-pr-merged" },
+  closed: { label: "Closed", icon: "GitPullRequestClosed", tone: "text-destructive-text" },
+};
+const DRAFT: Look = { label: "Draft", icon: "GitPullRequestDraft", tone: "text-muted-foreground" };
+
+const CI: Record<PrSnapshot["ci"], Look> = {
+  none: { label: "No checks", icon: "Minus", tone: "text-muted-foreground" },
+  pending: { label: "CI running", icon: "Clock", tone: "text-attention" },
+  pass: { label: "CI passing", icon: "Check", tone: "text-success" },
+  fail: { label: "CI failing", icon: "X", tone: "text-destructive-text" },
+};
+
+const REVIEW: Record<PrSnapshot["review"], string | null> = { approved: "Approved", "changes-requested": "Changes requested", none: null };

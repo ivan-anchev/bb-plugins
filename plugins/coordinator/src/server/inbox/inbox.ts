@@ -7,8 +7,9 @@ import { titlesOf } from "../../model/crew.ts";
 import type { HandoffId, NewHandoff } from "../../model/handoff.ts";
 import { wakes, type InboxEvent, type StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { doorbellText } from "../../model/inbox/wake-text.ts";
-import type { CoordinatorId } from "../../model/role.ts";
-import type { Verdict } from "../../model/verdict.ts";
+import type { PrSnapshot, PrUnavailable } from "../../model/verdict/pr.ts";
+import type { CoordinatorId, CrewId } from "../../model/role.ts";
+import type { Verdict } from "../../model/verdict/verdict.ts";
 import type { Settlement, Store, VerdictFrom } from "../store.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
@@ -51,6 +52,8 @@ type InboxStore = Pick<
   | "doorbells"
   | "clearDoorbell"
   | "reopenDoorbell"
+  | "savePrRead"
+  | "markPrUnavailable"
 >;
 
 type Doorbell = ReturnType<Store["doorbells"]>[number];
@@ -194,6 +197,23 @@ export function createInbox({ bb, store, onChange }: Deps) {
     settleVerdict(handoffId: HandoffId, as: Settlement): void {
       const id = store.settleReturned(handoffId, as, Date.now());
       if (id !== null) recorded(id);
+    },
+
+    /**
+     * Saves a successful read of a crew's pull request (null: none), begun at the crew's handoff
+     * `handoffAtRead`, with a `pr` event when it changed meaningfully. The board reads it again either way: its CI may have moved. why no ring
+     * here: the watch reads only on the tick, whose own ring follows, and a verdict the read settles
+     * rings first, so one doorbell carries both.
+     */
+    prRead(coordinatorId: CoordinatorId, crewId: CrewId, pr: PrSnapshot | null, handoffAtRead: HandoffId | null, at: number): void {
+      store.savePrRead(coordinatorId, crewId, pr, handoffAtRead, at);
+      onChange(coordinatorId);
+    },
+
+    /** Records why reading a crew's pull request failed, and whether that lasts; its snapshot stays, and nobody is woken. */
+    prUnavailable(coordinatorId: CoordinatorId, crewId: CrewId, unavailable: PrUnavailable, at: number): void {
+      store.markPrUnavailable(coordinatorId, crewId, unavailable, at);
+      onChange(coordinatorId);
     },
 
     /** The user's switch: turns verification on or off, and tells the coordinating thread when it changed. */
