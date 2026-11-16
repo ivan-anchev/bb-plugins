@@ -3,12 +3,14 @@ import { test } from "node:test";
 import { DISPLAY_NAME } from "../name.ts";
 import { harness, isRefusal, newThreadRequest, textOf } from "./test-harness.ts";
 
+const COORDINATOR_TOOLS = ["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_start", "crew_message", "crew_read", "crew_close"];
+
 test("a coordinating thread is offered its tools, its skill and rules naming the product", async () => {
   const kit = harness();
   const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
 
   const configuration = kit.configurationFor(threadId, {});
-  assert.deepEqual(configuration.tools, ["crew_catch_up", "crew_memory_read", "crew_memory_write"]);
+  assert.deepEqual(configuration.tools, COORDINATOR_TOOLS);
   assert.ok(configuration.skills.includes("coordinating"));
   assert.ok(configuration.instructions?.startsWith(`You are a ${DISPLAY_NAME}:`));
 });
@@ -17,7 +19,7 @@ test("its first session, before any bind, is configured from its unbound ticket"
   const kit = harness({ created: false, answer: "lost" });
   await assert.rejects(kit.spawner.coordinator(newThreadRequest("Migrate the webhook service")));
 
-  assert.deepEqual(kit.configurationFor("thr_1", kit.metadataOf("thr_1")).tools, ["crew_catch_up", "crew_memory_read", "crew_memory_write"]);
+  assert.deepEqual(kit.configurationFor("thr_1", kit.metadataOf("thr_1")).tools, COORDINATOR_TOOLS);
 });
 
 for (const [label, metadata] of [
@@ -73,4 +75,41 @@ test("crew_memory_read rejects a name outside the memory folder or not markdown"
   for (const file of ["../x.md", "/etc/passwd.md", "notes.txt", "notes/../../data.md"]) {
     await assert.rejects(kit.call("crew_memory_read", { file }, threadId), /memory file is a \.md path inside the memory folder/, file);
   }
+});
+
+test("a crew thread is offered crew_memory_read, its skill and its rules, and nothing else", async () => {
+  const kit = harness();
+  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
+  const started = await kit.call("crew_start", { title: "Retries", brief: "Retry failed deliveries.", doneCriteria: ["npm test passes"] }, threadId);
+  const crewThreadId = /@thread:(\w+)/.exec(textOf(started))?.[1] ?? "";
+
+  const configuration = kit.configurationFor(crewThreadId, {});
+  assert.deepEqual(configuration.tools, ["crew_memory_read"]);
+  assert.deepEqual(configuration.skills, ["crew-board", "crew-work"]);
+  assert.ok(configuration.instructions?.startsWith(`You are a crew thread of a ${DISPLAY_NAME}`));
+});
+
+test("a crew thread reads its coordinating thread's memory, and is refused crew_start and crew_memory_write", async () => {
+  const kit = harness();
+  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
+  const started = await kit.call("crew_start", { title: "Retries", brief: "Retry failed deliveries.", doneCriteria: ["npm test passes"] }, threadId);
+  const crewThreadId = /@thread:(\w+)/.exec(textOf(started))?.[1] ?? "";
+
+  const read = await kit.call("crew_memory_read", { file: "GOAL.md" }, crewThreadId);
+  assert.ok(!isRefusal(read));
+  assert.match(textOf(read), /Migrate the webhook service/);
+
+  for (const [tool, input] of [
+    ["crew_start", { title: "More", brief: "More work.", doneCriteria: ["it runs"] }],
+    ["crew_memory_write", { file: "PLAN.md", content: "# Taken over\n", baseVersion: null }],
+    ["crew_catch_up", {}],
+  ] as const) {
+    const result = await kit.call(tool, input, crewThreadId);
+    assert.ok(isRefusal(result), tool);
+    assert.match(textOf(result), new RegExp(`${tool} is refused`));
+  }
+  const role = kit.store.roleOfThread(threadId);
+  assert.equal(role?.kind, "coordinator");
+  assert.equal(kit.store.crews(role.coordinatorId).length, 1, "the crew started no crew");
+  assert.match(textOf(await kit.call("crew_memory_read", { file: "PLAN.md" }, threadId)), /No plan yet/);
 });

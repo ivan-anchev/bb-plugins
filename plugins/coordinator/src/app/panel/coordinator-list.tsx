@@ -1,5 +1,5 @@
 // The panel's root page: every coordinating thread, under its project, newest first. A row opens
-// its thread.
+// its thread; its buttons open its board and its memory.
 import {
   experimental_Icon as Icon,
   experimental_ThreadStatusGlyph as ThreadStatusGlyph,
@@ -16,7 +16,9 @@ import { Button } from "../ui/button.tsx";
 import { ReadFailure } from "../ui/read-failure.tsx";
 import { listView } from "./coordinator-groups.ts";
 
-export function CoordinatorList({ ref, onOpenMemory }: { ref: Ref<HTMLDivElement>; onOpenMemory(id: CoordinatorId): void }) {
+type Open = { onOpenBoard(id: CoordinatorId): void; onOpenMemory(id: CoordinatorId): void };
+
+export function CoordinatorList({ ref, ...open }: { ref: Ref<HTMLDivElement> } & Open) {
   const read = experimental_useRpcQuery({ contract, method: "coordinators", input: {} });
   const live = useSidebarThreads();
   const view = listView(read, live);
@@ -37,7 +39,7 @@ export function CoordinatorList({ ref, onOpenMemory }: { ref: Ref<HTMLDivElement
               <ul className="flex flex-col">
                 {group.rows.map(({ coordinator, thread }) => (
                   <li key={thread.id}>
-                    <Row coordinator={coordinator} thread={thread} onOpenMemory={onOpenMemory} />
+                    <Row coordinator={coordinator} thread={thread} {...open} />
                   </li>
                 ))}
               </ul>
@@ -48,8 +50,8 @@ export function CoordinatorList({ ref, onOpenMemory }: { ref: Ref<HTMLDivElement
   );
 }
 
-/** A row opens its thread; its Memory button opens the thread's memory files. */
-function Row({ coordinator, thread, onOpenMemory }: { coordinator: Coordinator; thread: PluginSidebarThread; onOpenMemory(id: CoordinatorId): void }) {
+/** A row opens its thread; its Board and Memory buttons open the thread's board and memory files. */
+function Row({ coordinator, thread, onOpenBoard, onOpenMemory }: { coordinator: Coordinator; thread: PluginSidebarThread } & Open) {
   const navigate = useBbNavigate();
   return (
     <div className="flex items-center gap-1">
@@ -63,6 +65,10 @@ function Row({ coordinator, thread, onOpenMemory }: { coordinator: Coordinator; 
         </span>
         <span className="min-w-0 flex-1 truncate">{thread.displayTitle}</span>
       </button>
+      <Button variant="ghost" size="sm" aria-label={`Board of ${thread.displayTitle}`} onClick={() => onOpenBoard(coordinator.id)}>
+        <Icon name="LayoutList" aria-hidden />
+        Board
+      </Button>
       <Button variant="ghost" size="sm" aria-label={`Memory of ${thread.displayTitle}`} onClick={() => onOpenMemory(coordinator.id)}>
         <Icon name="FileText" aria-hidden />
         Memory

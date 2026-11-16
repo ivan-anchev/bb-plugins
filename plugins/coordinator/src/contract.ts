@@ -3,8 +3,9 @@
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
+import { boardStateSchema } from "./model/crew-state.ts";
 import { memoryContentSchema, memoryFileSchema, memorySnapshotSchema, memoryVersionSchema, writeOutcomeSchema } from "./model/memory-file.ts";
-import { coordinatorIdSchema, type CoordinatorId } from "./model/role.ts";
+import { coordinatorIdSchema, crewIdSchema, type CoordinatorId } from "./model/role.ts";
 
 /** A coordinating thread: its memory is keyed by `id`, its conversation is `threadId`. */
 export const coordinatorSchema = z.object({
@@ -21,6 +22,27 @@ export const COORDINATORS_TAG = "coordinators";
 /** Every read of one coordinating thread's memory carries it; any write to its files invalidates it. */
 export const memoryTag = (id: CoordinatorId): string => `memory:${id}`;
 const memoryTags = ({ coordinatorId }: { coordinatorId: CoordinatorId }) => [memoryTag(coordinatorId)];
+
+/** Every read of one coordinating thread's board carries it; a crew started or closed, or a crew thread's status change, invalidates it. */
+export const boardTag = (id: CoordinatorId): string => `board:${id}`;
+
+/** One crew on the board: where it sits, why, and its thread (null: it never got one) and branch (null: none yet). */
+const boardRowSchema = z.object({
+  crewId: crewIdSchema,
+  title: z.string(),
+  threadId: z.string().nullable(),
+  branch: z.string().nullable(),
+  state: boardStateSchema,
+  headline: z.string(),
+});
+export type BoardRow = z.infer<typeof boardRowSchema>;
+
+/** The board: DIGEST.md and when it last changed (null: there is none), then every crew in the order started. */
+const boardSchema = z.object({
+  digest: z.object({ content: z.string(), modifiedAt: z.number() }).nullable(),
+  rows: z.array(boardRowSchema),
+});
+export type Board = z.infer<typeof boardSchema>;
 
 // why only these fields are checked: the plugin reads only the project and the typed text, which
 // becomes the goal. The rest goes to threads.spawn unchanged (as the composer asks), and bb
@@ -50,6 +72,12 @@ export const coordinatorContract = defineRpcContract({
   startCoordinator: {
     input: z.object({ request: newThreadRequestSchema }),
     output: z.object({ threadId: z.string() }),
+  },
+  /** A coordinating thread's board. why the memory tag too: the board shows DIGEST.md. */
+  board: {
+    input: z.object({ coordinatorId: coordinatorIdSchema }),
+    output: boardSchema,
+    tags: ({ coordinatorId }) => [boardTag(coordinatorId), memoryTag(coordinatorId)],
   },
   /** A coordinating thread's memory folder on the bb server, and the files in it. */
   memoryList: {
