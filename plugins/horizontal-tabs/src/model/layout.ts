@@ -94,6 +94,32 @@ export function withPaneIdsApart(layout: Layout, other: Layout | null, prefix: s
   return { root: mapPanes(layout.root, (pane) => ({ ...pane, paneId: rename(pane.paneId) })), focusedPaneId: rename(layout.focusedPaneId) };
 }
 
+/**
+ * `layout` without its panes on threads `alive` rejects, or null when no pane is left. As bb closes such a
+ * pane: a split left with one child gives way to it, and focus moves to the next pane left, else the previous
+ * one. Unlike bb, which evens out the sizes, the split's other children keep their proportions.
+ */
+export function withoutThreads(layout: Layout, alive: (threadId: string) => boolean): Layout | null {
+  const kept = (pane: Pane) => pane.content.kind !== "thread" || alive(pane.content.threadId);
+  const root = keep(layout.root, kept);
+  if (root === null) return null;
+  const all = panes(layout);
+  const at = all.findIndex((pane) => pane.paneId === layout.focusedPaneId);
+  const focus = [...all.slice(at), ...all.slice(0, at).reverse()].find(kept)!;
+  return { root, focusedPaneId: focus.paneId };
+}
+
+function keep(node: LayoutNode, kept: (pane: Pane) => boolean): LayoutNode | null {
+  if (node.type === "pane") return kept(node) ? node : null;
+  const survivors = node.children.flatMap((child, i) => {
+    const survivor = keep(child, kept);
+    return survivor === null ? [] : [{ node: survivor, size: node.sizes[i] }];
+  });
+  if (survivors.length <= 1) return survivors[0]?.node ?? null;
+  const total = sum(survivors.map(({ size }) => size));
+  return { ...node, sizes: survivors.map(({ size }) => size / total), children: survivors.map(({ node }) => node) };
+}
+
 function leaves(node: LayoutNode): Pane[] {
   return node.type === "pane" ? [node] : node.children.flatMap(leaves);
 }

@@ -1,10 +1,11 @@
 // The one owner of this window's tabs. bb owns what is on screen: whenever bb's layout or route changes,
 // observe copies bb's layout into the live tab, so a focus change, a divider drag or any other way bb
 // opens a thread updates the tab with no code of its own. The plugin writes bb's layout only when the user
-// changes tabs, one write at a time.
+// changes tabs, one write at a time. Every change is saved, so a reload brings the tabs back.
 import type { BbNavigate, PluginSidebarProject, PluginSidebarThread, PluginSidebarThreadsState } from "@get-bb/plugin-sdk/app";
 import { focused, single, withFocus, withPaneIdsApart, type Layout } from "../model/layout.ts";
-import { adopt, close, live, locate, makeLive, nth, open, seed, step, tabOf, type TabSet } from "../model/tab-set.ts";
+import type { SavedTabs } from "../model/saved.ts";
+import { adopt, close, live, locate, makeLive, nth, open, prune, seed, step, tabOf, type TabSet } from "../model/tab-set.ts";
 
 /** The routes the controller takes, from the overlay's useBbNavigate. */
 export type Nav = Pick<BbNavigate, "toThread" | "toCompose">;
@@ -29,8 +30,8 @@ export type Screen = "thread" | "workspace" | "page";
 /** A click on a sidebar thread row the tabs take: a plain click, or a middle-click for a new tab. */
 export type SidebarGesture = "plain" | "newTab";
 
-/** The overlay's navigator, and the signal its unbind aborts. */
-type Binding = { nav: Nav; signal: AbortSignal };
+/** The overlay's navigator, where the tabs are saved, and the signal its unbind aborts. */
+type Binding = { nav: Nav; saved: SavedTabs; signal: AbortSignal };
 
 /**
  * What the strip renders. `selectedId` is null on routes that show no tab (Settings, plugin pages, bb's own
@@ -62,6 +63,7 @@ export function createTabsController(host: HostLayout) {
   function commit(): void {
     if (set === null) return;
     snapshot = { set, selectedId, threads, projects };
+    binding?.saved.save(set);
     listeners.forEach((listener) => listener());
   }
 
@@ -158,12 +160,15 @@ export function createTabsController(host: HostLayout) {
     snapshot: (): TabsSnapshot | null => snapshot,
 
     /**
-     * The navigator tab switches route with; the overlay binds it before its first observe, and unbinds it
-     * when it unmounts. After the unbind bb is neither written nor routed, even by a write in flight.
+     * The navigator tab switches route with, and where the tabs are saved; the overlay binds them before its
+     * first observe, and unbinds them when it unmounts. The first bind loads the saved tabs, whose live tab
+     * then takes bb's own restored layout at that observe, so starting up writes nothing to bb. After the
+     * unbind bb is neither written nor routed, even by a write in flight, and nothing is saved.
      */
-    bind(nav: Nav): () => void {
+    bind(nav: Nav, saved: SavedTabs): () => void {
+      set ??= saved.load();
       const abort = new AbortController();
-      binding = { nav, signal: abort.signal };
+      binding = { nav, saved, signal: abort.signal };
       return () => {
         abort.abort();
         binding = null;
@@ -173,10 +178,14 @@ export function createTabsController(host: HostLayout) {
 
     observe,
 
-    /** The sidebar's thread index, once it is ready. */
+    /**
+     * The sidebar's index of active threads, once it is ready. Parked tabs drop the threads it lacks: those
+     * were archived or deleted.
+     */
     syncThreads(index: PluginSidebarThreadsState): void {
       threads = new Map(index.threads.map((thread) => [thread.id, thread]));
       projects = new Map(index.projects.map((project) => [project.id, project]));
+      if (set !== null) set = prune(set, (threadId) => threads.has(threadId));
       commit();
     },
 

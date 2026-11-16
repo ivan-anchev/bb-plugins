@@ -1,6 +1,6 @@
 ---
 name: horizontal-tabs
-description: Explain the Horizontal Tabs plugin's tab strip at the top of bb's main panel, where each tab holds a whole split layout. Use when the user asks what a tab holds or shows, how to open, switch or close tabs, what clicking, middle-clicking or Cmd/Ctrl-clicking a thread in the sidebar does, what bb's next/previous thread and open thread N shortcuts do with tabs, why a thread is open in two tabs, how to switch tabs from the keyboard or change those shortcuts, why Ctrl+Tab does nothing in a browser, why a tab's title or project initials changed, why no tab is selected, why a maximized pane came back unmaximized, or why the strip is missing.
+description: Explain the Horizontal Tabs plugin's tab strip at the top of bb's main panel, where each tab holds a whole split layout. Use when the user asks what a tab holds or shows, how to open, switch or close tabs, what clicking, middle-clicking or Cmd/Ctrl-clicking a thread in the sidebar does, what bb's next/previous thread and open thread N shortcuts do with tabs, why a thread is open in two tabs, how to switch tabs from the keyboard or change those shortcuts, why Ctrl+Tab does nothing in a browser, why a tab's title or project initials changed, why no tab is selected, what happens to tabs on a reload or in a new window, why a tab lost a pane or disappeared, why a maximized pane came back unmaximized, or why the strip is missing.
 ---
 
 # Horizontal Tabs
@@ -100,12 +100,35 @@ On Settings, a plugin page or bb's own New thread screen (its sidebar button),
 the strip stays and no tab is selected. Those screens don't change the tab
 that was on screen: click it to get its layout back.
 
+## Reloads and new windows
+
+- **Each window keeps its own tabs.** Reloading the window brings back every
+  tab in its order, with its panes, sizes and focused pane, and the tab that
+  was on screen.
+- **A new window starts from the last tabs saved on this device,** by any
+  window, then goes its own way: opening, closing or changing tabs in one
+  window never changes another window's tabs, even after a reload.
+- Tabs are kept in the browser (or bb Desktop) on this device, not on the bb
+  server, so another device or browser starts with one tab.
+- A tab saved by a newer version of the plugin, or holding a pane this version
+  doesn't know, is left out; the other tabs still come back. When no saved tab
+  can be read, the window starts with one tab showing bb's current layout.
+
+## Archived and deleted threads
+
+- When a thread is archived or deleted, its pane leaves every tab that isn't
+  on screen, without a reload. The panes left take its space, and if it was
+  the tab's focused pane the next pane is focused. A tab with no pane left
+  closes.
+- The tab on screen follows bb: in a split bb closes the thread's pane itself,
+  and a thread open alone stays on screen as bb shows it. Once another tab is
+  on screen, that tab drops the thread the next time bb's thread list changes.
+- Panes that show no thread (New thread, a plugin page) stay.
+
 ## What a tab doesn't keep
 
 - **Maximize:** switching tabs always shows every pane of the tab; a pane
   maximized with Ctrl+Shift+E comes back unmaximized, at its sizes.
-- **Reloads:** for now tabs last until the window reloads; bb then shows its
-  own layout as one tab.
 
 ## When the strip is missing
 

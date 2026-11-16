@@ -2,6 +2,8 @@ import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { focused, panes, single, type Layout, type Pane } from "../model/layout.ts";
+import type { SavedTabs } from "../model/saved.ts";
+import type { TabSet } from "../model/tab-set.ts";
 import { createTabsController, type HostLayout, type Nav } from "./tabs-controller.ts";
 
 /**
@@ -46,6 +48,22 @@ function fakeHost(initial: Layout | null): FakeHost {
 
 const nav: Nav = { toThread() {}, toCompose() {} };
 
+/** The window's saved tabs: `set` is what is saved, and `saves` counts the saves. */
+type FakeSaved = SavedTabs & { set: TabSet | null; saves: number };
+
+function fakeSaved(initial: TabSet | null = null): FakeSaved {
+  const saved: FakeSaved = {
+    set: initial,
+    saves: 0,
+    load: () => saved.set,
+    save(set) {
+      saved.set = set;
+      saved.saves += 1;
+    },
+  };
+  return saved;
+}
+
 /** Lets the controller's pump run past its awaits. */
 function flush(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
@@ -59,11 +77,11 @@ const alpha = thread("thr_alpha");
 const newThread = single({ kind: "new-thread" }, "pane-1");
 const pluginPage = single({ kind: "plugin-panel", pluginId: "notes", panelPath: "notes", subPath: "" }, "pane-1");
 
-function controller(initial: Layout | null) {
+function controller(initial: Layout | null, saved = fakeSaved()) {
   const host = fakeHost(initial);
   const tabs = createTabsController(host);
-  const unbind = tabs.bind(nav);
-  return { host, tabs, unbind };
+  const unbind = tabs.bind(nav, saved);
+  return { host, tabs, unbind, saved };
 }
 
 function snapshotOf(tabs: ReturnType<typeof createTabsController>) {
@@ -468,4 +486,71 @@ test("a new-tab gesture is left to bb until the sidebar's index has the thread",
   assert.equal(tabs.routeSidebarClick("thr_echo", "newTab"), false);
   assert.equal(host.shown.length, 0);
   assert.equal(snapshotOf(tabs).set.tabs.length, 2);
+});
+
+/** Saved tabs on Alpha | Bravo, Delta, and Charlie, with Delta's live: what a window saved before its reload. */
+function savedBeforeReload(): TabSet {
+  return {
+    tabs: [
+      { id: "t1", layout: split(threadPane("thr_alpha", "t1-1"), threadPane("thr_bravo", "t1-2")) },
+      { id: "t2", layout: thread("thr_delta", "t2-1") },
+      { id: "t3", layout: thread("thr_charlie", "t3-1") },
+    ],
+    liveId: "t2",
+  };
+}
+
+test("after a reload the saved tabs come back, the live one selected with bb's restored layout, and nothing is written to bb", () => {
+  const restored = thread("thr_delta", "t2-1");
+  const { host, tabs } = controller(restored, fakeSaved(savedBeforeReload()));
+  tabs.observe("thread");
+  const { set, selectedId } = snapshotOf(tabs);
+  assert.deepEqual(set, savedBeforeReload());
+  assert.equal(selectedId, "t2");
+  assert.equal(host.shown.length, 0);
+});
+
+test("a saved live tab takes the layout bb restored, and parked tabs keep theirs", () => {
+  const restored = split(threadPane("thr_delta", "t2-1"), threadPane("thr_echo", "t2-2"));
+  const { tabs } = controller(restored, fakeSaved(savedBeforeReload()));
+  tabs.observe("thread");
+  const [t1, , t3] = savedBeforeReload().tabs;
+  assert.deepEqual(snapshotOf(tabs).set, { tabs: [t1, { id: "t2", layout: restored }, t3], liveId: "t2" });
+});
+
+test("every change is saved, and nothing once unbound", async () => {
+  const { host, tabs, unbind, saved } = controller(alpha);
+  tabs.observe("thread");
+  assert.deepEqual(saved.set, snapshotOf(tabs).set);
+  tabs.openNew();
+  assert.deepEqual(saved.set, snapshotOf(tabs).set);
+  await host.settle();
+  const saves = saved.saves;
+  unbind();
+  tabs.close(snapshotOf(tabs).set.liveId);
+  assert.equal(saved.saves, saves);
+});
+
+test("only the first bind loads the saved tabs", () => {
+  const { tabs } = controller(alpha);
+  tabs.observe("thread");
+  const before = snapshotOf(tabs).set;
+  tabs.bind(nav, fakeSaved(savedBeforeReload()));
+  tabs.observe("thread");
+  assert.deepEqual(snapshotOf(tabs).set, before);
+});
+
+test("archived or deleted threads leave parked tabs, a parked tab left empty goes, and the live tab is left to bb", () => {
+  const { tabs } = controller(thread("thr_delta", "t2-1"), fakeSaved(savedBeforeReload()));
+  tabs.observe("thread");
+  const index = ["thr_alpha", "thr_echo"].map((id) => sidebarThread(id, "proj_a"));
+  tabs.syncThreads({ status: "ready", threads: index, projects: [], sections: [], experimental_archived: null });
+  const { set } = snapshotOf(tabs);
+  assert.deepEqual(set, {
+    tabs: [
+      { id: "t1", layout: thread("thr_alpha", "t1-1") },
+      { id: "t2", layout: thread("thr_delta", "t2-1") },
+    ],
+    liveId: "t2",
+  });
 });
