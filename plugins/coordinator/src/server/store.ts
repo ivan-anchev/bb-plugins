@@ -7,6 +7,7 @@ import { closedKindSchema, doneCriteriaSchema, executionSchema, placementSchema,
 import { handoffIdSchema, handoffReportSchema, type Handoff, type HandoffId, type NewHandoff } from "../model/handoff.ts";
 import { inboxEventSchema, type InboxEvent, type StoredEvent } from "../model/inbox/inbox-event.ts";
 import { memoryRevisionSchema, type MemoryFile, type MemoryRevision, type MemoryVersion } from "../model/memory-file.ts";
+import { nextDue, reminderIdSchema, type Reminder, type ReminderId } from "../model/reminder.ts";
 import { meaningfulChanges, prSnapshotSchema, prUnavailableSchema, type CiVerdict, type PrSnapshot, type PrStatus, type PrUnavailable } from "../model/verdict/pr.ts";
 import { coordinatorIdSchema, crewIdSchema, roleSchema, type CoordinatorId, type CrewId, type Role } from "../model/role.ts";
 import { isSettled, verdictSchema, type Verdict } from "../model/verdict/verdict.ts";
@@ -63,6 +64,14 @@ const MIGRATIONS = [
   // The tick settles verdicts that wait for CI as well.
   `DROP INDEX verdicts_unsettled`,
   `CREATE INDEX verdicts_unsettled ON verdicts (handoff_id) WHERE json_extract(verdict, '$.settlement.kind') IN ('pending', 'sending-back', 'waiting-for-ci')`,
+  // A reminder a coordinating thread set: its note, when it is next due, and how often it repeats
+  // (null: once). why AUTOINCREMENT: a cancelled or spent id is never reused, so cancelling by an
+  // old id can't take a newer reminder.
+  `CREATE TABLE reminders (id INTEGER PRIMARY KEY AUTOINCREMENT, coordinator_id TEXT NOT NULL REFERENCES coordinators (id),
+     note TEXT NOT NULL, due_at INTEGER NOT NULL, every_ms INTEGER)`,
+  // The tick reads every reminder that is due; crew_catch_up lists a coordinating thread's.
+  `CREATE INDEX reminders_due ON reminders (due_at)`,
+  `CREATE INDEX reminders_of_coordinator ON reminders (coordinator_id)`,
 ];
 
 /** Where a verdict must still be for a change to apply: queued, or running in this verifier thread. */
@@ -604,6 +613,58 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
       markPolled(coordinatorId, crewId, unavailable, at);
     },
 
+    /** Sets a reminder for the coordinating thread, and returns it with its id. */
+    insertReminder(coordinatorId: CoordinatorId, { note, dueAt, everyMs }: Omit<Reminder, "id">): Reminder {
+      const row = db().prepare("INSERT INTO reminders (coordinator_id, note, due_at, every_ms) VALUES (?, ?, ?, ?) RETURNING id, note, due_at AS dueAt, every_ms AS everyMs").get(coordinatorId, note, dueAt, everyMs);
+      return toReminder(row);
+    },
+
+    /** The coordinating thread's reminders, soonest due first. */
+    reminders(coordinatorId: CoordinatorId): Reminder[] {
+      return db().prepare("SELECT id, note, due_at AS dueAt, every_ms AS everyMs FROM reminders WHERE coordinator_id = ? ORDER BY due_at, id").all(coordinatorId).map(toReminder);
+    },
+
+    /** Cancels one of the coordinating thread's reminders, and returns it (null: it has none by that id). */
+    cancelReminder(coordinatorId: CoordinatorId, id: ReminderId): Reminder | null {
+      const row = db().prepare("DELETE FROM reminders WHERE id = ? AND coordinator_id = ? RETURNING id, note, due_at AS dueAt, every_ms AS everyMs").get(rowIdOf(id), coordinatorId);
+      return row === undefined ? null : toReminder(row);
+    },
+
+    /** Every reminder due at `now`, with its coordinating thread and that thread's id. */
+    dueReminders(now: number): { id: ReminderId; coordinatorId: CoordinatorId; threadId: string }[] {
+      return db()
+        .prepare(
+          `SELECT m.id, m.coordinator_id AS coordinatorId, r.thread_id AS threadId
+             FROM reminders m JOIN coordinators c ON c.id = m.coordinator_id JOIN roles r ON r.ticket = c.ticket
+            WHERE m.due_at <= ? AND r.thread_id IS NOT NULL
+            ORDER BY m.due_at, m.id`,
+        )
+        .all(now)
+        .map((row) => z.object({ id: reminderRowIdSchema, coordinatorId: coordinatorIdSchema, threadId: z.string() }).parse(row));
+    },
+
+    /** Deletes every reminder of the coordinating thread, due or not. */
+    deleteReminders(coordinatorId: CoordinatorId): void {
+      db().prepare("DELETE FROM reminders WHERE coordinator_id = ?").run(coordinatorId);
+    },
+
+    /**
+     * Records a `reminder` event for a reminder still due at `now`, and removes a one-off or moves
+     * a repeating one to its next time after now, together. One cancelled or already recorded
+     * since it was read records nothing.
+     */
+    fireReminder(id: ReminderId, now: number): void {
+      db().transaction(() => {
+        const row = db().prepare("SELECT id, coordinator_id AS coordinatorId, note, due_at AS dueAt, every_ms AS everyMs FROM reminders WHERE id = ? AND due_at <= ?").get(rowIdOf(id), now);
+        if (row === undefined) return;
+        const { coordinatorId, ...reminder } = reminderRowSchema.extend({ coordinatorId: coordinatorIdSchema }).parse(row);
+        insertEvent(coordinatorId, { kind: "reminder", reminderId: reminder.id, note: reminder.note, dueAt: reminder.dueAt, everyMs: reminder.everyMs }, now);
+        const next = nextDue(reminder, now);
+        if (next === null) db().prepare("DELETE FROM reminders WHERE id = ?").run(rowIdOf(id));
+        else db().prepare("UPDATE reminders SET due_at = ? WHERE id = ?").run(next, rowIdOf(id));
+      })();
+    },
+
     /** Every coordinator whose thread is bound, newest first. */
     coordinators(): Coordinator[] {
       return db()
@@ -697,6 +758,12 @@ const prStatusRowSchema = z.union([
     handoffAtRead: handoffIdSchema.nullable(),
   }),
 ]);
+
+/** A reminder's row id is its number: `r7` is row 7. */
+const reminderRowIdSchema = z.number().int().transform((id) => reminderIdSchema.parse(`r${id}`));
+const rowIdOf = (id: ReminderId): number => Number(id.slice(1));
+const reminderRowSchema = z.object({ id: reminderRowIdSchema, note: z.string(), dueAt: z.number(), everyMs: z.number().nullable() });
+const toReminder = (row: unknown): Reminder => reminderRowSchema.parse(row);
 
 const eventRowSchema = z.object({ id: z.number().int(), at: z.number(), event: z.string().transform((json) => inboxEventSchema.parse(JSON.parse(json))) });
 const toEvent = (row: unknown): StoredEvent => eventRowSchema.parse(row);

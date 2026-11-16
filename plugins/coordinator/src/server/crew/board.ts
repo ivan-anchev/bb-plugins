@@ -24,20 +24,26 @@ export type BoardBb = ListBb<ListedThread> & TurnsBb;
 // bb lists at most 200 threads by id per call.
 const IDS_PER_LIST = 200;
 
+type ListableThread = { id: string; archivedAt: number | null; deletedAt: number | null };
+
 /**
  * The threads among `threadIds` that are neither archived nor deleted, hidden ones included. why by
  * id, not by parent: a crew someone moved under another thread is still this coordinating
  * thread's crew. why filter here: bb lists archived threads by id too.
  */
-export async function listedThreads<Thread extends { id: string; archivedAt: number | null; deletedAt: number | null }>(bb: ListBb<Thread>, threadIds: string[]): Promise<Map<string, Thread>> {
-  const listed = new Map<string, Thread>();
+export async function listedThreads<Thread extends ListableThread>(bb: ListBb<Thread>, threadIds: string[]): Promise<Map<string, Thread>> {
+  const threads = await threadsById(bb, threadIds);
+  return new Map([...threads].filter(([, thread]) => thread.archivedAt === null && thread.deletedAt === null));
+}
+
+/** The threads among `threadIds` that bb lists, archived and hidden ones included. */
+export async function threadsById<Thread extends ListableThread>(bb: ListBb<Thread>, threadIds: string[]): Promise<Map<string, Thread>> {
+  const threads = new Map<string, Thread>();
   for (let start = 0; start < threadIds.length; start += IDS_PER_LIST) {
     const threadIdsOfPage = threadIds.slice(start, start + IDS_PER_LIST);
-    for (const thread of await bb.sdk.threads.list({ threadIds: threadIdsOfPage, includeHidden: true, limit: IDS_PER_LIST })) {
-      if (thread.archivedAt === null && thread.deletedAt === null) listed.set(thread.id, thread);
-    }
+    for (const thread of await bb.sdk.threads.list({ threadIds: threadIdsOfPage, includeHidden: true, limit: IDS_PER_LIST })) threads.set(thread.id, thread);
   }
-  return listed;
+  return threads;
 }
 
 const DIGEST = memoryFileSchema.parse("DIGEST.md");

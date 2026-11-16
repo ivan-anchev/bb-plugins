@@ -5,6 +5,7 @@ import type { PluginAgentToolContext, PluginAgentToolResult } from "@get-bb/plug
 import { z } from "zod";
 import { briefSchema, doneCriteriaSchema, requestedPlacementSchema, titlesOf, type Crew } from "../../model/crew.ts";
 import { memoryContentSchema, memoryFileSchema, memoryVersionSchema } from "../../model/memory-file.ts";
+import { AT_FORMS, parseAt, parseEvery, reminderIdSchema, reminderNoteSchema } from "../../model/reminder.ts";
 import { crewIdSchema, type CoordinatorId, type CrewId, type Role } from "../../model/role.ts";
 import type { BoardReader } from "../crew/board.ts";
 import { isStarted, type Crews } from "../crew/crews.ts";
@@ -14,7 +15,7 @@ import type { Store } from "../store.ts";
 import { boardText, closeText, detailText, startText, supersedeText } from "./crew-text.ts";
 import { VERDICT } from "../verify/verdict-tool.ts";
 import { HANDOFF } from "./crew-tools.ts";
-import { updatesText } from "./inbox-text.ts";
+import { remindersText, reminderText, updatesText } from "./inbox-text.ts";
 import { catchUpText, readText, writeResult } from "./memory-text.ts";
 import { failed, type ToolsBb } from "./tool-kit.ts";
 
@@ -25,16 +26,17 @@ const START = "crew_start";
 const MESSAGE = "crew_message";
 const READ = "crew_read";
 const CLOSE = "crew_close";
+const REMIND = "crew_remind";
 
 /** What configure offers a coordinating thread. */
-export const COORDINATOR_TOOLS = [CATCH_UP, MEMORY_READ, MEMORY_WRITE, START, MESSAGE, READ, CLOSE];
+export const COORDINATOR_TOOLS = [CATCH_UP, MEMORY_READ, MEMORY_WRITE, START, MESSAGE, READ, CLOSE, REMIND];
 /** What configure offers a crew thread: its coordinating thread's memory, read only, and its handoff. */
 export const CREW_TOOLS = [MEMORY_READ, HANDOFF];
 /** What configure offers a verifier thread: its coordinating thread's memory, read only, and its verdict. */
 export const VERIFIER_TOOLS = [MEMORY_READ, VERDICT];
 
 type Deps = {
-  store: Pick<Store, "roleOfThread" | "crew" | "crews" | "handoff">;
+  store: Pick<Store, "roleOfThread" | "crew" | "crews" | "handoff" | "reminders" | "insertReminder" | "cancelReminder">;
   inbox: Pick<Inbox, "takeUnread">;
   memory: MemoryRoot;
   crews: Pick<Crews, "start" | "supersede" | "message" | "detail" | "close">;
@@ -67,14 +69,14 @@ export function registerCoordinatorTools(bb: ToolsBb, { store, inbox, memory, cr
   bb.agents.registerTool({
     name: CATCH_UP,
     description:
-      "Catch up: returns every update since your last catch-up in full (crews' handoffs, a done one with its verifier's verdict, crews that failed, wait on the user or stopped without a handoff, and the user's memory edits and verification switch), then the board (every crew you started, under Needs you, Ready for review, Verifying, Working, Idle or Done, with its thread and branch) and your memory files (MEMORY.md, GOAL.md, PLAN.md, PREFERENCES.md, CREW.md, DIGEST.md) in full, each with its version, and names any other memory file. Each update is returned once. Call it first on every wake.",
+      "Catch up: returns every update since your last catch-up in full (crews' handoffs, a done one with its verifier's verdict, crews that failed, wait on the user or stopped without a handoff, your reminders that came due, and the user's memory edits and verification switch), then the board (every crew you started, under Needs you, Ready for review, Verifying, Working, Idle or Done, with its thread and branch), your reminders with their ids, and your memory files (MEMORY.md, GOAL.md, PLAN.md, PREFERENCES.md, CREW.md, DIGEST.md) in full, each with its version, and names any other memory file. Each update is returned once. Call it first on every wake.",
     presentation: { label: { pending: "Catching up", completed: "Caught up" }, icon: { glyph: "Workflow" } },
     parameters: z.object({}),
     execute: forCoordinator(CATCH_UP, async (id) => {
       const updates = updatesText(inbox.takeUnread(id), { titles: titlesOf(store.crews(id)), handoff: store.handoff });
       // why caught: the updates and the memory are still worth reading when bb's thread list can't be.
       const rows = await board.rows(id).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
-      return `${updates}\n\n${boardText(rows)}\n\n${catchUpText(memory.of(id))}`;
+      return `${updates}\n\n${boardText(rows)}\n\n${remindersText(store.reminders(id))}\n\n${catchUpText(memory.of(id))}`;
     }),
   });
 
@@ -162,6 +164,34 @@ export function registerCoordinatorTools(bb: ToolsBb, { store, inbox, memory, cr
     presentation: { label: { pending: "Closing a crew", completed: "Closed a crew" }, icon: { glyph: "Check" } },
     parameters: z.object({ crewId: crewIdSchema, action: z.enum(["stop", "resolve", "archive"]) }),
     execute: forCrew(CLOSE, async (crew, { action }) => closeText(crew.id, await crews.close(crew, action))),
+  });
+
+  bb.agents.registerTool({
+    name: REMIND,
+    description:
+      "Set yourself a reminder instead of waiting or polling: when it comes due, the plugin wakes you with its note. Give note and at, and every to repeat it; or give only cancel to cancel one. Due reminders are checked once a minute. A repeating one that was missed several times (the server was down) wakes you once, then keeps its times. crew_catch_up lists your reminders with their ids.",
+    presentation: { label: { pending: "Updating reminders", completed: "Updated reminders" }, icon: { glyph: "Clock" } },
+    parameters: z.object({
+      note: reminderNoteSchema.optional().describe("What to do when it comes due, in one line, such as \"check on c1\". It wakes you as written. Required unless you give cancel."),
+      at: z.string().optional().describe(`When it first comes due: ${AT_FORMS}. Required unless you give cancel.`),
+      every: z.string().optional().describe('How often it comes due again after that, such as "30m", "2h" or "every 1d". Leave it out for a one-off.'),
+      cancel: reminderIdSchema.optional().describe("The id of one of your reminders to cancel, such as r3. Give nothing else with it."),
+    }),
+    execute: forCoordinator(REMIND, (id, { note, at, every, cancel }) => {
+      if (cancel !== undefined) {
+        if (note !== undefined || at !== undefined || every !== undefined) return failed(`${REMIND} either sets a reminder (note, at and every) or cancels one (cancel alone), not both.`);
+        const cancelled = store.cancelReminder(id, cancel);
+        return cancelled === null ? failed(`You have no reminder ${cancel}. crew_catch_up lists your reminders.`) : `Cancelled ${reminderText(cancelled)}. It won't wake you.`;
+      }
+      if (note === undefined || at === undefined) return failed(`${REMIND} needs a note and at to set a reminder, or cancel alone to cancel one.`);
+      const now = Date.now();
+      const dueAt = parseAt(at, now);
+      if (!dueAt.ok) return failed(dueAt.error);
+      const everyMs = every === undefined ? null : parseEvery(every);
+      if (everyMs?.ok === false) return failed(everyMs.error);
+      const reminder = store.insertReminder(id, { note, dueAt: dueAt.ms, everyMs: everyMs?.ms ?? null });
+      return `Set ${reminderText(reminder)}. It wakes you with its note when it comes due; cancel it with ${REMIND} and cancel: "${reminder.id}".`;
+    }),
   });
 }
 

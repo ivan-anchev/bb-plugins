@@ -43,7 +43,7 @@ export default function plugin(bb: BbPluginApi): void {
     // why each caught: a pass that can't read bb or GitHub must not keep the next from running, nor the doorbells from ringing.
     await prWatch.tick(Date.now()).catch((error: unknown) => bb.log.warn(`Could not read the crews' pull requests; the next tick tries again: ${messageOf(error)}`));
     await verify.reconcile().catch((error: unknown) => bb.log.warn(`Could not reconcile the verifiers; the next tick tries again: ${messageOf(error)}`));
-    await inbox.tick();
+    await inbox.tick(Date.now());
   });
 
   bb.rpc.register(coordinatorContract, {

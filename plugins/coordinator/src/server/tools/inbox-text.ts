@@ -1,8 +1,9 @@
-// What crew_catch_up and crew_read say about events and handoffs: everything, whole, however long.
-// This is where a crew's own words reach the coordinating thread, as a tool result, each marked as
-// the crew's.
+// What crew_catch_up and crew_read say about events, handoffs and reminders: everything, whole,
+// however long. This is where a crew's own words reach the coordinating thread, as a tool result,
+// each marked as the crew's.
 import type { Handoff, HandoffId } from "../../model/handoff.ts";
 import type { InboxEvent, StoredEvent } from "../../model/inbox/inbox-event.ts";
+import { intervalText, type Reminder } from "../../model/reminder.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
 import type { CrewId } from "../../model/role.ts";
 import { allPassed, ciVerdictOf, judge, mayHaveReachedCrew, outcome, type Verdict } from "../../model/verdict/verdict.ts";
@@ -28,6 +29,10 @@ function eventText({ event, at }: StoredEvent, { titles, handoff }: Lookups): st
       ? `### The user turned verification on\n\n${when} Done handoffs made from now on get an independent verifier, and reach you with its verdict.`
       : `### The user turned verification off\n\n${when} Done handoffs made from now on reach you unverified: read their evidence before you call the work done.`;
   }
+  if (event.kind === "reminder") {
+    const repeats = event.everyMs === null ? "It was a one-off, so it is gone." : `It repeats every ${intervalText(event.everyMs)}; Reminders below says when it is next due.`;
+    return `### Your reminder ${event.reminderId}: ${event.note}\n\n${when} It was due at ${new Date(event.dueAt).toISOString()}. ${repeats}`;
+  }
   const crew = crewName(event, titles);
   switch (event.kind) {
     case "handoff":
@@ -49,6 +54,17 @@ function eventText({ event, at }: StoredEvent, { titles, handoff }: Lookups): st
     default:
       return event satisfies never;
   }
+}
+
+/** The reminders section of a catch-up: every reminder the thread has set, soonest due first. */
+export function remindersText(reminders: readonly Reminder[]): string {
+  if (reminders.length === 0) return "## Reminders\n\nNone set. Set one with crew_remind instead of waiting or polling.";
+  return ["## Reminders\n\nCancel one with crew_remind and its id as cancel.", ...reminders.map((reminder) => `- ${reminderText(reminder)}`)].join("\n\n");
+}
+
+/** One reminder in a line: its id, when it is next due, how often it repeats, and its note. */
+export function reminderText({ id, note, dueAt, everyMs }: Reminder): string {
+  return `${id}, due ${new Date(dueAt).toISOString()}${everyMs === null ? "" : `, then every ${intervalText(everyMs)}`}: ${note}`;
 }
 
 /** The handoff an event names. why throw: an event is inserted with its handoff, in one transaction. */

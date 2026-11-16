@@ -10,10 +10,14 @@ import { doorbellText } from "../../model/inbox/wake-text.ts";
 import type { PrSnapshot, PrUnavailable } from "../../model/verdict/pr.ts";
 import type { CoordinatorId, CrewId } from "../../model/role.ts";
 import type { Verdict } from "../../model/verdict/verdict.ts";
+import { threadsById } from "../crew/board.ts";
 import type { Settlement, Store, VerdictFrom } from "../store.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
 type SendArgs = Parameters<Threads["send"]>[0];
+
+/** A coordinating thread as the tick reads it, to fire its reminders. */
+type ListedThread = { id: string; archivedAt: number | null; deletedAt: number | null };
 
 /** A message bb holds in a thread's queue, down to the fields the tick reads. */
 type QueuedMessage = Pick<Awaited<ReturnType<Threads["queuedMessages"]["list"]>>[number], "id" | "state" | "failureReason">;
@@ -26,6 +30,7 @@ type InboxBb = {
   sdk: {
     threads: {
       send(args: SendArgs): Promise<{ delivery: "sent" } | { delivery: "queued"; queuedMessage: { id: string } }>;
+      list(args: { threadIds: string[]; includeHidden: true; limit: number }): Promise<ListedThread[]>;
       queuedMessages: {
         list(args: { threadId: string }): Promise<QueuedMessage[]>;
         delete(args: { threadId: string; queuedMessageId: string }): Promise<unknown>;
@@ -54,6 +59,9 @@ type InboxStore = Pick<
   | "reopenDoorbell"
   | "savePrRead"
   | "markPrUnavailable"
+  | "dueReminders"
+  | "fireReminder"
+  | "deleteReminders"
 >;
 
 type Doorbell = ReturnType<Store["doorbells"]>[number];
@@ -163,6 +171,26 @@ export function createInbox({ bb, store, onChange }: Deps) {
     }
   }
 
+  /**
+   * Records every reminder due at `now` whose coordinating thread bb lists, unless it was cancelled
+   * or recorded since it was read (see fireReminder). One of a thread bb lists as archived stays
+   * due, and fires once the thread is unarchived. Every reminder of a thread bb deleted is deleted,
+   * so none is read again. why no ring here: the tick's own ring follows, so one doorbell carries
+   * them with whatever else the tick found.
+   */
+  async function fireDueReminders(now: number): Promise<void> {
+    const due = store.dueReminders(now);
+    if (due.length === 0) return;
+    const threads = await threadsById(bb, [...new Set(due.map((reminder) => reminder.threadId))]);
+    if (disposed) return;
+    for (const { id, coordinatorId, threadId } of due) {
+      const thread = threads.get(threadId);
+      // why both: bb leaves a deleted thread out of a list by id, or lists it with deletedAt.
+      if (thread === undefined || thread.deletedAt !== null) store.deleteReminders(coordinatorId);
+      else if (thread.archivedAt === null) store.fireReminder(id, now);
+    }
+  }
+
   function recorded(id: CoordinatorId): void {
     onChange(id);
     ringSoon(id);
@@ -235,12 +263,14 @@ export function createInbox({ bb, store, onChange }: Deps) {
     },
 
     /**
-     * The once-a-minute pass. It forgets a queued doorbell bb no longer has, because its
-     * `message.dispatched` can be missed while the plugin reloads, and one bb gave up sending, then
-     * rings every coordinating thread with an event left unannounced (a failed send, a crash after
-     * a write, a doorbell bb gave up on).
+     * The once-a-minute pass, at `now`. It records the reminders that came due, forgets a queued
+     * doorbell bb no longer has, because its `message.dispatched` can be missed while the plugin
+     * reloads, and one bb gave up sending, then rings every coordinating thread with an event left
+     * unannounced (a reminder, a failed send, a crash after a write, a doorbell bb gave up on).
      */
-    async tick(): Promise<void> {
+    async tick(now: number): Promise<void> {
+      // why caught: reminders bb can't look up must not keep the doorbells from ringing.
+      await fireDueReminders(now).catch((error: unknown) => bb.log.warn(`Could not check the reminders; the next tick tries again: ${messageOf(error)}`));
       for (const doorbell of store.doorbells()) {
         if (disposed) return;
         await check(doorbell);
