@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { single, type Layout } from "./layout.ts";
-import { adopt, close, makeLive, nth, open, seed, step, type TabSet } from "./tab-set.ts";
+import { single, type Layout, type Pane } from "./layout.ts";
+import { adopt, close, locate, makeLive, nth, open, seed, step, type TabSet } from "./tab-set.ts";
 
 function threadLayout(threadId: string): Layout {
   return single({ kind: "thread", projectId: "proj_a", threadId }, "pane-1");
@@ -84,4 +84,26 @@ test("nth counts from 1 and finds nothing past the last tab", () => {
   assert.equal(nth(set, 1)?.id, "t1");
   assert.equal(nth(set, 3)?.id, "t3");
   assert.equal(nth(set, 4), undefined);
+});
+
+test("locate finds the tab and pane showing a thread, the live tab first, then from the left", () => {
+  const pane = (paneId: string, threadId: string): Pane => ({ type: "pane", paneId, content: { kind: "thread", projectId: "proj_a", threadId } });
+  const split = (left: Pane, right: Pane): Layout => ({ root: { type: "split", dir: "row", sizes: [0.5, 0.5], children: [left, right] }, focusedPaneId: left.paneId });
+  const set: TabSet = {
+    tabs: [
+      { id: "t1", layout: split(pane("t1-1", "thr_a"), pane("t1-2", "thr_b")) },
+      { id: "t2", layout: split(pane("t2-1", "thr_c"), pane("t2-2", "thr_b")) },
+      { id: "t3", layout: split(pane("t3-1", "thr_b"), pane("t3-2", "thr_a")) },
+    ],
+    liveId: "t3",
+  };
+  const found = (threadId: string) => {
+    const hit = locate(set, threadId);
+    return hit && `${hit.tab.id}/${hit.pane.paneId}`;
+  };
+  assert.equal(found("thr_b"), "t3/t3-1");
+  assert.equal(found("thr_a"), "t3/t3-2");
+  assert.equal(found("thr_c"), "t2/t2-1");
+  assert.equal(locate({ ...set, liveId: "t2" }, "thr_a")?.tab.id, "t1");
+  assert.equal(found("thr_z"), undefined);
 });

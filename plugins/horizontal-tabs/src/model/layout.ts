@@ -64,6 +64,11 @@ export function focused(layout: Layout): Pane {
   return panes(layout).find((pane) => pane.paneId === layout.focusedPaneId)!;
 }
 
+/** `layout` with pane `paneId`, one of its own, focused. */
+export function withFocus(layout: Layout, paneId: string): Layout {
+  return { ...layout, focusedPaneId: paneId };
+}
+
 /** One pane showing `content`. */
 export function single(content: PaneContent, paneId: string): Layout {
   return { root: { type: "pane", paneId, content }, focusedPaneId: paneId };

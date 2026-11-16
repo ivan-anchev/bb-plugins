@@ -1,6 +1,7 @@
+import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { focused, panes, single, type Layout } from "../model/layout.ts";
+import { focused, panes, single, type Layout, type Pane } from "../model/layout.ts";
 import { createTabsController, type HostLayout, type Nav } from "./tabs-controller.ts";
 
 /**
@@ -352,4 +353,119 @@ test("tells whether there is a tab to step to, and whether tab N exists", async 
   assert.equal(tabs.canStep(), true);
   assert.equal(tabs.has(2), true);
   assert.equal(tabs.has(3), false);
+});
+
+/** A valid sidebar row for `threadId`, in project `projectId`. */
+function sidebarThread(threadId: string, projectId: string): PluginSidebarThread {
+  return {
+    id: threadId,
+    projectId,
+    title: threadId,
+    titleFallback: null,
+    displayTitle: threadId,
+    parentThreadId: null,
+    lifecycleOwnerThreadId: null,
+    parentNotifications: "auto",
+    sourceThreadId: null,
+    sectionId: null,
+    originKind: null,
+    originPluginId: null,
+    providerId: "claude-code",
+    status: "idle",
+    runtimeStatus: "idle",
+    queuedWork: "none",
+    hasPendingInteraction: false,
+    activity: { workflows: 0, backgroundAgents: 0, backgroundCommands: 0, planMode: 0 },
+    indicator: "none",
+    indicatorLabel: null,
+    isUnread: false,
+    isPinned: false,
+    pinnedAt: null,
+    pinSortKey: null,
+    isArchived: false,
+    archivedAt: null,
+    href: `/projects/${projectId}/threads/${threadId}`,
+    isHidden: false,
+    environment: null,
+    host: null,
+    createdAt: 0,
+    updatedAt: 0,
+    lastReadAt: null,
+    latestAttentionAt: 0,
+  };
+}
+
+function split(left: Pane, right: Pane): Layout {
+  return { root: { type: "split", dir: "row", sizes: [0.5, 0.5], children: [left, right] }, focusedPaneId: left.paneId };
+}
+
+function threadPane(threadId: string, paneId: string): Pane {
+  return { type: "pane", paneId, content: { kind: "thread", projectId: "proj_a", threadId } };
+}
+
+/**
+ * Tab 1 on Alpha | Bravo (Alpha focused), on screen; tab 2 on Delta | Charlie (Delta focused). The sidebar's
+ * index has every thread, Echo's in another project, unless `indexed` is false.
+ */
+async function sidebarTabs(indexed = true) {
+  const { host, tabs } = controller(split(threadPane("thr_alpha", "pane-1"), threadPane("thr_bravo", "pane-2")));
+  tabs.observe("thread");
+  tabs.openNew();
+  await host.settle();
+  host.layout = split(threadPane("thr_delta", "pane-3"), threadPane("thr_charlie", "pane-4"));
+  tabs.observe("thread");
+  const ids = snapshotOf(tabs).set.tabs.map((tab) => tab.id);
+  tabs.activate(ids[0]);
+  await host.settle();
+  if (indexed) {
+    const threads = ["thr_alpha", "thr_bravo", "thr_charlie", "thr_delta"].map((id) => sidebarThread(id, "proj_a"));
+    tabs.syncThreads({ status: "ready", threads: [...threads, sidebarThread("thr_echo", "proj_e")], projects: [], sections: [], experimental_archived: null });
+  }
+  host.shown.length = 0;
+  return { host, tabs, ids };
+}
+
+test("a plain click on a thread another tab shows selects that tab, with the thread's pane focused", async () => {
+  const { host, tabs, ids } = await sidebarTabs();
+  assert.equal(tabs.routeSidebarClick("thr_charlie", "plain"), true);
+  await host.settle();
+  assert.equal(snapshotOf(tabs).selectedId, ids[1]);
+  assert.equal(host.shown.length, 1);
+  assert.equal(focusedThread(host.shown[0]), "thr_charlie");
+  assert.deepEqual(panes(host.shown[0]).map((pane) => pane.content), [
+    { kind: "thread", projectId: "proj_a", threadId: "thr_delta" },
+    { kind: "thread", projectId: "proj_a", threadId: "thr_charlie" },
+  ]);
+});
+
+test("a plain click on a thread the tab on screen shows, or no tab shows, is left to bb", async () => {
+  const { host, tabs } = await sidebarTabs();
+  const before = snapshotOf(tabs);
+  for (const threadId of ["thr_bravo", "thr_alpha", "thr_echo"]) {
+    assert.equal(tabs.routeSidebarClick(threadId, "plain"), false, threadId);
+  }
+  assert.equal(host.shown.length, 0);
+  assert.equal(snapshotOf(tabs), before);
+});
+
+test("a new-tab gesture opens a selected tab right of the one on screen with the thread alone, even one a tab shows", async () => {
+  const { host, tabs, ids } = await sidebarTabs();
+  const opened: string[] = [];
+  for (const [threadId, projectId] of [["thr_echo", "proj_e"], ["thr_alpha", "proj_a"]]) {
+    assert.equal(tabs.routeSidebarClick(threadId, "newTab"), true, threadId);
+    await host.settle();
+    const { set, selectedId } = snapshotOf(tabs);
+    opened.push(set.liveId);
+    assert.equal(selectedId, set.liveId);
+    assert.deepEqual(panes(liveLayout(tabs)).map((pane) => pane.content), [{ kind: "thread", projectId, threadId }]);
+    assert.deepEqual(host.shown.at(-1), liveLayout(tabs));
+  }
+  assert.deepEqual(snapshotOf(tabs).set.tabs.map((tab) => tab.id), [ids[0], ...opened, ids[1]]);
+});
+
+test("a new-tab gesture is left to bb until the sidebar's index has the thread", async () => {
+  const { host, tabs } = await sidebarTabs(false);
+  assert.equal(tabs.routeSidebarClick("thr_echo", "newTab"), false);
+  assert.equal(host.shown.length, 0);
+  assert.equal(snapshotOf(tabs).set.tabs.length, 2);
 });

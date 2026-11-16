@@ -3,8 +3,8 @@
 // opens a thread updates the tab with no code of its own. The plugin writes bb's layout only when the user
 // changes tabs, one write at a time.
 import type { BbNavigate, PluginSidebarProject, PluginSidebarThread, PluginSidebarThreadsState } from "@get-bb/plugin-sdk/app";
-import { focused, single, withPaneIdsApart, type Layout } from "../model/layout.ts";
-import { adopt, close, live, makeLive, nth, open, seed, step, tabOf, type TabSet } from "../model/tab-set.ts";
+import { focused, single, withFocus, withPaneIdsApart, type Layout } from "../model/layout.ts";
+import { adopt, close, live, locate, makeLive, nth, open, seed, step, tabOf, type TabSet } from "../model/tab-set.ts";
 
 /** The routes the controller takes, from the overlay's useBbNavigate. */
 export type Nav = Pick<BbNavigate, "toThread" | "toCompose">;
@@ -25,6 +25,9 @@ export interface HostLayout {
  * a plugin page); or a page that takes the workspace's place (Settings).
  */
 export type Screen = "thread" | "workspace" | "page";
+
+/** A click on a sidebar thread row the tabs take: a plain click, or a middle-click for a new tab. */
+export type SidebarGesture = "plain" | "newTab";
 
 /** The overlay's navigator, and the signal its unbind aborts. */
 type Binding = { nav: Nav; signal: AbortSignal };
@@ -85,6 +88,26 @@ export function createTabsController(host: HostLayout) {
   function activate(id: string): void {
     if (set === null || id === selectedId) return;
     present(set, id, id === set.liveId ? null : live(set).layout);
+  }
+
+  /** A plain click on a thread another tab shows: that tab is shown with the thread's pane focused. */
+  function switchToThread(current: TabSet, threadId: string): boolean {
+    const hit = locate(current, threadId);
+    if (hit === undefined || hit.tab.id === current.liveId) return false;
+    const { tab, pane } = hit;
+    present(makeLive(current, tab.id, withFocus(tab.layout, pane.paneId)), tab.id, live(current).layout);
+    return true;
+  }
+
+  /** A new-tab gesture: a tab right of the live one holding the thread alone, even when another tab shows it. */
+  function openThreadTab(current: TabSet, threadId: string): boolean {
+    const thread = threads.get(threadId);
+    // why: until the sidebar's index has the thread there is no projectId to open it with; bb opens it.
+    if (thread === undefined) return false;
+    const id = newTabId();
+    const layout = single({ kind: "thread", projectId: thread.projectId, threadId }, `${id}-1`);
+    present(open(current, { id, layout }), id, live(current).layout);
+    return true;
   }
 
   /**
@@ -188,6 +211,16 @@ export function createTabsController(host: HostLayout) {
         set = rest;
         commit();
       } else present(rest, rest.liveId, live(set).layout);
+    },
+
+    /**
+     * A sidebar row click, before bb routes it. True when the tabs took it and bb must not route it. False
+     * leaves it to bb, which focuses the thread's pane when the tab on screen shows it, and otherwise opens it
+     * in the focused pane.
+     */
+    routeSidebarClick(threadId: string, gesture: SidebarGesture): boolean {
+      if (set === null) return false;
+      return gesture === "newTab" ? openThreadTab(set, threadId) : switchToThread(set, threadId);
     },
 
     /** `+`: a tab right of the live one, on the New thread screen; the thread created there fills it. */
