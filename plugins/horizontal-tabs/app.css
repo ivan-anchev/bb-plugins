@@ -85,7 +85,8 @@
 }
 
 .ht-close,
-.ht-new {
+.ht-new,
+.ht-dismiss {
   display: flex;
   flex: none;
   align-items: center;
@@ -97,7 +98,8 @@
   app-region: no-drag;
 }
 .ht-close:hover,
-.ht-new:hover {
+.ht-new:hover,
+.ht-dismiss:hover {
   background: var(--state-hover);
   color: var(--foreground);
 }
@@ -118,9 +120,33 @@
   margin-left: 4px;
   border-radius: 7px;
 }
-.ht-new:focus-visible {
+.ht-new:focus-visible,
+.ht-dismiss:focus-visible {
   outline: none;
   box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+
+/* The equal-sizes notice, at the strip's far end, cut short with an ellipsis when the row runs out. */
+.ht-notice {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  margin-left: auto;
+  padding-left: 12px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.ht-notice-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ht-dismiss {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
 }
 
 .ht-tiles {

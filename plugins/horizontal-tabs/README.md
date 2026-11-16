@@ -16,9 +16,12 @@ shows.
   window's instance (`tabs.ts`), and the keyboard commands that drive it
   (`commands.ts`).
 - `src/host/`: everything that reaches into bb outside the SDK, each with a
-  `why:` comment: bb's layout atom, found in bb's loaded chunks
-  (`layout-atom.ts`); reading and showing bb's layout through it
-  (`host-layout.ts`); the strip's slot in bb's DOM (`strip-mount.ts`); and
+  `why:` comment. `layout/` reads and shows bb's layout (`host-layout.ts`):
+  through bb's layout atom, found in bb's loaded chunks (`layout-atom.ts`), or,
+  when it can't be found, rebuilt pane by pane through navigation and bb's
+  Close pane buttons (`pane-by-pane.ts`), with bb's stored copy of its layout
+  (`stored-layout.ts`) read in both cases. Outside it: what bb shows
+  (`screen.ts`); the strip's slot in bb's DOM (`strip-mount.ts`); and
   sidebar row clicks, routed into tabs before bb routes them
   (`sidebar-clicks.ts`, with the pure rule for which clicks it takes in
   `sidebar-gesture.ts`).

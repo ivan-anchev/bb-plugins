@@ -6,6 +6,8 @@ import type { SavedTabs } from "../model/saved.ts";
 import type { TabSet } from "../model/tab-set.ts";
 import { createTabsController, type HostLayout, type Nav } from "./tabs-controller.ts";
 
+type Shown = Awaited<ReturnType<HostLayout["show"]>>;
+
 /**
  * bb as the test drives it: `layout` is what bb holds, and each write stays in flight until `settle`, `fail`,
  * or its signal aborts.
@@ -14,14 +16,14 @@ type FakeHost = HostLayout & {
   layout: Layout | null;
   /** Every layout written, in order. */
   shown: Layout[];
-  /** bb finishes the write in flight. */
-  settle(): Promise<void>;
+  /** bb finishes the write in flight, exactly unless it says otherwise. */
+  settle(shown?: Shown): Promise<void>;
   /** The write in flight fails. */
   fail(error: Error): Promise<void>;
 };
 
 function fakeHost(initial: Layout | null): FakeHost {
-  const writes: { resolve: () => void; reject: (error: Error) => void }[] = [];
+  const writes: { resolve: (shown: Shown) => void; reject: (error: Error) => void }[] = [];
   const host: FakeHost = {
     layout: initial,
     shown: [],
@@ -29,13 +31,13 @@ function fakeHost(initial: Layout | null): FakeHost {
     show(layout, _nav, signal) {
       host.shown.push(layout);
       host.layout = layout;
-      return new Promise<void>((resolve, reject) => {
+      return new Promise<Shown>((resolve, reject) => {
         writes.push({ resolve, reject });
         signal.addEventListener("abort", () => reject(signal.reason));
       });
     },
-    async settle() {
-      writes.shift()?.resolve();
+    async settle(shown = "exact") {
+      writes.shift()?.resolve(shown);
       await flush();
     },
     async fail(error) {
@@ -256,6 +258,28 @@ test("a failed write is reported once, and the tab takes what bb shows", async (
   await host.fail(new Error("no atom"));
   assert.equal(warn.mock.callCount(), 1);
   assert.deepEqual(liveLayout(tabs), before);
+});
+
+test("the first tab shown at equal sizes raises the notice; once dismissed it stays down", async () => {
+  const { host, tabs, ids } = await threeTabs();
+  assert.equal(snapshotOf(tabs).notice, false);
+  tabs.activate(ids[0]);
+  await host.settle("equal-splits");
+  assert.equal(snapshotOf(tabs).notice, true);
+  tabs.dismissNotice();
+  assert.equal(snapshotOf(tabs).notice, false);
+  tabs.activate(ids[1]);
+  await host.settle("equal-splits");
+  assert.equal(snapshotOf(tabs).notice, false);
+});
+
+test("tabs shown at their exact sizes raise no notice", async () => {
+  const { host, tabs, ids } = await threeTabs();
+  for (const id of [ids[0], ids[1], ids[2]]) {
+    tabs.activate(id);
+    await host.settle();
+  }
+  assert.equal(snapshotOf(tabs).notice, false);
 });
 
 test("clicking the live tab from Settings shows its layout again with its own pane ids", async () => {

@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, test } from "node:test";
 import { pathToFileURL } from "node:url";
-import type { Nav } from "../controller/tabs-controller.ts";
-import { single, type Layout } from "../model/layout.ts";
+import type { Nav } from "../../controller/tabs-controller.ts";
+import { single, type Layout } from "../../model/layout.ts";
 import { hostLayout } from "./host-layout.ts";
 
 // Node has no sessionStorage; the module reads only getItem, so a map stands in for bb's tab storage.
