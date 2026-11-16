@@ -8,7 +8,7 @@ const ID = coordinatorIdSchema.parse("6f1c2a52-6b8e-4c43-9a51-1d6a3c0b7e10");
 
 function storeWithTicket() {
   const store = openStore(memoryStorage().storage);
-  store.insertCoordinator({ id: ID, ticket: "ticket-1", projectId: "prj_1", createdAt: 1_000 });
+  store.insertCoordinator({ id: ID, ticket: "ticket-1", projectId: "prj_1", verify: true, createdAt: 1_000 });
   return store;
 }
 
@@ -27,7 +27,7 @@ test("an unbound coordinator is not listed until its thread is bound", () => {
   assert.deepEqual(store.coordinators(), []);
 
   store.bindTicket("ticket-1", "thr_a");
-  assert.deepEqual(store.coordinators(), [{ id: ID, threadId: "thr_a", projectId: "prj_1", createdAt: 1_000 }]);
+  assert.deepEqual(store.coordinators(), [{ id: ID, threadId: "thr_a", projectId: "prj_1", verify: true, createdAt: 1_000 }]);
 });
 
 test("an unbound ticket configures only while unbound", () => {

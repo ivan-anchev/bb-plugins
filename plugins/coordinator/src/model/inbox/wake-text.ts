@@ -2,24 +2,34 @@
 // user-role message, so it holds only facts the plugin derived (a crew's id, a handoff's status, a
 // memory file's name) and the titles the coordinating thread itself gave its crews. Anything a crew
 // wrote is read through crew_catch_up, as a tool result, never here.
+import type { Handoff, HandoffId } from "../handoff.ts";
 import type { CrewId } from "../role.ts";
+import { outcome } from "../verdict.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import type { InboxEvent, StoredEvent } from "./inbox-event.ts";
 
-/** `titles`: each crew's title, as the coordinating thread gave it in crew_start. */
-export function doorbellText(events: readonly StoredEvent[], titles: ReadonlyMap<CrewId, string>): string {
+type Lookups = {
+  /** Each crew's title, as the coordinating thread gave it in crew_start. */
+  titles: ReadonlyMap<CrewId, string>;
+  handoff(id: HandoffId): Handoff | null;
+};
+
+export function doorbellText(events: readonly StoredEvent[], lookups: Lookups): string {
   const count = events.length === 1 ? "1 update" : `${events.length} updates`;
-  const lines = events.map(({ event }) => `- ${line(event, titles)}`);
+  const lines = events.map(({ event }) => `- ${line(event, lookups)}`);
   return [`[${DISPLAY_NAME}] ${count}. Call crew_catch_up to read ${events.length === 1 ? "it" : "them"} in full.`, ...lines].join("\n");
 }
 
-function line(event: InboxEvent, titles: ReadonlyMap<CrewId, string>): string {
+function line(event: InboxEvent, { titles, handoff }: Lookups): string {
   if (event.kind === "memory-edited") return `The user edited ${event.file}`;
+  if (event.kind === "verification-toggled") return `The user turned verification of done handoffs ${event.verify ? "on" : "off"}`;
   const title = titles.get(event.crewId);
   const crew = title === undefined ? event.crewId : `${event.crewId} "${title}"`;
   switch (event.kind) {
     case "handoff":
       return `${crew} handed off: ${event.status}`;
+    case "checked":
+      return `${crew} handed off: done, ${checkedAs(handoff(event.handoffId))}`;
     case "idle-without-handoff":
       return `${crew} ended its turn without a handoff`;
     case "failed":
@@ -28,5 +38,29 @@ function line(event: InboxEvent, titles: ReadonlyMap<CrewId, string>): string {
       return `${crew} is waiting on the user in its thread`;
     default:
       return event satisfies never;
+  }
+}
+
+/** What the plugin's check of a done handoff found, in words derived from its verdict alone. */
+function checkedAs(handoff: Handoff | null): string {
+  // why throw: a checked event is inserted with its handoff, in one transaction.
+  if (handoff === null) throw new Error("A checked handoff is missing.");
+  if (handoff.status !== "done") throw new Error(`The checked handoff ${handoff.id} is ${handoff.status}, not done.`);
+  const verdict = outcome(handoff.verdict);
+  switch (verdict) {
+    case "pass":
+      return "verified";
+    case "fail":
+      return "failed verification";
+    case "could-not-run":
+      return "could not be verified";
+    case "unverified":
+      return "unverified";
+    case "pending":
+    case "superseded":
+      // why: a checked event is recorded once the verdict is final, which neither of these is.
+      return "not checked yet";
+    default:
+      return verdict satisfies never;
   }
 }

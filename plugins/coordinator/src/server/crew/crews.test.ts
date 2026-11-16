@@ -53,7 +53,7 @@ test("crews are numbered in the order started, per Coordinator", async () => {
   const { kit, threadId } = await coordinating();
   assert.match(textOf(await kit.call("crew_start", RETRIES, threadId)), /^Started c1 /);
   assert.match(textOf(await kit.call("crew_start", { ...RETRIES, title: "Dead letters" }, threadId)), /^Started c2 /);
-  const other = await kit.spawner.coordinator(newThreadRequest("Retire the cron box"));
+  const other = await kit.spawner.coordinator(newThreadRequest("Retire the cron box"), true);
   assert.match(textOf(await kit.call("crew_start", RETRIES, other.threadId)), /^Started c1 /);
 });
 
@@ -84,7 +84,7 @@ test("crew_message reaches the crew as a message from the Coordinator's thread",
 test("a crew id the Coordinator has no crew by is refused, and a crew can't be reached from another Coordinator", async () => {
   const { kit, threadId } = await coordinating();
   await kit.call("crew_start", RETRIES, threadId);
-  const other = await kit.spawner.coordinator(newThreadRequest("Retire the cron box"));
+  const other = await kit.spawner.coordinator(newThreadRequest("Retire the cron box"), true);
 
   for (const caller of [threadId, other.threadId]) {
     const crewId = caller === threadId ? "c2" : "c1";
@@ -122,7 +122,7 @@ test("crew_catch_up shows the updates, then the board grouped by state, then the
 });
 
 test("crew_close stop is recorded only once bb no longer runs the thread", async () => {
-  const { kit, threadId, coordinatorId } = await coordinating({ created: true, answer: "thread" }, "stopping");
+  const { kit, threadId, coordinatorId } = await coordinating({ stops: "stopping" });
   await kit.call("crew_start", RETRIES, threadId);
 
   assert.match(textOf(await kit.call("crew_close", { crewId: "c1", action: "stop" }, threadId)), /still stopping, so it is not recorded as stopped/);

@@ -8,8 +8,8 @@ const REPORT = { summary: "Retries land with backoff", did: ["Added exponential 
 const DONE = { status: "done", ...REPORT, headSha: "0123456789abcdef0123456789abcdef01234567" };
 const c1 = crewIdSchema.parse("c1");
 
-async function withCrew() {
-  const { kit, threadId, coordinatorId } = await coordinating();
+async function withCrew({ verify = true } = {}) {
+  const { kit, threadId, coordinatorId } = await coordinating({ verify });
   const crewThreadId = threadIn(textOf(await kit.call("crew_start", RETRIES, threadId)));
   return { kit, threadId, coordinatorId, crewThreadId };
 }
@@ -27,7 +27,7 @@ test("crew_handoff from a thread that is not a crew is refused, and nothing is s
 });
 
 test("a handoff is stored whole, trimmed, with its turn and a waived verdict, and reads back as written", async () => {
-  const { kit, coordinatorId, crewThreadId } = await withCrew();
+  const { kit, coordinatorId, crewThreadId } = await withCrew({ verify: false });
   const result = await kit.call("crew_handoff", { ...DONE, summary: "  Retries land with backoff ", prUrl: "https://github.com/acme/webhooks/pull/7" }, crewThreadId);
   assert.match(textOf(result), /^Handed off\. Your coordinator has your report, marked unverified/);
 
@@ -87,8 +87,8 @@ test("a closed crew's handoff is refused", async () => {
   assert.equal(kit.store.latestHandoff(coordinatorId, c1), null);
 });
 
-test("once its turn ends, a done handoff is Ready for review as Unverified, and a blocked or gave-up one Needs you", async () => {
-  const { kit, threadId, coordinatorId } = await coordinating();
+test("with verification off, once its turn ends a done handoff is Ready for review as Unverified, and a blocked or gave-up one Needs you", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
   const crews: [string, Record<string, unknown>][] = [];
   for (const [title, input] of [
     ["Done", DONE],
@@ -110,14 +110,15 @@ test("once its turn ends, a done handoff is Ready for review as Unverified, and 
 });
 
 test("a handoff of 50 evidence items of 2,000 characters comes back whole from crew_catch_up and crew_read", async () => {
-  const { kit, threadId, crewThreadId } = await withCrew();
+  const { kit, threadId, crewThreadId } = await withCrew({ verify: false });
   // Each item is numbered at its start and ends in "$", so a missing or cut one can't match.
   const evidence = Array.from({ length: 50 }, (_, i) => `${String(i).padStart(2, "0")}${"e".repeat(1_997)}$`);
   await kit.call("crew_handoff", { ...DONE, evidence }, crewThreadId);
 
   for (const text of [textOf(await kit.call("crew_catch_up", {}, threadId)), textOf(await kit.call("crew_read", { crewId: "c1" }, threadId))]) {
     for (const item of evidence) assert.ok(text.includes(`- ${item}`), `item ${item.slice(0, 2)} is missing or cut`);
-    assert.match(text, /Status: done \(unverified: nobody has checked it against the done-criteria\)\nSummary: Retries land with backoff\nCommit: 0123456789abcdef0123456789abcdef01234567\nPull request: none/);
+    assert.match(text, /Status: done\nSummary: Retries land with backoff\nCommit: 0123456789abcdef0123456789abcdef01234567\nPull request: none/);
+    assert.match(text, /#### Verdict\n\nUnverified: verification was off, so nobody has checked it against the done-criteria\./);
   }
 });
 

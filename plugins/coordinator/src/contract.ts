@@ -7,12 +7,17 @@ import { doneCriteriaSchema, environmentSchema, executionSchema } from "./model/
 import { boardStateSchema } from "./model/crew-state.ts";
 import { memoryContentSchema, memoryFileSchema, memorySnapshotSchema, memoryVersionSchema, writeOutcomeSchema } from "./model/memory-file.ts";
 import { coordinatorIdSchema, crewIdSchema, type CoordinatorId } from "./model/role.ts";
+import { verdictSchema } from "./model/verdict.ts";
 
-/** A coordinating thread: its memory is keyed by `id`, its conversation is `threadId`. */
+/**
+ * A coordinating thread: its memory is keyed by `id`, its conversation is `threadId`. `verify`:
+ * whether its crews' done handoffs get a verifier from now on.
+ */
 export const coordinatorSchema = z.object({
   id: coordinatorIdSchema,
   threadId: z.string().min(1),
   projectId: z.string().min(1),
+  verify: z.boolean(),
   createdAt: z.number().int().nonnegative(),
 });
 export type Coordinator = z.infer<typeof coordinatorSchema>;
@@ -42,7 +47,8 @@ export type Draft = z.infer<typeof draftSchema>;
 
 /**
  * One crew on the board: where it sits, why, its thread (null: it never got one) and branch (null:
- * none yet), and its draft (null: it is not one, or is closed).
+ * none yet), the verdict of the done handoff that places it (null: none does), and its draft (null:
+ * it is not one, or is closed).
  */
 const boardRowSchema = z.object({
   crewId: crewIdSchema,
@@ -51,12 +57,14 @@ const boardRowSchema = z.object({
   branch: z.string().nullable(),
   state: boardStateSchema,
   headline: z.string(),
+  verdict: verdictSchema.nullable(),
   draft: draftSchema.nullable(),
 });
 export type BoardRow = z.infer<typeof boardRowSchema>;
 
-/** The board: DIGEST.md and when it last changed (null: there is none), then every crew in the order started. */
+/** The board: whether done handoffs are verified, DIGEST.md and when it last changed (null: there is none), then every crew in the order started. */
 const boardSchema = z.object({
+  verify: z.boolean(),
   digest: z.object({ content: z.string(), modifiedAt: z.number() }).nullable(),
   rows: z.array(boardRowSchema),
 });
@@ -90,9 +98,9 @@ export const coordinatorContract = defineRpcContract({
     input: z.object({}),
     output: z.object({ hostId: z.string().nullable() }),
   },
-  /** Starts a coordinating thread from bb's new-thread composer; the request's text is its goal. */
+  /** Starts a coordinating thread from bb's new-thread composer; the request's text is its goal. `verify`: verify its crews' done handoffs. */
   startCoordinator: {
-    input: z.object({ request: newThreadRequestSchema }),
+    input: z.object({ request: newThreadRequestSchema, verify: z.boolean() }),
     output: z.object({ threadId: z.string() }),
   },
   /** A coordinating thread's board. why the memory tag too: the board shows DIGEST.md. */
@@ -114,6 +122,14 @@ export const coordinatorContract = defineRpcContract({
         .refine((request) => environmentSchema.safeParse(request.environment).success, "Expected an environment from bb's composer"),
       doneCriteria: doneCriteriaSchema,
     }),
+    output: z.object({}),
+  },
+  /**
+   * Turns verification of the coordinating thread's done handoffs on or off. It applies to handoffs
+   * made after it; a handoff keeps the verdict it was made with. The only way to change it: no tool can.
+   */
+  setVerify: {
+    input: z.object({ coordinatorId: coordinatorIdSchema, verify: z.boolean() }),
     output: z.object({}),
   },
   /** Spawns a draft's crew from what is stored. A second call while one runs joins it; one for a crew that is no longer a draft is refused. */

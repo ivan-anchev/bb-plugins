@@ -4,6 +4,7 @@
 import type { Handoff, HandoffId } from "../../model/handoff.ts";
 import type { InboxEvent, StoredEvent } from "../../model/inbox/inbox-event.ts";
 import type { CrewId } from "../../model/role.ts";
+import { outcome, type Verdict } from "../../model/verdict.ts";
 
 type Lookups = {
   /** Each crew's title, as the coordinating thread gave it. */
@@ -21,13 +22,19 @@ export function updatesText(events: readonly StoredEvent[], lookups: Lookups): s
 function eventText({ event, at }: StoredEvent, { titles, handoff }: Lookups): string {
   const when = `At ${new Date(at).toISOString()}.`;
   if (event.kind === "memory-edited") return `### The user edited ${event.file}\n\n${when} Its current text is in the memory below, or read it with crew_memory_read.`;
+  if (event.kind === "verification-toggled") {
+    return event.verify
+      ? `### The user turned verification on\n\n${when} Done handoffs made from now on get an independent verifier, and reach you with its verdict.`
+      : `### The user turned verification off\n\n${when} Done handoffs made from now on reach you unverified: read their evidence before you call the work done.`;
+  }
   const crew = crewName(event, titles);
   switch (event.kind) {
-    case "handoff": {
+    case "handoff":
+    case "checked": {
       const report = handoff(event.handoffId);
       // why throw: an event is inserted with its handoff, in one transaction.
       if (report === null) throw new Error(`The handoff ${event.handoffId} is missing.`);
-      return `### ${crew} handed off: ${event.status}\n\n${when} Its report, in its own words:\n\n${handoffText(report)}`;
+      return `### ${crew} handed off: ${report.status}\n\n${when} Its report, in its own words:\n\n${handoffText(report)}`;
     }
     case "idle-without-handoff":
       return `### ${crew} ended its turn without a handoff\n\n${when} ${event.lastAnswer === null ? "It gave no answer." : `Its last answer, in its own words:\n\n${event.lastAnswer.trim()}`}`;
@@ -45,9 +52,9 @@ const crewName = (event: Extract<InboxEvent, { crewId: CrewId }>, titles: Readon
   return title === undefined ? event.crewId : `${event.crewId} "${title}"`;
 };
 
-/** A handoff whole: its status and verdict, summary, commit and pull request, then every item of every list. */
+/** A handoff whole: its status, summary, commit and pull request, every item of every list, then a done one's verdict. */
 export function handoffText(handoff: Handoff): string {
-  const head = [`Status: ${handoff.status}${handoff.status === "done" ? ` (${verdictText(handoff.verdict)})` : ""}`, `Summary: ${handoff.summary}`];
+  const head = [`Status: ${handoff.status}`, `Summary: ${handoff.summary}`];
   if (handoff.status === "done") head.push(`Commit: ${handoff.headSha}`, `Pull request: ${handoff.prUrl ?? "none"}`);
   const lists = (
     [
@@ -58,14 +65,33 @@ export function handoffText(handoff: Handoff): string {
       ["Findings", handoff.findings],
     ] as const
   ).map(([name, items]) => `#### ${name}\n\n${items.length === 0 ? "None." : items.map((item) => `- ${item.replaceAll("\n", "\n  ")}`).join("\n")}`);
-  return [head.join("\n"), ...lists].join("\n\n");
+  const report = [head.join("\n"), ...lists];
+  if (handoff.status === "done") report.push(`#### Verdict\n\n${verdictText(handoff.verdict)}`);
+  return report.join("\n\n");
 }
 
-function verdictText(verdict: Extract<Handoff, { status: "done" }>["verdict"]): string {
+/** What the plugin's check found. A verifier's evidence is its own words, marked as such. */
+function verdictText(verdict: Verdict): string {
   switch (verdict.state) {
+    case "queued":
+    case "running":
+      return "Not in yet: a verifier is checking it.";
+    case "returned": {
+      const label = outcome(verdict) === "pass" ? "Verified" : "Failed verification";
+      const passed = verdict.criteria.filter((check) => check.result === "pass").length;
+      const by = `${verdict.model.providerId} ${verdict.model.model}${verdict.sameModel ? ", the crew's own model, as no other was available" : ""}`;
+      const head = `${label}: ${passed} of ${verdict.criteria.length} criteria passed, checked at ${verdict.headSha} by a verifier on ${by}. Each result, with its evidence in the verifier's words:`;
+      const checks = verdict.criteria.map((check, i) => `${i + 1}. ${check.result.toUpperCase()}: ${check.criterion}\n   ${check.evidence.replaceAll("\n", "\n   ")}`);
+      const findings = verdict.findings.length === 0 ? "Findings: none." : `Findings:\n${verdict.findings.map((finding) => `- ${finding.replaceAll("\n", "\n  ")}`).join("\n")}`;
+      return [head, ...checks, findings].join("\n\n");
+    }
+    case "could-not-run":
+      return `Couldn't verify: ${verdict.reason}. Nobody has checked it against the done-criteria.`;
+    case "superseded":
+      return "Replaced by a newer handoff before its verdict; that one is checked instead.";
     case "waived":
-      return "unverified: nobody has checked it against the done-criteria";
+      return "Unverified: verification was off, so nobody has checked it against the done-criteria.";
     default:
-      return verdict.state satisfies never;
+      return verdict satisfies never;
   }
 }

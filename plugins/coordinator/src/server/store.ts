@@ -4,10 +4,11 @@ import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { coordinatorSchema, type Coordinator } from "../contract.ts";
 import { closedKindSchema, doneCriteriaSchema, executionSchema, placementSchema, type ClosedKind, type Crew, type DraftEdit, type Placement } from "../model/crew.ts";
-import { handoffIdSchema, handoffReportSchema, verdictSchema, type Handoff, type HandoffId } from "../model/handoff.ts";
+import { handoffIdSchema, handoffReportSchema, type Handoff, type HandoffId, type NewHandoff } from "../model/handoff.ts";
 import { inboxEventSchema, type InboxEvent, type StoredEvent } from "../model/inbox/inbox-event.ts";
 import { memoryRevisionSchema, type MemoryFile, type MemoryRevision, type MemoryVersion } from "../model/memory-file.ts";
 import { coordinatorIdSchema, crewIdSchema, roleSchema, type CoordinatorId, type CrewId, type Role } from "../model/role.ts";
+import { verdictSchema, type Verdict } from "../model/verdict.ts";
 
 // Append-only: bb.storage.migrate records each statement's hash by its index.
 const MIGRATIONS = [
@@ -44,7 +45,17 @@ const MIGRATIONS = [
   `CREATE TABLE doorbells (coordinator_id TEXT PRIMARY KEY REFERENCES coordinators (id), queued_message_id TEXT NOT NULL UNIQUE)`,
   // A crew's latest handoff is read on every board read and idle: newest by rowid within the crew.
   `CREATE INDEX handoffs_of_crew ON handoffs (coordinator_id, crew_id)`,
+  // Whether a done handoff gets a verifier: set at creation and on the board, read when a crew hands off.
+  `ALTER TABLE coordinators ADD COLUMN verify INTEGER NOT NULL DEFAULT 1`,
+  // The tick reads every verdict still waiting for its verifier, or for its verdict.
+  `CREATE INDEX verdicts_open ON verdicts (handoff_id) WHERE json_extract(verdict, '$.state') IN ('queued', 'running')`,
 ];
+
+/** Where a verdict must still be for a change to apply: queued, or running in this verifier thread. */
+export type VerdictFrom = { state: "queued" } | { state: "running"; verifierThreadId: string };
+
+/** A verdict that is still waiting, with whose handoff it is. */
+type OpenVerdict = { handoffId: HandoffId; coordinatorId: CoordinatorId; crewId: CrewId; verdict: Extract<Verdict, { state: VerdictFrom["state"] }> };
 
 export type Store = ReturnType<typeof openStore>;
 
@@ -88,14 +99,79 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     return row === undefined ? null : toHandoff(row);
   }
 
+  function verifies(id: CoordinatorId): boolean {
+    return z.object({ verify: z.number() }).parse(db().prepare("SELECT verify FROM coordinators WHERE id = ?").get(id)).verify === 1;
+  }
+
+  function insertTicket(ticket: string, role: Role, createdAt: number): void {
+    db().prepare("INSERT INTO roles (ticket, role, created_at) VALUES (?, ?, ?)").run(ticket, JSON.stringify(role), createdAt);
+  }
+
+  function verdictOf(handoffId: HandoffId): Verdict | null {
+    const row = db().prepare("SELECT verdict FROM verdicts WHERE handoff_id = ?").get(handoffId);
+    return row === undefined ? null : verdictSchema.parse(JSON.parse(z.object({ verdict: z.string() }).parse(row).verdict));
+  }
+
+  /** Replaces the verdict if it is still where `from` says, and says whether it did. Call inside a transaction. */
+  function moveVerdict(handoffId: HandoffId, from: VerdictFrom, next: Verdict): boolean {
+    const current = verdictOf(handoffId);
+    if (current === null || !isAt(current, from)) return false;
+    db().prepare("UPDATE verdicts SET verdict = ? WHERE handoff_id = ?").run(JSON.stringify(next), handoffId);
+    return true;
+  }
+
+  /** Whose handoff it is. why throw: a verdict is inserted with its handoff. */
+  function ownerOf(handoffId: HandoffId): { coordinatorId: CoordinatorId; crewId: CrewId } {
+    const row = db().prepare("SELECT coordinator_id AS coordinatorId, crew_id AS crewId FROM handoffs WHERE id = ?").get(handoffId);
+    return z.object({ coordinatorId: coordinatorIdSchema, crewId: crewIdSchema }).parse(row);
+  }
+
+  /**
+   * Marks every verdict of the crew's earlier handoffs that is still waiting as superseded, and
+   * returns the verifier threads that were checking them. Call inside a transaction.
+   */
+  function supersede(coordinatorId: CoordinatorId, crewId: CrewId): string[] {
+    const open = db()
+      .prepare(
+        `SELECT v.handoff_id AS handoffId, h.coordinator_id AS coordinatorId, h.crew_id AS crewId, v.verdict
+           FROM verdicts v JOIN handoffs h ON h.id = v.handoff_id
+          WHERE h.coordinator_id = ? AND h.crew_id = ? AND json_extract(v.verdict, '$.state') IN ('queued', 'running')`,
+      )
+      .all(coordinatorId, crewId)
+      .map(toOpenVerdict);
+    const mark = db().prepare("UPDATE verdicts SET verdict = ? WHERE handoff_id = ?");
+    for (const { handoffId } of open) mark.run(JSON.stringify({ state: "superseded" } satisfies Verdict), handoffId);
+    return open.flatMap(({ verdict }) => (verdict.state === "running" ? [verdict.verifierThreadId] : []));
+  }
+
   return {
     /** The coordinator and its unbound ticket, together or not at all. */
-    insertCoordinator({ id, ticket, projectId, createdAt }: { id: CoordinatorId; ticket: string; projectId: string; createdAt: number }): void {
-      const role: Role = { kind: "coordinator", coordinatorId: id };
+    insertCoordinator({ id, ticket, projectId, verify, createdAt }: { id: CoordinatorId; ticket: string; projectId: string; verify: boolean; createdAt: number }): void {
       db().transaction(() => {
-        db().prepare("INSERT INTO roles (ticket, role, created_at) VALUES (?, ?, ?)").run(ticket, JSON.stringify(role), createdAt);
-        db().prepare("INSERT INTO coordinators (id, ticket, project_id, created_at) VALUES (?, ?, ?, ?)").run(id, ticket, projectId, createdAt);
+        insertTicket(ticket, { kind: "coordinator", coordinatorId: id }, createdAt);
+        db().prepare("INSERT INTO coordinators (id, ticket, project_id, verify, created_at) VALUES (?, ?, ?, ?, ?)").run(id, ticket, projectId, Number(verify), createdAt);
       })();
+    },
+
+    /**
+     * Turns verification of the coordinating thread's done handoffs on or off, and records the
+     * change for it, together. Setting what is already set changes and records nothing; returns
+     * whether it changed.
+     */
+    setVerify(id: CoordinatorId, verify: boolean, at: number): boolean {
+      return db().transaction(() => {
+        const changed = db().prepare("UPDATE coordinators SET verify = ? WHERE id = ? AND verify != ?").run(Number(verify), id, Number(verify)).changes > 0;
+        if (changed) insertEvent(id, { kind: "verification-toggled", verify }, at);
+        return changed;
+      })();
+    },
+
+    /** Whether the coordinating thread's done handoffs get a verifier from now on. why throw: callers check the id first. */
+    verifies,
+
+    /** A verifier's unbound ticket, minted before its thread is spawned. */
+    insertVerifierTicket(ticket: string, role: Extract<Role, { kind: "verifier" }>, createdAt: number): void {
+      insertTicket(ticket, role, createdAt);
     },
 
     /**
@@ -106,8 +182,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
       return db().transaction(() => {
         const { count } = z.object({ count: z.number() }).parse(db().prepare("SELECT count(*) AS count FROM crews WHERE coordinator_id = ?").get(crew.coordinatorId));
         const id = crewIdSchema.parse(`c${count + 1}`);
-        const role: Role = { kind: "crew", coordinatorId: crew.coordinatorId, crewId: id };
-        db().prepare("INSERT INTO roles (ticket, role, created_at) VALUES (?, ?, ?)").run(crew.ticket, JSON.stringify(role), crew.createdAt);
+        insertTicket(crew.ticket, { kind: "crew", coordinatorId: crew.coordinatorId, crewId: id }, crew.createdAt);
         db()
           .prepare("INSERT INTO crews (coordinator_id, id, ticket, title, brief, done_criteria, placement, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
           .run(crew.coordinatorId, id, crew.ticket, crew.title, crew.brief, JSON.stringify(crew.doneCriteria), JSON.stringify(crew.placement), crew.createdAt);
@@ -117,11 +192,17 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
 
     /**
      * Gives the ticket's role to the thread, and returns that role. Idempotent: a ticket binds once,
-     * so a second call, or a call naming another thread, changes nothing and returns null.
+     * so a second call, or a call naming another thread, changes nothing and returns null. A
+     * verifier's verdict starts running in the thread as it binds, unless it was superseded meanwhile.
      */
     bindTicket(ticket: string, threadId: string): Role | null {
-      const row = db().prepare("UPDATE roles SET thread_id = ? WHERE ticket = ? AND thread_id IS NULL RETURNING role").get(threadId, ticket);
-      return row === undefined ? null : toRole(row);
+      return db().transaction(() => {
+        const row = db().prepare("UPDATE roles SET thread_id = ? WHERE ticket = ? AND thread_id IS NULL RETURNING role").get(threadId, ticket);
+        if (row === undefined) return null;
+        const role = toRole(row);
+        if (role.kind === "verifier") moveVerdict(role.handoffId, { state: "queued" }, { state: "running", verifierThreadId: threadId, nudged: false });
+        return role;
+      })();
     },
 
     /** What tools see: a thread has a role only once its ticket is bound to it. */
@@ -148,12 +229,12 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     coordinator(id: CoordinatorId): Coordinator | null {
       const row = db()
         .prepare(
-          `SELECT c.id, r.thread_id AS threadId, c.project_id AS projectId, c.created_at AS createdAt
+          `SELECT c.id, r.thread_id AS threadId, c.project_id AS projectId, c.verify, c.created_at AS createdAt
              FROM coordinators c JOIN roles r ON r.ticket = c.ticket
             WHERE c.id = ? AND r.thread_id IS NOT NULL`,
         )
         .get(id);
-      return row === undefined ? null : coordinatorSchema.parse(row);
+      return row === undefined ? null : toCoordinator(row);
     },
 
     /** Every crew of the coordinating thread, in the order they were started. */
@@ -198,16 +279,62 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     },
 
     /**
-     * A crew's handoff, its verdict when it claims done, and the event announcing it, together or
-     * not at all: a handoff can't exist unannounced, or a done one without its verdict.
+     * A crew's handoff and, when it claims done, its verdict, together or not at all. A blocked or
+     * gave-up handoff is announced at once. A done one is queued for a verifier when its
+     * coordinating thread verifies, and announced with its verdict later; else it is waived and
+     * announced at once. A done one supersedes every earlier verdict of the crew still waiting.
+     * Returns its verdict (null: not done) and the verifier threads of the verdicts it superseded.
      */
-    insertHandoff(handoff: Handoff): void {
+    insertHandoff(handoff: NewHandoff): { verdict: Verdict | null; superseded: string[] } {
       const { id, coordinatorId, crewId, at, turnSeq, ...report } = handoff;
-      db().transaction(() => {
+      return db().transaction(() => {
         const stored = handoffReportSchema.parse(report);
         db().prepare("INSERT INTO handoffs (id, coordinator_id, crew_id, report, turn_seq, at) VALUES (?, ?, ?, ?, ?, ?)").run(id, coordinatorId, crewId, JSON.stringify(stored), turnSeq, at);
-        if (handoff.status === "done") db().prepare("INSERT INTO verdicts (handoff_id, verdict) VALUES (?, ?)").run(id, JSON.stringify(handoff.verdict));
-        insertEvent(coordinatorId, { kind: "handoff", crewId, handoffId: id, status: handoff.status }, at);
+        if (stored.status !== "done") {
+          insertEvent(coordinatorId, { kind: "handoff", crewId, handoffId: id, status: stored.status }, at);
+          return { verdict: null, superseded: [] };
+        }
+        const superseded = supersede(coordinatorId, crewId);
+        const verdict: Verdict = verifies(coordinatorId) ? { state: "queued" } : { state: "waived" };
+        db().prepare("INSERT INTO verdicts (handoff_id, verdict) VALUES (?, ?)").run(id, JSON.stringify(verdict));
+        if (verdict.state === "waived") insertEvent(coordinatorId, { kind: "checked", crewId, handoffId: id }, at);
+        return { verdict, superseded };
+      })();
+    },
+
+    /** Every verdict waiting for its verifier to start or to return, oldest first. */
+    openVerdicts(): OpenVerdict[] {
+      return db()
+        .prepare(
+          `SELECT v.handoff_id AS handoffId, h.coordinator_id AS coordinatorId, h.crew_id AS crewId, v.verdict
+             FROM verdicts v JOIN handoffs h ON h.id = v.handoff_id
+            WHERE json_extract(v.verdict, '$.state') IN ('queued', 'running')
+            ORDER BY h.rowid`,
+        )
+        .all()
+        .map(toOpenVerdict);
+    },
+
+    /** Marks a running verdict's verifier as nudged, once; says whether this call did. */
+    markNudged(handoffId: HandoffId, verifierThreadId: string): boolean {
+      return db().transaction(() => {
+        const current = verdictOf(handoffId);
+        if (current?.state !== "running" || current.verifierThreadId !== verifierThreadId || current.nudged) return false;
+        return moveVerdict(handoffId, { state: "running", verifierThreadId }, { ...current, nudged: true });
+      })();
+    },
+
+    /**
+     * Settles a waiting verdict and records it for its coordinating thread, together, if the verdict
+     * is still where `from` says; returns whose it was, or null when it had moved on (superseded,
+     * already settled, or checked by another thread).
+     */
+    settleVerdict(handoffId: HandoffId, from: VerdictFrom, verdict: Extract<Verdict, { state: "returned" | "could-not-run" }>, at: number): CoordinatorId | null {
+      return db().transaction(() => {
+        if (!moveVerdict(handoffId, from, verdict)) return null;
+        const { coordinatorId, crewId } = ownerOf(handoffId);
+        insertEvent(coordinatorId, { kind: "checked", crewId, handoffId }, at);
+        return coordinatorId;
       })();
     },
 
@@ -295,15 +422,36 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     coordinators(): Coordinator[] {
       return db()
         .prepare(
-          `SELECT c.id, r.thread_id AS threadId, c.project_id AS projectId, c.created_at AS createdAt
+          `SELECT c.id, r.thread_id AS threadId, c.project_id AS projectId, c.verify, c.created_at AS createdAt
              FROM coordinators c JOIN roles r ON r.ticket = c.ticket
             WHERE r.thread_id IS NOT NULL
             ORDER BY c.created_at DESC, c.rowid DESC`,
         )
         .all()
-        .map((row) => coordinatorSchema.parse(row));
+        .map(toCoordinator);
     },
   };
+}
+
+// why: SQLite has no boolean; verify is stored as 0 or 1.
+const coordinatorRowSchema = coordinatorSchema.extend({ verify: z.number().transform((verify) => verify === 1) });
+const toCoordinator = (row: unknown): Coordinator => coordinatorRowSchema.parse(row);
+
+const isAt = (verdict: Verdict, from: VerdictFrom): boolean =>
+  from.state === "queued" ? verdict.state === "queued" : verdict.state === "running" && verdict.verifierThreadId === from.verifierThreadId;
+
+const openVerdictRowSchema = z.object({
+  handoffId: handoffIdSchema,
+  coordinatorId: coordinatorIdSchema,
+  crewId: crewIdSchema,
+  verdict: z.string().transform((json) => verdictSchema.parse(JSON.parse(json))),
+});
+
+function toOpenVerdict(row: unknown): OpenVerdict {
+  const { verdict, ...owner } = openVerdictRowSchema.parse(row);
+  // why throw: every query here picks only queued and running verdicts.
+  if (verdict.state !== "queued" && verdict.state !== "running") throw new Error(`The verdict of ${owner.handoffId} is ${verdict.state}, not waiting`);
+  return { ...owner, verdict };
 }
 
 const toRole = (row: unknown): Role => roleSchema.parse(JSON.parse(z.object({ role: z.string() }).parse(row).role));

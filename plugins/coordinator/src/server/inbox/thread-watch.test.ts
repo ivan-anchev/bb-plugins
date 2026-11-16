@@ -34,22 +34,22 @@ test("a crew that goes idle without a handoff is announced, its last answer only
   assert.deepEqual([(await row())?.state, (await row())?.headline], ["idle", "Its turn ended without a handoff"]);
 });
 
-test("a crew whose turn ends after its handoff is not announced again", async () => {
+test("a crew whose turn ends after its handoff is not announced as stopping without one", async () => {
   const { kit, coordinatorId, crewThreadId, doorbells } = await withCrew();
-  await kit.call("crew_handoff", DONE, crewThreadId);
+  await kit.call("crew_handoff", { ...DONE, status: "blocked" }, crewThreadId);
   await kit.idle(crewThreadId, "Handed off.");
   await settled();
 
   assert.equal(doorbells().length, 1);
   assert.deepEqual(kit.store.unannounced(coordinatorId), []);
-  assert.match(doorbells()[0] ?? "", /handed off: done/);
+  assert.match(doorbells()[0] ?? "", /handed off: blocked/);
 });
 
-test("after a handoff, typing into the crew moves it out of Ready for review, and its end with no new handoff is Idle and announced", async () => {
+test("after a handoff, typing into the crew moves it out of Verifying, and its end with no new handoff is Idle and announced", async () => {
   const { kit, crewThreadId, doorbells, row } = await withCrew();
   await kit.call("crew_handoff", DONE, crewThreadId);
   await kit.idle(crewThreadId, "Handed off.");
-  assert.equal((await row())?.state, "ready-for-review");
+  assert.equal((await row())?.state, "verifying");
 
   kit.startTurn(crewThreadId); // the user types into the crew's thread
   assert.equal((await row())?.state, "working");

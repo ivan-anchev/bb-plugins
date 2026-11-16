@@ -7,7 +7,7 @@ const COORDINATOR_TOOLS = ["crew_catch_up", "crew_memory_read", "crew_memory_wri
 
 test("a coordinating thread is offered its tools, its skill and rules naming the product", async () => {
   const kit = harness();
-  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
+  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
 
   const configuration = kit.configurationFor(threadId, {});
   assert.deepEqual(configuration.tools, COORDINATOR_TOOLS);
@@ -17,7 +17,7 @@ test("a coordinating thread is offered its tools, its skill and rules naming the
 
 test("its first session, before any bind, is configured from its unbound ticket", async () => {
   const kit = harness({ created: false, answer: "lost" });
-  await assert.rejects(kit.spawner.coordinator(newThreadRequest("Migrate the webhook service")));
+  await assert.rejects(kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true));
 
   assert.deepEqual(kit.configurationFor("thr_1", kit.metadataOf("thr_1")).tools, COORDINATOR_TOOLS);
 });
@@ -28,7 +28,7 @@ for (const [label, metadata] of [
 ] as const) {
   test(`a thread whose metadata holds ${label} is offered no tools, and crew_catch_up refuses it`, async () => {
     const kit = harness();
-    await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
+    await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
 
     const configuration = kit.configurationFor("thr_forged", metadata);
     assert.deepEqual(configuration.tools, []);
@@ -43,7 +43,7 @@ for (const [label, metadata] of [
 
 test("a bound ticket copied into another thread grants it nothing", async () => {
   const kit = harness();
-  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
+  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
 
   assert.deepEqual(kit.configurationFor("thr_fork", kit.metadataOf(threadId)).tools, []);
   assert.ok(isRefusal(await kit.call("crew_memory_read", { file: "GOAL.md" }, "thr_fork")));
@@ -51,7 +51,7 @@ test("a bound ticket copied into another thread grants it nothing", async () => 
 
 test("crew_catch_up returns the seeded memory with the goal", async () => {
   const kit = harness();
-  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
+  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
 
   const text = textOf(await kit.call("crew_catch_up", {}, threadId));
   for (const file of ["MEMORY.md", "GOAL.md", "PLAN.md", "PREFERENCES.md", "CREW.md", "DIGEST.md"]) assert.match(text, new RegExp(`^## ${file} \\(version \\w+\\)$`, "m"));
@@ -60,7 +60,7 @@ test("crew_catch_up returns the seeded memory with the goal", async () => {
 
 test("crew_memory_read reads one file, and says so when there is none", async () => {
   const kit = harness();
-  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
+  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
 
   assert.match(textOf(await kit.call("crew_memory_read", { file: "GOAL.md" }, threadId)), /Migrate the webhook service/);
   const missing = await kit.call("crew_memory_read", { file: "notes/api.md" }, threadId);
@@ -70,7 +70,7 @@ test("crew_memory_read reads one file, and says so when there is none", async ()
 
 test("crew_memory_read rejects a name outside the memory folder or not markdown", async () => {
   const kit = harness();
-  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
+  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
 
   for (const file of ["../x.md", "/etc/passwd.md", "notes.txt", "notes/../../data.md"]) {
     await assert.rejects(kit.call("crew_memory_read", { file }, threadId), /memory file is a \.md path inside the memory folder/, file);
@@ -79,7 +79,7 @@ test("crew_memory_read rejects a name outside the memory folder or not markdown"
 
 test("a crew thread is offered crew_memory_read, crew_handoff, its skill and its rules, and nothing else", async () => {
   const kit = harness();
-  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
+  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
   const started = await kit.call("crew_start", { title: "Retries", brief: "Retry failed deliveries.", doneCriteria: ["npm test passes"] }, threadId);
   const crewThreadId = /@thread:(\w+)/.exec(textOf(started))?.[1] ?? "";
 
@@ -91,7 +91,7 @@ test("a crew thread is offered crew_memory_read, crew_handoff, its skill and its
 
 test("a crew thread reads its coordinating thread's memory, and is refused crew_start and crew_memory_write", async () => {
   const kit = harness();
-  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
+  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
   const started = await kit.call("crew_start", { title: "Retries", brief: "Retry failed deliveries.", doneCriteria: ["npm test passes"] }, threadId);
   const crewThreadId = /@thread:(\w+)/.exec(textOf(started))?.[1] ?? "";
 

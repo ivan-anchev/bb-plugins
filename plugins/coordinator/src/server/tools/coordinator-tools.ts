@@ -12,6 +12,7 @@ import type { Inbox } from "../inbox/inbox.ts";
 import type { MemoryRoot } from "../memory/memory-files.ts";
 import type { Store } from "../store.ts";
 import { boardText, closeText, detailText, startText } from "./crew-text.ts";
+import { VERDICT } from "../verify/verdict-tool.ts";
 import { HANDOFF } from "./crew-tools.ts";
 import { updatesText } from "./inbox-text.ts";
 import { catchUpText, readText, writeResult } from "./memory-text.ts";
@@ -29,6 +30,8 @@ const CLOSE = "crew_close";
 export const COORDINATOR_TOOLS = [CATCH_UP, MEMORY_READ, MEMORY_WRITE, START, MESSAGE, READ, CLOSE];
 /** What configure offers a crew thread: its coordinating thread's memory, read only, and its handoff. */
 export const CREW_TOOLS = [MEMORY_READ, HANDOFF];
+/** What configure offers a verifier thread: its coordinating thread's memory, read only, and its verdict. */
+export const VERIFIER_TOOLS = [MEMORY_READ, VERDICT];
 
 type Deps = {
   store: Pick<Store, "roleOfThread" | "crew" | "crews" | "handoff">;
@@ -64,7 +67,7 @@ export function registerCoordinatorTools(bb: ToolsBb, { store, inbox, memory, cr
   bb.agents.registerTool({
     name: CATCH_UP,
     description:
-      "Catch up: returns every update since your last catch-up in full (crews' handoffs, crews that failed, wait on the user or stopped without a handoff, and the user's memory edits), then the board (every crew you started, under Needs you, Ready for review, Working, Idle or Done, with its thread and branch) and your memory files (MEMORY.md, GOAL.md, PLAN.md, PREFERENCES.md, CREW.md, DIGEST.md) in full, each with its version, and names any other memory file. Each update is returned once. Call it first on every wake.",
+      "Catch up: returns every update since your last catch-up in full (crews' handoffs, a done one with its verifier's verdict, crews that failed, wait on the user or stopped without a handoff, and the user's memory edits and verification switch), then the board (every crew you started, under Needs you, Ready for review, Verifying, Working, Idle or Done, with its thread and branch) and your memory files (MEMORY.md, GOAL.md, PLAN.md, PREFERENCES.md, CREW.md, DIGEST.md) in full, each with its version, and names any other memory file. Each update is returned once. Call it first on every wake.",
     presentation: { label: { pending: "Catching up", completed: "Caught up" }, icon: { glyph: "Workflow" } },
     parameters: z.object({}),
     execute: forCoordinator(CATCH_UP, async (id) => {
@@ -82,7 +85,7 @@ export function registerCoordinatorTools(bb: ToolsBb, { store, inbox, memory, cr
     parameters: z.object({ file: memoryFileSchema }),
     execute: ({ file }, { threadId }) => {
       const role = store.roleOfThread(threadId);
-      if (role === null) return failed(`${MEMORY_READ} is refused: this thread is neither a coordinating thread nor one of its crew, so it has no memory to read. Carry on without it.`);
+      if (role === null) return failed(`${MEMORY_READ} is refused: this thread is not a coordinating thread, nor one of its crew or verifiers, so it has no memory to read. Carry on without it.`);
       const { text } = memory.of(memoryOwner(role)).read(file);
       return text === null ? failed(`There is no memory file named ${file}.`) : readText(file, text);
     },
@@ -150,6 +153,7 @@ function memoryOwner(role: Role): CoordinatorId {
   switch (role.kind) {
     case "coordinator":
     case "crew":
+    case "verifier":
       return role.coordinatorId;
   }
 }

@@ -1,6 +1,6 @@
-// The New page: bb's own new-thread composer, seeded with a fresh worktree and auto permissions.
-// The composer owns the user's choices; the server forwards them, its provider and model marked as
-// chosen, and adds the role.
+// The New page: bb's own new-thread composer, seeded with a fresh worktree and auto permissions,
+// and the switch for verifying its crews' done handoffs. The composer owns the user's choices; the
+// server forwards them, its provider and model marked as chosen, and adds the role.
 import {
   experimental_Icon as Icon,
   experimental_NewThreadComposer as NewThreadComposer,
@@ -16,16 +16,18 @@ import { coordinatorContract as contract } from "../../contract.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import { Button } from "../ui/button.tsx";
 import { ReadFailure } from "../ui/read-failure.tsx";
+import { Switch } from "../ui/switch.tsx";
 import { composerSeed, type ComposerSeed } from "./composer-seed.ts";
 
 export function NewCoordinator({ ref, onBack }: { ref: Ref<HTMLDivElement>; onBack(): void }) {
   const { seed, host, sidebarFailed } = useComposerSeed();
   const navigate = useBbNavigate();
   const start = experimental_useRpcMutation({ contract, method: "startCoordinator" });
+  const [verify, setVerify] = useState(true);
 
   // The composer keeps the draft when this throws, so a failed start never loses the goal.
   async function submit(request: NewThreadRequest) {
-    const { threadId } = await start.mutate({ request });
+    const { threadId } = await start.mutate({ request, verify });
     navigate.toThread(threadId);
   }
 
@@ -59,6 +61,18 @@ export function NewCoordinator({ ref, onBack }: { ref: Ref<HTMLDivElement>; onBa
             onSubmit={submit}
           />
         )}
+        <div className="px-3">
+          <Switch
+            checked={verify}
+            onChange={setVerify}
+            label="Verify done handoffs"
+            hint={
+              verify
+                ? `When a crew says it's done, a hidden verifier, on another model when there is one, checks each done-criterion before the ${DISPLAY_NAME} hears of it. You can change this on the board.`
+                : `Done handoffs reach the ${DISPLAY_NAME} unverified. You can change this on the board.`
+            }
+          />
+        </div>
         {start.error !== null && (
           <p role="alert" className="px-3 text-sm text-destructive-text">
             Could not start it: {start.error.message}
