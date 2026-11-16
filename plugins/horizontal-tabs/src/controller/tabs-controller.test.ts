@@ -207,6 +207,37 @@ test("the thread created on a + tab's New thread screen fills that tab", async (
   assert.deepEqual(snapshotOf(tabs).set.tabs[0].layout, alpha);
 });
 
+test("a thread created on a + tab stays that tab's when the user switches away before bb's change is observed", async () => {
+  const { host, tabs } = controller(alpha);
+  tabs.observe("thread");
+  const first = snapshotOf(tabs).set.liveId;
+  tabs.openNew();
+  await host.settle();
+  tabs.observe("workspace");
+  const plus = snapshotOf(tabs).set.liveId;
+  const created = thread("thr_bravo", liveLayout(tabs).focusedPaneId);
+  // bb routes to the thread it created; the click on another tab comes before the overlay observes that.
+  host.layout = created;
+  tabs.activate(first);
+  await host.settle();
+  assert.deepEqual(snapshotOf(tabs).set.tabs.find((tab) => tab.id === plus)?.layout, created);
+  tabs.activate(plus);
+  await host.settle();
+  assert.equal(focusedThread(host.shown.at(-1)), "thr_bravo");
+});
+
+test("a switch made while a write is in flight leaves the tab being written as it was", async () => {
+  const { host, tabs, ids } = await threeTabs();
+  tabs.activate(ids[0]);
+  const target = liveLayout(tabs);
+  // bb is part way through taking the write.
+  host.layout = thread("thr_delta");
+  tabs.activate(ids[1]);
+  await host.settle();
+  await host.settle();
+  assert.deepEqual(snapshotOf(tabs).set.tabs[0].layout, target);
+});
+
 test("clicking a tab shows its layout with pane ids apart from the outgoing layout's, and selects it", async () => {
   const { host, tabs, ids } = await threeTabs();
   tabs.activate(ids[0]);

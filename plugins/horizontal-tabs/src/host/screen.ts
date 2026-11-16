@@ -5,7 +5,8 @@
 import { useSyncExternalStore } from "react";
 import type { Screen } from "../controller/tabs-controller.ts";
 
-const PANE = "data-split-pane-id";
+/** The attribute bb puts on each of its panes on screen, holding the pane id. */
+export const PANE = "data-split-pane-id";
 
 /** What bb's route shows; `threadId` is the route's thread (useBbContext), null off thread routes. */
 export function useScreen(threadId: string | null): Screen {

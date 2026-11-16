@@ -7,6 +7,7 @@
 import type { HostLayout, Nav } from "../../controller/tabs-controller.ts";
 import { focused, panes, type Layout } from "../../model/layout.ts";
 import { paneIdsOnScreen } from "../screen.ts";
+import { withCaretInFocusedPane } from "./composer-focus.ts";
 import { currentLayoutAtom, locateLayoutAtom } from "./layout-atom.ts";
 import { rebuildPaneByPane } from "./pane-by-pane.ts";
 import { readStored } from "./stored-layout.ts";
@@ -24,25 +25,30 @@ export const hostLayout: HostLayout = {
   },
 
   /**
-   * Resolves once bb shows `layout`: "exact" from bb's layout atom, else "equal-splits" rebuilt pane by pane.
-   * Rejects when bb does not show it in time, and with the signal's reason once it aborts.
+   * Resolves once bb shows `layout`, with the caret in its focused pane's composer: "exact" from bb's layout
+   * atom, else "equal-splits" rebuilt pane by pane. Rejects when bb does not show it in time, and with the
+   * signal's reason once it aborts.
    */
-  async show(layout, nav, signal) {
-    const atom = await locateLayoutAtom().catch((error: unknown) => {
-      warnOnce(error);
-      return null;
-    });
-    signal.throwIfAborted();
-    if (atom === null) {
-      await rebuildPaneByPane(layout, nav, signal);
-      return "equal-splits";
-    }
-    atom.write(layout);
-    routeTo(layout, nav);
-    await onScreen(layout, signal);
-    return "exact";
+  show(layout, nav, signal) {
+    return withCaretInFocusedPane(() => place(layout, nav, signal), signal);
   },
 };
+
+async function place(layout: Layout, nav: Nav, signal: AbortSignal): Promise<"exact" | "equal-splits"> {
+  const atom = await locateLayoutAtom().catch((error: unknown) => {
+    warnOnce(error);
+    return null;
+  });
+  signal.throwIfAborted();
+  if (atom === null) {
+    await rebuildPaneByPane(layout, nav, signal);
+    return "equal-splits";
+  }
+  atom.write(layout);
+  routeTo(layout, nav);
+  await onScreen(layout, signal);
+  return "exact";
+}
 
 function warnOnce(error: unknown): void {
   if (warned) return;
