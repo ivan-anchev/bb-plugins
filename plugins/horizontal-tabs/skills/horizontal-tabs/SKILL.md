@@ -17,8 +17,10 @@ experimental: a bb update may break it.
   highlights while the tab is on screen. Hover the tab for the full title when
   it is cut short. A tab opened with `+` reads "New thread" until a thread is
   created there.
-- **Project initials:** one coloured tile per project with a thread open in the
-  tab, in pane order, coloured as in the Activity sidebar.
+- **Project stack:** one coloured tile per thread pane, coloured by its project
+  as in the Activity sidebar. The focused thread's tile is in front with the
+  project's initial; up to two more fan out behind it in pane order. Panes
+  without a thread have no tile.
 
 ## Using tabs
 

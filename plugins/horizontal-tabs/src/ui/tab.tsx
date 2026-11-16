@@ -1,12 +1,12 @@
-// One tab: the project tiles of its threads, then its focused pane's title. Click shows its layout; × (on
+// One tab: the project stack of its thread panes, then its focused pane's title. Click shows its layout; × (on
 // hover) and middle-click close it.
 import type { MouseEvent } from "react";
 import { tabs } from "../controller/tabs.ts";
 import type { TabsSnapshot } from "../controller/tabs-controller.ts";
-import { focused, panes, type Layout } from "../model/layout.ts";
+import { focused, type Layout } from "../model/layout.ts";
 import type { Tab } from "../model/tab-set.ts";
-import { hueOf } from "./project-hue.ts";
-import { ProjectTile } from "./project-tile.tsx";
+import { stackOf } from "./card-stack.ts";
+import { ProjectStack } from "./project-stack.tsx";
 
 type Index = Pick<TabsSnapshot, "threads" | "projects">;
 
@@ -35,11 +35,8 @@ export function TabItem({ tab, selected, tabStop, onClose, index }: Props) {
         title={label}
         onClick={() => tabs.activate(tab.id)}
       >
-        <span className="ht-tiles">
-          {projectsOf(tab.layout, index).map((project) => (
-            <ProjectTile key={project.id} name={project.name} hue={hueOf(project.id)} />
-          ))}
-        </span>
+        {/* Until the sidebar's index loads, its projects are unknown and the stack is empty. */}
+        <ProjectStack projects={stackOf(tab.layout, (id) => index.projects.get(id))} />
         <span className="ht-title">{label}</span>
       </button>
       {onClose !== null && (
@@ -85,8 +82,3 @@ function labelOf(layout: Layout, index: Index): string {
   }
 }
 
-/** The distinct projects of the layout's threads, in pane order; unknown until the index loads. */
-function projectsOf(layout: Layout, index: Index) {
-  const ids = new Set(panes(layout).flatMap((pane) => (pane.content.kind === "thread" ? [pane.content.projectId] : [])));
-  return [...ids].flatMap((id) => index.projects.get(id) ?? []);
-}
