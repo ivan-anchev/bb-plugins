@@ -79,14 +79,15 @@
   }
 }
 
-/* One row as tall as bb's page headers, padded like them. The inset bb gives the top-left one for its
-   floating chrome is the .ht-inset spacer, sized by bb's own classes (src/host/chrome-inset.ts).
+/* One row as tall as bb's page headers. Its first tab starts at the panes' left edge, as the strip does: no
+   left padding. The inset bb gives the top-left header for its floating chrome is the .ht-inset spacer,
+   sized by bb's own classes (src/host/chrome-inset.ts).
    why app-region: on bb Desktop the top row is where the window is dragged; only the controls are not. */
 .ht-strip {
   display: flex;
   align-items: center;
   height: var(--bb-app-chrome-row-height);
-  padding: 0 1rem;
+  padding: 0 1rem 0 0;
   background: var(--sidebar);
   user-select: none;
   app-region: drag;
@@ -101,22 +102,36 @@
 
 .ht-inset {
   flex: none;
+  transition-property: padding, margin;
+}
+/* bb's inset is the header's padding past its own 1rem, so wherever bb insets the row the 1rem comes back. */
+.ht-inset[class*="pl-"] {
+  margin-right: 1rem;
 }
 
 .ht-tablist {
   display: flex;
+  flex: 0 1 auto;
   align-items: center;
   gap: 4px;
   min-width: 0;
+  /* why: past every tab's minimum the row scrolls (a focused tab scrolls into view) rather than run under +. */
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-/* One tab: its button, then × (hidden until the tab is hovered or holds focus). The tab draws the box, so
-   × sits inside it. */
+/* One tab: its button, then × (hidden until the tab is hovered or holds focus, but keeping its room). The
+   tab draws the box, so × sits inside it. Every tab is --ht-tab-width wide; when the row runs out they
+   shrink evenly, as browser tabs do, to a floor that still shows the project tile, a few characters of the
+   title and ×. */
 .ht-tab {
+  --ht-tab-width: 225px;
   display: flex;
+  flex: 0 1 var(--ht-tab-width);
   align-items: center;
-  min-width: 0;
-  max-width: 240px;
+  /* why width too: the tablist sizes itself from its tabs' widths, and only then are they shrunk to fit. */
+  width: var(--ht-tab-width);
+  min-width: 88px;
   height: 32px;
   border: 1px solid transparent;
   border-radius: 8px;

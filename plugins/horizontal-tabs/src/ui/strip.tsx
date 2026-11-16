@@ -21,6 +21,12 @@ export function Strip() {
     if (held !== null && !held.isConnected) tablist.current?.querySelector<HTMLElement>('[role="tab"][tabindex="0"]')?.focus();
   });
 
+  // why: past every tab's minimum width the tablist scrolls, and the selected tab must stay in view.
+  const selected = snapshot?.selectedId;
+  useLayoutEffect(() => {
+    tablist.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [selected]);
+
   if (snapshot === null) return null;
   const { set, selectedId, notice } = snapshot;
   const holdFocus = () => {
