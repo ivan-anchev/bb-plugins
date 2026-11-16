@@ -7,12 +7,13 @@ shows.
 ## Layout
 
 - `src/model/`: bb's split layout (`layout.ts`, with bb's own schema) and the
-  window's tabs (`tab-set.ts`). Pure.
+  window's tabs (`tab-set.ts`, with the open, switch and close reducers). Pure.
 - `src/controller/`: the one owner of the tabs (`tabs-controller.ts`) and this
   window's instance (`tabs.ts`).
 - `src/host/`: everything that reaches into bb outside the SDK, each with a
-  `why:` comment: reading bb's layout (`host-layout.ts`) and the strip's slot in
-  bb's DOM (`strip-mount.ts`).
+  `why:` comment: bb's layout atom, found in bb's loaded chunks
+  (`layout-atom.ts`); reading and showing bb's layout through it
+  (`host-layout.ts`); and the strip's slot in bb's DOM (`strip-mount.ts`).
 - `src/ui/`: the app overlay that feeds bb's changes to the controller and
   portals the strip into the slot, and the strip itself.
 

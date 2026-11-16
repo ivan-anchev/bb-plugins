@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { single, type Layout } from "./layout.ts";
-import { adopt, seed, type TabSet } from "./tab-set.ts";
+import { adopt, close, makeLive, open, seed, type TabSet } from "./tab-set.ts";
 
 function threadLayout(threadId: string): Layout {
   return single({ kind: "thread", projectId: "proj_a", threadId }, "pane-1");
@@ -28,4 +28,45 @@ test("adopt replaces only the live tab's layout", () => {
     ],
     liveId: "t2",
   });
+});
+
+/** Tabs t1…tN on threads thr_1…thr_N, `live` live. */
+function tabsOf(count: number, live: string): TabSet {
+  return { tabs: Array.from({ length: count }, (_, i) => ({ id: `t${i + 1}`, layout: threadLayout(`thr_${i + 1}`) })), liveId: live };
+}
+
+const ids = (set: TabSet) => set.tabs.map((tab) => tab.id);
+
+test("open puts the tab right of the live one and makes it live", () => {
+  const set = open(tabsOf(3, "t2"), { id: "new", layout: threadLayout("thr_new") });
+  assert.deepEqual(ids(set), ["t1", "t2", "new", "t3"]);
+  assert.equal(set.liveId, "new");
+});
+
+test("makeLive makes the tab live with the layout given, and leaves the others", () => {
+  const set = makeLive(tabsOf(3, "t1"), "t3", threadLayout("thr_renamed"));
+  assert.equal(set.liveId, "t3");
+  assert.deepEqual(set.tabs.map((tab) => tab.layout), [threadLayout("thr_1"), threadLayout("thr_2"), threadLayout("thr_renamed")]);
+});
+
+test("closing the live tab hands over to its right neighbour", () => {
+  const set = close(tabsOf(3, "t2"), "t2");
+  assert.deepEqual(ids(set), ["t1", "t3"]);
+  assert.equal(set.liveId, "t3");
+});
+
+test("closing the rightmost live tab hands over to its left neighbour", () => {
+  const set = close(tabsOf(3, "t3"), "t3");
+  assert.deepEqual(ids(set), ["t1", "t2"]);
+  assert.equal(set.liveId, "t2");
+});
+
+test("closing a parked tab keeps the live one", () => {
+  const set = close(tabsOf(3, "t3"), "t1");
+  assert.deepEqual(ids(set), ["t2", "t3"]);
+  assert.equal(set.liveId, "t3");
+});
+
+test("the last tab stays", () => {
+  assert.deepEqual(close(tabsOf(1, "t1"), "t1"), tabsOf(1, "t1"));
 });

@@ -69,8 +69,32 @@ export function single(content: PaneContent, paneId: string): Layout {
   return { root: { type: "pane", paneId, content }, focusedPaneId: paneId };
 }
 
+/**
+ * `layout` with every pane id that `other` also uses renamed to a fresh `<prefix>-<n>`, the focus following
+ * its pane. why: bb keeps a maximized pane by id, so a tab shown with an id the outgoing layout used would
+ * inherit its maximize; with no shared id bb treats every pane as new and maximizes none.
+ */
+export function withPaneIdsApart(layout: Layout, other: Layout | null, prefix: string): Layout {
+  const ids = panes(layout).map((pane) => pane.paneId);
+  const theirs = new Set(other === null ? [] : panes(other).map((pane) => pane.paneId));
+  const taken = new Set([...ids, ...theirs]);
+  const renamed = new Map<string, string>();
+  for (const id of ids.filter((id) => theirs.has(id))) {
+    let n = 1;
+    while (taken.has(`${prefix}-${n}`)) n += 1;
+    renamed.set(id, `${prefix}-${n}`);
+    taken.add(`${prefix}-${n}`);
+  }
+  const rename = (id: string) => renamed.get(id) ?? id;
+  return { root: mapPanes(layout.root, (pane) => ({ ...pane, paneId: rename(pane.paneId) })), focusedPaneId: rename(layout.focusedPaneId) };
+}
+
 function leaves(node: LayoutNode): Pane[] {
   return node.type === "pane" ? [node] : node.children.flatMap(leaves);
+}
+
+function mapPanes(node: LayoutNode, map: (pane: Pane) => Pane): LayoutNode {
+  return node.type === "pane" ? map(node) : { ...node, children: node.children.map((child) => mapPanes(child, map)) };
 }
 
 function sum(values: readonly number[]): number {
