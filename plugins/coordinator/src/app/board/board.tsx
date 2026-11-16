@@ -1,7 +1,8 @@
-// The board of one coordinating thread: its verification switch and its digest, then its crews
-// grouped Needs you, Ready for review, Verifying, Working, Idle and Done. The Board tab in the thread and the Board page in the panel both
-// draw it, from one read; each gives it the scrolling root it sits in.
-import { experimental_useRpcMutation, experimental_useRpcQuery, Markdown } from "@get-bb/plugin-sdk/app";
+// The board of one coordinating thread: its verification switch, why PR status is unavailable when
+// it is, and its digest, then its crews grouped Needs you, Ready for review, Verifying, Working,
+// Landing, Idle and Done. The Board tab in the thread and the Board page in the panel both draw
+// it, from one read; each gives it the scrolling root it sits in.
+import { experimental_Icon as Icon, experimental_useRpcMutation, experimental_useRpcQuery, Markdown } from "@get-bb/plugin-sdk/app";
 import { useId, useState } from "react";
 import { coordinatorContract as contract, type Board as BoardData, type BoardRow } from "../../contract.ts";
 import { BOARD_STATE_LABELS, byState, type BoardState } from "../../model/crew-state.ts";
@@ -26,6 +27,7 @@ export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
       {read.data !== undefined && (
         <>
           <VerifySwitch coordinatorId={coordinatorId} verify={read.data.verify} />
+          {read.data.prUnavailable !== null && <PrUnavailable reason={read.data.prUnavailable} />}
           <Digest ids={ids} digest={read.data.digest} />
           <Crews ids={ids} coordinatorId={coordinatorId} rows={read.data.rows} />
         </>
@@ -69,6 +71,21 @@ function VerifySwitch({ coordinatorId, verify }: { coordinatorId: CoordinatorId;
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * Why the plugin can't read its crews' pull requests now. Rows keep the PR and CI it read last, and a
+ * pass it couldn't check CI for says so.
+ */
+function PrUnavailable({ reason }: { reason: string }) {
+  return (
+    <p className="flex items-start gap-2 px-2 text-xs text-muted-foreground">
+      <Icon name="AlertTriangle" aria-hidden className="mt-px size-3.5 shrink-0 text-warning-text" />
+      <span className="min-w-0">
+        <span className="font-medium text-foreground">PR status unavailable:</span> {reason}. Rows show what was read last.
+      </span>
+    </p>
   );
 }
 
@@ -132,6 +149,7 @@ const DOT: Record<BoardState, string> = {
   "ready-for-review": "bg-pr-merged",
   verifying: "bg-attention",
   working: "bg-success",
+  landing: "bg-primary",
   idle: "bg-muted-foreground",
   done: "border border-muted-foreground",
 };

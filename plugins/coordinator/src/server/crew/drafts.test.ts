@@ -44,6 +44,7 @@ test("a draft sits under Needs you headed with its title, with what its editor s
     state: "needs-you",
     headline: "Draft: Add retries",
     verdict: null,
+    pr: null,
     draft: {
       projectId: "prj_1",
       brief: RETRIES.brief,

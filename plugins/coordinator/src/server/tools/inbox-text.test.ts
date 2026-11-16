@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { handoffIdSchema, type Handoff } from "../../model/handoff.ts";
 import { coordinatorIdSchema, crewIdSchema } from "../../model/role.ts";
-import { outcome, type CriterionResult, type Verdict } from "../../model/verdict.ts";
+import { outcome, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
 import { handoffText } from "./inbox-text.ts";
 
 const doneWith = (verdict: Verdict): Handoff => ({
@@ -31,7 +31,7 @@ const returned = (results: CriterionResult[]): Verdict => ({
   findings: [],
   model: { providerId: "codex", model: "gpt-default" },
   sameModel: false,
-  settlement: { kind: "checked", refused: null },
+  settlement: { kind: "checked", refused: null, ci: { kind: "none" } },
 });
 
 test("a returned verdict reads Verified in catch-up exactly when outcome() passes it, with its count beside", () => {

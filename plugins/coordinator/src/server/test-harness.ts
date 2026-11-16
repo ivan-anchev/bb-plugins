@@ -28,6 +28,7 @@ import type { ToolsBb } from "./tools/tool-kit.ts";
 import { registerVerdictTool } from "./verify/verdict-tool.ts";
 import type { ModelsBb } from "./verify/verifier-model.ts";
 import { createVerify } from "./verify/verify.ts";
+import { createPrWatch } from "./watch/pr-watch.ts";
 
 const PLUGIN_ID = "coordinator";
 
@@ -37,6 +38,7 @@ type SpawnArgs = Parameters<SpawnBb["sdk"]["threads"]["spawn"]>[0];
 type CrewsBb = Parameters<typeof createCrews>[0]["bb"];
 type InboxBb = Parameters<typeof createInbox>[0]["bb"];
 type VerifyBb = Parameters<typeof createVerify>[0]["bb"];
+type PrWatchBb = Parameters<typeof createPrWatch>[0]["bb"];
 type SendArgs = Parameters<CrewsBb["sdk"]["threads"]["send"]>[0];
 type Delivery = Awaited<ReturnType<InboxBb["sdk"]["threads"]["send"]>>;
 type QueuedMessage = Awaited<ReturnType<InboxBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number];
@@ -130,6 +132,60 @@ const PROVIDERS: FakeProvider[] = [
 /** How bb fails the sends to one thread (see `sends`). */
 export type SendFailure = { threadId: string; error: Error; taken: boolean };
 
+/**
+ * A pull request as the fake GitHub holds it, in GitHub's words: its state, draft flag, review
+ * decision, head commit, and its checks rolled up (null: none reported) with the names of the
+ * failed ones.
+ */
+export type FakePr = {
+  number: number;
+  state: "OPEN" | "MERGED" | "CLOSED";
+  isDraft: boolean;
+  reviewDecision: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
+  head: string;
+  rollup: "SUCCESS" | "FAILURE" | "PENDING" | null;
+  failed: string[];
+};
+
+/**
+ * gh's answer to the watch's query, built as GitHub builds it: one aliased field per branch
+ * variable, each with that branch's pull request, or none.
+ */
+function graphqlAnswer(args: string[], prs: ReadonlyMap<string, FakePr>): string {
+  const branches = args.flatMap((arg) => {
+    const match = /^(b\d+)=(.*)$/s.exec(arg);
+    return match === null ? [] : [[match[1], match[2]] as const];
+  });
+  const field = (pr: FakePr | undefined) => ({
+    nodes:
+      pr === undefined
+        ? []
+        : [
+            {
+              number: pr.number,
+              url: `https://github.com/acme/webhooks/pull/${pr.number}`,
+              state: pr.state,
+              isDraft: pr.isDraft,
+              reviewDecision: pr.reviewDecision,
+              commits: {
+                nodes: [
+                  {
+                    commit: {
+                      oid: pr.head,
+                      statusCheckRollup:
+                        pr.rollup === null
+                          ? null
+                          : { state: pr.rollup, contexts: { nodes: [...pr.failed.map((name) => ({ __typename: "CheckRun", name, conclusion: "FAILURE" })), { __typename: "CheckRun", name: "lint", conclusion: "SUCCESS" }] } },
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+  });
+  return JSON.stringify({ data: { repository: Object.fromEntries(branches.map(([alias, branch]) => [alias, field(prs.get(branch))])) } });
+}
+
 /** Whether a stop leaves the thread idle, or still stopping, as bb's unconfirmed interrupt does. */
 type StopBehaviour = "idle" | "stopping";
 
@@ -144,6 +200,28 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
    * send and never answer, as when the plugin crashes during the call.
    */
   const sends: { failure: SendFailure | null; pending: Promise<void> | null; unanswered: boolean } = { failure: null, pending: null, unanswered: false };
+  /**
+   * GitHub and gh as the PR watch reaches them: the project's git remote (null: none), each
+   * branch's pull request, a failure every gh run rejects with instead (null: none), and every
+   * run's arguments. A test sets them between ticks. Set `pending` to hold every run's answer,
+   * GitHub's as the run began, until it settles, as a slow network does.
+   */
+  const github: { remote: string | null; prs: Map<string, FakePr>; failure: Error | null; pending: Promise<void> | null; runs: string[][] } = {
+    remote: "https://github.com/acme/webhooks.git",
+    prs: new Map(),
+    failure: null,
+    pending: null,
+    runs: [],
+  };
+  /** The time the tick runs at; a test moves it on. */
+  const clock = { now: 1_000_000 };
+  /**
+   * bb's git plugin as the watch reaches it: the branch each environment has checked out, by
+   * environment id (absent: bb--git can't read it), and the keys of every `status` call.
+   */
+  const git: { checkouts: Map<string, string>; calls: string[][] } = { checkouts: new Map(), calls: [] };
+  /** Set `failure` to make every read of a thread's turns reject with it, as when bb can't answer. */
+  const turnEvents: { failure: Error | null } = { failure: null };
   /** Set `answered` to run as bb answers a thread's model lookup, as when someone acts at that moment. */
   const modelLookups: { answered: ((threadId: string) => void) | null } = { answered: null };
   const store = openStore(memoryStorage().storage);
@@ -185,7 +263,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     for (const handler of handlersOf(event)) await handler(payload);
   }
 
-  const threads: SpawnBb["sdk"]["threads"] & CrewsBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] & VerifyBb["sdk"]["threads"] = {
+  const threads: SpawnBb["sdk"]["threads"] & CrewsBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] & VerifyBb["sdk"]["threads"] & PrWatchBb["sdk"]["threads"] = {
     async spawn(args) {
       const id = `thr_${++spawned}`;
       metadata.set(id, args.pluginMetadata ?? {});
@@ -256,6 +334,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     },
     events: {
       list: async ({ threadId }) => {
+        if (turnEvents.failure !== null) throw turnEvents.failure;
         const latest = fakeThread(threadId).turns.at(-1);
         return latest === undefined ? [] : [{ seq: latest }];
       },
@@ -283,9 +362,27 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       return models === null ? { modelLoadError: { code: "auth_required", detail: null, providerId }, models: [] } : { modelLoadError: null, models };
     },
   };
+  const projects = { get: async (_: { projectId: string }) => ({ gitRemoteUrl: github.remote }) };
+  // As bb--git answers `status`: each key's checkout when it can read it, else unavailable; the caller's schema parses it, as bb's callRpc does.
+  const plugins = {
+    async callRpc<T>({ pluginId, method, input, outputSchema }: { pluginId: string; method: string; input: { keys: string[] }; outputSchema: z.ZodType<T> }): Promise<T> {
+      if (pluginId !== "bb--git" || method !== "status") throw new Error(`No rpc ${pluginId} ${method}`);
+      git.calls.push(input.keys);
+      const status = (branchName: string | undefined) =>
+        branchName === undefined ? { outcome: "unavailable", message: "The environment's machine is offline" } : { outcome: "available", workspace: { checkout: { kind: "branch", branchName, headSha: null } } };
+      return outputSchema.parse(Object.fromEntries(input.keys.map((key) => [key, status(git.checkouts.get(key))])));
+    },
+  };
+  async function gh(args: string[]): Promise<string> {
+    github.runs.push(args);
+    if (github.failure !== null) throw github.failure;
+    const answer = graphqlAnswer(args, github.prs);
+    await github.pending;
+    return answer;
+  }
   const bb = {
     pluginId: PLUGIN_ID,
-    sdk: { threads, providers: providersArea },
+    sdk: { threads, providers: providersArea, projects, plugins },
     log: { warn: (message: string) => void warnings.push(message) },
     onDispose: (hook: () => void) => void disposers.push(hook),
     events: {
@@ -311,7 +408,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     registerVerdictTool(bb, { store, verify });
     forwardCrewThreadEvents(bb, store, refreshBoard);
     watchCrewThreads({ bb, store, inbox, onChange: refreshBoard });
-    return { spawner, inbox, verify, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, crews, inbox }) } };
+    const prWatch = createPrWatch({ bb, store, inbox, gh });
+    return { spawner, inbox, verify, prWatch, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, crews, inbox }) } };
   }
   let plugin = wire();
 
@@ -339,8 +437,17 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     get rpc() {
       return plugin.rpc;
     },
-    /** The schedule's once-a-minute pass, as server.ts runs it. */
+    /** GitHub and gh as the PR watch reaches them; a test may change them between ticks. */
+    github,
+    /** bb's git plugin as the PR watch reaches it; a test may change it between ticks. */
+    git,
+    /** How bb answers a read of a thread's turns; a test may make it fail. */
+    turnEvents,
+    /** The time the next tick runs at; a test may move it on. */
+    clock,
+    /** The schedule's once-a-minute pass, as server.ts runs it, at the clock's time. */
     async tick(): Promise<void> {
+      await plugin.prWatch.tick(clock.now);
       await plugin.verify.reconcile();
       await plugin.inbox.tick();
     },

@@ -1,13 +1,15 @@
 // The verify step: the plugin, not the coordinating thread, starts a verifier for every done
 // handoff while verification is on, and the handoff reaches the coordinating thread only with its
-// verdict. A returned verdict is stored first, then settled: a crew's first failed verdict goes
-// back to the crew, as the verifier's message, with no turn of the coordinating thread; any other
-// goes to the coordinating thread. Every change to a verdict is a compare-and-set in the store, so
+// verdict. A returned verdict is stored first, then settled: one that passed every criterion waits
+// while CI on its commit is still to come, a crew's first failed verdict goes back to the crew, as
+// the verifier's message, with no turn of the coordinating thread, and any other goes to the
+// coordinating thread. Every change to a verdict is a compare-and-set in the store, so
 // the crew tool, the verifier's crew_verdict and the tick can race without a verdict moving twice.
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
 import type { Crew } from "../../model/crew.ts";
 import { handoffIsCurrent, type Handoff, type HandoffId, type NewHandoff } from "../../model/handoff.ts";
-import { allPassed, isSettled, type CriterionResult, type ModelRef, type Verdict } from "../../model/verdict.ts";
+import { ciOf, type CiVerdict } from "../../model/verdict/pr.ts";
+import { isSettled, judge, type CriterionResult, type ModelRef, type Verdict } from "../../model/verdict/verdict.ts";
 import { isOpen, listedThreads } from "../crew/board.ts";
 import { latestTurnSeq, type TurnsBb } from "../crew/handoffs.ts";
 import type { Inbox } from "../inbox/inbox.ts";
@@ -39,7 +41,7 @@ type VerifyBb = ModelsBb & TurnsBb & {
 
 type Deps = {
   bb: VerifyBb;
-  store: Pick<Store, "handoff" | "crew" | "coordinator" | "openVerdicts" | "markNudged" | "receiveVerdict" | "claimFixRound" | "unsettledVerdicts">;
+  store: Pick<Store, "handoff" | "crew" | "coordinator" | "openVerdicts" | "markNudged" | "receiveVerdict" | "claimFixRound" | "unsettledVerdicts" | "prStatus">;
   spawner: Pick<Spawner, "verifier">;
   inbox: Pick<Inbox, "handoff" | "giveUpVerdict" | "settleVerdict">;
 };
@@ -49,9 +51,13 @@ export type VerifierReport = Pick<Extract<Verdict, { state: "returned" }>, "head
 
 type Running = Extract<Verdict, { state: "running" }>;
 type Returned = Extract<Verdict, { state: "returned" }>;
+type Done = Extract<Handoff, { status: "done" }>;
 
-/** What settling a returned verdict does next: send its findings to the crew, or settle it as it is. */
-type Step = { kind: "send" } | Exclude<Settlement, { kind: "sent-back" }>;
+/** What settling a returned verdict does next: send its findings to the crew, wait for CI, or settle it as it is. */
+type Step = { kind: "send"; ci: CiVerdict } | Exclude<Settlement, { kind: "sent-back" }>;
+
+/** What a verdict that settles before CI finished on its commit says of CI: it failed on its criteria first. */
+const CI_UNFINISHED: CiVerdict = { kind: "not-checked", reason: "CI hadn't finished when its criteria failed" };
 
 /** How many failed verdicts go back to a crew before the next one goes to its coordinating thread. */
 const MAX_AUTO_FIX_ROUNDS = 1;
@@ -150,7 +156,7 @@ export function createVerify({ bb, store, spawner, inbox }: Deps) {
   }
 
   /** The handoff, its crew and its crew's thread, while a verifier's verdict on it is not settled; else null. */
-  function unsettledOf(handoffId: HandoffId): { handoff: Handoff; crew: Crew; verdict: Returned; crewThreadId: string } | null {
+  function unsettledOf(handoffId: HandoffId): { handoff: Done; crew: Crew; verdict: Returned; crewThreadId: string } | null {
     const handoff = store.handoff(handoffId);
     if (handoff?.status !== "done" || handoff.verdict.state !== "returned" || isSettled(handoff.verdict)) return null;
     const crew = store.crew(handoff.coordinatorId, handoff.crewId);
@@ -160,18 +166,23 @@ export function createVerify({ bb, store, spawner, inbox }: Deps) {
   }
 
   /**
-   * The next step for an unsettled verdict (`latestTurnSeq`: its crew thread's, as bb lists it). A
-   * pending one is sent back when it failed, its handoff is current and the crew is open with a
-   * round left; else it is checked. One whose round is claimed was being sent when the plugin
+   * The next step for an unsettled verdict (`latestTurnSeq`: its crew thread's, as bb lists it),
+   * judged with CI on its commit as the crew's PR status says. One that passed every criterion
+   * waits while CI is still to come. A failed one is sent back when its handoff is current and the
+   * crew is open with a round left; else it is checked. One whose round is claimed was being sent when the plugin
    * stopped, as settle owns a claim until it settles it. Its findings may or may not have reached
    * the crew, and nothing bb keeps can tell: a send's pluginSubmission is never stored, and a turn
    * in the crew's thread may be anyone's. So it goes to the coordinating thread, with the round
    * kept, and is never sent again.
    */
-  function stepOf(handoff: Handoff, crew: Crew, verdict: Returned, latestTurnSeq: number | null): Step {
+  function stepOf(handoff: Done, crew: Crew, verdict: Returned, latestTurnSeq: number | null): Step {
     if (verdict.settlement.kind === "sending-back") return { kind: "maybe-sent-back" };
-    const send = !allPassed(verdict) && handoffIsCurrent(handoff, latestTurnSeq) && isOpen(crew) && crew.fixRounds < MAX_AUTO_FIX_ROUNDS;
-    return send ? { kind: "send" } : { kind: "checked", refused: null };
+    const ci = ciOf(handoff, store.prStatus(crew.coordinatorId, crew.id));
+    const judged = judge(verdict, ci);
+    if (judged === "waiting-for-ci") return { kind: "waiting-for-ci" };
+    const settledCi = ci.kind === "waiting" ? CI_UNFINISHED : ci;
+    const send = judged === "fail" && handoffIsCurrent(handoff, latestTurnSeq) && isOpen(crew) && crew.fixRounds < MAX_AUTO_FIX_ROUNDS;
+    return send ? { kind: "send", ci: settledCi } : { kind: "checked", refused: null, ci: settledCi };
   }
 
   /**
@@ -197,9 +208,9 @@ export function createVerify({ bb, store, spawner, inbox }: Deps) {
       const { handoff, crew, verdict } = unsettled;
       const step = stepOf(handoff, crew, verdict, latest);
       if (step.kind !== "send") return inbox.settleVerdict(handoffId, step);
-      store.claimFixRound(handoffId);
+      store.claimFixRound(handoffId, step.ci);
       // why settle whatever happened meanwhile: the claim, not the verdict's old state, says the findings are owed.
-      inbox.settleVerdict(handoffId, await sendBack(handoff, crewThreadId, verdict));
+      inbox.settleVerdict(handoffId, await sendBack(handoff, crewThreadId, verdict, step.ci));
     } finally {
       settling.delete(handoffId);
     }
@@ -211,19 +222,19 @@ export function createVerify({ bb, store, spawner, inbox }: Deps) {
    * Refused, as only some of bb's answers prove: checked, with bb's answer. Any other failure may
    * come after bb took them, so they may or may not have reached the crew.
    */
-  async function sendBack(handoff: Handoff, crewThreadId: string, verdict: Returned): Promise<Settlement> {
+  async function sendBack(handoff: Handoff, crewThreadId: string, verdict: Returned, ci: CiVerdict): Promise<Settlement> {
     try {
       await bb.sdk.threads.send({
         threadId: crewThreadId,
         senderThreadId: verdict.verifierThreadId,
         mode: "queue-if-active",
-        input: [{ type: "text", text: findingsMessage(verdict), mentions: [] }],
+        input: [{ type: "text", text: findingsMessage(verdict, ci), mentions: [] }],
       });
       return { kind: "sent-back" };
     } catch (error) {
       bb.log.warn(`Could not send the verifier's findings to ${handoff.crewId} (${crewThreadId}), so its coordinating thread decides: ${messageOf(error)}`);
       const refused = refusalOf(error);
-      return refused === null ? { kind: "maybe-sent-back" } : { kind: "checked", refused };
+      return refused === null ? { kind: "maybe-sent-back" } : { kind: "checked", refused, ci };
     }
   }
 
@@ -252,9 +263,10 @@ export function createVerify({ bb, store, spawner, inbox }: Deps) {
     },
 
     /**
-     * The tick's pass: starts every verifier still queued, follows every one still running, and
-     * settles every verdict a crash or a reload left unsettled. why one read per verdict, right
-     * before acting on it: the pass awaits bb between them.
+     * The tick's pass, after the PR watch's reads: starts every verifier still queued, follows every
+     * one still running, and settles every verdict that waits for CI or that a crash or a reload
+     * left unsettled. why one read per verdict, right before acting on it: the pass awaits bb
+     * between them.
      */
     async reconcile(): Promise<void> {
       for (const { handoffId, verdict } of store.openVerdicts()) {

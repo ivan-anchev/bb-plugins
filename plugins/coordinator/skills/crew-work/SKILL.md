@@ -53,7 +53,9 @@ then stop:
   done-criterion in turn: the command you ran and what it printed. Use `[]`
   for an empty list.
 - **headSha** (done only, required): `git rev-parse HEAD` after your last
-  commit. **prUrl**: the pull request, if you opened one.
+  commit. **prUrl**: the pull request, if you opened one. Name it: a verifier
+  passing your criteria then waits for CI on your commit, and fails if CI
+  does.
 
 Say plainly when a criterion fails or you couldn't check it. Never report
 `done` without having run every check.

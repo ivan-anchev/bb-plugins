@@ -3,8 +3,9 @@
 // the crew's.
 import type { Handoff, HandoffId } from "../../model/handoff.ts";
 import type { InboxEvent, StoredEvent } from "../../model/inbox/inbox-event.ts";
+import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
 import type { CrewId } from "../../model/role.ts";
-import { allPassed, mayHaveReachedCrew, outcome, type Verdict } from "../../model/verdict.ts";
+import { allPassed, ciVerdictOf, judge, mayHaveReachedCrew, outcome, type Verdict } from "../../model/verdict/verdict.ts";
 
 type Lookups = {
   /** Each crew's title, as the coordinating thread gave it. */
@@ -43,6 +44,8 @@ function eventText({ event, at }: StoredEvent, { titles, handoff }: Lookups): st
       return `### ${crew} failed\n\n${when} ${event.error === null ? "bb gave no error message." : `bb's error:\n\n${event.error.trim()}`} Read its thread with crew_read before deciding what to do.`;
     case "needs-input":
       return `### ${crew} is waiting on the user in its thread\n\n${when} Only the user can answer it there; tell them in your digest. It asks, in its own words:\n\n${event.question.trim()}`;
+    case "pr":
+      return `### ${crew} PR #${event.pr.number}: ${event.changes.map((change) => PR_CHANGE_WORDS[change]).join(", ")}\n\n${when} ${prText(event.pr)} A done handoff's verdict that waits for CI settles on its own; you hear of it then.`;
     default:
       return event satisfies never;
   }
@@ -91,6 +94,38 @@ export function handoffText(handoff: Handoff): string {
   return report.join("\n\n");
 }
 
+/** A pull request as the plugin read it from GitHub. Check names are GitHub's, as the repository's CI names them. */
+function prText(pr: PrSnapshot): string {
+  const state = pr.state === "open" && pr.draft ? "open, as a draft" : pr.state;
+  const review = { approved: "approved", "changes-requested": "changes requested", none: "no approval or change request" }[pr.review];
+  const ci = {
+    none: "no checks reported",
+    pending: "still running",
+    pass: "passed",
+    fail: `failed${pr.failedChecks.length === 0 ? "" : ` (${pr.failedChecks.map((name) => `\`${name}\``).join(", ")})`}`,
+  }[pr.ci];
+  return `It is ${state} (${pr.url}), with ${review}; CI on its head ${pr.headSha.slice(0, 7)}: ${ci}.`;
+}
+
+/** What CI said about a verdict's commit, in a line (empty: the verdict is still to settle, and doesn't wait for CI). */
+function ciLine(verdict: Extract<Verdict, { state: "returned" }>, ci: CiVerdict | null): string {
+  if (ci === null) return verdict.settlement.kind === "waiting-for-ci" ? "CI: still to finish on this commit; the verdict waits for it." : "";
+  switch (ci.kind) {
+    case "none":
+      return "CI: no pull request to wait for.";
+    case "no-checks":
+      return `CI: no checks; GitHub reported none on #${ci.number} at this commit, after the wait for them.`;
+    case "pass":
+      return `CI: passed on #${ci.number} at this commit.`;
+    case "fail":
+      return `CI: failed on #${ci.number} at this commit${ci.failedChecks.length === 0 ? "" : `; failed checks, as GitHub names them: ${ci.failedChecks.join(", ")}`}.`;
+    case "not-checked":
+      return `CI: not checked (${ci.reason}).`;
+    default:
+      return ci satisfies never;
+  }
+}
+
 /** What the plugin's check found. A verifier's evidence is its own words, marked as such. */
 function verdictText(verdict: Verdict): string {
   switch (verdict.state) {
@@ -98,10 +133,12 @@ function verdictText(verdict: Verdict): string {
     case "running":
       return "Not in yet: a verifier is checking it.";
     case "returned": {
-      const label = allPassed(verdict) ? "Verified" : "Failed verification";
-      const passed = verdict.criteria.filter((check) => check.result === "pass").length;
+      const ci = ciVerdictOf(verdict);
+      const passed = ci === null ? allPassed(verdict) : judge(verdict, ci) === "pass";
+      const label = passed ? (ci === null ? "Passed every criterion" : "Verified") : "Failed verification";
+      const count = verdict.criteria.filter((check) => check.result === "pass").length;
       const by = `${verdict.model.providerId} ${verdict.model.model}${verdict.sameModel ? ", the crew's own model, as no other was available" : ""}`;
-      const head = `${label}: ${passed} of ${verdict.criteria.length} criteria passed, checked at ${verdict.headSha} by a verifier on ${by}. Each result, with its evidence in the verifier's words:`;
+      const head = [`${label}: ${count} of ${verdict.criteria.length} criteria passed, checked at ${verdict.headSha} by a verifier on ${by}.`, ciLine(verdict, ci), "Each result, with its evidence in the verifier's words:"].filter((part) => part !== "").join(" ");
       const checks = verdict.criteria.map((check, i) => `${i + 1}. ${check.result.toUpperCase()}: ${check.criterion}\n   ${check.evidence.replaceAll("\n", "\n   ")}`);
       const findings = verdict.findings.length === 0 ? "Findings: none." : `Findings:\n${verdict.findings.map((finding) => `- ${finding.replaceAll("\n", "\n  ")}`).join("\n")}`;
       return [head, ...checks, findings].join("\n\n");

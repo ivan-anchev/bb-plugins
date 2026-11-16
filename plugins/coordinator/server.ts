@@ -18,6 +18,8 @@ import { registerCoordinatorTools } from "./src/server/tools/coordinator-tools.t
 import { registerCrewTools } from "./src/server/tools/crew-tools.ts";
 import { registerVerdictTool } from "./src/server/verify/verdict-tool.ts";
 import { createVerify } from "./src/server/verify/verify.ts";
+import { runGh } from "./src/server/watch/host-command.ts";
+import { createPrWatch } from "./src/server/watch/pr-watch.ts";
 
 export default function plugin(bb: BbPluginApi): void {
   const store = openStore(bb.storage);
@@ -36,9 +38,11 @@ export default function plugin(bb: BbPluginApi): void {
   registerVerdictTool(bb, { store, verify });
   forwardCrewThreadEvents(bb, store, refreshBoard);
   watchCrewThreads({ bb, store, inbox, onChange: refreshBoard });
+  const prWatch = createPrWatch({ bb, store, inbox, gh: runGh });
   bb.background.schedule("watch", "* * * * *", async () => {
-    // why caught: a verifier pass that can't read bb must not keep the doorbells from ringing.
-    await verify.reconcile().catch((error: unknown) => bb.log.warn(`Could not reconcile the verifiers; the next tick tries again: ${error instanceof Error ? error.message : String(error)}`));
+    // why each caught: a pass that can't read bb or GitHub must not keep the next from running, nor the doorbells from ringing.
+    await prWatch.tick(Date.now()).catch((error: unknown) => bb.log.warn(`Could not read the crews' pull requests; the next tick tries again: ${messageOf(error)}`));
+    await verify.reconcile().catch((error: unknown) => bb.log.warn(`Could not reconcile the verifiers; the next tick tries again: ${messageOf(error)}`));
     await inbox.tick();
   });
 
@@ -50,3 +54,5 @@ export default function plugin(bb: BbPluginApi): void {
     ...memoryHandlers(store, memory, inbox),
   });
 }
+
+const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));

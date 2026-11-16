@@ -1,0 +1,116 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { handoffIdSchema } from "../handoff.ts";
+import { ciOf, meaningfulChanges, type PrSnapshot, type PrStatus, type PrUnavailable } from "./pr.ts";
+
+const HEAD = "a".repeat(40);
+const pr = (fields: Partial<PrSnapshot> = {}): PrSnapshot => ({
+  number: 12,
+  url: "https://github.com/octo-org/widgets/pull/12",
+  state: "open",
+  draft: false,
+  review: "none",
+  ci: "pending",
+  headSha: HEAD,
+  failedChecks: [],
+  ...fields,
+});
+
+test("meaningfulChanges: one case per transition, a new pending run among those that change nothing", () => {
+  const cases: [string, PrSnapshot | null, PrSnapshot, ReturnType<typeof meaningfulChanges>][] = [
+    ["first seen open: opened", null, pr(), ["opened"]],
+    ["first seen merged: merged", null, pr({ state: "merged" }), ["merged"]],
+    ["first seen closed: closed", null, pr({ state: "closed" }), ["closed"]],
+    ["open → merged", pr(), pr({ state: "merged" }), ["merged"]],
+    ["open → closed", pr(), pr({ state: "closed" }), ["closed"]],
+    ["closed → open: reopened", pr({ state: "closed" }), pr(), ["reopened"]],
+    ["CI pending → pass", pr(), pr({ ci: "pass" }), ["ci-passed"]],
+    ["CI pending → fail", pr(), pr({ ci: "fail" }), ["ci-failed"]],
+    ["CI pass → fail", pr({ ci: "pass" }), pr({ ci: "fail" }), ["ci-failed"]],
+    ["CI fail → pass", pr({ ci: "fail" }), pr({ ci: "pass" }), ["ci-passed"]],
+    ["CI none → pass", pr({ ci: "none" }), pr({ ci: "pass" }), ["ci-passed"]],
+    ["review none → approved", pr(), pr({ review: "approved" }), ["approved"]],
+    ["review none → changes requested", pr(), pr({ review: "changes-requested" }), ["changes-requested"]],
+    ["review changes requested → approved", pr({ review: "changes-requested" }), pr({ review: "approved" }), ["approved"]],
+    ["merged with CI green at once, in order", pr(), pr({ state: "merged", ci: "pass" }), ["merged", "ci-passed"]],
+    ["a new pending run after a pass: no event", pr({ ci: "pass" }), pr({ ci: "pending", headSha: "b".repeat(40) }), []],
+    ["a new pending run after a failure: no event", pr({ ci: "fail" }), pr({ ci: "pending", headSha: "b".repeat(40) }), []],
+    ["CI none → pending: no event", pr({ ci: "none" }), pr({ ci: "pending" }), []],
+    ["CI pass → none: no event", pr({ ci: "pass" }), pr({ ci: "none" }), []],
+    ["review dismissed: no event", pr({ review: "approved" }), pr(), []],
+    ["marked ready from draft: no event", pr({ draft: true }), pr(), []],
+    ["a push whose CI still passes: no event", pr({ ci: "pass" }), pr({ ci: "pass", headSha: "b".repeat(40) }), []],
+    ["nothing changed: no event", pr(), pr(), []],
+  ];
+  for (const [name, before, after, expected] of cases) assert.deepEqual(meaningfulChanges(before, after), expected, name);
+});
+
+const READ_AT = 10_000_000;
+const MINUTE = 60_000;
+const HANDOFF = handoffIdSchema.parse("6f1c2a54-0b8e-4c3e-9d7a-2f5e8b1c4d90");
+/** The done handoff CI is judged for: its commit is HEAD, and it names this pull request (null: none). */
+const claim = (prUrl: string | null) => ({ id: HANDOFF, headSha: HEAD, prUrl });
+/** A PR status whose latest read that found the pull request came since the handoff, and saw its head for `seenFor` by then (a minute, unless given). */
+const read = (snapshot: PrSnapshot | null, unavailable: PrUnavailable | null = null, seenFor = MINUTE): PrStatus =>
+  snapshot === null ? { snapshot, unavailable } : { snapshot, headSeenAt: READ_AT - seenFor, readAt: READ_AT, handoffAtRead: HANDOFF, unavailable };
+const SIGNED_OUT: PrUnavailable = { kind: "persistent", reason: "gh isn't signed in" };
+const UNREACHABLE: PrUnavailable = { kind: "transient", reason: "couldn't reach GitHub" };
+
+test("ciOf: with no pull request named or known there is nothing to wait for", () => {
+  assert.deepEqual(ciOf(claim(null), null), { kind: "none" });
+  assert.deepEqual(ciOf(claim(null), read(null)), { kind: "none" });
+  assert.deepEqual(ciOf(claim(null), read(null, UNREACHABLE)), { kind: "none" });
+  assert.deepEqual(ciOf(claim(null), read(null, SIGNED_OUT)), { kind: "none" });
+});
+
+test("ciOf: a pull request named with no snapshot yet waits", () => {
+  assert.deepEqual(ciOf(claim("https://github.com/octo-org/widgets/pull/12"), null), { kind: "waiting", number: null });
+  assert.deepEqual(ciOf(claim("https://github.com/octo-org/widgets/pull/12"), read(null)), { kind: "waiting", number: null });
+});
+
+test("ciOf: a snapshot of the handoff's commit says what CI said; one of another commit says nothing", () => {
+  assert.deepEqual(ciOf(claim(null), read(pr({ ci: "pass" }))), { kind: "pass", number: 12 });
+  assert.deepEqual(ciOf(claim(null), read(pr({ ci: "fail", failedChecks: ["test"] }))), { kind: "fail", number: 12, failedChecks: ["test"] });
+  assert.deepEqual(ciOf(claim(null), read(pr({ ci: "pending" }))), { kind: "waiting", number: 12 });
+  assert.deepEqual(ciOf(claim(null), read(pr({ ci: "pass", headSha: "b".repeat(40) }))), { kind: "waiting", number: 12 });
+});
+
+test("ciOf: while GitHub can't be read until someone acts, CI still to come can't be checked; a result already read still counts", () => {
+  assert.deepEqual(ciOf(claim("https://github.com/octo-org/widgets/pull/12"), read(null, SIGNED_OUT)), { kind: "not-checked", reason: "PR status unavailable: gh isn't signed in" });
+  assert.deepEqual(ciOf(claim(null), read(pr(), SIGNED_OUT)), { kind: "not-checked", reason: "PR status unavailable: gh isn't signed in" });
+  assert.deepEqual(ciOf(claim(null), read(pr({ ci: "fail" }), SIGNED_OUT)), { kind: "fail", number: 12, failedChecks: [] });
+});
+
+test("ciOf: a read that failed in a way the next may not says nothing about CI: still to come waits; a result already read still counts", () => {
+  assert.deepEqual(ciOf(claim("https://github.com/octo-org/widgets/pull/12"), read(null, UNREACHABLE)), { kind: "waiting", number: null });
+  assert.deepEqual(ciOf(claim(null), read(pr(), UNREACHABLE)), { kind: "waiting", number: 12 });
+  assert.deepEqual(ciOf(claim(null), read(pr({ ci: "pass" }), UNREACHABLE)), { kind: "pass", number: 12 });
+});
+
+test("ciOf: a pull request merged or closed at another commit leaves this one's CI unchecked, not waiting forever", () => {
+  assert.deepEqual(ciOf(claim(null), read(pr({ state: "merged", ci: "pass", headSha: "b".repeat(40) }))), { kind: "not-checked", reason: "#12 was merged before CI finished on this commit" });
+  assert.deepEqual(ciOf(claim(null), read(pr({ state: "closed", ci: "pending" }))), { kind: "not-checked", reason: "#12 was closed before CI finished on this commit" });
+  assert.deepEqual(ciOf(claim(null), { snapshot: pr({ state: "closed", ci: "pending" }), headSeenAt: READ_AT, readAt: READ_AT, handoffAtRead: null, unavailable: null }), { kind: "waiting", number: 12 }, "read before the handoff: it may have reopened since");
+});
+
+test("ciOf: zero checks on the handoff's commit wait while GitHub may still attach them, and follow them when it does", () => {
+  const prUrl = "https://github.com/octo-org/widgets/pull/12";
+  assert.deepEqual(ciOf(claim(prUrl), read(pr({ ci: "none" }), null, 0)), { kind: "waiting", number: 12 }, "right after the push");
+  assert.deepEqual(ciOf(claim(prUrl), read(pr({ ci: "none" }), null, 5 * MINUTE - 1)), { kind: "waiting", number: 12 }, "just inside the window");
+  assert.deepEqual(ciOf(claim(prUrl), read(pr({ ci: "pending" }), null, 2 * MINUTE)), { kind: "waiting", number: 12 }, "checks attached and running");
+  assert.deepEqual(ciOf(claim(prUrl), read(pr({ ci: "fail", failedChecks: ["test"] }), null, 2 * MINUTE)), { kind: "fail", number: 12, failedChecks: ["test"] }, "checks attached and failed");
+});
+
+test("ciOf: zero checks on the handoff's commit past the window are no CI checks, never a CI pass", () => {
+  assert.deepEqual(ciOf(claim(null), read(pr({ ci: "none" }), null, 5 * MINUTE)), { kind: "no-checks", number: 12 });
+  assert.deepEqual(ciOf(claim(null), read(pr({ ci: "none", headSha: "b".repeat(40) }), null, 60 * MINUTE)), { kind: "waiting", number: 12 }, "another commit's lack of checks says nothing");
+});
+
+test("ciOf: past the window, only a read that still sees zero checks makes them no CI checks", () => {
+  const insideWindow = read(pr({ ci: "none" }), null, MINUTE);
+  assert.deepEqual(ciOf(claim(null), insideWindow), { kind: "waiting", number: 12 }, "the latest read saw none a minute in, however long ago that was");
+  assert.deepEqual(ciOf(claim(null), { ...insideWindow, unavailable: UNREACHABLE }), { kind: "waiting", number: 12 }, "a read since that failed for now: still waiting, never no checks");
+  assert.deepEqual(ciOf(claim(null), { ...insideWindow, unavailable: SIGNED_OUT }), { kind: "not-checked", reason: "PR status unavailable: gh isn't signed in" }, "one since that failed until someone acts: can't be checked, never no checks");
+  assert.deepEqual(ciOf(claim(null), read(pr({ ci: "none" }), UNREACHABLE, 5 * MINUTE)), { kind: "no-checks", number: 12 }, "a read past the window saw none before reads failed");
+  assert.deepEqual(ciOf(claim(null), read(pr({ ci: "pass" }), null, 10 * MINUTE)), { kind: "pass", number: 12 }, "a read past the window found checks: they are followed");
+});

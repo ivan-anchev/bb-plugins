@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { z } from "zod";
 import { handoffIdSchema } from "../../model/handoff.ts";
 import { crewIdSchema } from "../../model/role.ts";
-import type { Verdict } from "../../model/verdict.ts";
+import type { Verdict } from "../../model/verdict/verdict.ts";
 import { bbHttpError, coordinating, isRefusal, settled, textOf, threadIn, type SendFailure } from "../test-harness.ts";
 
 const c1 = crewIdSchema.parse("c1");
@@ -223,7 +223,7 @@ for (const [gone, answer] of REFUSED) {
     await settled();
 
     assert.deepEqual(kit.sent().filter((args) => args.threadId === crewThreadId), [], "bb took nothing");
-    assert.deepEqual(settlement(), { kind: "checked", refused: answer });
+    assert.deepEqual(settlement(), { kind: "checked", refused: answer, ci: { kind: "none" } });
     assert.equal(kit.store.crew(coordinatorId, c1)?.fixRounds, 0, "the round is given back");
     assert.deepEqual(doorbells(), [`[Coordinator] 1 update. Call crew_catch_up to read it in full.\n- c1 "Add retries" handed off: done, failed verification`]);
     const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
@@ -282,7 +282,7 @@ for (const [how, failure] of UNPROVEN) {
     kit.sends.failure = null;
 
     assert.equal(kit.delivered(crewThreadId).length, failure.taken ? 1 : 0, failure.taken ? "bb took the findings" : "bb never had them");
-    assert.deepEqual(settlement(), { kind: "maybe-sent-back", round: 1 });
+    assert.deepEqual(settlement(), { kind: "maybe-sent-back", round: 1, ci: { kind: "none" } });
     assert.equal(kit.store.crew(coordinatorId, c1)?.fixRounds, 1, "the round stays spent");
     assert.deepEqual(doorbells(), [`[Coordinator] 1 update. Call crew_catch_up to read it in full.\n${MAYBE_SENT}`], "the coordinating thread is woken");
     assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /nothing bb keeps shows whether they arrived: they may or may not have\. Read its thread with crew_read/);
@@ -308,7 +308,7 @@ test("a crash before the findings leave, then an unrelated turn in the crew's th
   await kit.tick();
   await settled();
   assert.deepEqual(kit.sent().filter((args) => args.threadId === crewThreadId), [], "nothing is sent on a guess");
-  assert.deepEqual(settlement(), { kind: "maybe-sent-back", round: 1 });
+  assert.deepEqual(settlement(), { kind: "maybe-sent-back", round: 1, ci: { kind: "none" } });
   assert.equal(kit.store.crew(coordinatorId, c1)?.fixRounds, 1, "the claim is kept");
   assert.deepEqual(doorbells(), [`[Coordinator] 1 update. Call crew_catch_up to read it in full.\n${MAYBE_SENT}`], "the coordinating thread is woken");
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /nothing bb keeps shows whether they arrived: they may or may not have\. Read its thread with crew_read/);
@@ -333,7 +333,7 @@ test("findings bb queued before a crash are not sent again by the next tick", as
   await kit.tick();
   await settled();
   assert.equal(kit.sent().filter((args) => args.threadId === crewThreadId).length, 1, "not sent twice");
-  assert.deepEqual(settlement(), { kind: "maybe-sent-back", round: 1 });
+  assert.deepEqual(settlement(), { kind: "maybe-sent-back", round: 1, ci: { kind: "none" } });
   assert.deepEqual(doorbells(), [`[Coordinator] 1 update. Call crew_catch_up to read it in full.\n${MAYBE_SENT}`]);
 
   await kit.dispatch(kit.queued(crewThreadId)[0] ?? assert.fail("nothing queued"));
@@ -355,7 +355,7 @@ test("findings bb delivered before a crash are not sent again by the next tick",
   await kit.tick();
   await settled();
   assert.equal(kit.sent().filter((args) => args.threadId === crewThreadId).length, 1, "not sent twice");
-  assert.deepEqual(settlement(), { kind: "maybe-sent-back", round: 1 });
+  assert.deepEqual(settlement(), { kind: "maybe-sent-back", round: 1, ci: { kind: "none" } });
   assert.equal(kit.store.crew(coordinatorId, c1)?.fixRounds, 1);
   assert.deepEqual(doorbells(), [`[Coordinator] 1 update. Call crew_catch_up to read it in full.\n${MAYBE_SENT}`]);
 });

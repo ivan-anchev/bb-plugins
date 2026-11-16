@@ -86,7 +86,7 @@ test("a fix round claimed before its findings are sent survives the plugin's rel
   };
   assert.ok(store.receiveVerdict(handoffId, failed));
   assert.deepEqual(store.unannounced(ID), [], "nobody is told of a verdict before it is settled");
-  store.claimFixRound(handoffId);
+  store.claimFixRound(handoffId, { kind: "none" });
 
   const reloaded = openStore(storage);
   assert.equal(reloaded.crew(ID, crewId)?.fixRounds, 1);

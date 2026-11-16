@@ -7,8 +7,9 @@ import { closedKindSchema, doneCriteriaSchema, executionSchema, placementSchema,
 import { handoffIdSchema, handoffReportSchema, type Handoff, type HandoffId, type NewHandoff } from "../model/handoff.ts";
 import { inboxEventSchema, type InboxEvent, type StoredEvent } from "../model/inbox/inbox-event.ts";
 import { memoryRevisionSchema, type MemoryFile, type MemoryRevision, type MemoryVersion } from "../model/memory-file.ts";
+import { meaningfulChanges, prSnapshotSchema, prUnavailableSchema, type CiVerdict, type PrSnapshot, type PrStatus, type PrUnavailable } from "../model/verdict/pr.ts";
 import { coordinatorIdSchema, crewIdSchema, roleSchema, type CoordinatorId, type CrewId, type Role } from "../model/role.ts";
-import { isSettled, verdictSchema, type Verdict } from "../model/verdict.ts";
+import { isSettled, verdictSchema, type Verdict } from "../model/verdict/verdict.ts";
 
 // Append-only: bb.storage.migrate records each statement's hash by its index.
 const MIGRATIONS = [
@@ -53,6 +54,15 @@ const MIGRATIONS = [
   `ALTER TABLE crews ADD COLUMN fix_rounds INTEGER NOT NULL DEFAULT 0`,
   // The tick settles every returned verdict nobody has been told of yet (see the verdict's settlement).
   `CREATE INDEX verdicts_unsettled ON verdicts (handoff_id) WHERE json_extract(verdict, '$.settlement.kind') IN ('pending', 'sending-back')`,
+  // A crew's pull request as the latest read that found one returned it (null: none has), with
+  // when a read first saw its head commit, when this one was read, and the crew's latest handoff
+  // as it began, all written by that read alone; and, of every read, why the latest failed and
+  // whether that lasts (null: it didn't), and when one was last tried. why JSON: read and written whole.
+  `CREATE TABLE pr_snapshots (coordinator_id TEXT NOT NULL, crew_id TEXT NOT NULL, snapshot TEXT, head_seen_at INTEGER, read_at INTEGER, handoff_at_read TEXT,
+     unavailable TEXT, polled_at INTEGER NOT NULL, PRIMARY KEY (coordinator_id, crew_id), FOREIGN KEY (coordinator_id, crew_id) REFERENCES crews (coordinator_id, id))`,
+  // The tick settles verdicts that wait for CI as well.
+  `DROP INDEX verdicts_unsettled`,
+  `CREATE INDEX verdicts_unsettled ON verdicts (handoff_id) WHERE json_extract(verdict, '$.settlement.kind') IN ('pending', 'sending-back', 'waiting-for-ci')`,
 ];
 
 /** Where a verdict must still be for a change to apply: queued, or running in this verifier thread. */
@@ -61,12 +71,16 @@ export type VerdictFrom = { state: "queued" } | { state: "running"; verifierThre
 type Returned = Extract<Verdict, { state: "returned" }>;
 
 /**
- * How a returned verdict ends: `checked`, final and its coordinating thread's, with bb's refusal
- * of its findings if they were refused; `sent-back`, its findings reached the crew for the fix
- * round it claimed; `maybe-sent-back`, its coordinating thread's, with that round kept, as nothing
- * shows whether they did.
+ * How a returned verdict ends, or that it waits: `waiting-for-ci`, it passed every criterion and
+ * waits for CI on its commit; `checked`, final and its coordinating thread's, with bb's refusal
+ * of its findings if they were refused and what CI said; `sent-back`, its findings reached the
+ * crew for the fix round it claimed; `maybe-sent-back`, its coordinating thread's, with that round
+ * kept, as nothing shows whether they did. The last two keep the CI their claim recorded.
  */
-export type Settlement = Extract<Returned["settlement"], { kind: "checked" }> | { kind: "sent-back" } | { kind: "maybe-sent-back" };
+export type Settlement = Extract<Returned["settlement"], { kind: "checked" | "waiting-for-ci" }> | { kind: "sent-back" } | { kind: "maybe-sent-back" };
+
+/** A crew's PR status, and when the watch last tried to read it. */
+type PolledPr = PrStatus & { polledAt: number };
 
 /** A verdict that is still waiting, with whose handoff it is. */
 type OpenVerdict = { handoffId: HandoffId; coordinatorId: CoordinatorId; crewId: CrewId; verdict: Extract<Verdict, { state: VerdictFrom["state"] }> };
@@ -156,9 +170,22 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     return verdict?.state === "returned" && !isSettled(verdict) ? verdict : null;
   }
 
+  /** The crew's verdicts that passed every criterion and wait for CI on their commit, oldest first. */
+  function waitingForCi(coordinatorId: CoordinatorId, crewId: CrewId): HandoffId[] {
+    return db()
+      .prepare(
+        `SELECT h.id AS handoffId FROM handoffs h JOIN verdicts v ON v.handoff_id = h.id
+          WHERE h.coordinator_id = ? AND h.crew_id = ? AND json_extract(v.verdict, '$.settlement.kind') = 'waiting-for-ci'
+          ORDER BY h.rowid`,
+      )
+      .all(coordinatorId, crewId)
+      .map((row) => z.object({ handoffId: handoffIdSchema }).parse(row).handoffId);
+  }
+
   /**
-   * Marks every verdict of the crew's earlier handoffs that is still waiting as superseded, and
-   * returns the verifier threads that were checking them. Call inside a transaction.
+   * Marks every verdict of the crew's earlier handoffs that is still waiting, for its verifier or
+   * for CI, as superseded, and returns the verifier threads that were checking them. Call inside a
+   * transaction.
    */
   function supersede(coordinatorId: CoordinatorId, crewId: CrewId): string[] {
     const open = db()
@@ -170,8 +197,28 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
       .all(coordinatorId, crewId)
       .map(toOpenVerdict);
     const mark = db().prepare("UPDATE verdicts SET verdict = ? WHERE handoff_id = ?");
-    for (const { handoffId } of open) mark.run(JSON.stringify({ state: "superseded" } satisfies Verdict), handoffId);
+    for (const handoffId of [...open.map((verdict) => verdict.handoffId), ...waitingForCi(coordinatorId, crewId)]) mark.run(JSON.stringify({ state: "superseded" } satisfies Verdict), handoffId);
     return open.flatMap(({ verdict }) => (verdict.state === "running" ? [verdict.verifierThreadId] : []));
+  }
+
+  function prStatus(coordinatorId: CoordinatorId, crewId: CrewId): PolledPr | null {
+    const row = db()
+      .prepare(
+        `SELECT snapshot, head_seen_at AS headSeenAt, read_at AS readAt, handoff_at_read AS handoffAtRead, unavailable, polled_at AS polledAt
+           FROM pr_snapshots WHERE coordinator_id = ? AND crew_id = ?`,
+      )
+      .get(coordinatorId, crewId);
+    return row === undefined ? null : prStatusRowSchema.parse(row);
+  }
+
+  /** Records that a read of the crew's pull request was tried, and why it failed (null: it didn't). */
+  function markPolled(coordinatorId: CoordinatorId, crewId: CrewId, unavailable: PrUnavailable | null, at: number): void {
+    db()
+      .prepare(
+        `INSERT INTO pr_snapshots (coordinator_id, crew_id, unavailable, polled_at) VALUES (?, ?, ?, ?)
+           ON CONFLICT (coordinator_id, crew_id) DO UPDATE SET unavailable = excluded.unavailable, polled_at = excluded.polled_at`,
+      )
+      .run(coordinatorId, crewId, unavailable === null ? null : JSON.stringify(unavailable), at);
   }
 
   return {
@@ -376,24 +423,26 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     },
 
     /**
-     * Claims the crew's next fix round for a pending verdict, before its findings are sent: counts it
-     * on the crew and marks the verdict as going back, together.
+     * Claims the crew's next fix round for a pending verdict, or one that waited for CI, before its
+     * findings are sent: counts it on the crew and marks the verdict as going back, with what CI
+     * said, together.
      */
-    claimFixRound(handoffId: HandoffId): void {
+    claimFixRound(handoffId: HandoffId, ci: CiVerdict): void {
       db().transaction(() => {
         const verdict = unsettled(handoffId);
-        // why throw: it is claimed right after it was read pending, with no await between.
-        if (verdict?.settlement.kind !== "pending") throw new Error(`The verdict on ${handoffId} is not pending, so it has no round to claim.`);
+        // why throw: it is claimed right after it was read pending or waiting, with no await between.
+        if (verdict === null || verdict.settlement.kind === "sending-back") throw new Error(`The verdict on ${handoffId} is not pending, so it has no round to claim.`);
         const { coordinatorId, crewId } = ownerOf(handoffId);
-        writeVerdict(handoffId, { ...verdict, settlement: { kind: "sending-back", round: countFixRound(coordinatorId, crewId, 1) } });
+        writeVerdict(handoffId, { ...verdict, settlement: { kind: "sending-back", round: countFixRound(coordinatorId, crewId, 1), ci } });
       })();
     },
 
     /**
      * Settles an unsettled verdict and records it for its coordinating thread, together. `sent-back`
-     * and `maybe-sent-back` need a claimed round, and keep it; `checked` gives back a round claimed
-     * for findings that never left. Returns whose it was, or null when it was already settled or
-     * there is no claim to keep.
+     * and `maybe-sent-back` need a claimed round, and keep it and its CI; `checked` gives back a
+     * round claimed for findings that never left. `waiting-for-ci` moves a pending verdict to wait,
+     * and records nothing: nobody is told until it settles. Returns whose it was, or null when it
+     * was already settled or waiting, or there is no claim to keep.
      */
     settleReturned(handoffId: HandoffId, as: Settlement, at: number): CoordinatorId | null {
       return db().transaction(() => {
@@ -401,6 +450,11 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
         if (verdict === null) return null;
         const { settlement } = verdict;
         const { coordinatorId, crewId } = ownerOf(handoffId);
+        if (as.kind === "waiting-for-ci") {
+          if (settlement.kind !== "pending") return null;
+          writeVerdict(handoffId, { ...verdict, settlement: as });
+          return coordinatorId;
+        }
         if (as.kind === "checked") {
           if (settlement.kind === "sending-back") countFixRound(coordinatorId, crewId, -1);
           writeVerdict(handoffId, { ...verdict, settlement: as });
@@ -408,19 +462,21 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
           return coordinatorId;
         }
         if (settlement.kind !== "sending-back") return null;
-        const { round } = settlement;
-        writeVerdict(handoffId, { ...verdict, settlement: { kind: as.kind, round } });
+        const { round, ci } = settlement;
+        writeVerdict(handoffId, { ...verdict, settlement: { kind: as.kind, round, ci } });
         insertEvent(coordinatorId, as.kind === "sent-back" ? { kind: "sent-back", crewId, handoffId, round } : { kind: "checked", crewId, handoffId }, at);
         return coordinatorId;
       })();
     },
 
-    /** Every returned verdict not settled yet, oldest first: a crash or a reload stopped its settling. */
+    waitingForCi,
+
+    /** Every returned verdict not settled yet, oldest first: one waiting for CI, or one a crash or a reload stopped settling. */
     unsettledVerdicts(): HandoffId[] {
       return db()
         .prepare(
           `SELECT v.handoff_id AS handoffId FROM verdicts v JOIN handoffs h ON h.id = v.handoff_id
-            WHERE json_extract(v.verdict, '$.settlement.kind') IN ('pending', 'sending-back')
+            WHERE json_extract(v.verdict, '$.settlement.kind') IN ('pending', 'sending-back', 'waiting-for-ci')
             ORDER BY h.rowid`,
         )
         .all()
@@ -516,6 +572,38 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
       })();
     },
 
+    /** What the watch knows of the crew's pull request, or null before it first tried to read it. */
+    prStatus,
+
+    /**
+     * Saves a successful read of the crew's pull request, begun when the crew's latest handoff was
+     * `handoffAtRead`. One that found it saves its snapshot as read now, with when a read first saw
+     * its head commit and that handoff, and records a `pr` event for its coordinating thread when
+     * it changed meaningfully, together. One that found none (null) keeps the snapshot already
+     * saved as it was read, and vouches for nothing about it.
+     */
+    savePrRead(coordinatorId: CoordinatorId, crewId: CrewId, pr: PrSnapshot | null, handoffAtRead: HandoffId | null, at: number): void {
+      return db().transaction(() => {
+        const before = prStatus(coordinatorId, crewId);
+        markPolled(coordinatorId, crewId, null, at);
+        if (pr === null) return;
+        const headSeenAt = before !== null && before.snapshot !== null && before.snapshot.headSha === pr.headSha ? before.headSeenAt : at;
+        db()
+          .prepare(
+            `UPDATE pr_snapshots SET snapshot = ?, head_seen_at = ?, read_at = ?, handoff_at_read = ?
+              WHERE coordinator_id = ? AND crew_id = ?`,
+          )
+          .run(JSON.stringify(pr), headSeenAt, at, handoffAtRead, coordinatorId, crewId);
+        const changes = meaningfulChanges(before?.snapshot ?? null, pr);
+        if (changes.length > 0) insertEvent(coordinatorId, { kind: "pr", crewId, pr, changes }, at);
+      })();
+    },
+
+    /** Records why reading the crew's pull request failed, and whether that lasts. The snapshot it had stays as it was read, and nothing is recorded for its coordinating thread. */
+    markPrUnavailable(coordinatorId: CoordinatorId, crewId: CrewId, unavailable: PrUnavailable, at: number): void {
+      markPolled(coordinatorId, crewId, unavailable, at);
+    },
+
     /** Every coordinator whose thread is bound, newest first. */
     coordinators(): Coordinator[] {
       return db()
@@ -592,6 +680,23 @@ function toHandoff(row: unknown): Handoff {
   if (verdict === null) throw new Error(`The done handoff ${handoff.id} has no verdict`);
   return { ...handoff, ...report, verdict };
 }
+
+const polledSchema = z.object({
+  unavailable: z
+    .string()
+    .nullable()
+    .transform((json) => (json === null ? null : prUnavailableSchema.parse(JSON.parse(json)))),
+  polledAt: z.number(),
+});
+const prStatusRowSchema = z.union([
+  polledSchema.extend({ snapshot: z.null() }),
+  polledSchema.extend({
+    snapshot: z.string().transform((json) => prSnapshotSchema.parse(JSON.parse(json))),
+    headSeenAt: z.number(),
+    readAt: z.number(),
+    handoffAtRead: handoffIdSchema.nullable(),
+  }),
+]);
 
 const eventRowSchema = z.object({ id: z.number().int(), at: z.number(), event: z.string().transform((json) => inboxEventSchema.parse(JSON.parse(json))) });
 const toEvent = (row: unknown): StoredEvent => eventRowSchema.parse(row);

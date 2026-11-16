@@ -1,6 +1,6 @@
 ---
 name: crew-board
-description: Explain the coordinating-thread plugin (bb-plugin-coordinator). Its panel in bb's navigation rail starts long-lived coordinating threads with bb's composer and lists them. Each keeps its memory as markdown files on the bb server, which the user edits too, and starts crew threads that each work on their own branch from a brief and done-criteria, or drafts the user starts. A crew ends with a handoff; a done one is checked by a hidden independent verifier unless the user switched that off, and a first failed verdict goes back to the crew to fix. The Board shows the digest and every crew under Needs you, Ready for review, Verifying, Working, Idle or Done. Use when the user asks how to start a coordinating thread or a crew, what the board, a row or a verdict means, how verification works or how to turn it off, why a crew got its verifier's findings, how to replace a crew, what a handoff or an update is, why the thread woke, where memory lives, which thread has which tools, how drafts work, or what is missing.
+description: Explain the coordinating-thread plugin (bb-plugin-coordinator). Its panel in bb's navigation rail starts long-lived coordinating threads with bb's composer. Each keeps its memory as markdown files on the bb server and starts crew threads that each work on their own branch from a brief and done-criteria, or drafts the user starts. A crew ends with a handoff; a done one is checked by a hidden independent verifier unless switched off, and a first failed verdict goes back to the crew. Each crew's pull request and CI are watched through gh, and a pass waits for CI. The Board shows the digest and every crew under Needs you, Ready for review, Verifying, Working, Landing, Idle or Done. Use when the user asks how to start a coordinating thread or a crew, what the board, a row or a verdict means, how verification or CI checking works, why PR status is unavailable, why a crew got findings, how to replace a crew, what an update is, why the thread woke, where memory lives, which thread has which tools, or how drafts work.
 ---
 
 # Coordinating threads
@@ -154,6 +154,9 @@ with `crew_handoff`, and the plugin stores everything it sees:
 - **A crew ended a turn without a handoff**, with its last answer.
 - **The user saved a memory file** in the Memory editor. The thread's own
   writes don't count.
+- **A crew's pull request changed** (see [Pull requests and CI](#pull-requests-and-ci)):
+  it opened, reopened, merged or closed, its CI passed or failed, or a review
+  approved it or asked for changes. A new CI run starting is not an update.
 
 A `done` handoff is announced only together with its verdict (see
 [Verification](#verification)); a blocked or gave-up one, and everything
@@ -162,7 +165,8 @@ else, at once. The user turning verification on or off is an update too.
 Each one wakes the coordinating thread with one short message: the plugin's
 name in brackets, how many updates there are, and one line each, such as
 `- c1 "Add retries" handed off: done, failed verification`,
-`- c2 "Dead letters" handed off: blocked` or `- The user edited PLAN.md`. The
+`- c2 "Dead letters" handed off: blocked`, `- c1 "Add retries" PR #41: CI
+passed` or `- The user edited PLAN.md`. The
 message reaches the thread as if you typed it, so it holds only facts the
 plugin derived and the titles the thread gave its crews: never a crew's
 summary, answer, error or question, nor a verifier's evidence. Those are in
@@ -199,7 +203,9 @@ a **verifier** for each one:
   evidence, and any findings. A verdict that skips, repeats or invents a
   criterion, or passes one on another commit, is refused.
 - **Outcome**: derived, never stored. Verified only when every criterion
-  passed; an unverifiable one is not a pass.
+  passed, and CI didn't fail on the commit when the crew has a pull request
+  (see [Pull requests and CI](#pull-requests-and-ci)); an unverifiable
+  criterion is not a pass.
 - **No verdict**: a verifier that ends a turn without one is reminded once;
   a second time, or a verifier bb wouldn't start or whose thread was
   archived, reads "Couldn't verify" with the reason.
@@ -210,13 +216,14 @@ a **verifier** for each one:
 
 ### One automatic fix round
 
-A crew's first failed verdict (any criterion failed or unverifiable) doesn't
-wait for the coordinating thread:
+A crew's first failed verdict (any criterion failed or unverifiable, or CI
+failed on its commit) doesn't wait for the coordinating thread:
 
 - The plugin sends the crew's thread one message, **from the verifier
   thread**: bb shows it as another thread's message, so the crew never takes
   it for yours. It is headed "Verifier findings" and holds each criterion that
-  didn't pass, with the verifier's evidence, and its other findings.
+  didn't pass, with the verifier's evidence, the checks that failed when CI
+  did, and its other findings.
 - The crew starts working on it at once (or after its running turn), so its
   row moves to Working. It commits, hands off again, and a new verifier checks
   the new commit: Verifying, then Ready for review or Needs you.
@@ -261,39 +268,94 @@ back on doesn't check earlier ones. Each change tells the coordinating
 thread. With it off, a done handoff waits under Ready for review as
 "Unverified: <summary>".
 
+## Pull requests and CI
+
+bb tells plugins nothing about pull requests, so the plugin reads them itself,
+with `gh` on the machine running bb, on the same once-a-minute tick:
+
+- **What**: each open, started crew's newest pull request from its branch (the
+  one bb records for its thread, else the one its environment has checked out):
+  its number, state (open, draft, merged, closed), review (approved, changes
+  requested) and its CI on its head commit, as GitHub's merge box rolls the
+  checks up (passing, failing with the failed checks' names, running, or no
+  checks). A check state GitHub adds later counts as running, never as a pass.
+- **How often**: one `gh api graphql` call per GitHub repository for all its
+  crews. A repository is read every tick while any of its crews' CI is running
+  or a verdict waits for CI, else every five minutes. A closed crew, or one
+  whose thread is gone, is never read. A crew whose pull request was read
+  merged or closed isn't read again until it hands off again. Only projects
+  whose git remote is on github.com are read.
+- **A verdict waits for CI**: a done handoff that passed every criterion, when
+  it names a pull request or one is known for the crew, waits under Verifying
+  as "Waiting for CI on #41: <summary>" (or "Waiting for CI" before the
+  pull request is seen) until CI finishes on the very commit the handoff
+  claims; CI on another commit says nothing about it. CI passing makes it
+  verified, and it moves to Landing within about a minute. CI failing makes it
+  a failure, which goes back to the crew as above, naming the failed checks.
+  Only then does the coordinating thread hear of it. A handoff with no pull
+  request named or known doesn't wait. No checks on the claimed commit is not
+  a pass: right after a push GitHub may not have attached them yet, so it
+  waits, follows the checks if they appear, and passes as "✓ Verified, no CI
+  checks: <summary>", never as CI passing, only once a read five minutes or
+  more after the plugin first saw that commit still finds none. Time passing
+  without such a read, or a read that fails, never makes it no CI checks.
+- **When it can't read GitHub**, the board says "PR status unavailable:
+  <why>", rows keep the pull request and CI read last, and no update is
+  recorded. A failure that may pass by the next read (GitHub unreachable, a
+  timeout, a rate limit, an answer the plugin can't read, or anything gh
+  doesn't explain) says nothing about CI, so a verdict waiting for CI keeps
+  waiting and settles on the next read that succeeds. One that lasts until
+  someone acts (gh missing, signed out, or holding credentials GitHub
+  rejects) makes a verdict that would wait pass as "✓ Verified, CI not
+  checked: <summary>". The same goes for a verdict that waits on a pull
+  request in a project not on github.com, or one a read begun after the
+  handoff found merged or closed before CI finished on the claimed commit.
+  Sign gh in with `gh auth login` on the machine running bb; for rejected
+  credentials, check `gh auth status` there.
+
 ## The board
 
 The **Board** tab in a coordinating thread's side panel, and the **Board**
 page from its row in the panel, show the same board:
 
 - **Verify done handoffs**: the switch for this coordinating thread.
+- **PR status unavailable: <why>**, only while the latest read of a crew's
+  pull request failed.
 - **Digest**: `DIGEST.md`, the coordinating thread's latest summary for you,
   and when it last changed.
 - **Crews**, each with its id, title, a one-line headline and its branch,
-  grouped:
+  then, once it has one, its pull request: its number, which opens it on
+  GitHub, its state, its CI and its review. Grouped:
   - **Needs you**: a draft waiting for you to start it, waiting for your
     answer or approval in its thread, its last turn failed, it handed
     off as blocked ("Blocked: <summary>") or gave up ("Gave up: <summary>"),
     its done handoff failed verification ("✗ Failed verification after its
     fix round: <summary>", or without "after its fix round" when the
-    findings couldn't be sent back), or it couldn't be verified ("Couldn't verify: <summary>").
-  - **Ready for review**: it handed off as done and every criterion passed
-    ("✓ Verified: <summary>"), or it handed off while verification was off
-    ("Unverified: <summary>").
+    findings couldn't be sent back; "✗ CI failed on #41 …" when every
+    criterion passed but CI failed), or it couldn't be verified ("Couldn't
+    verify: <summary>").
+  - **Ready for review**: it handed off as done and passed ("✓ Verified:
+    <summary>"), or it handed off while verification was off ("Unverified:
+    <summary>"), and it has no open pull request.
   - **Verifying**: its verifier is starting or checking ("Verifying:
-    <summary>"). **Verifier** opens the hidden verifier thread.
+    <summary>"), or every criterion passed and it waits for CI ("Waiting for
+    CI on #41: <summary>"). **Verifier** opens the hidden verifier thread.
   - **Working**: its thread is running, starting, waiting to start or
     stopping, as while it fixes findings sent back to it.
+  - **Landing**: as Ready for review, with its pull request open, approved
+    or not.
   - **Idle**: its turn ended without a handoff.
-  - **Done**: resolved, stopped or archived through `crew_close`, or its
-    thread was archived or deleted.
+  - **Done**: resolved, stopped or archived through `crew_close`, its pull
+    request merged ("Merged #41"), or its thread was archived or deleted.
 
 A row placed by a verdict has a **Verdict** button. It opens the verdict
 under the row: how many criteria passed, the commit checked and the provider
 and model it ran on, then each criterion with Pass, Fail or Unverifiable. A
 failed or unverifiable criterion shows its evidence; a passed one folds it
 away until you open it. Findings follow, and **Open verifier thread** opens
-the verifier. A verdict that couldn't be had shows why.
+the verifier. What CI said about the commit follows the model: passed, failed
+with the failed checks, not checked and why, or still to finish. A verdict
+that couldn't be had shows why.
 
 A handoff places its crew until the crew's thread starts another turn: type
 into a crew that handed off and it moves to Working, then to Idle if it ends
@@ -343,7 +405,8 @@ and the Memory page read the new text on their next read.
 
 ## Not yet
 
-- A pull request's CI isn't part of a verdict.
-- Pull request and CI changes don't wake the thread.
+- Pull requests are read by polling, never pushed: a change shows within a
+  minute while CI runs or a verdict waits for it, else within five.
+- The plugin never merges, approves or comments on a pull request.
 - The coordinating thread chooses no model for a crew; it gets the
   coordinating thread's unless you pick one in a draft's editor.
