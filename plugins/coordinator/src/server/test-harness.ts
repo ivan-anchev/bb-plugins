@@ -7,7 +7,7 @@ import { join } from "node:path";
 import type { PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgentToolResult, PluginThreadEventPayloads } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import type { z } from "zod";
-import type { CrewThread } from "../model/crew-state.ts";
+import type { CrewThread } from "../model/board/crew-state.ts";
 import type { CoordinatorId } from "../model/role.ts";
 import { boardHandlers } from "./crew/board-rpc.ts";
 import { createBoard } from "./crew/board.ts";
@@ -408,7 +408,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const inbox = createInbox({ bb, store, onChange: refreshBoard });
     const verify = createVerify({ bb, store, spawner, inbox });
     registerRoles(bb, store);
-    registerCoordinatorTools(bb, { store, inbox, memory, crews, board });
+    registerCoordinatorTools(bb, { store, inbox, memory, crews, board, onChange: refreshBoard });
     registerCrewTools(bb, { store, verify });
     registerVerdictTool(bb, { store, verify });
     forwardCrewThreadEvents(bb, store, refreshBoard);

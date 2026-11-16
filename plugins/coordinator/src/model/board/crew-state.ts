@@ -2,10 +2,10 @@
 // crew_catch_up share one definition. Every headline comes from facts; no model call.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import type { Crew } from "./crew.ts";
-import type { Handoff } from "./handoff.ts";
-import type { CiVerdict, PrSnapshot } from "./verdict/pr.ts";
-import { allPassed, ciVerdictOf, mayHaveReachedCrew, outcome, type Verdict } from "./verdict/verdict.ts";
+import type { Crew } from "../crew.ts";
+import type { Handoff } from "../handoff.ts";
+import type { CiVerdict, PrSnapshot } from "../verdict/pr.ts";
+import { allPassed, ciVerdictOf, mayHaveReachedCrew, outcome, type Verdict } from "../verdict/verdict.ts";
 
 /** The board's groups, in the order it shows them. */
 export const boardStateSchema = z.enum(["needs-you", "ready-for-review", "verifying", "working", "landing", "idle", "done"]);

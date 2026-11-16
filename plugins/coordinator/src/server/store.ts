@@ -4,6 +4,7 @@ import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { coordinatorSchema, type Coordinator } from "../contract.ts";
 import { closedKindSchema, doneCriteriaSchema, executionSchema, placementSchema, type ClosedKind, type Crew, type DraftEdit } from "../model/crew.ts";
+import { decisionIdSchema, type Decision, type DecisionId } from "../model/decision.ts";
 import { handoffIdSchema, handoffReportSchema, type Handoff, type HandoffId, type NewHandoff } from "../model/handoff.ts";
 import { inboxEventSchema, type InboxEvent, type StoredEvent } from "../model/inbox/inbox-event.ts";
 import { memoryRevisionSchema, type MemoryFile, type MemoryRevision, type MemoryVersion } from "../model/memory-file.ts";
@@ -72,6 +73,13 @@ const MIGRATIONS = [
   // The tick reads every reminder that is due; crew_catch_up lists a coordinating thread's.
   `CREATE INDEX reminders_due ON reminders (due_at)`,
   `CREATE INDEX reminders_of_coordinator ON reminders (coordinator_id)`,
+  // A decision a coordinating thread put to the user: its question, its options (why JSON: read and
+  // written whole), when it asked, and the user's answer and when they gave it (null: not yet).
+  // why AUTOINCREMENT: an id is never reused, so an answer can't land on a newer decision.
+  `CREATE TABLE decisions (id INTEGER PRIMARY KEY AUTOINCREMENT, coordinator_id TEXT NOT NULL REFERENCES coordinators (id),
+     question TEXT NOT NULL, options TEXT NOT NULL, asked_at INTEGER NOT NULL, answer TEXT, answered_at INTEGER)`,
+  // The board, the panel's badge and crew_catch_up read a coordinating thread's decisions.
+  `CREATE INDEX decisions_of_coordinator ON decisions (coordinator_id)`,
 ];
 
 /** Where a verdict must still be for a change to apply: queued, or running in this verifier thread. */
@@ -665,6 +673,41 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
       })();
     },
 
+    /** Puts a decision to the user for the coordinating thread, and returns it with its id. */
+    insertDecision(coordinatorId: CoordinatorId, { question, options }: Pick<Decision, "question" | "options">, at: number): Decision {
+      const row = db()
+        .prepare(`INSERT INTO decisions (coordinator_id, question, options, asked_at) VALUES (?, ?, ?, ?) RETURNING ${DECISION_COLUMNS}`)
+        .get(coordinatorId, question, JSON.stringify(options), at);
+      return toDecision(row);
+    },
+
+    /** A decision by its id, answered or not; null when there is none. */
+    decision(id: DecisionId): Decision | null {
+      const row = db().prepare(`SELECT ${DECISION_COLUMNS} FROM decisions WHERE id = ?`).get(rowIdOfDecision(id));
+      return row === undefined ? null : toDecision(row);
+    },
+
+    /** Every decision the coordinating thread put to the user, in the order it asked them. */
+    decisions(coordinatorId: CoordinatorId): Decision[] {
+      return db().prepare(`SELECT ${DECISION_COLUMNS} FROM decisions WHERE coordinator_id = ? ORDER BY id`).all(coordinatorId).map(toDecision);
+    },
+
+    /**
+     * Stores the user's answer to one of the coordinating thread's decisions, and records it for the
+     * thread, together; or says why it didn't: it has no decision by that id, or that one was answered.
+     */
+    answerDecision(coordinatorId: CoordinatorId, id: DecisionId, answer: string, at: number): "answered" | "already-answered" | "unknown" {
+      return db().transaction(() => {
+        const updated = db().prepare("UPDATE decisions SET answer = ?, answered_at = ? WHERE id = ? AND coordinator_id = ? AND answer IS NULL").run(answer, at, rowIdOfDecision(id), coordinatorId);
+        if (updated.changes > 0) {
+          insertEvent(coordinatorId, { kind: "decision-answered", decisionId: id }, at);
+          return "answered";
+        }
+        const exists = db().prepare("SELECT 1 FROM decisions WHERE id = ? AND coordinator_id = ?").get(rowIdOfDecision(id), coordinatorId) !== undefined;
+        return exists ? "already-answered" : "unknown";
+      })();
+    },
+
     /** Every coordinator whose thread is bound, newest first. */
     coordinators(): Coordinator[] {
       return db()
@@ -764,6 +807,22 @@ const reminderRowIdSchema = z.number().int().transform((id) => reminderIdSchema.
 const rowIdOf = (id: ReminderId): number => Number(id.slice(1));
 const reminderRowSchema = z.object({ id: reminderRowIdSchema, note: z.string(), dueAt: z.number(), everyMs: z.number().nullable() });
 const toReminder = (row: unknown): Reminder => reminderRowSchema.parse(row);
+
+/** A decision's row id is its number: `d7` is row 7. */
+const rowIdOfDecision = (id: DecisionId): number => Number(id.slice(1));
+const DECISION_COLUMNS = "id, question, options, asked_at AS askedAt, answer, answered_at AS answeredAt";
+const decisionRowSchema = z.object({
+  id: z.number().int().transform((id) => decisionIdSchema.parse(`d${id}`)),
+  question: z.string(),
+  options: z.string().transform((json) => z.array(z.string()).parse(JSON.parse(json))),
+  askedAt: z.number(),
+});
+// why a union: the answer and its time are written together, or not at all.
+const answerColumnsSchema = z.union([
+  z.object({ answer: z.null(), answeredAt: z.null() }).transform(() => null),
+  z.object({ answer: z.string(), answeredAt: z.number() }).transform(({ answer, answeredAt }) => ({ text: answer, at: answeredAt })),
+]);
+const toDecision = (row: unknown): Decision => ({ ...decisionRowSchema.parse(row), answer: answerColumnsSchema.parse(row) });
 
 const eventRowSchema = z.object({ id: z.number().int(), at: z.number(), event: z.string().transform((json) => inboxEventSchema.parse(JSON.parse(json))) });
 const toEvent = (row: unknown): StoredEvent => eventRowSchema.parse(row);

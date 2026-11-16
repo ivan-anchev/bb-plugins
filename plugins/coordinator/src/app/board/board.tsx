@@ -1,17 +1,21 @@
 // The board of one coordinating thread: its verification switch, why PR status is unavailable when
-// it is, and its digest, then its crews grouped Needs you, Ready for review, Verifying, Working,
-// Landing, Idle and Done. The Board tab in the thread and the Board page in the panel both draw
+// it is, and its digest, then its decisions and crews grouped Needs you, Ready for review, Verifying,
+// Working, Landing, Idle and Done, each group's decisions first. The Board tab in the thread and the Board page in the panel both draw
 // it, from one read; each gives it the scrolling root it sits in.
 import { experimental_Icon as Icon, experimental_useRpcMutation, experimental_useRpcQuery, Markdown } from "@get-bb/plugin-sdk/app";
 import { useId, useState } from "react";
 import { coordinatorContract as contract, type Board as BoardData, type BoardRow } from "../../contract.ts";
-import { BOARD_STATE_LABELS, byState, type BoardState } from "../../model/crew-state.ts";
+import { boardGroups, type BoardItem } from "../../model/board/board-groups.ts";
+import { BOARD_STATE_LABELS, type BoardState } from "../../model/board/crew-state.ts";
+import type { Decision } from "../../model/decision.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import { useFocusKeptByKey } from "../ui/focus-hand-off.ts";
 import { ReadFailure } from "../ui/read-failure.tsx";
 import { Switch } from "../ui/switch.tsx";
+import { shortTime } from "../ui/time.ts";
 import { CrewRow } from "./crew-row.tsx";
+import { DecisionRow } from "./decision-row.tsx";
 import { DraftRow } from "./draft/draft-row.tsx";
 import { DroppedEdit } from "./draft/dropped-edit.tsx";
 
@@ -29,7 +33,7 @@ export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
           <VerifySwitch coordinatorId={coordinatorId} verify={read.data.verify} />
           {read.data.prUnavailable !== null && <PrUnavailable reason={read.data.prUnavailable} />}
           <Digest ids={ids} digest={read.data.digest} />
-          <Crews ids={ids} coordinatorId={coordinatorId} rows={read.data.rows} />
+          <Groups ids={ids} coordinatorId={coordinatorId} decisions={read.data.decisions} rows={read.data.rows} />
         </>
       )}
     </div>
@@ -99,7 +103,7 @@ function Digest({ ids, digest }: { ids: string; digest: BoardData["digest"] }) {
         </h2>
         {digest !== null && (
           <time dateTime={new Date(digest.modifiedAt).toISOString()} className="shrink-0 text-xs text-muted-foreground tabular-nums">
-            Updated {updatedAt(digest.modifiedAt)}
+            Updated {shortTime(digest.modifiedAt)}
           </time>
         )}
       </div>
@@ -114,34 +118,51 @@ function titled(content: string): { title: string; body: string } {
   return match === null ? { title: "Digest", body: content } : { title: match[1]?.trim() ?? "Digest", body: match[2] ?? "" };
 }
 
-function Crews({ ids, coordinatorId, rows }: { ids: string; coordinatorId: CoordinatorId; rows: readonly BoardRow[] }) {
+type GroupsProps = { ids: string; coordinatorId: CoordinatorId; decisions: readonly Decision[]; rows: readonly BoardRow[] };
+
+function Groups({ ids, coordinatorId, decisions, rows }: GroupsProps) {
   const keepFocus = useFocusKeptByKey();
-  if (rows.length === 0) {
-    return <p className="px-2 text-sm text-muted-foreground">No crews yet. The {DISPLAY_NAME} starts one for each piece of work it delegates.</p>;
+  return (
+    <>
+      {boardGroups(decisions, rows).map(({ state, rows: inState }) => (
+        <section key={state} aria-labelledby={`${ids}-${state}`} className="flex flex-col gap-1">
+          <h2 id={`${ids}-${state}`} className="flex items-center gap-2 px-2 text-xs font-medium text-muted-foreground">
+            <span aria-hidden className={`size-1.5 rounded-full ${DOT[state]}`} />
+            {BOARD_STATE_LABELS[state]}
+            <span className="tabular-nums">{inState.length}</span>
+          </h2>
+          <ul className="flex flex-col">
+            {inState.map((item) => (
+              <li key={item.kind === "decision" ? item.decision.id : item.row.crewId}>
+                <ItemRow item={item} coordinatorId={coordinatorId} keepFocus={keepFocus} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+      {rows.length === 0 && <p className="px-2 text-sm text-muted-foreground">No crews yet. The {DISPLAY_NAME} starts one for each piece of work it delegates.</p>}
+    </>
+  );
+}
+
+/** One row, keeping focus as it moves between groups: decision and crew ids never collide (`d1`, `c1`). */
+function ItemRow({ item, coordinatorId, keepFocus }: { item: BoardItem<BoardRow>; coordinatorId: CoordinatorId; keepFocus: ReturnType<typeof useFocusKeptByKey> }) {
+  switch (item.kind) {
+    case "decision":
+      return <DecisionRow ref={keepFocus(item.decision.id)} coordinatorId={coordinatorId} decision={item.decision} />;
+    case "crew": {
+      const row = item.row;
+      if (row.draft !== null) return <DraftRow ref={keepFocus(row.crewId)} coordinatorId={coordinatorId} row={row} draft={row.draft} />;
+      return (
+        <>
+          <CrewRow ref={keepFocus(row.crewId)} row={row} />
+          <DroppedEdit coordinatorId={coordinatorId} row={row} />
+        </>
+      );
+    }
+    default:
+      return item satisfies never;
   }
-  return byState(rows).map(({ state, rows: inState }) => (
-    <section key={state} aria-labelledby={`${ids}-${state}`} className="flex flex-col gap-1">
-      <h2 id={`${ids}-${state}`} className="flex items-center gap-2 px-2 text-xs font-medium text-muted-foreground">
-        <span aria-hidden className={`size-1.5 rounded-full ${DOT[state]}`} />
-        {BOARD_STATE_LABELS[state]}
-        <span className="tabular-nums">{inState.length}</span>
-      </h2>
-      <ul className="flex flex-col">
-        {inState.map((row) => (
-          <li key={row.crewId}>
-            {row.draft === null ? (
-              <>
-                <CrewRow ref={keepFocus(row.crewId)} row={row} />
-                <DroppedEdit coordinatorId={coordinatorId} row={row} />
-              </>
-            ) : (
-              <DraftRow ref={keepFocus(row.crewId)} coordinatorId={coordinatorId} row={row} draft={row.draft} />
-            )}
-          </li>
-        ))}
-      </ul>
-    </section>
-  ));
 }
 
 const DOT: Record<BoardState, string> = {
@@ -153,10 +174,3 @@ const DOT: Record<BoardState, string> = {
   idle: "bg-muted-foreground",
   done: "border border-muted-foreground",
 };
-
-/** The time the digest changed: today's as a time, an older one with its date. */
-function updatedAt(modifiedAt: number): string {
-  const at = new Date(modifiedAt);
-  const today = at.toDateString() === new Date().toDateString();
-  return at.toLocaleString([], today ? { timeStyle: "short" } : { dateStyle: "medium", timeStyle: "short" });
-}

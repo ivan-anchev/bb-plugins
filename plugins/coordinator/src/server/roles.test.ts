@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { DISPLAY_NAME } from "../name.ts";
 import { harness, isRefusal, newThreadRequest, textOf } from "./test-harness.ts";
 
-const COORDINATOR_TOOLS = ["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_start", "crew_message", "crew_read", "crew_close", "crew_remind"];
+const COORDINATOR_TOOLS = ["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_start", "crew_message", "crew_read", "crew_close", "crew_remind", "crew_ask_user"];
 
 test("a coordinating thread is offered its tools, its skill and rules naming the product", async () => {
   const kit = harness();

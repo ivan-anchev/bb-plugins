@@ -1,8 +1,10 @@
-// What crew_catch_up and crew_read say about events, handoffs and reminders: everything, whole,
-// however long. This is where a crew's own words reach the coordinating thread, as a tool result,
-// each marked as the crew's.
+// What crew_catch_up and crew_read say about events, handoffs, reminders and decisions: everything,
+// whole, however long. This is where a crew's own words, and the user's answers, reach the
+// coordinating thread, as a tool result, each marked as whose they are.
+import type { Decision, DecisionId } from "../../model/decision.ts";
 import type { Handoff, HandoffId } from "../../model/handoff.ts";
 import type { InboxEvent, StoredEvent } from "../../model/inbox/inbox-event.ts";
+import { askedOf } from "../../model/inbox/wake-text.ts";
 import { intervalText, type Reminder } from "../../model/reminder.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
 import type { CrewId } from "../../model/role.ts";
@@ -12,6 +14,7 @@ type Lookups = {
   /** Each crew's title, as the coordinating thread gave it. */
   titles: ReadonlyMap<CrewId, string>;
   handoff(id: HandoffId): Handoff | null;
+  decision(id: DecisionId): Decision | null;
 };
 
 /** The updates section of a catch-up: every event it returned, oldest first. */
@@ -21,7 +24,7 @@ export function updatesText(events: readonly StoredEvent[], lookups: Lookups): s
   return [`## Updates\n\n${count} since your last catch-up, oldest first.`, ...events.map((stored) => eventText(stored, lookups))].join("\n\n");
 }
 
-function eventText({ event, at }: StoredEvent, { titles, handoff }: Lookups): string {
+function eventText({ event, at }: StoredEvent, { titles, handoff, decision }: Lookups): string {
   const when = `At ${new Date(at).toISOString()}.`;
   if (event.kind === "memory-edited") return `### The user edited ${event.file}\n\n${when} Its current text is in the memory below, or read it with crew_memory_read.`;
   if (event.kind === "verification-toggled") {
@@ -33,6 +36,7 @@ function eventText({ event, at }: StoredEvent, { titles, handoff }: Lookups): st
     const repeats = event.everyMs === null ? "It was a one-off, so it is gone." : `It repeats every ${intervalText(event.everyMs)}; Reminders below says when it is next due.`;
     return `### Your reminder ${event.reminderId}: ${event.note}\n\n${when} It was due at ${new Date(event.dueAt).toISOString()}. ${repeats}`;
   }
+  if (event.kind === "decision-answered") return answeredText(askedOf(decision(event.decisionId)), when);
   const crew = crewName(event, titles);
   switch (event.kind) {
     case "handoff":
@@ -54,6 +58,22 @@ function eventText({ event, at }: StoredEvent, { titles, handoff }: Lookups): st
     default:
       return event satisfies never;
   }
+}
+
+/** A decision the user answered: what was asked and offered, then the answer, marked as theirs. */
+function answeredText({ id, question, options, answer }: Decision, when: string): string {
+  if (answer === null) throw new Error(`The decision ${id} is announced as answered, but has no answer.`);
+  const offered = options.length === 0 ? "You offered no options." : `You offered: ${options.map((option) => `"${option}"`).join(", ")}.`;
+  const theirs = options.includes(answer.text) ? `They chose "${answer.text}".` : `Their answer, in their own words:\n\n${answer.text}`;
+  return `### The user answered your question ${id}\n\n${when} You asked: ${question} ${offered} ${theirs}`;
+}
+
+/** The decisions section of a catch-up: every decision still waiting for the user, oldest first. */
+export function openDecisionsText(decisions: readonly Decision[]): string {
+  const open = decisions.filter((decision) => decision.answer === null);
+  if (open.length === 0) return "## Decisions\n\nNone waiting for the user. Ask one with crew_ask_user when only the user can decide.";
+  const lines = open.map(({ id, question, options, askedAt }) => `- ${id}, asked ${new Date(askedAt).toISOString()}: ${question}${options.length === 0 ? "" : ` Options: ${options.map((option) => `"${option}"`).join(", ")}.`}`);
+  return ["## Decisions\n\nWaiting for the user on the board, under Needs you. Their answer wakes you; don't ask again meanwhile.", ...lines].join("\n\n");
 }
 
 /** The reminders section of a catch-up: every reminder the thread has set, soonest due first. */

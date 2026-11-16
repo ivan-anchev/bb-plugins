@@ -1,7 +1,9 @@
 // What the plugin tells a coordinating thread about: every fact it observes about the crews and the
-// memory, and the reminders it set itself, stored whole. Crew-written text (an answer, an error, a question) lives only here and in
-// crew_catch_up, never in the doorbell that announces it.
+// memory, the reminders it set itself and the user's answers to its decisions, stored whole.
+// Crew-written text (an answer, an error, a question) lives only here and in crew_catch_up, never in
+// the doorbell that announces it; so does the user's answer to a decision, kept with the decision.
 import { z } from "zod";
+import { decisionIdSchema } from "../decision.ts";
 import { handoffIdSchema, handoffStatusSchema } from "../handoff.ts";
 import { memoryFileSchema } from "../memory-file.ts";
 import { reminderIdSchema, reminderNoteSchema } from "../reminder.ts";
@@ -35,6 +37,8 @@ export const inboxEventSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("memory-edited"), file: memoryFileSchema }),
   /** A reminder the coordinating thread set came due at `dueAt`; `everyMs` is how often it repeats (null: it was a one-off, and is gone). */
   z.object({ kind: z.literal("reminder"), reminderId: reminderIdSchema, note: reminderNoteSchema, dueAt: z.number(), everyMs: z.number().int().positive().nullable() }),
+  /** The user answered a decision the coordinating thread put to them with crew_ask_user. */
+  z.object({ kind: z.literal("decision-answered"), decisionId: decisionIdSchema }),
 ]);
 export type InboxEvent = z.infer<typeof inboxEventSchema>;
 
@@ -57,6 +61,7 @@ const WAKES: Record<InboxEvent["kind"], boolean> = {
   "verification-toggled": true,
   "memory-edited": true,
   reminder: true,
+  "decision-answered": true,
 };
 
 export const wakes = (event: InboxEvent): boolean => WAKES[event.kind];

@@ -22,7 +22,7 @@ its role.
   `src/model/crew.ts`: a crew, a draft until its thread is bound, and where
   and on what model it runs. `src/model/handoff.ts`: a crew's handoff, its
   verdict, and `handoffIsCurrent`, the one definition of a current handoff
-  (no later turn started). `src/model/crew-state.ts`: `crewState`, the
+  (no later turn started). `src/model/board/crew-state.ts`: `crewState`, the
   one function that puts a crew on the board, used by the board and
   `crew_catch_up`. `src/model/inbox/`: the events the plugin tells a
   coordinating thread about, and `doorbellText`, the wake message, which

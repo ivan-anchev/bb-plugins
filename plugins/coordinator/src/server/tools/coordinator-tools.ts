@@ -4,6 +4,7 @@
 import type { PluginAgentToolContext, PluginAgentToolResult } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { briefSchema, doneCriteriaSchema, requestedPlacementSchema, titlesOf, type Crew } from "../../model/crew.ts";
+import { optionsSchema, questionSchema } from "../../model/decision.ts";
 import { memoryContentSchema, memoryFileSchema, memoryVersionSchema } from "../../model/memory-file.ts";
 import { AT_FORMS, parseAt, parseEvery, reminderIdSchema, reminderNoteSchema } from "../../model/reminder.ts";
 import { crewIdSchema, type CoordinatorId, type CrewId, type Role } from "../../model/role.ts";
@@ -15,7 +16,7 @@ import type { Store } from "../store.ts";
 import { boardText, closeText, detailText, startText, supersedeText } from "./crew-text.ts";
 import { VERDICT } from "../verify/verdict-tool.ts";
 import { HANDOFF } from "./crew-tools.ts";
-import { remindersText, reminderText, updatesText } from "./inbox-text.ts";
+import { openDecisionsText, remindersText, reminderText, updatesText } from "./inbox-text.ts";
 import { catchUpText, readText, writeResult } from "./memory-text.ts";
 import { failed, type ToolsBb } from "./tool-kit.ts";
 
@@ -27,23 +28,26 @@ const MESSAGE = "crew_message";
 const READ = "crew_read";
 const CLOSE = "crew_close";
 const REMIND = "crew_remind";
+const ASK_USER = "crew_ask_user";
 
 /** What configure offers a coordinating thread. */
-export const COORDINATOR_TOOLS = [CATCH_UP, MEMORY_READ, MEMORY_WRITE, START, MESSAGE, READ, CLOSE, REMIND];
+export const COORDINATOR_TOOLS = [CATCH_UP, MEMORY_READ, MEMORY_WRITE, START, MESSAGE, READ, CLOSE, REMIND, ASK_USER];
 /** What configure offers a crew thread: its coordinating thread's memory, read only, and its handoff. */
 export const CREW_TOOLS = [MEMORY_READ, HANDOFF];
 /** What configure offers a verifier thread: its coordinating thread's memory, read only, and its verdict. */
 export const VERIFIER_TOOLS = [MEMORY_READ, VERDICT];
 
 type Deps = {
-  store: Pick<Store, "roleOfThread" | "crew" | "crews" | "handoff" | "reminders" | "insertReminder" | "cancelReminder">;
+  store: Pick<Store, "roleOfThread" | "crew" | "crews" | "handoff" | "reminders" | "insertReminder" | "cancelReminder" | "decision" | "decisions" | "insertDecision">;
   inbox: Pick<Inbox, "takeUnread">;
   memory: MemoryRoot;
   crews: Pick<Crews, "start" | "supersede" | "message" | "detail" | "close">;
   board: Pick<BoardReader, "rows">;
+  /** Runs after a decision is asked, to show it on the coordinating thread's board. */
+  onChange(id: CoordinatorId): void;
 };
 
-export function registerCoordinatorTools(bb: ToolsBb, { store, inbox, memory, crews, board }: Deps): void {
+export function registerCoordinatorTools(bb: ToolsBb, { store, inbox, memory, crews, board, onChange }: Deps): void {
   /** The caller's coordinating thread, or null when the caller isn't one. */
   function coordinatorOf(threadId: string): CoordinatorId | null {
     const role = store.roleOfThread(threadId);
@@ -69,14 +73,14 @@ export function registerCoordinatorTools(bb: ToolsBb, { store, inbox, memory, cr
   bb.agents.registerTool({
     name: CATCH_UP,
     description:
-      "Catch up: returns every update since your last catch-up in full (crews' handoffs, a done one with its verifier's verdict, crews that failed, wait on the user or stopped without a handoff, your reminders that came due, and the user's memory edits and verification switch), then the board (every crew you started, under Needs you, Ready for review, Verifying, Working, Idle or Done, with its thread and branch), your reminders with their ids, and your memory files (MEMORY.md, GOAL.md, PLAN.md, PREFERENCES.md, CREW.md, DIGEST.md) in full, each with its version, and names any other memory file. Each update is returned once. Call it first on every wake.",
+      "Catch up: returns every update since your last catch-up in full (crews' handoffs, a done one with its verifier's verdict, crews that failed, wait on the user or stopped without a handoff, your reminders that came due, the user's answers to your questions, and the user's memory edits and verification switch), then the board (every crew you started, under Needs you, Ready for review, Verifying, Working, Idle or Done, with its thread and branch), the questions still waiting for the user, your reminders with their ids, and your memory files (MEMORY.md, GOAL.md, PLAN.md, PREFERENCES.md, CREW.md, DIGEST.md) in full, each with its version, and names any other memory file. Each update is returned once. Call it first on every wake.",
     presentation: { label: { pending: "Catching up", completed: "Caught up" }, icon: { glyph: "Workflow" } },
     parameters: z.object({}),
     execute: forCoordinator(CATCH_UP, async (id) => {
-      const updates = updatesText(inbox.takeUnread(id), { titles: titlesOf(store.crews(id)), handoff: store.handoff });
+      const updates = updatesText(inbox.takeUnread(id), { titles: titlesOf(store.crews(id)), handoff: store.handoff, decision: store.decision });
       // why caught: the updates and the memory are still worth reading when bb's thread list can't be.
       const rows = await board.rows(id).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
-      return `${updates}\n\n${boardText(rows)}\n\n${remindersText(store.reminders(id))}\n\n${catchUpText(memory.of(id))}`;
+      return `${updates}\n\n${boardText(rows)}\n\n${openDecisionsText(store.decisions(id))}\n\n${remindersText(store.reminders(id))}\n\n${catchUpText(memory.of(id))}`;
     }),
   });
 
@@ -191,6 +195,22 @@ export function registerCoordinatorTools(bb: ToolsBb, { store, inbox, memory, cr
       if (everyMs?.ok === false) return failed(everyMs.error);
       const reminder = store.insertReminder(id, { note, dueAt: dueAt.ms, everyMs: everyMs?.ms ?? null });
       return `Set ${reminderText(reminder)}. It wakes you with its note when it comes due; cancel it with ${REMIND} and cancel: "${reminder.id}".`;
+    }),
+  });
+
+  bb.agents.registerTool({
+    name: ASK_USER,
+    description:
+      "Ask the user to decide something only they can: a one-line question and up to five short options. It goes on their board under Needs you, with a button for each option and a field to answer in their own words, and returns at once: carry on with other work, or end your turn. Their answer wakes you, and crew_catch_up returns it with your question. crew_catch_up lists the questions still waiting, so don't ask one twice. Not for a crew's own question or approval: that waits in the crew's thread, for the user.",
+    presentation: { label: { pending: "Asking the user", completed: "Asked the user" }, icon: { glyph: "MessageCircleQuestion" } },
+    parameters: z.object({
+      question: questionSchema.describe("What the user decides, in one line, such as \"Target main or release/2?\"."),
+      options: optionsSchema.default([]).describe("Up to five answers to pick from, each a few words, such as [\"main\", \"release/2\"]. Leave it out when only their own words will do."),
+    }),
+    execute: forCoordinator(ASK_USER, (id, { question, options }) => {
+      const decision = store.insertDecision(id, { question, options }, Date.now());
+      onChange(id);
+      return `Asked the user ${decision.id} on their board, under Needs you. Carry on with other work, or end your turn: their answer wakes you, and crew_catch_up returns it.`;
     }),
   });
 }

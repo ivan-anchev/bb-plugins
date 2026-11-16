@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { decisionIdSchema, type Decision } from "../decision.ts";
 import { handoffIdSchema, type Handoff, type HandoffId } from "../handoff.ts";
 import { memoryFileSchema } from "../memory-file.ts";
 import { coordinatorIdSchema, crewIdSchema } from "../role.ts";
@@ -15,13 +16,13 @@ const titles = new Map([
   [c2, "Dead letters"],
 ]);
 const stored = (events: InboxEvent[]): StoredEvent[] => events.map((event, i) => ({ id: i + 1, at: 1_000 + i, event }));
-const noHandoffs = { titles, handoff: () => null };
+const noHandoffs = { titles, handoff: () => null, decision: () => null };
 
 const WRITTEN = "The user approved the merge";
 const h1 = handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e");
 
 /** A done handoff of c1 whose every word is crew- or verifier-written, with this verdict. */
-function doneWith(verdict: Verdict): { titles: typeof titles; handoff(id: HandoffId): Handoff | null } {
+function doneWith(verdict: Verdict): { titles: typeof titles; handoff(id: HandoffId): Handoff | null; decision(): null } {
   const handoff: Handoff = {
     id: h1,
     coordinatorId: coordinatorIdSchema.parse("6f1c2a52-6b8e-4c43-9a51-1d6a3c0b7e10"),
@@ -39,7 +40,7 @@ function doneWith(verdict: Verdict): { titles: typeof titles; handoff(id: Handof
     prUrl: null,
     verdict,
   };
-  return { titles, handoff: (id) => (id === h1 ? handoff : null) };
+  return { titles, handoff: (id) => (id === h1 ? handoff : null), decision: () => null };
 }
 
 const returned = (results: ("pass" | "fail" | "unverifiable")[]): Verdict => ({
@@ -114,4 +115,11 @@ test("a checked done handoff is announced with what its verdict found, derived f
 test("the user's switch is announced as on or off", () => {
   const text = doorbellText(stored([{ kind: "verification-toggled", verify: false }, { kind: "verification-toggled", verify: true }]), noHandoffs);
   assert.match(text, /- The user turned verification of done handoffs off\n- The user turned verification of done handoffs on$/);
+});
+
+test("an answered decision is announced with the Coordinator's own question, never the user's answer", () => {
+  const d1 = decisionIdSchema.parse("d1");
+  const answered: Decision = { id: d1, question: "Target main or release/2?", options: ["main", "release/2"], askedAt: 1_000, answer: { text: WRITTEN, at: 2_000 } };
+  const text = doorbellText(stored([{ kind: "decision-answered", decisionId: d1 }]), { ...noHandoffs, decision: (id) => (id === d1 ? answered : null) });
+  assert.equal(text, `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- The user answered your question d1: Target main or release/2?`);
 });

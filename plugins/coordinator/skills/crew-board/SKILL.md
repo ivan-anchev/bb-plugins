@@ -1,6 +1,6 @@
 ---
 name: crew-board
-description: Explain the coordinating-thread plugin (bb-plugin-coordinator). Its panel in the navigation rail starts long-lived coordinating threads. Each keeps its memory in markdown files, sets itself reminders and starts crew threads from a brief and done-criteria, each on its own branch, or drafts the user starts. A crew ends with a handoff; a done one is checked by a hidden independent verifier unless switched off, and a first failed verdict goes back to the crew. Each crew's pull request and CI are watched through gh, and a pass waits for CI. The Board shows the digest and every crew under Needs you, Ready for review, Verifying, Working, Landing, Idle or Done. Use when the user asks how to start a coordinating thread or crew, what the board, a row or verdict means, how verification or CI checks work, why PR status is unavailable, why a crew got findings, how to replace a crew, what an update is, why the thread woke, how reminders work, where memory lives, which thread has which tools, or how drafts work.
+description: Explain the coordinating-thread plugin (bb-plugin-coordinator). Its rail panel starts long-lived coordinating threads. Each keeps its memory in markdown files, sets itself reminders, asks the user for decisions on its board, and starts crew threads (or drafts) from a brief and done-criteria, each on its own branch. A crew ends with a handoff; a done one is checked by a hidden verifier unless switched off, and a first failed verdict goes back to the crew. PRs and CI are watched through gh; a pass waits for CI. The Board shows the digest, decisions and crews under Needs you, Ready for review, Verifying, Working, Landing, Idle or Done. Use when the user asks how to start a coordinating thread or crew, what the board, a row or verdict means, how verification or CI checks work, why PR status is unavailable, why a crew got findings, how to replace a crew, what an update is, why the thread woke, how reminders or decisions work, where memory lives, which thread has which tools, or how drafts work.
 ---
 
 # Coordinating threads
@@ -35,7 +35,7 @@ From its first turn the thread has:
   project files, build or commit itself, and delegate with checkable
   done-criteria;
 - the `coordinating` skill, its playbook;
-- eight tools:
+- nine tools:
   - `crew_catch_up` returns every update since its last catch-up in full
     (below), the board, then its core memory files in full,
     each with its version, in a fixed order, up to 40,000 characters; files
@@ -51,6 +51,8 @@ From its first turn the thread has:
     (see [Replacing a crew](#replacing-a-crew)).
   - `crew_remind` sets or cancels one of its reminders (see
     [Reminders](#reminders)).
+  - `crew_ask_user` puts a decision to you on its board (see
+    [Decisions](#decisions)).
 
   A name that leaves the memory folder or doesn't end in `.md` is rejected.
   Its rules tell it to keep its plan in `PLAN.md`, each standing preference
@@ -160,6 +162,7 @@ with `crew_handoff`, and the plugin stores everything it sees:
   it opened, reopened, merged or closed, its CI passed or failed, or a review
   approved it or asked for changes. A new CI run starting is not an update.
 - **One of the thread's reminders came due** (see [Reminders](#reminders)).
+- **You answered one of its decisions** (see [Decisions](#decisions)).
 
 A `done` handoff is announced only together with its verdict (see
 [Verification](#verification)); a blocked or gave-up one, and everything
@@ -169,11 +172,13 @@ Each one wakes the coordinating thread with one short message: the plugin's
 name in brackets, how many updates there are, and one line each, such as
 `- c1 "Add retries" handed off: done, failed verification`,
 `- c2 "Dead letters" handed off: blocked`, `- c1 "Add retries" PR #41: CI
-passed`, `- The user edited PLAN.md` or `- Your reminder r1: check on c1`.
+passed`, `- The user edited PLAN.md`, `- Your reminder r1: check on c1` or
+`- The user answered your question d1: Target main or release/2?`.
 The message reaches the thread as if you typed it, so it holds only facts the
-plugin derived and what the thread wrote itself (the titles it gave its crews
-and the notes of its reminders): never a crew's summary, answer, error or
-question, nor a verifier's evidence. Those are in
+plugin derived and what the thread wrote itself (the titles it gave its crews,
+the notes of its reminders and the questions it asked you): never a crew's
+summary, answer, error or question, a verifier's evidence, nor your answer to
+a decision. Those are in
 `crew_catch_up`, which returns every update since the last catch-up, whole,
 once.
 
@@ -344,6 +349,32 @@ Rather than wait or poll, a coordinating thread sets itself a reminder with
   and wake it once bb lists it again, unarchived. A **deleted** coordinating
   thread's reminders are deleted.
 
+## Decisions
+
+When only you can decide something, a coordinating thread asks with
+`crew_ask_user`: a one-line question (up to 500 characters) and up to five
+options (each one line, up to 80 characters, no two alike), or none. It
+returns at once and the thread keeps working: the question never waits as a
+form in its thread, where it would hold every update meant to wake it. It
+gets an id: `d1`, `d2`… An id is never reused.
+
+The decision shows on the board under **Needs you**, above the crews there,
+with a button for each option and a field to answer in your own words: Enter
+sends it and Shift+Enter breaks the line, and Esc doesn't leave the page while
+it has text. A send that fails keeps your text, with the error under it. Your
+answer moves the decision to **Done**, with the answer and when you gave it,
+and wakes the thread; its `crew_catch_up` returns your answer, as the option
+you chose or in your own words, with its question. A decision is answered
+once: a second answer, as from another window, is refused.
+
+The panel's entry in the navigation rail counts everything under **Needs
+you** on every board the panel lists: open decisions and crews alike, the same
+rows each board shows there. Its name says which, as "3 need you: 1 decision,
+2 crews". It drops as you answer a decision or a crew leaves Needs you.
+
+A crew's own question or approval stays in the crew's thread, for you to
+answer there.
+
 ## The board
 
 The **Board** tab in a coordinating thread's side panel, and the **Board**
@@ -354,6 +385,8 @@ page from its row in the panel, show the same board:
   pull request failed.
 - **Digest**: `DIGEST.md`, the coordinating thread's latest summary for you,
   and when it last changed.
+- **Decisions** the thread put to you (see [Decisions](#decisions)): open
+  under Needs you, answered under Done, each above the crews in its group.
 - **Crews**, each with its id, title, a one-line headline and its branch,
   then, once it has one, its pull request: its number, which opens it on
   GitHub, its state, its CI and its review. Grouped:
