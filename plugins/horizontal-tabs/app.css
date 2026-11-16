@@ -92,6 +92,13 @@
   app-region: drag;
 }
 
+/* In bb's framed window (bb Desktop) the top row is the window's title bar, which bb's sidebar card and
+   floating controls are laid out against: the strip takes its height, so the panes start where the
+   sidebar does and the tabs centre on the traffic lights. */
+[data-testid="app-layout-root"][data-framed] .ht-strip {
+  height: var(--bb-window-title-bar-height);
+}
+
 .ht-inset {
   flex: none;
 }
