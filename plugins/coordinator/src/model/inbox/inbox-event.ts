@@ -39,6 +39,10 @@ export const inboxEventSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("reminder"), reminderId: reminderIdSchema, note: reminderNoteSchema, dueAt: z.number(), everyMs: z.number().int().positive().nullable() }),
   /** The user answered a decision the coordinating thread put to them with crew_ask_user. */
   z.object({ kind: z.literal("decision-answered"), decisionId: decisionIdSchema }),
+  /** A turn of the coordinating thread ended with `fileCount` changed files in its own environment's working tree (see ownTreeEventAfter). */
+  z.object({ kind: z.literal("coordinator-edited-files"), fileCount: z.number().int().min(1) }),
+  /** A turn of the coordinating thread ended with its own working tree clean again, after a `coordinator-edited-files`. */
+  z.object({ kind: z.literal("coordinator-tree-clean") }),
 ]);
 export type InboxEvent = z.infer<typeof inboxEventSchema>;
 
@@ -48,7 +52,10 @@ export type StoredEvent = { id: number; at: number; event: InboxEvent };
 /**
  * Whether an event of each kind wakes its coordinating thread on its own. One that doesn't waits,
  * unannounced, for the next one that does, and is listed in that doorbell and in the catch-up. why
- * `sent-back` doesn't: it leaves the thread nothing to do, and a turn costs tokens and context.
+ * `sent-back` and `coordinator-tree-clean` don't: they leave the thread nothing to do, and a turn
+ * costs tokens and context. why `coordinator-edited-files` does: only the thread can move its change
+ * to a crew, and with no crew at work nothing else may wake it for hours. It can't wake the thread
+ * in a loop: the turn it starts ends with the same count, which records nothing.
  */
 const WAKES: Record<InboxEvent["kind"], boolean> = {
   handoff: true,
@@ -62,6 +69,8 @@ const WAKES: Record<InboxEvent["kind"], boolean> = {
   "memory-edited": true,
   reminder: true,
   "decision-answered": true,
+  "coordinator-edited-files": true,
+  "coordinator-tree-clean": false,
 };
 
 export const wakes = (event: InboxEvent): boolean => WAKES[event.kind];

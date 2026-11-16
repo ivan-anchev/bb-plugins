@@ -5,6 +5,7 @@ import type { Board, BoardRow } from "../../contract.ts";
 import { environmentOf, type Crew } from "../../model/crew.ts";
 import { needsYou, type NeedsYou } from "../../model/board/board-groups.ts";
 import { crewState, type CrewThread } from "../../model/board/crew-state.ts";
+import { warnedFileCount } from "../../model/inbox/own-tree.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { MemoryRoot } from "../memory/memory-files.ts";
@@ -49,7 +50,7 @@ export async function threadsById<Thread extends ListableThread>(bb: ListBb<Thre
 
 const DIGEST = memoryFileSchema.parse("DIGEST.md");
 
-export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinator" | "latestHandoff" | "verifies" | "prStatus" | "decisions">, memory: MemoryRoot) {
+export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinator" | "latestHandoff" | "verifies" | "prStatus" | "decisions" | "lastOwnTreeEvent">, memory: MemoryRoot) {
   /** Why the latest read of an open crew's pull request failed, the first one's; null when none did. */
   function prUnavailable(id: CoordinatorId): string | null {
     for (const crew of store.crews(id).filter(isOpen)) {
@@ -57,6 +58,13 @@ export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinat
       if (unavailable !== null) return unavailable.reason;
     }
     return null;
+  }
+
+  /** The warning of changed files in the coordinating thread's own working tree, from the latest event about it. */
+  function ownEdits(id: CoordinatorId): Board["ownEdits"] {
+    const last = store.lastOwnTreeEvent(id);
+    const fileCount = warnedFileCount(last?.event ?? null);
+    return last === null || fileCount === 0 ? null : { fileCount, at: last.at };
   }
 
   async function rows(id: CoordinatorId): Promise<BoardRow[]> {
@@ -83,13 +91,14 @@ export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinat
   return {
     rows,
 
-    /** The board as the user sees it: the verification switch, why PR status is unavailable, the digest, the decisions, then every crew's row. */
+    /** The board as the user sees it: the verification switch, the warning of its own edits, why PR status is unavailable, the digest, the decisions, then every crew's row. */
     async read(id: CoordinatorId): Promise<Board> {
       const files = memory.of(id);
       const text = files.read(DIGEST).text;
       const modifiedAt = files.modifiedAt(DIGEST);
       return {
         verify: store.verifies(id),
+        ownEdits: ownEdits(id),
         prUnavailable: prUnavailable(id),
         digest: text === null || modifiedAt === null ? null : { content: text.content, modifiedAt },
         decisions: store.decisions(id),

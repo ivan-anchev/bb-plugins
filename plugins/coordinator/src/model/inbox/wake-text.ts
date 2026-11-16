@@ -10,6 +10,7 @@ import type { CrewId } from "../role.ts";
 import { ciVerdictOf, mayHaveReachedCrew, outcome } from "../verdict/verdict.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import type { InboxEvent, StoredEvent } from "./inbox-event.ts";
+import { filesText } from "./own-tree.ts";
 
 type Lookups = {
   /** Each crew's title, as the coordinating thread gave it in crew_start. */
@@ -29,6 +30,8 @@ function line(event: InboxEvent, { titles, handoff, decision }: Lookups): string
   if (event.kind === "verification-toggled") return `The user turned verification of done handoffs ${event.verify ? "on" : "off"}`;
   if (event.kind === "reminder") return `Your reminder ${event.reminderId}: ${event.note}`;
   if (event.kind === "decision-answered") return `The user answered your question ${event.decisionId}: ${askedOf(decision(event.decisionId)).question}`;
+  if (event.kind === "coordinator-edited-files") return `Your own environment has ${filesText(event.fileCount)} changed after your turn: hand the change to a crew`;
+  if (event.kind === "coordinator-tree-clean") return "Your own environment is clean again";
   const title = titles.get(event.crewId);
   const crew = title === undefined ? event.crewId : `${event.crewId} "${title}"`;
   switch (event.kind) {

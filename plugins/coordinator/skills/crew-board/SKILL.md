@@ -1,6 +1,6 @@
 ---
 name: crew-board
-description: Explain the coordinating-thread plugin (bb-plugin-coordinator). Its rail panel starts long-lived coordinating threads. Each keeps its memory in markdown files, sets itself reminders, asks the user for decisions on its board, and starts crew threads (or drafts) from a brief and done-criteria, each on its own branch. A crew ends with a handoff; a done one is checked by a hidden verifier unless switched off, and a first failed verdict goes back to the crew. PRs and CI are watched through gh; a pass waits for CI. The Board shows the digest, decisions and crews under Needs you, Ready for review, Verifying, Working, Landing, Idle or Done. Use when the user asks how to start a coordinating thread or crew, what the board, a row or verdict means, how verification or CI checks work, why PR status is unavailable, why a crew got findings, how to replace a crew, what an update is, why the thread woke, how reminders or decisions work, where memory lives, which thread has which tools, or how drafts work.
+description: Explain the coordinating-thread plugin (bb-plugin-coordinator). Its rail panel starts long-lived coordinating threads. Each keeps its memory in markdown files, sets itself reminders, asks the user for decisions on its board, and starts crew threads (or drafts) from a brief and done-criteria. A crew ends with a handoff; a done one is checked by a hidden verifier unless switched off, and a first failed verdict goes back to the crew. PRs and CI are watched through gh; a pass waits for CI. The Board shows the digest, decisions, crews grouped from Needs you to Done, and a warning when the thread edits files itself. Use when the user asks how to start a coordinating thread or crew, what the board, a row or verdict means, how verification or CI checks work, why PR status is unavailable, why a crew got findings, how to replace a crew, what an update is, why the thread woke or the board warns of edits, how reminders or decisions work, where memory lives, which thread has which tools, or how drafts work.
 ---
 
 # Coordinating threads
@@ -163,6 +163,9 @@ with `crew_handoff`, and the plugin stores everything it sees:
   approved it or asked for changes. A new CI run starting is not an update.
 - **One of the thread's reminders came due** (see [Reminders](#reminders)).
 - **You answered one of its decisions** (see [Decisions](#decisions)).
+- **Its own turn ended with changed files in its working tree** (see
+  [Edits it makes itself](#edits-it-makes-itself)), or with the tree clean
+  again after that.
 
 A `done` handoff is announced only together with its verdict (see
 [Verification](#verification)); a blocked or gave-up one, and everything
@@ -172,8 +175,11 @@ Each one wakes the coordinating thread with one short message: the plugin's
 name in brackets, how many updates there are, and one line each, such as
 `- c1 "Add retries" handed off: done, failed verification`,
 `- c2 "Dead letters" handed off: blocked`, `- c1 "Add retries" PR #41: CI
-passed`, `- The user edited PLAN.md`, `- Your reminder r1: check on c1` or
-`- The user answered your question d1: Target main or release/2?`.
+passed`, `- The user edited PLAN.md`, `- Your reminder r1: check on c1`,
+`- The user answered your question d1: Target main or release/2?` or
+`- Your own environment has 2 files changed after your turn: hand the change to a crew`.
+The tree being clean again, like a fix round sent back, wakes nobody: it is
+listed in the next message and catch-up.
 The message reaches the thread as if you typed it, so it holds only facts the
 plugin derived and what the thread wrote itself (the titles it gave its crews,
 the notes of its reminders and the questions it asked you): never a crew's
@@ -375,12 +381,49 @@ rows each board shows there. Its name says which, as "3 need you: 1 decision,
 A crew's own question or approval stays in the crew's thread, for you to
 answer there.
 
+## Edits it makes itself
+
+A coordinating thread's rules say it never edits project files, builds or
+commits. bb can't enforce that (there is no read-only mode, and a plugin can't
+take a provider's file tools away), so the plugin **detects** it instead:
+
+- **When**: each time one of the coordinating thread's turns ends, the
+  plugin reads its own environment's working tree through bb's git plugin
+  (`bb--git` `status`). Crews' and verifiers' turns aren't read.
+- **Changed files** (any modified, added, deleted or untracked file) put a
+  warning at the top of its board, under the switch: how many files changed
+  in its own environment, when its turn ended, and that it was told to hand
+  the change to a crew. The thread is woken
+  with `- Your own environment has 2 files changed after your turn: hand the
+  change to a crew`, and its `crew_catch_up` tells it to describe the change
+  in a crew brief saved as a draft (always: it never starts that crew
+  itself), so a crew you start redoes it on its own branch, then ask you on its board whether to discard the changes in
+  its environment; or, if you made the changes, to leave them and say so in
+  its digest. It never stashes, reverts, checks out or deletes anything
+  there, not even its own changes, since you may have edited the same
+  files: discarding them is yours to do.
+- **Once per state**: a turn that ends with the same number of changed files
+  records nothing new and wakes nobody, after a reload too, since the plugin
+  compares with the last warning it stored. A different number warns again.
+- **A clean tree** at the end of a later turn clears the warning, and its
+  next catch-up says the tree is clean again. That doesn't wake it.
+- **Nothing is recorded** for an environment outside git, or when bb's git
+  plugin can't read it (its machine is offline, or the read fails); the
+  warning stays as it was, and the server log says why.
+- **It is not a guarantee.** A change the thread committed, or made and
+  undid within one turn, leaves the tree clean and isn't seen. The plugin
+  never blocks or reverts an edit. The plugin itself writes nothing in the
+  thread's environment: its memory files live on the bb server.
+
 ## The board
 
 The **Board** tab in a coordinating thread's side panel, and the **Board**
 page from its row in the panel, show the same board:
 
 - **Verify done handoffs**: the switch for this coordinating thread.
+- **Files changed in its own environment**: a warning with how many, and
+  when its turn ended, while the latest read of its working tree found
+  changed files (see [Edits it makes itself](#edits-it-makes-itself)).
 - **PR status unavailable: <why>**, only while the latest read of a crew's
   pull request failed.
 - **Digest**: `DIGEST.md`, the coordinating thread's latest summary for you,
@@ -469,6 +512,8 @@ and the Memory page read the new text on their next read.
 
 ## Not yet
 
+- Edits are detected after a turn ends, never prevented, and a committed one
+  isn't seen.
 - Reminders are checked once a minute, and take no cron expressions.
 - Pull requests are read by polling, never pushed: a change shows within a
   minute while CI runs or a verdict waits for it, else within five.

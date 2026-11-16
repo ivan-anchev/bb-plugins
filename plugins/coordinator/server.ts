@@ -8,6 +8,7 @@ import { createBoard } from "./src/server/crew/board.ts";
 import { createCrews } from "./src/server/crew/crews.ts";
 import { forwardCrewThreadEvents } from "./src/server/crew/thread-events.ts";
 import { createInbox } from "./src/server/inbox/inbox.ts";
+import { watchOwnTree } from "./src/server/inbox/own-tree-watch.ts";
 import { watchCrewThreads } from "./src/server/inbox/thread-watch.ts";
 import { openMemoryRoot } from "./src/server/memory/memory-files.ts";
 import { memoryHandlers } from "./src/server/memory/memory-rpc.ts";
@@ -38,6 +39,7 @@ export default function plugin(bb: BbPluginApi): void {
   registerVerdictTool(bb, { store, verify });
   forwardCrewThreadEvents(bb, store, refreshBoard);
   watchCrewThreads({ bb, store, inbox, onChange: refreshBoard });
+  watchOwnTree({ bb, store, inbox });
   const prWatch = createPrWatch({ bb, store, inbox, gh: runGh });
   bb.background.schedule("watch", "* * * * *", async () => {
     // why each caught: a pass that can't read bb or GitHub must not keep the next from running, nor the doorbells from ringing.
