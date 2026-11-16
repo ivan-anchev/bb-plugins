@@ -87,7 +87,6 @@
   align-items: center;
   height: var(--bb-app-chrome-row-height);
   padding: 0 1rem;
-  border-bottom: 1px solid var(--border-seam-vertical);
   background: var(--sidebar);
   user-select: none;
   app-region: drag;
