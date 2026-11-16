@@ -4,11 +4,12 @@
 // inside it). The overlay portals the strip into the slot.
 import type { PluginContentScriptRegistration } from "@get-bb/plugin-sdk/app";
 import { useSyncExternalStore } from "react";
+import { followChromeInset } from "./chrome-inset.ts";
 
 const SHELL = "[data-app-content-shell]";
-const HEADER_ROW = '[data-testid="app-page-header-content-row"]';
 
 let slot: HTMLElement | null = null;
+let inset = "";
 const listeners = new Set<() => void>();
 
 export const stripMount: PluginContentScriptRegistration = {
@@ -17,20 +18,24 @@ export const stripMount: PluginContentScriptRegistration = {
     const element = document.createElement("div");
     element.setAttribute("data-ht-strip-slot", "");
     const focus = keepFocus(element, signal);
-    const inset = followChromeInset(element, signal);
+    const chromeInset = followChromeInset(signal, (classes) => {
+      inset = classes;
+      notify();
+    });
     const sync = () => {
       if (attach(element)) focus.restore();
-      inset.follow();
+      chromeInset.follow();
     };
     sync();
     // why: bb re-renders the app shell on some route changes and swaps page headers on most; put the slot
-    // back whenever it falls out, and re-read the inset whenever the header changes.
+    // back whenever it falls out, and follow the inset to the headers bb shows now.
     const observer = new MutationObserver(sync);
     observer.observe(document.body, { childList: true, subtree: true });
     publish(element);
     return () => {
       observer.disconnect();
       element.remove();
+      inset = "";
       publish(null);
     };
   },
@@ -39,6 +44,11 @@ export const stripMount: PluginContentScriptRegistration = {
 /** The strip's portal target, or null while the content script is not mounted. */
 export function useStripSlot(): HTMLElement | null {
   return useSyncExternalStore(subscribe, () => slot);
+}
+
+/** bb's classes for the strip's inset spacer (src/host/chrome-inset.ts); empty while nothing is followed. */
+export function useChromeInset(): string {
+  return useSyncExternalStore(subscribe, () => inset);
 }
 
 /**
@@ -56,6 +66,10 @@ function subscribe(listener: () => void): () => void {
 
 function publish(next: HTMLElement | null): void {
   slot = next;
+  notify();
+}
+
+function notify(): void {
   listeners.forEach((listener) => listener());
 }
 
@@ -90,35 +104,6 @@ function keepFocus(element: HTMLElement, signal: AbortSignal) {
     restore(): void {
       if (held !== null && document.activeElement === document.body) held.focus({ preventScroll: true });
       held = null;
-    },
-  };
-}
-
-// why: bb's floating chrome (sidebar toggle, New thread, back and forward; the macOS traffic lights on
-// desktop) sits over the top-left of the main panel when the sidebar is closed, and bb pads each page
-// header's row to clear it. The strip now holds that top row, so it takes the same inset, read from the
-// header bb shows now. Single-pane New thread has no header; the last inset read stays.
-function followChromeInset(element: HTMLElement, signal: AbortSignal) {
-  let row: Element | null = null;
-  const mirror = () => {
-    if (row !== null) element.style.setProperty("--ht-chrome-inset", getComputedStyle(row).paddingLeft);
-  };
-  window.addEventListener("resize", mirror, { signal });
-  // The header row animates its padding when bb's sidebar opens or closes; read it once it settles.
-  document.addEventListener(
-    "transitionend",
-    (event) => {
-      if (event.propertyName === "padding-left" && event.target === row) mirror();
-    },
-    { signal },
-  );
-  return {
-    /** Re-reads the inset when bb has put up a new page header. */
-    follow(): void {
-      const next = document.querySelector(HEADER_ROW);
-      if (next === row) return;
-      row = next;
-      mirror();
     },
   };
 }
