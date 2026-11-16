@@ -1,7 +1,8 @@
 // The doorbell: the short message that wakes a coordinating thread. It reaches the thread as a
 // user-role message, so it holds only facts the plugin derived (a crew's id, a handoff's status, a
-// memory file's name) and the titles the coordinating thread itself gave its crews. Anything a crew
-// wrote is read through crew_catch_up, as a tool result, never here.
+// memory file's name) and text the coordinating thread itself wrote: the titles it gave its crews and
+// the notes of its reminders. Anything a crew wrote is read through crew_catch_up, as a tool result,
+// never here.
 import type { Handoff, HandoffId } from "../handoff.ts";
 import { PR_CHANGE_WORDS } from "../verdict/pr.ts";
 import type { CrewId } from "../role.ts";
@@ -24,6 +25,7 @@ export function doorbellText(events: readonly StoredEvent[], lookups: Lookups): 
 function line(event: InboxEvent, { titles, handoff }: Lookups): string {
   if (event.kind === "memory-edited") return `The user edited ${event.file}`;
   if (event.kind === "verification-toggled") return `The user turned verification of done handoffs ${event.verify ? "on" : "off"}`;
+  if (event.kind === "reminder") return `Your reminder ${event.reminderId}: ${event.note}`;
   const title = titles.get(event.crewId);
   const crew = title === undefined ? event.crewId : `${event.crewId} "${title}"`;
   switch (event.kind) {

@@ -222,6 +222,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   const git: { checkouts: Map<string, string>; calls: string[][] } = { checkouts: new Map(), calls: [] };
   /** Set `failure` to make every read of a thread's turns reject with it, as when bb can't answer. */
   const turnEvents: { failure: Error | null } = { failure: null };
+  /** Set `failure` to make every listing of threads by id reject with it, as when bb can't answer. */
+  const threadLists: { failure: Error | null } = { failure: null };
   /** Set `answered` to run as bb answers a thread's model lookup, as when someone acts at that moment. */
   const modelLookups: { answered: ((threadId: string) => void) | null } = { answered: null };
   const store = openStore(memoryStorage().storage);
@@ -292,7 +294,10 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       return value;
     },
     // As bb does, listing by id includes archived and deleted threads.
-    list: async ({ threadIds }) => threadIds.flatMap((id) => fakeThreads.get(id) ?? []),
+    list: async ({ threadIds }) => {
+      if (threadLists.failure !== null) throw threadLists.failure;
+      return threadIds.flatMap((id) => fakeThreads.get(id) ?? []);
+    },
     async defaultExecutionOptions({ threadId }) {
       const { execution } = fakeThread(threadId);
       modelLookups.answered?.(threadId);
@@ -443,13 +448,15 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     git,
     /** How bb answers a read of a thread's turns; a test may make it fail. */
     turnEvents,
+    /** How bb answers a listing of threads by id; a test may make it fail. */
+    threadLists,
     /** The time the next tick runs at; a test may move it on. */
     clock,
     /** The schedule's once-a-minute pass, as server.ts runs it, at the clock's time. */
     async tick(): Promise<void> {
       await plugin.prWatch.tick(clock.now);
       await plugin.verify.reconcile();
-      await plugin.inbox.tick();
+      await plugin.inbox.tick(clock.now);
     },
     /**
      * bb reloads the plugin, as after a crash: the old modules are disposed and forgotten, with

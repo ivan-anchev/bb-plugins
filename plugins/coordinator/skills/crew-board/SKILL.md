@@ -1,6 +1,6 @@
 ---
 name: crew-board
-description: Explain the coordinating-thread plugin (bb-plugin-coordinator). Its panel in bb's navigation rail starts long-lived coordinating threads with bb's composer. Each keeps its memory as markdown files on the bb server and starts crew threads that each work on their own branch from a brief and done-criteria, or drafts the user starts. A crew ends with a handoff; a done one is checked by a hidden independent verifier unless switched off, and a first failed verdict goes back to the crew. Each crew's pull request and CI are watched through gh, and a pass waits for CI. The Board shows the digest and every crew under Needs you, Ready for review, Verifying, Working, Landing, Idle or Done. Use when the user asks how to start a coordinating thread or a crew, what the board, a row or a verdict means, how verification or CI checking works, why PR status is unavailable, why a crew got findings, how to replace a crew, what an update is, why the thread woke, where memory lives, which thread has which tools, or how drafts work.
+description: Explain the coordinating-thread plugin (bb-plugin-coordinator). Its panel in the navigation rail starts long-lived coordinating threads. Each keeps its memory in markdown files, sets itself reminders and starts crew threads from a brief and done-criteria, each on its own branch, or drafts the user starts. A crew ends with a handoff; a done one is checked by a hidden independent verifier unless switched off, and a first failed verdict goes back to the crew. Each crew's pull request and CI are watched through gh, and a pass waits for CI. The Board shows the digest and every crew under Needs you, Ready for review, Verifying, Working, Landing, Idle or Done. Use when the user asks how to start a coordinating thread or crew, what the board, a row or verdict means, how verification or CI checks work, why PR status is unavailable, why a crew got findings, how to replace a crew, what an update is, why the thread woke, how reminders work, where memory lives, which thread has which tools, or how drafts work.
 ---
 
 # Coordinating threads
@@ -35,7 +35,7 @@ From its first turn the thread has:
   project files, build or commit itself, and delegate with checkable
   done-criteria;
 - the `coordinating` skill, its playbook;
-- seven tools:
+- eight tools:
   - `crew_catch_up` returns every update since its last catch-up in full
     (below), the board, then its core memory files in full,
     each with its version, in a fixed order, up to 40,000 characters; files
@@ -49,6 +49,8 @@ From its first turn the thread has:
   - `crew_start`, `crew_message`, `crew_read` and `crew_close` start and
     manage its crews (below). `crew_start` with `supersedes` replaces one
     (see [Replacing a crew](#replacing-a-crew)).
+  - `crew_remind` sets or cancels one of its reminders (see
+    [Reminders](#reminders)).
 
   A name that leaves the memory folder or doesn't end in `.md` is rejected.
   Its rules tell it to keep its plan in `PLAN.md`, each standing preference
@@ -157,6 +159,7 @@ with `crew_handoff`, and the plugin stores everything it sees:
 - **A crew's pull request changed** (see [Pull requests and CI](#pull-requests-and-ci)):
   it opened, reopened, merged or closed, its CI passed or failed, or a review
   approved it or asked for changes. A new CI run starting is not an update.
+- **One of the thread's reminders came due** (see [Reminders](#reminders)).
 
 A `done` handoff is announced only together with its verdict (see
 [Verification](#verification)); a blocked or gave-up one, and everything
@@ -166,10 +169,11 @@ Each one wakes the coordinating thread with one short message: the plugin's
 name in brackets, how many updates there are, and one line each, such as
 `- c1 "Add retries" handed off: done, failed verification`,
 `- c2 "Dead letters" handed off: blocked`, `- c1 "Add retries" PR #41: CI
-passed` or `- The user edited PLAN.md`. The
-message reaches the thread as if you typed it, so it holds only facts the
-plugin derived and the titles the thread gave its crews: never a crew's
-summary, answer, error or question, nor a verifier's evidence. Those are in
+passed`, `- The user edited PLAN.md` or `- Your reminder r1: check on c1`.
+The message reaches the thread as if you typed it, so it holds only facts the
+plugin derived and what the thread wrote itself (the titles it gave its crews
+and the notes of its reminders): never a crew's summary, answer, error or
+question, nor a verifier's evidence. Those are in
 `crew_catch_up`, which returns every update since the last catch-up, whole,
 once.
 
@@ -313,6 +317,33 @@ with `gh` on the machine running bb, on the same once-a-minute tick:
   Sign gh in with `gh auth login` on the machine running bb; for rejected
   credentials, check `gh auth status` there.
 
+## Reminders
+
+Rather than wait or poll, a coordinating thread sets itself a reminder with
+`crew_remind`:
+
+- **Set one** with a `note` (one line, up to 500 characters, such as "check
+  on c1") and `at`, when it first comes due: `"2m"`, `"in 2h"` or `"3d"` from
+  now (whole minutes, hours or days), or an ISO 8601 time with its offset,
+  such as `"2026-11-16T17:00+02:00"` (the thread can't know the server's time
+  zone, so a time without one is refused). Add `every`, such as `"30m"`,
+  `"2h"` or `"every 1d"`, to repeat it. A time the plugin can't read, a date
+  that doesn't exist (such as `2027-02-29`), or one in the past, is refused
+  with the forms it accepts, and nothing is set. It
+  returns the reminder's id: `r1`, `r2`… An id is never reused.
+- **When it comes due**, the once-a-minute tick wakes the thread with its
+  note, as in `- Your reminder r1: check on c1`, within about a minute. A
+  one-off is then gone. A repeating one moves to its next time after now, so
+  one missed several times while bb was down wakes the thread once, and keeps
+  its schedule.
+- **See them**: `crew_catch_up` lists every reminder with its id, when it is
+  next due and how often it repeats.
+- **Cancel one** with `crew_remind` and `cancel: "r1"`. A thread can cancel
+  only its own.
+- **An archived coordinating thread** is never woken: its due reminders wait,
+  and wake it once bb lists it again, unarchived. A **deleted** coordinating
+  thread's reminders are deleted.
+
 ## The board
 
 The **Board** tab in a coordinating thread's side panel, and the **Board**
@@ -405,6 +436,7 @@ and the Memory page read the new text on their next read.
 
 ## Not yet
 
+- Reminders are checked once a minute, and take no cron expressions.
 - Pull requests are read by polling, never pushed: a change shows within a
   minute while CI runs or a verdict waits for it, else within five.
 - The plugin never merges, approves or comments on a pull request.

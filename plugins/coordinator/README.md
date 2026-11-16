@@ -26,12 +26,14 @@ its role.
   one function that puts a crew on the board, used by the board and
   `crew_catch_up`. `src/model/inbox/`: the events the plugin tells a
   coordinating thread about, and `doorbellText`, the wake message, which
-  holds no crew-written text.
+  holds no crew-written text. `src/model/reminder.ts`: a reminder, and the
+  one parser of `crew_remind`'s times.
 - `src/server/`: `store.ts` holds every SQL statement (tables `roles`,
   `coordinators`, `memory_revisions`, `crews`, `handoffs`, `verdicts`,
-  `events`, `doorbells`); `inbox/` is the only writer of events and the only
-  sender of doorbells, with the once-a-minute `watch` tick and the thread
-  watch that turns a crew's idle, failure or question into an event; `spawn.ts` mints a ticket,
+  `events`, `doorbells`, `reminders`); `inbox/` is the only writer of events and the only
+  sender of doorbells, with the once-a-minute `watch` tick, the thread
+  watch that turns a crew's idle, failure or question into an event; the tick
+  first turns each due reminder into one; `spawn.ts` mints a ticket,
   saves a crew and spawns a coordinating or crew thread, and binds it on the spawn answer and
   on `thread.created`; `roles.ts` is the one `configure` callback; `tools/`
   the agent tools and the text they return; `crew/` the crew actions (one
