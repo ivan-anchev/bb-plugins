@@ -127,6 +127,9 @@ const PROVIDERS: FakeProvider[] = [
   { id: "codex", available: true, models: [{ model: "gpt-default", isDefault: true, defaultReasoningEffort: "low" }] },
 ];
 
+/** How bb fails the sends to one thread (see `sends`). */
+export type SendFailure = { threadId: string; error: Error; taken: boolean };
+
 /** Whether a stop leaves the thread idle, or still stopping, as bb's unconfirmed interrupt does. */
 type StopBehaviour = "idle" | "stopping";
 
@@ -134,8 +137,15 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   const behaviour = { ...spawns };
   /** The providers bb lists, in its order; a test may replace them. */
   const providers = { list: structuredClone(PROVIDERS) };
-  /** Set `failure` to make every send throw it, as bb does when it can't take the message. */
-  const sends: { failure: string | null } = { failure: null };
+  /**
+   * Set `failure` to make every send to its thread reject with its error: before bb takes the
+   * message, or after, when `taken`, as when the connection drops while bb answers. Set `pending`
+   * to hold every send until it settles, as a slow bb does. Set `unanswered` to have bb take every
+   * send and never answer, as when the plugin crashes during the call.
+   */
+  const sends: { failure: SendFailure | null; pending: Promise<void> | null; unanswered: boolean } = { failure: null, pending: null, unanswered: false };
+  /** Set `answered` to run as bb answers a thread's model lookup, as when someone acts at that moment. */
+  const modelLookups: { answered: ((threadId: string) => void) | null } = { answered: null };
   const store = openStore(memoryStorage().storage);
   const memoryWrites: CoordinatorId[] = [];
   const memory = openMemoryRoot(join(mkdtempSync(join(tmpdir(), "coordinator-test-")), "data.db"), store, (id) => memoryWrites.push(id));
@@ -205,20 +215,33 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     },
     // As bb does, listing by id includes archived and deleted threads.
     list: async ({ threadIds }) => threadIds.flatMap((id) => fakeThreads.get(id) ?? []),
-    defaultExecutionOptions: async ({ threadId }) => fakeThread(threadId).execution,
-    // As bb does, a queue-if-active message to a busy thread is queued; any other starts a turn.
+    async defaultExecutionOptions({ threadId }) {
+      const { execution } = fakeThread(threadId);
+      modelLookups.answered?.(threadId);
+      return execution;
+    },
+    // As bb does, a deleted or archived thread refuses a message before taking it, a
+    // queue-if-active message to a busy thread is queued, and any other starts a turn.
     async send(args): Promise<Delivery> {
+      await sends.pending;
       const thread = fakeThread(args.threadId);
-      if (sends.failure !== null) throw new Error(sends.failure);
+      if (thread.deletedAt !== null) throw bbHttpError(404, "thread_not_found", "Thread not found");
+      if (thread.archivedAt !== null) throw bbHttpError(409, "thread_not_writable", "Thread is archived");
+      const failure = sends.failure?.threadId === args.threadId ? sends.failure : null;
+      if (failure?.taken === false) throw failure.error;
       sent.push(args);
+      const answer = async (delivery: Delivery): Promise<Delivery> => {
+        if (failure !== null) throw failure.error;
+        return sends.unanswered ? new Promise(() => {}) : delivery;
+      };
       if (args.mode === "queue-if-active" && thread.status !== "idle") {
         const entry: (typeof queue)[number] = { id: `qm_${++queued}`, state: "queued", failureReason: null, threadId: args.threadId, text: textOfInput(args) };
         queue.push(entry);
-        return { delivery: "queued", queuedMessage: { id: entry.id } };
+        return answer({ delivery: "queued", queuedMessage: { id: entry.id } });
       }
       startTurn(thread);
       delivered.push({ threadId: args.threadId, text: textOfInput(args) });
-      return { delivery: "sent" };
+      return answer({ delivery: "sent" });
     },
     queuedMessages: {
       list: async ({ threadId }) => queue.filter((entry) => entry.threadId === threadId),
@@ -274,38 +297,62 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   };
 
   const refreshBoard = (id: CoordinatorId) => invalidated.push(`board:${id}`);
-  const spawner = createSpawner(bb, store, memory, () => bindings++);
-  const board = createBoard(bb, store, memory);
-  const crews = createCrews({ bb, store, spawner, onChange: refreshBoard });
-  const inbox = createInbox({ bb, store, onChange: refreshBoard });
-  const verify = createVerify({ bb, store, spawner, inbox });
-  registerRoles(bb, store);
-  registerCoordinatorTools(bb, { store, inbox, memory, crews, board });
-  registerCrewTools(bb, { store, verify });
-  registerVerdictTool(bb, { store, verify });
-  forwardCrewThreadEvents(bb, store, refreshBoard);
-  watchCrewThreads({ bb, store, inbox, onChange: refreshBoard });
+
+  /** The plugin's modules over the store and the fake bb, wired as server.ts wires them. */
+  function wire() {
+    const spawner = createSpawner(bb, store, memory, () => bindings++);
+    const board = createBoard(bb, store, memory);
+    const crews = createCrews({ bb, store, spawner, onChange: refreshBoard });
+    const inbox = createInbox({ bb, store, onChange: refreshBoard });
+    const verify = createVerify({ bb, store, spawner, inbox });
+    registerRoles(bb, store);
+    registerCoordinatorTools(bb, { store, inbox, memory, crews, board });
+    registerCrewTools(bb, { store, verify });
+    registerVerdictTool(bb, { store, verify });
+    forwardCrewThreadEvents(bb, store, refreshBoard);
+    watchCrewThreads({ bb, store, inbox, onChange: refreshBoard });
+    return { spawner, inbox, verify, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, crews, inbox }) } };
+  }
+  let plugin = wire();
 
   const ref = (threadId: string): ThreadRef => ({ id: threadId, originPluginId: PLUGIN_ID });
 
   return {
     store,
     memory,
-    spawner,
+    get spawner() {
+      return plugin.spawner;
+    },
     /** How bb answers the next spawns; a test may change it between them. */
     spawns: behaviour,
     /** How bb answers the next sends; a test may change it between them. */
     sends,
+    /** What happens as bb answers a model lookup; a test may set it. */
+    modelLookups,
     /** The providers bb lists, in its order; a test may replace them. */
     providers,
     /** The inbox, as the tools and the verify step write to it. */
-    inbox,
+    get inbox() {
+      return plugin.inbox;
+    },
     /** The app's RPC handlers, as server.ts registers them. */
-    rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, crews, inbox }) },
+    get rpc() {
+      return plugin.rpc;
+    },
     /** The schedule's once-a-minute pass, as server.ts runs it. */
     async tick(): Promise<void> {
-      await verify.reconcile();
-      await inbox.tick();
+      await plugin.verify.reconcile();
+      await plugin.inbox.tick();
+    },
+    /**
+     * bb reloads the plugin, as after a crash: the old modules are disposed and forgotten, with
+     * whatever they were awaiting, and new ones are wired over the same database and bb.
+     */
+    reload(): void {
+      disposers.splice(0).forEach((hook) => hook());
+      for (const registered of Object.values(handlers)) registered.length = 0;
+      tools.clear();
+      plugin = wire();
     },
     /** A thread bb has, as the plugin can list it, and what it was spawned with. */
     thread: fakeThread,
@@ -387,6 +434,14 @@ export async function coordinating({ verify = true, spawns, stops }: { verify?: 
   const role = kit.store.roleOfThread(threadId);
   assert.equal(role?.kind, "coordinator");
   return { kit, threadId, coordinatorId: role.coordinatorId };
+}
+
+/**
+ * An error as bb's SDK throws it for an error answer (BbHttpError in bb's packages/sdk/src/response.ts):
+ * the status, and the code from the body bb's ApiError writes.
+ */
+export function bbHttpError(status: number, code: string, message: string): Error {
+  return Object.assign(new Error(`HTTP ${status}: ${message}`), { name: "BbHttpError", status, code, body: { code, message } });
 }
 
 /** Lets every ring started in the background finish: each one awaits only the fake bb. */

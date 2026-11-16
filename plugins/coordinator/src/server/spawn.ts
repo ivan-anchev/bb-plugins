@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { typedText, type Coordinator } from "../contract.ts";
-import { environmentOf, type Crew, type RequestedPlacement } from "../model/crew.ts";
+import { environmentOf, type Crew } from "../model/crew.ts";
 import type { Handoff } from "../model/handoff.ts";
 import { memoryFileSchema } from "../model/memory-file.ts";
 import { coordinatorIdSchema, ticketMetadataSchema, type CrewId, type Role } from "../model/role.ts";
@@ -42,8 +42,8 @@ type SpawnBb = {
 
 type SpawnStore = Pick<Store, "insertCoordinator" | "insertCrew" | "insertVerifierTicket" | "crewTicket" | "bindTicket" | "crew">;
 
-/** What crew_start asks for. */
-export type CrewRequest = Pick<Crew, "title" | "brief" | "doneCriteria"> & { placement: RequestedPlacement };
+/** What a crew is saved with: what crew_start asks for, or what a superseded crew had. `execution` null: see Crew. */
+export type CrewRequest = Pick<Crew, "title" | "brief" | "doneCriteria" | "placement" | "execution">;
 
 /** What a verifier runs on: chosen by the plugin, never left to bb's default. */
 export type VerifierExecution = { providerId: string; model: string; reasoningLevel: string };

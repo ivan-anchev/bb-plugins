@@ -4,7 +4,7 @@ import { z } from "zod";
 import { handoffIdSchema } from "../../model/handoff.ts";
 import { crewIdSchema } from "../../model/role.ts";
 import type { Verdict } from "../../model/verdict.ts";
-import { coordinating, isRefusal, settled, textOf, threadIn } from "../test-harness.ts";
+import { bbHttpError, coordinating, isRefusal, settled, textOf, threadIn, type SendFailure } from "../test-harness.ts";
 
 const c1 = crewIdSchema.parse("c1");
 const HEAD = "0123456789abcdef0123456789abcdef01234567";
@@ -51,6 +51,10 @@ async function withCrew({ verify = true } = {}) {
     const current = verdict();
     return current.state === "running" ? current.verifierThreadId : assert.fail(`the verdict is ${current.state}`);
   };
+  const settlement = () => {
+    const current = verdict();
+    return current.state === "returned" ? current.settlement : assert.fail(`the verdict is ${current.state}`);
+  };
   /** The crew hands off as done and ends its turn. */
   async function handOff(): Promise<string> {
     const answer = textOf(await kit.call("crew_handoff", DONE, crewThreadId));
@@ -58,7 +62,7 @@ async function withCrew({ verify = true } = {}) {
     await settled();
     return answer;
   }
-  return { kit, threadId, coordinatorId, crewThreadId, doorbells, row, latest, verdict, verifier, handOff };
+  return { kit, threadId, coordinatorId, crewThreadId, doorbells, row, latest, verdict, verifier, settlement, handOff };
 }
 
 test("a done handoff starts a hidden verifier as the crew's child, in its environment, on another provider, with no inherited choices", async () => {
@@ -87,21 +91,346 @@ test("a verifier's brief holds the claimed commit and every criterion numbered, 
   assert.doesNotMatch(prompt, /trust me|Retries land with backoff/);
 });
 
-test("a failing criterion: the row goes Verifying, then Needs you, and the doorbell comes only with the verdict, which holds the test output", async () => {
-  const { kit, threadId, coordinatorId, doorbells, row, verifier, handOff } = await withCrew();
+test("a first failed verdict goes back to the crew as its verifier's message, with each failed criterion and its evidence, and the crew works again", async () => {
+  const { kit, threadId, crewThreadId, doorbells, row, verifier, handOff } = await withCrew();
   await handOff();
   assert.deepEqual([(await row()).state, (await row()).headline], ["verifying", "Verifying: Retries land with backoff"]);
   assert.deepEqual(doorbells(), [], "no doorbell before the verdict");
-  assert.deepEqual(kit.store.unannounced(coordinatorId), []);
+  const verifierThreadId = verifier();
 
-  assert.match(textOf(await kit.call("crew_verdict", FAILS, verifier())), /^Verdict recorded: 1 of 2 criteria passed\./);
+  assert.match(textOf(await kit.call("crew_verdict", FAILS, verifierThreadId)), /^Verdict recorded: 1 of 2 criteria passed\./);
   await settled();
-  assert.deepEqual(doorbells(), [`[Coordinator] 1 update. Call crew_catch_up to read it in full.\n- c1 "Add retries" handed off: done, failed verification`]);
-  const failed = await row();
-  assert.deepEqual([failed.state, failed.headline], ["needs-you", "✗ Failed verification: Retries land with backoff"]);
-  assert.equal(failed.verdict?.state, "returned");
-  assert.deepEqual(failed.verdict?.state === "returned" && failed.verdict.criteria[0], { criterion: "npm test passes", result: "fail", evidence: FAILS.criteria[0]?.evidence });
-  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /Failed verification: 1 of 2 criteria passed[\s\S]*1\. FAIL: npm test passes\n {3}\$ npm test\n {3}not ok 13 - backoff caps at 6000/);
+  const toCrew = kit.sent().filter((args) => args.threadId === crewThreadId);
+  assert.equal(toCrew.length, 1);
+  assert.deepEqual([toCrew[0]?.senderThreadId, toCrew[0]?.mode], [verifierThreadId, "queue-if-active"], "marked as the verifier's message, never the user's");
+  const findings = kit.delivered(crewThreadId).at(-1) ?? assert.fail("nothing reached the crew");
+  assert.match(findings, /^## Verifier findings: 1 of 2 done-criteria not met\n\nA verifier checked your done handoff at commit `0123456`/);
+  assert.match(findings, /### 1\. npm test passes\n\n\*\*Failed\.\*\* The verifier's evidence:\n\n```\n\$ npm test\nnot ok 13 - backoff caps at 6000\n  expected: 6000\n  actual: 5000\n# fail 1\n```/);
+  assert.doesNotMatch(findings, /npm run lint/, "a passed criterion is not sent back");
+  assert.equal(kit.thread(crewThreadId).status, "active", "the crew works again");
+  assert.deepEqual([(await row()).state, (await row()).headline], ["working", "Working"]);
+
+  await handOff();
+  assert.deepEqual([(await row()).state, (await row()).headline], ["verifying", "Verifying: Retries land with backoff"]);
+  assert.notEqual(verifier(), verifierThreadId, "a new verifier checks the new handoff");
+  await kit.call("crew_verdict", PASSES, verifier());
+  await settled();
+  assert.deepEqual([(await row()).state, (await row()).headline], ["ready-for-review", "✓ Verified: Retries land with backoff"]);
+  assert.deepEqual(doorbells(), [
+    `[Coordinator] 2 updates. Call crew_catch_up to read them in full.\n- c1 "Add retries" handed off: done, failed verification, findings sent back to it (fix round 1)\n- c1 "Add retries" handed off: done, verified`,
+  ]);
+  const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
+  assert.match(catchUp, /findings sent back to it\n\nAt [^\n]* as its automatic fix round 1\. Nothing to do yet/);
+  assert.match(catchUp, /Failed verification: 1 of 2 criteria passed[\s\S]*1\. FAIL: npm test passes\n {3}\$ npm test\n {3}not ok 13 - backoff caps at 6000/);
+});
+
+test("findings sent back wake the coordinating thread neither at once nor from the tick; the next update's doorbell and the catch-up list them", async () => {
+  const { kit, threadId, coordinatorId, crewThreadId, doorbells, verifier, handOff } = await withCrew();
+  await handOff();
+  await kit.call("crew_verdict", FAILS, verifier());
+  await settled();
+  assert.deepEqual(doorbells(), [], "no doorbell when they are sent");
+  await kit.tick();
+  await settled();
+  assert.deepEqual(doorbells(), [], "none from the tick");
+  assert.deepEqual(kit.store.unannounced(coordinatorId).map(({ event }) => event.kind), ["sent-back"], "it waits, unannounced");
+
+  await kit.idle(crewThreadId, "Looking at it."); // the crew's fix turn ends without a handoff
+  await settled();
+  assert.deepEqual(doorbells(), [
+    `[Coordinator] 2 updates. Call crew_catch_up to read them in full.\n- c1 "Add retries" handed off: done, failed verification, findings sent back to it (fix round 1)\n- c1 "Add retries" ended its turn without a handoff`,
+  ]);
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /2 updates since your last catch-up[\s\S]*findings sent back to it[\s\S]*ended its turn without a handoff/);
+});
+
+test("a second failed verdict sends nothing to the crew, and the row waits under Needs you with ✗ for the coordinating thread", async () => {
+  const { kit, threadId, crewThreadId, doorbells, row, verifier, handOff } = await withCrew();
+  await handOff();
+  await kit.call("crew_verdict", FAILS, verifier());
+  await handOff();
+  await kit.call("crew_verdict", FAILS, verifier());
+  await settled();
+
+  assert.equal(kit.sent().filter((args) => args.threadId === crewThreadId).length, 1, "only the first verdict went back");
+  assert.deepEqual([(await row()).state, (await row()).headline], ["needs-you", "✗ Failed verification after its fix round: Retries land with backoff"]);
+  assert.match(doorbells().at(-1) ?? "", /- c1 "Add retries" handed off: done, failed verification$/);
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /It failed verification and is yours to decide: message the crew with crew_message, replace it with a fresh crew through crew_start with supersedes/);
+});
+
+test("a verdict on a superseded or stale handoff, or of a closed crew, sends nothing to the crew and spends no round", async () => {
+  const superseded = await withCrew();
+  await superseded.handOff();
+  const replaced = superseded.verifier();
+  superseded.kit.startTurn(superseded.crewThreadId);
+  await superseded.handOff();
+  assert.ok(isRefusal(await superseded.kit.call("crew_verdict", FAILS, replaced)));
+
+  const stale = await withCrew();
+  await stale.handOff();
+  stale.kit.startTurn(stale.crewThreadId); // the user types to the crew before its verdict
+  await stale.kit.call("crew_verdict", FAILS, stale.verifier());
+
+  const closed = await withCrew();
+  await closed.handOff();
+  await closed.kit.call("crew_close", { crewId: "c1", action: "resolve" }, closed.threadId);
+  await closed.kit.call("crew_verdict", FAILS, closed.verifier());
+  await settled();
+
+  for (const { kit, coordinatorId, crewThreadId } of [superseded, stale, closed]) {
+    assert.deepEqual(kit.sent().filter((args) => args.threadId === crewThreadId), []);
+    assert.equal(kit.store.crew(coordinatorId, c1)?.fixRounds, 0);
+  }
+  for (const { kit, coordinatorId, latest } of [stale, closed]) {
+    assert.deepEqual(kit.store.takeUnread(coordinatorId, Date.now()).map(({ event }) => event), [{ kind: "checked", crewId: c1, handoffId: latest().id }], "the coordinating thread decides");
+  }
+});
+
+test("until bb has taken the findings, the row says Verifying and the coordinating thread hears nothing; a verdict made again meanwhile is refused", async () => {
+  const { kit, coordinatorId, crewThreadId, row, verifier, handOff } = await withCrew();
+  await handOff();
+  const verifierThreadId = verifier();
+  let take = () => {};
+  kit.sends.pending = new Promise((resolve) => (take = resolve));
+  const returning = kit.call("crew_verdict", FAILS, verifierThreadId);
+  await settled();
+
+  assert.deepEqual([(await row()).state, kit.store.unannounced(coordinatorId)], ["verifying", []]);
+  assert.ok(isRefusal(await kit.call("crew_verdict", FAILS, verifierThreadId)), "its findings go to the crew once");
+  take();
+  assert.match(textOf(await returning), /^Verdict recorded/);
+  assert.equal(kit.delivered(crewThreadId).length, 1, "the findings, once");
+  assert.deepEqual([(await row()).state, kit.store.crew(coordinatorId, c1)?.fixRounds], ["working", 1]);
+});
+
+/** Crew threads bb refuses a message to, with its answer. */
+const REFUSED: ["archivedAt" | "deletedAt", string][] = [
+  ["archivedAt", "HTTP 409: Thread is archived"],
+  ["deletedAt", "HTTP 404: Thread not found"],
+];
+
+for (const [gone, answer] of REFUSED) {
+  test(`findings bb refuses (${answer}) leave the failed verdict with the coordinating thread, spend no round, and the catch-up says bb refused them`, async () => {
+    const { kit, threadId, coordinatorId, crewThreadId, doorbells, settlement, verifier, handOff } = await withCrew();
+    await handOff();
+    let take = () => {};
+    kit.sends.pending = new Promise((resolve) => (take = resolve));
+    const returning = kit.call("crew_verdict", FAILS, verifier());
+    await settled();
+    kit.thread(crewThreadId)[gone] = Date.now(); // the user archives or deletes the crew's thread as the findings go
+    take();
+    kit.sends.pending = null;
+    await returning;
+    await settled();
+
+    assert.deepEqual(kit.sent().filter((args) => args.threadId === crewThreadId), [], "bb took nothing");
+    assert.deepEqual(settlement(), { kind: "checked", refused: answer });
+    assert.equal(kit.store.crew(coordinatorId, c1)?.fixRounds, 0, "the round is given back");
+    assert.deepEqual(doorbells(), [`[Coordinator] 1 update. Call crew_catch_up to read it in full.\n- c1 "Add retries" handed off: done, failed verification`]);
+    const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
+    assert.ok(
+      catchUp.includes(`bb refused the verifier's findings when the plugin sent them to the crew as its automatic fix round, so the crew never got them and the round is not spent. bb answered: ${answer}. It failed verification and is yours to decide`),
+      catchUp,
+    );
+  });
+}
+
+test("a done handoff that supersedes a verdict while its findings are on their way leaves them sent back and counted once", async () => {
+  const { kit, coordinatorId, crewThreadId, row, latest, verifier, handOff } = await withCrew();
+  await handOff();
+  const first = latest().id;
+  let take = () => {};
+  kit.sends.pending = new Promise((resolve) => (take = resolve));
+  const returning = kit.call("crew_verdict", FAILS, verifier());
+  await settled();
+
+  kit.startTurn(crewThreadId); // the user asks the crew for one more change while bb takes the findings
+  await handOff();
+  take();
+  kit.sends.pending = null;
+  assert.match(textOf(await returning), /^Verdict recorded/);
+  await settled();
+  assert.equal(kit.sent().filter((args) => args.threadId === crewThreadId).length, 1, "the findings, once");
+  assert.equal(kit.store.crew(coordinatorId, c1)?.fixRounds, 1);
+  assert.deepEqual(kit.store.unannounced(coordinatorId).map(({ event }) => event), [{ kind: "sent-back", crewId: c1, handoffId: first, round: 1 }]);
+
+  await kit.tick();
+  assert.equal(kit.store.unannounced(coordinatorId).length, 1, "the tick settles nothing again");
+  await kit.call("crew_verdict", FAILS, verifier());
+  await settled();
+  assert.equal(kit.sent().filter((args) => args.threadId === crewThreadId).length, 1, "nothing more goes back");
+  assert.deepEqual([(await row()).state, kit.store.crew(coordinatorId, c1)?.fixRounds], ["working", 1], "the findings started the crew's next turn");
+});
+
+/** The doorbell line of a failed verdict whose findings a crash left in doubt. */
+const MAYBE_SENT = `- c1 "Add retries" handed off: done, failed verification, findings may or may not have reached it`;
+
+/** Sends that fail without proving bb refused the findings: they may or may not have reached the crew. */
+const UNPROVEN: [string, Omit<SendFailure, "threadId">][] = [
+  ["bb took them, then the call timed out", { error: Object.assign(new Error("BB request timed out after 75 seconds."), { name: "BbRequestTimeoutError" }), taken: true }],
+  ["the connection dropped", { error: new TypeError("fetch failed", { cause: Object.assign(new Error("other side closed"), { code: "UND_ERR_SOCKET" }) }), taken: true }],
+  ["an error with no status", { error: new Error("socket hang up"), taken: false }],
+  ["bb failed after taking them", { error: bbHttpError(500, "internal_error", "Internal Server Error"), taken: true }],
+];
+
+for (const [how, failure] of UNPROVEN) {
+  test(`a send that fails without bb refusing the findings (${how}) keeps the round spent, wakes the coordinating thread, and is never sent again`, async () => {
+    const { kit, threadId, coordinatorId, crewThreadId, doorbells, settlement, verifier, handOff } = await withCrew();
+    await handOff();
+    kit.sends.failure = { threadId: crewThreadId, ...failure };
+    await kit.call("crew_verdict", FAILS, verifier());
+    await settled();
+    kit.sends.failure = null;
+
+    assert.equal(kit.delivered(crewThreadId).length, failure.taken ? 1 : 0, failure.taken ? "bb took the findings" : "bb never had them");
+    assert.deepEqual(settlement(), { kind: "maybe-sent-back", round: 1 });
+    assert.equal(kit.store.crew(coordinatorId, c1)?.fixRounds, 1, "the round stays spent");
+    assert.deepEqual(doorbells(), [`[Coordinator] 1 update. Call crew_catch_up to read it in full.\n${MAYBE_SENT}`], "the coordinating thread is woken");
+    assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /nothing bb keeps shows whether they arrived: they may or may not have\. Read its thread with crew_read/);
+
+    await kit.tick();
+    await settled();
+    assert.equal(kit.sent().filter((args) => args.threadId === crewThreadId).length, failure.taken ? 1 : 0, "not sent again");
+    assert.deepEqual(kit.store.unannounced(coordinatorId), [], "settled once");
+  });
+}
+
+test("a crash before the findings leave, then an unrelated turn in the crew's thread: the tick hands the verdict to the coordinating thread, never as sent back", async () => {
+  const { kit, threadId, coordinatorId, crewThreadId, doorbells, latest, settlement, verifier, handOff } = await withCrew();
+  await handOff();
+  kit.sends.pending = new Promise(() => {}); // the plugin dies before bb has the findings
+  void kit.call("crew_verdict", FAILS, verifier());
+  await settled();
+  assert.deepEqual([kit.sent().filter((args) => args.threadId === crewThreadId).length, kit.store.crew(coordinatorId, c1)?.fixRounds], [0, 1], "the round is claimed before they leave");
+
+  kit.sends.pending = null;
+  kit.reload();
+  kit.startTurn(crewThreadId); // the user asks the crew something before the tick
+  await kit.tick();
+  await settled();
+  assert.deepEqual(kit.sent().filter((args) => args.threadId === crewThreadId), [], "nothing is sent on a guess");
+  assert.deepEqual(settlement(), { kind: "maybe-sent-back", round: 1 });
+  assert.equal(kit.store.crew(coordinatorId, c1)?.fixRounds, 1, "the claim is kept");
+  assert.deepEqual(doorbells(), [`[Coordinator] 1 update. Call crew_catch_up to read it in full.\n${MAYBE_SENT}`], "the coordinating thread is woken");
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /nothing bb keeps shows whether they arrived: they may or may not have\. Read its thread with crew_read/);
+  assert.deepEqual(kit.store.takeUnread(coordinatorId, Date.now()), [], "told once");
+  await kit.tick();
+  await settled();
+  assert.deepEqual([kit.sent().filter((args) => args.threadId === crewThreadId).length, kit.store.unannounced(coordinatorId)], [0, []], "settled once");
+  assert.equal(latest().status, "done");
+});
+
+test("findings bb queued before a crash are not sent again by the next tick", async () => {
+  const { kit, coordinatorId, crewThreadId, doorbells, settlement, verifier } = await withCrew();
+  await kit.call("crew_handoff", DONE, crewThreadId); // its turn is still running, so bb queues the findings
+  await settled();
+  kit.sends.unanswered = true;
+  void kit.call("crew_verdict", FAILS, verifier());
+  await settled();
+  assert.deepEqual([kit.queued(crewThreadId).length, kit.delivered(crewThreadId).length, kit.store.unannounced(coordinatorId)], [1, 0, []], "bb holds them; nobody is told yet");
+
+  kit.sends.unanswered = false;
+  kit.reload();
+  await kit.tick();
+  await settled();
+  assert.equal(kit.sent().filter((args) => args.threadId === crewThreadId).length, 1, "not sent twice");
+  assert.deepEqual(settlement(), { kind: "maybe-sent-back", round: 1 });
+  assert.deepEqual(doorbells(), [`[Coordinator] 1 update. Call crew_catch_up to read it in full.\n${MAYBE_SENT}`]);
+
+  await kit.dispatch(kit.queued(crewThreadId)[0] ?? assert.fail("nothing queued"));
+  await kit.tick();
+  await settled();
+  assert.deepEqual([kit.delivered(crewThreadId).length, kit.sent().filter((args) => args.threadId === crewThreadId).length], [1, 1], "the crew gets them once");
+});
+
+test("findings bb delivered before a crash are not sent again by the next tick", async () => {
+  const { kit, coordinatorId, crewThreadId, doorbells, settlement, verifier, handOff } = await withCrew();
+  await handOff();
+  kit.sends.unanswered = true;
+  void kit.call("crew_verdict", FAILS, verifier());
+  await settled();
+  assert.equal(kit.delivered(crewThreadId).length, 1, "bb took the findings");
+
+  kit.sends.unanswered = false;
+  kit.reload();
+  await kit.tick();
+  await settled();
+  assert.equal(kit.sent().filter((args) => args.threadId === crewThreadId).length, 1, "not sent twice");
+  assert.deepEqual(settlement(), { kind: "maybe-sent-back", round: 1 });
+  assert.equal(kit.store.crew(coordinatorId, c1)?.fixRounds, 1);
+  assert.deepEqual(doorbells(), [`[Coordinator] 1 update. Call crew_catch_up to read it in full.\n${MAYBE_SENT}`]);
+});
+
+test("a crew turn that starts after the models are looked up, before the decision, keeps the findings from going back", async () => {
+  const { kit, coordinatorId, crewThreadId, latest, verifier, handOff } = await withCrew();
+  await handOff();
+  let answers = 0;
+  // why the second: crew_verdict looks up the verifier's model and the crew's; the turn starts once both are answered.
+  kit.modelLookups.answered = () => {
+    if (++answers === 2) kit.startTurn(crewThreadId);
+  };
+  await kit.call("crew_verdict", FAILS, verifier());
+  await settled();
+
+  assert.equal(answers, 2);
+  assert.deepEqual(kit.sent().filter((args) => args.threadId === crewThreadId), []);
+  assert.equal(kit.store.crew(coordinatorId, c1)?.fixRounds, 0);
+  assert.deepEqual(kit.store.takeUnread(coordinatorId, Date.now()).map(({ event }) => event), [{ kind: "checked", crewId: c1, handoffId: latest().id }]);
+});
+
+test("crew_start with supersedes stops the crew and starts a fresh one with its brief, criteria and latest findings, on the model a new crew gets", async () => {
+  const { kit, threadId, coordinatorId, verifier, handOff } = await withCrew();
+  await handOff();
+  await kit.call("crew_verdict", FAILS, verifier());
+  await handOff();
+  await kit.call("crew_verdict", FAILS, verifier());
+
+  const answer = textOf(await kit.call("crew_start", { supersedes: "c1" }, threadId));
+  assert.match(answer, /^c1 is stopped\. [^\n]*\n\nStarted c2 as @thread:\w+\./);
+  const { spawnedWith, providerId, execution } = kit.thread(threadIn(answer));
+  const prompt = spawnedWith.prompt ?? assert.fail("no prompt");
+  assert.match(prompt, /^# Add retries\n/);
+  assert.match(prompt, /## Brief\n\nRetry failed deliveries with backoff\.\n\n## Previous attempt's verifier findings\n\nCrew c1 worked on this before you, on its own branch, and was stopped\. Its latest verdict, on its commit `0123456`: 1 of 2 done-criteria not met\./);
+  assert.match(prompt, /### 1\. npm test passes\n\n\*\*Failed\.\*\* The verifier's evidence:\n\n```\n\$ npm test\nnot ok 13 - backoff caps at 6000/);
+  assert.match(prompt, /## Done when\n\n[^\n]*\n\n1\. npm test passes\n2\. npm run lint prints no errors\n/);
+  assert.deepEqual([providerId, execution?.model], ["claude-code", "opus"], "the coordinating thread's, as any crew without a picked model");
+  assert.equal("executionInputSources" in spawnedWith, false);
+  assert.deepEqual(
+    (await kit.rpc.board({ coordinatorId })).rows.map((r) => [r.crewId, r.state, r.headline]),
+    [
+      ["c1", "done", "Stopped"],
+      ["c2", "working", "Working"],
+    ],
+  );
+});
+
+test("crew_start with supersedes takes a new title and brief, says when no verdict came, and refuses an unknown crew, a draft, and a new crew with fields missing", async () => {
+  const { kit, threadId } = await withCrew();
+  await kit.call("crew_start", { title: "Dead letters", brief: "Park undeliverable events.", doneCriteria: ["npm test passes"], draft: true }, threadId);
+  const refusals: [unknown, RegExp][] = [
+    [{ supersedes: "c9" }, /You have no crew c9/],
+    [{ supersedes: "c2" }, /c2 is a draft that never ran/],
+    [{ title: "Retries" }, /needs a title, a brief and doneCriteria to start a new crew/],
+  ];
+  for (const [input, reason] of refusals) {
+    const result = await kit.call("crew_start", input, threadId);
+    assert.ok(isRefusal(result), String(reason));
+    assert.match(textOf(result), reason);
+  }
+  assert.equal(kit.store.crews(kit.store.coordinators()[0]?.id ?? assert.fail("no coordinator")).length, 2, "nothing was saved");
+
+  const answer = textOf(await kit.call("crew_start", { supersedes: "c1", title: "Retries, take 2", brief: "Use the queue's own retry." }, threadId));
+  const prompt = kit.thread(threadIn(answer)).spawnedWith.prompt ?? assert.fail("no prompt");
+  assert.match(prompt, /^# Retries, take 2\n/);
+  assert.match(prompt, /## Brief\n\nUse the queue's own retry\.\n\n## Previous attempt's verifier findings\n\nCrew c1 worked on this before you and was stopped\. No verifier returned a verdict on its work\./);
+  assert.doesNotMatch(prompt, /Retry failed deliveries/);
+});
+
+test("crew_start with supersedes starts nothing while the old crew's thread is still stopping", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating({ stops: "stopping" });
+  await kit.call("crew_start", { title: "Add retries", brief: "Retry failed deliveries with backoff.", doneCriteria: CRITERIA }, threadId);
+  const answer = textOf(await kit.call("crew_start", { supersedes: "c1" }, threadId));
+  assert.match(answer, /^Asked c1 to stop, but its thread is still stopping, so nothing was replaced and no crew started\./);
+  assert.deepEqual(kit.store.crews(coordinatorId).map((crew) => [crew.id, crew.closed]), [["c1", null]]);
 });
 
 test("a verdict that passes every criterion is Ready for review with ✓ and the models bb ran the verifier on", async () => {

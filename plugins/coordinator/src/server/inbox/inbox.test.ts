@@ -106,8 +106,8 @@ test("no doorbell holds a crew's words: not its summary, its last answer, its er
 });
 
 test("an event recorded while the send throws is announced by the next tick", async () => {
-  const { kit, coordinatorId, crewThreads, doorbells } = await withCrews("Add retries");
-  kit.sends.failure = "bb is restarting";
+  const { kit, threadId, coordinatorId, crewThreads, doorbells } = await withCrews("Add retries");
+  kit.sends.failure = { threadId, error: new Error("bb is restarting"), taken: false };
   await kit.call("crew_handoff", DONE, crewThreads[0]);
   await settled();
   assert.deepEqual(doorbells(), []);

@@ -4,7 +4,7 @@ import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import type { Crew } from "./crew.ts";
 import type { Handoff } from "./handoff.ts";
-import { outcome, type Outcome } from "./verdict.ts";
+import { mayHaveReachedCrew, outcome, type Outcome, type Verdict } from "./verdict.ts";
 
 /** The board's groups, in the order it shows them. */
 export const boardStateSchema = z.enum(["needs-you", "ready-for-review", "verifying", "working", "idle", "done"]);
@@ -54,7 +54,7 @@ export function crewState(crew: Crew, thread: CrewThread | null, handoff: Handof
     case "stopping":
       return { state: "working", headline: "Stopping" };
     case "idle":
-      return handoff === null ? IDLE : handedOff(handoff);
+      return handoff === null ? IDLE : handedOff(handoff, crew.fixRounds);
     default:
       // why not throw: bb can send a status newer than this plugin's SDK. A thread in it is not
       // known to be working, so it shows as idle until bb says otherwise.
@@ -65,28 +65,41 @@ export function crewState(crew: Crew, thread: CrewThread | null, handoff: Handof
 
 const IDLE = { state: "idle", headline: "Its turn ended without a handoff" } as const;
 
-function handedOff(handoff: Handoff): { state: BoardState; headline: string } {
+function handedOff(handoff: Handoff, fixRounds: number): { state: BoardState; headline: string } {
   switch (handoff.status) {
     case "blocked":
       return { state: "needs-you", headline: `Blocked: ${handoff.summary}` };
     case "gave-up":
       return { state: "needs-you", headline: `Gave up: ${handoff.summary}` };
     case "done":
-      return checked(handoff.summary, outcome(handoff.verdict));
+      return checked(handoff.summary, outcome(handoff.verdict), failureNote(handoff.verdict, fixRounds));
     default:
       return handoff satisfies never;
   }
 }
 
-/** A done handoff, placed by its verdict. The board never reads the switch: a handoff keeps the verdict it was made with. */
-function checked(summary: string, verdict: Outcome): { state: BoardState; headline: string } {
+/**
+ * What a failure's headline adds about the crew's fix round: that this verdict's findings may or
+ * may not have reached it, or that it failed again after them. why `fixRounds`: a failure that
+ * reaches the board after the crew's findings went back to it once is not its first.
+ */
+function failureNote(verdict: Verdict, fixRounds: number): string {
+  if (mayHaveReachedCrew(verdict)) return ", its findings may or may not have reached it";
+  return fixRounds > 0 ? " after its fix round" : "";
+}
+
+/**
+ * A done handoff, placed by its verdict, with `failureNote` added to a failure. The board never
+ * reads the switch: a handoff keeps the verdict it was made with.
+ */
+function checked(summary: string, verdict: Outcome, failureNote: string): { state: BoardState; headline: string } {
   switch (verdict) {
     case "pending":
       return { state: "verifying", headline: `Verifying: ${summary}` };
     case "pass":
       return { state: "ready-for-review", headline: `✓ Verified: ${summary}` };
     case "fail":
-      return { state: "needs-you", headline: `✗ Failed verification: ${summary}` };
+      return { state: "needs-you", headline: `✗ Failed verification${failureNote}: ${summary}` };
     case "could-not-run":
       return { state: "needs-you", headline: `Couldn't verify: ${summary}` };
     case "unverified":

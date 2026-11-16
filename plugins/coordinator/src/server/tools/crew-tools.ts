@@ -34,7 +34,7 @@ export function registerCrewTools(bb: ToolsBb & TurnsBb, { store, verify }: Deps
       const verdict = await verify.handoff({ id: handoffIdSchema.parse(randomUUID()), coordinatorId: crew.coordinatorId, crewId: crew.id, at: Date.now(), turnSeq, ...report });
       if (verdict === null) return "Handed off. Your coordinator has your report. Stop here.";
       if (verdict.state === "waived") return "Handed off. Your coordinator has your report, marked unverified: verification is off. Stop here.";
-      return "Handed off. A verifier now checks your commit against the done-criteria in this environment, and your coordinator gets your report with its verdict. Stop here, and change nothing in this environment until you hear back.";
+      return "Handed off. A verifier now checks your commit against the done-criteria in this environment, and your coordinator gets your report with its verdict. If it fails, its findings may come back to you here, as a message from the verifier. Stop here, and change nothing in this environment until you hear back.";
     },
   });
 }

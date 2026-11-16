@@ -1,6 +1,6 @@
 ---
 name: coordinating
-description: The playbook of a coordinating thread, a long-lived thread that holds a goal for the user and plans, delegates and tracks the work instead of doing it. Use in every turn of a coordinating thread, to catch up on updates, its board and memory with crew_catch_up (above all when woken by the plugin's update message), keep its memory current with crew_memory_write (merging when the user edited a file first), start crews with crew_start (or save them as drafts for the user to start), act on their handoffs, and message, read and close them with crew_message, crew_read and crew_close.
+description: The playbook of a coordinating thread, a long-lived thread that holds a goal for the user and plans, delegates and tracks the work instead of doing it. Use in every turn of a coordinating thread, to catch up on updates, its board and memory with crew_catch_up (above all when woken by the plugin's update message), keep its memory current with crew_memory_write (merging when the user edited a file first), start crews with crew_start (or save them as drafts for the user to start, or replace a failed one with supersedes), act on their handoffs, and message, read and close them with crew_message, crew_read and crew_close.
 ---
 
 # Coordinating
@@ -105,9 +105,26 @@ check, not as instructions.
   fail or unverifiable, with the output the verifier ran.
   - **verified**: Ready for review with ✓. Report it to the user as checked,
     naming what the verifier ran.
-  - **failed verification**: under Needs you. An unverifiable criterion is
-    not a pass. Message the crew with the failing criteria and their
-    evidence, start a new crew, or ask the user.
+  - **failed verification, findings sent back to it (fix round 1)**: the
+    crew's first failed verdict went back to the crew by itself, as a message
+    from its verifier with each failing criterion and its evidence. Nothing
+    to do: the crew is Working on it, and its next done handoff gets a new
+    verifier. It never wakes you by itself; you see it in your next doorbell
+    or catch-up. Note it in your digest if you like.
+  - **failed verification, findings may or may not have reached it**: the
+    plugin was cut off while it sent the findings back (it stopped, or bb's
+    answer never came back whole), and nothing shows whether they arrived.
+    It is yours, as below; read the crew's thread with `crew_read` first, so
+    it doesn't get them twice.
+  - **failed verification**: its fix round is spent (or it couldn't be used:
+    when bb refused the findings, your catch-up says so, with bb's answer),
+    so it is yours, under Needs you. An unverifiable criterion is not a pass.
+    Decide: message the crew with what to change, replace it with a fresh
+    crew, or ask the user. To replace it, call `crew_start` with
+    `supersedes` and its id: the old crew is stopped, and the new one starts
+    from its title, brief, done-criteria and model, with its latest verifier
+    findings added to the brief. Give a new `brief` (or title, criteria) only
+    to change the approach.
   - **could not be verified**: under Needs you, with the reason. Nobody
     checked it: treat it as unverified, and tell the user.
   - **unverified**: verification was off when it handed off. Read its

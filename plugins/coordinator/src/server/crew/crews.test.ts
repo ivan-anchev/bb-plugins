@@ -34,10 +34,13 @@ test("a crew's first message holds the brief, every done-criterion, and CREW.md 
   assert.match(prompt, /You are crew c1/);
 });
 
-test("crew_start is rejected without done-criteria, with none, or with more than 12", async () => {
+test("crew_start is refused without done-criteria, and rejected with none, a blank one, or more than 12", async () => {
   const { kit, threadId, coordinatorId } = await coordinating();
   const { doneCriteria: _, ...withoutCriteria } = RETRIES;
-  for (const input of [withoutCriteria, { ...RETRIES, doneCriteria: [] }, { ...RETRIES, doneCriteria: [" "] }, { ...RETRIES, doneCriteria: Array.from({ length: 13 }, (_, i) => `criterion ${i}`) }]) {
+  const refused = await kit.call("crew_start", withoutCriteria, threadId);
+  assert.ok(isRefusal(refused));
+  assert.match(textOf(refused), /needs a title, a brief and doneCriteria/);
+  for (const input of [{ ...RETRIES, doneCriteria: [] }, { ...RETRIES, doneCriteria: [" "] }, { ...RETRIES, doneCriteria: Array.from({ length: 13 }, (_, i) => `criterion ${i}`) }]) {
     await assert.rejects(kit.call("crew_start", input, threadId));
   }
   assert.deepEqual(kit.store.crews(coordinatorId), []);

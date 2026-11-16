@@ -13,6 +13,24 @@ export type ModelRef = z.infer<typeof modelRefSchema>;
 
 const verifierThreadIdSchema = z.string().min(1);
 
+const roundSchema = z.number().int().min(1);
+
+/**
+ * What became of a returned verdict. `pending`: nobody has been told yet. `sending-back`: its
+ * findings are on their way to the crew as fix round `round`, already counted on the crew.
+ * `sent-back`: the crew has them. `maybe-sent-back`: the plugin stopped while they were on their
+ * way, or the send failed in a way that doesn't show whether bb took them, so it is final and its
+ * coordinating thread's, with the round still spent. `checked`: it is final, and its coordinating
+ * thread's; `refused` is bb's answer when it refused the findings sent back, else null.
+ */
+const settlementSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("pending") }),
+  z.object({ kind: z.literal("sending-back"), round: roundSchema }),
+  z.object({ kind: z.literal("sent-back"), round: roundSchema }),
+  z.object({ kind: z.literal("maybe-sent-back"), round: roundSchema }),
+  z.object({ kind: z.literal("checked"), refused: z.string().nullable() }),
+]);
+
 export const verdictSchema = z.discriminatedUnion("state", [
   /** Verification is on and no verifier has started yet. */
   z.object({ state: z.literal("queued") }),
@@ -21,6 +39,7 @@ export const verdictSchema = z.discriminatedUnion("state", [
   /**
    * The verifier's verdict: the commit it found checked out, each criterion in the crew's order, and
    * the model bb ran it on. `sameModel`: no other model was available, so it ran on the crew's own.
+   * why a default: a verdict stored before settlements existed was settled as it was stored.
    */
   z.object({
     state: z.literal("returned"),
@@ -30,6 +49,7 @@ export const verdictSchema = z.discriminatedUnion("state", [
     findings: z.array(z.string()),
     model: modelRefSchema,
     sameModel: z.boolean(),
+    settlement: settlementSchema.default({ kind: "checked", refused: null }),
   }),
   /** No verdict will come: the verifier never started, or stopped without one. Its thread, if it had one. */
   z.object({ state: z.literal("could-not-run"), verifierThreadId: verifierThreadIdSchema.nullable(), reason: z.string() }),
@@ -40,7 +60,10 @@ export const verdictSchema = z.discriminatedUnion("state", [
 ]);
 export type Verdict = z.infer<typeof verdictSchema>;
 
-/** What a verdict says about the work. `pending`: no verdict yet. `unverified`: nobody checks it. */
+/**
+ * What a verdict says about the work. `pending`: no verdict yet, or one nobody has been told of.
+ * `unverified`: nobody checks it.
+ */
 export type Outcome = "pending" | "pass" | "fail" | "could-not-run" | "superseded" | "unverified";
 
 export function outcome(verdict: Verdict): Outcome {
@@ -49,7 +72,9 @@ export function outcome(verdict: Verdict): Outcome {
     case "running":
       return "pending";
     case "returned":
-      return verdict.criteria.every((check) => check.result === "pass") ? "pass" : "fail";
+      // why pending until settled: the row says Verifying until the findings reach the crew or the verdict is final.
+      if (!isSettled(verdict)) return "pending";
+      return allPassed(verdict) ? "pass" : "fail";
     case "could-not-run":
       return "could-not-run";
     case "superseded":
@@ -60,3 +85,14 @@ export function outcome(verdict: Verdict): Outcome {
       return verdict satisfies never;
   }
 }
+
+type Returned = Extract<Verdict, { state: "returned" }>;
+
+/** Whether the verifier passed every criterion, whatever has become of its verdict since. */
+export const allPassed = (verdict: Returned): boolean => verdict.criteria.every((check) => check.result === "pass");
+
+/** Whether a returned verdict is final: its findings reached the crew, or it is its coordinating thread's. */
+export const isSettled = (verdict: Returned): boolean => verdict.settlement.kind !== "pending" && verdict.settlement.kind !== "sending-back";
+
+/** Whether a verdict's findings may or may not have reached its crew (see `maybe-sent-back`). */
+export const mayHaveReachedCrew = (verdict: Verdict): boolean => verdict.state === "returned" && verdict.settlement.kind === "maybe-sent-back";

@@ -31,6 +31,7 @@ const returned = (results: CriterionResult[]): Verdict => ({
   findings: [],
   model: { providerId: "codex", model: "gpt-default" },
   sameModel: false,
+  settlement: { kind: "checked", refused: null },
 });
 
 test("a returned verdict reads Verified in catch-up exactly when outcome() passes it, with its count beside", () => {
