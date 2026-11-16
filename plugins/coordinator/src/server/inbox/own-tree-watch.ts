@@ -2,36 +2,20 @@
 // turns ends (see own-tree.ts). bb has no read-only mode, and a plugin can't take a provider's
 // tools away, so this is how an edit the thread made shows.
 import type { PluginLogger } from "@get-bb/plugin-sdk";
-import { z } from "zod";
 import type { CoordinatorId } from "../../model/role.ts";
+import { gitStatusOf, type GitStatusBb } from "../git-status.ts";
 import type { Store } from "../store.ts";
 import type { Inbox } from "./inbox.ts";
-
-/**
- * The part of a `bb--git` `status` row the watch reads (`bb plugin rpc inspect bb--git status`
- * prints the whole). why the last: a newer bb--git can answer an outcome this plugin doesn't know,
- * or a known one in a shape it can't read, and either must record nothing rather than fail.
- */
-const statusRowSchema = z.union([
-  z.object({ outcome: z.literal("available"), workspace: z.object({ workingTree: z.object({ fileCount: z.number().int().min(0) }) }) }),
-  z.object({ outcome: z.literal("not_applicable") }),
-  z.object({ outcome: z.literal("unavailable"), failure: z.object({ message: z.string() }) }),
-  z.object({ outcome: z.literal("failed"), message: z.string() }),
-  z.object({ outcome: z.string() }).transform(({ outcome }) => ({ outcome: "unreadable" as const, answered: outcome })),
-]);
-
-type StatusRow = z.infer<typeof statusRowSchema>;
 
 /** A thread as bb's thread.idle names it, down to the fields the watch reads. */
 type ThreadRef = { id: string; originPluginId: string | null; environmentId: string | null };
 
 /** The parts of bb the watch uses. */
-type OwnTreeBb = {
+type OwnTreeBb = GitStatusBb & {
   pluginId: string;
   log: Pick<PluginLogger, "warn">;
   onDispose(hook: () => void): void;
   events: { on(event: "thread.idle", handler: (payload: { thread: ThreadRef }) => Promise<void>): void };
-  sdk: { plugins: { callRpc<T>(args: { pluginId: string; method: string; input: { keys: string[] }; outputSchema: z.ZodType<T>; signal: AbortSignal }): Promise<T> } };
 };
 
 type Deps = { bb: OwnTreeBb; store: Pick<Store, "roleOfThread">; inbox: Pick<Inbox, "ownTreeRead"> };
@@ -58,38 +42,20 @@ export function watchOwnTree({ bb, store, inbox }: Deps): void {
 
   /** How many files changed in the environment's working tree; null when bb's git plugin can't say, which records nothing. */
   async function changedFileCount(environmentId: string): Promise<number | null> {
-    let rows: Record<string, StatusRow>;
-    try {
-      rows = await bb.sdk.plugins.callRpc({
-        pluginId: "bb--git",
-        method: "status",
-        input: { keys: [environmentId] },
-        outputSchema: z.record(z.string(), statusRowSchema),
-        signal: disposal.signal,
-      });
-    } catch (error) {
-      // why silent: the plugin was disposed and cancelled the read, so nobody is left to be told.
-      if (disposal.signal.aborted) return null;
-      // why caught: the git plugin may be off, or its machine unreachable; the next turn's end reads again.
-      return unread(environmentId, error instanceof Error ? error.message : String(error));
-    }
-    // why possibly undefined: bb's git plugin may leave a key out.
-    const row: StatusRow | undefined = rows[environmentId];
-    if (row === undefined) return unread(environmentId, "bb's git plugin returned no row for it");
-    switch (row.outcome) {
-      case "available":
-        return row.workspace.workingTree.fileCount;
-      case "not_applicable":
+    const status = await gitStatusOf(bb, environmentId, disposal.signal);
+    // why silent: the plugin was disposed and cancelled the read, so nobody is left to be told.
+    if (disposal.signal.aborted) return null;
+    switch (status.kind) {
+      case "read":
+        return status.changedFileCount;
+      case "not-git":
         // why silent: a coordinating thread outside git has no working tree to change.
         return null;
-      case "unavailable":
-        return unread(environmentId, row.failure.message);
-      case "failed":
-        return unread(environmentId, row.message);
-      case "unreadable":
-        return unread(environmentId, `bb's git plugin answered "${row.answered}" in a shape this plugin can't read`);
+      case "unread":
+        // why recorded nothing: the next turn's end reads again.
+        return unread(environmentId, status.reason);
       default:
-        return row satisfies never;
+        return status satisfies never;
     }
   }
 

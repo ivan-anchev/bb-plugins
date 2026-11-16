@@ -8,6 +8,7 @@
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
 import type { Crew } from "../../model/crew.ts";
 import { handoffIsCurrent, type Handoff, type HandoffId, type NewHandoff } from "../../model/handoff.ts";
+import type { CheckoutRead } from "../../model/verdict/checkout.ts";
 import { ciOf, type CiVerdict } from "../../model/verdict/pr.ts";
 import { isSettled, judge, type CriterionResult, type ModelRef, type Verdict } from "../../model/verdict/verdict.ts";
 import { isOpen, listedThreads } from "../crew/board/board.ts";
@@ -47,7 +48,7 @@ type Deps = {
   inbox: Pick<Inbox, "handoff" | "giveUpVerdict" | "settleVerdict">;
 };
 
-/** A verifier's report, each criterion named by its text. */
+/** A verifier's report on the claimed commit `headSha`, each criterion named by its text. */
 export type VerifierReport = Pick<Extract<Verdict, { state: "returned" }>, "headSha" | "findings"> & { criteria: { criterion: string; result: CriterionResult; evidence: string }[] };
 
 type Running = Extract<Verdict, { state: "running" }>;
@@ -105,7 +106,7 @@ export function createVerify({ bb, store, spawner, inbox }: Deps) {
       coordinator: coordinatorThread === undefined ? null : await executionOf(coordinatorThread),
       environmentId: crewThread.environmentId,
     });
-    return { coordinator, crew: { ...crew, launch: crew.launch }, handoff, environmentId: crewThread.environmentId, execution };
+    return { coordinator, crew: { ...crew, launch: crew.launch }, handoff, checkout: handoff.verdict.checkout, environmentId: crewThread.environmentId, execution };
   }
 
   /** Starts the handoff's verifier if its verdict is still queued; one that can't start is recorded as could-not-run. */
@@ -254,11 +255,12 @@ export function createVerify({ bb, store, spawner, inbox }: Deps) {
 
   return {
     /**
-     * Stores a crew's handoff, stops the verifiers of the earlier done handoffs it supersedes, and
-     * starts its own when verification is on. Returns its verdict (null: not done).
+     * Stores a crew's handoff with `checkout`, its environment as read as it handed off, stops the
+     * verifiers of the earlier done handoffs it supersedes, and starts its own when its verdict is
+     * queued for one. Returns its verdict (null: not done).
      */
-    async handoff(handoff: NewHandoff): Promise<Verdict | null> {
-      const { verdict, superseded } = inbox.handoff(handoff);
+    async handoff(handoff: NewHandoff, checkout: CheckoutRead): Promise<Verdict | null> {
+      const { verdict, superseded } = inbox.handoff(handoff, checkout);
       await Promise.all(superseded.map(stop));
       if (verdict?.state === "queued") await start(handoff.id);
       return verdict;

@@ -25,6 +25,8 @@ const thread = (status: CrewThread["status"], hasPendingInteraction = false): Cr
 const report = { summary: "Retries land with backoff", did: ["Added backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [] };
 const meta = { id: handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e"), coordinatorId: crew.coordinatorId, crewId: crew.id, at: 5_000, turnSeq: 7 };
 const done: Handoff = { ...meta, ...report, status: "done", headSha: "a".repeat(40), prUrl: null, verdict: { state: "waived" } };
+/** The claimed commit, on a clean tree, as bb's git plugin read it. */
+const CLEAN = { headSha: "a".repeat(40), changedFiles: [], changedFileCount: 0 };
 const blocked: Handoff = { ...meta, ...report, status: "blocked", summary: "Needs a staging key" };
 const gaveUp: Handoff = { ...meta, ...report, status: "gave-up", summary: "The queue API rejects batches" };
 
@@ -98,6 +100,7 @@ test("an idle crew's done handoff is placed by its verdict, for every verdict st
     state: "returned",
     verifierThreadId: "thr_v",
     headSha: "a".repeat(40),
+    checkout: CLEAN,
     criteria: results.map((result) => ({ criterion: "npm test passes", result, evidence: "npm test: 1 failing" })),
     findings: [],
     model: { providerId: "codex", model: "gpt-default" },
@@ -105,8 +108,8 @@ test("an idle crew's done handoff is placed by its verdict, for every verdict st
     settlement: { kind: "checked", refused: null, ci: { kind: "none" } },
   });
   const cases: [Verdict, BoardState, string][] = [
-    [{ state: "queued" }, "verifying", "Verifying: Retries land with backoff"],
-    [{ state: "running", verifierThreadId: "thr_v", nudged: false }, "verifying", "Verifying: Retries land with backoff"],
+    [{ state: "queued", checkout: CLEAN }, "verifying", "Verifying: Retries land with backoff"],
+    [{ state: "running", verifierThreadId: "thr_v", nudged: false, checkout: CLEAN }, "verifying", "Verifying: Retries land with backoff"],
     [checked(["pass", "pass"]), "ready-for-review", "✓ Verified: Retries land with backoff"],
     [checked(["pass", "fail"]), "needs-you", "✗ Failed verification: Retries land with backoff"],
     [checked(["unverifiable"]), "needs-you", "✗ Failed verification: Retries land with backoff"],
@@ -120,15 +123,15 @@ test("an idle crew's done handoff is placed by its verdict, for every verdict st
 });
 
 test("a failed verdict after the crew's fix round says so", () => {
-  const failed: Verdict = { state: "returned", verifierThreadId: "thr_v", headSha: "a".repeat(40), criteria: [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }], findings: [], model: { providerId: "codex", model: "gpt-default" }, sameModel: false, settlement: { kind: "checked", refused: null, ci: { kind: "none" } } };
+  const failed: Verdict = { state: "returned", verifierThreadId: "thr_v", headSha: "a".repeat(40), checkout: CLEAN, criteria: [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }], findings: [], model: { providerId: "codex", model: "gpt-default" }, sameModel: false, settlement: { kind: "checked", refused: null, ci: { kind: "none" } } };
   assert.deepEqual(crewState({ ...crew, fixRounds: 1 }, thread("idle"), { ...done, verdict: failed }, null), { state: "needs-you", headline: "✗ Failed verification after its fix round: Retries land with backoff" });
 });
 
 test("a failed verdict whose findings may or may not have reached the crew says so, not that it failed again", () => {
-  const failed: Verdict = { state: "returned", verifierThreadId: "thr_v", headSha: "a".repeat(40), criteria: [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }], findings: [], model: { providerId: "codex", model: "gpt-default" }, sameModel: false, settlement: { kind: "maybe-sent-back", round: 1, ci: { kind: "none" } } };
+  const failed: Verdict = { state: "returned", verifierThreadId: "thr_v", headSha: "a".repeat(40), checkout: CLEAN, criteria: [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }], findings: [], model: { providerId: "codex", model: "gpt-default" }, sameModel: false, settlement: { kind: "maybe-sent-back", round: 1, ci: { kind: "none" } } };
   assert.deepEqual(crewState({ ...crew, fixRounds: 1 }, thread("idle"), { ...done, verdict: failed }, null), { state: "needs-you", headline: "✗ Failed verification, its findings may or may not have reached it: Retries land with backoff" });
 });
 
 test("a crew whose verifier is checking its done handoff is still Working once someone types into it", () => {
-  assert.equal(crewState(crew, thread("active"), { ...done, verdict: { state: "running", verifierThreadId: "thr_v", nudged: false } }, null).state, "working");
+  assert.equal(crewState(crew, thread("active"), { ...done, verdict: { state: "running", verifierThreadId: "thr_v", nudged: false, checkout: CLEAN } }, null).state, "working");
 });

@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
 import { z } from "zod";
 import { handoffIdSchema } from "../../model/handoff.ts";
 import { crewIdSchema } from "../../model/role.ts";
-import type { Verdict } from "../../model/verdict/verdict.ts";
-import { bbHttpError, coordinating, isRefusal, settled, textOf, threadIn, type SendFailure } from "../test-harness.ts";
+import { outcome, type Verdict } from "../../model/verdict/verdict.ts";
+import { memoryStorage } from "../memory-storage.ts";
+import { bbHttpError, coordinating, HEAD, isRefusal, settled, textOf, threadIn, type SendFailure } from "../test-harness.ts";
 
 const c1 = crewIdSchema.parse("c1");
-const HEAD = "0123456789abcdef0123456789abcdef01234567";
 const CRITERIA = ["npm test passes", "npm run lint prints no errors"];
 const DONE = {
   status: "done",
@@ -20,7 +22,6 @@ const DONE = {
   headSha: HEAD,
 };
 const PASSES = {
-  headSha: HEAD,
   criteria: [
     { criterion: 1, result: "pass", evidence: "$ npm test\n# pass 13\n# fail 0" },
     { criterion: 2, result: "pass", evidence: "$ npm run lint\n0 problems" },
@@ -36,8 +37,8 @@ const FAILS = {
 };
 
 /** A Coordinator with one crew, both idle, so a doorbell starts the Coordinator's turn. */
-async function withCrew({ verify = true } = {}) {
-  const { kit, threadId, coordinatorId } = await coordinating({ verify });
+async function withCrew(options: Parameters<typeof coordinating>[0] = {}) {
+  const { kit, threadId, coordinatorId } = await coordinating(options);
   const crewThreadId = threadIn(textOf(await kit.call("crew_start", { title: "Add retries", brief: "Retry failed deliveries with backoff.", doneCriteria: CRITERIA }, threadId)));
   kit.thread(threadId).status = "idle";
   const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
@@ -82,11 +83,11 @@ test("a done handoff starts a hidden verifier as the crew's child, in its enviro
   assert.ok(kit.configurationFor(verifier(), {}).skills?.includes("verifying"));
 });
 
-test("a verifier's brief holds the claimed commit and every criterion numbered, and none of the crew's own report", async () => {
+test("a verifier's brief holds the claimed commit, the plugin's read of it, and every criterion numbered, and none of the crew's own report", async () => {
   const { kit, verifier, handOff } = await withCrew();
   await handOff();
   const prompt = kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no prompt");
-  assert.match(prompt, new RegExp(`git rev-parse HEAD[\\s\\S]*If HEAD is not ${HEAD}`));
+  assert.match(prompt, new RegExp(`## The commit and the tree, as the plugin read them\n\nbb's git plugin read the crew's environment as it handed off: the claimed commit ${HEAD} checked out, on a clean working tree\. The plugin judges the commit and the tree itself`));
   assert.match(prompt, /1\. npm test passes\n2\. npm run lint prints no errors/);
   assert.doesNotMatch(prompt, /trust me|Retries land with backoff/);
 });
@@ -450,7 +451,95 @@ test("a verdict that passes every criterion is Ready for review with ✓ and the
   assert.match(doorbells()[0] ?? "", /handed off: done, verified$/);
 });
 
-test("crew_verdict refuses a caller that is not this handoff's verifier, a skipped, repeated or unknown criterion, and a pass on the wrong commit", async () => {
+// QA-03: a Claude Code verifier's per-command sandbox showed a boat sandbox's home dotfiles as
+// untracked, and its own "the tree is clean" check failed clean work and spent the fix round.
+test("a crew bb reads at the claimed commit on a clean tree is judged on its criteria alone, and its verifier is never asked to check the commit or the tree", async () => {
+  const { kit, coordinatorId, crewThreadId, row, verifier, handOff } = await withCrew();
+  await handOff();
+  const verifierThreadId = verifier();
+  const skill = readFileSync(join(import.meta.dirname, "..", "..", "..", "skills", "verifying", "SKILL.md"), "utf8");
+  const asked = [kit.thread(verifierThreadId).spawnedWith.prompt, kit.configurationFor(verifierThreadId, {}).instructions, skill].join("\n");
+  assert.doesNotMatch(asked, /git status|rev-parse|porcelain/, "nothing tells the verifier to run git to check the commit or the tree");
+  const parameters = kit.tools().find((tool) => tool.name === "crew_verdict")?.parameters ?? assert.fail("no crew_verdict");
+  assert.equal(JSON.stringify(z.toJSONSchema(parameters)).includes("headSha"), false, "crew_verdict asks for no commit");
+
+  await kit.call("crew_verdict", PASSES, verifierThreadId);
+  await settled();
+  assert.deepEqual([(await row()).state, (await row()).headline], ["ready-for-review", "✓ Verified: Retries land with backoff"]);
+  assert.equal(kit.sent().filter((args) => args.threadId === crewThreadId).length, 0, "nothing went back to the crew");
+  assert.equal(kit.store.crew(coordinatorId, c1)?.fixRounds, 0);
+});
+
+test("a tree bb reads with changes fails the verdict with bb's evidence, whatever the criteria say, and goes back to the crew as its fix round", async () => {
+  const { kit, threadId, coordinatorId, crewThreadId, row, verifier, handOff } = await withCrew();
+  kit.git.changedFiles.set(kit.thread(crewThreadId).environmentId ?? assert.fail("no environment"), 2);
+  await handOff();
+  const prompt = kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no prompt");
+  assert.match(prompt, /the working tree had 2 changed files: \?\? scratch-1\.txt, \?\? scratch-2\.txt\. The plugin judges[^\n]*This already fails the verdict, whatever you find; check every criterion anyway/);
+
+  await kit.call("crew_verdict", PASSES, verifier());
+  await settled();
+  const findings = kit.delivered(crewThreadId).at(-1) ?? assert.fail("nothing reached the crew");
+  assert.match(findings, /^## Verifier findings: every done-criterion passed, and the claimed commit wasn't checked out on a clean tree\n/);
+  assert.match(findings, /### The commit and the tree\n\nbb's git plugin read the crew's environment as it handed off: the working tree had 2 changed files: \?\? scratch-1\.txt, \?\? scratch-2\.txt\. Commit what belongs/);
+  assert.deepEqual([(await row()).state, (await row()).headline], ["working", "Working"], "the crew works again, on its one fix round");
+  assert.equal(kit.store.crew(coordinatorId, c1)?.fixRounds, 1);
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /Failed verification: 2 of 2 criteria passed[^\n]*bb's git plugin read the crew's environment as it handed off: the working tree had 2 changed files/);
+
+  // The fix round works as before: the crew cleans up and hands off again, and a clean pass is verified.
+  kit.git.changedFiles.clear();
+  await handOff();
+  await kit.call("crew_verdict", PASSES, verifier());
+  await settled();
+  assert.deepEqual([(await row()).state, (await row()).headline], ["ready-for-review", "✓ Verified: Retries land with backoff"]);
+});
+
+test("a commit bb reads other than the claimed one fails the verdict with bb's evidence; failing again after the fix round goes to the coordinating thread", async () => {
+  const { kit, crewThreadId, row, verifier, handOff } = await withCrew();
+  kit.git.heads.set(kit.thread(crewThreadId).environmentId ?? assert.fail("no environment"), "f".repeat(40));
+  await handOff();
+  await kit.call("crew_verdict", PASSES, verifier());
+  await settled();
+  assert.match(kit.delivered(crewThreadId).at(-1) ?? "", new RegExp(`HEAD was f{40}, not the claimed ${HEAD}\\.`));
+
+  await handOff();
+  await kit.call("crew_verdict", PASSES, verifier());
+  await settled();
+  assert.equal(kit.sent().filter((args) => args.threadId === crewThreadId).length, 1, "only the first verdict went back");
+  assert.deepEqual([(await row()).state, (await row()).headline], ["needs-you", "✗ Failed verification after its fix round: Retries land with backoff"]);
+  const shown = (await row()).verdict;
+  assert.ok(shown?.state === "returned");
+  assert.deepEqual(shown.checkout, { headSha: "f".repeat(40), changedFiles: [], changedFileCount: 0 }, "the board has bb's read to show");
+});
+
+test("a checkout bb's git plugin can't read is Couldn't verify at once: no verifier, nothing sent to the crew, no fix round spent", async () => {
+  const cases: [string, (kit: Awaited<ReturnType<typeof withCrew>>["kit"], environmentId: string) => void, RegExp][] = [
+    ["its machine offline", (kit, id) => kit.git.offline.add(id), /\(The environment's machine is offline\)/],
+    ["not a git repository", (kit, id) => kit.git.nonGit.add(id), /\(the environment is not a git repository\)/],
+    ["an answer the plugin can't read", (kit, id) => kit.git.newer.set(id, { outcome: "rebasing" }), /\(bb's git plugin answered "rebasing" in a shape this plugin can't read\)/],
+    ["no commit named", (kit, id) => kit.git.newer.set(id, { outcome: "available", workspace: { checkout: { kind: "unborn", branchName: "main" }, workingTree: { fileCount: 0, files: [] } } }), /\(it named no commit checked out\)/],
+  ];
+  for (const [name, unreadable, reason] of cases) {
+    const { kit, threadId, coordinatorId, crewThreadId, doorbells, row, verdict, handOff } = await withCrew();
+    unreadable(kit, kit.thread(crewThreadId).environmentId ?? assert.fail("no environment"));
+    const spawned = kit.spawned();
+    assert.match(await handOff(), /marked couldn't verify: bb's git plugin couldn't read the crew's commit and working tree/, name);
+
+    const current = verdict();
+    assert.ok(current.state === "could-not-run", name);
+    assert.match(current.reason, reason, name);
+    assert.equal(kit.spawned(), spawned, `${name}: no verifier`);
+    await kit.tick();
+    await settled();
+    assert.equal(kit.sent().filter((args) => args.threadId === crewThreadId).length, 0, `${name}: nothing went back to the crew`);
+    assert.equal(kit.store.crew(coordinatorId, c1)?.fixRounds, 0, `${name}: no fix round spent`);
+    assert.deepEqual([(await row()).state, (await row()).headline], ["needs-you", "Couldn't verify: Retries land with backoff"], name);
+    assert.match(doorbells().at(-1) ?? "", /handed off: done, could not be verified$/, name);
+    assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /Couldn't verify: bb's git plugin couldn't read the crew's commit and working tree as it handed off/, name);
+  }
+});
+
+test("crew_verdict refuses a caller that is not this handoff's verifier, and a skipped, repeated or unknown criterion", async () => {
   const { kit, threadId, crewThreadId, verdict, verifier, handOff } = await withCrew();
   await handOff();
   const [first, second] = PASSES.criteria;
@@ -460,7 +549,6 @@ test("crew_verdict refuses a caller that is not this handoff's verifier, a skipp
     [verifier(), { ...PASSES, criteria: [first] }, /missing 2 of 1 to 2/],
     [verifier(), { ...PASSES, criteria: [first, first, second] }, /1 appears more than once/],
     [verifier(), { ...PASSES, criteria: [first, second, { ...second, criterion: 3 }] }, /only 2 done-criteria; 3 is not one/],
-    [verifier(), { ...PASSES, headSha: "f".repeat(40) }, /HEAD was f{40}, not the claimed 0123/],
   ];
   for (const [caller, input, reason] of refusals) {
     const result = await kit.call("crew_verdict", input, caller);
@@ -468,9 +556,6 @@ test("crew_verdict refuses a caller that is not this handoff's verifier, a skipp
     assert.match(textOf(result), reason);
   }
   assert.equal(verdict().state, "running");
-
-  const wrongCommit = { ...FAILS, headSha: "f".repeat(40), criteria: FAILS.criteria.map((check) => ({ ...check, result: "fail" })) };
-  assert.ok(!isRefusal(await kit.call("crew_verdict", wrongCommit, verifier())), "the wrong commit with every criterion failed is a verdict");
 });
 
 test("a second verdict from the same verifier is refused, and the first stands", async () => {
@@ -524,9 +609,10 @@ test("a verdict whose verifier never started is started by the next tick", async
   // As if the plugin reloaded between storing the handoff and starting its verifier.
   const id = handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e");
   const turnSeq = kit.thread(crewThreadId).turns.at(-1) ?? assert.fail("no turn");
-  kit.inbox.handoff({ id, coordinatorId, crewId: c1, at: Date.now(), turnSeq, ...DONE, status: "done", prUrl: null });
+  const checkout = { headSha: HEAD, changedFiles: [], changedFileCount: 0 };
+  kit.inbox.handoff({ id, coordinatorId, crewId: c1, at: Date.now(), turnSeq, ...DONE, status: "done", prUrl: null }, { kind: "read", checkout });
   const spawned = kit.spawned();
-  assert.deepEqual(verdict(), { state: "queued" });
+  assert.deepEqual(verdict(), { state: "queued", checkout });
 
   await kit.tick();
   assert.equal(kit.spawned(), spawned + 1);
@@ -579,6 +665,42 @@ test("a verifier whose sandbox was removed before its verdict reads Couldn't ver
   assert.match(doorbells()[0] ?? "", /handed off: done, could not be verified$/);
 });
 
+test("after an upgrade, a verifier already checking and a verdict still waiting for one reach the Coordinator as couldn't verify, with no new verifier or fix round, and the late verdict never passes", async () => {
+  // The release that first read the crew's checkout, until it is upgraded: its database without the migrations after that.
+  const { db, storage } = memoryStorage();
+  let upgraded = false;
+  const throughFirstRead = (statements: string[]) => statements.slice(0, statements.findIndex((statement) => statement.includes("'$.checkout'")) + 1);
+  const { kit, threadId, coordinatorId, doorbells, verdict, verifier, handOff } = await withCrew({ storage: { ...storage, migrate: (handle, statements) => storage.migrate(handle, upgraded ? statements : throughFirstRead(statements)) } });
+  const c2 = crewIdSchema.parse("c2");
+  await kit.call("crew_start", { title: "Count deliveries", brief: "Count every delivery.", doneCriteria: CRITERIA }, threadId);
+  await handOff();
+  // c1's verifier started on that release's brief; c2's handoff is queued for a verifier it hadn't started.
+  const running = verifier();
+  const queued = handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d55");
+  db.prepare("INSERT INTO handoffs (id, coordinator_id, crew_id, report, turn_seq, at) VALUES (?, ?, ?, ?, 1, ?)").run(queued, coordinatorId, c2, JSON.stringify({ ...DONE, prUrl: null }), kit.clock.now);
+  db.prepare("INSERT INTO verdicts (handoff_id, verdict) VALUES (?, ?)").run(queued, JSON.stringify({ state: "queued", checkout: { headSha: HEAD, changedFiles: [], changedFileCount: 0 } }));
+  const spawned = kit.spawned();
+
+  upgraded = true;
+  kit.reload();
+  await kit.tick();
+  await settled();
+
+  assert.equal(kit.spawned(), spawned, "no verifier starts on a checkout nothing shows was checked");
+  const c2Handoff = kit.store.handoff(queued);
+  assert.ok(c2Handoff?.status === "done");
+  assert.equal(c2Handoff.verdict.state, "could-not-run");
+  assert.equal(verdict().state, "could-not-run");
+  assert.deepEqual([kit.store.crew(coordinatorId, c1)?.fixRounds, kit.store.crew(coordinatorId, c2)?.fixRounds], [0, 0], "no fix round is spent");
+  assert.match(doorbells().join("\n"), /c1 "Add retries" handed off: done, could not be verified/);
+  assert.match(doorbells().join("\n"), /c2 "Count deliveries" handed off: done, could not be verified/);
+
+  assert.ok(isRefusal(await kit.call("crew_verdict", PASSES, running)), "the verifier's late verdict is refused");
+  await kit.tick();
+  await settled();
+  assert.equal(outcome(verdict()), "could-not-run", "never a pass on its criteria alone");
+});
+
 test("a reload while the tick reads a quiet verifier's environment leaves its one reminder to the new instance", async () => {
   const { kit, verdict, verifier, handOff } = await withCrew();
   await handOff();
@@ -593,11 +715,12 @@ test("a reload while the tick reads a quiet verifier's environment leaves its on
   kit.environments.holding = false;
   kit.environments.held.splice(0).forEach((release) => release());
   await settled();
-  assert.deepEqual([verdict(), kit.delivered(verifierThreadId)], [{ state: "running", verifierThreadId, nudged: false }, []], "the old instance neither marks nor sends it");
+  const checkout = { headSha: HEAD, changedFiles: [], changedFileCount: 0 };
+  assert.deepEqual([verdict(), kit.delivered(verifierThreadId)], [{ state: "running", verifierThreadId, nudged: false, checkout }, []], "the old instance neither marks nor sends it");
 
   await kit.tick();
   await settled();
-  assert.deepEqual([verdict(), kit.delivered(verifierThreadId).length], [{ state: "running", verifierThreadId, nudged: true }, 1], "the new instance reminds it once");
+  assert.deepEqual([verdict(), kit.delivered(verifierThreadId).length], [{ state: "running", verifierThreadId, nudged: true, checkout }, 1], "the new instance reminds it once");
 });
 
 test("a verifier whose thread is archived is given up on at the next tick", async () => {

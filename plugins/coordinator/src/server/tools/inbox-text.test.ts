@@ -27,6 +27,7 @@ const returned = (results: CriterionResult[]): Verdict => ({
   state: "returned",
   verifierThreadId: "thr_v",
   headSha: "0123456789abcdef0123456789abcdef01234567",
+  checkout: { headSha: "0123456789abcdef0123456789abcdef01234567", changedFiles: [], changedFileCount: 0 },
   criteria: results.map((result) => ({ criterion: "npm test passes", result, evidence: "ran npm test" })),
   findings: [],
   model: { providerId: "codex", model: "gpt-default" },

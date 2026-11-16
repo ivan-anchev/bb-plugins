@@ -4,10 +4,14 @@ import { handoffIdSchema } from "../handoff.ts";
 import { ciOf, type PrSnapshot } from "./pr.ts";
 import { judge, outcome, verdictSchema, type CriterionResult, type Verdict } from "./verdict.ts";
 
+/** The claimed commit, on a clean tree, as bb's git plugin read it. */
+const CLEAN = { headSha: "a".repeat(40), changedFiles: [], changedFileCount: 0 };
+
 const returned = (results: CriterionResult[], settlement: Settlement = { kind: "checked", refused: null, ci: { kind: "none" } }): Verdict => ({
   state: "returned",
   verifierThreadId: "thr_v",
   headSha: "a".repeat(40),
+  checkout: CLEAN,
   criteria: results.map((result, i) => ({ criterion: `criterion ${i + 1}`, result, evidence: "ran it" })),
   findings: [],
   model: { providerId: "codex", model: "gpt-default" },
@@ -19,8 +23,8 @@ type Settlement = Extract<Verdict, { state: "returned" }>["settlement"];
 
 test("a verdict's outcome is derived from its state, and a returned one from every criterion", () => {
   const cases: [Verdict, ReturnType<typeof outcome>][] = [
-    [{ state: "queued" }, "pending"],
-    [{ state: "running", verifierThreadId: "thr_v", nudged: true }, "pending"],
+    [{ state: "queued", checkout: CLEAN }, "pending"],
+    [{ state: "running", verifierThreadId: "thr_v", nudged: true, checkout: CLEAN }, "pending"],
     [returned(["pass"]), "pass"],
     [returned(["pass", "pass", "pass"]), "pass"],
     [returned(["pass", "fail"]), "fail"],
@@ -48,7 +52,7 @@ test("a returned verdict is pending until it is settled: its findings reached th
 });
 
 test("a verdict stored before settlements existed reads as settled", () => {
-  const stored = verdictSchema.parse({ state: "returned", verifierThreadId: "thr_v", headSha: "a".repeat(40), criteria: [{ criterion: "npm test passes", result: "pass", evidence: "ran it" }], findings: [], model: { providerId: "codex", model: "gpt-default" }, sameModel: false });
+  const stored = verdictSchema.parse({ state: "returned", verifierThreadId: "thr_v", headSha: "a".repeat(40), checkout: CLEAN, criteria: [{ criterion: "npm test passes", result: "pass", evidence: "ran it" }], findings: [], model: { providerId: "codex", model: "gpt-default" }, sameModel: false });
   assert.equal(outcome(stored), "pass");
 });
 

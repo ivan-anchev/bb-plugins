@@ -12,7 +12,8 @@ import { memoryRevisionSchema, type MemoryFile, type MemoryRevision, type Memory
 import { nextDue, reminderIdSchema, type Reminder, type ReminderId } from "../model/reminder.ts";
 import { meaningfulChanges, prSnapshotSchema, prUnavailableSchema, type CiVerdict, type PrSnapshot, type PrStatus, type PrUnavailable } from "../model/verdict/pr.ts";
 import { coordinatorIdSchema, crewIdSchema, roleSchema, type CoordinatorId, type CrewId, type Role } from "../model/role.ts";
-import { isSettled, verdictSchema, type Verdict } from "../model/verdict/verdict.ts";
+import type { CheckoutRead } from "../model/verdict/checkout.ts";
+import { firstVerdict, isSettled, verdictSchema, type Verdict } from "../model/verdict/verdict.ts";
 
 // Append-only: bb.storage.migrate records each statement's hash by its index.
 const MIGRATIONS = [
@@ -95,6 +96,28 @@ const MIGRATIONS = [
   // The branch a crew's thread had checked out at its latest handoff that bb's git plugin could
   // read (null: none yet). why stored: reading it at any other time could wake a crew's sandbox.
   `ALTER TABLE crews ADD COLUMN branch TEXT`,
+  // A verdict keeps its crew's checkout, as bb's git plugin read it at the handoff, from queued on.
+  // why kept as it is: bb refuses a changed statement. It made up a clean checkout for verdicts
+  // stored before it, and the two after it take back the ones still open.
+  `UPDATE verdicts SET verdict = json_set(verdict, '$.checkout', json_object(
+     'headSha', COALESCE(json_extract(verdict, '$.headSha'), (SELECT json_extract(report, '$.headSha') FROM handoffs WHERE id = verdicts.handoff_id)),
+     'changedFiles', json('[]'), 'changedFileCount', 0))
+   WHERE json_extract(verdict, '$.state') IN ('queued', 'running', 'returned')`,
+  // Nothing tells a made-up checkout from a read one, nor which brief a running verifier started
+  // on: one that started before the plugin read checkouts was told to check the tree itself, and
+  // one after was told not to. So every verdict still queued or running when the plugin is
+  // upgraded to this goes to its coordinating thread as couldn't verify, as any verdict that can't
+  // be checked does, without a verifier or a fix round. Its event comes first, while it still
+  // reads open; bb runs both in one transaction. A returned verdict is left as it is: nothing acts
+  // on it again.
+  `INSERT INTO events (coordinator_id, event, at)
+   SELECT h.coordinator_id, json_object('kind', 'checked', 'crewId', h.crew_id, 'handoffId', h.id), CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)
+     FROM verdicts v JOIN handoffs h ON h.id = v.handoff_id
+    WHERE json_extract(v.verdict, '$.state') IN ('queued', 'running')
+    ORDER BY h.rowid`,
+  `UPDATE verdicts SET verdict = json_object('state', 'could-not-run', 'verifierThreadId', NULL, 'reason',
+     'the plugin was upgraded while this handoff waited for its verdict, and nothing shows whether its commit and working tree were checked; a new handoff gets verified')
+   WHERE json_extract(verdict, '$.state') IN ('queued', 'running')`,
 ];
 
 /** Where a verdict must still be for a change to apply: queued, or running in this verifier thread. */
@@ -340,7 +363,9 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
         const row = db().prepare("UPDATE roles SET thread_id = ? WHERE ticket = ? AND thread_id IS NULL RETURNING role").get(threadId, ticket);
         if (row === undefined) return null;
         const role = toRole(row);
-        if (role.kind === "verifier") moveVerdict(role.handoffId, { state: "queued" }, { state: "running", verifierThreadId: threadId, nudged: false });
+        if (role.kind !== "verifier") return role;
+        const queued = verdictOf(role.handoffId);
+        if (queued?.state === "queued") writeVerdict(role.handoffId, { state: "running", verifierThreadId: threadId, nudged: false, checkout: queued.checkout });
         return role;
       })();
     },
@@ -425,12 +450,13 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
 
     /**
      * A crew's handoff and, when it claims done, its verdict, together or not at all. A blocked or
-     * gave-up handoff is announced at once. A done one is queued for a verifier when its
-     * coordinating thread verifies, and announced with its verdict later; else it is waived and
-     * announced at once. A done one supersedes every earlier verdict of the crew still waiting.
-     * Returns its verdict (null: not done) and the verifier threads of the verdicts it superseded.
+     * gave-up handoff is announced at once. A done one starts with the verdict firstVerdict gives
+     * it on `checkout`, its environment as read as it handed off: queued for a verifier, and
+     * announced with its verdict later, or else announced at once. A done one supersedes every
+     * earlier verdict of the crew still waiting. Returns its verdict (null: not done) and the
+     * verifier threads of the verdicts it superseded.
      */
-    insertHandoff(handoff: NewHandoff): { verdict: Verdict | null; superseded: string[] } {
+    insertHandoff(handoff: NewHandoff, checkout: CheckoutRead): { verdict: Verdict | null; superseded: string[] } {
       const { id, coordinatorId, crewId, at, turnSeq, ...report } = handoff;
       return db().transaction(() => {
         const stored = handoffReportSchema.parse(report);
@@ -440,9 +466,9 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
           return { verdict: null, superseded: [] };
         }
         const superseded = supersede(coordinatorId, crewId);
-        const verdict: Verdict = verifies(coordinatorId) ? { state: "queued" } : { state: "waived" };
+        const verdict = firstVerdict(verifies(coordinatorId), checkout);
         db().prepare("INSERT INTO verdicts (handoff_id, verdict) VALUES (?, ?)").run(id, JSON.stringify(verdict));
-        if (verdict.state === "waived") insertEvent(coordinatorId, { kind: "checked", crewId, handoffId: id }, at);
+        if (verdict.state !== "queued") insertEvent(coordinatorId, { kind: "checked", crewId, handoffId: id }, at);
         return { verdict, superseded };
       })();
     },
@@ -483,11 +509,16 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     },
 
     /**
-     * Stores a verifier's verdict, not yet settled, if its verifier is still the handoff's running
-     * one; says whether it was. Nobody is told until it is settled.
+     * Stores a verifier's verdict, not yet settled, on the checkout it was started for, if its
+     * verifier is still the handoff's running one; says whether it was. Nobody is told until it is settled.
      */
-    receiveVerdict(handoffId: HandoffId, verdict: Omit<Returned, "settlement">): boolean {
-      return db().transaction(() => moveVerdict(handoffId, { state: "running", verifierThreadId: verdict.verifierThreadId }, { ...verdict, settlement: { kind: "pending" } }))();
+    receiveVerdict(handoffId: HandoffId, verdict: Omit<Returned, "checkout" | "settlement">): boolean {
+      return db().transaction(() => {
+        const running = verdictOf(handoffId);
+        if (running?.state !== "running" || running.verifierThreadId !== verdict.verifierThreadId) return false;
+        writeVerdict(handoffId, { ...verdict, checkout: running.checkout, settlement: { kind: "pending" } });
+        return true;
+      })();
     },
 
     /**

@@ -3,7 +3,8 @@ import { test } from "node:test";
 import type { Draft } from "../../../contract.ts";
 import { coordinatorIdSchema, crewIdSchema } from "../../../model/role.ts";
 import { typed } from "./criteria.ts";
-import { composerKeyOf, newerOf, opened, parsed, serialized } from "./edit-session.ts";
+import { readStored, writeStored } from "../../ui/stored.ts";
+import { composerKeyOf, editSessionSchema, newerOf, opened, storageKeyOf, type EditSession } from "./edit-session.ts";
 
 const COORDINATOR = coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10");
 const C1 = crewIdSchema.parse("c1");
@@ -16,8 +17,17 @@ const DRAFT: Draft = {
   environment: { type: "host", hostId: "host_1", workspace: { type: "managed-worktree", baseBranch: { kind: "default" } } },
 };
 
-/** What a reload finds: the edit as localStorage keeps it. */
-const reloaded = (stored: string) => parsed(stored);
+const KEY = storageKeyOf(COORDINATOR, C1);
+
+/** What a reload finds when the browser holds `raw` under the edit's key. */
+const found = (raw: string | null): EditSession | null => readStored({ getItem: () => raw }, KEY, editSessionSchema);
+
+/** What a reload finds after the edit was stored. */
+function reloaded(session: EditSession): EditSession | null {
+  let raw: string | null = null;
+  writeStored({ setItem: (_, value) => (raw = value), removeItem: () => (raw = null) }, KEY, session);
+  return found(raw);
+}
 
 test("an edit opens on the draft as read, with its criteria and nothing newer", () => {
   const session = opened(DRAFT, 1000);
@@ -32,7 +42,7 @@ test("an edit survives a reload whole, under the same composer key, so the brief
   const session = opened(DRAFT, 1000);
   const edited = { ...session, criteria: typed(session.criteria, 1, "a failed delivery is retried 3 times,\nthen dead-lettered") };
 
-  const after = reloaded(serialized(edited));
+  const after = reloaded(edited);
   assert.deepEqual(after, edited);
   assert.ok(after !== null);
   assert.equal(composerKeyOf(COORDINATOR, C1, after), composerKeyOf(COORDINATOR, C1, edited));
@@ -43,9 +53,9 @@ test("each opening gets its own composer key, so Edit after Cancel starts from w
 });
 
 test("nothing stored, or something that isn't an edit, reads as no edit", () => {
-  assert.equal(parsed(null), null);
-  assert.equal(parsed("{not json"), null);
-  assert.equal(parsed(JSON.stringify({ openedAt: 1000, criteria: [] })), null);
+  assert.equal(found(null), null);
+  assert.equal(found("{not json"), null);
+  assert.equal(found(JSON.stringify({ openedAt: 1000, criteria: [] })), null);
 });
 
 test("the user's own changes are not a newer draft", () => {
@@ -69,7 +79,7 @@ test("a draft saved elsewhere during the edit is shown beside it, naming each pa
 test("the newer draft stays newer after a reload, so the user still sees both", () => {
   const session = opened(DRAFT, 1000);
   const saved: Draft = { ...DRAFT, brief: "Retry with jitter." };
-  const after = reloaded(serialized(session));
+  const after = reloaded(session);
   assert.ok(after !== null);
   assert.deepEqual(newerOf(after, saved)?.changed, ["brief"]);
   assert.equal(newerOf(after, DRAFT), null, "the draft as read before the reload is not newer");

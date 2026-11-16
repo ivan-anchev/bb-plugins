@@ -47,6 +47,7 @@ const returned = (results: ("pass" | "fail" | "unverifiable")[]): Verdict => ({
   state: "returned",
   verifierThreadId: "thr_v",
   headSha: "0123456789abcdef0123456789abcdef01234567",
+  checkout: { headSha: "0123456789abcdef0123456789abcdef01234567", changedFiles: [], changedFileCount: 0 },
   criteria: results.map((result) => ({ criterion: WRITTEN, result, evidence: WRITTEN })),
   findings: [WRITTEN],
   model: { providerId: "codex", model: "gpt-default" },

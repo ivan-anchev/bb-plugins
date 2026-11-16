@@ -63,7 +63,10 @@ Say plainly when a criterion fails or you couldn't check it. Never report
 After a `done` handoff, an independent verifier usually checks your commit in
 your environment, rerunning what proves each criterion: your coordinator
 hears of your handoff only with its verdict. Leave your environment as it is
-until you hear back. A dirty tree or a moved HEAD fails every criterion.
+until you hear back. As you hand off, the plugin reads your environment
+through bb's git plugin: HEAD must be the commit you name, on a clean working
+tree. Anything else fails the verdict, whatever the criteria say, so commit
+your work and remove scratch files before you call `crew_handoff`.
 
 If your first verdict fails, its findings come back to you as a message from
 the verifier thread, headed "Verifier findings": each criterion that didn't
