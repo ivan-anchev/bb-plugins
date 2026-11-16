@@ -4,12 +4,14 @@
 // inside it). The overlay portals the strip into the slot.
 import type { PluginContentScriptRegistration } from "@get-bb/plugin-sdk/app";
 import { useSyncExternalStore } from "react";
-import { followChromeInset } from "./chrome-inset.ts";
+import { type ChromeInset, followChromeInset } from "./chrome-inset.ts";
 
 const SHELL = "[data-app-content-shell]";
 
+const NO_INSET: ChromeInset = { classes: "" };
+
 let slot: HTMLElement | null = null;
-let inset = "";
+let inset: ChromeInset = NO_INSET;
 const listeners = new Set<() => void>();
 
 export const stripMount: PluginContentScriptRegistration = {
@@ -18,8 +20,8 @@ export const stripMount: PluginContentScriptRegistration = {
     const element = document.createElement("div");
     element.setAttribute("data-ht-strip-slot", "");
     const focus = keepFocus(element, signal);
-    const chromeInset = followChromeInset(signal, (classes) => {
-      inset = classes;
+    const chromeInset = followChromeInset(signal, (next) => {
+      inset = next;
       notify();
     });
     const sync = () => {
@@ -28,14 +30,14 @@ export const stripMount: PluginContentScriptRegistration = {
     };
     sync();
     // why: bb re-renders the app shell on some route changes and swaps page headers on most; put the slot
-    // back whenever it falls out, and follow the inset to the headers bb shows now.
+    // back whenever it falls out, and follow the inset to the headers and controls bb shows now.
     const observer = new MutationObserver(sync);
     observer.observe(document.body, { childList: true, subtree: true });
     publish(element);
     return () => {
       observer.disconnect();
       element.remove();
-      inset = "";
+      inset = NO_INSET;
       publish(null);
     };
   },
@@ -46,8 +48,8 @@ export function useStripSlot(): HTMLElement | null {
   return useSyncExternalStore(subscribe, () => slot);
 }
 
-/** bb's classes for the strip's inset spacer (src/host/chrome-inset.ts); empty while nothing is followed. */
-export function useChromeInset(): string {
+/** The strip's inset spacer (src/host/chrome-inset.ts); none while nothing is followed. */
+export function useChromeInset(): ChromeInset {
   return useSyncExternalStore(subscribe, () => inset);
 }
 

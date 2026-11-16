@@ -1,104 +1,232 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
-import { followChromeInset } from "./chrome-inset.ts";
+import { type ChromeInset, followChromeInset } from "./chrome-inset.ts";
 
-// bb's page as chrome-inset.ts reads it: the rows it pads at the window's top-left, their classes, and the
-// observers watching those classes.
-type FakeRow = { classList: string[] };
-let rows: FakeRow[] = [];
-Object.defineProperty(globalThis, "document", { value: { querySelectorAll: () => rows } });
+// bb's page as chrome-inset.ts reads it: the rows it pads at the window's top-left and their classes, its
+// floating controls and where they end, the strip's spacer and where it starts, and the observers watching
+// all of these.
+type FakeElement = {
+  classList: string[];
+  left: number;
+  right: number;
+  parentElement: FakeElement | null;
+  getBoundingClientRect(): { left: number; right: number };
+};
+function element(classes = ""): FakeElement {
+  return {
+    classList: classes.split(" "),
+    left: 0,
+    right: 0,
+    parentElement: null,
+    getBoundingClientRect() {
+      return { left: this.left, right: this.right };
+    },
+  };
+}
 
-const observers = new Set<FakeObserver>();
-class FakeObserver {
-  watched = new Set<FakeRow>();
+let rows: FakeElement[] = [];
+let controls: FakeElement[] = [];
+/** The strip's spacer; null until the strip renders. */
+let spacer: FakeElement | null = null;
+Object.defineProperty(globalThis, "document", {
+  value: {
+    querySelectorAll: (selector: string) => (selector.includes("app-page-header-content-row") ? rows : controls),
+    querySelector: (selector: string) => {
+      assert.equal(selector, ".ht-inset");
+      return spacer;
+    },
+  },
+});
+
+const classObservers = new Set<FakeClassObserver>();
+class FakeClassObserver {
+  watched = new Set<FakeElement>();
   readonly callback: () => void;
   constructor(callback: () => void) {
     this.callback = callback;
-    observers.add(this);
+    classObservers.add(this);
   }
-  observe(row: FakeRow, options: { attributes: boolean; attributeFilter: string[] }): void {
+  observe(row: FakeElement, options: { attributes: boolean; attributeFilter: string[] }): void {
     assert.deepEqual(options, { attributes: true, attributeFilter: ["class"] });
     this.watched.add(row);
   }
   disconnect(): void {
     this.watched.clear();
   }
-  /** bb changed `row`'s classes. */
-  notify(row: FakeRow): void {
-    if (this.watched.has(row)) this.callback();
+}
+Object.defineProperty(globalThis, "MutationObserver", { value: FakeClassObserver });
+
+const sizeObservers = new Set<FakeSizeObserver>();
+class FakeSizeObserver {
+  watched = new Set<FakeElement>();
+  readonly callback: () => void;
+  constructor(callback: () => void) {
+    this.callback = callback;
+    sizeObservers.add(this);
+  }
+  /** As in the browser, a new target reports its size once. */
+  observe(target: FakeElement, options: { box: string }): void {
+    assert.deepEqual(options, { box: "border-box" });
+    this.watched.add(target);
+    this.callback();
+  }
+  disconnect(): void {
+    this.watched.clear();
   }
 }
-Object.defineProperty(globalThis, "MutationObserver", { value: FakeObserver });
+Object.defineProperty(globalThis, "ResizeObserver", { value: FakeSizeObserver });
 
 /** bb sets `row`'s classes, as React does on a re-render. */
-function setClasses(row: FakeRow, classes: string): void {
+function setClasses(row: FakeElement, classes: string): void {
   row.classList = classes.split(" ");
-  observers.forEach((observer) => observer.notify(row));
+  classObservers.forEach((observer) => {
+    if (observer.watched.has(row)) observer.callback();
+  });
 }
 
-function row(classes: string): FakeRow {
-  return { classList: classes.split(" ") };
+/** `target` changed size, as the strip does when bb's sidebar moves it. */
+function resize(target: FakeElement): void {
+  sizeObservers.forEach((observer) => {
+    if (observer.watched.has(target)) observer.callback();
+  });
 }
 
 const TRANSITION = "transition-[padding] duration-200 ease-linear";
 const INSET = "pl-[calc(var(--bb-window-title-bar-controls-end)_+_12px)]";
 const HEADER = "flex h-(--bb-app-chrome-row-height) items-center relative z-10 gap-1";
 
-/** Follows the inset like strip-mount.ts does, recording each set of classes it hands over. */
+/** Follows the inset like strip-mount.ts does, recording each inset it hands over. */
 function follow() {
   const controller = new AbortController();
-  const published: string[] = [];
-  const follower = followChromeInset(controller.signal, (classes) => published.push(classes));
+  const published: ChromeInset[] = [];
+  const follower = followChromeInset(controller.signal, (inset) => published.push(inset));
   follower.follow();
   return { published, follow: () => follower.follow(), stop: () => controller.abort() };
 }
 
+const classes = (value: string): ChromeInset => ({ classes: value });
+const padding = (value: number): ChromeInset => ({ padding: value });
+
+/** bb Desktop's title bar: traffic lights, back, forward and the sidebar toggle, ending at `right`. */
+function titleBar(right: number): FakeElement {
+  const bar = element();
+  bar.right = right;
+  return bar;
+}
+
+/** The strip renders its spacer, starting at `left`. */
+function renderStrip(left: number): { strip: FakeElement; spacer: FakeElement } {
+  const strip = element();
+  const rendered = element();
+  rendered.left = left;
+  rendered.parentElement = strip;
+  spacer = rendered;
+  return { strip, spacer: rendered };
+}
+
 beforeEach(() => {
   rows = [];
-  observers.clear();
+  controls = [];
+  spacer = null;
+  classObservers.clear();
+  sizeObservers.clear();
 });
 
 test("the inset comes from the row bb pads, not the first row on the page", () => {
   // A thread's header first in the page, the New thread pane's at the window's top-left after it.
-  rows = [row(`${HEADER} ${TRANSITION}`), row(`${HEADER} ${TRANSITION} ${INSET}`)];
+  rows = [element(`${HEADER} ${TRANSITION}`), element(`${HEADER} ${TRANSITION} ${INSET}`)];
   const { published } = follow();
-  assert.deepEqual(published, [`${TRANSITION} ${INSET}`]);
+  assert.deepEqual(published, [classes(`${TRANSITION} ${INSET}`)]);
 });
 
 test("a class change on the row moves the inset, keeping the transition that animates it", () => {
-  const header = row(`${HEADER} ${TRANSITION}`);
+  const header = element(`${HEADER} ${TRANSITION}`);
   rows = [header];
   const { published } = follow();
   setClasses(header, `${HEADER} ${TRANSITION} ${INSET}`); // the sidebar closes
   setClasses(header, `${HEADER} ${TRANSITION}`); // and opens again
-  assert.deepEqual(published, [TRANSITION, `${TRANSITION} ${INSET}`, TRANSITION]);
+  assert.deepEqual(published, [classes(TRANSITION), classes(`${TRANSITION} ${INSET}`), classes(TRANSITION)]);
 });
 
 test("swapping the header moves the watch to the new row", () => {
-  const before = row(`${HEADER} ${TRANSITION} ${INSET}`);
+  const before = element(`${HEADER} ${TRANSITION} ${INSET}`);
   rows = [before];
   const { published, follow: domChanged } = follow();
-  const after = row(`${HEADER} ${TRANSITION}`);
+  const after = element(`${HEADER} ${TRANSITION}`);
   rows = [after];
   domChanged();
   setClasses(before, `${HEADER} ${TRANSITION}`); // the old row, gone from the page, changes nothing
   setClasses(after, `${HEADER} ${TRANSITION} ${INSET}`);
-  assert.deepEqual(published, [`${TRANSITION} ${INSET}`, TRANSITION, `${TRANSITION} ${INSET}`]);
+  assert.deepEqual(published, [
+    classes(`${TRANSITION} ${INSET}`),
+    classes(TRANSITION),
+    classes(`${TRANSITION} ${INSET}`),
+  ]);
 });
 
-test("with no row on the page, the last inset stays", () => {
-  rows = [row(`${HEADER} ${TRANSITION} ${INSET}`)];
+test("with no row on the page, the spacer reaches 12px past bb's floating controls", () => {
+  controls = [titleBar(178)];
+  renderStrip(66);
+  const { published } = follow();
+  assert.deepEqual(published, [padding(124)]);
+});
+
+test("with no row, the inset follows the strip as bb's sidebar moves it, down to none", () => {
+  controls = [titleBar(178)];
+  const { strip, spacer } = renderStrip(66);
+  const { published } = follow();
+  for (const left of [120, 190, 336]) {
+    spacer.left = left; // the sidebar slides open, moving and narrowing the strip
+    resize(strip);
+  }
+  assert.deepEqual(published, [padding(124), padding(70), padding(0)]);
+});
+
+test("with no row, the inset follows bb's controls as they grow and as bb swaps them", () => {
+  const bar = titleBar(178);
+  controls = [bar];
+  renderStrip(66);
   const { published, follow: domChanged } = follow();
-  rows = [];
+  bar.right = 200; // the traffic lights take more room
+  resize(bar);
+  controls = [titleBar(38)]; // bb shows another set of controls
   domChanged();
-  assert.deepEqual(published, [`${TRANSITION} ${INSET}`]);
+  assert.deepEqual(published, [padding(124), padding(146), padding(0)]);
 });
 
-test("stopping disconnects the watch", () => {
-  const header = row(`${HEADER} ${TRANSITION}`);
+test("with no row, nothing is measured until the strip renders its spacer", () => {
+  controls = [titleBar(178)];
+  const { published, follow: domChanged } = follow();
+  renderStrip(66);
+  domChanged();
+  assert.deepEqual(published, [padding(124)]);
+});
+
+test("a header coming back gives the inset back to its classes and stops measuring", () => {
+  controls = [titleBar(178)];
+  const { strip, spacer } = renderStrip(66);
+  const { published, follow: domChanged } = follow();
+  rows = [element(`${HEADER} ${TRANSITION} ${INSET}`)];
+  domChanged();
+  spacer.left = 336;
+  resize(strip);
+  assert.deepEqual(published, [padding(124), classes(`${TRANSITION} ${INSET}`)]);
+});
+
+test("stopping disconnects every watch", () => {
+  const header = element(`${HEADER} ${TRANSITION}`);
   rows = [header];
-  const { published, stop } = follow();
-  stop();
+  const byClasses = follow();
+  byClasses.stop();
+  byClasses.follow(); // a stopped follower doesn't watch again
   setClasses(header, `${HEADER} ${TRANSITION} ${INSET}`);
-  assert.deepEqual(published, [TRANSITION]);
+
+  rows = [];
+  controls = [titleBar(178)];
+  const { strip, spacer } = renderStrip(66);
+  const byMeasure = follow();
+  byMeasure.stop();
+  spacer.left = 336;
+  resize(strip);
+  assert.deepEqual([...byClasses.published, ...byMeasure.published], [classes(TRANSITION), padding(124)]);
 });
