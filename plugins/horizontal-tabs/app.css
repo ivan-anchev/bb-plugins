@@ -26,7 +26,13 @@
    - The row bb pads at the window's top-left to clear its floating chrome loses that padding; the strip
      carries it (src/host/chrome-inset.ts).
    - In a split bb marks the focused pane's title with a pill (bg-state-active), which under the strip reads
-     as a second tab. The title's colour still tells the focused pane apart. */
+     as a second tab. The title's colour still tells the focused pane apart.
+   - No pane or panel reaches the window's title bar, so for them its height is 0: whatever is keyed on it
+     (a theme cutting a top-row pane's card below a title-bar strip, say) draws them as panes below the top
+     row.
+   - bb starts a top-row pane's focus scrim at --bb-window-frame-top. That variable is resolved from the
+     title-bar height on an ancestor above the panes, so the override doesn't reach it: the scrim needs its
+     own top: 0. */
 @media not ((max-width: 767px) or (pointer: coarse)) {
   [data-app-content-shell]:has(> [data-ht-strip-slot])
     :is(
@@ -40,8 +46,9 @@
     /* why not `none`: Chrome reads `app-region: none` as no-drag; initial is the none other bars have. */
     app-region: initial;
   }
-  [data-app-content-shell]:has(> [data-ht-strip-slot])
-    :has(> [data-testid="app-page-header-content-row"])[class~="[app-region:drag]"] {
+  /* why :where: bb gives other headers this look by class, so a theme restyling those restyles these too. */
+  :where([data-app-content-shell]:has(> [data-ht-strip-slot])
+    :has(> [data-testid="app-page-header-content-row"])[class~="[app-region:drag]"]) {
     border-bottom: 1px solid;
     border-color: color-mix(in oklab, var(--border-seam-vertical) 60%, transparent);
     background-color: var(--surface-scrim);
@@ -63,6 +70,12 @@
   }
   [data-app-content-shell]:has(> [data-ht-strip-slot]) [data-pane-header-focus-tab] {
     background-color: transparent;
+  }
+  [data-app-content-shell]:has(> [data-ht-strip-slot]) :is([data-split-pane-id], [data-panel-id]) {
+    --bb-window-title-bar-height: 0px;
+  }
+  [data-app-content-shell]:has(> [data-ht-strip-slot]) [data-split-pane-id] > [data-pane-focus-scrim] {
+    top: 0;
   }
 }
 
