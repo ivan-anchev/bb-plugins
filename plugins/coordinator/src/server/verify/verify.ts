@@ -10,7 +10,7 @@ import type { Crew } from "../../model/crew.ts";
 import { handoffIsCurrent, type Handoff, type HandoffId, type NewHandoff } from "../../model/handoff.ts";
 import { ciOf, type CiVerdict } from "../../model/verdict/pr.ts";
 import { isSettled, judge, type CriterionResult, type ModelRef, type Verdict } from "../../model/verdict/verdict.ts";
-import { isOpen, listedThreads } from "../crew/board.ts";
+import { isOpen, listedThreads } from "../crew/board/board.ts";
 import { latestTurnSeq, type TurnsBb } from "../crew/handoffs.ts";
 import type { Inbox } from "../inbox/inbox.ts";
 import type { Spawner, VerifierExecution, VerifierRequest } from "../spawn.ts";
@@ -36,6 +36,7 @@ type VerifyBb = ModelsBb & TurnsBb & {
       send(args: Parameters<Threads["send"]>[0]): Promise<unknown>;
       stop(args: { threadId: string }): Promise<unknown>;
     };
+    environments: { get(args: { environmentId: string }): Promise<{ status: string }> };
   };
 };
 
@@ -131,12 +132,25 @@ export function createVerify({ bb, store, spawner, inbox }: Deps) {
     }
   }
 
-  /** A running verdict on the tick: a verifier that is gone, or idle without a verdict, is nudged once, then given up on. */
+  /** Whether bb has destroyed the environment, as when a sandbox is removed: no turn can run there again. */
+  async function isDestroyed(environmentId: string): Promise<boolean> {
+    return (await bb.sdk.environments.get({ environmentId })).status === "destroyed";
+  }
+
+  /**
+   * A running verdict on the tick: a verifier that is gone, or idle without a verdict, is nudged
+   * once, then given up on. One whose environment bb destroyed is given up on at once, since a
+   * reminder can't run there.
+   */
   async function follow(handoffId: HandoffId, verdict: Running, thread: ListedThread | null): Promise<void> {
     const from = { state: "running", verifierThreadId: verdict.verifierThreadId } as const;
     const giveUp = (reason: string) => inbox.giveUpVerdict(handoffId, from, { state: "could-not-run", verifierThreadId: verdict.verifierThreadId, reason });
     if (thread === null) return void giveUp("its verifier thread was archived or deleted before it returned a verdict");
     if (thread.status !== "idle" && thread.status !== "error") return;
+    const destroyed = thread.environmentId !== null && (await isDestroyed(thread.environmentId));
+    // why: a reload during the read has a new instance follow this verdict.
+    if (disposed) return;
+    if (destroyed) return void giveUp("the crew's environment was removed (a sandbox removed or reaped) before its verifier returned a verdict");
     if (verdict.nudged) return void giveUp("its verifier stopped without a verdict twice, the second time after a reminder");
     // why mark first: a nudge sent twice would double the verifier's work; a lost one only ends it sooner.
     if (!store.markNudged(handoffId, verdict.verifierThreadId)) return;

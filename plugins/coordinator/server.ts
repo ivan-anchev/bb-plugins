@@ -3,9 +3,10 @@
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { boardTag, COORDINATORS_TAG, coordinatorContract, memoryTag } from "./src/contract.ts";
 import type { CoordinatorId, Role } from "./src/model/role.ts";
-import { boardHandlers } from "./src/server/crew/board-rpc.ts";
-import { createBoard } from "./src/server/crew/board.ts";
+import { boardHandlers } from "./src/server/crew/board/board-rpc.ts";
+import { createBoard } from "./src/server/crew/board/board.ts";
 import { createCrews } from "./src/server/crew/crews.ts";
+import { placementFactsReader } from "./src/server/crew/placement-facts.ts";
 import { forwardCrewThreadEvents } from "./src/server/crew/thread-events.ts";
 import { createInbox } from "./src/server/inbox/inbox.ts";
 import { watchOwnTree } from "./src/server/inbox/own-tree-watch.ts";
@@ -34,7 +35,7 @@ export default function plugin(bb: BbPluginApi): void {
   const verify = createVerify({ bb, store, spawner, inbox });
 
   registerRoles(bb, store);
-  registerCoordinatorTools(bb, { store, inbox, memory, crews, board, onChange: refreshBoard });
+  registerCoordinatorTools(bb, { store, inbox, memory, crews, board, placementFacts: placementFactsReader(bb, store), onChange: refreshBoard });
   registerCrewTools(bb, { store, verify });
   registerVerdictTool(bb, { store, verify });
   forwardCrewThreadEvents(bb, store, refreshBoard);

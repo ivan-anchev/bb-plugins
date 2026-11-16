@@ -1,7 +1,6 @@
 # bb-plugin-coordinator
 
-Experimental: it may break with a bb update. Unlisted in the marketplace; it
-installs directly from git.
+Experimental: it may break with a bb update.
 
 A long-lived coordinating thread, started from a panel in bb's navigation rail.
 See `PLUGIN_OVERVIEW.md` for the user-facing description and

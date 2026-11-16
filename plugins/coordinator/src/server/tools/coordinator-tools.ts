@@ -3,12 +3,12 @@
 // can write. A coordinating thread gets them all; a crew thread reads memory and hands off.
 import type { PluginAgentToolContext, PluginAgentToolResult } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { briefSchema, doneCriteriaSchema, requestedPlacementSchema, titlesOf, type Crew } from "../../model/crew.ts";
+import { briefSchema, doneCriteriaSchema, placementOf, requestedPlacementSchema, titlesOf, type Crew, type PlacementFacts } from "../../model/crew.ts";
 import { optionsSchema, questionSchema } from "../../model/decision.ts";
 import { memoryContentSchema, memoryFileSchema, memoryVersionSchema } from "../../model/memory-file.ts";
 import { AT_FORMS, parseAt, parseEvery, reminderIdSchema, reminderNoteSchema } from "../../model/reminder.ts";
 import { crewIdSchema, type CoordinatorId, type CrewId, type Role } from "../../model/role.ts";
-import type { BoardReader } from "../crew/board.ts";
+import type { BoardReader } from "../crew/board/board.ts";
 import { isStarted, type Crews } from "../crew/crews.ts";
 import type { Inbox } from "../inbox/inbox.ts";
 import type { MemoryRoot } from "../memory/memory-files.ts";
@@ -43,11 +43,13 @@ type Deps = {
   memory: MemoryRoot;
   crews: Pick<Crews, "start" | "supersede" | "message" | "detail" | "close">;
   board: Pick<BoardReader, "rows">;
+  /** What bb says about where the coordinating thread's crews can run, read when crew_start names a placement. */
+  placementFacts(id: CoordinatorId): Promise<PlacementFacts>;
   /** Runs after a decision is asked, to show it on the coordinating thread's board. */
   onChange(id: CoordinatorId): void;
 };
 
-export function registerCoordinatorTools(bb: ToolsBb, { store, inbox, memory, crews, board, onChange }: Deps): void {
+export function registerCoordinatorTools(bb: ToolsBb, { store, inbox, memory, crews, board, placementFacts, onChange }: Deps): void {
   /** The caller's coordinating thread, or null when the caller isn't one. */
   function coordinatorOf(threadId: string): CoordinatorId | null {
     const role = store.roleOfThread(threadId);
@@ -121,22 +123,26 @@ export function registerCoordinatorTools(bb: ToolsBb, { store, inbox, memory, cr
         .describe("1 to 12 criteria, each checkable by running something: a test, a command and its output, a page that shows a thing. Required unless you give supersedes."),
       placement: requestedPlacementSchema
         .optional()
-        .describe("worktree (the default): a fresh worktree of the default branch on your machine. provider: an environment provider such as boat-sandbox, named by environmentProviderId."),
+        .describe(
+          'worktree (the default): a fresh worktree of the default branch on your machine. provider: an environment provider such as boat-sandbox, named by environmentProviderId, with machineInputs for the machine it makes, such as {"preset": "small"} for boat-sandbox (`bb environment providers --json` shows each one\'s machineInputs). A sandbox crew gets its own new branch from the default branch.',
+        ),
       draft: z.boolean().default(false).describe("true: save it as a draft for the user to start, or edit and start, and start no thread now."),
       supersedes: crewIdSchema
         .optional()
         .describe("The id of one of your crews to replace, typically one whose work failed verification twice. Leave out title, brief, doneCriteria and placement to keep its own; any you give replace them."),
     }),
-    execute: forCoordinator(START, async (id, { supersedes, draft, ...fields }) => {
+    execute: forCoordinator(START, async (id, { supersedes, draft, placement: requested, ...fields }) => {
+      const placement = requested === undefined ? undefined : placementOf(requested, await placementFacts(id));
+      if (placement !== undefined && "refused" in placement) return failed(placement.refused);
       if (supersedes !== undefined) {
         const old = store.crew(id, supersedes);
         if (old === null) return failed(`You have no crew ${supersedes}. crew_catch_up lists your crews.`);
         if (!isStarted(old)) return failed(`${supersedes} is a draft that never ran, so there is nothing to replace: the user edits or starts it on the board, or close it with crew_close.`);
-        return supersedeText(supersedes, await crews.supersede(old, { ...fields, draft }));
+        return supersedeText(supersedes, await crews.supersede(old, { ...fields, placement, draft }));
       }
-      const { title, brief, doneCriteria, placement = WORKTREE } = fields;
+      const { title, brief, doneCriteria } = fields;
       if (title === undefined || brief === undefined || doneCriteria === undefined) return failed(`${START} needs a title, a brief and doneCriteria to start a new crew; only with supersedes can you leave them out.`);
-      return startText(await crews.start(id, { title, brief, doneCriteria, placement, execution: null, draft }));
+      return startText(await crews.start(id, { title, brief, doneCriteria, placement: placement ?? WORKTREE, execution: null, draft }));
     }),
   });
 

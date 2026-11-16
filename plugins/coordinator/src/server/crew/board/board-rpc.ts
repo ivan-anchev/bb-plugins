@@ -3,13 +3,13 @@
 // decisions.
 import { experimental_PluginRpcRefusal as Refusal, type PluginRpcHandlers } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
-import { typedText, type coordinatorContract } from "../../contract.ts";
-import { briefSchema, type DraftEdit } from "../../model/crew.ts";
-import type { CoordinatorId } from "../../model/role.ts";
-import type { Inbox } from "../inbox/inbox.ts";
-import type { Store } from "../store.ts";
+import { typedText, type coordinatorContract } from "../../../contract.ts";
+import { briefSchema, type DraftEdit } from "../../../model/crew.ts";
+import type { CoordinatorId } from "../../../model/role.ts";
+import type { Inbox } from "../../inbox/inbox.ts";
+import type { Store } from "../../store.ts";
 import type { BoardReader } from "./board.ts";
-import type { Crews } from "./crews.ts";
+import type { Crews } from "../crews.ts";
 
 type Deps = {
   store: Pick<Store, "isCoordinator" | "coordinator">;

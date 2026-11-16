@@ -16,6 +16,7 @@ const crew: Crew = {
   execution: null,
   launch: { kind: "started", threadId: "thr_1" },
   closed: null,
+  branch: null,
   fixRounds: 0,
   createdAt: 1_000,
 };

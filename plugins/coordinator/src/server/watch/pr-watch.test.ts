@@ -7,6 +7,7 @@ import { coordinating, settled, textOf, threadIn, type FakePr } from "../test-ha
 const c1 = crewIdSchema.parse("c1");
 const HEAD = "0123456789abcdef0123456789abcdef01234567";
 const PR_URL = "https://github.com/acme/webhooks/pull/41";
+const BLOCKED = { status: "blocked", summary: "Needs the retry budget", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
 const DONE = { status: "done", summary: "Retries land with backoff", did: ["Added backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [], headSha: HEAD };
 const PASSES = {
   headSha: HEAD,
@@ -24,9 +25,9 @@ const recorded = (name: string) => Object.assign(new Error("Command failed: gh a
 const ghSaid = (stderr: string) => Object.assign(new Error("Command failed: gh api graphql"), { code: 1, stdout: "", stderr: `${stderr}\n` });
 
 /** A coordinating thread with one crew on a GitHub project, both idle; the crew's branch and what the plugin shows of it. */
-async function crewOnGitHub() {
+async function crewOnGitHub(placement: object = { kind: "worktree" }) {
   const { kit, threadId, coordinatorId } = await coordinating();
-  const crewThreadId = threadIn(textOf(await kit.call("crew_start", { title: "Add retries", brief: "Retry failed deliveries.", doneCriteria: ["npm test passes", "npm run lint is clean"] }, threadId)));
+  const crewThreadId = threadIn(textOf(await kit.call("crew_start", { title: "Add retries", brief: "Retry failed deliveries.", doneCriteria: ["npm test passes", "npm run lint is clean"], placement }, threadId)));
   kit.thread(threadId).status = "idle";
   const branch = kit.thread(crewThreadId).environmentBranchName ?? assert.fail("no branch");
   const board = () => kit.rpc.board({ coordinatorId });
@@ -36,8 +37,8 @@ async function crewOnGitHub() {
   };
   const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
   const events = () => kit.store.unannounced(coordinatorId).map(({ event }) => event.kind);
-  /** GitHub now has the crew's pull request #41 as given. */
-  const pr = (fields: Partial<FakePr> = {}) => kit.github.prs.set(branch, { number: 41, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup: "PENDING", failed: [], ...fields });
+  /** GitHub now has the crew's pull request #41 as given, on its branch as bb records it unless `onBranch` names another. */
+  const pr = (fields: Partial<FakePr> = {}, onBranch = branch) => kit.github.prs.set(onBranch, { number: 41, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup: "PENDING", failed: [], ...fields });
   /** A minute passes and the schedule runs. */
   async function minute(): Promise<void> {
     kit.clock.now += MINUTE;
@@ -475,18 +476,48 @@ test("a verdict whose settle fails leaves every read of the batch saved, and set
   assert.equal((await row()).state, "landing");
 });
 
-test("a crew whose thread has no branch on record is read by the branch its environment has checked out", async () => {
-  const { kit, crewThreadId, row, pr, minute } = await crewOnGitHub();
-  const thread = kit.thread(crewThreadId);
-  const branch = thread.environmentBranchName ?? assert.fail("no branch");
-  thread.environmentBranchName = null;
+test("a sandbox crew's environment is read by bb's git plugin only as it hands off: never by the board, the badge, crew_read or the watch", async () => {
+  const { kit, threadId, coordinatorId, crewThreadId, board, pr, minute } = await crewOnGitHub({ kind: "provider", environmentProviderId: "boat-sandbox", machineInputs: { preset: "small" } });
+  const { environmentId, environmentBranchName } = kit.thread(crewThreadId);
+  const crewReads = () => kit.git.calls.filter((keys) => keys.includes(environmentId)).length;
+  kit.git.checkouts.set(environmentId, "add-retries");
   pr();
-  await minute();
-  assert.deepEqual(kit.git.calls, [[thread.environmentId]], "bb's git plugin is asked for the environment's branch");
-  assert.equal(kit.github.runs.length, 0, "no branch either way: nothing to read");
+  for (let tick = 0; tick < 3; tick++) {
+    await board();
+    await kit.rpc.needsYou({ keys: [coordinatorId] });
+    await kit.call("crew_read", { crewId: "c1" }, threadId);
+    kit.clock.now += 5 * MINUTE;
+    await minute();
+  }
+  assert.equal(crewReads(), 0, "nothing reads the sandbox to learn its branch");
+  assert.equal(kit.github.runs.length, 3, "the watch still read GitHub every five minutes");
+  assert.ok(kit.github.runs.at(-1)?.includes(`b0=${environmentBranchName}`), "by bb's record of the branch it made");
+  assert.equal((await board()).rows[0]?.branch, environmentBranchName);
 
-  kit.git.checkouts.set(thread.environmentId, branch);
+  await kit.call("crew_handoff", BLOCKED, crewThreadId);
+  assert.equal(crewReads(), 1, "one read, as it hands off");
+  assert.equal((await board()).rows[0]?.branch, "add-retries", "the board shows the branch it handed off on");
+  assert.match(textOf(await kit.call("crew_read", { crewId: "c1" }, threadId)), /add-retries/);
+  kit.clock.now += 5 * MINUTE;
   await minute();
-  assert.ok(kit.github.runs.at(-1)?.includes(`b0=${branch}`), "read by the checked-out branch");
+  assert.ok(kit.github.runs.at(-1)?.includes("b0=add-retries"), "the watch reads its pull request by that branch");
+  assert.equal(crewReads(), 1, "and still no other read");
+});
+
+test("a crew's branch as recorded at a handoff is kept when a later handoff can't read its checkout", async () => {
+  const { kit, crewThreadId, row, pr, minute } = await crewOnGitHub();
+  const { environmentId } = kit.thread(crewThreadId);
+  kit.git.checkouts.set(environmentId, "add-retries");
+  await kit.call("crew_handoff", BLOCKED, crewThreadId);
+  pr({}, "add-retries");
+  await minute();
+  assert.equal((await row()).pr, "#41 open CI pending");
+
+  kit.git.offline.add(environmentId);
+  kit.startTurn(crewThreadId);
+  await kit.call("crew_handoff", BLOCKED, crewThreadId);
+  kit.clock.now += 5 * MINUTE;
+  await minute();
+  assert.ok(kit.github.runs.at(-1)?.includes("b0=add-retries"), "read by the branch recorded before");
   assert.equal((await row()).pr, "#41 open CI pending");
 });

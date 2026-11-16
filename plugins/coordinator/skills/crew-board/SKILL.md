@@ -7,7 +7,9 @@ description: Explain the coordinating-thread plugin (bb-plugin-coordinator). Its
 
 This plugin turns one ordinary bb thread into a long-lived **coordinating
 thread**: it holds a goal, keeps its memory in files, plans the work, and
-hands each piece to a **crew thread**. It has no CLI commands and no settings.
+hands each piece to a **crew thread**. It has no CLI commands and no plugin
+settings. Its one setting belongs to each coordinating thread: the **Verify
+done handoffs** switch (see [Verification](#verification)).
 
 ## Start one
 
@@ -64,6 +66,25 @@ is offered none of these tools, and a call from one is refused. No tool can
 turn verification on or off. A thread's role comes
 from the plugin's own database, so editing a thread's metadata grants nothing.
 
+## Tools
+
+Every tool, by the thread that gets it. A call from any other thread is
+refused.
+
+| Tool | Thread | What it does |
+| --- | --- | --- |
+| `crew_catch_up` | coordinating | Returns every update since its last catch-up, whole, then the board, then its core memory files with their versions. |
+| `crew_memory_read` | coordinating, crew, verifier | Reads one memory file, such as `PLAN.md` or `notes/api.md`, with its version. |
+| `crew_memory_write` | coordinating | Writes one memory file whole, naming the version it read (null to create one); a stale write returns the current text instead. |
+| `crew_start` | coordinating | Starts a crew from a title, brief, 1 to 12 done-criteria and a placement; `draft: true` saves a draft, `supersedes` replaces a crew. |
+| `crew_message` | coordinating | Messages one crew, marked as from the coordinating thread. |
+| `crew_read` | coordinating | Returns one crew's state, branch, brief, criteria, latest handoff and latest answer. |
+| `crew_close` | coordinating | Resolves, stops or archives one crew. |
+| `crew_remind` | coordinating | Sets a reminder (`note`, `at`, optional `every`) or cancels one (`cancel`). |
+| `crew_ask_user` | coordinating | Puts a one-line question, with up to five options, on its board. |
+| `crew_handoff` | crew | Ends the crew's work: done (with its commit), blocked or gave up, with a summary and its lists. |
+| `crew_verdict` | verifier | Returns each criterion's result and evidence, and findings, for the handoff it checks. |
+
 ## Crews
 
 A crew is an ordinary child thread of the coordinating thread, which starts
@@ -71,8 +92,8 @@ it with `crew_start`:
 
 - **Where it runs**: a fresh worktree of the project's default branch on the
   coordinating thread's machine, on its own branch; or, when the coordinating
-  thread names one, an environment provider such as `boat-sandbox`. It runs
-  with auto permissions.
+  thread names one, an environment provider such as `boat-sandbox` (see
+  [Crews in a sandbox](#crews-in-a-sandbox)). It runs with auto permissions.
 - **What it runs on**: the provider and model picked in its draft's editor;
   otherwise its coordinating thread's provider, model, reasoning level and
   service tier as they are when it starts. Never bb's default: if bb has no
@@ -95,6 +116,32 @@ it like any thread.
 
 Archiving or deleting the coordinating thread archives or deletes its crews
 with it.
+
+### Crews in a sandbox
+
+`crew_start` with `placement: {"kind": "provider", "environmentProviderId":
+"boat-sandbox"}` starts the crew on a new machine from that environment
+provider, here a boat sandbox with the project cloned and a new branch made
+from its default branch, which bb names and records, so the crew works on its
+own branch from the start, as a worktree crew does.
+`machineInputs` sets that machine's inputs, such as `{"preset": "small"}` for a
+small boat sandbox; `bb environment providers --json` lists each provider's.
+Without them the provider's defaults apply. The plugin checks the provider
+with bb first: one bb doesn't have, one that needs inputs the plugin can't
+give, or `machineInputs` for one that makes no machine, is refused and nothing
+is saved, and so is one that needs a new branch when bb records no default
+branch for the project.
+
+- The crew's tools run on the bb server, so `crew_memory_read` and
+  `crew_handoff` work from the sandbox as from any machine.
+- The plugin never reads the sandbox just to learn the crew's branch, since
+  a read could wake it or keep it from idling: the branch is the one bb made,
+  until the crew hands off on another (see
+  [Pull requests and CI](#pull-requests-and-ci)).
+- Its verifier runs in the same sandbox, on the crew's own checkout.
+- A sandbox removed before its verifier returns a verdict (by hand, or by
+  the sandbox provider's idle sweep) leaves the crew under Needs you as
+  "Couldn't verify", with the reason.
 
 ## Drafts
 
@@ -222,8 +269,9 @@ a **verifier** for each one:
   (see [Pull requests and CI](#pull-requests-and-ci)); an unverifiable
   criterion is not a pass.
 - **No verdict**: a verifier that ends a turn without one is reminded once;
-  a second time, or a verifier bb wouldn't start or whose thread was
-  archived, reads "Couldn't verify" with the reason.
+  a second time, or a verifier bb wouldn't start, whose thread was archived,
+  or whose environment bb removed (its sandbox was removed or reaped), reads
+  "Couldn't verify" with the reason.
 - **A newer done handoff** from the same crew stops the older verifier, and
   only the newer handoff is checked and announced.
 - **A verifier that never started** (the plugin reloaded at that moment) is
@@ -288,9 +336,11 @@ thread. With it off, a done handoff waits under Ready for review as
 bb tells plugins nothing about pull requests, so the plugin reads them itself,
 with `gh` on the machine running bb, on the same once-a-minute tick:
 
-- **What**: each open, started crew's newest pull request from its branch (the
-  one bb records for its thread, else the one its environment has checked out):
-  its number, state (open, draft, merged, closed), review (approved, changes
+- **What**: each open, started crew's newest pull request from its branch:
+  the one it had checked out at its latest handoff, read once through bb's
+  git plugin as it hands off, while it is awake anyway; else the one bb made
+  its environment on. Nothing else reads a crew's environment for its branch,
+  so a crew in a sandbox is never woken for it. For each, its number, state (open, draft, merged, closed), review (approved, changes
   requested) and its CI on its head commit, as GitHub's merge box rolls the
   checks up (passing, failing with the failed checks' names, running, or no
   checks). A check state GitHub adds later counts as running, never as a pass.
@@ -430,7 +480,9 @@ page from its row in the panel, show the same board:
   and when it last changed.
 - **Decisions** the thread put to you (see [Decisions](#decisions)): open
   under Needs you, answered under Done, each above the crews in its group.
-- **Crews**, each with its id, title, a one-line headline and its branch,
+- **Crews**, each with its id, title, a one-line headline and its branch (the
+  one it had checked out at its latest handoff, else the one bb made its
+  environment on),
   then, once it has one, its pull request: its number, which opens it on
   GitHub, its state, its CI and its review. Grouped:
   - **Needs you**: a draft waiting for you to start it, waiting for your
@@ -510,13 +562,29 @@ of the file it started from:
 You can also edit the files in any editor on the server's disk; the thread
 and the Memory page read the new text on their next read.
 
-## Not yet
+## What it needs
 
-- Edits are detected after a turn ends, never prevented, and a committed one
-  isn't seen.
-- Reminders are checked once a minute, and take no cron expressions.
-- Pull requests are read by polling, never pushed: a change shows within a
-  minute while CI runs or a verdict waits for it, else within five.
+- **`gh`, signed in, on the machine running bb**, for pull requests and CI.
+  Without it the board says "PR status unavailable: <why>" and verdicts that
+  would wait for CI pass as "CI not checked" (see
+  [Pull requests and CI](#pull-requests-and-ci)).
+- **bb's git plugin** (`bb--git`, built in), to read the branch a crew has
+  checked out as it hands off, and the coordinating thread's own working tree
+  as each of its turns ends. When it can't read one, the crew keeps the branch
+  recorded before (else bb's), and no edit warning is recorded.
+- **An environment provider**, such as the boat-sandbox plugin, only for crews
+  you want off the coordinating thread's machine.
+
+## Limits
+
+- **Wakes are not instant.** An update never interrupts a running turn: the
+  coordinating thread reads it when its turn ends. Reminders come due within
+  about a minute; a pull request change shows within a minute while CI runs or
+  a verdict waits for it, else within five, because pull requests are polled,
+  never pushed.
+- **Edits are detected, not prevented.** They are read after a turn ends, a
+  committed one isn't seen, and nothing is blocked or reverted.
+- Reminders take no cron expressions and nothing finer than a minute.
 - The plugin never merges, approves or comments on a pull request.
 - The coordinating thread chooses no model for a crew; it gets the
   coordinating thread's unless you pick one in a draft's editor.

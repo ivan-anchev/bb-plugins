@@ -8,9 +8,11 @@ import type { PluginAgentConfiguration, PluginAgentConfigurationContext, PluginA
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import type { z } from "zod";
 import type { CrewThread } from "../model/board/crew-state.ts";
+import type { EnvironmentProvider } from "../model/crew.ts";
 import type { CoordinatorId } from "../model/role.ts";
-import { boardHandlers } from "./crew/board-rpc.ts";
-import { createBoard } from "./crew/board.ts";
+import { boardHandlers } from "./crew/board/board-rpc.ts";
+import { createBoard } from "./crew/board/board.ts";
+import { placementFactsReader } from "./crew/placement-facts.ts";
 import { createCrews } from "./crew/crews.ts";
 import type { TurnsBb } from "./crew/handoffs.ts";
 import { forwardCrewThreadEvents } from "./crew/thread-events.ts";
@@ -33,7 +35,15 @@ import { createPrWatch } from "./watch/pr-watch.ts";
 
 const PLUGIN_ID = "coordinator";
 
+// As bb lists them (schemas shortened): boat-sandbox composes project-checkout with a machine of its own.
+const ENVIRONMENT_PROVIDERS: EnvironmentProvider[] = [
+  { id: "project-checkout", inputs: { type: "object" }, acceptsEmptyInputs: true, machineProviderId: null },
+  { id: "personal-workspace", inputs: null, acceptsEmptyInputs: true, machineProviderId: null },
+  { id: "boat-sandbox", inputs: { type: "object" }, acceptsEmptyInputs: true, environmentProviderId: "project-checkout", machineProviderId: "boat-sandbox", machineInputs: { type: "object" }, machineAcceptsEmptyInputs: true },
+];
+
 type SpawnBb = Parameters<typeof createSpawner>[0];
+
 type Metadata = Awaited<ReturnType<SpawnBb["sdk"]["threads"]["getPluginMetadata"]>>;
 type SpawnArgs = Parameters<SpawnBb["sdk"]["threads"]["spawn"]>[0];
 type CrewsBb = Parameters<typeof createCrews>[0]["bb"];
@@ -390,6 +400,19 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     },
   };
   const projects = { get: async (_: { projectId: string }) => ({ gitRemoteUrl: github.remote }) };
+  /**
+   * bb's environments: the ones it has destroyed, as when their sandbox was removed (every other one
+   * is ready), and the project's default branch bb records on each. Set `holding` to keep each answer, as read when called, until the test calls its release in `held`.
+   */
+  const environmentRecords: { destroyed: Set<string>; defaultBranch: string | null; holding: boolean; held: (() => void)[] } = { destroyed: new Set(), defaultBranch: "main", holding: false, held: [] };
+  const environments = {
+    listProviders: async () => ENVIRONMENT_PROVIDERS,
+    async get({ environmentId }: { environmentId: string }) {
+      const answer = { status: environmentRecords.destroyed.has(environmentId) ? "destroyed" : "ready", defaultBranch: environmentRecords.defaultBranch };
+      if (environmentRecords.holding) await new Promise<void>((release) => environmentRecords.held.push(release));
+      return answer;
+    },
+  };
   // As bb--git answers `status`, each key's row in its shape; the caller's schema parses it, as bb's callRpc does.
   function gitStatus(environmentId: string): object {
     const newer = git.newer.get(environmentId);
@@ -423,7 +446,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   }
   const bb = {
     pluginId: PLUGIN_ID,
-    sdk: { threads, providers: providersArea, projects, plugins },
+    sdk: { threads, providers: providersArea, projects, plugins, environments },
     log: { warn: (message: string) => void warnings.push(message) },
     onDispose: (hook: () => void) => void disposers.push(hook),
     events: {
@@ -444,7 +467,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const inbox = createInbox({ bb, store, onChange: refreshBoard });
     const verify = createVerify({ bb, store, spawner, inbox });
     registerRoles(bb, store);
-    registerCoordinatorTools(bb, { store, inbox, memory, crews, board, onChange: refreshBoard });
+    registerCoordinatorTools(bb, { store, inbox, memory, crews, board, placementFacts: placementFactsReader(bb, store), onChange: refreshBoard });
     registerCrewTools(bb, { store, verify });
     registerVerdictTool(bb, { store, verify });
     forwardCrewThreadEvents(bb, store, refreshBoard);
@@ -483,6 +506,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     github,
     /** bb's git plugin as the PR watch and the own-tree watch reach it; a test may change it between reads. */
     git,
+    /** bb's environments as the plugin reads them; a test destroys one to remove its sandbox, changes the default branch, or holds the reads. */
+    environments: environmentRecords,
     /** How bb answers a read of a thread's turns; a test may make it fail. */
     turnEvents,
     /** How bb answers a listing of threads by id; a test may make it fail. */

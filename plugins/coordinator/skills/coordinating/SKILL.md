@@ -64,7 +64,9 @@ environment, on its own branch.
 - **Start** one with `crew_start`: a short `title`, a `brief` it can start
   from without asking, and 1 to 12 `doneCriteria`, each checkable by running
   something. `placement` is a fresh worktree on your machine unless you name
-  an environment provider, such as `boat-sandbox`. Its first message is your
+  an environment provider, such as `boat-sandbox`, with `machineInputs` for
+  the machine it makes (such as `{"preset": "small"}`). A sandbox crew starts
+  on its own new branch from the default one, as a worktree crew does. Its first message is your
   brief, the criteria, and `CREW.md` and `MEMORY.md` as they are now, so put
   rules every crew follows in `CREW.md` before you start crews. It returns the
   crew's id (`c1`, `c2`…) and a link to its thread.
