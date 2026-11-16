@@ -81,7 +81,8 @@
 
 /* One row as tall as bb's page headers. Its first tab starts at the panes' left edge, as the strip does: no
    left padding. The inset bb gives the top-left header for its floating chrome is the .ht-inset spacer,
-   sized by bb's own classes (src/host/chrome-inset.ts).
+   sized by bb's own classes, or where bb has no header, to clear its floating controls
+   (src/host/chrome-inset.ts).
    why app-region: on bb Desktop the top row is where the window is dragged; only the controls are not. */
 .ht-strip {
   display: flex;

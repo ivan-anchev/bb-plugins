@@ -42,8 +42,13 @@ export function Strip() {
   };
   return (
     <div ref={strip} className="ht-strip">
-      {/* bb sizes this with its own top-left padding classes (src/host/chrome-inset.ts). */}
-      <span aria-hidden className={`ht-inset ${inset}`} />
+      {/* Its left padding clears bb's floating controls: bb's own classes, or a measure (src/host/chrome-inset.ts).
+          One element in both cases, so bb's padding transition runs from a measure to its classes. */}
+      <span
+        aria-hidden
+        className={"classes" in inset ? `ht-inset ${inset.classes}` : "ht-inset"}
+        style={"padding" in inset ? { paddingLeft: inset.padding } : undefined}
+      />
       <div ref={tablist} role="tablist" aria-label="Tabs" className="ht-tablist">
         {set.tabs.map((tab) => (
           <TabItem
