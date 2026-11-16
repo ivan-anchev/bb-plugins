@@ -9,12 +9,11 @@
 // the thread, bb moves nothing. Opening the first thread and closing panes do wait until bb shows them.
 import type { Nav } from "../../controller/tabs-controller.ts";
 import { focused, panes, type Layout } from "../../model/layout.ts";
-import { paneIdsOnScreen } from "../screen.ts";
+import { PANE, paneIdsOnScreen } from "../screen.ts";
 import { readStored } from "./stored-layout.ts";
 import { untilFrame } from "./until-frame.ts";
 
 const STEP_TIMEOUT_MS = 1000;
-const PANE = "data-split-pane-id";
 const CLOSE_PANE = 'header button[aria-label="Close pane"]';
 
 /**

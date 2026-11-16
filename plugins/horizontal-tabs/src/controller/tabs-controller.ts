@@ -79,10 +79,7 @@ export function createTabsController(host: HostLayout) {
     if (showing) return;
     const layout = host.read();
     const kind = layout === null ? null : focused(layout).content.kind;
-    if (set === null) set = seed(newTabId(), layout ?? single({ kind: "new-thread" }, "pane-1"));
-    // why: only a thread in the focused pane is this tab's content. bb's New thread or a plugin page in
-    // that pane leaves the tab's layout alone, so clicking the tab brings it back.
-    else if (layout !== null && kind === "thread") set = adopt(set, layout);
+    set = set === null ? seed(newTabId(), layout ?? single({ kind: "new-thread" }, "pane-1")) : adoptThread(set, layout);
     // A `+` tab is selected on its own New thread screen; bb's New thread button over a thread selects none,
     // and neither does Settings, though bb keeps the `+` tab's New thread pane underneath.
     const ownNewThread =
@@ -94,7 +91,8 @@ export function createTabsController(host: HostLayout) {
   /** Tab `id` is shown and selected. From Settings or a plugin page this also brings back the live tab. */
   function activate(id: string): void {
     if (set === null || id === selectedId) return;
-    present(set, id, id === set.liveId ? null : live(set).layout);
+    const current = caughtUp(set);
+    present(current, id, id === current.liveId ? null : live(current).layout);
   }
 
   /** A plain click on a thread another tab shows: that tab is shown with the thread's pane focused. */
@@ -115,6 +113,17 @@ export function createTabsController(host: HostLayout) {
     const layout = single({ kind: "thread", projectId: thread.projectId, threadId }, `${id}-1`);
     present(open(current, { id, layout }), id, live(current).layout);
     return true;
+  }
+
+  /**
+   * `current` with bb's layout adopted as observe adopts it: the live tab as the user leaves it, before a
+   * switch writes over bb's layout.
+   * why: a switch can come before bb's latest change is observed, as when bb routes to the thread just created
+   * on a `+` tab and the overlay has not re-rendered yet. While a write is in flight bb shows that write, not
+   * the live tab, so there is nothing to adopt.
+   */
+  function caughtUp(current: TabSet): TabSet {
+    return showing ? current : adoptThread(current, host.read());
   }
 
   /**
@@ -238,7 +247,8 @@ export function createTabsController(host: HostLayout) {
      */
     routeSidebarClick(threadId: string, gesture: SidebarGesture): boolean {
       if (set === null) return false;
-      return gesture === "newTab" ? openThreadTab(set, threadId) : switchToThread(set, threadId);
+      const current = caughtUp(set);
+      return gesture === "newTab" ? openThreadTab(current, threadId) : switchToThread(current, threadId);
     },
 
     /** The user dismissed the equal-sizes notice; it stays dismissed in this page. */
@@ -250,10 +260,20 @@ export function createTabsController(host: HostLayout) {
     /** `+`: a tab right of the live one, on the New thread screen; the thread created there fills it. */
     openNew(): void {
       if (set === null) return;
+      const current = caughtUp(set);
       const id = newTabId();
-      present(open(set, { id, layout: single({ kind: "new-thread" }, `${id}-1`) }), id, live(set).layout);
+      present(open(current, { id, layout: single({ kind: "new-thread" }, `${id}-1`) }), id, live(current).layout);
     },
   };
+}
+
+/**
+ * `set` with `layout` as its live tab's when bb's focused pane shows a thread.
+ * why: only a thread in the focused pane is a tab's content. bb's New thread or a plugin page in that pane
+ * leaves the tab's layout alone, so clicking the tab brings it back.
+ */
+function adoptThread(set: TabSet, layout: Layout | null): TabSet {
+  return layout !== null && focused(layout).content.kind === "thread" ? adopt(set, layout) : set;
 }
 
 function newTabId(): string {

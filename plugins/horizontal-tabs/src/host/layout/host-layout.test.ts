@@ -64,6 +64,8 @@ const page = {
     selector === "script[src]" ? chunks : paneIds.map((id) => ({ getAttribute: () => id })),
 };
 Object.defineProperty(globalThis, "document", { value: page });
+// A touch screen, where bb's composers don't focus themselves, so a show leaves focus alone (composer-focus.ts).
+Object.defineProperty(globalThis, "matchMedia", { value: () => ({ matches: true }) });
 const frames = new Map<number, () => void>();
 let lastFrame = 0;
 Object.defineProperty(globalThis, "requestAnimationFrame", {
