@@ -1,6 +1,6 @@
 ---
 name: crew-board
-description: Explain the coordinating-thread plugin (package bb-plugin-coordinator). Its panel in bb's navigation rail starts long-lived coordinating threads with bb's own composer and lists them. A coordinating thread keeps its memory as markdown files on the bb server (MEMORY.md, GOAL.md, PLAN.md, PREFERENCES.md, CREW.md, DIGEST.md), which the user edits too without either side overwriting the other, and starts crew threads, child threads that each work on their own branch from a brief and done-criteria. The Board, a tab in the coordinating thread and a page in the panel, shows the digest and every crew under Needs you, Working, Idle or Done. Use when the user asks how to start a coordinating thread or a crew, what the board, its groups or a row mean, where the memory files are or how to edit them, why a save or a write was refused, why a thread has or lacks the crew_ tools, how to message or close a crew, or what the plugin can't do yet.
+description: Explain the coordinating-thread plugin (package bb-plugin-coordinator). Its panel in bb's navigation rail starts long-lived coordinating threads with bb's own composer and lists them. A coordinating thread keeps its memory as markdown files on the bb server (MEMORY.md, GOAL.md, PLAN.md, PREFERENCES.md, CREW.md, DIGEST.md), which the user edits too without either side overwriting the other, and starts crew threads, child threads that each work on their own branch from a brief and done-criteria, or saves them as drafts the user edits and starts. The Board, a tab in the coordinating thread and a page in the panel, shows the digest and every crew under Needs you, Working, Idle or Done. Use when the user asks how to start a coordinating thread or a crew, what the board, its groups or a row mean, where the memory files are or how to edit them, why a save or a write was refused, why a thread has or lacks the crew_ tools, how to message or close a crew, how to edit or start a draft, or what the plugin can't do yet.
 ---
 
 # Coordinating threads
@@ -80,6 +80,51 @@ it like any thread.
 Archiving or deleting the coordinating thread archives or deletes its crews
 with it.
 
+## Drafts
+
+Tell the coordinating thread to propose crews and wait for you, and it calls
+`crew_start` with `draft: true`: the crew is saved, numbered and shown on the
+board, and no thread starts. Its rules tell it to do this whenever you asked
+it to propose and wait, or `PREFERENCES.md` says so.
+
+A draft sits under **Needs you**, headed "Draft: <title>", with the first line
+of its brief and two buttons:
+
+- **Edit** opens the draft under its row: bb's own new-thread composer holding
+  the brief, with its model, environment and permission pickers, and the
+  done-criteria as a list you can change, add to (up to 12) or remove from.
+  Each criterion's field grows to show all of it. In a criterion, Enter starts
+  the next one (the text after the caret moves into it), Shift+Enter breaks
+  the line, and Backspace at its start joins it to the one above, or removes
+  it when it is empty.
+  Until you pick one, the model is the project's default and the environment
+  is a fresh worktree on the coordinating thread's machine (or the provider it
+  named). The composer's own send button stores it all; **Cancel** drops your
+  changes, and the next **Edit** starts from what is stored. While it is open,
+  Esc doesn't leave the page.
+  The project stays the coordinating thread's, and a brief is text only.
+- **An open edit is kept** in the browser (localStorage) until you save or
+  cancel it: a reload, a restart or bb redrawing the panel brings back the
+  open editor, your brief and your done-criteria, and every tab of that
+  browser shows the same edit. A model or environment you picked but haven't
+  saved goes back to the draft's: bb's composer keeps those picks only while
+  it is on screen. If the
+  draft is saved somewhere else meanwhile (another browser or device), the
+  editor says which parts changed and shows the saved version in full; saving
+  puts yours over it, and **Drop mine and edit the saved version** takes it
+  instead. If the crew starts or is closed elsewhere first, its row says your
+  edit wasn't used until you dismiss it.
+- **Start** spawns the crew from what is stored, exactly as `crew_start` does
+  without `draft`: CREW.md and MEMORY.md are copied as they are at that
+  moment. The row moves to its new group and keeps keyboard focus. A second
+  click while it starts joins the first, so one thread starts. A crew that
+  started or is closed can't be started or edited again.
+
+A crew whose spawn bb never confirmed is a draft too, so **Start** tries it
+again. `crew_catch_up` lists every draft as waiting for you, and `crew_close`
+closes one like any crew. Starting a draft doesn't wake the coordinating
+thread; it sees the crew on its next catch-up.
+
 ## The board
 
 The **Board** tab in a coordinating thread's side panel, and the **Board**
@@ -89,8 +134,8 @@ page from its row in the panel, show the same board:
   and when it last changed.
 - **Crews**, each with its id, title, a one-line headline and its branch,
   grouped:
-  - **Needs you**: waiting for your answer or approval in its thread, its
-    last turn failed, or bb never started its thread.
+  - **Needs you**: a draft waiting for you to start it, waiting for your
+    answer or approval in its thread, or its last turn failed.
   - **Working**: its thread is running, starting, waiting to start or
     stopping.
   - **Idle**: its turn ended and it waits for a message.
@@ -146,6 +191,6 @@ and the Memory page read the new text on their next read.
   off for them, so the coordinating thread checks the board and reads each
   crew with `crew_read`. Handoffs come later.
 - The coordinating thread chooses no model for a crew; it gets the project's
-  default.
+  default unless you pick one in a draft's editor.
 - Saving in the Memory editor doesn't wake the thread; it reads your edit at
   the start of its next turn.

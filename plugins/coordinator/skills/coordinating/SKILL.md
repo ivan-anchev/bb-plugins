@@ -1,6 +1,6 @@
 ---
 name: coordinating
-description: The playbook of a coordinating thread, a long-lived thread that holds a goal for the user and plans, delegates and tracks the work instead of doing it. Use in every turn of a coordinating thread, to catch up on its board and memory with crew_catch_up, keep its memory current with crew_memory_write (merging when the user edited a file first), start crews with crew_start, and message, read and close them with crew_message, crew_read and crew_close.
+description: The playbook of a coordinating thread, a long-lived thread that holds a goal for the user and plans, delegates and tracks the work instead of doing it. Use in every turn of a coordinating thread, to catch up on its board and memory with crew_catch_up, keep its memory current with crew_memory_write (merging when the user edited a file first), start crews with crew_start (or save them as drafts for the user to start), and message, read and close them with crew_message, crew_read and crew_close.
 ---
 
 # Coordinating
@@ -66,6 +66,11 @@ environment, on its own branch.
   brief, the criteria, and `CREW.md` and `MEMORY.md` as they are now, so put
   rules every crew follows in `CREW.md` before you start crews. It returns the
   crew's id (`c1`, `c2`…) and a link to its thread.
+- **Propose** instead of starting when the user asked you to propose crews and
+  wait, or `PREFERENCES.md` says so: call `crew_start` with `draft: true`. The
+  crew is saved as a draft on the board and nothing runs; the user edits it
+  if they like and presses Start. `crew_catch_up` shows each draft until then.
+  Don't start a draft's work another way.
 - **Message** one with `crew_message`. It arrives marked as a message from
   your thread, not from the user.
 - **Read** one with `crew_read`: its place on the board, its thread and

@@ -1,19 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { memoryFileSchema } from "../../model/memory-file.ts";
-import { harness, isRefusal, newThreadRequest, textOf } from "../test-harness.ts";
+import { coordinating, isRefusal, newThreadRequest, textOf, threadIn } from "../test-harness.ts";
 
 const RETRIES = { title: "Add retries", brief: "Retry failed webhook deliveries with backoff.", doneCriteria: ["npm test passes", "a failed delivery is retried 3 times"] };
-
-async function coordinating(...args: Parameters<typeof harness>) {
-  const kit = harness(...args);
-  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
-  const role = kit.store.roleOfThread(threadId);
-  assert.equal(role?.kind, "coordinator");
-  return { kit, threadId, coordinatorId: role.coordinatorId };
-}
-
-const threadIn = (text: string): string => /@thread:(\w+)/.exec(text)?.[1] ?? assert.fail(`no thread link in: ${text}`);
 
 test("crew_start starts a child of the Coordinator in a fresh worktree, unreported to it, and links it", async () => {
   const { kit, threadId } = await coordinating();
@@ -67,16 +57,16 @@ test("crews are numbered in the order started, per Coordinator", async () => {
   assert.match(textOf(await kit.call("crew_start", RETRIES, other.threadId)), /^Started c1 /);
 });
 
-test("a crew whose spawn failed is kept and says so; one whose answer alone was lost is started", async () => {
+test("a crew whose spawn failed is kept as a draft and says so; one whose answer alone was lost is started", async () => {
   const { kit, threadId, coordinatorId } = await coordinating();
   Object.assign(kit.spawns, { created: false, answer: "lost" });
-  assert.match(textOf(await kit.call("crew_start", RETRIES, threadId)), /^c1 was saved, but bb did not start its thread: socket hang up\./);
+  assert.match(textOf(await kit.call("crew_start", RETRIES, threadId)), /^c1 was saved, but bb did not start its thread: socket hang up\. It waits on the board as a draft the user can start\./);
 
   Object.assign(kit.spawns, { created: true, answer: "lost" });
   assert.match(textOf(await kit.call("crew_start", RETRIES, threadId)), /^Started c2 as @thread:\w+\./);
 
   assert.deepEqual((await kit.rpc.board({ coordinatorId })).rows.map((row) => [row.crewId, row.state, row.headline]), [
-    ["c1", "needs-you", "Not started: bb never confirmed its thread"],
+    ["c1", "needs-you", "Draft: Add retries"],
     ["c2", "working", "Working"],
   ]);
 });

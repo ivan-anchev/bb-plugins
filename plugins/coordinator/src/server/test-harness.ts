@@ -1,5 +1,6 @@
 // Tests only: the server's modules wired as server.ts wires them, over an in-memory database, a
 // temporary memory folder and a fake bb that records what the plugin registers.
+import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -140,9 +141,11 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     /** How bb answers the next spawns; a test may change it between them. */
     spawns: behaviour,
     /** The app's RPC handlers, as server.ts registers them. */
-    rpc: { ...memoryHandlers(store, memory), ...boardHandlers(store, board) },
+    rpc: { ...memoryHandlers(store, memory), ...boardHandlers({ store, board, crews }) },
     /** A thread bb has, as the plugin can list it, and what it was spawned with. */
     thread: fakeThread,
+    /** How many threads bb has spawned. */
+    spawned: () => spawned,
     /** Every message sent to a thread, in order. */
     sent: () => [...sent],
     /** Every RPC tag invalidated, in order. */
@@ -179,6 +182,18 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     },
   };
 }
+
+/** A harness with one coordinating thread started, its thread and its id. */
+export async function coordinating(...args: Parameters<typeof harness>) {
+  const kit = harness(...args);
+  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
+  const role = kit.store.roleOfThread(threadId);
+  assert.equal(role?.kind, "coordinator");
+  return { kit, threadId, coordinatorId: role.coordinatorId };
+}
+
+/** The thread a tool's answer links to. */
+export const threadIn = (text: string): string => /@thread:(\w+)/.exec(text)?.[1] ?? assert.fail(`no thread link in: ${text}`);
 
 /** What the composer submits for this goal. */
 export function newThreadRequest(goal: string): NewThreadRequest {
