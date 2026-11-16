@@ -7,6 +7,7 @@ import { closedKindSchema, doneCriteriaSchema, executionSchema, placementSchema,
 import { decisionIdSchema, type Decision, type DecisionId } from "../model/decision.ts";
 import { handoffIdSchema, handoffReportSchema, type Handoff, type HandoffId, type NewHandoff } from "../model/handoff.ts";
 import { inboxEventSchema, type InboxEvent, type StoredEvent } from "../model/inbox/inbox-event.ts";
+import { ownTreeEventAfter, type OwnTreeEvent } from "../model/inbox/own-tree.ts";
 import { memoryRevisionSchema, type MemoryFile, type MemoryRevision, type MemoryVersion } from "../model/memory-file.ts";
 import { nextDue, reminderIdSchema, type Reminder, type ReminderId } from "../model/reminder.ts";
 import { meaningfulChanges, prSnapshotSchema, prUnavailableSchema, type CiVerdict, type PrSnapshot, type PrStatus, type PrUnavailable } from "../model/verdict/pr.ts";
@@ -80,6 +81,8 @@ const MIGRATIONS = [
      question TEXT NOT NULL, options TEXT NOT NULL, asked_at INTEGER NOT NULL, answer TEXT, answered_at INTEGER)`,
   // The board, the panel's badge and crew_catch_up read a coordinating thread's decisions.
   `CREATE INDEX decisions_of_coordinator ON decisions (coordinator_id)`,
+  // Every end of a coordinating thread's turn reads its latest event about its own working tree, and so does its board.
+  `CREATE INDEX events_own_tree ON events (coordinator_id, id) WHERE json_extract(event, '$.kind') IN ('coordinator-edited-files', 'coordinator-tree-clean')`,
 ];
 
 /** Where a verdict must still be for a change to apply: queued, or running in this verifier thread. */
@@ -129,6 +132,22 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
 
   function insertEvent(coordinatorId: CoordinatorId, event: InboxEvent, at: number): void {
     db().prepare("INSERT INTO events (coordinator_id, event, at) VALUES (?, ?, ?)").run(coordinatorId, JSON.stringify(event), at);
+  }
+
+  /** The latest event about the coordinating thread's own working tree, with when it was recorded; null when none was. */
+  function lastOwnTreeEvent(coordinatorId: CoordinatorId): { at: number; event: OwnTreeEvent } | null {
+    const row = db()
+      .prepare(
+        `SELECT id, at, event FROM events
+          WHERE coordinator_id = ? AND json_extract(event, '$.kind') IN ('coordinator-edited-files', 'coordinator-tree-clean')
+          ORDER BY id DESC LIMIT 1`,
+      )
+      .get(coordinatorId);
+    if (row === undefined) return null;
+    const { at, event } = toEvent(row);
+    // why throw: the clause picks only these kinds.
+    if (event.kind !== "coordinator-edited-files" && event.kind !== "coordinator-tree-clean") throw new Error(`The event ${event.kind} is not about the working tree`);
+    return { at, event };
   }
 
   /** The first handoff the clause picks, or null when it picks none. */
@@ -257,6 +276,21 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
         const changed = db().prepare("UPDATE coordinators SET verify = ? WHERE id = ? AND verify != ?").run(Number(verify), id, Number(verify)).changes > 0;
         if (changed) insertEvent(id, { kind: "verification-toggled", verify }, at);
         return changed;
+      })();
+    },
+
+    lastOwnTreeEvent,
+
+    /**
+     * Records what a read of `fileCount` changed files in the coordinating thread's own working tree
+     * says that its latest such event doesn't (see ownTreeEventAfter), deciding from that event in the
+     * same transaction. Returns whether it recorded one.
+     */
+    recordOwnTree(id: CoordinatorId, fileCount: number, at: number): boolean {
+      return db().transaction(() => {
+        const event = ownTreeEventAfter(lastOwnTreeEvent(id)?.event ?? null, fileCount);
+        if (event !== null) insertEvent(id, event, at);
+        return event !== null;
       })();
     },
 

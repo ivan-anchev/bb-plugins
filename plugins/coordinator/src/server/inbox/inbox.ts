@@ -65,6 +65,7 @@ type InboxStore = Pick<
   | "deleteReminders"
   | "decision"
   | "answerDecision"
+  | "recordOwnTree"
 >;
 
 type Doorbell = ReturnType<Store["doorbells"]>[number];
@@ -257,6 +258,14 @@ export function createInbox({ bb, store, onChange }: Deps) {
       const outcome = store.answerDecision(id, decisionId, answer, Date.now());
       if (outcome === "answered") recorded(id);
       return outcome;
+    },
+
+    /**
+     * A read of the coordinating thread's own working tree as its turn ended: records it when the
+     * board doesn't already say it (see ownTreeEventAfter), then rings, which a clean tree alone doesn't.
+     */
+    ownTreeRead(id: CoordinatorId, fileCount: number): void {
+      if (store.recordOwnTree(id, fileCount, Date.now())) recorded(id);
     },
 
     /** Stores the event, then wakes its coordinating thread. A crash between the two is rung by the next tick. */

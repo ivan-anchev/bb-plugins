@@ -4,6 +4,7 @@
 import type { Decision, DecisionId } from "../../model/decision.ts";
 import type { Handoff, HandoffId } from "../../model/handoff.ts";
 import type { InboxEvent, StoredEvent } from "../../model/inbox/inbox-event.ts";
+import { filesText } from "../../model/inbox/own-tree.ts";
 import { askedOf } from "../../model/inbox/wake-text.ts";
 import { intervalText, type Reminder } from "../../model/reminder.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
@@ -37,6 +38,8 @@ function eventText({ event, at }: StoredEvent, { titles, handoff, decision }: Lo
     return `### Your reminder ${event.reminderId}: ${event.note}\n\n${when} It was due at ${new Date(event.dueAt).toISOString()}. ${repeats}`;
   }
   if (event.kind === "decision-answered") return answeredText(askedOf(decision(event.decisionId)), when);
+  if (event.kind === "coordinator-edited-files") return `### Your own environment has ${filesText(event.fileCount)} changed\n\n${when} ${MOVE_TO_A_CREW}`;
+  if (event.kind === "coordinator-tree-clean") return `### Your own environment is clean again\n\n${when} Your turn ended with no changed files in your working tree, so the warning is gone from the board.`;
   const crew = crewName(event, titles);
   switch (event.kind) {
     case "handoff":
@@ -103,6 +106,9 @@ function fixRoundNote(verdict: Verdict): string {
 
 const MAY_HAVE_REACHED_CREW =
   "The plugin was cut off while it sent the verifier's findings to the crew as its automatic fix round (it stopped, or bb's answer never came back whole), and nothing bb keeps shows whether they arrived: they may or may not have. Read its thread with crew_read before you message it, so it doesn't get them twice. ";
+
+const MOVE_TO_A_CREW =
+  "bb's git plugin read changed files in your working tree when your turn ended, and the board warns the user of it. You never edit project files yourself, and you never touch your working tree: no stash, revert, checkout or deletion, not even of files you changed, since the user may have edited the same files. First describe the change in a crew brief with crew_start and draft: true, always, whatever the user's preferences: the crew waits on their board, beside your question, until they start it, and redoes the change properly on its own branch. Then ask the user with crew_ask_user whether to discard the changes in your environment: discarding them is theirs to do, never yours. If you made none of these changes, they are the user's: leave them and say so in your digest. The warning stays until a turn of yours ends with a clean tree.";
 
 const FAILED_IS_YOURS =
   "It failed verification and is yours to decide: message the crew with crew_message, replace it with a fresh crew through crew_start with supersedes (which carries its brief and these findings), or ask the user.";

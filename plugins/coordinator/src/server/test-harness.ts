@@ -15,6 +15,7 @@ import { createCrews } from "./crew/crews.ts";
 import type { TurnsBb } from "./crew/handoffs.ts";
 import { forwardCrewThreadEvents } from "./crew/thread-events.ts";
 import { createInbox } from "./inbox/inbox.ts";
+import { watchOwnTree } from "./inbox/own-tree-watch.ts";
 import { watchCrewThreads } from "./inbox/thread-watch.ts";
 import { openMemoryRoot } from "./memory/memory-files.ts";
 import { memoryHandlers } from "./memory/memory-rpc.ts";
@@ -50,7 +51,7 @@ type InteractionPayload = PluginThreadEventPayloads["interaction.pending"]["inte
 type FakeEvents = {
   "thread.created": { thread: ThreadRef };
   "thread.active": { thread: ThreadRef };
-  "thread.idle": { thread: ThreadRef; lastAssistantText: string | null };
+  "thread.idle": { thread: ThreadRef & { environmentId: string | null }; lastAssistantText: string | null };
   "thread.failed": { thread: ThreadRef; error: string | null };
   "thread.archived": { thread: ThreadRef };
   "thread.unarchived": { thread: ThreadRef };
@@ -216,10 +217,31 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   /** The time the tick runs at; a test moves it on. */
   const clock = { now: 1_000_000 };
   /**
-   * bb's git plugin as the watch reaches it: the branch each environment has checked out, by
-   * environment id (absent: bb--git can't read it), and the keys of every `status` call.
+   * bb's git plugin as the watches reach it, by environment id: the branch each has checked out
+   * (absent: none, as when detached), how many files changed in its working tree (absent: none),
+   * the ones outside git, the ones whose machine it can't read, and a row a newer bb--git answers
+   * instead, in a shape the plugin's contract doesn't name; and the keys of every `status` call.
+   * Set `holding` to keep each answer, as read when called, until the test calls its release in `held`.
    */
-  const git: { checkouts: Map<string, string>; calls: string[][] } = { checkouts: new Map(), calls: [] };
+  const git: {
+    checkouts: Map<string, string>;
+    changedFiles: Map<string, number>;
+    nonGit: Set<string>;
+    offline: Set<string>;
+    newer: Map<string, object>;
+    calls: string[][];
+    holding: boolean;
+    held: (() => void)[];
+  } = {
+    checkouts: new Map(),
+    changedFiles: new Map(),
+    nonGit: new Set(),
+    offline: new Set(),
+    newer: new Map(),
+    calls: [],
+    holding: false,
+    held: [],
+  };
   /** Set `failure` to make every read of a thread's turns reject with it, as when bb can't answer. */
   const turnEvents: { failure: Error | null } = { failure: null };
   /** Set `failure` to make every listing of threads by id reject with it, as when bb can't answer. */
@@ -368,14 +390,28 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     },
   };
   const projects = { get: async (_: { projectId: string }) => ({ gitRemoteUrl: github.remote }) };
-  // As bb--git answers `status`: each key's checkout when it can read it, else unavailable; the caller's schema parses it, as bb's callRpc does.
+  // As bb--git answers `status`, each key's row in its shape; the caller's schema parses it, as bb's callRpc does.
+  function gitStatus(environmentId: string): object {
+    const newer = git.newer.get(environmentId);
+    if (newer !== undefined) return newer;
+    if (git.nonGit.has(environmentId)) return { outcome: "not_applicable", reason: "non_git_environment", message: "The environment is not a git repository" };
+    if (git.offline.has(environmentId)) return { outcome: "unavailable", failure: { code: "unknown", workspacePath: "/work/webhooks", message: "The environment's machine is offline" } };
+    const branchName = git.checkouts.get(environmentId);
+    return {
+      outcome: "available",
+      workspace: {
+        checkout: branchName === undefined ? { kind: "detached", headSha: null } : { kind: "branch", branchName, headSha: null },
+        workingTree: { fileCount: git.changedFiles.get(environmentId) ?? 0 },
+      },
+    };
+  }
   const plugins = {
     async callRpc<T>({ pluginId, method, input, outputSchema }: { pluginId: string; method: string; input: { keys: string[] }; outputSchema: z.ZodType<T> }): Promise<T> {
       if (pluginId !== "bb--git" || method !== "status") throw new Error(`No rpc ${pluginId} ${method}`);
       git.calls.push(input.keys);
-      const status = (branchName: string | undefined) =>
-        branchName === undefined ? { outcome: "unavailable", message: "The environment's machine is offline" } : { outcome: "available", workspace: { checkout: { kind: "branch", branchName, headSha: null } } };
-      return outputSchema.parse(Object.fromEntries(input.keys.map((key) => [key, status(git.checkouts.get(key))])));
+      const answer = outputSchema.parse(Object.fromEntries(input.keys.map((key) => [key, gitStatus(key)])));
+      if (git.holding) await new Promise<void>((release) => git.held.push(release));
+      return answer;
     },
   };
   async function gh(args: string[]): Promise<string> {
@@ -413,6 +449,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     registerVerdictTool(bb, { store, verify });
     forwardCrewThreadEvents(bb, store, refreshBoard);
     watchCrewThreads({ bb, store, inbox, onChange: refreshBoard });
+    watchOwnTree({ bb, store, inbox });
     const prWatch = createPrWatch({ bb, store, inbox, gh });
     return { spawner, inbox, verify, prWatch, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, crews, inbox }) } };
   }
@@ -444,7 +481,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     },
     /** GitHub and gh as the PR watch reaches them; a test may change them between ticks. */
     github,
-    /** bb's git plugin as the PR watch reaches it; a test may change it between ticks. */
+    /** bb's git plugin as the PR watch and the own-tree watch reach it; a test may change it between reads. */
     git,
     /** How bb answers a read of a thread's turns; a test may make it fail. */
     turnEvents,
@@ -486,8 +523,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     startTurn: (threadId: string) => startTurn(fakeThread(threadId)),
     /** The thread's turn ends, and bb announces it with its last answer. */
     async idle(threadId: string, lastAssistantText: string | null): Promise<void> {
-      fakeThread(threadId).status = "idle";
-      await emit("thread.idle", { thread: ref(threadId), lastAssistantText });
+      const thread = fakeThread(threadId);
+      thread.status = "idle";
+      await emit("thread.idle", { thread: { ...ref(threadId), environmentId: thread.environmentId }, lastAssistantText });
     },
     /** The text of every message that reached the thread and started a turn, in order. */
     delivered: (threadId: string) => delivered.filter((message) => message.threadId === threadId).map((message) => message.text),
