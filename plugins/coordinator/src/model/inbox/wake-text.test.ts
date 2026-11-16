@@ -50,6 +50,7 @@ const returned = (results: ("pass" | "fail" | "unverifiable")[]): Verdict => ({
   findings: [WRITTEN],
   model: { providerId: "codex", model: "gpt-default" },
   sameModel: false,
+  settlement: { kind: "checked", refused: null },
 });
 
 test("a doorbell names how many updates there are, then one line of plugin facts per update", () => {

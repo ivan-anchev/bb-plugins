@@ -37,7 +37,10 @@ its role.
   the agent tools and the text they return; `crew/` the crew actions (one
   launch at a time per crew), the crew's brief, a crew's current handoff, the
   board and its rpc handlers (its read, and editing and starting a draft), and
-  the thread events that refresh it; `memory/` the memory files beside `data.db` (compare-and-swap
+  the thread events that refresh it; `verify/` the verify step (a verifier
+  per done handoff, its brief, model and `crew_verdict`, and the one
+  automatic fix round that sends a first failed verdict's findings back to
+  the crew); `memory/` the memory files beside `data.db` (compare-and-swap
   writes through a temp file and a rename) and the Memory editor's rpc
   handlers (a save there wakes the coordinating thread).
 - `src/app/panel/`: the nav panel, its list, and the New page around bb's

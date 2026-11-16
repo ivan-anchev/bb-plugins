@@ -12,8 +12,13 @@ export const inboxEventSchema = z.discriminatedUnion("kind", [
    * verification existed; since then a done handoff is announced as `checked`.
    */
   z.object({ kind: z.literal("handoff"), crewId: crewIdSchema, handoffId: handoffIdSchema, status: handoffStatusSchema }),
-  /** A crew's done handoff and its verdict, together: once the verdict is final, or at once when verification was off. */
+  /**
+   * A crew's done handoff and its verdict, together: once the verdict is final and nothing goes back
+   * to the crew, or at once when verification was off.
+   */
   z.object({ kind: z.literal("checked"), crewId: crewIdSchema, handoffId: handoffIdSchema }),
+  /** A crew's done handoff failed its verdict, and the plugin sent the findings back to the crew as its fix round `round`. */
+  z.object({ kind: z.literal("sent-back"), crewId: crewIdSchema, handoffId: handoffIdSchema, round: z.number().int().min(1) }),
   /** A crew's turn ended with no current handoff; `lastAnswer` is its last answer, whole (null: none). */
   z.object({ kind: z.literal("idle-without-handoff"), crewId: crewIdSchema, lastAnswer: z.string().nullable() }),
   /** A crew's thread failed; `error` is bb's message for it (null: none). */
@@ -29,3 +34,21 @@ export type InboxEvent = z.infer<typeof inboxEventSchema>;
 
 /** An event as stored: numbered in the order it was recorded, at the time it was. */
 export type StoredEvent = { id: number; at: number; event: InboxEvent };
+
+/**
+ * Whether an event of each kind wakes its coordinating thread on its own. One that doesn't waits,
+ * unannounced, for the next one that does, and is listed in that doorbell and in the catch-up. why
+ * `sent-back` doesn't: it leaves the thread nothing to do, and a turn costs tokens and context.
+ */
+const WAKES: Record<InboxEvent["kind"], boolean> = {
+  handoff: true,
+  checked: true,
+  "sent-back": false,
+  "idle-without-handoff": true,
+  failed: true,
+  "needs-input": true,
+  "verification-toggled": true,
+  "memory-edited": true,
+};
+
+export const wakes = (event: InboxEvent): boolean => WAKES[event.kind];

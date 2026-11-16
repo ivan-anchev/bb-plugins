@@ -82,6 +82,8 @@ export type Crew = {
    */
   launch: { kind: "draft" } | { kind: "started"; threadId: string };
   closed: null | { kind: ClosedKind; at: number };
+  /** How many failed verdicts the plugin has sent back to it to fix, without its coordinating thread. */
+  fixRounds: number;
   createdAt: number;
 };
 

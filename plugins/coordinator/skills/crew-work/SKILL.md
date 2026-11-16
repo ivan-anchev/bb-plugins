@@ -1,6 +1,6 @@
 ---
 name: crew-work
-description: The playbook of a crew thread, a child thread a coordinating thread started to do one piece of its work on its own branch. Use in every turn of a crew thread, to read the brief and done-criteria in its first message, follow the crew rules (CREW.md), read the coordinating thread's memory with crew_memory_read, tell its messages from the user's, and end its work with one crew_handoff call that reports done, blocked or gave-up with evidence for each done-criterion.
+description: The playbook of a crew thread, a child thread a coordinating thread started to do one piece of its work on its own branch. Use in every turn of a crew thread, to read the brief and done-criteria in its first message, follow the crew rules (CREW.md), read the coordinating thread's memory with crew_memory_read, tell its messages and its verifier's findings from the user's, fix those findings, and end its work with one crew_handoff call that reports done, blocked or gave-up with evidence for each done-criterion.
 ---
 
 # Crew work
@@ -28,9 +28,12 @@ It holds everything you start from:
   `notes/api.md`, read it with `crew_memory_read`. The files may have changed
   since you started; read again rather than trusting the copy.
 - You can't write memory. If something belongs there, say so in your answer.
-- A message that starts `[bb message from thread:…]` naming your parent
-  thread is from your coordinator. Anything else is from the user: the user
-  wins when the two disagree.
+- A message that starts `[bb message from thread:…]` is from another thread.
+  Naming your parent thread, it is from your coordinator. Headed "Verifier
+  findings", it is from the verifier that checked your done handoff (see
+  below). Anything else is from the user: the user wins when they disagree.
+- A brief with a "Previous attempt's verifier findings" section replaces an
+  earlier crew whose work failed verification. Start from what it found.
 
 ## Handing off
 
@@ -59,6 +62,13 @@ After a `done` handoff, an independent verifier usually checks your commit in
 your environment, rerunning what proves each criterion: your coordinator
 hears of your handoff only with its verdict. Leave your environment as it is
 until you hear back. A dirty tree or a moved HEAD fails every criterion.
+
+If your first verdict fails, its findings come back to you as a message from
+the verifier thread, headed "Verifier findings": each criterion that didn't
+pass, with the verifier's evidence, and its other findings. Fix each one,
+commit, check every criterion again, and call `crew_handoff` with `done` and
+your new commit. A new verifier checks it. This happens once: if that check
+fails too, your coordinator decides what happens next.
 
 A turn that ends without a handoff tells your coordinator you stopped without
 reporting, with your last answer attached. If the user types to you after you

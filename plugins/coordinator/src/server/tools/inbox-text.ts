@@ -4,7 +4,7 @@
 import type { Handoff, HandoffId } from "../../model/handoff.ts";
 import type { InboxEvent, StoredEvent } from "../../model/inbox/inbox-event.ts";
 import type { CrewId } from "../../model/role.ts";
-import { outcome, type Verdict } from "../../model/verdict.ts";
+import { allPassed, mayHaveReachedCrew, outcome, type Verdict } from "../../model/verdict.ts";
 
 type Lookups = {
   /** Each crew's title, as the coordinating thread gave it. */
@@ -31,11 +31,12 @@ function eventText({ event, at }: StoredEvent, { titles, handoff }: Lookups): st
   switch (event.kind) {
     case "handoff":
     case "checked": {
-      const report = handoff(event.handoffId);
-      // why throw: an event is inserted with its handoff, in one transaction.
-      if (report === null) throw new Error(`The handoff ${event.handoffId} is missing.`);
-      return `### ${crew} handed off: ${report.status}\n\n${when} Its report, in its own words:\n\n${handoffText(report)}`;
+      const report = handoffOf(event, handoff);
+      const yours = report.status === "done" && outcome(report.verdict) === "fail" ? `\n\n${fixRoundNote(report.verdict)}${FAILED_IS_YOURS}` : "";
+      return `### ${crew} handed off: ${report.status}\n\n${when} Its report, in its own words:\n\n${handoffText(report)}${yours}`;
     }
+    case "sent-back":
+      return `### ${crew} handed off: done, failed verification, findings sent back to it\n\n${when} The plugin sent the verifier's findings to the crew as its automatic fix round ${event.round}. Nothing to do yet: it fixes them and hands off again, and a new verifier checks that. If that fails too, it comes to you. Its report, in its own words:\n\n${handoffText(handoffOf(event, handoff))}`;
     case "idle-without-handoff":
       return `### ${crew} ended its turn without a handoff\n\n${when} ${event.lastAnswer === null ? "It gave no answer." : `Its last answer, in its own words:\n\n${event.lastAnswer.trim()}`}`;
     case "failed":
@@ -46,6 +47,26 @@ function eventText({ event, at }: StoredEvent, { titles, handoff }: Lookups): st
       return event satisfies never;
   }
 }
+
+/** The handoff an event names. why throw: an event is inserted with its handoff, in one transaction. */
+function handoffOf(event: { handoffId: HandoffId }, handoff: Lookups["handoff"]): Handoff {
+  const report = handoff(event.handoffId);
+  if (report === null) throw new Error(`The handoff ${event.handoffId} is missing.`);
+  return report;
+}
+
+/** What became of the fix round of a failed verdict that is the coordinating thread's, when it was tried. */
+function fixRoundNote(verdict: Verdict): string {
+  if (mayHaveReachedCrew(verdict)) return MAY_HAVE_REACHED_CREW;
+  const refused = verdict.state === "returned" && verdict.settlement.kind === "checked" ? verdict.settlement.refused : null;
+  return refused === null ? "" : `bb refused the verifier's findings when the plugin sent them to the crew as its automatic fix round, so the crew never got them and the round is not spent. bb answered: ${refused}. `;
+}
+
+const MAY_HAVE_REACHED_CREW =
+  "The plugin was cut off while it sent the verifier's findings to the crew as its automatic fix round (it stopped, or bb's answer never came back whole), and nothing bb keeps shows whether they arrived: they may or may not have. Read its thread with crew_read before you message it, so it doesn't get them twice. ";
+
+const FAILED_IS_YOURS =
+  "It failed verification and is yours to decide: message the crew with crew_message, replace it with a fresh crew through crew_start with supersedes (which carries its brief and these findings), or ask the user.";
 
 const crewName = (event: Extract<InboxEvent, { crewId: CrewId }>, titles: ReadonlyMap<CrewId, string>): string => {
   const title = titles.get(event.crewId);
@@ -77,7 +98,7 @@ function verdictText(verdict: Verdict): string {
     case "running":
       return "Not in yet: a verifier is checking it.";
     case "returned": {
-      const label = outcome(verdict) === "pass" ? "Verified" : "Failed verification";
+      const label = allPassed(verdict) ? "Verified" : "Failed verification";
       const passed = verdict.criteria.filter((check) => check.result === "pass").length;
       const by = `${verdict.model.providerId} ${verdict.model.model}${verdict.sameModel ? ", the crew's own model, as no other was available" : ""}`;
       const head = `${label}: ${passed} of ${verdict.criteria.length} criteria passed, checked at ${verdict.headSha} by a verifier on ${by}. Each result, with its evidence in the verifier's words:`;

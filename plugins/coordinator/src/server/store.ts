@@ -3,12 +3,12 @@
 import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { coordinatorSchema, type Coordinator } from "../contract.ts";
-import { closedKindSchema, doneCriteriaSchema, executionSchema, placementSchema, type ClosedKind, type Crew, type DraftEdit, type Placement } from "../model/crew.ts";
+import { closedKindSchema, doneCriteriaSchema, executionSchema, placementSchema, type ClosedKind, type Crew, type DraftEdit } from "../model/crew.ts";
 import { handoffIdSchema, handoffReportSchema, type Handoff, type HandoffId, type NewHandoff } from "../model/handoff.ts";
 import { inboxEventSchema, type InboxEvent, type StoredEvent } from "../model/inbox/inbox-event.ts";
 import { memoryRevisionSchema, type MemoryFile, type MemoryRevision, type MemoryVersion } from "../model/memory-file.ts";
 import { coordinatorIdSchema, crewIdSchema, roleSchema, type CoordinatorId, type CrewId, type Role } from "../model/role.ts";
-import { verdictSchema, type Verdict } from "../model/verdict.ts";
+import { isSettled, verdictSchema, type Verdict } from "../model/verdict.ts";
 
 // Append-only: bb.storage.migrate records each statement's hash by its index.
 const MIGRATIONS = [
@@ -49,10 +49,24 @@ const MIGRATIONS = [
   `ALTER TABLE coordinators ADD COLUMN verify INTEGER NOT NULL DEFAULT 1`,
   // The tick reads every verdict still waiting for its verifier, or for its verdict.
   `CREATE INDEX verdicts_open ON verdicts (handoff_id) WHERE json_extract(verdict, '$.state') IN ('queued', 'running')`,
+  // How many failed verdicts went back to the crew to fix. why on the crew: its rounds are spent once, whatever it hands off next.
+  `ALTER TABLE crews ADD COLUMN fix_rounds INTEGER NOT NULL DEFAULT 0`,
+  // The tick settles every returned verdict nobody has been told of yet (see the verdict's settlement).
+  `CREATE INDEX verdicts_unsettled ON verdicts (handoff_id) WHERE json_extract(verdict, '$.settlement.kind') IN ('pending', 'sending-back')`,
 ];
 
 /** Where a verdict must still be for a change to apply: queued, or running in this verifier thread. */
 export type VerdictFrom = { state: "queued" } | { state: "running"; verifierThreadId: string };
+
+type Returned = Extract<Verdict, { state: "returned" }>;
+
+/**
+ * How a returned verdict ends: `checked`, final and its coordinating thread's, with bb's refusal
+ * of its findings if they were refused; `sent-back`, its findings reached the crew for the fix
+ * round it claimed; `maybe-sent-back`, its coordinating thread's, with that round kept, as nothing
+ * shows whether they did.
+ */
+export type Settlement = Extract<Returned["settlement"], { kind: "checked" }> | { kind: "sent-back" } | { kind: "maybe-sent-back" };
 
 /** A verdict that is still waiting, with whose handoff it is. */
 type OpenVerdict = { handoffId: HandoffId; coordinatorId: CoordinatorId; crewId: CrewId; verdict: Extract<Verdict, { state: VerdictFrom["state"] }> };
@@ -73,7 +87,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     return db()
       .prepare(
         `SELECT k.coordinator_id AS coordinatorId, k.id, k.title, k.brief, k.done_criteria AS doneCriteria, k.placement, k.execution,
-                k.created_at AS createdAt, k.closed_as AS closedAs, k.closed_at AS closedAt, r.thread_id AS threadId
+                k.fix_rounds AS fixRounds, k.created_at AS createdAt, k.closed_as AS closedAs, k.closed_at AS closedAt, r.thread_id AS threadId
            FROM crews k LEFT JOIN roles r ON r.ticket = k.ticket
           WHERE k.coordinator_id = ? AND (? IS NULL OR k.id = ?)
           ORDER BY k.created_at, k.rowid`,
@@ -112,11 +126,15 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     return row === undefined ? null : verdictSchema.parse(JSON.parse(z.object({ verdict: z.string() }).parse(row).verdict));
   }
 
+  function writeVerdict(handoffId: HandoffId, verdict: Verdict): void {
+    db().prepare("UPDATE verdicts SET verdict = ? WHERE handoff_id = ?").run(JSON.stringify(verdict), handoffId);
+  }
+
   /** Replaces the verdict if it is still where `from` says, and says whether it did. Call inside a transaction. */
   function moveVerdict(handoffId: HandoffId, from: VerdictFrom, next: Verdict): boolean {
     const current = verdictOf(handoffId);
     if (current === null || !isAt(current, from)) return false;
-    db().prepare("UPDATE verdicts SET verdict = ? WHERE handoff_id = ?").run(JSON.stringify(next), handoffId);
+    writeVerdict(handoffId, next);
     return true;
   }
 
@@ -124,6 +142,18 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
   function ownerOf(handoffId: HandoffId): { coordinatorId: CoordinatorId; crewId: CrewId } {
     const row = db().prepare("SELECT coordinator_id AS coordinatorId, crew_id AS crewId FROM handoffs WHERE id = ?").get(handoffId);
     return z.object({ coordinatorId: coordinatorIdSchema, crewId: crewIdSchema }).parse(row);
+  }
+
+  /** Counts one more fix round on the crew (`by` 1), or gives one back (-1), and returns the count. Call inside a transaction. */
+  function countFixRound(coordinatorId: CoordinatorId, crewId: CrewId, by: 1 | -1): number {
+    const row = db().prepare("UPDATE crews SET fix_rounds = fix_rounds + ? WHERE coordinator_id = ? AND id = ? RETURNING fix_rounds AS rounds").get(by, coordinatorId, crewId);
+    return z.object({ rounds: z.number().int() }).parse(row).rounds;
+  }
+
+  /** The handoff's verdict if a verifier returned it and it is not settled yet, else null. */
+  function unsettled(handoffId: HandoffId): Returned | null {
+    const verdict = verdictOf(handoffId);
+    return verdict?.state === "returned" && !isSettled(verdict) ? verdict : null;
   }
 
   /**
@@ -178,14 +208,14 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
      * The crew and its unbound ticket, together or not at all, numbered after the coordinating
      * thread's last crew. why one transaction: two starts at once can't take the same number.
      */
-    insertCrew(crew: { coordinatorId: CoordinatorId; ticket: string; title: string; brief: string; doneCriteria: string[]; placement: Placement; createdAt: number }): CrewId {
+    insertCrew(crew: Pick<Crew, "coordinatorId" | "title" | "brief" | "doneCriteria" | "placement" | "execution" | "createdAt"> & { ticket: string }): CrewId {
       return db().transaction(() => {
         const { count } = z.object({ count: z.number() }).parse(db().prepare("SELECT count(*) AS count FROM crews WHERE coordinator_id = ?").get(crew.coordinatorId));
         const id = crewIdSchema.parse(`c${count + 1}`);
         insertTicket(crew.ticket, { kind: "crew", coordinatorId: crew.coordinatorId, crewId: id }, crew.createdAt);
         db()
-          .prepare("INSERT INTO crews (coordinator_id, id, ticket, title, brief, done_criteria, placement, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-          .run(crew.coordinatorId, id, crew.ticket, crew.title, crew.brief, JSON.stringify(crew.doneCriteria), JSON.stringify(crew.placement), crew.createdAt);
+          .prepare("INSERT INTO crews (coordinator_id, id, ticket, title, brief, done_criteria, placement, execution, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+          .run(crew.coordinatorId, id, crew.ticket, crew.title, crew.brief, JSON.stringify(crew.doneCriteria), JSON.stringify(crew.placement), crew.execution === null ? null : JSON.stringify(crew.execution), crew.createdAt);
         return id;
       })();
     },
@@ -325,17 +355,85 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     },
 
     /**
-     * Settles a waiting verdict and records it for its coordinating thread, together, if the verdict
-     * is still where `from` says; returns whose it was, or null when it had moved on (superseded,
-     * already settled, or checked by another thread).
+     * Gives up on a waiting verdict and records it checked for its coordinating thread, together, if
+     * it is still where `from` says; returns whose it was, or null when it had moved on.
      */
-    settleVerdict(handoffId: HandoffId, from: VerdictFrom, verdict: Extract<Verdict, { state: "returned" | "could-not-run" }>, at: number): CoordinatorId | null {
+    giveUpVerdict(handoffId: HandoffId, from: VerdictFrom, verdict: Extract<Verdict, { state: "could-not-run" }>, at: number): CoordinatorId | null {
       return db().transaction(() => {
         if (!moveVerdict(handoffId, from, verdict)) return null;
         const { coordinatorId, crewId } = ownerOf(handoffId);
         insertEvent(coordinatorId, { kind: "checked", crewId, handoffId }, at);
         return coordinatorId;
       })();
+    },
+
+    /**
+     * Stores a verifier's verdict, not yet settled, if its verifier is still the handoff's running
+     * one; says whether it was. Nobody is told until it is settled.
+     */
+    receiveVerdict(handoffId: HandoffId, verdict: Omit<Returned, "settlement">): boolean {
+      return db().transaction(() => moveVerdict(handoffId, { state: "running", verifierThreadId: verdict.verifierThreadId }, { ...verdict, settlement: { kind: "pending" } }))();
+    },
+
+    /**
+     * Claims the crew's next fix round for a pending verdict, before its findings are sent: counts it
+     * on the crew and marks the verdict as going back, together.
+     */
+    claimFixRound(handoffId: HandoffId): void {
+      db().transaction(() => {
+        const verdict = unsettled(handoffId);
+        // why throw: it is claimed right after it was read pending, with no await between.
+        if (verdict?.settlement.kind !== "pending") throw new Error(`The verdict on ${handoffId} is not pending, so it has no round to claim.`);
+        const { coordinatorId, crewId } = ownerOf(handoffId);
+        writeVerdict(handoffId, { ...verdict, settlement: { kind: "sending-back", round: countFixRound(coordinatorId, crewId, 1) } });
+      })();
+    },
+
+    /**
+     * Settles an unsettled verdict and records it for its coordinating thread, together. `sent-back`
+     * and `maybe-sent-back` need a claimed round, and keep it; `checked` gives back a round claimed
+     * for findings that never left. Returns whose it was, or null when it was already settled or
+     * there is no claim to keep.
+     */
+    settleReturned(handoffId: HandoffId, as: Settlement, at: number): CoordinatorId | null {
+      return db().transaction(() => {
+        const verdict = unsettled(handoffId);
+        if (verdict === null) return null;
+        const { settlement } = verdict;
+        const { coordinatorId, crewId } = ownerOf(handoffId);
+        if (as.kind === "checked") {
+          if (settlement.kind === "sending-back") countFixRound(coordinatorId, crewId, -1);
+          writeVerdict(handoffId, { ...verdict, settlement: as });
+          insertEvent(coordinatorId, { kind: "checked", crewId, handoffId }, at);
+          return coordinatorId;
+        }
+        if (settlement.kind !== "sending-back") return null;
+        const { round } = settlement;
+        writeVerdict(handoffId, { ...verdict, settlement: { kind: as.kind, round } });
+        insertEvent(coordinatorId, as.kind === "sent-back" ? { kind: "sent-back", crewId, handoffId, round } : { kind: "checked", crewId, handoffId }, at);
+        return coordinatorId;
+      })();
+    },
+
+    /** Every returned verdict not settled yet, oldest first: a crash or a reload stopped its settling. */
+    unsettledVerdicts(): HandoffId[] {
+      return db()
+        .prepare(
+          `SELECT v.handoff_id AS handoffId FROM verdicts v JOIN handoffs h ON h.id = v.handoff_id
+            WHERE json_extract(v.verdict, '$.settlement.kind') IN ('pending', 'sending-back')
+            ORDER BY h.rowid`,
+        )
+        .all()
+        .map((row) => z.object({ handoffId: handoffIdSchema }).parse(row).handoffId);
+    },
+
+    /** The crew's latest verdict a verifier returned, or null when none has. */
+    latestReturnedVerdict(coordinatorId: CoordinatorId, crewId: CrewId): Extract<Verdict, { state: "returned" }> | null {
+      const handoff = oneHandoff("WHERE h.coordinator_id = ? AND h.crew_id = ? AND json_extract(v.verdict, '$.state') = 'returned' ORDER BY h.rowid DESC", coordinatorId, crewId);
+      if (handoff === null) return null;
+      // why throw: the clause picks only done handoffs with a returned verdict.
+      if (handoff.status !== "done" || handoff.verdict.state !== "returned") throw new Error(`The handoff ${handoff.id} has no returned verdict`);
+      return handoff.verdict;
     },
 
     /** One handoff, or null when there is none by that id. */
@@ -467,6 +565,7 @@ const crewRowSchema = z.object({
     .string()
     .nullable()
     .transform((json) => (json === null ? null : executionSchema.parse(JSON.parse(json)))),
+  fixRounds: z.number().int(),
   createdAt: z.number(),
   closedAs: closedKindSchema.nullable(),
   closedAt: z.number().nullable(),

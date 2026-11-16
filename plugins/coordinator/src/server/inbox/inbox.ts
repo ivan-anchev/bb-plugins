@@ -5,11 +5,11 @@
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
 import { titlesOf } from "../../model/crew.ts";
 import type { HandoffId, NewHandoff } from "../../model/handoff.ts";
-import type { InboxEvent, StoredEvent } from "../../model/inbox/inbox-event.ts";
+import { wakes, type InboxEvent, type StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { doorbellText } from "../../model/inbox/wake-text.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { Verdict } from "../../model/verdict.ts";
-import type { Store, VerdictFrom } from "../store.ts";
+import type { Settlement, Store, VerdictFrom } from "../store.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
 type SendArgs = Parameters<Threads["send"]>[0];
@@ -39,7 +39,8 @@ type InboxStore = Pick<
   | "crews"
   | "handoff"
   | "insertHandoff"
-  | "settleVerdict"
+  | "giveUpVerdict"
+  | "settleReturned"
   | "setVerify"
   | "insertEvent"
   | "unannounced"
@@ -71,13 +72,16 @@ export function createInbox({ bb, store, onChange }: Deps) {
     disposed = true;
   });
 
-  /** Sends one doorbell for every unannounced event, unless one is in flight or still queued in bb. */
+  /**
+   * Sends one doorbell for every unannounced event, unless one is in flight or still queued in bb,
+   * or none of them wakes the thread on its own (see wakes): those wait for the next that does.
+   */
   async function ring(id: CoordinatorId): Promise<void> {
     if (disposed || ringing.has(id) || store.doorbell(id) !== null) return;
     const coordinator = store.coordinator(id);
     const events = store.unannounced(id);
     // why: a coordinating thread whose thread isn't bound yet is rung by the tick once it is.
-    if (coordinator === null || events.length === 0) return;
+    if (coordinator === null || !events.some(({ event }) => wakes(event))) return;
     ringing.add(id);
     let delivery: "sent" | "queued";
     try {
@@ -180,11 +184,16 @@ export function createInbox({ bb, store, onChange }: Deps) {
       return inserted;
     },
 
-    /** Settles a waiting verdict and announces its handoff, if it is still where `from` says; says whether it was. */
-    settle(handoffId: HandoffId, from: VerdictFrom, verdict: Extract<Verdict, { state: "returned" | "could-not-run" }>): boolean {
-      const id = store.settleVerdict(handoffId, from, verdict, Date.now());
+    /** Gives up on a waiting verdict and announces it checked, if it is still where `from` says. */
+    giveUpVerdict(handoffId: HandoffId, from: VerdictFrom, verdict: Extract<Verdict, { state: "could-not-run" }>): void {
+      const id = store.giveUpVerdict(handoffId, from, verdict, Date.now());
       if (id !== null) recorded(id);
-      return id !== null;
+    },
+
+    /** Settles a returned verdict as `as` says and announces it, unless it was settled already (see settleReturned). */
+    settleVerdict(handoffId: HandoffId, as: Settlement): void {
+      const id = store.settleReturned(handoffId, as, Date.now());
+      if (id !== null) recorded(id);
     },
 
     /** The user's switch: turns verification on or off, and tells the coordinating thread when it changed. */

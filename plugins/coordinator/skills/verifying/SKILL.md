@@ -48,6 +48,11 @@ Call `crew_verdict` once, as your last action, then stop:
   (for a fail, the failing lines), up to 4,000 characters.
 - **findings**: problems no criterion covers, up to 20; `[]` for none.
 
+If the crew's first verdict fails, the plugin sends each criterion that
+didn't pass, with your evidence, and your findings to the crew as a message
+from your thread, for it to fix. Write evidence and findings the crew can act
+on: the failing command and its failing lines, not a summary.
+
 It is refused, and nothing is saved, when you skip, repeat or invent a
 criterion, or pass one on a commit that isn't the claimed one. Fix the call
 and make it again. If it says the handoff no longer waits for your verdict, a

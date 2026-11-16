@@ -16,6 +16,7 @@ const crew: Crew = {
   execution: null,
   launch: { kind: "started", threadId: "thr_1" },
   closed: null,
+  fixRounds: 0,
   createdAt: 1_000,
 };
 const thread = (status: CrewThread["status"], hasPendingInteraction = false): CrewThread => ({ status, hasPendingInteraction });
@@ -100,6 +101,7 @@ test("an idle crew's done handoff is placed by its verdict, for every verdict st
     findings: [],
     model: { providerId: "codex", model: "gpt-default" },
     sameModel: false,
+    settlement: { kind: "checked", refused: null },
   });
   const cases: [Verdict, BoardState, string][] = [
     [{ state: "queued" }, "verifying", "Verifying: Retries land with backoff"],
@@ -114,6 +116,16 @@ test("an idle crew's done handoff is placed by its verdict, for every verdict st
   for (const [verdict, state, headline] of cases) {
     assert.deepEqual(crewState(crew, thread("idle"), { ...done, verdict }), { state, headline }, JSON.stringify(verdict));
   }
+});
+
+test("a failed verdict after the crew's fix round says so", () => {
+  const failed: Verdict = { state: "returned", verifierThreadId: "thr_v", headSha: "a".repeat(40), criteria: [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }], findings: [], model: { providerId: "codex", model: "gpt-default" }, sameModel: false, settlement: { kind: "checked", refused: null } };
+  assert.deepEqual(crewState({ ...crew, fixRounds: 1 }, thread("idle"), { ...done, verdict: failed }), { state: "needs-you", headline: "✗ Failed verification after its fix round: Retries land with backoff" });
+});
+
+test("a failed verdict whose findings may or may not have reached the crew says so, not that it failed again", () => {
+  const failed: Verdict = { state: "returned", verifierThreadId: "thr_v", headSha: "a".repeat(40), criteria: [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }], findings: [], model: { providerId: "codex", model: "gpt-default" }, sameModel: false, settlement: { kind: "maybe-sent-back", round: 1 } };
+  assert.deepEqual(crewState({ ...crew, fixRounds: 1 }, thread("idle"), { ...done, verdict: failed }), { state: "needs-you", headline: "✗ Failed verification, its findings may or may not have reached it: Retries land with backoff" });
 });
 
 test("a crew whose verifier is checking its done handoff is still Working once someone types into it", () => {

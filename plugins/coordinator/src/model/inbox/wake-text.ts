@@ -4,7 +4,7 @@
 // wrote is read through crew_catch_up, as a tool result, never here.
 import type { Handoff, HandoffId } from "../handoff.ts";
 import type { CrewId } from "../role.ts";
-import { outcome } from "../verdict.ts";
+import { mayHaveReachedCrew, outcome } from "../verdict.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import type { InboxEvent, StoredEvent } from "./inbox-event.ts";
 
@@ -30,6 +30,8 @@ function line(event: InboxEvent, { titles, handoff }: Lookups): string {
       return `${crew} handed off: ${event.status}`;
     case "checked":
       return `${crew} handed off: done, ${checkedAs(handoff(event.handoffId))}`;
+    case "sent-back":
+      return `${crew} handed off: done, failed verification, findings sent back to it (fix round ${event.round})`;
     case "idle-without-handoff":
       return `${crew} ended its turn without a handoff`;
     case "failed":
@@ -51,7 +53,7 @@ function checkedAs(handoff: Handoff | null): string {
     case "pass":
       return "verified";
     case "fail":
-      return "failed verification";
+      return mayHaveReachedCrew(handoff.verdict) ? "failed verification, findings may or may not have reached it" : "failed verification";
     case "could-not-run":
       return "could not be verified";
     case "unverified":
