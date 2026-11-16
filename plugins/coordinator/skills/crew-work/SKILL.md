@@ -1,6 +1,6 @@
 ---
 name: crew-work
-description: The playbook of a crew thread, a child thread a coordinating thread started to do one piece of its work on its own branch. Use in every turn of a crew thread, to read the brief and done-criteria in its first message, follow the crew rules (CREW.md), read the coordinating thread's memory with crew_memory_read, tell its messages from the user's, and end a turn with an answer that checks each done-criterion with evidence.
+description: The playbook of a crew thread, a child thread a coordinating thread started to do one piece of its work on its own branch. Use in every turn of a crew thread, to read the brief and done-criteria in its first message, follow the crew rules (CREW.md), read the coordinating thread's memory with crew_memory_read, tell its messages from the user's, and end its work with one crew_handoff call that reports done, blocked or gave-up with evidence for each done-criterion.
 ---
 
 # Crew work
@@ -32,15 +32,29 @@ It holds everything you start from:
   thread is from your coordinator. Anything else is from the user: the user
   wins when the two disagree.
 
-## Ending a turn
+## Handing off
 
-The coordinating thread reads your latest answer, so end each turn with one it
-can act on:
+Your coordinator reads one thing from you: your handoff. bb's own report to
+your parent thread is off, so your chat answer doesn't reach it. When you
+finish, get stuck or give up, call `crew_handoff` once, as your last action,
+then stop:
 
-1. One line: done, blocked, or gave up.
-2. Each done-criterion in turn: what you ran, and what it printed.
-3. What you changed, on which branch, and the commit.
-4. Anything you were unsure of, or did differently from the brief.
+- **status**: `done` when every done-criterion is met and committed;
+  `blocked` when you need a decision or hit a problem you didn't cause;
+  `gave-up` when a retried approach failed again.
+- **summary**: one line, up to 120 characters, your coordinator can pass on
+  as it is. Don't open it with the status: the board shows it after the
+  status, as in "Blocked: <summary>".
+- **did**, **evidence**, **concerns**, **deviations**, **findings**: lists of
+  up to 50 items, each up to 2,000 characters. Evidence takes each
+  done-criterion in turn: the command you ran and what it printed. Use `[]`
+  for an empty list.
+- **headSha** (done only, required): `git rev-parse HEAD` after your last
+  commit. **prUrl**: the pull request, if you opened one.
 
-Say plainly when a criterion fails or you couldn't check it. Never report a
-criterion as met without having run its check.
+Say plainly when a criterion fails or you couldn't check it. Never report
+`done` without having run every check.
+
+A turn that ends without a handoff tells your coordinator you stopped without
+reporting, with your last answer attached. If the user types to you after you
+handed off, answer them; if that changes your work, hand off again.

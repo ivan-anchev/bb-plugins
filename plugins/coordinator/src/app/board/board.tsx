@@ -1,6 +1,6 @@
-// The board of one coordinating thread: its digest, then its crews grouped Needs you, Working, Idle
-// and Done. The Board tab in the thread and the Board page in the panel both draw it, from one read;
-// each gives it the scrolling root it sits in.
+// The board of one coordinating thread: its digest, then its crews grouped Needs you, Ready for
+// review, Working, Idle and Done. The Board tab in the thread and the Board page in the panel both
+// draw it, from one read; each gives it the scrolling root it sits in.
 import { experimental_Icon as Icon, experimental_useRpcQuery, Markdown, useBbNavigate } from "@get-bb/plugin-sdk/app";
 import { useId, type Ref } from "react";
 import { coordinatorContract as contract, type Board as BoardData, type BoardRow } from "../../contract.ts";
@@ -87,6 +87,7 @@ function Crews({ ids, coordinatorId, rows }: { ids: string; coordinatorId: Coord
 
 const DOT: Record<BoardState, string> = {
   "needs-you": "bg-warning",
+  "ready-for-review": "bg-pr-merged",
   working: "bg-success",
   idle: "bg-muted-foreground",
   done: "border border-muted-foreground",

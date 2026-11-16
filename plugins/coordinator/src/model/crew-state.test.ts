@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Crew } from "./crew.ts";
 import { crewState, type CrewThread } from "./crew-state.ts";
+import { handoffIdSchema, handoffIsCurrent, type Handoff } from "./handoff.ts";
 import { coordinatorIdSchema, crewIdSchema } from "./role.ts";
 
 const crew: Crew = {
@@ -18,38 +19,73 @@ const crew: Crew = {
 };
 const thread = (status: CrewThread["status"], hasPendingInteraction = false): CrewThread => ({ status, hasPendingInteraction });
 
+const report = { summary: "Retries land with backoff", did: ["Added backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [] };
+const meta = { id: handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e"), coordinatorId: crew.coordinatorId, crewId: crew.id, at: 5_000, turnSeq: 7 };
+const done: Handoff = { ...meta, ...report, status: "done", headSha: "a".repeat(40), prUrl: null, verdict: { state: "waived" } };
+const blocked: Handoff = { ...meta, ...report, status: "blocked", summary: "Needs a staging key" };
+const gaveUp: Handoff = { ...meta, ...report, status: "gave-up", summary: "The queue API rejects batches" };
+
 test("a running crew is Working", () => {
-  for (const status of ["active", "starting", "pending", "stopping"] as const) assert.equal(crewState(crew, thread(status)).state, "working", status);
-  assert.deepEqual(crewState(crew, thread("active")), { state: "working", headline: "Working" });
+  for (const status of ["active", "starting", "pending", "stopping"] as const) assert.equal(crewState(crew, thread(status), null).state, "working", status);
+  assert.deepEqual(crewState(crew, thread("active"), null), { state: "working", headline: "Working" });
 });
 
 test("a crew whose turn ended is Idle", () => {
-  assert.deepEqual(crewState(crew, thread("idle")), { state: "idle", headline: "Its turn ended: waiting for a message" });
+  assert.deepEqual(crewState(crew, thread("idle"), null), { state: "idle", headline: "Its turn ended without a handoff" });
 });
 
 test("a crew waiting on an approval or a question Needs you, even while its turn runs", () => {
-  assert.deepEqual(crewState(crew, thread("active", true)), { state: "needs-you", headline: "Waiting for an answer or an approval in its thread" });
+  assert.deepEqual(crewState(crew, thread("active", true), null), { state: "needs-you", headline: "Waiting for an answer or an approval in its thread" });
 });
 
 test("a crew whose turn failed Needs you", () => {
-  assert.deepEqual(crewState(crew, thread("error")), { state: "needs-you", headline: "Its last turn failed" });
+  assert.deepEqual(crewState(crew, thread("error"), null), { state: "needs-you", headline: "Its last turn failed" });
 });
 
 test("a draft, saved for the user or never confirmed by bb, Needs you under its title", () => {
-  assert.deepEqual(crewState({ ...crew, launch: { kind: "draft" } }, null), { state: "needs-you", headline: "Draft: Add retries to the webhook sender" });
+  assert.deepEqual(crewState({ ...crew, launch: { kind: "draft" } }, null, null), { state: "needs-you", headline: "Draft: Add retries to the webhook sender" });
 });
 
 test("a closed crew is Done, whatever its thread is doing", () => {
-  assert.deepEqual(crewState({ ...crew, closed: { kind: "stopped", at: 2_000 } }, thread("idle")), { state: "done", headline: "Stopped" });
-  assert.deepEqual(crewState({ ...crew, closed: { kind: "resolved", at: 2_000 } }, thread("active")), { state: "done", headline: "Resolved" });
+  assert.deepEqual(crewState({ ...crew, closed: { kind: "stopped", at: 2_000 } }, thread("idle"), null), { state: "done", headline: "Stopped" });
+  assert.deepEqual(crewState({ ...crew, closed: { kind: "resolved", at: 2_000 } }, thread("active"), null), { state: "done", headline: "Resolved" });
 });
 
 test("a crew whose thread bb no longer lists is Done", () => {
-  assert.deepEqual(crewState(crew, null), { state: "done", headline: "Its thread was archived or deleted" });
+  assert.deepEqual(crewState(crew, null, null), { state: "done", headline: "Its thread was archived or deleted" });
 });
 
 test("a thread status newer than this plugin's SDK reads as Idle, never throws", () => {
   // why the cast: it stands in for a status a newer bb sends, which this SDK's type can't name.
   const fromNewerHost = { status: "hibernating", hasPendingInteraction: false } as unknown as CrewThread;
-  assert.equal(crewState(crew, fromNewerHost).state, "idle");
+  assert.equal(crewState(crew, fromNewerHost, null).state, "idle");
+});
+
+test("a handoff is current until its thread starts a later turn, whatever the clock says", () => {
+  assert.equal(handoffIsCurrent(done, 7), true);
+  assert.equal(handoffIsCurrent(done, 8), false);
+  const madeLater: Handoff = { ...done, at: Number.MAX_SAFE_INTEGER };
+  assert.equal(handoffIsCurrent(madeLater, 8), false, "a later timestamp does not make it current");
+  assert.equal(handoffIsCurrent(done, null), true, "with no turn listed, no later turn started");
+});
+
+test("an idle crew with a current done handoff is Ready for review, marked Unverified", () => {
+  assert.deepEqual(crewState(crew, thread("idle"), done), { state: "ready-for-review", headline: "Unverified: Retries land with backoff" });
+});
+
+test("an idle crew that is blocked or gave up Needs you, with its summary", () => {
+  assert.deepEqual(crewState(crew, thread("idle"), blocked), { state: "needs-you", headline: "Blocked: Needs a staging key" });
+  assert.deepEqual(crewState(crew, thread("idle"), gaveUp), { state: "needs-you", headline: "Gave up: The queue API rejects batches" });
+});
+
+test("after a handoff, a new turn makes the crew Working, and its end with no new handoff Idle", () => {
+  // The user typed into the crew's thread: turn 8 started after the handoff from turn 7.
+  const current = (latestTurnSeq: number) => (handoffIsCurrent(done, latestTurnSeq) ? done : null);
+  assert.equal(crewState(crew, thread("active"), current(8)).state, "working");
+  assert.deepEqual(crewState(crew, thread("idle"), current(8)), { state: "idle", headline: "Its turn ended without a handoff" });
+});
+
+test("a crew waiting on the user or failed Needs you, even with a current handoff", () => {
+  assert.equal(crewState(crew, thread("idle", true), done).state, "needs-you");
+  assert.equal(crewState(crew, thread("error"), done).headline, "Its last turn failed");
 });

@@ -117,7 +117,7 @@ function NewerNotice({ newer, onTakeNewer }: { newer: Newer; onTakeNewer(): void
               </li>
             ))}
           </ol>
-          <p className="pt-1 text-muted-foreground">Model: {draft.execution?.model ?? "the project's default"}</p>
+          <p className="pt-1 text-muted-foreground">Model: {draft.execution?.model ?? "the coordinating thread's"}</p>
         </div>
       </details>
       {/* why the negative margin: the button's text lines up with the notice's. */}

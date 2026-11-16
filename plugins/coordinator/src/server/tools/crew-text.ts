@@ -3,6 +3,7 @@
 import type { BoardRow } from "../../contract.ts";
 import { BOARD_STATE_LABELS, byState } from "../../model/crew-state.ts";
 import type { CloseOutcome, CrewDetail, StartOutcome } from "../crew/crews.ts";
+import { handoffText } from "./inbox-text.ts";
 
 /** The most of a crew's latest answer crew_read returns. */
 const OUTPUT_BUDGET_CHARS = 12_000;
@@ -27,7 +28,7 @@ export function startText(outcome: StartOutcome): string {
     case "drafted":
       return `Saved ${outcome.crewId} as a draft. It waits for the user under Needs you on the board, where they start it, or edit it first; no thread runs until they do. crew_catch_up shows it as a draft until then.`;
     case "started":
-      return `Started ${outcome.crewId} as @thread:${outcome.threadId}. It works in its own environment on its own branch, and its brief arrived as a message from you. It does not report back by itself yet: check it with crew_read.`;
+      return `Started ${outcome.crewId} as @thread:${outcome.threadId}. It works in its own environment on its own branch, and its brief arrived as a message from you. It ends its work with a handoff, and you are woken when it hands off, fails, waits on the user or stops without one.`;
     case "failed":
       return `${outcome.crewId} was saved, but bb did not start its thread: ${outcome.error}. It waits on the board as a draft the user can start. Tell the user, or close it with crew_close (resolve) and start the work again.`;
     default:
@@ -35,7 +36,7 @@ export function startText(outcome: StartOutcome): string {
   }
 }
 
-export function detailText({ crew, state, branch, output }: CrewDetail): string {
+export function detailText({ crew, state, branch, handoff, output }: CrewDetail): string {
   const threadId = crew.launch.kind === "started" ? crew.launch.threadId : null;
   const answer =
     output === null
@@ -48,6 +49,7 @@ export function detailText({ crew, state, branch, output }: CrewDetail): string 
     `${BOARD_STATE_LABELS[state.state]}: ${state.headline}. Thread: ${threadLink(threadId)}${branch === null ? "" : `, branch \`${branch}\``}.`,
     `### Brief\n\n${crew.brief.trim()}`,
     `### Done when\n\n${crew.doneCriteria.map((criterion, i) => `${i + 1}. ${criterion}`).join("\n")}`,
+    `### Its latest handoff\n\n${handoff === null ? "None yet." : `${handoff.current === false ? "Its thread has had a turn since, so this no longer places it on the board.\n\n" : ""}${handoffText(handoff.handoff)}`}`,
     `### Its latest answer\n\n${answer}`,
   ].join("\n\n");
 }

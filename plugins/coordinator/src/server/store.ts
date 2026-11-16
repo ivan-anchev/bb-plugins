@@ -4,6 +4,8 @@ import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { coordinatorSchema, type Coordinator } from "../contract.ts";
 import { closedKindSchema, doneCriteriaSchema, executionSchema, placementSchema, type ClosedKind, type Crew, type DraftEdit, type Placement } from "../model/crew.ts";
+import { handoffIdSchema, handoffReportSchema, verdictSchema, type Handoff, type HandoffId } from "../model/handoff.ts";
+import { inboxEventSchema, type InboxEvent, type StoredEvent } from "../model/inbox/inbox-event.ts";
 import { memoryRevisionSchema, type MemoryFile, type MemoryRevision, type MemoryVersion } from "../model/memory-file.ts";
 import { coordinatorIdSchema, crewIdSchema, roleSchema, type CoordinatorId, type CrewId, type Role } from "../model/role.ts";
 
@@ -26,8 +28,22 @@ const MIGRATIONS = [
      ticket TEXT UNIQUE REFERENCES roles (ticket), title TEXT NOT NULL, brief TEXT NOT NULL,
      done_criteria TEXT NOT NULL, placement TEXT NOT NULL, created_at INTEGER NOT NULL,
      closed_as TEXT, closed_at INTEGER, PRIMARY KEY (coordinator_id, id))`,
-  // The model the user picked for a draft in bb's composer; null for the project's default.
+  // The model the user picked for a draft in bb's composer; null for the coordinating thread's.
   `ALTER TABLE crews ADD COLUMN execution TEXT`,
+  // A crew's handoff, as it wrote it (why JSON: read and written whole), and the turn it was made in.
+  `CREATE TABLE handoffs (id TEXT PRIMARY KEY, coordinator_id TEXT NOT NULL, crew_id TEXT NOT NULL, report TEXT NOT NULL,
+     turn_seq INTEGER NOT NULL, at INTEGER NOT NULL, FOREIGN KEY (coordinator_id, crew_id) REFERENCES crews (coordinator_id, id))`,
+  // A done handoff's verdict, written with it. why JSON: each state carries its own fields.
+  `CREATE TABLE verdicts (handoff_id TEXT PRIMARY KEY REFERENCES handoffs (id), verdict TEXT NOT NULL)`,
+  // Everything the plugin tells a coordinating thread about, in the order recorded. A doorbell
+  // announced it once `announced_at` is set; crew_catch_up returned it once `read_at` is.
+  `CREATE TABLE events (id INTEGER PRIMARY KEY AUTOINCREMENT, coordinator_id TEXT NOT NULL REFERENCES coordinators (id),
+     event TEXT NOT NULL, at INTEGER NOT NULL, announced_at INTEGER, read_at INTEGER)`,
+  `CREATE INDEX events_unread ON events (coordinator_id) WHERE read_at IS NULL`,
+  // A doorbell bb queued and hasn't dispatched yet. While one is queued, no other is sent.
+  `CREATE TABLE doorbells (coordinator_id TEXT PRIMARY KEY REFERENCES coordinators (id), queued_message_id TEXT NOT NULL UNIQUE)`,
+  // A crew's latest handoff is read on every board read and idle: newest by rowid within the crew.
+  `CREATE INDEX handoffs_of_crew ON handoffs (coordinator_id, crew_id)`,
 ];
 
 export type Store = ReturnType<typeof openStore>;
@@ -53,6 +69,23 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
       )
       .all(coordinatorId, crewId, crewId)
       .map(toCrew);
+  }
+
+  function insertEvent(coordinatorId: CoordinatorId, event: InboxEvent, at: number): void {
+    db().prepare("INSERT INTO events (coordinator_id, event, at) VALUES (?, ?, ?)").run(coordinatorId, JSON.stringify(event), at);
+  }
+
+  /** The first handoff the clause picks, or null when it picks none. */
+  function oneHandoff(clause: string, ...params: string[]): Handoff | null {
+    const row = db()
+      .prepare(
+        `SELECT h.id, h.coordinator_id AS coordinatorId, h.crew_id AS crewId, h.report, h.turn_seq AS turnSeq, h.at, v.verdict
+           FROM handoffs h LEFT JOIN verdicts v ON v.handoff_id = h.id
+          ${clause}
+          LIMIT 1`,
+      )
+      .get(...params);
+    return row === undefined ? null : toHandoff(row);
   }
 
   return {
@@ -164,6 +197,100 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
       return z.object({ revision: memoryRevisionSchema }).parse(row).revision;
     },
 
+    /**
+     * A crew's handoff, its verdict when it claims done, and the event announcing it, together or
+     * not at all: a handoff can't exist unannounced, or a done one without its verdict.
+     */
+    insertHandoff(handoff: Handoff): void {
+      const { id, coordinatorId, crewId, at, turnSeq, ...report } = handoff;
+      db().transaction(() => {
+        const stored = handoffReportSchema.parse(report);
+        db().prepare("INSERT INTO handoffs (id, coordinator_id, crew_id, report, turn_seq, at) VALUES (?, ?, ?, ?, ?, ?)").run(id, coordinatorId, crewId, JSON.stringify(stored), turnSeq, at);
+        if (handoff.status === "done") db().prepare("INSERT INTO verdicts (handoff_id, verdict) VALUES (?, ?)").run(id, JSON.stringify(handoff.verdict));
+        insertEvent(coordinatorId, { kind: "handoff", crewId, handoffId: id, status: handoff.status }, at);
+      })();
+    },
+
+    /** One handoff, or null when there is none by that id. */
+    handoff: (id: HandoffId): Handoff | null => oneHandoff("WHERE h.id = ?", id),
+
+    /** A crew's latest handoff, or null when it has made none. */
+    latestHandoff: (coordinatorId: CoordinatorId, crewId: CrewId): Handoff | null =>
+      oneHandoff("WHERE h.coordinator_id = ? AND h.crew_id = ? ORDER BY h.rowid DESC", coordinatorId, crewId),
+
+    /** Records something to tell the coordinating thread, neither announced nor read yet. */
+    insertEvent,
+
+    /** The events no doorbell has announced and no catch-up has returned, in the order recorded. */
+    unannounced(coordinatorId: CoordinatorId): StoredEvent[] {
+      return db().prepare("SELECT id, at, event FROM events WHERE coordinator_id = ? AND announced_at IS NULL AND read_at IS NULL ORDER BY id").all(coordinatorId).map(toEvent);
+    },
+
+    /** Every coordinating thread with an event to announce. */
+    coordinatorsToRing(): CoordinatorId[] {
+      return db()
+        .prepare("SELECT DISTINCT coordinator_id AS id FROM events WHERE announced_at IS NULL AND read_at IS NULL")
+        .all()
+        .map((row) => z.object({ id: coordinatorIdSchema }).parse(row).id);
+    },
+
+    /**
+     * Marks the events announced by a doorbell, and keeps the doorbell when bb queued it rather than
+     * sending it (null: sent), together.
+     */
+    announce(coordinatorId: CoordinatorId, eventIds: number[], queuedMessageId: string | null, at: number): void {
+      db().transaction(() => {
+        const mark = db().prepare("UPDATE events SET announced_at = ? WHERE id = ?");
+        for (const eventId of eventIds) mark.run(at, eventId);
+        if (queuedMessageId !== null) db().prepare("INSERT INTO doorbells (coordinator_id, queued_message_id) VALUES (?, ?)").run(coordinatorId, queuedMessageId);
+      })();
+    },
+
+    /** Every unread event, marked read as it is returned, in the order recorded. */
+    takeUnread(coordinatorId: CoordinatorId, at: number): StoredEvent[] {
+      return db()
+        .prepare("UPDATE events SET read_at = ? WHERE coordinator_id = ? AND read_at IS NULL RETURNING id, at, event")
+        .all(at, coordinatorId)
+        .map(toEvent)
+        .sort((a, b) => a.id - b.id);
+    },
+
+    /** The queued doorbell of a coordinating thread, or null when none is waiting. */
+    doorbell(coordinatorId: CoordinatorId): string | null {
+      const row = db().prepare("SELECT queued_message_id AS id FROM doorbells WHERE coordinator_id = ?").get(coordinatorId);
+      return row === undefined ? null : z.object({ id: z.string() }).parse(row).id;
+    },
+
+    /** Every queued doorbell, with the thread it waits in. */
+    doorbells(): { coordinatorId: CoordinatorId; threadId: string; queuedMessageId: string }[] {
+      return db()
+        .prepare(
+          `SELECT d.coordinator_id AS coordinatorId, r.thread_id AS threadId, d.queued_message_id AS queuedMessageId
+             FROM doorbells d JOIN coordinators c ON c.id = d.coordinator_id JOIN roles r ON r.ticket = c.ticket`,
+        )
+        .all()
+        .map((row) => z.object({ coordinatorId: coordinatorIdSchema, threadId: z.string(), queuedMessageId: z.string() }).parse(row));
+    },
+
+    /** Forgets the queued doorbell with this message id, and returns whose it was (null: no doorbell has it). */
+    clearDoorbell(queuedMessageId: string): CoordinatorId | null {
+      const row = db().prepare("DELETE FROM doorbells WHERE queued_message_id = ? RETURNING coordinator_id AS id").get(queuedMessageId);
+      return row === undefined ? null : z.object({ id: coordinatorIdSchema }).parse(row).id;
+    },
+
+    /**
+     * Forgets a doorbell that never reached its thread, and makes every unread event of its
+     * coordinating thread unannounced again, together, so the next doorbell names them.
+     */
+    reopenDoorbell(queuedMessageId: string): void {
+      db().transaction(() => {
+        const row = db().prepare("DELETE FROM doorbells WHERE queued_message_id = ? RETURNING coordinator_id AS id").get(queuedMessageId);
+        if (row === undefined) return;
+        const { id } = z.object({ id: coordinatorIdSchema }).parse(row);
+        db().prepare("UPDATE events SET announced_at = NULL WHERE coordinator_id = ? AND read_at IS NULL").run(id);
+      })();
+    },
+
     /** Every coordinator whose thread is bound, newest first. */
     coordinators(): Coordinator[] {
       return db()
@@ -197,6 +324,30 @@ const crewRowSchema = z.object({
   closedAt: z.number().nullable(),
   threadId: z.string().nullable(),
 });
+
+const handoffRowSchema = z.object({
+  id: handoffIdSchema,
+  coordinatorId: coordinatorIdSchema,
+  crewId: crewIdSchema,
+  report: z.string().transform((json) => handoffReportSchema.parse(JSON.parse(json))),
+  turnSeq: z.number().int(),
+  at: z.number(),
+  verdict: z
+    .string()
+    .nullable()
+    .transform((json) => (json === null ? null : verdictSchema.parse(JSON.parse(json)))),
+});
+
+function toHandoff(row: unknown): Handoff {
+  const { report, verdict, ...handoff } = handoffRowSchema.parse(row);
+  if (report.status !== "done") return { ...handoff, ...report };
+  // why throw: a done handoff is inserted with its verdict, in one transaction.
+  if (verdict === null) throw new Error(`The done handoff ${handoff.id} has no verdict`);
+  return { ...handoff, ...report, verdict };
+}
+
+const eventRowSchema = z.object({ id: z.number().int(), at: z.number(), event: z.string().transform((json) => inboxEventSchema.parse(JSON.parse(json))) });
+const toEvent = (row: unknown): StoredEvent => eventRowSchema.parse(row);
 
 function toCrew(row: unknown): Crew {
   const { closedAs, closedAt, threadId, ...crew } = crewRowSchema.parse(row);

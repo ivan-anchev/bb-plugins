@@ -8,14 +8,18 @@ import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { MemoryRoot } from "../memory/memory-files.ts";
 import type { Store } from "../store.ts";
+import { currentHandoff, type TurnsBb } from "./handoffs.ts";
 
 /** A crew's thread as the board reads it. */
 type ListedThread = CrewThread & { id: string; environmentBranchName: string | null; environmentHostId: string | null; archivedAt: number | null; deletedAt: number | null };
 
 type ListArgs = { threadIds: string[]; includeHidden: true; limit: number };
 
-/** The part of bb the board reads. */
-export type BoardBb = { sdk: { threads: { list(args: ListArgs): Promise<ListedThread[]> } } };
+/** The part of bb that lists crews' threads. */
+type ListBb = { sdk: { threads: { list(args: ListArgs): Promise<ListedThread[]> } } };
+
+/** The part of bb the board reads: crews' threads and their turns. */
+export type BoardBb = ListBb & TurnsBb;
 
 // bb lists at most 200 threads by id per call.
 const IDS_PER_LIST = 200;
@@ -25,7 +29,7 @@ const IDS_PER_LIST = 200;
  * id, not by parent: a crew someone moved under another thread is still this coordinating
  * thread's crew. why filter here: bb lists archived threads by id too.
  */
-export async function listedThreads(bb: BoardBb, threadIds: string[]): Promise<Map<string, ListedThread>> {
+export async function listedThreads(bb: ListBb, threadIds: string[]): Promise<Map<string, ListedThread>> {
   const listed = new Map<string, ListedThread>();
   for (let start = 0; start < threadIds.length; start += IDS_PER_LIST) {
     const threadIdsOfPage = threadIds.slice(start, start + IDS_PER_LIST);
@@ -38,7 +42,7 @@ export async function listedThreads(bb: BoardBb, threadIds: string[]): Promise<M
 
 const DIGEST = memoryFileSchema.parse("DIGEST.md");
 
-export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinator">, memory: MemoryRoot) {
+export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinator" | "latestHandoff">, memory: MemoryRoot) {
   async function rows(id: CoordinatorId): Promise<BoardRow[]> {
     const coordinator = store.coordinator(id);
     // why: a coordinating thread starts crews through its tools, which it gets once its thread is bound.
@@ -47,12 +51,15 @@ export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinat
     // why the coordinating thread too: a draft's editor shows the machine its worktree would be on.
     const threads = await listedThreads(bb, [coordinator.threadId, ...crews.flatMap((crew) => (crew.launch.kind === "started" ? [crew.launch.threadId] : []))]);
     const environmentHostId = threads.get(coordinator.threadId)?.environmentHostId ?? null;
-    return crews.map((crew) => {
-      const threadId = crew.launch.kind === "started" ? crew.launch.threadId : null;
-      const thread = threadId === null ? null : (threads.get(threadId) ?? null);
-      const draft = draftOf(crew, { projectId: coordinator.projectId, environmentHostId });
-      return { crewId: crew.id, title: crew.title, threadId, branch: thread?.environmentBranchName ?? null, ...crewState(crew, thread), draft };
-    });
+    return Promise.all(
+      crews.map(async (crew) => {
+        const threadId = crew.launch.kind === "started" ? crew.launch.threadId : null;
+        const thread = threadId === null ? null : (threads.get(threadId) ?? null);
+        const handoff = isOpen(crew) && thread !== null ? await currentHandoff(bb, store, crew) : null;
+        const draft = draftOf(crew, { projectId: coordinator.projectId, environmentHostId });
+        return { crewId: crew.id, title: crew.title, threadId, branch: thread?.environmentBranchName ?? null, ...crewState(crew, thread, handoff), draft };
+      }),
+    );
   }
 
   return {
@@ -69,6 +76,9 @@ export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinat
 }
 
 export type BoardReader = ReturnType<typeof createBoard>;
+
+/** A crew whose thread runs and that nobody closed: the only kind whose handoff can place it. */
+export const isOpen = (crew: Crew): crew is Crew & { launch: { kind: "started" } } => crew.launch.kind === "started" && crew.closed === null;
 
 /** A crew that is still a draft, as its row shows it and its editor starts from. */
 function draftOf(crew: Crew, coordinator: { projectId: string; environmentHostId: string | null }): BoardRow["draft"] {

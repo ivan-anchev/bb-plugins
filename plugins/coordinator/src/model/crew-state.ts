@@ -3,13 +3,14 @@
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import type { Crew } from "./crew.ts";
+import type { Handoff } from "./handoff.ts";
 
 /** The board's groups, in the order it shows them. */
-export const boardStateSchema = z.enum(["needs-you", "working", "idle", "done"]);
+export const boardStateSchema = z.enum(["needs-you", "ready-for-review", "working", "idle", "done"]);
 export type BoardState = z.infer<typeof boardStateSchema>;
 
 /** Each group's name, as the board and crew_catch_up show it. */
-export const BOARD_STATE_LABELS: Record<BoardState, string> = { "needs-you": "Needs you", working: "Working", idle: "Idle", done: "Done" };
+export const BOARD_STATE_LABELS: Record<BoardState, string> = { "needs-you": "Needs you", "ready-for-review": "Ready for review", working: "Working", idle: "Idle", done: "Done" };
 
 /** The rows under each state that has any, in the board's order; rows keep their order. */
 export function byState<Row extends { state: BoardState }>(rows: readonly Row[]): { state: BoardState; rows: Row[] }[] {
@@ -24,8 +25,11 @@ type ThreadRow = Awaited<ReturnType<BbPluginApi["sdk"]["threads"]["list"]>>[numb
 /** The crew's thread as bb lists it now. */
 export type CrewThread = Pick<ThreadRow, "status" | "hasPendingInteraction">;
 
-/** `thread` is null when bb no longer lists it: archived or deleted. */
-export function crewState(crew: Crew, thread: CrewThread | null): { state: BoardState; headline: string } {
+/**
+ * `thread` is null when bb no longer lists it: archived or deleted. `handoff` is the crew's current
+ * handoff (see handoffIsCurrent), null when it has none.
+ */
+export function crewState(crew: Crew, thread: CrewThread | null, handoff: Handoff | null): { state: BoardState; headline: string } {
   if (crew.closed !== null) return { state: "done", headline: CLOSED[crew.closed.kind] };
   if (crew.launch.kind === "draft") return { state: "needs-you", headline: `Draft: ${crew.title}` };
   if (thread === null) return { state: "done", headline: "Its thread was archived or deleted" };
@@ -42,7 +46,7 @@ export function crewState(crew: Crew, thread: CrewThread | null): { state: Board
     case "stopping":
       return { state: "working", headline: "Stopping" };
     case "idle":
-      return IDLE;
+      return handoff === null ? IDLE : handedOff(handoff);
     default:
       // why not throw: bb can send a status newer than this plugin's SDK. A thread in it is not
       // known to be working, so it shows as idle until bb says otherwise.
@@ -51,7 +55,25 @@ export function crewState(crew: Crew, thread: CrewThread | null): { state: Board
   }
 }
 
-const IDLE = { state: "idle", headline: "Its turn ended: waiting for a message" } as const;
+const IDLE = { state: "idle", headline: "Its turn ended without a handoff" } as const;
+
+function handedOff(handoff: Handoff): { state: BoardState; headline: string } {
+  switch (handoff.status) {
+    case "blocked":
+      return { state: "needs-you", headline: `Blocked: ${handoff.summary}` };
+    case "gave-up":
+      return { state: "needs-you", headline: `Gave up: ${handoff.summary}` };
+    case "done":
+      switch (handoff.verdict.state) {
+        case "waived":
+          return { state: "ready-for-review", headline: `Unverified: ${handoff.summary}` };
+        default:
+          return handoff.verdict.state satisfies never;
+      }
+    default:
+      return handoff satisfies never;
+  }
+}
 
 const CLOSED: Record<NonNullable<Crew["closed"]>["kind"], string> = {
   resolved: "Resolved",

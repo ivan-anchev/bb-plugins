@@ -74,7 +74,7 @@ export type Crew = {
   brief: string;
   doneCriteria: string[];
   placement: Placement;
-  /** Null: the project's default model, with auto permissions. */
+  /** Null: its coordinating thread's provider and model when it starts, with auto permissions. */
   execution: Execution | null;
   /**
    * A draft has no thread yet: it waits for the user's Start, or its spawn never confirmed one.
@@ -84,6 +84,9 @@ export type Crew = {
   closed: null | { kind: ClosedKind; at: number };
   createdAt: number;
 };
+
+/** Each crew's title by its id, as the coordinating thread gave it in crew_start. */
+export const titlesOf = (crews: readonly Crew[]): ReadonlyMap<CrewId, string> => new Map(crews.map((crew) => [crew.id, crew.title]));
 
 /** What the user changes in a draft, all from bb's composer but the criteria: everything but its title. */
 export type DraftEdit = Pick<Crew, "brief" | "doneCriteria"> & { execution: Execution; placement: Extract<Placement, { kind: "chosen" }> };
