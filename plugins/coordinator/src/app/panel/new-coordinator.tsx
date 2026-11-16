@@ -30,7 +30,7 @@ export function NewCoordinator({ ref, onBack }: { ref: Ref<HTMLDivElement>; onBa
 
   return (
     // why the tab stop: the page scrolls, and the keyboard scrolls only what has focus (REVIEW.md).
-    <div ref={ref} tabIndex={0} className="h-full min-h-0 overflow-y-auto bg-background text-foreground outline-none">
+    <div ref={ref} tabIndex={0} className="h-full min-h-0 overflow-y-auto bg-background text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6 sm:px-6">
         <div className="flex flex-col items-start gap-1">
           <Button variant="ghost" size="sm" onClick={onBack}>

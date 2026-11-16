@@ -28,3 +28,15 @@ export function useFocusHandOff(): FocusHandOff {
     };
   }, []);
 }
+
+/**
+ * A ref for a region that leaves while the page around it stays, such as a failed read's notice once
+ * Retry succeeds: focus in it moves to the page's tab stop, the element every page scrolls by
+ * (REVIEW.md). why not `to`: the page is already there, so no element mounts to take the focus.
+ */
+export function handFocusToPage(region: HTMLElement | null): (() => void) | undefined {
+  if (region === null) return;
+  return () => {
+    if (region.contains(document.activeElement)) region.parentElement?.closest<HTMLElement>('[tabindex="0"]')?.focus();
+  };
+}

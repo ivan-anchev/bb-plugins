@@ -29,7 +29,7 @@ test("threads group under their project, newest group first, and a thread bb no 
   const view = listView(read(coordinators), { status: "ready", threads, projects: [project("a"), project("b")] });
   assert.equal(view.kind, "listed");
   assert.deepEqual(
-    view.kind === "listed" && view.groups.map((g) => [g.project.id, g.threads.map((t) => t.id)]),
+    view.kind === "listed" && view.groups.map((g) => [g.project.id, g.rows.map((r) => r.thread.id)]),
     [
       ["b", ["thr_4", "thr_2"]],
       ["a", ["thr_1"]],

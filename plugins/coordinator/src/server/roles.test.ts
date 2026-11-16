@@ -8,7 +8,7 @@ test("a coordinating thread is offered its tools, its skill and rules naming the
   const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
 
   const configuration = kit.configurationFor(threadId, {});
-  assert.deepEqual(configuration.tools, ["crew_catch_up", "crew_memory_read"]);
+  assert.deepEqual(configuration.tools, ["crew_catch_up", "crew_memory_read", "crew_memory_write"]);
   assert.ok(configuration.skills.includes("coordinating"));
   assert.ok(configuration.instructions?.startsWith(`You are a ${DISPLAY_NAME}:`));
 });
@@ -17,7 +17,7 @@ test("its first session, before any bind, is configured from its unbound ticket"
   const kit = harness({ created: false, answer: "lost" });
   await assert.rejects(kit.spawner.coordinator(newThreadRequest("Migrate the webhook service")));
 
-  assert.deepEqual(kit.configurationFor("thr_1", kit.metadataOf("thr_1")).tools, ["crew_catch_up", "crew_memory_read"]);
+  assert.deepEqual(kit.configurationFor("thr_1", kit.metadataOf("thr_1")).tools, ["crew_catch_up", "crew_memory_read", "crew_memory_write"]);
 });
 
 for (const [label, metadata] of [
@@ -52,8 +52,8 @@ test("crew_catch_up returns the seeded memory with the goal", async () => {
   const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"));
 
   const text = textOf(await kit.call("crew_catch_up", {}, threadId));
-  for (const file of ["MEMORY.md", "GOAL.md", "PLAN.md", "PREFERENCES.md", "CREW.md", "DIGEST.md"]) assert.match(text, new RegExp(`^## ${file}$`, "m"));
-  assert.match(text, /## GOAL\.md\n\n# Goal\n\nMigrate the webhook service/);
+  for (const file of ["MEMORY.md", "GOAL.md", "PLAN.md", "PREFERENCES.md", "CREW.md", "DIGEST.md"]) assert.match(text, new RegExp(`^## ${file} \\(version \\w+\\)$`, "m"));
+  assert.match(text, /## GOAL\.md \(version \w+\)\n\n# Goal\n\nMigrate the webhook service/);
 });
 
 test("crew_memory_read reads one file, and says so when there is none", async () => {

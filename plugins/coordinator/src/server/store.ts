@@ -3,6 +3,7 @@
 import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { coordinatorSchema, type Coordinator } from "../contract.ts";
+import { memoryRevisionSchema, type MemoryFile, type MemoryRevision, type MemoryVersion } from "../model/memory-file.ts";
 import { roleSchema, type CoordinatorId, type Role } from "../model/role.ts";
 
 // Append-only: bb.storage.migrate records each statement's hash by its index.
@@ -13,6 +14,10 @@ const MIGRATIONS = [
   // A coordinating thread's memory folder is named by its id; its thread is its ticket's.
   `CREATE TABLE coordinators (id TEXT PRIMARY KEY, ticket TEXT NOT NULL UNIQUE REFERENCES roles (ticket),
      project_id TEXT NOT NULL, created_at INTEGER NOT NULL)`,
+  // Each memory file's revision, and the version it was last seen at. A file with no row is seen
+  // for the first time; `version` is null while it doesn't exist.
+  `CREATE TABLE memory_revisions (coordinator_id TEXT NOT NULL, file TEXT NOT NULL, version TEXT,
+     revision INTEGER NOT NULL, PRIMARY KEY (coordinator_id, file))`,
 ];
 
 export type Store = ReturnType<typeof openStore>;
@@ -58,6 +63,28 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
       if (bound !== null || ticket === null) return bound;
       const row = db().prepare("SELECT role FROM roles WHERE ticket = ? AND thread_id IS NULL").get(ticket);
       return row === undefined ? null : toRole(row);
+    },
+
+    /** Whether a coordinating thread with this id was ever started. */
+    isCoordinator(id: CoordinatorId): boolean {
+      return db().prepare("SELECT 1 FROM coordinators WHERE id = ?").get(id) !== undefined;
+    },
+
+    /**
+     * The file's revision, now that it reads as `version`: the same while it stays that version, one
+     * more each time it is seen at another. why one statement: no other read can see the old
+     * revision with the new version, so two sightings of one version always share a revision.
+     */
+    memoryRevision(id: CoordinatorId, file: MemoryFile, version: MemoryVersion): MemoryRevision {
+      const row = db()
+        .prepare(
+          `INSERT INTO memory_revisions (coordinator_id, file, version, revision) VALUES (?, ?, ?, 1)
+             ON CONFLICT (coordinator_id, file) DO UPDATE
+             SET revision = revision + (version IS NOT excluded.version), version = excluded.version
+           RETURNING revision`,
+        )
+        .get(id, file, version);
+      return z.object({ revision: memoryRevisionSchema }).parse(row).revision;
     },
 
     /** Every coordinator whose thread is bound, newest first. */
