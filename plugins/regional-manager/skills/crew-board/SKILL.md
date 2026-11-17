@@ -82,13 +82,16 @@ An issue's status is derived from what its agents did, never stored:
 is blocked or gave up, waits for your answer or approval in its thread, its
 last turn failed, its work failed verification after its fix round ("✗ Failed
 verification after its fix round", "✗ CI failed on #41"), its findings may or
-may not have reached it, it couldn't be verified, or one of the manager's
-open decisions names it.
+may not have reached it, it couldn't be verified, bb never confirmed starting
+its agent's thread ("No thread: bb never confirmed starting one": the manager
+ends that agent with `agent_stop`, which ends it at once, and starts another
+with `agent_start`), or one of the manager's open decisions names it.
 
 The manager sets a status in only four ways, with `issue_update`: `backlog`
 or `todo` rests an issue no agent holds (and reopens a canceled one),
-`canceled` closes one no agent holds, and `done` accepts one In review. Any
-other change, or one while an agent holds the issue, is refused naming why.
+`canceled` closes one no agent holds, and `done` accepts one In review, even
+while its agent still holds it. Any other change, or `backlog`, `todo` or
+`canceled` while an agent holds the issue, is refused naming why.
 
 ## Agents
 
@@ -122,7 +125,11 @@ agent's thread and type into it like any thread.
 An agent ends when it is stopped, or when you archive or delete its thread.
 Its issue keeps its place if the agent's work had reached Verifying, In
 review or Done; otherwise the issue returns to Todo and the manager is woken
-with "returned to Todo". An ended agent's handoff is refused. To try again,
+with "returned to Todo". An agent stopped while its done handoff is Verifying
+leaves the issue in Verifying; if that check then fails, or can't be had, the
+issue rests in Todo, and the manager hears of the failed check rather than a
+return to Todo. A check that passes still takes it to In review. An ended
+agent's handoff is refused. To try again,
 the manager starts a fresh agent on the same issue, from the issue's brief as
 it is then.
 
@@ -504,8 +511,11 @@ page from its row in the panel, show the same board, live:
   its CI and its review. A row with a live agent thread opens it.
 
 An issue placed by a verdict has a **Verdict** button. It opens the verdict
-under the row: how many criteria passed and the commit checked, then each
-criterion with Pass, Fail or Unverifiable. A failed or unverifiable criterion
+under the row: how many criteria passed and the commit checked; the
+plugin's own read when that commit wasn't checked out on a clean tree; what
+CI said about that commit (passed, failed with the failed checks' names, no
+checks, not checked with why, or still waiting for it); then each criterion
+with Pass, Fail or Unverifiable. A failed or unverifiable criterion
 shows its evidence; a passed one folds it away until you open it. Findings
 follow, with a link to the verifier thread. It warns when the check had to
 run on the agent's own model, but names no provider or model. A verdict that

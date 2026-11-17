@@ -13,5 +13,5 @@ test("each page's subPath leads back to it", () => {
 });
 
 test("a memory or board path whose id isn't a coordinator id, or that goes on past it, shows the list", () => {
-  for (const subPath of ["memory", "memory/..%2F..", "memory/not-an-id", `memory/${ID}/PLAN.md`, "board", `board/${ID}/c1`, `elsewhere/${ID}`]) assert.deepEqual(pageOf(subPath), { kind: "list" }, subPath);
+  for (const subPath of ["memory", "memory/..%2F..", "memory/not-an-id", `memory/${ID}/PLAN.md`, "board", `board/${ID}/i1`, `elsewhere/${ID}`]) assert.deepEqual(pageOf(subPath), { kind: "list" }, subPath);
 });

@@ -62,7 +62,7 @@ issue.
 
 - **File** one with `issue_create`: `kind` (`build`: code on its own branch,
   checked by a verifier), a short `title` (it titles its agent's thread), a
-  `description` for the user (the board shows it), and, before an agent can
+  `description` for the user (`issue_read` shows it), and, before an agent can
   start, a `brief` it can start from without asking and 1 to 12
   `doneCriteria`, each checkable by running something: a test, a command and
   its output, a page that shows a thing. It is numbered `i1`, `i2`… and rests
@@ -95,7 +95,9 @@ In progress, Verifying or In review.
 **Needs you** is a flag on an open issue, not a status: its agent is blocked
 or gave up, waits for an answer or approval in its thread, its last turn
 failed, its work failed verification after its fix round or couldn't be
-verified, or a decision you asked names it. The board shows these first.
+verified, bb never confirmed starting its agent's thread ("No thread": end
+that agent with `agent_stop`, which ends it at once, then `agent_start`
+again), or a decision you asked names it. The board shows these first.
 
 `issue_update` with `status` does only four things:
 

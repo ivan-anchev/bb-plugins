@@ -467,7 +467,7 @@ test("a verdict whose settle fails leaves every read of the batch saved, and set
   secondPr("SUCCESS");
   kit.turnEvents.failure = new Error("bb is restarting");
   kit.clock.now += MINUTE;
-  await assert.rejects(kit.tick(), /bb is restarting/, "settling c1's verdict, after the reads, fails");
+  await assert.rejects(kit.tick(), /bb is restarting/, "settling i1's verdict, after the reads, fails");
   assert.equal(kit.github.runs.length, 2, "one read of both branches this tick");
   assert.equal(kit.store.prOfBranch(coordinatorId, branch)?.snapshot?.ci, "pass");
   assert.equal(kit.store.prOfBranch(coordinatorId, secondBranch)?.snapshot?.ci, "pass", "the read after the failing verdict's agent is saved too");
