@@ -237,3 +237,20 @@ test("a send the plugin refuses keeps the answer typed, in the field and in the 
   const field = view.getByRole("textbox", { name: "Your answer" });
   assert.ok(field instanceof HTMLTextAreaElement && field.value === "Kept");
 });
+
+test("an answer sent from the answer's own field hands focus to Done's header while Done is folded, and to the answered row while it is open", async () => {
+  for (const unfold of [false, true]) {
+    const { view, reread } = await mount({ decisions: [decision("d1", false)], issues: [issue("i1", { status: "done", headline: "Merged #9" })] });
+    if (unfold) fireEvent.click(view.getByRole("button", { name: /^Done/ }));
+    type(view, "Yes");
+    const send = view.getByRole("button", { name: "Send" });
+    send.focus();
+    await act(async () => fireEvent.click(send));
+    await reread({ decisions: [decision("d1", true)], issues: [issue("i1", { status: "done", headline: "Merged #9" })] });
+
+    const done = view.getByRole("button", { name: /^Done/ });
+    const landed = unfold ? done.closest("section")?.querySelector("li [tabindex='-1']") : done;
+    assert.ok(landed !== null && landed !== undefined && document.activeElement === landed, unfold ? "on the answered row" : "on Done's header");
+    cleanup();
+  }
+});

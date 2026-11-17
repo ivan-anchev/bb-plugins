@@ -63,7 +63,7 @@ function mount(issues: readonly IssueRow[], decisions: readonly Decision[] = [QU
     decisionRow: (decision: Decision, ref: (el: HTMLElement | null) => void) => createElement("p", { ref, tabIndex: -1 }, decision.question),
     detailOf: (shown: IssueRow) => {
       read.push(shown.id);
-      return createElement("p", null, `Detail of ${shown.id}`);
+      return createElement("button", { type: "button" }, `Detail of ${shown.id}`);
     },
   });
   const view = renderSlot({ component: IssueBoard }, props(issues));
@@ -143,6 +143,31 @@ test("an open row whose issue moves to another lane stays open there, with focus
   assert.equal(moved.getAttribute("aria-expanded"), "true");
   assert.ok(view.getByRole("region", { name: "i4: Issue i4" }));
   assert.ok(document.activeElement === moved, "focus moved with the row");
+});
+
+const moved = (id: string, fields: Partial<IssueRow>) => ISSUES.map((each) => (each.id === id ? { ...each, ...fields } : each));
+
+test("a focused row whose issue moves into a folded lane hands focus to that lane's header", () => {
+  const { view, reread } = mount(ISSUES);
+  row(view, "i4").focus();
+
+  act(() => reread(moved("i4", { status: "done", headline: "Merged #44" })));
+
+  const done = laneHeader(view, /^Done/);
+  assert.equal(done.getAttribute("aria-expanded"), "false");
+  assert.ok(document.activeElement === done, "focus is on Done's header");
+});
+
+test("focus on a row's agent link or in its open detail moves with the issue, to its row where it lands", () => {
+  const { view, reread } = mount(ISSUES);
+  view.getByRole("button", { name: "Open a2's thread" }).focus();
+  act(() => reread(moved("i2", { status: "verifying", headline: "Waiting for CI on #41" })));
+  assert.ok(document.activeElement === lane(view, /^Verifying/).getByRole("button", { name: /\bi2 Build/ }), "from the agent link");
+
+  fireEvent.click(row(view, "i4"));
+  view.getByRole("button", { name: "Detail of i4" }).focus();
+  act(() => reread(moved("i4", { status: "verifying", headline: "Verifying: added it" })));
+  assert.ok(document.activeElement === lane(view, /^Verifying/).getByRole("button", { name: /\bi4 Build/ }), "from the open detail");
 });
 
 test("a row links its agent's thread and its pull request with CI, apart from opening it", () => {

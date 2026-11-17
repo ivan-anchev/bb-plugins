@@ -1,14 +1,14 @@
 // A lane's header: a bar on the theme's recessed surface (issue-board.css `.rmi-lane`) holding the
 // lane's status glyph, its name, how many it holds and a chevron. The whole bar folds the lane, as
 // Activity Sidebar's section title does (src/ui/shelf-title.tsx).
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 
-type LaneHeaderProps = { id: string; glyph: ReactNode; name: string; count: number; open: boolean; listId: string; onToggle(): void };
+type LaneHeaderProps = { ref: Ref<HTMLButtonElement>; id: string; glyph: ReactNode; name: string; count: number; open: boolean; listId: string; onToggle(): void };
 
-export function LaneHeader({ id, glyph, name, count, open, listId, onToggle }: LaneHeaderProps) {
+export function LaneHeader({ ref, id, glyph, name, count, open, listId, onToggle }: LaneHeaderProps) {
   return (
     <h2 id={id} className="rmi-lane-heading">
-      <button type="button" className="rmi-lane" aria-expanded={open} aria-controls={open ? listId : undefined} onClick={onToggle}>
+      <button ref={ref} type="button" className="rmi-lane" aria-expanded={open} aria-controls={open ? listId : undefined} onClick={onToggle}>
         <span className="rmi-lane-glyph" aria-hidden>
           {glyph}
         </span>
