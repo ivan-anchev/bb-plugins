@@ -446,7 +446,7 @@ test("an issue opened on the board reads what it is about, its criteria and each
   await assert.rejects(async () => kit.rpc.issue({ coordinatorId, issueId: issueIdSchema.parse("i9") }), { code: "not_found", message: "This regional manager has no issue i9." });
 });
 
-test("an issue opened on the board sends of each verdict only what the board shows: no checkout before it returns, no nudge, no fix round", async () => {
+test("an issue opened on the board sends of each verdict only what the board shows: no checkout before it returns, no nudge, no fix round, no CI while its findings go back", async () => {
   const { kit, coordinatorId, agentThreadId, opened, verifier } = await withAgent();
   const shown = async () => (await opened()).record[0]?.handoffs.at(-1)?.verdict ?? assert.fail("no verdict");
   // As if the plugin reloaded between storing the handoff and starting its verifier: it waits, queued.
@@ -459,7 +459,17 @@ test("an issue opened on the board sends of each verdict only what the board sho
   await kit.tick();
   assert.deepEqual(await shown(), { state: "running", verifierThreadId: verifier() });
 
-  await kit.call("issue_verdict", FAILS, verifier());
+  // Its findings on their way back to the agent: bb holds the send.
+  let take = () => {};
+  kit.sends.pending = new Promise((resolve) => (take = resolve));
+  const returning = kit.call("issue_verdict", FAILS, verifier());
+  await settled();
+  const sendingBack = await shown();
+  assert.deepEqual(Object.keys(sendingBack).sort(), ["checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
+  assert.deepEqual(sendingBack.state === "returned" && sendingBack.settlement, { kind: "sending-back" });
+
+  take();
+  await returning;
   await settled();
   const returned = await shown();
   assert.deepEqual(Object.keys(returned).sort(), ["checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);

@@ -74,11 +74,12 @@ export type Verdict = z.infer<typeof verdictSchema>;
 /**
  * What became of a returned verdict, as the board reads it: its kind and, once settled, CI. why
  * without the fix round and bb's refusal: they are the regional manager's, and the board shows neither.
+ * why no CI while the findings are on their way back: the board shows that state as pending.
  */
 const shownSettlementSchema = z.discriminatedUnion("kind", [
   pendingSchema,
   waitingForCiSchema,
-  sendingBackSchema.omit({ round: true }),
+  sendingBackSchema.omit({ round: true, ci: true }),
   sentBackSchema.omit({ round: true }),
   maybeSentBackSchema.omit({ round: true }),
   checkedSchema.omit({ refused: true }),
