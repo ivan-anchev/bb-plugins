@@ -4,7 +4,8 @@
 // verifier's message when a failed verdict goes back for its fix round.
 import { checkoutText } from "../../model/verdict/checkout.ts";
 import type { CiVerdict } from "../../model/verdict/pr.ts";
-import { failedCheckout, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
+import type { Check } from "../../model/verdict/check.ts";
+import { allPassed, ciVerdictOf, failedCheckout, judge, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
 
 type Returned = Extract<Verdict, { state: "returned" }>;
 
@@ -15,6 +16,32 @@ export function findingsMessage(verdict: Returned, ci: CiVerdict): string {
     `A verifier checked your done handoff at commit \`${short(verdict.headSha)}\` and it doesn't pass yet. Fix what it found, commit, and call agent_handoff with done again: a new verifier checks the new commit. This is your one automatic fix round. If the next check fails too, your regional manager decides what happens next.`,
     whatFailed(verdict, ci),
   ].join("\n\n");
+}
+
+/**
+ * What the check of an earlier agent's done handoff found, for the agent that takes its issue over:
+ * that it passed, or what failed, with the verifier's evidence and findings, under `###` headings;
+ * or why nobody checked it.
+ */
+export function earlierVerdictText({ verdict }: Check): string {
+  switch (verdict.state) {
+    case "queued":
+    case "running":
+    case "superseded":
+      return "Not checked: a newer handoff or the handover came before its verdict.";
+    case "could-not-run":
+      return `Not checked: ${verdict.reason}.`;
+    case "waived":
+      return "Not checked: verification was off.";
+    case "returned": {
+      const ci = ciVerdictOf(verdict);
+      const passed = ci === null ? allPassed(verdict) : judge(verdict, ci) === "pass";
+      if (passed) return `Passed at \`${short(verdict.headSha)}\`: every done-criterion was met.`;
+      return `Failed at \`${short(verdict.headSha)}\`: ${notPassed(verdict, ci)}.\n\n${whatFailed(verdict, ci)}`;
+    }
+    default:
+      return verdict satisfies never;
+  }
 }
 
 /** How many done-criteria the verdict didn't pass, and whether the checkout or CI failed, in words. `ci`: null while the verdict was not settled. */

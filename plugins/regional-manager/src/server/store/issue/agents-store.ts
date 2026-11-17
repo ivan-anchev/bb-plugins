@@ -27,6 +27,40 @@ export function countFixRound(db: Db, coordinatorId: CoordinatorId, agentId: Age
   return z.object({ rounds: z.number().int() }).parse(row).rounds;
 }
 
+/** A new agent: its issue, its unbound ticket, where it runs, where its work starts and what it inherits there, and what it runs on. */
+export type NewAgent = { coordinatorId: CoordinatorId; issueId: IssueId; ticket: string; placement: Placement; base: Base; checkout: AgentCheckout; execution: Execution; at: number };
+
+/**
+ * Inserts the agent, holding its issue, and its unbound ticket, numbered after the regional
+ * manager's highest; the issue rests in Todo from then on, so losing the agent leaves it there.
+ * Null when an agent already holds the issue. Call inside a transaction.
+ */
+export function insertAgent(db: Db, a: NewAgent): AgentId | null {
+  if (db().prepare("SELECT 1 FROM agents WHERE coordinator_id = ? AND issue_id = ? AND ended_at IS NULL").get(a.coordinatorId, a.issueId) !== undefined) return null;
+  // why the highest, not a count: an id is never reused.
+  const { last } = z.object({ last: z.number().nullable() }).parse(db().prepare("SELECT max(CAST(substr(id, 2) AS INTEGER)) AS last FROM agents WHERE coordinator_id = ?").get(a.coordinatorId));
+  const id = agentIdSchema.parse(`a${(last ?? 0) + 1}`);
+  insertTicket(db, a.ticket, { kind: "agent", coordinatorId: a.coordinatorId, agentId: id }, a.at);
+  const { environmentId, branch, head } = a.checkout;
+  db()
+    .prepare("INSERT INTO agents (coordinator_id, id, issue_id, ticket, placement, base, execution, environment_id, branch, head, started_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(a.coordinatorId, id, a.issueId, a.ticket, JSON.stringify(a.placement), JSON.stringify(a.base), JSON.stringify(a.execution), environmentId, branch, head, a.at);
+  restIssue(db, a.coordinatorId, a.issueId, "todo");
+  return id;
+}
+
+/**
+ * Ends the agent, once, with the handoff it leaves (its current one, or null). `placed`: whether
+ * the issue keeps its place (status.ts keepsPlaceAfterEnd); when it doesn't, the issue rests in
+ * Todo again and the regional manager is told, unless bb never started its thread or a handover
+ * replaced it, which the manager did itself. Returns whether this call ended it. Call inside a transaction.
+ */
+export function endAgent(db: Db, agent: Pick<Agent, "coordinatorId" | "id" | "issueId">, how: EndedHow, left: HandoffId | null, placed: boolean, at: number): boolean {
+  const ended = db().prepare("UPDATE agents SET ended_how = ?, ended_at = ?, left_handoff_id = ? WHERE coordinator_id = ? AND id = ? AND ended_at IS NULL").run(how, at, left, agent.coordinatorId, agent.id).changes > 0;
+  if (ended && !placed && how !== "spawn-failed" && how !== "replaced") insertEvent(db, agent.coordinatorId, { kind: "returned-to-todo", issueId: agent.issueId, agentId: agent.id, how }, at);
+  return ended;
+}
+
 export function agentsStore(db: Db) {
   function roleOfThread(threadId: string): Role | null {
     const row = db().prepare("SELECT role FROM roles WHERE thread_id = ?").get(threadId);
@@ -69,24 +103,10 @@ export function agentsStore(db: Db) {
     },
 
     /**
-     * The agent, holding its issue, and its unbound ticket, together, numbered after the regional
-     * manager's highest; the issue rests in Todo from then on, so losing the agent leaves it there.
-     * Null when an agent already holds the issue: two starts at once give one agent.
+     * The agent, holding its issue, and its unbound ticket, together (see insertAgent). Null when an
+     * agent already holds the issue: two starts at once give one agent.
      */
-    insertAgent(a: { coordinatorId: CoordinatorId; issueId: IssueId; ticket: string; placement: Placement; base: Base; execution: Execution; at: number }): AgentId | null {
-      return db().transaction(() => {
-        if (db().prepare("SELECT 1 FROM agents WHERE coordinator_id = ? AND issue_id = ? AND ended_at IS NULL").get(a.coordinatorId, a.issueId) !== undefined) return null;
-        // why the highest, not a count: an id is never reused.
-        const { last } = z.object({ last: z.number().nullable() }).parse(db().prepare("SELECT max(CAST(substr(id, 2) AS INTEGER)) AS last FROM agents WHERE coordinator_id = ?").get(a.coordinatorId));
-        const id = agentIdSchema.parse(`a${(last ?? 0) + 1}`);
-        insertTicket(db, a.ticket, { kind: "agent", coordinatorId: a.coordinatorId, agentId: id }, a.at);
-        db()
-          .prepare("INSERT INTO agents (coordinator_id, id, issue_id, ticket, placement, base, execution, started_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-          .run(a.coordinatorId, id, a.issueId, a.ticket, JSON.stringify(a.placement), JSON.stringify(a.base), JSON.stringify(a.execution), a.at);
-        restIssue(db, a.coordinatorId, a.issueId, "todo");
-        return id;
-      })();
-    },
+    insertAgent: (a: NewAgent): AgentId | null => db().transaction(() => insertAgent(db, a))(),
 
     /** Every agent of the regional manager, holding or ended, in the order started. */
     agents: (coordinatorId: CoordinatorId): Agent[] => agents(coordinatorId, null),
@@ -99,21 +119,9 @@ export function agentsStore(db: Db) {
       return z.object({ ticket: z.string() }).parse(db().prepare("SELECT ticket FROM agents WHERE coordinator_id = ? AND id = ?").get(coordinatorId, id)).ticket;
     },
 
-    /**
-     * Ends the agent, once, with the handoff it leaves (its current one, or null). `placed`: whether
-     * the issue keeps its place (status.ts keepsPlaceAfterEnd); when it doesn't, the issue rests
-     * in Todo again and the regional manager is told, in this transaction, unless bb never started
-     * its thread. Returns whether this call ended it.
-     */
-    endAgent(agent: Pick<Agent, "coordinatorId" | "id" | "issueId">, how: EndedHow, left: HandoffId | null, placed: boolean, at: number): boolean {
-      return db().transaction(() => {
-        const ended = db()
-          .prepare("UPDATE agents SET ended_how = ?, ended_at = ?, left_handoff_id = ? WHERE coordinator_id = ? AND id = ? AND ended_at IS NULL")
-          .run(how, at, left, agent.coordinatorId, agent.id).changes > 0;
-        if (ended && !placed && how !== "spawn-failed") insertEvent(db, agent.coordinatorId, { kind: "returned-to-todo", issueId: agent.issueId, agentId: agent.id, how }, at);
-        return ended;
-      })();
-    },
+    /** Ends the agent, once, together with what it tells its regional manager (see endAgent). Returns whether this call ended it. */
+    endAgent: (agent: Pick<Agent, "coordinatorId" | "id" | "issueId">, how: EndedHow, left: HandoffId | null, placed: boolean, at: number): boolean =>
+      db().transaction(() => endAgent(db, agent, how, left, placed, at))(),
 
     /** Records where the agent's work is, as bb's git plugin read it while it handed off. */
     recordCheckout(coordinatorId: CoordinatorId, agentId: AgentId, { environmentId, branch, head }: AgentCheckout): void {

@@ -319,6 +319,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
 
   const threads = {
     async spawn(args) {
+      const reused = args.environment?.type === "reuse" ? args.environment.environmentId : null;
+      // As bb does, a reuse of an environment it destroyed is refused before any thread exists (a local one answers so; a sandbox's "HTTP 404: Host is unavailable").
+      if (reused !== null && environmentRecords.destroyed.has(reused)) throw bbHttpError(409, "environment_unavailable", "Environment unavailable");
       const id = `thr_${++spawned}`;
       metadata.set(id, args.pluginMetadata ?? {});
       const thread: FakeThread = {
@@ -326,8 +329,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         status: "active",
         hasPendingInteraction: false,
         ...runsOn(args, args.parentThreadId === undefined ? null : fakeThread(args.parentThreadId)),
-        environmentId: args.environment?.type === "reuse" ? args.environment.environmentId : `env_${id}`,
-        environmentBranchName: `bb/${id}`,
+        environmentId: reused ?? `env_${id}`,
+        // As bb does, a thread in a reused environment reports the branch bb made that environment on.
+        environmentBranchName: reused === null ? `bb/${id}` : ([...fakeThreads.values()].find((thread) => thread.environmentId === reused)?.environmentBranchName ?? null),
         environmentHostId: "host_1",
         archivedAt: null,
         deletedAt: null,

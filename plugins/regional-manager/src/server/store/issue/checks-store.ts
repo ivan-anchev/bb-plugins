@@ -41,6 +41,31 @@ export function startCheck(db: Db, checkId: CheckId, verifierThreadId: string): 
   if (queued?.state === "queued") writeVerdict(db, checkId, { state: "running", verifierThreadId, nudged: false, checkout: queued.checkout });
 }
 
+/** The agent's checks that passed every criterion and wait for CI on their commit, oldest first. */
+function waitingForCi(db: Db, coordinatorId: CoordinatorId, agentId: AgentId): CheckId[] {
+  return db()
+    .prepare(
+      `SELECT id FROM checks
+        WHERE coordinator_id = ? AND json_extract(subject, '$.agentId') = ? AND json_extract(verdict, '$.settlement.kind') = 'waiting-for-ci'
+        ORDER BY rowid`,
+    )
+    .all(coordinatorId, agentId)
+    .map(toCheckId);
+}
+
+/**
+ * Marks every check of the agent still waiting, for its verifier or for CI, as superseded, and
+ * returns the verifier threads that were running them. Call inside a transaction.
+ */
+export function supersedeChecks(db: Db, coordinatorId: CoordinatorId, agentId: AgentId): string[] {
+  const open = db()
+    .prepare(`SELECT ${CHECK_COLUMNS} FROM checks WHERE coordinator_id = ? AND json_extract(subject, '$.agentId') = ? AND json_extract(verdict, '$.state') IN ('queued', 'running')`)
+    .all(coordinatorId, agentId)
+    .map(toOpenCheck);
+  for (const checkId of [...open.map(({ id }) => id), ...waitingForCi(db, coordinatorId, agentId)]) writeVerdict(db, checkId, { state: "superseded" });
+  return open.flatMap(({ verdict }) => (verdict.state === "running" ? [verdict.verifierThreadId] : []));
+}
+
 export function checksStore(db: Db) {
   function verifies(coordinatorId: CoordinatorId): boolean {
     return z.object({ verify: z.number() }).parse(db().prepare("SELECT verify FROM coordinators WHERE id = ?").get(coordinatorId)).verify === 1;
@@ -64,31 +89,6 @@ export function checksStore(db: Db) {
   function unsettled(checkId: CheckId): Returned | null {
     const verdict = verdictOf(db, checkId);
     return verdict?.state === "returned" && !isSettled(verdict) ? verdict : null;
-  }
-
-  /** The agent's checks that passed every criterion and wait for CI on their commit, oldest first. */
-  function waitingForCi(coordinatorId: CoordinatorId, agentId: AgentId): CheckId[] {
-    return db()
-      .prepare(
-        `SELECT id FROM checks
-          WHERE coordinator_id = ? AND json_extract(subject, '$.agentId') = ? AND json_extract(verdict, '$.settlement.kind') = 'waiting-for-ci'
-          ORDER BY rowid`,
-      )
-      .all(coordinatorId, agentId)
-      .map(toCheckId);
-  }
-
-  /**
-   * Marks every check of the agent still waiting, for its verifier or for CI, as superseded, and
-   * returns the verifier threads that were running them. Call inside a transaction.
-   */
-  function supersede(coordinatorId: CoordinatorId, agentId: AgentId): string[] {
-    const open = db()
-      .prepare(`SELECT ${CHECK_COLUMNS} FROM checks WHERE coordinator_id = ? AND json_extract(subject, '$.agentId') = ? AND json_extract(verdict, '$.state') IN ('queued', 'running')`)
-      .all(coordinatorId, agentId)
-      .map(toOpenCheck);
-    for (const checkId of [...open.map(({ id }) => id), ...waitingForCi(coordinatorId, agentId)]) writeVerdict(db, checkId, { state: "superseded" });
-    return open.flatMap(({ verdict }) => (verdict.state === "running" ? [verdict.verifierThreadId] : []));
   }
 
   function check(checkId: CheckId): Check | null {
@@ -138,7 +138,7 @@ export function checksStore(db: Db) {
           insertEvent(db, coordinatorId, { kind: "handoff", issueId, agentId, handoffId: id, status: stored.status }, at);
           return { check: null, superseded: [] };
         }
-        const superseded = supersede(coordinatorId, agentId);
+        const superseded = supersedeChecks(db, coordinatorId, agentId);
         const { kind, criteria, verifier } = z
           .object({ kind: kindSchema, criteria: json(doneCriteriaSchema), verifier: nullableJson(executionSchema) })
           .parse(db().prepare("SELECT kind, done_criteria AS criteria, verifier FROM issues WHERE coordinator_id = ? AND id = ?").get(coordinatorId, issueId));
@@ -257,7 +257,8 @@ export function checksStore(db: Db) {
       })();
     },
 
-    waitingForCi,
+    /** The agent's checks that passed every criterion and wait for CI on their commit, oldest first. */
+    waitingForCi: (coordinatorId: CoordinatorId, agentId: AgentId): CheckId[] => waitingForCi(db, coordinatorId, agentId),
 
     /** Every returned verdict not settled yet, oldest first: one waiting for CI, or one a crash or a reload stopped settling. */
     unsettledChecks(): CheckId[] {

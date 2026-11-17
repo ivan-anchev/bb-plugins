@@ -8,8 +8,10 @@ import { coordinatorSchema, type Coordinator } from "../../contract.ts";
 import { memoryRevisionSchema, type MemoryFile, type MemoryRevision, type MemoryVersion } from "../../model/memory-file.ts";
 import type { CoordinatorId, Role } from "../../model/role.ts";
 import { inboxStore } from "./inbox/inbox-store.ts";
-import { agentsStore, bindRole, insertTicket } from "./issue/agents-store.ts";
-import { checksStore, startCheck } from "./issue/checks-store.ts";
+import type { Agent, AgentId } from "../../model/agent.ts";
+import type { HandoffId } from "../../model/handoff.ts";
+import { agentsStore, bindRole, endAgent, insertAgent, insertTicket, type NewAgent } from "./issue/agents-store.ts";
+import { checksStore, startCheck, supersedeChecks } from "./issue/checks-store.ts";
 import { issuesStore } from "./issue/issues-store.ts";
 import { prStore } from "./issue/pr-store.ts";
 import { MIGRATIONS } from "./migrations.ts";
@@ -69,6 +71,24 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
         const role = bindRole(db, ticket, threadId);
         if (role?.kind === "verifier") startCheck(db, role.checkId, threadId);
         return role;
+      })();
+    },
+
+    /**
+     * A handover, together or not at all: ends the holder as replaced, leaving `left` (its current
+     * handoff, or null), supersedes every check of its still waiting, and inserts the new agent.
+     * Returns the new agent and the verifier threads of the superseded checks; null when the holder
+     * no longer holds its issue, and then nothing is written.
+     */
+    replaceAgent(holder: Pick<Agent, "coordinatorId" | "id" | "issueId">, left: HandoffId | null, next: NewAgent): { agentId: AgentId; superseded: string[] } | null {
+      return db().transaction(() => {
+        // why placed: the issue passes to the new agent, so it neither rests in Todo nor tells the manager, who handed it over.
+        if (!endAgent(db, holder, "replaced", left, true, next.at)) return null;
+        const superseded = supersedeChecks(db, holder.coordinatorId, holder.id);
+        const agentId = insertAgent(db, next);
+        // why throw, which rolls the transaction back: the holder ended just now in it, and an issue has one holder.
+        if (agentId === null) throw new Error(`${next.issueId} of ${next.coordinatorId} has another holder than ${holder.id}.`);
+        return { agentId, superseded };
       })();
     },
 

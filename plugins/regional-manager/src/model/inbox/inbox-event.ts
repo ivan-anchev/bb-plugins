@@ -50,7 +50,7 @@ export const inboxEventSchema = z.discriminatedUnion("kind", [
   /** The pull request of the agent's branch changed meaningfully (see meaningfulChanges): what changed, and the pull request as read then. */
   z.object({ kind: z.literal("pr"), ...onAgent, pr: prSnapshotSchema, changes: z.array(prChangeSchema).min(1) }),
   /** The issue's agent ended before its work reached Verifying, In review or Done, so the issue rests in Todo again. */
-  z.object({ kind: z.literal("returned-to-todo"), ...onAgent, how: endedHowSchema.exclude(["spawn-failed"]) }),
+  z.object({ kind: z.literal("returned-to-todo"), ...onAgent, how: endedHowSchema.exclude(["spawn-failed", "replaced"]) }),
   ...managerEvents,
 ]);
 export type InboxEvent = z.infer<typeof inboxEventSchema>;

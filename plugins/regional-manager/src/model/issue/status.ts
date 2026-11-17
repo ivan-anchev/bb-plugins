@@ -96,6 +96,7 @@ function restingHeadline(rest: Issue["rest"], endedHow: EndedHow | null): string
     case "stopped":
     case "archived":
     case "deleted":
+    case "replaced":
       return `Its agent was ${endedHow}`;
     default:
       return endedHow satisfies never;

@@ -138,14 +138,6 @@ export function createVerify({ bb, store, spawner, inbox }: Deps) {
     }
   }
 
-  async function stop(threadId: string): Promise<void> {
-    try {
-      await bb.sdk.threads.stop({ threadId });
-    } catch (error) {
-      bb.log.warn(`Could not stop the superseded verifier ${threadId}; its verdict will be refused: ${messageOf(error)}`);
-    }
-  }
-
   /**
    * A running check on the tick: a verifier that is gone, or idle without a verdict, is nudged
    * once, then given up on. One whose environment bb destroyed is given up on at once, since a
@@ -269,7 +261,7 @@ export function createVerify({ bb, store, spawner, inbox }: Deps) {
      */
     async handoff(handoff: GivenHandoff, checkout: CheckoutRead): Promise<Check | null> {
       const { check, superseded } = inbox.handoff(handoff, checkout);
-      await Promise.all(superseded.map(stop));
+      await stopVerifiers(bb, superseded);
       if (check?.verdict.state === "queued") await start(check.id);
       return check;
     },
@@ -312,6 +304,26 @@ export function createVerify({ bb, store, spawner, inbox }: Deps) {
       }
     },
   };
+}
+
+/** The parts of bb stopping a verifier uses. */
+export type StopVerifiersBb = { log: Pick<PluginLogger, "warn">; sdk: { threads: { stop(args: { threadId: string }): Promise<unknown> } } };
+
+/**
+ * Stops the verifiers of superseded checks, never archiving them: a verifier lives in its agent's
+ * environment, and archiving a sandbox's last live thread destroys it (SH5). One that won't stop is
+ * only logged, since its verdict is refused anyway.
+ */
+export async function stopVerifiers(bb: StopVerifiersBb, threadIds: readonly string[]): Promise<void> {
+  await Promise.all(
+    threadIds.map(async (threadId) => {
+      try {
+        await bb.sdk.threads.stop({ threadId });
+      } catch (error) {
+        bb.log.warn(`Could not stop the superseded verifier ${threadId}; its verdict will be refused: ${messageOf(error)}`);
+      }
+    }),
+  );
 }
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));

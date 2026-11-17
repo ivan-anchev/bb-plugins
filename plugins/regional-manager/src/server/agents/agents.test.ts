@@ -124,15 +124,6 @@ test("agent_start is refused, starting nothing, on an issue with no brief or no 
   assert.equal(kit.spawned(), 1, "only the regional manager was spawned");
 });
 
-test("a second agent_start on an issue its agent holds is refused naming the agent", async () => {
-  const { kit, coordinatorId, start } = await filed();
-  await start();
-  const second = await start();
-  assert.ok(isRefusal(second));
-  assert.equal(textOf(second), "agent_start is refused: a1 holds i1. An issue has one agent at a time: stop a1 with agent_stop first.");
-  assert.equal(kit.store.agents(coordinatorId).length, 1);
-});
-
 test("agent_start runs the agent on the execution named, and issue_read lists it on the agent", async () => {
   const { kit, threadId, start } = await filed();
   const result = textOf(await start({ execution: { providerId: "codex", model: "gpt-default", reasoningLevel: "high" } }));
@@ -151,7 +142,7 @@ test("an execution bb can't run where the agent would work is refused before any
   kit.providers.list = kit.providers.list.map((provider) => (provider.id === "codex" ? { ...provider, available: false } : provider));
   // As bb lists a provider whose executable is missing: available, with models it can't load.
   kit.providers.list.push({ id: "pi", available: true, models: null });
-  const where = "agent_start is refused: Nothing started. Where the agent would run (a fresh worktree on your machine):";
+  const where = "agent_start is refused: Nothing changed. Where the agent would run (a fresh worktree on your machine):";
   for (const [execution, refusal] of [
     [{ providerId: "gemini", model: "pro" }, "bb can't run gemini there. bb can run: claude-code."],
     [{ providerId: "codex", model: "gpt-default" }, "bb can't run codex there. bb can run: claude-code."],
@@ -249,7 +240,7 @@ test("an agent whose spawn the plugin never heard the end of flags its issue unt
   const unconfirmed = "No thread: bb never confirmed starting one. agent_stop ends the agent at once; then agent_start again";
   // As agent_start leaves it when the plugin stops before bb answers its spawn: inserted, never bound or ended.
   const execution = { providerId: "claude-code", model: "opus", reasoningLevel: "high" };
-  kit.store.insertAgent({ coordinatorId, issueId: issueIdSchema.parse("i1"), ticket: "lost-spawn", placement: { kind: "worktree" }, base: { kind: "default" }, execution, at: 2_000 });
+  kit.store.insertAgent({ coordinatorId, issueId: issueIdSchema.parse("i1"), ticket: "lost-spawn", placement: { kind: "worktree" }, base: { kind: "default" }, checkout: { environmentId: null, branch: null, head: null }, execution, at: 2_000 });
 
   assert.deepEqual(await rows(), [["i1", "needs-you", unconfirmed]]);
   assert.ok(textOf(await kit.call("crew_catch_up", {}, threadId)).includes(`### Needs you (1)\n- i1 "Add retries" (Build; a1, no thread): ${unconfirmed}`));

@@ -36,7 +36,7 @@ export const newIssue = (over: Partial<NewIssue> = {}): NewIssue => ({
 
 /** An agent started on the issue, its thread bound as `thr_<ticket>`. */
 export function startAgent(store: Store, issueId: IssueId, ticket: string, coordinatorId = MANAGER): AgentId {
-  const id = store.insertAgent({ coordinatorId, issueId, ticket, placement: { kind: "worktree" }, base: { kind: "default" }, execution: EXECUTION, at: 2_000 });
+  const id = store.insertAgent({ coordinatorId, issueId, ticket, placement: { kind: "worktree" }, base: { kind: "default" }, checkout: { environmentId: null, branch: null, head: null }, execution: EXECUTION, at: 2_000 });
   if (id === null) throw new Error(`${issueId} already has an agent`);
   store.bindTicket(ticket, `thr_${ticket}`);
   return id;
