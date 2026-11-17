@@ -243,3 +243,47 @@ test("a start refuses on what bb still has queued for an earlier, ended agent an
   );
   assert.equal(kit.spawned(), spawned);
 });
+
+test("an agent end the tick started and didn't wait for writes nothing once the plugin is disposed while it reads bb; the reloaded plugin ends the agent", async () => {
+  const { kit, coordinatorId, agentThreadId } = await onI1();
+  const read = hold();
+  kit.turnEvents.pending = read.done;
+  kit.thread(agentThreadId).archivedAt = 5_000;
+  await kit.tick();
+  assert.equal(kit.store.agent(coordinatorId, a1)?.ended, null, "the end waits on bb's read of a1's turns");
+
+  kit.dispose();
+  kit.turnEvents.pending = null;
+  read.release();
+  await settled();
+  assert.equal(kit.store.agent(coordinatorId, a1)?.ended, null);
+  assert.match(kit.warnings().at(-1) ?? "", /^Could not end a1, whose thread was archived; the next tick tries again: Regional Manager was reloaded or disabled/);
+
+  kit.reload();
+  await kit.tick();
+  assert.equal(kit.store.agent(coordinatorId, a1)?.ended?.how, "archived");
+});
+
+test("findings on their way when the plugin is disposed settle nothing once bb answers, which leaves the verdict to the reloaded plugin", async () => {
+  const { kit, coordinatorId, agentThreadId, verifiers, check } = await onI1();
+  await kit.call("agent_handoff", DONE, agentThreadId);
+  const sends = hold();
+  kit.sends.pending = sends.done;
+  const verdict = kit.call("issue_verdict", FAILS, verifiers()[0]?.id ?? assert.fail());
+  await settled();
+  const sending = check().verdict;
+  assert.equal(sending.state === "returned" && sending.settlement.kind, "sending-back");
+
+  kit.dispose();
+  kit.sends.pending = null;
+  sends.release();
+  await verdict;
+  const after = kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict;
+  assert.equal(after?.state === "returned" && after.settlement.kind, "sending-back", "nothing settled it after disposal");
+  assert.match(kit.warnings().at(-1) ?? "", /^Could not settle the verdict of check \S+ yet; the next tick tries again: Regional Manager was reloaded or disabled/);
+
+  kit.reload();
+  await kit.tick();
+  const reloaded = kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict;
+  assert.equal(reloaded?.state === "returned" && reloaded.settlement.kind, "maybe-sent-back");
+});

@@ -9,6 +9,8 @@
 // its outcome is unknown, and whatever acted next would decide on a guess. What is bounded is the
 // wait: a caller that waited WAIT_MS gets Busy, having done nothing, and the tick never waits.
 //
+// why a disposed instance admits nothing more: a new one runs the issues now (lifetime.ts).
+//
 // why in memory, and what ends a turn bb never answers: the plugin's server is one process, so a
 // queue per issue in it is enough, and nothing in the plugin ends such a turn. A reload drops the
 // queue with whatever was awaiting bb, and the new instance acts on what bb and the database say:
@@ -27,8 +29,8 @@ export type IssueTurns = ReturnType<typeof issueTurns>;
 /** How long a tool call waits for its issue's turn before it is refused. */
 const WAIT_MS = 30_000;
 
-/** `waitMs`: how long `run` waits for the turn; tests shorten it. */
-export function issueTurns(waitMs = WAIT_MS) {
+/** `disposal`: aborts as the plugin's instance is disposed (lifetime.ts). `waitMs`: how long `run` waits for the turn; tests shorten it. */
+export function issueTurns(disposal: AbortSignal, waitMs = WAIT_MS) {
   // The latest turn asked for on each issue, resolved once it and every turn before it are over.
   const tails = new Map<string, Promise<void>>();
   const keyOf = (coordinatorId: CoordinatorId, issueId: IssueId) => `${coordinatorId}/${issueId}`;
@@ -50,6 +52,7 @@ export function issueTurns(waitMs = WAIT_MS) {
       return busy(issueId);
     }
     try {
+      disposal.throwIfAborted();
       return await operation();
     } finally {
       end();

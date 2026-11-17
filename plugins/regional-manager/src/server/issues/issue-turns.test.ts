@@ -7,6 +7,8 @@ import { issueTurns } from "./issue-turns.ts";
 const MANAGER = coordinatorIdSchema.parse("8a3f2c1e-1b2d-4c5e-8f90-123456789abc");
 const I1 = issueIdSchema.parse("i1");
 const I2 = issueIdSchema.parse("i2");
+/** The plugin's instance, never disposed. */
+const LIVE = new AbortController().signal;
 
 /** A promise and the function that settles it. */
 function held(): { done: Promise<void>; release: () => void } {
@@ -16,7 +18,7 @@ function held(): { done: Promise<void>; release: () => void } {
 }
 
 test("one issue's turns run one after another, in the order asked; another issue's run beside them", async () => {
-  const turns = issueTurns();
+  const turns = issueTurns(LIVE);
   const order: string[] = [];
   const first = held();
   const a = turns.run(MANAGER, I1, async () => {
@@ -34,13 +36,13 @@ test("one issue's turns run one after another, in the order asked; another issue
 });
 
 test("a turn that fails still ends, and the next one runs", async () => {
-  const turns = issueTurns();
+  const turns = issueTurns(LIVE);
   await assert.rejects(turns.run(MANAGER, I1, async () => assert.fail("bb refused")));
   assert.equal(await turns.run(MANAGER, I1, async () => "next"), "next");
 });
 
 test("a turn bb hasn't answered holds its issue until it settles: a caller that waited past the bound is refused, having run nothing, and the turns behind it still wait", async () => {
-  const turns = issueTurns(20);
+  const turns = issueTurns(LIVE, 20);
   const bb = held();
   const acted: string[] = [];
   const first = turns.run(MANAGER, I1, async () => {
@@ -59,7 +61,7 @@ test("a turn bb hasn't answered holds its issue until it settles: a caller that 
 });
 
 test("the tick's runIfFree skips an issue whose turn is held or waited for, and runs one that is free", async () => {
-  const turns = issueTurns();
+  const turns = issueTurns(LIVE);
   const bb = held();
   const holding = turns.run(MANAGER, I1, () => bb.done);
   const ran: string[] = [];
@@ -69,4 +71,20 @@ test("the tick's runIfFree skips an issue whose turn is held or waited for, and 
   await holding;
   await turns.runIfFree(MANAGER, I1, async () => void ran.push("i1 again"));
   assert.deepEqual(ran, ["i2", "i1 again"]);
+});
+
+test("once the plugin's instance is disposed, no turn is admitted, one already waiting included", async () => {
+  const disposal = new AbortController();
+  const turns = issueTurns(disposal.signal);
+  const bb = held();
+  const ran: string[] = [];
+  const holding = turns.run(MANAGER, I1, () => bb.done);
+  await new Promise((resolve) => setImmediate(resolve)); // the first turn is admitted
+  const waiting = assert.rejects(turns.run(MANAGER, I1, async () => void ran.push("waiting")), /disposed/);
+  disposal.abort(new Error("disposed"));
+  bb.release();
+  await holding;
+  await waiting;
+  await assert.rejects(turns.runIfFree(MANAGER, I2, async () => void ran.push("i2")), /disposed/);
+  assert.deepEqual(ran, []);
 });

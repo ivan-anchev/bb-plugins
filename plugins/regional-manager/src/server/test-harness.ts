@@ -25,6 +25,7 @@ import { watchAgentThreads } from "./inbox/thread-watch.ts";
 import { registerIssueTools } from "./issues/issue-tools.ts";
 import { issueTurns } from "./issues/issue-turns.ts";
 import { createIssues } from "./issues/issues.ts";
+import { pluginInstance } from "./lifetime.ts";
 import { openMemoryRoot } from "./memory/memory-files.ts";
 import { memoryHandlers } from "./memory/memory-rpc.ts";
 import { memoryStorage } from "./memory-storage.ts";
@@ -294,9 +295,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   };
   /** Set `answered` to run as bb answers a thread's model lookup, as when someone acts at that moment. */
   const modelLookups: { answered: ((threadId: string) => void) | null } = { answered: null };
-  let store = openStore(storage);
+  let openedStore = openStore(storage);
   const memoryWrites: CoordinatorId[] = [];
-  const memory = openMemoryRoot(join(mkdtempSync(join(tmpdir(), "coordinator-test-")), "data.db"), store, (id) => memoryWrites.push(id));
+  const memory = openMemoryRoot(join(mkdtempSync(join(tmpdir(), "coordinator-test-")), "data.db"), openedStore, (id) => memoryWrites.push(id));
   const metadata = new Map<string, Metadata>();
   const tools = new Map<string, { parameters: z.ZodType; run(input: unknown, threadId: string): Promise<PluginAgentToolResult> }>();
   let configure: ((context: PluginAgentConfigurationContext) => PluginAgentConfiguration) | null = null;
@@ -518,7 +519,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     await github.pending;
     return answer;
   }
-  const bb = {
+  const fakeBb = {
     pluginId: PLUGIN_ID,
     sdk: { threads, providers: providersArea, projects, plugins, environments },
     log: { warn: (message: string) => void warnings.push(message) },
@@ -537,10 +538,14 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
 
   /** The plugin's modules over the store and the fake bb, wired as server.ts wires them. */
   function wire() {
+    const instance = pluginInstance(fakeBb);
+    const { bb } = instance;
+    // why shadowed: the modules act through the store bound to their instance; the tests read the store as it is.
+    const store = instance.bind(openedStore);
     const spawner = createSpawner(bb, store, memory, () => bindings++);
     const board = createBoard(bb, store, memory);
     const inbox = createInbox({ bb, store, memory, onChange: refreshBoard });
-    const turns = turnWaitMs === null ? issueTurns() : issueTurns(turnWaitMs);
+    const turns = turnWaitMs === null ? issueTurns(instance.signal) : issueTurns(instance.signal, turnWaitMs);
     const agents = createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts: placementFactsReader(bb, store), onChange: refreshBoard, onRemoved: refreshCoordinators });
     const issues = createIssues({ bb, store, onChange: refreshBoard });
     const verify = createVerify({ bb, store, spawner, inbox, turns });
@@ -562,7 +567,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
 
   return {
     get store() {
-      return store;
+      return openedStore;
     },
     memory,
     get spawner() {
@@ -602,9 +607,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     clock,
     /** The schedule's once-a-minute pass, as server.ts runs it, at the clock's time. */
     async tick(): Promise<void> {
-      await plugin.agents.reconcile().catch((error: unknown) => bb.log.warn(`Could not reconcile the agents; the next tick tries again: ${error instanceof Error ? error.message : String(error)}`));
+      await plugin.agents.reconcile().catch((error: unknown) => fakeBb.log.warn(`Could not reconcile the agents; the next tick tries again: ${error instanceof Error ? error.message : String(error)}`));
       await plugin.prWatch.tick(clock.now);
-      await plugin.verify.reconcile();
+      await plugin.verify.reconcile().catch((error: unknown) => fakeBb.log.warn(`Could not reconcile the verifiers; the next tick tries again: ${error instanceof Error ? error.message : String(error)}`));
       await plugin.inbox.tick(clock.now);
       // why: the issues' turns the pass started run on, unwaited for, as on the server; this fake answers them at once unless a test holds bb.
       await settled();
@@ -618,7 +623,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       for (const registered of Object.values(handlers)) registered.length = 0;
       tools.clear();
       // why open it again: the reloaded plugin does, which runs the migrations it hasn't, as after an upgrade.
-      store = openStore(storage);
+      openedStore = openStore(storage);
       plugin = wire();
     },
     /**
@@ -629,7 +634,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
      * point registered and read it back.
      */
     load(entry: (bb: BbPluginApi) => void): FakePluginHarness {
-      const host = createFakePluginHost({ pluginId: PLUGIN_ID, sdk: bb.sdk, agentSkillIds: manifestSkillIds() });
+      const host = createFakePluginHost({ pluginId: PLUGIN_ID, sdk: fakeBb.sdk, agentSkillIds: manifestSkillIds() });
       entry(host.bb);
       return host.harness;
     },

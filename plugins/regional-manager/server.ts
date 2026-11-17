@@ -1,5 +1,5 @@
 // Composition root. Owns no logic: opens the store and the memory folder, and wires each module
-// to bb.
+// to bb, through the SDK and the store bound to this instance of the plugin (lifetime.ts).
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { boardTag, COORDINATORS_TAG, coordinatorContract, memoryTag } from "./src/contract.ts";
 import type { CoordinatorId, Role } from "./src/model/role.ts";
@@ -15,6 +15,7 @@ import { watchAgentThreads } from "./src/server/inbox/thread-watch.ts";
 import { registerIssueTools } from "./src/server/issues/issue-tools.ts";
 import { issueTurns } from "./src/server/issues/issue-turns.ts";
 import { createIssues } from "./src/server/issues/issues.ts";
+import { pluginInstance } from "./src/server/lifetime.ts";
 import { openMemoryRoot } from "./src/server/memory/memory-files.ts";
 import { memoryHandlers } from "./src/server/memory/memory-rpc.ts";
 import { registerRoles } from "./src/server/roles.ts";
@@ -27,8 +28,10 @@ import { createVerify } from "./src/server/verify/verify.ts";
 import { runGh } from "./src/server/watch/host-command.ts";
 import { createPrWatch } from "./src/server/watch/pr-watch.ts";
 
-export default function plugin(bb: BbPluginApi): void {
-  const store = openStore(bb.storage);
+export default function plugin(host: BbPluginApi): void {
+  const instance = pluginInstance(host);
+  const { bb } = instance;
+  const store = instance.bind(openStore(bb.storage));
   const memory = openMemoryRoot(bb.storage.database().name, store, (id) => bb.rpc.experimental_invalidate([memoryTag(id)]));
   bb.log.info(`Memory files are in ${memory.dir}`);
   const refreshBoard = (id: CoordinatorId) => bb.rpc.experimental_invalidate([boardTag(id)]);
@@ -36,7 +39,7 @@ export default function plugin(bb: BbPluginApi): void {
   const spawner = createSpawner(bb, store, memory, (role: Role) => (role.kind === "coordinator" ? refreshCoordinators() : refreshBoard(role.coordinatorId)));
   const board = createBoard(bb, store, memory);
   const inbox = createInbox({ bb, store, memory, onChange: refreshBoard });
-  const turns = issueTurns();
+  const turns = issueTurns(instance.signal);
   const agents = createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts: placementFactsReader(bb, store), onChange: refreshBoard, onRemoved: refreshCoordinators });
   const issues = createIssues({ bb, store, onChange: refreshBoard });
   const verify = createVerify({ bb, store, spawner, inbox, turns });

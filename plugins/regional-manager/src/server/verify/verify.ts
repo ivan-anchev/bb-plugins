@@ -41,7 +41,6 @@ type VerifyBb = CatalogBb &
   EnvironmentsBb &
   StopBb & {
     log: Pick<PluginLogger, "warn">;
-    onDispose(hook: () => void): void;
     sdk: {
       threads: {
         list(args: { threadIds: string[]; includeHidden: true; limit: number }): Promise<ListedThread[]>;
@@ -88,11 +87,6 @@ const NUDGE =
 export type Verify = ReturnType<typeof createVerify>;
 
 export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
-  let disposed = false;
-  bb.onDispose(() => {
-    disposed = true;
-  });
-
   /** The agent whose done handoff the check judges. why throw: a check is made of an agent's handoff, and agents are never deleted while their regional manager is kept. */
   function agentOf(check: Check): Agent & { threadId: string } {
     const agent = store.agent(check.coordinatorId, check.subject.agentId);
@@ -149,7 +143,7 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
     if (unstopped.length > 0) return;
     try {
       const request = await requestFor(id);
-      if (request === null || disposed) return;
+      if (request === null) return;
       await spawner.verifier(request);
     } catch (error) {
       // why only from queued: bb may have made the thread and bound it through thread.created, with only its answer lost.
@@ -172,8 +166,6 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
     if (thread === null) return void giveUp("its verifier thread was archived or deleted before it returned a verdict");
     if (thread.status !== "idle" && thread.status !== "error") return;
     const destroyed = thread.environmentId !== null && (await environmentGone(bb, thread.environmentId));
-    // why: a reload during the read has a new instance follow this check.
-    if (disposed) return;
     if (destroyed) return void giveUp("the agent's environment was removed (a sandbox removed or reaped) before its verifier returned a verdict");
     if (verdict.nudged) return void giveUp("its verifier stopped without a verdict twice, the second time after a reminder");
     // why mark first: a nudge sent twice would double the verifier's work; a lost one only ends it sooner.
@@ -240,7 +232,7 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
     // agent starts after this read starts after the decision too.
     const latest = sendable ? await latestTurnSeq(bb, agent.threadId) : null;
     const unsettled = unsettledOf(checkId);
-    if (unsettled === null || disposed) return;
+    if (unsettled === null) return;
     const step = stepOf(unsettled, sendable && handoffIsCurrent(unsettled.handoff, latest), thread);
     if (step.kind !== "send") return inbox.settleCheck(checkId, step);
     store.claimFixRound(checkId, step.ci);
@@ -333,7 +325,7 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
       for (const { coordinatorId, issueId, checkIds } of byIssue.values()) {
         turns
           .runIfFree(coordinatorId, issueId, async () => {
-            for (const checkId of checkIds) if (!disposed) await tend(checkId);
+            for (const checkId of checkIds) await tend(checkId);
           })
           .catch((error: unknown) => bb.log.warn(`Could not reconcile the verifiers of ${issueId}; the next tick tries again: ${messageOf(error)}`));
       }
