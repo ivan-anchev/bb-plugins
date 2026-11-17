@@ -1,0 +1,177 @@
+// Sub-issues end to end, through the tools as the regional manager and its agents reach them: one
+// level deep, a parent with no agent whose status rolls up from its sub-issues, the kinds a parent
+// holds, a parent's dependencies blocking its sub-issues, and canceling a parent. Each test is one
+// of issue 08's acceptance criteria, at the tools.
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn } from "../test-harness.ts";
+
+const RESEARCH = { kind: "research", title: "Pick a card vault", description: "Which vault fits our PCI scope.", brief: "Compare Vault and KMS.", doneCriteria: [] };
+const FIELDS = { summary: "Vault fits our PCI scope", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
+const RESEARCH_DONE = { status: "done", ...FIELDS, report: "## Recommendation\n\nVault." };
+const BUILD_DONE = { status: "done", ...FIELDS, summary: "Retries land", headSha: HEAD };
+
+async function managing(options: Parameters<typeof coordinating>[0] = {}) {
+  const { kit, threadId, coordinatorId } = await coordinating(options);
+  const call = async (tool: string, input: object) => {
+    const result = await kit.call(tool, input, threadId);
+    return { refused: isRefusal(result), text: textOf(result) };
+  };
+  const text = async (tool: string, input: object) => (await call(tool, input)).text;
+  const announced: string[] = [];
+  const catchUp = async () => {
+    const caughtUp = await text("crew_catch_up", {});
+    for (const [, issue, by, as] of caughtUp.matchAll(/^### (i\d+) "[^"]*" is unblocked: (i\d+) (\w+)$/gm)) announced.push(`${issue} by ${by} ${as}`);
+    return caughtUp;
+  };
+  /** The board section of a catch-up: the lanes and the ready line. */
+  const board = async () => (await catchUp()).split("## Board\n\n")[1]?.split("\n\n## Decisions")[0] ?? assert.fail("no board");
+  const statuses = async () => Object.fromEntries((await kit.rpc.board({ coordinatorId })).issues.map(({ id, status }) => [id, status]));
+  /** Starts an agent on the issue; returns its thread. */
+  const started = async (issue: string) => threadIn(await text("agent_start", { issue }));
+  return { kit, threadId, call, text, catchUp, board, statuses, started, unblocked: async () => (await catchUp(), [...announced]) };
+}
+
+test("1: issue_create with a parent files a sub-issue, listed under its parent in issue_read and in the catch-up", async () => {
+  const { text, board } = await managing();
+  await text("issue_create", ISSUE);
+  assert.equal(await text("issue_create", { ...RESEARCH, parent: "i1" }), "Filed i2 (research) as a sub-issue of i1 in Todo.");
+  assert.match(await text("issue_read", { id: "i1" }), /### Relations\n\nParent: none\.\nSub-issues: i2 \(Todo\)\./);
+  assert.match(await text("issue_read", { id: "i2" }), /### Relations\n\nParent: i1 \(Todo\)\.\nSub-issues: none\./);
+  assert.equal(
+    await board(),
+    ['### Todo (1)\n- i1 "Add retries" (Build; parent): 0/1 done\n  - i2 "Pick a card vault" (Research; no agent, under i1): Not started', "Ready: i2 (in Todo, no sub-issues, and nothing they or their parent depend on is open)."].join("\n\n"),
+  );
+});
+
+test("2: a sub-issue of a sub-issue, a parent for an issue with sub-issues, and a kind its parent doesn't hold are refused with the reason, filing and changing nothing", async () => {
+  const { call, text, statuses } = await managing();
+  await text("issue_create", ISSUE);
+  await text("issue_create", { ...ISSUE, title: "Dead letters", parent: "i1" });
+  await text("issue_create", { ...RESEARCH, title: "Which queue" });
+  await text("issue_create", { ...RESEARCH, title: "Which broker", parent: "i3" });
+  const before = await statuses();
+
+  assert.deepEqual(await call("issue_create", { ...ISSUE, parent: "i2" }), {
+    refused: true,
+    text: "No issue filed: i5 can't be a sub-issue of i2: i2 is a sub-issue of i1, and sub-issues go one level deep. Put i5 under i1 instead.",
+  });
+  assert.deepEqual(await call("issue_update", { id: "i1", parent: "i3" }), {
+    refused: true,
+    text: "i1 can't be a sub-issue of i3: it has sub-issues of its own (i2), and sub-issues go one level deep. Move them under i3 first.",
+  });
+  assert.deepEqual(await call("issue_create", { ...ISSUE, parent: "i3" }), { refused: true, text: "No issue filed: i5 can't be a build sub-issue of i3: a research issue holds only research sub-issues." });
+  assert.deepEqual(await call("issue_update", { id: "i1", kind: "research" }), {
+    refused: true,
+    text: "i1 can't be research: it holds i2, a build issue, and a research issue holds only research sub-issues.",
+  });
+  assert.deepEqual(await statuses(), before);
+  assert.equal(await text("issue_update", { id: "i4", parent: "i1" }), "Updated i4. Now ready: i3.", "a build parent holds research, and i3, with no sub-issue left, is ready");
+  assert.equal(await text("issue_update", { id: "i4", parent: null }), "Updated i4.", "and top-level again");
+});
+
+test("3: agent_start on a parent is refused, and so is filing a sub-issue under an issue an agent holds, naming the agent", async () => {
+  const { kit, call, text } = await managing();
+  await text("issue_create", ISSUE);
+  await text("issue_create", { ...ISSUE, title: "Dead letters", parent: "i1" });
+  assert.deepEqual(await call("agent_start", { issue: "i1" }), { refused: true, text: "agent_start is refused: i1 has sub-issues (i2), and a parent has no agent of its own: start agents on them." });
+
+  await text("issue_create", { ...ISSUE, title: "Replay" });
+  await text("agent_start", { issue: "i3" });
+  assert.deepEqual(await call("issue_create", { ...ISSUE, parent: "i3" }), {
+    refused: true,
+    text: "No issue filed: i4 can't be a sub-issue of i3: a1 holds i3, and a parent has no agent, so i3 can't be split now. Stop a1 with agent_stop first.",
+  });
+  assert.deepEqual(await call("issue_update", { id: "i2", parent: "i3" }), {
+    refused: true,
+    text: "i2 can't be a sub-issue of i3: a1 holds i3, and a parent has no agent, so i3 can't be split now. Stop a1 with agent_stop first.",
+  });
+  assert.equal(kit.store.issues(kit.store.coordinators()[0]?.id ?? assert.fail("no manager")).length, 3);
+});
+
+test("4: a parent's dependency blocks its sub-issue, which isn't ready; when it closes, the sub-issue is announced unblocked, once, and the parent never", async () => {
+  const { kit, text, board, unblocked } = await managing();
+  await text("issue_create", RESEARCH);
+  const researcher = threadIn(await text("agent_start", { issue: "i1" }));
+  await text("issue_create", { ...ISSUE, title: "Card vault", dependsOn: ["i1"] });
+  assert.equal(await text("issue_create", { ...ISSUE, title: "Vault schema", parent: "i2" }), "Filed i3 (build) as a sub-issue of i2 in Todo, blocked by i1 (In progress).");
+  await text("issue_create", { ...ISSUE, title: "Vault client", parent: "i2", status: "backlog" });
+  assert.match(await board(), /\n {2}- i3 "Vault schema" \(Build; no agent, under i2\): Not started; blocked by i1 \(In progress\)\n/);
+  assert.match(await board(), /Ready: none /);
+  assert.match(await text("issue_read", { id: "i3" }), /Blocked by i1 \(In progress\)\./);
+
+  await kit.call("agent_handoff", RESEARCH_DONE, researcher);
+  await kit.idle(researcher, "Handed off.");
+  await settled();
+  assert.deepEqual(await unblocked(), ["i3 by i1 done", "i4 by i1 done"], "each open sub-issue, Backlog too, as any dependent is; never the parent i2");
+  await kit.tick();
+  await settled();
+  assert.deepEqual(await unblocked(), ["i3 by i1 done", "i4 by i1 done"]);
+  assert.match(await board(), /Ready: i3 /);
+});
+
+test("5: a parent rolls up: Todo while its sub-issues are, In progress once one is; a flagged sub-issue is listed under its parent and under Needs you", async () => {
+  const { kit, text, board, statuses, started } = await managing();
+  await text("issue_create", ISSUE);
+  await text("issue_create", { ...ISSUE, title: "Dead letters", parent: "i1" });
+  await text("issue_create", { ...ISSUE, title: "Replay", parent: "i1" });
+  assert.deepEqual(await statuses(), { i1: "todo", i2: "todo", i3: "todo" });
+  const agentThreadId = await started("i2");
+  assert.deepEqual(await statuses(), { i1: "in-progress", i2: "in-progress", i3: "todo" });
+
+  await kit.call("agent_handoff", { status: "blocked", ...FIELDS, summary: "Needs a staging key" }, agentThreadId);
+  await kit.idle(agentThreadId, "Handed off.");
+  const blockedRow = `- i2 "Dead letters" (Build; a1, @thread:${agentThreadId}, under i1, on branch \`bb/${agentThreadId}\`): Blocked: Needs a staging key`;
+  const lanes = await board();
+  assert.ok(lanes.startsWith(`### Needs you (1)\n${blockedRow}\n\n### In progress (1)\n- i1 "Add retries" (Build; parent): 0/2 done\n  ${blockedRow}\n  - i3 `), lanes);
+});
+
+test("6: a research parent is Done when its last sub-issue closes; a build parent waits In review once all are merged and is accepted; one accepted unmerged is flagged", async () => {
+  const research = await managing();
+  await research.text("issue_create", RESEARCH);
+  await research.text("issue_create", { ...RESEARCH, title: "Vault", parent: "i1" });
+  await research.text("issue_create", { ...RESEARCH, title: "KMS", parent: "i1" });
+  await research.text("issue_update", { id: "i3", status: "canceled" });
+  const researcher = await research.started("i2");
+  await research.kit.call("agent_handoff", RESEARCH_DONE, researcher);
+  await research.kit.idle(researcher, "Handed off.");
+  assert.deepEqual(await research.statuses(), { i1: "done", i2: "done", i3: "canceled" });
+
+  const build = await managing({ verify: false });
+  await build.text("issue_create", ISSUE);
+  await build.text("issue_create", { ...ISSUE, title: "Dead letters", parent: "i1" });
+  await build.text("issue_create", { ...RESEARCH, parent: "i1" });
+  const builder = await build.started("i2");
+  const researcher2 = await build.started("i3");
+  await build.kit.call("agent_handoff", RESEARCH_DONE, researcher2);
+  await build.kit.idle(researcher2, "Handed off.");
+  await build.kit.call("agent_handoff", BUILD_DONE, builder);
+  await build.kit.idle(builder, "Handed off.");
+  assert.deepEqual(await build.call("issue_update", { id: "i1", status: "done" }), { refused: true, text: "i1 is In progress (1/2 done), so it can't be marked Done: only an issue In review can." });
+
+  assert.equal(await build.text("issue_update", { id: "i2", status: "done" }), "Updated i2.");
+  const flag = "i2 isn't merged, so i1's work isn't all on the default branch";
+  assert.match(await build.board(), new RegExp(`### Needs you \\(1\\)\\n- i1 "Add retries" \\(Build; parent\\): ${flag}\\n`));
+
+  build.kit.github.prs.set(build.kit.thread(builder).environmentBranchName ?? assert.fail("no branch"), { number: 41, state: "MERGED", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
+  build.kit.clock.now += 10 * 60_000;
+  await build.kit.tick();
+  assert.deepEqual(await build.statuses(), { i1: "in-review", i2: "done", i3: "done" });
+  assert.equal(await build.text("issue_update", { id: "i1", status: "done" }), "Updated i1.");
+  assert.deepEqual(await build.statuses(), { i1: "done", i2: "done", i3: "done" });
+});
+
+test("7: a parent is canceled only once its sub-issues are closed; every sub-issue canceled leaves it where the manager rested it", async () => {
+  const { call, text, statuses } = await managing();
+  await text("issue_create", { ...ISSUE, status: "backlog" });
+  await text("issue_create", { ...ISSUE, title: "Dead letters", parent: "i1" });
+  await text("issue_create", { ...ISSUE, title: "Replay", parent: "i1" });
+  await text("issue_update", { id: "i2", status: "canceled" });
+  assert.deepEqual(await call("issue_update", { id: "i1", status: "canceled" }), { refused: true, text: "i1 can't be canceled while sub-issues of it are open: i3. Cancel them, or let them finish, first." });
+
+  await text("issue_update", { id: "i3", status: "canceled" });
+  assert.deepEqual(await statuses(), { i1: "backlog", i2: "canceled", i3: "canceled" });
+  assert.equal(await text("issue_update", { id: "i1", status: "canceled" }), "Updated i1.");
+  assert.deepEqual(await statuses(), { i1: "canceled", i2: "canceled", i3: "canceled" });
+  assert.deepEqual(await call("issue_create", { ...ISSUE, parent: "i1" }), { refused: true, text: "No issue filed: i4 can't be a sub-issue of i1: i1 is closed. File i4 on its own." });
+});

@@ -43,9 +43,9 @@ and no tool can turn verification on or off.
 | `crew_memory_write` | regional manager | Writes one memory file whole, naming the version it read (null to create one); a stale write returns the current text instead. |
 | `crew_remind` | regional manager | Sets a reminder (`note`, `at`, optional `every`) or cancels one (`cancel`). |
 | `crew_ask_user` | regional manager | Puts a one-line question, with up to five options, on its board, optionally naming the issue it is about. |
-| `issue_create` | regional manager | Files an issue: `kind`, `title`, `description`, and optionally `brief`, `doneCriteria`, `status` (todo or backlog), `verifier` and `dependsOn`. |
-| `issue_update` | regional manager | Changes an issue's kind (until an agent has started on it), title, description, brief, done-criteria, verifier or dependencies, or rests, cancels or accepts it with `status`. |
-| `issue_read` | regional manager | Returns one issue whole: status, what blocks it, plan, what it depends on and blocks, verifier, its agents and what they ran on, every handoff with its verdict, and its agent's latest answer. |
+| `issue_create` | regional manager | Files an issue: `kind`, `title`, `description`, and optionally `brief`, `doneCriteria`, `status` (todo or backlog), `verifier`, `parent` and `dependsOn`. |
+| `issue_update` | regional manager | Changes an issue's kind (until an agent has started on it), title, description, brief, done-criteria, verifier, parent or dependencies, or rests, cancels or accepts it with `status`. |
+| `issue_read` | regional manager | Returns one issue whole: status, what blocks it, plan, its parent and sub-issues, what it depends on and blocks, verifier, its agents and what they ran on, every handoff with its verdict, and its agent's latest answer. |
 | `agent_start` | regional manager | Starts an agent on an issue, optionally naming its `execution` and `placement`; on an issue that has or had one, hands it over, continuing in the previous agent's environment unless `from` is `default`. |
 | `agent_message` | regional manager | Messages one agent, marked as from the regional manager. |
 | `agent_stop` | regional manager | Stops one agent, and archives its thread with `archive: true`. |
@@ -101,27 +101,62 @@ with `agent_start`), or one of the manager's open decisions names it.
 
 The manager sets a status in only four ways, with `issue_update`: `backlog`
 or `todo` rests an issue no agent holds (and reopens a canceled one),
-`canceled` closes one no agent holds, and `done` accepts one In review, even
+`canceled` closes one no agent holds (a parent once its sub-issues are
+closed), and `done` accepts one In review, even
 while its agent still holds it (a research issue is never In review, so never
 accepted: its done handoff makes it Done). Any other change, or `backlog`, `todo` or
 `canceled` while an agent holds the issue, is refused naming why.
+
+### Sub-issues
+
+An issue can have sub-issues, one level deep: the manager files them with
+`parent` on `issue_create`, or moves an issue under a parent with
+`issue_update` (`parent: null` makes it top-level again). A sub-issue of a
+sub-issue, and a parent for an issue that has sub-issues, are refused. A
+parent is a container: it never has an agent (`agent_start` on it is
+refused), and an issue an agent holds can't be split until that agent is
+stopped. A build parent holds build and research sub-issues; a research
+parent holds research ones only, so a build sub-issue under it, or making a
+parent research while it holds one, is refused.
+
+A parent's status rolls up from its sub-issues, derived like any other:
+
+- While a sub-issue is open: In progress once any has started, Todo while
+  any is in Todo or the manager rested the parent there, else Backlog. Every
+  sub-issue canceled leaves the parent where the manager rested it.
+- Once every sub-issue is closed and at least one is Done: a research parent
+  is Done. A build parent is In review once every Done build sub-issue's pull
+  request merged, and the manager accepts it as Done. A build sub-issue the
+  manager accepted unmerged flags the parent Needs you ("i3 isn't merged, so
+  i1's work isn't all on the default branch"); the plugin keeps reading that
+  pull request, and its merge clears the flag.
+
+A flagged sub-issue flags itself, not its parent. A parent is canceled only
+once its sub-issues are closed, and a closed parent takes no new sub-issue.
+A parent's dependencies block each of its sub-issues. The manager's catch-up
+lists each sub-issue under its parent, and a flagged one under Needs you too;
+`issue_read` names an issue's parent and sub-issues.
 
 ### Dependencies
 
 An issue can depend on others (`dependsOn` on `issue_create`, added and
 removed with `issue_update`), seen from the other side as "blocks". It is
-**blocked** while one of them is not Done or Canceled: derived on every read
+**blocked** while one of them, or of its parent's, is not Done or Canceled: derived on every read
 from the same statuses the board shows, never stored, so it can't go stale. A
 research dependency closes with its report and reopens when its agent is
 messaged, and its dependents are blocked again until the next report. A
 dependency on an issue the manager doesn't have, on the issue itself, or that
-would close a cycle is refused, naming the cycle (`i1 → i3 → i2 → i1`).
+would close a cycle is refused, naming the cycle (`i1 → i3 → i2 → i1`); a
+cycle through a parent counts, since a sub-issue waits for its parent's
+dependencies and a parent for its sub-issues.
 
 Dependencies inform and never refuse: the manager decides what runs at once,
 and can start an agent on a blocked issue, whose start result says what blocks
-it. Its catch-up lists the issues **ready** to start (in Todo, not blocked).
-When a merge or an agent's handoff closes the last open issue another depends
-on, the manager is woken to say it is unblocked; when the manager closes one
+it. Its catch-up lists the issues **ready** to start (in Todo, not blocked,
+no sub-issues). When a merge or an agent's handoff closes the last open issue
+another depends on, the manager is woken to say it is unblocked (for a
+parent's dependency, each open sub-issue nothing else blocks, never the
+parent, which has no agent to start); when the manager closes one
 itself, or removes a dependency, its own result names what became ready. A
 dependency carries nothing between issues: an agent gets another issue's
 report only when the manager names its file in that agent's brief.
@@ -328,7 +363,8 @@ work with `agent_handoff`, and the plugin records everything it sees:
 - **An issue returned to Todo**: its agent was stopped, archived or deleted
   before its work reached Verifying.
 - **An issue was unblocked**: a pull request's merge or an agent's handoff
-  closed the last open issue it depends on (see [Dependencies](#dependencies)).
+  closed the last open issue it, or its parent, depends on (see
+  [Dependencies](#dependencies)).
 - **An issue's pull request changed** (see
   [Pull requests and CI](#pull-requests-and-ci)): it opened, reopened, merged
   or closed, its CI passed or failed, or a review approved it or asked for
@@ -470,9 +506,10 @@ regional manager:
 bb tells plugins nothing about pull requests, so the plugin reads them itself,
 with `gh` on the machine running bb, on the same once-a-minute tick:
 
-- **What**: each open build issue's newest pull request from its branch (a
-  research issue's branch is never read, so a pull request there changes
-  nothing): the branch
+- **What**: each open build issue's newest pull request from its branch,
+  and a build sub-issue's the manager accepted unmerged while its parent is
+  open (a research issue's branch is never read, so a pull request there
+  changes nothing): the branch
   of its latest agent that has one, as that agent had it checked out at its
   latest handoff (read once through bb's git plugin as it hands off), else the
   one bb made its environment on. It is read whether or not that agent's

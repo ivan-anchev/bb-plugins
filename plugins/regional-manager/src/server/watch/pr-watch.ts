@@ -1,11 +1,13 @@
 // Pull requests and CI, which bb never pushes: on the one-minute tick, the watch reads the pull
-// request of every open issue's branch (its latest agent's with one) from GitHub, once per branch,
+// request of every open issue's branch (its latest agent's with one) from GitHub, and of a sub-issue
+// accepted unmerged while its parent is open (watches), once per branch,
 // one `gh api graphql` call per repository, whether or not that agent's thread is still live: an
 // issue In review whose agent's thread was archived still becomes Done when its pull request
 // merges. It saves each successful read and records a `pr` event when one changed meaningfully; the
 // verify step's pass, after it in the same tick, settles the verdicts that wait for CI. A failed
 // read keeps what was saved and says why on the board.
 import { issueBranch, type Agent } from "../../model/agent.ts";
+import type { Issue } from "../../model/issue/issue.ts";
 import { shipsCode } from "../../model/issue/kind.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { ciRunning, type PrSnapshot, type PrUnavailable } from "../../model/verdict/pr.ts";
@@ -60,7 +62,8 @@ export function createPrWatch({ bb, store, inbox, gh }: Deps) {
   async function watched(): Promise<Map<string | null, Watched[]>> {
     const groups = new Map<string | null, Watched[]>();
     for (const coordinator of store.coordinators()) {
-      const open = store.issues(coordinator.id).filter((issue) => issue.closed === null && shipsCode(issue.kind));
+      const issues = store.issues(coordinator.id);
+      const open = issues.filter((issue) => watches(issue, issues));
       const agents = store.agents(coordinator.id).filter((agent) => open.some((issue) => issue.id === agent.issueId));
       if (agents.length === 0) continue;
       const { gitRemoteUrl } = await bb.sdk.projects.get({ projectId: coordinator.projectId });
@@ -130,8 +133,9 @@ export function createPrWatch({ bb, store, inbox, gh }: Deps) {
     const result = repo === null ? null : await read(repo, [...new Set(branches.map(({ branch }) => branch))]);
     for (const { coordinatorId, agent, branch, handoffAtRead } of reading) {
       if (disposed) return;
-      // why read the issue again: the regional manager may have closed it while gh ran.
-      if (store.issue(coordinatorId, agent.issueId)?.closed !== null) continue;
+      // why read the issues again: the regional manager may have closed the issue, or its parent, while gh ran.
+      const issue = store.issue(coordinatorId, agent.issueId);
+      if (issue === null || !watches(issue, store.issues(coordinatorId))) continue;
       if (result === null) {
         if (store.waitingForCi(coordinatorId, agent.id).length === 0) continue;
         inbox.prUnavailable(coordinatorId, branch, NOT_ON_GITHUB, now);
@@ -155,4 +159,17 @@ export function createPrWatch({ bb, store, inbox, gh }: Deps) {
       }
     },
   };
+}
+
+/**
+ * Whether the watch reads the issue's pull request: an open issue of a kind that ships code, or one
+ * the manager accepted while its parent is open. why that one: whether its work merged decides
+ * whether its parent waits In review or is flagged (status.ts parentView), and a merge after the
+ * accept clears the flag.
+ */
+function watches(issue: Issue, issues: readonly Issue[]): boolean {
+  if (!shipsCode(issue.kind)) return false;
+  if (issue.closed === null) return true;
+  const parent = issues.find(({ id }) => id === issue.parentId);
+  return issue.closed.as === "accepted" && parent !== undefined && parent.closed === null;
 }

@@ -6,17 +6,17 @@
 import type { Issue, IssueId } from "./issue.ts";
 import type { Closure, IssueStatus, IssueView } from "./status.ts";
 
-/** An issue as the relations read it: its id and the issues it depends on. */
-type Shape = Pick<Issue, "id" | "dependsOn">;
+/** An issue as the relations read it: its id, the issues it depends on, and its parent. */
+type Shape = Pick<Issue, "id" | "dependsOn" | "parentId">;
 
 /** An issue as viewed: what the relations read of it. */
-type Viewed = Pick<IssueView, "status" | "blockedBy"> & { issue: Shape };
+type Viewed = Pick<IssueView, "status" | "blockedBy" | "subIssues"> & { issue: Shape };
 
 /** The other issue of a relation, with its status now. */
 export type Related = { id: IssueId; status: IssueStatus };
 
-/** An issue's relations: the issues it depends on, and the issues it blocks (those that depend on it). */
-export type Relations = { dependsOn: Related[]; blocks: Related[] };
+/** An issue's relations: its parent (null: none) and sub-issues, the issues it depends on, and the issues it blocks (those that depend on it). */
+export type Relations = { parent: Related | null; subIssues: Related[]; dependsOn: Related[]; blocks: Related[] };
 
 /** A status in which an issue no longer blocks the issues that depend on it. */
 type ClosedStatus = Extract<IssueStatus, "done" | "canceled">;
@@ -26,16 +26,15 @@ export const isClosed = (status: IssueStatus): status is ClosedStatus => status 
 
 /**
  * What blocks the issue now: its own and its parent's dependencies that are not closed, each with
- * its status. why the parent: a parent's dependencies block its sub-issues; until sub-issues exist
- * (issue 08) every caller passes null.
+ * its status. why the parent: a parent's dependencies block its sub-issues.
  */
-export function blockedBy(issue: Shape, parent: Shape | null, statusOf: (id: IssueId) => IssueStatus): Related[] {
+export function blockedBy(issue: Pick<Shape, "dependsOn">, parent: Pick<Shape, "dependsOn"> | null, statusOf: (id: IssueId) => IssueStatus): Related[] {
   const dependencies = new Set([...issue.dependsOn, ...(parent?.dependsOn ?? [])]);
   return [...dependencies].map((id) => ({ id, status: statusOf(id) })).filter(({ status }) => !isClosed(status));
 }
 
-/** Ready: in Todo and not blocked. crew_catch_up lists the ready issues. */
-export const isReady = ({ status, blockedBy }: Pick<IssueView, "status" | "blockedBy">): boolean => status === "todo" && blockedBy.length === 0;
+/** Ready: in Todo, not blocked, and not a parent: a parent never has an agent, its sub-issues do. crew_catch_up lists the ready issues. */
+export const isReady = ({ status, blockedBy, subIssues }: Pick<IssueView, "status" | "blockedBy" | "subIssues">): boolean => status === "todo" && blockedBy.length === 0 && subIssues === null;
 
 /** The issues ready in `after` that were not in `before`: what a write between the two readings made ready. */
 export function newlyReady(before: readonly Viewed[], after: readonly Viewed[]): IssueId[] {
@@ -68,13 +67,15 @@ type Announced = Pick<IssueView, "status" | "blockedBy" | "closedBy"> & { issue:
 /**
  * What every issue as viewed now says that `known` doesn't: the issues unblocked since, and the
  * relations whose dependency closed otherwise than known, with that close to know next. An open
- * issue nothing blocks is unblocked when one of its dependencies closed by its work since (a merge,
- * a report), with another close than the one known: none for a close the manager made (its own
- * result names what that made ready), nor for a dependency closed already when the relation was
- * written. A dependency that reads open keeps the close known: a research issue a message reopened
- * is news only once another handoff closes it, and one whose agent's thread is gone until the agent
- * ends is no news. A relation `known` doesn't hold was removed after the views were read: it has
- * nothing to tell, nor to remember.
+ * issue nothing blocks is unblocked when one of its dependencies, or of its parent's, closed by its
+ * work since (a merge, a report), with another close than the one known: none for a close the
+ * manager made (its own result names what that made ready), nor for a dependency closed already
+ * when the relation was written. A dependency that reads open keeps the close known: a research
+ * issue a message reopened is news only once another handoff closes it, and one whose agent's
+ * thread is gone until the agent ends is no news. A relation `known` doesn't hold was removed after
+ * the views were read: it has nothing to tell, nor to remember. why a parent is never announced,
+ * its sub-issues instead: a parent has no agent, so it is its sub-issues the manager can start.
+ * An issue unblocked through its own relation and its parent's at once is announced once.
  */
 export function unblockedSince(known: KnownCloses, views: readonly Announced[]): { unblocked: Unblocking[]; learned: Map<IssueId, Map<IssueId, CloseKey>> } {
   const byId = new Map(views.map((view) => [view.issue.id, view]));
@@ -82,8 +83,16 @@ export function unblockedSince(known: KnownCloses, views: readonly Announced[]):
     const before = known.get(view.issue.id);
     return before === undefined ? [] : [{ view, ...dependenciesRead(view.issue, before, byId) }];
   });
+  const announced = new Map<IssueId, Unblocking>();
+  for (const { view, news: [by] } of reads) {
+    if (by === undefined) continue;
+    const subIssues = views.filter(({ issue }) => issue.parentId === view.issue.id);
+    for (const { issue, status, blockedBy } of subIssues.length === 0 ? [view] : subIssues) {
+      if (!isClosed(status) && blockedBy.length === 0 && !announced.has(issue.id)) announced.set(issue.id, { issueId: issue.id, ...by });
+    }
+  }
   return {
-    unblocked: reads.flatMap(({ view: { issue, status, blockedBy }, news: [by] }) => (by !== undefined && !isClosed(status) && blockedBy.length === 0 ? [{ issueId: issue.id, ...by }] : [])),
+    unblocked: [...announced.values()],
     learned: new Map(reads.filter(({ closes }) => closes.size > 0).map(({ view, closes }) => [view.issue.id, closes])),
   };
 }
@@ -116,10 +125,15 @@ function closeKey(closure: Closure): CloseKey {
 }
 
 /** The relations of `issue` among every issue of its regional manager, as viewed. */
-export function relationsOf(views: readonly Viewed[], { id, dependsOn }: Shape): Relations {
+export function relationsOf(views: readonly Viewed[], { id, dependsOn, parentId }: Shape): Relations {
   const statuses = new Map(views.map(({ issue, status }) => [issue.id, status]));
   const related = (other: IssueId): Related => ({ id: other, status: statusIn(statuses, other) });
-  return { dependsOn: dependsOn.map(related), blocks: views.filter(({ issue }) => issue.dependsOn.includes(id)).map(({ issue }) => related(issue.id)) };
+  return {
+    parent: parentId === null ? null : related(parentId),
+    subIssues: views.filter(({ issue }) => issue.parentId === id).map(({ issue }) => related(issue.id)),
+    dependsOn: dependsOn.map(related),
+    blocks: views.filter(({ issue }) => issue.dependsOn.includes(id)).map(({ issue }) => related(issue.id)),
+  };
 }
 
 /** The issue's status among `statuses`. */
@@ -133,28 +147,74 @@ function named<T>(byId: ReadonlyMap<IssueId, T>, id: IssueId): T {
 }
 
 /**
- * Why `changed`'s dependencies, as a write would leave them, can't stand among the regional
- * manager's `issues` as stored, or null when they can: a dependency on no issue, on itself, or one
- * that closes a cycle, named as its path ("i3 → i5 → i3"). `changed` is one of `issues` or a new one.
+ * Why `changed`'s dependencies and parent, as a write would leave them, can't stand among the
+ * regional manager's `issues` as stored, or null when they can: a dependency on no issue, on
+ * itself, between a parent and its sub-issue, or one that closes a cycle, named as its path
+ * ("i3 → i5 → i3"). `changed` is one of `issues` or a new one. why a parent and its sub-issues in
+ * the cycle: a sub-issue waits for its parent's dependencies, and a parent closes only with its
+ * sub-issues, so either can close one as surely as a dependency.
  */
 export function relationProblem(issues: readonly Shape[], changed: Shape): string | null {
   const byId = new Map([...issues.map((issue) => [issue.id, issue] as const), [changed.id, changed]]);
+  const subIssuesOf = (id: IssueId): IssueId[] => [...byId.values()].filter(({ parentId }) => parentId === id).map((sub) => sub.id);
   for (const dependency of changed.dependsOn) {
     if (!byId.has(dependency)) return `${changed.id} can't depend on ${dependency}: there is no issue ${dependency}`;
     if (dependency === changed.id) return `${changed.id} can't depend on itself`;
+    if (dependency === changed.parentId) return `${changed.id} can't depend on its parent ${dependency}: a parent closes only with its sub-issues`;
+    if (byId.get(dependency)?.parentId === changed.id) return `${changed.id} can't depend on its sub-issue ${dependency}: a parent closes only with its sub-issues`;
   }
-  const cycle = pathBack(byId, changed.id, changed.id, new Set());
-  return cycle === null ? null : `${changed.id} can't depend on ${cycle[0]}: that would close a cycle, ${[changed.id, ...cycle].join(" → ")}`;
+  if (changed.parentId !== null && byId.get(changed.parentId)?.dependsOn.includes(changed.id)) {
+    return `${changed.id} can't be a sub-issue of ${changed.parentId}: ${changed.parentId} depends on it, and a parent closes only with its sub-issues`;
+  }
+  const waits = (id: IssueId): Wait[] => {
+    const issue = byId.get(id);
+    const parentId = issue?.parentId ?? null;
+    return [
+      ...(issue?.dependsOn ?? []).map((to): Wait => ({ to, as: "dependency" })),
+      ...(parentId === null ? [] : (byId.get(parentId)?.dependsOn ?? []).map((to): Wait => ({ to, as: "parent's dependency", parentId }))),
+      ...subIssuesOf(id).map((to): Wait => ({ to, as: "sub-issue" })),
+    ];
+  };
+  // why its sub-issues too: a parent's new dependency is waited for by them, not by the parent, so a cycle it closes runs through one of them.
+  for (const start of [changed.id, ...subIssuesOf(changed.id)]) {
+    const cycle = pathBack(waits, start, start, new Set());
+    if (cycle !== null) return `${changed.id} can't ${cycleCause(changed.id, start, cycle[0])}: that would close a cycle, ${[start, ...cycle.map(waitText)].join(" → ")}`;
+  }
+  return null;
 }
 
-/** A path of dependencies from `from` to `target`, `target` included, or null when there is none. Depth first; `seen` keeps it from walking an issue twice. An id with no issue depends on nothing. */
-function pathBack(byId: ReadonlyMap<IssueId, Shape>, from: IssueId, target: IssueId, seen: Set<IssueId>): [IssueId, ...IssueId[]] | null {
-  for (const next of byId.get(from)?.dependsOn ?? []) {
-    if (next === target) return [next];
-    if (seen.has(next)) continue;
-    seen.add(next);
-    const rest = pathBack(byId, next, target, seen);
-    if (rest !== null) return [next, ...rest];
+/** One issue waiting for another to close: as its own dependency, as its parent's, or as a parent waits for its sub-issue. */
+type Wait = { to: IssueId; as: "dependency" | "sub-issue" } | { to: IssueId; as: "parent's dependency"; parentId: IssueId };
+
+/** What of `changed` closes the cycle that starts at `start` with `first`: one of its dependencies, or its parent. */
+function cycleCause(changed: IssueId, start: IssueId, first: Wait): string {
+  if (first.as === "dependency" && start === changed) return `depend on ${first.to}`;
+  if (first.as === "parent's dependency") return start === changed ? `be a sub-issue of ${first.parentId}` : `depend on ${first.to}`;
+  return "be changed so";
+}
+
+/** The issue waited for, with how, when it is not by a dependency of its own. */
+function waitText(wait: Wait): string {
+  switch (wait.as) {
+    case "dependency":
+      return wait.to;
+    case "parent's dependency":
+      return `${wait.to} (${wait.parentId}'s dependency)`;
+    case "sub-issue":
+      return `${wait.to} (its sub-issue)`;
+    default:
+      return wait satisfies never;
+  }
+}
+
+/** A path of waits from `from` to `target`, `target` included, or null when there is none. Depth first; `seen` keeps it from walking an issue twice. */
+function pathBack(waits: (id: IssueId) => Wait[], from: IssueId, target: IssueId, seen: Set<IssueId>): [Wait, ...Wait[]] | null {
+  for (const wait of waits(from)) {
+    if (wait.to === target) return [wait];
+    if (seen.has(wait.to)) continue;
+    seen.add(wait.to);
+    const rest = pathBack(waits, wait.to, target, seen);
+    if (rest !== null) return [wait, ...rest];
   }
   return null;
 }

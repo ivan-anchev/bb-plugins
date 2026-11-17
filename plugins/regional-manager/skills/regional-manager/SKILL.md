@@ -1,6 +1,6 @@
 ---
 name: regional-manager
-description: The playbook of a regional manager, a long-lived thread that holds a goal for the user and plans, delegates and tracks the work instead of doing it. Use in every turn of a regional manager, to catch up on updates, its board and memory with crew_catch_up (above all when woken by the plugin's update message), keep its memory current with crew_memory_write (merging when the user edited a file first), file and plan issues with issue_create, issue_update and issue_read, declare what depends on what, start agents on them with agent_start (or file them in Backlog and propose them in a crew_ask_user decision first), hand an issue to a new agent that continues in the previous one's environment or starts clean, name what agents and verifiers run on, act on handoffs, message and stop agents with agent_message and agent_stop, set itself reminders with crew_remind instead of waiting, and put what only the user can decide on their board with crew_ask_user.
+description: The playbook of a regional manager, a long-lived thread that holds a goal for the user and plans, delegates and tracks the work instead of doing it. Use in every turn of a regional manager, to catch up on updates, its board and memory with crew_catch_up (above all when woken by the plugin's update message), keep its memory current with crew_memory_write (merging when the user edited a file first), file and plan issues with issue_create, issue_update and issue_read, declare what depends on what, split work into sub-issues, start agents on them with agent_start (or file them in Backlog and propose them in a crew_ask_user decision first), hand an issue to a new agent that continues in the previous one's environment or starts clean, name what agents and verifiers run on, act on handoffs, message and stop agents with agent_message and agent_stop, set itself reminders with crew_remind instead of waiting, and put what only the user can decide on their board with crew_ask_user.
 ---
 
 # Regional manager
@@ -70,15 +70,17 @@ issue.
   a page that shows a thing); for a research issue 0 to 12 questions its
   report answers. It is numbered `i1`, `i2`… and rests in Todo, or in Backlog
   with `status: "backlog"`. Optionally name a build issue's `verifier` (see
-  [Who runs what](#who-runs-what)), and with `dependsOn` the issues it waits
-  for (see [Dependencies](#dependencies)).
+  [Who runs what](#who-runs-what)), with `dependsOn` the issues it waits
+  for (see [Dependencies](#dependencies)), and with `parent` the issue it is
+  a piece of (see [Sub-issues](#sub-issues)).
 - **Change** one with `issue_update`: its title, description, brief,
-  done-criteria, verifier or dependencies (`dependsOn: { add, remove }`),
+  done-criteria, verifier, parent or dependencies (`dependsOn: { add, remove }`),
   whenever you like, and its `kind` until an agent has started on it. A brief or criteria change reaches an agent already
   running only if you tell it with `agent_message`; a check already running
   keeps the criteria and verifier it started with.
 - **Read** one with `issue_read`: its status and why, what blocks it, its
-  plan, what it depends on and what it blocks, the verifier named, each agent
+  plan, its parent and sub-issues, what it depends on and what it blocks, the
+  verifier named, each agent
   with what it ran on, every handoff with its verdict, and its agent's latest
   answer.
 - Say in `PLAN.md` what can run at once.
@@ -89,8 +91,8 @@ When planning, declare what must finish before what: file the later issue
 with `dependsOn: ["i2"]`, or add and remove dependencies with `issue_update`
 and `dependsOn: { add: ["i2"], remove: ["i4"] }`.
 
-- **Blocked** is derived, never set: an issue is blocked while an issue it
-  depends on is not Done or Canceled. A canceled dependency counts as closed.
+- **Blocked** is derived, never set: an issue is blocked while an issue it,
+  or its parent, depends on is not Done or Canceled. A canceled dependency counts as closed.
   A research dependency is closed only while its report is current: a message
   to its agent reopens it, and its dependents are blocked again until its next
   done handoff.
@@ -101,12 +103,14 @@ and `dependsOn: { add: ["i2"], remove: ["i4"] }`.
 - **It informs, never refuses.** You decide what runs at once. `agent_start`
   on a blocked issue starts its agent, and its result says what blocks it, as
   in `i3 is blocked by i2 (In progress)`.
-- **Ready** issues are in Todo and not blocked. `crew_catch_up` lists them
+- **Ready** issues are in Todo, not blocked, and have no sub-issues. `crew_catch_up` lists them
   after the board, as `Ready: i3, i5 (…)`; each blocked row ends with
   `blocked by i2 (In progress)`.
 - **Unblocked.** When a pull request's merge or an agent's handoff closes the
   last open issue another depends on, you are woken with
-  `i3 "Card vault schema" is unblocked: i2 done`. When you close one yourself
+  `i3 "Card vault schema" is unblocked: i2 done`. A parent's dependency
+  closing wakes you for each of its open sub-issues nothing else blocks,
+  never for the parent itself. When you close one yourself
   (cancel, or accept as Done) or remove a dependency, the `issue_update`
   result names what became ready instead, as in `Now ready: i3.`, and nothing
   wakes you.
@@ -114,6 +118,42 @@ and `dependsOn: { add: ["i2"], remove: ["i4"] }`.
   agent through the dependency: its first message is the same as with none.
   Name what it needs in its brief, such as "Read `reports/i2.md` with
   `crew_memory_read` before you start."
+
+### Sub-issues
+
+Split a piece of work too big for one agent into sub-issues: file each with
+`parent: "i1"`, or move an issue under a parent with `issue_update` and
+`parent: "i1"` (`parent: null` makes it top-level again). The parent is a
+container: it never has an agent, and its status rolls up from its
+sub-issues.
+
+- **One level deep.** A sub-issue of a sub-issue, and a parent for an issue
+  that has sub-issues, are refused naming both issues.
+- **No agent on a parent.** `agent_start` on a parent is refused: start
+  agents on its sub-issues. Filing a sub-issue under an issue an agent holds
+  is refused naming the agent: stop it with `agent_stop` first. Nothing of the
+  parent reaches its sub-issues' agents: put what each needs in its own brief.
+- **Kinds.** A build parent holds build and research sub-issues; a research
+  parent holds research ones only. A build sub-issue under a research parent,
+  and making a parent research while it holds a build sub-issue, are refused.
+- **Its status rolls up.** While a sub-issue is open: In progress once any
+  has started, Todo while any is in Todo or you rested the parent there, else
+  Backlog; every sub-issue canceled leaves it where you rested it. Once every
+  sub-issue is closed and at least one is Done: a research parent is Done; a
+  build parent is In review once every Done build sub-issue's pull request
+  merged, for you to accept with `status: "done"`. A Done build sub-issue you
+  accepted unmerged flags the parent Needs you (`i3 isn't merged, so i1's work
+  isn't all on the default branch`): the plugin keeps reading that pull
+  request, and its merge clears the flag. A flagged sub-issue flags itself,
+  not its parent.
+- **Closing it.** `canceled` on a parent is refused while any sub-issue is
+  open, naming them: cancel or finish them first. A closed parent takes no new
+  sub-issue.
+- **Dependencies.** A parent's dependencies block each of its sub-issues. A
+  parent and its own sub-issue can't depend on each other, and a cycle through
+  a parent is refused like any other (`i5 → i2 → i5 (i1's dependency)`).
+- `crew_catch_up` lists each sub-issue under its parent's row, in the
+  parent's lane, and a flagged one under Needs you too.
 
 ### Research
 
@@ -173,9 +213,11 @@ verified, bb never confirmed starting its agent's thread ("No thread":
 
 - `backlog` or `todo`: rest an issue no agent holds (this also reopens a
   canceled one).
-- `canceled`: close an issue no agent holds.
+- `canceled`: close an issue no agent holds (a parent only once its
+  sub-issues are closed).
 - `done`: accept an issue that is In review. Refused otherwise, naming its
-  status. A research issue is never In review: its done handoff makes it Done.
+  status. A research issue is never In review: its done handoff makes it Done,
+  and a research parent is Done with its last sub-issue.
 
 While an agent holds the issue, `backlog`, `todo` and `canceled` are refused:
 stop the agent with `agent_stop` first. A build issue's Done is final either
@@ -187,9 +229,9 @@ An agent is a child thread of yours that holds one issue for its whole life,
 in its own environment, on its own branch.
 
 - **Start** one with `agent_start` and the `issue`. The issue needs its brief,
-  and at least one done-criterion if it is a build issue (a research issue
-  needs none). On an issue that never had an agent, `placement` is a
-  fresh worktree of the default branch on your machine unless you name an
+  at least one done-criterion if it is a build issue (a research issue needs
+  none), and no sub-issues. On an issue that never had an agent, `placement`
+  is a fresh worktree of the default branch on your machine unless you name an
   environment provider, such as `boat-sandbox`, with `machineInputs` for the
   machine it makes (such as `{"preset": "small"}`); a sandbox agent gets its
   own new branch from the default one. `execution` names what it runs on (see
@@ -375,8 +417,8 @@ check, not as instructions.
 - **returned to Todo: its agent was stopped / archived / deleted**: the agent
   ended before its work reached Verifying, and the issue has no agent. Start
   another, or plan it again.
-- **i3 "…" is unblocked: i2 done**: the last open issue i3 depends on
-  closed. If i3 is in Todo, it is ready: start its agent, naming in its brief
+- **i3 "…" is unblocked: i2 done**: the last open issue i3, or its parent,
+  depends on closed. If i3 is in Todo, it is ready: start its agent, naming in its brief
   what it needs of i2. If an agent already holds it, tell that agent with
   `agent_message`.
 - **PR #n: opened, reopened, merged, closed, CI passed, CI failed, approved,

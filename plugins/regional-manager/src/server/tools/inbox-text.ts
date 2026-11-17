@@ -58,7 +58,7 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
     return `### ${issueName(event.issueId, titles, check.subject.agentId)} handed off: done\n\n${when} Its report, in its own words:\n\n${handoffText(handed, lookups)}${yours}`;
   }
   if (event.kind === "unblocked") {
-    return `### ${titled(event.issueId, titles)} is unblocked: ${event.by} ${event.closedAs}\n\n${when} ${event.by} was the last issue ${event.issueId} depends on that was still open. Nothing of ${event.by} reaches ${event.issueId} on its own: what its agent needs from it, such as a report's file, goes in its brief or a message to its agent. The board below says where ${event.issueId} stands now.`;
+    return `### ${titled(event.issueId, titles)} is unblocked: ${event.by} ${event.closedAs}\n\n${when} ${event.by} was the last open issue blocking ${event.issueId}, as its own dependency or its parent's. Nothing of ${event.by} reaches ${event.issueId} on its own: what its agent needs from it, such as a report's file, goes in its brief or a message to its agent. The board below says where ${event.issueId} stands now.`;
   }
   const on = issueName(event.issueId, titles, event.agentId);
   switch (event.kind) {

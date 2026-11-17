@@ -17,26 +17,36 @@ const OUTPUT_BUDGET_CHARS = 12_000;
 
 const threadLink = (threadId: string | null): string => (threadId === null ? "no thread" : `@thread:${threadId}`);
 
-/** The board section of a catch-up: every issue in its lane, with its agent and what blocks it, then the ready ones; or why it couldn't be read. */
+/**
+ * The board section of a catch-up: every issue in its lane, each sub-issue under its parent's row,
+ * with its agent and what blocks it, then the ready ones; or why it couldn't be read. A flagged
+ * sub-issue is also listed under Needs you, as the board shows it.
+ */
 export function boardText(reads: readonly IssueRead[] | { error: string }): string {
   if ("error" in reads) return `## Board\n\nCould not read your agents' threads from bb: ${reads.error}. Call crew_catch_up again before relying on any issue's status.`;
   if (reads.length === 0) return "## Board\n\nNo issues yet. File one with issue_create.";
-  const lanes = byLane(reads.map((read) => ({ lane: laneOf(read.view), read }))).map(({ lane, rows }) =>
-    [`### ${LANE_LABELS[lane]} (${rows.length})`, ...rows.map(({ read }) => rowLine(read))].join("\n"),
+  const subIssuesOf = (read: IssueRead): IssueRead[] => reads.filter(({ view }) => view.issue.parentId === read.view.issue.id);
+  const rows = reads.flatMap((read) => {
+    if (read.view.issue.parentId === null) return [{ lane: laneOf(read.view), read, subIssues: subIssuesOf(read) }];
+    return read.view.needsYou === null ? [] : [{ lane: "needs-you" as const, read, subIssues: [] }];
+  });
+  const lanes = byLane(rows).map(({ lane, rows: inLane }) =>
+    [`### ${LANE_LABELS[lane]} (${inLane.length})`, ...inLane.flatMap(({ read, subIssues }) => [rowLine(read), ...subIssues.map((sub) => `  ${rowLine(sub)}`)])].join("\n"),
   );
   return ["## Board", ...lanes, readyLine(reads.map(({ view }) => view))].join("\n\n");
 }
 
 function rowLine({ view, agent, threadId, branch }: IssueRead): string {
   const { issue } = view;
-  const held = agent === null ? "no agent" : `${agent.id}${agent.ended === null ? "" : ` (${agent.ended.how})`}, ${threadLink(threadId)}`;
-  return `- ${issue.id} "${issue.title}" (${PIPELINES[issue.kind].label}; ${held}${branch === null ? "" : `, on branch \`${branch}\``}): ${view.headline}${blockedText(view.blockedBy, "; blocked by ")}`;
+  const held = view.subIssues !== null ? "parent" : agent === null ? "no agent" : `${agent.id}${agent.ended === null ? "" : ` (${agent.ended.how})`}, ${threadLink(threadId)}`;
+  const under = issue.parentId === null ? "" : `, under ${issue.parentId}`;
+  return `- ${issue.id} "${issue.title}" (${PIPELINES[issue.kind].label}; ${held}${under}${branch === null ? "" : `, on branch \`${branch}\``}): ${view.headline}${blockedText(view.blockedBy, "; blocked by ")}`;
 }
 
 /** The issues in Todo that nothing blocks: those an agent can start on without waiting. */
 function readyLine(views: readonly IssueView[]): string {
   const ready = views.filter(isReady).map(({ issue }) => issue.id);
-  return `Ready: ${ready.length === 0 ? "none" : ready.join(", ")} (in Todo, and nothing they depend on is open).`;
+  return `Ready: ${ready.length === 0 ? "none" : ready.join(", ")} (in Todo, no sub-issues, and nothing they or their parent depend on is open).`;
 }
 
 /** The issues as `i2 (Todo), i4 (In progress)`, after `lead`; nothing when there are none. */
@@ -46,7 +56,7 @@ const relatedText = (related: readonly Related[]): string => related.map(({ id, 
 
 /** What issue_create says it filed, and what blocks it as it is filed. */
 export const filedText = (issue: Issue, blockedBy: readonly Related[]): string =>
-  `Filed ${issue.id} (${issue.kind}) in ${STATUS_LABELS[issue.rest]}${blockedText(blockedBy, ", blocked by ")}.${issue.verifier === null ? "" : ` Its done handoffs are checked on ${executionText(issue.verifier)}.`}`;
+  `Filed ${issue.id} (${issue.kind})${issue.parentId === null ? "" : ` as a sub-issue of ${issue.parentId}`} in ${STATUS_LABELS[issue.rest]}${blockedText(blockedBy, ", blocked by ")}.${issue.verifier === null ? "" : ` Its done handoffs are checked on ${executionText(issue.verifier)}.`}`;
 
 /** What agent_start did. */
 export function startText(issueId: Issue["id"], outcome: Exclude<StartOutcome, { kind: "refused" }>): string {
@@ -152,9 +162,14 @@ function criteriaText({ kind, doneCriteria }: Issue): string {
   return `### ${verified ? "Done when" : "Questions"}\n\n${doneCriteria.length > 0 ? numbered : verified ? "No criteria yet." : "None."}`;
 }
 
-/** What it depends on and what it blocks, each with its status. */
-function relationsText({ dependsOn, blocks }: Relations): string {
-  return [`Depends on: ${dependsOn.length === 0 ? "nothing" : relatedText(dependsOn)}.`, `Blocks: ${blocks.length === 0 ? "nothing" : relatedText(blocks)}.`].join("\n");
+/** Its parent and sub-issues, what it depends on and what it blocks, each with its status. */
+function relationsText({ parent, subIssues, dependsOn, blocks }: Relations): string {
+  return [
+    `Parent: ${parent === null ? "none" : relatedText([parent])}.`,
+    `Sub-issues: ${subIssues.length === 0 ? "none" : relatedText(subIssues)}.`,
+    `Depends on: ${dependsOn.length === 0 ? "nothing" : relatedText(dependsOn)}.`,
+    `Blocks: ${blocks.length === 0 ? "nothing" : relatedText(blocks)}.`,
+  ].join("\n");
 }
 
 /** Who checks its done handoffs. */
