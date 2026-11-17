@@ -120,8 +120,9 @@ starts it with `agent_start`:
 - **Its first message**: the issue's description, brief and numbered
   done-criteria (a research agent's under "Questions your report answers",
   followed by how to hand off its report, and no section when it has none),
-  and `CREW.md` and `MEMORY.md` as they were at that moment, their `#`
-  headings outside code set under the message's own. Put rules every agent
+  and `CREW.md` and `MEMORY.md` as they were at that moment, each file's
+  `#` title on its first line set under the message's own section, and
+  nothing after it changed. Put rules every agent
   follows in `CREW.md`: the agent is told its work is its brief and
   done-criteria, and the other memory files are its regional manager's
   context, not its instructions.

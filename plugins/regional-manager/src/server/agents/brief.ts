@@ -61,43 +61,12 @@ function memorySection(file: string, holds: string, note: string | null, text: M
 }
 
 /**
- * Each `#` heading outside a code fence goes two levels down, so the file's title sits under the message's `##` section.
- * Code is never changed: once a line might open or close a fence and only a list or quote around it could tell, or opens
- * an HTML block of preformatted or raw text such as `<pre>`, the rest is left as it is. Titles underlined with `===` and
- * headings in lists or quotes keep their size: cosmetic, not worth a Markdown parser.
+ * The file's title, two levels down, so it sits under the message's `##` section: its first non-blank line, when that is
+ * an ATX `#` heading. why nothing after it: a later line can sit in code (a fence, a `<pre>` block) that only a Markdown
+ * parser could tell, and its headings keep their level; a first line can't be inside either.
  */
-function nested(markdown: string): string {
-  const lines = markdown.split("\n");
-  let fence: Fence | null = null;
-  for (const [i, line] of lines.entries()) {
-    const next: Place = fence === null ? opens(line) : after(fence, line);
-    if (next === "unsure") break;
-    if (fence === null && next === null) lines[i] = line.replace(ATX_HEADING, (_, indent: string, hashes: string) => `${indent}${"#".repeat(Math.min(hashes.length + 2, 6))}`);
-    fence = next;
-  }
-  return lines.join("\n");
-}
+const nested = (markdown: string): string =>
+  markdown.replace(FIRST_LINE_HEADING, (_, before: string, hashes: string) => `${before}${"#".repeat(Math.min(hashes.length + 2, 6))}`);
 
-/** A code fence: its marker's character, how many of them opened it, and the spaces before them. */
-type Fence = { char: string; length: number; indent: string };
-
-/** Where a line leaves the text: in a fence, outside one (null), or unsure, after which nothing is changed. */
-type Place = Fence | null | "unsure";
-
-const ATX_HEADING = /^( {0,3})(#{1,6})(?=[ \t]|$)/;
-
-/** The fence the line opens, or null; unsure when a tab, list marker or `>` comes before its marker, or it opens raw HTML. */
-function opens(line: string): Place {
-  const match = /^( *)(`{3,}|~{3,})(.*)$/.exec(line);
-  if (match === null) return /^[ \t>*+\-\d.)]*(?:```|~~~|<(?:pre|script|style|textarea)(?:[\s>]|$))/i.test(line) ? "unsure" : null;
-  const [, indent = "", marker = "", info = ""] = match;
-  return marker.startsWith("`") && info.includes("`") ? null : { char: marker.charAt(0), length: marker.length, indent };
-}
-
-/** The fence after the line: still open, closed (null) by a marker as indented as its opener's, or unsure when it may end elsewhere. */
-function after(fence: Fence, line: string): Place {
-  const indent = line.slice(0, line.search(/\S|$/));
-  const marker = /^\s*(`+|~+)[ \t]*$/.exec(line)?.[1];
-  if (marker?.charAt(0) === fence.char && marker.length >= fence.length) return indent === fence.indent ? null : "unsure";
-  return line.trim() !== "" && indent.length < fence.indent.length ? "unsure" : fence;
-}
+/** Blank lines, then up to three spaces and an ATX heading's `#`s, at the very start of the text. */
+const FIRST_LINE_HEADING = /^((?:[ \t]*\n)* {0,3})(#{1,6})(?=[ \t\n]|$)/;
