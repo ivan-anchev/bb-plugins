@@ -42,14 +42,17 @@ export const boardTag = (id: CoordinatorId): string => `board:${id}`;
 const shownAgentSchema = z.object({ id: agentIdSchema, threadId: z.string().nullable() });
 
 /**
- * One issue on the board, as its view reads now: its kind, its status, why it waits on the user
- * (null: it doesn't; the board then shows it under Needs you, its status on the row), its latest
- * agent (null: none started) with that agent's thread while bb runs it (null: archived or deleted),
- * and its pull request as last read (null: none seen). Its verdicts are in its detail (`issue`).
+ * One issue on the board, as its view reads now: its kind, its parent (null: none), how many of its
+ * sub-issues are Done of how many (null: it has none), its status, why it waits on the user (null:
+ * it doesn't; the board then shows it under Needs you, its status on the row), its latest agent
+ * (null: none started) with that agent's thread while bb runs it (null: archived or deleted), and
+ * its pull request as last read (null: none seen). Its verdicts are in its detail (`issue`).
  */
 const issueRowSchema = z.object({
   id: issueIdSchema,
   kind: kindSchema,
+  parentId: issueIdSchema.nullable(),
+  subIssues: z.object({ done: z.number().int().nonnegative(), total: z.number().int().positive() }).nullable(),
   title: z.string(),
   status: issueStatusSchema,
   needsYou: z.string().nullable(),

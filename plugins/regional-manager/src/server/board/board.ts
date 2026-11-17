@@ -24,6 +24,8 @@ type BoardStore = FactsStore & Pick<Store, "verifies" | "lastOwnTreeEvent" | "is
 const rowOf = ({ view, agent, threadId }: IssueRead): IssueRow => ({
   id: view.issue.id,
   kind: view.issue.kind,
+  parentId: view.issue.parentId,
+  subIssues: view.subIssues,
   title: view.issue.title,
   status: view.status,
   needsYou: view.needsYou,

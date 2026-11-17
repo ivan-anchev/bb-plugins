@@ -35,6 +35,8 @@ const SHA = "4b1d9e0c2a7f3e5d6c8b9a0f1e2d3c4b5a697881";
 const issue = (id: string, fields: Partial<IssueRow>): IssueRow => ({
   id: issueIdSchema.parse(id),
   kind: "build",
+  parentId: null,
+  subIssues: null,
   title: `Title of ${id}`,
   status: "todo",
   needsYou: null,
