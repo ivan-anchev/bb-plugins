@@ -258,9 +258,12 @@ verdict.
   seconds, and retires a worktree a few minutes later, once no live thread is
   left in it. First the manager's messages and the verifiers' findings still
   queued for any of the issue's agents, the holder or one the manager
-  stopped, are taken back, each confirmed gone by reading bb's queue again;
-  the result quotes the manager's, naming the agent that never got each. One
-  that can't be taken back, or that the user queued, refuses the start. Then
+  stopped, and the plugin's reminders queued for its verifiers (sent as from
+  the manager's thread), are taken back, each confirmed gone by reading bb's
+  queue again; the result quotes the manager's, naming the agent that never
+  got each. One that can't be taken back, or that the user queued for an
+  agent or a verifier, refuses the start: once sent, it would wake that
+  thread beside the new agent. Then
   every thread the plugin started on the issue that bb reports running (the
   holder, a verifier, an earlier agent) is stopped, never archived; a late
   verdict is refused. Until bb confirms each stopped, the start is refused and

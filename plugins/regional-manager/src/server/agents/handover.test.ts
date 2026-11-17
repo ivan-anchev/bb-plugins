@@ -353,6 +353,42 @@ test("findings bb queued for a busy a1 are taken back before the handover stops 
   assert.deepEqual([kit.queued(agentThreadId), kit.thread(agentThreadId).status, agent(a1).ended?.how], [[], "idle", "replaced"]);
 });
 
+test("the plugin's reminder bb queued for a verifier behind a turn someone started there is taken back before the handover stops it, so it never wakes the superseded verifier beside a2", async () => {
+  const { kit, threadId, coordinatorId, agentThreadId, handover, handOff } = await handedTo();
+  await handOff(agentThreadId);
+  const verifier = verifierOf(kit, coordinatorId);
+  await kit.idle(verifier, "Forgot the verdict.");
+  let release = (): void => assert.fail("the reminder was never sent");
+  kit.sends.pending = new Promise((resolve) => (release = resolve));
+  await kit.tick(); // the tick reads the verifier idle; its reminder waits at bb
+  kit.startTurn(verifier); // the user messages the current verifier before the reminder arrives
+  kit.sends.pending = null;
+  release();
+  await settled();
+  const [reminder] = kit.queued(verifier);
+  assert.ok(reminder, "bb queued the reminder behind the user's turn");
+  assert.equal(kit.sent().at(-1)?.senderThreadId, threadId, "sent as from the regional manager's thread");
+
+  const next = threadIn(textOf(await handover()));
+  assert.deepEqual([kit.queued(verifier), kit.thread(verifier).status, kit.thread(next).status], [[], "idle", "active"], "taken back, then the verifier stopped: nothing left to wake it");
+  assert.equal(kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict.state, "superseded");
+});
+
+test("a person's message queued for a verifier refuses a handover, as one for an agent does: it isn't the plugin's to delete, and once sent it would wake the verifier beside the new agent", async () => {
+  const { kit, coordinatorId, agentThreadId, handover, agent, handOff } = await handedTo();
+  await handOff(agentThreadId);
+  const verifier = verifierOf(kit, coordinatorId);
+  kit.userQueues(verifier, "Check the lint output too.");
+
+  const refused = await handover();
+  assert.ok(isRefusal(refused));
+  assert.equal(
+    textOf(refused),
+    `agent_start is refused: bb still has a message from the user queued for the verifier @thread:${verifier} and couldn't take it back; once sent, it would wake the verifier @thread:${verifier} beside a new agent, so no agent started and a1 still holds i1. Call agent_start again once bb has sent or deleted it.`,
+  );
+  assert.deepEqual([kit.queued(verifier).length, kit.thread(verifier).status, agent(a1).ended], [1, "active", null], "the message is left alone, and nothing stopped");
+});
+
 test("a verifier whose start is held when a handover is asked starts first, and the handover stops it before a2 starts", async () => {
   const { kit, coordinatorId, agentThreadId, handover } = await handedTo();
   kit.providers.holding = true;

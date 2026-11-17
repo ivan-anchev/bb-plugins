@@ -277,8 +277,9 @@ verdict) stays one.
   instead when a sentence would set it right: a handover costs a new thread
   that reads everything again.
 - **What happens**: your messages and its verifiers' findings still queued
-  for any of the issue's agents, the holder or one you stopped, are taken
-  back (the result quotes yours, naming the agent: it never got them); then
+  for any of the issue's agents, the holder or one you stopped, and the
+  plugin's reminders queued for its verifiers, are taken back (the result
+  quotes yours, naming the agent: it never got them); then
   every thread the plugin started on the issue that
   bb reports running, the holder, a verifier, an earlier agent, is stopped,
   and the holder ends as replaced. A verifier's verdict still to come is
@@ -350,9 +351,9 @@ verdict) stays one.
 - **Refusals**: nothing is stopped when `agent_start` is refused, unless the
   refusal says what was: the issue changed while its threads stopped (it
   merged), or bb doesn't confirm one of them stopped (the holder still holds
-  the issue). A message queued for any of the issue's agents that can't be
-  taken back, one the user queued included, refuses it before anything
-  stops, naming it and the agent:
+  the issue). A message queued for any of the issue's agents or verifiers
+  that can't be taken back, one the user queued included, refuses it before
+  anything stops, naming it and the thread:
   once bb sends or deletes it, call again. A move is refused before anything
   stops for the reasons in Moving the work, and once more after the holder
   stopped if its environment changed meanwhile (the holder still holds the

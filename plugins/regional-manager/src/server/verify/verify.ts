@@ -10,6 +10,7 @@ import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
 import { branchOf, type Agent, type AgentCheckout, type EndedHow } from "../../model/agent.ts";
 import { sameModel, type Execution } from "../../model/execution.ts";
 import { handoffIsCurrent, type GivenHandoff, type Handoff } from "../../model/handoff.ts";
+import type { CoordinatorId } from "../../model/role.ts";
 import type { Check, CheckId } from "../../model/verdict/check.ts";
 import type { CheckoutRead } from "../../model/verdict/checkout.ts";
 import { ciOf, type CiVerdict } from "../../model/verdict/pr.ts";
@@ -94,6 +95,13 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
     return { ...agent, threadId: agent.threadId };
   }
 
+  /** A regional manager's thread. why throw: checks are kept while their regional manager is. */
+  function managerThreadOf(coordinatorId: CoordinatorId): string {
+    const coordinator = store.coordinator(coordinatorId);
+    if (coordinator === null) throw new Error(`The regional manager ${coordinatorId} is missing.`);
+    return coordinator.threadId;
+  }
+
   /** The check. why throw: callers hold a check id the store gave them, and checks are kept while their regional manager is. */
   function checkOf(checkId: CheckId): Check {
     const check = store.check(checkId);
@@ -157,7 +165,7 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
    * a reminder can't run there. Reads the check and its verifier as it decides.
    */
   async function followInTurn(checkId: CheckId): Promise<void> {
-    const { verdict } = checkOf(checkId);
+    const { verdict, coordinatorId } = checkOf(checkId);
     if (verdict.state !== "running") return;
     const { verifierThreadId } = verdict;
     const from = { state: "running", verifierThreadId } as const;
@@ -168,10 +176,13 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
     const destroyed = thread.environmentId !== null && (await environmentGone(bb, thread.environmentId));
     if (destroyed) return void giveUp("the agent's environment was removed (a sandbox removed or reaped) before its verifier returned a verdict");
     if (verdict.nudged) return void giveUp("its verifier stopped without a verdict twice, the second time after a reminder");
+    // why from the regional manager's thread: a handover takes back what the plugin queued by its
+    // sender, and a reminder bb queued behind a turn would otherwise wake a superseded verifier.
+    const managerThreadId = managerThreadOf(coordinatorId);
     // why mark first: a nudge sent twice would double the verifier's work; a lost one only ends it sooner.
     if (!store.markNudged(checkId, verifierThreadId)) return;
     try {
-      await bb.sdk.threads.send({ threadId: thread.id, mode: "queue-if-active", input: [{ type: "text", text: NUDGE, mentions: [] }] });
+      await bb.sdk.threads.send({ threadId: thread.id, senderThreadId: managerThreadId, mode: "queue-if-active", input: [{ type: "text", text: NUDGE, mentions: [] }] });
     } catch (error) {
       bb.log.warn(`Could not remind the verifier ${thread.id} to return its verdict: ${messageOf(error)}`);
     }

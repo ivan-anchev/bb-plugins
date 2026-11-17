@@ -375,7 +375,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
    */
   async function quiet(coordinatorId: CoordinatorId, issueId: IssueId, holder: Agent | null): Promise<{ withdrawn: Withdrawn[]; did: string } | { refused: string }> {
     const threads = store.issueThreads(coordinatorId, issueId);
-    const named = (threadId: string): string => threads.find((thread) => thread.threadId === threadId)?.agentId ?? `the verifier @thread:${threadId}`;
+    const named = (threadId: string): string => threadName({ threadId, agentId: threads.find((thread) => thread.threadId === threadId)?.agentId ?? null });
     const { withdrawn, left } = await withdrawQueued(coordinatorOf(coordinatorId).threadId, threads);
     const { stopped, unstopped } = left.length > 0 ? { stopped: [], unstopped: [] } : await stopRunning(bb, threads.map(({ threadId }) => threadId));
     const did = didText(withdrawn, stopped.map(named));
@@ -392,30 +392,38 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
   }
 
   /**
-   * Takes back the messages the plugin's tools queued in bb for the threads of the issue's agents
-   * (among `threads`, every thread of the issue) that bb still has, which bb would send once a
-   * thread's turn stops: the regional manager's (`managerThreadId`) and the issue's verifiers'
-   * findings, as bb names their sender. Then reads each queue again, and returns, in words, everything still
-   * there that bb would send (`left`), a message someone else queued included, and the manager's
-   * messages bb deleted, with the agent each was to (`withdrawn`). why read again, not trust a
-   * delete's answer: bb refuses one for a message it sent meanwhile and fails one it never reached
-   * alike. One bb sent meanwhile reached its agent, and the stop after this ends the turn it started.
+   * Takes back the messages the plugin queued in bb for the issue's threads (`threads`: every thread
+   * of the issue, its agents' and its verifiers') that bb still has, which bb would send once a
+   * thread's turn stops: the regional manager's to its agents and the plugin's reminders to
+   * verifiers, both sent from the manager's thread (`managerThreadId`), and the issue's verifiers'
+   * findings, as bb names their sender. Then reads each queue again, and returns, in words,
+   * everything still there that bb would send (`left`), with the thread it was for, a message
+   * someone else queued included, and the manager's messages to agents bb deleted, with the agent
+   * each was to (`withdrawn`). why a person's message left for a verifier refuses the start, as one
+   * for an agent does: once sent, it wakes that verifier beside the new agent, and it isn't the
+   * plugin's to delete. why read again, not trust a delete's answer: bb refuses one for a message
+   * it sent meanwhile and fails one it never reached alike. One bb sent meanwhile reached its
+   * thread, and the stop after this ends the turn it started.
    */
-  async function withdrawQueued(managerThreadId: string, threads: { threadId: string; agentId: AgentId | null }[]): Promise<{ withdrawn: Withdrawn[]; left: { to: AgentId; what: string }[] }> {
+  async function withdrawQueued(managerThreadId: string, threads: IssueThread[]): Promise<{ withdrawn: Withdrawn[]; left: { to: string; what: string }[] }> {
     const ours = new Set([managerThreadId, ...threads.map((thread) => thread.threadId)]);
     const queue = bb.sdk.threads.queuedMessages;
-    const agents = threads.flatMap(({ threadId, agentId }) => (agentId === null ? [] : [{ threadId, agentId }]));
-    const listed = await threadsById(bb, agents.map(({ threadId }) => threadId));
-    const kept = agents.filter(({ threadId }) => listed.get(threadId)?.deletedAt === null);
-    const sender = (senderThreadId: string | null): string =>
-      senderThreadId === managerThreadId ? "your message" : senderThreadId === null ? "a message from the user" : ours.has(senderThreadId) ? `findings from the verifier @thread:${senderThreadId}` : `a message from @thread:${senderThreadId}`;
+    const listed = await threadsById(bb, threads.map(({ threadId }) => threadId));
+    const kept = threads.filter(({ threadId }) => listed.get(threadId)?.deletedAt === null);
+    const sender = (senderThreadId: string | null, toVerifier: boolean): string => {
+      if (senderThreadId === managerThreadId) return toVerifier ? "the plugin's reminder" : "your message";
+      if (senderThreadId === null) return "a message from the user";
+      return ours.has(senderThreadId) ? `findings from the verifier @thread:${senderThreadId}` : `a message from @thread:${senderThreadId}`;
+    };
     const each = await Promise.all(
-      kept.map(async ({ threadId, agentId }) => {
+      kept.map(async (thread) => {
+        const { threadId, agentId } = thread;
         const mine = (await queue.list({ threadId })).filter((message) => bbSends(message) && message.senderThreadId !== null && ours.has(message.senderThreadId));
         const deleted = await Promise.all(mine.map(({ id }) => queue.delete({ threadId, queuedMessageId: id }).then(() => true, () => false)));
+        const toManager = mine.filter(({ senderThreadId }, i) => deleted[i] && senderThreadId === managerThreadId);
         return {
-          withdrawn: mine.filter(({ senderThreadId }, i) => deleted[i] && senderThreadId === managerThreadId).map(({ content }) => ({ to: agentId, text: textOf(content) })),
-          left: (await queue.list({ threadId })).filter(bbSends).map(({ senderThreadId }) => ({ to: agentId, what: sender(senderThreadId) })),
+          withdrawn: agentId === null ? [] : toManager.map(({ content }) => ({ to: agentId, text: textOf(content) })),
+          left: (await queue.list({ threadId })).filter(bbSends).map(({ senderThreadId }) => ({ to: threadName(thread), what: sender(senderThreadId, agentId === null) })),
         };
       }),
     );
@@ -645,8 +653,14 @@ function didText(withdrawn: readonly Withdrawn[], stopped: readonly string[]): s
   return did === "" ? "" : `${did.charAt(0).toUpperCase()}${did.slice(1)}, but `;
 }
 
-/** The agents the messages were to, in words: `a1`, `a1 and a2`. */
-export const recipientsText = (messages: readonly { to: AgentId }[]): string => [...new Set(messages.map(({ to }) => to))].join(" and ");
+/** The threads the messages were to, in words: `a1`, `a1 and the verifier @thread:thr_7`. */
+export const recipientsText = (messages: readonly { to: string }[]): string => [...new Set(messages.map(({ to }) => to))].join(" and ");
+
+/** One of the threads the plugin started for an issue: an agent's, or (agentId null) a verifier's. */
+type IssueThread = { threadId: string; agentId: AgentId | null };
+
+/** A thread of an issue, in words: its agent's id, or `the verifier @thread:thr_7`. */
+const threadName = ({ threadId, agentId }: IssueThread): string => agentId ?? `the verifier @thread:${threadId}`;
 
 /** A queued message's text. */
 const textOf = (content: QueuedMessage["content"]): string => content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n");
