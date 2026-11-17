@@ -37,7 +37,7 @@ export function useFocusHandOff(): FocusHandOff {
 export function handFocusToPage(region: HTMLElement | null): (() => void) | undefined {
   if (region === null) return;
   return () => {
-    if (region.contains(document.activeElement)) region.parentElement?.closest<HTMLElement>('[tabindex="0"]')?.focus();
+    if (region.contains(document.activeElement)) pageOf(region)?.focus();
   };
 }
 
@@ -55,11 +55,12 @@ type GroupFocus<Group> = {
  * Focus kept by items that move from one group to another, some groups folded, such as a board's rows
  * moving lanes: React removes an item from its old list and mounts it in the new one, or nowhere while
  * the new one is folded. Once the commit is done, focus that was anywhere in the leaving item goes to
- * its target where it landed, or to the header of the group it is in now (`groupOf`, null: in none).
+ * its target where it landed, or to the header of the group it is in now (`groupOf`, null: in none),
+ * or, once the item is gone from every group, to the tab stop of the page it was in.
  */
 export function useFocusKeptAcrossGroups<Group>(groupOf: (key: string) => Group | null): GroupFocus<Group> {
   const kept = useMemo(() => {
-    let leaving: string | null = null;
+    let leaving: { key: string; page: HTMLElement | null } | null = null;
     const targets = new Map<string, HTMLElement>();
     const headers = new Map<Group, HTMLElement>();
     return {
@@ -67,7 +68,8 @@ export function useFocusKeptAcrossGroups<Group>(groupOf: (key: string) => Group 
         item: stablePerKey((key: string): RefCallback<HTMLElement> => (item) => {
           if (item === null) return;
           return () => {
-            if (item.contains(document.activeElement)) leaving = key;
+            // why read the page now: the item is still in it, and nothing of it is once it's gone.
+            if (item.contains(document.activeElement)) leaving = { key, page: pageOf(item) };
           };
         }),
         target: stablePerKey((key: string) => tracked(targets, key)),
@@ -76,10 +78,10 @@ export function useFocusKeptAcrossGroups<Group>(groupOf: (key: string) => Group 
       /** Hands the focus kept to where its item landed; nothing when no item that held it left. */
       land(groupOf: (key: string) => Group | null) {
         if (leaving === null) return;
-        const key = leaving;
+        const { key, page } = leaving;
         leaving = null;
         const group = groupOf(key);
-        (targets.get(key) ?? (group === null ? undefined : headers.get(group)))?.focus();
+        (targets.get(key) ?? (group === null ? undefined : headers.get(group)) ?? page)?.focus();
       },
     };
   }, []);
@@ -90,6 +92,9 @@ export function useFocusKeptAcrossGroups<Group>(groupOf: (key: string) => Group 
 }
 
 // ------------------------------------------------------------------ layer 2
+
+/** The tab stop of the page around `element`: the element the page scrolls by (REVIEW.md). */
+const pageOf = (element: HTMLElement): HTMLElement | null => element.parentElement?.closest<HTMLElement>('[tabindex="0"]') ?? null;
 
 /** A ref that keeps `map` pointing at the element mounted for `key`. */
 function tracked<Key>(map: Map<Key, HTMLElement>, key: Key): RefCallback<HTMLElement> {

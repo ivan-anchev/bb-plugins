@@ -5,7 +5,7 @@ import { registerHooks } from "node:module";
 import { afterEach, test } from "node:test";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent, within } from "@testing-library/react";
-import { createElement } from "react";
+import { createElement, type ComponentProps } from "react";
 import type { IssueRow } from "../../../contract.ts";
 import { agentIdSchema } from "../../../model/agent.ts";
 import { decisionIdSchema, type Decision } from "../../../model/decision.ts";
@@ -54,6 +54,9 @@ const ISSUES: IssueRow[] = [
   issue("i7", { status: "done", headline: "Merged #39" }),
 ];
 
+/** The board in the page it scrolls in, as the Board page and the Board tab draw it: a tab stop. */
+const Page = (props: ComponentProps<typeof IssueBoard>) => createElement("div", { tabIndex: 0, "aria-label": "Board page" }, createElement(IssueBoard, props));
+
 /** The board, with a detail standing in for the one read from the plugin; every detail drawn is recorded in `read`. */
 function mount(issues: readonly IssueRow[], decisions: readonly Decision[] = [QUESTION]) {
   const read: string[] = [];
@@ -66,8 +69,8 @@ function mount(issues: readonly IssueRow[], decisions: readonly Decision[] = [QU
       return createElement("button", { type: "button" }, `Detail of ${shown.id}`);
     },
   });
-  const view = renderSlot({ component: IssueBoard }, props(issues));
-  return { view, read, reread: (rows: readonly IssueRow[]) => view.rerender(createElement(IssueBoard, props(rows))) };
+  const view = renderSlot({ component: Page }, props(issues));
+  return { view, read, reread: (rows: readonly IssueRow[]) => view.rerender(createElement(Page, props(rows))) };
 }
 
 const laneHeader = (view: ReturnType<typeof mount>["view"], name: RegExp) => view.getByRole("button", { name });
@@ -181,6 +184,16 @@ test("a focused row whose issue moves into a folded lane hands focus to that lan
   const done = laneHeader(view, /^Done/);
   assert.equal(done.getAttribute("aria-expanded"), "false");
   assert.ok(document.activeElement === done, "focus is on Done's header");
+});
+
+test("a focused row whose issue is gone from the next read hands focus to the page the board scrolls in", () => {
+  const { view, reread } = mount([issue("i1", {}), issue("i2", {})], []);
+  row(view, "i1").focus();
+
+  act(() => reread([issue("i2", {})]));
+
+  assert.equal(view.queryByRole("button", { name: /\bi1 Build/ }), null);
+  assert.ok(document.activeElement === view.getByLabelText("Board page"), "focus is on the page's tab stop, not the body");
 });
 
 test("focus on a row's agent link or in its open detail moves with the issue, to its row where it lands", () => {
