@@ -63,7 +63,7 @@ export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
   bb.agents.registerTool({
     name: UPDATE,
     description:
-      "Change one of your issues: its kind (only before any agent has started on it), title, description, brief, done-criteria or verifier, or where it stands. status: backlog or todo rests an issue no agent holds (and reopens a canceled one); canceled closes one no agent holds; done accepts one that is In review (a research issue never is: its agent's done handoff makes it Done). Every other status is the plugin's to say, from what its agents did. A verifier change applies from the issue's next done handoff on; verifier: null lets the plugin pick again.",
+      "Change one of your issues: its kind (only before any agent has started on it), title, description, brief, done-criteria or verifier, or where it stands. status: backlog or todo rests an issue no agent holds (and reopens a canceled one); canceled closes one no agent holds; done accepts one that is In review (a research issue never is: its agent's done handoff makes it Done). Every other status is the plugin's to say, from what its agents did. A build issue's verifier change applies from its next done handoff on; verifier: null lets the plugin pick again, and drops the one named when the issue becomes research.",
     presentation: { label: { pending: "Updating an issue", completed: "Updated an issue" }, icon: { glyph: "Workflow" } },
     parameters: z.strictObject({
       id: issueIdSchema,

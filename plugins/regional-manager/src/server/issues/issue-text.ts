@@ -61,9 +61,11 @@ export function stopText(agent: Agent, outcome: StopOutcome): string {
   }
 }
 
-/** What a verifier named on an issue applies to. */
-export const verifierText = (issue: Issue): string =>
-  issue.verifier === null ? `${issue.id}'s verifier is the plugin's pick again.` : `${issue.id}'s done handoffs are checked on ${executionText(issue.verifier)}, from its next handoff on; a check already running keeps its own.`;
+/** What a verifier named on an issue applies to: nothing on a kind nothing verifies. */
+export function verifierText(issue: Issue): string {
+  if (!isVerified(issue.kind)) return `${issue.id} has no verifier: nothing verifies a ${PIPELINES[issue.kind].label.toLowerCase()} issue.`;
+  return issue.verifier === null ? `${issue.id}'s verifier is the plugin's pick again.` : `${issue.id}'s done handoffs are checked on ${executionText(issue.verifier)}, from its next handoff on; a check already running keeps its own.`;
+}
 
 /**
  * An issue whole: its status and why, its plan, the verifier named, each agent with what it runs

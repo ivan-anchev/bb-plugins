@@ -64,6 +64,26 @@ test("a research agent's first message lists its questions under \"Questions you
   assert.doesNotMatch(buildPrompt, /## Questions|## Handing off|report/);
 });
 
+test("what bb injects for a research agent and its manager agrees with its first message: a report, no commit read, nothing verified", async () => {
+  const { kit, threadId, agentThreadId } = await researching();
+  const prompt = kit.thread(agentThreadId).spawnedWith.prompt ?? assert.fail("spawned without a prompt");
+  assert.match(prompt, /It names no commit: nothing you commit or push is read, and no verifier checks your work\./);
+
+  const agent = kit.configurationFor(agentThreadId, {});
+  assert.deepEqual(agent.tools, ["crew_memory_read", "agent_handoff"]);
+  const rules = agent.instructions ?? assert.fail("an agent with no rules");
+  assert.match(rules, /its done-criteria \(on a research issue, the questions your report answers\)/);
+  assert.match(rules, /A research issue's is a report, which you hand off: nothing you commit is read\./);
+  assert.match(rules, /On a research issue, your done handoff carries your whole report, and nothing verifies it\./);
+  assert.doesNotMatch(rules, /and commit it there|Its evidence takes each done-criterion/);
+
+  const manager = kit.configurationFor(threadId, {}).instructions ?? assert.fail("a manager with no rules");
+  assert.match(manager, /A research issue's done handoff carries its report, which nothing verifies: it makes the issue Done/);
+  assert.match(manager, /A build issue's done handoff reaches you with its verdict/);
+  assert.match(manager, /verifier on every build issue they cover/);
+  assert.doesNotMatch(manager, /\n- A done handoff reaches you with its verdict/);
+});
+
 test("a research done handoff is Done at once: no verifier, no git read, a commit given anyway dropped, and the manager woken to read the report whole with its file", async () => {
   const { kit, threadId, coordinatorId, agentThreadId, files, statusOf, catchUp, handOff } = await researching();
   const spawned = kit.spawned();
@@ -132,7 +152,7 @@ test("a research issue can't be accepted Done by the manager, and nothing can na
   assert.equal(textOf(await call("issue_create", { ...ISSUE, verifier: { providerId: "codex", model: "gpt-default" } })), "Filed i2 (build) in Todo. Its done handoffs are checked on codex gpt-default (low).");
   const toResearch = await call("issue_update", { id: "i2", kind: "research" });
   assert.equal(textOf(toResearch), "i2 can't be changed so: a research issue has no verifier: nothing verifies it. Give verifier: null with the change to drop the one named.");
-  assert.equal(textOf(await call("issue_update", { id: "i2", kind: "research", verifier: null })), "Updated i2. i2's verifier is the plugin's pick again.");
+  assert.equal(textOf(await call("issue_update", { id: "i2", kind: "research", verifier: null })), "Updated i2. i2 has no verifier: nothing verifies a research issue.");
   assert.deepEqual(
     kit.store.issues(coordinatorId).map(({ id, kind, verifier }) => [id, kind, verifier]),
     [

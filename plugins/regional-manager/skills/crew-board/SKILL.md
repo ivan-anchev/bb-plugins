@@ -49,12 +49,12 @@ and no tool can turn verification on or off.
 | `agent_start` | regional manager | Starts an agent on an issue, optionally naming its `execution` and `placement`. |
 | `agent_message` | regional manager | Messages one agent, marked as from the regional manager. |
 | `agent_stop` | regional manager | Stops one agent, and archives its thread with `archive: true`. |
-| `agent_handoff` | agent | Ends the agent's work: done (with its commit), blocked or gave up, with a summary and its lists. |
+| `agent_handoff` | agent | Ends the agent's work: done (a build issue's with its commit, a research issue's with its report), blocked or gave up, with a summary and its lists. |
 | `issue_verdict` | verifier | Returns each criterion's result and evidence, and findings, for the handoff it checks. |
 
 The regional manager also gets its rules (call `crew_catch_up` first every
-turn, never edit project files, build or commit itself, delegate with
-checkable done-criteria) and the `regional-manager` skill, its playbook. An
+turn, never edit project files, build or commit itself, delegate with a
+brief and done-criteria) and the `regional-manager` skill, its playbook. An
 agent gets the `agent-work` skill and a verifier the `verifying` skill. A
 memory file name that leaves the memory folder or doesn't end in `.md` is
 rejected.
@@ -82,7 +82,7 @@ An issue's status is derived from what its agents did, never stored:
 | Status | When |
 | --- | --- |
 | Backlog | No agent holds it, and the manager rested it here: not planned yet. |
-| Todo | No agent holds it, ready to start. A new issue rests here, and returns here when its agent ends before its work reached Verifying. |
+| Todo | No agent holds it, ready to start. A new issue rests here, and returns here when its agent ends before its work reached Verifying (on a research issue, Done). |
 | In progress | An agent holds it: working, starting, idle without a handoff, fixing its verifier's findings, blocked, gave up, or its last turn failed. |
 | Verifying | A build issue: its agent handed off done, and the verifier checks it, or every criterion passed and it waits for CI. |
 | In review | A build issue: its done handoff passed ("✓ Verified"), or was made with verification off ("Unverified"). |
@@ -194,7 +194,7 @@ branch for the project.
   refused. The start's result says which, and `issue_read` lists each agent
   with what it ran on, as recorded at its latest handoff (so a model you
   switch in the agent's composer counts from its next handoff).
-- **A verifier** runs on the issue's `verifier`, named on `issue_create` or
+- **A verifier** runs on a build issue's `verifier`, named on `issue_create` or
   `issue_update`, when bb can run it in the agent's environment and it isn't
   the agent's model. Otherwise, or with none named, the plugin picks: the
   regional manager's model, if the agent runs on another; else the default

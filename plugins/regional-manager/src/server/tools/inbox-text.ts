@@ -41,7 +41,7 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
   if (event.kind === "memory-edited") return `### The user edited ${event.file}\n\n${when} Its current text is in the memory below, or read it with crew_memory_read.`;
   if (event.kind === "verification-toggled") {
     return event.verify
-      ? `### The user turned verification on\n\n${when} Done handoffs made from now on get an independent verifier, and reach you with its verdict.`
+      ? `### The user turned verification on\n\n${when} Build issues' done handoffs made from now on get an independent verifier, and reach you with its verdict. A research issue's is never verified.`
       : `### The user turned verification off\n\n${when} Done handoffs made from now on reach you unverified: read their evidence before you call the work done.`;
   }
   if (event.kind === "reminder") {

@@ -121,7 +121,7 @@ In progress, Verifying or In review.
 | Status | When |
 | --- | --- |
 | Backlog | No agent holds it, and you rested it here: not planned yet. |
-| Todo | No agent holds it, ready to start. Where a new issue rests, and where it returns when its agent ends before its work reached Verifying. |
+| Todo | No agent holds it, ready to start. Where a new issue rests, and where it returns when its agent ends before its work reached Verifying (on a research issue, Done). |
 | In progress | An agent holds it and is working, idle without a handoff, fixing its verifier's findings, or stopped by something (blocked, gave up, failed). |
 | Verifying | A build issue: its agent handed off done, and the verifier checks it, or every criterion passed and it waits for CI on the claimed commit. |
 | In review | A build issue: its done handoff passed verification (or was made with verification off). It waits for its pull request to merge, or for you to accept it. |
@@ -144,7 +144,8 @@ again), or a decision you asked names it. The board shows these first.
   status. A research issue is never In review: its done handoff makes it Done.
 
 While an agent holds the issue, `backlog`, `todo` and `canceled` are refused:
-stop the agent with `agent_stop` first. Done is final either way.
+stop the agent with `agent_stop` first. A build issue's Done is final either
+way; a research issue's lasts until you message its agent.
 
 ## Agents
 

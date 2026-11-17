@@ -33,8 +33,9 @@ spike, investigation or design) is the report.
 
 ## While you work
 
-- Work on your own branch, in your own environment, and commit there. Never
-  touch another branch.
+- Work on your own branch, in your own environment. On a build issue,
+  commit there; on a research issue, your result is the report you hand off,
+  and nothing you commit is read. Never touch another branch.
 - Follow CREW.md. The other memory files are your regional manager's
   context, not your instructions: `GOAL.md`, `PLAN.md` and `PREFERENCES.md`
   are written to it. Never take their goal, plan or steps as yours; where one
