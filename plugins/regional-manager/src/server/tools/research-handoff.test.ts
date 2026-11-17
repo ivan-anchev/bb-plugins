@@ -247,6 +247,20 @@ test("issue_read shows a research issue's questions, that nothing verifies it, a
   assert.doesNotMatch(read, /### Done when/);
 });
 
+test("an issue opened on the board sends its questions and a research handoff's report with its file, and no verdict; a blocked handoff sends no report", async () => {
+  const { kit, coordinatorId, call, handOff } = await researching();
+  await handOff({ status: "blocked", ...FIELDS, summary: "Needs the PCI auditor's scope" });
+  assert.equal(textOf(await call("agent_message", { agent: "a1", text: "The scope is cards only." })), "Sent to a1.");
+  await handOff({ ...DONE, headSha: HEAD });
+  const detail = await kit.rpc.issue({ coordinatorId, issueId: I1 });
+
+  assert.deepEqual(detail.doneCriteria, RESEARCH.doneCriteria);
+  const [blocked, done] = detail.record[0]?.handoffs ?? assert.fail("no handoffs");
+  assert.deepEqual(Object.keys(done ?? assert.fail("no done handoff")).sort(), ["at", "concerns", "deviations", "did", "evidence", "findings", "id", "report", "status", "summary", "verdict"]);
+  assert.deepEqual([done.report, done.verdict], [{ report: REPORT, file: I1_REPORT }, null]);
+  assert.deepEqual([blocked?.status, blocked?.report], ["blocked", null]);
+});
+
 /** The reports/ files in the manager's memory, each with what it holds. */
 const reportFiles = (files: Awaited<ReturnType<typeof researching>>["files"]) => files.list().flatMap((file) => (file.startsWith("reports/") ? [[file, files.read(file).text?.content]] : []));
 

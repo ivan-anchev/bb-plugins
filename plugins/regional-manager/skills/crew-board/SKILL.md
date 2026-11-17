@@ -545,13 +545,19 @@ page from its row in the panel, show the same board, live:
   "Verifying: <summary>", "✓ Verified: <summary>" or "Blocked: <summary>"),
   its agent, which opens the agent's thread, and once it has one, its pull
   request: its number in its state's colour, with a dot for its CI, which
-  opens it on GitHub.
+  opens it on GitHub. A research issue's row reads "Research" and never has
+  a pull request.
 
 Pressing an issue opens it in place: its row grows to show its title and
 headline whole, which a closed row fades out at its edge, and under it come
-what it is about, **Done when** with its criteria, and its **Record**: each agent that held it, how it
-ended, and each handoff it made, the latest one open. A handoff shows the
-verdict on it first: how many criteria passed, a link to the verifier thread,
+what it is about, **Done when** with its criteria (a research issue's
+**Questions**, and nothing when it has none), and its **Record**: each
+agent that held it, how it ended, and each handoff it made, the latest one
+open. A research issue's done handoff shows its **Report** first, as the
+Markdown it is, beside the memory file it was saved to (such as
+`reports/i2.md`): a long report scrolls in its own box, and the file holds
+it whole in the Memory editor. Nothing verifies it, so it has no verdict.
+A build issue's handoff shows the verdict on it first: how many criteria passed, a link to the verifier thread,
 and the commit checked; the plugin's own read when that commit wasn't checked
 out on a clean tree; what CI said about that commit when it failed, couldn't
 be checked or is still to come; then each criterion with Pass, Fail or

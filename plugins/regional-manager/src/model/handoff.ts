@@ -57,12 +57,6 @@ export const handoffFieldsSchema = z.object({
   report: reportSchema.optional().describe("done on a research issue only, and required then: your report, in markdown, up to 20,000 characters. It is your result: your regional manager reads it whole."),
 });
 
-/**
- * What the board shows of a handoff: when it was made, how the work ended, and the agent's report.
- * why not what it delivered: the issue's row shows its pull request, and its verdict the commit checked.
- */
-export const shownHandoffSchema = z.object({ id: handoffIdSchema, at: z.number(), status: handoffStatusSchema, ...reportFields });
-
 /** A handoff is current while its thread has started no later turn. `latestTurnSeq` is null when bb lists no turn. */
 export const handoffIsCurrent = (handoff: Pick<Handoff, "turnSeq">, latestTurnSeq: number | null): boolean => latestTurnSeq === null || latestTurnSeq <= handoff.turnSeq;
 
@@ -73,12 +67,17 @@ export const handoffIsCurrent = (handoff: Pick<Handoff, "turnSeq">, latestTurnSe
  */
 const commitDeliverySchema = z.object({ kind: z.literal("commit"), headSha: commitSchema, prUrl: prUrlSchema.nullable() });
 const givenReportSchema = z.object({ kind: z.literal("report"), report: reportSchema });
-export const deliverySchema = z.discriminatedUnion("kind", [
-  commitDeliverySchema,
-  /** `file`: where the plugin saved the report in its regional manager's memory as it stored the handoff (report-file.ts). */
-  givenReportSchema.extend({ file: memoryFileSchema }),
-]);
+/** `file`: where the plugin saved the report in its regional manager's memory as it stored the handoff (report-file.ts). */
+const reportDeliverySchema = givenReportSchema.extend({ file: memoryFileSchema });
+export const deliverySchema = z.discriminatedUnion("kind", [commitDeliverySchema, reportDeliverySchema]);
 export type Delivery = z.infer<typeof deliverySchema>;
+
+/**
+ * What the board shows of a handoff: when it was made, how the work ended, the agent's account of it,
+ * and the report it delivered with its file (null: none, as a build or a blocked handoff delivers none).
+ * why not a commit: the issue's row shows its pull request, and its verdict the commit checked.
+ */
+export const shownHandoffSchema = z.object({ id: handoffIdSchema, at: z.number(), status: handoffStatusSchema, ...reportFields, report: reportDeliverySchema.omit({ kind: true }).nullable() });
 
 /** A handoff as an agent wrote it, stored whole. */
 export const handoffReportSchema = z.discriminatedUnion("status", [

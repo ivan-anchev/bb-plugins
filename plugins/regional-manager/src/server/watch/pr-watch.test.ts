@@ -620,7 +620,7 @@ test("after a newer agent's spawn fails, the issue's pull request is still read 
   assert.deepEqual(await row(), { lane: "done", headline: "Merged #41", pr: "#41 merged CI pending" });
 });
 
-test("a research issue's branch is never read from GitHub, so even a merged pull request on it neither closes it nor wakes anyone", async () => {
+test("a research issue's branch is never read from GitHub, so even a merged pull request on it neither closes it, wakes anyone nor shows on its board row", async () => {
   const { kit, threadId, coordinatorId } = await coordinating();
   const agentThreadId = (await startedAgent(kit, threadId, { kind: "research", doneCriteria: [] })).agentThreadId;
   kit.thread(threadId).status = "idle";
@@ -634,4 +634,6 @@ test("a research issue's branch is never read from GitHub, so even a merged pull
   assert.deepEqual(kit.github.runs, []);
   assert.deepEqual(kit.store.unannounced(coordinatorId), []);
   assert.match(textOf(await kit.call("issue_read", { id: "i1" }, threadId)), /\n\nResearch\. In progress: Working\./);
+  const row = (await kit.rpc.board({ coordinatorId })).issues[0] ?? assert.fail("no row");
+  assert.deepEqual([row.kind, row.pr], ["research", null]);
 });

@@ -502,6 +502,44 @@ details[open] > summary > .rmi-disclose {
   white-space: pre-wrap;
 }
 
+/* A research handoff's report: its file beside its title, then the report in a box that scrolls past
+   about twenty lines; the whole of it is in that file. */
+.rmi-report-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.rmi-report-file {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.rmi-report {
+  max-height: 360px;
+  overflow: auto;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--surface-recessed);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--foreground);
+}
+/* why over bb's Markdown: it sizes a chat message (14px, 16px headings), louder than the issue's own title. */
+.rmi-report [data-markdown-preview] {
+  font-size: inherit;
+  line-height: inherit;
+}
+.rmi-report [data-markdown-preview] h1,
+.rmi-report [data-markdown-preview] h2,
+.rmi-report [data-markdown-preview] h3 {
+  font-size: 14px;
+  line-height: 20px;
+}
+.rmi-report:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+
 /* The verdict on a handoff. */
 .rmi-verdict {
   display: flex;
