@@ -5,10 +5,10 @@
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import type { Agent } from "../agent.ts";
-import type { NextHandoff } from "../handoff.ts";
+import type { Handoff } from "../handoff.ts";
 import type { Check } from "../verdict/check.ts";
 import type { CiVerdict, PrSnapshot } from "../verdict/pr.ts";
-import { allPassed, ciVerdictOf, mayHaveReachedCrew, outcome, type Verdict } from "../verdict/verdict.ts";
+import { allPassed, ciVerdictOf, mayHaveReachedAgent, outcome, type Verdict } from "../verdict/verdict.ts";
 import type { Issue } from "./issue.ts";
 import { PIPELINES, type Kind, type Stage } from "./kind.ts";
 
@@ -32,7 +32,7 @@ type ThreadRow = Awaited<ReturnType<BbPluginApi["sdk"]["threads"]["list"]>>[numb
 export type HolderThread = Pick<ThreadRow, "status" | "hasPendingInteraction">;
 
 /** A handoff and the check made of it (null: none was). */
-export type Handed = { handoff: NextHandoff; check: Check | null };
+export type Handed = { handoff: Handoff; check: Check | null };
 
 /** Everything one issue's view is derived from. Nothing here reads bb or SQLite. */
 export type IssueFacts = {
@@ -41,7 +41,7 @@ export type IssueFacts = {
   holder: { agent: Agent; thread: HolderThread | null; current: Handed | null } | null;
   /** With no holder: the handoff its latest agent left when it ended (null: none). */
   left: Handed | null;
-  /** The pull request of its latest agent's branch as last read (null: none seen). */
+  /** The pull request of its branch (agent.ts issueBranch) as last read (null: none seen). */
   pr: PrSnapshot | null;
   /** An unanswered decision names it. */
   openDecision: boolean;
@@ -71,10 +71,8 @@ const CLOSED = { canceled: { status: "canceled", headline: "Canceled" }, accepte
 
 function issueView({ issue, holder, left, pr, openDecision }: IssueFacts): IssueView {
   const base = { issue, holder: holder?.agent ?? null, pr, placing: null };
-  if (issue.closed !== null) return { ...base, ...CLOSED[issue.closed.as], needsYou: null };
-  // why first: a merge is the user's act and final, whatever its thread does next; a check still
-  // pending or failed then is never sent back.
-  if (pr?.state === "merged") return { ...base, status: "done", headline: `Merged #${pr.number}`, needsYou: null };
+  const final = finalOf(issue, pr);
+  if (final !== null) return { ...base, ...final, needsYou: null };
   const asked = openDecision ? ASKED : null;
   if (holder !== null) {
     const placed = held(issue.kind, holder, pr);
@@ -86,10 +84,27 @@ function issueView({ issue, holder, left, pr, openDecision }: IssueFacts): Issue
 }
 
 /**
+ * Where the manager's closing act or a merge put the issue, or null when neither did. why before
+ * its agents: a merge is the user's act and final, whatever its thread does next; a check still
+ * pending or failed then is never sent back.
+ */
+function finalOf(issue: Issue, pr: PrSnapshot | null): Pick<Placing, "status" | "headline"> | null {
+  if (issue.closed !== null) return CLOSED[issue.closed.as];
+  return pr?.state === "merged" ? { status: "done", headline: `Merged #${pr.number}` } : null;
+}
+
+/**
+ * Whether the issue keeps its place once its agent ends leaving `left` (its current handoff, or
+ * null), rather than resting again: it was closed or merged, or what it left places it. Ending an
+ * agent asks this to decide whether the manager is told the issue returned to Todo.
+ */
+export const keepsPlaceAfterEnd = (issue: Issue, left: Handed | null, pr: PrSnapshot | null): boolean =>
+  finalOf(issue, pr) !== null || (left !== null && placedByLeft(issue.kind, left, pr) !== null);
+
+/**
  * Where the handoff an ended agent left places its issue, or null when it doesn't and the issue
  * rests again. why everything but In progress: work that reached Verifying, In review or Done
  * survives its thread being stopped, archived or deleted; anything short of that returns to Todo.
- * Ending an agent asks the same question to decide whether the manager is told it returned.
  */
 export function placedByLeft(kind: Kind, left: Handed, pr: PrSnapshot | null): Placing | null {
   const after = byHandoff(kind, left, 0, pr);
@@ -195,7 +210,7 @@ const flagged = (reason: string): Placing => ({ status: "in-progress", headline:
  * may not have reached it, or that it failed again after them.
  */
 function failureNote(verdict: Verdict, fixRounds: number): string {
-  if (mayHaveReachedCrew(verdict)) return ", its findings may or may not have reached it";
+  if (mayHaveReachedAgent(verdict)) return ", its findings may or may not have reached it";
   return fixRounds > 0 ? " after its fix round" : "";
 }
 

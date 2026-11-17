@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { crewIdSchema } from "../../model/role.ts";
-import { coordinating, settled, textOf, threadIn, type FakePr } from "../test-harness.ts";
+import { agentIdSchema } from "../../model/agent.ts";
+import { coordinating, isRefusal, settled, startedAgent, textOf, threadIn, type FakePr } from "../test-harness.ts";
 
-const c1 = crewIdSchema.parse("c1");
+const a1 = agentIdSchema.parse("a1");
 const HEAD = "0123456789abcdef0123456789abcdef01234567";
 const PR_URL = "https://github.com/acme/webhooks/pull/41";
 const BLOCKED = { status: "blocked", summary: "Needs the retry budget", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
@@ -27,13 +27,13 @@ const ghSaid = (stderr: string) => Object.assign(new Error("Command failed: gh a
 /** A regional manager with one crew on a GitHub project, both idle; the crew's branch and what the plugin shows of it. */
 async function crewOnGitHub(placement: object = { kind: "worktree" }) {
   const { kit, threadId, coordinatorId } = await coordinating();
-  const crewThreadId = threadIn(textOf(await kit.call("crew_start", { title: "Add retries", brief: "Retry failed deliveries.", doneCriteria: ["npm test passes", "npm run lint is clean"], placement }, threadId)));
+  const crewThreadId = (await startedAgent(kit, threadId, { title: "Add retries", brief: "Retry failed deliveries.", doneCriteria: ["npm test passes", "npm run lint is clean"] }, { placement })).agentThreadId;
   kit.thread(threadId).status = "idle";
   const branch = kit.thread(crewThreadId).environmentBranchName ?? assert.fail("no branch");
   const board = () => kit.rpc.board({ coordinatorId });
   const row = async () => {
-    const { state, headline, pr } = (await board()).rows[0] ?? assert.fail("no row");
-    return { state, headline, pr: pr === null ? null : `#${pr.number} ${pr.state} CI ${pr.ci}` };
+    const { lane, headline, pr } = (await board()).rows[0] ?? assert.fail("no row");
+    return { lane, headline, pr: pr === null ? null : `#${pr.number} ${pr.state} CI ${pr.ci}` };
   };
   const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
   const events = () => kit.store.unannounced(coordinatorId).map(({ event }) => event.kind);
@@ -47,14 +47,14 @@ async function crewOnGitHub(placement: object = { kind: "worktree" }) {
   }
   /** The crew hands off as done, naming its pull request, and its verifier passes every criterion. */
   async function verified(): Promise<void> {
-    await kit.call("crew_handoff", { ...DONE, prUrl: PR_URL }, crewThreadId);
+    await kit.call("agent_handoff", { ...DONE, prUrl: PR_URL }, crewThreadId);
     await kit.idle(crewThreadId, "Handed off.");
-    const handoff = kit.store.latestHandoff(coordinatorId, c1);
-    if (handoff?.status !== "done" || handoff.verdict.state !== "running") return assert.fail("no running verifier");
-    await kit.call("crew_verdict", PASSES, handoff.verdict.verifierThreadId);
+    const verdict = kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict;
+    if (verdict?.state !== "running") return assert.fail("no running verifier");
+    await kit.call("issue_verdict", PASSES, verdict.verifierThreadId);
     await settled();
   }
-  return { kit, threadId, coordinatorId, crewThreadId, board, row, doorbells, events, pr, minute, verified };
+  return { kit, threadId, coordinatorId, crewThreadId, branch, board, row, doorbells, events, pr, minute, verified };
 }
 
 test("a crew that opens a pull request shows #n on its row within a tick, and the coordinating thread gets a pr event", async () => {
@@ -66,9 +66,9 @@ test("a crew that opens a pull request shows #n on its row within a tick, and th
   kit.clock.now += 5 * MINUTE;
   await minute();
   assert.equal((await row()).pr, "#41 open CI pending");
-  assert.match(doorbells().at(-1) ?? assert.fail("no doorbell"), /- c1 "Add retries" PR #41: opened$/);
+  assert.match(doorbells().at(-1) ?? assert.fail("no doorbell"), /- i1 "Add retries" \(a1\) PR #41: opened$/);
   const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
-  assert.match(catchUp, /### c1 "Add retries" PR #41: opened\n\nAt [^\n]* It is open \(https:\/\/github\.com\/acme\/webhooks\/pull\/41\), with no approval or change request; CI on its head 0123456: still running\./);
+  assert.match(catchUp, /### i1 "Add retries" \(a1\) PR #41: opened\n\nAt [^\n]* It is open \(https:\/\/github\.com\/acme\/webhooks\/pull\/41\), with no approval or change request; CI on its head 0123456: still running\./);
 });
 
 test("a verdict that passes while CI is pending waits under Verifying as waiting for CI, then goes to Landing the tick CI passes", async () => {
@@ -76,15 +76,15 @@ test("a verdict that passes while CI is pending waits under Verifying as waiting
   pr();
   await minute();
   await verified();
-  assert.deepEqual(await row(), { state: "verifying", headline: "Waiting for CI on #41: Retries land with backoff", pr: "#41 open CI pending" });
+  assert.deepEqual(await row(), { lane: "verifying", headline: "Waiting for CI on #41: Retries land with backoff", pr: "#41 open CI pending" });
   const before = doorbells().length;
   await minute();
   assert.equal(doorbells().length, before, "a verdict waiting for CI wakes nobody");
 
   pr({ rollup: "SUCCESS" });
   await minute();
-  assert.deepEqual(await row(), { state: "landing", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" });
-  assert.equal(doorbells().at(-1), '[Regional Manager] 2 updates. Call crew_catch_up to read them in full.\n- c1 "Add retries" PR #41: CI passed\n- c1 "Add retries" handed off: done, verified');
+  assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" });
+  assert.equal(doorbells().at(-1), '[Regional Manager] 2 updates. Call crew_catch_up to read them in full.\n- i1 "Add retries" (a1) PR #41: CI passed\n- i1 "Add retries" (a1) handed off: done, verified');
 });
 
 test("the same verdict with failing CI fails, and the findings sent back to the crew name the failed checks", async () => {
@@ -98,13 +98,13 @@ test("the same verdict with failing CI fails, and the findings sent back to the 
   assert.match(findings, /^## Verifier findings: every done-criterion passed, and CI failed on #41\n/);
   assert.match(findings, /### CI failed on #41\n\nFailed checks on this commit: `test \(node 22\)`, `e2e`\./);
   assert.doesNotMatch(findings, /`lint`/, "a check that passed is not named");
-  const handoff = kit.store.latestHandoff(coordinatorId, c1);
-  assert.deepEqual(handoff?.status === "done" && handoff.verdict.state === "returned" ? handoff.verdict.settlement : null, {
+  const verdict = kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict;
+  assert.deepEqual(verdict?.state === "returned" ? verdict.settlement : null, {
     kind: "sent-back",
     round: 1,
     ci: { kind: "fail", number: 41, failedChecks: ["test (node 22)", "e2e"] },
   });
-  assert.equal((await row()).state, "working", "the crew works on its fix");
+  assert.equal((await row()).lane, "in-progress", "the crew works on its fix");
 });
 
 test("a CI failure after the crew's fix round reaches the coordinating thread as a CI failure, under Needs you", async () => {
@@ -114,14 +114,14 @@ test("a CI failure after the crew's fix round reaches the coordinating thread as
   await verified();
   pr({ rollup: "FAILURE", failed: ["test"] });
   await minute();
-  assert.equal(kit.store.crew(coordinatorId, c1)?.fixRounds, 1, "the first failure went back to the crew");
+  assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 1, "the first failure went back to the crew");
 
   // The crew hands off again, and CI on the commit it names has failed.
   await verified();
-  assert.deepEqual(await row(), { state: "needs-you", headline: "✗ CI failed on #41 after its fix round: Retries land with backoff", pr: "#41 open CI fail" });
+  assert.deepEqual(await row(), { lane: "needs-you", headline: "✗ CI failed on #41 after its fix round: Retries land with backoff", pr: "#41 open CI fail" });
   // why the catch-up: the coordinating thread is busy with an earlier doorbell by now, so bb holds this one queued.
   const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
-  assert.match(catchUp, /### c1 "Add retries" handed off: done\n[\s\S]*Failed verification: 2 of 2 criteria passed, checked at 0123456789abcdef0123456789abcdef01234567 by a verifier on [^.]*\. bb's git plugin read the crew's environment as it handed off: the claimed commit 0123456789abcdef0123456789abcdef01234567 checked out, on a clean working tree\. CI: failed on #41 at this commit; failed checks, as GitHub names them: test\./);
+  assert.match(catchUp, /### i1 "Add retries" \(a1\) handed off: done\n[\s\S]*Failed verification: 2 of 2 criteria passed, checked at 0123456789abcdef0123456789abcdef01234567 by a verifier on [^.]*\. bb's git plugin read the agent's environment as it handed off: the claimed commit 0123456789abcdef0123456789abcdef01234567 checked out, on a clean working tree\. CI: failed on #41 at this commit; failed checks, as GitHub names them: test\./);
 });
 
 test("a snapshot of another commit does not settle the verdict, even with CI green", async () => {
@@ -131,7 +131,7 @@ test("a snapshot of another commit does not settle the verdict, even with CI gre
   await verified();
   pr({ rollup: "SUCCESS", head: "f".repeat(40) });
   await minute();
-  assert.deepEqual(await row(), { state: "verifying", headline: "Waiting for CI on #41: Retries land with backoff", pr: "#41 open CI pass" });
+  assert.deepEqual(await row(), { lane: "verifying", headline: "Waiting for CI on #41: Retries land with backoff", pr: "#41 open CI pass" });
 });
 
 test("with gh signed out the board shows why PR status is unavailable, no pr event is recorded, and a pass reads CI not checked", async () => {
@@ -145,19 +145,19 @@ test("with gh signed out the board shows why PR status is unavailable, no pr eve
 
   await verified();
   await minute();
-  assert.deepEqual(await row(), { state: "ready-for-review", headline: "✓ Verified, CI not checked: Retries land with backoff", pr: null });
+  assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified, CI not checked: Retries land with backoff", pr: null });
 });
 
 test("a failed read keeps the stored snapshot, and the next good read clears the unavailable line", async () => {
-  const { kit, coordinatorId, board, row, pr, minute } = await crewOnGitHub();
+  const { kit, coordinatorId, branch, board, row, pr, minute } = await crewOnGitHub();
   pr();
   await minute();
-  const stored = kit.store.prStatus(coordinatorId, c1)?.snapshot;
+  const stored = kit.store.prOfBranch(coordinatorId, branch)?.snapshot;
   assert.equal(stored?.number, 41);
 
   kit.github.failure = Object.assign(new Error("Command failed"), { code: 1, stdout: "", stderr: 'Post "https://api.github.com/graphql": dial tcp: lookup api.github.com: no such host\n' });
   await minute();
-  assert.deepEqual(kit.store.prStatus(coordinatorId, c1)?.snapshot, stored);
+  assert.deepEqual(kit.store.prOfBranch(coordinatorId, branch)?.snapshot, stored);
   assert.equal((await board()).prUnavailable, "couldn't reach GitHub");
   assert.equal((await row()).pr, "#41 open CI pending", "the row keeps what was read last");
 
@@ -167,13 +167,13 @@ test("a failed read keeps the stored snapshot, and the next good read clears the
 });
 
 test("an answer gh gives that isn't the pull requests asked for overwrites nothing", async () => {
-  const { kit, coordinatorId, board, pr, minute } = await crewOnGitHub();
+  const { kit, coordinatorId, branch, board, pr, minute } = await crewOnGitHub();
   pr();
   await minute();
-  const stored = kit.store.prStatus(coordinatorId, c1)?.snapshot;
+  const stored = kit.store.prOfBranch(coordinatorId, branch)?.snapshot;
   pr({ state: "MERGED", head: "not-a-commit" });
   await minute();
-  assert.deepEqual(kit.store.prStatus(coordinatorId, c1)?.snapshot, stored);
+  assert.deepEqual(kit.store.prOfBranch(coordinatorId, branch)?.snapshot, stored);
   assert.equal((await board()).prUnavailable, "GitHub's answer wasn't the pull requests the plugin asked for");
 });
 
@@ -182,15 +182,15 @@ test("a merged pull request moves the row to Done, and the coordinating thread h
   pr({ rollup: "SUCCESS" });
   await minute();
   await verified();
-  assert.equal((await row()).state, "landing");
+  assert.equal((await row()).lane, "in-review");
   pr({ state: "MERGED", rollup: "SUCCESS" });
   kit.clock.now += 5 * MINUTE;
   await minute();
-  assert.deepEqual(await row(), { state: "done", headline: "Merged #41", pr: "#41 merged CI pass" });
-  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /### c1 "Add retries" PR #41: merged\n\nAt [^\n]* It is merged \(https:\/\/github\.com\/acme\/webhooks\/pull\/41\)/);
+  assert.deepEqual(await row(), { lane: "done", headline: "Merged #41", pr: "#41 merged CI pass" });
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /### i1 "Add retries" \(a1\) PR #41: merged\n\nAt [^\n]* It is merged \(https:\/\/github\.com\/acme\/webhooks\/pull\/41\)/);
 });
 
-test("a repository is read every tick while CI runs or a verdict waits for it, else every five minutes, and never once its crews close", async () => {
+test("a repository is read every tick while CI runs or a verdict waits for it, else every five minutes, and never once its issues close", async () => {
   const { kit, threadId, pr, minute, verified } = await crewOnGitHub();
   const runs = () => kit.github.runs.length;
   pr({ rollup: "SUCCESS" });
@@ -212,9 +212,10 @@ test("a repository is read every tick while CI runs or a verdict waits for it, e
   await minute();
   assert.equal(runs(), 6, "a verdict waiting for CI: every tick");
 
-  await kit.call("crew_close", { crewId: "c1", action: "resolve" }, threadId);
+  await kit.call("agent_stop", { agent: "a1" }, threadId);
+  assert.equal(textOf(await kit.call("issue_update", { id: "i1", status: "canceled" }, threadId)), "Updated i1.");
   for (let i = 0; i < 10; i++) await minute();
-  assert.equal(runs(), 6, "a closed crew is never read");
+  assert.equal(runs(), 6, "a closed issue is never read");
 });
 
 test("a crew whose project isn't on GitHub is not read; a verdict that waits on its pull request passes with CI not checked", async () => {
@@ -222,9 +223,9 @@ test("a crew whose project isn't on GitHub is not read; a verdict that waits on 
   kit.github.remote = "https://gitlab.com/acme/webhooks.git";
   await minute();
   await verified();
-  assert.equal((await row()).state, "verifying");
+  assert.equal((await row()).lane, "verifying");
   await minute();
-  assert.deepEqual(await row(), { state: "ready-for-review", headline: "✓ Verified, CI not checked: Retries land with backoff", pr: null });
+  assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified, CI not checked: Retries land with backoff", pr: null });
   assert.equal(kit.github.runs.length, 0);
 });
 
@@ -233,12 +234,11 @@ test("a newer done handoff replaces a verdict still waiting for CI, so only the 
   pr();
   await minute();
   await verified();
-  const waiting = kit.store.latestHandoff(coordinatorId, c1)?.id ?? assert.fail("no handoff");
+  const waiting = kit.store.latestHandoff(coordinatorId, a1)?.handoff.id ?? assert.fail("no handoff");
   kit.startTurn(crewThreadId);
-  await kit.call("crew_handoff", { ...DONE, prUrl: PR_URL }, crewThreadId);
-  const replaced = kit.store.handoff(waiting);
-  assert.deepEqual(replaced?.status === "done" ? replaced.verdict : null, { state: "superseded" });
-  assert.deepEqual(kit.store.waitingForCi(coordinatorId, c1), []);
+  await kit.call("agent_handoff", { ...DONE, prUrl: PR_URL }, crewThreadId);
+  assert.deepEqual(kit.store.handoff(waiting)?.check?.verdict, { state: "superseded" });
+  assert.deepEqual(kit.store.waitingForCi(coordinatorId, a1), []);
 });
 
 test("a verdict on a commit with no CI checks yet waits for them, and follows them once GitHub attaches them", async () => {
@@ -246,14 +246,14 @@ test("a verdict on a commit with no CI checks yet waits for them, and follows th
   pr({ rollup: null });
   await minute();
   await verified();
-  assert.deepEqual(await row(), { state: "verifying", headline: "Waiting for CI on #41: Retries land with backoff", pr: "#41 open CI none" }, "zero checks right after the push is not a pass");
+  assert.deepEqual(await row(), { lane: "verifying", headline: "Waiting for CI on #41: Retries land with backoff", pr: "#41 open CI none" }, "zero checks right after the push is not a pass");
   await minute();
   pr({ rollup: "PENDING" });
   await minute();
-  assert.deepEqual(await row(), { state: "verifying", headline: "Waiting for CI on #41: Retries land with backoff", pr: "#41 open CI pending" });
+  assert.deepEqual(await row(), { lane: "verifying", headline: "Waiting for CI on #41: Retries land with backoff", pr: "#41 open CI pending" });
   pr({ rollup: "SUCCESS" });
   await minute();
-  assert.deepEqual(await row(), { state: "landing", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" });
+  assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" });
 });
 
 test("a verdict on a commit still with no CI checks five minutes after it was first seen passes as no CI checks, never as CI passing", async () => {
@@ -262,10 +262,10 @@ test("a verdict on a commit still with no CI checks five minutes after it was fi
   await minute();
   await verified();
   for (let i = 0; i < 4; i++) await minute();
-  assert.equal((await row()).state, "verifying", "four minutes after the commit was first seen: still waiting");
+  assert.equal((await row()).lane, "verifying", "four minutes after the commit was first seen: still waiting");
   await minute();
-  assert.deepEqual(await row(), { state: "landing", headline: "✓ Verified, no CI checks: Retries land with backoff", pr: "#41 open CI none" });
-  assert.match(doorbells().at(-1) ?? assert.fail("no doorbell"), /- c1 "Add retries" handed off: done, verified, no CI checks$/);
+  assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified, no CI checks: Retries land with backoff", pr: "#41 open CI none" });
+  assert.match(doorbells().at(-1) ?? assert.fail("no doorbell"), /- i1 "Add retries" \(a1\) handed off: done, verified, no CI checks$/);
   const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
   assert.match(catchUp, /CI: no checks; GitHub reported none on #41 at this commit, after the wait for them\./);
   assert.doesNotMatch(catchUp, /CI: passed/);
@@ -277,14 +277,14 @@ test("zero checks, then the read past the window fails: the verdict keeps waitin
   await minute();
   await verified();
   for (let i = 0; i < 4; i++) await minute();
-  assert.equal((await row()).state, "verifying", "four minutes of reads seeing no checks: still waiting");
+  assert.equal((await row()).lane, "verifying", "four minutes of reads seeing no checks: still waiting");
   kit.github.failure = ghSaid('Post "https://api.github.com/graphql": dial tcp: lookup api.github.com: no such host');
   await minute();
-  assert.deepEqual(await row(), { state: "verifying", headline: "Waiting for CI on #41: Retries land with backoff", pr: "#41 open CI none" }, "a failed read past the window says nothing about CI");
+  assert.deepEqual(await row(), { lane: "verifying", headline: "Waiting for CI on #41: Retries land with backoff", pr: "#41 open CI none" }, "a failed read past the window says nothing about CI");
   assert.equal((await board()).prUnavailable, "couldn't reach GitHub");
   kit.github.failure = null;
   await minute();
-  assert.deepEqual(await row(), { state: "landing", headline: "✓ Verified, no CI checks: Retries land with backoff", pr: "#41 open CI none" });
+  assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified, no CI checks: Retries land with backoff", pr: "#41 open CI none" });
 });
 
 test("a verdict waiting for CI keeps waiting through every transient gh failure, shows why on the board, and settles ✓ once a read finds CI passed", async () => {
@@ -293,7 +293,7 @@ test("a verdict waiting for CI keeps waiting through every transient gh failure,
   await minute();
   await verified();
   pr({ rollup: "SUCCESS" });
-  const waiting = { state: "verifying", headline: "Waiting for CI on #41: Retries land with backoff", pr: "#41 open CI pending" };
+  const waiting = { lane: "verifying", headline: "Waiting for CI on #41: Retries land with backoff", pr: "#41 open CI pending" };
   const transient: [string, () => void][] = [
     ["a timeout", () => (kit.github.failure = recorded("timed-out"))],
     ["an EOF", () => (kit.github.failure = recorded("network-eof"))],
@@ -318,7 +318,7 @@ test("a verdict waiting for CI keeps waiting through every transient gh failure,
 
   pr({ rollup: "SUCCESS" });
   await minute();
-  assert.deepEqual(await row(), { state: "landing", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" });
+  assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" });
   assert.equal((await board()).prUnavailable, null);
 });
 
@@ -330,18 +330,18 @@ test("after a transient gh failure, a read that finds CI failed fails the verdic
   pr({ rollup: "FAILURE", failed: ["test (node 22)"] });
   kit.github.failure = recorded("network-eof");
   await minute();
-  assert.equal((await row()).state, "verifying", "the failed read leaves it waiting");
+  assert.equal((await row()).lane, "verifying", "the failed read leaves it waiting");
 
   kit.github.failure = null;
   await minute();
   assert.match(kit.delivered(crewThreadId).at(-1) ?? assert.fail("nothing reached the crew"), /### CI failed on #41\n\nFailed checks on this commit: `test \(node 22\)`\./);
-  const handoff = kit.store.latestHandoff(coordinatorId, c1);
-  assert.deepEqual(handoff?.status === "done" && handoff.verdict.state === "returned" ? handoff.verdict.settlement : null, {
+  const verdict = kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict;
+  assert.deepEqual(verdict?.state === "returned" ? verdict.settlement : null, {
     kind: "sent-back",
     round: 1,
     ci: { kind: "fail", number: 41, failedChecks: ["test (node 22)"] },
   });
-  assert.equal((await row()).state, "working");
+  assert.equal((await row()).lane, "in-progress");
 });
 
 test("a verdict waiting through a transient gh failure settles as CI not checked once gh is missing or GitHub rejects its credentials", async () => {
@@ -355,14 +355,14 @@ test("a verdict waiting through a transient gh failure settles as CI not checked
     await verified();
     kit.github.failure = recorded("timed-out");
     await minute();
-    assert.equal((await row()).state, "verifying", `${name}: a timeout first leaves it waiting`);
+    assert.equal((await row()).lane, "verifying", `${name}: a timeout first leaves it waiting`);
 
     kit.github.failure = recorded(name);
     await minute();
     assert.equal((await board()).prUnavailable, reason, name);
-    assert.deepEqual(await row(), { state: "landing", headline: "✓ Verified, CI not checked: Retries land with backoff", pr: "#41 open CI pending" }, name);
-    const handoff = kit.store.latestHandoff(coordinatorId, c1);
-    assert.deepEqual(handoff?.status === "done" && handoff.verdict.state === "returned" ? handoff.verdict.settlement : null, {
+    assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified, CI not checked: Retries land with backoff", pr: "#41 open CI pending" }, name);
+    const verdict = kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict;
+    assert.deepEqual(verdict?.state === "returned" ? verdict.settlement : null, {
       kind: "checked",
       refused: null,
       ci: { kind: "not-checked", reason: `PR status unavailable: ${reason}` },
@@ -377,9 +377,9 @@ test("zero checks, then time passes with no read: the verdict waits for a read p
   kit.clock.now += 10 * MINUTE; // bb was asleep: no tick, so no read
   pr({ rollup: "SUCCESS" });
   await verified();
-  assert.deepEqual(await row(), { state: "verifying", headline: "Waiting for CI on #41: Retries land with backoff", pr: "#41 open CI none" }, "the last read was right after the push");
+  assert.deepEqual(await row(), { lane: "verifying", headline: "Waiting for CI on #41: Retries land with backoff", pr: "#41 open CI none" }, "the last read was right after the push");
   await minute();
-  assert.deepEqual(await row(), { state: "landing", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" });
+  assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" });
 });
 
 test("a crew whose pull request merged is not read again until it hands off again", async () => {
@@ -410,7 +410,7 @@ test("a crew whose pull request closed is read again once it reopens and the cre
   pr({ state: "OPEN", rollup: "SUCCESS" });
   await verified();
   await minute();
-  assert.deepEqual(await row(), { state: "landing", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" });
+  assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" });
 });
 
 test("a crew whose pull request closed, then hands off while a read finds none on its branch, is still read and still waits for CI", async () => {
@@ -420,7 +420,7 @@ test("a crew whose pull request closed, then hands off while a read finds none o
   kit.github.prs.clear();
   await verified();
   await minute();
-  const waiting = { state: "verifying", headline: "Waiting for CI on #41: Retries land with backoff", pr: "#41 closed CI pending" };
+  const waiting = { lane: "verifying", headline: "Waiting for CI on #41: Retries land with backoff", pr: "#41 closed CI pending" };
   assert.deepEqual(await row(), waiting, "a read that found no pull request says nothing about #41 since the handoff");
   const runs = kit.github.runs.length;
   await minute();
@@ -444,18 +444,17 @@ test("a read that finds the pull request closed, saved after the crew reopened i
   answer();
   await ticking;
   await settled();
-  assert.deepEqual(await row(), { state: "verifying", headline: "Waiting for CI on #41: Retries land with backoff", pr: "#41 closed CI pending" }, "a read begun before the handoff says nothing about the pull request since");
+  assert.deepEqual(await row(), { lane: "verifying", headline: "Waiting for CI on #41: Retries land with backoff", pr: "#41 closed CI pending" }, "a read begun before the handoff says nothing about the pull request since");
 
   await minute();
   assert.equal(kit.github.runs.length, 2, "still read");
-  assert.deepEqual(await row(), { state: "landing", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" });
+  assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" });
 });
 
 test("a verdict whose settle fails leaves every read of the batch saved, and settles on a later tick", async () => {
-  const { kit, threadId, coordinatorId, row, pr, minute, verified } = await crewOnGitHub();
-  const second = threadIn(textOf(await kit.call("crew_start", { title: "Add metrics", brief: "Count deliveries.", doneCriteria: ["npm test passes"] }, threadId)));
+  const { kit, threadId, coordinatorId, branch, row, pr, minute, verified } = await crewOnGitHub();
+  const second = (await startedAgent(kit, threadId, { title: "Add metrics", brief: "Count deliveries.", doneCriteria: ["npm test passes"] })).agentThreadId;
   const secondBranch = kit.thread(second).environmentBranchName ?? assert.fail("no branch");
-  const c2 = crewIdSchema.parse("c2");
   const secondPr = (rollup: FakePr["rollup"]) => kit.github.prs.set(secondBranch, { number: 42, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup, failed: [] });
   pr();
   secondPr("PENDING");
@@ -468,15 +467,15 @@ test("a verdict whose settle fails leaves every read of the batch saved, and set
   kit.clock.now += MINUTE;
   await assert.rejects(kit.tick(), /bb is restarting/, "settling c1's verdict, after the reads, fails");
   assert.equal(kit.github.runs.length, 2, "one read of both branches this tick");
-  assert.equal(kit.store.prStatus(coordinatorId, c1)?.snapshot?.ci, "pass");
-  assert.equal(kit.store.prStatus(coordinatorId, c2)?.snapshot?.ci, "pass", "the read after the failing verdict's crew is saved too");
+  assert.equal(kit.store.prOfBranch(coordinatorId, branch)?.snapshot?.ci, "pass");
+  assert.equal(kit.store.prOfBranch(coordinatorId, secondBranch)?.snapshot?.ci, "pass", "the read after the failing verdict's crew is saved too");
 
   kit.turnEvents.failure = null;
   await minute();
-  assert.equal((await row()).state, "landing");
+  assert.equal((await row()).lane, "in-review");
 });
 
-test("a sandbox crew's environment is read by bb's git plugin only as it hands off: never by the board, the badge, crew_read or the watch", async () => {
+test("a sandbox agent's environment is read by bb's git plugin only as it hands off: never by the board, the badge, issue_read or the watch", async () => {
   const { kit, threadId, coordinatorId, crewThreadId, board, pr, minute } = await crewOnGitHub({ kind: "provider", environmentProviderId: "boat-sandbox", machineInputs: { preset: "small" } });
   const { environmentId, environmentBranchName } = kit.thread(crewThreadId);
   const crewReads = () => kit.git.calls.filter((keys) => keys.includes(environmentId)).length;
@@ -485,7 +484,7 @@ test("a sandbox crew's environment is read by bb's git plugin only as it hands o
   for (let tick = 0; tick < 3; tick++) {
     await board();
     await kit.rpc.needsYou({ keys: [coordinatorId] });
-    await kit.call("crew_read", { crewId: "c1" }, threadId);
+    await kit.call("issue_read", { id: "i1" }, threadId);
     kit.clock.now += 5 * MINUTE;
     await minute();
   }
@@ -494,10 +493,10 @@ test("a sandbox crew's environment is read by bb's git plugin only as it hands o
   assert.ok(kit.github.runs.at(-1)?.includes(`b0=${environmentBranchName}`), "by bb's record of the branch it made");
   assert.equal((await board()).rows[0]?.branch, environmentBranchName);
 
-  await kit.call("crew_handoff", BLOCKED, crewThreadId);
+  await kit.call("agent_handoff", BLOCKED, crewThreadId);
   assert.equal(crewReads(), 1, "one read, as it hands off");
   assert.equal((await board()).rows[0]?.branch, "add-retries", "the board shows the branch it handed off on");
-  assert.match(textOf(await kit.call("crew_read", { crewId: "c1" }, threadId)), /add-retries/);
+  assert.match(textOf(await kit.call("issue_read", { id: "i1" }, threadId)), /add-retries/);
   kit.clock.now += 5 * MINUTE;
   await minute();
   assert.ok(kit.github.runs.at(-1)?.includes("b0=add-retries"), "the watch reads its pull request by that branch");
@@ -508,16 +507,113 @@ test("a crew's branch as recorded at a handoff is kept when a later handoff can'
   const { kit, crewThreadId, row, pr, minute } = await crewOnGitHub();
   const { environmentId } = kit.thread(crewThreadId);
   kit.git.checkouts.set(environmentId, "add-retries");
-  await kit.call("crew_handoff", BLOCKED, crewThreadId);
+  await kit.call("agent_handoff", BLOCKED, crewThreadId);
   pr({}, "add-retries");
   await minute();
   assert.equal((await row()).pr, "#41 open CI pending");
 
   kit.git.offline.add(environmentId);
   kit.startTurn(crewThreadId);
-  await kit.call("crew_handoff", BLOCKED, crewThreadId);
+  await kit.call("agent_handoff", BLOCKED, crewThreadId);
   kit.clock.now += 5 * MINUTE;
   await minute();
   assert.ok(kit.github.runs.at(-1)?.includes("b0=add-retries"), "read by the branch recorded before");
   assert.equal((await row()).pr, "#41 open CI pending");
+});
+
+test("a pull request merged while its check is pending makes the issue Done, and the failed verdict that comes after is never sent back", async () => {
+  const { kit, coordinatorId, crewThreadId, row, pr, minute } = await crewOnGitHub();
+  pr();
+  await minute();
+  await kit.call("agent_handoff", { ...DONE, prUrl: PR_URL }, crewThreadId);
+  await kit.idle(crewThreadId, "Handed off.");
+  await settled();
+  const running = kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict;
+  if (running?.state !== "running") return assert.fail("no running verifier");
+  assert.equal((await row()).lane, "verifying");
+
+  pr({ state: "MERGED" });
+  kit.clock.now += 5 * MINUTE;
+  await minute();
+  assert.deepEqual(await row(), { lane: "done", headline: "Merged #41", pr: "#41 merged CI pending" });
+
+  await kit.call("issue_verdict", { ...PASSES, criteria: [{ criterion: 1, result: "fail", evidence: "# fail 1" }, PASSES.criteria[1]] }, running.verifierThreadId);
+  await settled();
+  await minute();
+  assert.deepEqual(kit.delivered(crewThreadId).filter((text) => text.startsWith("## Verifier findings")), [], "nothing goes back to the agent");
+  assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 0);
+  assert.equal((await row()).lane, "done");
+});
+
+test("an issue In review whose agent's thread was archived still becomes Done when its pull request merges", async () => {
+  const { kit, crewThreadId, row, pr, minute, verified } = await crewOnGitHub();
+  pr({ rollup: "SUCCESS" });
+  await minute();
+  await verified();
+  assert.equal((await row()).lane, "in-review");
+
+  kit.thread(crewThreadId).archivedAt = Date.now();
+  await kit.emit("thread.archived", { thread: kit.ref(crewThreadId) });
+  await settled();
+  assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" }, "its work survives its thread");
+
+  pr({ state: "MERGED", rollup: "SUCCESS" });
+  kit.clock.now += 5 * MINUTE;
+  await minute();
+  assert.deepEqual(await row(), { lane: "done", headline: "Merged #41", pr: "#41 merged CI pass" });
+});
+
+test("an issue Done by its merge stays Done when its agent is stopped, its manager hears nothing returned, and no new agent starts on it", async () => {
+  const { kit, threadId, coordinatorId, row, doorbells, pr, minute } = await crewOnGitHub();
+  pr({ state: "MERGED" });
+  await minute();
+  assert.deepEqual(await row(), { lane: "done", headline: "Merged #41", pr: "#41 merged CI pending" });
+
+  await kit.call("agent_stop", { agent: "a1" }, threadId);
+  await settled();
+  assert.equal((await row()).lane, "done");
+  assert.ok(!doorbells().some((text) => text.includes("returned to Todo")), "nothing returned to Todo");
+  assert.ok(!kit.store.unannounced(coordinatorId).some(({ event }) => event.kind === "returned-to-todo"));
+
+  const restarted = await kit.call("agent_start", { issue: "i1" }, threadId);
+  assert.ok(isRefusal(restarted));
+  assert.equal(textOf(restarted), "agent_start is refused: i1 is Done (Merged #41), so no agent can start on it.");
+  assert.equal(kit.store.agents(coordinatorId).length, 1);
+  assert.equal((await row()).lane, "done");
+});
+
+for (const event of [true, false]) {
+  test(`a verdict waiting for CI settles In review once CI passes, though its agent's thread was deleted meanwhile (${event ? "bb's event heard" : "no event"})`, async () => {
+    const { kit, crewThreadId, row, pr, minute, verified } = await crewOnGitHub();
+    pr();
+    await minute();
+    await verified();
+    assert.equal((await row()).headline, "Waiting for CI on #41: Retries land with backoff");
+
+    kit.thread(crewThreadId).deletedAt = Date.now();
+    if (event) await kit.emit("thread.deleted", { thread: kit.ref(crewThreadId) });
+    await settled();
+    pr({ rollup: "SUCCESS" });
+    await minute();
+    assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" });
+    assert.deepEqual(kit.warnings(), []);
+  });
+}
+
+test("after a newer agent's spawn fails, the issue's pull request is still read on the branch of the agent before it, and its merge makes it Done", async () => {
+  const { kit, threadId, crewThreadId, row, pr, minute } = await crewOnGitHub();
+  await kit.call("agent_handoff", { ...BLOCKED, prUrl: PR_URL }, crewThreadId);
+  await kit.idle(crewThreadId, "Handed off.");
+  pr();
+  kit.clock.now += 5 * MINUTE;
+  await minute();
+  await kit.call("agent_stop", { agent: "a1" }, threadId);
+  Object.assign(kit.spawns, { created: false, answer: "lost" });
+  assert.match(textOf(await kit.call("agent_start", { issue: "i1" }, threadId)), /^bb did not start a2/);
+  assert.deepEqual(await row(), { lane: "todo", headline: "Not started", pr: "#41 open CI pending" });
+
+  pr({ state: "MERGED" });
+  kit.clock.now += 6 * MINUTE;
+  await minute();
+  assert.deepEqual(await row(), { lane: "done", headline: "Merged #41", pr: "#41 merged CI pending" });
 });

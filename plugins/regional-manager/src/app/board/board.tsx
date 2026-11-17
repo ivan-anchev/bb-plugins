@@ -6,8 +6,7 @@
 import { experimental_Icon as Icon, experimental_useRpcMutation, experimental_useRpcQuery, Markdown } from "@get-bb/plugin-sdk/app";
 import { useId, useState } from "react";
 import { coordinatorContract as contract, type Board as BoardData, type BoardRow } from "../../contract.ts";
-import { boardGroups, type BoardItem } from "../../model/board/board-groups.ts";
-import { BOARD_STATE_LABELS, type BoardState } from "../../model/board/crew-state.ts";
+import { boardGroups, LANE_LABELS, type BoardItem, type Lane } from "../../model/board/board-groups.ts";
 import { filesText } from "../../model/inbox/own-tree.ts";
 import type { Decision } from "../../model/decision.ts";
 import type { CoordinatorId } from "../../model/role.ts";
@@ -143,16 +142,16 @@ function Groups({ ids, coordinatorId, decisions, rows }: GroupsProps) {
   const keepFocus = useFocusKeptByKey();
   return (
     <>
-      {boardGroups(decisions, rows).map(({ state, rows: inState }) => (
-        <section key={state} aria-labelledby={`${ids}-${state}`} className="flex flex-col gap-1">
-          <h2 id={`${ids}-${state}`} className="flex items-center gap-2 px-2 text-xs font-medium text-muted-foreground">
-            <span aria-hidden className={`size-1.5 rounded-full ${DOT[state]}`} />
-            {BOARD_STATE_LABELS[state]}
-            <span className="tabular-nums">{inState.length}</span>
+      {boardGroups(decisions, rows).map(({ lane, rows: inLane }) => (
+        <section key={lane} aria-labelledby={`${ids}-${lane}`} className="flex flex-col gap-1">
+          <h2 id={`${ids}-${lane}`} className="flex items-center gap-2 px-2 text-xs font-medium text-muted-foreground">
+            <span aria-hidden className={`size-1.5 rounded-full ${DOT[lane]}`} />
+            {LANE_LABELS[lane]}
+            <span className="tabular-nums">{inLane.length}</span>
           </h2>
           <ul className="flex flex-col">
-            {inState.map((item) => (
-              <li key={item.kind === "decision" ? item.decision.id : item.row.crewId}>
+            {inLane.map((item) => (
+              <li key={item.kind === "decision" ? item.decision.id : item.row.issueId}>
                 <ItemRow item={item} coordinatorId={coordinatorId} keepFocus={keepFocus} />
               </li>
             ))}
@@ -164,24 +163,25 @@ function Groups({ ids, coordinatorId, decisions, rows }: GroupsProps) {
   );
 }
 
-/** One row, keeping focus as it moves between groups: decision and crew ids never collide (`d1`, `c1`). */
+/** One row, keeping focus as it moves between lanes: decision and issue ids never collide (`d1`, `i1`). */
 function ItemRow({ item, coordinatorId, keepFocus }: { item: BoardItem<BoardRow>; coordinatorId: CoordinatorId; keepFocus: ReturnType<typeof useFocusKeptByKey> }) {
   switch (item.kind) {
     case "decision":
       return <DecisionRow ref={keepFocus(item.decision.id)} coordinatorId={coordinatorId} decision={item.decision} />;
-    case "crew":
-      return <CrewRow ref={keepFocus(item.row.crewId)} row={item.row} />;
+    case "issue":
+      return <CrewRow ref={keepFocus(item.row.issueId)} row={item.row} />;
     default:
       return item satisfies never;
   }
 }
 
-const DOT: Record<BoardState, string> = {
+const DOT: Record<Lane, string> = {
   "needs-you": "bg-warning",
-  "ready-for-review": "bg-pr-merged",
+  "in-review": "bg-pr-merged",
   verifying: "bg-attention",
-  working: "bg-success",
-  landing: "bg-primary",
-  idle: "bg-muted-foreground",
+  "in-progress": "bg-success",
+  todo: "bg-muted-foreground",
+  backlog: "border border-muted-foreground",
   done: "border border-muted-foreground",
+  canceled: "border border-muted-foreground",
 };

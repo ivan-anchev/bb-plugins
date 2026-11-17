@@ -1,10 +1,10 @@
-// The Board's RPC, for a coordinating thread the store knows: its read and what of it needs the
+// The Board's RPC, for a regional manager the store knows: its read and what of it needs the
 // user, its verification switch, and the user's answers to its decisions.
 import { experimental_PluginRpcRefusal as Refusal, type PluginRpcHandlers } from "@get-bb/plugin-sdk";
-import type { coordinatorContract } from "../../../contract.ts";
-import type { CoordinatorId } from "../../../model/role.ts";
-import type { Inbox } from "../../inbox/inbox.ts";
-import type { Store } from "../../store.ts";
+import type { coordinatorContract } from "../../contract.ts";
+import type { CoordinatorId } from "../../model/role.ts";
+import type { Inbox } from "../inbox/inbox.ts";
+import type { Store } from "../store/store.ts";
 import type { BoardReader } from "./board.ts";
 
 type Deps = {
@@ -16,7 +16,7 @@ type Deps = {
 type BoardMethods = "board" | "needsYou" | "setVerify" | "answerDecision";
 
 export function boardHandlers({ store, board, inbox }: Deps): PluginRpcHandlers<Pick<typeof coordinatorContract, BoardMethods>> {
-  // why refuse an unknown id: it would read as a board with no crews.
+  // why refuse an unknown id: it would read as a board with no issues.
   function known(id: CoordinatorId): CoordinatorId {
     if (!store.isCoordinator(id)) throw new Refusal({ code: "not_found", message: `There is no regional manager ${id}.` });
     return id;

@@ -4,7 +4,7 @@
 import type { PluginLogger } from "@get-bb/plugin-sdk";
 import type { CoordinatorId } from "../../model/role.ts";
 import { gitStatusOf, type GitStatusBb } from "../git-status.ts";
-import type { Store } from "../store.ts";
+import type { Store } from "../store/store.ts";
 import type { Inbox } from "./inbox.ts";
 
 /** A thread as bb's thread.idle names it, down to the fields the watch reads. */

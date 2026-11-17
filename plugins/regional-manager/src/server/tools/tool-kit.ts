@@ -1,6 +1,7 @@
 // What every tool module shares: the part of bb that registers a tool, and the shape of a refusal.
 import type { PluginAgentToolContext, PluginAgentToolRegistrationBase, PluginAgentToolResult } from "@get-bb/plugin-sdk";
 import type { z } from "zod";
+import type { CoordinatorId, Role } from "../../model/role.ts";
 
 /** The part of bb the tools use: registering a tool whose parameters are a zod schema. */
 export type ToolsBb = {
@@ -16,3 +17,19 @@ export type ToolsBb = {
 
 /** A result the agent reads as a failure: nothing was done, and the text says why. */
 export const failed = (text: string): PluginAgentToolResult => ({ content: [{ type: "text", text }], isError: true });
+
+/**
+ * Runs the tool only for a regional manager, by the role the plugin's database holds for the
+ * calling thread, never its metadata; any other caller is refused.
+ */
+export function forManager<Input>(
+  store: { roleOfThread(threadId: string): Role | null },
+  tool: string,
+  run: (id: CoordinatorId, input: Input) => PluginAgentToolResult | Promise<PluginAgentToolResult>,
+): (input: Input, ctx: PluginAgentToolContext) => PluginAgentToolResult | Promise<PluginAgentToolResult> {
+  return (input, { threadId }) => {
+    const role = store.roleOfThread(threadId);
+    if (role?.kind !== "coordinator") return failed(`${tool} is refused: only a regional manager can use it, and this thread was not started as one. Carry on without it.`);
+    return run(role.coordinatorId, input);
+  };
+}

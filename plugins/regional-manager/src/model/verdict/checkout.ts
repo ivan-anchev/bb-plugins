@@ -41,6 +41,6 @@ export function checkoutProblems(claimed: string, checkout: Checkout): string[] 
 /** The checkout in a sentence, as the plugin's: what the verifier is told, and what the verdict shows. */
 export function checkoutText(claimed: string, checkout: Checkout): string {
   const problems = checkoutProblems(claimed, checkout);
-  const read = "bb's git plugin read the crew's environment as it handed off";
+  const read = "bb's git plugin read the agent's environment as it handed off";
   return problems.length === 0 ? `${read}: the claimed commit ${claimed} checked out, on a clean working tree.` : `${read}: ${problems.join("; ")}.`;
 }

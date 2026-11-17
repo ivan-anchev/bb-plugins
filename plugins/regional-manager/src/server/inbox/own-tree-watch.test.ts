@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { coordinatorContract } from "../../contract.ts";
 import { DISPLAY_NAME } from "../../name.ts";
-import { coordinating, settled, textOf, threadIn } from "../test-harness.ts";
+import { coordinating, settled, startedAgent, textOf } from "../test-harness.ts";
 
 /** A Coordinator whose first turn is running, in its own environment. */
 async function working() {
@@ -52,11 +52,11 @@ test("a turn that ends with changed files in the Coordinator's own environment w
   const shown = await warning();
   assert.equal(shown?.fileCount, 2);
   assert.ok(shown !== null && Math.abs(shown.at - Date.now()) < 5_000, "with when its turn ended");
-  assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- Your own environment has 2 files changed after your turn: hand the change to a crew`]);
+  assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- Your own environment has 2 files changed after your turn: hand the change to an agent`]);
   const text = await catchUp();
   assert.match(text, /### Your own environment has 2 files changed\n\nAt [^\n]+ bb's git plugin read changed files in your working tree when your turn ended/);
   assert.match(text, /you never touch your working tree: no stash, revert, checkout or deletion/);
-  assert.match(text, /First propose, in a crew_ask_user decision, a crew that redoes the change properly on its own branch, always, whatever the user's preferences: .* In the same decision, ask the user whether to discard the changes in your environment: discarding them is theirs to do, never yours\./);
+  assert.match(text, /First propose, in a crew_ask_user decision, an issue whose agent redoes the change properly on its own branch, always, whatever the user's preferences: .* In the same decision, ask the user whether to discard the changes in your environment: discarding them is theirs to do, never yours\./);
   assert.doesNotMatch(text, /git stash/);
 });
 
@@ -131,13 +131,13 @@ test("a read bb's git plugin can't make, or answers in a shape the plugin can't 
   ]);
 });
 
-test("a crew's changed files are its work: only the Coordinator's own turns are read", async () => {
+test("an agent's changed files are its work: only the regional manager's own turns are read", async () => {
   const { kit, threadId, warning } = await working();
-  const crewThreadId = threadIn(textOf(await kit.call("crew_start", { title: "Add retries", brief: "Retry deliveries.", doneCriteria: ["npm test passes"] }, threadId)));
+  const crewThreadId = (await startedAgent(kit, threadId)).agentThreadId;
   kit.git.changedFiles.set(kit.thread(crewThreadId).environmentId, 5);
   await kit.idle(crewThreadId, "Halfway.");
   await settled();
-  assert.deepEqual(kit.git.calls, [], "no read for a crew's turn");
+  assert.deepEqual(kit.git.calls, [], "no read for an agent's turn");
   assert.equal(await warning(), null);
 });
 

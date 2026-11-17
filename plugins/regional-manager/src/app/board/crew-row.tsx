@@ -48,7 +48,7 @@ function Summary({ ref, row }: { ref: Ref<HTMLButtonElement>; row: BoardRow }) {
   const navigate = useBbNavigate();
   const body = (
     <>
-      <span className="font-mono text-xs text-muted-foreground">{row.crewId}</span>
+      <span className="font-mono text-xs text-muted-foreground">{row.issueId}</span>
       <span className="truncate text-sm">{row.title}</span>
       <span className="col-start-2 text-xs text-muted-foreground">{row.headline}</span>
       {row.branch !== null && (

@@ -4,7 +4,7 @@ import type { PluginRpcHandlers } from "@get-bb/plugin-sdk";
 import type { coordinatorContract } from "../../contract.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { Inbox } from "../inbox/inbox.ts";
-import type { Store } from "../store.ts";
+import type { Store } from "../store/store.ts";
 import type { MemoryRoot } from "./memory-files.ts";
 
 type MemoryMethods = Pick<typeof coordinatorContract, "memoryList" | "memoryRead" | "memoryWrite">;

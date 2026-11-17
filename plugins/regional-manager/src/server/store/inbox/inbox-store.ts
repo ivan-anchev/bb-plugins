@@ -1,8 +1,8 @@
 // What the plugin tells a regional manager, and what it waits on the user for: events and the
 // doorbells that announce them, the reminders it set itself, and the decisions it put to the user.
 import { z } from "zod";
-import { decisionIdSchema, type DecisionId, type NextDecision } from "../../../model/decision.ts";
-import { nextInboxEventSchema, type NextInboxEvent, type NextStoredEvent } from "../../../model/inbox/inbox-event.ts";
+import { decisionIdSchema, type DecisionId, type Decision } from "../../../model/decision.ts";
+import { inboxEventSchema, type InboxEvent, type StoredEvent } from "../../../model/inbox/inbox-event.ts";
 import { ownTreeEventAfter, type OwnTreeEvent } from "../../../model/inbox/own-tree.ts";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
 import { nextDue, reminderIdSchema, type Reminder, type ReminderId } from "../../../model/reminder.ts";
@@ -10,7 +10,7 @@ import { coordinatorIdSchema, type CoordinatorId } from "../../../model/role.ts"
 import { json, type Db } from "../rows.ts";
 
 /** Records something to tell the regional manager, neither announced nor read yet. Call inside the transaction that records what it tells. */
-export function insertEvent(db: Db, coordinatorId: CoordinatorId, event: NextInboxEvent, at: number): void {
+export function insertEvent(db: Db, coordinatorId: CoordinatorId, event: InboxEvent, at: number): void {
   db().prepare("INSERT INTO events (coordinator_id, event, at) VALUES (?, ?, ?)").run(coordinatorId, JSON.stringify(event), at);
 }
 
@@ -32,7 +32,7 @@ export function inboxStore(db: Db) {
   }
 
   return {
-    insertEvent: (coordinatorId: CoordinatorId, event: NextInboxEvent, at: number): void => insertEvent(db, coordinatorId, event, at),
+    insertEvent: (coordinatorId: CoordinatorId, event: InboxEvent, at: number): void => insertEvent(db, coordinatorId, event, at),
 
     lastOwnTreeEvent,
 
@@ -50,7 +50,7 @@ export function inboxStore(db: Db) {
     },
 
     /** The events no doorbell has announced and no catch-up has returned, in the order recorded. */
-    unannounced(coordinatorId: CoordinatorId): NextStoredEvent[] {
+    unannounced(coordinatorId: CoordinatorId): StoredEvent[] {
       return db().prepare("SELECT id, at, event FROM events WHERE coordinator_id = ? AND announced_at IS NULL AND read_at IS NULL ORDER BY id").all(coordinatorId).map(toEvent);
     },
 
@@ -72,7 +72,7 @@ export function inboxStore(db: Db) {
     },
 
     /** Every unread event, marked read as it is returned, in the order recorded. */
-    takeUnread(coordinatorId: CoordinatorId, at: number): NextStoredEvent[] {
+    takeUnread(coordinatorId: CoordinatorId, at: number): StoredEvent[] {
       return db()
         .prepare("UPDATE events SET read_at = ? WHERE coordinator_id = ? AND read_at IS NULL RETURNING id, at, event")
         .all(at, coordinatorId)
@@ -161,7 +161,7 @@ export function inboxStore(db: Db) {
     },
 
     /** Puts a decision to the user for the regional manager, flagging `issueId` Needs you until answered (null: none), and returns it with its id. */
-    insertDecision(coordinatorId: CoordinatorId, { question, options, issueId }: Pick<NextDecision, "question" | "options" | "issueId">, at: number): NextDecision {
+    insertDecision(coordinatorId: CoordinatorId, { question, options, issueId }: Pick<Decision, "question" | "options" | "issueId">, at: number): Decision {
       const row = db()
         .prepare(`INSERT INTO decisions (coordinator_id, issue_id, question, options, asked_at) VALUES (?, ?, ?, ?, ?) RETURNING ${DECISION_COLUMNS}`)
         .get(coordinatorId, issueId, question, JSON.stringify(options), at);
@@ -169,13 +169,13 @@ export function inboxStore(db: Db) {
     },
 
     /** A decision by its id, answered or not; null when there is none. */
-    decision(id: DecisionId): NextDecision | null {
+    decision(id: DecisionId): Decision | null {
       const row = db().prepare(`SELECT ${DECISION_COLUMNS} FROM decisions WHERE id = ?`).get(rowIdOfDecision(id));
       return row === undefined ? null : toDecision(row);
     },
 
     /** Every decision the regional manager put to the user, in the order it asked them. */
-    decisions(coordinatorId: CoordinatorId): NextDecision[] {
+    decisions(coordinatorId: CoordinatorId): Decision[] {
       return db().prepare(`SELECT ${DECISION_COLUMNS} FROM decisions WHERE coordinator_id = ? ORDER BY id`).all(coordinatorId).map(toDecision);
     },
 
@@ -197,8 +197,8 @@ export function inboxStore(db: Db) {
   };
 }
 
-const eventRowSchema = z.object({ id: z.number().int(), at: z.number(), event: json(nextInboxEventSchema) });
-const toEvent = (row: unknown): NextStoredEvent => eventRowSchema.parse(row);
+const eventRowSchema = z.object({ id: z.number().int(), at: z.number(), event: json(inboxEventSchema) });
+const toEvent = (row: unknown): StoredEvent => eventRowSchema.parse(row);
 
 /** A reminder's row id is its number: `r7` is row 7. */
 const reminderRowIdSchema = z.number().int().transform((id) => reminderIdSchema.parse(`r${id}`));
@@ -222,4 +222,4 @@ const answerColumnsSchema = z.union([
   z.object({ answer: z.null(), answeredAt: z.null() }).transform(() => null),
   z.object({ answer: z.string(), answeredAt: z.number() }).transform(({ answer, answeredAt }) => ({ text: answer, at: answeredAt })),
 ]);
-const toDecision = (row: unknown): NextDecision => ({ ...decisionRowSchema.parse(row), answer: answerColumnsSchema.parse(row) });
+const toDecision = (row: unknown): Decision => ({ ...decisionRowSchema.parse(row), answer: answerColumnsSchema.parse(row) });

@@ -9,7 +9,7 @@ const changed = (count: number) => Array.from({ length: count }, (_, i) => ({ pa
 test("the claimed commit on a clean tree has no problem, and says so as the plugin's read", () => {
   const checkout = checkoutOf(CLAIMED, [], 0);
   assert.deepEqual(checkoutProblems(CLAIMED, checkout), []);
-  assert.equal(checkoutText(CLAIMED, checkout), `bb's git plugin read the crew's environment as it handed off: the claimed commit ${CLAIMED} checked out, on a clean working tree.`);
+  assert.equal(checkoutText(CLAIMED, checkout), `bb's git plugin read the agent's environment as it handed off: the claimed commit ${CLAIMED} checked out, on a clean working tree.`);
 });
 
 test("another commit and changed files are each a problem, in bb's words, with the files beyond the bound counted", () => {
@@ -29,6 +29,6 @@ test("a done handoff's first verdict: waived with verification off, Couldn't ver
   assert.deepEqual(firstVerdict(true, unread), {
     state: "could-not-run",
     verifierThreadId: null,
-    reason: "bb's git plugin couldn't read the crew's commit and working tree as it handed off (The environment's machine is offline)",
+    reason: "bb's git plugin couldn't read the agent's commit and working tree as it handed off (The environment's machine is offline)",
   });
 });

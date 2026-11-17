@@ -6,7 +6,7 @@ import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { coordinatorSchema, type Coordinator } from "../../contract.ts";
 import { memoryRevisionSchema, type MemoryFile, type MemoryRevision, type MemoryVersion } from "../../model/memory-file.ts";
-import type { CoordinatorId, NextRole } from "../../model/role.ts";
+import type { CoordinatorId, Role } from "../../model/role.ts";
 import { inboxStore } from "./inbox/inbox-store.ts";
 import { agentsStore, bindRole, insertTicket } from "./issue/agents-store.ts";
 import { checksStore, startCheck } from "./issue/checks-store.ts";
@@ -64,7 +64,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
      * so a second call, or a call naming another thread, changes nothing and returns null. A
      * verifier's check starts running in the thread as it binds, unless it was superseded meanwhile.
      */
-    bindTicket(ticket: string, threadId: string): NextRole | null {
+    bindTicket(ticket: string, threadId: string): Role | null {
       return db().transaction(() => {
         const role = bindRole(db, ticket, threadId);
         if (role?.kind === "verifier") startCheck(db, role.checkId, threadId);

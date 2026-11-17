@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import type { AgentId } from "../../../model/agent.ts";
-import { handoffIdSchema, type NextHandoff } from "../../../model/handoff.ts";
+import { handoffIdSchema, type Handoff } from "../../../model/handoff.ts";
 import type { IssueId } from "../../../model/issue/issue.ts";
 import type { Check } from "../../../model/verdict/check.ts";
 import type { CheckoutRead } from "../../../model/verdict/checkout.ts";
@@ -13,7 +13,7 @@ const SHA = "a".repeat(40);
 const CLEAN: CheckoutRead = { kind: "read", checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 } };
 const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
 
-function handoff(issueId: IssueId, agentId: AgentId, status: "done" | "blocked", at = 3_000): NextHandoff {
+function handoff(issueId: IssueId, agentId: AgentId, status: "done" | "blocked", at = 3_000): Handoff {
   const made = { id: handoffIdSchema.parse(randomUUID()), coordinatorId: MANAGER, issueId, agentId, at, turnSeq: 1 };
   return status === "done" ? { ...made, ...report, status, delivery: { kind: "commit", headSha: SHA, prUrl: null } } : { ...made, ...report, status };
 }

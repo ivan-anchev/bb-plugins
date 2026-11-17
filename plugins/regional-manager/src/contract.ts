@@ -3,12 +3,13 @@
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
-import { needsYouSchema } from "./model/board/board-groups.ts";
+import { agentIdSchema } from "./model/agent.ts";
+import { laneSchema, needsYouSchema } from "./model/board/board-groups.ts";
 import { answerSchema, decisionIdSchema, decisionSchema } from "./model/decision.ts";
-import { boardStateSchema } from "./model/board/crew-state.ts";
+import { issueIdSchema } from "./model/issue/issue.ts";
 import { memoryContentSchema, memoryFileSchema, memorySnapshotSchema, memoryVersionSchema, writeOutcomeSchema } from "./model/memory-file.ts";
 import { prSnapshotSchema } from "./model/verdict/pr.ts";
-import { coordinatorIdSchema, crewIdSchema, type CoordinatorId } from "./model/role.ts";
+import { coordinatorIdSchema, type CoordinatorId } from "./model/role.ts";
 import { verdictSchema } from "./model/verdict/verdict.ts";
 
 /**
@@ -35,16 +36,18 @@ const memoryTags = ({ coordinatorId }: { coordinatorId: CoordinatorId }) => [mem
 export const boardTag = (id: CoordinatorId): string => `board:${id}`;
 
 /**
- * One crew on the board: where it sits, why, its thread (null: it never got one) and branch (null:
- * none yet), the verdict of the done handoff that places it (null: none does), and its pull request
- * as last read (null: none seen).
+ * One issue on the board: its latest agent (null: none started) and that agent's thread while bb
+ * runs it (null: none, archived or deleted), its branch (null: none on record), its lane and why,
+ * the verdict of the check that places it (null: none does), and its pull request as last read
+ * (null: none seen).
  */
 const boardRowSchema = z.object({
-  crewId: crewIdSchema,
+  issueId: issueIdSchema,
   title: z.string(),
+  agentId: agentIdSchema.nullable(),
   threadId: z.string().nullable(),
   branch: z.string().nullable(),
-  state: boardStateSchema,
+  lane: laneSchema,
   headline: z.string(),
   verdict: verdictSchema.nullable(),
   pr: prSnapshotSchema.nullable(),

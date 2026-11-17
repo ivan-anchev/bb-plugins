@@ -1,8 +1,8 @@
 // An environment's git status, as bb's git plugin reads it on that environment's machine. The
-// plugin reads a crew's environment once, as the crew hands off, while it is awake anyway, and the
-// coordinating thread's own as each of its turns ends. why so seldom: a read at any other time could
-// wake a crew's sandbox, or keep it from idling. why not bb's record of the branch: bb records the
-// branch an environment was made on and keeps it when the crew checks out another.
+// plugin reads an agent's environment once, as the agent hands off, while it is awake anyway, and the
+// regional manager's own as each of its turns ends. why so seldom: a read at any other time could
+// wake an agent's sandbox, or keep it from idling. why not bb's record of the branch: bb records the
+// branch an environment was made on and keeps it when the agent checks out another.
 import { z } from "zod";
 
 /** The commit and branch checked out; null for each that bb's git plugin can't name (detached, unborn, unknown). */

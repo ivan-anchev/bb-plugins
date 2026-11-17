@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync,
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { memoryFileSchema, type MemoryFile, type MemorySnapshot, type MemoryVersion, type WriteOutcome } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import type { Store } from "../store.ts";
+import type { Store } from "../store/store.ts";
 
 /** The files every memory starts with, in the order a catch-up reads them and the editor lists them. */
 export const CORE_FILES = ["MEMORY.md", "GOAL.md", "PLAN.md", "PREFERENCES.md", "CREW.md", "DIGEST.md"].map((name) => memoryFileSchema.parse(name));
@@ -117,7 +117,7 @@ The index of this memory. Each file holds one kind of thing:
 - GOAL.md: the goal this work was started with.
 - PLAN.md: the plan: what to delegate, in what order, and what is done.
 - PREFERENCES.md: the user's standing preferences and rules.
-- CREW.md: rules every crew thread follows.
+- CREW.md: rules every agent follows.
 - DIGEST.md: the latest summary for the user.
 `,
     ],

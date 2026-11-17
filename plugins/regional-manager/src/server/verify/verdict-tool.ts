@@ -1,14 +1,14 @@
-// A verifier's own tool: crew_verdict, its judgement of each done-criterion with the evidence it
+// A verifier's own tool: issue_verdict, its judgement of each done-criterion with the evidence it
 // ran. Its overall outcome is never reported: the plugin derives it (model/verdict.ts). The caller's
 // role comes from the plugin's database by its thread id.
 import { z } from "zod";
-import { MAX_CRITERIA, type Crew } from "../../model/crew.ts";
+import { MAX_CRITERIA, type DoneCriteria } from "../../model/issue/issue.ts";
 import { criterionResultSchema } from "../../model/verdict/verdict.ts";
-import type { Store } from "../store.ts";
+import type { Store } from "../store/store.ts";
 import { failed, type ToolsBb } from "../tools/tool-kit.ts";
 import type { Verify, VerifierReport } from "./verify.ts";
 
-export const VERDICT = "crew_verdict";
+export const VERDICT = "issue_verdict";
 
 const verdictInputSchema = z.object({
   criteria: z
@@ -26,34 +26,35 @@ const verdictInputSchema = z.object({
 });
 type VerdictInput = z.infer<typeof verdictInputSchema>;
 
-type Deps = { store: Pick<Store, "roleOfThread" | "handoff" | "crew">; verify: Pick<Verify, "returned"> };
+type Deps = { store: Pick<Store, "roleOfThread" | "check" | "agent">; verify: Pick<Verify, "returned"> };
 
 export function registerVerdictTool(bb: ToolsBb, { store, verify }: Deps): void {
   bb.agents.registerTool({
     name: VERDICT,
-    description: "Your verdict on the crew's done handoff: one result per done-criterion, with the evidence you ran. Call it once, last, then stop.",
+    description: "Your verdict on the agent's done handoff: one result per done-criterion, with the evidence you ran. Call it once, last, then stop.",
     instructions: VERDICT_INSTRUCTIONS,
     presentation: { label: { pending: "Returning the verdict", completed: "Returned the verdict" }, icon: { glyph: "Check" } },
     parameters: verdictInputSchema,
     execute: async (input, { threadId }) => {
       const role = store.roleOfThread(threadId);
       if (role?.kind !== "verifier") return failed(`${VERDICT} is refused: only a verifier thread the plugin started returns a verdict, and this thread is not one. Carry on without it.`);
-      const handoff = store.handoff(role.handoffId);
-      const crew = store.crew(role.coordinatorId, role.crewId);
-      // why throw: a verifier is started for a done handoff of a started crew.
-      if (handoff?.status !== "done" || crew?.launch.kind !== "started") throw new Error(`The handoff ${role.handoffId} this verifier checks is missing.`);
-      if (handoff.verdict.state !== "running" || handoff.verdict.verifierThreadId !== threadId) return failed(NOT_RUNNING);
-      const report = reportOf(input, handoff.headSha, crew.doneCriteria);
+      const check = store.check(role.checkId);
+      const agent = check === null ? null : store.agent(check.coordinatorId, check.subject.agentId);
+      // why throw: a verifier is started for a check of an agent's handoff, and both are kept while their regional manager is.
+      if (check === null || agent === null) throw new Error(`The check ${role.checkId} this verifier runs is missing.`);
+      if (check.verdict.state !== "running" || check.verdict.verifierThreadId !== threadId) return failed(NOT_RUNNING);
+      const report = reportOf(input, check.subject.headSha, check.criteria);
       if (typeof report === "string") return failed(`${VERDICT} is refused and nothing was saved: ${report}`);
-      if (!(await verify.returned(handoff.id, threadId, crew.launch.threadId, report))) return failed(NOT_RUNNING);
+      // why the agent's stored execution: it is what made the work, recorded as it handed off.
+      if (!(await verify.returned(check.id, threadId, [agent.execution], report))) return failed(NOT_RUNNING);
       const passed = report.criteria.filter((check) => check.result === "pass").length;
       return `Verdict recorded: ${passed} of ${report.criteria.length} criteria passed. Stop here; don't change anything in this environment.`;
     },
   });
 }
 
-/** The verdict on the claimed commit `headSha`, each criterion named by its text, in the crew's order; or why it can't be taken. */
-function reportOf(input: VerdictInput, headSha: string, doneCriteria: Crew["doneCriteria"]): VerifierReport | string {
+/** The verdict on the claimed commit `headSha`, each criterion named by its text, in the check's order; or why it can't be taken. */
+function reportOf(input: VerdictInput, headSha: string, doneCriteria: DoneCriteria): VerifierReport | string {
   const numbers = input.criteria.map((check) => check.criterion);
   const missing = doneCriteria.flatMap((_, i) => (numbers.includes(i + 1) ? [] : [i + 1]));
   const unknown = numbers.filter((number) => number > doneCriteria.length);
@@ -76,6 +77,6 @@ function reportOf(input: VerdictInput, headSha: string, doneCriteria: Crew["done
 
 const NOT_RUNNING = `${VERDICT} is refused and nothing was saved: this handoff no longer waits for your verdict (a newer handoff replaced it, or it already has one). Stop here.`;
 
-const VERDICT_INSTRUCTIONS = `Returning your verdict: call crew_verdict once, as your last action, then stop. The plugin judges the commit and the tree itself, from bb's read in your first message; you judge only the criteria.
+const VERDICT_INSTRUCTIONS = `Returning your verdict: call issue_verdict once, as your last action, then stop. The plugin judges the commit and the tree itself, from bb's read in your first message; you judge only the criteria.
 - criteria: one entry per done-criterion, by its number in your first message: result pass, fail or unverifiable, and evidence quoting what you ran and what it printed (up to 4,000 characters).
 - findings: problems no criterion covers, up to 20. [] for none.`;

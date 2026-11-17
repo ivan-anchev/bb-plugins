@@ -179,3 +179,17 @@ export type Agent = {
  */
 export const branchOf = (agent: Pick<Agent, "checkout">, thread: { environmentBranchName: string | null } | null): string | null =>
   agent.checkout.branch ?? thread?.environmentBranchName ?? null;
+
+/**
+ * An issue's branch: that of its latest agent with one (`own`: its agents in the order started;
+ * `threadOf`: each one's thread as bb lists it, null for none), with that agent; null when none has
+ * one. Its pull request is the issue's, read on it. why not the latest agent alone: one whose spawn
+ * failed has no branch, and the work before it still has its pull request.
+ */
+export function issueBranch<A extends Pick<Agent, "checkout">>(own: readonly A[], threadOf: (agent: A) => { environmentBranchName: string | null } | null): { agent: A; branch: string } | null {
+  for (const agent of [...own].reverse()) {
+    const branch = branchOf(agent, threadOf(agent));
+    if (branch !== null) return { agent, branch };
+  }
+  return null;
+}

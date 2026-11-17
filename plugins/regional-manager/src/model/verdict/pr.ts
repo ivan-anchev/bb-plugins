@@ -2,7 +2,7 @@
 // what CI says about the commit a done handoff claims. Pure: the watch writes the reading, and
 // settling a verdict, the board and the texts read it.
 import { z } from "zod";
-import { commitSchema, type Handoff, type HandoffId } from "../handoff.ts";
+import { commitSchema, type HandoffId } from "../handoff.ts";
 
 /** A pull request's checks on its head commit, rolled up as GitHub's merge box rolls them. `none`: it reports no checks. */
 const ciSchema = z.enum(["none", "pending", "pass", "fail"]);
@@ -97,7 +97,7 @@ export type Ci = CiVerdict | { kind: "waiting"; number: number | null };
 const CHECKS_GRACE_MS = 5 * 60_000;
 
 /** The done handoff whose commit CI is judged on: its id, the commit it claims, and the pull request it names (null: none). */
-type Claim = Pick<Extract<Handoff, { status: "done" }>, "id" | "headSha" | "prUrl">;
+type Claim = { id: HandoffId; headSha: string; prUrl: string | null };
 
 /**
  * What CI says about the commit a done handoff claims, given its crew's PR status (null: never

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { agentIdSchema, type Agent } from "../agent.ts";
-import { handoffIdSchema, type NextHandoff } from "../handoff.ts";
+import { handoffIdSchema, type Handoff } from "../handoff.ts";
 import { coordinatorIdSchema } from "../role.ts";
 import { checkIdSchema, type Check } from "../verdict/check.ts";
 import type { PrSnapshot } from "../verdict/pr.ts";
@@ -40,8 +40,8 @@ const SHA = "a".repeat(40);
 const CLEAN = { headSha: SHA, changedFiles: [], changedFileCount: 0 };
 const report = { summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
 const made = { id: handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e"), coordinatorId, issueId: issue.id, agentId: agent.id, at: 5_000, turnSeq: 7 };
-const done: NextHandoff = { ...made, ...report, status: "done", delivery: { kind: "commit", headSha: SHA, prUrl: null } };
-const blocked: NextHandoff = { ...made, ...report, status: "blocked", summary: "Needs a staging key" };
+const done: Handoff = { ...made, ...report, status: "done", delivery: { kind: "commit", headSha: SHA, prUrl: null } };
+const blocked: Handoff = { ...made, ...report, status: "blocked", summary: "Needs a staging key" };
 
 const checkOf = (verdict: Verdict): Check => ({
   id: checkIdSchema.parse("5d6c1e0a-2b3f-4a5e-8c7d-9e0f1a2b3c4d"),

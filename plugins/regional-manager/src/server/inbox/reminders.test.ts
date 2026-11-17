@@ -51,13 +51,13 @@ test("a one-off reminder wakes the Coordinator once with its note when it comes 
 
 test("a repeating reminder missed for three intervals records one event, and its next due time is in the future", async () => {
   const { kit, threadId, remind, reminders, doorbells, tickAt } = await idleCoordinator();
-  await remind({ note: "check on c1", at: "1h", every: "every 1h" });
+  await remind({ note: "check on i1", at: "1h", every: "every 1h" });
   const [{ dueAt } = assert.fail("no reminder")] = reminders();
 
   // The server was down through the occurrences at dueAt, +1h and +2h.
   const now = dueAt + 2 * HOUR + 30 * 60_000;
   await tickAt(now);
-  assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- Your reminder r1: check on c1`]);
+  assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- Your reminder r1: check on i1`]);
   const [next = assert.fail("the repeating reminder is gone")] = reminders();
   assert.equal(next.dueAt, dueAt + 3 * HOUR, "its next time keeps the schedule");
   assert.ok(next.dueAt > now);
@@ -65,13 +65,13 @@ test("a repeating reminder missed for three intervals records one event, and its
   const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
   assert.equal(caughtUp.match(/### Your reminder r1/g)?.length, 1);
   assert.match(caughtUp, /It repeats every 1h; Reminders below says when it is next due\./);
-  assert.ok(caughtUp.includes(`## Reminders\n\nCancel one with crew_remind and its id as cancel.\n\n- r1, due ${new Date(next.dueAt).toISOString()}, then every 1h: check on c1`));
+  assert.ok(caughtUp.includes(`## Reminders\n\nCancel one with crew_remind and its id as cancel.\n\n- r1, due ${new Date(next.dueAt).toISOString()}, then every 1h: check on i1`));
 });
 
 test("a cancelled reminder never fires, and only its own Coordinator can cancel it", async () => {
   const { kit, threadId, remind, reminders, doorbells, tickAt } = await idleCoordinator();
   await remind({ note: "check the migration", at: "2m" });
-  await remind({ note: "check on c1", at: "10m", every: "1d" });
+  await remind({ note: "check on i1", at: "10m", every: "1d" });
   const [first = assert.fail("no reminder")] = reminders();
 
   const other = await kit.spawner.coordinator(newThreadRequest("Another goal"), false);
@@ -115,10 +115,10 @@ test("a reminder of an archived Coordinator records nothing while bb lists it ar
   assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- Your reminder r1: check the migration`]);
 });
 
-test("a deleted Coordinator's reminders are deleted, due or not, and never fire", async () => {
+test("a deleted regional manager is removed with its reminders, due or not, by the tick: none fires", async () => {
   const { kit, threadId, coordinatorId, remind, reminders, doorbells, tickAt } = await idleCoordinator();
   await remind({ note: "check the migration", at: "2m" });
-  await remind({ note: "check on c1", at: "1d", every: "1d" });
+  await remind({ note: "check on i1", at: "1d", every: "1d" });
   const [{ dueAt } = assert.fail("no reminder")] = reminders();
   kit.thread(threadId).deletedAt = Date.now();
 

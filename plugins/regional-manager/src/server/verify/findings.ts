@@ -1,36 +1,18 @@
-// What a verdict found, written for a crew: a checkout that wasn't the claimed commit on a clean
+// What a verdict found, written for an agent: a checkout that wasn't the claimed commit on a clean
 // tree, as bb's git plugin read it, each done-criterion it didn't pass, with the verifier's
-// evidence, CI's failure on its pull request, and its findings. It reaches a crew twice: as the
-// verifier's message when a failed verdict goes back for its fix round, and in the brief of a
-// fresh crew that supersedes one.
-import type { Crew } from "../../model/crew.ts";
+// evidence, CI's failure on its pull request, and its findings. It reaches the agent as the
+// verifier's message when a failed verdict goes back for its fix round.
 import { checkoutText } from "../../model/verdict/checkout.ts";
 import type { CiVerdict } from "../../model/verdict/pr.ts";
-import { ciVerdictOf, failedCheckout, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
+import { failedCheckout, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
 
 type Returned = Extract<Verdict, { state: "returned" }>;
 
-/** The message a crew gets from its verifier when its done handoff failed and goes back to it, with what CI said about its commit. */
+/** The message an agent gets from its verifier when its done handoff failed and goes back to it, with what CI said about its commit. */
 export function findingsMessage(verdict: Returned, ci: CiVerdict): string {
   return [
     `## Verifier findings: ${notPassed(verdict, ci)}`,
-    `A verifier checked your done handoff at commit \`${short(verdict.headSha)}\` and it doesn't pass yet. Fix what it found, commit, and call crew_handoff with done again: a new verifier checks the new commit. This is your one automatic fix round. If the next check fails too, your regional manager decides what happens next.`,
-    whatFailed(verdict, ci),
-  ].join("\n\n");
-}
-
-/**
- * The brief of a crew that supersedes `old`: the brief it is given, then `old`'s latest verdict
- * (null: no verifier returned one on its work).
- */
-export function supersedingBrief(old: Pick<Crew, "id">, brief: string, verdict: Returned | null): string {
-  const heading = "## Previous attempt's verifier findings";
-  if (verdict === null) return [brief.trim(), heading, `Crew ${old.id} worked on this before you and was stopped. No verifier returned a verdict on its work.`].join("\n\n");
-  const ci = ciVerdictOf(verdict);
-  return [
-    brief.trim(),
-    heading,
-    `Crew ${old.id} worked on this before you, on its own branch, and was stopped. Its latest verdict, on its commit \`${short(verdict.headSha)}\`: ${notPassed(verdict, ci)}. Start from what it found.`,
+    `A verifier checked your done handoff at commit \`${short(verdict.headSha)}\` and it doesn't pass yet. Fix what it found, commit, and call agent_handoff with done again: a new verifier checks the new commit. This is your one automatic fix round. If the next check fails too, your regional manager decides what happens next.`,
     whatFailed(verdict, ci),
   ].join("\n\n");
 }

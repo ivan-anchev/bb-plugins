@@ -57,10 +57,10 @@ export type Issue = {
   createdAt: number;
 };
 
-/** Why an agent can't start on the issue as it is planned, or null when it can. */
-export function startRefusal(issue: Pick<Issue, "id" | "kind" | "brief" | "doneCriteria">): string | null {
-  if (issue.brief === null) return `${issue.id} has no brief yet. Write one with issue_update.`;
+/** The brief an agent starts from, or why none can start on the issue as it is planned. */
+export function briefToStart(issue: Pick<Issue, "id" | "kind" | "brief" | "doneCriteria">): { brief: string } | { refused: string } {
+  if (issue.brief === null) return { refused: `${issue.id} has no brief yet. Write one with issue_update.` };
   const fewest = minCriteria(issue.kind);
-  if (issue.doneCriteria.length < fewest) return `${issue.id} needs done-criteria (at least ${fewest}) before an agent starts. Add doneCriteria with issue_update.`;
-  return null;
+  if (issue.doneCriteria.length < fewest) return { refused: `${issue.id} needs done-criteria (at least ${fewest}) before an agent starts. Add doneCriteria with issue_update.` };
+  return { brief: issue.brief };
 }

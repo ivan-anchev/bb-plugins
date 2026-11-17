@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { agentIdSchema, type AgentId } from "../../../model/agent.ts";
 import { executionSchema } from "../../../model/execution.ts";
-import { handoffIdSchema, nextHandoffReportSchema, type HandoffId, type NextHandoff } from "../../../model/handoff.ts";
+import { handoffIdSchema, handoffReportSchema, type HandoffId, type Handoff } from "../../../model/handoff.ts";
 import { doneCriteriaSchema, issueIdSchema, type IssueId } from "../../../model/issue/issue.ts";
 import type { Handed } from "../../../model/issue/status.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../../model/role.ts";
@@ -127,10 +127,10 @@ export function checksStore(db: Db) {
      * earlier check of the agent still waiting. A blocked or gave-up one is announced at once.
      * Returns its check (null: not done) and the verifier threads of the checks it superseded.
      */
-    insertHandoff(handoff: NextHandoff, checkout: CheckoutRead): { check: Check | null; superseded: string[] } {
+    insertHandoff(handoff: Handoff, checkout: CheckoutRead): { check: Check | null; superseded: string[] } {
       const { id, coordinatorId, issueId, agentId, at, turnSeq, ...report } = handoff;
       return db().transaction(() => {
-        const stored = nextHandoffReportSchema.parse(report);
+        const stored = handoffReportSchema.parse(report);
         db().prepare("INSERT INTO handoffs (id, coordinator_id, issue_id, agent_id, report, turn_seq, at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, coordinatorId, issueId, agentId, JSON.stringify(stored), turnSeq, at);
         if (stored.status !== "done") {
           insertEvent(db, coordinatorId, { kind: "handoff", issueId, agentId, handoffId: id, status: stored.status }, at);
@@ -299,12 +299,12 @@ const handoffRowSchema = z.object({
   coordinatorId: coordinatorIdSchema,
   issueId: issueIdSchema,
   agentId: agentIdSchema,
-  report: json(nextHandoffReportSchema),
+  report: json(handoffReportSchema),
   turnSeq: z.number().int(),
   at: z.number(),
 });
 
-function toHandoff(row: unknown): NextHandoff {
+function toHandoff(row: unknown): Handoff {
   const { report, ...made } = handoffRowSchema.parse(row);
   return { ...made, ...report };
 }

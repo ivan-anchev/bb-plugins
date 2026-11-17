@@ -1,0 +1,86 @@
+// The regional manager's issue tools: issue_create, issue_update and issue_read. An issue is the
+// unit of work; its status is derived from what its agents did, and the manager writes only its plan,
+// where it rests, and its two closing acts.
+import type { PluginAgentToolResult } from "@get-bb/plugin-sdk";
+import { z } from "zod";
+import { requestedExecutionSchema } from "../../model/execution.ts";
+import { briefSchema, descriptionSchema, doneCriteriaSchema, issueIdSchema, managerStatusSchema, restSchema, titleSchema, type Issue, type IssueId } from "../../model/issue/issue.ts";
+import { kindSchema } from "../../model/issue/kind.ts";
+import type { CoordinatorId } from "../../model/role.ts";
+import type { Store } from "../store/store.ts";
+import { failed, forManager, type ToolsBb } from "../tools/tool-kit.ts";
+import { filedText } from "./issue-text.ts";
+import type { Issues } from "./issues.ts";
+
+const CREATE = "issue_create";
+const UPDATE = "issue_update";
+const READ = "issue_read";
+
+/** What configure offers a regional manager of these tools. */
+export const ISSUE_TOOLS = [CREATE, UPDATE, READ];
+
+type Deps = { store: Pick<Store, "roleOfThread" | "issue">; issues: Pick<Issues, "create" | "update" | "read"> };
+
+const VERIFIER = requestedExecutionSchema.describe(
+  "What checks this issue's done handoffs: a provider and a model bb can run, and optionally a reasoning level (left out: the model's default). Left out, the plugin picks one independent of the agent.",
+);
+
+export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
+  /** The tool runs on one of the caller's issues; an id it has none by is refused. */
+  function forIssue<Input extends { id: IssueId }>(tool: string, run: (issue: Issue, input: Input) => PluginAgentToolResult | Promise<PluginAgentToolResult>) {
+    return forManager<Input>(store, tool, (id: CoordinatorId, input) => {
+      const issue = store.issue(id, input.id);
+      return issue === null ? failed(`You have no issue ${input.id}. crew_catch_up lists your issues.`) : run(issue, input);
+    });
+  }
+
+  bb.agents.registerTool({
+    name: CREATE,
+    description:
+      "File an issue: one piece of the work, done by an agent you start on it with agent_start. It is numbered i1, i2… and rests in Todo, or in Backlog when you are proposing it and waiting for the user. kind decides how its done handoffs are checked: build is code on a branch, verified by an independent verifier. A brief and doneCriteria may wait until you start its agent.",
+    presentation: { label: { pending: "Filing an issue", completed: "Filed an issue" }, icon: { glyph: "Workflow" } },
+    parameters: z.strictObject({
+      kind: kindSchema.describe("build: code on its own branch, checked by a verifier against the done-criteria."),
+      title: titleSchema.describe("A short name for the piece of work; it titles its agent's thread."),
+      description: descriptionSchema.describe("What it is about, in plain words, for the user: the board shows it."),
+      brief: briefSchema.optional().describe("Everything its agent needs to start without asking: the goal, the context, the constraints, where to look. Required before an agent starts."),
+      doneCriteria: doneCriteriaSchema.optional().describe("Up to 12 criteria, each checkable by running something: a test, a command and its output, a page that shows a thing. At least one before an agent starts."),
+      status: restSchema.optional().describe("todo (the default): ready to start. backlog: not planned yet, as when you propose it and wait for the user."),
+      verifier: VERIFIER.optional(),
+    }),
+    execute: forManager(store, CREATE, async (id, { brief, doneCriteria, status, ...plan }) => {
+      const filed = await issues.create(id, { ...plan, brief: brief ?? null, doneCriteria: doneCriteria ?? [], rest: status ?? "todo" });
+      return "refused" in filed ? failed(filed.refused) : filedText(filed);
+    }),
+  });
+
+  bb.agents.registerTool({
+    name: UPDATE,
+    description:
+      "Change one of your issues: its title, description, brief, done-criteria or verifier, or where it stands. status: backlog or todo rests an issue no agent holds (and reopens a canceled one); canceled closes one no agent holds; done accepts one that is In review. Every other status is the plugin's to say, from what its agents did. A verifier change applies from the issue's next done handoff on; verifier: null lets the plugin pick again.",
+    presentation: { label: { pending: "Updating an issue", completed: "Updated an issue" }, icon: { glyph: "Workflow" } },
+    parameters: z.strictObject({
+      id: issueIdSchema,
+      title: titleSchema.optional(),
+      description: descriptionSchema.optional(),
+      brief: briefSchema.optional(),
+      doneCriteria: doneCriteriaSchema.optional(),
+      status: managerStatusSchema.optional(),
+      verifier: VERIFIER.nullable().optional(),
+    }),
+    execute: forIssue(UPDATE, async (issue, { id: _, ...change }) => {
+      const updated = await issues.update(issue, change);
+      if ("refused" in updated) return failed(updated.refused);
+      return [`Updated ${issue.id}.`, updated.note].filter((line) => line !== null).join(" ");
+    }),
+  });
+
+  bb.agents.registerTool({
+    name: READ,
+    description:
+      "Read one of your issues whole: its status and why, its description, brief and done-criteria, the verifier named, each agent with what it runs on, every handoff with its verdict, and its agent's latest answer.",
+    presentation: { label: { pending: "Reading an issue", completed: "Read an issue" }, icon: { glyph: "FileText" } },
+    parameters: z.object({ id: issueIdSchema }),
+    execute: forIssue(READ, (issue) => issues.read(issue)),
+  });
+}

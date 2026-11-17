@@ -5,18 +5,18 @@ import { agentIdSchema, baseSchema, endedHowSchema, placementSchema, type Agent,
 import { executionSchema, type Execution } from "../../../model/execution.ts";
 import { handoffIdSchema, type HandoffId } from "../../../model/handoff.ts";
 import { issueIdSchema, type IssueId } from "../../../model/issue/issue.ts";
-import { coordinatorIdSchema, nextRoleSchema, type CoordinatorId, type NextRole } from "../../../model/role.ts";
+import { coordinatorIdSchema, roleSchema, type CoordinatorId, type Role } from "../../../model/role.ts";
 import { insertEvent } from "../inbox/inbox-store.ts";
 import { json, type Db } from "../rows.ts";
 import { restIssue } from "./issues-store.ts";
 
 /** A thread's role, under the ticket its thread is spawned with, unbound until bb names the thread. */
-export function insertTicket(db: Db, ticket: string, role: NextRole, at: number): void {
+export function insertTicket(db: Db, ticket: string, role: Role, at: number): void {
   db().prepare("INSERT INTO roles (ticket, role, created_at) VALUES (?, ?, ?)").run(ticket, JSON.stringify(role), at);
 }
 
 /** Gives the ticket's role to the thread and returns it; null when the ticket was already bound, to this thread or another. */
-export function bindRole(db: Db, ticket: string, threadId: string): NextRole | null {
+export function bindRole(db: Db, ticket: string, threadId: string): Role | null {
   const row = db().prepare("UPDATE roles SET thread_id = ? WHERE ticket = ? AND thread_id IS NULL RETURNING role").get(threadId, ticket);
   return row === undefined ? null : toRole(row);
 }
@@ -28,7 +28,7 @@ export function countFixRound(db: Db, coordinatorId: CoordinatorId, agentId: Age
 }
 
 export function agentsStore(db: Db) {
-  function roleOfThread(threadId: string): NextRole | null {
+  function roleOfThread(threadId: string): Role | null {
     const row = db().prepare("SELECT role FROM roles WHERE thread_id = ?").get(threadId);
     return row === undefined ? null : toRole(row);
   }
@@ -56,7 +56,7 @@ export function agentsStore(db: Db) {
      * why the ticket: a first session can start before bb's spawn answer binds it. A ticket already
      * bound belongs to its own thread, so a copy in another thread's metadata grants nothing.
      */
-    roleFor(threadId: string, ticket: string | null): NextRole | null {
+    roleFor(threadId: string, ticket: string | null): Role | null {
       const bound = roleOfThread(threadId);
       if (bound !== null || ticket === null) return bound;
       const row = db().prepare("SELECT role FROM roles WHERE ticket = ? AND thread_id IS NULL").get(ticket);
@@ -64,7 +64,7 @@ export function agentsStore(db: Db) {
     },
 
     /** A verifier's unbound ticket, minted before its thread is spawned. */
-    insertVerifierTicket(ticket: string, role: Extract<NextRole, { kind: "verifier" }>, at: number): void {
+    insertVerifierTicket(ticket: string, role: Extract<Role, { kind: "verifier" }>, at: number): void {
       insertTicket(db, ticket, role, at);
     },
 
@@ -101,7 +101,7 @@ export function agentsStore(db: Db) {
 
     /**
      * Ends the agent, once, with the handoff it leaves (its current one, or null). `placed`: whether
-     * what it left still places the issue (status.ts placedByLeft); when it doesn't, the issue rests
+     * the issue keeps its place (status.ts keepsPlaceAfterEnd); when it doesn't, the issue rests
      * in Todo again and the regional manager is told, in this transaction, unless bb never started
      * its thread. Returns whether this call ended it.
      */
@@ -127,7 +127,7 @@ export function agentsStore(db: Db) {
   };
 }
 
-const toRole = (row: unknown): NextRole => nextRoleSchema.parse(JSON.parse(z.object({ role: z.string() }).parse(row).role));
+const toRole = (row: unknown): Role => roleSchema.parse(JSON.parse(z.object({ role: z.string() }).parse(row).role));
 
 const agentRowSchema = z.object({
   coordinatorId: coordinatorIdSchema,
