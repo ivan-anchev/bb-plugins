@@ -95,7 +95,7 @@ const status = (id: string, change: Extract<TimelineItem, { kind: "status" }>["s
 const comment = (id: string, minute: number): TimelineItem => ({
   kind: "comment",
   id,
-  comment: { id: minute, url: "", author: { login: "jun-park", bot: false }, body: "Looks good", createdAt: at(minute) },
+  comment: { id: minute, url: "", author: { login: "jun-park", bot: false }, body: "Looks good", createdAt: at(minute), pending: false },
 });
 
 // The parts after the opened line.

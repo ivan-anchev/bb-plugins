@@ -36,6 +36,10 @@
                       "__typename": "User",
                       "login": "ivan-anchev"
                     },
+                    "state": "SUBMITTED",
+                    "pullRequestReview": {
+                      "id": "PRR_kwDOVjmb-s8AAAABXBdIPg"
+                    },
                     "commit": {
                       "oid": "ff2bc97857da72054e99587086ddf022d0512df7"
                     },
@@ -75,6 +79,10 @@
                       "__typename": "User",
                       "login": "ivan-anchev"
                     },
+                    "state": "SUBMITTED",
+                    "pullRequestReview": {
+                      "id": "PRR_kwDOVjmb-s8AAAABXBde5A"
+                    },
                     "commit": {
                       "oid": "ff2bc97857da72054e99587086ddf022d0512df7"
                     },
@@ -113,6 +121,10 @@
                     "author": {
                       "__typename": "User",
                       "login": "ivan-anchev"
+                    },
+                    "state": "SUBMITTED",
+                    "pullRequestReview": {
+                      "id": "PRR_kwDOVjmb-s8AAAABXBeKuA"
                     },
                     "commit": {
                       "oid": "ff2bc97857da72054e99587086ddf022d0512df7"

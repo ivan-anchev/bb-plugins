@@ -3,6 +3,7 @@
 // (github/pr-timeline.ts); pure zod, shared by the server and the app.
 import { z } from "zod";
 import { labelSchema } from "../github/label.ts";
+import { viewerReviewSchema } from "./review-schema.ts";
 import { githubCommentSchema, reviewThreadSchema } from "./thread-schema.ts";
 
 // Every event names who did it, as a login ("ghost" for a deleted account), and when, in ISO 8601.
@@ -75,7 +76,12 @@ export function timeOf(item: TimelineItem): string {
  * Every comment on a PR, in GitHub's order: its review threads, and its timeline, which holds the
  * conversation's comments and the reviews that opened the threads. `changedPaths`: the files the
  * PR's diff changes, named as a thread names its file, byte for byte; a thread on any other file
- * has left the diff.
+ * has left the diff. `viewer`: the reader's own review, whose pending comments are in `threads`.
  */
-export const prCommentsSchema = z.object({ threads: z.array(reviewThreadSchema), timeline: z.array(timelineItemSchema), changedPaths: z.array(z.string()) });
+export const prCommentsSchema = z.object({
+  threads: z.array(reviewThreadSchema),
+  timeline: z.array(timelineItemSchema),
+  changedPaths: z.array(z.string()),
+  viewer: viewerReviewSchema,
+});
 export type PrComments = z.infer<typeof prCommentsSchema>;

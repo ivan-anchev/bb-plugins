@@ -13,6 +13,12 @@ const posted = (what: string) => async (...args: unknown[]) => {
   events.push(`${what} ${JSON.stringify(args)}`);
   return { url: `https://github.com/ivan-anchev/bb-plugins/pull/40#${what}` };
 };
+// A review write resolves to nothing, or fails as GitHub refused it while `refusing` is set.
+let refusing: Refusal | null = null;
+const wrote = (what: string) => async (...args: unknown[]) => {
+  events.push(`${what} ${JSON.stringify(args)}`);
+  if (refusing !== null) throw refusing;
+};
 const notCalled = async () => assert.fail("not part of these tests");
 // PR 41 stands for one GitHub refuses to change.
 const REFUSED_PR = 41;
@@ -30,6 +36,10 @@ mock.module("../github/gh.ts", {
     postReply: posted("reply"),
     postConversationComment: posted("conversation"),
     changePrState: changedState,
+    addReviewComment: wrote("add-to-review"),
+    addReviewReply: wrote("reply-in-review"),
+    submitReview: wrote("submit"),
+    discardReview: wrote("discard"),
     readPrComments: notCalled,
     listOpenPrs: notCalled,
     readInbox: async () => ({ found: searchFinds, stackMates: [] }),
@@ -81,7 +91,9 @@ const pullRequest40 = {
   changesRequested: false,
 } as const satisfies FoundPr["pr"];
 // The tag the comments read carries for this PR: what each post must invalidate for it to show.
-const READ_TAGS = prReviewsContract.comments.tags!(TARGET, { threads: [], timeline: [], changedPaths: [] });
+const READ_TAGS = prReviewsContract.comments.tags!(TARGET, { threads: [], timeline: [], changedPaths: [], viewer: { author: false, pendingReviewId: null } });
+// The tag the PR read, which carries its reviewers' states, has for the project's repo.
+const PR_TAG = repoTag(repoSchema.parse("ivan-anchev/bb-plugins"));
 // The app calling, as the Changes tab and the guide do.
 const FROM_APP = { experimental_caller: { kind: "client" }, experimental_signal: new AbortController().signal } as const;
 const call = async <Input, Output>(handler: (input: Input, context: typeof FROM_APP) => Output | Promise<Output>, input: Input) => handler(input, FROM_APP);
@@ -228,4 +240,46 @@ test("a page opened first whose project reads slower records the earlier time, s
     ],
   );
   assert.equal(lastOpenedProject(saved), "proj_2");
+});
+
+test("a comment and a reply go into the pending review, each then re-reading the PR's comments; submitting or discarding it re-reads the PR too", async () => {
+  const request: CommentRequest = { kind: "line", commit: "ff2bc97", path: "src/a.ts", start: { side: "new", line: 10 }, end: { side: "new", line: 12 }, body: "Why?" };
+  events.length = 0;
+
+  const results = [
+    await call(handlers.addToReview, { ...TARGET, request, reviewId: null }),
+    await call(handlers.addReplyToReview, { ...TARGET, threadId: "PRRT_1", reviewId: "PRR_1", body: "And this?" }),
+    await call(handlers.submitReview, { ...TARGET, reviewId: "PRR_1", event: "REQUEST_CHANGES", body: "" }),
+    await call(handlers.discardReview, { ...TARGET, reviewId: "PRR_2" }),
+  ];
+
+  assert.deepEqual(events, [
+    `add-to-review ${JSON.stringify(["ivan-anchev/bb-plugins", 40, request, null])}`,
+    `invalidate ${READ_TAGS.join(",")}`,
+    `reply-in-review ${JSON.stringify(["PRRT_1", "PRR_1", "And this?"])}`,
+    `invalidate ${READ_TAGS.join(",")}`,
+    `submit ${JSON.stringify(["PRR_1", "REQUEST_CHANGES", ""])}`,
+    `invalidate ${[...READ_TAGS, PR_TAG].join(",")}`,
+    `discard ${JSON.stringify(["PRR_2"])}`,
+    `invalidate ${[...READ_TAGS, PR_TAG].join(",")}`,
+  ]);
+  assert.deepEqual(results, [{}, {}, {}, {}]);
+});
+
+test("a comment GitHub refuses still re-reads the PR's comments, since a review may have gone pending elsewhere; a refused submit does not", async () => {
+  const request: CommentRequest = { kind: "line", commit: "ff2bc97", path: "src/a.ts", start: null, end: { side: "new", line: 12 }, body: "Why?" };
+  events.length = 0;
+  refusing = new Refusal({ code: "invalid", message: "GitHub refused it: Could not resolve to a node with the global id of 'PRR_1'" });
+
+  try {
+    await assert.rejects(call(handlers.addToReview, { ...TARGET, request, reviewId: "PRR_1" }), /Could not resolve to a node/);
+    await assert.rejects(call(handlers.submitReview, { ...TARGET, reviewId: "PRR_1", event: "COMMENT", body: "Looks good" }), /Could not resolve to a node/);
+  } finally {
+    refusing = null;
+  }
+  assert.deepEqual(events, [
+    `add-to-review ${JSON.stringify(["ivan-anchev/bb-plugins", 40, request, "PRR_1"])}`,
+    `invalidate ${READ_TAGS.join(",")}`,
+    `submit ${JSON.stringify(["PRR_1", "COMMENT", "Looks good"])}`,
+  ]);
 });

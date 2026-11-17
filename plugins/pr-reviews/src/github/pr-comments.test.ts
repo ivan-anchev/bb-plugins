@@ -36,6 +36,7 @@ test("PR #71: a range from a removed line to an added one, at the head and where
           author: { login: "ivan-anchev", bot: false },
           body: "Why halve it?",
           createdAt: "2026-11-10T08:20:27Z",
+          pending: false,
         },
       ],
     },
