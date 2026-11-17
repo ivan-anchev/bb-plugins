@@ -15,44 +15,59 @@ its role.
   `startCoordinator`, `board`, `setVerify`, `answerDecision`, `needsYou`,
   `memoryList`, `memoryRead`, `memoryWrite`;
   tags `coordinators`, `board:<regional manager id>` and `memory:<regional manager id>`).
-- `src/model/role.ts`: the role a thread holds, and the ticket its metadata
-  carries until it is bound. `src/model/memory-file.ts`: a memory file's
-  name, version, revision and write outcome, shared by tools, rpc and editor.
-  `src/model/crew.ts`: a crew, unstarted until its thread is bound, and
-  where it runs. `src/model/handoff.ts`: a crew's handoff, its
-  verdict, and `handoffIsCurrent`, the one definition of a current handoff
-  (no later turn started). `src/model/board/crew-state.ts`: `crewState`, the
-  one function that puts a crew on the board, used by the board and
-  `crew_catch_up`. `src/model/inbox/`: the events the plugin tells a
-  regional manager about, and `doorbellText`, the wake message, which
-  holds no crew-written text; `own-tree.ts` in it decides, from the latest
-  stored event, whether a read of the regional manager's own working tree
-  records a warning or its clearing. `src/model/reminder.ts`: a reminder, and the
-  one parser of `crew_remind`'s times.
-- `src/server/`: `store.ts` holds every SQL statement (tables `roles`,
-  `coordinators`, `memory_revisions`, `crews`, `handoffs`, `verdicts`,
-  `events`, `doorbells`, `reminders`); `inbox/` is the only writer of events and the only
-  sender of doorbells, with the once-a-minute `watch` tick, the thread
-  watch that turns a crew's idle, failure or question into an event, and the
-  own-tree watch that reads the regional manager's working tree through
-  `bb--git` when its turn ends and records changed files there; the tick
-  first turns each due reminder into one; `spawn.ts` mints a ticket,
-  saves a crew and spawns a regional manager or crew thread, and binds it on the spawn answer and
-  on `thread.created`; `roles.ts` is the one `configure` callback; `tools/`
-  the agent tools and the text they return; `crew/` the crew actions, the crew's brief, a crew's current handoff, the
-  board and its rpc handlers (its read, the verification switch and the answers to decisions), and
-  the thread events that refresh it; `verify/` the verify step (a verifier
-  per done handoff, its brief, model and `crew_verdict`, and the one
-  automatic fix round that sends a first failed verdict's findings back to
-  the crew); `memory/` the memory files beside `data.db` (compare-and-swap
-  writes through a temp file and a rename) and the Memory editor's rpc
-  handlers (a save there wakes the regional manager).
+- `src/model/role.ts`: the role a thread holds (coordinator, agent or
+  verifier), and the ticket its metadata carries until it is bound.
+  `src/model/memory-file.ts`: a memory file's name, version, revision and
+  write outcome, shared by tools, rpc and editor. `src/model/issue/`: an
+  issue and its plan (`issue.ts`), its kinds and the pipeline each runs
+  (`kind.ts`), and `status.ts`, the one derivation of an issue's status and
+  Needs you, used by the board, `crew_catch_up`, `issue_read`, the rail badge
+  and the PR watch. `src/model/agent.ts`: an agent, where it runs, and the
+  branch an issue's pull request is read on. `src/model/execution.ts`: what a
+  thread runs on, resolved against bb's catalog or refused.
+  `src/model/handoff.ts`: an agent's handoff, and `handoffIsCurrent`, the one
+  definition of a current handoff (no later turn started).
+  `src/model/verdict/`: a check of a done handoff, its verdict, the plugin's
+  read of the commit and the tree, and a branch's pull request and CI.
+  `src/model/board/board-groups.ts`: the board's lanes. `src/model/inbox/`:
+  the events the plugin tells a regional manager about, and `doorbellText`,
+  the wake message, which holds no agent-written text; `own-tree.ts` in it
+  decides, from the latest stored event, whether a read of the regional
+  manager's own working tree records a warning or its clearing.
+  `src/model/reminder.ts`: a reminder, and the one parser of `crew_remind`'s
+  times. `src/model/decision.ts`: a question put to the user.
+- `src/server/`: `store/` holds every SQL statement, one file per cluster
+  (issues, agents, checks, inbox, pull requests) composed by `store.ts`, and
+  `migrations.ts`, the one list of statements, which only grows; `inbox/` is
+  the only writer of events and the only sender of doorbells, with the
+  thread watch that turns an agent's idle, failure or question into an
+  event, and the own-tree watch that reads the regional manager's working
+  tree through `bb--git` when its turn ends; `spawn.ts` mints a ticket and
+  spawns a regional manager, agent or verifier thread, and binds it on the
+  spawn answer and on `thread.created`; `roles.ts` is the one `configure`
+  callback, with each role's tools, skills and rule text; `issues/` the
+  issue tools, their texts and the one read of an issue's facts; `agents/`
+  the agent tools, starting, messaging, stopping and ending agents, an
+  agent's brief, and the thread events that end an agent or refresh the
+  board; `execution/` reads bb's provider catalog and what a thread runs on;
+  `tools/` the fleet-wide `crew_` tools, `agent_handoff`, and the catch-up
+  texts; `verify/` the verify step (a verifier per done handoff, its brief,
+  model and `issue_verdict`, and the one automatic fix round that sends a
+  first failed verdict's findings back to the agent); `watch/` the PR watch
+  through `gh`; `board/` the board's read and its rpc handlers (the
+  verification switch and the answers to decisions); `memory/` the memory
+  files beside `data.db` (compare-and-swap writes through a temp file and a
+  rename) and the Memory editor's rpc handlers (a save there wakes the
+  regional manager). `server.ts` runs the once-a-minute tick: agents, then
+  the PR watch, then the verifiers, then the inbox (due reminders, unsent
+  doorbells).
 - `src/app/panel/`: the nav panel, its list, and the New page around bb's
   new-thread composer. `src/app/board/`: the Board, its thread tab and its
   panel page. `src/app/memory/`: the Memory page and its editor.
 - `skills/regional-manager/`: the regional manager's playbook, selected only
-  for it. `skills/crew-work/`: a crew thread's playbook, selected only for
-  crews. `skills/crew-board/`: the user guide, selected for every thread.
+  for it. `skills/agent-work/`: an agent's playbook, selected only for
+  agents. `skills/verifying/`: a verifier's playbook. `skills/crew-board/`:
+  the user guide, selected for every thread.
 
 ## Develop
 

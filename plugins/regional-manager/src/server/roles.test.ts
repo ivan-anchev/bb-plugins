@@ -85,7 +85,7 @@ test("an agent thread is offered crew_memory_read, agent_handoff, its skill and 
 
   const configuration = kit.configurationFor(agentThreadId, {});
   assert.deepEqual(configuration.tools, ["crew_memory_read", "agent_handoff"]);
-  assert.deepEqual(configuration.skills, ["crew-board", "crew-work"]);
+  assert.deepEqual(configuration.skills, ["crew-board", "agent-work"]);
   assert.ok(configuration.instructions?.startsWith("You are an agent, started by a regional manager"));
 });
 
