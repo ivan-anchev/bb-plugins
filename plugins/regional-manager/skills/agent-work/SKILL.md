@@ -42,8 +42,8 @@ spike, investigation or design) is the report.
 When your first message has "Where you work", the regional manager handed you
 an issue another agent held, and you work in that agent's environment, where
 it stopped: the same checkout, branch and commits, and any files it left
-uncommitted, half-done edits included. That agent is stopped; nobody else
-works there.
+uncommitted, half-done edits included. That agent no longer works there,
+and nobody else does.
 
 - Look before you change anything: run `git status` and `git log`, and read
   the earlier handoffs and verdicts. Decide from them what to keep, fix or
