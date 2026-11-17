@@ -1,8 +1,8 @@
-// The PR header, a masthead: the PR's state badge, with `owner/repo #number` beside it, above the
-// title and the identity row (author, `base ← head`) on the left; on the right, Finish review while
-// the reader has a pending review on GitHub, then icon actions (Review chat when a review thread
-// exists, then GitHub). The badge opens a menu of the state changes GitHub allows. The PR's line
-// counts are on the Changes tab.
+// The PR header: a pane header bar, then the masthead. The bar holds the PR's state badge, with
+// `owner/repo #number` beside it, and at its end Finish review while the reader has a pending
+// review on GitHub, then icon actions (Review chat when a review thread exists, then GitHub). The
+// badge opens a menu of the state changes GitHub allows. Under the bar, the masthead is the title
+// above the identity row (author, `base ← head`). The PR's line counts are on the Changes tab.
 import { Fragment, useState, type RefObject } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { PrDetail, PrState, StateChange } from "../../contract.ts";
@@ -22,33 +22,29 @@ type PrHeaderProps = { target: PrTarget; repo: Repo; pr: PrDetail; hasReviewThre
 
 export function PrHeader({ target, repo, pr, hasReviewThread, title }: PrHeaderProps) {
   return (
-    <header className="shrink-0 px-6 pt-4 pb-3.5">
-      <div className="mb-2 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+    <>
+      {/* .pr-pane-header (app.css): bb's pane header height and seam. */}
+      <div className="pr-pane-header">
         <StateBadge target={target} state={pr.state} />
-        <span className="text-xs text-muted-foreground">
+        <span className="min-w-0 truncate text-xs text-muted-foreground">
           {repo} <span className="font-medium tabular-nums">#{pr.number}</span>
         </span>
-      </div>
-      <div className={MASTHEAD}>
-        <h1 ref={title} tabIndex={-1} className="outline-none text-[17px] leading-6 font-semibold text-pretty break-words [grid-area:title]">{pr.title}</h1>
-        {/* -my-0.5 centers the 28px buttons on the title's 24px first line; -mr-1.5 lines the last
-            glyph, not its hit area, up with the header's right edge. */}
-        <div className="-my-0.5 -mr-1.5 flex gap-1 justify-self-end [grid-area:actions]">
+        {/* -mr-1.5 lines the last glyph, not its hit area, up with the bar's right edge. */}
+        <div className="-mr-1.5 ml-auto flex shrink-0 items-center gap-1">
           <ReviewSubmit target={target} focusAfter={title} />
           {hasReviewThread && <ReviewChatIconButton />}
           <IconLink icon="Github" label="Open on GitHub" href={pr.url} />
         </div>
-        <div className="[grid-area:identity]">
-          <PrIdentity pr={pr} />
-        </div>
       </div>
-    </header>
+      <header className="flex shrink-0 flex-col gap-0.5 px-6 pt-4 pb-1.5">
+        <h1 ref={title} tabIndex={-1} className="outline-none text-[17px] leading-6 font-semibold text-pretty break-words">
+          {pr.title}
+        </h1>
+        <PrIdentity pr={pr} />
+      </header>
+    </>
   );
 }
-
-// One layout at every width: the identity row runs under the actions, so a narrow page wraps the
-// branches rather than leaving a column empty.
-const MASTHEAD = "grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-0.5 [grid-template-areas:'title_actions'_'identity_identity']";
 
 export const STATE_TILES = {
   OPEN: { label: "Open", icon: "GitPullRequest", color: "text-success" },

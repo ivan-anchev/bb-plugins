@@ -37,9 +37,11 @@ or your own.
 - **Stacks as trees**: pull requests built on each other show under "Stack
   #N" (the bottom one) with "3 of 5", bottom first; the stack's pull requests
   listed elsewhere stay in place as dim rows.
-- **A page per pull request**: a state badge for whether it is open, a draft,
-  merged or closed, beside `owner/repo #number`, above its title, author,
-  `base ← branch`, and Review chat and GitHub icon buttons, then three tabs: **Summary**, the author's own
+- **A page per pull request**: a header bar drawn as bb's own pane headers,
+  with a state badge for whether it is open, a draft, merged or closed,
+  `owner/repo #number`, and Review chat and GitHub icon buttons, above its
+  title, author and `base ← branch`, then three tabs in one segmented control:
+  **Summary**, the author's own
   description and the PR's activity beside its reviewers, checks and labels; **Changes**, the
   PR's whole diff, with its `+N −M` on the tab; and **Guide**, which keeps its
   step while you switch and marks a ready guide with a dot.

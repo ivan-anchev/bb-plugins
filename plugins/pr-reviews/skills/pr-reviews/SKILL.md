@@ -103,14 +103,14 @@ the composer.
 
 ## The page
 
-Clicking a row opens that PR's page. Its header shows the PR's state in the sidebar's badge, by name,
-on its own line (green Open, grey Draft, purple Merged, red Closed) with
-`owner/repo #number` beside it, then the title over the author's GitHub avatar
-and login and `base-branch ← head-branch`; and icon buttons, each named by its
-tooltip:
-**Review chat** (opens the review thread's chat beside the page; shown once a
-review has started, see "Review chat" below) and **Open on GitHub** (opens the
-PR on github.com).
+Clicking a row opens that PR's page. It opens on a header bar, as tall as bb's own pane headers
+and ruled off from the page the same way: the PR's state in the sidebar's badge, by name (green
+Open, grey Draft, purple Merged, red Closed), with `owner/repo #number` beside it, and at the bar's
+end **Finish review** while you have a pending review (see "Reviewing on GitHub" below), then icon
+buttons, each named by its tooltip: **Review chat** (opens the review thread's chat beside the
+page; shown once a review has started, see "Review chat" below) and **Open on GitHub** (opens the
+PR on github.com). Under the bar sit the title and the author's GitHub avatar and login with
+`base-branch ← head-branch`.
 
 ### Changing the state
 
@@ -134,8 +134,8 @@ on GitHub since the page read it (Refresh to see it). When GitHub doesn't
 answer within a minute the change may still have happened, so it says to
 Refresh and check before trying again, and never retries by itself.
 
-Under the header sit three tabs, **Summary**, **Changes** and **Guide**; a PR
-opens on Summary. The Changes tab carries the PR's lines added and removed,
+Under the header sit three tabs, **Summary**, **Changes** and **Guide**, as one segmented control:
+the selected tab is raised on a recessed track. A PR opens on Summary. The Changes tab carries the PR's lines added and removed,
 `Changes +A −D`, as GitHub counts them. The header and the tabs stay put, and each tab scrolls on its
 own. Switching tabs keeps the guide where you left it, on the same step and
 scroll position, and Changes on the same file, scroll position and open
@@ -459,7 +459,7 @@ comment on the PR's latest commit, so Review shows only on a diff of it.
 While you have a pending review:
 
 - **Finish review**, with the number of pending comments, sits at the top of
-  the page, beside Review chat, on every tab. It opens a summary field
+  the page, in its header bar beside Review chat, on every tab. It opens a summary field
   (optional) and **Comment**, **Approve** or **Request changes**, then
   **Submit review**, which publishes the review and its comments; or **Discard
   review**, which asks once, then deletes the review and its comments. On your

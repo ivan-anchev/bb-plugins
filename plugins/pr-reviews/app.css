@@ -24,6 +24,20 @@
   --trees-status-renamed-override: var(--muted-foreground);
 }
 
+/* A pane's header bar, drawn as bb draws its own pane headers (AppPageHeader: one chrome row tall,
+   `border-b border-border-seam-vertical/60`), so it reads as bb's and a theme that changes those
+   tokens changes it too. Any pane header on the page takes it, so their bars line up across the
+   split. Its inline padding matches the PR page's content edge. */
+.pr-pane-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.625rem;
+  height: var(--bb-app-chrome-row-height);
+  padding-inline: 1.5rem;
+  border-bottom: 1px solid color-mix(in oklab, var(--border-seam-vertical) 60%, transparent);
+}
+
 /* Prose's block spacing (src/app/ui/prose.tsx): GitHub's markdown rhythm, in place of bb's chat
    margins, which leave `<details>` flush against its neighbours. Every block keeps one gap below
    it and none above, so gaps never collapse unevenly; a heading takes 1.5 gaps above and one below,
