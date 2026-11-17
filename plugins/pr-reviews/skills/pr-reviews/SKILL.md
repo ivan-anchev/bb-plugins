@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app and its card on the new-thread screen show (a list in the main pane of your pull requests across every GitHub project, in Authored by me, Needs my review and Recently merged sections with stacked pull requests as trees, one attention dot per row and a Filter that hides the sections you don't watch, a page per pull request with a state badge that changes its state on GitHub (ready for review, convert to draft, close by press and hold, reopen), Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (Write and Preview tabs, a Send as switch of Ask to ask the review thread, Comment to post a GitHub review comment and Review to add it to a pending review, and one send button; nothing posts before you send, and review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app and its card on the new-thread screen show (a list in the main pane of your pull requests across every GitHub project, in Authored by me, Needs my review and Recently merged sections with stacked pull requests as trees, one attention dot per row and a Filter that hides the sections you don't watch, a page per pull request with a state badge that changes its state on GitHub (ready for review, convert to draft, close by press and hold, reopen), Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (drawn as bb's composer, with Preview, a Send as chip whose menu picks Ask to ask the review thread, Comment to post a GitHub review comment or Review to add it to a pending review, and one send button; nothing posts before you send, and review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -314,24 +314,26 @@ box under the last one, after any finding there, with its text field focused.
 Pick other lines in the same diff and the box moves there, keeping what you
 wrote. The box has:
 
-- **Write** and **Preview** tabs (← and → switch them): you write markdown,
-  and Preview renders it as bb's chat does, at the same size and inset.
-  ⌘B, ⌘I, ⌘E and ⌘K (Ctrl on Windows and Linux) wrap the selected text in
-  bold, italic, `code` or a link.
-- **×** to discard: the text and the selection go.
-- **Send as** at the bottom right, a switch of what your text goes as:
-  **Ask** (the review thread), **Comment** (GitHub, at once) and, on a PR you
-  didn't write, **Review** (your pending GitHub review; see "Reviewing on
-  GitHub"). ← and → move between the ones that can send. One that can't stays
-  greyed out, its tooltip saying why. The box opens on the one you last picked
-  in any box, where it can send; otherwise on Comment, or on Review while you
-  have a pending review. The placeholder says what your text goes as. In a box
-  under 470px wide the switch shows icons alone, each naming itself in its
-  tooltip.
-- The round **send** button after it (⌘↵, Ctrl+↵ off a Mac) sends your text
-  as the switch says; its tooltip names the action, such as "Comment (⌘↵)".
-  It needs some text. The Summary tab's box has no switch: one **Comment**
-  button.
+- Your text, written in markdown. ⌘B, ⌘I, ⌘E and ⌘K (Ctrl on Windows and
+  Linux) wrap the selected text in bold, italic, `code` or a link.
+- **×** at the top right to discard: the text and the selection go.
+- **Send as** at the bottom left, a chip naming what your text goes as, like
+  the model chip in bb's own composer. It opens a menu of **Ask the agent**
+  (the review thread), **Comment** (GitHub, at once; **Reply** in a thread)
+  and, on a PR you didn't write, **Add to review** (your pending GitHub
+  review; see "Reviewing on GitHub"), each with a line on what it does. One
+  that can't send stays in the menu, greyed out, with its reason in place of
+  that line. The box opens on the one you last picked in any box, where it can
+  send; otherwise on Comment, or on Review while you have a pending review.
+  The placeholder says what your text goes as. Where there is only one thing
+  to send as, the Summary tab's box, the chip is a label, not a menu.
+- **Preview** (the eye) at the bottom right renders your markdown as bb's chat
+  does, in place of the text; press it again to go back to writing.
+- The **send** button after it (⌘↵, Ctrl+↵ off a Mac) sends your text as the
+  chip says; its tooltip names the action, such as "Comment (⌘↵)". It needs
+  some text.
+
+The box is drawn as bb's composer, so it follows your theme as bb's own does.
 
 Esc in an empty box closes it and clears the lines; a box with text ignores
 Esc, so a draft is never lost to it. While the box is open, Esc elsewhere on

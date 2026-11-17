@@ -65,10 +65,10 @@ export function MenuCheckboxItem({ checked, onCheckedChange, keepOpen = false, c
   );
 }
 
-/** One choice of a `MenuRadioGroup`, its check on the chosen one. */
-export function MenuRadioItem({ value, children }: { value: string; children: ReactNode }) {
+/** One choice of a `MenuRadioGroup`, its check on the chosen one. A `disabled` one is skipped by the keys. */
+export function MenuRadioItem({ value, disabled = false, children }: { value: string; disabled?: boolean; children: ReactNode }) {
   return (
-    <RadioItem value={value} className={`${ITEM_CLASS} pl-2 pr-8`}>
+    <RadioItem value={value} disabled={disabled} className={`${ITEM_CLASS} pl-2 pr-8`}>
       <CheckIndicator />
       {children}
     </RadioItem>

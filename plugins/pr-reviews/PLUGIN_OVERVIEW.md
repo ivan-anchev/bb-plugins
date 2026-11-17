@@ -88,9 +88,9 @@ or your own.
   comment box under it, empty to ask the thread about the finding, or with the
   finding as the comment to post on its line.
 - **One comment box per diff**: hover a line and click the gutter's +, or
-  drag from it, to select lines in any diff; a box opens under them with Write
-  and Preview tabs for markdown, and a Send as switch (Ask, Comment, Review)
-  beside one send button. Pick other lines and it moves there with your text.
+  drag from it, to select lines in any diff; a box drawn as bb's composer opens
+  under them, for markdown with a preview, and a Send as chip whose menu picks
+  Ask, Comment or Review for its one send button. Pick other lines and it moves there with your text.
 - **Ask about lines**: sent as Ask, your question goes to the review thread
   with the quoted lines; the answer is in Review chat.
 - **Comment on GitHub**: sent as Comment, your text posts as a review comment

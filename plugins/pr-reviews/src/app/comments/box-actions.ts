@@ -1,11 +1,11 @@
 // What the comment box can send as: which of its GitHub actions the reader has, posting at once
 // (Comment or Reply) or adding to their pending review, which GitHub publishes only when they
-// submit it; the Send as segments those make, with Ask; the one the box sends with; and the words
-// each mode puts in the box. Pure.
+// submit it; the Send as modes those make, with Ask; the one the box sends with; and the words
+// each mode puts in the box and its menu. Pure.
 import type { ViewerReview } from "../../comments/review-schema.ts";
 import type { Action } from "./box-problems.ts";
 
-type Subject = "lines" | "reply" | "conversation";
+export type Subject = "lines" | "reply" | "conversation";
 
 /**
  * `publish`: Comment or Reply alone. `both`: a reviewer on lines can comment at once or start a
@@ -25,17 +25,17 @@ export function githubActionsOf(subject: Subject, viewer: ViewerReview | undefin
   return subject === "lines" && !viewer.author && atHead ? { kind: "both" } : { kind: "publish" };
 }
 
-/** A Send as segment: what it sends as, and why it can't now (its tooltip), or null when it can. */
-export type Segment = { mode: Action; reason: string | null };
+/** A Send as option: what it sends as, and why it can't now (said in its menu), or null when it can. */
+export type SendOption = { mode: Action; reason: string | null };
 
 /**
- * The box's segments, in order. Lines and threads: Ask, which needs the agent review's thread
+ * The box's Send as options, in order. Lines and threads: Ask, which needs the agent review's thread
  * (`hasThread`); Comment, which GitHub holds back while a review is pending; and Review, while
  * the reader has one or can start one, which takes lines only at the PR's head (`atHead`). The
  * conversation: Comment alone, since GitHub can't hold a conversation comment in a review and
  * the agent review is about the code.
  */
-export function segmentsOf(subject: Subject, actions: GitHubActions, hasThread: boolean, atHead: boolean): Segment[] {
+export function sendOptionsOf(subject: Subject, actions: GitHubActions, hasThread: boolean, atHead: boolean): SendOption[] {
   const comment = can("comment");
   if (subject === "conversation") return [comment];
   const ask = hasThread ? can("ask") : cant("ask", "Start an agent review to ask about these lines.");
@@ -55,33 +55,22 @@ export function segmentsOf(subject: Subject, actions: GitHubActions, hasThread: 
   }
 }
 
-const can = (mode: Action): Segment => ({ mode, reason: null });
-const cant = (mode: Action, reason: string): Segment => ({ mode, reason });
+const can = (mode: Action): SendOption => ({ mode, reason: null });
+const cant = (mode: Action, reason: string): SendOption => ({ mode, reason });
 
 /** Why Review can't take lines on an older commit. */
 const NOT_AT_HEAD = "Your review takes comments on the PR's latest commit only. Refresh, then comment from the Changes tab.";
 
 /**
- * The segment the box sends with: the one the reader last `picked`, in any box this session, if
+ * The option the box sends with: the one the reader last `picked`, in any box this session, if
  * it can send here; else the default, Review with a review pending and Comment otherwise; else the
  * first that can. With none that can, the first.
  */
-export function selectedOf(segments: readonly Segment[], actions: GitHubActions, picked: Action | null): Segment {
+export function selectedOf(options: readonly SendOption[], actions: GitHubActions, picked: Action | null): SendOption {
   const fallback = actions.kind === "review" ? "review" : "comment";
-  const usable = segments.filter((segment) => segment.reason === null);
-  const of = (mode: Action | null) => (segment: Segment) => segment.mode === mode;
-  return usable.find(of(picked)) ?? usable.find(of(fallback)) ?? usable.at(0) ?? segments[0];
-}
-
-/**
- * Where ← (`by` -1) or → (1) goes from the `from` segment: the next one round that can send,
- * skipping the disabled ones; null when none can.
- */
-export function steppedFrom(segments: readonly Segment[], from: Action, by: 1 | -1): Action | null {
-  const usable = segments.filter((segment) => segment.reason === null);
-  if (usable.length === 0) return null;
-  const at = usable.findIndex((segment) => segment.mode === from);
-  return usable[(at + by + usable.length) % usable.length].mode;
+  const usable = options.filter((option) => option.reason === null);
+  const of = (mode: Action | null) => (option: SendOption) => option.mode === mode;
+  return usable.find(of(picked)) ?? usable.find(of(fallback)) ?? usable.at(0) ?? options[0];
 }
 
 /** What sending as `mode` does, as the send button and its tooltip name it. */
@@ -99,6 +88,20 @@ export function sendLabelOf(subject: Subject, mode: Action): string {
   }
 }
 
+
+/** What sending as `mode` does, under its name in the Send as menu. */
+export function descriptionOf(mode: Action, actions: GitHubActions): string {
+  switch (mode) {
+    case "ask":
+      return "Private. The agent answers in Review chat.";
+    case "comment":
+      return "Posts on GitHub now, for everyone.";
+    case "review":
+      return actions.kind === "review" ? "Joins your pending review. Published when you finish it." : "Starts a pending review. Published when you finish it.";
+    default:
+      return mode satisfies never;
+  }
+}
 
 /** The empty box's placeholder: what the draft goes as. */
 export function placeholderOf(subject: Subject, mode: Action): string {

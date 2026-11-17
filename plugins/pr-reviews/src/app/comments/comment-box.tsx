@@ -1,9 +1,10 @@
 // The comment box: a diff's one box, under its selected lines or in one of its review threads, or
-// the Summary tab's composer. Write in markdown, preview it, pick what it goes as (send-as.tsx), then
-// send it: ask the review thread about the lines, comment on them on GitHub, reply in the thread,
-// or comment on the PR's conversation; or add the comment or reply to the reader's pending review
-// (box-actions.ts). A diff's draft is the diff's, so it follows the box from place to place. Once
-// the box has done its job it shows the outcome in the same shell, where the text was.
+// the Summary tab's composer, drawn as bb's composer is. Write in markdown, preview it, pick what it
+// goes as (send-as.tsx), then send it: ask the review thread about the lines, comment on them on
+// GitHub, reply in the thread, or comment on the PR's conversation; or add the comment or reply to
+// the reader's pending review (box-actions.ts). A diff's draft is the diff's, so it follows the box
+// from place to place. Once the box has done its job it shows the outcome in the same shell, where
+// the text was.
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { experimental_Icon as Icon, experimental_PluginRpcCallError as RpcCallError } from "@get-bb/plugin-sdk/app";
 import { reviewThreadOf, type PrDetail, type ReviewState } from "../../contract.ts";
@@ -26,17 +27,14 @@ import {
   useReplyToThread,
   type PrHeadTarget,
 } from "../queries.ts";
-import { Button } from "../ui/button.tsx";
 import { useHoldEscape } from "../ui/hold-escape.ts";
 import { IconButton } from "../ui/icon-button.tsx";
 import { Prose, READING_TYPE } from "../ui/prose.tsx";
-import { Tooltip } from "../ui/tooltip.tsx";
-import { githubActionsOf, placeholderOf, segmentsOf, selectedOf, sendLabelOf, type GitHubActions } from "./box-actions.ts";
+import { githubActionsOf, placeholderOf, sendOptionsOf, selectedOf, sendLabelOf, type GitHubActions } from "./box-actions.ts";
 import { problemsOf, type Action, type Failure } from "./box-problems.ts";
-import { BOX_CLASS, DoneBox, SentNote } from "./done-box.tsx";
+import { BOX_SHELL, DoneBox, SentNote } from "./done-box.tsx";
 import { markdownShortcut } from "./markdown-keys.ts";
 import { SendAs, SendButton, usePickedMode } from "./send-as.tsx";
-import { useWriteTabs, WriteTabs } from "./write-tabs.tsx";
 
 /**
  * What the box is about: the lines under it, at the commit the reader views, the review thread it
@@ -94,12 +92,12 @@ type ComposerProps = Omit<CommentBoxProps, "onSettled" | "stage"> & {
 // stays beside the kept draft until the draft changes. A reply that lands after the box has moved
 // or closed changes nothing: the box is no longer the one that sent it.
 function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, onClose, pr, review }: ComposerProps) {
-  const tabs = useWriteTabs();
+  const [preview, setPreview] = useState(false);
   const [sending, setSending] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
   const group = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
-  const caret = useTextarea(textarea, draft, tabs.tab === "write", takeFocus);
+  const caret = useTextarea(textarea, draft, !preview, takeFocus);
   const life = useLifetime();
   const askLines = useAskAboutLines();
   const askFinding = useAskAboutFinding();
@@ -115,15 +113,15 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
   // why a latch beside `sending`: the state arrives with the next render, so a quick second click
   // would send twice.
   const latch = useRef(false);
-  const ids = { text: useId(), error: useId() };
+  const ids = { text: useId(), error: useId(), preview: useId() };
   const [picked, pick] = usePickedMode();
 
   const check = postOf(subject, pr, draft);
   const post = "blocked" in check ? null : check;
   const atHead = subject.kind !== "lines" || subject.span.commit === pr.headSha;
   const actions = githubActionsOf(subject.kind, viewer, atHead);
-  const segments = segmentsOf(subject.kind, actions, reviewThreadOf(review) !== null, atHead);
-  const selected = selectedOf(segments, actions, picked);
+  const options = sendOptionsOf(subject.kind, actions, reviewThreadOf(review) !== null, atHead);
+  const selected = selectedOf(options, actions, picked);
   const write = reviewWriteOf(actions, post);
   const problems = problemsOf("blocked" in check ? check.blocked : null, failure, draft);
   const label = sendLabelOf(subject.kind, selected.mode);
@@ -232,69 +230,59 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
     onDraft(edit.text);
   };
 
+  const togglePreview = () => {
+    setPreview(!preview);
+    // Back to writing, the caret goes back to the text.
+    if (preview) requestAnimationFrame(() => textarea.current!.focus());
+  };
+
   return (
-    // why a size container: under 470px wide, Send as draws its segments as icons alone.
-    <div ref={group} role="group" aria-label="Comment box" onKeyDown={onKeyDown} className={`@container ${BOX_CLASS}`}>
-      <div className="flex items-center px-2 pt-2">
-        <WriteTabs tabs={tabs} onWrite={() => textarea.current!.focus()} />
-        {subject.kind !== "conversation" && (
-          <div className="ml-auto">
-            <IconButton icon="X" label="Discard" size="dismiss" onClick={onClose} />
-          </div>
-        )}
-      </div>
-      <div hidden={tabs.tab !== "write"} {...tabs.panelProps("write")}>
-        <label htmlFor={ids.text} className="sr-only">
-          {labelOf(subject)}
-        </label>
-        <textarea
-          ref={textarea}
-          id={ids.text}
-          rows={3}
-          value={draft}
-          onChange={(event) => onDraft(event.target.value)}
-          placeholder={placeholderOf(subject.kind, selected.mode)}
-          aria-describedby={problems.length === 0 ? undefined : ids.error}
-          className={`${TEXT_CLASS} max-h-[330px] resize-none border-0 bg-transparent placeholder:text-subtle-foreground`}
-        />
-      </div>
-      {tabs.tab === "preview" && (
-        // why its own tab stop: it is a tab panel of text alone, and the keys reach it only so (REVIEW.md).
-        <div {...tabs.panelProps("preview")} tabIndex={0} className={`${TEXT_CLASS} rounded-md focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset`}>
+    <div ref={group} role="group" aria-label="Comment box" onKeyDown={onKeyDown} {...BOX_SHELL}>
+      {subject.kind !== "conversation" && (
+        // Where bb's composer has its collapse button.
+        <div className="absolute top-2 right-[13px] z-10">
+          <IconButton icon="X" label="Discard" size="dismiss" onClick={onClose} />
+        </div>
+      )}
+      <label htmlFor={ids.text} className="sr-only">
+        {labelOf(subject)}
+      </label>
+      <textarea
+        ref={textarea}
+        id={ids.text}
+        hidden={preview}
+        rows={3}
+        value={draft}
+        onChange={(event) => onDraft(event.target.value)}
+        placeholder={placeholderOf(subject.kind, selected.mode)}
+        aria-describedby={problems.length === 0 ? undefined : ids.error}
+        className={`${TEXT_CLASS} max-h-[330px] resize-none border-0 bg-transparent placeholder:text-subtle-foreground`}
+      />
+      {preview && (
+        // why its own tab stop: it is a region of text alone, and the keys reach it only so (REVIEW.md).
+        <div id={ids.preview} role="region" aria-label="Preview" tabIndex={0} className={`${TEXT_CLASS} rounded-md focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset`}>
           {isBlank(draft) ? <p className="text-subtle-foreground">Nothing to preview</p> : <Prose text={draft} />}
         </div>
       )}
       {post !== null && post.note !== null && <p className="px-4 pt-1 text-xs text-muted-foreground">{post.note}</p>}
       {sent !== null && <SentNote outcome={sent} />}
-      <div className="flex min-h-11 items-center gap-2 pt-1.5 pr-2 pb-2 pl-4">
-        {problems.length > 0 && (
-          <div id={ids.error} role="alert" className="mr-auto grid min-w-0 gap-1">
-            {problems.map((problem) => (
-              <p key={problem} className="flex items-start gap-1.5 text-xs text-destructive-text">
-                <Icon name="AlertCircle" className="mt-px size-3.5 shrink-0" aria-hidden />
-                <span>{problem}</span>
-              </p>
-            ))}
-          </div>
-        )}
-        {/* why aria-disabled, not disabled: the send button stays focusable, and says what it would send as. */}
-        {segments.length === 1 ? (
-          <div className="ml-auto">
-            <Tooltip content={`${label} on GitHub (${SEND_KEYS})`} placement="top-end">
-              {(describedBy) => (
-                <Button variant="default" size="sm" aria-disabled={!canSend} aria-describedby={describedBy} onClick={send}>
-                  <Icon name="GithubLogo" className="size-3.5" aria-hidden />
-                  {sending ? "Commenting…" : label}
-                </Button>
-              )}
-            </Tooltip>
-          </div>
-        ) : (
-          <div className="ml-auto flex shrink-0 items-center gap-2">
-            <SendAs segments={segments} selected={selected.mode} onPick={pick} />
-            <SendButton label={`${label} (${SEND_KEYS})`} sending={sending} disabled={!canSend} onSend={send} />
-          </div>
-        )}
+      {problems.length > 0 && (
+        <div id={ids.error} role="alert" className="grid gap-1 px-4 pt-1">
+          {problems.map((problem) => (
+            <p key={problem} className="flex items-start gap-1.5 text-xs text-destructive-text">
+              <Icon name="AlertCircle" className="mt-px size-3.5 shrink-0" aria-hidden />
+              <span>{problem}</span>
+            </p>
+          ))}
+        </div>
+      )}
+      {/* bb's composer action row: the chip at the start, the send button at the end. */}
+      <div className="flex items-center gap-3 pt-1.5 pr-[13px] pb-2 pl-3">
+        <SendAs subject={subject.kind} actions={actions} options={options} selected={selected.mode} onPick={pick} />
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <IconButton icon="Eye" label="Preview" aria-pressed={preview} aria-controls={preview ? ids.preview : undefined} onClick={togglePreview} />
+          <SendButton label={`${label} (${SEND_KEYS})`} sending={sending} disabled={!canSend} onSend={send} />
+        </div>
       </div>
     </div>
   );
@@ -360,16 +348,17 @@ function labelOf(subject: BoxSubject): string {
 }
 
 /**
- * Write and Preview share type, padding and minimum height, so switching moves nothing. The minimum
- * holds the textarea's three rows and its padding.
+ * The text and its preview share bb's composer inset, the type of its draft (14/22), and a minimum
+ * height, so switching moves nothing. The minimum is three rows: 3 × 22px of line, and 12px + 4px
+ * of padding. The right inset clears the × above the text.
  */
-const TEXT_CLASS = `block w-full min-h-20 px-4 pt-2 pb-1 ${READING_TYPE} text-foreground outline-none`;
+const TEXT_CLASS = `block w-full min-h-[82px] px-4 pt-3 pr-12 pb-1 ${READING_TYPE} text-foreground outline-none`;
 
 /**
  * The textarea's focus, height and selection. It takes focus with the caret at the end when the
  * box opens (`takeFocus`), grows with its text to its max height and then scrolls, and `select`
- * places the selection once the text a shortcut changed is drawn. `shown`: the Write tab is
- * selected; a hidden textarea has no height to measure.
+ * places the selection once the text a shortcut changed is drawn. `shown`: the text is shown, not
+ * its preview; a hidden textarea has no height to measure.
  */
 function useTextarea(textarea: RefObject<HTMLTextAreaElement | null>, text: string, shown: boolean, takeFocus: boolean) {
   const pending = useRef<[number, number] | null>(null);

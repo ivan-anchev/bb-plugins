@@ -11,8 +11,15 @@ import { useOpenReviewChat } from "../review-chat/review-chat-button.tsx";
 import { Button, buttonClass } from "../ui/button.tsx";
 import { LINK } from "../ui/link.ts";
 
-/** The box's shell, writing or done: a field's edge, in the focus ring's colour while it has focus. */
-export const BOX_CLASS = "rounded-md border border-input bg-background focus-within:border-ring";
+/**
+ * The box's shell, writing or done: bb's composer, class for class, and marked as bb marks its own
+ * (`data-promptbox`), so the theme draws it as it draws bb's composer: Zeron's pill, its round
+ * buttons and its send button.
+ */
+export const BOX_SHELL = {
+  "data-promptbox": "",
+  className: "relative w-full rounded-xl border border-border bg-background shadow-lift",
+} as const;
 
 /** `takeFocus`: the composer this replaces had focus, which would otherwise drop to the page body. */
 type DoneBoxProps = { outcome: BoxOutcome; takeFocus: boolean; onDone(): void };
@@ -29,14 +36,14 @@ export function DoneBox({ outcome, takeFocus, onDone }: DoneBoxProps) {
     <div
       role="group"
       aria-label="Comment box"
-      className={BOX_CLASS}
+      {...BOX_SHELL}
       onKeyDown={(event) => {
         if (event.key !== "Escape") return;
         event.preventDefault();
         onDone();
       }}
     >
-      <div className="flex min-h-9 flex-wrap items-center gap-2 pt-2 pr-2 pb-2 pl-4">
+      <div className="flex min-h-9 flex-wrap items-center gap-2 pt-2 pr-[13px] pb-2 pl-4">
         <p role="status" className="flex items-center gap-1.5 text-sm font-medium text-foreground">
           <Icon name="Check" className="size-3.5 text-success" aria-hidden />
           {DONE_WORDS[outcome.kind]}
