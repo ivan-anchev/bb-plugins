@@ -8,10 +8,10 @@ import { handoffFieldsSchema, handoffIdSchema, reportOf } from "../../model/hand
 import type { IssueId } from "../../model/issue/issue.ts";
 import { PIPELINES, shipsCode } from "../../model/issue/kind.ts";
 import type { Role } from "../../model/role.ts";
-import { checkoutOf, type CheckoutRead } from "../../model/verdict/checkout.ts";
+import type { CheckoutRead } from "../../model/verdict/checkout.ts";
 import { latestTurnSeq, listedThreads, type TurnsBb } from "../agents/threads.ts";
 import { threadExecution, type ThreadExecutionBb } from "../execution/thread-execution.ts";
-import { gitStatusOf, type GitStatus, type GitStatusBb } from "../git-status.ts";
+import { checkoutReadOf, gitStatusOf, type GitStatus, type GitStatusBb } from "../git-status.ts";
 import type { Store } from "../store/store.ts";
 import type { Verify } from "../verify/verify.ts";
 import { failed, refusedBusy, type ToolsBb } from "./tool-kit.ts";
@@ -89,20 +89,8 @@ function checkoutSeen(agent: Agent, { environmentId, status }: EnvironmentRead):
 }
 
 /** The agent's checkout for the verdict, as read (null: its thread has no environment). */
-function checkoutRead(environment: EnvironmentRead | null): CheckoutRead {
-  if (environment === null) return { kind: "unread", reason: "the agent's thread has no environment" };
-  const { status } = environment;
-  switch (status.kind) {
-    case "read":
-      return status.headSha === null ? { kind: "unread", reason: "it named no commit checked out" } : { kind: "read", checkout: checkoutOf(status.headSha, status.changedFiles, status.changedFileCount) };
-    case "not-git":
-      return { kind: "unread", reason: "the environment is not a git repository" };
-    case "unread":
-      return status;
-    default:
-      return status satisfies never;
-  }
-}
+const checkoutRead = (environment: EnvironmentRead | null): CheckoutRead =>
+  environment === null ? { kind: "unread", reason: "the agent's thread has no environment" } : checkoutReadOf(environment.status);
 
 const endedText = (issueId: IssueId, how: EndedHow) => failed(`${HANDOFF} is refused: you no longer hold ${issueId} (you were ${how}), so nothing reads a handoff from you. Stop here.`);
 
