@@ -356,3 +356,34 @@ test("a research parent's last two sub-issues closing together wake its dependen
   await settled();
   assert.deepEqual(await unblocked(), ["i4 by i1 done"]);
 });
+
+test("the board's rows carry each issue's parent and a parent's count of Done sub-issues, and nothing else new", async () => {
+  const { kit, coordinatorId, text, started } = await managing();
+  await text("issue_create", RESEARCH);
+  await text("issue_create", { ...RESEARCH, title: "Vault", parent: "i1" });
+  const rows = async () => (await kit.rpc.board({ coordinatorId })).issues;
+  const unstarted = { needsYou: null, agent: null, pr: null };
+  assert.deepEqual(await rows(), [
+    { id: "i1", kind: "research", parentId: null, subIssues: { done: 0, total: 1 }, title: "Pick a card vault", status: "todo", headline: "0/1 done", ...unstarted },
+    { id: "i2", kind: "research", parentId: "i1", subIssues: null, title: "Vault", status: "todo", headline: "Not started", ...unstarted },
+  ]);
+
+  const researcher = await started("i2");
+  await kit.call("agent_handoff", RESEARCH_DONE, researcher);
+  await kit.idle(researcher, "Handed off.");
+  assert.deepEqual(await rows(), [
+    { id: "i1", kind: "research", parentId: null, subIssues: { done: 1, total: 1 }, title: "Pick a card vault", status: "done", headline: "1/1 done", ...unstarted },
+    {
+      id: "i2",
+      kind: "research",
+      parentId: "i1",
+      subIssues: null,
+      title: "Vault",
+      status: "done",
+      needsYou: null,
+      headline: "Handed off: Vault fits our PCI scope",
+      agent: { id: "a1", threadId: researcher },
+      pr: null,
+    },
+  ]);
+});
