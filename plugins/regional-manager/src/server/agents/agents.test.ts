@@ -95,6 +95,17 @@ test("an agent's first message leaves a memory file as it is from where only a M
   assert.ok(prompt.endsWith(`\n\n${index}`), "MEMORY.md changed on its way into the first message");
 });
 
+test("an agent's first message leaves a memory file as it is from an HTML <pre> block on, whose lines are code", async () => {
+  const { kit, coordinatorId, start } = await filed();
+  const memory = kit.memory.of(coordinatorId);
+  const crewMd = memoryFileSchema.parse("CREW.md");
+  const rest = ["<pre>", "# a shell comment", "</pre>", "", "# After the block"].join("\n");
+  memory.write(crewMd, `# Crew rules\n\n${rest}`, memory.read(crewMd).text?.version ?? null);
+
+  const prompt = kit.thread(threadIn(textOf(await start()))).spawnedWith.prompt ?? assert.fail("spawned without a prompt");
+  assert.ok(prompt.includes(`## CREW.md: the rules every agent follows\n\n### Crew rules\n\n${rest}\n\n## MEMORY.md`), "the <pre> block or what follows it changed on its way into the first message");
+});
+
 test("an agent's first message tells it the memory is its regional manager's context, and its work is its brief and done-criteria", async () => {
   const { kit, start } = await filed();
   const prompt = kit.thread(threadIn(textOf(await start()))).spawnedWith.prompt ?? assert.fail("spawned without a prompt");

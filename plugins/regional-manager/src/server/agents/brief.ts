@@ -62,8 +62,9 @@ function memorySection(file: string, holds: string, note: string | null, text: M
 
 /**
  * Each `#` heading outside a code fence goes two levels down, so the file's title sits under the message's `##` section.
- * Code is never changed: once a line might open or close a fence and only a list or quote around it could tell, the rest is
- * left as it is. Titles underlined with `===` and headings in lists or quotes keep their size: cosmetic, not worth a Markdown parser.
+ * Code is never changed: once a line might open or close a fence and only a list or quote around it could tell, or opens
+ * an HTML block of preformatted or raw text such as `<pre>`, the rest is left as it is. Titles underlined with `===` and
+ * headings in lists or quotes keep their size: cosmetic, not worth a Markdown parser.
  */
 function nested(markdown: string): string {
   const lines = markdown.split("\n");
@@ -85,10 +86,10 @@ type Place = Fence | null | "unsure";
 
 const ATX_HEADING = /^( {0,3})(#{1,6})(?=[ \t]|$)/;
 
-/** The fence the line opens, or null; unsure when a tab, list marker or `>` comes before its marker. */
+/** The fence the line opens, or null; unsure when a tab, list marker or `>` comes before its marker, or it opens raw HTML. */
 function opens(line: string): Place {
   const match = /^( *)(`{3,}|~{3,})(.*)$/.exec(line);
-  if (match === null) return /^[ \t>*+\-\d.)]*(?:```|~~~)/.test(line) ? "unsure" : null;
+  if (match === null) return /^[ \t>*+\-\d.)]*(?:```|~~~|<(?:pre|script|style|textarea)(?:[\s>]|$))/i.test(line) ? "unsure" : null;
   const [, indent = "", marker = "", info = ""] = match;
   return marker.startsWith("`") && info.includes("`") ? null : { char: marker.charAt(0), length: marker.length, indent };
 }
