@@ -67,7 +67,7 @@ function joinedText({ from, placement, branch, pr }: Joined): string {
 
 /** What becomes of a replaced agent's thread: the plugin never archives it. */
 const replacedText = (replaced: string): string =>
-  `${replaced}'s thread stays stopped, not archived, which keeps its environment alive: it stays in the sidebar, and a sandbox stays allocated (suspended after 15 idle minutes), until someone archives it.`;
+  `${replaced}'s thread stays stopped, not archived, which keeps its environment alive until someone archives it.`;
 
 /** What agent_stop did. */
 export function stopText(agent: Agent, outcome: StopOutcome): string {
