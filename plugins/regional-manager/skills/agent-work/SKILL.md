@@ -140,4 +140,5 @@ A turn that ends without a handoff tells your regional manager you stopped
 without reporting, with your last answer attached. If the user types to you
 after you handed off, answer them; if that changes your work, hand off again.
 Once you are stopped, `agent_handoff` is refused: you no longer hold the
-issue.
+issue. If it is refused because an earlier operation on the issue hasn't
+finished, nothing was saved: call it again in a minute.

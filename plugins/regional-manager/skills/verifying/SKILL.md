@@ -57,7 +57,8 @@ message from your thread, for it to fix. Write evidence and findings the agent
 can act on: the failing command and its failing lines, not a summary.
 
 It is refused, and nothing is saved, when you skip, repeat or invent a
-criterion. Fix the call and make it again. If it says the handoff no longer
+criterion. Fix the call and make it again. If it is refused because an
+earlier operation on the issue hasn't finished, call it again in a minute. If it says the handoff no longer
 waits for your verdict, a newer handoff replaced it: stop.
 
 If you end a turn without it, the plugin reminds you once. A second turn

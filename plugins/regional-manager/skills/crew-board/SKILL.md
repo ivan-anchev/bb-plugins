@@ -197,16 +197,27 @@ verdict.
 - **The holder** is stopped and ends as "replaced", never archived: a stopped
   thread keeps its environment alive, since bb destroys a sandbox within
   seconds, and retires a worktree a few minutes later, once no live thread is
-  left in it. A verifier checking its work is stopped too, never archived,
-  and its late verdict refused; findings its verifiers queued for it are
-  taken back first. Until bb confirms each stopped, the start is refused and
-  the holder keeps the issue. A verdict that passed and waits for CI is kept
-  whole, marked superseded. Nobody is woken: the manager did it.
-- **One at a time**: everything that acts in bb on one issue (a start or
-  handover, `agent_stop` and its archive, `agent_message`, a verifier
-  started or nudged, findings sent to an agent) runs one after another, and
-  each decides on what the one before left. A turn bb never answers holds the
-  issue two minutes at most; then the next one runs.
+  left in it. First the manager's messages and the verifiers' findings still
+  queued for it are taken back, each confirmed gone by reading bb's queue
+  again; the result quotes the manager's, which the holder never got. One
+  that can't be taken back, or that the user queued, refuses the start. Then
+  every thread the plugin started on the issue that bb reports running (the
+  holder, a verifier, an earlier agent) is stopped, never archived; a late
+  verdict is refused. Until bb confirms each stopped, the start is refused and
+  the holder keeps the issue. Every check of the issue still waiting is
+  superseded; a verdict that passed and waits for CI is kept whole, marked
+  superseded. Nobody is woken: the manager did it.
+- **One at a time**: everything that acts on one issue (a start or handover,
+  `agent_stop` and its archive, `agent_message`, a handoff, a verdict, a
+  verifier started, reminded or given up on, findings sent to an agent, an
+  agent ended as its thread was archived or deleted) runs one after another,
+  and each reads what it decides on once it is its turn. A turn lasts until bb
+  answers it, however long that takes. A tool call that waited about 30
+  seconds is refused, having changed nothing, and can be called again; the
+  minute's pass never waits, and skips a busy issue until the next minute.
+  Before a verifier starts, every other verifier of the issue that bb reports
+  running is stopped; one bb doesn't confirm keeps it queued for the next
+  minute.
 - **By default the new agent continues** in the previous agent's environment,
   a worktree or a sandbox alike, as the verifier joins it: the same
   checkout, branch, commits, uncommitted files and pull request. A suspended
@@ -719,3 +730,6 @@ and the Memory page read the new text on their next read.
 - A handover continues only in the previous agent's environment, or starts
   clean: it can't yet move the work to a new environment, as after bb
   removed a sandbox.
+- A replaced agent's thread stays in the sidebar, stopped: someone typing
+  into it wakes it in the environment the new agent works in, and the plugin
+  neither prevents nor flags that. The next start on the issue stops it.
