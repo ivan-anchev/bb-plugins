@@ -48,10 +48,10 @@ test("crew_ask_user returns at once, and the decision waits on the board under N
 test("while a decision waits for the user, an agent's handoff still wakes the regional manager", async () => {
   const { kit, threadId, doorbells } = await asked();
   kit.thread(threadId).status = "active";
-  const crew = (await startedAgent(kit, threadId, { title: "Add retries", brief: "Do it." })).agentThreadId;
+  const agentThreadId = (await startedAgent(kit, threadId, { title: "Add retries", brief: "Do it." })).agentThreadId;
   kit.thread(threadId).status = "idle";
 
-  await kit.call("agent_handoff", { status: "blocked", summary: "Needs a staging key", did: [], evidence: [], concerns: [], deviations: [], findings: [] }, crew);
+  await kit.call("agent_handoff", { status: "blocked", summary: "Needs a staging key", did: [], evidence: [], concerns: [], deviations: [], findings: [] }, agentThreadId);
   await settled();
 
   assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- i1 "Add retries" (a1) handed off: blocked`]);

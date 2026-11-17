@@ -10,14 +10,14 @@ const HEAD = "0123456789abcdef0123456789abcdef01234567";
 const DONE = { status: "done", ...REPORT, headSha: HEAD };
 const a1 = agentIdSchema.parse("a1");
 
-async function withCrew({ verify = true } = {}) {
+async function withAgent({ verify = true } = {}) {
   const { kit, threadId, coordinatorId } = await coordinating({ verify });
-  const crewThreadId = (await startedAgent(kit, threadId, RETRIES)).agentThreadId;
-  return { kit, threadId, coordinatorId, crewThreadId };
+  const agentThreadId = (await startedAgent(kit, threadId, RETRIES)).agentThreadId;
+  return { kit, threadId, coordinatorId, agentThreadId };
 }
 
 test("agent_handoff from a thread that is not an agent is refused, and nothing is stored or rung", async () => {
-  const { kit, threadId, coordinatorId } = await withCrew();
+  const { kit, threadId, coordinatorId } = await withAgent();
   for (const caller of [threadId, "thr_forged"]) {
     const result = await kit.call("agent_handoff", DONE, caller);
     assert.ok(isRefusal(result), caller);
@@ -29,8 +29,8 @@ test("agent_handoff from a thread that is not an agent is refused, and nothing i
 });
 
 test("a handoff is stored whole, trimmed, with its turn and a waived verdict, and reads back as written", async () => {
-  const { kit, coordinatorId, crewThreadId } = await withCrew({ verify: false });
-  const result = await kit.call("agent_handoff", { ...DONE, summary: "  Retries land with backoff ", prUrl: "https://github.com/acme/webhooks/pull/7" }, crewThreadId);
+  const { kit, coordinatorId, agentThreadId } = await withAgent({ verify: false });
+  const result = await kit.call("agent_handoff", { ...DONE, summary: "  Retries land with backoff ", prUrl: "https://github.com/acme/webhooks/pull/7" }, agentThreadId);
   assert.match(textOf(result), /^Handed off\. Your regional manager has your report, marked unverified/);
 
   const { handoff, check } = kit.store.latestHandoff(coordinatorId, a1) ?? assert.fail("no handoff stored");
@@ -40,7 +40,7 @@ test("a handoff is stored whole, trimmed, with its turn and a waived verdict, an
     coordinatorId,
     issueId: "i1",
     agentId: a1,
-    turnSeq: kit.thread(crewThreadId).turns.at(-1),
+    turnSeq: kit.thread(agentThreadId).turns.at(-1),
     ...report,
     delivery: { kind: "commit", headSha: HEAD, prUrl: "https://github.com/acme/webhooks/pull/7" },
   });
@@ -49,12 +49,12 @@ test("a handoff is stored whole, trimmed, with its turn and a waived verdict, an
 });
 
 test("a handoff records where the agent's work is and what its thread runs on now, so neither is read from it again", async () => {
-  const { kit, threadId, coordinatorId, crewThreadId } = await withCrew({ verify: false });
-  const environmentId = kit.thread(crewThreadId).environmentId;
+  const { kit, threadId, coordinatorId, agentThreadId } = await withAgent({ verify: false });
+  const environmentId = kit.thread(agentThreadId).environmentId;
   kit.git.checkouts.set(environmentId, "retries");
   // The user switches the agent's model in bb's composer before it hands off.
-  kit.thread(crewThreadId).execution = { model: "sonnet", reasoningLevel: "low", serviceTier: "default", permissionMode: "auto" };
-  await kit.call("agent_handoff", DONE, crewThreadId);
+  kit.thread(agentThreadId).execution = { model: "sonnet", reasoningLevel: "low", serviceTier: "default", permissionMode: "auto" };
+  await kit.call("agent_handoff", DONE, agentThreadId);
 
   const agent = kit.store.agent(coordinatorId, a1) ?? assert.fail("no agent");
   assert.deepEqual(agent.checkout, { environmentId, branch: "retries", head: HEAD });
@@ -63,12 +63,12 @@ test("a handoff records where the agent's work is and what its thread runs on no
 });
 
 test("an agent's latest handoff is its newest, never another agent's, and an earlier one still reads by its id", async () => {
-  const { kit, threadId, coordinatorId, crewThreadId } = await withCrew();
+  const { kit, threadId, coordinatorId, agentThreadId } = await withAgent();
   const otherThreadId = (await startedAgent(kit, threadId, { ...RETRIES, title: "Dead letters" })).agentThreadId;
-  await kit.call("agent_handoff", { ...REPORT, status: "blocked" }, crewThreadId);
+  await kit.call("agent_handoff", { ...REPORT, status: "blocked" }, agentThreadId);
   const blocked = kit.store.latestHandoff(coordinatorId, a1) ?? assert.fail("no handoff stored");
-  kit.startTurn(crewThreadId);
-  await kit.call("agent_handoff", DONE, crewThreadId);
+  kit.startTurn(agentThreadId);
+  await kit.call("agent_handoff", DONE, agentThreadId);
   await kit.call("agent_handoff", { ...REPORT, status: "gave-up" }, otherThreadId);
 
   assert.equal(kit.store.latestHandoff(coordinatorId, a1)?.handoff.status, "done");
@@ -77,9 +77,9 @@ test("an agent's latest handoff is its newest, never another agent's, and an ear
 });
 
 test("a handoff outside its bounds is rejected, and a done one needs its commit", async () => {
-  const { kit, coordinatorId, crewThreadId } = await withCrew();
+  const { kit, coordinatorId, agentThreadId } = await withAgent();
   const { headSha: _, ...doneWithoutCommit } = DONE;
-  const commitless = await kit.call("agent_handoff", doneWithoutCommit, crewThreadId);
+  const commitless = await kit.call("agent_handoff", doneWithoutCommit, agentThreadId);
   assert.ok(isRefusal(commitless));
   assert.equal(textOf(commitless), "agent_handoff is refused and nothing was saved: A done handoff needs headSha: the output of `git rev-parse HEAD` after your last commit.");
   for (const input of [
@@ -91,26 +91,26 @@ test("a handoff outside its bounds is rejected, and a done one needs its commit"
     { ...DONE, prUrl: "javascript:alert(1)" },
     { ...DONE, status: "finished" },
   ]) {
-    await assert.rejects(kit.call("agent_handoff", input, crewThreadId));
+    await assert.rejects(kit.call("agent_handoff", input, agentThreadId));
   }
   assert.equal(kit.store.latestHandoff(coordinatorId, a1), null);
 
-  assert.ok(!isRefusal(await kit.call("agent_handoff", { ...REPORT, status: "blocked" }, crewThreadId)), "blocked needs no commit");
+  assert.ok(!isRefusal(await kit.call("agent_handoff", { ...REPORT, status: "blocked" }, agentThreadId)), "blocked needs no commit");
 });
 
 test("with verification off, once its turn ends a done handoff is In review as Unverified, and a blocked or gave-up one Needs you", async () => {
   const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
-  const crews: [string, Record<string, unknown>][] = [];
+  const started: [string, Record<string, unknown>][] = [];
   for (const [title, input] of [
     ["Done", DONE],
     ["Blocked", { ...REPORT, status: "blocked", summary: "Needs a staging key" }],
     ["Gave up", { ...REPORT, status: "gave-up", summary: "The queue API rejects batches" }],
   ] as const) {
-    crews.push([(await startedAgent(kit, threadId, { ...RETRIES, title })).agentThreadId, input]);
+    started.push([(await startedAgent(kit, threadId, { ...RETRIES, title })).agentThreadId, input]);
   }
-  for (const [crewThreadId, input] of crews) {
-    await kit.call("agent_handoff", input, crewThreadId);
-    await kit.idle(crewThreadId, "Handed off.");
+  for (const [agentThreadId, input] of started) {
+    await kit.call("agent_handoff", input, agentThreadId);
+    await kit.idle(agentThreadId, "Handed off.");
   }
 
   assert.deepEqual((await kit.rpc.board({ coordinatorId })).issues.map((issue) => [issue.id, laneOf(issue), issue.headline]), [
@@ -121,10 +121,10 @@ test("with verification off, once its turn ends a done handoff is In review as U
 });
 
 test("a handoff of 50 evidence items of 2,000 characters comes back whole from crew_catch_up and issue_read", async () => {
-  const { kit, threadId, crewThreadId } = await withCrew({ verify: false });
+  const { kit, threadId, agentThreadId } = await withAgent({ verify: false });
   // Each item is numbered at its start and ends in "$", so a missing or cut one can't match.
   const evidence = Array.from({ length: 50 }, (_, i) => `${String(i).padStart(2, "0")}${"e".repeat(1_997)}$`);
-  await kit.call("agent_handoff", { ...DONE, evidence }, crewThreadId);
+  await kit.call("agent_handoff", { ...DONE, evidence }, agentThreadId);
 
   for (const text of [textOf(await kit.call("crew_catch_up", {}, threadId)), textOf(await kit.call("issue_read", { id: "i1" }, threadId))]) {
     for (const item of evidence) assert.ok(text.includes(`- ${item}`), `item ${item.slice(0, 2)} is missing or cut`);
@@ -134,24 +134,24 @@ test("a handoff of 50 evidence items of 2,000 characters comes back whole from c
 });
 
 test("issue_read places the issue by its agent's thread once it has had a turn since its handoff, and keeps the handoff on record", async () => {
-  const { kit, threadId, crewThreadId } = await withCrew({ verify: false });
-  await kit.call("agent_handoff", DONE, crewThreadId);
-  await kit.idle(crewThreadId, "Handed off.");
+  const { kit, threadId, agentThreadId } = await withAgent({ verify: false });
+  await kit.call("agent_handoff", DONE, agentThreadId);
+  await kit.idle(agentThreadId, "Handed off.");
   assert.match(textOf(await kit.call("issue_read", { id: "i1" }, threadId)), /^## i1: Add retries\n\nBuild\. In review: Unverified: Retries land with backoff\./);
 
-  kit.startTurn(crewThreadId);
+  kit.startTurn(agentThreadId);
   const text = textOf(await kit.call("issue_read", { id: "i1" }, threadId));
   assert.match(text, /^## i1: Add retries\n\nBuild\. In progress: Working\./);
   assert.match(text, /### Its record\n\n#### a1's handoff\n\nStatus: done/);
 });
 
 test("a handoff still reading the agent's checkout when the agent is stopped is refused, and stores, checks and starts nothing", async () => {
-  const { kit, threadId, coordinatorId, crewThreadId } = await withCrew();
+  const { kit, threadId, coordinatorId, agentThreadId } = await withAgent();
   const before = kit.store.agent(coordinatorId, a1) ?? assert.fail("no agent");
-  kit.git.checkouts.set(kit.thread(crewThreadId).environmentId, "retries");
-  kit.thread(crewThreadId).execution = { model: "sonnet", reasoningLevel: "low", serviceTier: "default", permissionMode: "auto" };
+  kit.git.checkouts.set(kit.thread(agentThreadId).environmentId, "retries");
+  kit.thread(agentThreadId).execution = { model: "sonnet", reasoningLevel: "low", serviceTier: "default", permissionMode: "auto" };
   kit.git.holding = true;
-  const handingOff = kit.call("agent_handoff", DONE, crewThreadId);
+  const handingOff = kit.call("agent_handoff", DONE, agentThreadId);
   await settled();
   assert.equal(kit.git.held.length, 1, "the checkout read is held");
 

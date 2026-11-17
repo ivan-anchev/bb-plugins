@@ -45,7 +45,7 @@ async function working() {
   };
 }
 
-test("a turn that ends with changed files in the Coordinator's own environment warns on the board and wakes it to hand the change to a crew", async () => {
+test("a turn that ends with changed files in the Coordinator's own environment warns on the board and wakes it to hand the change to an agent", async () => {
   const { turnEnds, doorbells, warning, catchUp } = await working();
   await turnEnds(2);
 
@@ -133,9 +133,9 @@ test("a read bb's git plugin can't make, or answers in a shape the plugin can't 
 
 test("an agent's changed files are its work: only the regional manager's own turns are read", async () => {
   const { kit, threadId, warning } = await working();
-  const crewThreadId = (await startedAgent(kit, threadId)).agentThreadId;
-  kit.git.changedFiles.set(kit.thread(crewThreadId).environmentId, 5);
-  await kit.idle(crewThreadId, "Halfway.");
+  const agentThreadId = (await startedAgent(kit, threadId)).agentThreadId;
+  kit.git.changedFiles.set(kit.thread(agentThreadId).environmentId, 5);
+  await kit.idle(agentThreadId, "Halfway.");
   await settled();
   assert.deepEqual(kit.git.calls, [], "no read for an agent's turn");
   assert.equal(await warning(), null);

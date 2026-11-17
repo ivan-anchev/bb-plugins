@@ -640,7 +640,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   };
 }
 
-/** A harness with one coordinating thread started, verifying its crews' done handoffs unless `verify` is false; its thread and its id. */
+/** A harness with one coordinating thread started, verifying its agents' done handoffs unless `verify` is false; its thread and its id. */
 export async function coordinating({ verify = true, spawns, stops, storage }: { verify?: boolean; spawns?: SpawnBehaviour; stops?: StopBehaviour; storage?: Storage } = {}) {
   const kit = harness(spawns, stops, storage);
   const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), verify);

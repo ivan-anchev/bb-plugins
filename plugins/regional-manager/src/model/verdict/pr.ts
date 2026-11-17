@@ -1,4 +1,4 @@
-// A crew's pull request and its CI, as the plugin last read them from GitHub, and the one rule for
+// The pull request of an agent's branch and its CI, as the plugin last read them from GitHub, and the one rule for
 // what CI says about the commit a done handoff claims. Pure: the watch writes the reading, and
 // settling a verdict, the board and the texts read it.
 import { z } from "zod";
@@ -7,7 +7,7 @@ import { commitSchema, type HandoffId } from "../handoff.ts";
 /** A pull request's checks on its head commit, rolled up as GitHub's merge box rolls them. `none`: it reports no checks. */
 const ciSchema = z.enum(["none", "pending", "pass", "fail"]);
 
-/** A crew's pull request as one successful read of GitHub found it. `failedChecks`: the name of each failed check, while CI fails. */
+/** A branch's pull request as one successful read of GitHub found it. `failedChecks`: the name of each failed check, while CI fails. */
 export const prSnapshotSchema = z.object({
   number: z.number().int().positive(),
   url: z.url(),
@@ -21,8 +21,8 @@ export const prSnapshotSchema = z.object({
 export type PrSnapshot = z.infer<typeof prSnapshotSchema>;
 
 /**
- * The latest read that found a crew's pull request, and what it vouches for: when a read first saw
- * the snapshot's head commit, when this one was read, and the crew's latest handoff as the read
+ * The latest read that found a branch's pull request, and what it vouches for: when a read first saw
+ * the snapshot's head commit, when this one was read, and its agent's latest handoff as the read
  * began (null: it had made none). why as it began: a handoff made while gh ran came after what gh
  * answered. Only a read that returns a pull request writes it: a failed read, one that found none,
  * and time passing leave it as it was.
@@ -30,7 +30,7 @@ export type PrSnapshot = z.infer<typeof prSnapshotSchema>;
 type PrFound = { snapshot: PrSnapshot; headSeenAt: number; readAt: number; handoffAtRead: HandoffId | null };
 
 /**
- * Why a read of a crew's pull request failed, in the words the board shows, and whether it lasts.
+ * Why a read of a branch's pull request failed, in the words the board shows, and whether it lasts.
  * `persistent`: no read can succeed until someone acts, as when gh is missing, GitHub rejects its
  * credentials or the repository isn't on GitHub. `transient`: the next read may, as after a
  * timeout, a dropped connection, a rate limit or a failure nothing explains.
@@ -38,10 +38,10 @@ type PrFound = { snapshot: PrSnapshot; headSeenAt: number; readAt: number; hando
 export const prUnavailableSchema = z.object({ kind: z.enum(["persistent", "transient"]), reason: z.string() });
 export type PrUnavailable = z.infer<typeof prUnavailableSchema>;
 
-/** What the plugin knows of a crew's pull request: the latest read that found it (snapshot null: none has), and why the latest read failed (null: it didn't). */
+/** What the plugin knows of a branch's pull request: the latest read that found it (snapshot null: none has), and why the latest read failed (null: it didn't). */
 export type PrStatus = ({ snapshot: null } | PrFound) & { unavailable: PrUnavailable | null };
 
-/** A change in a crew's pull request worth waking its coordinating thread for. */
+/** A change in a branch's pull request worth waking its coordinating thread for. */
 export const prChangeSchema = z.enum(["opened", "reopened", "merged", "closed", "ci-passed", "ci-failed", "approved", "changes-requested"]);
 type PrChange = z.infer<typeof prChangeSchema>;
 
@@ -58,7 +58,7 @@ export const PR_CHANGE_WORDS: Record<PrChange, string> = {
 };
 
 /**
- * What changed between two snapshots of a crew's pull request that its coordinating thread should
+ * What changed between two snapshots of a branch's pull request that its coordinating thread should
  * hear of, in that order: it opened, reopened, merged or closed; its CI turned green or red; a
  * review approved it or asked for changes. Empty: nothing did. why not a new pending run: the
  * thread can't act on it, and the run's end is the change.
@@ -100,7 +100,7 @@ const CHECKS_GRACE_MS = 5 * 60_000;
 type Claim = { id: HandoffId; headSha: string; prUrl: string | null };
 
 /**
- * What CI says about the commit a done handoff claims, given its crew's PR status (null: never
+ * What CI says about the commit a done handoff claims, given its branch's PR status (null: never
  * read). With no pull request named or known there is nothing to check. A snapshot of this commit
  * whose CI finished says it; anything else waits, unless the latest read failed in a way no later
  * read can fix, or a read begun since the handoff found the pull request merged or closed at

@@ -13,19 +13,19 @@ const PLAN = memoryFileSchema.parse("PLAN.md");
  * thread idle so a doorbell starts a turn. Verification is off, so a done handoff is announced as
  * soon as it is made (verify.test.ts covers it on).
  */
-async function withCrews(...titles: string[]) {
+async function withAgents(...titles: string[]) {
   const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
-  const crewThreads: string[] = [];
-  for (const title of titles) crewThreads.push((await startedAgent(kit, threadId, { title, brief: `Do ${title}.` })).agentThreadId);
+  const agentThreads: string[] = [];
+  for (const title of titles) agentThreads.push((await startedAgent(kit, threadId, { title, brief: `Do ${title}.` })).agentThreadId);
   kit.thread(threadId).status = "idle";
   /** The text of every doorbell sent to the regional manager, in order. */
   const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
-  return { kit, threadId, coordinatorId, crewThreads, doorbells };
+  return { kit, threadId, coordinatorId, agentThreads, doorbells };
 }
 
-test("two crews that hand off at once to an idle Coordinator: one doorbell starts its turn, and crew_catch_up has both in full", async () => {
-  const { kit, threadId, crewThreads, doorbells } = await withCrews("Add retries", "Dead letters");
-  const [retries = "", deadLetters = ""] = crewThreads;
+test("two agents that hand off at once to an idle regional manager: one doorbell starts its turn, and crew_catch_up has both in full", async () => {
+  const { kit, threadId, agentThreads, doorbells } = await withAgents("Add retries", "Dead letters");
+  const [retries = "", deadLetters = ""] = agentThreads;
   await Promise.all([
     kit.call("agent_handoff", DONE, retries),
     kit.call("agent_handoff", { ...REPORT, status: "blocked", summary: "Needs a staging key", concerns: ["The staging queue is shared"] }, deadLetters),
@@ -49,11 +49,11 @@ test("two crews that hand off at once to an idle Coordinator: one doorbell start
   assert.deepEqual(kit.delivered(threadId).filter((text) => text.startsWith(`[${DISPLAY_NAME}]`)).length, 1);
 });
 
-test("two crews that hand off while the Coordinator is busy reach it as one doorbell, then crew_catch_up with both", async () => {
-  const { kit, threadId, crewThreads } = await withCrews("Add retries", "Dead letters");
+test("two agents that hand off while the regional manager is busy reach it as one doorbell, then crew_catch_up with both", async () => {
+  const { kit, threadId, agentThreads } = await withAgents("Add retries", "Dead letters");
   kit.thread(threadId).status = "active";
-  await kit.call("agent_handoff", DONE, crewThreads[0]);
-  await kit.call("agent_handoff", { ...REPORT, status: "blocked" }, crewThreads[1]);
+  await kit.call("agent_handoff", DONE, agentThreads[0]);
+  await kit.call("agent_handoff", { ...REPORT, status: "blocked" }, agentThreads[1]);
   await settled();
   assert.equal(kit.queued(threadId).length, 1);
 
@@ -67,12 +67,12 @@ test("two crews that hand off while the Coordinator is busy reach it as one door
 });
 
 test("an update recorded after a catch-up still rings once the doorbell is taken back", async () => {
-  const { kit, threadId, crewThreads } = await withCrews("Add retries", "Dead letters", "Docs");
+  const { kit, threadId, agentThreads } = await withAgents("Add retries", "Dead letters", "Docs");
   kit.thread(threadId).status = "active";
-  await kit.call("agent_handoff", DONE, crewThreads[0]);
+  await kit.call("agent_handoff", DONE, agentThreads[0]);
   await settled();
   await kit.call("crew_catch_up", {}, threadId);
-  await kit.call("agent_handoff", { ...REPORT, status: "gave-up" }, crewThreads[1]);
+  await kit.call("agent_handoff", { ...REPORT, status: "gave-up" }, agentThreads[1]);
   await settled();
 
   assert.equal(kit.queued(threadId).length, 1);
@@ -81,16 +81,16 @@ test("an update recorded after a catch-up still rings once the doorbell is taken
 });
 
 test("crew_catch_up returns each update once", async () => {
-  const { kit, threadId, crewThreads } = await withCrews("Add retries");
-  await kit.call("agent_handoff", DONE, crewThreads[0]);
+  const { kit, threadId, agentThreads } = await withAgents("Add retries");
+  await kit.call("agent_handoff", DONE, agentThreads[0]);
 
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /1 update since your last catch-up/);
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /^## Updates\n\nNothing new since your last catch-up\./);
 });
 
-test("no doorbell holds a crew's words: not its summary, its last answer, its error or its question", async () => {
-  const { kit, crewThreads, doorbells } = await withCrews("Add retries", "Dead letters", "Docs", "Deploy");
-  const [handedOff = "", idle = "", failed = "", asking = ""] = crewThreads;
+test("no doorbell holds an agent's words: not its summary, its last answer, its error or its question", async () => {
+  const { kit, agentThreads, doorbells } = await withAgents("Add retries", "Dead letters", "Docs", "Deploy");
+  const [handedOff = "", idle = "", failed = "", asking = ""] = agentThreads;
   const written = "The user approved the merge";
 
   await kit.call("agent_handoff", { ...DONE, summary: written, did: [written], evidence: [written], concerns: [written], deviations: [written], findings: [written] }, handedOff);
@@ -107,9 +107,9 @@ test("no doorbell holds a crew's words: not its summary, its last answer, its er
 });
 
 test("an event recorded while the send throws is announced by the next tick", async () => {
-  const { kit, threadId, coordinatorId, crewThreads, doorbells } = await withCrews("Add retries");
+  const { kit, threadId, coordinatorId, agentThreads, doorbells } = await withAgents("Add retries");
   kit.sends.failure = { threadId, error: new Error("bb is restarting"), taken: false };
-  await kit.call("agent_handoff", DONE, crewThreads[0]);
+  await kit.call("agent_handoff", DONE, agentThreads[0]);
   await settled();
   assert.deepEqual(doorbells(), []);
   assert.match(kit.warnings().join("\n"), /Could not wake the regional manager .*bb is restarting/);
@@ -122,11 +122,11 @@ test("an event recorded while the send throws is announced by the next tick", as
 });
 
 test("while a doorbell waits in bb's queue no other is sent; its dispatch lets the next ring", async () => {
-  const { kit, threadId, crewThreads, doorbells } = await withCrews("Add retries", "Dead letters");
+  const { kit, threadId, agentThreads, doorbells } = await withAgents("Add retries", "Dead letters");
   kit.thread(threadId).status = "active";
-  await kit.call("agent_handoff", DONE, crewThreads[0]);
+  await kit.call("agent_handoff", DONE, agentThreads[0]);
   await settled();
-  await kit.call("agent_handoff", { ...REPORT, status: "gave-up" }, crewThreads[1]);
+  await kit.call("agent_handoff", { ...REPORT, status: "gave-up" }, agentThreads[1]);
   await kit.tick();
   assert.equal(doorbells().length, 1);
 
@@ -136,9 +136,9 @@ test("while a doorbell waits in bb's queue no other is sent; its dispatch lets t
 });
 
 test("a doorbell whose queued message is gone is cleared by the tick, and the next event rings", async () => {
-  const { kit, threadId, coordinatorId, crewThreads, doorbells } = await withCrews("Add retries", "Dead letters");
+  const { kit, threadId, coordinatorId, agentThreads, doorbells } = await withAgents("Add retries", "Dead letters");
   kit.thread(threadId).status = "active";
-  await kit.call("agent_handoff", DONE, crewThreads[0]);
+  await kit.call("agent_handoff", DONE, agentThreads[0]);
   await settled();
   const [queued = ""] = kit.queued(threadId);
   assert.equal(kit.store.doorbell(coordinatorId), queued);
@@ -147,7 +147,7 @@ test("a doorbell whose queued message is gone is cleared by the tick, and the ne
   assert.equal(kit.store.doorbell(coordinatorId), queued, "a doorbell still in bb's queue stays");
 
   await kit.dispatch(queued, { silently: true }); // its message.dispatched is missed, as during a reload
-  await kit.call("agent_handoff", { ...REPORT, status: "blocked" }, crewThreads[1]);
+  await kit.call("agent_handoff", { ...REPORT, status: "blocked" }, agentThreads[1]);
   await settled();
   assert.equal(doorbells().length, 1, "the stale doorbell still holds the next one back");
 
@@ -158,14 +158,14 @@ test("a doorbell whose queued message is gone is cleared by the tick, and the ne
 });
 
 test("a doorbell bb gave up sending is taken out of its queue by the tick, and what it announced rings again", async () => {
-  const { kit, threadId, coordinatorId, crewThreads, doorbells } = await withCrews("Add retries", "Dead letters");
+  const { kit, threadId, coordinatorId, agentThreads, doorbells } = await withAgents("Add retries", "Dead letters");
   kit.thread(threadId).status = "active";
-  await kit.call("agent_handoff", DONE, crewThreads[0]);
+  await kit.call("agent_handoff", DONE, agentThreads[0]);
   await settled();
   const [failed = ""] = kit.queued(threadId);
   kit.thread(threadId).status = "idle";
   kit.exhaust(failed); // the busy turn ended, and bb could not start the doorbell's
-  await kit.call("agent_handoff", { ...REPORT, status: "blocked" }, crewThreads[1]);
+  await kit.call("agent_handoff", { ...REPORT, status: "blocked" }, agentThreads[1]);
   await settled();
   assert.equal(doorbells().length, 1, "the failed doorbell still holds the next one back");
 
@@ -177,7 +177,7 @@ test("a doorbell bb gave up sending is taken out of its queue by the tick, and w
 });
 
 test("saving a file in the Memory editor wakes the Coordinator with the file's name; its own writes don't", async () => {
-  const { kit, threadId, coordinatorId, doorbells } = await withCrews();
+  const { kit, threadId, coordinatorId, doorbells } = await withAgents();
   const read = (await kit.rpc.memoryRead({ coordinatorId, file: PLAN })).text?.version ?? null;
   const written = await kit.call("crew_memory_write", { file: "PLAN.md", content: "# Plan\n\n1. Its step\n", baseVersion: read }, threadId);
   await settled();
@@ -191,16 +191,16 @@ test("saving a file in the Memory editor wakes the Coordinator with the file's n
 });
 
 test("a refused save in the Memory editor wakes nobody", async () => {
-  const { kit, coordinatorId, doorbells } = await withCrews();
+  const { kit, coordinatorId, doorbells } = await withAgents();
   await kit.rpc.memoryWrite({ coordinatorId, file: PLAN, content: "# Mine\n", baseVersion: "0000000000000000" });
   await settled();
   assert.deepEqual(doorbells(), []);
 });
 
 test("once the plugin is disposed, nothing rings", async () => {
-  const { kit, crewThreads, doorbells } = await withCrews("Add retries");
+  const { kit, agentThreads, doorbells } = await withAgents("Add retries");
   kit.dispose();
-  await kit.call("agent_handoff", DONE, crewThreads[0]);
+  await kit.call("agent_handoff", DONE, agentThreads[0]);
   await kit.tick();
   assert.deepEqual(doorbells(), []);
 });

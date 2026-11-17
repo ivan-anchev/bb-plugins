@@ -1,7 +1,7 @@
-// The plugin's own check of a done handoff, before any criterion: that the crew's environment had
+// The plugin's own check of a done handoff, before any criterion: that the agent's environment had
 // the claimed commit checked out on a clean working tree. bb's git plugin reads it on the
-// environment's machine as the crew hands off. why not the verifier's shell: a provider can run
-// each command in a sandbox of its own, which shows files that aren't in the crew's tree (Claude
+// environment's machine as the agent hands off. why not the verifier's shell: a provider can run
+// each command in a sandbox of its own, which shows files that aren't in the agent's tree (Claude
 // Code's showed a boat sandbox's home dotfiles as untracked), and so fails clean work.
 import { z } from "zod";
 
@@ -9,7 +9,7 @@ import { z } from "zod";
 const MAX_LISTED = 20;
 
 /**
- * The crew's environment as bb's git plugin read it when the crew handed off: the commit checked
+ * The agent's environment as bb's git plugin read it when the agent handed off: the commit checked
  * out, and its working tree's changed files, each as `<status> <path>` (`?? notes.txt`), listed up
  * to MAX_LISTED, with how many there were.
  */

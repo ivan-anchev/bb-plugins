@@ -40,7 +40,7 @@ test("a criterion the verifier couldn't check is not a pass", () => {
   assert.equal(outcome(returned(["unverifiable"])), "fail");
 });
 
-test("a returned verdict is pending until it is settled: its findings reached the crew, or it is checked", () => {
+test("a returned verdict is pending until it is settled: its findings reached the agent, or it is checked", () => {
   const cases: [Settlement, ReturnType<typeof outcome>][] = [
     [{ kind: "pending" }, "pending"],
     [{ kind: "sending-back", round: 1, ci: { kind: "none" } }, "pending"],

@@ -25,12 +25,12 @@ const recorded = (name: string) => Object.assign(new Error("Command failed: gh a
 /** A gh run that failed with this on stderr. */
 const ghSaid = (stderr: string) => Object.assign(new Error("Command failed: gh api graphql"), { code: 1, stdout: "", stderr: `${stderr}\n` });
 
-/** A regional manager with one crew on a GitHub project, both idle; the crew's branch and what the plugin shows of it. */
-async function crewOnGitHub(placement: object = { kind: "worktree" }) {
+/** A regional manager with one agent on a GitHub project, both idle; the agent's branch and what the plugin shows of it. */
+async function agentOnGitHub(placement: object = { kind: "worktree" }) {
   const { kit, threadId, coordinatorId } = await coordinating();
-  const crewThreadId = (await startedAgent(kit, threadId, { title: "Add retries", brief: "Retry failed deliveries.", doneCriteria: ["npm test passes", "npm run lint is clean"] }, { placement })).agentThreadId;
+  const agentThreadId = (await startedAgent(kit, threadId, { title: "Add retries", brief: "Retry failed deliveries.", doneCriteria: ["npm test passes", "npm run lint is clean"] }, { placement })).agentThreadId;
   kit.thread(threadId).status = "idle";
-  const branch = kit.thread(crewThreadId).environmentBranchName ?? assert.fail("no branch");
+  const branch = kit.thread(agentThreadId).environmentBranchName ?? assert.fail("no branch");
   const board = () => kit.rpc.board({ coordinatorId });
   const row = async () => {
     const issue = (await board()).issues[0] ?? assert.fail("no row");
@@ -39,7 +39,7 @@ async function crewOnGitHub(placement: object = { kind: "worktree" }) {
   };
   const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
   const events = () => kit.store.unannounced(coordinatorId).map(({ event }) => event.kind);
-  /** GitHub now has the crew's pull request #41 as given, on its branch as bb records it unless `onBranch` names another. */
+  /** GitHub now has the agent's pull request #41 as given, on its branch as bb records it unless `onBranch` names another. */
   const pr = (fields: Partial<FakePr> = {}, onBranch = branch) => kit.github.prs.set(onBranch, { number: 41, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup: "PENDING", failed: [], ...fields });
   /** A minute passes and the schedule runs. */
   async function minute(): Promise<void> {
@@ -47,20 +47,20 @@ async function crewOnGitHub(placement: object = { kind: "worktree" }) {
     await kit.tick();
     await settled();
   }
-  /** The crew hands off as done, naming its pull request, and its verifier passes every criterion. */
+  /** The agent hands off as done, naming its pull request, and its verifier passes every criterion. */
   async function verified(): Promise<void> {
-    await kit.call("agent_handoff", { ...DONE, prUrl: PR_URL }, crewThreadId);
-    await kit.idle(crewThreadId, "Handed off.");
+    await kit.call("agent_handoff", { ...DONE, prUrl: PR_URL }, agentThreadId);
+    await kit.idle(agentThreadId, "Handed off.");
     const verdict = kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict;
     if (verdict?.state !== "running") return assert.fail("no running verifier");
     await kit.call("issue_verdict", PASSES, verdict.verifierThreadId);
     await settled();
   }
-  return { kit, threadId, coordinatorId, crewThreadId, branch, board, row, doorbells, events, pr, minute, verified };
+  return { kit, threadId, coordinatorId, agentThreadId, branch, board, row, doorbells, events, pr, minute, verified };
 }
 
-test("a crew that opens a pull request shows #n on its row within a tick, and the coordinating thread gets a pr event", async () => {
-  const { kit, threadId, row, doorbells, pr, minute } = await crewOnGitHub();
+test("an agent that opens a pull request shows #n on its row within a tick, and the coordinating thread gets a pr event", async () => {
+  const { kit, threadId, row, doorbells, pr, minute } = await agentOnGitHub();
   await minute();
   assert.equal((await row()).pr, null, "no pull request yet");
 
@@ -73,8 +73,8 @@ test("a crew that opens a pull request shows #n on its row within a tick, and th
   assert.match(catchUp, /### i1 "Add retries" \(a1\) PR #41: opened\n\nAt [^\n]* It is open \(https:\/\/github\.com\/acme\/webhooks\/pull\/41\), with no approval or change request; CI on its head 0123456: still running\./);
 });
 
-test("a verdict that passes while CI is pending waits under Verifying as waiting for CI, then goes to Landing the tick CI passes", async () => {
-  const { kit, row, doorbells, pr, minute, verified } = await crewOnGitHub();
+test("a verdict that passes while CI is pending waits under Verifying as waiting for CI, then goes to In review the tick CI passes", async () => {
+  const { kit, row, doorbells, pr, minute, verified } = await agentOnGitHub();
   pr();
   await minute();
   await verified();
@@ -89,14 +89,14 @@ test("a verdict that passes while CI is pending waits under Verifying as waiting
   assert.equal(doorbells().at(-1), '[Regional Manager] 2 updates. Call crew_catch_up to read them in full.\n- i1 "Add retries" (a1) PR #41: CI passed\n- i1 "Add retries" (a1) handed off: done, verified');
 });
 
-test("the same verdict with failing CI fails, and the findings sent back to the crew name the failed checks", async () => {
-  const { kit, coordinatorId, crewThreadId, row, pr, minute, verified } = await crewOnGitHub();
+test("the same verdict with failing CI fails, and the findings sent back to the agent name the failed checks", async () => {
+  const { kit, coordinatorId, agentThreadId, row, pr, minute, verified } = await agentOnGitHub();
   pr();
   await minute();
   await verified();
   pr({ rollup: "FAILURE", failed: ["test (node 22)", "e2e"] });
   await minute();
-  const findings = kit.delivered(crewThreadId).at(-1) ?? assert.fail("nothing reached the crew");
+  const findings = kit.delivered(agentThreadId).at(-1) ?? assert.fail("nothing reached the agent");
   assert.match(findings, /^## Verifier findings: every done-criterion passed, and CI failed on #41\n/);
   assert.match(findings, /### CI failed on #41\n\nFailed checks on this commit: `test \(node 22\)`, `e2e`\./);
   assert.doesNotMatch(findings, /`lint`/, "a check that passed is not named");
@@ -106,19 +106,19 @@ test("the same verdict with failing CI fails, and the findings sent back to the 
     round: 1,
     ci: { kind: "fail", number: 41, failedChecks: ["test (node 22)", "e2e"] },
   });
-  assert.equal((await row()).lane, "in-progress", "the crew works on its fix");
+  assert.equal((await row()).lane, "in-progress", "the agent works on its fix");
 });
 
-test("a CI failure after the crew's fix round reaches the coordinating thread as a CI failure, under Needs you", async () => {
-  const { kit, threadId, coordinatorId, row, pr, minute, verified } = await crewOnGitHub();
+test("a CI failure after the agent's fix round reaches the coordinating thread as a CI failure, under Needs you", async () => {
+  const { kit, threadId, coordinatorId, row, pr, minute, verified } = await agentOnGitHub();
   pr();
   await minute();
   await verified();
   pr({ rollup: "FAILURE", failed: ["test"] });
   await minute();
-  assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 1, "the first failure went back to the crew");
+  assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 1, "the first failure went back to the agent");
 
-  // The crew hands off again, and CI on the commit it names has failed.
+  // The agent hands off again, and CI on the commit it names has failed.
   await verified();
   assert.deepEqual(await row(), { lane: "needs-you", headline: "✗ CI failed on #41 after its fix round: Retries land with backoff", pr: "#41 open CI fail" });
   // why the catch-up: the coordinating thread is busy with an earlier doorbell by now, so bb holds this one queued.
@@ -127,7 +127,7 @@ test("a CI failure after the crew's fix round reaches the coordinating thread as
 });
 
 test("a snapshot of another commit does not settle the verdict, even with CI green", async () => {
-  const { row, pr, minute, verified } = await crewOnGitHub();
+  const { row, pr, minute, verified } = await agentOnGitHub();
   pr();
   await minute();
   await verified();
@@ -137,7 +137,7 @@ test("a snapshot of another commit does not settle the verdict, even with CI gre
 });
 
 test("with gh signed out the board shows why PR status is unavailable, no pr event is recorded, and a pass reads CI not checked", async () => {
-  const { kit, board, row, events, pr, minute, verified } = await crewOnGitHub();
+  const { kit, board, row, events, pr, minute, verified } = await agentOnGitHub();
   kit.github.failure = Object.assign(new Error("Command failed: gh api graphql"), { code: 4, stdout: "", stderr: "To get started with GitHub CLI, please run:  gh auth login\nAlternatively, populate the GH_TOKEN environment variable with a GitHub API authentication token.\n" });
   pr({ rollup: "SUCCESS" });
   await minute();
@@ -151,7 +151,7 @@ test("with gh signed out the board shows why PR status is unavailable, no pr eve
 });
 
 test("a failed read keeps the stored snapshot, and the next good read clears the unavailable line", async () => {
-  const { kit, coordinatorId, branch, board, row, pr, minute } = await crewOnGitHub();
+  const { kit, coordinatorId, branch, board, row, pr, minute } = await agentOnGitHub();
   pr();
   await minute();
   const stored = kit.store.prOfBranch(coordinatorId, branch)?.snapshot;
@@ -169,7 +169,7 @@ test("a failed read keeps the stored snapshot, and the next good read clears the
 });
 
 test("an answer gh gives that isn't the pull requests asked for overwrites nothing", async () => {
-  const { kit, coordinatorId, branch, board, pr, minute } = await crewOnGitHub();
+  const { kit, coordinatorId, branch, board, pr, minute } = await agentOnGitHub();
   pr();
   await minute();
   const stored = kit.store.prOfBranch(coordinatorId, branch)?.snapshot;
@@ -180,7 +180,7 @@ test("an answer gh gives that isn't the pull requests asked for overwrites nothi
 });
 
 test("a merged pull request moves the row to Done, and the coordinating thread hears it merged", async () => {
-  const { kit, threadId, row, pr, minute, verified } = await crewOnGitHub();
+  const { kit, threadId, row, pr, minute, verified } = await agentOnGitHub();
   pr({ rollup: "SUCCESS" });
   await minute();
   await verified();
@@ -193,11 +193,11 @@ test("a merged pull request moves the row to Done, and the coordinating thread h
 });
 
 test("a repository is read every tick while CI runs or a verdict waits for it, else every five minutes, and never once its issues close", async () => {
-  const { kit, threadId, pr, minute, verified } = await crewOnGitHub();
+  const { kit, threadId, pr, minute, verified } = await agentOnGitHub();
   const runs = () => kit.github.runs.length;
   pr({ rollup: "SUCCESS" });
   await minute();
-  assert.equal(runs(), 1, "a crew never read is read at once");
+  assert.equal(runs(), 1, "an agent never read is read at once");
   for (let i = 0; i < 4; i++) await minute();
   assert.equal(runs(), 1, "quiet: not again within five minutes");
   await minute();
@@ -220,8 +220,8 @@ test("a repository is read every tick while CI runs or a verdict waits for it, e
   assert.equal(runs(), 6, "a closed issue is never read");
 });
 
-test("a crew whose project isn't on GitHub is not read; a verdict that waits on its pull request passes with CI not checked", async () => {
-  const { kit, row, minute, verified } = await crewOnGitHub();
+test("an agent whose project isn't on GitHub is not read; a verdict that waits on its pull request passes with CI not checked", async () => {
+  const { kit, row, minute, verified } = await agentOnGitHub();
   kit.github.remote = "https://gitlab.com/acme/webhooks.git";
   await minute();
   await verified();
@@ -232,19 +232,19 @@ test("a crew whose project isn't on GitHub is not read; a verdict that waits on 
 });
 
 test("a newer done handoff replaces a verdict still waiting for CI, so only the newer one is ever announced", async () => {
-  const { kit, coordinatorId, crewThreadId, pr, minute, verified } = await crewOnGitHub();
+  const { kit, coordinatorId, agentThreadId, pr, minute, verified } = await agentOnGitHub();
   pr();
   await minute();
   await verified();
   const waiting = kit.store.latestHandoff(coordinatorId, a1)?.handoff.id ?? assert.fail("no handoff");
-  kit.startTurn(crewThreadId);
-  await kit.call("agent_handoff", { ...DONE, prUrl: PR_URL }, crewThreadId);
+  kit.startTurn(agentThreadId);
+  await kit.call("agent_handoff", { ...DONE, prUrl: PR_URL }, agentThreadId);
   assert.deepEqual(kit.store.handoff(waiting)?.check?.verdict, { state: "superseded" });
   assert.deepEqual(kit.store.waitingForCi(coordinatorId, a1), []);
 });
 
 test("a verdict on a commit with no CI checks yet waits for them, and follows them once GitHub attaches them", async () => {
-  const { row, pr, minute, verified } = await crewOnGitHub();
+  const { row, pr, minute, verified } = await agentOnGitHub();
   pr({ rollup: null });
   await minute();
   await verified();
@@ -259,7 +259,7 @@ test("a verdict on a commit with no CI checks yet waits for them, and follows th
 });
 
 test("a verdict on a commit still with no CI checks five minutes after it was first seen passes as no CI checks, never as CI passing", async () => {
-  const { kit, threadId, row, doorbells, pr, minute, verified } = await crewOnGitHub();
+  const { kit, threadId, row, doorbells, pr, minute, verified } = await agentOnGitHub();
   pr({ rollup: null });
   await minute();
   await verified();
@@ -274,7 +274,7 @@ test("a verdict on a commit still with no CI checks five minutes after it was fi
 });
 
 test("zero checks, then the read past the window fails: the verdict keeps waiting, and the next read that still sees none passes it as no CI checks", async () => {
-  const { kit, board, row, pr, minute, verified } = await crewOnGitHub();
+  const { kit, board, row, pr, minute, verified } = await agentOnGitHub();
   pr({ rollup: null });
   await minute();
   await verified();
@@ -290,7 +290,7 @@ test("zero checks, then the read past the window fails: the verdict keeps waitin
 });
 
 test("a verdict waiting for CI keeps waiting through every transient gh failure, shows why on the board, and settles ✓ once a read finds CI passed", async () => {
-  const { kit, board, row, pr, minute, verified } = await crewOnGitHub();
+  const { kit, board, row, pr, minute, verified } = await agentOnGitHub();
   pr();
   await minute();
   await verified();
@@ -325,7 +325,7 @@ test("a verdict waiting for CI keeps waiting through every transient gh failure,
 });
 
 test("after a transient gh failure, a read that finds CI failed fails the verdict and sends its findings back for the fix round", async () => {
-  const { kit, coordinatorId, crewThreadId, row, pr, minute, verified } = await crewOnGitHub();
+  const { kit, coordinatorId, agentThreadId, row, pr, minute, verified } = await agentOnGitHub();
   pr();
   await minute();
   await verified();
@@ -336,7 +336,7 @@ test("after a transient gh failure, a read that finds CI failed fails the verdic
 
   kit.github.failure = null;
   await minute();
-  assert.match(kit.delivered(crewThreadId).at(-1) ?? assert.fail("nothing reached the crew"), /### CI failed on #41\n\nFailed checks on this commit: `test \(node 22\)`\./);
+  assert.match(kit.delivered(agentThreadId).at(-1) ?? assert.fail("nothing reached the agent"), /### CI failed on #41\n\nFailed checks on this commit: `test \(node 22\)`\./);
   const verdict = kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict;
   assert.deepEqual(verdict?.state === "returned" ? verdict.settlement : null, {
     kind: "sent-back",
@@ -351,7 +351,7 @@ test("a verdict waiting through a transient gh failure settles as CI not checked
     ["not-installed", "gh, the GitHub CLI, isn't installed on the machine running bb"],
     ["bad-credentials-401", "GitHub rejected gh's credentials on the machine running bb (HTTP 401): check gh auth status there"],
   ]) {
-    const { kit, coordinatorId, board, row, pr, minute, verified } = await crewOnGitHub();
+    const { kit, coordinatorId, board, row, pr, minute, verified } = await agentOnGitHub();
     pr();
     await minute();
     await verified();
@@ -373,7 +373,7 @@ test("a verdict waiting through a transient gh failure settles as CI not checked
 });
 
 test("zero checks, then time passes with no read: the verdict waits for a read past the window, and follows the checks it finds", async () => {
-  const { kit, row, pr, minute, verified } = await crewOnGitHub();
+  const { kit, row, pr, minute, verified } = await agentOnGitHub();
   pr({ rollup: null });
   await minute();
   kit.clock.now += 10 * MINUTE; // bb was asleep: no tick, so no read
@@ -384,8 +384,8 @@ test("zero checks, then time passes with no read: the verdict waits for a read p
   assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" });
 });
 
-test("a crew whose pull request merged is not read again until it hands off again", async () => {
-  const { kit, pr, minute, verified } = await crewOnGitHub();
+test("an agent whose pull request merged is not read again until it hands off again", async () => {
+  const { kit, pr, minute, verified } = await agentOnGitHub();
   const runs = () => kit.github.runs.length;
   pr({ rollup: "SUCCESS" });
   await minute();
@@ -403,8 +403,8 @@ test("a crew whose pull request merged is not read again until it hands off agai
   assert.equal(runs(), 3, "still merged: not read again");
 });
 
-test("a crew whose pull request closed is read again once it reopens and the crew hands off", async () => {
-  const { kit, row, pr, minute, verified } = await crewOnGitHub();
+test("an agent whose pull request closed is read again once it reopens and the agent hands off", async () => {
+  const { kit, row, pr, minute, verified } = await agentOnGitHub();
   pr({ state: "CLOSED" });
   await minute();
   for (let i = 0; i < 10; i++) await minute();
@@ -415,8 +415,8 @@ test("a crew whose pull request closed is read again once it reopens and the cre
   assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" });
 });
 
-test("a crew whose pull request closed, then hands off while a read finds none on its branch, is still read and still waits for CI", async () => {
-  const { kit, row, pr, minute, verified } = await crewOnGitHub();
+test("an agent whose pull request closed, then hands off while a read finds none on its branch, is still read and still waits for CI", async () => {
+  const { kit, row, pr, minute, verified } = await agentOnGitHub();
   pr({ state: "CLOSED" });
   await minute();
   kit.github.prs.clear();
@@ -430,8 +430,8 @@ test("a crew whose pull request closed, then hands off while a read finds none o
   assert.deepEqual(await row(), waiting);
 });
 
-test("a read that finds the pull request closed, saved after the crew reopened it and handed off, leaves the new verdict waiting and the crew read again", async () => {
-  const { kit, row, pr, minute, verified } = await crewOnGitHub();
+test("a read that finds the pull request closed, saved after the agent reopened it and handed off, leaves the new verdict waiting and the agent read again", async () => {
+  const { kit, row, pr, minute, verified } = await agentOnGitHub();
   pr({ state: "CLOSED" });
   let answer = () => {};
   kit.github.pending = new Promise((resolve) => (answer = resolve));
@@ -454,7 +454,7 @@ test("a read that finds the pull request closed, saved after the crew reopened i
 });
 
 test("a verdict whose settle fails leaves every read of the batch saved, and settles on a later tick", async () => {
-  const { kit, threadId, coordinatorId, branch, row, pr, minute, verified } = await crewOnGitHub();
+  const { kit, threadId, coordinatorId, branch, row, pr, minute, verified } = await agentOnGitHub();
   const second = (await startedAgent(kit, threadId, { title: "Add metrics", brief: "Count deliveries.", doneCriteria: ["npm test passes"] })).agentThreadId;
   const secondBranch = kit.thread(second).environmentBranchName ?? assert.fail("no branch");
   const secondPr = (rollup: FakePr["rollup"]) => kit.github.prs.set(secondBranch, { number: 42, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup, failed: [] });
@@ -470,7 +470,7 @@ test("a verdict whose settle fails leaves every read of the batch saved, and set
   await assert.rejects(kit.tick(), /bb is restarting/, "settling c1's verdict, after the reads, fails");
   assert.equal(kit.github.runs.length, 2, "one read of both branches this tick");
   assert.equal(kit.store.prOfBranch(coordinatorId, branch)?.snapshot?.ci, "pass");
-  assert.equal(kit.store.prOfBranch(coordinatorId, secondBranch)?.snapshot?.ci, "pass", "the read after the failing verdict's crew is saved too");
+  assert.equal(kit.store.prOfBranch(coordinatorId, secondBranch)?.snapshot?.ci, "pass", "the read after the failing verdict's agent is saved too");
 
   kit.turnEvents.failure = null;
   await minute();
@@ -478,9 +478,9 @@ test("a verdict whose settle fails leaves every read of the batch saved, and set
 });
 
 test("a sandbox agent's environment is read by bb's git plugin only as it hands off: never by the board, the badge, issue_read or the watch", async () => {
-  const { kit, threadId, coordinatorId, crewThreadId, board, pr, minute } = await crewOnGitHub({ kind: "provider", environmentProviderId: "boat-sandbox", machineInputs: { preset: "small" } });
-  const { environmentId, environmentBranchName } = kit.thread(crewThreadId);
-  const crewReads = () => kit.git.calls.filter((keys) => keys.includes(environmentId)).length;
+  const { kit, threadId, coordinatorId, agentThreadId, board, pr, minute } = await agentOnGitHub({ kind: "provider", environmentProviderId: "boat-sandbox", machineInputs: { preset: "small" } });
+  const { environmentId, environmentBranchName } = kit.thread(agentThreadId);
+  const agentReads = () => kit.git.calls.filter((keys) => keys.includes(environmentId)).length;
   kit.git.checkouts.set(environmentId, "add-retries");
   pr();
   for (let tick = 0; tick < 3; tick++) {
@@ -490,33 +490,33 @@ test("a sandbox agent's environment is read by bb's git plugin only as it hands 
     kit.clock.now += 5 * MINUTE;
     await minute();
   }
-  assert.equal(crewReads(), 0, "nothing reads the sandbox to learn its branch");
+  assert.equal(agentReads(), 0, "nothing reads the sandbox to learn its branch");
   assert.equal(kit.github.runs.length, 3, "the watch still read GitHub every five minutes");
   assert.ok(kit.github.runs.at(-1)?.includes(`b0=${environmentBranchName}`), "by bb's record of the branch it made");
   assert.equal((await board()).issues[0]?.branch, environmentBranchName);
 
-  await kit.call("agent_handoff", BLOCKED, crewThreadId);
-  assert.equal(crewReads(), 1, "one read, as it hands off");
+  await kit.call("agent_handoff", BLOCKED, agentThreadId);
+  assert.equal(agentReads(), 1, "one read, as it hands off");
   assert.equal((await board()).issues[0]?.branch, "add-retries", "the board shows the branch it handed off on");
   assert.match(textOf(await kit.call("issue_read", { id: "i1" }, threadId)), /add-retries/);
   kit.clock.now += 5 * MINUTE;
   await minute();
   assert.ok(kit.github.runs.at(-1)?.includes("b0=add-retries"), "the watch reads its pull request by that branch");
-  assert.equal(crewReads(), 1, "and still no other read");
+  assert.equal(agentReads(), 1, "and still no other read");
 });
 
-test("a crew's branch as recorded at a handoff is kept when a later handoff can't read its checkout", async () => {
-  const { kit, crewThreadId, row, pr, minute } = await crewOnGitHub();
-  const { environmentId } = kit.thread(crewThreadId);
+test("an agent's branch as recorded at a handoff is kept when a later handoff can't read its checkout", async () => {
+  const { kit, agentThreadId, row, pr, minute } = await agentOnGitHub();
+  const { environmentId } = kit.thread(agentThreadId);
   kit.git.checkouts.set(environmentId, "add-retries");
-  await kit.call("agent_handoff", BLOCKED, crewThreadId);
+  await kit.call("agent_handoff", BLOCKED, agentThreadId);
   pr({}, "add-retries");
   await minute();
   assert.equal((await row()).pr, "#41 open CI pending");
 
   kit.git.offline.add(environmentId);
-  kit.startTurn(crewThreadId);
-  await kit.call("agent_handoff", BLOCKED, crewThreadId);
+  kit.startTurn(agentThreadId);
+  await kit.call("agent_handoff", BLOCKED, agentThreadId);
   kit.clock.now += 5 * MINUTE;
   await minute();
   assert.ok(kit.github.runs.at(-1)?.includes("b0=add-retries"), "read by the branch recorded before");
@@ -524,11 +524,11 @@ test("a crew's branch as recorded at a handoff is kept when a later handoff can'
 });
 
 test("a pull request merged while its check is pending makes the issue Done, and the failed verdict that comes after is never sent back", async () => {
-  const { kit, coordinatorId, crewThreadId, row, pr, minute } = await crewOnGitHub();
+  const { kit, coordinatorId, agentThreadId, row, pr, minute } = await agentOnGitHub();
   pr();
   await minute();
-  await kit.call("agent_handoff", { ...DONE, prUrl: PR_URL }, crewThreadId);
-  await kit.idle(crewThreadId, "Handed off.");
+  await kit.call("agent_handoff", { ...DONE, prUrl: PR_URL }, agentThreadId);
+  await kit.idle(agentThreadId, "Handed off.");
   await settled();
   const running = kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict;
   if (running?.state !== "running") return assert.fail("no running verifier");
@@ -542,20 +542,20 @@ test("a pull request merged while its check is pending makes the issue Done, and
   await kit.call("issue_verdict", { ...PASSES, criteria: [{ criterion: 1, result: "fail", evidence: "# fail 1" }, PASSES.criteria[1]] }, running.verifierThreadId);
   await settled();
   await minute();
-  assert.deepEqual(kit.delivered(crewThreadId).filter((text) => text.startsWith("## Verifier findings")), [], "nothing goes back to the agent");
+  assert.deepEqual(kit.delivered(agentThreadId).filter((text) => text.startsWith("## Verifier findings")), [], "nothing goes back to the agent");
   assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 0);
   assert.equal((await row()).lane, "done");
 });
 
 test("an issue In review whose agent's thread was archived still becomes Done when its pull request merges", async () => {
-  const { kit, crewThreadId, row, pr, minute, verified } = await crewOnGitHub();
+  const { kit, agentThreadId, row, pr, minute, verified } = await agentOnGitHub();
   pr({ rollup: "SUCCESS" });
   await minute();
   await verified();
   assert.equal((await row()).lane, "in-review");
 
-  kit.thread(crewThreadId).archivedAt = Date.now();
-  await kit.emit("thread.archived", { thread: kit.ref(crewThreadId) });
+  kit.thread(agentThreadId).archivedAt = Date.now();
+  await kit.emit("thread.archived", { thread: kit.ref(agentThreadId) });
   await settled();
   assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" }, "its work survives its thread");
 
@@ -566,7 +566,7 @@ test("an issue In review whose agent's thread was archived still becomes Done wh
 });
 
 test("an issue Done by its merge stays Done when its agent is stopped, its manager hears nothing returned, and no new agent starts on it", async () => {
-  const { kit, threadId, coordinatorId, row, doorbells, pr, minute } = await crewOnGitHub();
+  const { kit, threadId, coordinatorId, row, doorbells, pr, minute } = await agentOnGitHub();
   pr({ state: "MERGED" });
   await minute();
   assert.deepEqual(await row(), { lane: "done", headline: "Merged #41", pr: "#41 merged CI pending" });
@@ -586,14 +586,14 @@ test("an issue Done by its merge stays Done when its agent is stopped, its manag
 
 for (const event of [true, false]) {
   test(`a verdict waiting for CI settles In review once CI passes, though its agent's thread was deleted meanwhile (${event ? "bb's event heard" : "no event"})`, async () => {
-    const { kit, crewThreadId, row, pr, minute, verified } = await crewOnGitHub();
+    const { kit, agentThreadId, row, pr, minute, verified } = await agentOnGitHub();
     pr();
     await minute();
     await verified();
     assert.equal((await row()).headline, "Waiting for CI on #41: Retries land with backoff");
 
-    kit.thread(crewThreadId).deletedAt = Date.now();
-    if (event) await kit.emit("thread.deleted", { thread: kit.ref(crewThreadId) });
+    kit.thread(agentThreadId).deletedAt = Date.now();
+    if (event) await kit.emit("thread.deleted", { thread: kit.ref(agentThreadId) });
     await settled();
     pr({ rollup: "SUCCESS" });
     await minute();
@@ -603,9 +603,9 @@ for (const event of [true, false]) {
 }
 
 test("after a newer agent's spawn fails, the issue's pull request is still read on the branch of the agent before it, and its merge makes it Done", async () => {
-  const { kit, threadId, crewThreadId, row, pr, minute } = await crewOnGitHub();
-  await kit.call("agent_handoff", { ...BLOCKED, prUrl: PR_URL }, crewThreadId);
-  await kit.idle(crewThreadId, "Handed off.");
+  const { kit, threadId, agentThreadId, row, pr, minute } = await agentOnGitHub();
+  await kit.call("agent_handoff", { ...BLOCKED, prUrl: PR_URL }, agentThreadId);
+  await kit.idle(agentThreadId, "Handed off.");
   pr();
   kit.clock.now += 5 * MINUTE;
   await minute();
