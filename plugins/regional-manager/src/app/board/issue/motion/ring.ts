@@ -16,7 +16,7 @@ const DEG = Math.PI / 180;
 type Dash = { from: number; to: number; lift: number };
 
 /** The ring `ms` into its period; `still`, its rest frame: eight even dashes. */
-export function ringDashes(ms: number, still: boolean): Dash[] {
+function ringDashes(ms: number, still: boolean): Dash[] {
   const ph = Math.min(ms / 1000, RUN);
   const amp = still ? 0 : smooth(0, 0.55, ph) * (1 - smooth(RUN - 0.75, RUN, ph));
   const tau = ph / RUN;
