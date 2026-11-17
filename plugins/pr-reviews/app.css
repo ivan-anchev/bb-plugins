@@ -25,7 +25,9 @@
 }
 
 /* A pane's header bar, as bb draws its own pane headers (the thread view's, measured 48px in bb
-   0.49): the app chrome's row height and its seam hairline below, the bar's controls centred. The
+   0.49): the app chrome's row height and a seam hairline below, the bar's controls centred. The
+   hairline is the full seam colour, the same line the split draws between the panes, so the two
+   edges read as one frame. The
    sidebar's and the PR pane's share it, so their bars line up across the split. It holds only what
    both share: each pane sets its own padding and gap as utilities, which this unlayered rule would
    override if it set them too. */
@@ -35,7 +37,7 @@
   align-items: center;
   box-sizing: border-box;
   height: var(--bb-app-chrome-row-height);
-  border-bottom: 1px solid color-mix(in oklab, var(--border-seam-vertical) 60%, transparent);
+  border-bottom: 1px solid var(--border-seam);
 }
 
 /* Prose's block spacing (src/app/ui/prose.tsx): GitHub's markdown rhythm, in place of bb's chat
