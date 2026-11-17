@@ -11,7 +11,7 @@ import type { Repo } from "./repo.ts";
 export const PAGE = 100;
 
 export const COMMENT_FIELDS = "databaseId url body createdAt author { __typename login }";
-const REVIEW_COMMENTS = `pageInfo { hasNextPage endCursor } nodes { ${COMMENT_FIELDS} commit { oid } originalCommit { oid } diffHunk }`;
+const REVIEW_COMMENTS = `pageInfo { hasNextPage endCursor } nodes { ${COMMENT_FIELDS} state pullRequestReview { id } commit { oid } originalCommit { oid } diffHunk }`;
 export const PR = "query($owner: String!, $name: String!, $number: Int!, $cursor: String) { repository(owner: $owner, name: $name) { pullRequest(number: $number) {";
 
 export const THREADS_QUERY = `${PR} reviewThreads(first: ${PAGE}, after: $cursor) { pageInfo { hasNextPage endCursor } nodes {
@@ -64,7 +64,11 @@ export const ghCommentSchema = z.object({
   author: z.object({ __typename: z.string(), login: z.string() }).nullable(),
 });
 
+// A comment in the reader's pending review is PENDING until they submit it. Its review is null
+// only for a few seconds after the review was discarded, while GitHub still serves the comment.
 const ghReviewCommentSchema = ghCommentSchema.extend({
+  state: z.enum(["PENDING", "SUBMITTED"]),
+  pullRequestReview: z.object({ id: z.string() }).nullable(),
   commit: z.object({ oid: z.string() }).nullable(),
   originalCommit: z.object({ oid: z.string() }).nullable(),
   diffHunk: z.string(),
@@ -113,16 +117,24 @@ export function toThread(thread: GhThread, comments: GhReviewComment[]): ReviewT
     resolvedBy: thread.isResolved ? (thread.resolvedBy?.login ?? "ghost") : null,
     outdated: thread.isOutdated,
     subject: thread.subjectType === "FILE" ? { kind: "file" } : { kind: "lines", anchors: anchorsOf(thread, first), excerpt: excerptOf(thread, first.diffHunk) },
-    comments: comments.map(toComment),
+    comments: comments.map((comment) => ({ ...toComment(comment), pending: comment.state === "PENDING" })),
   };
 }
 
+/**
+ * A thread's comments without those of a discarded pending review, which GitHub serves for a few
+ * seconds after the discard (with no review). A thread left with none is gone.
+ */
+export const liveComments = (comments: GhReviewComment[]) => comments.filter((comment) => comment.state !== "PENDING" || comment.pullRequestReview !== null);
+
+/** A comment as read. Only a review comment can be pending, and toThread says which are. */
 export const toComment = (comment: z.infer<typeof ghCommentSchema>): GitHubComment => ({
   id: comment.databaseId,
   url: comment.url,
   author: comment.author === null ? { login: "ghost", bot: false } : { login: comment.author.login, bot: comment.author.__typename === "Bot" },
   body: comment.body,
   createdAt: comment.createdAt,
+  pending: false,
 });
 
 const sideOf = (side: z.infer<typeof ghSideSchema>): LineRef["side"] => (side === "LEFT" ? "old" : "new");

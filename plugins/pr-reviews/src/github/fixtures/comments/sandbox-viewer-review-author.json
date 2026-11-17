@@ -1,0 +1,12 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "viewerDidAuthor": true,
+        "reviews": {
+          "nodes": []
+        }
+      }
+    }
+  }
+}

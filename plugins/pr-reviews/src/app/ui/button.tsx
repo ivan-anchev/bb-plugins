@@ -11,6 +11,8 @@ const VARIANTS = {
   default: "bg-foreground text-background hover:bg-foreground/90",
   secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
   outline: "border border-input bg-transparent hover:bg-state-hover hover:text-foreground",
+  // An action that deletes, such as discarding a pending review, once the reader has confirmed it.
+  destructive: "bg-destructive text-white hover:bg-destructive/90",
   ghost:
     "hover:bg-state-hover hover:text-foreground aria-pressed:bg-state-active aria-pressed:text-foreground aria-pressed:hover:bg-state-active data-[state=open]:bg-state-active data-[state=open]:text-foreground data-[state=open]:hover:bg-state-active",
 } as const;

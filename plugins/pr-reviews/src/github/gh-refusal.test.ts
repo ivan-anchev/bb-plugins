@@ -11,6 +11,8 @@ import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 // stderr. Recorded with gh 2.97.0. draft-merged and ready-closed ran against a merged and a closed
 // public PR, and the *-eof fixtures through a proxy that drops every connection; their repo is
 // renamed octo-org/widgets.
+// graphql-submit-refused and comment-while-review-pending-422 are from PR #2 of the private sandbox
+// ivan-anchev/pr-reviews-review-mode-sandbox, with a pending review open.
 const recorded = (name: string) => parseHostCommandFailure(JSON.parse(readFileSync(new URL(`./fixtures/gh-failures/${name}.json`, import.meta.url), "utf8")));
 
 const refusalOf = (refusalOrFailure: Refusal | HostCommandFailure) => {
@@ -132,4 +134,18 @@ test("no permission to change a PR's state (shape-only fixtures)", () => {
 
 test("a gh pr failure nothing else matches shows its first line without gh's mark", () => {
   assert.equal(ghRefusalFor(parseHostCommandFailure({ code: 1, stderr: "X Pull request octo-org/widgets#7 can't be changed today\n" })).message, "Pull request octo-org/widgets#7 can't be changed today");
+});
+
+test("a GraphQL request GitHub refuses gives GitHub's own words from its response", () => {
+  assert.deepEqual(refusalOf(recorded("graphql-submit-refused")), {
+    code: "invalid",
+    message: "GitHub refused it: Could not comment for pull request review. You need to leave a comment indicating the requested changes.",
+  });
+});
+
+test("a comment on its own while the reader has a pending review says to add it to the review", () => {
+  assert.deepEqual(refusalOf(recorded("comment-while-review-pending-422")), {
+    code: "invalid",
+    message: "You have a pending review on this pull request, so GitHub takes comments only into it. Add this to your review instead.",
+  });
 });

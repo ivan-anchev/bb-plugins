@@ -1,8 +1,9 @@
 // The PR header, a masthead: the PR's state badge, with `owner/repo #number` beside it, above the
-// title and the identity row (author, `base ← head`) on the left; icon actions (Review chat when a
-// review thread exists, then GitHub) on the right. The badge opens a menu of the state changes
-// GitHub allows. The PR's line counts are on the Changes tab.
-import { Fragment, useState, type Ref } from "react";
+// title and the identity row (author, `base ← head`) on the left; on the right, Finish review while
+// the reader has a pending review on GitHub, then icon actions (Review chat when a review thread
+// exists, then GitHub). The badge opens a menu of the state changes GitHub allows. The PR's line
+// counts are on the Changes tab.
+import { Fragment, useState, type RefObject } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { PrDetail, PrState, StateChange } from "../../contract.ts";
 import type { Repo } from "../../github/repo.ts";
@@ -14,9 +15,10 @@ import { PrStateBadge } from "../ui/pr-state-badge.tsx";
 import { Spinner } from "../ui/spinner.tsx";
 import { HOLD_MS, useHold } from "../ui/use-hold.ts";
 import { PrIdentity } from "./pr-identity.tsx";
+import { ReviewSubmit } from "./review-submit.tsx";
 
 /** `title`: the heading, which takes focus when a control above it, such as a notice's, leaves. */
-type PrHeaderProps = { target: PrTarget; repo: Repo; pr: PrDetail; hasReviewThread: boolean; title: Ref<HTMLHeadingElement> };
+type PrHeaderProps = { target: PrTarget; repo: Repo; pr: PrDetail; hasReviewThread: boolean; title: RefObject<HTMLHeadingElement | null> };
 
 export function PrHeader({ target, repo, pr, hasReviewThread, title }: PrHeaderProps) {
   return (
@@ -32,6 +34,7 @@ export function PrHeader({ target, repo, pr, hasReviewThread, title }: PrHeaderP
         {/* -my-0.5 centers the 28px buttons on the title's 24px first line; -mr-1.5 lines the last
             glyph, not its hit area, up with the header's right edge. */}
         <div className="-my-0.5 -mr-1.5 flex gap-1 justify-self-end [grid-area:actions]">
+          <ReviewSubmit target={target} focusAfter={title} />
           {hasReviewThread && <ReviewChatIconButton />}
           <IconLink icon="Github" label="Open on GitHub" href={pr.url} />
         </div>

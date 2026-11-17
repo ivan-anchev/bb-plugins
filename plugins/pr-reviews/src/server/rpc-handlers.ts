@@ -1,12 +1,27 @@
 // RPC handlers: resolve the project to its GitHub repo, read GitHub through gh with each PR's
 // review state, read the sidebar's PRs across projects, stored guides, a PR's live diff and its
 // comments, record the PR pages the reader opens, hand review actions to `reviews`, post the
-// comments a reader chose to, and change a PR's state. A thin shell; the logic lives in the
-// modules it calls.
+// comments a reader chose to, alone or in their pending review, which they submit or discard, and
+// change a PR's state. A thin shell; the logic lives in the modules it calls.
 import { experimental_PluginRpcRefusal as Refusal, type BbPluginApi, type ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import { commentsTag, INBOX_TAG, prReviewsContract, prsOf, repoTag, VISITS_TAG, type GitHubProject, type UnreadableProject } from "../contract.ts";
 import { parsePrDiff } from "../diff/parse-pr-diff.ts";
-import { changePrState, listOpenPrs, postComment, postConversationComment, postReply, readFileAt, readInbox, readPrComments, snapshotPrDiff, type PrDiffSnapshot } from "../github/gh.ts";
+import {
+  addReviewComment,
+  addReviewReply,
+  changePrState,
+  discardReview,
+  listOpenPrs,
+  postComment,
+  postConversationComment,
+  postReply,
+  readFileAt,
+  readInbox,
+  readPrComments,
+  snapshotPrDiff,
+  submitReview,
+  type PrDiffSnapshot,
+} from "../github/gh.ts";
 import { projectRepo, type ProjectRepo } from "../github/project-repo.ts";
 import type { Repo } from "../github/repo.ts";
 import { buildSections, inboxPrs } from "./inbox.ts";
@@ -69,11 +84,26 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
     return { projectId, repo: await repoOf(projectId), number };
   }
 
-  // The PR's comments re-read once GitHub has the new one, so it shows in place.
-  async function posted(target: { projectId: string; number: number }, post: (repo: Repo) => Promise<{ url: string }>): Promise<{ url: string }> {
-    const result = await post(await repoOf(target.projectId));
-    bb.rpc.experimental_invalidate([commentsTag(target)]);
-    return result;
+  // The PR's comments re-read once GitHub has the comment, so it shows in place, and after a
+  // refusal too: GitHub may refuse one because of a review made pending elsewhere, which the box
+  // then offers to add to, or refuse having started a pending review for a comment it couldn't place.
+  async function posted<Result>(target: { projectId: string; number: number }, post: (repo: Repo) => Promise<Result>): Promise<Result> {
+    const repo = await repoOf(target.projectId);
+    try {
+      return await post(repo);
+    } finally {
+      bb.rpc.experimental_invalidate([commentsTag(target)]);
+    }
+  }
+
+  // The PR's comments, and the PR with its reviewers' states, re-read once GitHub has submitted or
+  // discarded the review. A refusal leaves both as they are, so Finish review stays open with
+  // GitHub's words beside the reader's summary.
+  async function reviewed(target: { projectId: string; number: number }, write: () => Promise<void>): Promise<Record<string, never>> {
+    const repo = await repoOf(target.projectId);
+    await write();
+    bb.rpc.experimental_invalidate([commentsTag(target), repoTag(repo)]);
+    return {};
   }
 
   return {
@@ -164,6 +194,22 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
       sidebarCatchUp.follow(repo, number, change);
       return {};
     },
+
+    addToReview: ({ request, reviewId, ...target }) =>
+      posted(target, async (repo) => {
+        await addReviewComment(repo, target.number, request, reviewId);
+        return {};
+      }),
+
+    addReplyToReview: ({ threadId, reviewId, body, ...target }) =>
+      posted(target, async () => {
+        await addReviewReply(threadId, reviewId, body);
+        return {};
+      }),
+
+    submitReview: ({ reviewId, event, body, ...target }) => reviewed(target, () => submitReview(reviewId, event, body)),
+
+    discardReview: ({ reviewId, ...target }) => reviewed(target, () => discardReview(reviewId)),
   };
 }
 

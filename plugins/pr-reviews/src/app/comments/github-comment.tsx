@@ -1,8 +1,9 @@
 // One GitHub comment as the plugin draws it, in a review thread or on the Summary tab's activity,
 // as Zeron draws one: the author's avatar, then one line of their login, "author" for the PR's
-// author, "bot" for an app, an optional verb (a review's "approved", a stale thread's badge), and
-// its time, with Quote and the link to GitHub on the right; under it the markdown
-// in a borderless bubble on the recessed surface. A bot's body folds to three lines.
+// author, "bot" for an app, "Pending" while it waits in the reader's pending review, an optional
+// verb (a review's "approved", a stale thread's badge), and its time, with Quote and the link to
+// GitHub on the right; under it the markdown in a borderless bubble on the recessed surface. A
+// bot's body folds to three lines.
 import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import type { GitHubComment } from "../../comments/thread-schema.ts";
 import { timeAgo } from "../relative-time.ts";
@@ -42,6 +43,7 @@ export function GitHubCommentView({ ref, comment, byPrAuthor, verb, onQuote, chi
         <span className="min-w-0 shrink-0 truncate font-medium">{author.login}</span>
         {byPrAuthor && <span className="shrink-0 text-muted-foreground">author</span>}
         {author.bot && <span className="shrink-0 text-muted-foreground">bot</span>}
+        {comment.pending && <PendingBadge />}
         {verb}
         <TimeAgo at={comment.createdAt} className="shrink-0 text-subtle-foreground" />
         <div className="-my-1 ml-auto flex shrink-0 items-center opacity-0 transition-opacity duration-150 group-focus-within/comment:opacity-100 group-hover/comment:opacity-100 [@media(hover:none)]:opacity-100">
@@ -62,6 +64,20 @@ export function GitHubCommentView({ ref, comment, byPrAuthor, verb, onQuote, chi
     </article>
   );
 }
+
+// why a pill in the warning colour, not a muted word like "author": it is the comment's state, not
+// who wrote it, and the only mark that no one else can see it yet. The same amber marks the
+// header's count of pending comments (review-submit.tsx).
+function PendingBadge() {
+  return (
+    <span title="Only you can see this until you submit your review" className={`shrink-0 rounded-full px-1.5 text-[11px] leading-4 font-medium ${PENDING_TONE}`}>
+      Pending
+    </span>
+  );
+}
+
+/** Pending's colours: the theme's warning text, on a wash and inside a ring of itself. */
+export const PENDING_TONE = "bg-[color-mix(in_oklab,var(--warning-text)_12%,transparent)] text-warning-text inset-ring inset-ring-[color-mix(in_oklab,var(--warning-text)_35%,transparent)]";
 
 const FADE_LAST_LINE = "[mask-image:linear-gradient(to_bottom,#000_calc(100%-1lh),transparent)]";
 

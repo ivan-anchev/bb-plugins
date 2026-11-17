@@ -2,7 +2,8 @@
 // page's background across the diff, edge to edge, with its comments in order, each an avatar and a
 // line of who and when over a borderless bubble, a timeline line joining the avatars. A thread
 // whose lines are stale says so with a warning badge on its first comment ("Outdated"). Then Reply
-// and Ask about this, which open the diff's one comment box under the thread. A thread at its file
+// and Ask about this, which open the diff's one comment box under the thread, on the Send as mode
+// each names. A thread at its file
 // that lost its lines opens with them, drawn as the diff draws code. A long thread shows its first
 // and latest comments with "N more" between; a bot's comment is clamped to three lines; a resolved
 // thread is one row that opens it. The band draws only its bottom edge: the diff's note draws the
@@ -19,6 +20,7 @@ import { mergeRefs } from "../ui/merge-refs.ts";
 import type { NumberedLine } from "../../diff/diff-schema.ts";
 import { COMMENT_INDENT, firstLineOf, GitHubCommentView, QUIET_BUTTON } from "./github-comment.tsx";
 import { OutdatedCode } from "./outdated-code.tsx";
+import { pickForNextBox } from "./send-as.tsx";
 
 /** Reply, Ask about this, or a comment's Quote (`quote` "" for none), from its button. */
 export type OpenReply = (request: { quote: string; from: HTMLElement }) => void;
@@ -74,10 +76,24 @@ export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: Rev
       />
       {box === null ? (
         <div className={`${COMMENT_INDENT} -ml-3 flex items-center gap-1 px-3`}>
-          <Button variant="ghost" size="sm" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(event) => {
+              pickForNextBox("github");
+              onReply({ quote: "", from: event.currentTarget });
+            }}
+          >
             Reply
           </Button>
-          <Button variant="ghost" size="sm" onClick={(event) => onReply({ quote: "", from: event.currentTarget })}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(event) => {
+              pickForNextBox("ask");
+              onReply({ quote: "", from: event.currentTarget });
+            }}
+          >
             Ask about this
           </Button>
           {thread.resolvedBy !== null && (

@@ -71,7 +71,7 @@ test("a review line says its verdict and how many threads it resolved", () => {
     kind: "review",
     id: `r-${verdict}`,
     verdict,
-    comment: { id: 1, url: "", author: { login: "jun-park", bot: false }, body: "", createdAt: at(1) },
+    comment: { id: 1, url: "", author: { login: "jun-park", bot: false }, body: "", createdAt: at(1), pending: false },
     threadIds,
   });
   const resolved = THREADS.filter((thread) => thread.resolvedBy !== null);

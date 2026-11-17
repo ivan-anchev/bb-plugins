@@ -38,6 +38,10 @@
                       "__typename": "Bot",
                       "login": "astro-factory"
                     },
+                    "state": "SUBMITTED",
+                    "pullRequestReview": {
+                      "id": "PRR_kwDOFL76Q88AAAABV-2UwA"
+                    },
                     "commit": {
                       "oid": "c0404b76f92a7e399e7334191b31cf82e0218168"
                     },
@@ -78,6 +82,10 @@
                     "author": {
                       "__typename": "Bot",
                       "login": "astro-factory"
+                    },
+                    "state": "SUBMITTED",
+                    "pullRequestReview": {
+                      "id": "PRR_kwDOFL76Q88AAAABV-_bYQ"
                     },
                     "commit": {
                       "oid": "c0404b76f92a7e399e7334191b31cf82e0218168"
@@ -120,6 +128,10 @@
                       "__typename": "Bot",
                       "login": "astro-factory"
                     },
+                    "state": "SUBMITTED",
+                    "pullRequestReview": {
+                      "id": "PRR_kwDOFL76Q88AAAABV_IZNg"
+                    },
                     "commit": {
                       "oid": "c0404b76f92a7e399e7334191b31cf82e0218168"
                     },
@@ -161,6 +173,10 @@
                       "__typename": "Bot",
                       "login": "astro-factory"
                     },
+                    "state": "SUBMITTED",
+                    "pullRequestReview": {
+                      "id": "PRR_kwDOFL76Q88AAAABV_OabA"
+                    },
                     "commit": {
                       "oid": "c0404b76f92a7e399e7334191b31cf82e0218168"
                     },
@@ -199,6 +215,10 @@
                     "author": {
                       "__typename": "User",
                       "login": "ematipico"
+                    },
+                    "state": "SUBMITTED",
+                    "pullRequestReview": {
+                      "id": "PRR_kwDOFL76Q88AAAABWOOTsQ"
                     },
                     "commit": {
                       "oid": "8b30d97901c304a40bb99f30f3aea480fcfa2f3d"
