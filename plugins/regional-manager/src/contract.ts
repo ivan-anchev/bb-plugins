@@ -38,12 +38,14 @@ const memoryTags = ({ coordinatorId }: { coordinatorId: CoordinatorId }) => [mem
 /** Every read of one regional manager's board carries it; an issue filed or changed, an agent started or ended, or an agent's thread changing status, invalidates it. */
 export const boardTag = (id: CoordinatorId): string => `board:${id}`;
 
+/** An agent as the board names it, with the thread it opens (null: none to open). */
+const shownAgentSchema = z.object({ id: agentIdSchema, threadId: z.string().nullable() });
+
 /**
  * One issue on the board, as its view reads now: its kind, its status, why it waits on the user
  * (null: it doesn't; the board then shows it under Needs you, its status on the row), its latest
  * agent (null: none started) with that agent's thread while bb runs it (null: archived or deleted),
- * its branch (null: none on record; an earlier agent's when the latest has none), and its pull
- * request as last read (null: none seen). Its verdicts are in its detail (`issue`).
+ * and its pull request as last read (null: none seen). Its verdicts are in its detail (`issue`).
  */
 const issueRowSchema = z.object({
   id: issueIdSchema,
@@ -52,8 +54,7 @@ const issueRowSchema = z.object({
   status: issueStatusSchema,
   needsYou: z.string().nullable(),
   headline: z.string(),
-  agent: z.object({ id: agentIdSchema, threadId: z.string().nullable() }).nullable(),
-  branch: z.string().nullable(),
+  agent: shownAgentSchema.nullable(),
   pr: prSnapshotSchema.nullable(),
 });
 export type IssueRow = z.infer<typeof issueRowSchema>;
@@ -86,7 +87,7 @@ const issueDetailSchema = z.object({
   doneCriteria: doneCriteriaSchema,
   record: z.array(
     z.object({
-      agent: z.object({ id: agentIdSchema, threadId: z.string().nullable(), ended: endedHowSchema.nullable() }),
+      agent: shownAgentSchema.extend({ ended: endedHowSchema.nullable() }),
       handoffs: z.array(shownHandoffSchema.extend({ verdict: shownVerdictSchema.nullable() })),
     }),
   ),

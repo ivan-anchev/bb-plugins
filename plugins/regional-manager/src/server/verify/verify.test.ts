@@ -446,6 +446,26 @@ test("an issue opened on the board reads what it is about, its criteria and each
   await assert.rejects(async () => kit.rpc.issue({ coordinatorId, issueId: issueIdSchema.parse("i9") }), { code: "not_found", message: "This regional manager has no issue i9." });
 });
 
+test("an issue opened on the board sends of each verdict only what the board shows: no checkout before it returns, no nudge, no fix round", async () => {
+  const { kit, coordinatorId, agentThreadId, opened, verifier } = await withAgent();
+  const shown = async () => (await opened()).record[0]?.handoffs.at(-1)?.verdict ?? assert.fail("no verdict");
+  // As if the plugin reloaded between storing the handoff and starting its verifier: it waits, queued.
+  const turnSeq = kit.thread(agentThreadId).turns.at(-1) ?? assert.fail("no turn");
+  const { headSha, ...report } = DONE;
+  const handoff = { id: handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e"), coordinatorId, issueId: i1, agentId: a1, at: Date.now(), turnSeq, ...report, status: "done" as const };
+  kit.inbox.handoff({ ...handoff, delivery: { kind: "commit", headSha, prUrl: null } }, { kind: "read", checkout: { headSha: HEAD, changedFiles: [], changedFileCount: 0 } });
+  assert.deepEqual(await shown(), { state: "queued" });
+
+  await kit.tick();
+  assert.deepEqual(await shown(), { state: "running", verifierThreadId: verifier() });
+
+  await kit.call("issue_verdict", FAILS, verifier());
+  await settled();
+  const returned = await shown();
+  assert.deepEqual(Object.keys(returned).sort(), ["checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
+  assert.deepEqual(returned.state === "returned" && returned.settlement, { kind: "sent-back", ci: { kind: "none" } });
+});
+
 // QA-03: a Claude Code verifier's per-command sandbox showed a boat sandbox's home dotfiles as
 // untracked, and its own "the tree is clean" check failed clean work and spent the fix round.
 test("an agent bb reads at the claimed commit on a clean tree is judged on its criteria alone, and its verifier is never asked to check the commit or the tree", async () => {

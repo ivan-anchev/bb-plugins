@@ -287,11 +287,12 @@ test("the board puts a running agent's issue In progress, one waiting on an appr
   assert.equal(textOf(await kit.call("agent_stop", { agent: "a3" }, threadId)), "a3 is stopped; it no longer holds i3. crew_catch_up shows where i3 stands now.");
 
   const { issues } = await kit.rpc.board({ coordinatorId });
-  assert.deepEqual(issues.map((issue) => [issue.id, laneOf(issue), issue.agent?.id, issue.agent?.threadId, issue.branch]), [
-    ["i1", "in-progress", "a1", ids[0], `bb/${ids[0]}`],
-    ["i2", "needs-you", "a2", ids[1], `bb/${ids[1]}`],
-    ["i3", "todo", "a3", ids[2], `bb/${ids[2]}`],
+  assert.deepEqual(issues.map((issue) => [issue.id, laneOf(issue), issue.agent?.id, issue.agent?.threadId]), [
+    ["i1", "in-progress", "a1", ids[0]],
+    ["i2", "needs-you", "a2", ids[1]],
+    ["i3", "todo", "a3", ids[2]],
   ]);
+  assert.deepEqual(Object.keys(issues[0] ?? {}).sort(), ["agent", "headline", "id", "kind", "needsYou", "pr", "status", "title"], "a row sends only what the board shows");
 });
 
 test("crew_catch_up shows the updates, then the board by lane with each issue's agent, then the memory", async () => {

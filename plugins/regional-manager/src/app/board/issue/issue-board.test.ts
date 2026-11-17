@@ -34,7 +34,7 @@ afterEach(cleanup);
 const SHA = "3f2a9c1d8e7b6a5f4e3d2c1b0a9f8e7d6c5b4a39";
 
 function issue(id: string, fields: Partial<IssueRow>): IssueRow {
-  return { id: issueIdSchema.parse(id), kind: "build", title: `Issue ${id}`, status: "todo", needsYou: null, headline: "Planned", agent: null, branch: null, pr: null, ...fields };
+  return { id: issueIdSchema.parse(id), kind: "build", title: `Issue ${id}`, status: "todo", needsYou: null, headline: "Planned", agent: null, pr: null, ...fields };
 }
 
 const QUESTION: Decision = { id: decisionIdSchema.parse("d1"), issueId: null, question: "Which license should the repo use?", options: ["MIT", "Apache-2.0"], askedAt: 1_000, answer: null };

@@ -39,7 +39,6 @@ const issue = (id: string, fields: Partial<IssueRow>): IssueRow => ({
   needsYou: null,
   headline: "Not started",
   agent: null,
-  branch: null,
   pr: null,
   ...fields,
 });
@@ -83,7 +82,7 @@ const DETAIL: IssueDetail = {
             ],
             findings: [],
             sameModel: true,
-            settlement: { kind: "checked", refused: null, ci: { kind: "none" } },
+            settlement: { kind: "checked", ci: { kind: "none" } },
           },
         },
       ],

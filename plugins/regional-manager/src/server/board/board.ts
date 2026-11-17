@@ -19,7 +19,7 @@ const DIGEST = memoryFileSchema.parse("DIGEST.md");
 type BoardStore = FactsStore & Pick<Store, "verifies" | "lastOwnTreeEvent" | "issue" | "record">;
 
 /** An issue's row on the board. */
-const rowOf = ({ view, agent, threadId, branch }: IssueRead): IssueRow => ({
+const rowOf = ({ view, agent, threadId }: IssueRead): IssueRow => ({
   id: view.issue.id,
   kind: view.issue.kind,
   title: view.issue.title,
@@ -27,7 +27,6 @@ const rowOf = ({ view, agent, threadId, branch }: IssueRead): IssueRow => ({
   needsYou: view.needsYou,
   headline: view.headline,
   agent: agent === null ? null : { id: agent.id, threadId },
-  branch,
   pr: view.pr,
 });
 

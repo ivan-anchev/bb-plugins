@@ -31,14 +31,13 @@ const settledCiSchema = ciVerdictSchema.default({ kind: "none" });
  * `refused` is bb's answer when it refused the findings sent back, else null. Each that settled
  * it keeps `ci`, what CI said about the commit then.
  */
-const settlementSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("pending") }),
-  z.object({ kind: z.literal("waiting-for-ci") }),
-  z.object({ kind: z.literal("sending-back"), round: roundSchema, ci: settledCiSchema }),
-  z.object({ kind: z.literal("sent-back"), round: roundSchema, ci: settledCiSchema }),
-  z.object({ kind: z.literal("maybe-sent-back"), round: roundSchema, ci: settledCiSchema }),
-  z.object({ kind: z.literal("checked"), refused: z.string().nullable(), ci: settledCiSchema }),
-]);
+const pendingSchema = z.object({ kind: z.literal("pending") });
+const waitingForCiSchema = z.object({ kind: z.literal("waiting-for-ci") });
+const sendingBackSchema = z.object({ kind: z.literal("sending-back"), round: roundSchema, ci: settledCiSchema });
+const sentBackSchema = z.object({ kind: z.literal("sent-back"), round: roundSchema, ci: settledCiSchema });
+const maybeSentBackSchema = z.object({ kind: z.literal("maybe-sent-back"), round: roundSchema, ci: settledCiSchema });
+const checkedSchema = z.object({ kind: z.literal("checked"), refused: z.string().nullable(), ci: settledCiSchema });
+const settlementSchema = z.discriminatedUnion("kind", [pendingSchema, waitingForCiSchema, sendingBackSchema, sentBackSchema, maybeSentBackSchema, checkedSchema]);
 
 /**
  * The verifier's verdict on the claimed commit `headSha`: each criterion in the issue's order, and
@@ -72,15 +71,36 @@ const waivedSchema = z.object({ state: z.literal("waived") });
 export const verdictSchema = z.discriminatedUnion("state", [queuedSchema, runningSchema, returnedSchema, couldNotRunSchema, supersededSchema, waivedSchema]);
 export type Verdict = z.infer<typeof verdictSchema>;
 
-/** A verdict as the user is shown it. why without the model: the board names no model; it stays with the plugin and the regional manager. */
-export const shownVerdictSchema = z.discriminatedUnion("state", [queuedSchema, runningSchema, returnedSchema.omit({ model: true }), couldNotRunSchema, supersededSchema, waivedSchema]);
+/**
+ * What became of a returned verdict, as the board reads it: its kind and, once settled, CI. why
+ * without the fix round and bb's refusal: they are the regional manager's, and the board shows neither.
+ */
+const shownSettlementSchema = z.discriminatedUnion("kind", [
+  pendingSchema,
+  waitingForCiSchema,
+  sendingBackSchema.omit({ round: true }),
+  sentBackSchema.omit({ round: true }),
+  maybeSentBackSchema.omit({ round: true }),
+  checkedSchema.omit({ refused: true }),
+]);
+
+/**
+ * A verdict as the user is shown it: only what the board reads. why without the model: the board
+ * names no model; it stays with the plugin and the regional manager. why no checkout before a
+ * verdict returns, nor a verifier's nudge: the board shows neither.
+ */
+export const shownVerdictSchema = z.discriminatedUnion("state", [
+  queuedSchema.omit({ checkout: true }),
+  runningSchema.omit({ checkout: true, nudged: true }),
+  returnedSchema.omit({ model: true, settlement: true }).extend({ settlement: shownSettlementSchema }),
+  couldNotRunSchema,
+  supersededSchema,
+  waivedSchema,
+]);
 export type ShownVerdict = z.infer<typeof shownVerdictSchema>;
 
-export function shownVerdict(verdict: Verdict): ShownVerdict {
-  if (verdict.state !== "returned") return verdict;
-  const { model: _, ...shown } = verdict;
-  return shown;
-}
+/** The verdict as the user is shown it. why parse: zod drops every key its schema doesn't name, so nothing else reaches the board. */
+export const shownVerdict = (verdict: Verdict): ShownVerdict => shownVerdictSchema.parse(verdict);
 
 /**
  * What a verdict says about the work. `pending`: no verdict yet, or one nobody has been told of.
