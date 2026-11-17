@@ -26,9 +26,12 @@ or your own.
   bb project whose git remote is on github.com, no picker. **Authored by me** (open, and closed
   in the last 7 days), **Needs my review** (review requested from you or your
   team) and **Recently merged** (yours or reviewed by you, last 7 days), each
-  with its count and a quiet line when empty. The list sits beside the selected
-  review in wide panes. In narrow panes, opening a PR shows its review;
-  **Pull requests** above it returns to the list.
+  with its count and a quiet line when empty. A header above the list holds
+  chips (All, Mine, Review, Merged) that list one section, and a Filter that
+  hides the sections you don't watch; clicking a section's heading folds it.
+  The list sits beside the selected review in wide panes. In narrow panes,
+  opening a PR shows its review; **Pull requests** above it returns to the
+  list.
 - **Compact rows**: one line each, the author's avatar, the title, and a
   badge with the PR's state icon and number, coloured by state. The repo's name shows on hover,
   focus and the open row. At most one dot on the avatar asks for attention:

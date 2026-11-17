@@ -1,5 +1,5 @@
-// One sidebar section: a sticky heading with its count, in Activity's section-title type, then its PRs and stacks, or one quiet line
-// when it has none.
+// One sidebar section: a sticky heading with its count, in Activity's section-title type, that folds
+// the section, then its PRs and stacks, or one quiet line when it has none.
 import { useId } from "react";
 import type { InboxPr, Section } from "../../contract.ts";
 import { attentionOf, type Visits } from "./attention.ts";
@@ -7,24 +7,31 @@ import { ListedRow } from "./pr-row.tsx";
 import { SECTION_TEXT } from "./section-text.ts";
 import { StackTree } from "./stack-tree.tsx";
 
-// Activity's section title: quiet small words, then the count.
+// Activity's section title: quiet small words, then the count, brighter under the pointer; no caret.
 const SECTION_TITLE = "text-[11px] leading-3.5 font-medium whitespace-nowrap text-subtle-foreground";
+const FOLD =
+  "flex h-full w-full cursor-pointer items-center gap-2 rounded-md px-2.5 hover:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset";
 
 export type RowActions = { isOpen(pr: InboxPr): boolean; open(pr: InboxPr): void };
 
-export function InboxSection({ section, visits, isOpen, open }: RowActions & { section: Section; visits: Visits }) {
+type InboxSectionProps = RowActions & { section: Section; visits: Visits; folded: boolean; onFold(folded: boolean): void };
+
+export function InboxSection({ section, visits, isOpen, open, folded, onFold }: InboxSectionProps) {
   const headingId = useId();
+  const bodyId = useId();
   const { title, empty } = SECTION_TEXT[section.key];
   return (
     <section aria-labelledby={headingId} className="[&+&]:mt-2">
-      <h2 id={headingId} className={`sticky top-0 z-10 -mx-1.5 flex h-6 items-center gap-2 bg-background px-4 ${SECTION_TITLE}`}>
-        {title}
-        <span className="tabular-nums">{section.count}</span>
+      <h2 id={headingId} className={`sticky top-0 z-10 -mx-1.5 h-6 bg-background px-1.5 ${SECTION_TITLE}`}>
+        <button type="button" aria-expanded={!folded} aria-controls={bodyId} onClick={() => onFold(!folded)} className={FOLD}>
+          {title}
+          <span className="tabular-nums">{section.count}</span>
+        </button>
       </h2>
-      {section.items.length === 0 ? (
-        <p className="px-2.5 pt-1 pb-2 text-xs leading-4 text-subtle-foreground">{empty}</p>
+      {folded ? null : section.items.length === 0 ? (
+        <p id={bodyId} className="px-2.5 pt-1 pb-2 text-xs leading-4 text-subtle-foreground">{empty}</p>
       ) : (
-        <ul>
+        <ul id={bodyId}>
           {section.items.map((item) =>
             item.kind === "pr" ? (
               <li key={`${item.pr.repo}#${item.pr.number}`}>

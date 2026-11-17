@@ -1,9 +1,14 @@
-// Which of the sidebar's sections the reader hides, kept in this browser's localStorage so the
-// choice outlives a reload. Stored as the hidden keys, so a section added later shows by default.
+// Which of the sidebar's sections the reader hides, and which they fold, each kept in this
+// browser's localStorage so the choice outlives a reload. Stored as the hidden (or folded) keys, so
+// a section added later shows, open, by default.
 import { useState } from "react";
 import { SECTION_KEYS, type SectionKey } from "../../contract.ts";
 
-const STORAGE_KEY = "bb-plugin-pr-reviews.sidebar.hidden-sections.v1";
+/** A set of sections the reader picked, saved under its own key. */
+export type SectionSet = { storageKey: string; what: string };
+
+export const HIDDEN_SECTIONS: SectionSet = { storageKey: "bb-plugin-pr-reviews.sidebar.hidden-sections.v1", what: "hidden sections" };
+export const COLLAPSED_SECTIONS: SectionSet = { storageKey: "bb-plugin-pr-reviews.sidebar.collapsed-sections.v1", what: "folded sections" };
 
 type SectionStorage = Pick<Storage, "getItem" | "setItem">;
 
@@ -14,41 +19,42 @@ const browserStorage: SectionStorage = {
   setItem: (key, value) => localStorage.setItem(key, value),
 };
 
-export function useHiddenSections() {
-  const [hidden, setHidden] = useState(() => readHiddenSections(browserStorage));
+export function useSectionSet(set: SectionSet) {
+  const [sections, setSections] = useState(() => readSectionSet(browserStorage, set));
   const change = (next: SectionKey[]) => {
-    setHidden(next);
-    writeHiddenSections(browserStorage, next);
+    setSections(next);
+    writeSectionSet(browserStorage, set, next);
   };
-  return [hidden, change] as const;
+  return [sections, change] as const;
 }
 
 /**
- * The stored hidden sections in sidebar order. Storage that cannot be read, or holds unreadable
- * data, hides none; unknown keys are dropped.
+ * The stored sections in sidebar order. Storage that cannot be read, or holds unreadable data,
+ * holds none; unknown keys are dropped.
  */
-export function readHiddenSections(storage: SectionStorage): SectionKey[] {
-  const stored = parseJson(readStored(storage));
+export function readSectionSet(storage: SectionStorage, set: SectionSet): SectionKey[] {
+  const stored = parseJson(readStored(storage, set.storageKey));
   return Array.isArray(stored) ? SECTION_KEYS.filter((key) => stored.includes(key)) : [];
 }
 
 /** Saves the choice for the next load. A failed save only warns: the choice still holds for this session. */
-export function writeHiddenSections(storage: SectionStorage, hidden: readonly SectionKey[]) {
+export function writeSectionSet(storage: SectionStorage, set: SectionSet, sections: readonly SectionKey[]) {
   try {
-    storage.setItem(STORAGE_KEY, JSON.stringify(hidden));
+    storage.setItem(set.storageKey, JSON.stringify(sections));
   } catch (error) {
-    console.warn("pr-reviews: could not save the sidebar's hidden sections; the choice lasts until reload.", error);
+    console.warn(`pr-reviews: could not save the sidebar's ${set.what}; the choice lasts until reload.`, error);
   }
 }
 
-export function withSectionShown(hidden: readonly SectionKey[], section: SectionKey, shown: boolean): SectionKey[] {
-  return SECTION_KEYS.filter((key) => (key === section ? !shown : hidden.includes(key)));
+/** `sections` with `section` in it or out of it, in sidebar order. */
+export function withSection(sections: readonly SectionKey[], section: SectionKey, included: boolean): SectionKey[] {
+  return SECTION_KEYS.filter((key) => (key === section ? included : sections.includes(key)));
 }
 
 // Storage the browser denies (blocked site data, a sandboxed frame) throws on access; it reads as nothing stored.
-function readStored(storage: SectionStorage): string | null {
+function readStored(storage: SectionStorage, key: string): string | null {
   try {
-    return storage.getItem(STORAGE_KEY);
+    return storage.getItem(key);
   } catch {
     return null;
   }
