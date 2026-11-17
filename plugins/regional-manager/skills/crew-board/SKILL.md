@@ -760,10 +760,11 @@ and the Memory page read the new text on their next read.
 - A replaced agent's thread stays in the sidebar, stopped: someone typing
   into it wakes it in the environment the new agent works in, and the plugin
   neither prevents nor flags that. The next start on the issue stops it.
-- **An unblocked wake can come a minute late.** The plugin reads every issue
-  again after anything an issue's status depends on changes. If bb's threads
-  can't be read then, the plugin reloads, or the manager's agents keep
-  changing things while it reads, the next minute's pass reads again and wakes
-  the manager, once for each close after the dependency was added. Meanwhile
-  the catch-up's ready list and every blocked row are right, since they are
-  derived on each read.
+- **An unblocked wake can come late.** The plugin reads every issue again
+  after anything an issue's status depends on changes. If bb's threads can't
+  be read then, or the plugin reloads, the next minute's pass reads again and
+  wakes the manager. If the manager's agents keep changing things while it
+  reads, the wake waits until they pause: each later change and each minute's
+  pass tries again. Either way it wakes the manager once for each close after
+  the dependency was added. Meanwhile the catch-up's ready list and every
+  blocked row are right, since they are derived on each read.
