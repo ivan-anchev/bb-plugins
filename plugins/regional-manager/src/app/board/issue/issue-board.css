@@ -328,6 +328,23 @@ button.rmi-thread-link {
 .rmi-detail ul {
   margin: 0;
 }
+/* The title and headline whole, which the row fades out at its edge. */
+.rmi-detail-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rmi-detail-title {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--foreground);
+  text-wrap: pretty;
+}
+.rmi-detail-headline {
+  color: var(--muted-foreground);
+  text-wrap: pretty;
+}
 .rmi-description {
   font-size: 13px;
   line-height: 18px;

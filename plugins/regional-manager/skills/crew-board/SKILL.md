@@ -524,8 +524,9 @@ page from its row in the panel, show the same board, live:
   request: its number in its state's colour, with a dot for its CI, which
   opens it on GitHub.
 
-Pressing an issue opens it in place, under its row: what it is about, **Done
-when** with its criteria, and its **Record**: each agent that held it, how it
+Pressing an issue opens it in place, under its row: its title and headline
+whole, which the row fades out at its edge, what it is about, **Done when**
+with its criteria, and its **Record**: each agent that held it, how it
 ended, and each handoff it made, the latest one open. A handoff shows the
 verdict on it first: how many criteria passed, a link to the verifier thread,
 and the commit checked; the plugin's own read when that commit wasn't checked

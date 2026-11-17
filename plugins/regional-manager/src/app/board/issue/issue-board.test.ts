@@ -145,6 +145,21 @@ test("an open row whose issue moves to another lane stays open there, with focus
   assert.ok(document.activeElement === moved, "focus moved with the row");
 });
 
+test("an open row's detail shows its title and its headline whole, which the row fades out at its edge", () => {
+  const title = "Retry failed webhook deliveries with exponential backoff, capped at five attempts, and record each one";
+  const headline = "Blocked: Needs a staging key for the webhook sandbox before the retry test can run against it";
+  const { view } = mount([issue("i9", { status: "in-progress", needsYou: headline, headline, title })]);
+  const flagged = row(view, "i9");
+  assert.equal(view.queryByRole("region", { name: `i9: ${title}` }), null);
+
+  fireEvent.click(flagged);
+  const detail = view.getByRole("region", { name: `i9: ${title}` });
+  assert.deepEqual(
+    [within(detail).getByText(title).tagName, within(detail).getByText(headline).tagName],
+    ["P", "P"],
+  );
+});
+
 const moved = (id: string, fields: Partial<IssueRow>) => ISSUES.map((each) => (each.id === id ? { ...each, ...fields } : each));
 
 test("a focused row whose issue moves into a folded lane hands focus to that lane's header", () => {
