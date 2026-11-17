@@ -1,9 +1,13 @@
-// A started crew on the board: its id, title, headline and branch, opening its thread, then its pull
-// request and CI as last read, linking to GitHub. A row placed by a verdict has a Verdict button that
-// shows the verdict under it; a row under Verifying links its verifier, which is hidden from the sidebar.
+// An issue on the board: its id, title, kind, its status when it sits under Needs you, its latest
+// agent and headline, and its branch, opening that agent's thread, then its pull request and CI as
+// last read, linking to GitHub. A row placed by a verdict has a Verdict button that shows the verdict
+// under it; a row under Verifying links its verifier, which is hidden from the sidebar.
 import { experimental_Icon as Icon, useBbNavigate } from "@get-bb/plugin-sdk/app";
 import { useId, useState, type Ref } from "react";
-import type { BoardRow } from "../../contract.ts";
+import type { IssueRow as Row } from "../../contract.ts";
+import { laneOf } from "../../model/board/board-groups.ts";
+import { PIPELINES } from "../../model/issue/kind.ts";
+import { STATUS_LABELS } from "../../model/issue/status.ts";
 import type { PrSnapshot } from "../../model/verdict/pr.ts";
 import { Button } from "../ui/button.tsx";
 import { VerdictDetail } from "./verdict-detail.tsx";
@@ -11,16 +15,16 @@ import { VerdictDetail } from "./verdict-detail.tsx";
 // why a grid: the headline lines up under the title, whatever the id's width.
 const ROW = "grid w-full min-w-0 grid-cols-[2.25rem_minmax(0,1fr)] items-baseline gap-x-2 gap-y-0.5 rounded-md px-2 py-1.5 text-left";
 
-export function CrewRow({ ref, row }: { ref: Ref<HTMLButtonElement>; row: BoardRow }) {
+export function IssueRow({ ref, issue }: { ref: Ref<HTMLButtonElement>; issue: Row }) {
   const navigate = useBbNavigate();
   const ids = useId();
   const [open, setOpen] = useState(false);
-  const verdict = row.verdict;
+  const verdict = issue.placing?.verdict ?? null;
   const judged = verdict?.state === "returned" || verdict?.state === "could-not-run";
   return (
     <div className="flex flex-col">
       <div className="flex items-start gap-1">
-        <Summary ref={ref} row={row} />
+        <Summary ref={ref} issue={issue} />
         {judged && (
           <div className="shrink-0 pt-1">
             <Button variant="ghost" size="sm" aria-expanded={open} aria-controls={`${ids}-verdict`} onClick={() => setOpen(!open)}>
@@ -38,28 +42,28 @@ export function CrewRow({ ref, row }: { ref: Ref<HTMLButtonElement>; row: BoardR
           </div>
         )}
       </div>
-      {row.pr !== null && <PrLine pr={row.pr} />}
+      {issue.pr !== null && <PrLine pr={issue.pr} />}
       {judged && open && <VerdictDetail id={`${ids}-verdict`} verdict={verdict} />}
     </div>
   );
 }
 
-function Summary({ ref, row }: { ref: Ref<HTMLButtonElement>; row: BoardRow }) {
+function Summary({ ref, issue }: { ref: Ref<HTMLButtonElement>; issue: Row }) {
   const navigate = useBbNavigate();
   const body = (
     <>
-      <span className="font-mono text-xs text-muted-foreground">{row.issueId}</span>
-      <span className="truncate text-sm">{row.title}</span>
-      <span className="col-start-2 text-xs text-muted-foreground">{row.headline}</span>
-      {row.branch !== null && (
+      <span className="font-mono text-xs text-muted-foreground">{issue.id}</span>
+      <span className="truncate text-sm">{issue.title}</span>
+      <span className="col-start-2 text-xs text-muted-foreground">{factsOf(issue).join(" · ")}</span>
+      {issue.branch !== null && (
         <span className="col-start-2 flex min-w-0 items-center gap-1 font-mono text-xs text-muted-foreground">
           <Icon name="GitBranch" className="size-3 shrink-0" aria-hidden />
-          <span className="truncate">{row.branch}</span>
+          <span className="truncate">{issue.branch}</span>
         </span>
       )}
     </>
   );
-  const threadId = row.threadId;
+  const threadId = issue.agent?.threadId ?? null;
   if (threadId === null) return <div className={ROW}>{body}</div>;
   return (
     <button
@@ -73,7 +77,16 @@ function Summary({ ref, row }: { ref: Ref<HTMLButtonElement>; row: BoardRow }) {
   );
 }
 
-/** The crew's pull request as last read: a link to it, its state, its CI on its head commit, and its review. */
+/**
+ * The line under the title: the issue's kind, its status when its lane doesn't say it (under Needs
+ * you), its latest agent, and its headline.
+ */
+function factsOf(issue: Row): string[] {
+  const status = laneOf(issue) === issue.status ? [] : [STATUS_LABELS[issue.status]];
+  return [PIPELINES[issue.kind].label, ...status, ...(issue.agent === null ? [] : [issue.agent.id]), issue.headline];
+}
+
+/** The issue's pull request as last read: a link to it, its state, its CI on its head commit, and its review. */
 function PrLine({ pr }: { pr: PrSnapshot }) {
   const state = pr.state === "open" && pr.draft ? DRAFT : PR_STATE[pr.state];
   const ci = CI[pr.ci];

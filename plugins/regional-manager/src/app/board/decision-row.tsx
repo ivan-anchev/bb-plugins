@@ -1,4 +1,4 @@
-// A decision the coordinating thread put to the user with crew_ask_user. Open, it sits under Needs
+// A decision the regional manager put to the user with crew_ask_user. Open, it sits under Needs
 // you with its question, a button for each option and a field for an answer in the user's own
 // words, which the browser keeps until it is sent (see answer-draft.ts). Answered, it sits under
 // Done with the answer. Answering moves it there, and the board moves focus with it, to the
@@ -15,7 +15,7 @@ import { useStored } from "../ui/stored.ts";
 import { shortTime } from "../ui/time.ts";
 import { answerDraftKeyOf, answerDraftSchema } from "./answer-draft.ts";
 
-// why: the question and the answer line up past the id, as a crew's title does.
+// why: the question and the answer line up past the id, as an issue's title does.
 const ID_COLUMN = "grid grid-cols-[2.25rem_minmax(0,1fr)] items-baseline gap-x-2 gap-y-0.5";
 /** Lines under the question start where it starts: px-2, the 2.25rem id column and gap-x-2. */
 const UNDER_QUESTION = "pl-[2.75rem]";

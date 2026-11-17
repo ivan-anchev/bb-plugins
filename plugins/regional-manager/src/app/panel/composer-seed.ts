@@ -1,4 +1,4 @@
-// Where a new coordinating thread starts unless the user picks otherwise.
+// Where a new regional manager starts unless the user picks otherwise.
 import type { NewThreadComposerProps, PluginSidebarProject, PluginSidebarThreadsState } from "@get-bb/plugin-sdk/app";
 
 export type ComposerSeed = Pick<NewThreadComposerProps, "defaultProjectId" | "defaultEnvironment">;

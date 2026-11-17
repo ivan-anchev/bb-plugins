@@ -1,7 +1,7 @@
 // The board: every issue of a regional manager, viewed now, with its latest agent's thread, and the
 // digest. Read whole on every call; bb's thread events only say when to read again.
-import type { Board, BoardRow } from "../../contract.ts";
-import { laneOf, needsYou, type NeedsYou } from "../../model/board/board-groups.ts";
+import type { Board, IssueRow } from "../../contract.ts";
+import { needsYou, type NeedsYou } from "../../model/board/board-groups.ts";
 import { warnedFileCount } from "../../model/inbox/own-tree.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
@@ -14,15 +14,16 @@ const DIGEST = memoryFileSchema.parse("DIGEST.md");
 type BoardStore = FactsStore & Pick<Store, "verifies" | "lastOwnTreeEvent">;
 
 /** An issue's row on the board. */
-const rowOf = ({ view, agent, threadId, branch }: IssueRead): BoardRow => ({
-  issueId: view.issue.id,
+const rowOf = ({ view, agent, threadId, branch }: IssueRead): IssueRow => ({
+  id: view.issue.id,
+  kind: view.issue.kind,
   title: view.issue.title,
-  agentId: agent?.id ?? null,
-  threadId,
-  branch,
-  lane: laneOf(view),
+  status: view.status,
+  needsYou: view.needsYou,
   headline: view.headline,
-  verdict: view.placing?.verdict ?? null,
+  agent: agent === null ? null : { id: agent.id, threadId },
+  branch,
+  placing: view.placing === null ? null : { verdict: view.placing.verdict },
   pr: view.pr,
 });
 
@@ -60,13 +61,13 @@ export function createBoard(bb: FactsBb, store: BoardStore, memory: MemoryRoot) 
         prUnavailable: prUnavailable(id, reads),
         digest: text === null || modifiedAt === null ? null : { content: text.content, modifiedAt },
         decisions: store.decisions(id),
-        rows: reads.map(rowOf),
+        issues: reads.map(rowOf),
       };
     },
 
     /** What sits under Needs you on the board, from the same reads as the board's own: its decisions and its issues. */
     async needsYou(id: CoordinatorId): Promise<NeedsYou> {
-      return needsYou(store.decisions(id), (await readIssues(bb, store, id)).map((read) => ({ lane: laneOf(read.view) })));
+      return needsYou(store.decisions(id), (await readIssues(bb, store, id)).map((read) => read.view));
     },
   };
 }

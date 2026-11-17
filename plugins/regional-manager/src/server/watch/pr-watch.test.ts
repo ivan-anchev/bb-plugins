@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent.ts";
 import { coordinating, isRefusal, settled, startedAgent, textOf, threadIn, type FakePr } from "../test-harness.ts";
 
@@ -32,8 +33,9 @@ async function crewOnGitHub(placement: object = { kind: "worktree" }) {
   const branch = kit.thread(crewThreadId).environmentBranchName ?? assert.fail("no branch");
   const board = () => kit.rpc.board({ coordinatorId });
   const row = async () => {
-    const { lane, headline, pr } = (await board()).rows[0] ?? assert.fail("no row");
-    return { lane, headline, pr: pr === null ? null : `#${pr.number} ${pr.state} CI ${pr.ci}` };
+    const issue = (await board()).issues[0] ?? assert.fail("no row");
+    const { headline, pr } = issue;
+    return { lane: laneOf(issue), headline, pr: pr === null ? null : `#${pr.number} ${pr.state} CI ${pr.ci}` };
   };
   const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
   const events = () => kit.store.unannounced(coordinatorId).map(({ event }) => event.kind);
@@ -491,11 +493,11 @@ test("a sandbox agent's environment is read by bb's git plugin only as it hands 
   assert.equal(crewReads(), 0, "nothing reads the sandbox to learn its branch");
   assert.equal(kit.github.runs.length, 3, "the watch still read GitHub every five minutes");
   assert.ok(kit.github.runs.at(-1)?.includes(`b0=${environmentBranchName}`), "by bb's record of the branch it made");
-  assert.equal((await board()).rows[0]?.branch, environmentBranchName);
+  assert.equal((await board()).issues[0]?.branch, environmentBranchName);
 
   await kit.call("agent_handoff", BLOCKED, crewThreadId);
   assert.equal(crewReads(), 1, "one read, as it hands off");
-  assert.equal((await board()).rows[0]?.branch, "add-retries", "the board shows the branch it handed off on");
+  assert.equal((await board()).issues[0]?.branch, "add-retries", "the board shows the branch it handed off on");
   assert.match(textOf(await kit.call("issue_read", { id: "i1" }, threadId)), /add-retries/);
   kit.clock.now += 5 * MINUTE;
   await minute();

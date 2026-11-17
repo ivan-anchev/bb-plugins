@@ -1,4 +1,4 @@
-// The Memory page: one coordinating thread's memory folder, its files, and an editor for the one
+// The Memory page: one regional manager's memory folder, its files, and an editor for the one
 // picked. It keeps each file's edit, so switching files, bb redrawing the panel or a reload loses
 // nothing and a save still settles, and while any draft is open, Esc never leaves the page.
 import { experimental_Icon as Icon, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
@@ -67,7 +67,7 @@ export function MemoryPage({ ref, coordinatorId, onBack }: MemoryPageProps) {
   );
 }
 
-/** Where a tab keeps the file it has open on a coordinating thread's Memory page. */
+/** Where a tab keeps the file it has open on a regional manager's Memory page. */
 const pickedKeyOf = (coordinatorId: CoordinatorId): string => `coordinator-memory-open:${coordinatorId}`;
 
 function FileList({ files, open, drafted, onOpen }: { files: readonly MemoryFile[]; open: MemoryFile; drafted: ReadonlySet<MemoryFile>; onOpen(file: MemoryFile): void }) {

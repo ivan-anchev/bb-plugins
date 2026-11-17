@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { needsYouBadge } from "../../app/needs-you-label.ts";
 import { boardTag, coordinatorContract } from "../../contract.ts";
-import { boardGroups } from "../../model/board/board-groups.ts";
+import { boardGroups, laneOf } from "../../model/board/board-groups.ts";
 import { decisionIdSchema } from "../../model/decision.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import type { CoordinatorId } from "../../model/role.ts";
@@ -39,7 +39,7 @@ test("crew_ask_user returns at once, and the decision waits on the board under N
     board.decisions.map((decision) => ({ id: decision.id, question: decision.question, options: decision.options, given: decision.answer })),
     [{ id: d1, question: QUESTION, options: ["main", "release/2"], given: null }],
   );
-  assert.deepEqual(boardGroups(board.decisions, board.rows).map(({ lane, rows }) => [lane, rows.length]), [["needs-you", 1]]);
+  assert.deepEqual(boardGroups(board.decisions, board.issues).map(({ lane, rows }) => [lane, rows.length]), [["needs-you", 1]]);
   assert.ok(kit.invalidated().includes(boardTag(coordinatorId)), "the board reads it again");
   assert.deepEqual(await kit.rpc.needsYou({ keys: [coordinatorId] }), { [coordinatorId]: { decisions: 1, issues: 0 } });
   assert.deepEqual(doorbells(), [], "asking wakes nobody");
@@ -68,7 +68,7 @@ test("an answer wakes the Coordinator with its own question, and crew_catch_up r
   assert.match(caughtUp, /## Decisions\n\nNone waiting for the user\./);
 
   const board = await boardOf(kit, coordinatorId);
-  assert.deepEqual(boardGroups(board.decisions, board.rows).map(({ lane, rows }) => [lane, rows.length]), [["done", 1]]);
+  assert.deepEqual(boardGroups(board.decisions, board.issues).map(({ lane, rows }) => [lane, rows.length]), [["done", 1]]);
   assert.equal(board.decisions[0]?.answer?.text, "release/2");
   assert.deepEqual(await kit.rpc.needsYou({ keys: [coordinatorId] }), { [coordinatorId]: { decisions: 0, issues: 0 } }, "the badge drops it");
 });
@@ -92,8 +92,8 @@ test("the badge counts what each board shows under Needs you: open decisions, an
   /** The ids under Needs you, as the board draws its lanes. */
   const drawn = async (id: CoordinatorId) => {
     const board = await boardOf(kit, id);
-    const lane = boardGroups(board.decisions, board.rows).find(({ lane }) => lane === "needs-you")?.rows ?? [];
-    return lane.map((item) => (item.kind === "decision" ? item.decision.id : item.row.issueId));
+    const lane = boardGroups(board.decisions, board.issues).find(({ lane }) => lane === "needs-you")?.rows ?? [];
+    return lane.map((item) => (item.kind === "decision" ? item.decision.id : item.issue.id));
   };
   assert.deepEqual(await drawn(coordinatorId), ["d1", "i1", "i2", "i3"]);
   assert.deepEqual(await drawn(other.coordinatorId), []);
@@ -113,12 +113,12 @@ test("a question about an issue flags it Needs you until the user answers, and t
   assert.match(textOf(await kit.call("crew_ask_user", { question: "Start i1 now?", options: ["Yes", "Not yet"], issue: "i1" }, threadId)), /^Asked the user d1/);
 
   const board = await boardOf(kit, coordinatorId);
-  assert.deepEqual(board.rows.map(({ issueId, lane, headline }) => [issueId, lane, headline]), [["i1", "needs-you", "Not planned"]]);
+  assert.deepEqual(board.issues.map((issue) => [issue.id, laneOf(issue), issue.headline]), [["i1", "needs-you", "Not planned"]]);
   assert.deepEqual(board.decisions.map(({ id, issueId }) => [id, issueId]), [["d1", "i1"]]);
   assert.deepEqual(needsYouBadge(Object.values(await kit.rpc.needsYou({ keys: [coordinatorId] }))), { count: 2, tone: "critical", label: "2 need you: 1 decision, 1 issue" });
 
   await kit.rpc.answerDecision({ coordinatorId, decisionId: d1, answer: "Yes" });
-  assert.deepEqual((await boardOf(kit, coordinatorId)).rows.map(({ lane }) => lane), ["backlog"]);
+  assert.deepEqual((await boardOf(kit, coordinatorId)).issues.map(laneOf), ["backlog"]);
   assert.equal(needsYouBadge(Object.values(await kit.rpc.needsYou({ keys: [coordinatorId] }))), null);
 
   const unknown = await kit.call("crew_ask_user", { question: "Start i9?", issue: "i9" }, threadId);

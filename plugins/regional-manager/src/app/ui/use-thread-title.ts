@@ -1,9 +1,9 @@
-// A coordinating thread's title, as bb shows it.
+// A regional manager's title, as bb shows it.
 import { experimental_useRpcQuery, experimental_useSidebarThreads as useSidebarThreads } from "@get-bb/plugin-sdk/app";
 import { coordinatorContract as contract } from "../../contract.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 
-/** The coordinating thread's title, once both reads have it. */
+/** The regional manager's title, once both reads have it. */
 export function useThreadTitle(coordinatorId: CoordinatorId): string | null {
   const coordinators = experimental_useRpcQuery({ contract, method: "coordinators", input: {} });
   const { threads } = useSidebarThreads();

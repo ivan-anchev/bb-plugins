@@ -68,7 +68,7 @@ test("a decision answered elsewhere drops the answer typed here, so the browser 
   assert.equal(localStorage.length, 0);
 });
 
-test("the answer typed is kept by Coordinator and decision, and an emptied field keeps none", () => {
+test("the answer typed is kept by regional manager and decision, and an emptied field keeps none", () => {
   mount(OPEN).type(TYPED);
   cleanup();
   assert.equal(mount({ ...OPEN, id: decisionIdSchema.parse("d1") }).field().value, "", "another decision has none");

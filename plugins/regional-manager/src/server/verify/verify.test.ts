@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { laneOf } from "../../model/board/board-groups.ts";
 import { z } from "zod";
 import { handoffIdSchema } from "../../model/handoff.ts";
 import { agentIdSchema } from "../../model/agent.ts";
@@ -44,7 +45,10 @@ async function withCrew(options: Parameters<typeof coordinating>[0] = {}) {
   const crewThreadId = (await startedAgent(kit, threadId, { title: "Add retries", brief: "Retry failed deliveries with backoff.", doneCriteria: CRITERIA })).agentThreadId;
   kit.thread(threadId).status = "idle";
   const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
-  const row = async () => (await kit.rpc.board({ coordinatorId })).rows[0] ?? assert.fail("no row");
+  const row = async () => {
+    const issue = (await kit.rpc.board({ coordinatorId })).issues[0] ?? assert.fail("no row");
+    return { ...issue, lane: laneOf(issue) };
+  };
   const latest = () => kit.store.latestHandoff(coordinatorId, a1) ?? assert.fail("no handoff");
   /** The check of the agent's latest handoff. */
   const check = () => latest().check ?? assert.fail(`the handoff is ${latest().handoff.status}`);
@@ -401,10 +405,11 @@ test("a verdict that passes every criterion is In review with ✓ and the models
 
   const passed = await row();
   assert.deepEqual([passed.lane, passed.headline], ["in-review", "✓ Verified: Retries land with backoff"]);
-  assert.ok(passed.verdict?.state === "returned");
-  assert.deepEqual([passed.verdict.model, passed.verdict.sameModel], [{ providerId: "codex", model: "gpt-default" }, false]);
+  const verdict = passed.placing?.verdict;
+  assert.ok(verdict?.state === "returned");
+  assert.deepEqual([verdict.model, verdict.sameModel], [{ providerId: "codex", model: "gpt-default" }, false]);
   assert.deepEqual(
-    passed.verdict.criteria.map((check) => [check.criterion, check.result]),
+    verdict.criteria.map((check) => [check.criterion, check.result]),
     CRITERIA.map((criterion) => [criterion, "pass"]),
   );
   assert.match(doorbells()[0] ?? "", /handed off: done, verified$/);
@@ -466,7 +471,7 @@ test("a commit bb reads other than the claimed one fails the verdict with bb's e
   await settled();
   assert.equal(kit.sent().filter((args) => args.threadId === crewThreadId).length, 1, "only the first verdict went back");
   assert.deepEqual([(await row()).lane, (await row()).headline], ["needs-you", "✗ Failed verification after its fix round: Retries land with backoff"]);
-  const shown = (await row()).verdict;
+  const shown = (await row()).placing?.verdict;
   assert.ok(shown?.state === "returned");
   assert.deepEqual(shown.checkout, { headSha: "f".repeat(40), changedFiles: [], changedFileCount: 0 }, "the board has bb's read to show");
 });
@@ -716,9 +721,9 @@ test("with no other provider the verifier runs on another model of the crew's, t
   await alone.handOff();
   assert.deepEqual([alone.kit.thread(alone.verifier()).providerId, alone.kit.thread(alone.verifier()).execution?.model], ["claude-code", "opus"]);
   await alone.kit.call("issue_verdict", PASSES, alone.verifier());
-  const row = await alone.row();
-  assert.ok(row.verdict?.state === "returned");
-  assert.equal(row.verdict.sameModel, true);
+  const verdict = (await alone.row()).placing?.verdict;
+  assert.ok(verdict?.state === "returned");
+  assert.equal(verdict.sameModel, true);
 });
 
 test("no registered tool can change whether a regional manager verifies, whoever calls it with whatever input", async () => {

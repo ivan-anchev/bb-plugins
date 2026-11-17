@@ -1,8 +1,8 @@
-// The panel's list: each coordinating thread bb still lists, under its project.
+// The panel's list: each regional manager bb still lists, under its project.
 import type { PluginSidebarThreadsState } from "@get-bb/plugin-sdk/app";
 import type { Coordinator } from "../../contract.ts";
 
-/** A row: the coordinating thread as bb lists it, and the plugin's record of it. */
+/** A row: the regional manager as bb lists it, and the plugin's record of it. */
 type CoordinatorGroup<Project, Thread> = { project: Project; rows: { coordinator: Coordinator; thread: Thread }[] };
 
 /** What the list shows below its read errors. */

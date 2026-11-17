@@ -1,4 +1,4 @@
-// The nav panel: the list at its root, the New page at `new`, and a coordinating thread's board at
+// The nav panel: the list at its root, the New page at `new`, and a regional manager's board at
 // `board/<id>` and its memory at `memory/<id>`. Its title bar holds New.
 import { experimental_Icon as Icon, useBbNavigate, type PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { useCallback } from "react";

@@ -1,4 +1,4 @@
-// The rail badge: what sits under Needs you on the board of every coordinating thread the panel
+// The rail badge: what sits under Needs you on the board of every regional manager the panel
 // lists. Each board's count reads again whenever that board does, so an answer drops it at once.
 import {
   experimental_useRpcKeyedQuery,

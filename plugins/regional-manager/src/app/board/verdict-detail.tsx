@@ -1,10 +1,10 @@
-// A verdict under its row: how many criteria passed, the commit and the model that checked them,
+// A verdict under its row: how many criteria passed, the commit the verifier checked them at,
 // a checkout that wasn't that commit on a clean tree, what CI said about that commit, then each
 // criterion with its evidence. A failed or unverifiable criterion shows its evidence; a
 // passed one keeps it folded, so what needs the user is what they see first.
-import { experimental_Icon as Icon, experimental_ProviderIcon as ProviderIcon, experimental_useProviders as useProviders, useBbNavigate } from "@get-bb/plugin-sdk/app";
+import { experimental_Icon as Icon, useBbNavigate } from "@get-bb/plugin-sdk/app";
 import { checkoutText } from "../../model/verdict/checkout.ts";
-import { allPassed, ciVerdictOf, failedCheckout, outcome, type CriterionResult, type ModelRef, type Verdict } from "../../model/verdict/verdict.ts";
+import { allPassed, ciVerdictOf, failedCheckout, outcome, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
 
 type Judged = Extract<Verdict, { state: "returned" | "could-not-run" }>;
 
@@ -20,7 +20,7 @@ export function VerdictDetail({ id, verdict }: { id: string; verdict: Judged }) 
 function Returned({ verdict }: { verdict: Extract<Verdict, { state: "returned" }> }) {
   const passed = verdict.criteria.filter((check) => check.result === "pass").length;
   const result = outcome(verdict);
-  // why: one on its way back to the crew failed its criteria, though nobody has been told yet.
+  // why: one on its way back to the agent failed its criteria, though nobody has been told yet.
   const look = result === "pending" && !allPassed(verdict) ? FAILED : HEADLINE[result];
   return (
     <>
@@ -31,7 +31,7 @@ function Returned({ verdict }: { verdict: Extract<Verdict, { state: "returned" }
         </p>
         <VerifierLink threadId={verdict.verifierThreadId} />
       </div>
-      <CheckedBy model={verdict.model} sameModel={verdict.sameModel} headSha={verdict.headSha} />
+      <CheckedBy sameModel={verdict.sameModel} headSha={verdict.headSha} />
       <CheckoutLine verdict={verdict} />
       <CiLine verdict={verdict} />
       <ol className="flex flex-col gap-1">
@@ -109,21 +109,14 @@ function CiLine({ verdict }: { verdict: Extract<Verdict, { state: "returned" }> 
   }
 }
 
-/** The commit the verifier checked, and what bb ran it on. */
-function CheckedBy({ model, sameModel, headSha }: { model: ModelRef; sameModel: boolean; headSha: string }) {
-  const { providers } = useProviders();
-  const provider = providers.find((candidate) => candidate.id === model.providerId);
+/** The commit the verifier checked, and whether the check wasn't independent. why no model: the board names none (the user's rule). */
+function CheckedBy({ sameModel, headSha }: { sameModel: boolean; headSha: string }) {
   return (
     <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
       <span>
-        Checked <span className="font-mono">{headSha.slice(0, 7)}</span> on
+        Checked <span className="font-mono">{headSha.slice(0, 7)}</span>
       </span>
-      <span className="inline-flex items-center gap-1 text-foreground">
-        <ProviderIcon providerKind="agent" provider={provider ?? { id: model.providerId }} className="size-3.5" />
-        {provider?.displayName ?? model.providerId}
-        <span className="font-mono">{model.model}</span>
-      </span>
-      {sameModel && <span className="text-warning-text">· the crew's own model: no other was available</span>}
+      {sameModel && <span className="text-warning-text">· the agent's own model: no other was available</span>}
     </p>
   );
 }

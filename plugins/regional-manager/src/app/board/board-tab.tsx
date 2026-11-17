@@ -1,4 +1,4 @@
-// The Board tab, fixed in every coordinating thread's side panel and in no other thread's.
+// The Board tab, fixed in every regional manager's side panel and in no other thread's.
 import { experimental_useRpcQuery, type ExperimentalThreadTabProps } from "@get-bb/plugin-sdk/app";
 import { coordinatorContract as contract } from "../../contract.ts";
 import { ReadFailure } from "../ui/read-failure.tsx";
@@ -15,7 +15,7 @@ export const boardTab = {
   useVisible: ({ threadId }: ExperimentalThreadTabProps) => useCoordinatorOf(threadId).coordinatorId !== null,
 } as const;
 
-/** The coordinating thread this thread is, from the same read as the panel's list. */
+/** The regional manager this thread is, from the same read as the panel's list. */
 function useCoordinatorOf(threadId: string) {
   const read = experimental_useRpcQuery({ contract, method: "coordinators", input: {} });
   return { read, coordinatorId: read.data?.coordinators.find((coordinator) => coordinator.threadId === threadId)?.id ?? null };

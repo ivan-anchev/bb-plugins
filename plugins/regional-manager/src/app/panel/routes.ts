@@ -5,7 +5,7 @@ export const PANEL_ID = "regional-managers";
 export const PANEL_PATH = "regional-managers";
 /** The subPath of the New page. */
 export const NEW_SUBPATH = "new";
-/** One coordinating thread's pages are at `<page>/<coordinator id>`: its board and its memory. */
+/** One regional manager's pages are at `<page>/<coordinator id>`: its board and its memory. */
 const COORDINATOR_PAGES = ["board", "memory"] as const;
 type CoordinatorPage = (typeof COORDINATOR_PAGES)[number];
 
@@ -21,5 +21,5 @@ export function pageOf(subPath: string): PanelPage {
   return { kind: "list" };
 }
 
-/** The subPath of a coordinating thread's board or memory. */
+/** The subPath of a regional manager's board or memory. */
 export const coordinatorSubPath = (page: CoordinatorPage, id: CoordinatorId): string => `${page}/${id}`;

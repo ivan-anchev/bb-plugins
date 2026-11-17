@@ -1,4 +1,4 @@
-// The panel's root page: every coordinating thread, under its project, newest first. A row opens
+// The panel's root page: every regional manager, under its project, newest first. A row opens
 // its thread; its buttons open its board and its memory.
 import {
   experimental_Icon as Icon,

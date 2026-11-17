@@ -12,8 +12,11 @@ export type Lane = z.infer<typeof laneSchema>;
 /** Each lane's name, as the board and crew_catch_up show it. */
 export const LANE_LABELS: Record<Lane, string> = { "needs-you": "Needs you", ...STATUS_LABELS };
 
+/** What places an issue in a lane: its status, and why it waits on the user (null: it doesn't). */
+type Placed = { status: IssueStatus; needsYou: string | null };
+
 /** An issue's lane: Needs you while it waits on the user, else its status. */
-export const laneOf = ({ status, needsYou }: { status: IssueStatus; needsYou: string | null }): Lane => (needsYou === null ? status : "needs-you");
+export const laneOf = ({ status, needsYou }: Placed): Lane => (needsYou === null ? status : "needs-you");
 
 /** The rows in each lane that has any, in the board's order; rows keep their order. */
 export function byLane<Row extends { lane: Lane }>(rows: readonly Row[]): { lane: Lane; rows: Row[] }[] {
@@ -24,16 +27,19 @@ export function byLane<Row extends { lane: Lane }>(rows: readonly Row[]): { lane
 }
 
 /** A row on the board: a decision put to the user, or an issue. */
-export type BoardItem<Row> = { kind: "decision"; lane: Lane; decision: Decision } | { kind: "issue"; lane: Lane; row: Row };
+export type BoardItem<Issue> = { kind: "decision"; lane: Lane; decision: Decision } | { kind: "issue"; lane: Lane; issue: Issue };
 
 /** Where a decision sits: under Needs you until the user answers it, then Done. */
 const decisionLane = (decision: Decision): Lane => (decision.answer === null ? "needs-you" : "done");
 
-/** The board's rows in each lane that has any, in the board's order; each lane's decisions come first. */
-export function boardGroups<Row extends { lane: Lane }>(decisions: readonly Decision[], rows: readonly Row[]): { lane: Lane; rows: BoardItem<Row>[] }[] {
-  return byLane<BoardItem<Row>>([
+/**
+ * The board's rows in each lane that has any, in the board's order; each lane's decisions come
+ * first. A flagged issue sits under Needs you only, never also in its status's lane.
+ */
+export function boardGroups<Issue extends Placed>(decisions: readonly Decision[], issues: readonly Issue[]): { lane: Lane; rows: BoardItem<Issue>[] }[] {
+  return byLane<BoardItem<Issue>>([
     ...decisions.map((decision) => ({ kind: "decision", lane: decisionLane(decision), decision }) as const),
-    ...rows.map((row) => ({ kind: "issue", lane: row.lane, row }) as const),
+    ...issues.map((issue) => ({ kind: "issue", lane: laneOf(issue), issue }) as const),
   ]);
 }
 
@@ -41,7 +47,7 @@ export function boardGroups<Row extends { lane: Lane }>(decisions: readonly Deci
 export const needsYouSchema = z.object({ decisions: z.number().int().nonnegative(), issues: z.number().int().nonnegative() });
 export type NeedsYou = z.infer<typeof needsYouSchema>;
 
-export function needsYou(decisions: readonly Decision[], rows: readonly { lane: Lane }[]): NeedsYou {
-  const waiting = boardGroups(decisions, rows).find(({ lane }) => lane === "needs-you")?.rows ?? [];
+export function needsYou(decisions: readonly Decision[], issues: readonly Placed[]): NeedsYou {
+  const waiting = boardGroups(decisions, issues).find(({ lane }) => lane === "needs-you")?.rows ?? [];
   return { decisions: waiting.filter((item) => item.kind === "decision").length, issues: waiting.filter((item) => item.kind === "issue").length };
 }

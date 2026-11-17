@@ -1,11 +1,11 @@
-// The board of one coordinating thread: its verification switch, a warning while its own working
+// The board of one regional manager: its verification switch, a warning while its own working
 // tree has changed files, why PR status is unavailable when it is, and its digest, then its
-// decisions and crews grouped Needs you, Ready for review, Verifying, Working, Landing, Idle and
-// Done, each group's decisions first. The Board tab in the thread and the Board page in the panel
-// both draw it, from one read; each gives it the scrolling root it sits in.
+// decisions and issues in lanes: Needs you, then one per status (In review, Verifying, In progress,
+// Todo, Backlog, Done, Canceled), each lane's decisions first. The Board tab in the thread and the
+// Board page in the panel both draw it, from one read; each gives it the scrolling root it sits in.
 import { experimental_Icon as Icon, experimental_useRpcMutation, experimental_useRpcQuery, Markdown } from "@get-bb/plugin-sdk/app";
 import { useId, useState } from "react";
-import { coordinatorContract as contract, type Board as BoardData, type BoardRow } from "../../contract.ts";
+import { coordinatorContract as contract, type Board as BoardData, type IssueRow as Row } from "../../contract.ts";
 import { boardGroups, LANE_LABELS, type BoardItem, type Lane } from "../../model/board/board-groups.ts";
 import { filesText } from "../../model/inbox/own-tree.ts";
 import type { Decision } from "../../model/decision.ts";
@@ -14,8 +14,8 @@ import { useFocusKeptByKey } from "../ui/focus-hand-off.ts";
 import { ReadFailure } from "../ui/read-failure.tsx";
 import { Switch } from "../ui/switch.tsx";
 import { shortTime } from "../ui/time.ts";
-import { CrewRow } from "./crew-row.tsx";
 import { DecisionRow } from "./decision-row.tsx";
+import { IssueRow } from "./issue-row.tsx";
 
 export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
   const read = experimental_useRpcQuery({ contract, method: "board", input: { coordinatorId } });
@@ -32,7 +32,7 @@ export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
           {read.data.ownEdits !== null && <OwnEdits {...read.data.ownEdits} />}
           {read.data.prUnavailable !== null && <PrUnavailable reason={read.data.prUnavailable} />}
           <Digest ids={ids} digest={read.data.digest} />
-          <Groups ids={ids} coordinatorId={coordinatorId} decisions={read.data.decisions} rows={read.data.rows} />
+          <Groups ids={ids} coordinatorId={coordinatorId} decisions={read.data.decisions} issues={read.data.issues} />
         </>
       )}
     </div>
@@ -78,7 +78,7 @@ function VerifySwitch({ coordinatorId, verify }: { coordinatorId: CoordinatorId;
 }
 
 /**
- * Files changed in the coordinating thread's own working tree when a turn of its ended. Its rules
+ * Files changed in the regional manager's own working tree when a turn of its ended. Its rules
  * say it never edits project files, and bb can't stop it, so the plugin tells it and the user. It
  * goes once a turn of its ends with the tree clean.
  */
@@ -90,14 +90,14 @@ function OwnEdits({ fileCount, at }: NonNullable<BoardData["ownEdits"]>) {
         <span className="font-medium text-foreground">
           {filesText(fileCount)} changed in the regional manager's own environment
         </span>{" "}
-        when its turn ended at <time dateTime={new Date(at).toISOString()}>{shortTime(at)}</time>. Its rules forbid editing project files, so it was told to hand the change to a crew.
+        when its turn ended at <time dateTime={new Date(at).toISOString()}>{shortTime(at)}</time>. Its rules forbid editing project files, so it was told to hand the change to an agent.
       </span>
     </p>
   );
 }
 
 /**
- * Why the plugin can't read its crews' pull requests now. Rows keep the PR and CI it read last, and a
+ * Why the plugin can't read its issues' pull requests now. Rows keep the PR and CI it read last, and a
  * pass it couldn't check CI for says so.
  */
 function PrUnavailable({ reason }: { reason: string }) {
@@ -136,13 +136,13 @@ function titled(content: string): { title: string; body: string } {
   return match === null ? { title: "Digest", body: content } : { title: match[1]?.trim() ?? "Digest", body: match[2] ?? "" };
 }
 
-type GroupsProps = { ids: string; coordinatorId: CoordinatorId; decisions: readonly Decision[]; rows: readonly BoardRow[] };
+type GroupsProps = { ids: string; coordinatorId: CoordinatorId; decisions: readonly Decision[]; issues: readonly Row[] };
 
-function Groups({ ids, coordinatorId, decisions, rows }: GroupsProps) {
+function Groups({ ids, coordinatorId, decisions, issues }: GroupsProps) {
   const keepFocus = useFocusKeptByKey();
   return (
     <>
-      {boardGroups(decisions, rows).map(({ lane, rows: inLane }) => (
+      {boardGroups(decisions, issues).map(({ lane, rows: inLane }) => (
         <section key={lane} aria-labelledby={`${ids}-${lane}`} className="flex flex-col gap-1">
           <h2 id={`${ids}-${lane}`} className="flex items-center gap-2 px-2 text-xs font-medium text-muted-foreground">
             <span aria-hidden className={`size-1.5 rounded-full ${DOT[lane]}`} />
@@ -151,25 +151,25 @@ function Groups({ ids, coordinatorId, decisions, rows }: GroupsProps) {
           </h2>
           <ul className="flex flex-col">
             {inLane.map((item) => (
-              <li key={item.kind === "decision" ? item.decision.id : item.row.issueId}>
+              <li key={item.kind === "decision" ? item.decision.id : item.issue.id}>
                 <ItemRow item={item} coordinatorId={coordinatorId} keepFocus={keepFocus} />
               </li>
             ))}
           </ul>
         </section>
       ))}
-      {rows.length === 0 && <p className="px-2 text-sm text-muted-foreground">No crews yet. The regional manager starts one for each piece of work it delegates.</p>}
+      {issues.length === 0 && <p className="px-2 text-sm text-muted-foreground">No issues yet. The regional manager files one for each piece of work and starts an agent on it.</p>}
     </>
   );
 }
 
 /** One row, keeping focus as it moves between lanes: decision and issue ids never collide (`d1`, `i1`). */
-function ItemRow({ item, coordinatorId, keepFocus }: { item: BoardItem<BoardRow>; coordinatorId: CoordinatorId; keepFocus: ReturnType<typeof useFocusKeptByKey> }) {
+function ItemRow({ item, coordinatorId, keepFocus }: { item: BoardItem<Row>; coordinatorId: CoordinatorId; keepFocus: ReturnType<typeof useFocusKeptByKey> }) {
   switch (item.kind) {
     case "decision":
       return <DecisionRow ref={keepFocus(item.decision.id)} coordinatorId={coordinatorId} decision={item.decision} />;
     case "issue":
-      return <CrewRow ref={keepFocus(item.row.issueId)} row={item.row} />;
+      return <IssueRow ref={keepFocus(item.issue.id)} issue={item.issue} />;
     default:
       return item satisfies never;
   }

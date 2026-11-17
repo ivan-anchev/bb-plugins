@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent.ts";
 import { coordinating, isRefusal, ISSUE, settled, startedAgent, textOf } from "../test-harness.ts";
 
@@ -112,7 +113,7 @@ test("with verification off, once its turn ends a done handoff is In review as U
     await kit.idle(crewThreadId, "Handed off.");
   }
 
-  assert.deepEqual((await kit.rpc.board({ coordinatorId })).rows.map((row) => [row.issueId, row.lane, row.headline]), [
+  assert.deepEqual((await kit.rpc.board({ coordinatorId })).issues.map((issue) => [issue.id, laneOf(issue), issue.headline]), [
     ["i1", "in-review", "Unverified: Retries land with backoff"],
     ["i2", "needs-you", "Blocked: Needs a staging key"],
     ["i3", "needs-you", "Gave up: The queue API rejects batches"],

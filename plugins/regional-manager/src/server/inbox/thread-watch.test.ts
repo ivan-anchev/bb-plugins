@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { laneOf } from "../../model/board/board-groups.ts";
 import type { PluginThreadEventPayloads } from "@get-bb/plugin-sdk";
 import { coordinating, settled, startedAgent, textOf } from "../test-harness.ts";
 
@@ -19,7 +20,10 @@ async function withCrew() {
   const crewThreadId = (await startedAgent(kit, threadId, { title: "Add retries", brief: "Retry deliveries." })).agentThreadId;
   kit.thread(threadId).status = "idle";
   const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
-  const row = async () => (await kit.rpc.board({ coordinatorId })).rows[0];
+  const row = async () => {
+    const issue = (await kit.rpc.board({ coordinatorId })).issues[0];
+    return issue === undefined ? undefined : { ...issue, lane: laneOf(issue) };
+  };
   return { kit, threadId, coordinatorId, crewThreadId, doorbells, row };
 }
 
@@ -110,7 +114,7 @@ test("an archived agent thread ends its agent: its issue returns to Todo, and it
   await settled();
 
   assert.equal(kit.store.agents(coordinatorId)[0]?.ended?.how, "archived");
-  assert.deepEqual([(await row())?.lane, (await row())?.headline, (await row())?.threadId], ["todo", "Not started", null]);
+  assert.deepEqual([(await row())?.lane, (await row())?.headline, (await row())?.agent?.threadId], ["todo", "Not started", null]);
   assert.deepEqual(doorbells().map((text) => text.split("\n")[1]), [`- i1 "Add retries" (a1) returned to Todo: its agent was archived`]);
 });
 

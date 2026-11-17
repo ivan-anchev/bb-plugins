@@ -1,4 +1,4 @@
-// The Board page in the panel: one coordinating thread's board, with the way back to the list and
+// The Board page in the panel: one regional manager's board, with the way back to the list and
 // to its memory.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { Ref } from "react";

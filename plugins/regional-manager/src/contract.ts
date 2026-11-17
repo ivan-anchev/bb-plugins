@@ -4,17 +4,19 @@ import { defineRpcContract } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
 import { agentIdSchema } from "./model/agent.ts";
-import { laneSchema, needsYouSchema } from "./model/board/board-groups.ts";
+import { needsYouSchema } from "./model/board/board-groups.ts";
 import { answerSchema, decisionIdSchema, decisionSchema } from "./model/decision.ts";
 import { issueIdSchema } from "./model/issue/issue.ts";
+import { kindSchema } from "./model/issue/kind.ts";
+import { issueStatusSchema } from "./model/issue/status.ts";
 import { memoryContentSchema, memoryFileSchema, memorySnapshotSchema, memoryVersionSchema, writeOutcomeSchema } from "./model/memory-file.ts";
 import { prSnapshotSchema } from "./model/verdict/pr.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "./model/role.ts";
 import { verdictSchema } from "./model/verdict/verdict.ts";
 
 /**
- * A coordinating thread: its memory is keyed by `id`, its conversation is `threadId`. `verify`:
- * whether its crews' done handoffs get a verifier from now on.
+ * A regional manager: its memory is keyed by `id`, its conversation is `threadId`. `verify`:
+ * whether its agents' done handoffs get a verifier from now on.
  */
 export const coordinatorSchema = z.object({
   id: coordinatorIdSchema,
@@ -28,38 +30,41 @@ export type Coordinator = z.infer<typeof coordinatorSchema>;
 /** Every read of the list carries it; a start or a bind invalidates it. */
 export const COORDINATORS_TAG = "coordinators";
 
-/** Every read of one coordinating thread's memory carries it; any write to its files invalidates it. */
+/** Every read of one regional manager's memory carries it; any write to its files invalidates it. */
 export const memoryTag = (id: CoordinatorId): string => `memory:${id}`;
 const memoryTags = ({ coordinatorId }: { coordinatorId: CoordinatorId }) => [memoryTag(coordinatorId)];
 
-/** Every read of one coordinating thread's board carries it; a crew started or closed, or a crew thread's status change, invalidates it. */
+/** Every read of one regional manager's board carries it; an issue filed or changed, an agent started or ended, or an agent's thread changing status, invalidates it. */
 export const boardTag = (id: CoordinatorId): string => `board:${id}`;
 
 /**
- * One issue on the board: its latest agent (null: none started) and that agent's thread while bb
- * runs it (null: none, archived or deleted), its branch (null: none on record), its lane and why,
- * the verdict of the check that places it (null: none does), and its pull request as last read
- * (null: none seen).
+ * One issue on the board, as its view reads now: its kind, its status, why it waits on the user
+ * (null: it doesn't; the board then shows it under Needs you, its status on the row), its latest
+ * agent (null: none started) with that agent's thread while bb runs it (null: archived or deleted),
+ * its branch (null: none on record; an earlier agent's when the latest has none), the check that
+ * places it, as the row shows it (null: none does), and its pull request as last read (null: none
+ * seen).
  */
-const boardRowSchema = z.object({
-  issueId: issueIdSchema,
+const issueRowSchema = z.object({
+  id: issueIdSchema,
+  kind: kindSchema,
   title: z.string(),
-  agentId: agentIdSchema.nullable(),
-  threadId: z.string().nullable(),
-  branch: z.string().nullable(),
-  lane: laneSchema,
+  status: issueStatusSchema,
+  needsYou: z.string().nullable(),
   headline: z.string(),
-  verdict: verdictSchema.nullable(),
+  agent: z.object({ id: agentIdSchema, threadId: z.string().nullable() }).nullable(),
+  branch: z.string().nullable(),
+  placing: z.object({ verdict: verdictSchema }).nullable(),
   pr: prSnapshotSchema.nullable(),
 });
-export type BoardRow = z.infer<typeof boardRowSchema>;
+export type IssueRow = z.infer<typeof issueRowSchema>;
 
 /**
  * The board: whether done handoffs are verified, how many files had changed in the coordinating
  * thread's own working tree when the turn that warned of them ended, and when (null: none, or it
- * was clean again since), why the latest read of a crew's pull request failed (null: none did),
+ * was clean again since), why the latest read of an issue's pull request failed (null: none did),
  * DIGEST.md and when it last changed (null: there is none), every decision put to the user in the
- * order asked, then every crew in the order started.
+ * order asked, then every issue in the order filed.
  */
 const boardSchema = z.object({
   verify: z.boolean(),
@@ -67,7 +72,7 @@ const boardSchema = z.object({
   prUnavailable: z.string().nullable(),
   digest: z.object({ content: z.string(), modifiedAt: z.number() }).nullable(),
   decisions: z.array(decisionSchema),
-  rows: z.array(boardRowSchema),
+  issues: z.array(issueRowSchema),
 });
 export type Board = z.infer<typeof boardSchema>;
 
@@ -88,7 +93,7 @@ export const typedText = (request: NewThreadRequest): string =>
   request.input.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n\n");
 
 export const coordinatorContract = defineRpcContract({
-  /** Every coordinating thread whose thread exists, newest first. */
+  /** Every regional manager whose thread exists, newest first. */
   coordinators: {
     input: z.object({}),
     output: z.object({ coordinators: z.array(coordinatorSchema) }),
@@ -99,32 +104,32 @@ export const coordinatorContract = defineRpcContract({
     input: z.object({}),
     output: z.object({ hostId: z.string().nullable() }),
   },
-  /** Starts a coordinating thread from bb's new-thread composer; the request's text is its goal. `verify`: verify its crews' done handoffs. */
+  /** Starts a regional manager from bb's new-thread composer; the request's text is its goal. `verify`: verify its agents' done handoffs. */
   startCoordinator: {
     input: z.object({ request: newThreadRequestSchema, verify: z.boolean() }),
     output: z.object({ threadId: z.string() }),
   },
-  /** A coordinating thread's board. why the memory tag too: the board shows DIGEST.md. */
+  /** A regional manager's board. why the memory tag too: the board shows DIGEST.md. */
   board: {
     input: z.object({ coordinatorId: coordinatorIdSchema }),
     output: boardSchema,
     tags: ({ coordinatorId }) => [boardTag(coordinatorId), memoryTag(coordinatorId)],
   },
   /**
-   * Turns verification of the coordinating thread's done handoffs on or off. It applies to handoffs
+   * Turns verification of the regional manager's done handoffs on or off. It applies to handoffs
    * made after it; a handoff keeps the verdict it was made with. The only way to change it: no tool can.
    */
   setVerify: {
     input: z.object({ coordinatorId: coordinatorIdSchema, verify: z.boolean() }),
     output: z.object({}),
   },
-  /** Stores the user's answer to a decision and wakes its coordinating thread. A decision is answered once: a second answer is refused. */
+  /** Stores the user's answer to a decision and wakes its regional manager. A decision is answered once: a second answer is refused. */
   answerDecision: {
     input: z.object({ coordinatorId: coordinatorIdSchema, decisionId: decisionIdSchema, answer: answerSchema }),
     output: z.object({}),
   },
   /**
-   * What sits under Needs you on each of these coordinating threads' boards, counted from what its
+   * What sits under Needs you on each of these regional managers' boards, counted from what its
    * board reads. Each one reads again when its board does.
    */
   needsYou: {
@@ -132,7 +137,7 @@ export const coordinatorContract = defineRpcContract({
     output: z.record(z.string(), needsYouSchema),
     keyTags: (key) => [boardTag(coordinatorIdSchema.parse(key))],
   },
-  /** A coordinating thread's memory folder on the bb server, and the files in it. */
+  /** A regional manager's memory folder on the bb server, and the files in it. */
   memoryList: {
     input: z.object({ coordinatorId: coordinatorIdSchema }),
     output: z.object({ dir: z.string(), files: z.array(memoryFileSchema) }),

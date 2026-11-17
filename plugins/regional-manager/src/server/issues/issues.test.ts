@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { laneOf } from "../../model/board/board-groups.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { coordinating, HEAD, isRefusal, ISSUE, newThreadRequest, settled, textOf, threadIn } from "../test-harness.ts";
 
@@ -13,7 +14,7 @@ async function managing(options: Parameters<typeof coordinating>[0] = {}) {
     const result = await call("issue_update", { id: "i1", ...input });
     return { refused: isRefusal(result), text: textOf(result) };
   };
-  const statuses = async () => (await kit.rpc.board({ coordinatorId })).rows.map((row) => [row.issueId, row.lane]);
+  const statuses = async () => (await kit.rpc.board({ coordinatorId })).issues.map((issue) => [issue.id, laneOf(issue)]);
   return { kit, threadId, coordinatorId, call, update, statuses };
 }
 

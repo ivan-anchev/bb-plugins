@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { coordinating, HEAD, isRefusal, ISSUE, newThreadRequest, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
@@ -13,7 +14,7 @@ async function filed(options: Parameters<typeof coordinating>[0] = {}) {
   await kit.call("issue_create", RETRIES, threadId);
   kit.thread(threadId).status = "idle";
   const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
-  const rows = async () => (await kit.rpc.board({ coordinatorId })).rows.map((row) => [row.issueId, row.lane, row.headline]);
+  const rows = async () => (await kit.rpc.board({ coordinatorId })).issues.map((issue) => [issue.id, laneOf(issue), issue.headline]);
   const start = async (input: object = {}) => kit.call("agent_start", { issue: "i1", ...input }, threadId);
   return { kit, threadId, coordinatorId, doorbells, rows, start };
 }
@@ -215,8 +216,8 @@ test("the board puts a running agent's issue In progress, one waiting on an appr
   kit.thread(ids[1] ?? "").hasPendingInteraction = true;
   assert.equal(textOf(await kit.call("agent_stop", { agent: "a3" }, threadId)), "a3 is stopped; it no longer holds i3. crew_catch_up shows where i3 stands now.");
 
-  const { rows } = await kit.rpc.board({ coordinatorId });
-  assert.deepEqual(rows.map((row) => [row.issueId, row.lane, row.agentId, row.threadId, row.branch]), [
+  const { issues } = await kit.rpc.board({ coordinatorId });
+  assert.deepEqual(issues.map((issue) => [issue.id, laneOf(issue), issue.agent?.id, issue.agent?.threadId, issue.branch]), [
     ["i1", "in-progress", "a1", ids[0], `bb/${ids[0]}`],
     ["i2", "needs-you", "a2", ids[1], `bb/${ids[1]}`],
     ["i3", "todo", "a3", ids[2], `bb/${ids[2]}`],

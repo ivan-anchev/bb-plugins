@@ -1,5 +1,5 @@
 // The New page: bb's own new-thread composer, seeded with a fresh worktree and auto permissions,
-// and the switch for verifying its crews' done handoffs. The composer owns the user's choices; the
+// and the switch for verifying its agents' done handoffs. The composer owns the user's choices; the
 // server forwards them, its provider and model marked as chosen, and adds the role.
 import {
   experimental_Icon as Icon,
@@ -51,7 +51,7 @@ export function NewCoordinator({ ref, onBack }: { ref: Ref<HTMLDivElement>; onBa
           <NewThreadComposer
             defaultProjectId={seed.defaultProjectId}
             defaultEnvironment={seed.defaultEnvironment}
-            // why auto: a permission prompt on the coordinating thread would hold everything behind it.
+            // why auto: a permission prompt on the regional manager would hold everything behind it.
             defaultPermissionMode="auto"
             placeholder="What should this regional manager get done?"
             draftKey="new-coordinator"
@@ -67,7 +67,7 @@ export function NewCoordinator({ ref, onBack }: { ref: Ref<HTMLDivElement>; onBa
             label="Verify done handoffs"
             hint={
               verify
-                ? `When a crew says it's done, a hidden verifier, on another model when there is one, checks each done-criterion before the regional manager hears of it. You can change this on the board.`
+                ? `When an agent says it's done, a hidden verifier, on another model when there is one, checks each done-criterion before the regional manager hears of it. You can change this on the board.`
                 : `Done handoffs reach the regional manager unverified. You can change this on the board.`
             }
           />
