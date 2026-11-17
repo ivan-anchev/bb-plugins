@@ -331,6 +331,25 @@ for (const how of ["deleted", "archived", "deleted unseen"] as const) {
   });
 }
 
+test("a research agent the tick ends in its issue's turn, after the tick's own pass read nothing to announce, unblocks its dependent from that turn", async () => {
+  const { kit, text, unblocked, research } = await managing();
+  const { agentThreadId } = await research();
+  await text("issue_create", { ...ISSUE, title: "Card vault schema", dependsOn: ["i1"] });
+  await settled();
+  await kit.call("agent_handoff", RESEARCH_DONE, agentThreadId);
+  // why archived unseen, its turn read held: only the tick's reconcile ends a1, in i1's turn, which the tick doesn't wait for.
+  kit.thread(agentThreadId).archivedAt = Date.now();
+  let release = (): void => assert.fail("never held");
+  kit.turnEvents.pending = new Promise<void>((resolve) => (release = resolve));
+  await kit.tick();
+  assert.deepEqual(await unblocked(), [], "the tick's pass ran while a1 still held i1");
+
+  kit.turnEvents.pending = null;
+  release();
+  await settled();
+  assert.deepEqual(await unblocked(), ["i2 by i1 done"]);
+});
+
 test("a research agent ended after its turn ended on its report announces nothing more", async () => {
   const { kit, text, unblocked, research } = await managing();
   const { agentThreadId, report } = await research();
