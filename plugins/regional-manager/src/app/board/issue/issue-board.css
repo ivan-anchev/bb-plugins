@@ -138,7 +138,8 @@
   font-size: 11px;
   color: var(--subtle-foreground);
 }
-/* Under the title (Activity's second line, pulled up under it): the headline, quiet. */
+/* Under the title (Activity's second line, pulled up under it): the headline, in Activity's readable
+   second-line colour. Ids, kinds, counts and times stay subtle, as in Activity and the theme. */
 .rmi-headline {
   display: flex;
   align-items: center;
@@ -149,7 +150,7 @@
   padding-right: 8px;
   font-size: 11px;
   line-height: 14px;
-  color: var(--subtle-foreground);
+  color: var(--muted-foreground);
 }
 .rmi-pr-cell {
   grid-column: 2;
@@ -363,7 +364,7 @@ button.rmi-thread-link {
   font-size: 11px;
   line-height: 14px;
   font-weight: 500;
-  color: var(--subtle-foreground);
+  color: var(--muted-foreground);
 }
 /* why list-style: Tailwind's preflight, which bb's build adds, takes every list's markers away. */
 .rmi-criteria {
@@ -394,7 +395,7 @@ button.rmi-thread-link {
   gap: 8px;
   font-size: 11px;
   line-height: 14px;
-  color: var(--subtle-foreground);
+  color: var(--muted-foreground);
 }
 .rmi-handoffs {
   gap: 4px;
@@ -521,7 +522,7 @@ details[open] > summary > .rmi-disclose {
 .rmi-verdict-meta {
   font-size: 11px;
   line-height: 14px;
-  color: var(--subtle-foreground);
+  color: var(--muted-foreground);
 }
 .rmi-verdict-meta code {
   font-family: var(--font-mono);
@@ -567,7 +568,7 @@ details[open] > summary > .rmi-disclose {
   flex: 0 0 auto;
   font-size: 11px;
   font-weight: 500;
-  color: var(--subtle-foreground);
+  color: var(--muted-foreground);
 }
 .rmi-result[data-result="fail"] { color: var(--destructive-text); }
 .rmi-result[data-result="unverifiable"] { color: var(--warning-text); }
