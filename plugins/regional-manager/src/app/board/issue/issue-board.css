@@ -1,0 +1,617 @@
+/* The board's lanes and issue rows, from Activity Sidebar's app.css: its row sizes, fading titles, PR
+   badge and state glyphs; the lane header is the board's round-6 bar. Every colour is a bb theme token
+   (the user's theme sets them), never a literal. bb does not scope a plugin's stylesheet, so every
+   class carries the `rmi-` prefix. */
+
+.rmi-board {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+/* --- A lane's header: a bar on the recessed surface, its glyph, name, count and chevron ---------- */
+.rmi-lane-heading {
+  margin: 0;
+  font: inherit;
+}
+.rmi-lane {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--surface-recessed);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--foreground);
+  cursor: pointer;
+  user-select: none;
+}
+/* why layered: the hover's own wash on the bar's surface, not a mix invented for it. */
+@media (hover: hover) {
+  .rmi-lane:hover {
+    background: linear-gradient(var(--state-hover), var(--state-hover)), var(--surface-recessed);
+  }
+}
+.rmi-lane:active {
+  background: linear-gradient(var(--state-active), var(--state-active)), var(--surface-recessed);
+}
+.rmi-lane:focus-visible {
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+.rmi-lane-glyph {
+  display: flex;
+}
+.rmi-count {
+  margin-left: -2px;
+  color: var(--subtle-foreground);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.rmi-chevron {
+  flex: 0 0 auto;
+  color: var(--subtle-foreground);
+  transition: transform 150ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.rmi-lane[aria-expanded="false"] .rmi-chevron {
+  transform: rotate(-90deg);
+}
+.rmi-list {
+  display: flex;
+  flex-direction: column;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* --- An issue's row: Activity's tall row, its 30 slot, its words, the flat wash ----------------- */
+/* The row's button spans its words; its pull request and its agent sit beside them, on the same wash. */
+.rmi-rowbox {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: 30px 16px;
+  border-radius: 8px;
+}
+.rmi-rowbox[data-depth] {
+  margin-left: 22px;
+}
+@media (hover: hover) {
+  .rmi-rowbox:hover {
+    background: var(--state-hover);
+  }
+}
+.rmi-rowbox:has(> .rmi-row:active) {
+  background: var(--state-active);
+}
+.rmi-rowbox[data-open] {
+  background: var(--surface-selected);
+}
+.rmi-rowbox:has(> .rmi-row:focus-visible) {
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+.rmi-row {
+  all: unset;
+  box-sizing: border-box;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.rmi-slot {
+  flex: 0 0 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+}
+.rmi-words {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.rmi-line {
+  flex: 0 0 30px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 8px;
+}
+.rmi-id {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--subtle-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.rmi-kind {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--subtle-foreground);
+}
+/* Under the title (Activity's second line, pulled up under it): the headline, quiet. */
+.rmi-headline {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 14px;
+  margin-top: -7px;
+  padding-right: 8px;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--subtle-foreground);
+}
+.rmi-blocked {
+  flex: 0 0 auto;
+  color: var(--warning-text);
+}
+.rmi-blocked::after {
+  content: " ·";
+  color: var(--subtle-foreground);
+}
+/* A parent's sub-issues done: Activity's pill, a count on a wash of its ink. */
+.rmi-pill {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+.rmi-pill::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0.1;
+}
+.rmi-pr-cell {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  padding-right: 8px;
+}
+.rmi-agent-cell {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  justify-content: flex-end;
+  align-self: start;
+  height: 14px;
+  margin-top: -7px;
+  padding-right: 8px;
+}
+
+/* --- Text that doesn't fit fades out at its end, never cut to "…" ------------------------------- */
+.rmi-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.rmi-line .rmi-text {
+  color: var(--muted-foreground);
+}
+.rmi-row[data-strong] .rmi-line .rmi-text {
+  color: var(--foreground);
+  font-weight: 500;
+}
+.rmi-row[data-quiet] .rmi-line .rmi-text {
+  color: var(--subtle-foreground);
+}
+/* why black: a mask reads only its alpha; nothing is painted in it. */
+.rmi-text[data-over] {
+  -webkit-mask-image: linear-gradient(90deg, transparent, black var(--rmi-fade-in), black calc(100% - 24px), transparent);
+  mask-image: linear-gradient(90deg, transparent, black var(--rmi-fade-in), black calc(100% - 24px), transparent);
+  transition: --rmi-fade-in 160ms ease-out;
+}
+.rmi-text-run {
+  display: inline-block;
+  transition: transform 240ms cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+/* A title too long for its row runs through to its end under the pointer, after a beat, as fast as it
+   reads (fading-text.tsx runStyle); its start fades as it goes. Leaving, it slides home. */
+@property --rmi-fade-in {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .rmi-rowbox:hover .rmi-line .rmi-text[data-over] {
+    --rmi-fade-in: 12px;
+    transition-delay: 500ms;
+  }
+  .rmi-rowbox:hover .rmi-line .rmi-text[data-over] > .rmi-text-run {
+    transform: translateX(calc(-1 * var(--rmi-travel)));
+    transition: transform var(--rmi-run) cubic-bezier(0.45, 0, 0.55, 1) 500ms;
+  }
+}
+
+/* --- Its pull request: glyph and number in its state's token on a 10% wash of it, then CI -------- */
+.rmi-pr {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-decoration: none;
+  outline: none;
+}
+.rmi-pr::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0.1;
+}
+.rmi-pr > * {
+  position: relative;
+}
+@media (hover: hover) {
+  .rmi-pr:hover::before {
+    opacity: 0.18;
+  }
+}
+.rmi-pr:focus-visible {
+  box-shadow: 0 0 0 1.5px var(--ring);
+}
+.rmi-pr[data-state="open"] { color: var(--success); }
+.rmi-pr[data-state="draft"] { color: var(--muted-foreground); }
+.rmi-pr[data-state="merged"] { color: var(--pr-merged); }
+.rmi-pr[data-state="closed"] { color: var(--destructive-text); }
+.rmi-ci {
+  width: 5px;
+  height: 5px;
+  margin-left: 2px;
+  border-radius: 999px;
+}
+.rmi-ci[data-ci="pass"] { background: var(--success); }
+.rmi-ci[data-ci="pending"] { background: var(--warning-text); }
+.rmi-ci[data-ci="fail"] { background: var(--destructive-text); }
+
+/* --- A thread named on the board: quiet words and an arrow, brighter under the pointer ----------- */
+.rmi-thread-link {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--subtle-foreground);
+  border-radius: 4px;
+}
+button.rmi-thread-link {
+  cursor: pointer;
+}
+@media (hover: hover) {
+  button.rmi-thread-link:hover {
+    color: var(--foreground);
+  }
+}
+.rmi-thread-link:focus-visible {
+  box-shadow: 0 0 0 1.5px var(--ring);
+}
+
+/* --- A status's glyph in its token: 14 in a 16 box ----------------------------------------------- */
+.rmi-state {
+  flex: 0 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+.rmi-state[data-state="backlog"],
+.rmi-state[data-state="canceled"] { color: var(--subtle-foreground); }
+.rmi-state[data-state="todo"],
+.rmi-state[data-state="in-progress"] { color: var(--muted-foreground); }
+.rmi-state[data-state="verifying"] { color: var(--warning-text); }
+.rmi-state[data-state="in-review"] { color: var(--success); }
+.rmi-state[data-state="done"] { color: var(--pr-merged); }
+.rmi-state[data-state="needs-you"] { color: var(--destructive-text); }
+.rmi-ring {
+  display: block;
+}
+
+/* --- An issue opened in place, under its row: its words lined up with the row's ------------------ */
+.rmi-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 8px 8px 16px 30px;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+.rmi-detail[data-depth] {
+  margin-left: 22px;
+}
+.rmi-detail p,
+.rmi-detail h3,
+.rmi-detail h4,
+.rmi-detail ol,
+.rmi-detail ul,
+.rmi-detail dl,
+.rmi-detail dd {
+  margin: 0;
+}
+.rmi-description {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--foreground);
+  white-space: pre-wrap;
+  text-wrap: pretty;
+}
+.rmi-part {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* Activity's quiet section title. */
+.rmi-part-title,
+.rmi-reported h4 {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 500;
+  color: var(--subtle-foreground);
+}
+.rmi-criteria {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 18px;
+}
+.rmi-criteria ::marker {
+  color: var(--subtle-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.rmi-relations {
+  display: grid;
+  gap: 2px;
+}
+.rmi-relations > div {
+  display: flex;
+  gap: 8px;
+}
+.rmi-relations dt {
+  flex: 0 0 76px;
+  color: var(--subtle-foreground);
+}
+.rmi-relations dd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* The record: each agent on a rule, its handoffs under it. */
+.rmi-record,
+.rmi-handoffs {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  list-style: none;
+}
+.rmi-record {
+  gap: 12px;
+}
+.rmi-held-by {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--subtle-foreground);
+}
+.rmi-handoffs {
+  gap: 4px;
+  margin-top: 6px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
+.rmi-handoff > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 3px 6px;
+  margin: 0 -6px;
+  border-radius: 6px;
+  list-style: none;
+  cursor: pointer;
+}
+.rmi-handoff > summary::-webkit-details-marker {
+  display: none;
+}
+@media (hover: hover) {
+  .rmi-handoff > summary:hover {
+    background: var(--state-hover);
+  }
+}
+.rmi-handoff > summary:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+.rmi-handoff-status {
+  flex: 0 0 auto;
+  font-weight: 500;
+  color: var(--foreground);
+}
+.rmi-handoff-status[data-status="blocked"] { color: var(--warning-text); }
+.rmi-handoff-status[data-status="gave-up"] { color: var(--destructive-text); }
+.rmi-handoff-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--foreground);
+}
+.rmi-handoff time {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--subtle-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.rmi-handoff-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 0 4px;
+}
+.rmi-reported {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rmi-reported ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 16px;
+}
+.rmi-reported ul[data-code] {
+  padding-left: 0;
+  list-style: none;
+  gap: 4px;
+}
+.rmi-reported ul[data-code] > li,
+.rmi-evidence {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--surface-recessed);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--foreground);
+  white-space: pre-wrap;
+}
+
+/* The verdict on a handoff. */
+.rmi-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rmi-verdict-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  color: var(--foreground);
+}
+.rmi-verdict-head[data-failed] {
+  color: var(--destructive-text);
+}
+.rmi-verdict-head .rmi-thread-link {
+  margin-left: auto;
+  font-weight: 400;
+}
+.rmi-verdict-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.rmi-verdict-meta {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--subtle-foreground);
+}
+.rmi-verdict-meta code {
+  font-family: var(--font-mono);
+}
+[data-tone="warning"] { color: var(--warning-text); }
+.rmi-verdict-meta[data-tone="failed"] { color: var(--destructive-text); }
+.rmi-criteria-checked {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0;
+  list-style: none;
+}
+.rmi-criterion > summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 6px;
+  margin: 0 -6px;
+  border-radius: 6px;
+  list-style: none;
+  cursor: pointer;
+}
+.rmi-criterion > summary::-webkit-details-marker {
+  display: none;
+}
+@media (hover: hover) {
+  .rmi-criterion > summary:hover {
+    background: var(--state-hover);
+  }
+}
+.rmi-criterion > summary:focus-visible,
+.rmi-evidence:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+.rmi-criterion-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--foreground);
+}
+.rmi-result {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--subtle-foreground);
+}
+.rmi-result[data-result="fail"] { color: var(--destructive-text); }
+.rmi-result[data-result="unverifiable"] { color: var(--warning-text); }
+.rmi-result-glyph {
+  flex: 0 0 14px;
+  margin-top: 1.5px;
+}
+.rmi-result-glyph[data-result="pass"] { color: var(--success); }
+.rmi-result-glyph[data-result="fail"] { color: var(--destructive-text); }
+.rmi-result-glyph[data-result="unverifiable"] { color: var(--warning-text); }
+.rmi-verdict-head .rmi-result-glyph {
+  margin-top: 0;
+}
+.rmi-evidence {
+  max-height: 224px;
+  margin: 4px 0 4px 22px;
+  overflow: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rmi-chevron,
+  .rmi-text[data-over],
+  .rmi-text-run {
+    transition: none;
+  }
+}
