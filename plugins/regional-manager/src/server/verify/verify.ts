@@ -14,10 +14,11 @@ import type { CheckoutRead } from "../../model/verdict/checkout.ts";
 import { ciOf, type CiVerdict } from "../../model/verdict/pr.ts";
 import { isSettled, judge, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
 import { environmentGone, type EnvironmentsBb } from "../agents/environments.ts";
-import { latestTurnSeq, listedThreads, threadsById, type TurnsBb } from "../agents/threads.ts";
+import { latestTurnSeq, listedThreads, stoppedTurn, threadsById, type StopBb, type TurnsBb } from "../agents/threads.ts";
 import type { CatalogBb } from "../execution/catalog.ts";
 import { threadExecution, type ThreadExecutionBb } from "../execution/thread-execution.ts";
 import type { Inbox } from "../inbox/inbox.ts";
+import type { IssueTurns, Turn } from "../issues/issue-turns.ts";
 import type { Spawner, VerifierRequest } from "../spawn.ts";
 import type { OpenCheck, Settlement } from "../store/issue/checks-store.ts";
 import type { Store } from "../store/store.ts";
@@ -53,6 +54,7 @@ type Deps = {
   store: Pick<Store, "check" | "handoff" | "agent" | "issue" | "coordinator" | "openChecks" | "markNudged" | "receiveVerdict" | "claimFixRound" | "unsettledChecks" | "prOfBranch">;
   spawner: Pick<Spawner, "verifier">;
   inbox: Pick<Inbox, "handoff" | "giveUpCheck" | "settleCheck">;
+  turns: IssueTurns;
 };
 
 /** A verifier's report on the claimed commit `headSha`, each criterion named by its text. */
@@ -75,7 +77,7 @@ const NUDGE =
 
 export type Verify = ReturnType<typeof createVerify>;
 
-export function createVerify({ bb, store, spawner, inbox }: Deps) {
+export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
   // why: the handoff tool and the tick can both find a check queued; one spawn is enough.
   const starting = new Set<CheckId>();
   // why: issue_verdict and the tick can both settle a verdict, and its findings must reach the agent once.
@@ -122,14 +124,21 @@ export function createVerify({ bb, store, spawner, inbox }: Deps) {
     };
   }
 
-  /** Starts the check's verifier if it is still queued; one that can't start is recorded as could-not-run. */
+  /**
+   * Starts the check's verifier if it is still queued once it holds its issue's turn, so a handover
+   * that superseded it meanwhile starts none; one that can't start is recorded as could-not-run.
+   */
   async function start(checkId: CheckId): Promise<void> {
-    if (disposed || starting.has(checkId)) return;
+    const check = store.check(checkId);
+    if (disposed || check === null || starting.has(checkId)) return;
     starting.add(checkId);
     try {
-      const request = await requestFor(checkId);
-      if (request === null || disposed) return;
-      await spawner.verifier(request);
+      await turns.run(check.coordinatorId, check.issueId, async (turn) => {
+        const request = await requestFor(checkId);
+        if (request === null || disposed) return;
+        turn.check();
+        await spawner.verifier(request);
+      });
     } catch (error) {
       // why only from queued: bb may have made the thread and bound it through thread.created, with only its answer lost.
       inbox.giveUpCheck(checkId, { state: "queued" }, { state: "could-not-run", verifierThreadId: null, reason: `bb did not start a verifier: ${messageOf(error)}` });
@@ -143,7 +152,12 @@ export function createVerify({ bb, store, spawner, inbox }: Deps) {
    * once, then given up on. One whose environment bb destroyed is given up on at once, since a
    * reminder can't run there.
    */
-  async function follow(checkId: CheckId, verdict: Running, thread: ListedThread | null): Promise<void> {
+  async function follow(check: OpenCheck & { verdict: Running }, thread: ListedThread | null): Promise<void> {
+    // why in its issue's turn: a handover that supersedes the check meanwhile stops its verifier, and a nudge after that would wake it.
+    await turns.run(check.coordinatorId, check.issueId, (turn) => nudgeOrGiveUp(check.id, check.verdict, thread, turn));
+  }
+
+  async function nudgeOrGiveUp(checkId: CheckId, verdict: Running, thread: ListedThread | null, turn: Turn): Promise<void> {
     const from = { state: "running", verifierThreadId: verdict.verifierThreadId } as const;
     const giveUp = (reason: string) => inbox.giveUpCheck(checkId, from, { state: "could-not-run", verifierThreadId: verdict.verifierThreadId, reason });
     if (thread === null) return void giveUp("its verifier thread was archived or deleted before it returned a verdict");
@@ -153,6 +167,7 @@ export function createVerify({ bb, store, spawner, inbox }: Deps) {
     if (disposed) return;
     if (destroyed) return void giveUp("the agent's environment was removed (a sandbox removed or reaped) before its verifier returned a verdict");
     if (verdict.nudged) return void giveUp("its verifier stopped without a verdict twice, the second time after a reminder");
+    turn.check();
     // why mark first: a nudge sent twice would double the verifier's work; a lost one only ends it sooner.
     if (!store.markNudged(checkId, verdict.verifierThreadId)) return;
     try {
@@ -208,27 +223,34 @@ export function createVerify({ bb, store, spawner, inbox }: Deps) {
    * bb refused the findings (see sendBack).
    */
   async function settle(checkId: CheckId): Promise<void> {
-    if (disposed || settling.has(checkId)) return;
+    const check = store.check(checkId);
+    if (disposed || check === null || settling.has(checkId)) return;
     settling.add(checkId);
     try {
-      const agent = unsettledOf(checkId)?.agent;
-      if (agent === undefined) return;
-      const thread = (await threadsById(bb, [agent.threadId])).get(agent.threadId) ?? null;
-      // why only a holding agent's thread bb still has: bb answers 404 for a deleted thread's turns, and an ended agent is sent nothing.
-      const sendable = agent.ended === null && thread !== null && thread.deletedAt === null;
-      // why read bb first and the store right after, with no await before deciding: a turn the
-      // agent starts after this read starts after the decision too.
-      const latest = sendable ? await latestTurnSeq(bb, agent.threadId) : null;
-      const unsettled = unsettledOf(checkId);
-      if (unsettled === null || disposed) return;
-      const step = stepOf(unsettled, sendable && handoffIsCurrent(unsettled.handoff, latest), thread);
-      if (step.kind !== "send") return inbox.settleCheck(checkId, step);
-      store.claimFixRound(checkId, step.ci);
-      // why settle whatever happened meanwhile: the claim, not the verdict's old state, says the findings are owed.
-      inbox.settleCheck(checkId, await sendBack(unsettled.agent, unsettled.verdict, step.ci));
+      // why in its issue's turn: a handover waits for findings on their way to finish, and stops the agent after them; findings that wait for it find their agent replaced, and go to the regional manager.
+      await turns.run(check.coordinatorId, check.issueId, (turn) => settleInTurn(checkId, turn));
     } finally {
       settling.delete(checkId);
     }
+  }
+
+  async function settleInTurn(checkId: CheckId, turn: Turn): Promise<void> {
+    const agent = unsettledOf(checkId)?.agent;
+    if (agent === undefined) return;
+    const thread = (await threadsById(bb, [agent.threadId])).get(agent.threadId) ?? null;
+    // why only a holding agent's thread bb still has: bb answers 404 for a deleted thread's turns, and an ended agent is sent nothing.
+    const sendable = agent.ended === null && thread !== null && thread.deletedAt === null;
+    // why read bb first and the store right after, with no await before deciding: a turn the
+    // agent starts after this read starts after the decision too.
+    const latest = sendable ? await latestTurnSeq(bb, agent.threadId) : null;
+    const unsettled = unsettledOf(checkId);
+    if (unsettled === null || disposed) return;
+    const step = stepOf(unsettled, sendable && handoffIsCurrent(unsettled.handoff, latest), thread);
+    turn.check();
+    if (step.kind !== "send") return inbox.settleCheck(checkId, step);
+    store.claimFixRound(checkId, step.ci);
+    // why settle whatever happened meanwhile: the claim, not the verdict's old state, says the findings are owed.
+    inbox.settleCheck(checkId, await sendBack(unsettled.agent, unsettled.verdict, step.ci));
   }
 
   /**
@@ -261,7 +283,8 @@ export function createVerify({ bb, store, spawner, inbox }: Deps) {
      */
     async handoff(handoff: GivenHandoff, checkout: CheckoutRead): Promise<Check | null> {
       const { check, superseded } = inbox.handoff(handoff, checkout);
-      await stopVerifiers(bb, superseded);
+      const unstopped = await turns.run(handoff.coordinatorId, handoff.issueId, () => stopVerifiers(bb, superseded));
+      for (const { threadId, why } of unstopped) bb.log.warn(`The superseded verifier ${threadId} ${why}; its verdict will be refused.`);
       if (check?.verdict.state === "queued") await start(check.id);
       return check;
     },
@@ -289,14 +312,15 @@ export function createVerify({ bb, store, spawner, inbox }: Deps) {
      * them.
      */
     async reconcile(): Promise<void> {
-      for (const { id, verdict } of store.openChecks() satisfies OpenCheck[]) {
+      for (const check of store.openChecks() satisfies OpenCheck[]) {
         if (disposed) return;
+        const { verdict } = check;
         if (verdict.state === "queued") {
-          await start(id);
+          await start(check.id);
           continue;
         }
         const thread = (await listedThreads(bb, [verdict.verifierThreadId])).get(verdict.verifierThreadId) ?? null;
-        if (!disposed) await follow(id, verdict, thread);
+        if (!disposed) await follow({ ...check, verdict }, thread);
       }
       for (const checkId of store.unsettledChecks()) {
         if (disposed) return;
@@ -306,24 +330,26 @@ export function createVerify({ bb, store, spawner, inbox }: Deps) {
   };
 }
 
-/** The parts of bb stopping a verifier uses. */
-export type StopVerifiersBb = { log: Pick<PluginLogger, "warn">; sdk: { threads: { stop(args: { threadId: string }): Promise<unknown> } } };
+/** A verifier bb hasn't confirmed stopped, and why: the status bb still reports, or its refusal of the stop. */
+export type Unstopped = { threadId: string; why: string };
 
 /**
- * Stops the verifiers of superseded checks, never archiving them: a verifier lives in its agent's
- * environment, and archiving a sandbox's last live thread destroys it (SH5). One that won't stop is
- * only logged, since its verdict is refused anyway.
+ * Stops the verifiers and confirms each stopped, never archiving them: a verifier lives in its
+ * agent's environment, and archiving a sandbox's last live thread destroys it (SH5). Returns every
+ * one bb hasn't confirmed stopped.
  */
-export async function stopVerifiers(bb: StopVerifiersBb, threadIds: readonly string[]): Promise<void> {
-  await Promise.all(
-    threadIds.map(async (threadId) => {
+export async function stopVerifiers(bb: StopBb, threadIds: readonly string[]): Promise<Unstopped[]> {
+  const stops = await Promise.all(
+    threadIds.map(async (threadId): Promise<Unstopped[]> => {
       try {
-        await bb.sdk.threads.stop({ threadId });
+        const status = await stoppedTurn(bb, threadId);
+        return status === null ? [] : [{ threadId, why: `is still ${status}` }];
       } catch (error) {
-        bb.log.warn(`Could not stop the superseded verifier ${threadId}; its verdict will be refused: ${messageOf(error)}`);
+        return [{ threadId, why: `wasn't stopped: bb answered ${messageOf(error)}` }];
       }
     }),
   );
+  return stops.flat();
 }
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));

@@ -52,3 +52,17 @@ export async function ifCurrent<Handed extends { handoff: Pick<Handoff, "turnSeq
   if (handed === null) return null;
   return handoffIsCurrent(handed.handoff, await latestTurnSeq(bb, threadId)) ? handed : null;
 }
+
+/** The part of bb stopping a turn uses: the stop, and the thread's status read after it. */
+export type StopBb = ListBb<ListableThread & { status: string }> & { sdk: { threads: { stop(args: { threadId: string }): Promise<unknown> } } };
+
+/**
+ * Stops the thread's turn; null once bb no longer runs it, else the status bb still reports, as
+ * when its stop is unconfirmed. Rejects as bb's stop does. why read again: bb's stop can leave the
+ * thread stopping, and a turn is over only once its thread no longer runs.
+ */
+export async function stoppedTurn(bb: StopBb, threadId: string): Promise<string | null> {
+  await bb.sdk.threads.stop({ threadId });
+  const thread = (await threadsById(bb, [threadId])).get(threadId);
+  return thread !== undefined && isLive(thread) && thread.status !== "idle" && thread.status !== "error" ? thread.status : null;
+}

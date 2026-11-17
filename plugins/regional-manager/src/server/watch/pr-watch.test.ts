@@ -237,10 +237,10 @@ test("a newer done handoff replaces a verdict still waiting for CI, so only the 
   pr();
   await minute();
   await verified();
-  const waiting = kit.store.latestHandoff(coordinatorId, a1)?.handoff.id ?? assert.fail("no handoff");
+  const waiting = kit.store.latestHandoff(coordinatorId, a1) ?? assert.fail("no handoff");
   kit.startTurn(agentThreadId);
   await kit.call("agent_handoff", { ...DONE, prUrl: PR_URL }, agentThreadId);
-  assert.deepEqual(kit.store.handoff(waiting)?.check?.verdict, { state: "superseded" });
+  assert.deepEqual(kit.store.handoff(waiting.handoff.id)?.check?.verdict, { ...waiting.check?.verdict, settlement: { kind: "superseded" } }, "its returned verdict kept whole");
   assert.deepEqual(kit.store.waitingForCi(coordinatorId, a1), []);
 });
 

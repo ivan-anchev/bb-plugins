@@ -113,7 +113,7 @@ function handingOver() {
 
 test("a handover ends the holder as replaced with what it left, supersedes its waiting check and inserts the new agent with its inherited checkout, together", () => {
   const { store, holder, handoffId, check, next } = handingOver();
-  assert.deepEqual(store.replaceAgent(holder, handoffId, next), { agentId: "a2", superseded: ["thr_verifier"] });
+  assert.equal(store.replaceAgent(holder, handoffId, next), "a2");
   const [a1, a2] = store.agents(MANAGER);
   assert.deepEqual(a1?.ended, { how: "replaced", at: 4_000, left: handoffId });
   assert.deepEqual([a2?.base, a2?.checkout, a2?.ended], [{ kind: "joined", from: "a1" }, { environmentId: "env_1", branch: "bb/a1", head: null }, null]);
@@ -134,5 +134,5 @@ test("a handover whose insert fails writes nothing: the holder still holds, and 
   assert.equal(store.check(check.id)?.verdict.state, "running");
   assert.equal(store.roleFor("thr_x", "agent-2"), null, "no ticket minted");
   allow();
-  assert.equal(store.replaceAgent(holder, handoffId, next)?.agentId, "a2");
+  assert.equal(store.replaceAgent(holder, handoffId, next), "a2");
 });

@@ -33,16 +33,18 @@ import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
 import { inheritedFrom, type Inherited, type ThreadExecutionBb } from "../execution/thread-execution.ts";
 import type { Inbox } from "../inbox/inbox.ts";
 import { readIssue, type FactsBb, type FactsStore } from "../issues/issue-facts.ts";
+import type { IssueTurns, Turn } from "../issues/issue-turns.ts";
 import type { MemoryRoot } from "../memory/memory-files.ts";
 import type { Spawner } from "../spawn.ts";
 import type { NewAgent } from "../store/issue/agents-store.ts";
 import type { Store } from "../store/store.ts";
-import { stopVerifiers, type StopVerifiersBb } from "../verify/verify.ts";
+import { stopVerifiers } from "../verify/verify.ts";
 import { agentBrief } from "./brief.ts";
 import { environmentGone, type EnvironmentsBb } from "./environments.ts";
-import { isLive, latestTurnSeq, threadsById, type ListBb } from "./threads.ts";
+import { latestTurnSeq, stoppedTurn, threadsById, type ListBb, type StopBb } from "./threads.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
+type QueuedMessage = Awaited<ReturnType<Threads["queuedMessages"]["list"]>>[number];
 type EnvironmentArgs = NewThreadRequest["environment"];
 
 /** An agent's or a regional manager's thread as the agents read it. */
@@ -62,13 +64,16 @@ type AgentsBb = CatalogBb &
   ThreadExecutionBb &
   FactsBb &
   EnvironmentsBb &
-  StopVerifiersBb &
+  StopBb &
   ListBb<ListedThread> & {
     sdk: {
       threads: {
         send(args: Parameters<Threads["send"]>[0]): Promise<{ delivery: "sent" | "queued" }>;
-        stop(args: { threadId: string }): Promise<unknown>;
         archive(args: { threadId: string }): Promise<unknown>;
+        queuedMessages: {
+          list(args: { threadId: string }): Promise<Pick<QueuedMessage, "id" | "senderThreadId">[]>;
+          delete(args: { threadId: string; queuedMessageId: string }): Promise<unknown>;
+        };
       };
     };
   };
@@ -107,12 +112,16 @@ export type StartOutcome =
 /** What a stop did. An agent ends as stopped only once bb no longer runs its thread. */
 export type StopOutcome = { kind: "stopped"; archived: boolean } | { kind: "already-ended"; how: EndedHow } | { kind: "still-running"; status: string };
 
+/** What a message did: sent or queued by bb; or nothing, as the agent ended or has no thread yet. */
+export type MessageOutcome = { kind: "sent" | "queued" | "unbound" } | { kind: "already-ended"; how: EndedHow };
+
 type Deps = {
   bb: AgentsBb;
   store: FactsStore & Pick<Store, "coordinator" | "coordinators" | "issue" | "agent" | "insertAgent" | "replaceAgent" | "record" | "agentTicket" | "removeCoordinator">;
   spawner: Pick<Spawner, "agent">;
   inbox: Pick<Inbox, "endAgent">;
   memory: MemoryRoot;
+  turns: IssueTurns;
   /** What bb says about where the regional manager's agents can run, read when agent_start names a placement. */
   placementFacts(id: CoordinatorId): Promise<PlacementFacts>;
   /** Runs after anything that changes a regional manager's board. */
@@ -128,7 +137,7 @@ const MEMORY_INDEX = memoryFileSchema.parse("MEMORY.md");
 const WORKTREE = { kind: "worktree" } as const;
 const NO_CHECKOUT: AgentCheckout = { environmentId: null, branch: null, head: null };
 
-export function createAgents({ bb, store, spawner, inbox, memory, placementFacts, onChange, onRemoved }: Deps) {
+export function createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts, onChange, onRemoved }: Deps) {
   function coordinatorOf(id: CoordinatorId): Coordinator {
     const coordinator = store.coordinator(id);
     // why throw: a tool resolves the caller's role from a bound thread, so its regional manager is bound.
@@ -202,31 +211,27 @@ export function createAgents({ bb, store, spawner, inbox, memory, placementFacts
     return { issue, brief: planned.brief };
   }
 
-  /** Stops the thread's turn; null once bb no longer runs it, else the status bb still reports, as when its stop is unconfirmed. */
-  async function stoppedTurn(threadId: string): Promise<string | null> {
-    await bb.sdk.threads.stop({ threadId });
-    // why read again: bb's stop can leave the thread stopping, and an agent ends only once its thread no longer runs.
-    const thread = await listed(threadId);
-    return thread !== null && isLive(thread) && thread.status !== "idle" && thread.status !== "error" ? thread.status : null;
-  }
-
   /**
-   * Starts an agent on the issue; a handover when the issue has or had one. The order keeps a
-   * sandbox alive, where nothing waits once the last live thread is archived (SH5):
+   * Starts an agent on the issue; a handover when the issue has or had one. It runs as its issue's
+   * turn (issue-turns.ts), so it decides on facts no other start, stop, message, fix round or
+   * verifier of the issue changes before it is done. The order keeps a sandbox alive, where nothing
+   * waits once the last live thread is archived (SH5):
    * 1. decide where it runs and on what, from what bb has now; a refusal changes nothing;
-   * 2. stop the holder's turn and confirm it, so two turns never share a checkout, and never archive
-   *    it: a stopped thread keeps its environment (SH1 (b), SH5);
-   * 3. end the holder as replaced, supersede its open checks and insert the new agent, together,
-   *    then stop those checks' verifiers, never archiving them;
+   * 2. take back the holder's queued fix rounds, then stop its turn and its verifiers' and confirm
+   *    each, so no two turns share a checkout, and never archive one: a stopped thread keeps its
+   *    environment (SH1 (b), SH5). One bb doesn't confirm refuses the start, holder and record intact;
+   * 3. end the holder as replaced, supersede its open checks and insert the new agent, together;
    * 4. spawn: a reuse wakes a suspended sandbox and keeps a retiring worktree (SH1). bb refusing it,
    *    as for an environment removed since step 1, ends the new agent as spawn-failed.
    */
-  async function start(coordinatorId: CoordinatorId, request: StartRequest): Promise<StartOutcome> {
-    const decided = await decide(coordinatorId, request);
-    if ("refused" in decided) return { kind: "refused", reason: decided.refused };
-    const taken = await takeOver(coordinatorId, decided);
-    if ("refused" in taken) return { kind: "refused", reason: taken.refused };
-    return spawn(coordinatorId, decided, taken);
+  function start(coordinatorId: CoordinatorId, request: StartRequest): Promise<StartOutcome> {
+    return turns.run(coordinatorId, request.issueId, async (turn) => {
+      const decided = await decide(coordinatorId, request);
+      if ("refused" in decided) return { kind: "refused", reason: decided.refused };
+      const taken = await takeOver(coordinatorId, decided, turn);
+      if ("refused" in taken) return { kind: "refused", reason: taken.refused };
+      return spawn(coordinatorId, decided, taken);
+    });
   }
 
   /** Step 1: where the agent starts and what it runs on, from what bb and the store have now; changes nothing. */
@@ -246,16 +251,16 @@ export function createAgents({ bb, store, spawner, inbox, memory, placementFacts
   }
 
   /**
-   * Steps 2 and 3: stops the holder's turn, if one holds the issue, then gives the issue to the new
-   * agent. Refused with nothing changed when the holder is still running; with nothing changed but
-   * the stop, which the refusal says, when the issue can no longer start an agent or changed hands
-   * while it stopped.
+   * Steps 2 and 3: stops the holder and its verifiers, if one holds the issue, then gives the issue
+   * to the new agent. Refused with nothing changed when one of them is still running; with nothing
+   * changed but the stops, which the refusal says, when the issue can no longer start an agent or
+   * changed hands while they stopped.
    */
-  async function takeOver(coordinatorId: CoordinatorId, { issueId, spot, runsOn }: Decided): Promise<Taken | { refused: string }> {
+  async function takeOver(coordinatorId: CoordinatorId, { issueId, spot, runsOn }: Decided, turn: Turn): Promise<Taken | { refused: string }> {
     const holder = holderOf(coordinatorId, issueId);
     const holderThread = holder?.threadId ?? null;
-    const stillRunning = holderThread === null ? null : await stoppedTurn(holderThread);
-    if (holder !== null && stillRunning !== null) return { refused: `${holder.id} is still ${stillRunning}, so nothing changed and it still holds ${issueId}. Call agent_start again once it has stopped.` };
+    const running = holder === null ? null : await stopHolder(holder, turn);
+    if (running !== null) return { refused: `${running}. Call agent_start again once it has stopped.` };
     const turnSeq = holderThread === null ? null : await latestTurnSeq(bb, holderThread);
     // why decide again here, with no await from here to the write: while the holder stopped, the
     // manager may have closed the issue or changed its plan, a merge made it Done, or the holder
@@ -263,11 +268,36 @@ export function createAgents({ bb, store, spawner, inbox, memory, placementFacts
     const stopped = holder === null ? "" : `${holder.id} was stopped, but nothing else changed: `;
     const now = startable(coordinatorId, issueId, (await readIssue(bb, store, { coordinatorId, id: issueId })).view, runsOn);
     if ("refused" in now) return { refused: `${stopped}${now.refused}` };
+    turn.check();
     const next: NewAgent = { coordinatorId, issueId, ticket: randomUUID(), ...spot, execution: runsOn.execution, at: Date.now() };
-    const inserted = holder === null ? withNoneSuperseded(store.insertAgent(next)) : store.replaceAgent(holder, leftBy(holder, turnSeq), next);
-    if (inserted === null) return { refused: `${stopped}${issueId} changed hands meanwhile. crew_catch_up shows who holds it now.` };
-    await stopVerifiers(bb, inserted.superseded);
-    return { ...now, agentId: inserted.agentId, ticket: next.ticket, replaced: holder?.id ?? null };
+    const agentId = holder === null ? store.insertAgent(next) : store.replaceAgent(holder, leftBy(holder, turnSeq), next);
+    if (agentId === null) return { refused: `${stopped}${issueId} changed hands meanwhile. crew_catch_up shows who holds it now.` };
+    return { ...now, agentId, ticket: next.ticket, replaced: holder?.id ?? null };
+  }
+
+  /**
+   * Quiets everything of the holder's that runs in its environment: takes back the fix rounds its
+   * verifiers queued for it, which bb would send once its turn stops, then stops its turn and its
+   * running verifiers' and confirms each. Null once none runs; else why the start is refused. A
+   * holder with no thread has handed nothing off, so it has no verifier.
+   */
+  async function stopHolder(holder: Agent, turn: Turn): Promise<string | null> {
+    const { threadId } = holder;
+    if (threadId === null) return null;
+    const checks = store.record(holder.coordinatorId, holder.issueId).flatMap(({ handoff, check }) => (handoff.agentId === holder.id && check !== null ? [check] : []));
+    const verifiers = checks.flatMap(({ verdict }) => ("verifierThreadId" in verdict && verdict.verifierThreadId !== null ? [verdict.verifierThreadId] : []));
+    for (const { id, senderThreadId } of await bb.sdk.threads.queuedMessages.list({ threadId })) {
+      turn.check();
+      // why not fail on a refused delete: bb sent it meanwhile, so it started a turn the stop below ends.
+      if (senderThreadId !== null && verifiers.includes(senderThreadId)) await bb.sdk.threads.queuedMessages.delete({ threadId, queuedMessageId: id }).catch(() => undefined);
+    }
+    turn.check();
+    const status = await stoppedTurn(bb, threadId);
+    if (status !== null) return `${holder.id} is still ${status}, so nothing changed and it still holds ${holder.issueId}`;
+    turn.check();
+    const unstopped = await stopVerifiers(bb, checks.flatMap(({ verdict }) => (verdict.state === "running" ? [verdict.verifierThreadId] : [])));
+    if (unstopped.length === 0) return null;
+    return `${holder.id} was stopped, but its verifier ${unstopped.map(({ threadId, why }) => `@thread:${threadId} ${why}`).join(", and its verifier ")}, so nothing else changed and ${holder.id} still holds ${holder.issueId}`;
   }
 
   /** Step 4: spawns the inserted agent's thread with its first message; one bb refuses ends as spawn-failed. */
@@ -331,6 +361,13 @@ export function createAgents({ bb, store, spawner, inbox, memory, placementFacts
     onChange(agent.coordinatorId);
   }
 
+  /** The agent as stored now. why throw: a tool resolved it from the store, and agents are kept while their regional manager is. */
+  function agentOf(coordinatorId: CoordinatorId, id: AgentId): Agent {
+    const agent = store.agent(coordinatorId, id);
+    if (agent === null) throw new Error(`The agent ${id} of ${coordinatorId} is missing.`);
+    return agent;
+  }
+
   /** why throw: an agent is inserted on an issue of its regional manager, and issues are never deleted. */
   function issueOf(coordinatorId: CoordinatorId, issueId: IssueId): Issue {
     const issue = store.issue(coordinatorId, issueId);
@@ -347,29 +384,45 @@ export function createAgents({ bb, store, spawner, inbox, memory, placementFacts
   return {
     start,
 
-    /** Sends the text as a message from the regional manager: it steers a running turn or starts one. */
-    async message(agent: Agent & { threadId: string }, text: string): Promise<"sent" | "queued"> {
-      const { delivery } = await bb.sdk.threads.send({
-        threadId: agent.threadId,
-        senderThreadId: coordinatorOf(agent.coordinatorId).threadId,
-        mode: "auto",
-        input: [{ type: "text", text, mentions: [] }],
-      });
-      onChange(agent.coordinatorId);
-      return delivery;
-    },
+    /**
+     * Sends the text as a message from the regional manager: it steers a running turn or starts one.
+     * In its issue's turn, to an agent that still holds it, so a handover never has it wake the agent it replaced.
+     */
+    message: ({ coordinatorId, id, issueId }: Agent, text: string): Promise<MessageOutcome> =>
+      turns.run(coordinatorId, issueId, async () => {
+        const agent = agentOf(coordinatorId, id);
+        if (agent.ended !== null) return { kind: "already-ended", how: agent.ended.how };
+        if (agent.threadId === null) return { kind: "unbound" };
+        const { delivery } = await bb.sdk.threads.send({
+          threadId: agent.threadId,
+          senderThreadId: coordinatorOf(coordinatorId).threadId,
+          mode: "auto",
+          input: [{ type: "text", text, mentions: [] }],
+        });
+        onChange(coordinatorId);
+        return { kind: delivery };
+      }),
 
-    /** Stops the agent's turn and ends it once bb no longer runs its thread; then archives its thread when asked, which destroys a sandbox no other thread lives in. Never archives otherwise. */
-    async stop(agent: Agent, archive: boolean): Promise<StopOutcome> {
-      if (agent.ended !== null) return { kind: "already-ended", how: agent.ended.how };
-      const { threadId } = agent;
-      const status = threadId === null ? null : await stoppedTurn(threadId);
-      if (status !== null) return { kind: "still-running", status };
-      await end(agent, "stopped");
-      if (archive && threadId !== null) await bb.sdk.threads.archive({ threadId });
-      onChange(agent.coordinatorId);
-      return { kind: "stopped", archived: archive && threadId !== null };
-    },
+    /**
+     * Stops the agent's turn and ends it once bb no longer runs its thread; then archives its thread
+     * when asked, which destroys a sandbox no other thread lives in. Never archives otherwise. In its
+     * issue's turn, so an agent a handover replaced meanwhile is already ended, and its thread, now
+     * its successor's environment, is never archived.
+     */
+    stop: ({ coordinatorId, id, issueId }: Agent, archive: boolean): Promise<StopOutcome> =>
+      turns.run(coordinatorId, issueId, async (turn) => {
+        const agent = agentOf(coordinatorId, id);
+        if (agent.ended !== null) return { kind: "already-ended", how: agent.ended.how };
+        const { threadId } = agent;
+        const status = threadId === null ? null : await stoppedTurn(bb, threadId);
+        if (status !== null) return { kind: "still-running", status };
+        turn.check();
+        await end(agent, "stopped");
+        turn.check();
+        if (archive && threadId !== null) await bb.sdk.threads.archive({ threadId });
+        onChange(coordinatorId);
+        return { kind: "stopped", archived: archive && threadId !== null };
+      }),
 
     /** The user archived the agent's thread in bb. */
     archived: (agent: Agent) => end(agent, "archived"),
@@ -415,9 +468,6 @@ function finalText(issue: Issue, view: IssueView): string | null {
   if (issue.closed !== null) return `${issue.id} is ${issue.closed.as === "canceled" ? "canceled" : "accepted as done"}, so no agent can start on it.`;
   return view.status === "done" ? `${issue.id} is Done (${view.headline}), so no agent can start on it.` : null;
 }
-
-/** The insert of a start with no holder to replace, as a handover's replaceAgent returns it. */
-const withNoneSuperseded = (agentId: AgentId | null): { agentId: AgentId; superseded: string[] } | null => (agentId === null ? null : { agentId, superseded: [] });
 
 /** Where the agent would run, in words, for a refusal of what it would run on. */
 const whereText = ({ base, placement }: Spot): string => (base.kind === "joined" ? `${base.from}'s environment` : placementText(placement));

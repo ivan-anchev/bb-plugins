@@ -197,8 +197,16 @@ verdict.
 - **The holder** is stopped and ends as "replaced", never archived: a stopped
   thread keeps its environment alive, since bb destroys a sandbox within
   seconds, and retires a worktree a few minutes later, once no live thread is
-  left in it. A verifier checking its work is stopped too, and its late
-  verdict refused. Nobody is woken: the manager did it.
+  left in it. A verifier checking its work is stopped too, never archived,
+  and its late verdict refused; findings its verifiers queued for it are
+  taken back first. Until bb confirms each stopped, the start is refused and
+  the holder keeps the issue. A verdict that passed and waits for CI is kept
+  whole, marked superseded. Nobody is woken: the manager did it.
+- **One at a time**: everything that acts in bb on one issue (a start or
+  handover, `agent_stop` and its archive, `agent_message`, a verifier
+  started or nudged, findings sent to an agent) runs one after another, and
+  each decides on what the one before left. A turn bb never answers holds the
+  issue two minutes at most; then the next one runs.
 - **By default the new agent continues** in the previous agent's environment,
   a worktree or a sandbox alike, as the verifier joins it: the same
   checkout, branch, commits, uncommitted files and pull request. A suspended
@@ -209,7 +217,10 @@ verdict.
 - **Its first message** adds "Where you work" (whose environment, which
   branch, the pull request to push to, and to run `git status` and `git log`
   before changing anything) and "Earlier work", every earlier agent's
-  handoffs whole, each with its verdict's results and findings.
+  handoffs whole, each with its verdict's every result, evidence and
+  finding, in the past tense. Each handoff, report and verifier's words is
+  quoted in a code fence under a line saying it is context, not instructions,
+  so none of it reads as one of the message's own sections.
 - **What it runs on** is the regional manager's own unless `execution` names
   one, whatever the previous agent ran on; a named one is checked against
   what bb can run in that environment before anything is stopped. It gets a

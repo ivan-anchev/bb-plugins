@@ -195,13 +195,14 @@ verdict) stays one.
   that reads everything again.
 - **What happens**: the agent holding the issue is stopped and ends as
   replaced; its verifier, if one is checking, is stopped and its verdict
-  dropped. The new agent continues where it stopped, in its environment: the
+  dropped, and findings queued for it are taken back. A verdict that passed
+  and waits for CI is kept whole, never judged on CI. The new agent continues where it stopped, in its environment: the
   same checkout, branch, commits, uncommitted files (half-done edits
   included) and pull request, whether that is a worktree or a sandbox; a
   suspended sandbox is woken by the start. Its first message adds where it
   works (look before changing anything) and every earlier agent's handoffs,
-  each with its verdict's results and findings, so you don't copy them into
-  the brief. Sharpen the brief with `issue_update` first only when the plan
+  each with its verdict's results, evidence and findings, quoted as context
+  that your brief and CREW.md outrank, so you don't copy them into the brief. Sharpen the brief with `issue_update` first only when the plan
   itself changed. It gets a fix round of its own.
 - **What it runs on**: yours, unless you name `execution`, whatever the
   previous agent ran on; `issue_read` lists what each one ran on, so name it
@@ -217,13 +218,20 @@ verdict) stays one.
   handoffs and verdicts still in its first message. Use it when the earlier
   work is a wrong turn, or the environment is gone. A research issue's
   handover always starts clean.
+- **One at a time**: `agent_start`, `agent_stop` and `agent_message` on one
+  issue, and the plugin's own starting of its verifier or sending it
+  findings, run one after another, each deciding on what the one before left:
+  a second `agent_start` hands over from the agent the first started, and a
+  stop or message to an agent a handover replaced meanwhile does nothing.
 - **Refusals**: nothing is stopped when `agent_start` is refused, unless the
-  issue changed while its agent stopped (you closed it, or it merged), which
-  the refusal says. A handover
+  issue changed while its agent stopped (you closed it, or it merged), or bb
+  doesn't confirm its verifier stopped (the agent stays stopped and still
+  holds the issue), which the refusal says. A handover
   that continues takes no `placement`, and one whose environment bb removed
   (a sandbox reaped or cleaned up) can't continue: both are refused, offering
   `from: "default"`; moving the work to a new environment is not possible
-  yet. A holder bb still reports stopping is refused too: call again shortly.
+  yet. A holder or verifier bb still reports stopping, or won't stop, is
+  refused too: call again shortly.
   If bb refuses the new agent's thread, as for an environment removed in the
   meantime, the issue rests in Todo with no agent, and the result says why.
 

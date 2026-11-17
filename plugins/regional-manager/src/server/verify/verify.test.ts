@@ -252,10 +252,15 @@ test("a done handoff that supersedes a verdict while its findings are on their w
   await settled();
 
   kit.startTurn(agentThreadId); // the user asks the agent for one more change while bb takes the findings
-  await handOff();
+  // Stored at once; it stops the superseded verifier once the findings are through, as it waits for i1's turn.
+  const handing = kit.call("agent_handoff", DONE, agentThreadId);
+  await settled();
+  assert.notEqual(check().id, first, "the newer handoff supersedes the first at once");
+  await kit.idle(agentThreadId, "Handed off.");
   take();
   kit.sends.pending = null;
   assert.match(textOf(await returning), /^Verdict recorded/);
+  await handing;
   await settled();
   assert.equal(kit.sent().filter((args) => args.threadId === agentThreadId).length, 1, "the findings, once");
   assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 1);

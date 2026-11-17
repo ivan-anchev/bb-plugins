@@ -15,9 +15,15 @@ export function insertTicket(db: Db, ticket: string, role: Role, at: number): vo
   db().prepare("INSERT INTO roles (ticket, role, created_at) VALUES (?, ?, ?)").run(ticket, JSON.stringify(role), at);
 }
 
-/** Gives the ticket's role to the thread and returns it; null when the ticket was already bound, to this thread or another. */
+/**
+ * Gives the ticket's role to the thread and returns it; null when the ticket was already bound, to
+ * this thread or another, or is an ended agent's. why not an ended agent's: its issue went on
+ * without it, and a thread bound to it would count as where the issue's work is (previousOf).
+ */
 export function bindRole(db: Db, ticket: string, threadId: string): Role | null {
-  const row = db().prepare("UPDATE roles SET thread_id = ? WHERE ticket = ? AND thread_id IS NULL RETURNING role").get(threadId, ticket);
+  const row = db()
+    .prepare("UPDATE roles SET thread_id = ? WHERE ticket = ? AND thread_id IS NULL AND NOT EXISTS (SELECT 1 FROM agents WHERE ticket = roles.ticket AND ended_at IS NOT NULL) RETURNING role")
+    .get(threadId, ticket);
   return row === undefined ? null : toRole(row);
 }
 

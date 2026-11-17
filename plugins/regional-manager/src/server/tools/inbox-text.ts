@@ -178,9 +178,12 @@ function prText(pr: PrSnapshot): string {
   return `It is ${state} (${pr.url}), with ${review}; CI on its head ${pr.headSha.slice(0, 7)}: ${ci}.`;
 }
 
-/** What CI said about a verdict's commit, in a line (empty: the verdict is still to settle, and doesn't wait for CI). */
+/** What CI said about a verdict's commit, in a line (empty: the verdict is still to settle, and doesn't wait for CI). A verdict superseded while it waited never had CI judged. */
 function ciLine(verdict: Extract<Verdict, { state: "returned" }>, ci: CiVerdict | null): string {
-  if (ci === null) return verdict.settlement.kind === "waiting-for-ci" ? "CI: still to finish on this commit; the verdict waits for it." : "";
+  if (ci === null) {
+    if (verdict.settlement.kind === "waiting-for-ci") return "CI: still to finish on this commit; the verdict waits for it.";
+    return verdict.settlement.kind === "superseded" ? "CI: not waited for; a newer handoff or a handover replaced it first." : "";
+  }
   switch (ci.kind) {
     case "none":
       return "CI: no pull request to wait for.";

@@ -29,7 +29,8 @@ const settledCiSchema = ciVerdictSchema.default({ kind: "none" });
  * failed in a way that doesn't show whether bb took them, so it is final and its coordinating
  * thread's, with the round still spent. `checked`: it is final, and its coordinating thread's;
  * `refused` is bb's answer when it refused the findings sent back, else null. Each that settled
- * it keeps `ci`, what CI said about the commit then.
+ * it keeps `ci`, what CI said about the commit then. `superseded`: it waited for CI when a newer
+ * handoff or a handover replaced it, so it is final with no CI judged, and nobody is told.
  */
 const pendingSchema = z.object({ kind: z.literal("pending") });
 const waitingForCiSchema = z.object({ kind: z.literal("waiting-for-ci") });
@@ -37,7 +38,16 @@ const sendingBackSchema = z.object({ kind: z.literal("sending-back"), round: rou
 const sentBackSchema = z.object({ kind: z.literal("sent-back"), round: roundSchema, ci: settledCiSchema });
 const maybeSentBackSchema = z.object({ kind: z.literal("maybe-sent-back"), round: roundSchema, ci: settledCiSchema });
 const checkedSchema = z.object({ kind: z.literal("checked"), refused: z.string().nullable(), ci: settledCiSchema });
-const settlementSchema = z.discriminatedUnion("kind", [pendingSchema, waitingForCiSchema, sendingBackSchema, sentBackSchema, maybeSentBackSchema, checkedSchema]);
+const supersededSettlementSchema = z.object({ kind: z.literal("superseded") });
+const settlementSchema = z.discriminatedUnion("kind", [
+  pendingSchema,
+  waitingForCiSchema,
+  sendingBackSchema,
+  sentBackSchema,
+  maybeSentBackSchema,
+  checkedSchema,
+  supersededSettlementSchema,
+]);
 
 /**
  * The verifier's verdict on the claimed commit `headSha`: each criterion in the issue's order, and
@@ -63,7 +73,7 @@ const queuedSchema = z.object({ state: z.literal("queued"), checkout: checkoutSc
 const runningSchema = z.object({ state: z.literal("running"), verifierThreadId: verifierThreadIdSchema, nudged: z.boolean(), checkout: checkoutSchema });
 /** No verdict will come: bb's git plugin couldn't read the agent's environment, or the verifier never started or stopped without one. Its thread, if it had one. */
 const couldNotRunSchema = z.object({ state: z.literal("could-not-run"), verifierThreadId: verifierThreadIdSchema.nullable(), reason: z.string() });
-/** A newer done handoff from the same agent replaced this one before its verdict. */
+/** A newer done handoff from the same agent, or a handover, replaced this one before its verdict. */
 const supersededSchema = z.object({ state: z.literal("superseded") });
 /** Verification was off when the agent handed off. */
 const waivedSchema = z.object({ state: z.literal("waived") });
@@ -83,6 +93,7 @@ const shownSettlementSchema = z.discriminatedUnion("kind", [
   sentBackSchema.omit({ round: true }),
   maybeSentBackSchema.omit({ round: true }),
   checkedSchema.omit({ refused: true }),
+  supersededSettlementSchema,
 ]);
 
 /**
@@ -128,6 +139,7 @@ export function outcome(verdict: ShownVerdict): Outcome {
     case "running":
       return "pending";
     case "returned": {
+      if (verdict.settlement.kind === "superseded") return "superseded";
       const ci = ciVerdictOf(verdict);
       if (ci !== null) return judge(verdict, ci);
       // why pending until settled: the row says Verifying until the findings reach the agent or the verdict is final.
@@ -167,13 +179,14 @@ export function failedCheckout(verdict: Returned): Checkout | null {
   return checkoutProblems(headSha, checkout).length > 0 ? checkout : null;
 }
 
-/** What CI said about a settled verdict's commit; null while it is not settled. */
+/** What CI said about a settled verdict's commit; null while it is not settled, or when it was superseded before CI was judged. */
 export function ciVerdictOf(verdict: Returned): CiVerdict | null {
   const { settlement } = verdict;
   switch (settlement.kind) {
     case "pending":
     case "waiting-for-ci":
     case "sending-back":
+    case "superseded":
       return null;
     case "sent-back":
     case "maybe-sent-back":
@@ -184,8 +197,8 @@ export function ciVerdictOf(verdict: Returned): CiVerdict | null {
   }
 }
 
-/** Whether a returned verdict is final: its findings reached the agent, or it is its coordinating thread's. why by its CI: every settled verdict keeps one. */
-export const isSettled = (verdict: Returned): boolean => ciVerdictOf(verdict) !== null;
+/** Whether a returned verdict is final: its findings reached the agent, it is its coordinating thread's, or it was superseded. why by its CI otherwise: every other settled verdict keeps one. */
+export const isSettled = (verdict: Returned): boolean => verdict.settlement.kind === "superseded" || ciVerdictOf(verdict) !== null;
 
 /** Whether a verdict's findings may or may not have reached its agent (see `maybe-sent-back`). */
 export const mayHaveReachedAgent = (verdict: Verdict): boolean => verdict.state === "returned" && verdict.settlement.kind === "maybe-sent-back";

@@ -23,6 +23,7 @@ import { createInbox } from "./inbox/inbox.ts";
 import { watchOwnTree } from "./inbox/own-tree-watch.ts";
 import { watchAgentThreads } from "./inbox/thread-watch.ts";
 import { registerIssueTools } from "./issues/issue-tools.ts";
+import { issueTurns } from "./issues/issue-turns.ts";
 import { createIssues } from "./issues/issues.ts";
 import { openMemoryRoot } from "./memory/memory-files.ts";
 import { memoryHandlers } from "./memory/memory-rpc.ts";
@@ -57,7 +58,7 @@ type VerifyBb = Parameters<typeof createVerify>[0]["bb"];
 type PrWatchBb = Parameters<typeof createPrWatch>[0]["bb"];
 type SendArgs = Parameters<AgentsBb["sdk"]["threads"]["send"]>[0];
 type Delivery = Awaited<ReturnType<InboxBb["sdk"]["threads"]["send"]>>;
-type QueuedMessage = Awaited<ReturnType<InboxBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number];
+type QueuedMessage = Awaited<ReturnType<InboxBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number] & Awaited<ReturnType<AgentsBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number];
 
 type ThreadRef = { id: string; originPluginId: string | null };
 type InteractionPayload = PluginThreadEventPayloads["interaction.pending"]["interaction"]["payload"];
@@ -273,8 +274,12 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   const turnEvents: { failure: Error | null } = { failure: null };
   /** Set `failure` to make every listing of threads by id reject with it, as when bb can't answer. */
   const threadLists: { failure: Error | null } = { failure: null };
-  /** Set `pending` to hold every stop until it settles, as a slow bb does; set `failure` to make every stop reject with it then. */
-  const stopRequests: { pending: Promise<void> | null; failure: Error | null } = { pending: null, failure: null };
+  /**
+   * Set `pending` to hold every stop until it settles, as a slow bb does; set `failure` to make every
+   * stop reject with it then. `byThread` overrides one thread's stop: an error it rejects with, or
+   * "stopping", which leaves the thread stopping.
+   */
+  const stopRequests: { pending: Promise<void> | null; failure: Error | null; byThread: Map<string, Error | "stopping"> } = { pending: null, failure: null, byThread: new Map() };
   /** Set `answered` to run as bb answers a thread's model lookup, as when someone acts at that moment. */
   const modelLookups: { answered: ((threadId: string) => void) | null } = { answered: null };
   let store = openStore(storage);
@@ -376,7 +381,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         return sends.unanswered ? new Promise(() => {}) : delivery;
       };
       if (args.mode === "queue-if-active" && thread.status !== "idle") {
-        const entry: (typeof queue)[number] = { id: `qm_${++queued}`, state: "queued", failureReason: null, threadId: args.threadId, text: textOfInput(args) };
+        const entry: (typeof queue)[number] = { id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: args.senderThreadId ?? null, threadId: args.threadId, text: textOfInput(args) };
         queue.push(entry);
         return answer({ delivery: "queued", queuedMessage: { id: entry.id } });
       }
@@ -408,10 +413,13 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     // As bb does, a stop that ends a running turn announces the thread idle, with the interrupted turn's last answer.
     async stop({ threadId }) {
       await stopRequests.pending;
+      const own = stopRequests.byThread.get(threadId);
+      if (own instanceof Error) throw own;
       if (stopRequests.failure !== null) throw stopRequests.failure;
       const thread = fakeThread(threadId);
-      const interrupted = thread.status !== "idle" && stops === "idle";
-      thread.status = stops;
+      const leaves = own ?? stops;
+      const interrupted = thread.status !== "idle" && leaves === "idle";
+      thread.status = leaves;
       if (interrupted) await emit("thread.idle", { thread: { ...ref(threadId), environmentId: thread.environmentId }, lastAssistantText: "Interrupted halfway." });
     },
     async archive({ threadId }) {
@@ -508,9 +516,10 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const spawner = createSpawner(bb, store, memory, () => bindings++);
     const board = createBoard(bb, store, memory);
     const inbox = createInbox({ bb, store, memory, onChange: refreshBoard });
-    const agents = createAgents({ bb, store, spawner, inbox, memory, placementFacts: placementFactsReader(bb, store), onChange: refreshBoard, onRemoved: refreshCoordinators });
+    const turns = issueTurns();
+    const agents = createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts: placementFactsReader(bb, store), onChange: refreshBoard, onRemoved: refreshCoordinators });
     const issues = createIssues({ bb, store, onChange: refreshBoard });
-    const verify = createVerify({ bb, store, spawner, inbox });
+    const verify = createVerify({ bb, store, spawner, inbox, turns });
     registerRoles(bb, store);
     registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
     registerIssueTools(bb, { store, issues });

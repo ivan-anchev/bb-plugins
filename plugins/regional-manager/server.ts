@@ -13,6 +13,7 @@ import { createInbox } from "./src/server/inbox/inbox.ts";
 import { watchOwnTree } from "./src/server/inbox/own-tree-watch.ts";
 import { watchAgentThreads } from "./src/server/inbox/thread-watch.ts";
 import { registerIssueTools } from "./src/server/issues/issue-tools.ts";
+import { issueTurns } from "./src/server/issues/issue-turns.ts";
 import { createIssues } from "./src/server/issues/issues.ts";
 import { openMemoryRoot } from "./src/server/memory/memory-files.ts";
 import { memoryHandlers } from "./src/server/memory/memory-rpc.ts";
@@ -35,9 +36,10 @@ export default function plugin(bb: BbPluginApi): void {
   const spawner = createSpawner(bb, store, memory, (role: Role) => (role.kind === "coordinator" ? refreshCoordinators() : refreshBoard(role.coordinatorId)));
   const board = createBoard(bb, store, memory);
   const inbox = createInbox({ bb, store, memory, onChange: refreshBoard });
-  const agents = createAgents({ bb, store, spawner, inbox, memory, placementFacts: placementFactsReader(bb, store), onChange: refreshBoard, onRemoved: refreshCoordinators });
+  const turns = issueTurns();
+  const agents = createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts: placementFactsReader(bb, store), onChange: refreshBoard, onRemoved: refreshCoordinators });
   const issues = createIssues({ bb, store, onChange: refreshBoard });
-  const verify = createVerify({ bb, store, spawner, inbox });
+  const verify = createVerify({ bb, store, spawner, inbox, turns });
 
   registerRoles(bb, store);
   registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });

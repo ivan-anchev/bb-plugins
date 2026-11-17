@@ -63,8 +63,9 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
 
     /**
      * Gives the ticket's role to the thread, and returns that role. Idempotent: a ticket binds once,
-     * so a second call, or a call naming another thread, changes nothing and returns null. A
-     * verifier's check starts running in the thread as it binds, unless it was superseded meanwhile.
+     * so a second call, or a call naming another thread, changes nothing and returns null. An ended
+     * agent's ticket never binds (see bindRole). A verifier's check starts running in the thread as
+     * it binds, unless it was superseded meanwhile.
      */
     bindTicket(ticket: string, threadId: string): Role | null {
       return db().transaction(() => {
@@ -77,18 +78,18 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     /**
      * A handover, together or not at all: ends the holder as replaced, leaving `left` (its current
      * handoff, or null), supersedes every check of its still waiting, and inserts the new agent.
-     * Returns the new agent and the verifier threads of the superseded checks; null when the holder
-     * no longer holds its issue, and then nothing is written.
+     * Returns the new agent; null when the holder no longer holds its issue, and then nothing is
+     * written. The handover stopped the holder's verifiers before.
      */
-    replaceAgent(holder: Pick<Agent, "coordinatorId" | "id" | "issueId">, left: HandoffId | null, next: NewAgent): { agentId: AgentId; superseded: string[] } | null {
+    replaceAgent(holder: Pick<Agent, "coordinatorId" | "id" | "issueId">, left: HandoffId | null, next: NewAgent): AgentId | null {
       return db().transaction(() => {
         // why placed: the issue passes to the new agent, so it neither rests in Todo nor tells the manager, who handed it over.
         if (!endAgent(db, holder, "replaced", left, true, next.at)) return null;
-        const superseded = supersedeChecks(db, holder.coordinatorId, holder.id);
+        supersedeChecks(db, holder.coordinatorId, holder.id);
         const agentId = insertAgent(db, next);
         // why throw, which rolls the transaction back: the holder ended just now in it, and an issue has one holder.
         if (agentId === null) throw new Error(`${next.issueId} of ${next.coordinatorId} has another holder than ${holder.id}.`);
-        return { agentId, superseded };
+        return agentId;
       })();
     },
 

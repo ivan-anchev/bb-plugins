@@ -166,8 +166,9 @@ test("a verdict that passed waits for CI, and one settled as checked gives back 
   assert.deepEqual(store.waitingForCi(MANAGER, agentId), [passed.id]);
   assert.deepEqual(events(store), [], "nobody is told while it waits for CI");
 
+  const waiting = store.check(passed.id)?.verdict;
   const failed = runningCheck(store, issue.id, agentId, 2);
-  assert.deepEqual(store.check(passed.id)?.verdict, { state: "superseded" }, "a newer done handoff supersedes one waiting for CI");
+  assert.deepEqual(store.check(passed.id)?.verdict, { ...waiting, settlement: { kind: "superseded" } }, "a newer done handoff supersedes one waiting for CI, its verdict kept whole");
   store.receiveVerdict(failed.id, returned("thr_verifier_2", "fail"));
   store.claimFixRound(failed.id, { kind: "none" });
   assert.equal(store.settleReturned(failed.id, { kind: "checked", refused: "bb refused the message", ci: { kind: "none" } }, 4_100), MANAGER);
@@ -243,12 +244,13 @@ test("a verdict, a give-up or a CI result that arrives after its check settled o
   const waiting = runningCheck(store, issue.id, agentId, 2);
   store.receiveVerdict(waiting.id, returned("thr_verifier_2", "pass"));
   store.settleReturned(waiting.id, { kind: "waiting-for-ci" }, 4_200);
+  const waited = store.check(waiting.id)?.verdict;
   const superseded = runningCheck(store, issue.id, agentId, 3);
   runningCheck(store, issue.id, agentId, 4);
   assert.equal(store.settleReturned(waiting.id, CHECKED, 4_300), null, "CI on a superseded commit");
   assert.equal(store.receiveVerdict(superseded.id, returned("thr_verifier_3", "pass")), false);
   assert.equal(store.giveUpCheck(superseded.id, running(3), gaveUp(3), 4_300), null);
-  assert.deepEqual([store.check(waiting.id)?.verdict, store.check(superseded.id)?.verdict], [{ state: "superseded" }, { state: "superseded" }]);
+  assert.deepEqual([store.check(waiting.id)?.verdict, store.check(superseded.id)?.verdict], [{ ...waited, settlement: { kind: "superseded" } }, { state: "superseded" }]);
   assert.deepEqual(events(store), [{ kind: "checked", issueId: issue.id, checkId: settled.id }]);
 });
 

@@ -63,10 +63,19 @@ export function registerAgentTools(bb: ToolsBb, { store, agents }: Deps): void {
     presentation: { label: { pending: "Messaging an agent", completed: "Messaged an agent" }, icon: { glyph: "SideChat" } },
     parameters: z.object({ agent: agentIdSchema, text: z.string().trim().min(1).max(20_000) }),
     execute: forAgent(MESSAGE, async (agent, { text }) => {
-      if (agent.ended !== null) return failed(`${agent.id} was ${agent.ended.how}, so it takes no more messages. Start a new agent on ${agent.issueId} with agent_start.`);
-      if (agent.threadId === null) return failed(`${agent.id} has no thread to message yet: bb hasn't confirmed one.`);
-      const delivery = await agents.message({ ...agent, threadId: agent.threadId }, text);
-      return delivery === "sent" ? `Sent to ${agent.id}.` : `Queued for ${agent.id}: it is waiting on the user or busy, and gets your message once it is free.`;
+      const outcome = await agents.message(agent, text);
+      switch (outcome.kind) {
+        case "sent":
+          return `Sent to ${agent.id}.`;
+        case "queued":
+          return `Queued for ${agent.id}: it is waiting on the user or busy, and gets your message once it is free.`;
+        case "already-ended":
+          return failed(`${agent.id} was ${outcome.how}, so it takes no more messages. Start a new agent on ${agent.issueId} with agent_start.`);
+        case "unbound":
+          return failed(`${agent.id} has no thread to message yet: bb hasn't confirmed one.`);
+        default:
+          return outcome satisfies never;
+      }
     }),
   });
 

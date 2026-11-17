@@ -54,15 +54,22 @@ function waitingForCi(db: Db, coordinatorId: CoordinatorId, agentId: AgentId): C
 }
 
 /**
- * Marks every check of the agent still waiting, for its verifier or for CI, as superseded, and
- * returns the verifier threads that were running them. Call inside a transaction.
+ * Marks every check of the agent still waiting as superseded, and returns the verifier threads that
+ * were running them: one waiting for its verifier has no verdict to keep; one waiting for CI keeps
+ * its returned verdict whole, settled as superseded. Call inside a transaction.
  */
 export function supersedeChecks(db: Db, coordinatorId: CoordinatorId, agentId: AgentId): string[] {
   const open = db()
     .prepare(`SELECT ${CHECK_COLUMNS} FROM checks WHERE coordinator_id = ? AND json_extract(subject, '$.agentId') = ? AND json_extract(verdict, '$.state') IN ('queued', 'running')`)
     .all(coordinatorId, agentId)
     .map(toOpenCheck);
-  for (const checkId of [...open.map(({ id }) => id), ...waitingForCi(db, coordinatorId, agentId)]) writeVerdict(db, checkId, { state: "superseded" });
+  for (const { id } of open) writeVerdict(db, id, { state: "superseded" });
+  for (const checkId of waitingForCi(db, coordinatorId, agentId)) {
+    const verdict = verdictOf(db, checkId);
+    // why throw: waitingForCi picks only returned verdicts.
+    if (verdict?.state !== "returned") throw new Error(`The check ${checkId} waits for CI with no returned verdict.`);
+    writeVerdict(db, checkId, { ...verdict, settlement: { kind: "superseded" } });
+  }
   return open.flatMap(({ verdict }) => (verdict.state === "running" ? [verdict.verifierThreadId] : []));
 }
 

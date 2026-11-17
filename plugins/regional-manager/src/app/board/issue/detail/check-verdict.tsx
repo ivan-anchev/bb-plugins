@@ -27,7 +27,7 @@ export function CheckVerdict({ verdict }: { verdict: ShownVerdict }) {
         </p>
       );
     case "superseded":
-      return <p className="rmi-verdict-line">Replaced by a newer handoff before its verdict</p>;
+      return <p className="rmi-verdict-line">Replaced before its verdict, by a newer handoff or a new agent</p>;
     case "waived":
       return <p className="rmi-verdict-line">Not verified: verification was off</p>;
     default:
@@ -86,10 +86,28 @@ function CheckoutLine({ verdict }: { verdict: ReturnedVerdict }) {
   );
 }
 
+/** Why CI hasn't been judged on the commit, when the board has something to say about it. */
+function UnjudgedCiLine({ verdict }: { verdict: ReturnedVerdict }) {
+  switch (verdict.settlement.kind) {
+    case "waiting-for-ci":
+      return <p className="rmi-verdict-meta">Waiting for CI on this commit</p>;
+    case "superseded":
+      return <p className="rmi-verdict-meta">Replaced before CI on this commit was judged</p>;
+    case "pending":
+    case "sending-back":
+    case "sent-back":
+    case "maybe-sent-back":
+    case "checked":
+      return null;
+    default:
+      return verdict.settlement satisfies never;
+  }
+}
+
 /** What CI said about the commit, when it failed the verdict, couldn't be read, or is still to come. */
 function CiLine({ verdict }: { verdict: ReturnedVerdict }) {
   const ci = ciVerdictOf(verdict);
-  if (ci === null) return verdict.settlement.kind === "waiting-for-ci" ? <p className="rmi-verdict-meta">Waiting for CI on this commit</p> : null;
+  if (ci === null) return <UnjudgedCiLine verdict={verdict} />;
   switch (ci.kind) {
     case "none":
     case "pass":

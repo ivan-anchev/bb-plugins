@@ -37,6 +37,15 @@ test("an agent's thread is null until its ticket binds", () => {
   assert.equal(store.roleFor("thr_new", "agent-1")?.kind, "agent");
 });
 
+test("an ended agent's ticket never binds: a thread bb makes for it late gets no role, and the agent no thread", () => {
+  const { store } = freshStore();
+  const { id } = store.insertIssue(MANAGER, newIssue(), 2_000);
+  const agent = { coordinatorId: MANAGER, id: store.insertAgent({ coordinatorId: MANAGER, issueId: id, ticket: "agent-1", placement: { kind: "worktree" }, base: { kind: "default" }, checkout: { environmentId: null, branch: null, head: null }, execution: EXECUTION, at: 2_000 }) ?? assert.fail("no agent"), issueId: id };
+  store.endAgent(agent, "replaced", null, true, 3_000);
+  assert.equal(store.bindTicket("agent-1", "thr_late"), null);
+  assert.deepEqual([store.roleOfThread("thr_late"), store.agent(MANAGER, agent.id)?.threadId], [null, null]);
+});
+
 test("an issue has one agent at a time: a second start is refused until the first ends, and ids are never reused", () => {
   const { store } = freshStore();
   const { id } = store.insertIssue(MANAGER, newIssue(), 2_000);
