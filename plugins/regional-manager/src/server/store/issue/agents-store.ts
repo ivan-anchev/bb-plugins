@@ -108,17 +108,27 @@ export function agentsStore(db: Db) {
       insertTicket(db, ticket, role, at);
     },
 
-    /**
-     * The agent, holding its issue, and its unbound ticket, together (see insertAgent). Null when an
-     * agent already holds the issue: two starts at once give one agent.
-     */
-    insertAgent: (a: NewAgent): AgentId | null => db().transaction(() => insertAgent(db, a))(),
-
     /** Every agent of the regional manager, holding or ended, in the order started. */
     agents: (coordinatorId: CoordinatorId): Agent[] => agents(coordinatorId, null),
 
     /** One agent of the regional manager, or null when it has none by that id. */
     agent: (coordinatorId: CoordinatorId, id: AgentId): Agent | null => agents(coordinatorId, id)[0] ?? null,
+
+    /**
+     * Every thread the plugin started for the issue and bb named, oldest first: its agents', each
+     * with its id, and its verifiers' (agentId null), whether they still hold a role in its work or not.
+     */
+    issueThreads(coordinatorId: CoordinatorId, issueId: IssueId): { threadId: string; agentId: AgentId | null }[] {
+      return db()
+        .prepare(
+          `SELECT r.thread_id AS threadId, a.id AS agentId FROM roles r LEFT JOIN agents a ON a.ticket = r.ticket
+            WHERE r.thread_id IS NOT NULL AND json_extract(r.role, '$.coordinatorId') = ?
+              AND (a.issue_id = ? OR (json_extract(r.role, '$.kind') = 'verifier' AND json_extract(r.role, '$.issueId') = ?))
+            ORDER BY r.rowid`,
+        )
+        .all(coordinatorId, issueId, issueId)
+        .map((row) => z.object({ threadId: z.string(), agentId: agentIdSchema.nullable() }).parse(row));
+    },
 
     /** The ticket an agent's thread is spawned with. why throw: every agent is inserted with one. */
     agentTicket(coordinatorId: CoordinatorId, id: AgentId): string {

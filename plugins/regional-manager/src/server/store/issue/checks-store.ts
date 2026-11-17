@@ -54,23 +54,27 @@ function waitingForCi(db: Db, coordinatorId: CoordinatorId, agentId: AgentId): C
 }
 
 /**
- * Marks every check of the agent still waiting as superseded, and returns the verifier threads that
- * were running them: one waiting for its verifier has no verdict to keep; one waiting for CI keeps
- * its returned verdict whole, settled as superseded. Call inside a transaction.
+ * Marks every check of the issue still waiting as superseded, whichever of its agents handed off: a
+ * newer done handoff or a new agent makes them moot. One waiting for its verifier has no verdict to
+ * keep; one waiting for CI keeps its returned verdict whole, settled as superseded. Its verifier may
+ * still run: whatever starts next on the issue asks bb, and stops it. Call inside a transaction.
  */
-export function supersedeChecks(db: Db, coordinatorId: CoordinatorId, agentId: AgentId): string[] {
+export function supersedeChecks(db: Db, coordinatorId: CoordinatorId, issueId: IssueId): void {
   const open = db()
-    .prepare(`SELECT ${CHECK_COLUMNS} FROM checks WHERE coordinator_id = ? AND json_extract(subject, '$.agentId') = ? AND json_extract(verdict, '$.state') IN ('queued', 'running')`)
-    .all(coordinatorId, agentId)
+    .prepare(`SELECT ${CHECK_COLUMNS} FROM checks WHERE coordinator_id = ? AND issue_id = ? AND json_extract(verdict, '$.state') IN ('queued', 'running')`)
+    .all(coordinatorId, issueId)
     .map(toOpenCheck);
   for (const { id } of open) writeVerdict(db, id, { state: "superseded" });
-  for (const checkId of waitingForCi(db, coordinatorId, agentId)) {
+  const waiting = db()
+    .prepare("SELECT id FROM checks WHERE coordinator_id = ? AND issue_id = ? AND json_extract(verdict, '$.settlement.kind') = 'waiting-for-ci'")
+    .all(coordinatorId, issueId)
+    .map(toCheckId);
+  for (const checkId of waiting) {
     const verdict = verdictOf(db, checkId);
-    // why throw: waitingForCi picks only returned verdicts.
+    // why throw: only a returned verdict has a settlement.
     if (verdict?.state !== "returned") throw new Error(`The check ${checkId} waits for CI with no returned verdict.`);
     writeVerdict(db, checkId, { ...verdict, settlement: { kind: "superseded" } });
   }
-  return open.flatMap(({ verdict }) => (verdict.state === "running" ? [verdict.verifierThreadId] : []));
 }
 
 export function checksStore(db: Db) {
@@ -132,26 +136,26 @@ export function checksStore(db: Db) {
      * The check copies its issue's criteria and verifier as they are now, and starts with the verdict
      * firstVerdict gives it on `checkout`, the agent's environment as read as it handed off: queued
      * for a verifier and announced with its verdict later, or else announced at once. A done handoff
-     * supersedes every earlier check of the agent still waiting. A blocked or gave-up one, and a done
+     * supersedes every earlier check of its issue still waiting. A blocked or gave-up one, and a done
      * one nothing verifies, is announced at once.
-     * Returns its check (null: not done) and the verifier threads of the checks it superseded.
+     * Returns its check (null: not done).
      */
-    insertHandoff(handoff: Handoff, checkout: CheckoutRead): { check: Check | null; superseded: string[] } {
+    insertHandoff(handoff: Handoff, checkout: CheckoutRead): Check | null {
       const { id, coordinatorId, issueId, agentId, at, turnSeq, ...report } = handoff;
       return db().transaction(() => {
         const stored = handoffReportSchema.parse(report);
         db().prepare("INSERT INTO handoffs (id, coordinator_id, issue_id, agent_id, report, turn_seq, at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, coordinatorId, issueId, agentId, JSON.stringify(stored), turnSeq, at);
         if (stored.status !== "done") {
           insertEvent(db, coordinatorId, { kind: "handoff", issueId, agentId, handoffId: id, status: stored.status }, at);
-          return { check: null, superseded: [] };
+          return null;
         }
-        const superseded = supersedeChecks(db, coordinatorId, agentId);
+        supersedeChecks(db, coordinatorId, issueId);
         const { kind, criteria, verifier } = z
           .object({ kind: kindSchema, criteria: json(doneCriteriaSchema), verifier: nullableJson(executionSchema) })
           .parse(db().prepare("SELECT kind, done_criteria AS criteria, verifier FROM issues WHERE coordinator_id = ? AND id = ?").get(coordinatorId, issueId));
         if (!isVerified(kind)) {
           insertEvent(db, coordinatorId, { kind: "handoff", issueId, agentId, handoffId: id, status: stored.status }, at);
-          return { check: null, superseded };
+          return null;
         }
         // why throw: a verified kind delivers a commit (kind.ts Pipeline), and reportOf made this delivery by its kind.
         if (stored.delivery.kind !== "commit") throw new Error(`A done handoff of ${issueId}, a ${kind} issue, delivers no commit to check.`);
@@ -170,7 +174,7 @@ export function checksStore(db: Db) {
           .prepare("INSERT INTO checks (id, coordinator_id, issue_id, handoff_id, subject, criteria, verifier, verdict, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
           .run(made.id, coordinatorId, issueId, id, JSON.stringify(made.subject), JSON.stringify(criteria), jsonOrNull(verifier), JSON.stringify(made.verdict), at);
         if (made.verdict.state !== "queued") insertEvent(db, coordinatorId, { kind: "checked", issueId, checkId: made.id }, at);
-        return { check: made, superseded };
+        return made;
       })();
     },
 

@@ -8,6 +8,7 @@ import { STATUS_LABELS, type Handed } from "../../model/issue/status.ts";
 import type { Agent } from "../../model/agent.ts";
 import { executionText, type Joined, type StartOutcome, type StopOutcome } from "../agents/agents.ts";
 import { handoffText, type Lookups } from "../tools/inbox-text.ts";
+import { fenced } from "../verify/findings.ts";
 import type { IssueRead } from "./issue-facts.ts";
 
 /** The most of an agent's latest answer issue_read returns. */
@@ -39,20 +40,20 @@ export const filedText = (issue: Issue): string =>
 export function startText(issueId: Issue["id"], outcome: Exclude<StartOutcome, { kind: "refused" }>): string {
   switch (outcome.kind) {
     case "started": {
-      const { agentId, threadId, execution, inherited, after, replaced, joined } = outcome;
+      const { agentId, threadId, execution, inherited, after, replaced, withdrawn, joined } = outcome;
       const started = `${replaced === null ? "Started" : `Stopped ${replaced} and started`} ${agentId} on ${issueId} as @thread:${threadId}`;
       const runs = `on ${executionText(execution)}${inherited ? ", your own provider, model and reasoning level" : ""}`;
-      const ends = "It ends its work with a handoff, and you are woken when it hands off, fails, waits on the user or stops without one.";
+      const ends = `It ends its work with a handoff, and you are woken when it hands off, fails, waits on the user or stops without one.${withdrawnText(replaced, withdrawn)}`;
       if (after === null) return `${started}, ${runs}. It works in its own environment on its own branch, and its brief arrived as a message from you. ${ends}`;
       const earlier = `Its first message, from you, holds the issue's plan and every earlier handoff and verdict.${replaced === null ? "" : ` ${replacedText(replaced)}`}`;
       if (joined === null) return `${started}, ${runs}. It starts clean, in its own environment from the default branch. ${earlier} ${ends}`;
       return `${started} ${joinedText(joined)}, ${runs}. It continues ${joined.from}'s work there: its commits, its uncommitted files and its pull request are ${agentId}'s now. ${earlier} ${ends}`;
     }
     case "failed": {
-      const { agentId, error, replaced, joined } = outcome;
+      const { agentId, error, replaced, withdrawn, joined } = outcome;
       const was = replaced === null ? "" : ` ${replaced} was stopped and replaced, and stays so.`;
       const retry = joined === null ? "call agent_start again, or tell the user" : `if bb removed ${joined.from}'s environment, start clean with agent_start and from: "default"; otherwise call agent_start again, or tell the user`;
-      return `bb did not start ${agentId}'s thread${joined === null ? "" : ` in ${joined.from}'s environment`}: ${error}.${was} ${issueId} has no agent and rests in Todo: ${retry}.`;
+      return `bb did not start ${agentId}'s thread${joined === null ? "" : ` in ${joined.from}'s environment`}: ${error}.${was} ${issueId} has no agent and rests in Todo: ${retry}.${withdrawnText(replaced, withdrawn)}`;
     }
     default:
       return outcome satisfies never;
@@ -69,6 +70,13 @@ function joinedText({ from, placement, branch, pr }: Joined): string {
 const replacedText = (replaced: string): string =>
   `${replaced}'s thread stays stopped, not archived, which keeps its environment alive until someone archives it.`;
 
+/** Your messages to the replaced agent that its handover took back from bb's queue, which it never got, quoted ("" when none). */
+function withdrawnText(replaced: string | null, withdrawn: readonly string[]): string {
+  if (replaced === null || withdrawn.length === 0) return "";
+  const one = withdrawn.length === 1;
+  return `\n\n${one ? "Your message" : `Your ${withdrawn.length} messages`} to ${replaced} still waited in bb's queue, so ${one ? "it was" : "they were"} taken back before ${replaced} stopped, and ${replaced} never got ${one ? "it" : "them"}:\n\n${withdrawn.map(fenced).join("\n\n")}`;
+}
+
 /** What agent_stop did. */
 export function stopText(agent: Agent, outcome: StopOutcome): string {
   switch (outcome.kind) {
@@ -77,7 +85,7 @@ export function stopText(agent: Agent, outcome: StopOutcome): string {
     case "already-ended":
       return `${agent.id} had already ended (${outcome.how}); nothing changed.`;
     case "still-running":
-      return `Asked ${agent.id} to stop, but its thread is still ${outcome.status}, so it still holds ${agent.issueId}. Call agent_stop again shortly.`;
+      return `Asked ${agent.id} to stop, but its thread ${outcome.why}, so it still holds ${agent.issueId}. Call agent_stop again shortly.`;
     default:
       return outcome satisfies never;
   }

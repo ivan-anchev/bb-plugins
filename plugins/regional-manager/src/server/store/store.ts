@@ -76,16 +76,29 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     },
 
     /**
+     * The agent, holding its issue, and its unbound ticket (see insertAgent), superseding every check
+     * of the issue still waiting, together: the new agent's work makes them moot. Null, with nothing
+     * written, when an agent already holds the issue: two starts at once give one agent.
+     */
+    insertAgent(next: NewAgent): AgentId | null {
+      return db().transaction(() => {
+        const agentId = insertAgent(db, next);
+        if (agentId !== null) supersedeChecks(db, next.coordinatorId, next.issueId);
+        return agentId;
+      })();
+    },
+
+    /**
      * A handover, together or not at all: ends the holder as replaced, leaving `left` (its current
-     * handoff, or null), supersedes every check of its still waiting, and inserts the new agent.
-     * Returns the new agent; null when the holder no longer holds its issue, and then nothing is
-     * written. The handover stopped the holder's verifiers before.
+     * handoff, or null), supersedes every check of the issue still waiting, and inserts the new
+     * agent. Returns the new agent; null when the holder no longer holds its issue, and then nothing
+     * is written. The handover stopped the issue's verifiers before.
      */
     replaceAgent(holder: Pick<Agent, "coordinatorId" | "id" | "issueId">, left: HandoffId | null, next: NewAgent): AgentId | null {
       return db().transaction(() => {
         // why placed: the issue passes to the new agent, so it neither rests in Todo nor tells the manager, who handed it over.
         if (!endAgent(db, holder, "replaced", left, true, next.at)) return null;
-        supersedeChecks(db, holder.coordinatorId, holder.id);
+        supersedeChecks(db, holder.coordinatorId, holder.issueId);
         const agentId = insertAgent(db, next);
         // why throw, which rolls the transaction back: the holder ended just now in it, and an issue has one holder.
         if (agentId === null) throw new Error(`${next.issueId} of ${next.coordinatorId} has another holder than ${holder.id}.`);

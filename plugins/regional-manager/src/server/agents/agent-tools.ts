@@ -7,7 +7,7 @@ import { requestedExecutionSchema } from "../../model/execution.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { startText, stopText } from "../issues/issue-text.ts";
 import type { Store } from "../store/store.ts";
-import { failed, forManager, type ToolsBb } from "../tools/tool-kit.ts";
+import { failed, forManager, refusedBusy, type ToolsBb } from "../tools/tool-kit.ts";
 import type { Agents } from "./agents.ts";
 
 const START = "agent_start";
@@ -53,6 +53,7 @@ export function registerAgentTools(bb: ToolsBb, { store, agents }: Deps): void {
     }),
     execute: forManager(store, START, async (id, { issue, from, execution, placement }) => {
       const outcome = await agents.start(id, { issueId: issue, from, execution, placement });
+      if ("busy" in outcome) return refusedBusy(START, outcome);
       return outcome.kind === "refused" ? failed(`${START} is refused: ${outcome.reason}`) : startText(issue, outcome);
     }),
   });
@@ -64,6 +65,7 @@ export function registerAgentTools(bb: ToolsBb, { store, agents }: Deps): void {
     parameters: z.object({ agent: agentIdSchema, text: z.string().trim().min(1).max(20_000) }),
     execute: forAgent(MESSAGE, async (agent, { text }) => {
       const outcome = await agents.message(agent, text);
+      if ("busy" in outcome) return refusedBusy(MESSAGE, outcome);
       switch (outcome.kind) {
         case "sent":
           return `Sent to ${agent.id}.`;
@@ -91,6 +93,9 @@ export function registerAgentTools(bb: ToolsBb, { store, agents }: Deps): void {
         .default(false)
         .describe("Archive its thread too, once it is stopped. bb then destroys a sandbox no other thread lives in, unpushed work included, and retires a worktree after a few minutes."),
     }),
-    execute: forAgent(STOP, async (agent, { archive }) => stopText(agent, await agents.stop(agent, archive))),
+    execute: forAgent(STOP, async (agent, { archive }) => {
+      const outcome = await agents.stop(agent, archive);
+      return "busy" in outcome ? refusedBusy(STOP, outcome) : stopText(agent, outcome);
+    }),
   });
 }

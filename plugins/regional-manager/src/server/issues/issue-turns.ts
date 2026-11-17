@@ -1,66 +1,79 @@
-// One thing at a time per issue. Everything that has an effect in bb on an issue's environment (a
-// start or handover, agent_stop and its archive, a message or a verifier's findings sent to its
-// agent, a verifier started or nudged) runs as one turn of its issue, from its decision until bb
-// confirmed or refused its effects, and reads its facts and decides once it holds the turn. The
-// database's transactions protect its rows; turns protect the awaits around them, where two
-// operations deciding on the same facts would otherwise both act. Writes with no effect in bb (a
-// handoff, a verdict, the tick ending an agent bb archived) need no turn.
+// One thing at a time per issue. Everything that changes an issue's facts or has an effect in bb on
+// its threads (a start or handover, agent_stop, a message to its agent, a handoff, a verdict, a
+// verifier started, nudged or given up on, findings sent back, an agent ended as its thread was
+// archived or deleted) runs as one turn of its issue, and reads its facts once it holds the turn.
+// The database's transactions protect its rows; turns protect the awaits around them, where two
+// operations deciding on the same facts would otherwise both act.
 //
-// why in memory: the plugin's server is one process, so a queue per issue in it is enough. A crash
-// or reload mid-turn drops the queue with whatever was awaiting bb: at worst an agent inserted with
-// no thread, which the board flags Needs you, or a check still queued, which the tick starts again.
+// why a turn is held until its operation settles, however long bb takes: while a call to bb is out,
+// its outcome is unknown, and whatever acted next would decide on a guess. What is bounded is the
+// wait: a caller that waited WAIT_MS gets Busy, having done nothing, and the tick never waits.
 //
-// why a lease: a call bb never answers would hold its issue forever. A turn lasts at most LEASE_MS;
-// then the next waiting operation starts, and the late one's `check` throws, so it does nothing more.
-// What bounds a waiter is the lease of each turn ahead of it. Only the one bb call in flight when a
-// lease ran out can still land.
+// why in memory, and what ends a turn bb never answers: the plugin's server is one process, so a
+// queue per issue in it is enough, and nothing in the plugin ends such a turn. A reload drops the
+// queue with whatever was awaiting bb, and the new instance acts on what bb and the database say:
+// an agent inserted whose spawn never answered has no thread, which the board flags Needs you until
+// agent_stop ends it, or binds when bb makes its thread; a check still queued is started again by
+// the tick; a thread the lost call started or woke is one of the issue's, so the next start on the
+// issue, an agent's or a verifier's, finds it running in bb and stops it first.
 import type { IssueId } from "../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 
-/** An operation's hold on its issue. */
-export type Turn = {
-  /** Throws once the turn's lease ran out and its issue moved on. Call it right before each effect that follows an await. */
-  check(): void;
-};
+/** What an operation that didn't get its issue's turn returns: it did nothing, and can be asked again. */
+export type Busy = { busy: string };
 
 export type IssueTurns = ReturnType<typeof issueTurns>;
 
-/** Long enough for bb to wake a suspended sandbox and spawn into it. */
-const LEASE_MS = 2 * 60_000;
+/** How long a tool call waits for its issue's turn before it is refused. */
+const WAIT_MS = 30_000;
 
-/** `leaseMs`: how long a turn holds its issue at most; tests shorten it. */
-export function issueTurns(leaseMs = LEASE_MS) {
-  // The latest turn asked for on each issue, resolved once it is over.
+/** `waitMs`: how long `run` waits for the turn; tests shorten it. */
+export function issueTurns(waitMs = WAIT_MS) {
+  // The latest turn asked for on each issue, resolved once it and every turn before it are over.
   const tails = new Map<string, Promise<void>>();
+  const keyOf = (coordinatorId: CoordinatorId, issueId: IssueId) => `${coordinatorId}/${issueId}`;
+  const busy = (issueId: IssueId): Busy => ({ busy: `an earlier operation on ${issueId} hasn't finished yet, so nothing changed` });
+
+  /** Queues for the issue's turn; runs `operation` once `ready` says the turns before are over, else returns Busy. */
+  async function take<T>(coordinatorId: CoordinatorId, issueId: IssueId, operation: () => Promise<T>, ready: (before: Promise<void>) => Promise<boolean>): Promise<T | Busy> {
+    const key = keyOf(coordinatorId, issueId);
+    const before = tails.get(key) ?? Promise.resolve();
+    let end = (): void => {};
+    const over = new Promise<void>((resolve) => (end = resolve));
+    // why after `before`: a caller that gave up waiting must not let the turns behind it pass the one it waited for.
+    const tail = before.then(() => over);
+    tails.set(key, tail);
+    const forget = () => tails.get(key) === tail && tails.delete(key);
+    if (!(await ready(before))) {
+      end();
+      void tail.then(forget);
+      return busy(issueId);
+    }
+    try {
+      return await operation();
+    } finally {
+      end();
+      forget();
+    }
+  }
 
   return {
-    /** Runs `operation` once every earlier turn of the issue is over, as the issue's only turn. */
-    async run<T>(coordinatorId: CoordinatorId, issueId: IssueId, operation: (turn: Turn) => Promise<T>): Promise<T> {
-      const key = `${coordinatorId}/${issueId}`;
-      const before = tails.get(key) ?? Promise.resolve();
-      let end = (): void => {};
-      const over = new Promise<void>((resolve) => (end = resolve));
-      const tail = before.then(() => over);
-      tails.set(key, tail);
-      await before;
-      let lost = false;
-      const lease = setTimeout(() => {
-        lost = true;
-        end();
-      }, leaseMs);
-      // why unref: a turn bb never answers must not keep the process alive.
-      lease.unref();
-      try {
-        return await operation({
-          check() {
-            if (lost) throw new Error(`bb took over ${leaseMs / 1000} seconds to answer, so ${issueId} went on to what waited behind this, and nothing more was done here.`);
-          },
-        });
-      } finally {
-        clearTimeout(lease);
-        end();
-        if (tails.get(key) === tail) tails.delete(key);
-      }
-    },
+    /** Runs `operation` as the issue's only turn once every earlier one is over; Busy, with nothing run, after waiting `waitMs`. */
+    run: <T>(coordinatorId: CoordinatorId, issueId: IssueId, operation: () => Promise<T>): Promise<T | Busy> => take(coordinatorId, issueId, operation, (before) => settlesWithin(before, waitMs)),
+
+    /** For the tick, which never waits: runs `operation` as the issue's turn if no operation holds or waits for it; else Busy, and the next tick tries again. */
+    runIfFree: <T>(coordinatorId: CoordinatorId, issueId: IssueId, operation: () => Promise<T>): Promise<T | Busy> =>
+      tails.has(keyOf(coordinatorId, issueId)) ? Promise.resolve(busy(issueId)) : take(coordinatorId, issueId, operation, async () => true),
   };
+}
+
+/** Whether `promise` settles within `ms`. */
+async function settlesWithin(promise: Promise<void>, ms: number): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<false>((resolve) => (timer = setTimeout(() => resolve(false), ms)));
+  try {
+    return await Promise.race([promise.then(() => true), late]);
+  } finally {
+    clearTimeout(timer);
+  }
 }

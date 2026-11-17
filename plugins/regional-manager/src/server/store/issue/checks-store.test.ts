@@ -24,8 +24,8 @@ function withAgent() {
   return { db, storage, store, issue, agentId: startAgent(store, issue.id, "agent-1") };
 }
 
-function checkOf(made: { check: Check | null }): Check {
-  return made.check ?? assert.fail("the done handoff made no check");
+function checkOf(made: Check | null): Check {
+  return made ?? assert.fail("the done handoff made no check");
 }
 
 type Received = Parameters<Store["receiveVerdict"]>[1];
@@ -94,11 +94,11 @@ test("a done handoff no verifier will check is announced at once: verification o
 test("a blocked handoff gets no check and is announced at once", () => {
   const { store, issue, agentId } = withAgent();
   const blocked = handoff(issue.id, agentId, "blocked");
-  assert.deepEqual(store.insertHandoff(blocked, CLEAN), { check: null, superseded: [] });
+  assert.equal(store.insertHandoff(blocked, CLEAN), null);
   assert.deepEqual(events(store), [{ kind: "handoff", issueId: issue.id, agentId, handoffId: blocked.id, status: "blocked" }]);
 });
 
-test("a newer done handoff supersedes the agent's checks still waiting, and returns the verifiers to stop", () => {
+test("a newer done handoff supersedes the issue's checks still waiting", () => {
   const { store, issue, agentId } = withAgent();
   const queued = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done", 3_000), CLEAN));
   const running = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done", 3_100), CLEAN));
@@ -107,7 +107,6 @@ test("a newer done handoff supersedes the agent's checks still waiting, and retu
 
   const newest = store.insertHandoff(handoff(issue.id, agentId, "done", 3_200), CLEAN);
 
-  assert.deepEqual(newest.superseded, ["thr_verifier"]);
   assert.deepEqual([store.check(queued.id)?.verdict, store.check(running.id)?.verdict], [{ state: "superseded" }, { state: "superseded" }]);
   assert.deepEqual(store.openChecks().map(({ id }) => id), [checkOf(newest).id]);
   assert.deepEqual(store.record(MANAGER, issue.id).map(({ check }) => check?.verdict.state), ["superseded", "superseded", "queued"]);

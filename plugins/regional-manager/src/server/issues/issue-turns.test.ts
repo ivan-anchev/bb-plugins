@@ -39,18 +39,34 @@ test("a turn that fails still ends, and the next one runs", async () => {
   assert.equal(await turns.run(MANAGER, I1, async () => "next"), "next");
 });
 
-test("a turn bb never answers holds its issue only for its lease: the next one runs, and the late one does nothing more", async () => {
+test("a turn bb hasn't answered holds its issue until it settles: a caller that waited past the bound is refused, having run nothing, and the turns behind it still wait", async () => {
   const turns = issueTurns(20);
   const bb = held();
   const acted: string[] = [];
-  const late = turns.run(MANAGER, I1, async (turn) => {
+  const first = turns.run(MANAGER, I1, async () => {
     await bb.done;
-    turn.check();
-    acted.push("late");
+    acted.push("first");
   });
-  await turns.run(MANAGER, I1, async () => void acted.push("next"));
-  assert.deepEqual(acted, ["next"], "the next turn ran once the lease was over");
+  const refused = turns.run(MANAGER, I1, async () => void acted.push("refused"));
+  assert.deepEqual(await refused, { busy: "an earlier operation on i1 hasn't finished yet, so nothing changed" });
+  const behind = turns.run(MANAGER, I1, async () => void acted.push("behind"));
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.deepEqual(acted, [], "nothing ran beside the first, whose call is still out");
   bb.release();
-  await assert.rejects(late, /bb took over 0.02 seconds to answer, so i1 went on to what waited behind this, and nothing more was done here\./);
-  assert.deepEqual(acted, ["next"]);
+  await first;
+  await behind;
+  assert.deepEqual(acted, ["first", "behind"]);
+});
+
+test("the tick's runIfFree skips an issue whose turn is held or waited for, and runs one that is free", async () => {
+  const turns = issueTurns();
+  const bb = held();
+  const holding = turns.run(MANAGER, I1, () => bb.done);
+  const ran: string[] = [];
+  assert.deepEqual(await turns.runIfFree(MANAGER, I1, async () => void ran.push("i1")), { busy: "an earlier operation on i1 hasn't finished yet, so nothing changed" });
+  await turns.runIfFree(MANAGER, I2, async () => void ran.push("i2"));
+  bb.release();
+  await holding;
+  await turns.runIfFree(MANAGER, I1, async () => void ran.push("i1 again"));
+  assert.deepEqual(ran, ["i2", "i1 again"]);
 });

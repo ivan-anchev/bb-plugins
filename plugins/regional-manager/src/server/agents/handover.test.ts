@@ -138,7 +138,7 @@ test("a holder bb still reports stopping is not replaced: the start is refused a
   const spawned = kit.spawned();
   const refused = await handover();
   assert.ok(isRefusal(refused));
-  assert.equal(textOf(refused), "agent_start is refused: a1 is still stopping, so nothing changed and it still holds i1. Call agent_start again once it has stopped.");
+  assert.equal(textOf(refused), "agent_start is refused: a1 is still stopping, so no agent started and a1 still holds i1. Call agent_start again once it has stopped.");
   assert.equal(agent(a1).ended, null);
   assert.deepEqual([kit.spawned(), kit.store.agents(coordinatorId).length], [spawned, 1]);
 });
@@ -386,23 +386,24 @@ test("a verifier whose start is held when a handover is asked starts first, and 
   assert.equal(kit.thread(next).status, "active");
 });
 
-test("a check the handover superseded while its verifier waited to start starts no verifier", async () => {
+test("a handoff made while a handover stops its agent waits for i1, then is refused as the agent was replaced: nothing is stored, and no verifier starts", async () => {
   const { kit, coordinatorId, agentThreadId, handover } = await handedTo();
   const stops = hold();
   kit.stopRequests.pending = stops.done;
   kit.startTurn(agentThreadId);
   const handing = handover();
   await settled();
-  // a1 hands off while the handover stops it; its check is queued, and its verifier waits for i1.
+  // a1 hands off while the handover stops it: the handoff waits for i1.
   const spawned = kit.spawned();
   const handed = kit.call("agent_handoff", DONE, agentThreadId);
   await settled();
-  assert.equal(kit.spawned(), spawned, "no verifier while the handover holds i1");
+  assert.equal(kit.store.latestHandoff(coordinatorId, a1), null, "nothing stored while the handover holds i1");
   kit.stopRequests.pending = null;
   stops.release();
-  await Promise.all([handing, handed]);
+  await handing;
 
-  assert.equal(kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict.state, "superseded");
+  assert.equal(textOf(await handed), "agent_handoff is refused: you no longer hold i1 (you were replaced), so nothing reads a handoff from you. Stop here.");
+  assert.equal(kit.store.latestHandoff(coordinatorId, a1), null);
   assert.equal(kit.spawned(), spawned + 1, "a2 only, no verifier");
 });
 
@@ -419,7 +420,7 @@ for (const [how, stop, why] of [
 
     const refused = await handover();
     assert.ok(isRefusal(refused));
-    assert.equal(textOf(refused), `agent_start is refused: a1 was stopped, but its verifier @thread:${verifier} ${why}, so nothing else changed and a1 still holds i1. Call agent_start again once it has stopped.`);
+    assert.equal(textOf(refused), `agent_start is refused: the verifier @thread:${verifier} ${why}, so no agent started and a1 still holds i1. Call agent_start again once it has stopped.`);
     assert.deepEqual([agent(a1).ended, kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict.state, kit.spawned(), kit.thread(verifier).archivedAt], [null, "running", spawned, null]);
 
     kit.stopRequests.byThread.delete(verifier);

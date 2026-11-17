@@ -74,7 +74,7 @@ test("an agent that opens a pull request shows #n on its row within a tick, and 
 });
 
 test("a verdict that passes while CI is pending waits under Verifying as waiting for CI, then goes to In review the tick CI passes", async () => {
-  const { kit, row, doorbells, pr, minute, verified } = await agentOnGitHub();
+  const { kit, row, doorbells, events, pr, minute, verified } = await agentOnGitHub();
   pr();
   await minute();
   await verified();
@@ -86,7 +86,9 @@ test("a verdict that passes while CI is pending waits under Verifying as waiting
   pr({ rollup: "SUCCESS" });
   await minute();
   assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" });
-  assert.equal(doorbells().at(-1), '[Regional Manager] 2 updates. Call crew_catch_up to read them in full.\n- i1 "Add retries" (a1) PR #41: CI passed\n- i1 "Add retries" (a1) handed off: done, verified');
+  // why apart: the tick rings for the read while the verdict settles in i1's turn, which the tick doesn't wait for; the verdict waits for the next doorbell.
+  assert.equal(doorbells().at(-1), '[Regional Manager] 1 update. Call crew_catch_up to read it in full.\n- i1 "Add retries" (a1) PR #41: CI passed');
+  assert.deepEqual(events(), ["checked"]);
 });
 
 test("the same verdict with failing CI fails, and the findings sent back to the agent name the failed checks", async () => {
@@ -468,7 +470,8 @@ test("a verdict whose settle fails leaves every read of the batch saved, and set
   secondPr("SUCCESS");
   kit.turnEvents.failure = new Error("bb is restarting");
   kit.clock.now += MINUTE;
-  await assert.rejects(kit.tick(), /bb is restarting/, "settling i1's verdict, after the reads, fails");
+  await kit.tick();
+  assert.match(kit.warnings().join("\n"), /Could not reconcile the verifiers of i1; the next tick tries again: bb is restarting/, "settling i1's verdict, after the reads, fails");
   assert.equal(kit.github.runs.length, 2, "one read of both branches this tick");
   assert.equal(kit.store.prOfBranch(coordinatorId, branch)?.snapshot?.ci, "pass");
   assert.equal(kit.store.prOfBranch(coordinatorId, secondBranch)?.snapshot?.ci, "pass", "the read after the failing verdict's agent is saved too");

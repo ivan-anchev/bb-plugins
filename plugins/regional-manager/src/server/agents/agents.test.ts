@@ -328,7 +328,7 @@ test("an agent that ends its turn by itself while agent_stop waits on bb is repo
 
     if (failure === null) assert.match(textOf(await stopping), /^a1 is stopped; it no longer holds i1\./);
     else {
-      await assert.rejects(stopping, /Bad gateway/);
+      assert.match(textOf(await stopping), /^Asked a1 to stop, but its thread wasn't stopped: bb answered HTTP 502: Bad gateway, so it still holds i1\./);
       assert.equal(kit.store.agents(coordinatorId)[0]?.ended, null);
     }
     assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /### i1 "Add retries" \(a1\) ended its turn without a handoff\n\nAt [^\n]+ Its last answer, in its own words:\n\nI need the staging key\./);
@@ -442,7 +442,8 @@ test("an agent whose thread was archived or deleted while the plugin wasn't list
     ["i1", "todo", "Its agent was archived"],
     ["i2", "todo", "Its agent was deleted"],
   ]);
-  assert.deepEqual(doorbells().flatMap((text) => text.split("\n").slice(1)), ['- i1 "Add retries" (a1) returned to Todo: its agent was archived', '- i2 "Dead letters" (a2) returned to Todo: its agent was deleted']);
+  // why sorted: each issue's end runs in its own turn, side by side.
+  assert.deepEqual(doorbells().flatMap((text) => text.split("\n").slice(1)).sort(), ['- i1 "Add retries" (a1) returned to Todo: its agent was archived', '- i2 "Dead letters" (a2) returned to Todo: its agent was deleted']);
 });
 
 for (const first of ["agent", "manager", "neither"] as const) {

@@ -55,6 +55,8 @@ export default function plugin(bb: BbPluginApi): void {
     // why each caught: a pass that can't read bb or GitHub must not keep the next from running, nor the doorbells from ringing.
     // why the agents first: they remove a regional manager bb deleted before any later pass could ring it.
     // why the PR reads before the verifiers: a verdict waiting for CI settles on this tick's read.
+    // why nothing waits for the issues' turns the agents' and the verifiers' passes start: a call bb
+    // never answers holds only its own issue, which every tick skips until it answers (issue-turns.ts).
     await agents.reconcile().catch((error: unknown) => bb.log.warn(`Could not reconcile the agents; the next tick tries again: ${messageOf(error)}`));
     await prWatch.tick(Date.now()).catch((error: unknown) => bb.log.warn(`Could not read the issues' pull requests; the next tick tries again: ${messageOf(error)}`));
     await verify.reconcile().catch((error: unknown) => bb.log.warn(`Could not reconcile the verifiers; the next tick tries again: ${messageOf(error)}`));
