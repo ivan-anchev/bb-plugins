@@ -5,7 +5,7 @@ import { byLane, LANE_LABELS, laneOf } from "../../model/board/board-groups.ts";
 import type { Issue, IssueId } from "../../model/issue/issue.ts";
 import { isVerified, PIPELINES } from "../../model/issue/kind.ts";
 import { isReady, type Related, type Relations } from "../../model/issue/relations.ts";
-import { STATUS_LABELS, type Handed } from "../../model/issue/status.ts";
+import { STATUS_LABELS, type Handed, type IssueView } from "../../model/issue/status.ts";
 import type { Agent } from "../../model/agent.ts";
 import { executionText, recipientsText, type Joined, type StartOutcome, type StopOutcome, type Withdrawn } from "../agents/agents.ts";
 import { handoffText, type Lookups } from "../tools/inbox-text.ts";
@@ -34,7 +34,7 @@ function rowLine({ view, agent, threadId, branch }: IssueRead): string {
 }
 
 /** The issues in Todo that nothing blocks: those an agent can start on without waiting. */
-function readyLine(views: readonly IssueRead["view"][]): string {
+function readyLine(views: readonly IssueView[]): string {
   const ready = views.filter(isReady).map(({ issue }) => issue.id);
   return `Ready: ${ready.length === 0 ? "none" : ready.join(", ")} (in Todo, and nothing they depend on is open).`;
 }

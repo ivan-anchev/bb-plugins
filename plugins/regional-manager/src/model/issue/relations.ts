@@ -19,7 +19,7 @@ export type Related = { id: IssueId; status: IssueStatus };
 export type Relations = { dependsOn: Related[]; blocks: Related[] };
 
 /** A status in which an issue no longer blocks the issues that depend on it. */
-export type ClosedStatus = Extract<IssueStatus, "done" | "canceled">;
+type ClosedStatus = Extract<IssueStatus, "done" | "canceled">;
 
 /** Whether an issue in this status no longer blocks the issues that depend on it. why Canceled too: a canceled dependency counts as closed (brief, open question 1). */
 export const isClosed = (status: IssueStatus): status is ClosedStatus => status === "done" || status === "canceled";
