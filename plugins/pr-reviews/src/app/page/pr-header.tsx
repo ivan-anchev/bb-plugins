@@ -23,8 +23,8 @@ type PrHeaderProps = { target: PrTarget; repo: Repo; pr: PrDetail; hasReviewThre
 export function PrHeader({ target, repo, pr, hasReviewThread, title }: PrHeaderProps) {
   return (
     <>
-      {/* .pr-pane-header (app.css): bb's pane header height and seam. */}
-      <div className="pr-pane-header">
+      {/* .pr-pane-header (app.css): bb's pane header height and seam; px-6 is the page's content edge. */}
+      <div className="pr-pane-header gap-2.5 px-6">
         <StateBadge target={target} state={pr.state} />
         <span className="min-w-0 truncate text-xs text-muted-foreground">
           {repo} <span className="font-medium tabular-nums">#{pr.number}</span>

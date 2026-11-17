@@ -24,17 +24,17 @@
   --trees-status-renamed-override: var(--muted-foreground);
 }
 
-/* A pane's header bar, drawn as bb draws its own pane headers (AppPageHeader: one chrome row tall,
-   `border-b border-border-seam-vertical/60`), so it reads as bb's and a theme that changes those
-   tokens changes it too. Any pane header on the page takes it, so their bars line up across the
-   split. Its inline padding matches the PR page's content edge. */
+/* A pane's header bar, as bb draws its own pane headers (the thread view's, measured 48px in bb
+   0.49): the app chrome's row height and its seam hairline below, the bar's controls centred. The
+   sidebar's and the PR pane's share it, so their bars line up across the split. It holds only what
+   both share: each pane sets its own padding and gap as utilities, which this unlayered rule would
+   override if it set them too. */
 .pr-pane-header {
   display: flex;
-  flex: none;
+  flex-shrink: 0;
   align-items: center;
-  gap: 0.625rem;
+  box-sizing: border-box;
   height: var(--bb-app-chrome-row-height);
-  padding-inline: 1.5rem;
   border-bottom: 1px solid color-mix(in oklab, var(--border-seam-vertical) 60%, transparent);
 }
 
@@ -169,16 +169,4 @@
     transform: translateX(calc(-1 * var(--pr-reviews-travel)));
     transition: transform var(--pr-reviews-run) cubic-bezier(0.45, 0, 0.55, 1) 500ms;
   }
-}
-
-/* A pane's header bar, as bb draws its own pane headers (the thread view's, measured 48px in bb
-   0.49): the app chrome's row height and its seam hairline below, the bar's controls centred.
-   The sidebar's and the PR pane's share it, so their bars line up across the split. */
-.pr-pane-header {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  box-sizing: border-box;
-  height: var(--bb-app-chrome-row-height);
-  border-bottom: 1px solid color-mix(in oklab, var(--border-seam-vertical) 60%, transparent);
 }
