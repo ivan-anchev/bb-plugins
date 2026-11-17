@@ -322,10 +322,12 @@ verdict.
   and verdicts still in its first message. A research issue's handover always
   starts clean.
 - **Refused, with nothing stopped**: a move out of an environment with
-  uncommitted files (named) or that can't be read, offering the continue; a
-  move with a sandbox on either side whose head no pull request shows,
-  offering the continue or a push; a removed sandbox whose head never reached
-  origin, offering `from: "default"`: its unpushed commits went with it. A
+  uncommitted files (named), no branch checked out, or that can't be read,
+  offering the continue; a move with a sandbox on either side whose head no
+  pull request shows, offering the continue or a push; a removed sandbox
+  whose head never reached origin, offering `from: "default"`: its unpushed
+  commits went with it; a removed worktree's unpushed commits to a sandbox,
+  offering a worktree start, which reaches its local branch. A
   holder bb still reports stopping is refused too, and a move whose previous
   environment changed while the holder stopped is refused after the stop,
   the holder still holding. If bb refuses the new agent's thread, as for an

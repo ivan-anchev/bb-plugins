@@ -315,6 +315,26 @@ test("criterion 8 (sandbox, harness): once bb destroys a1's sandbox, a start wit
   }
 });
 
+test("criterion 8 (harness): once bb removes a1's worktree, a move to a sandbox of its unpushed commits is refused saying they are still on its branch, and a start with no placement reaches them", async () => {
+  const { kit, threadId, agentThreadId, call, headOf, environmentOf, branch } = await holding();
+  kit.commit(agentThreadId, COMMITTED);
+  await kit.call("agent_handoff", BLOCKED, agentThreadId); // records the head a1 left
+  await kit.idle(agentThreadId, "Blocked.");
+  await kit.call("agent_stop", { agent: "a1", archive: true }, threadId);
+  kit.environments.destroyed.add(environmentOf(agentThreadId)); // bb environment cleanup: the worktree goes, its branch stays
+
+  const refused = await call({ placement: SANDBOX });
+  assert.ok(isRefusal(refused));
+  assert.equal(
+    textOf(refused),
+    `agent_start is refused: Nothing changed. bb removed a1's worktree, and nothing shows its branch \`${branch}\` reached origin at its head 1111111 (no pull request has that head): its commits are still on that branch on your machine, which a new worktree reaches. Leave out placement, or name a worktree, and the new agent starts on a branch cut from it; it can push and open its pull request, and a move to a sandbox works after that. Or start clean with from: "default", which starts from the default branch with every earlier handoff and verdict in the new agent's first message.`,
+  );
+  assert.equal(kit.repo.local.get(branch), COMMITTED);
+
+  const recovered = threadIn(textOf(await call()));
+  assert.equal(headOf(recovered), COMMITTED, "the start the refusal offers reaches a1's commits");
+});
+
 test("criterion 9 (sandbox, harness): a move out of a suspended sandbox is refused as unreadable, offering the continue, and wakes nothing", async () => {
   const { kit, agentThreadId, call, agent, environmentOf } = await holding({ placement: SANDBOX });
   await kit.idle(agentThreadId, "Waiting.");

@@ -323,7 +323,10 @@ verdict) stays one.
   With no `placement`, a handover whose environment bb removed (a sandbox
   goes when its last thread is archived) moves too, to a new one like it,
   the same provider and machine inputs; a sandbox whose head never reached
-  origin is lost, and the refusal offers `from: "default"`.
+  origin is lost, and the refusal offers `from: "default"`. A removed
+  worktree's unpushed commits stay on its local branch: a move of them to a
+  sandbox is refused, and a start with no `placement` (or a worktree) reaches
+  them, whose agent can push and open its pull request.
 - **A clean start**: `from: "default"` gives the new agent a new environment
   from the default branch (a `placement` may name where), with the earlier
   handoffs and verdicts still in its first message. Use it when the earlier

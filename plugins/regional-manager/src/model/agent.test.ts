@@ -162,7 +162,7 @@ test("cut 5: with a sandbox on either side it cuts from origin once the branch's
   assert.deepEqual(reaped.environment, { ...into.environment, machine: { type: "new", machineProviderId: "boat", inputs: { preset: "small" } } }, "a sandbox bb removed moves to a new one of the same provider and preset, from its last handoff's head");
 });
 
-test("cut 6: a head no pull request shows is refused: push and open one, or continue; a removed sandbox's is lost, offering a clean start", () => {
+test("cut 6: a head no pull request shows is refused: push and open one, or continue; a removed sandbox's is lost, offering a clean start; a removed worktree's is still on its branch, offering a worktree", () => {
   const behind = readAt(HEAD_D);
   const alive = refusal(handoverOf("build", { from: "previous", placement: worktree }, { ...previous, now: behind, pushed: { kind: "read", pr: prAt(HEAD_C) } }));
   assert.equal(
@@ -176,6 +176,11 @@ test("cut 6: a head no pull request shows is refused: push and open one, or cont
   );
   const never = refusal(handoverOf("build", { from: "previous", placement: null }, { ...previous, environmentId: null, agent: { ...sandboxAgent, checkout: { ...sandboxAgent.checkout, head: null } } }));
   assert.match(never, /reached origin at the head it left \(no pull request has that head\): its unpushed commits went with it\. Start clean/);
+  const worktreeGone = refusal(handoverOf("build", { from: "previous", placement: sandbox }, { agent: worktreeAgent, environmentId: null, branch: "bb/a3", now: null, pushed: { kind: "read", pr: null } }));
+  assert.equal(
+    worktreeGone,
+    'bb removed a3\'s worktree, and nothing shows its branch `bb/a3` reached origin at its head ccccccc (no pull request has that head): its commits are still on that branch on your machine, which a new worktree reaches. Leave out placement, or name a worktree, and the new agent starts on a branch cut from it; it can push and open its pull request, and a move to a sandbox works after that. Or start clean with from: "default", which starts from the default branch with every earlier handoff and verdict in the new agent\'s first message.',
+  );
 });
 
 test("cut 7: a pull request GitHub couldn't be read for is refused saying why, never as unpushed", () => {

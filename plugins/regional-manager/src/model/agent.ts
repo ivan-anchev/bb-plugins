@@ -334,7 +334,21 @@ function cutRef(previous: Previous, to: Placement): Cut | { refused: string } {
   if (environmentId !== null) {
     return { refused: `${agent.id}'s branch \`${branch}\` isn't shown on origin at ${at}: ${reaches}. Continue in its environment (leave out placement), or ask ${agent.id} to push and open a pull request, then call again.` };
   }
-  return { refused: `bb removed ${agent.id}'s ${placementName(agent.placement)}, and nothing shows its branch \`${branch}\` reached origin at ${at} (no pull request has that head): its unpushed commits went with it. ${CLEAN.charAt(0).toUpperCase()}${CLEAN.slice(1)}` };
+  const removed = `bb removed ${agent.id}'s ${placementName(agent.placement)}, and nothing shows its branch \`${branch}\` reached origin at ${at} (no pull request has that head)`;
+  return { refused: `${removed}: ${keptText(agent.placement)}` };
+}
+
+/** What became of a removed environment's unpushed commits, and the start that works from there. */
+function keptText(placement: Placement): string {
+  switch (placement.kind) {
+    // A worktree's branch outlives it (bb-facts P1c).
+    case "worktree":
+      return `its commits are still on that branch on your machine, which a new worktree reaches. Leave out placement, or name a worktree, and the new agent starts on a branch cut from it; it can push and open its pull request, and a move to a sandbox works after that. Or ${CLEAN}`;
+    case "provider":
+      return `its unpushed commits went with it. ${CLEAN.charAt(0).toUpperCase()}${CLEAN.slice(1)}`;
+    default:
+      return placement satisfies never;
+  }
 }
 
 const CLEAN = `start clean with from: "default", which starts from the default branch with every earlier handoff and verdict in the new agent's first message.`;
