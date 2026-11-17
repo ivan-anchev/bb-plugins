@@ -49,11 +49,11 @@ export type Unblocking = { issueId: IssueId; by: IssueId; closedAs: ClosedStatus
 export type CloseKey = string;
 
 /** Each issue's close as one read of every issue views it. An issue absent read open, as one filed since that read does: an issue is filed open. */
-export type Closes = ReadonlyMap<IssueId, CloseKey>;
+export type Closes = ReadonlyMap<IssueId, Closure>;
 
 /** Each issue's close as these views, read whole, say. */
 export const closesOf = (views: readonly (Pick<IssueView, "closedBy"> & { issue: Shape })[]): Closes =>
-  new Map(views.flatMap(({ issue, closedBy }) => (closedBy === null ? [] : [[issue.id, closeKey(closedBy)] as const])));
+  new Map(views.flatMap(({ issue, closedBy }) => (closedBy === null ? [] : [[issue.id, closedBy] as const])));
 
 /**
  * Of each issue's dependencies, the close the regional manager knows of: null while it has known it
@@ -109,6 +109,12 @@ function dependenciesRead(issue: Shape, before: ReadonlyMap<IssueId, CloseKey | 
     if (closedBy.by !== "manager" && isClosed(status)) news.push({ by: dependency, closedAs: status });
   }
   return { closes, news };
+}
+
+/** An issue's close as the regional manager knows of it from `closes`: null while it reads open. */
+export function knownClose(closes: Closes, id: IssueId): CloseKey | null {
+  const close = closes.get(id);
+  return close === undefined ? null : closeKey(close);
 }
 
 function closeKey(closure: Closure): CloseKey {

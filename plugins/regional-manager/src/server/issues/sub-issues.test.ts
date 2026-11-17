@@ -4,6 +4,7 @@
 // of issue 08's acceptance criteria, at the tools.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { issueIdSchema } from "../../model/issue/issue.ts";
 import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn } from "../test-harness.ts";
 
 const RESEARCH = { kind: "research", title: "Pick a card vault", description: "Which vault fits our PCI scope.", brief: "Compare Vault and KMS.", doneCriteria: [] };
@@ -29,7 +30,16 @@ async function managing(options: Parameters<typeof coordinating>[0] = {}) {
   const statuses = async () => Object.fromEntries((await kit.rpc.board({ coordinatorId })).issues.map(({ id, status }) => [id, status]));
   /** Starts an agent on the issue; returns its thread. */
   const started = async (issue: string) => threadIn(await text("agent_start", { issue }));
-  return { kit, threadId, call, text, catchUp, board, statuses, started, unblocked: async () => (await catchUp(), [...announced]) };
+  return { kit, threadId, coordinatorId, call, text, catchUp, board, statuses, started, unblocked: async () => (await catchUp(), [...announced]) };
+}
+
+/** Lets every answer `holds` kept go, and the ones asked for meanwhile, until none is left. */
+async function releaseAll(holds: { holding: boolean; held: (() => void)[] }): Promise<void> {
+  holds.holding = false;
+  while (holds.held.length > 0) {
+    holds.held.splice(0).forEach((release) => release());
+    await settled();
+  }
 }
 
 test("1: issue_create with a parent files a sub-issue, listed under its parent in issue_read and in the catch-up", async () => {
@@ -174,4 +184,84 @@ test("7: a parent is canceled only once its sub-issues are closed; every sub-iss
   assert.equal(await text("issue_update", { id: "i1", status: "canceled" }), "Updated i1.");
   assert.deepEqual(await statuses(), { i1: "canceled", i2: "canceled", i3: "canceled" });
   assert.deepEqual(await call("issue_create", { ...ISSUE, parent: "i1" }), { refused: true, text: "No issue filed: i4 can't be a sub-issue of i1: i1 is closed. File i4 on its own." });
+});
+
+type Manager = Awaited<ReturnType<typeof managing>>;
+
+/**
+ * A manager with i1 and i2, an agent on i2, i1 changed as `first` says, then the filing of a
+ * sub-issue of i1 held at bb's listing while `meanwhile` writes the manager's act straight to the
+ * store: no change is counted, so only the rows the write holds can say it. The filing's result,
+ * and every status after.
+ */
+async function filedUnderI1While(first: object, meanwhile: (store: Manager["kit"]["store"], id: Manager["coordinatorId"]) => void) {
+  const { kit, coordinatorId, call, text, statuses } = await managing();
+  await text("issue_create", ISSUE);
+  await text("issue_create", { ...ISSUE, title: "Dead letters" });
+  await text("agent_start", { issue: "i2" });
+  await text("issue_update", { id: "i1", ...first });
+  await settled();
+  kit.threadLists.holding = true;
+  const filing = call("issue_create", { ...ISSUE, title: "Replay", parent: "i1" });
+  await settled();
+  assert.ok(kit.threadLists.held.length > 0, "no listing held");
+  meanwhile(kit.store, coordinatorId);
+  await releaseAll(kit.threadLists);
+  return { result: await filing, statuses: await statuses() };
+}
+
+const I1 = issueIdSchema.parse("i1");
+
+test("filing a sub-issue is judged on its parent as stored when it is written: canceled while bb was read, refused; reopened meanwhile, filed", async () => {
+  const canceled = await filedUnderI1While({ title: "Add retries" }, (store, id) => store.updateIssue(id, I1, { closed: { as: "canceled", at: 2_000 } }, { requireUnheld: true, closes: new Map() }));
+  assert.deepEqual(canceled.result, { refused: true, text: "No issue filed: i3 can't be a sub-issue of i1: i1 is closed. File i3 on its own." });
+  assert.deepEqual(canceled.statuses, { i1: "canceled", i2: "in-progress" });
+
+  const reopened = await filedUnderI1While({ status: "canceled" }, (store, id) => store.updateIssue(id, I1, { closed: null }, { requireUnheld: true, closes: new Map() }));
+  assert.deepEqual(reopened.result, { refused: false, text: "Filed i3 (build) as a sub-issue of i1 in Todo." });
+});
+
+test("canceling a parent is judged on its sub-issues as they are when it is written: one reopened by a message while bb's turns were read keeps it open", async () => {
+  const { kit, call, text, statuses } = await managing();
+  await text("issue_create", ISSUE);
+  await text("issue_create", { ...RESEARCH, parent: "i1" });
+  const researcher = threadIn(await text("agent_start", { issue: "i2" }));
+  await kit.call("agent_handoff", RESEARCH_DONE, researcher);
+  await kit.idle(researcher, "Handed off.");
+  await settled();
+  assert.deepEqual(await statuses(), { i1: "in-review", i2: "done" });
+
+  kit.turnEvents.holding = true;
+  const canceling = call("issue_update", { id: "i1", status: "canceled" });
+  await settled();
+  assert.ok(kit.turnEvents.held.length > 0, "no turn read held");
+  await text("agent_message", { agent: "a1", text: "Please revise the report." });
+  await releaseAll(kit.turnEvents);
+
+  assert.deepEqual(await canceling, { refused: true, text: "i1 can't be canceled while sub-issues of it are open: i2. Cancel them, or let them finish, first." });
+  assert.deepEqual(await statuses(), { i1: "in-progress", i2: "in-progress" });
+});
+
+test("a plan write whose reads keep being overtaken writes nothing and says to try again", async () => {
+  const { kit, call, text, statuses } = await managing();
+  await text("issue_create", ISSUE);
+  await text("issue_create", { ...ISSUE, title: "Dead letters" });
+  await text("agent_start", { issue: "i2" });
+  await settled();
+  kit.threadLists.holding = true;
+  let answered = false;
+  const filing = call("issue_create", { ...ISSUE, title: "Replay", parent: "i1" }).finally(() => {
+    answered = true;
+  });
+  // Every bb read answers only after the manager changed something again, as a crew at work keeps doing.
+  for (let round = 0; round < 10 && !answered; round++) {
+    await settled();
+    await text("issue_update", { id: "i2", title: `Dead letters, round ${round}` });
+    kit.threadLists.held.splice(0).forEach((release) => release());
+  }
+  await releaseAll(kit.threadLists);
+
+  assert.deepEqual(await filing, { refused: true, text: "No issue filed: your issues kept changing while they were read, so nothing was written. Try again." });
+  assert.deepEqual(await statuses(), { i1: "todo", i2: "in-progress" });
+  assert.equal(await text("issue_create", { ...ISSUE, title: "Replay", parent: "i1" }), "Filed i3 (build) as a sub-issue of i1 in Todo.");
 });

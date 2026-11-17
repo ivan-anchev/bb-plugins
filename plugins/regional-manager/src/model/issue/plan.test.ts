@@ -10,7 +10,9 @@ type Planned = Pick<Issue, "id" | "kind" | "parentId" | "dependsOn" | "closed">;
 /** `i<n>`, open, of `kind`, under parent `parent` (null: none), depending on the issues numbered. */
 const planned = (n: number, kind: Kind, parent: number | null, ...dependsOn: number[]): Planned => ({ id: id(n), kind, parentId: parent === null ? null : id(parent), dependsOn: dependsOn.map(id), closed: null });
 const OPEN: Closes = new Map();
-const closed = (...ns: number[]): Closes => new Map(ns.map((n) => [id(n), `canceled at ${n}`]));
+/** The issues numbered as a read finds them closed by work: a report each. */
+const reported = (...ns: number[]): Closes => new Map(ns.map((n) => [id(n), { by: "merge", number: n }]));
+const canceledAs = (issue: Planned): Planned => ({ ...issue, closed: { as: "canceled", at: 9_000 } });
 
 test("a sub-issue goes one level deep, under an issue that is no sub-issue and has none of its own changed", () => {
   const plan = [planned(1, "build", null), planned(2, "build", 1), planned(3, "build", null)];
@@ -24,8 +26,14 @@ test("a sub-issue goes one level deep, under an issue that is no sub-issue and h
 
 test("a closed issue takes no new sub-issue, and keeps the ones it has", () => {
   const plan = [planned(1, "build", null), planned(2, "build", 1)];
-  assert.equal(planProblem(plan, planned(3, "build", 1), closed(1)), "i3 can't be a sub-issue of i1: i1 is closed. File i3 on its own");
-  assert.equal(planProblem(plan, { ...planned(2, "build", 1), dependsOn: [] }, closed(1)), null);
+  assert.equal(planProblem(plan, planned(3, "build", 1), reported(1)), "i3 can't be a sub-issue of i1: i1 is closed. File i3 on its own");
+  assert.equal(planProblem(plan, { ...planned(2, "build", 1), dependsOn: [] }, reported(1)), null);
+});
+
+test("the manager's closing acts are read from the plan as stored, whatever the read said", () => {
+  const read: Closes = new Map([[id(1), { by: "manager", as: "canceled", at: 9_000 }]]);
+  assert.equal(planProblem([planned(1, "build", null)], planned(2, "build", 1), read), null, "reopened since the read");
+  assert.equal(planProblem([canceledAs(planned(1, "build", null))], planned(2, "build", 1), OPEN), "i2 can't be a sub-issue of i1: i1 is closed. File i2 on its own", "canceled since the read");
 });
 
 test("a parent holds only the kinds its kind holds, checked from the sub-issue and from the parent's new kind", () => {
@@ -38,9 +46,10 @@ test("a parent holds only the kinds its kind holds, checked from the sub-issue a
 
 test("a parent is canceled only once every sub-issue is closed", () => {
   const plan = [planned(1, "build", null), planned(2, "build", 1), planned(3, "build", 1)];
-  const canceled = { ...planned(1, "build", null), closed: { as: "canceled", at: 9_000 } } as const;
-  assert.equal(planProblem(plan, canceled, closed(2)), "i1 can't be canceled while sub-issues of it are open: i3. Cancel them, or let them finish, first");
-  assert.equal(planProblem(plan, canceled, closed(2, 3)), null);
+  const canceled = canceledAs(planned(1, "build", null));
+  assert.equal(planProblem(plan, canceled, reported(2)), "i1 can't be canceled while sub-issues of it are open: i3. Cancel them, or let them finish, first");
+  assert.equal(planProblem(plan, canceled, reported(2, 3)), null);
+  assert.equal(planProblem([plan[0], canceledAs(planned(2, "build", 1)), plan[2]], canceled, reported(3)), null, "i2 canceled as stored");
   assert.equal(planProblem(plan, { ...planned(1, "build", null), closed: { as: "accepted", at: 9_000 } }, OPEN), null, "accepting is the status's to judge: only In review can be");
 });
 

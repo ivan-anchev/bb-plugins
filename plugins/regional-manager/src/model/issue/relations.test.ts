@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueIdSchema, type IssueId } from "./issue.ts";
 import { handoffIdSchema } from "../handoff.ts";
-import { blockedBy, closesOf, relationProblem, statusIn, unblockedSince, type CloseKey } from "./relations.ts";
+import { blockedBy, closesOf, knownClose, relationProblem, statusIn, unblockedSince, type CloseKey } from "./relations.ts";
 import type { Closure, IssueStatus } from "./status.ts";
 
 const id = (n: number): IssueId => issueIdSchema.parse(`i${n}`);
@@ -44,7 +44,7 @@ test("an issue is unblocked once by each close of a dependency its work made; ne
   };
   // The relations are written as i4, i5 and i6 are filed, knowing what the read their filing answered from said: i2 closed already.
   const filed = closesOf(views([open, reported(1), open]));
-  const relations = (...on: number[]) => new Map(on.map((n): [IssueId, CloseKey | null] => [id(n), filed.get(id(n)) ?? null]));
+  const relations = (...on: number[]) => new Map(on.map((n): [IssueId, CloseKey | null] => [id(n), knownClose(filed, id(n))]));
   const known = new Map([
     [id(4), relations(1)],
     [id(5), relations(1, 3)],

@@ -7,7 +7,7 @@ import { executionSchema } from "../../../model/execution.ts";
 import { closedAsSchema, doneCriteriaSchema, issueIdSchema, restSchema, verifierProblem, type Issue, type IssueId, type Rest } from "../../../model/issue/issue.ts";
 import { kindSchema } from "../../../model/issue/kind.ts";
 import { planProblem } from "../../../model/issue/plan.ts";
-import type { CloseKey, Closes, KnownCloses } from "../../../model/issue/relations.ts";
+import { knownClose, type CloseKey, type Closes, type KnownCloses } from "../../../model/issue/relations.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../../model/role.ts";
 import { json, jsonOrNull, nullableJson, type Db } from "../rows.ts";
 
@@ -120,7 +120,7 @@ function writeDependencies(db: Db, { coordinatorId, id, dependsOn }: Pick<Issue,
   const kept = new Map(rows.map((row) => keptRowSchema.parse(row)).map(({ dependsOn: dependency, close }) => [dependency, close]));
   db().prepare("DELETE FROM issue_relations WHERE coordinator_id = ? AND issue_id = ?").run(coordinatorId, id);
   const insert = db().prepare("INSERT INTO issue_relations (coordinator_id, issue_id, depends_on, known_close) VALUES (?, ?, ?, ?)");
-  for (const dependency of dependsOn) insert.run(coordinatorId, id, dependency, kept.has(dependency) ? kept.get(dependency) : (closes.get(dependency) ?? null));
+  for (const dependency of dependsOn) insert.run(coordinatorId, id, dependency, kept.has(dependency) ? kept.get(dependency) : knownClose(closes, dependency));
 }
 
 /** Of each of the regional manager's issues' dependencies, the close it knows of (relations.ts unblockedSince). Call inside the transaction that records what it learned. */

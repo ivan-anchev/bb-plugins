@@ -805,3 +805,8 @@ and the Memory page read the new text on their next read.
   pass tries again. Either way it wakes the manager once for each close after
   the dependency was added. Meanwhile the catch-up's ready list and every
   blocked row are right, since they are derived on each read.
+- **A plan write can ask to be tried again.** `issue_create` and `issue_update`
+  judge a parent, a sub-issue or a dependency on every issue read as the write
+  is made, reading again when something changed meanwhile. If the manager's
+  agents keep changing things through a few reads, the call writes nothing and
+  says to try again.

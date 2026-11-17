@@ -13,6 +13,7 @@ import { executionText } from "../agents/agents.ts";
 import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
 import type { DependencyChange, IssueEdit, NewIssue } from "../store/issue/issues-store.ts";
 import type { Store } from "../store/store.ts";
+import type { CurrentViews } from "./current-views.ts";
 import { readIssues, type FactsBb, type FactsStore, type IssueRead } from "./issue-facts.ts";
 import { issueText, verifierText } from "./issue-text.ts";
 
@@ -22,6 +23,7 @@ type IssuesBb = FactsBb & CatalogBb & { sdk: { threads: { output(args: { threadI
 type Deps = {
   bb: IssuesBb;
   store: FactsStore & Pick<Store, "issue" | "insertIssue" | "updateIssue" | "record" | "check" | "agent">;
+  views: Pick<CurrentViews, "whileCurrent">;
   /** Runs after anything that changes a regional manager's board. */
   onChange(id: CoordinatorId): void;
 };
@@ -39,9 +41,12 @@ type IssueChange = Partial<Pick<Issue, "kind" | "title" | "description" | "doneC
 
 type Refused = { refused: string };
 
+/** Why a write judged on every issue viewed made none: changes kept coming while they were read. */
+const OVERTAKEN = "your issues kept changing while they were read, so nothing was written. Try again.";
+
 export type Issues = ReturnType<typeof createIssues>;
 
-export function createIssues({ bb, store, onChange }: Deps) {
+export function createIssues({ bb, store, views: current, onChange }: Deps) {
   /**
    * The verifier named, resolved against bb's catalog on its primary machine. why there: where a
    * check runs is the agent's environment, not known yet; a verifier bb can't run there when the
@@ -57,9 +62,9 @@ export function createIssues({ bb, store, onChange }: Deps) {
   const viewsOf = async (coordinatorId: CoordinatorId): Promise<IssueView[]> => (await readIssues(bb, store, coordinatorId)).map(({ view }) => view);
 
   /**
-   * The edit a status asks for, or why the issue as it stands now (`view`, read just before) can't
-   * take it. why the holder read after the view: an agent started meanwhile holds it (updateIssue
-   * checks that again). A parent's open sub-issues are the plan's to refuse (plan.ts).
+   * The edit a status asks for, or why the issue as it stands now (`view`, current as the edit is
+   * written) can't take it. why the holder read after the view: an agent started meanwhile holds it
+   * (updateIssue checks that again). A parent's open sub-issues are the plan's to refuse (plan.ts).
    */
   function statusEdit(issue: Issue, view: IssueView, status: NonNullable<IssueChange["status"]>): IssueEdit | Refused {
     const now = `${issue.id} is ${STATUS_LABELS[view.status]} (${view.headline})`;
@@ -74,18 +79,20 @@ export function createIssues({ bb, store, onChange }: Deps) {
     /**
      * Files an issue, numbered after the regional manager's highest, with what blocks it as it is
      * filed; refused when its kind has no verifier, bb can't run the one named, or the plan with it
-     * can't stand (plan.ts). why the views read before the write, with no await between: an issue
-     * filed can't change any other's status, and a failed read then files nothing. Its dependencies
-     * are written, and its parent judged open, from what that read says, which is what the manager is
-     * told.
+     * can't stand (plan.ts). why on views current as it is written (current-views.ts): a parent
+     * closed by its work, or a dependency's close, can change while bb is read, and filing a
+     * sub-issue changes its parent's status. Its dependencies are written, and its parent judged
+     * open, from what those views say, which is what the manager is told; a failed read files nothing.
      */
     async create(coordinatorId: CoordinatorId, { verifier: requested, ...plan }: IssueRequest): Promise<{ issue: Issue; blockedBy: Related[] } | Refused> {
       const problem = verifierProblem(plan.kind, requested !== undefined);
       if (problem !== null) return { refused: `No issue filed: ${problem}. Leave verifier out.` };
       const verifier = requested === undefined ? null : await verifierOf(requested);
       if (verifier !== null && "refused" in verifier) return { refused: `No issue filed. ${verifier.refused}` };
-      const views = plan.dependsOn.length === 0 && plan.parentId === null ? [] : await viewsOf(coordinatorId);
-      const filed = store.insertIssue(coordinatorId, { ...plan, verifier }, closesOf(views), Date.now());
+      const file = (views: IssueView[]) => ({ filed: store.insertIssue(coordinatorId, { ...plan, verifier }, closesOf(views), Date.now()), views });
+      const written = plan.dependsOn.length === 0 && plan.parentId === null ? { acted: file([]) } : await current.whileCurrent(coordinatorId, file);
+      if (written === null) return { refused: `No issue filed: ${OVERTAKEN}` };
+      const { filed, views } = written.acted;
       if ("refused" in filed) return { refused: `No issue filed: ${filed.refused}` };
       onChange(coordinatorId);
       const parent = plan.parentId === null ? null : viewOf(views, plan.parentId).issue;
@@ -104,23 +111,29 @@ export function createIssues({ bb, store, onChange }: Deps) {
       // undefined: unchanged; null: the plugin picks.
       const verifier = requested === undefined || requested === null ? requested : await verifierOf(requested);
       if (verifier !== undefined && verifier !== null && "refused" in verifier) return verifier;
-      const before = status === undefined && dependsOn === undefined && plan.parentId === undefined ? null : await viewsOf(issue.coordinatorId);
-      const statusChange = before === null || status === undefined ? {} : statusEdit(issue, viewOf(before, issue.id), status);
-      if ("refused" in statusChange) return statusChange;
-      // why the holder read here, with no await before the write: an agent started meanwhile may run on the verifier's model.
-      const holder = holderOf(issue);
-      if (verifier !== undefined && verifier !== null && holder !== null && sameModel(verifier, holder.execution)) {
-        return {
-          refused: `${holder.id} holds ${issue.id} on ${executionText(holder.execution)}, so a verifier on it couldn't check that work independently. Name another model, or stop ${holder.id} with agent_stop and start an agent on another execution.`,
-        };
-      }
-      const edit: IssueEdit = { ...plan, ...statusChange, ...(dependsOn === undefined ? {} : { dependsOn }), ...(verifier === undefined ? {} : { verifier }) };
-      // why `before`'s closes: it is read whenever a status, parent or dependency changes, the only changes the plan judges by them.
-      const updated = store.updateIssue(issue.coordinatorId, issue.id, edit, { requireUnheld: status !== undefined && status !== "done", closes: closesOf(before ?? []) });
-      if ("refused" in updated) return updated;
+      /** Writes the change judged on `before`: every issue viewed, or null when nothing changed is judged by them. */
+      const write = (before: IssueView[] | null): { issue: Issue; before: IssueView[] | null } | Refused => {
+        const statusChange = before === null || status === undefined ? {} : statusEdit(issue, viewOf(before, issue.id), status);
+        if ("refused" in statusChange) return statusChange;
+        // why the holder read here, with no await before the write: an agent started meanwhile may run on the verifier's model.
+        const holder = holderOf(issue);
+        if (verifier !== undefined && verifier !== null && holder !== null && sameModel(verifier, holder.execution)) {
+          return {
+            refused: `${holder.id} holds ${issue.id} on ${executionText(holder.execution)}, so a verifier on it couldn't check that work independently. Name another model, or stop ${holder.id} with agent_stop and start an agent on another execution.`,
+          };
+        }
+        const edit: IssueEdit = { ...plan, ...statusChange, ...(dependsOn === undefined ? {} : { dependsOn }), ...(verifier === undefined ? {} : { verifier }) };
+        const updated = store.updateIssue(issue.coordinatorId, issue.id, edit, { requireUnheld: status !== undefined && status !== "done", closes: closesOf(before ?? []) });
+        return "refused" in updated ? updated : { issue: updated.issue, before };
+      };
+      // why views current as it is written (current-views.ts), whenever a status, parent or dependency changes: the only changes judged by them.
+      const written = status === undefined && dependsOn === undefined && plan.parentId === undefined ? { acted: write(null) } : await current.whileCurrent(issue.coordinatorId, write);
+      if (written === null) return { refused: `${issue.id} is unchanged: ${OVERTAKEN}` };
+      if ("refused" in written.acted) return written.acted;
+      const { issue: updated, before } = written.acted;
       onChange(issue.coordinatorId);
       const nowReady = before === null ? [] : newlyReady(before, await viewsOf(issue.coordinatorId));
-      return { issue: updated.issue, note: requested === undefined ? null : verifierText(updated.issue), nowReady };
+      return { issue: updated, note: requested === undefined ? null : verifierText(updated), nowReady };
     },
 
     /** The issue whole, as issue_read returns it, with the issues it depends on and those that depend on it. */

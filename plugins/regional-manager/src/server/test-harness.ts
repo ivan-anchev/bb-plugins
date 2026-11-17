@@ -25,6 +25,7 @@ import { watchAgentThreads } from "./inbox/thread-watch.ts";
 import { registerIssueTools } from "./issues/issue-tools.ts";
 import { issueTurns } from "./issues/issue-turns.ts";
 import { createIssues } from "./issues/issues.ts";
+import { currentViews } from "./issues/current-views.ts";
 import { pluginInstance } from "./lifetime.ts";
 import { watchUnblocked } from "./issues/unblocked.ts";
 import { openMemoryRoot } from "./memory/memory-files.ts";
@@ -556,6 +557,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const store = instance.bind(openedStore);
     const onChange = (id: CoordinatorId) => {
       refreshBoard(id);
+      views.changed(id);
       unblocked.changed(id);
     };
     const onRemoved = (id: CoordinatorId) => {
@@ -568,10 +570,11 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     });
     const board = createBoard(bb, store, memory);
     const inbox = createInbox({ bb, store, memory, onChange });
-    const unblocked = watchUnblocked({ bb, store, inbox });
+    const views = currentViews({ bb, store });
+    const unblocked = watchUnblocked({ bb, store, views, inbox });
     const turns = turnWaitMs === null ? issueTurns(instance.signal) : issueTurns(instance.signal, turnWaitMs);
     const agents = createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
-    const issues = createIssues({ bb, store, onChange });
+    const issues = createIssues({ bb, store, views, onChange });
     const verify = createVerify({ bb, store, spawner, inbox, turns });
     registerRoles(bb, store);
     registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
