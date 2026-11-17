@@ -112,8 +112,7 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
       )}
       {file.hunks.length > 0 && (
         <FileDiff<Annotation>
-          // Under threads at the file the code starts at once, with no band of its background between.
-          className={threads.file.length > 0 ? `${DIFF_TEXT_CLASS} [--diffs-gap-block:0px]` : DIFF_TEXT_CLASS}
+          className={DIFF_TEXT_CLASS}
           fileDiff={fileDiff}
           options={options}
           // why always passed, null included: it makes the selection controlled, so the highlight is

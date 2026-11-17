@@ -49,7 +49,7 @@ export function useDiffOptions<Annotation>(settings: DiffSettings, gestures: Lin
       // and drag from the "+" select lines; it reports the same range as the gesture's end.
       enableGutterUtility: true,
       onGutterUtilityClick: gestures.picked,
-      unsafeCSS: `${NOTE_ROWS}${FULL_WIDTH_NOTES}`,
+      unsafeCSS: `${NOTE_ROWS}${FULL_WIDTH_NOTES}${CODE_UNDER_HEADER}${NO_UPRIGHT_GUTTER}`,
     }),
     [code.name, code.mode, settings.view, settings.overflow, gestures],
   );
@@ -67,6 +67,18 @@ const FULL_WIDTH_NOTES =
   "[data-line-annotation]{z-index:4}" +
   "[data-annotation-content]{margin-left:calc(-1 * var(--diffs-column-number-width,0px))}" +
   "[data-overflow=scroll] [data-annotation-content]{left:0;width:calc(var(--diffs-column-content-width,100%) + var(--diffs-column-number-width,0px))}";
+
+// Pierre drops the band of the diff's background above the first line when its own file header
+// sits above the diff. bb's header is drawn outside Pierre (disableFileHeader), so that rule never
+// fires: the same rule, for the header the card draws, or a thread at its file, above the code.
+const CODE_UNDER_HEADER =
+  "[data-code],[data-diff][data-overflow=wrap],[data-diff][data-dehydrated][data-diff-type=split][data-overflow=scroll]{padding-top:0}";
+
+// The code only ever scrolls sideways, yet Pierre keeps a gutter for an upright scrollbar. The
+// Chrome bb's desktop app runs computes Pierre's `overflow: scroll clip` as hidden upright, and
+// bb's inherited scrollbar-color turns off Pierre's zero-width scrollbar, so with classic
+// scrollbars the gutter is a 15px strip of the diff's background down the code's right side.
+const NO_UPRIGHT_GUTTER = "[data-code]{scrollbar-gutter:auto}";
 
 /**
  * The file's diff for Pierre: its patch at first, then, once `newContent` is read, both whole

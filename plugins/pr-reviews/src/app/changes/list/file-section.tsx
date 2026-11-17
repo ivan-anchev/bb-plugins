@@ -33,9 +33,7 @@ export const FileSection = memo(function FileSection({ file, head, settings, jum
   }
 
   return (
-    // Space above the card inside the pane, not as the pane's padding: a sticky header stops under
-    // the pane's padding, and the code would show above it.
-    <div ref={section} className="pt-2">
+    <div ref={section}>
       <FileCard path={file.path} end={<StatText parts={fileStatPartsOf(file)} />}>
         {near ? (
           <FileDiff file={file} head={head} settings={settings} unfolded={unfolded} onUnfold={() => setUnfolded(true)} />

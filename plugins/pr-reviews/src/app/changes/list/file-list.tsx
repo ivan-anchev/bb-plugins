@@ -47,7 +47,7 @@ export const FileList = memo(function FileList({ ref, files, head, settings, jum
   return (
     <ApproachContext.Provider value={watcher}>
       <ListPane ref={regionRef}>
-        <div ref={cards}>
+        <div ref={cards} className="space-y-2">
           {files.map(({ treePath, file }) => (
             <FileSection key={treePath} file={file} head={head} settings={settings} jump={jump?.treePath === treePath ? jump : null} />
           ))}
@@ -155,7 +155,10 @@ function topsOf(region: HTMLElement, cards: HTMLElement): number[] {
 // itself, out of reach of the pane's tab stop, since the keys scroll only the focused element and
 // its ancestors. As a block each takes its full height and the pane scrolls them. The ring sits
 // inside: the pane runs to the split's edges. Its padding is bb's Changes panel's around the
-// file's card, less on the tree's side, where no divider shows, and none on top (FileSection).
+// file's card, less on the tree's side, where no divider shows.
+// why the space above the first card is a margin, outside what scrolls: a card's header sticks at
+// the pane's top edge, so it sits there from the start and is stuck at once, with no space above
+// it for the code to scroll through.
 function ListPane({ ref, children }: { ref: RefCallback<HTMLDivElement>; children: ReactNode }) {
   return (
     <div
@@ -163,7 +166,7 @@ function ListPane({ ref, children }: { ref: RefCallback<HTMLDivElement>; childre
       role="region"
       aria-label="Diff"
       tabIndex={0}
-      className="min-h-0 flex-1 overflow-auto pr-4 pb-3 pl-2 outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
+      className="mt-2 min-h-0 flex-1 overflow-auto pr-4 pb-3 pl-2 outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
     >
       {children}
     </div>
