@@ -1,17 +1,15 @@
-// The comment box's send row: Send as, a segmented control (ui/segmented.tsx) of what the draft
-// goes as (Ask, Comment, Review; box-actions.ts), and the round send button that sends it. Send as
-// is the ARIA radio pattern: one tab stop, ← → move and pick, skipping the segments that can't send,
-// which stay in place, aria-disabled, with their tooltip saying why. In a box under 470px wide the
-// segments are icons alone: their names stay for screen readers, and the tooltip of one that can
-// send shows its name.
-import { useId, useRef, type KeyboardEvent, type ReactNode } from "react";
+// The comment box's send row, drawn as bb's composer draws its own: Send as, a chip naming what the
+// draft goes as (Ask, Comment, Review; box-actions.ts) that opens a menu of the others, as bb's
+// model chip does; and the send button that sends it. A mode that can't send stays in the menu,
+// disabled, its reason in place of what it does. With one mode, the chip is a label, not a menu.
+import type { ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { useRememberedState } from "../use-remembered-state.ts";
 import { CodeReviewIcon } from "../ui/code-review-icon.tsx";
-import { SEGMENT_CLASS, SegmentThumb, TRACK_CLASS } from "../ui/segmented.tsx";
+import { Menu, MenuContent, MenuRadioGroup, MenuRadioItem, MenuTrigger } from "../ui/menu.tsx";
 import { Spinner } from "../ui/spinner.tsx";
 import { Tooltip } from "../ui/tooltip.tsx";
-import { steppedFrom, type Segment } from "./box-actions.ts";
+import { descriptionOf, sendLabelOf, type GitHubActions, type SendOption, type Subject } from "./box-actions.ts";
 import type { Action } from "./box-problems.ts";
 
 // The mode the reader last picked, in any box: every box after opens on it, for the session.
@@ -32,67 +30,55 @@ export function pickForNextBox(to: "ask" | "github"): void {
   else if (remembered.get(PICKED) !== "review") remembered.set(PICKED, "comment");
 }
 
-type SendAsProps = { segments: readonly Segment[]; selected: Action; onPick(mode: Action): void };
+type SendAsProps = { subject: Subject; actions: GitHubActions; options: readonly SendOption[]; selected: Action; onPick(mode: Action): void };
 
-export function SendAs({ segments, selected, onPick }: SendAsProps) {
-  const track = useRef<HTMLDivElement>(null);
-  const radioId = useId();
-  const idOf = (mode: Action) => `${radioId}-${mode}`;
-  // The radio keeps focus and picks as it goes. Handled here, the keys stay out of the diff's.
-  const onKeyDown = (event: KeyboardEvent) => {
-    const by = STEPS[event.key];
-    if (by === undefined) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const to = steppedFrom(segments, selected, by);
-    if (to === null) return;
-    onPick(to);
-    track.current!.querySelector<HTMLElement>(`#${CSS.escape(idOf(to))}`)!.focus();
-  };
+export function SendAs({ subject, actions, options, selected, onPick }: SendAsProps) {
+  const chip = (
+    <>
+      {ICONS[selected]}
+      <span className="min-w-0 truncate">{sendLabelOf(subject, selected)}</span>
+    </>
+  );
+  if (options.length === 1) return <span className={`${CHIP_CLASS} cursor-default`}>{chip}</span>;
   return (
-    <div ref={track} role="radiogroup" aria-label="Send as" className={TRACK_CLASS} onKeyDown={onKeyDown}>
-      <SegmentThumb at={segments.findIndex(({ mode }) => mode === selected)} of={segments.length} />
-      {segments.map(({ mode, reason }) => (
-        // why the name only when narrow: beside the label it would only repeat it, and it would
-        // cover the send button's tooltip while the radio has focus.
-        <Tooltip key={mode} content={reason ?? LABELS[mode]} placement="top-end" popupClassName={reason === null ? "@min-[470px]:hidden" : ""}>
-          {(describedBy) => (
-            <button
-              type="button"
-              role="radio"
-              id={idOf(mode)}
-              aria-checked={mode === selected}
-              aria-disabled={reason !== null}
-              aria-describedby={reason === null ? undefined : describedBy}
-              tabIndex={mode === selected ? 0 : -1}
-              onClick={() => {
-                if (reason === null) onPick(mode);
-              }}
-              className={RADIO_CLASS}
-            >
-              {ICONS[mode]}
-              <span className="@max-[470px]:sr-only">{LABELS[mode]}</span>
-            </button>
-          )}
-        </Tooltip>
-      ))}
-    </div>
+    <Menu>
+      <MenuTrigger asChild>
+        <button type="button" aria-label={`Send as: ${sendLabelOf(subject, selected)}`} className={`${CHIP_CLASS} ${CHIP_BUTTON_CLASS}`}>
+          {chip}
+          <Icon name="ChevronDown" aria-hidden />
+        </button>
+      </MenuTrigger>
+      <MenuContent align="start" className="w-72">
+        <MenuRadioGroup value={selected} onValueChange={(value) => onPick(options.find(({ mode }) => mode === value)?.mode ?? selected)}>
+          {options.map(({ mode, reason }) => (
+            <MenuRadioItem key={mode} value={mode} disabled={reason !== null}>
+              <span className="flex min-w-0 items-start gap-2">
+                <span className="mt-px text-muted-foreground">{ICONS[mode]}</span>
+                <span className="min-w-0">
+                  <span className="block">{sendLabelOf(subject, mode)}</span>
+                  <span className="block text-muted-foreground">{reason ?? descriptionOf(mode, actions)}</span>
+                </span>
+              </span>
+            </MenuRadioItem>
+          ))}
+        </MenuRadioGroup>
+      </MenuContent>
+    </Menu>
   );
 }
 
-const RADIO_CLASS = `${SEGMENT_CLASS} h-6 flex-1 gap-1 @max-[470px]:px-1.5 aria-checked:text-foreground aria-disabled:cursor-default aria-disabled:opacity-50 aria-disabled:hover:text-muted-foreground`;
+// bb's model chip in its composer, class for class: a quiet ghost button, the choice and a chevron.
+const CHIP_CLASS =
+  "inline-flex h-8 w-fit max-w-full min-w-0 select-none items-center justify-start gap-1 whitespace-nowrap rounded-md px-1 text-xs leading-tight font-normal text-muted-foreground [&_[data-icon-root]]:pointer-events-none [&_[data-icon-root]]:size-4 [&_[data-icon-root]]:shrink-0";
+const CHIP_BUTTON_CLASS =
+  "cursor-pointer duration-150 hover:bg-state-hover hover:duration-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring data-[state=open]:bg-state-active data-[state=open]:text-foreground data-[state=open]:hover:bg-state-active";
 
-const ICON_CLASS = "size-3.5 shrink-0";
-
+// 16px, as bb's composer and menus draw their icons.
 const ICONS = {
-  ask: <Icon name="SideChat" className={ICON_CLASS} aria-hidden />,
-  comment: <Icon name="GithubLogo" className={ICON_CLASS} aria-hidden />,
-  review: <CodeReviewIcon className={ICON_CLASS} />,
+  ask: <Icon name="SideChat" className="size-4 shrink-0" aria-hidden />,
+  comment: <Icon name="GithubLogo" className="size-4 shrink-0" aria-hidden />,
+  review: <CodeReviewIcon className="size-4 shrink-0" />,
 } as const satisfies Record<Action, ReactNode>;
-
-const LABELS = { ask: "Ask", comment: "Comment", review: "Review" } as const satisfies Record<Action, string>;
-
-const STEPS: Partial<Record<string, 1 | -1>> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
 
 type SendButtonProps = {
   /** What it sends as, with its keys: its name and its tooltip. */
@@ -102,19 +88,22 @@ type SendButtonProps = {
   onSend(): void;
 };
 
-/** The round send button, an arrow; a spinner while the draft is going. */
+/**
+ * bb's composer send button, class for class, and marked as bb marks it, so a theme that draws
+ * bb's (a round one, in Zeron) draws this one too. An arrow; a spinner while the draft is going.
+ */
 export function SendButton({ label, sending, disabled, onSend }: SendButtonProps) {
   return (
     <Tooltip content={label} placement="top-end">
       {() => (
-        <button type="button" aria-label={sending ? "Sending…" : label} aria-disabled={disabled} onClick={onSend} className={SEND_CLASS}>
-          {sending ? <Spinner /> : <Icon name="ArrowUp" className="size-4" aria-hidden />}
+        <button type="button" data-promptbox-submit-action="" aria-label={sending ? "Sending…" : label} aria-disabled={disabled} onClick={onSend} className={SEND_CLASS}>
+          {sending ? <Spinner /> : <Icon name="ArrowUp" aria-hidden />}
         </button>
       )}
     </Tooltip>
   );
 }
 
-// The ring stands off by a pixel of the background, as a primary Button's does.
+// why aria-disabled, not disabled: the button stays focusable, and still names what it would send as.
 const SEND_CLASS =
-  "inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground transition-[background-color,scale] duration-150 ease-out hover:bg-primary/88 hover:duration-0 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background aria-disabled:cursor-default aria-disabled:opacity-50 aria-disabled:active:scale-100 motion-reduce:transition-none motion-reduce:active:scale-100";
+  "inline-flex h-8 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md bg-foreground px-2 text-xs font-medium text-background transition-colors duration-150 hover:bg-foreground/90 hover:duration-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring aria-disabled:cursor-default aria-disabled:opacity-50 aria-disabled:hover:bg-foreground [&_[data-icon-root]]:pointer-events-none [&_[data-icon-root]]:size-4 [&_[data-icon-root]]:shrink-0";
