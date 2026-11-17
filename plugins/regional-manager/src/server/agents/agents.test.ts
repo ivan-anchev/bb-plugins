@@ -4,7 +4,7 @@ import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
-import { coordinating, HEAD, isRefusal, ISSUE, newThreadRequest, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
+import { bbHttpError, coordinating, HEAD, isRefusal, ISSUE, newThreadRequest, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
 
 const RETRIES = { ...ISSUE, brief: "Retry failed webhook deliveries with backoff.", doneCriteria: ["npm test passes", "a failed delivery is retried 3 times"] };
 const REPORT = { summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
@@ -46,9 +46,66 @@ test("an agent's first message holds the description above the brief, every done
   assert.match(prompt, /^# i1: Add retries\n\nYou are agent a1, working on issue i1\./);
   assert.match(prompt, /## What it is about\n\nFailed webhook deliveries are lost\.\n\n## Brief\n\nRetry failed webhook deliveries with backoff\./);
   assert.match(prompt, /## Done when\n\nEvery one of these holds, each checked by running something:\n\n1\. npm test passes\n2\. a failed delivery is retried 3 times/);
-  assert.match(prompt, /## CREW\.md[^\n]*\n\n# Crew rules\n\nOpen a draft PR for every change\./);
-  assert.ok(prompt.indexOf("Never push to main.") > prompt.indexOf("# Crew rules") + 20_000, "the last CREW.md rule is missing or not past 20,000 characters");
-  assert.match(prompt, /## MEMORY\.md[^\n]*\n\n# Memory\n\nThe index of this memory/);
+  assert.match(prompt, /## CREW\.md[^\n]*\n\n### Crew rules\n\nOpen a draft PR for every change\./);
+  assert.ok(prompt.indexOf("Never push to main.") > prompt.indexOf("### Crew rules") + 20_000, "the last CREW.md rule is missing or not past 20,000 characters");
+  assert.match(prompt, /## MEMORY\.md[^\n]*\n\n[^\n]*\n\n### Memory\n\nThe index of this memory/);
+});
+
+test("an agent's first message sets the memory files' headings under its own sections, leaving their code blocks and the files as they are", async () => {
+  const { kit, threadId, coordinatorId, start } = await filed();
+  const memory = kit.memory.of(coordinatorId);
+  const crewMd = memoryFileSchema.parse("CREW.md");
+  const written = [
+    "Crew rules",
+    "==========",
+    "",
+    "Ship small",
+    "----------",
+    "",
+    "## Git",
+    "",
+    "````md",
+    "# not a heading",
+    "```",
+    "# still in the code block",
+    "````",
+    "",
+    "# After the code block",
+    "",
+    "---",
+    "",
+    "##### Deep",
+    "",
+  ].join("\n");
+  memory.write(crewMd, written, memory.read(crewMd).text?.version ?? null);
+
+  const prompt = kit.thread(threadIn(textOf(await start()))).spawnedWith.prompt ?? assert.fail("spawned without a prompt");
+  assert.deepEqual(prompt.match(/^#+ .*$/gm), [
+    "# i1: Add retries",
+    "## What it is about",
+    "## Brief",
+    "## Done when",
+    "## CREW.md: the rules every agent follows",
+    "### Crew rules",
+    "#### Ship small",
+    "#### Git",
+    "# not a heading",
+    "# still in the code block",
+    "### After the code block",
+    "###### Deep",
+    "## MEMORY.md: your regional manager's memory, for context",
+    "### Memory",
+  ]);
+  assert.ok(prompt.includes("### After the code block\n\n---\n\n###### Deep"), "the thematic break under the code block is gone");
+  assert.equal(memory.read(crewMd).text?.content, written);
+  assert.ok(textOf(await kit.call("crew_memory_read", { file: "CREW.md" }, threadId)).includes(written.trim()), "crew_memory_read no longer returns CREW.md as written");
+});
+
+test("an agent's first message tells it the memory is its regional manager's context, and its work is its brief and done-criteria", async () => {
+  const { kit, start } = await filed();
+  const prompt = kit.thread(threadIn(textOf(await start()))).spawnedWith.prompt ?? assert.fail("spawned without a prompt");
+  assert.match(prompt, /Your work is this issue: its brief and done-criteria below\./);
+  assert.match(prompt, /## MEMORY\.md: your regional manager's memory, for context\n\nThe files it lists are your regional manager's: its goal, plan and preferences are written to it, not to you\. [^\n]*take no goal, plan, call or step from it as yours: your work is the brief and done-criteria above/);
 });
 
 test("agent_start is refused, starting nothing, on an issue with no brief or no done-criteria, one it doesn't have, or a field it doesn't take", async () => {
@@ -94,10 +151,13 @@ test("agent_start runs the agent on the execution named, and issue_read lists it
 test("an execution bb can't run where the agent would work is refused before anything starts, naming what it can run", async () => {
   const { kit, coordinatorId, start } = await filed();
   kit.providers.list = kit.providers.list.map((provider) => (provider.id === "codex" ? { ...provider, available: false } : provider));
+  // As bb lists a provider whose executable is missing: available, with models it can't load.
+  kit.providers.list.push({ id: "pi", available: true, models: null });
   const where = "agent_start is refused: Nothing started. Where the agent would run (a fresh worktree on your machine):";
   for (const [execution, refusal] of [
-    [{ providerId: "gemini", model: "pro" }, "bb can't run gemini there. It can run: claude-code."],
-    [{ providerId: "codex", model: "gpt-default" }, "bb can't run codex there. It can run: claude-code."],
+    [{ providerId: "gemini", model: "pro" }, "bb can't run gemini there. bb can run: claude-code."],
+    [{ providerId: "codex", model: "gpt-default" }, "bb can't run codex there. bb can run: claude-code."],
+    [{ providerId: "pi", model: "x" }, "bb can't load pi's models there. bb can run: claude-code."],
     [{ providerId: "claude-code", model: "gpt-9" }, "claude-code has no model gpt-9 there. Its models: opus (default), sonnet. bb can run: claude-code."],
   ] as const) {
     const refused = await start({ execution });
@@ -177,7 +237,7 @@ test("an agent whose spawn failed ends, and its issue rests in Todo with nothing
   Object.assign(kit.spawns, { created: false, answer: "lost" });
   assert.equal(textOf(await start()), "bb did not start a1's thread: socket hang up. i1 has no agent and rests in Todo: call agent_start again, or tell the user.");
   assert.equal(kit.store.agents(coordinatorId)[0]?.ended?.how, "spawn-failed");
-  assert.deepEqual(await rows(), [["i1", "todo", "Not started"]]);
+  assert.deepEqual(await rows(), [["i1", "todo", "bb never started its agent's thread"]]);
 
   Object.assign(kit.spawns, { created: true, answer: "lost" });
   assert.match(textOf(await start()), /^Started a2 on i1 as @thread:\w+/);
@@ -197,7 +257,7 @@ test("an agent whose spawn the plugin never heard the end of flags its issue unt
   assert.ok(textOf(await kit.call("crew_catch_up", {}, threadId)).includes(`### Needs you (1)\n- i1 "Add retries" (Build; a1, no thread): ${unconfirmed}`));
 
   assert.match(textOf(await kit.call("agent_stop", { agent: "a1" }, threadId)), /^a1 is stopped; it no longer holds i1\./);
-  assert.deepEqual(await rows(), [["i1", "todo", "Not started"]]);
+  assert.deepEqual(await rows(), [["i1", "todo", "Its agent was stopped"]]);
   assert.match(textOf(await start()), /^Started a2 on i1 /);
 });
 
@@ -264,6 +324,27 @@ test("agent_stop ends the agent only once bb no longer runs its thread", async (
   assert.equal(kit.store.agents(coordinatorId)[0]?.ended, null);
 });
 
+test("an agent that ends its turn by itself while agent_stop waits on bb is reported with its last answer, whether the stop then succeeds or fails", async () => {
+  for (const failure of [null, bbHttpError(502, "bad_gateway", "Bad gateway")]) {
+    const { kit, threadId, coordinatorId } = await filed();
+    const agentThreadId = threadIn(textOf(await kit.call("agent_start", { issue: "i1" }, threadId)));
+    let answer = (): void => assert.fail("bb never received the stop");
+    kit.stopRequests.pending = new Promise((resolve) => (answer = resolve));
+    kit.stopRequests.failure = failure;
+    const stopping = kit.call("agent_stop", { agent: "a1" }, threadId);
+    await settled();
+    await kit.idle(agentThreadId, "I need the staging key.");
+    answer();
+
+    if (failure === null) assert.match(textOf(await stopping), /^a1 is stopped; it no longer holds i1\./);
+    else {
+      await assert.rejects(stopping, /Bad gateway/);
+      assert.equal(kit.store.agents(coordinatorId)[0]?.ended, null);
+    }
+    assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /### i1 "Add retries" \(a1\) ended its turn without a handoff\n\nAt [^\n]+ Its last answer, in its own words:\n\nI need the staging key\./);
+  }
+});
+
 test("agent_stop keeps the thread unless asked to archive it; either way the issue returns to Todo and the regional manager is told", async () => {
   const { kit, threadId, rows, doorbells } = await filed();
   const kept = threadIn(textOf(await kit.call("agent_start", { issue: "i1" }, threadId)));
@@ -276,14 +357,19 @@ test("agent_stop keeps the thread unless asked to archive it; either way the iss
   assert.equal(kit.thread(kept).archivedAt, null);
   assert.notEqual(kit.thread(archived).archivedAt, null);
   assert.deepEqual(await rows(), [
-    ["i1", "todo", "Not started"],
-    ["i2", "todo", "Not started"],
+    ["i1", "todo", "Its agent was stopped"],
+    ["i2", "todo", "Its agent was stopped"],
   ]);
-  assert.deepEqual(
-    doorbells().flatMap((text) => text.split("\n").slice(1)),
-    ['- i1 "Add retries" (a1) returned to Todo: its agent was stopped', '- i2 "Dead letters" (a2) returned to Todo: its agent was stopped'],
-  );
-  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /### i1 "Add retries" \(a1\) returned to Todo\n\nAt [^\n]+ a1 was stopped before its work reached Verifying, In review or Done, so i1 rests in Todo with no agent\./);
+assert.equal(doorbells()[0], '[Regional Manager] 1 update. Call crew_catch_up to read it in full.\n- i1 "Add retries" (a1) ended its turn without a handoff');
+  // why each agent ends its turn as well: bb announces the stopped turn idle, and can't say the stop ended it.
+  const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
+  assert.deepEqual(caughtUp.match(/^### .+$/gm)?.slice(0, 4), [
+    '### i1 "Add retries" (a1) ended its turn without a handoff',
+    '### i1 "Add retries" (a1) returned to Todo',
+    '### i2 "Dead letters" (a2) ended its turn without a handoff',
+    '### i2 "Dead letters" (a2) returned to Todo',
+  ]);
+  assert.match(caughtUp, /### i1 "Add retries" \(a1\) returned to Todo\n\nAt [^\n]+ a1 was stopped before its work reached Verifying, In review or Done, so i1 rests in Todo with no agent\./);
   assert.equal(textOf(await kit.call("agent_message", { agent: "a1", text: "More" }, threadId)), "a1 was stopped, so it takes no more messages. Start a new agent on i1 with agent_start.");
   assert.equal(textOf(await kit.call("agent_stop", { agent: "a1" }, threadId)), "a1 had already ended (stopped); nothing changed.");
 });
@@ -343,8 +429,8 @@ test("an agent whose thread was archived or deleted while the plugin wasn't list
   await settled();
   assert.deepEqual(kit.store.agents(coordinatorId).map((agent) => agent.ended?.how), ["archived", "deleted"]);
   assert.deepEqual(await rows(), [
-    ["i1", "todo", "Not started"],
-    ["i2", "todo", "Not started"],
+    ["i1", "todo", "Its agent was archived"],
+    ["i2", "todo", "Its agent was deleted"],
   ]);
   assert.deepEqual(doorbells().flatMap((text) => text.split("\n").slice(1)), ['- i1 "Add retries" (a1) returned to Todo: its agent was archived', '- i2 "Dead letters" (a2) returned to Todo: its agent was deleted']);
 });

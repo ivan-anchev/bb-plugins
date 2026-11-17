@@ -12,9 +12,9 @@ import type { IssueId } from "../../model/issue/issue.ts";
 import type { Handed } from "../../model/issue/status.ts";
 import { intervalText, type Reminder } from "../../model/reminder.ts";
 import type { Check, CheckId } from "../../model/verdict/check.ts";
-import { checkoutText } from "../../model/verdict/checkout.ts";
+import { checkoutText, NOT_CLEAN } from "../../model/verdict/checkout.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
-import { allPassed, ciVerdictOf, judge, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
+import { allPassed, ciVerdictOf, failedCheckout, judge, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
 
 /** What the texts look up, all within one regional manager. */
 export type Lookups = {
@@ -190,10 +190,13 @@ function verdictText({ verdict, verifier, issueId, subject }: Check, agent: Agen
       const ci = ciVerdictOf(verdict);
       const passed = ci === null ? allPassed(verdict) : judge(verdict, ci) === "pass";
       const label = passed ? (ci === null ? "Passed every criterion" : "Verified") : "Failed verification";
+      // why the checkout and CI first when they failed the verdict: its criteria may all have passed.
+      const reasons = [...(failedCheckout(verdict) === null ? [] : [NOT_CLEAN.toLowerCase()]), ...(ci?.kind === "fail" ? [`CI failed on #${ci.number}`] : [])];
+      const reason = reasons.length === 0 ? "" : ` ${reasons.join(", and ")}.`;
       const count = verdict.criteria.filter((check) => check.result === "pass").length;
       const by = verifiedOn(verdict, verifier, issueId, subject.agentId, agent);
       const head = [
-        `${label}: ${count} of ${verdict.criteria.length} criteria passed, checked at ${verdict.headSha} by a verifier on ${by}.`,
+        `${label}:${reason} ${count} of ${verdict.criteria.length} criteria passed, checked at ${verdict.headSha} by a verifier on ${by}.`,
         checkoutText(verdict.headSha, verdict.checkout),
         ciLine(verdict, ci),
         "Each result, with its evidence in the verifier's words:",

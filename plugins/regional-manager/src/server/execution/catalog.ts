@@ -2,7 +2,7 @@
 // routing (an environment, a machine, or neither for bb's primary machine). One read per question,
 // so a refusal and a verifier's choice see the same catalog.
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
-import type { CatalogModel, CatalogRouting, ExecutionFacts } from "../../model/execution.ts";
+import { executionOf, runnableText, type CatalogModel, type CatalogRouting, type Execution, type ExecutionFacts, type RequestedExecution } from "../../model/execution.ts";
 
 type Providers = BbPluginApi["sdk"]["providers"];
 type Catalog = Awaited<ReturnType<Providers["models"]>>;
@@ -17,6 +17,25 @@ export type CatalogBb = {
     };
   };
 };
+
+/**
+ * The execution requested, resolved where `routing` points, or why not and what bb can run there.
+ * Two catalog reads when it runs; a refusal adds one models read per other available provider.
+ */
+export async function resolvedExecution(bb: CatalogBb, routing: CatalogRouting, requested: RequestedExecution): Promise<Execution | { refused: string }> {
+  const facts = await executionFacts(bb, routing, requested.providerId);
+  const resolved = executionOf(requested, facts);
+  if (!("refused" in resolved)) return resolved;
+  return { refused: `${resolved.refused} ${runnableText(await runnableThere(bb, routing, requested.providerId, facts))}` };
+}
+
+/** The providers bb lists as available where `routing` points and loads models of there. why the models: bb lists one whose executable is missing as available. */
+async function runnableThere(bb: CatalogBb, routing: CatalogRouting, requestedId: string, { providers, models }: ExecutionFacts): Promise<string[]> {
+  const loaded = await Promise.all(
+    providers.filter(({ available }) => available).map(async ({ id }) => ((id === requestedId ? models : await modelsOf(bb, routing, id)).length > 0 ? [id] : [])),
+  );
+  return loaded.flat();
+}
 
 /** The providers bb lists where `routing` points, and `providerId`'s models there. */
 export async function executionFacts(bb: CatalogBb, routing: CatalogRouting, providerId: string): Promise<ExecutionFacts> {

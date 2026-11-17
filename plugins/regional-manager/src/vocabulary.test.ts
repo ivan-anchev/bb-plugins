@@ -6,13 +6,16 @@
 // It is a lexical regression guard, not a reader. It fails on named things: the retired
 // single-thread names, "crew" given one thread's things (its thread, row, id, branch or worktree, in a
 // name or in prose, or a PR given to "every crew"), and ids from before agents. The tools named crew_ it
-// checks where the plugin declares them, not by spelling, so a private crew_rules is any other name.
+// checks as the plugin's entry point hands them to bb, not by spelling, so a private crew_rules is any other name.
 // It judges no other name, and bare prose that means one thread only by its sense passes:
 // "// The crew is stuck.", said of one agent, is green here. Review decides what such a sentence means.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { extname, join, relative } from "node:path";
 import { test } from "node:test";
+import { makePluginAgentConfigurationContext } from "@get-bb/plugin-sdk/testing";
+import plugin from "../server.ts";
+import { coordinatorContract } from "./contract.ts";
 import { harness, newThreadRequest } from "./server/test-harness.ts";
 
 const PLUGIN = join(import.meta.dirname, "..");
@@ -42,10 +45,12 @@ test(`no retired single-thread name, no "crew" given one thread's things, and no
 });
 
 test("the only tools named crew_ are the five about every agent at once", async () => {
-  const kit = harness();
-  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
-  const configured = kit.configurationFor(threadId, {}).tools.map((tool) => (typeof tool === "string" ? tool : tool.name));
-  const offered = [...kit.tools().map(({ name }) => name), ...configured];
+  const loaded = harness().load(plugin);
+  const { threadId } = coordinatorContract.startCoordinator.output.parse(await loaded.callRpc("startCoordinator", { request: newThreadRequest("Migrate the webhook service"), verify: true }));
+  const configured = await loaded.resolveAgentConfiguration(makePluginAgentConfigurationContext({ thread: { id: threadId } }));
+  // why: bb refuses a configuration naming a tool or skill it doesn't have, and gives the thread nothing.
+  assert.deepEqual(loaded.logEntries.filter(({ level }) => level !== "info"), [], "bb refused the entry point's configuration");
+  const offered = [...loaded.registrations.agentTools, ...configured.tools].map(({ name }) => name);
   const crewTools = new Set(offered.filter((name) => name.startsWith("crew_")));
   assert.deepEqual(crewTools, FLEET_TOOLS, `${MEANING} A tool for one agent is named agent_, one for one issue issue_.`);
 });

@@ -1,12 +1,13 @@
 // Tests only: the server's modules wired as server.ts wires them, over an in-memory database, a
 // temporary memory folder and a fake bb that records what the plugin registers.
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgentToolResult, PluginStorage, PluginThreadEventPayloads } from "@get-bb/plugin-sdk";
+import type { BbPluginApi, PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgentToolResult, PluginStorage, PluginThreadEventPayloads } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
-import type { z } from "zod";
+import { createFakePluginHost, type FakePluginHarness } from "@get-bb/plugin-sdk/testing";
+import { z } from "zod";
 import type { EnvironmentProvider } from "../model/agent.ts";
 import type { HolderThread } from "../model/issue/status.ts";
 import type { CoordinatorId } from "../model/role.ts";
@@ -272,6 +273,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   const turnEvents: { failure: Error | null } = { failure: null };
   /** Set `failure` to make every listing of threads by id reject with it, as when bb can't answer. */
   const threadLists: { failure: Error | null } = { failure: null };
+  /** Set `pending` to hold every stop until it settles, as a slow bb does; set `failure` to make every stop reject with it then. */
+  const stopRequests: { pending: Promise<void> | null; failure: Error | null } = { pending: null, failure: null };
   /** Set `answered` to run as bb answers a thread's model lookup, as when someone acts at that moment. */
   const modelLookups: { answered: ((threadId: string) => void) | null } = { answered: null };
   let store = openStore(storage);
@@ -314,7 +317,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     for (const handler of handlersOf(event)) await handler(payload);
   }
 
-  const threads: SpawnBb["sdk"]["threads"] & AgentsBb["sdk"]["threads"] & IssuesBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] & VerifyBb["sdk"]["threads"] & PrWatchBb["sdk"]["threads"] = {
+  const threads = {
     async spawn(args) {
       const id = `thr_${++spawned}`;
       metadata.set(id, args.pluginMetadata ?? {});
@@ -342,8 +345,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       if (value === undefined) throw new Error(`No thread ${threadId}`);
       return value;
     },
-    // As bb does, listing by id includes archived and deleted threads.
-    list: async ({ threadIds }) => {
+    // As bb does, listing by id includes archived and deleted threads. why optional: bb's SDK lists without ids too; the plugin always names them.
+    list: async ({ threadIds }: { threadIds?: readonly string[] } = {}) => {
+      if (threadIds === undefined) throw new Error("The plugin lists threads by id");
       if (threadLists.failure !== null) throw threadLists.failure;
       return threadIds.flatMap((id) => fakeThreads.get(id) ?? []);
     },
@@ -389,7 +393,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     },
     // As bb does, a deleted thread's events are gone; an archived one's stay readable.
     events: {
-      list: async ({ threadId }) => {
+      list: async ({ threadId }: { threadId: string }) => {
         if (turnEvents.failure !== null) throw turnEvents.failure;
         const thread = fakeThread(threadId);
         if (thread.deletedAt !== null) throw bbHttpError(404, "thread_not_found", "Thread not found");
@@ -397,14 +401,20 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         return latest === undefined ? [] : [{ seq: latest }];
       },
     },
+    // As bb does, a stop that ends a running turn announces the thread idle, with the interrupted turn's last answer.
     async stop({ threadId }) {
-      fakeThread(threadId).status = stops;
+      await stopRequests.pending;
+      if (stopRequests.failure !== null) throw stopRequests.failure;
+      const thread = fakeThread(threadId);
+      const interrupted = thread.status !== "idle" && stops === "idle";
+      thread.status = stops;
+      if (interrupted) await emit("thread.idle", { thread: { ...ref(threadId), environmentId: thread.environmentId }, lastAssistantText: "Interrupted halfway." });
     },
     async archive({ threadId }) {
       fakeThread(threadId).archivedAt = Date.now();
     },
     output: async () => ({ output: "Done: npm test passes." }),
-  };
+  } satisfies SpawnBb["sdk"]["threads"] & AgentsBb["sdk"]["threads"] & IssuesBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] & VerifyBb["sdk"]["threads"] & PrWatchBb["sdk"]["threads"];
   const agents: ToolsBb["agents"] & Parameters<typeof registerRoles>[0]["agents"] = {
     registerTool(tool) {
       tools.set(tool.name, { parameters: tool.parameters, run: async (input, threadId) => tool.execute(tool.parameters.parse(input), { threadId, projectId: "prj_1", signal: new AbortController().signal }) });
@@ -413,14 +423,16 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       configure = provider;
     },
   };
-  const providersArea: CatalogBb["sdk"]["providers"] = {
+  // why satisfies, and an optional provider: bb's SDK takes either call without arguments, and the plugin always names the provider.
+  const providersArea = {
     list: async () => providers.list.map(({ id, available }) => ({ id, available })),
-    async models({ providerId }) {
+    async models({ providerId }: { providerId?: string } = {}) {
+      if (providerId === undefined) throw new Error("The plugin names the provider whose models it reads");
       const models = providers.list.find((provider) => provider.id === providerId)?.models ?? null;
       if (providers.holding) await new Promise<void>((release) => providers.held.push(release));
       return models === null ? { modelLoadError: { code: "auth_required", detail: null, providerId }, models: [] } : { modelLoadError: null, models };
     },
-  };
+  } satisfies CatalogBb["sdk"]["providers"];
   const projects = { get: async (_: { projectId: string }) => ({ gitRemoteUrl: github.remote }) };
   /**
    * bb's environments: the ones it has destroyed, as when their sandbox was removed (every other one
@@ -453,10 +465,12 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     };
   }
   const plugins = {
-    async callRpc<T>({ pluginId, method, input, outputSchema }: { pluginId: string; method: string; input: { keys: string[] }; outputSchema: z.ZodType<T> }): Promise<T> {
+    // why any input: bb's SDK takes any JSON; git's status RPC takes the keys of the environments to read.
+    async callRpc<T>({ pluginId, method, input, outputSchema }: { pluginId?: string; method: string; input?: unknown; outputSchema: z.ZodType<T> }): Promise<T> {
       if (pluginId !== "bb--git" || method !== "status") throw new Error(`No rpc ${pluginId} ${method}`);
-      git.calls.push(input.keys);
-      const answer = outputSchema.parse(Object.fromEntries(input.keys.map((key) => [key, gitStatus(key)])));
+      const { keys } = z.object({ keys: z.array(z.string()) }).parse(input);
+      git.calls.push(keys);
+      const answer = outputSchema.parse(Object.fromEntries(keys.map((key) => [key, gitStatus(key)])));
       if (git.holding) await new Promise<void>((release) => git.held.push(release));
       return answer;
     },
@@ -543,6 +557,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     turnEvents,
     /** How bb answers a listing of threads by id; a test may make it fail. */
     threadLists,
+    /** How bb answers a stop; a test may hold it or make it fail. */
+    stopRequests,
     /** The time the next tick runs at; a test may move it on. */
     clock,
     /** The schedule's once-a-minute pass, as server.ts runs it, at the clock's time. */
@@ -563,6 +579,18 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       // why open it again: the reloaded plugin does, which runs the migrations it hasn't, as after an upgrade.
       store = openStore(storage);
       plugin = wire();
+    },
+    /**
+     * bb loads the plugin from this entry point, as it loads server.ts: over the SDK's fake plugin
+     * host, whose bb is a whole BbPluginApi, with this fake bb's threads, providers, projects,
+     * plugins and environments as its SDK; any other SDK call throws, naming itself. It runs beside
+     * the harness's wiring, on a database of its own. The host's harness, to call what the entry
+     * point registered and read it back.
+     */
+    load(entry: (bb: BbPluginApi) => void): FakePluginHarness {
+      const host = createFakePluginHost({ pluginId: PLUGIN_ID, sdk: bb.sdk, agentSkillIds: manifestSkillIds() });
+      entry(host.bb);
+      return host.harness;
     },
     /** A thread bb has, as the plugin can list it, and what it was spawned with. */
     thread: fakeThread,
@@ -681,6 +709,13 @@ export function newThreadRequest(goal: string): NewThreadRequest {
 export const textOf = (result: PluginAgentToolResult): string => (typeof result === "string" ? result : result.content.map((part) => (part.type === "text" ? part.text : "")).join(""));
 
 export const isRefusal = (result: PluginAgentToolResult): boolean => typeof result !== "string" && result.isError === true;
+
+/** The skills the plugin's manifest declares, as bb reads them: each folder in the directories its bb.skills names. */
+function manifestSkillIds(): string[] {
+  const root = join(import.meta.dirname, "../..");
+  const manifest = z.object({ bb: z.object({ skills: z.array(z.string()) }) }).parse(JSON.parse(readFileSync(join(root, "package.json"), "utf8")));
+  return manifest.bb.skills.flatMap((dir) => readdirSync(join(root, dir)));
+}
 
 function configurationContext(threadId: string, pluginMetadata: PluginAgentConfigurationContext["pluginMetadata"]): PluginAgentConfigurationContext {
   return {

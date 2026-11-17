@@ -157,8 +157,8 @@ opus".
   plugin picks the verifier: yours when the agent runs on another model, else
   another provider's default model, else another model of the agent's
   provider, else the agent's own, which the verdict then says.
-- A refusal lists what bb can run there (providers, and a known provider's
-  models): pick from it. Nothing is started or saved on a refusal.
+- A refusal lists what bb can run there (providers whose models load there,
+  and a known provider's models): pick from it. Nothing is started or saved on a refusal.
 - A verifier on the model of the agent holding the issue is refused, and so is
   an agent on the issue's verifier: the work couldn't be checked by another
   model. Each refusal offers the other change.

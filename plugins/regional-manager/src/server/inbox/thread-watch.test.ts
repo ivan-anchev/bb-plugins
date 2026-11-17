@@ -114,7 +114,7 @@ test("an archived agent thread ends its agent: its issue returns to Todo, and it
   await settled();
 
   assert.equal(kit.store.agents(coordinatorId)[0]?.ended?.how, "archived");
-  assert.deepEqual([(await row())?.lane, (await row())?.headline, (await row())?.agent?.threadId], ["todo", "Not started", null]);
+  assert.deepEqual([(await row())?.lane, (await row())?.headline, (await row())?.agent?.threadId], ["todo", "Its agent was archived", null]);
   assert.deepEqual(doorbells().map((text) => text.split("\n")[1]), [`- i1 "Add retries" (a1) returned to Todo: its agent was archived`]);
 });
 

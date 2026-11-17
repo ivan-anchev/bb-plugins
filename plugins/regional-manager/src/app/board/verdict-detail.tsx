@@ -3,7 +3,7 @@
 // criterion with its evidence. A failed or unverifiable criterion shows its evidence; a
 // passed one keeps it folded, so what needs the user is what they see first.
 import { experimental_Icon as Icon, useBbNavigate } from "@get-bb/plugin-sdk/app";
-import { checkoutText } from "../../model/verdict/checkout.ts";
+import { checkoutText, NOT_CLEAN } from "../../model/verdict/checkout.ts";
 import { allPassed, ciVerdictOf, failedCheckout, outcome, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
 
 type Judged = Extract<Verdict, { state: "returned" | "could-not-run" }>;
@@ -76,7 +76,9 @@ function CheckoutLine({ verdict }: { verdict: Extract<Verdict, { state: "returne
   return (
     <p className="flex items-start gap-1.5 text-xs text-destructive-text">
       <Icon name="X" aria-hidden className="mt-px size-3.5 shrink-0" />
-      <span className="min-w-0 [overflow-wrap:anywhere]">Not the claimed commit on a clean tree. {checkoutText(verdict.headSha, failed)}</span>
+      <span className="min-w-0 [overflow-wrap:anywhere]">
+        {NOT_CLEAN}. {checkoutText(verdict.headSha, failed)}
+      </span>
     </p>
   );
 }

@@ -79,7 +79,7 @@ export function issueText({ view, threadId, branch }: IssueRead, agents: readonl
         : `${output.slice(0, OUTPUT_BUDGET_CHARS)}\n\n[Cut here: it has ${output.length} characters. Read the rest in its thread.]`;
   return [
     `## ${issue.id}: ${issue.title}`,
-    `${PIPELINES[issue.kind].label}. ${STATUS_LABELS[view.status]}: ${view.headline}.${view.needsYou === null ? "" : " Needs you."} Thread: ${threadLink(threadId)}${branch === null ? "" : `, branch \`${branch}\``}.`,
+    `${PIPELINES[issue.kind].label}. ${sentence(`${STATUS_LABELS[view.status]}: ${view.headline}`)}${view.needsYou === null ? "" : " Needs you."} Thread: ${threadLink(threadId)}${branch === null ? "" : `, branch \`${branch}\``}.`,
     `### What it is about\n\n${issue.description.trim()}`,
     `### Brief\n\n${issue.brief?.trim() ?? "None yet."}`,
     `### Done when\n\n${issue.doneCriteria.length === 0 ? "No criteria yet." : issue.doneCriteria.map((criterion, i) => `${i + 1}. ${criterion}`).join("\n")}`,
@@ -89,6 +89,9 @@ export function issueText({ view, threadId, branch }: IssueRead, agents: readonl
     `### Its agent's latest answer\n\n${answer}`,
   ].join("\n\n");
 }
+
+/** The text as a sentence: with a full stop, unless an agent's summary ending it already has one. */
+const sentence = (text: string): string => (/[.!?]$/.test(text) ? text : `${text}.`);
 
 function agentLine(agent: Agent, liveThreadId: string | null): string {
   const thread = agent.threadId === liveThreadId ? `, ${threadLink(liveThreadId)}` : "";

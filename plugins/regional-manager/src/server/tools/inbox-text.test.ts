@@ -52,7 +52,7 @@ const checkedWith = (verdict: Verdict, verifier: Execution | null = null): Hande
 /** a1, as stored when it handed off, on `execution`. */
 const agentOn = (execution: Execution) => ({ agent: (): Agent => ({ id: agentId, coordinatorId, issueId, placement: { kind: "worktree" }, base: { kind: "default" }, execution, threadId: "thr_a1", checkout: { environmentId: null, branch: null, head: null }, fixRounds: 0, startedAt: 1_000, ended: null }) });
 
-const returned = (results: CriterionResult[], ranOn: Pick<Execution, "providerId" | "model"> = { providerId: "codex", model: "gpt-default" }, sameModel = false): Verdict => ({
+const returned = (results: CriterionResult[], ranOn: Pick<Execution, "providerId" | "model"> = { providerId: "codex", model: "gpt-default" }, sameModel = false): Extract<Verdict, { state: "returned" }> => ({
   state: "returned",
   verifierThreadId: "thr_v",
   headSha: SHA,
@@ -78,6 +78,15 @@ test("a returned verdict reads Verified in catch-up exactly when outcome() passe
     const label = outcome(verdict) === "pass" ? "Verified" : "Failed verification";
     assert.match(handoffText(checkedWith(verdict), agentOn(CODEX)), new RegExp(`#### Verdict\\n\\n${label}: ${passed} of ${results.length} criteria passed,`), results.join(", "));
   }
+});
+
+test("a verdict the plugin's checkout read or CI failed leads with that, before a count of criteria that may all have passed", () => {
+  const dirty: Verdict = { ...returned(["pass"]), checkout: { headSha: SHA, changedFiles: ["?? scratch.txt"], changedFileCount: 1 } };
+  assert.match(
+    handoffText(checkedWith(dirty), agentOn(CODEX)),
+    new RegExp(`#### Verdict\\n\\nFailed verification: not the claimed commit on a clean tree\\. 1 of 1 criteria passed, checked at ${SHA} by a verifier on codex gpt-default\\. bb's git plugin read the agent's environment as it handed off: the working tree had 1 changed file: \\?\\? scratch\\.txt\\.`),
+  );  const ciFailed: Verdict = { ...dirty, settlement: { kind: "checked", refused: null, ci: { kind: "fail", number: 41, failedChecks: ["test"] } } };
+  assert.match(handoffText(checkedWith(ciFailed), agentOn(CODEX)), /#### Verdict\n\nFailed verification: not the claimed commit on a clean tree, and CI failed on #41\. 1 of 1 criteria passed, /);
 });
 
 test("a verdict says what its verifier ran on: as named on the issue, why not the one named, or that it was the agent's own", () => {

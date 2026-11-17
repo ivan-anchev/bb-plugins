@@ -4,12 +4,12 @@
 // nothing else; every other status is evidence.
 import type { z } from "zod";
 import type { Agent } from "../../model/agent.ts";
-import { executionOf, sameModel, type Execution, type RequestedExecution } from "../../model/execution.ts";
+import { sameModel, type Execution, type RequestedExecution } from "../../model/execution.ts";
 import type { Issue, managerStatusSchema } from "../../model/issue/issue.ts";
 import { STATUS_LABELS } from "../../model/issue/status.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { executionText } from "../agents/agents.ts";
-import { executionFacts, type CatalogBb } from "../execution/catalog.ts";
+import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
 import type { IssueEdit, NewIssue } from "../store/issue/issues-store.ts";
 import type { Store } from "../store/store.ts";
 import { readIssue, type FactsBb, type FactsStore } from "./issue-facts.ts";
@@ -46,7 +46,7 @@ export function createIssues({ bb, store, onChange }: Deps) {
    * check comes is passed over, and the verdict says so.
    */
   async function verifierOf(requested: RequestedExecution): Promise<Execution | Refused> {
-    const resolved = executionOf(requested, await executionFacts(bb, {}, requested.providerId));
+    const resolved = await resolvedExecution(bb, {}, requested);
     return "refused" in resolved ? { refused: `On bb's primary machine: ${resolved.refused}` } : resolved;
   }
 

@@ -40,7 +40,7 @@ export async function readIssues(bb: FactsBb, store: FactsStore, coordinatorId: 
       const facts: IssueFacts = {
         issue,
         holder: await holderOf(bb, store, own, threadOf),
-        left: leftBy(store, latest),
+        ended: endedBy(store, latest),
         pr: branch === null ? null : (store.prOfBranch(coordinatorId, branch)?.snapshot ?? null),
         openDecision: openDecisions.has(issue.id),
       };
@@ -62,10 +62,11 @@ async function holderOf(bb: TurnsBb, store: FactsStore, own: readonly Agent[], t
   return { agent, thread, current };
 }
 
-/** With no holder, the handoff its latest agent left as it ended (null: none). */
-function leftBy(store: FactsStore, latest: Agent | null): IssueFacts["left"] {
-  const left = latest?.ended?.left ?? null;
-  return left === null ? null : store.handoff(left);
+/** How the latest agent ended, with the handoff it left then (null: none); null while it holds the issue, or when none started. */
+function endedBy(store: FactsStore, latest: Agent | null): IssueFacts["ended"] {
+  const ended = latest?.ended ?? null;
+  if (ended === null) return null;
+  return { how: ended.how, left: ended.left === null ? null : store.handoff(ended.left) };
 }
 
 /** why throw: issueViews returns one view per facts, in order. */

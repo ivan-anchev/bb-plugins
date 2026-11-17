@@ -4,11 +4,12 @@
 // kind's stages (walk); everything that reads an IssueStatus never sees a kind.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import type { Agent } from "../agent.ts";
+import type { Agent, EndedHow } from "../agent.ts";
 import type { Handoff } from "../handoff.ts";
 import type { Check } from "../verdict/check.ts";
 import type { CiVerdict, PrSnapshot } from "../verdict/pr.ts";
-import { allPassed, ciVerdictOf, mayHaveReachedAgent, outcome, type Verdict } from "../verdict/verdict.ts";
+import { NOT_CLEAN } from "../verdict/checkout.ts";
+import { allPassed, ciVerdictOf, failedCheckout, mayHaveReachedAgent, outcome, type Verdict } from "../verdict/verdict.ts";
 import type { Issue } from "./issue.ts";
 import { PIPELINES, type Kind, type Stage } from "./kind.ts";
 
@@ -39,8 +40,8 @@ export type IssueFacts = {
   issue: Issue;
   /** The agent holding it now; its thread (null: bb no longer lists it); its current handoff (handoffIsCurrent), null when it has none. */
   holder: { agent: Agent; thread: HolderThread | null; current: Handed | null } | null;
-  /** With no holder: the handoff its latest agent left when it ended (null: none). */
-  left: Handed | null;
+  /** With no holder: how its latest agent ended, and the handoff it left then (null: none); null when no agent ever started on it. */
+  ended: { how: EndedHow; left: Handed | null } | null;
   /** The pull request of its branch (agent.ts issueBranch) as last read (null: none seen). */
   pr: PrSnapshot | null;
   /** An unanswered decision names it. */
@@ -69,7 +70,7 @@ const ASKED = "Waiting on your answer to its decision";
 /** How the manager's two closing acts place an issue. */
 const CLOSED = { canceled: { status: "canceled", headline: "Canceled" }, accepted: { status: "done", headline: "Accepted" } } as const;
 
-function issueView({ issue, holder, left, pr, openDecision }: IssueFacts): IssueView {
+function issueView({ issue, holder, ended, pr, openDecision }: IssueFacts): IssueView {
   const base = { issue, holder: holder?.agent ?? null, pr, placing: null };
   const final = finalOf(issue, pr);
   if (final !== null) return { ...base, ...final, needsYou: null };
@@ -78,9 +79,27 @@ function issueView({ issue, holder, left, pr, openDecision }: IssueFacts): Issue
     const placed = held(issue.kind, holder, pr);
     return { ...base, ...placed, needsYou: placed.needsYou ?? asked };
   }
+  const left = ended?.left ?? null;
   const after = left === null ? null : placedByLeft(issue.kind, left, pr);
   if (left !== null && after !== null) return { ...base, ...after, placing: left.check, needsYou: after.needsYou ?? asked };
-  return { ...base, status: issue.rest, headline: issue.rest === "todo" ? "Not started" : "Not planned", needsYou: asked };
+  return { ...base, status: issue.rest, headline: restingHeadline(issue.rest, ended?.how ?? null), needsYou: asked };
+}
+
+/** Why an issue rests where the manager put it: in Todo, how its latest agent ended (null: none ever started). */
+function restingHeadline(rest: Issue["rest"], endedHow: EndedHow | null): string {
+  if (rest === "backlog") return "Not planned";
+  switch (endedHow) {
+    case null:
+      return "Not started";
+    case "spawn-failed":
+      return "bb never started its agent's thread";
+    case "stopped":
+    case "archived":
+    case "deleted":
+      return `Its agent was ${endedHow}`;
+    default:
+      return endedHow satisfies never;
+  }
 }
 
 /**
@@ -228,8 +247,9 @@ function passNote(ci: CiVerdict | null): string {
 /** What CI said about a settled verdict's commit; null for any other verdict. */
 const ciOfReturned = (verdict: Verdict): CiVerdict | null => (verdict.state === "returned" ? ciVerdictOf(verdict) : null);
 
-/** How a failure reads: as CI's, when every criterion passed and CI failed on the commit. */
+/** How a failure reads: by the plugin's checkout read when it failed it; as CI's, when every criterion passed and CI failed on the commit. */
 function failedAs(verdict: Verdict): string {
+  if (verdict.state === "returned" && failedCheckout(verdict) !== null) return `✗ ${NOT_CLEAN}`;
   const ci = ciOfReturned(verdict);
   return ci?.kind === "fail" && verdict.state === "returned" && allPassed(verdict) ? `✗ CI failed on #${ci.number}` : "✗ Failed verification";
 }

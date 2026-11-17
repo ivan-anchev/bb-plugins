@@ -145,6 +145,13 @@ test("issue_read places the issue by its agent's thread once it has had a turn s
   assert.match(text, /### Its record\n\n#### a1's handoff\n\nStatus: done/);
 });
 
+test("issue_read ends its status line with one full stop when the agent's summary already ends with one", async () => {
+  const { kit, threadId, agentThreadId } = await withAgent({ verify: false });
+  await kit.call("agent_handoff", { ...DONE, summary: "Added notes/p1.md with exactly one line: p1." }, agentThreadId);
+  await kit.idle(agentThreadId, "Handed off.");
+  assert.match(textOf(await kit.call("issue_read", { id: "i1" }, threadId)), /^## i1: Add retries\n\nBuild\. In review: Unverified: Added notes\/p1\.md with exactly one line: p1\. Thread: /);
+});
+
 test("a handoff still reading the agent's checkout when the agent is stopped is refused, and stores, checks and starts nothing", async () => {
   const { kit, threadId, coordinatorId, agentThreadId } = await withAgent();
   const before = kit.store.agent(coordinatorId, a1) ?? assert.fail("no agent");

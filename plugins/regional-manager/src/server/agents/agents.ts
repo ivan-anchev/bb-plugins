@@ -6,13 +6,13 @@ import { randomUUID } from "node:crypto";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { Coordinator } from "../../contract.ts";
 import { environmentOf, placementOf, type Agent, type AgentId, type EndedHow, type Placement, type PlacementFacts, type RequestedPlacement } from "../../model/agent.ts";
-import { catalogRouting, executionOf, sameModel, type Execution, type RequestedExecution } from "../../model/execution.ts";
+import { catalogRouting, sameModel, type Execution, type RequestedExecution } from "../../model/execution.ts";
 import { handoffIsCurrent } from "../../model/handoff.ts";
 import { briefToStart, type Issue, type IssueId } from "../../model/issue/issue.ts";
 import { keepsPlaceAfterEnd, type IssueView } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { executionFacts, type CatalogBb } from "../execution/catalog.ts";
+import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
 import { inheritedFrom, type Inherited, type ThreadExecutionBb } from "../execution/thread-execution.ts";
 import type { Inbox } from "../inbox/inbox.ts";
 import { readIssue, type FactsBb, type FactsStore } from "../issues/issue-facts.ts";
@@ -98,7 +98,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, placementFacts
       const own = await inheritedFrom(bb, coordinator.threadId);
       return own === null ? { refused: "bb has no model on record for you yet, so the agent has none to inherit. Name one with execution." } : { execution: own.execution, inherited: { serviceTier: own.serviceTier } };
     }
-    const resolved = executionOf(requested, await executionFacts(bb, catalogRouting(environment), requested.providerId));
+    const resolved = await resolvedExecution(bb, catalogRouting(environment), requested);
     if ("refused" in resolved) return { refused: `Nothing started. Where the agent would run (${placementText(placement)}): ${resolved.refused}` };
     return { execution: resolved, inherited: null };
   }

@@ -120,7 +120,7 @@ test("a verifier bb can't run is refused as an agent's execution is, and changes
   const { kit, coordinatorId, call, update } = await managing();
   const unknown = await call("issue_create", { ...ISSUE, verifier: { providerId: "gemini", model: "pro" } });
   assert.ok(isRefusal(unknown));
-  assert.equal(textOf(unknown), "No issue filed. On bb's primary machine: bb can't run gemini there. It can run: claude-code, codex.");
+  assert.equal(textOf(unknown), "No issue filed. On bb's primary machine: bb can't run gemini there. bb can run: claude-code, codex.");
   assert.deepEqual(kit.store.issues(coordinatorId), []);
 
   await call("issue_create", ISSUE);

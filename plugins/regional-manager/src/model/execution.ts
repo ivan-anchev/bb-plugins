@@ -1,7 +1,7 @@
 // What a thread the plugin starts runs on: a provider, a model and a reasoning level. The manager
 // names one as a request (an agent's on agent_start, an issue's verifier on issue_create and
 // issue_update), and it is resolved against bb's catalog where the thread will run, or refused
-// with what bb can run there, as placementOf resolves a placement (agent.ts).
+// with why, as placementOf resolves a placement (agent.ts).
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
 
@@ -29,17 +29,20 @@ export type ExecutionFacts = { providers: readonly { id: string; available: bool
 /**
  * The execution the manager asked for, or why bb can't run it there: the provider must be listed
  * and available, and the model in its catalog. A reasoning level it names is bb's to judge at the
- * spawn, as every spawn field is.
+ * spawn, as every spawn field is. why a refusal names no other provider: knowing which ones run
+ * there takes a catalog read of each (catalog.ts resolvedExecution).
  */
 export function executionOf(requested: RequestedExecution, { providers, models }: ExecutionFacts): Execution | { refused: string } {
   const { providerId } = requested;
-  const runnable = providers.filter(({ available }) => available).map(({ id }) => id);
-  if (!runnable.includes(providerId)) return { refused: `bb can't run ${providerId} there. It can run: ${runnable.join(", ")}.` };
-  if (models.length === 0) return { refused: `bb can't load ${providerId}'s models there. It can run: ${runnable.join(", ")}.` };
+  if (!providers.some(({ id, available }) => id === providerId && available)) return { refused: `bb can't run ${providerId} there.` };
+  if (models.length === 0) return { refused: `bb can't load ${providerId}'s models there.` };
   const model = models.find(({ model }) => model === requested.model);
-  if (model === undefined) return { refused: `${providerId} has no model ${requested.model} there. Its models: ${models.map(modelText).join(", ")}. bb can run: ${runnable.join(", ")}.` };
+  if (model === undefined) return { refused: `${providerId} has no model ${requested.model} there. Its models: ${models.map(modelText).join(", ")}.` };
   return { providerId, model: model.model, reasoningLevel: requested.reasoningLevel ?? model.defaultReasoningEffort };
 }
+
+/** The providers bb can run somewhere, as a refusal names them: those it lists as available and loads models of there. */
+export const runnableText = (runnable: readonly string[]): string => (runnable.length === 0 ? "bb can run no provider there." : `bb can run: ${runnable.join(", ")}.`);
 
 const modelText = ({ model, isDefault }: CatalogModel): string => (isDefault ? `${model} (default)` : model);
 

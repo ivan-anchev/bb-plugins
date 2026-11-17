@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { catalogRouting, executionOf, type ExecutionFacts } from "./execution.ts";
+import { catalogRouting, executionOf, runnableText, type ExecutionFacts } from "./execution.ts";
 
 const facts: ExecutionFacts = {
   providers: [
@@ -19,17 +19,22 @@ test("a named model bb lists runs at the reasoning level named, else at the mode
   assert.deepEqual(executionOf({ providerId: "codex", model: "gpt-5.4-mini" }, facts), { providerId: "codex", model: "gpt-5.4-mini", reasoningLevel: "low" });
 });
 
-test("an unknown or unavailable provider is refused naming the providers bb can run there", () => {
-  assert.deepEqual(executionOf({ providerId: "gemini", model: "x" }, facts), { refused: "bb can't run gemini there. It can run: claude-code, codex." });
-  assert.deepEqual(executionOf({ providerId: "pi", model: "x" }, facts), { refused: "bb can't run pi there. It can run: claude-code, codex." });
+test("an unknown or unavailable provider is refused", () => {
+  assert.deepEqual(executionOf({ providerId: "gemini", model: "x" }, facts), { refused: "bb can't run gemini there." });
+  assert.deepEqual(executionOf({ providerId: "pi", model: "x" }, facts), { refused: "bb can't run pi there." });
 });
 
-test("a model the provider's catalog doesn't list is refused naming its models, the default marked, and the providers bb can run there", () => {
-  assert.deepEqual(executionOf({ providerId: "codex", model: "gpt-4" }, facts), { refused: "codex has no model gpt-4 there. Its models: gpt-5.4 (default), gpt-5.4-mini. bb can run: claude-code, codex." });
+test("a model the provider's catalog doesn't list is refused naming its models, the default marked", () => {
+  assert.deepEqual(executionOf({ providerId: "codex", model: "gpt-4" }, facts), { refused: "codex has no model gpt-4 there. Its models: gpt-5.4 (default), gpt-5.4-mini." });
 });
 
 test("a provider whose models bb can't load there is refused", () => {
-  assert.deepEqual(executionOf({ providerId: "codex", model: "gpt-5.4" }, { ...facts, models: [] }), { refused: "bb can't load codex's models there. It can run: claude-code, codex." });
+  assert.deepEqual(executionOf({ providerId: "codex", model: "gpt-5.4" }, { ...facts, models: [] }), { refused: "bb can't load codex's models there." });
+});
+
+test("a refusal names the providers bb can run there, or that it can run none", () => {
+  assert.equal(runnableText(["claude-code", "codex"]), "bb can run: claude-code, codex.");
+  assert.equal(runnableText([]), "bb can run no provider there.");
 });
 
 test("a catalog is read where the thread will be spawned: a joined environment, a worktree's machine, else bb's primary machine", () => {

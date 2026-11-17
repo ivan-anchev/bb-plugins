@@ -7,7 +7,7 @@ import { checkIdSchema, type Check } from "../verdict/check.ts";
 import type { PrSnapshot } from "../verdict/pr.ts";
 import type { CriterionResult, Verdict } from "../verdict/verdict.ts";
 import { issueIdSchema, type Issue } from "./issue.ts";
-import { issueViews, placedByLeft, type HolderThread, type IssueFacts, type IssueStatus } from "./status.ts";
+import { issueViews, placedByLeft, type Handed, type HolderThread, type IssueFacts, type IssueStatus } from "./status.ts";
 
 const coordinatorId = coordinatorIdSchema.parse("6f1c2a52-6b8e-4c43-9a51-1d6a3c0b7e10");
 const issue: Issue = {
@@ -53,7 +53,7 @@ const checkOf = (verdict: Verdict): Check => ({
   subject: { kind: "handoff", agentId: agent.id, handoffId: done.id, headSha: SHA, prUrl: null },
   verdict,
 });
-const returned = (results: CriterionResult[], settlement: Extract<Verdict, { state: "returned" }>["settlement"] = { kind: "checked", refused: null, ci: { kind: "none" } }): Verdict => ({
+const returned = (results: CriterionResult[], settlement: Extract<Verdict, { state: "returned" }>["settlement"] = { kind: "checked", refused: null, ci: { kind: "none" } }): Extract<Verdict, { state: "returned" }> => ({
   state: "returned",
   verifierThreadId: "thr_v",
   headSha: SHA,
@@ -67,8 +67,8 @@ const returned = (results: CriterionResult[], settlement: Extract<Verdict, { sta
 const pr = (state: PrSnapshot["state"]): PrSnapshot => ({ number: 12, url: "https://github.com/o/r/pull/12", state, draft: false, review: "none", ci: "pass", headSha: SHA, failedChecks: [] });
 
 const thread = (status: HolderThread["status"], hasPendingInteraction = false): HolderThread => ({ status, hasPendingInteraction });
-const facts = (over: Partial<IssueFacts>): IssueFacts => ({ issue, holder: null, left: null, pr: null, openDecision: false, ...over });
-const held = (thread: HolderThread | null, current: IssueFacts["left"] = null, fixRounds = 0): Partial<IssueFacts> => ({ holder: { agent: { ...agent, fixRounds }, thread, current } });
+const facts = (over: Partial<IssueFacts>): IssueFacts => ({ issue, holder: null, ended: null, pr: null, openDecision: false, ...over });
+const held = (thread: HolderThread | null, current: Handed | null = null, fixRounds = 0): Partial<IssueFacts> => ({ holder: { agent: { ...agent, fixRounds }, thread, current } });
 const view = (over: Partial<IssueFacts>) => {
   const [placed] = issueViews([facts(over)]);
   return placed === undefined ? assert.fail("no view") : { status: placed.status, headline: placed.headline, needsYou: placed.needsYou };
@@ -131,6 +131,12 @@ test("a done handoff walks Verifying, then In review, by its check", () => {
   for (const [verdict, expected] of cases) assert.deepEqual(view(held(thread("idle"), { handoff: done, check: checkOf(verdict) })), expected, JSON.stringify(verdict));
 });
 
+test("a failure the plugin's checkout read made leads its headline with that, though every criterion passed", () => {
+  const dirty: Verdict = { ...returned(["pass"]), checkout: { headSha: SHA, changedFiles: ["?? scratch.txt"], changedFileCount: 1 } };
+  const headline = "✗ Not the claimed commit on a clean tree after its fix round: Retries land with backoff";
+  assert.deepEqual(view(held(thread("idle"), { handoff: done, check: checkOf(dirty) }, 1)), at("in-progress", headline, headline));
+});
+
 test("a failure after the agent's fix round says so, and one whose findings may not have reached it says that instead", () => {
   const summary = "Retries land with backoff";
   const failed = `✗ Failed verification after its fix round: ${summary}`;
@@ -140,10 +146,18 @@ test("a failure after the agent's fix round says so, and one whose findings may 
 });
 
 test("work that reached Verifying or In review stays there once its agent ended; anything short of it rests again", () => {
-  assert.deepEqual(view({ left: { handoff: done, check: checkOf({ state: "queued", checkout: CLEAN }) } }), at("verifying", "Verifying: Retries land with backoff"));
-  assert.deepEqual(view({ left: { handoff: done, check: checkOf(returned(["pass"])) }, pr: pr("open") }), at("in-review", "✓ Verified: Retries land with backoff"));
-  assert.deepEqual(view({ left: { handoff: done, check: checkOf(returned(["fail"])) } }), at("todo", "Not started"));
+  const stopped = (left: Handed) => ({ ended: { how: "stopped", left } }) as const;
+  assert.deepEqual(view(stopped({ handoff: done, check: checkOf({ state: "queued", checkout: CLEAN }) })), at("verifying", "Verifying: Retries land with backoff"));
+  assert.deepEqual(view({ ...stopped({ handoff: done, check: checkOf(returned(["pass"])) }), pr: pr("open") }), at("in-review", "✓ Verified: Retries land with backoff"));
+  assert.deepEqual(view(stopped({ handoff: done, check: checkOf(returned(["fail"])) })), at("todo", "Its agent was stopped"));
   assert.equal(placedByLeft("build", { handoff: blocked, check: null }, null), null);
+});
+
+test("an issue resting in Todo after its agent ended says how it ended; only one no agent ever started reads Not started", () => {
+  assert.deepEqual(view({}), at("todo", "Not started"));
+  for (const how of ["stopped", "archived", "deleted"] as const) assert.deepEqual(view({ ended: { how, left: null } }), at("todo", `Its agent was ${how}`), how);
+  assert.deepEqual(view({ ended: { how: "spawn-failed", left: null } }), at("todo", "bb never started its agent's thread"));
+  assert.deepEqual(view({ issue: { ...issue, rest: "backlog" }, ended: { how: "stopped", left: null } }), at("backlog", "Not planned"));
 });
 
 test("an issue named by an unanswered decision Needs you, unless something more pressing does", () => {

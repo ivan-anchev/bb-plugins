@@ -81,8 +81,9 @@ An issue's status is derived from what its agents did, never stored:
 **Needs you** is a flag on an open issue, shown above every status: its agent
 is blocked or gave up, waits for your answer or approval in its thread, its
 last turn failed, its work failed verification after its fix round ("✗ Failed
-verification after its fix round", "✗ CI failed on #41"), its findings may or
-may not have reached it, it couldn't be verified, bb never confirmed starting
+verification after its fix round", "✗ CI failed on #41", or "✗ Not the claimed
+commit on a clean tree" when the plugin's own read failed it), its findings
+may or may not have reached it, it couldn't be verified, bb never confirmed starting
 its agent's thread ("No thread: bb never confirmed starting one": the manager
 ends that agent with `agent_stop`, which ends it at once, and starts another
 with `agent_start`), or one of the manager's open decisions names it.
@@ -105,8 +106,11 @@ starts it with `agent_start`:
   [Agents in a sandbox](#agents-in-a-sandbox)). It runs with auto permissions.
 - **What it runs on**: see [Who runs what](#who-runs-what).
 - **Its first message**: the issue's description, brief and numbered
-  done-criteria, and `CREW.md` and `MEMORY.md` as they were at that moment.
-  Put rules every agent follows in `CREW.md`.
+  done-criteria, and `CREW.md` and `MEMORY.md` as they were at that moment,
+  their headings set under the message's own. Put rules every agent follows
+  in `CREW.md`: the agent is told its work is its brief and done-criteria,
+  and the other memory files are its regional manager's context, not its
+  instructions.
 - **Its id**: `a1`, `a2`… within its regional manager, never reused. Its
   thread is titled with the issue's title and sits under the regional
   manager in bb's sidebar.
@@ -119,19 +123,23 @@ or what it would run on or where can't be had.
 
 The regional manager messages an agent with `agent_message` (it arrives
 marked as from the regional manager, not from you), and stops one with
-`agent_stop`, which archives its thread too when asked. You can open any
-agent's thread and type into it like any thread.
+`agent_stop`, which archives its thread too when asked. Stopping an agent
+mid-turn is followed by two updates: that it ended its turn without a handoff,
+since bb doesn't say the stop ended it, and that it was stopped. You can open
+any agent's thread and type into it like any thread.
 
 An agent ends when it is stopped, or when you archive or delete its thread.
 Its issue keeps its place if the agent's work had reached Verifying, In
 review or Done; otherwise the issue returns to Todo and the manager is woken
-with "returned to Todo". An agent stopped while its done handoff is Verifying
-leaves the issue in Verifying; if that check then fails, or can't be had, the
-issue rests in Todo, and the manager hears of the failed check rather than a
-return to Todo. A check that passes still takes it to In review. An ended
-agent's handoff is refused. To try again,
-the manager starts a fresh agent on the same issue, from the issue's brief as
-it is then.
+with "returned to Todo". Its row then says how the agent ended ("Its agent was
+stopped", "archived" or "deleted", or "bb never started its agent's thread");
+only an issue no agent ever started reads "Not started". An agent stopped
+while its done handoff is Verifying leaves the issue in Verifying; if that
+check then fails, or can't be had, the issue rests in Todo, and the manager
+hears of the failed check rather than a return to Todo. A check that passes
+still takes it to In review. An ended agent's handoff is refused. To try
+again, the manager starts a fresh agent on the same issue, from the issue's
+brief as it is then.
 
 Archiving or deleting the regional manager archives or deletes its agents
 with it.
@@ -181,7 +189,8 @@ branch for the project.
   the issue's next done handoff; a check already running keeps its own.
 - **Refusals**: an unknown provider, one bb lists as unavailable there, or a
   model its catalog doesn't list is refused before anything changes, naming
-  what bb can run there and, for a known provider, its models. A verifier on
+  what bb can run there (providers it lists as available and can load the
+  models of) and, for a known provider, its models. A verifier on
   the model of the agent holding the issue is refused, and so is an agent on
   its issue's verifier; each refusal offers the other change.
 - **Your choices**: tell the regional manager once, such as "build on codex

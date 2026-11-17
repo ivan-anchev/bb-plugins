@@ -123,7 +123,8 @@ test("a CI failure after the agent's fix round reaches the coordinating thread a
   assert.deepEqual(await row(), { lane: "needs-you", headline: "✗ CI failed on #41 after its fix round: Retries land with backoff", pr: "#41 open CI fail" });
   // why the catch-up: the coordinating thread is busy with an earlier doorbell by now, so bb holds this one queued.
   const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
-  assert.match(catchUp, /### i1 "Add retries" \(a1\) handed off: done\n[\s\S]*Failed verification: 2 of 2 criteria passed, checked at 0123456789abcdef0123456789abcdef01234567 by a verifier on [^.]*\. bb's git plugin read the agent's environment as it handed off: the claimed commit 0123456789abcdef0123456789abcdef01234567 checked out, on a clean working tree\. CI: failed on #41 at this commit; failed checks, as GitHub names them: test\./);
+  assert.match(catchUp, /### i1 "Add retries" \(a1\) handed off: done\n[\s\S]*Failed verification: CI failed on #41\. 2 of 2 criteria passed, checked at 0123456789abcdef0123456789abcdef01234567 by a verifier on [^.]*\. bb's git plugin read the agent's environment as it handed off: the claimed commit 0123456789abcdef0123456789abcdef01234567 checked out, on a clean working tree\. CI: failed on #41 at this commit; failed checks, as GitHub names them: test\./);
+  assert.match(textOf(await kit.call("issue_read", { id: "i1" }, threadId)), /#### Verdict\n\nFailed verification: CI failed on #41\. 2 of 2 criteria passed, checked at /);
 });
 
 test("a snapshot of another commit does not settle the verdict, even with CI green", async () => {
@@ -612,7 +613,7 @@ test("after a newer agent's spawn fails, the issue's pull request is still read 
   await kit.call("agent_stop", { agent: "a1" }, threadId);
   Object.assign(kit.spawns, { created: false, answer: "lost" });
   assert.match(textOf(await kit.call("agent_start", { issue: "i1" }, threadId)), /^bb did not start a2/);
-  assert.deepEqual(await row(), { lane: "todo", headline: "Not started", pr: "#41 open CI pending" });
+  assert.deepEqual(await row(), { lane: "todo", headline: "bb never started its agent's thread", pr: "#41 open CI pending" });
 
   pr({ state: "MERGED" });
   kit.clock.now += 6 * MINUTE;

@@ -38,6 +38,9 @@ export function checkoutProblems(claimed: string, checkout: Checkout): string[] 
   return [...otherCommit, `the working tree had ${changedFileCount === 1 ? "1 changed file" : `${changedFileCount} changed files`}: ${listed}`];
 }
 
+/** Why a checkout the plugin read fails a verdict, whatever its criteria say: the board's headline, the verdict's lead. */
+export const NOT_CLEAN = "Not the claimed commit on a clean tree";
+
 /** The checkout in a sentence, as the plugin's: what the verifier is told, and what the verdict shows. */
 export function checkoutText(claimed: string, checkout: Checkout): string {
   const problems = checkoutProblems(claimed, checkout);

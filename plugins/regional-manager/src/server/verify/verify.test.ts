@@ -448,7 +448,7 @@ test("a tree bb reads with changes fails the verdict with bb's evidence, whateve
   assert.match(findings, /### The commit and the tree\n\nbb's git plugin read the agent's environment as it handed off: the working tree had 2 changed files: \?\? scratch-1\.txt, \?\? scratch-2\.txt\. Commit what belongs/);
   assert.deepEqual([(await row()).lane, (await row()).headline], ["in-progress", "Working"], "the agent works again, on its one fix round");
   assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 1);
-  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /Failed verification: 2 of 2 criteria passed[^\n]*bb's git plugin read the agent's environment as it handed off: the working tree had 2 changed files/);
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /Failed verification: not the claimed commit on a clean tree\. 2 of 2 criteria passed[^\n]*bb's git plugin read the agent's environment as it handed off: the working tree had 2 changed files/);
 
   // The fix round works as before: the agent cleans up and hands off again, and a clean pass is verified.
   kit.git.changedFiles.clear();
@@ -470,7 +470,7 @@ test("a commit bb reads other than the claimed one fails the verdict with bb's e
   await kit.call("issue_verdict", PASSES, verifier());
   await settled();
   assert.equal(kit.sent().filter((args) => args.threadId === agentThreadId).length, 1, "only the first verdict went back");
-  assert.deepEqual([(await row()).lane, (await row()).headline], ["needs-you", "✗ Failed verification after its fix round: Retries land with backoff"]);
+  assert.deepEqual([(await row()).lane, (await row()).headline], ["needs-you", "✗ Not the claimed commit on a clean tree after its fix round: Retries land with backoff"]);
   const shown = (await row()).placing?.verdict;
   assert.ok(shown?.state === "returned");
   assert.deepEqual(shown.checkout, { headSha: "f".repeat(40), changedFiles: [], changedFileCount: 0 }, "the board has bb's read to show");
