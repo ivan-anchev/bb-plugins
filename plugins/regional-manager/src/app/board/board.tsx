@@ -17,8 +17,6 @@ import { Switch } from "../ui/switch.tsx";
 import { shortTime } from "../ui/time.ts";
 import { CrewRow } from "./crew-row.tsx";
 import { DecisionRow } from "./decision-row.tsx";
-import { DraftRow } from "./draft/draft-row.tsx";
-import { DroppedEdit } from "./draft/dropped-edit.tsx";
 
 export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
   const read = experimental_useRpcQuery({ contract, method: "board", input: { coordinatorId } });
@@ -171,16 +169,8 @@ function ItemRow({ item, coordinatorId, keepFocus }: { item: BoardItem<BoardRow>
   switch (item.kind) {
     case "decision":
       return <DecisionRow ref={keepFocus(item.decision.id)} coordinatorId={coordinatorId} decision={item.decision} />;
-    case "crew": {
-      const row = item.row;
-      if (row.draft !== null) return <DraftRow ref={keepFocus(row.crewId)} coordinatorId={coordinatorId} row={row} draft={row.draft} />;
-      return (
-        <>
-          <CrewRow ref={keepFocus(row.crewId)} row={row} />
-          <DroppedEdit coordinatorId={coordinatorId} row={row} />
-        </>
-      );
-    }
+    case "crew":
+      return <CrewRow ref={keepFocus(item.row.crewId)} row={item.row} />;
     default:
       return item satisfies never;
   }

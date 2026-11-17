@@ -2,7 +2,7 @@
 // digest. Read whole on every call; bb's thread events only say when to read again.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { Board, BoardRow } from "../../../contract.ts";
-import { branchOf, environmentOf, type Crew } from "../../../model/crew.ts";
+import { branchOf, type Crew } from "../../../model/crew.ts";
 import { needsYou, type NeedsYou } from "../../../model/board/board-groups.ts";
 import { crewState, type CrewThread } from "../../../model/board/crew-state.ts";
 import { warnedFileCount } from "../../../model/inbox/own-tree.ts";
@@ -13,7 +13,7 @@ import type { Store } from "../../store.ts";
 import { currentHandoff, type TurnsBb } from "../handoffs.ts";
 
 /** A crew's thread as the board reads it. */
-type ListedThread = CrewThread & { id: string; environmentBranchName: string | null; environmentHostId: string | null; archivedAt: number | null; deletedAt: number | null };
+type ListedThread = CrewThread & { id: string; environmentBranchName: string | null; archivedAt: number | null; deletedAt: number | null };
 
 type ListArgs = { threadIds: string[]; includeHidden: true; limit: number };
 
@@ -50,7 +50,7 @@ export async function threadsById<Thread extends ListableThread>(bb: ListBb<Thre
 
 const DIGEST = memoryFileSchema.parse("DIGEST.md");
 
-export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinator" | "latestHandoff" | "verifies" | "prStatus" | "decisions" | "lastOwnTreeEvent">, memory: MemoryRoot) {
+export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "latestHandoff" | "verifies" | "prStatus" | "decisions" | "lastOwnTreeEvent">, memory: MemoryRoot) {
   /** Why the latest read of an open crew's pull request failed, the first one's; null when none did. */
   function prUnavailable(id: CoordinatorId): string | null {
     for (const crew of store.crews(id).filter(isOpen)) {
@@ -68,22 +68,16 @@ export function createBoard(bb: BoardBb, store: Pick<Store, "crews" | "coordinat
   }
 
   async function rows(id: CoordinatorId): Promise<BoardRow[]> {
-    const coordinator = store.coordinator(id);
-    // why: a coordinating thread starts crews through its tools, which it gets once its thread is bound.
-    if (coordinator === null) return [];
     const crews = store.crews(id);
-    // why the coordinating thread too: a draft's editor shows the machine its worktree would be on.
-    const threads = await listedThreads(bb, [coordinator.threadId, ...crews.flatMap((crew) => (crew.launch.kind === "started" ? [crew.launch.threadId] : []))]);
-    const environmentHostId = threads.get(coordinator.threadId)?.environmentHostId ?? null;
+    const threads = await listedThreads(bb, crews.flatMap((crew) => (crew.launch.kind === "started" ? [crew.launch.threadId] : [])));
     return Promise.all(
       crews.map(async (crew) => {
         const threadId = crew.launch.kind === "started" ? crew.launch.threadId : null;
         const thread = threadId === null ? null : (threads.get(threadId) ?? null);
         const handoff = isOpen(crew) && thread !== null ? await currentHandoff(bb, store, crew) : null;
-        const draft = draftOf(crew, { projectId: coordinator.projectId, environmentHostId });
         const verdict = handoff?.status === "done" ? handoff.verdict : null;
         const pr = store.prStatus(crew.coordinatorId, crew.id)?.snapshot ?? null;
-        return { crewId: crew.id, title: crew.title, threadId, branch: thread === null ? null : branchOf(crew, thread), ...crewState(crew, thread, handoff, pr), verdict, pr, draft };
+        return { crewId: crew.id, title: crew.title, threadId, branch: thread === null ? null : branchOf(crew, thread), ...crewState(crew, thread, handoff, pr), verdict, pr };
       }),
     );
   }
@@ -117,10 +111,3 @@ export type BoardReader = ReturnType<typeof createBoard>;
 
 /** A crew whose thread runs and that nobody closed: the only kind whose handoff can place it. */
 export const isOpen = (crew: Crew): crew is Crew & { launch: { kind: "started" } } => crew.launch.kind === "started" && crew.closed === null;
-
-/** A crew that is still a draft, as its row shows it and its editor starts from. */
-function draftOf(crew: Crew, coordinator: { projectId: string; environmentHostId: string | null }): BoardRow["draft"] {
-  if (crew.launch.kind !== "draft" || crew.closed !== null) return null;
-  const { brief, doneCriteria, execution, placement } = crew;
-  return { projectId: coordinator.projectId, brief, doneCriteria, execution, environment: environmentOf(placement, coordinator.environmentHostId) };
-}

@@ -72,7 +72,7 @@ test("an answer wakes the Coordinator with its own question, and crew_catch_up r
   assert.deepEqual(await kit.rpc.needsYou({ keys: [coordinatorId] }), { [coordinatorId]: { decisions: 0, crews: 0 } }, "the badge drops it");
 });
 
-test("the badge counts what each board shows under Needs you: open decisions, and crews blocked, waiting in their thread, failed or drafted", async () => {
+test("the badge counts what each board shows under Needs you: open decisions, and crews blocked, waiting in their thread, failed or with no thread", async () => {
   const { kit, threadId, coordinatorId } = await asked();
   await kit.call("crew_ask_user", { question: "Ship on Friday?", options: [] }, threadId);
   await kit.rpc.answerDecision({ coordinatorId, decisionId: decisionIdSchema.parse("d2"), answer: "No" });
@@ -84,7 +84,9 @@ test("the badge counts what each board shows under Needs you: open decisions, an
   kit.thread(asking).hasPendingInteraction = true;
   kit.thread(failing).status = "error";
   await kit.call("crew_close", { crewId: "c5", action: "stop" }, threadId);
-  await kit.call("crew_start", { title: "Drafted", brief: "Later.", doneCriteria: ["npm test passes"], draft: true }, threadId);
+  Object.assign(kit.spawns, { created: false, answer: "lost" });
+  await kit.call("crew_start", { title: "Unstarted", brief: "Later.", doneCriteria: ["npm test passes"] }, threadId);
+  Object.assign(kit.spawns, { created: true, answer: "thread" });
   const { threadId: otherThread } = await kit.spawner.coordinator(newThreadRequest("Ship the billing export"), false);
   const other = kit.store.roleOfThread(otherThread);
   assert.equal(other?.kind, "coordinator");

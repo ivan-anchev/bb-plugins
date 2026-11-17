@@ -2,7 +2,8 @@
 // link to its thread, so the agent can both act on it and point the user at it.
 import type { BoardRow } from "../../contract.ts";
 import { BOARD_STATE_LABELS, byState } from "../../model/board/crew-state.ts";
-import type { CloseOutcome, CrewDetail, StartOutcome, SupersedeOutcome } from "../crew/crews.ts";
+import type { CloseOutcome, CrewDetail, SupersedeOutcome } from "../crew/crews.ts";
+import type { CrewLaunch } from "../spawn.ts";
 import { handoffText } from "./inbox-text.ts";
 
 /** The most of a crew's latest answer crew_read returns. */
@@ -19,18 +20,14 @@ export function boardText(rows: BoardRow[] | { error: string }): string {
 }
 
 const rowLine = (row: BoardRow): string =>
-  row.draft !== null
-    ? `- ${row.crewId} "${row.title}", a draft with no thread: it waits for the user to start it, or edit it and start it`
-    : `- ${row.crewId} "${row.title}", ${threadLink(row.threadId)}${row.branch === null ? "" : ` on branch \`${row.branch}\``}: ${row.headline}`;
+  `- ${row.crewId} "${row.title}", ${threadLink(row.threadId)}${row.branch === null ? "" : ` on branch \`${row.branch}\``}: ${row.headline}`;
 
-export function startText(outcome: StartOutcome): string {
+export function startText(outcome: CrewLaunch): string {
   switch (outcome.kind) {
-    case "drafted":
-      return `Saved ${outcome.crewId} as a draft. It waits for the user under Needs you on the board, where they start it, or edit it first; no thread runs until they do. crew_catch_up shows it as a draft until then.`;
     case "started":
       return `Started ${outcome.crewId} as @thread:${outcome.threadId}. It works in its own environment on its own branch, and its brief arrived as a message from you. It ends its work with a handoff, and you are woken when it hands off, fails, waits on the user or stops without one.`;
     case "failed":
-      return `${outcome.crewId} was saved, but bb did not start its thread: ${outcome.error}. It waits on the board as a draft the user can start. Tell the user, or close it with crew_close (resolve) and start the work again.`;
+      return `${outcome.crewId} was saved, but bb did not start its thread: ${outcome.error}. It waits on the board with no thread, and nobody can start it: close it with crew_close and start the work again, or tell the user.`;
     default:
       return outcome satisfies never;
   }

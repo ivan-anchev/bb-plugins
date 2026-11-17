@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { crewIdSchema } from "../model/role.ts";
 import { BB_DEFAULT, coordinating, harness, newThreadRequest, textOf, threadIn } from "./test-harness.ts";
 
 const RETRIES = { title: "Add retries", brief: "Retry failed webhook deliveries with backoff.", doneCriteria: ["npm test passes"] };
@@ -75,7 +74,7 @@ test("a Coordinator runs on the provider and model picked in bb's composer, even
   assert.notEqual(thread.providerId, BB_DEFAULT.providerId);
 });
 
-test("a crew whose draft names no model runs on its Coordinator's provider and model as they are when it starts", async () => {
+test("a crew runs on its Coordinator's provider and model as they are when it starts", async () => {
   const { kit, threadId } = await coordinating();
   const first = kit.thread(threadIn(textOf(await kit.call("crew_start", RETRIES, threadId))));
   assert.deepEqual([first.providerId, first.execution], ["claude-code", { model: "opus", reasoningLevel: "high", serviceTier: "default", permissionMode: "auto" }]);
@@ -97,18 +96,7 @@ for (const permissionMode of ["accept-edits", "full"] as const) {
   });
 }
 
-test("a crew whose draft names a model runs on it, even one bb's composer left unmarked", async () => {
-  const { kit, threadId, coordinatorId } = await coordinating();
-  await kit.call("crew_start", { ...RETRIES, draft: true }, threadId);
-  const crewId = crewIdSchema.parse("c1");
-  const request = { ...newThreadRequest("Retry with backoff."), providerId: "codex", model: "gpt-5", executionInputSources: { providerId: "explicit" as const } };
-  await kit.rpc.updateDraft({ coordinatorId, crewId, request, doneCriteria: ["npm test passes"] });
-
-  const crew = kit.thread((await kit.rpc.startDraft({ coordinatorId, crewId })).threadId);
-  assert.deepEqual([crew.providerId, crew.execution?.model], ["codex", "gpt-5"]);
-});
-
-test("a crew never falls back to bb's default: with no model on record for its Coordinator, it stays a draft and says why", async () => {
+test("a crew never falls back to bb's default: with no model on record for its Coordinator, it gets no thread and says why", async () => {
   const { kit, threadId } = await coordinating();
   kit.thread(threadId).execution = null;
 
