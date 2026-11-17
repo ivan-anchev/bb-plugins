@@ -170,3 +170,15 @@
     transition: transform var(--pr-reviews-run) cubic-bezier(0.45, 0, 0.55, 1) 500ms;
   }
 }
+
+/* A pane's header bar, as bb draws its own pane headers (the thread view's, measured 48px in bb
+   0.49): the app chrome's row height and its seam hairline below, the bar's controls centred.
+   The sidebar's and the PR pane's share it, so their bars line up across the split. */
+.pr-pane-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  box-sizing: border-box;
+  height: var(--bb-app-chrome-row-height);
+  border-bottom: 1px solid color-mix(in oklab, var(--border-seam-vertical) 60%, transparent);
+}
