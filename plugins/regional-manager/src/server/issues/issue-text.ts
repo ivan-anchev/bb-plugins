@@ -6,7 +6,7 @@ import type { Issue } from "../../model/issue/issue.ts";
 import { isVerified, PIPELINES } from "../../model/issue/kind.ts";
 import { STATUS_LABELS, type Handed } from "../../model/issue/status.ts";
 import type { Agent } from "../../model/agent.ts";
-import { executionText, type Joined, type StartOutcome, type StopOutcome } from "../agents/agents.ts";
+import { executionText, recipientsText, type Joined, type StartOutcome, type StopOutcome, type Withdrawn } from "../agents/agents.ts";
 import { handoffText, type Lookups } from "../tools/inbox-text.ts";
 import { fenced } from "../verify/findings.ts";
 import type { IssueRead } from "./issue-facts.ts";
@@ -43,7 +43,7 @@ export function startText(issueId: Issue["id"], outcome: Exclude<StartOutcome, {
       const { agentId, threadId, execution, inherited, after, replaced, withdrawn, joined } = outcome;
       const started = `${replaced === null ? "Started" : `Stopped ${replaced} and started`} ${agentId} on ${issueId} as @thread:${threadId}`;
       const runs = `on ${executionText(execution)}${inherited ? ", your own provider, model and reasoning level" : ""}`;
-      const ends = `It ends its work with a handoff, and you are woken when it hands off, fails, waits on the user or stops without one.${withdrawnText(replaced, withdrawn)}`;
+      const ends = `It ends its work with a handoff, and you are woken when it hands off, fails, waits on the user or stops without one.${withdrawnText(withdrawn)}`;
       if (after === null) return `${started}, ${runs}. It works in its own environment on its own branch, and its brief arrived as a message from you. ${ends}`;
       const earlier = `Its first message, from you, holds the issue's plan and every earlier handoff and verdict.${replaced === null ? "" : ` ${replacedText(replaced)}`}`;
       if (joined === null) return `${started}, ${runs}. It starts clean, in its own environment from the default branch. ${earlier} ${ends}`;
@@ -53,7 +53,7 @@ export function startText(issueId: Issue["id"], outcome: Exclude<StartOutcome, {
       const { agentId, error, replaced, withdrawn, joined } = outcome;
       const was = replaced === null ? "" : ` ${replaced} was stopped and replaced, and stays so.`;
       const retry = joined === null ? "call agent_start again, or tell the user" : `if bb removed ${joined.from}'s environment, start clean with agent_start and from: "default"; otherwise call agent_start again, or tell the user`;
-      return `bb did not start ${agentId}'s thread${joined === null ? "" : ` in ${joined.from}'s environment`}: ${error}.${was} ${issueId} has no agent and rests in Todo: ${retry}.${withdrawnText(replaced, withdrawn)}`;
+      return `bb did not start ${agentId}'s thread${joined === null ? "" : ` in ${joined.from}'s environment`}: ${error}.${was} ${issueId} has no agent and rests in Todo: ${retry}.${withdrawnText(withdrawn)}`;
     }
     default:
       return outcome satisfies never;
@@ -70,11 +70,16 @@ function joinedText({ from, placement, branch, pr }: Joined): string {
 const replacedText = (replaced: string): string =>
   `${replaced}'s thread stays stopped, not archived, which keeps its environment alive until someone archives it.`;
 
-/** Your messages to the replaced agent that its handover took back from bb's queue, which it never got, quoted ("" when none). */
-function withdrawnText(replaced: string | null, withdrawn: readonly string[]): string {
-  if (replaced === null || withdrawn.length === 0) return "";
+/**
+ * Your messages to the issue's agents that the start took back from bb's queue, which they never
+ * got, quoted, each under the agent it was to when they were to more than one ("" when none).
+ */
+function withdrawnText(withdrawn: readonly Withdrawn[]): string {
+  if (withdrawn.length === 0) return "";
   const one = withdrawn.length === 1;
-  return `\n\n${one ? "Your message" : `Your ${withdrawn.length} messages`} to ${replaced} still waited in bb's queue, so ${one ? "it was" : "they were"} taken back before ${replaced} stopped, and ${replaced} never got ${one ? "it" : "them"}:\n\n${withdrawn.map(fenced).join("\n\n")}`;
+  const to = recipientsText(withdrawn);
+  const quoted = withdrawn.map(({ to: agentId, text }) => (to === agentId ? fenced(text) : `To ${agentId}:\n\n${fenced(text)}`));
+  return `\n\n${one ? "Your message" : `Your ${withdrawn.length} messages`} to ${to} still waited in bb's queue, so ${one ? "it was" : "they were"} taken back before anything started, and ${to} never got ${one ? "it" : "them"}:\n\n${quoted.join("\n\n")}`;
 }
 
 /** What agent_stop did. */

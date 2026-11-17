@@ -408,7 +408,10 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       return answer({ delivery: "sent" });
     },
     queuedMessages: {
-      list: async ({ threadId }) => queue.filter((entry) => entry.threadId === threadId),
+      async list({ threadId }) {
+        if (fakeThread(threadId).deletedAt !== null) throw bbHttpError(404, "thread_not_found", "Thread not found");
+        return queue.filter((entry) => entry.threadId === threadId);
+      },
       // As bb does, deleting a message that already left the queue fails, and a deleted one is announced.
       async delete({ queuedMessageId }) {
         if (queueDeletes.failure !== null) throw queueDeletes.failure;

@@ -458,6 +458,8 @@ test("an agent whose thread was archived or deleted while the plugin wasn't list
   ]);
   // why sorted: each issue's end runs in its own turn, side by side.
   assert.deepEqual(doorbells().flatMap((text) => text.split("\n").slice(1)).sort(), ['- i1 "Add retries" (a1) returned to Todo: its agent was archived', '- i2 "Dead letters" (a2) returned to Todo: its agent was deleted']);
+  // why: a start reads the queues of the issue's earlier agents that bb still has, and bb no longer has a2's.
+  assert.match(textOf(await kit.call("agent_start", { issue: "i2", from: "default" }, threadId)), /^Started a3 on i2/);
 });
 
 for (const first of ["agent", "manager", "neither"] as const) {

@@ -102,7 +102,7 @@ test("a message bb queued for a1 is taken back before the handover stops it, and
 
   const result = textOf(await start());
   assert.match(result, /^Stopped a1 and started a2/);
-  assert.ok(result.endsWith("Your message to a1 still waited in bb's queue, so it was taken back before a1 stopped, and a1 never got it:\n\n```\nAlso cap the backoff at 60s.\n```"), result);
+  assert.ok(result.endsWith("Your message to a1 still waited in bb's queue, so it was taken back before anything started, and a1 never got it:\n\n```\nAlso cap the backoff at 60s.\n```"), result);
   assert.deepEqual([kit.queued(agentThreadId), kit.delivered(agentThreadId).includes("Also cap the backoff at 60s.")], [[], false]);
 });
 
@@ -114,7 +114,7 @@ test("a queued message the handover can't take back, a failed delete or one the 
   kit.queueDeletes.failure = new Error("fetch failed");
 
   const refused = await start();
-  assert.equal(textOf(refused), "agent_start is refused: bb still has your message queued for a1, which would wake it once stopped, and couldn't take it back, so no agent started and a1 still holds i1. Call agent_start again once bb has sent or deleted it.");
+  assert.equal(textOf(refused), "agent_start is refused: bb still has your message queued for a1 and couldn't take it back; once sent, it would wake a1 beside a new agent, so no agent started and a1 still holds i1. Call agent_start again once bb has sent or deleted it.");
   assert.deepEqual([kit.queued(agentThreadId).length, kit.thread(agentThreadId).status, kit.spawned()], [1, "active", 2], "the message waits, a1 runs on, and nothing started");
 
   kit.queueDeletes.failure = null;
@@ -204,4 +204,42 @@ test("a stopped agent's verifier is stopped by the next start, and its check sup
   await kit.tick();
   await kit.tick();
   assert.deepEqual([kit.delivered(verifier), kit.thread(verifier).status, kit.thread(next).status], [[], "idle", "active"], "no reminder woke it");
+});
+
+test("a start after agent_stop takes back your message bb still queued for the stopped a1, so it never wakes a1 beside a2, and quotes it as a1's", async () => {
+  const { kit, threadId, agentThreadId, start } = await onI1();
+  kit.thread(agentThreadId).hasPendingInteraction = true; // a1 waits on the user's approval
+  await kit.call("agent_message", { agent: "a1", text: "Please add jitter." }, threadId);
+  assert.equal(kit.queued(agentThreadId).length, 1);
+  await kit.call("agent_stop", { agent: "a1" }, threadId);
+
+  const result = textOf(await start());
+  assert.match(result, /^Started a2 on i1/);
+  assert.ok(result.endsWith("Your message to a1 still waited in bb's queue, so it was taken back before anything started, and a1 never got it:\n\n```\nPlease add jitter.\n```"), result);
+  assert.deepEqual([kit.queued(agentThreadId), kit.delivered(agentThreadId).includes("Please add jitter.")], [[], false]);
+});
+
+test("a start after agent_stop takes back the findings bb still queued for the stopped a1, so they never wake it beside a2", async () => {
+  const { kit, threadId, agentThreadId, start, verifiers } = await onI1();
+  kit.startTurn(agentThreadId);
+  await kit.call("agent_handoff", DONE, agentThreadId); // a1's turn is still running
+  await kit.call("issue_verdict", FAILS, verifiers()[0]?.id ?? assert.fail());
+  assert.equal(kit.queued(agentThreadId).length, 1, "the findings wait in a1's queue");
+  await kit.call("agent_stop", { agent: "a1" }, threadId);
+
+  const next = threadIn(textOf(await start()));
+  assert.deepEqual([kit.queued(agentThreadId), kit.thread(agentThreadId).status, kit.thread(next).status], [[], "idle", "active"]);
+});
+
+test("a start refuses on what bb still has queued for an earlier, ended agent and couldn't take back, naming that agent; nothing is stopped or started", async () => {
+  const { kit, threadId, agentThreadId, start } = await onI1();
+  await kit.call("agent_stop", { agent: "a1" }, threadId);
+  kit.userQueues(agentThreadId, "Wait, use jitter too.");
+  const spawned = kit.spawned();
+
+  assert.equal(
+    textOf(await start()),
+    "agent_start is refused: bb still has a message from the user queued for a1 and couldn't take it back; once sent, it would wake a1 beside a new agent, so no agent started. Call agent_start again once bb has sent or deleted it.",
+  );
+  assert.equal(kit.spawned(), spawned);
 });
