@@ -245,6 +245,30 @@ test("canceling a parent is judged on its sub-issues as they are when it is writ
   assert.deepEqual(await statuses(), { i1: "in-progress", i2: "in-progress" });
 });
 
+test("two plan writes whose reads both finished first are judged in turn: a sub-issue moved out closes its research parent, and the filing under that parent read beside it is refused", async () => {
+  const { kit, call, text, statuses, started } = await managing();
+  await text("issue_create", RESEARCH);
+  await text("issue_create", { ...RESEARCH, title: "Vault", parent: "i1" });
+  await text("issue_create", { ...RESEARCH, title: "KMS", parent: "i1" });
+  const researcher = await started("i2");
+  await kit.call("agent_handoff", RESEARCH_DONE, researcher);
+  await kit.idle(researcher, "Handed off.");
+  await settled();
+  assert.deepEqual(await statuses(), { i1: "in-progress", i2: "done", i3: "todo" });
+
+  kit.turnEvents.holding = true;
+  const moving = call("issue_update", { id: "i3", parent: null });
+  const filing = call("issue_create", { ...RESEARCH, title: "HSM", parent: "i1" });
+  await settled();
+  assert.equal(kit.turnEvents.held.length, 2, "both writes' reads held");
+  // Both reads answer in one go: the filing's read is done before the move's caller resumes from its write.
+  await releaseAll(kit.turnEvents);
+
+  assert.deepEqual(await moving, { refused: false, text: "Updated i3." });
+  assert.deepEqual(await filing, { refused: true, text: "No issue filed: i4 can't be a sub-issue of i1: i1 is closed. Give i4 no parent, or an open top-level build or research issue as its parent." });
+  assert.deepEqual(await statuses(), { i1: "done", i2: "done", i3: "todo" });
+});
+
 test("a plan write whose reads keep being overtaken writes nothing and says to try again", async () => {
   const { kit, call, text, statuses } = await managing();
   await text("issue_create", ISSUE);
