@@ -69,7 +69,7 @@ export type VerifierReport = Pick<Extract<Verdict, { state: "returned" }>, "head
  * plugin's read of its checkout; where its work is as seen and what it ran on, to record on the
  * agent (null: not read).
  */
-export type Handing = { handoff: GivenHandoff; checkout: CheckoutRead; seen: AgentCheckout | null; execution: Execution | null };
+type Handing = { handoff: GivenHandoff; checkout: CheckoutRead; seen: AgentCheckout | null; execution: Execution | null };
 
 type Returned = Extract<Verdict, { state: "returned" }>;
 
