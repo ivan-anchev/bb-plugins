@@ -33,59 +33,42 @@ function memorySection(file: string, holds: string, note: string | null, text: M
 }
 
 /**
- * The file's markdown with every heading two levels down, so its own `#` title sits under the
- * message's `##` section rather than above it. A title underlined with `===` or `---` is rewritten
- * with `#`s, as an underline makes nothing deeper than `##`. Fenced code is left as it is; the file
- * on disk is never changed. why not fence the whole file instead: the person reading the thread
- * then sees raw markdown in a code block, unwrapped, where this keeps it rendered.
+ * Each `#` heading outside a code fence goes two levels down, so the file's title sits under the message's `##` section.
+ * Code is never changed: once a line might open or close a fence and only a list or quote around it could tell, the rest is
+ * left as it is. Titles underlined with `===` and headings in lists or quotes keep their size: cosmetic, not worth a Markdown parser.
  */
 function nested(markdown: string): string {
-  const lines: string[] = [];
+  const lines = markdown.split("\n");
   let fence: Fence | null = null;
-  /** Where in `lines` the paragraph an underline would make a heading begins; null when none is open. */
-  let paragraph: number | null = null;
-  /** Whether the lines since the last blank one continue a list item, quote or HTML block, whose text an underline doesn't make a heading. */
-  let container = false;
-  for (const line of markdown.split("\n")) {
-    if (fence !== null) {
-      if (closes(fence, line)) fence = null;
-      lines.push(line);
-      continue;
-    }
-    const underline = SETEXT_UNDERLINE.exec(line)?.[1];
-    if (underline !== undefined && paragraph !== null) {
-      const title = lines.splice(paragraph).join("\n");
-      lines.push(`${title.slice(0, title.search(/\S/))}${"#".repeat(underline === "=" ? 3 : 4)} ${title.trim().replace(/\s*\n\s*/g, " ")}`);
-      paragraph = null;
-      continue;
-    }
-    fence = opens(line);
-    if (fence !== null || /^\s*$/.test(line) || THEMATIC_BREAK.test(line) || ATX_HEADING.test(line)) [paragraph, container] = [null, false];
-    else if (CONTAINER_START.test(line)) [paragraph, container] = [null, true];
-    else if (paragraph === null && !container && !/^(?: {0,3}\t| {4})/.test(line)) paragraph = lines.length;
-    lines.push(line.replace(ATX_HEADING, (_, indent: string, hashes: string) => `${indent}${"#".repeat(Math.min(hashes.length + 2, 6))}`));
+  for (const [i, line] of lines.entries()) {
+    const next: Place = fence === null ? opens(line) : after(fence, line);
+    if (next === "unsure") break;
+    if (fence === null && next === null) lines[i] = line.replace(ATX_HEADING, (_, indent: string, hashes: string) => `${indent}${"#".repeat(Math.min(hashes.length + 2, 6))}`);
+    fence = next;
   }
   return lines.join("\n");
 }
 
-/** A code fence's marker: its character and how many of them opened it. */
-type Fence = { char: string; length: number };
+/** A code fence: its marker's character, how many of them opened it, and the spaces before them. */
+type Fence = { char: string; length: number; indent: string };
+
+/** Where a line leaves the text: in a fence, outside one (null), or unsure, after which nothing is changed. */
+type Place = Fence | null | "unsure";
 
 const ATX_HEADING = /^( {0,3})(#{1,6})(?=[ \t]|$)/;
-const SETEXT_UNDERLINE = /^ {0,3}(=|-)\1*[ \t]*$/;
-const THEMATIC_BREAK = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
-const CONTAINER_START = /^ {0,3}(?:[-+*][ \t]|[-+*]$|\d{1,9}[.)](?:[ \t]|$)|>|<)/;
 
-/** The fence the line opens, or null: three or more backticks or tildes, and no backtick after backticks. */
-function opens(line: string): Fence | null {
-  const match = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
-  if (match === null) return null;
-  const [, marker = "", info = ""] = match;
-  return marker.startsWith("`") && info.includes("`") ? null : { char: marker.charAt(0), length: marker.length };
+/** The fence the line opens, or null; unsure when a tab, list marker or `>` comes before its marker. */
+function opens(line: string): Place {
+  const match = /^( *)(`{3,}|~{3,})(.*)$/.exec(line);
+  if (match === null) return /^[ \t>*+\-\d.)]*(?:```|~~~)/.test(line) ? "unsure" : null;
+  const [, indent = "", marker = "", info = ""] = match;
+  return marker.startsWith("`") && info.includes("`") ? null : { char: marker.charAt(0), length: marker.length, indent };
 }
 
-/** Whether the line closes the fence: its character, at least as many, and nothing after. */
-function closes(fence: Fence, line: string): boolean {
-  const marker = /^ {0,3}(`+|~+)[ \t]*$/.exec(line)?.[1];
-  return marker !== undefined && marker.charAt(0) === fence.char && marker.length >= fence.length;
+/** The fence after the line: still open, closed (null) by a marker as indented as its opener's, or unsure when it may end elsewhere. */
+function after(fence: Fence, line: string): Place {
+  const indent = line.slice(0, line.search(/\S|$/));
+  const marker = /^\s*(`+|~+)[ \t]*$/.exec(line)?.[1];
+  if (marker?.charAt(0) === fence.char && marker.length >= fence.length) return indent === fence.indent ? null : "unsure";
+  return line.trim() !== "" && indent.length < fence.indent.length ? "unsure" : fence;
 }

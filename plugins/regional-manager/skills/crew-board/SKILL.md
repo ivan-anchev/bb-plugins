@@ -107,10 +107,10 @@ starts it with `agent_start`:
 - **What it runs on**: see [Who runs what](#who-runs-what).
 - **Its first message**: the issue's description, brief and numbered
   done-criteria, and `CREW.md` and `MEMORY.md` as they were at that moment,
-  their headings set under the message's own. Put rules every agent follows
-  in `CREW.md`: the agent is told its work is its brief and done-criteria,
-  and the other memory files are its regional manager's context, not its
-  instructions.
+  their `#` headings outside code set under the message's own. Put rules
+  every agent follows in `CREW.md`: the agent is told its work is its brief
+  and done-criteria, and the other memory files are its regional manager's
+  context, not its instructions.
 - **Its id**: `a1`, `a2`… within its regional manager, never reused. Its
   thread is titled with the issue's title and sits under the regional
   manager in bb's sidebar.
@@ -123,10 +123,11 @@ or what it would run on or where can't be had.
 
 The regional manager messages an agent with `agent_message` (it arrives
 marked as from the regional manager, not from you), and stops one with
-`agent_stop`, which archives its thread too when asked. Stopping an agent
-mid-turn is followed by two updates: that it ended its turn without a handoff,
-since bb doesn't say the stop ended it, and that it was stopped. You can open
-any agent's thread and type into it like any thread.
+`agent_stop`, which archives its thread too when asked. An agent stopped
+mid-turn before it hands off can be followed by two updates: that it ended its
+turn without a handoff and, when its issue returns to Todo, that it was
+stopped. bb gives no cause for an idle, so the plugin reports both. You can
+open any agent's thread and type into it like any thread.
 
 An agent ends when it is stopped, or when you archive or delete its thread.
 Its issue keeps its place if the agent's work had reached Verifying, In

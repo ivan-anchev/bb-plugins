@@ -51,32 +51,12 @@ test("an agent's first message holds the description above the brief, every done
   assert.match(prompt, /## MEMORY\.md[^\n]*\n\n[^\n]*\n\n### Memory\n\nThe index of this memory/);
 });
 
-test("an agent's first message sets the memory files' headings under its own sections, leaving their code blocks and the files as they are", async () => {
+test("an agent's first message sets the memory files' `#` headings under its own sections, leaving their code and the files as they are", async () => {
   const { kit, threadId, coordinatorId, start } = await filed();
   const memory = kit.memory.of(coordinatorId);
   const crewMd = memoryFileSchema.parse("CREW.md");
-  const written = [
-    "Crew rules",
-    "==========",
-    "",
-    "Ship small",
-    "----------",
-    "",
-    "## Git",
-    "",
-    "````md",
-    "# not a heading",
-    "```",
-    "# still in the code block",
-    "````",
-    "",
-    "# After the code block",
-    "",
-    "---",
-    "",
-    "##### Deep",
-    "",
-  ].join("\n");
+  const listCode = ["1. Run the checks:", "", "   ```sh", "   # a comment in a list item's code block", "   npm run check", "   ```"].join("\n");
+  const written = ["# Crew rules", "", "## Git", "", "````md", "# not a heading", "```", "# still in the code block", "````", "", listCode, "", "# After the code blocks", "", "##### Deep", ""].join("\n");
   memory.write(crewMd, written, memory.read(crewMd).text?.version ?? null);
 
   const prompt = kit.thread(threadIn(textOf(await start()))).spawnedWith.prompt ?? assert.fail("spawned without a prompt");
@@ -87,18 +67,32 @@ test("an agent's first message sets the memory files' headings under its own sec
     "## Done when",
     "## CREW.md: the rules every agent follows",
     "### Crew rules",
-    "#### Ship small",
     "#### Git",
     "# not a heading",
     "# still in the code block",
-    "### After the code block",
+    "### After the code blocks",
     "###### Deep",
     "## MEMORY.md: your regional manager's memory, for context",
     "### Memory",
   ]);
-  assert.ok(prompt.includes("### After the code block\n\n---\n\n###### Deep"), "the thematic break under the code block is gone");
+  assert.ok(prompt.includes(listCode), "the code block in the list item changed");
   assert.equal(memory.read(crewMd).text?.content, written);
   assert.ok(textOf(await kit.call("crew_memory_read", { file: "CREW.md" }, threadId)).includes(written.trim()), "crew_memory_read no longer returns CREW.md as written");
+});
+
+test("an agent's first message leaves a memory file as it is from where only a Markdown parser could place its headings: an underlined title, a quote, a list item's fence", async () => {
+  const { kit, coordinatorId, start } = await filed();
+  const memory = kit.memory.of(coordinatorId);
+  const write = (file: string, text: string) => memory.write(memoryFileSchema.parse(file), text, memory.read(memoryFileSchema.parse(file)).text?.version ?? null);
+  const crewRules = ["Crew rules", "==========", "", "> # Quoted", "", "- ~~~", "  # a comment in a list item's code block", "  ~~~", "", "# Rules"].join("\n");
+  // why: the list item ends at the unindented line, which opens a second code block rather than closing the first.
+  const index = ["1. Run:", "   ```sh", "   npm test", "```", "# a comment in the second code block", "```"].join("\n");
+  write("CREW.md", crewRules);
+  write("MEMORY.md", index);
+
+  const prompt = kit.thread(threadIn(textOf(await start()))).spawnedWith.prompt ?? assert.fail("spawned without a prompt");
+  assert.ok(prompt.includes(`## CREW.md: the rules every agent follows\n\n${crewRules}\n\n## MEMORY.md`), "CREW.md changed on its way into the first message");
+  assert.ok(prompt.endsWith(`\n\n${index}`), "MEMORY.md changed on its way into the first message");
 });
 
 test("an agent's first message tells it the memory is its regional manager's context, and its work is its brief and done-criteria", async () => {
