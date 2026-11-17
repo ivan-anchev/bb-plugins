@@ -62,8 +62,8 @@ test("a handover stops the holder without archiving it, ends it as replaced, and
 
   const message = firstMessage(next);
   assert.match(message, /^# i1: Add retries\n\nYou are agent a2, working on issue i1\. [^\n]* Your work is this issue: its brief and done-criteria below\. Do it where an earlier agent left it: see Where you work\.\n/);
-  assert.match(message, /## Where you work\n\nYou continue a1's work in its environment, on its branch `bb\/thr_2`\. a1 is stopped\. Its commits are here, and so may be files it left uncommitted, half-done edits included\. Run `git status` and `git log` before you change anything/);
-  assert.match(message, /## Earlier work on i1\n\na1 held i1 before you\. Their work is where you work\./);
+  assert.match(message, /## Where you work\n\nYou continue a1's work in its environment, on its branch `bb\/thr_2`\. a1 no longer works there\. Its commits are here, and so may be files it left uncommitted, half-done edits included\. Run `git status` and `git log` before you change anything/);
+  assert.match(message, /## Earlier work on i1\n\nBefore you, a1 handed off on i1\. Their handoffs, oldest first/);
   assert.match(message, /### a1's handoff: blocked\n\nStatus: blocked\nSummary: Needs the staging key\n\n#### Did\n\n- Wrote the retry loop, uncommitted/);
   assert.ok(message.indexOf("## Done when") < message.indexOf("## Where you work") && message.indexOf("## Earlier work") < message.indexOf("## CREW.md"));
 
@@ -110,7 +110,7 @@ test("from default starts clean from the default branch, and its first message s
   assert.deepEqual(kit.thread(next).spawnedWith.environment, { type: "host", hostId: "host_1", workspace: { type: "managed-worktree", baseBranch: { kind: "default" } } });
   const message = firstMessage(next);
   assert.doesNotMatch(message, /## Where you work/);
-  assert.match(message, /a1 held i1 before you\. You start clean from the default branch: none of their commits or files are in your environment\./);
+  assert.match(message, /Before you, a1 handed off on i1\. You start clean from the default branch: none of their commits or files are in your environment\./);
   assert.match(message, /### a1's handoff: done\n\nStatus: done\nSummary: Retries land with backoff\nCommit: 0123456789abcdef0123456789abcdef01234567\nPull request: none/);
   assert.match(message, /#### Verdict\n\nFailed at `0123456`: 1 of 2 done-criteria not met\.\n\n##### 1\. npm test passes\n\n\*\*Failed\.\*\* The verifier's evidence:\n\n```\n\$ npm test\nnot ok 13 - backoff caps at 6000\n```\n\n##### Other findings\n\n- The cap is applied before the jitter\./);
 });
@@ -214,7 +214,7 @@ test("a research issue's handover starts clean, with the earlier handoffs in its
   assert.match(result, /^Started a2 on i1 as @thread:\w+, on claude-code opus \(high\), your own provider, model and reasoning level\. It starts clean/);
   const next = kit.thread(threadIn(result));
   assert.deepEqual(next.spawnedWith.environment, { type: "host", hostId: "host_1", workspace: { type: "managed-worktree", baseBranch: { kind: "default" } } });
-  assert.match(next.spawnedWith.prompt ?? "", /## Earlier work on i1\n\na1 held i1 before you\. You start clean[^\n]*\n\n### a1's handoff: blocked\n\nStatus: blocked\nSummary: Two queues look equal/);
+  assert.match(next.spawnedWith.prompt ?? "", /## Earlier work on i1\n\nBefore you, a1 handed off on i1\. You start clean[^\n]*\n\n### a1's handoff: blocked\n\nStatus: blocked\nSummary: Two queues look equal/);
 });
 
 test("a sandbox agent is continued in its sandbox, which the spawn wakes: nothing reads it first, and the result names it", async () => {

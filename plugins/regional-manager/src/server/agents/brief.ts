@@ -85,7 +85,7 @@ function whereSection({ base, branch, pr }: StartingPoint): string | null {
     case "joined": {
       const on = branch === null ? "on the branch checked out there" : `on its branch \`${branch}\``;
       const pull = pr === null ? "" : `, whose pull request is #${pr}: push to it, and don't open another`;
-      return `## Where you work\n\nYou continue ${base.from}'s work in its environment, ${on}${pull}. ${base.from} is stopped. Its commits are here, and so may be files it left uncommitted, half-done edits included. Run \`git status\` and \`git log\` before you change anything, and decide from what you find and the handoffs below what to keep.`;
+      return `## Where you work\n\nYou continue ${base.from}'s work in its environment, ${on}${pull}. ${base.from} no longer works there. Its commits are here, and so may be files it left uncommitted, half-done edits included. Run \`git status\` and \`git log\` before you change anything, and decide from what you find and the handoffs below what to keep.`;
     }
     default:
       return base satisfies never;
@@ -96,13 +96,14 @@ function whereSection({ base, branch, pr }: StartingPoint): string | null {
 function earlierSection(issueId: Issue["id"], { base, earlier }: StartingPoint): string | null {
   if (earlier.length === 0) return null;
   const agents = [...new Set(earlier.map(({ handoff }) => handoff.agentId))].join(", ");
-  const theirWork = base.kind === "joined" ? "Their work is where you work." : "You start clean from the default branch: none of their commits or files are in your environment.";
+  // why no claim about where their work is for a joined agent: Where you work names the one agent whose environment it is, which may not be one of these.
+  const clean = base.kind === "default" ? " You start clean from the default branch: none of their commits or files are in your environment." : "";
   const handoffs = earlier.map(({ handoff, check }) => {
     const report = handoff.status === "done" && handoff.delivery.kind === "report" ? [`#### Report\n\n${handoff.delivery.report}`] : [];
     const verdict = check === null ? [] : [`#### Verdict\n\n${nested(earlierVerdictText(check))}`];
     return [`### ${handoff.agentId}'s handoff: ${handoff.status}`, handoffFieldsText(handoff), ...report, ...verdict].join("\n\n");
   });
-  return [`## Earlier work on ${issueId}\n\n${agents} held ${issueId} before you. ${theirWork} Their handoffs, oldest first, in their own words, each with its verifier's verdict:`, ...handoffs].join("\n\n");
+  return [`## Earlier work on ${issueId}\n\nBefore you, ${agents} handed off on ${issueId}.${clean} Their handoffs, oldest first, in their own words, each with its verifier's verdict:`, ...handoffs].join("\n\n");
 }
 
 /** A memory file under its own `##` section, with what it is to the agent (null: the heading says it all). */
