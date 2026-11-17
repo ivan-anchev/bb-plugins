@@ -61,6 +61,7 @@ test("a handover stops the holder without archiving it, ends it as replaced, and
   assert.deepEqual(kit.store.takeUnread(coordinatorId, Date.now()).filter(({ event }) => event.kind === "returned-to-todo"), [], "nothing returned to Todo");
 
   const message = firstMessage(next);
+  assert.match(message, /^# i1: Add retries\n\nYou are agent a2, working on issue i1\. [^\n]* Your work is this issue: its brief and done-criteria below\. Do it where an earlier agent left it: see Where you work\.\n/);
   assert.match(message, /## Where you work\n\nYou continue a1's work in its environment, on its branch `bb\/thr_2`\. a1 is stopped\. Its commits are here, and so may be files it left uncommitted, half-done edits included\. Run `git status` and `git log` before you change anything/);
   assert.match(message, /## Earlier work on i1\n\na1 held i1 before you\. Their work is where you work\./);
   assert.match(message, /### a1's handoff: blocked\n\nStatus: blocked\nSummary: Needs the staging key\n\n#### Did\n\n- Wrote the retry loop, uncommitted/);

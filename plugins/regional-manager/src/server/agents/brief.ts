@@ -30,7 +30,7 @@ export function agentBrief(
   const { work, handingOff } = BY_DELIVERY[PIPELINES[issue.kind].delivers];
   return [
     `# ${issue.id}: ${issue.title}`,
-    `You are agent ${agentId}, working on issue ${issue.id}. Your parent thread, a regional manager, started you with this brief. ${work}`,
+    `You are agent ${agentId}, working on issue ${issue.id}. Your parent thread, a regional manager, started you with this brief. ${work}${PIPELINES[issue.kind].delivers === "commit" ? ` ${WHERE_TO_WORK[start.base.kind]}` : ""}`,
     `## What it is about\n\n${issue.description.trim()}`,
     `## Brief\n\n${issue.brief.trim()}`,
     criteriaSection(issue.kind, issue.doneCriteria),
@@ -49,7 +49,7 @@ export function agentBrief(
  * agent_handoff's own instructions don't spell out (null: they do).
  */
 const BY_DELIVERY: Record<(typeof PIPELINES)[Kind]["delivers"], { work: string; handingOff: string | null }> = {
-  commit: { work: "Your work is this issue: its brief and done-criteria below. Do it on your own branch.", handingOff: null },
+  commit: { work: "Your work is this issue: its brief and done-criteria below.", handingOff: null },
   report: {
     work: "Your work is this issue: its brief below, and a report you hand off as your result.",
     handingOff:
@@ -66,6 +66,12 @@ function criteriaSection(kind: Kind, criteria: readonly string[]): string | null
   if (isVerified(kind)) return `## Done when\n\nEvery one of these holds, each checked by running something:\n\n${numbered}`;
   return criteria.length === 0 ? null : `## Questions your report answers\n\nAnswer each one in your report:\n\n${numbered}`;
 }
+
+/** Where an agent that commits does its work, by where it starts. */
+const WHERE_TO_WORK: Record<Base["kind"], string> = {
+  default: "Do it on your own branch.",
+  joined: "Do it where an earlier agent left it: see Where you work.",
+};
 
 /**
  * Where a joined agent works: the previous agent's environment, as it left it, uncommitted files
