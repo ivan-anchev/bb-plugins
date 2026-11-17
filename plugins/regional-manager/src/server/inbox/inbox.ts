@@ -9,10 +9,11 @@ import type { GivenHandoff, Handoff, HandoffId } from "../../model/handoff.ts";
 import { wakes, type InboxEvent, type StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { doorbellText } from "../../model/inbox/wake-text.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
+import type { IssueView } from "../../model/issue/status.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { CheckId } from "../../model/verdict/check.ts";
 import type { CheckoutRead } from "../../model/verdict/checkout.ts";
-import type { PrChange, PrSnapshot, PrUnavailable } from "../../model/verdict/pr.ts";
+import type { PrSnapshot, PrUnavailable } from "../../model/verdict/pr.ts";
 import type { Verdict } from "../../model/verdict/verdict.ts";
 import { isLive, threadsById } from "../agents/threads.ts";
 import type { MemoryRoot } from "../memory/memory-files.ts";
@@ -73,6 +74,7 @@ type InboxStore = Pick<
   | "decision"
   | "answerDecision"
   | "recordOwnTree"
+  | "recordUnblocked"
 >;
 
 type Doorbell = ReturnType<Store["doorbells"]>[number];
@@ -255,14 +257,13 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
 
     /**
      * Saves a successful read of a branch's pull request (null: none), begun at the handoff
-     * `handoffAtRead`, with a `pr` event naming `on` when it changed meaningfully, and returns those
-     * changes. The board reads it again either way: its CI may have moved. why no ring here: the
-     * watch reads only on the tick, whose own ring follows.
+     * `handoffAtRead`, with a `pr` event naming `on` when it changed meaningfully. The board reads it
+     * again either way: its CI may have moved. why no ring here: the watch reads only on the tick,
+     * whose own ring follows.
      */
-    prRead(coordinatorId: CoordinatorId, branch: string, on: { issueId: IssueId; agentId: AgentId }, pr: PrSnapshot | null, handoffAtRead: HandoffId | null, at: number): PrChange[] {
-      const changes = store.savePrRead(coordinatorId, branch, on, pr, handoffAtRead, at);
+    prRead(coordinatorId: CoordinatorId, branch: string, on: { issueId: IssueId; agentId: AgentId }, pr: PrSnapshot | null, handoffAtRead: HandoffId | null, at: number): void {
+      store.savePrRead(coordinatorId, branch, on, pr, handoffAtRead, at);
       onChange(coordinatorId);
-      return changes;
     },
 
     /** Records why reading a branch's pull request failed, and whether that lasts; its snapshot stays, and nobody is woken. */
@@ -289,6 +290,14 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
      */
     ownTreeRead(id: CoordinatorId, fileCount: number): void {
       if (store.recordOwnTree(id, fileCount, Date.now())) recorded(id);
+    },
+
+    /**
+     * Records what every issue as viewed just now (`views`, read whole) says was unblocked since the
+     * last such read (see recordUnblocked), and wakes the coordinating thread when it recorded one.
+     */
+    unblocked(id: CoordinatorId, views: readonly IssueView[]): void {
+      if (store.recordUnblocked(id, views, Date.now())) recorded(id);
     },
 
     /** Stores the event, then wakes its coordinating thread. A crash between the two is rung by the next tick. */

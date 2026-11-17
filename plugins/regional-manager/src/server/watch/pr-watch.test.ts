@@ -86,9 +86,11 @@ test("a verdict that passes while CI is pending waits under Verifying as waiting
   pr({ rollup: "SUCCESS" });
   await minute();
   assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" });
-  // why apart: the tick rings for the read while the verdict settles in i1's turn, which the tick doesn't wait for; the verdict waits for the next doorbell.
-  assert.equal(doorbells().at(-1), '[Regional Manager] 1 update. Call crew_catch_up to read it in full.\n- i1 "Add retries" (a1) PR #41: CI passed');
-  assert.deepEqual(events(), ["checked"]);
+  // why together: the tick rings for the read, and the verdict settles in i1's turn, which the tick
+  // doesn't wait for; it is in the same doorbell only because it settled while the announcer's pass
+  // (unblocked.ts) ran before the ring, else it waits for the next one.
+  assert.equal(doorbells().at(-1), '[Regional Manager] 2 updates. Call crew_catch_up to read them in full.\n- i1 "Add retries" (a1) PR #41: CI passed\n- i1 "Add retries" (a1) handed off: done, verified');
+  assert.deepEqual(events(), [], "the doorbell carried the verdict");
 });
 
 test("the same verdict with failing CI fails, and the findings sent back to the agent name the failed checks", async () => {

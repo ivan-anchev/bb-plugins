@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueIdSchema, type IssueId } from "./issue.ts";
-import { blockedBy, relationProblem, unblockedBy } from "./relations.ts";
-import type { IssueStatus } from "./status.ts";
+import { handoffIdSchema } from "../handoff.ts";
+import { blockedBy, relationProblem, statusIn, unblockedSince, type KnownCloses } from "./relations.ts";
+import type { Closure, IssueStatus } from "./status.ts";
 
 const id = (n: number): IssueId => issueIdSchema.parse(`i${n}`);
 /** An issue as the relations read it: `i<n>` depending on the issues numbered. */
@@ -25,12 +26,36 @@ test("blocked by is every open dependency, its own and its parent's, once each w
   ]);
 });
 
-test("a close unblocks the open issues it was the last open dependency of, and no other", () => {
-  const view = (n: number, status: IssueStatus, dependsOn: number[], blocked: number[]) => ({
-    issue: shape(n, ...dependsOn),
-    status,
-    blockedBy: blocked.map((b) => ({ id: id(b), status: "todo" as const })),
-  });
-  const views = [view(1, "done", [], []), view(2, "todo", [1], []), view(3, "todo", [1, 4], [4]), view(4, "todo", [], []), view(5, "canceled", [1], []), view(6, "todo", [], [])];
-  assert.deepEqual(unblockedBy(id(1), views), [id(2)]);
+test("an issue is unblocked once by each close of a dependency its work made; never by the manager's close, a dependency first seen closed, or one that only read open", () => {
+  type Dependency = { status: IssueStatus; closedBy: Closure | null };
+  const open: Dependency = { status: "in-progress", closedBy: null };
+  const merged: Dependency = { status: "done", closedBy: { by: "merge", number: 41 } };
+  /** Done by the agent's handoff number `n`. */
+  const reported = (n: 1 | 2): Dependency => ({ status: "done", closedBy: { by: "handoff", handoffId: handoffIdSchema.parse(`00000000-0000-4000-8000-00000000000${n}`) } });
+  const canceled: Dependency = { status: "canceled", closedBy: { by: "manager", as: "canceled", at: 9_000 } };
+  /** i1, i2 and i3 as `dependencies` says, and the issues depending on them: i4 on i1, i5 on i1 and i3, i6 on i2. */
+  const views = (dependencies: [Dependency, Dependency, Dependency]) => {
+    const statuses = new Map(dependencies.map(({ status }, i) => [id(i + 1), status]));
+    const dependent = (n: number, ...on: number[]) => {
+      const issue = shape(n, ...on);
+      return { issue, status: "todo" as const, closedBy: null, blockedBy: blockedBy(issue, null, (other) => statusIn(statuses, other)) };
+    };
+    return [...dependencies.map((dependency, i) => ({ issue: shape(i + 1), blockedBy: [], ...dependency })), dependent(4, 1), dependent(5, 1, 3), dependent(6, 2)];
+  };
+  let known: KnownCloses = new Map();
+  /** One read of every issue: what it announces, as "i4 by i1". */
+  const read = (dependencies: [Dependency, Dependency, Dependency]): string[] => {
+    const result = unblockedSince(known, views(dependencies));
+    known = result.known;
+    return result.unblocked.map(({ issueId, by, closedAs }) => `${issueId} by ${by} ${closedAs}`);
+  };
+
+  assert.deepEqual(read([open, reported(1), open]), [], "i6 was filed depending on i2 already closed");
+  assert.deepEqual(read([merged, reported(1), open]), ["i4 by i1 done"], "i5 is still blocked by i3");
+  assert.deepEqual(read([merged, reported(1), open]), [], "nothing twice");
+  assert.deepEqual(read([merged, reported(1), canceled]), [], "the manager canceled i5's last open dependency");
+  assert.deepEqual(read([merged, open, canceled]), [], "i2 reopened, or its agent's thread gone until the agent ends");
+  assert.deepEqual(read([merged, reported(1), canceled]), [], "i2 closed by the same handoff again");
+  assert.deepEqual(read([merged, open, canceled]), [], "i2 reopened by a message");
+  assert.deepEqual(read([merged, reported(2), canceled]), ["i6 by i2 done"], "i2 reported again");
 });

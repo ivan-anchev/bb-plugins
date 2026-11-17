@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { z } from "zod";
 import { handoffIdSchema, type Handoff } from "../../model/handoff.ts";
+import { issueViews } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { memoryStorage } from "../memory-storage.ts";
 import type { NewAgent } from "./issue/agents-store.ts";
@@ -16,7 +17,7 @@ test("a fresh database holds the design's tables and indexes, and nothing else",
       .prepare("SELECT name FROM sqlite_master WHERE type = ? AND name NOT LIKE 'sqlite_%' ORDER BY name")
       .all(type)
       .map((row) => z.object({ name: z.string() }).parse(row).name);
-  assert.deepEqual(names("table"), ["agents", "checks", "coordinators", "decisions", "doorbells", "events", "handoffs", "issue_relations", "issues", "memory_revisions", "pr_snapshots", "reminders", "roles"]);
+  assert.deepEqual(names("table"), ["agents", "checks", "coordinators", "decisions", "doorbells", "events", "handoffs", "issue_relations", "issues", "known_closes", "memory_revisions", "pr_snapshots", "reminders", "roles"]);
   assert.deepEqual(names("index"), [
     "agents_holding",
     "checks_of_issue",
@@ -76,6 +77,8 @@ test("removing a regional manager removes everything it owns, and nothing of ano
     store.insertReminder(manager, { note: "Look again", dueAt: 9_000, everyMs: null });
     store.memoryRevision(manager, memoryFileSchema.parse("MEMORY.md"), "v1");
     store.savePrRead(manager, "bb/retries", { issueId: id, agentId }, null, null, 3_000);
+    filedIssue(store, manager, { ...newIssue(), dependsOn: [id] }, 3_000);
+    store.recordUnblocked(manager, issueViews(store.issues(manager).map((issue) => ({ issue, holder: null, ended: null, pr: null, openDecision: false }))), 3_000);
   }
 
   store.removeCoordinator(MANAGER);
@@ -88,11 +91,13 @@ test("removing a regional manager removes everything it owns, and nothing of ano
   assert.equal(store.roleOfThread("thr_manager_1"), null);
   assert.equal(store.roleOfThread(`thr_agent-of-${MANAGER}`), null);
   assert.equal(store.prOfBranch(MANAGER, "bb/retries"), null);
+  assert.equal(store.hasDependencies(MANAGER), false);
   assert.deepEqual(store.coordinatorsToRing(), [OTHER_MANAGER]);
 
-  assert.equal(store.issues(OTHER_MANAGER).length, 1);
+  assert.equal(store.issues(OTHER_MANAGER).length, 2);
   assert.equal(store.agents(OTHER_MANAGER).length, 1);
   assert.equal(store.decisions(OTHER_MANAGER).length, 1);
+  assert.equal(store.hasDependencies(OTHER_MANAGER), true);
   assert.equal(store.roleOfThread("thr_manager_2")?.kind, "coordinator");
 });
 

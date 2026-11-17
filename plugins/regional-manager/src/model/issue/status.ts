@@ -5,7 +5,7 @@
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import type { Agent, EndedHow } from "../agent.ts";
-import type { Handoff } from "../handoff.ts";
+import type { Handoff, HandoffId } from "../handoff.ts";
 import type { Check } from "../verdict/check.ts";
 import type { CiVerdict, PrSnapshot } from "../verdict/pr.ts";
 import { NOT_CLEAN } from "../verdict/checkout.ts";
@@ -61,7 +61,16 @@ export type IssueView = {
   pr: PrSnapshot | null;
   /** The open issues it depends on, each with its status; none once it is closed itself. Derived from the other views, never stored. */
   blockedBy: Related[];
+  /** What closed it (null: it is open). */
+  closedBy: Closure | null;
 };
+
+/**
+ * What closed an issue: the manager's act, its pull request merged, or the handoff that made it
+ * Done. Two closes of one issue are the same close only when these are equal: a research issue
+ * reopened and reported again is closed by another handoff.
+ */
+export type Closure = { by: "manager"; as: NonNullable<Issue["closed"]>["as"]; at: number } | { by: "merge"; number: number } | { by: "handoff"; handoffId: HandoffId };
 
 /** A view before its dependencies are read: where its own facts place it. */
 type Placed = Omit<IssueView, "blockedBy">;
@@ -91,13 +100,16 @@ function issueView({ issue, holder, ended, pr, openDecision }: IssueFacts): Plac
   const asked = openDecision ? ASKED : null;
   if (holder !== null) {
     const placed = held(issue.kind, holder, pr);
-    return { ...base, ...placed, needsYou: placed.needsYou ?? asked };
+    return { ...base, ...placed, needsYou: placed.needsYou ?? asked, closedBy: handedOffClose(placed, holder.current) };
   }
   const left = ended?.left ?? null;
   const after = left === null ? null : placedByLeft(issue.kind, left, pr);
-  if (left !== null && after !== null) return { ...base, ...after, placing: left.check, needsYou: after.needsYou ?? asked };
-  return { ...base, status: issue.rest, headline: restingHeadline(issue.rest, ended?.how ?? null), needsYou: asked };
+  if (left !== null && after !== null) return { ...base, ...after, placing: left.check, needsYou: after.needsYou ?? asked, closedBy: handedOffClose(after, left) };
+  return { ...base, status: issue.rest, headline: restingHeadline(issue.rest, ended?.how ?? null), needsYou: asked, closedBy: null };
 }
+
+/** The handoff that placed the issue, as what closed it when that is Done; null for any other place. */
+const handedOffClose = ({ status }: Pick<Placing, "status">, handed: Handed | null): Closure | null => (status === "done" && handed !== null ? { by: "handoff", handoffId: handed.handoff.id } : null);
 
 /** Why an issue rests where the manager put it: in Todo, how its latest agent ended (null: none ever started). */
 function restingHeadline(rest: Issue["rest"], endedHow: EndedHow | null): string {
@@ -122,9 +134,9 @@ function restingHeadline(rest: Issue["rest"], endedHow: EndedHow | null): string
  * its agents: a merge is the user's act and final, whatever its thread does next; a check still
  * pending or failed then is never sent back.
  */
-function finalOf(issue: Issue, pr: PrSnapshot | null): Pick<Placing, "status" | "headline"> | null {
-  if (issue.closed !== null) return CLOSED[issue.closed.as];
-  return pr?.state === "merged" ? { status: "done", headline: `Merged #${pr.number}` } : null;
+function finalOf(issue: Issue, pr: PrSnapshot | null): Pick<IssueView, "status" | "headline" | "closedBy"> | null {
+  if (issue.closed !== null) return { ...CLOSED[issue.closed.as], closedBy: { by: "manager", ...issue.closed } };
+  return pr?.state === "merged" ? { status: "done", headline: `Merged #${pr.number}`, closedBy: { by: "merge", number: pr.number } } : null;
 }
 
 /**

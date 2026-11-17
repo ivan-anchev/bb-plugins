@@ -2,16 +2,15 @@
 // request of every open issue's branch (its latest agent's with one) from GitHub, once per branch,
 // one `gh api graphql` call per repository, whether or not that agent's thread is still live: an
 // issue In review whose agent's thread was archived still becomes Done when its pull request
-// merges. It saves each successful read and records a `pr` event when one changed meaningfully, and
-// announces what a merge unblocked; the verify step's pass, after it in the same tick, settles the
-// verdicts that wait for CI. A failed read keeps what was saved and says why on the board.
+// merges. It saves each successful read and records a `pr` event when one changed meaningfully; the
+// verify step's pass, after it in the same tick, settles the verdicts that wait for CI. A failed
+// read keeps what was saved and says why on the board.
 import { issueBranch, type Agent } from "../../model/agent.ts";
 import { shipsCode } from "../../model/issue/kind.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { ciRunning, type PrSnapshot, type PrUnavailable } from "../../model/verdict/pr.ts";
 import { threadsById } from "../agents/threads.ts";
 import type { Inbox } from "../inbox/inbox.ts";
-import type { Issues } from "../issues/issues.ts";
 import type { Store } from "../store/store.ts";
 import { ghFailure, UNREADABLE_ANSWER } from "./gh-failure.ts";
 import { parseHostCommandFailure } from "./host-command.ts";
@@ -39,7 +38,6 @@ type Deps = {
   bb: WatchBb;
   store: Pick<Store, "coordinators" | "issues" | "issue" | "agents" | "prOfBranch" | "waitingForCi" | "latestHandoff">;
   inbox: Pick<Inbox, "prRead" | "prUnavailable">;
-  issues: Pick<Issues, "announceUnblocked">;
   /** Runs gh with these arguments and resolves to its stdout; rejects as Node's execFile does. */
   gh(args: string[]): Promise<string>;
 };
@@ -47,7 +45,7 @@ type Deps = {
 /** A branch the watch reads: its regional manager, the agent last on it, in a repository on GitHub (null: its project's remote isn't). */
 type Watched = { coordinatorId: CoordinatorId; agent: Agent; branch: string; repo: Repo | null };
 
-export function createPrWatch({ bb, store, inbox, issues, gh }: Deps) {
+export function createPrWatch({ bb, store, inbox, gh }: Deps) {
   // why: a tick that outlasts the minute must not overlap the next, or one read could save over a newer one.
   let running = false;
   let disposed = false;
@@ -122,30 +120,24 @@ export function createPrWatch({ bb, store, inbox, issues, gh }: Deps) {
 
   /**
    * Reads the repository's branches and saves what each read found, as of each agent's latest
-   * handoff when the read began, then announces what each merge it found unblocked. Branches not on
-   * GitHub are only marked when a verdict waits on their CI, which then can't be checked.
+   * handoff when the read began. Branches not on GitHub are only marked when a verdict waits on their
+   * CI, which then can't be checked.
    */
   async function poll(branches: readonly Watched[], now: number): Promise<void> {
     const repo = branches[0]?.repo ?? null;
     // why before gh runs: a handoff made while it runs came after what it answers.
     const reading = branches.map((watched) => ({ ...watched, handoffAtRead: latestHandoffOf(watched.agent) }));
     const result = repo === null ? null : await read(repo, [...new Set(branches.map(({ branch }) => branch))]);
-    const merged: Watched[] = [];
-    for (const watched of reading) {
-      const { coordinatorId, agent, branch, handoffAtRead } = watched;
+    for (const { coordinatorId, agent, branch, handoffAtRead } of reading) {
       if (disposed) return;
       // why read the issue again: the regional manager may have closed it while gh ran.
       if (store.issue(coordinatorId, agent.issueId)?.closed !== null) continue;
       if (result === null) {
         if (store.waitingForCi(coordinatorId, agent.id).length === 0) continue;
         inbox.prUnavailable(coordinatorId, branch, NOT_ON_GITHUB, now);
-      } else if (result.kind === "read") {
-        const changes = inbox.prRead(coordinatorId, branch, { issueId: agent.issueId, agentId: agent.id }, result.prs.get(branch) ?? null, handoffAtRead, now);
-        if (changes.includes("merged")) merged.push(watched);
-      } else inbox.prUnavailable(coordinatorId, branch, result.unavailable, now);
+      } else if (result.kind === "read") inbox.prRead(coordinatorId, branch, { issueId: agent.issueId, agentId: agent.id }, result.prs.get(branch) ?? null, handoffAtRead, now);
+      else inbox.prUnavailable(coordinatorId, branch, result.unavailable, now);
     }
-    // why after every read is saved: an announcement reads bb, and a failed one must not keep the other reads from being saved.
-    for (const { coordinatorId, agent } of merged) await issues.announceUnblocked(coordinatorId, agent.issueId);
   }
 
   return {

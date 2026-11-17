@@ -1,18 +1,16 @@
 // What a regional manager does to its issues: file one, change its plan, its dependencies or where it
-// rests, close it, and read it whole; and, for a close the manager didn't make, the announcement of
-// what it unblocked. A status the manager writes is checked against the one derived from the facts
-// (issue-facts.ts): it may rest an issue no agent holds, cancel one, or accept one In review, and
-// nothing else; every other status is evidence.
+// rests, close it, and read it whole. A status the manager writes is checked against the one derived
+// from the facts (issue-facts.ts): it may rest an issue no agent holds, cancel one, or accept one In
+// review, and nothing else; every other status is evidence.
 import type { z } from "zod";
 import type { Agent } from "../../model/agent.ts";
 import { sameModel, type Execution, type RequestedExecution } from "../../model/execution.ts";
 import { verifierProblem, type Issue, type IssueId, type managerStatusSchema } from "../../model/issue/issue.ts";
-import { blockedBy, isClosed, newlyReady, relationsOf, unblockedBy, type Related } from "../../model/issue/relations.ts";
+import { blockedBy, newlyReady, relationsOf, type Related } from "../../model/issue/relations.ts";
 import { STATUS_LABELS, type IssueView } from "../../model/issue/status.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { executionText } from "../agents/agents.ts";
 import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
-import type { Inbox } from "../inbox/inbox.ts";
 import type { DependencyChange, IssueEdit, NewIssue } from "../store/issue/issues-store.ts";
 import type { Store } from "../store/store.ts";
 import { readIssues, type FactsBb, type FactsStore, type IssueRead } from "./issue-facts.ts";
@@ -24,7 +22,6 @@ type IssuesBb = FactsBb & CatalogBb & { sdk: { threads: { output(args: { threadI
 type Deps = {
   bb: IssuesBb;
   store: FactsStore & Pick<Store, "issue" | "insertIssue" | "updateIssue" | "record" | "check" | "agent">;
-  inbox: Pick<Inbox, "record">;
   /** Runs after anything that changes a regional manager's board. */
   onChange(id: CoordinatorId): void;
 };
@@ -44,7 +41,7 @@ type Refused = { refused: string };
 
 export type Issues = ReturnType<typeof createIssues>;
 
-export function createIssues({ bb, store, inbox, onChange }: Deps) {
+export function createIssues({ bb, store, onChange }: Deps) {
   /**
    * The verifier named, resolved against bb's catalog on its primary machine. why there: where a
    * check runs is the agent's environment, not known yet; a verifier bb can't run there when the
@@ -130,23 +127,6 @@ export function createIssues({ bb, store, inbox, onChange }: Deps) {
       const output = read.threadId === null ? null : (await bb.sdk.threads.output({ threadId: read.threadId })).output;
       const views = reads.map(({ view }) => view);
       return issueText(read, relationsOf(views, read.view.issue), agents, store.record(coordinatorId, id), output, { agent: (agentId) => store.agent(coordinatorId, agentId) });
-    },
-
-    /**
-     * Records `unblocked` for each open issue whose last open dependency was `closed`, judged from
-     * the views read after the write that may have closed it, with no await before the records:
-     * nothing when it isn't closed now (a merge on an earlier agent's branch, a report a message
-     * already reopened). Called by whoever learns of a close the manager didn't make: the thread
-     * watch when an agent's turn ends on a current handoff, the PR watch on a merge. why not inside
-     * those writes: only status.ts can say whether an issue is closed. Two closes racing can announce
-     * one issue twice: a repeated wake line, never a wrong status.
-     */
-    async announceUnblocked(coordinatorId: CoordinatorId, closed: IssueId): Promise<void> {
-      if (!store.issues(coordinatorId).some(({ dependsOn }) => dependsOn.includes(closed))) return;
-      const views = await viewsOf(coordinatorId);
-      const { status } = viewOf(views, closed);
-      if (!isClosed(status)) return;
-      for (const issueId of unblockedBy(closed, views)) inbox.record(coordinatorId, { kind: "unblocked", issueId, by: closed, closedAs: status });
     },
   };
 }
