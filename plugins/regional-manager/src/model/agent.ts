@@ -215,7 +215,7 @@ export type Handover = { kind: "clean" } | { kind: "join"; base: Extract<Base, {
 export function handoverOf(kind: Kind, request: { from: StartFrom; placement: RequestedPlacement | undefined }, previous: Previous | null): Handover | { refused: string } {
   if (previous === null || request.from === "default" || !shipsCode(kind)) return { kind: "clean" };
   const { agent, environmentId, branch } = previous;
-  const clean = `start clean with from: "default", which starts from the default branch and gives the new agent ${agent.id}'s handoffs and verdicts in its first message.`;
+  const clean = `start clean with from: "default", which starts from the default branch with every earlier handoff and verdict in the new agent's first message.`;
   if (request.placement !== undefined) return { refused: `A handover continues in ${agent.id}'s environment, and can't move its work to a placement yet: leave out placement, or ${clean}` };
   if (environmentId === null) return { refused: `bb has removed ${agent.id}'s environment, so its work can't be continued there, and moving it to a new one isn't possible yet: ${clean}` };
   return {
