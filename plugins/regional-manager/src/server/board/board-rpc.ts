@@ -1,5 +1,5 @@
-// The Board's RPC, for a regional manager the store knows: its read and what of it needs the
-// user, its verification switch, and the user's answers to its decisions.
+// The Board's RPC, for a regional manager the store knows: its read, an issue opened on it, and what
+// of it needs the user, its verification switch, and the user's answers to its decisions.
 import { experimental_PluginRpcRefusal as Refusal, type PluginRpcHandlers } from "@get-bb/plugin-sdk";
 import type { coordinatorContract } from "../../contract.ts";
 import type { CoordinatorId } from "../../model/role.ts";
@@ -9,11 +9,11 @@ import type { BoardReader } from "./board.ts";
 
 type Deps = {
   store: Pick<Store, "isCoordinator">;
-  board: Pick<BoardReader, "read" | "needsYou">;
+  board: Pick<BoardReader, "read" | "detail" | "needsYou">;
   inbox: Pick<Inbox, "setVerify" | "answerDecision">;
 };
 
-type BoardMethods = "board" | "needsYou" | "setVerify" | "answerDecision";
+type BoardMethods = "board" | "issue" | "needsYou" | "setVerify" | "answerDecision";
 
 export function boardHandlers({ store, board, inbox }: Deps): PluginRpcHandlers<Pick<typeof coordinatorContract, BoardMethods>> {
   // why refuse an unknown id: it would read as a board with no issues.
@@ -24,6 +24,12 @@ export function boardHandlers({ store, board, inbox }: Deps): PluginRpcHandlers<
 
   return {
     board: ({ coordinatorId }) => board.read(known(coordinatorId)),
+
+    issue: ({ coordinatorId, issueId }) => {
+      const detail = board.detail(known(coordinatorId), issueId);
+      if (detail === null) throw new Refusal({ code: "not_found", message: `This regional manager has no issue ${issueId}.` });
+      return detail;
+    },
 
     // why no refusal for an unknown id: the keys come from the coordinators read, and one refusal would fail every key read with it.
     needsYou: async ({ keys }) => Object.fromEntries(await Promise.all(keys.map(async (id) => [id, await board.needsYou(id)] as const))),

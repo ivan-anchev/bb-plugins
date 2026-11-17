@@ -512,25 +512,32 @@ page from its row in the panel, show the same board, live:
 - **Digest**: `DIGEST.md`, the regional manager's latest summary for you,
   and when it last changed.
 - **Lanes**: Needs you, then In review, Verifying, In progress, Todo,
-  Backlog, Done and Canceled. Needs you holds the open decisions put to you,
-  then the issues flagged Needs you; answered decisions sit under Done.
-- **Issues**, each with its id, title, kind, a one-line headline that says why
-  it is where it is (such as "Working", "Verifying: <summary>", "✓ Verified:
-  <summary>" or "Blocked: <summary>"), its agent and branch, and once it has
-  one, its pull request: its number, which opens it on GitHub, its state,
-  its CI and its review. A row with a live agent thread opens it.
+  Backlog, Done and Canceled, each under a bar with its glyph, how many it
+  holds and a chevron. Pressing the bar folds or unfolds the lane; Backlog,
+  Done and Canceled start folded, and an empty lane isn't shown. Needs you
+  holds the open decisions put to you, then the issues flagged Needs you,
+  each with its own status's glyph; answered decisions sit under Done.
+- **Issues**, each row with its status's glyph, its id, kind and title, a
+  one-line headline that says why it is where it is (such as "Working",
+  "Verifying: <summary>", "✓ Verified: <summary>" or "Blocked: <summary>"),
+  its agent, which opens the agent's thread, and once it has one, its pull
+  request: its number in its state's colour, with a dot for its CI, which
+  opens it on GitHub.
 
-An issue placed by a verdict has a **Verdict** button. It opens the verdict
-under the row: how many criteria passed and the commit checked; the
-plugin's own read when that commit wasn't checked out on a clean tree; what
-CI said about that commit (passed, failed with the failed checks' names, no
-checks, not checked with why, or still waiting for it); then each criterion
-with Pass, Fail or Unverifiable. A failed or unverifiable criterion
-shows its evidence; a passed one folds it away until you open it. Findings
-follow, with a link to the verifier thread. It warns when the check had to
-run on the agent's own model, but names no provider or model. A verdict that
-couldn't be had shows why. While it verifies, **Verifier** opens the hidden
-verifier thread.
+Pressing an issue opens it in place, under its row: what it is about, **Done
+when** with its criteria, and its **Record**: each agent that held it, how it
+ended, and each handoff it made, the latest one open. A handoff shows the
+verdict on it first: how many criteria passed, a link to the verifier thread,
+and the commit checked; the plugin's own read when that commit wasn't checked
+out on a clean tree; what CI said about that commit when it failed, couldn't
+be checked or is still to come; then each criterion with Pass, Fail or
+Unverifiable. A failed or unverifiable criterion shows its evidence; a passed
+one folds it away until you open it. The verifier's findings follow. It warns
+when the check had to run on the agent's own model, but names no provider or
+model. A verdict still to come says so, with the verifier's thread while it
+checks, and one that couldn't be had says why. Then what the agent reported:
+what it did, its evidence, concerns, deviations and findings. Pressing the
+issue again closes it. The brief is the agent's, so the board doesn't show it.
 
 A handoff places its issue until the agent's thread starts another turn: type
 into an agent that handed off and its issue moves back to In progress. Rows

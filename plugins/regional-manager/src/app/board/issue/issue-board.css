@@ -79,9 +79,6 @@
   grid-template-rows: 30px 16px;
   border-radius: 8px;
 }
-.rmi-rowbox[data-depth] {
-  margin-left: 22px;
-}
 @media (hover: hover) {
   .rmi-rowbox:hover {
     background: var(--state-hover);
@@ -153,36 +150,6 @@
   font-size: 11px;
   line-height: 14px;
   color: var(--subtle-foreground);
-}
-.rmi-blocked {
-  flex: 0 0 auto;
-  color: var(--warning-text);
-}
-.rmi-blocked::after {
-  content: " ·";
-  color: var(--subtle-foreground);
-}
-/* A parent's sub-issues done: Activity's pill, a count on a wash of its ink. */
-.rmi-pill {
-  position: relative;
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  height: 16px;
-  padding: 0 5px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  color: var(--muted-foreground);
-}
-.rmi-pill::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: currentColor;
-  opacity: 0.1;
 }
 .rmi-pr-cell {
   grid-column: 2;
@@ -354,16 +321,11 @@ button.rmi-thread-link {
   color: var(--muted-foreground);
   overflow-wrap: anywhere;
 }
-.rmi-detail[data-depth] {
-  margin-left: 22px;
-}
 .rmi-detail p,
 .rmi-detail h3,
 .rmi-detail h4,
 .rmi-detail ol,
-.rmi-detail ul,
-.rmi-detail dl,
-.rmi-detail dd {
+.rmi-detail ul {
   margin: 0;
 }
 .rmi-description {
@@ -398,23 +360,6 @@ button.rmi-thread-link {
   color: var(--subtle-foreground);
   font-variant-numeric: tabular-nums;
 }
-.rmi-relations {
-  display: grid;
-  gap: 2px;
-}
-.rmi-relations > div {
-  display: flex;
-  gap: 8px;
-}
-.rmi-relations dt {
-  flex: 0 0 76px;
-  color: var(--subtle-foreground);
-}
-.rmi-relations dd {
-  font-family: var(--font-mono);
-  font-size: 11px;
-}
-
 /* The record: each agent on a rule, its handoffs under it. */
 .rmi-record,
 .rmi-handoffs {

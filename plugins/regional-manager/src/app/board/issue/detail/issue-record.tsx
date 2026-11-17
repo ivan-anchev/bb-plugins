@@ -1,14 +1,16 @@
 // An issue's record: each agent that held it, oldest first, how it ended, and its handoffs. A
 // handoff opens to the verdict on it, then what the agent reported; the latest is open.
-import type { EndedHow } from "../../../model/agent.ts";
-import type { NextHandoff } from "../../../model/handoff.ts";
-import { shortTime } from "../../ui/time.ts";
-import type { AgentRecord, HandedOff } from "./board-issue.ts";
+import type { IssueDetail } from "../../../../contract.ts";
+import type { EndedHow } from "../../../../model/agent.ts";
+import type { HandoffReport } from "../../../../model/handoff.ts";
+import { shortTime } from "../../../ui/time.ts";
+import { ThreadLink } from "../thread-link.tsx";
 import { CheckVerdict } from "./check-verdict.tsx";
 import { DiscloseGlyph } from "./disclose-glyph.tsx";
-import { ThreadLink } from "./thread-link.tsx";
 
-export function IssueRecord({ record }: { record: readonly AgentRecord[] }) {
+type HandedOff = IssueDetail["record"][number]["handoffs"][number];
+
+export function IssueRecord({ record }: { record: IssueDetail["record"] }) {
   const latest = record.flatMap(({ handoffs }) => handoffs).at(-1)?.id ?? null;
   return (
     <ol className="rmi-record">
@@ -68,6 +70,6 @@ function Handoff({ handoff, open }: { handoff: HandedOff; open: boolean }) {
   );
 }
 
-const STATUS: Record<NextHandoff["status"], string> = { done: "Done", blocked: "Blocked", "gave-up": "Gave up" };
+const STATUS: Record<HandoffReport["status"], string> = { done: "Done", blocked: "Blocked", "gave-up": "Gave up" };
 
 const ENDED: Record<EndedHow, string> = { stopped: "Stopped", archived: "Archived", deleted: "Deleted", "spawn-failed": "Never started" };

@@ -1,8 +1,9 @@
-// A decision the regional manager put to the user with crew_ask_user. Open, it sits under Needs
-// you with its question, a button for each option and a field for an answer in the user's own
-// words, which the browser keeps until it is sent (see answer-draft.ts). Answered, it sits under
-// Done with the answer. Answering moves it there, and the board moves focus with it, to the
-// answered row.
+// A decision the regional manager put to the user with crew_ask_user, on an issue row's grid
+// (issue/issue-row.tsx): a question glyph in the 30 slot, its id and question where a title sits.
+// Open, it sits under Needs you with a button for each option and a field for an answer in the
+// user's own words, which the browser keeps until it is sent (see answer-draft.ts). Answered, it
+// sits under Done with the answer. Answering moves it there, and the board moves focus with it, to
+// the answered row.
 import { experimental_Icon as Icon, experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
 import { useEffect, useId, useState, type KeyboardEvent, type Ref } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
@@ -15,10 +16,12 @@ import { useStored } from "../ui/stored.ts";
 import { shortTime } from "../ui/time.ts";
 import { answerDraftKeyOf, answerDraftSchema } from "./answer-draft.ts";
 
-// why: the question and the answer line up past the id, as an issue's title does.
-const ID_COLUMN = "grid grid-cols-[2.25rem_minmax(0,1fr)] items-baseline gap-x-2 gap-y-0.5";
-/** Lines under the question start where it starts: px-2, the 2.25rem id column and gap-x-2. */
-const UNDER_QUESTION = "pl-[2.75rem]";
+// why these sizes: an issue row's (issue-board.css `.rmi-slot`, `.rmi-line`, `.rmi-id`), so the question lines up with the titles.
+const ROW = "flex items-start rounded-lg";
+const SLOT = "flex size-[30px] shrink-0 items-center justify-center";
+const WORDS = "flex min-w-0 flex-1 flex-col pr-2 text-[13px] leading-[18px]";
+const QUESTION = "py-1.5 text-pretty [overflow-wrap:anywhere]";
+const ID = "mr-1.5 font-mono text-[11px] text-subtle-foreground tabular-nums";
 
 type DecisionRowProps = { ref: Ref<HTMLDivElement>; coordinatorId: CoordinatorId; decision: Decision };
 
@@ -34,19 +37,27 @@ export function DecisionRow({ ref, coordinatorId, decision }: DecisionRowProps) 
   if (answer === null) return <OpenDecision ref={ref} decision={decision} coordinatorId={coordinatorId} typed={typed ?? ""} onType={(text) => store(text === "" ? null : text)} />;
   return (
     // why the focus stop: an answer moves the row here, and focus with it, so it lands on what was answered.
-    <div ref={ref} tabIndex={-1} className={`${ID_COLUMN} rounded-md px-2 py-1.5 outline-none focus-visible:ring-1 focus-visible:ring-ring`}>
-      <span className="font-mono text-xs text-muted-foreground">{decision.id}</span>
-      <span className="text-sm text-pretty">{decision.question}</span>
-      <span className="col-start-2 flex items-start gap-1 text-xs">
-        <Icon name="CornerDownRight" aria-hidden className="mt-0.5 size-3 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">
-          <span className="sr-only">You answered: </span>
-          {answer.text}
-        </span>
+    <div ref={ref} tabIndex={-1} className={`${ROW} pb-1.5 outline-none focus-visible:ring-1 focus-visible:ring-ring`}>
+      <span className={`${SLOT} text-subtle-foreground`}>
+        <QuestionGlyph />
       </span>
-      <span className="col-start-2 text-xs text-muted-foreground">
-        Answered <time dateTime={new Date(answer.at).toISOString()}>{shortTime(answer.at)}</time>
-      </span>
+      <div className={WORDS}>
+        <p className={`${QUESTION} text-subtle-foreground`}>
+          <span className={ID}>{decision.id}</span>
+          {decision.question}
+        </p>
+        <p className="flex items-start gap-1 text-xs text-muted-foreground">
+          <Icon name="CornerDownRight" aria-hidden className="mt-0.5 size-3 shrink-0" />
+          <span className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">
+            <span className="sr-only">You answered: </span>
+            {answer.text}
+            <span className="text-subtle-foreground">
+              {" · "}
+              <time dateTime={new Date(answer.at).toISOString()}>{shortTime(answer.at)}</time>
+            </span>
+          </span>
+        </p>
+      </div>
     </div>
   );
 }
@@ -85,21 +96,22 @@ function OpenDecision({ ref, coordinatorId, decision, typed: draft, onType }: Op
   // why aria-disabled, not disabled: a disabled button drops focus to the page while the answer sends.
   const busy = sent !== null;
   return (
-    <div ref={ref} role="group" aria-labelledby={`${ids}-id ${ids}-question`} className="flex flex-col gap-2 rounded-md px-2 py-1.5">
-      <div className={ID_COLUMN}>
-        <span id={`${ids}-id`} className="font-mono text-xs text-muted-foreground">
-          {decision.id}
-        </span>
-        <p id={`${ids}-question`} className="text-sm text-pretty">
-          {decision.question}
+    <div ref={ref} role="group" aria-labelledby={`${ids}-id ${ids}-question`} className={`${ROW} pb-2`}>
+      <span className={`${SLOT} text-destructive-text`}>
+        <QuestionGlyph />
+      </span>
+      <div className={`${WORDS} gap-2`}>
+        <p className={`${QUESTION} font-medium text-foreground`}>
+          <span id={`${ids}-id`} className={ID}>
+            {decision.id}
+          </span>
+          <span id={`${ids}-question`}>{decision.question}</span>
         </p>
-      </div>
-      <div className={`flex flex-col gap-2 ${UNDER_QUESTION}`}>
         {decision.options.length > 0 && (
           <ul aria-label="Options" className="flex flex-wrap gap-1.5">
             {decision.options.map((option) => (
               <li key={option} className="max-w-full">
-                <Button variant="outline" size="sm-wrap" aria-disabled={busy} onClick={() => send(option)}>
+                <Button variant="secondary" size="sm-wrap" aria-disabled={busy} onClick={() => send(option)}>
                   {option}
                 </Button>
               </li>
@@ -139,5 +151,15 @@ function OpenDecision({ ref, coordinatorId, decision, typed: draft, onType }: Op
         )}
       </div>
     </div>
+  );
+}
+
+/** A circle around a question mark: what a decision is, in the slot an issue's status glyph takes. */
+function QuestionGlyph() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01" />
+    </svg>
   );
 }

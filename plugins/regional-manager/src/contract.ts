@@ -3,16 +3,17 @@
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
-import { agentIdSchema } from "./model/agent.ts";
+import { agentIdSchema, endedHowSchema } from "./model/agent.ts";
 import { needsYouSchema } from "./model/board/board-groups.ts";
 import { answerSchema, decisionIdSchema, decisionSchema } from "./model/decision.ts";
-import { issueIdSchema } from "./model/issue/issue.ts";
+import { shownHandoffSchema } from "./model/handoff.ts";
+import { descriptionSchema, doneCriteriaSchema, issueIdSchema } from "./model/issue/issue.ts";
 import { kindSchema } from "./model/issue/kind.ts";
 import { issueStatusSchema } from "./model/issue/status.ts";
 import { memoryContentSchema, memoryFileSchema, memorySnapshotSchema, memoryVersionSchema, writeOutcomeSchema } from "./model/memory-file.ts";
 import { prSnapshotSchema } from "./model/verdict/pr.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "./model/role.ts";
-import { verdictSchema } from "./model/verdict/verdict.ts";
+import { shownVerdictSchema } from "./model/verdict/verdict.ts";
 
 /**
  * A regional manager: its memory is keyed by `id`, its conversation is `threadId`. `verify`:
@@ -41,9 +42,8 @@ export const boardTag = (id: CoordinatorId): string => `board:${id}`;
  * One issue on the board, as its view reads now: its kind, its status, why it waits on the user
  * (null: it doesn't; the board then shows it under Needs you, its status on the row), its latest
  * agent (null: none started) with that agent's thread while bb runs it (null: archived or deleted),
- * its branch (null: none on record; an earlier agent's when the latest has none), the check that
- * places it, as the row shows it (null: none does), and its pull request as last read (null: none
- * seen).
+ * its branch (null: none on record; an earlier agent's when the latest has none), and its pull
+ * request as last read (null: none seen). Its verdicts are in its detail (`issue`).
  */
 const issueRowSchema = z.object({
   id: issueIdSchema,
@@ -54,7 +54,6 @@ const issueRowSchema = z.object({
   headline: z.string(),
   agent: z.object({ id: agentIdSchema, threadId: z.string().nullable() }).nullable(),
   branch: z.string().nullable(),
-  placing: z.object({ verdict: verdictSchema }).nullable(),
   pr: prSnapshotSchema.nullable(),
 });
 export type IssueRow = z.infer<typeof issueRowSchema>;
@@ -75,6 +74,24 @@ const boardSchema = z.object({
   issues: z.array(issueRowSchema),
 });
 export type Board = z.infer<typeof boardSchema>;
+
+/**
+ * An issue opened on the board: what it is about, its done-criteria, and its record: every agent
+ * that held it, oldest first, with its thread (null: none to open) and how it ended (null: it holds
+ * the issue now), and each handoff it made, oldest first, with the verdict on it (null: none was
+ * asked for, as for a blocked handoff). No brief: that is the agent's.
+ */
+const issueDetailSchema = z.object({
+  description: descriptionSchema,
+  doneCriteria: doneCriteriaSchema,
+  record: z.array(
+    z.object({
+      agent: z.object({ id: agentIdSchema, threadId: z.string().nullable(), ended: endedHowSchema.nullable() }),
+      handoffs: z.array(shownHandoffSchema.extend({ verdict: shownVerdictSchema.nullable() })),
+    }),
+  ),
+});
+export type IssueDetail = z.infer<typeof issueDetailSchema>;
 
 // why only these fields are checked: the plugin reads only the project and the typed text, which
 // becomes the goal. The rest goes to threads.spawn unchanged (as the composer
@@ -114,6 +131,12 @@ export const coordinatorContract = defineRpcContract({
     input: z.object({ coordinatorId: coordinatorIdSchema }),
     output: boardSchema,
     tags: ({ coordinatorId }) => [boardTag(coordinatorId), memoryTag(coordinatorId)],
+  },
+  /** One issue of a regional manager, opened on its board; it reads again whenever the board does. */
+  issue: {
+    input: z.object({ coordinatorId: coordinatorIdSchema, issueId: issueIdSchema }),
+    output: issueDetailSchema,
+    tags: ({ coordinatorId }) => [boardTag(coordinatorId)],
   },
   /**
    * Turns verification of the regional manager's done handoffs on or off. It applies to handoffs

@@ -5,15 +5,14 @@ import { afterEach, test } from "node:test";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent, within } from "@testing-library/react";
 import { createElement } from "react";
+import type { IssueRow } from "../../../contract.ts";
 import { agentIdSchema } from "../../../model/agent.ts";
 import { decisionIdSchema, type Decision } from "../../../model/decision.ts";
-import { handoffIdSchema } from "../../../model/handoff.ts";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
-import type { Verdict } from "../../../model/verdict/verdict.ts";
-import type { BoardIssue, IssueDetailData } from "./board-issue.ts";
 
 // The board's lanes and in-place detail, driven as the user drives them: folding lanes, opening rows,
-// and an open row keeping its place and focus when its issue moves to another lane.
+// and an open row keeping its place and focus when its issue moves to another lane. board.test.ts
+// reads the detail through the plugin's RPC.
 
 // why: the board brings its stylesheet, which bb's build bundles and node can't load.
 registerHooks({ load: (url, context, nextLoad) => (url.endsWith(".css") ? { format: "module", source: "", shortCircuit: true } : nextLoad(url, context)) });
@@ -28,32 +27,18 @@ Object.assign(globalThis, {
 HTMLCanvasElement.prototype.getContext = () => null;
 
 const { IssueBoard } = await import("./issue-board.tsx");
-const { IssueDetail } = await import("./issue-detail.tsx");
 
 afterEach(cleanup);
 
 const SHA = "3f2a9c1d8e7b6a5f4e3d2c1b0a9f8e7d6c5b4a39";
 
-function issue(id: string, fields: Partial<BoardIssue>): BoardIssue {
-  return {
-    id: issueIdSchema.parse(id),
-    kind: "build",
-    title: `Issue ${id}`,
-    status: "todo",
-    needsYou: null,
-    headline: "Planned",
-    agent: null,
-    pr: null,
-    parentId: null,
-    blockedBy: [],
-    subIssues: null,
-    ...fields,
-  };
+function issue(id: string, fields: Partial<IssueRow>): IssueRow {
+  return { id: issueIdSchema.parse(id), kind: "build", title: `Issue ${id}`, status: "todo", needsYou: null, headline: "Planned", agent: null, branch: null, pr: null, ...fields };
 }
 
-const QUESTION: Decision = { id: decisionIdSchema.parse("d1"), question: "Which license should the repo use?", options: ["MIT", "Apache-2.0"], askedAt: 1_000, answer: null };
+const QUESTION: Decision = { id: decisionIdSchema.parse("d1"), issueId: null, question: "Which license should the repo use?", options: ["MIT", "Apache-2.0"], askedAt: 1_000, answer: null };
 
-const ISSUES: BoardIssue[] = [
+const ISSUES: IssueRow[] = [
   issue("i1", { status: "in-progress", needsYou: "Failed after its fix round", headline: "✗ Failed after its fix round", agent: { id: agentIdSchema.parse("a1"), threadId: "thr_one" } }),
   issue("i2", {
     status: "in-review",
@@ -68,48 +53,20 @@ const ISSUES: BoardIssue[] = [
   issue("i7", { status: "done", headline: "Merged #39" }),
 ];
 
-const FAILED: Verdict = {
-  state: "returned",
-  verifierThreadId: "thr_verifier",
-  headSha: SHA,
-  checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 },
-  criteria: [
-    { criterion: "notes/hello.md holds exactly the line hello", result: "pass", evidence: "$ cat notes/hello.md\nhello" },
-    { criterion: "npm test passes", result: "fail", evidence: "$ npm test\n1 failing: greets in French" },
-  ],
-  findings: [],
-  model: { providerId: "codex", model: "gpt-5.4" },
-  sameModel: false,
-  settlement: { kind: "checked", refused: null, ci: { kind: "none" } },
-};
-
-const DETAIL: IssueDetailData = {
-  kind: "build",
-  description: "Add a hello note so new readers have somewhere to start.",
-  doneCriteria: ["notes/hello.md holds exactly the line hello", "npm test passes"],
-  relations: { parentId: null, subIssues: [], dependsOn: [], blocks: [] },
-  record: [
-    {
-      agent: { id: agentIdSchema.parse("a1"), threadId: "thr_one", ended: null },
-      handoffs: [{ id: handoffIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10"), at: 2_000, status: "done", summary: "Added the hello note", did: ["Wrote notes/hello.md"], evidence: ["$ cat notes/hello.md"], concerns: [], deviations: [], findings: [], verdict: FAILED }],
-    },
-  ],
-};
-
-/** The board as part B mounts it: every detail read is recorded in `read`. */
-function mount(issues: readonly BoardIssue[], decisions: readonly Decision[] = [QUESTION]) {
+/** The board, with a detail standing in for the one read from the plugin; every detail drawn is recorded in `read`. */
+function mount(issues: readonly IssueRow[], decisions: readonly Decision[] = [QUESTION]) {
   const read: string[] = [];
-  const props = (rows: readonly BoardIssue[]) => ({
+  const props = (rows: readonly IssueRow[]) => ({
     decisions,
     issues: rows,
     decisionRow: (decision: Decision, ref: (el: HTMLElement | null) => void) => createElement("p", { ref, tabIndex: -1 }, decision.question),
-    detailOf: (shown: BoardIssue) => {
+    detailOf: (shown: IssueRow) => {
       read.push(shown.id);
-      return createElement(IssueDetail, DETAIL);
+      return createElement("p", null, `Detail of ${shown.id}`);
     },
   });
   const view = renderSlot({ component: IssueBoard }, props(issues));
-  return { view, read, reread: (rows: readonly BoardIssue[]) => view.rerender(createElement(IssueBoard, props(rows))) };
+  return { view, read, reread: (rows: readonly IssueRow[]) => view.rerender(createElement(IssueBoard, props(rows))) };
 }
 
 const laneHeader = (view: ReturnType<typeof mount>["view"], name: RegExp) => view.getByRole("button", { name });
@@ -164,7 +121,7 @@ test("a row opens its detail in place under it, reading only that issue, and clo
   const detail = view.getByRole("region", { name: "i5: Issue i5" });
   assert.equal(todo.getAttribute("aria-controls"), detail.id);
   assert.ok(todo.closest("li")?.contains(detail) === true, "the detail sits under its row");
-  assert.ok(within(detail).getByText("Done when"));
+  assert.ok(within(detail).getByText("Detail of i5"));
   assert.deepEqual(read, ["i5"]);
 
   fireEvent.click(todo);
@@ -200,20 +157,4 @@ test("a row links its agent's thread and its pull request with CI, apart from op
   );
   assert.equal(row(view, "i2").getAttribute("aria-expanded"), "false");
   assert.deepEqual(read, []);
-});
-
-test("an open failed verdict shows each failed criterion's evidence, keeps a pass's folded, and names no model", () => {
-  const { view } = mount(ISSUES);
-  fireEvent.click(row(view, "i1"));
-  const detail = within(view.getByRole("region", { name: /^i1:/ }));
-
-  assert.ok(detail.getByText("1 of 2 criteria passed"));
-  const failing = detail.getByLabelText("Evidence for criterion 2").closest("details");
-  const passing = detail.getByLabelText("Evidence for criterion 1").closest("details");
-  assert.equal(failing?.open, true);
-  assert.equal(passing?.open, false);
-  assert.match(detail.getByLabelText("Evidence for criterion 2").textContent ?? "", /1 failing/);
-
-  const text = view.getByRole("region", { name: /^i1:/ }).textContent ?? "";
-  for (const named of ["gpt-5.4", "codex", "Codex"]) assert.ok(!text.includes(named), `no ${named} on the board`);
 });

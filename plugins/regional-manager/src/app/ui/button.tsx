@@ -9,6 +9,8 @@ const VARIANTS = {
   default: "bg-foreground text-background hover:bg-foreground/90",
   outline: "border border-input bg-transparent hover:bg-state-hover hover:text-foreground",
   ghost: "text-muted-foreground hover:bg-state-hover hover:text-foreground",
+  // why: a choice among several, quieter than the one primary action; the theme's secondary button.
+  secondary: "bg-secondary text-foreground hover:bg-state-active",
 } as const;
 
 // why `sm-wrap`: a label the user must read whole, such as an option to choose, wraps on a narrow

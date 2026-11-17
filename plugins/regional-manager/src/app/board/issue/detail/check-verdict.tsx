@@ -1,11 +1,10 @@
-// The verdict on one handoff, as verdict-detail.tsx draws it, without naming a model (the board names
-// none): how many criteria passed, the commit checked, a checkout or CI that failed it, then each
-// criterion with its evidence. A failed or unverifiable criterion shows its evidence; a passed one
-// keeps it folded.
-import { checkoutText } from "../../../model/verdict/checkout.ts";
-import { allPassed, ciVerdictOf, failedCheckout, outcome, type CriterionResult, type Verdict } from "../../../model/verdict/verdict.ts";
+// The verdict on one handoff, as the user is shown it (no model: the board names none): how many
+// criteria passed, the commit checked, a checkout or CI that failed it, then each criterion with its
+// evidence. A failed or unverifiable criterion shows its evidence; a passed one keeps it folded.
+import { checkoutText } from "../../../../model/verdict/checkout.ts";
+import { allPassed, ciVerdictOf, failedCheckout, outcome, type CriterionResult, type ShownVerdict as Verdict } from "../../../../model/verdict/verdict.ts";
+import { ThreadLink } from "../thread-link.tsx";
 import { DiscloseGlyph } from "./disclose-glyph.tsx";
-import { ThreadLink } from "./thread-link.tsx";
 
 export function CheckVerdict({ verdict }: { verdict: Verdict }) {
   switch (verdict.state) {

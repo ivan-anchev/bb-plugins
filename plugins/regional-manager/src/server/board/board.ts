@@ -1,17 +1,22 @@
 // The board: every issue of a regional manager, viewed now, with its latest agent's thread, and the
-// digest. Read whole on every call; bb's thread events only say when to read again.
-import type { Board, IssueRow } from "../../contract.ts";
+// digest; and one issue opened on it, with its record. Read whole on every call; bb's thread events
+// only say when to read again.
+import type { Board, IssueDetail, IssueRow } from "../../contract.ts";
+import type { Agent } from "../../model/agent.ts";
 import { needsYou, type NeedsYou } from "../../model/board/board-groups.ts";
 import { warnedFileCount } from "../../model/inbox/own-tree.ts";
+import type { IssueId } from "../../model/issue/issue.ts";
+import type { Handed } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
+import { shownVerdict } from "../../model/verdict/verdict.ts";
 import { readIssues, type FactsBb, type FactsStore, type IssueRead } from "../issues/issue-facts.ts";
 import type { MemoryRoot } from "../memory/memory-files.ts";
 import type { Store } from "../store/store.ts";
 
 const DIGEST = memoryFileSchema.parse("DIGEST.md");
 
-type BoardStore = FactsStore & Pick<Store, "verifies" | "lastOwnTreeEvent">;
+type BoardStore = FactsStore & Pick<Store, "verifies" | "lastOwnTreeEvent" | "issue" | "record">;
 
 /** An issue's row on the board. */
 const rowOf = ({ view, agent, threadId, branch }: IssueRead): IssueRow => ({
@@ -23,8 +28,28 @@ const rowOf = ({ view, agent, threadId, branch }: IssueRead): IssueRow => ({
   headline: view.headline,
   agent: agent === null ? null : { id: agent.id, threadId },
   branch,
-  placing: view.placing === null ? null : { verdict: view.placing.verdict },
   pr: view.pr,
+});
+
+/** An agent in an issue's record. why no thread once deleted: there is nothing left to open. */
+const heldBy = ({ id, threadId, ended }: Agent): IssueDetail["record"][number]["agent"] => ({
+  id,
+  threadId: ended?.how === "deleted" ? null : threadId,
+  ended: ended?.how ?? null,
+});
+
+/** A handoff in an issue's record, with the verdict on it as the user is shown it. */
+const shownHanded = ({ handoff: { id, at, status, summary, did, evidence, concerns, deviations, findings }, check }: Handed): IssueDetail["record"][number]["handoffs"][number] => ({
+  id,
+  at,
+  status,
+  summary,
+  did,
+  evidence,
+  concerns,
+  deviations,
+  findings,
+  verdict: check === null ? null : shownVerdict(check.verdict),
 });
 
 export function createBoard(bb: FactsBb, store: BoardStore, memory: MemoryRoot) {
@@ -62,6 +87,21 @@ export function createBoard(bb: FactsBb, store: BoardStore, memory: MemoryRoot) 
         digest: text === null || modifiedAt === null ? null : { content: text.content, modifiedAt },
         decisions: store.decisions(id),
         issues: reads.map(rowOf),
+      };
+    },
+
+    /** An issue opened on the board: its plan for the user and its record, from the store alone (null: the regional manager has no such issue). */
+    detail(id: CoordinatorId, issueId: IssueId): IssueDetail | null {
+      const issue = store.issue(id, issueId);
+      if (issue === null) return null;
+      const record = store.record(id, issueId);
+      return {
+        description: issue.description,
+        doneCriteria: issue.doneCriteria,
+        record: store
+          .agents(id)
+          .filter((agent) => agent.issueId === issueId)
+          .map((agent) => ({ agent: heldBy(agent), handoffs: record.filter(({ handoff }) => handoff.agentId === agent.id).map(shownHanded) })),
       };
     },
 
