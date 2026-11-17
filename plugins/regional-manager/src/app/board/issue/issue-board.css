@@ -71,6 +71,13 @@
   list-style: none;
 }
 
+/* A parent's sub-issues, one level in, under its row and its open detail: each glyph sits under the
+   parent's id, and the words keep the rest of the width. */
+.rmi-list.rmi-sub-issues {
+  margin: 0;
+  padding-left: 16px;
+}
+
 /* --- An issue's row: Activity's tall row, its 30 slot, its words, the flat wash ----------------- */
 /* The row's button spans its words; its pull request and its agent sit beside them, on the same wash. */
 .rmi-rowbox {
@@ -152,6 +159,14 @@
   line-height: 14px;
   color: var(--muted-foreground);
 }
+/* A parent's sub-issues Done of all, where an agent would be: a count, quiet as the row's id. */
+.rmi-sub-count {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--subtle-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
 /* What blocks the issue, ahead of its headline: the plan's fact in the headline's words, its ids set
    as the row's own id, then a quiet dot. It never shrinks: the headline fades instead. */
 .rmi-blocked {
@@ -428,6 +443,11 @@ button.rmi-thread-link {
   flex: 1 1 auto;
   min-width: 0;
   color: var(--muted-foreground);
+}
+.rmi-related-through {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--subtle-foreground);
 }
 @media (hover: hover) {
   .rmi-related:hover {

@@ -243,6 +243,85 @@ test("a row links its agent's thread and its pull request with CI, apart from op
   assert.deepEqual(read, []);
 });
 
+const I1 = issueIdSchema.parse("i1");
+const STAGING = "Blocked: Needs a staging key";
+
+/** A parent In progress, i1, with three sub-issues: one Done, one flagged by its agent's blocked handoff, one blocked by a dependency; and a top-level Todo. */
+const SPLIT: IssueRow[] = [
+  issue("i1", { title: "Card vault", status: "in-progress", subIssues: { done: 1, total: 3 }, headline: "1/3 done" }),
+  issue("i2", { parentId: I1, status: "done", headline: "Merged #12" }),
+  issue("i3", { parentId: I1, status: "in-progress", needsYou: STAGING, headline: STAGING, agent: { id: agentIdSchema.parse("a3"), threadId: "thr_three" } }),
+  issue("i4", { parentId: I1, status: "todo", headline: "Not started", blockedBy: [issueIdSchema.parse("i5")] }),
+  issue("i5", { status: "todo", headline: "Not started" }),
+];
+
+/** The ids of the issue rows in a list, top level only, each with the ids of the rows indented under it. */
+const rowsIn = (list: HTMLElement): string[][] =>
+  [...list.children].map((item) => [...item.querySelectorAll<HTMLElement>(".rmi-row")].map((button) => /^i\d+/.exec(button.getAttribute("aria-label") ?? "")?.[0] ?? "?"));
+
+test("a parent's sub-issues sit indented under it in its lane, each with its own glyph, the parent counting them where an agent would be; a lane counts its top-level rows", () => {
+  const { view } = mount(SPLIT, []);
+  const headers = view.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
+  assert.deepEqual(headers, ["Needs you1", "In progress1", "Todo1"], "the parent counts once in its lane, its sub-issues by its own count");
+
+  const working = view.getByRole("region", { name: /^In progress/ });
+  assert.deepEqual(rowsIn(within(working).getAllByRole("list")[0] ?? assert.fail("no list")), [["i1", "i2", "i3", "i4"]], "all three under the parent, whatever their own status");
+  const subs = within(working).getAllByRole("list")[1] ?? assert.fail("no sub-issue list");
+  assert.deepEqual(
+    within(subs).getAllByRole("button", { name: /^i\d Build/ }).map((button) => within(button).getByRole("img").getAttribute("aria-label")),
+    ["Done", "In progress", "Todo"],
+  );
+  assert.match(within(subs).getByRole("button", { name: /\bi4 Build/ }).textContent ?? "", /blocked by i5/);
+  const parent = row(view, "i1");
+  assert.equal(parent.closest(".rmi-rowbox")?.querySelector(".rmi-sub-count")?.textContent, "1/3");
+  assert.match(parent.getAttribute("aria-label") ?? "", /, In progress, 1 of 3 sub-issues done,/);
+  assert.equal(lane(view, /^Todo/).queryByRole("button", { name: /\bi4 Build/ }), null, "a Todo sub-issue sits in its parent's lane, not Todo");
+});
+
+test("a flagged sub-issue sits under its parent and flat under Needs you, naming its parent there; each row opens on its own", () => {
+  const { view } = mount(SPLIT, []);
+  const flat = lane(view, /^Needs you/).getByRole("button", { name: /\bi3 Build/ });
+  assert.match(flat.getAttribute("aria-label") ?? "", /^i3 Build: Issue i3, sub-issue of i1, In progress,/);
+  assert.match(flat.textContent ?? "", /^i1 ›i3Build/);
+  assert.ok(within(flat).getByRole("img", { name: "In progress" }), "with its own status's glyph");
+  const nested = lane(view, /^In progress/).getByRole("button", { name: /\bi3 Build/ });
+  assert.doesNotMatch(nested.getAttribute("aria-label") ?? "", /sub-issue of/, "under its parent it needs no name of it");
+
+  fireEvent.click(flat);
+  assert.deepEqual([flat.getAttribute("aria-expanded"), nested.getAttribute("aria-expanded")], ["true", "false"]);
+  assert.equal(view.getAllByRole("region", { name: "i3" }).length, 1);
+});
+
+test("folding a parent's lane folds its sub-issues with it", () => {
+  const { view } = mount(SPLIT, []);
+  fireEvent.click(laneHeader(view, /^In progress/));
+  assert.deepEqual(["i1", "i2", "i4"].map((id) => view.queryByRole("button", { name: new RegExp(`\\b${id} Build`) })), [null, null, null]);
+  assert.ok(lane(view, /^Needs you/).getByRole("button", { name: /\bi3 Build/ }), "the flagged copy stays under Needs you");
+});
+
+test("focus on a sub-issue's row stays on it as it changes status under its parent, moves lanes with its parent, and leaves its parent for a lane of its own", () => {
+  const { view, reread } = mount(SPLIT, []);
+  const under = (id: string, name: RegExp) => lane(view, name).getByRole("button", { name: new RegExp(`\\b${id} Build`) });
+  under("i4", /^In progress/).focus();
+
+  act(() => reread(SPLIT.map((each) => (each.id === "i4" ? { ...each, status: "in-progress", headline: "Working", blockedBy: [] } : each))));
+  assert.ok(document.activeElement === under("i4", /^In progress/), "its status changed, its row stayed");
+
+  const reviewing = SPLIT.map((each) => (each.id === "i1" ? { ...each, status: "in-review" as const } : each));
+  act(() => reread(reviewing));
+  assert.ok(document.activeElement === under("i4", /^In review/), "moved with its parent, focus on its own row, not the parent's");
+
+  act(() => reread(reviewing.map((each) => (each.id === "i4" ? { ...each, parentId: null } : each))));
+  assert.ok(document.activeElement === under("i4", /^Todo/), "top-level now, in its own lane");
+});
+
+test("focus on a flagged sub-issue's row under Needs you moves to its row under its parent once its flag clears", () => {
+  const { view, reread } = mount(SPLIT, []);
+  lane(view, /^Needs you/).getByRole("button", { name: /\bi3 Build/ }).focus();
+  act(() => reread(SPLIT.map((each) => (each.id === "i3" ? { ...each, needsYou: null, headline: "Working" } : each))));
+  assert.ok(document.activeElement === lane(view, /^In progress/).getByRole("button", { name: /\bi3 Build/ }));
+});
+
 test("every rule in the board's stylesheet is scoped to the board, so none reaches bb or another plugin", async () => {
   // why read the file: bb doesn't scope a plugin's stylesheet, so a bare selector styles the whole page.
   const css = (await readFile(new URL("./issue-board.css", import.meta.url), "utf8")).replace(/\/\*[\s\S]*?\*\//g, "");

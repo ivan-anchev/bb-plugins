@@ -134,7 +134,8 @@ A parent's status rolls up from its sub-issues, derived like any other:
 A flagged sub-issue flags itself, not its parent. A parent is canceled only
 once its sub-issues are closed, and a closed parent takes no new sub-issue.
 A parent's dependencies block each of its sub-issues. The manager's catch-up
-lists each sub-issue under its parent, and a flagged one under Needs you too;
+lists each sub-issue under its parent, and a flagged one under Needs you too,
+as the board shows them (see [The board](#the-board));
 `issue_read` names an issue's parent and sub-issues.
 
 ### Dependencies
@@ -715,11 +716,21 @@ page from its row in the panel, show the same board, live:
   stays in its own status's lane: blocked is not a lane, and doesn't put it
   under Needs you. That differs from an agent's "Blocked: <summary>"
   headline, which is the agent asking you for something, under Needs you.
+- **Sub-issues** sit indented one level under their parent's row, in the
+  parent's lane whatever their own status, each with its own glyph and
+  everything a row has. The parent, which never has an agent, shows how many
+  of its sub-issues are Done where an agent would be ("1/3"). A flagged
+  sub-issue is also listed flat under Needs you, its parent's id ahead of its
+  own ("i1 › i3"). A lane's count is its rows: a parent counts once, its
+  sub-issues by its own count. Folding a lane folds its parents with their
+  sub-issues.
 
 Pressing an issue opens it in place: its row grows to show its title and
 headline whole, which a closed row fades out at its edge, and under it come
-what it is about; **Depends on** and **Blocks**, each issue there with its
-status's glyph, id and title, and none when there are none; pressing one goes
+what it is about; its **Parent** or its **Sub-issues**, **Depends on** (a
+sub-issue's lists its parent's open dependencies too, "through i1") and
+**Blocks**, each issue there with its status's glyph, id and title, and none
+when there are none; pressing one goes
 to that issue on the board, unfolding its lane, opening its row and moving
 focus to it; **Done when** with its criteria (a research issue's
 **Questions**, and nothing when it has none), and its **Record**: each

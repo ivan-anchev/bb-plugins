@@ -43,7 +43,7 @@ export function handFocusToPage(region: HTMLElement | null): (() => void) | unde
 
 /** The refs that keep focus as items move between groups (useFocusKeptAcrossGroups). Each is stable per key. */
 type GroupFocus<Group> = {
-  /** On the whole item: focus anywhere in it as it leaves (its row, a link beside it, its open detail) is kept. */
+  /** On the whole item: focus anywhere in it as it leaves (its row, a link beside it, its open detail) is kept; in an item nested in another, by the nested one. */
   item(key: string): RefCallback<HTMLElement>;
   /** On the element of the item that takes the focus kept, where the item lands. */
   target(key: string): RefCallback<HTMLElement>;
@@ -72,6 +72,8 @@ export function useFocusKeptAcrossGroups<Group>(groupOf: (key: string) => Group 
         item: stablePerKey((key: string): RefCallback<HTMLElement> => (item) => {
           if (item === null) return;
           return () => {
+            // why the last one wins: React detaches a removed tree's refs parent first, so of an item
+            // nested in another (a sub-issue under its parent), the nested one's cleanup runs last.
             // why read the page now: the item is still in it, and nothing of it is once it's gone.
             if (item.contains(document.activeElement)) pending = { key, page: pageOf(item) };
           };

@@ -1,8 +1,9 @@
 // A board's lanes: the decisions put to the user and the issues, each placed by its status, or
-// under Needs you while it waits on the user. The board draws them, crew_catch_up lists them and the
+// under Needs you while it waits on the user, and each sub-issue under its parent. The board draws them, crew_catch_up lists them and the
 // panel's badge counts their Needs you, so the three never disagree.
 import { z } from "zod";
 import type { Decision } from "../decision.ts";
+import type { IssueId } from "../issue/issue.ts";
 import { STATUS_LABELS, type IssueStatus } from "../issue/status.ts";
 
 /** The board's lanes, in the order it shows them. */
@@ -15,6 +16,9 @@ export const LANE_LABELS: Record<Lane, string> = { "needs-you": "Needs you", ...
 /** What places an issue in a lane: its status, and why it waits on the user (null: it doesn't). */
 type Placed = { status: IssueStatus; needsYou: string | null };
 
+/** What places an issue on the board: what places it in a lane, its id, and its parent (null: none). */
+type Nested = Placed & { id: IssueId; parentId: IssueId | null };
+
 /** An issue's lane: Needs you while it waits on the user, else its status. */
 export const laneOf = ({ status, needsYou }: Placed): Lane => (needsYou === null ? status : "needs-you");
 
@@ -26,20 +30,33 @@ export function byLane<Row extends { lane: Lane }>(rows: readonly Row[]): { lane
   });
 }
 
-/** A row on the board: a decision put to the user, or an issue. */
-export type BoardItem<Issue> = { kind: "decision"; lane: Lane; decision: Decision } | { kind: "issue"; lane: Lane; issue: Issue };
+/**
+ * A row on the board: a decision put to the user; a top-level issue, with its sub-issues under it
+ * (none: it has none), whatever their own lanes; or a sub-issue that waits on the user, listed flat
+ * under Needs you as well as under its parent.
+ */
+export type BoardItem<Issue> =
+  | { kind: "decision"; lane: Lane; decision: Decision }
+  | { kind: "issue"; lane: Lane; issue: Issue; subIssues: Issue[] }
+  | { kind: "flagged-sub-issue"; lane: "needs-you"; issue: Issue };
 
 /** Where a decision sits: under Needs you until the user answers it, then Done. */
 const decisionLane = (decision: Decision): Lane => (decision.answer === null ? "needs-you" : "done");
 
 /**
  * The board's rows in each lane that has any, in the board's order; each lane's decisions come
- * first. A flagged issue sits under Needs you only, never also in its status's lane.
+ * first. A top-level issue sits in its own lane, its sub-issues under it; a flagged issue sits under
+ * Needs you only, never also in its status's lane, and a flagged sub-issue under its parent too.
+ * A lane counts its rows: its sub-issues are counted by their parent.
  */
-export function boardGroups<Issue extends Placed>(decisions: readonly Decision[], issues: readonly Issue[]): { lane: Lane; rows: BoardItem<Issue>[] }[] {
+export function boardGroups<Issue extends Nested>(decisions: readonly Decision[], issues: readonly Issue[]): { lane: Lane; rows: BoardItem<Issue>[] }[] {
+  const subIssuesOf = (id: IssueId): Issue[] => issues.filter(({ parentId }) => parentId === id);
   return byLane<BoardItem<Issue>>([
     ...decisions.map((decision) => ({ kind: "decision", lane: decisionLane(decision), decision }) as const),
-    ...issues.map((issue) => ({ kind: "issue", lane: laneOf(issue), issue }) as const),
+    ...issues.flatMap((issue): BoardItem<Issue>[] => {
+      if (issue.parentId === null) return [{ kind: "issue", lane: laneOf(issue), issue, subIssues: subIssuesOf(issue.id) }];
+      return issue.needsYou === null ? [] : [{ kind: "flagged-sub-issue", lane: "needs-you", issue }];
+    }),
   ]);
 }
 
@@ -47,7 +64,7 @@ export function boardGroups<Issue extends Placed>(decisions: readonly Decision[]
 export const needsYouSchema = z.object({ decisions: z.number().int().nonnegative(), issues: z.number().int().nonnegative() });
 export type NeedsYou = z.infer<typeof needsYouSchema>;
 
+/** What sits under Needs you: each decision and each issue there once, a flagged sub-issue as its own row. */
 export function needsYou(decisions: readonly Decision[], issues: readonly Placed[]): NeedsYou {
-  const waiting = boardGroups(decisions, issues).find(({ lane }) => lane === "needs-you")?.rows ?? [];
-  return { decisions: waiting.filter((item) => item.kind === "decision").length, issues: waiting.filter((item) => item.kind === "issue").length };
+  return { decisions: decisions.filter((decision) => decisionLane(decision) === "needs-you").length, issues: issues.filter((issue) => laneOf(issue) === "needs-you").length };
 }

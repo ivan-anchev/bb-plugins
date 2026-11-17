@@ -290,6 +290,44 @@ test("an opened issue lists what it depends on and what it blocks, each by its s
   assert.equal(opened.queryByRole("heading", { name: "Depends on" }), null, "it depends on nothing");
 });
 
+test("a parent opens to its sub-issues and a sub-issue to its parent, each going there; a parent's dependency is listed as blocking its sub-issue through it", async () => {
+  const relations: Record<string, Pick<IssueDetail, "dependsOn" | "blocks">> = { i1: { dependsOn: [id("i9")], blocks: [] }, i2: { dependsOn: [], blocks: [] }, i9: { dependsOn: [], blocks: [id("i1")] } };
+  const { view } = await mount(
+    {
+      decisions: [],
+      issues: [
+        issue("i9", { kind: "research", status: "backlog", title: "Pick a vault", headline: "Not planned" }),
+        issue("i1", { title: "Card vault", subIssues: { done: 0, total: 1 }, blockedBy: [id("i9")], headline: "0/1 done" }),
+        issue("i2", { title: "Vault schema", parentId: id("i1"), blockedBy: [id("i9")] }),
+      ],
+    },
+    undefined,
+    (issueId) => ({ ...DETAIL, ...relations[issueId] }),
+  );
+  const section = (detail: ReturnType<typeof within>, name: string) =>
+    within(detail.getByRole("heading", { name }).closest("section") ?? assert.fail(`no ${name}`)).getAllByRole("button").map((button) => button.getAttribute("aria-label"));
+
+  fireEvent.click(view.getByRole("button", { name: /\bi1 Build/ }));
+  const parent = within(view.getByRole("region", { name: "i1" }));
+  await parent.findByText(DETAIL.description);
+  assert.deepEqual(section(parent, "Sub-issues"), ["i2: Vault schema, Todo"]);
+  assert.deepEqual(section(parent, "Depends on"), ["i9: Pick a vault, Backlog"]);
+  assert.equal(parent.queryByRole("heading", { name: "Parent" }), null);
+
+  fireEvent.click(parent.getByRole("button", { name: "i2: Vault schema, Todo" }));
+  const sub = view.getByRole("button", { name: /\bi2 Build/ });
+  assert.ok(document.activeElement === sub && sub.getAttribute("aria-expanded") === "true", "the sub-issue's row opens and takes focus");
+  const opened = within(view.getByRole("region", { name: "i2" }));
+  await opened.findByRole("heading", { name: "Parent" });
+  assert.deepEqual(section(opened, "Parent"), ["i1: Card vault, Todo"]);
+  assert.deepEqual(section(opened, "Depends on"), ["i9: Pick a vault, Backlog, through i1"], "every blocker its row names, its parent's too");
+  assert.equal(opened.queryByRole("heading", { name: "Sub-issues" }), null);
+
+  fireEvent.click(opened.getByRole("button", { name: "i9: Pick a vault, Backlog, through i1" }));
+  assert.equal(view.getByRole("button", { name: /^Backlog/ }).getAttribute("aria-expanded"), "true");
+  assert.ok(document.activeElement === view.getByRole("button", { name: /\bi9 Research/ }));
+});
+
 test("a board with no issues says so", async () => {
   const { view, lanes } = await mount({ decisions: [], issues: [] });
   assert.deepEqual(lanes(), []);

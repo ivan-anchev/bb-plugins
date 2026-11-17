@@ -2,7 +2,7 @@
 // and its record: every agent that held it, each handoff it made and the verdict on it.
 import { experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { coordinatorContract as contract, type IssueDetail as Detail, type IssueRow } from "../../../../contract.ts";
-import { isVerified, type Kind } from "../../../../model/issue/kind.ts";
+import { isVerified } from "../../../../model/issue/kind.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
 import { ReadFailure } from "../../../ui/read-failure.tsx";
 import type { GoTo } from "../issue-board.tsx";
@@ -23,20 +23,20 @@ export function IssueDetail({ coordinatorId, issue, issues, goTo }: IssueDetailP
     <>
       {read.error !== null && <ReadFailure onRetry={() => void read.refetch()}>Could not read {issue.id}: {read.error.message}</ReadFailure>}
       {read.data === undefined && read.error === null && <p className="rmi-description">Loading…</p>}
-      {read.data !== undefined && <Opened kind={issue.kind} detail={read.data} issues={issues} goTo={goTo} />}
+      {read.data !== undefined && <Opened issue={issue} detail={read.data} issues={issues} goTo={goTo} />}
     </>
   );
 }
 
-function Opened({ kind, detail: { description, doneCriteria, dependsOn, blocks, record }, issues, goTo }: { kind: Kind; detail: Detail } & Pick<IssueDetailProps, "issues" | "goTo">) {
+function Opened({ issue, detail: { description, doneCriteria, dependsOn, blocks, record }, issues, goTo }: Omit<IssueDetailProps, "coordinatorId"> & { detail: Detail }) {
   return (
     <>
       <p className="rmi-description">{description}</p>
-      <IssueRelations dependsOn={dependsOn} blocks={blocks} issues={issues} goTo={goTo} />
+      <IssueRelations issue={issue} dependsOn={dependsOn} blocks={blocks} issues={issues} goTo={goTo} />
       {doneCriteria.length > 0 && (
         <section className="rmi-part">
           {/* why by kind: a verified kind's criteria are judged; any other's are questions its report answers. */}
-          <h3 className="rmi-part-title">{isVerified(kind) ? "Done when" : "Questions"}</h3>
+          <h3 className="rmi-part-title">{isVerified(issue.kind) ? "Done when" : "Questions"}</h3>
           <ol className="rmi-criteria">
             {doneCriteria.map((criterion, i) => (
               <li key={i}>{criterion}</li>

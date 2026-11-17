@@ -1,7 +1,7 @@
 // What the issue and agent tools say to the regional manager. An issue is always named by its id
 // and an agent by its id, with a link to its thread, so the manager can both act on them and point
 // the user at them.
-import { byLane, LANE_LABELS, laneOf } from "../../model/board/board-groups.ts";
+import { boardGroups, LANE_LABELS, type BoardItem } from "../../model/board/board-groups.ts";
 import type { Issue, IssueId } from "../../model/issue/issue.ts";
 import { isVerified, PIPELINES } from "../../model/issue/kind.ts";
 import { isReady, type Related, type Relations } from "../../model/issue/relations.ts";
@@ -25,15 +25,23 @@ const threadLink = (threadId: string | null): string => (threadId === null ? "no
 export function boardText(reads: readonly IssueRead[] | { error: string }): string {
   if ("error" in reads) return `## Board\n\nCould not read your agents' threads from bb: ${reads.error}. Call crew_catch_up again before relying on any issue's status.`;
   if (reads.length === 0) return "## Board\n\nNo issues yet. File one with issue_create.";
-  const subIssuesOf = (read: IssueRead): IssueRead[] => reads.filter(({ view }) => view.issue.parentId === read.view.issue.id);
-  const rows = reads.flatMap((read) => {
-    if (read.view.issue.parentId === null) return [{ lane: laneOf(read.view), read, subIssues: subIssuesOf(read) }];
-    return read.view.needsYou === null ? [] : [{ lane: "needs-you" as const, read, subIssues: [] }];
-  });
-  const lanes = byLane(rows).map(({ lane, rows: inLane }) =>
-    [`### ${LANE_LABELS[lane]} (${inLane.length})`, ...inLane.flatMap(({ read, subIssues }) => [rowLine(read), ...subIssues.map((sub) => `  ${rowLine(sub)}`)])].join("\n"),
-  );
+  const placed = reads.map((read) => ({ ...read, id: read.view.issue.id, parentId: read.view.issue.parentId, status: read.view.status, needsYou: read.view.needsYou }));
+  const lanes = boardGroups([], placed).map(({ lane, rows }) => [`### ${LANE_LABELS[lane]} (${rows.length})`, ...rows.flatMap(laneLines)].join("\n"));
   return ["## Board", ...lanes, readyLine(reads.map(({ view }) => view))].join("\n\n");
+}
+
+/** A row's lines in its lane: an issue's, each of its sub-issues indented under it. why no decision: catch-up lists them in their own section. */
+function laneLines(item: BoardItem<IssueRead>): string[] {
+  switch (item.kind) {
+    case "decision":
+      return [];
+    case "issue":
+      return [rowLine(item.issue), ...item.subIssues.map((sub) => `  ${rowLine(sub)}`)];
+    case "flagged-sub-issue":
+      return [rowLine(item.issue)];
+    default:
+      return item satisfies never;
+  }
 }
 
 function rowLine({ view, agent, threadId, branch }: IssueRead): string {
