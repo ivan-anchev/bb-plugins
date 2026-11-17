@@ -2,8 +2,9 @@
 // and an agent by its id, with a link to its thread, so the manager can both act on them and point
 // the user at them.
 import { byLane, LANE_LABELS, laneOf } from "../../model/board/board-groups.ts";
-import type { Issue } from "../../model/issue/issue.ts";
+import type { Issue, IssueId } from "../../model/issue/issue.ts";
 import { isVerified, PIPELINES } from "../../model/issue/kind.ts";
+import { isReady, type Related, type Relations } from "../../model/issue/relations.ts";
 import { STATUS_LABELS, type Handed } from "../../model/issue/status.ts";
 import type { Agent } from "../../model/agent.ts";
 import { executionText, recipientsText, type Joined, type StartOutcome, type StopOutcome, type Withdrawn } from "../agents/agents.ts";
@@ -16,34 +17,45 @@ const OUTPUT_BUDGET_CHARS = 12_000;
 
 const threadLink = (threadId: string | null): string => (threadId === null ? "no thread" : `@thread:${threadId}`);
 
-/** The board section of a catch-up: every issue in its lane, with its agent, or why it couldn't be read. */
+/** The board section of a catch-up: every issue in its lane, with its agent and what blocks it, then the ready ones; or why it couldn't be read. */
 export function boardText(reads: readonly IssueRead[] | { error: string }): string {
   if ("error" in reads) return `## Board\n\nCould not read your agents' threads from bb: ${reads.error}. Call crew_catch_up again before relying on any issue's status.`;
   if (reads.length === 0) return "## Board\n\nNo issues yet. File one with issue_create.";
   const lanes = byLane(reads.map((read) => ({ lane: laneOf(read.view), read }))).map(({ lane, rows }) =>
     [`### ${LANE_LABELS[lane]} (${rows.length})`, ...rows.map(({ read }) => rowLine(read))].join("\n"),
   );
-  return ["## Board", ...lanes].join("\n\n");
+  return ["## Board", ...lanes, readyLine(reads.map(({ view }) => view))].join("\n\n");
 }
 
 function rowLine({ view, agent, threadId, branch }: IssueRead): string {
   const { issue } = view;
   const held = agent === null ? "no agent" : `${agent.id}${agent.ended === null ? "" : ` (${agent.ended.how})`}, ${threadLink(threadId)}`;
-  return `- ${issue.id} "${issue.title}" (${PIPELINES[issue.kind].label}; ${held}${branch === null ? "" : `, on branch \`${branch}\``}): ${view.headline}`;
+  return `- ${issue.id} "${issue.title}" (${PIPELINES[issue.kind].label}; ${held}${branch === null ? "" : `, on branch \`${branch}\``}): ${view.headline}${blockedText(view.blockedBy, "; blocked by ")}`;
 }
 
-/** What issue_create says it filed. */
-export const filedText = (issue: Issue): string =>
-  `Filed ${issue.id} (${issue.kind}) in ${STATUS_LABELS[issue.rest]}.${issue.verifier === null ? "" : ` Its done handoffs are checked on ${executionText(issue.verifier)}.`}`;
+/** The issues in Todo that nothing blocks: those an agent can start on without waiting. */
+function readyLine(views: readonly IssueRead["view"][]): string {
+  const ready = views.filter(isReady).map(({ issue }) => issue.id);
+  return `Ready: ${ready.length === 0 ? "none" : ready.join(", ")} (in Todo, and nothing they depend on is open).`;
+}
+
+/** The issues as `i2 (Todo), i4 (In progress)`, after `lead`; nothing when there are none. */
+const blockedText = (related: readonly Related[], lead: string): string => (related.length === 0 ? "" : `${lead}${relatedText(related)}`);
+
+const relatedText = (related: readonly Related[]): string => related.map(({ id, status }) => `${id} (${STATUS_LABELS[status]})`).join(", ");
+
+/** What issue_create says it filed, and what blocks it as it is filed. */
+export const filedText = (issue: Issue, blockedBy: readonly Related[]): string =>
+  `Filed ${issue.id} (${issue.kind}) in ${STATUS_LABELS[issue.rest]}${blockedText(blockedBy, ", blocked by ")}.${issue.verifier === null ? "" : ` Its done handoffs are checked on ${executionText(issue.verifier)}.`}`;
 
 /** What agent_start did. */
 export function startText(issueId: Issue["id"], outcome: Exclude<StartOutcome, { kind: "refused" }>): string {
   switch (outcome.kind) {
     case "started": {
-      const { agentId, threadId, execution, inherited, after, replaced, withdrawn, joined } = outcome;
+      const { agentId, threadId, execution, inherited, blockedBy, after, replaced, withdrawn, joined } = outcome;
       const started = `${replaced === null ? "Started" : `Stopped ${replaced} and started`} ${agentId} on ${issueId} as @thread:${threadId}`;
       const runs = `on ${executionText(execution)}${inherited ? ", your own provider, model and reasoning level" : ""}`;
-      const ends = `It ends its work with a handoff, and you are woken when it hands off, fails, waits on the user or stops without one.${withdrawnText(withdrawn)}`;
+      const ends = `It ends its work with a handoff, and you are woken when it hands off, fails, waits on the user or stops without one.${startedBlockedText(issueId, blockedBy)}${withdrawnText(withdrawn)}`;
       if (after === null) return `${started}, ${runs}. It works in its own environment on its own branch, and its brief arrived as a message from you. ${ends}`;
       const earlier = `Its first message, from you, holds the issue's plan and every earlier handoff and verdict.${replaced === null ? "" : ` ${replacedText(replaced)}`}`;
       if (joined === null) return `${started}, ${runs}. It starts clean, in its own environment from the default branch. ${earlier} ${ends}`;
@@ -82,6 +94,10 @@ function withdrawnText(withdrawn: readonly Withdrawn[]): string {
   return `\n\n${one ? "Your message" : `Your ${withdrawn.length} messages`} to ${to} still waited in bb's queue, so ${one ? "it was" : "they were"} taken back before anything started, and ${to} never got ${one ? "it" : "them"}:\n\n${quoted.join("\n\n")}`;
 }
 
+/** What a start on a blocked issue adds: it started anyway, with nothing of what blocks it. */
+const startedBlockedText = (issueId: IssueId, blockedBy: readonly Related[]): string =>
+  blockedBy.length === 0 ? "" : ` ${issueId} is blocked by ${relatedText(blockedBy)}: its agent started anyway, and has nothing of that work but what its brief names.`;
+
 /** What agent_stop did. */
 export function stopText(agent: Agent, outcome: StopOutcome): string {
   switch (outcome.kind) {
@@ -103,10 +119,11 @@ export function verifierText(issue: Issue): string {
 }
 
 /**
- * An issue whole: its status and why, its plan, the verifier named, each agent with what it runs
- * on, every handoff of every agent with its verdict, and its agent's latest answer (null: none).
+ * An issue whole: its status and why, what blocks it, its plan, its relations, the verifier named,
+ * each agent with what it runs on, every handoff of every agent with its verdict, and its agent's
+ * latest answer (null: none).
  */
-export function issueText({ view, threadId, branch }: IssueRead, agents: readonly Agent[], record: readonly Handed[], output: string | null, lookups: Pick<Lookups, "agent">): string {
+export function issueText({ view, threadId, branch }: IssueRead, relations: Relations, agents: readonly Agent[], record: readonly Handed[], output: string | null, lookups: Pick<Lookups, "agent">): string {
   const { issue } = view;
   const answer =
     output === null
@@ -116,10 +133,11 @@ export function issueText({ view, threadId, branch }: IssueRead, agents: readonl
         : `${output.slice(0, OUTPUT_BUDGET_CHARS)}\n\n[Cut here: it has ${output.length} characters. Read the rest in its thread.]`;
   return [
     `## ${issue.id}: ${issue.title}`,
-    `${PIPELINES[issue.kind].label}. ${sentence(`${STATUS_LABELS[view.status]}: ${view.headline}`)}${view.needsYou === null ? "" : " Needs you."} Thread: ${threadLink(threadId)}${branch === null ? "" : `, branch \`${branch}\``}.`,
+    `${PIPELINES[issue.kind].label}. ${sentence(`${STATUS_LABELS[view.status]}: ${view.headline}`)}${view.needsYou === null ? "" : " Needs you."}${blockedText(view.blockedBy, " Blocked by ")}${view.blockedBy.length === 0 ? "" : "."} Thread: ${threadLink(threadId)}${branch === null ? "" : `, branch \`${branch}\``}.`,
     `### What it is about\n\n${issue.description.trim()}`,
     `### Brief\n\n${issue.brief?.trim() ?? "None yet."}`,
     criteriaText(issue),
+    `### Relations\n\n${relationsText(relations)}`,
     `### Verifier\n\n${verifierLine(issue)}`,
     `### Agents\n\n${agents.length === 0 ? "None started." : agents.map((agent) => agentLine(agent, threadId)).join("\n")}`,
     `### Its record\n\n${record.length === 0 ? "No handoff yet." : record.map((handed) => `#### ${handed.handoff.agentId}'s handoff\n\n${handoffText(handed, lookups)}`).join("\n\n")}`,
@@ -132,6 +150,11 @@ function criteriaText({ kind, doneCriteria }: Issue): string {
   const verified = isVerified(kind);
   const numbered = doneCriteria.map((criterion, i) => `${i + 1}. ${criterion}`).join("\n");
   return `### ${verified ? "Done when" : "Questions"}\n\n${doneCriteria.length > 0 ? numbered : verified ? "No criteria yet." : "None."}`;
+}
+
+/** What it depends on and what it blocks, each with its status. */
+function relationsText({ dependsOn, blocks }: Relations): string {
+  return [`Depends on: ${dependsOn.length === 0 ? "nothing" : relatedText(dependsOn)}.`, `Blocks: ${blocks.length === 0 ? "nothing" : relatedText(blocks)}.`].join("\n");
 }
 
 /** Who checks its done handoffs. */

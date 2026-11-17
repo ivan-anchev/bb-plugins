@@ -20,6 +20,7 @@ const issue: Issue = {
   doneCriteria: ["npm test passes"],
   verifier: null,
   rest: "todo",
+  dependsOn: [],
   closed: null,
   createdAt: 1_000,
 };

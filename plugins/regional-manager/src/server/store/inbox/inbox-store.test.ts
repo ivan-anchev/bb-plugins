@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { decisionIdSchema } from "../../../model/decision.ts";
-import { failWrites, freshStore, MANAGER, newIssue, OTHER_MANAGER } from "../test-store.ts";
+import { failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER } from "../test-store.ts";
 
 test("a decision may name the issue it flags, and is answered once", () => {
   const { store } = freshStore();
-  const { id: issueId } = store.insertIssue(MANAGER, newIssue(), 2_000);
+  const { id: issueId } = filedIssue(store, MANAGER, newIssue(), 2_000);
   const named = store.insertDecision(MANAGER, { question: "Which queue?", options: ["SQS", "Redis"], issueId }, 3_000);
   const general = store.insertDecision(MANAGER, { question: "Ship on Friday?", options: [], issueId: null }, 3_100);
 

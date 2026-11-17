@@ -7,6 +7,7 @@ import { agentIdSchema, endedHowSchema } from "../agent.ts";
 import { decisionIdSchema } from "../decision.ts";
 import { handoffIdSchema, handoffStatusSchema } from "../handoff.ts";
 import { issueIdSchema } from "../issue/issue.ts";
+import { issueStatusSchema } from "../issue/status.ts";
 import { memoryFileSchema } from "../memory-file.ts";
 import { reminderIdSchema, reminderNoteSchema } from "../reminder.ts";
 import { checkIdSchema } from "../verdict/check.ts";
@@ -51,6 +52,8 @@ export const inboxEventSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("pr"), ...onAgent, pr: prSnapshotSchema, changes: z.array(prChangeSchema).min(1) }),
   /** The issue's agent ended before its work reached Verifying, In review or Done, so the issue rests in Todo again. */
   z.object({ kind: z.literal("returned-to-todo"), ...onAgent, how: endedHowSchema.exclude(["spawn-failed", "replaced"]) }),
+  /** The issue `by`, the last of its dependencies still open, closed without the manager closing it (a merge, a report), and stands `closedAs` (issues.ts announceUnblocked). */
+  z.object({ kind: z.literal("unblocked"), issueId: issueIdSchema, by: issueIdSchema, closedAs: issueStatusSchema.extract(["done", "canceled"]) }),
   ...managerEvents,
 ]);
 export type InboxEvent = z.infer<typeof inboxEventSchema>;
@@ -76,6 +79,8 @@ const WAKES: Record<InboxEvent["kind"], boolean> = {
   pr: true,
   // why: only the regional manager can plan the issue again.
   "returned-to-todo": true,
+  // why: only the regional manager starts its agent.
+  unblocked: true,
   "verification-toggled": true,
   "memory-edited": true,
   reminder: true,

@@ -1,6 +1,6 @@
-// Where an issue stands, why, and whether it waits on the user: derived from its stored plan and
-// the facts beside it, never stored. Pure, so the board, crew_catch_up, issue_read, the rail badge
-// and the PR watch share one definition. The kind enters in one place: a done handoff walks its
+// Where an issue stands, why, whether it waits on the user, and what blocks it: derived from its
+// stored plan and the facts beside it, never stored. Pure, so the board, crew_catch_up, issue_read,
+// the rail badge, the PR watch and the unblocked announcements share one definition. The kind enters in one place: a done handoff walks its
 // kind's stages (walk); everything that reads an IssueStatus never sees a kind.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
@@ -12,6 +12,7 @@ import { NOT_CLEAN } from "../verdict/checkout.ts";
 import { allPassed, ciVerdictOf, failedCheckout, mayHaveReachedAgent, outcome, type Verdict } from "../verdict/verdict.ts";
 import type { Issue } from "./issue.ts";
 import { PIPELINES, type Kind, type Stage } from "./kind.ts";
+import { blockedBy, isClosed, statusIn, type Related } from "./relations.ts";
 
 export const issueStatusSchema = z.enum(["backlog", "todo", "in-progress", "verifying", "in-review", "done", "canceled"]);
 export type IssueStatus = z.infer<typeof issueStatusSchema>;
@@ -58,19 +59,32 @@ export type IssueView = {
   /** The check whose verdict places it (the board's verdict), or null. */
   placing: Check | null;
   pr: PrSnapshot | null;
+  /** The open issues it depends on, each with its status; none once it is closed itself. Derived from the other views, never stored. */
+  blockedBy: Related[];
 };
+
+/** A view before its dependencies are read: where its own facts place it. */
+type Placed = Omit<IssueView, "blockedBy">;
 
 type Placing = Pick<IssueView, "status" | "headline" | "needsYou">;
 
-/** Every issue of one regional manager, viewed. */
-export const issueViews = (all: readonly IssueFacts[]): IssueView[] => all.map(issueView);
+/**
+ * Every issue of one regional manager, viewed: each placed by its own facts, then blocked by the
+ * statuses so placed. why from the same views: what blocks an issue can never disagree with the
+ * status shown for its dependency.
+ */
+export function issueViews(all: readonly IssueFacts[]): IssueView[] {
+  const placed = all.map(issueView);
+  const statuses = new Map(placed.map(({ issue, status }) => [issue.id, status]));
+  return placed.map((view) => ({ ...view, blockedBy: isClosed(view.status) ? [] : blockedBy(view.issue, null, (id) => statusIn(statuses, id)) }));
+}
 
 const ASKED = "Waiting on your answer to its decision";
 
 /** How the manager's two closing acts place an issue. */
 const CLOSED = { canceled: { status: "canceled", headline: "Canceled" }, accepted: { status: "done", headline: "Accepted" } } as const;
 
-function issueView({ issue, holder, ended, pr, openDecision }: IssueFacts): IssueView {
+function issueView({ issue, holder, ended, pr, openDecision }: IssueFacts): Placed {
   const base = { issue, holder: holder?.agent ?? null, pr, placing: null };
   const final = finalOf(issue, pr);
   if (final !== null) return { ...base, ...final, needsYou: null };

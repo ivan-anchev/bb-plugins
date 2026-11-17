@@ -7,7 +7,7 @@ import type { IssueId } from "../../../model/issue/issue.ts";
 import type { Check } from "../../../model/verdict/check.ts";
 import type { CheckoutRead } from "../../../model/verdict/checkout.ts";
 import { openStore, type Store } from "../store.ts";
-import { EXECUTION, failWrites, freshStore, MANAGER, newIssue, startAgent } from "../test-store.ts";
+import { EXECUTION, failWrites, filedIssue, freshStore, MANAGER, newIssue, startAgent } from "../test-store.ts";
 
 const SHA = "a".repeat(40);
 const CLEAN: CheckoutRead = { kind: "read", checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 } };
@@ -20,7 +20,7 @@ function handoff(issueId: IssueId, agentId: AgentId, status: "done" | "blocked",
 
 function withAgent() {
   const { db, storage, store } = freshStore();
-  const issue = store.insertIssue(MANAGER, newIssue({ doneCriteria: ["npm test passes", "npm run lint passes"], verifier: EXECUTION }), 2_000);
+  const issue = filedIssue(store, MANAGER, newIssue({ doneCriteria: ["npm test passes", "npm run lint passes"], verifier: EXECUTION }), 2_000);
   return { db, storage, store, issue, agentId: startAgent(store, issue.id, "agent-1") };
 }
 

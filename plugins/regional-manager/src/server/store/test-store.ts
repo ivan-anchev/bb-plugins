@@ -3,8 +3,8 @@
 import type Database from "better-sqlite3";
 import { memoryStorage } from "../memory-storage.ts";
 import type { AgentId } from "../../model/agent.ts";
-import type { IssueId } from "../../model/issue/issue.ts";
-import { coordinatorIdSchema } from "../../model/role.ts";
+import type { Issue, IssueId } from "../../model/issue/issue.ts";
+import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
 import { openStore, type Store } from "./store.ts";
 import type { NewIssue } from "./issue/issues-store.ts";
 
@@ -31,8 +31,16 @@ export const newIssue = (over: Partial<NewIssue> = {}): NewIssue => ({
   doneCriteria: ["npm test passes"],
   verifier: null,
   rest: "todo",
+  dependsOn: [],
   ...over,
 });
+
+/** Files the issue, as the store does, failing the test if it is refused. */
+export function filedIssue(store: Store, coordinatorId: CoordinatorId, issue: NewIssue, at: number): Issue {
+  const filed = store.insertIssue(coordinatorId, issue, at);
+  if ("refused" in filed) throw new Error(filed.refused);
+  return filed.issue;
+}
 
 /** An agent started on the issue, its thread bound as `thr_<ticket>`. */
 export function startAgent(store: Store, issueId: IssueId, ticket: string, coordinatorId = MANAGER): AgentId {

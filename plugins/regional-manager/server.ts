@@ -41,7 +41,7 @@ export default function plugin(host: BbPluginApi): void {
   const inbox = createInbox({ bb, store, memory, onChange: refreshBoard });
   const turns = issueTurns(instance.signal);
   const agents = createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts: placementFactsReader(bb, store), onChange: refreshBoard, onRemoved: refreshCoordinators });
-  const issues = createIssues({ bb, store, onChange: refreshBoard });
+  const issues = createIssues({ bb, store, inbox, onChange: refreshBoard });
   const verify = createVerify({ bb, store, spawner, inbox, turns });
 
   registerRoles(bb, store);
@@ -51,9 +51,9 @@ export default function plugin(host: BbPluginApi): void {
   registerHandoffTool(bb, { store, verify });
   registerVerdictTool(bb, { store, verify });
   forwardThreadEvents(bb, { store, agents, refreshBoard });
-  watchAgentThreads({ bb, store, inbox });
+  watchAgentThreads({ bb, store, inbox, issues });
   watchOwnTree({ bb, store, inbox });
-  const prWatch = createPrWatch({ bb, store, inbox, gh: runGh });
+  const prWatch = createPrWatch({ bb, store, inbox, issues, gh: runGh });
   bb.background.schedule("watch", "* * * * *", async () => {
     // why each caught: a pass that can't read bb or GitHub must not keep the next from running, nor the doorbells from ringing.
     // why the agents first: they remove a regional manager bb deleted before any later pass could ring it.

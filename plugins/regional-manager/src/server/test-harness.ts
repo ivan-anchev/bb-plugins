@@ -547,7 +547,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const inbox = createInbox({ bb, store, memory, onChange: refreshBoard });
     const turns = turnWaitMs === null ? issueTurns(instance.signal) : issueTurns(instance.signal, turnWaitMs);
     const agents = createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts: placementFactsReader(bb, store), onChange: refreshBoard, onRemoved: refreshCoordinators });
-    const issues = createIssues({ bb, store, onChange: refreshBoard });
+    const issues = createIssues({ bb, store, inbox, onChange: refreshBoard });
     const verify = createVerify({ bb, store, spawner, inbox, turns });
     registerRoles(bb, store);
     registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
@@ -556,9 +556,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     registerHandoffTool(bb, { store, verify });
     registerVerdictTool(bb, { store, verify });
     forwardThreadEvents(bb, { store, agents, refreshBoard });
-    watchAgentThreads({ bb, store, inbox });
+    watchAgentThreads({ bb, store, inbox, issues });
     watchOwnTree({ bb, store, inbox });
-    const prWatch = createPrWatch({ bb, store, inbox, gh });
+    const prWatch = createPrWatch({ bb, store, inbox, issues, gh });
     return { spawner, inbox, verify, agents, prWatch, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }) } };
   }
   let plugin = wire();
