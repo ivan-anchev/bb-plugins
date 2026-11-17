@@ -194,8 +194,9 @@ verdict) stays one.
   instead when a sentence would set it right: a handover costs a new thread
   that reads everything again.
 - **What happens**: your messages and its verifiers' findings still queued
-  for the agent holding the issue are taken back (the result quotes yours:
-  it never got them); then every thread the plugin started on the issue that
+  for any of the issue's agents, the holder or one you stopped, are taken
+  back (the result quotes yours, naming the agent: it never got them); then
+  every thread the plugin started on the issue that
   bb reports running, the holder, a verifier, an earlier agent, is stopped,
   and the holder ends as replaced. A verifier's verdict still to come is
   dropped. A verdict that passed
@@ -229,12 +230,16 @@ verdict) stays one.
   message to an agent a handover replaced meanwhile does nothing. One waits
   for bb as long as bb takes. A call that waited about 30 seconds behind it is
   refused: "an earlier operation on i1 hasn't finished yet, so nothing
-  changed". Call it again shortly.
+  changed". Call it again shortly. This orders the plugin's calls, not the
+  threads they start: an agent and its own verifier run together for a
+  moment as it hands off and as the verdict comes back, and your message
+  reaches an agent while its verifier checks.
 - **Refusals**: nothing is stopped when `agent_start` is refused, unless the
   refusal says what was: the issue changed while its threads stopped (it
   merged), or bb doesn't confirm one of them stopped (the holder still holds
-  the issue). A message queued for the holder that can't be taken back, one
-  the user queued included, refuses it before anything stops, naming it:
+  the issue). A message queued for any of the issue's agents that can't be
+  taken back, one the user queued included, refuses it before anything
+  stops, naming it and the agent:
   once bb sends or deletes it, call again. A handover
   that continues takes no `placement`, and one whose environment bb removed
   (a sandbox reaped or cleaned up) can't continue: both are refused, offering

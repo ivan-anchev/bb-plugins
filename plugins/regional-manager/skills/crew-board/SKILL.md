@@ -198,8 +198,9 @@ verdict.
   thread keeps its environment alive, since bb destroys a sandbox within
   seconds, and retires a worktree a few minutes later, once no live thread is
   left in it. First the manager's messages and the verifiers' findings still
-  queued for it are taken back, each confirmed gone by reading bb's queue
-  again; the result quotes the manager's, which the holder never got. One
+  queued for any of the issue's agents, the holder or one the manager
+  stopped, are taken back, each confirmed gone by reading bb's queue again;
+  the result quotes the manager's, naming the agent that never got each. One
   that can't be taken back, or that the user queued, refuses the start. Then
   every thread the plugin started on the issue that bb reports running (the
   holder, a verifier, an earlier agent) is stopped, never archived; a late
@@ -726,7 +727,10 @@ and the Memory page read the new text on their next read.
   committed one isn't seen, and nothing is blocked or reverted.
 - Reminders take no cron expressions and nothing finer than a minute.
 - The plugin never merges, approves or comments on a pull request.
-- An issue has one agent at a time.
+- An issue has one agent at a time, but an agent and its own verifier run
+  together for a moment: the verifier starts as the agent hands off, and a
+  failed verdict's findings reach the agent as the verifier returns it. A
+  message from the manager reaches an agent while its verifier checks.
 - A handover continues only in the previous agent's environment, or starts
   clean: it can't yet move the work to a new environment, as after bb
   removed a sandbox.
