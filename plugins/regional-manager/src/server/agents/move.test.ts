@@ -46,7 +46,7 @@ test("criterion 1: worktree to worktree: a1's committed work moves to a fresh wo
 
   const result = textOf(await call({ placement: WORKTREE }));
   const next = threadIn(result);
-  assert.match(result, new RegExp(`^Stopped a1 and started a2 on i1 as @thread:${next} in a new worktree, on a new branch cut from a1's \`${branch}\`, on claude-code opus \\(high\\), your own provider, model and reasoning level\\. It has a1's commits, and nothing a1 left uncommitted\\. Its first message`));
+  assert.match(result, new RegExp(`^Stopped a1 and started a2 on i1 as @thread:${next} in a new worktree, on a new branch cut from a1's \`${branch}\`, on claude-code opus \\(high\\), your own provider, model and reasoning level\\. It gets a1's commits, and nothing a1 left uncommitted; if bb can't cut that branch, its thread fails and you are woken\\. Its first message`));
   assert.deepEqual([kit.thread(agentThreadId).status, kit.thread(agentThreadId).archivedAt, agent(a1).ended?.how], ["idle", null, "replaced"], "a1 stopped, never archived");
   assert.deepEqual(kit.thread(next).spawnedWith.environment, { type: "host", hostId: "host_1", workspace: { type: "managed-worktree", baseBranch: { kind: "named", name: branch } } });
   assert.equal(headOf(next), COMMITTED, "git log -1 in a2's worktree is a1's tip");
@@ -175,7 +175,7 @@ test("criterion 5 (sandbox, harness): worktree to sandbox cuts from origin at a1
   pushAndOpen();
   const result = textOf(await call({ placement: SANDBOX, execution: { providerId: "codex", model: "gpt-default" } }));
   const next = threadIn(result);
-  assert.match(result, new RegExp(`in a new boat-sandbox environment, on a new branch cut from a1's \`${branch}\` \\(pushed at 1111111\\), on codex gpt-default \\(low\\)\\. It has a1's commits, and nothing a1 left uncommitted\\. a1's PR #44 stays on its branch; a2 opens its own\\.`));
+  assert.match(result, new RegExp(`in a new boat-sandbox environment, on a new branch cut from a1's \`${branch}\` \\(pushed at 1111111\\), on codex gpt-default \\(low\\)\\. It gets a1's commits, and nothing a1 left uncommitted; if bb can't cut that branch, its thread fails and you are woken\\. a1's PR #44 stays on its branch; a2 opens its own\\.`));
   assert.deepEqual(kit.thread(next).spawnedWith.environment, {
     type: "provider",
     environmentProviderId: "boat-sandbox",

@@ -74,7 +74,8 @@ export function startText(issueId: Issue["id"], outcome: Exclude<StartOutcome, {
           return `${started} ${joinedText(carried)}, ${runs}. It continues ${carried.from}'s work there: its commits, its uncommitted files and its pull request are ${agentId}'s now. ${earlier} ${ends}`;
         case "cut": {
           const pr = carried.pr === null ? "" : ` ${carried.from}'s PR #${carried.pr} stays on its branch; ${agentId} opens its own.`;
-          return `${started} ${cutText(carried)}, ${runs}. It has ${carried.from}'s commits, and nothing ${carried.from} left uncommitted.${pr} ${earlier} ${ends}`;
+          // why "gets", and the failure: bb cuts the branch after it answers the spawn, and a base it can't resolve fails the thread then (bb-facts P2a).
+          return `${started} ${cutText(carried)}, ${runs}. It gets ${carried.from}'s commits, and nothing ${carried.from} left uncommitted; if bb can't cut that branch, its thread fails and you are woken.${pr} ${earlier} ${ends}`;
         }
         default:
           return carried satisfies never;
