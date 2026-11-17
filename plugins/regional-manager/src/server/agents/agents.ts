@@ -218,9 +218,10 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
 
   /**
    * The previous agent, and for a move what it decides on, read once: its live environment through
-   * bb's git plugin (a suspended sandbox's read fails without waking it, SH5), and, for a cut through
-   * origin, its branch's pull request at the head it left. A continue reads neither: the spawn wakes
-   * a sleeping sandbox, and the new agent inherits whatever is there. null: a clean start.
+   * bb's git plugin, the branch checked out there and its head together (a suspended sandbox's read
+   * fails without waking it, SH5), and, for a cut through origin, that branch's pull request at that
+   * head. A continue reads neither: the spawn wakes a sleeping sandbox, and the new agent inherits
+   * whatever is there. null: a clean start.
    */
   async function previousFor(coordinatorId: CoordinatorId, issueId: IssueId, { kind, from, placement }: Asked): Promise<Previous | null> {
     if (startsClean(kind, from)) return null;
@@ -327,8 +328,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     const quieted = await quiet(coordinatorId, issueId, holder);
     if ("refused" in quieted) return quieted;
     // why judge a move again: what the previous agent's environment held was read before its turn
-    // was stopped, and it may have committed, pushed or left files since. The base is a branch name,
-    // so a cut that still holds is the same cut.
+    // was stopped, and it may have committed, pushed, switched branch or left files since.
     const spot = decided.spot.base.kind === "cut" ? await spotOf(coordinatorId, issueId, decided.asked) : decided.spot;
     if ("refused" in spot) return { refused: `${quieted.did}${spot.refused}` };
     const turnSeq = holder === null || holder.threadId === null ? null : await latestTurnSeq(bb, holder.threadId);

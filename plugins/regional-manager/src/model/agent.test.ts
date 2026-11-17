@@ -70,8 +70,8 @@ const HEAD_D = "d".repeat(40);
 const sandbox: Placement = sandboxAgent.placement;
 const worktree: Placement = { kind: "worktree" };
 const worktreeAgent: Agent = { ...sandboxAgent, placement: worktree, checkout: { environmentId: "env_wt", branch: "bb/a3", head: HEAD_C } };
-/** bb's git plugin's read of a live environment: its head, and its changed files as `git status --short` lists them. */
-const readAt = (headSha: string, changedFiles: string[] = []): CheckoutRead => ({ kind: "read", checkout: { headSha, changedFiles, changedFileCount: changedFiles.length } });
+/** bb's git plugin's read of a live environment: its head, its changed files as `git status --short` lists them, and the branch checked out (null: detached). */
+const readAt = (headSha: string, changedFiles: string[] = [], branch: string | null = "bb/a3"): CheckoutRead => ({ kind: "read", branch, checkout: { headSha, changedFiles, changedFileCount: changedFiles.length } });
 const clean = readAt(HEAD_C);
 const previous: Previous = { agent: sandboxAgent, environmentId: "env_sbx", branch: "bb/a3", now: null, pushed: null };
 const prAt = (headSha: string): PrSnapshot => ({ number: 44, url: "https://github.com/acme/webhooks/pull/44", state: "open", draft: false, review: "none", ci: "pass", headSha, failedChecks: [] });
@@ -104,15 +104,26 @@ function cutOf(handover: Handover | { refused: string }) {
   return { base: handover.base, environment: environmentOf(handover.placement, "host_1", refOf(handover.base)) };
 }
 
-// cutRef's rows, in its order (issue 06): no branch; a provider that takes no branch; a live
-// environment that can't be read or holds uncommitted files; worktree to worktree from the local
-// branch; else origin, once a pull request shows the head pushed.
+// cutRef's rows, in its order (issue 06): a provider that takes no branch; a gone environment with no
+// branch on record; a live environment that can't be read, has no branch checked out or holds
+// uncommitted files; worktree to worktree from the local branch; else origin, once a pull request
+// shows the head pushed.
 
-test("cut 1: an agent with no branch on record can't be moved: refused, offering a clean start, and the continue while its environment lives", () => {
+test("cut 1: a removed environment with no branch on record can't be moved: refused, offering a clean start; a live one moves from the branch it has checked out", () => {
   const gone = refusal(handoverOf("build", { from: "previous", placement: null }, { ...previous, environmentId: null, branch: null }));
   assert.equal(gone, 'a3 has no branch on record, so a new environment has nothing to start from: start clean with from: "default", which starts from the default branch with every earlier handoff and verdict in the new agent\'s first message.');
-  const alive = refusal(handoverOf("build", { from: "previous", placement: worktree }, { ...previous, branch: null, now: clean }));
-  assert.match(alive, /nothing to start from: continue in its environment \(leave out placement\), or start clean with from: "default"/);
+  const alive = cutOf(handoverOf("build", { from: "previous", placement: worktree }, { agent: worktreeAgent, environmentId: "env_wt", branch: null, now: clean, pushed: null }));
+  assert.deepEqual(alive.base, { kind: "cut", from: "a3", branch: "bb/a3", pushed: null });
+});
+
+test("cut 1: a live environment's branch and head both come from the read: another branch checked out is the one cut, and a detached HEAD is refused, offering the continue", () => {
+  const switched = readAt(HEAD_D, [], "bb/a3-retry");
+  const local = cutOf(handoverOf("build", { from: "previous", placement: worktree }, { agent: worktreeAgent, environmentId: "env_wt", branch: "bb/a3", now: switched, pushed: null }));
+  assert.deepEqual(local.base, { kind: "cut", from: "a3", branch: "bb/a3-retry", pushed: null });
+  assert.deepEqual(cutPlan({ ...previous, now: switched }, worktree), { prove: { branch: "bb/a3-retry", head: HEAD_D } }, "through origin, the proof is asked of the branch checked out, at its head");
+
+  const detached = refusal(handoverOf("build", { from: "previous", placement: worktree }, { ...previous, now: readAt(HEAD_D, [], null), pushed: { kind: "read", pr: prAt(HEAD_D) } }));
+  assert.equal(detached, "a3's environment has no branch checked out (HEAD is detached at ddddddd), so a new environment has none to start from. Continue in it (leave out placement), or ask a3 to check out a branch with its commits, then call again.");
 });
 
 test("cut 2: a provider that takes no branch can't carry the work: refused, offering a clean start", () => {

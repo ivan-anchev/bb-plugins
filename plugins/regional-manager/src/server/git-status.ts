@@ -80,11 +80,11 @@ export async function gitStatusOf(bb: GitStatusBb, environmentId: string, signal
 
 const unread = (reason: string): GitStatus => ({ kind: "unread", reason });
 
-/** The checkout a read shows: its commit and changed files, or why it names none. */
+/** The checkout a read shows: its branch, commit and changed files, or why it names no commit. */
 export function checkoutReadOf(status: GitStatus): CheckoutRead {
   switch (status.kind) {
     case "read":
-      return status.headSha === null ? { kind: "unread", reason: "it named no commit checked out" } : { kind: "read", checkout: checkoutOf(status.headSha, status.changedFiles, status.changedFileCount) };
+      return status.headSha === null ? { kind: "unread", reason: "it named no commit checked out" } : { kind: "read", branch: status.branch, checkout: checkoutOf(status.headSha, status.changedFiles, status.changedFileCount) };
     case "not-git":
       return { kind: "unread", reason: "the environment is not a git repository" };
     case "unread":

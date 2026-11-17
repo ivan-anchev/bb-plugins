@@ -22,7 +22,7 @@ test("another commit and changed files are each a problem, in bb's words, with t
 });
 
 test("a done handoff's first verdict: waived with verification off, Couldn't verify when bb couldn't read the checkout, else queued on it", () => {
-  const read = { kind: "read", checkout: checkoutOf(CLAIMED, [], 0) } as const;
+  const read = { kind: "read", branch: null, checkout: checkoutOf(CLAIMED, [], 0) } as const;
   const unread = { kind: "unread", reason: "The environment's machine is offline" } as const;
   assert.deepEqual(firstVerdict(false, unread), { state: "waived" }, "verification off reads nothing into it");
   assert.deepEqual(firstVerdict(true, read), { state: "queued", checkout: read.checkout });

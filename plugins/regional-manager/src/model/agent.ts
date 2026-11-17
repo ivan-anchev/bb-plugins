@@ -211,8 +211,9 @@ export type StartFrom = z.infer<typeof startFromSchema>;
 /**
  * The issue's previous agent as a handover finds it, before anything changes: its environment while
  * bb hasn't destroyed it (null: destroyed, or never known), and its branch (null: none on record).
- * For a move only, read once: `now`, its live environment as bb's git plugin read it, and `pushed`,
- * its branch's pull request as GitHub had it, when the cut goes through origin (null: not read).
+ * For a move only, read once: `now`, its live environment as bb's git plugin read it, the branch
+ * checked out there with its head and changed files, and `pushed`, the cut's branch's pull request
+ * as GitHub had it, when the cut goes through origin (null: not read).
  */
 export type Previous = { agent: Agent; environmentId: string | null; branch: string | null; now: CheckoutRead | null; pushed: PrRead | null };
 
@@ -265,40 +266,58 @@ export function handoverOf(kind: Kind, request: HandoverRequest, previous: Previ
 export const moveTo = (named: Placement | null, { agent, environmentId }: Pick<Previous, "agent" | "environmentId">): Placement | null =>
   named ?? (environmentId === null ? agent.placement : null);
 
+/** The branch a move cuts from, and the head the previous agent left there (null: none known). */
+type Tip = { branch: string; head: string | null };
+
 /**
  * How a move of the previous agent's work to `to` gets its branch, from what the move read
  * (`pushed` aside): from the local branch, as a cut; once its pull request shows the head pushed
  * (`prove`: the branch, and the head to find there, null when none is known); or why it can't,
  * naming the fact behind it and a start that does work. Every refusal comes first, in this order.
  */
-export function cutPlan({ agent, environmentId, branch, now }: Omit<Previous, "pushed">, to: Placement): Cut | { prove: { branch: string; head: string | null } } | { refused: string } {
-  const alive = environmentId !== null;
-  const orContinue = alive ? "continue in its environment (leave out placement), or " : "";
-  if (branch === null) return { refused: `${agent.id} has no branch on record, so a new environment has nothing to start from: ${orContinue}${CLEAN}` };
+export function cutPlan(previous: Omit<Previous, "pushed">, to: Placement): Cut | { prove: Tip } | { refused: string } {
+  const { agent, environmentId } = previous;
+  const orContinue = environmentId !== null ? "continue in its environment (leave out placement), or " : "";
   if (to.kind === "provider" && to.inputs.kind !== "new-branch") return { refused: `${to.environmentProviderId} takes no branch, so an agent there can't start from ${agent.id}'s: ${orContinue}${CLEAN}` };
-  // The graft, for a move only: a new environment gets committed work alone, so what a live one
-  // holds uncommitted would stay behind. A continue inherits it instead.
-  if (alive && now?.kind !== "read") {
-    const why = now === null ? "it wasn't read" : now.reason;
-    return { refused: `bb's git plugin can't read ${agent.id}'s environment now (${why}), so what ${agent.id} left uncommitted there is unknown. Continue in it instead (leave out placement; that wakes a sleeping sandbox), or call again once it can be read.` };
-  }
-  if (now?.kind === "read" && now.checkout.changedFileCount > 0) {
-    return { refused: `${agent.id} left ${uncommittedText(now.checkout)} in its environment, which a new environment wouldn't get. Continue in it (leave out placement), or ask ${agent.id} to commit them, then call again.` };
-  }
+  const tip = tipOf(previous);
+  if ("refused" in tip) return tip;
   // A worktree's branch is a ref of the project's repository on the regional manager's machine: a new
   // worktree there cuts from it while its agent lives, after it is archived, and after its worktree
   // is removed (bb-facts P1a, P1b(i), P1c).
-  if (to.kind === "worktree" && agent.placement.kind === "worktree") return { kind: "cut", from: agent.id, branch, pushed: null };
+  if (to.kind === "worktree" && agent.placement.kind === "worktree") return { kind: "cut", from: agent.id, branch: tip.branch, pushed: null };
   // Anything else reaches the branch only through origin: a sandbox clones from it (SH2), a worktree
   // fetches `origin/<branch>` (P2), and bb puts a sandbox's branch there only if something in the
   // sandbox pushes it (SH4).
-  return { prove: { branch, head: now?.kind === "read" ? now.checkout.headSha : agent.checkout.head } };
+  return { prove: tip };
+}
+
+/**
+ * Where the previous agent's work is, for a move: in a live environment, the branch checked out and
+ * its head, as the one read just made shows them together; once bb destroyed it, the branch on record
+ * and the head its last handoff recorded. Or why there is none to cut from. why the live branch: an
+ * agent may have checked out another, and committed there. The graft: a new environment gets
+ * committed work alone, so what a live one holds uncommitted would stay behind; a continue inherits it.
+ */
+function tipOf({ agent, environmentId, branch, now }: Omit<Previous, "pushed">): Tip | { refused: string } {
+  if (environmentId === null) {
+    return branch === null ? { refused: `${agent.id} has no branch on record, so a new environment has nothing to start from: ${CLEAN}` } : { branch, head: agent.checkout.head };
+  }
+  if (now?.kind !== "read") {
+    const why = now === null ? "it wasn't read" : now.reason;
+    return { refused: `bb's git plugin can't read ${agent.id}'s environment now (${why}), so what ${agent.id} left uncommitted there is unknown. Continue in it instead (leave out placement; that wakes a sleeping sandbox), or call again once it can be read.` };
+  }
+  if (now.branch === null) {
+    return { refused: `${agent.id}'s environment has no branch checked out (HEAD is detached at ${now.checkout.headSha.slice(0, 7)}), so a new environment has none to start from. Continue in it (leave out placement), or ask ${agent.id} to check out a branch with its commits, then call again.` };
+  }
+  if (now.checkout.changedFileCount > 0) {
+    return { refused: `${agent.id} left ${uncommittedText(now.checkout)} in its environment, which a new environment wouldn't get. Continue in it (leave out placement), or ask ${agent.id} to commit them, then call again.` };
+  }
+  return { branch: now.branch, head: now.checkout.headSha };
 }
 
 /**
  * The cut a move makes, or why it can't (pure; cutPlan's order): through origin only once the
- * branch's pull request has the head the agent left (its live head, else the one its last handoff
- * recorded), which proves it pushed (SH4).
+ * branch's pull request has the head the agent left (tipOf), which proves it pushed (SH4).
  */
 function cutRef(previous: Previous, to: Placement): Cut | { refused: string } {
   const plan = cutPlan(previous, to);

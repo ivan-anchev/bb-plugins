@@ -252,7 +252,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   const clock = { now: 1_000_000 };
   /**
    * bb's git plugin as the plugin reaches it, by environment id: the branch each has checked out
-   * (absent: none, as when detached), the commit (absent: HEAD), how many files changed in its
+   * (absent: none, as when detached; bb checks out the branch it made a new environment on), the
+   * commit (absent: HEAD), how many files changed in its
    * working tree (absent: none),
    * the ones outside git, the ones whose machine it can't read, and a row a newer bb--git answers
    * instead, in a shape the plugin's contract doesn't name; and the keys of every `status` call.
@@ -412,6 +413,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       }
       if (cut !== null) {
         git.heads.set(environmentId, cut.tip);
+        git.checkouts.set(environmentId, `bb/${id}`);
         if (args.environment?.type === "host") {
           kinds.worktrees.add(environmentId);
           repo.local.set(`bb/${id}`, cut.tip);
@@ -694,20 +696,20 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     environments: environmentRecords,
     /** The project's repository, locally and on origin; a test deletes a local branch, as a person can. */
     repo,
-    /** The agent commits in its thread's environment: its head moves, and a worktree's branch with it, as both are one ref. */
+    /** The agent commits in its thread's environment: its head moves, and a worktree's branch checked out with it, as both are one ref. */
     commit(threadId: string, sha: string): void {
-      const { environmentBranchName } = fakeThread(threadId);
       const environmentId = environmentOf(threadId);
+      const branch = git.checkouts.get(environmentId);
       git.heads.set(environmentId, sha);
-      if (kinds.worktrees.has(environmentId) && environmentBranchName !== null) repo.local.set(environmentBranchName, sha);
+      if (kinds.worktrees.has(environmentId) && branch !== undefined) repo.local.set(branch, sha);
     },
-    /** The agent pushes its thread's branch to origin, at its environment's head; returns the branch. */
+    /** The agent pushes the branch checked out in its thread's environment to origin, at its head; returns the branch. */
     push(threadId: string): string {
-      const { environmentBranchName } = fakeThread(threadId);
       const environmentId = environmentOf(threadId);
-      if (environmentBranchName === null) throw new Error(`${threadId} has no branch to push`);
-      repo.origin.set(environmentBranchName, git.heads.get(environmentId) ?? HEAD);
-      return environmentBranchName;
+      const branch = git.checkouts.get(environmentId);
+      if (branch === undefined) throw new Error(`${threadId} has no branch checked out to push`);
+      repo.origin.set(branch, git.heads.get(environmentId) ?? HEAD);
+      return branch;
     },
     /** How bb answers a read of a thread's turns; a test may hold it or make it fail. */
     turnEvents,

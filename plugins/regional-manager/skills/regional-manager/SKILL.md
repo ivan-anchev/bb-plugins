@@ -306,7 +306,8 @@ verdict) stays one.
 - **Moving the work**: name a `placement` to move it to a new environment,
   such as a sandbox for a heavy test run, or a worktree to work on your
   machine. The new agent gets its own new branch, cut from the previous
-  agent's branch: its commits come along, its uncommitted files don't, and
+  agent's branch (the one checked out in its environment now, or, once bb
+  removed that, the one on record): its commits come along, its uncommitted files don't, and
   its pull request stays on the old branch (the new agent opens its own).
   Worktree to worktree cuts from the local branch, even after the old thread
   is archived or its worktree removed. With a sandbox on either side, the
@@ -315,8 +316,9 @@ verdict) stays one.
   once that pull request's head is the commit the agent left (read fresh
   from GitHub when the one on record differs, so call right after the push).
   A move reads the previous environment first and is refused, with nothing
-  stopped, when it holds uncommitted files (named) or can't be read, as a
-  suspended sandbox can't: continue in it instead, or have the agent commit.
+  stopped, when it holds uncommitted files (named), has no branch checked
+  out (a detached HEAD), or can't be read, as a suspended sandbox can't:
+  continue in it instead, or have the agent commit or check out its branch.
   With no `placement`, a handover whose environment bb removed (a sandbox
   goes when its last thread is archived) moves too, to a new one like it,
   the same provider and machine inputs; a sandbox whose head never reached

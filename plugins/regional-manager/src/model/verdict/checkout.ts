@@ -20,8 +20,11 @@ export const checkoutSchema = z.object({
 });
 export type Checkout = z.infer<typeof checkoutSchema>;
 
-/** What a handoff's read of its environment came to: its checkout, or why bb's git plugin couldn't say. */
-export type CheckoutRead = { kind: "read"; checkout: Checkout } | { kind: "unread"; reason: string };
+/**
+ * What a read of an agent's environment came to: its checkout, with the branch checked out, both
+ * from that one read (null: none, as when HEAD is detached); or why bb's git plugin couldn't say.
+ */
+export type CheckoutRead = { kind: "read"; branch: string | null; checkout: Checkout } | { kind: "unread"; reason: string };
 
 /** The checkout from bb's read, its changed files listed up to the bound. */
 export function checkoutOf(headSha: string, changedFiles: readonly { path: string; status: string }[], changedFileCount: number): Checkout {

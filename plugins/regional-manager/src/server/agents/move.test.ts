@@ -26,10 +26,10 @@ async function holding(start: object = {}) {
   const environmentOf = (thread: string) => kit.environment(thread);
   /** The commit checked out in the thread's environment, as `git log -1` shows it. */
   const headOf = (thread: string) => kit.git.heads.get(environmentOf(thread)) ?? HEAD;
-  /** a1's branch is pushed at its head, and a pull request opened from it. */
-  const pushAndOpen = (number = 44) => {
-    const branch = kit.push(agentThreadId);
-    kit.github.prs.set(branch, { number, state: "OPEN", isDraft: false, reviewDecision: null, head: headOf(agentThreadId), rollup: "SUCCESS", failed: [] });
+  /** The branch checked out in the thread's environment (a1's by default) is pushed at its head, and a pull request opened from it. */
+  const pushAndOpen = (thread = agentThreadId) => {
+    const branch = kit.push(thread);
+    kit.github.prs.set(branch, { number: 44, state: "OPEN", isDraft: false, reviewDecision: null, head: headOf(thread), rollup: "SUCCESS", failed: [] });
     return branch;
   };
   const row = async () => {
@@ -74,6 +74,43 @@ test("criterion 1: the same move after a1's thread is archived, and after its wo
   const result = textOf(await removed.call());
   assert.match(result, /^Started a2 on i1 as @thread:\w+ in a new worktree, on a new branch cut from a1's `bb\/thr_2`/, "no placement named: its environment is gone, so the work moves to a new one like it");
   assert.equal(removed.headOf(threadIn(result)), COMMITTED);
+});
+
+test("criterion 1: a move cuts from the branch a1's environment has checked out, at its head, both from one read: a branch a1 switched to and committed on moves, a detached HEAD is refused", async () => {
+  const { kit, agentThreadId, call, agent, headOf, pushAndOpen, environmentOf, branch } = await holding();
+  const environment = environmentOf(agentThreadId);
+  kit.commit(agentThreadId, COMMITTED);
+  kit.git.checkouts.set(environment, "bb/retry-jitter"); // git switch -c bb/retry-jitter
+  kit.commit(agentThreadId, LATER); // bb's record still names a1's first branch, at COMMITTED
+
+  kit.git.checkouts.delete(environment); // git switch --detach
+  const spawned = kit.spawned();
+  const detached = await call({ placement: WORKTREE });
+  assert.ok(isRefusal(detached));
+  assert.equal(
+    textOf(detached),
+    "agent_start is refused: Nothing changed. a1's environment has no branch checked out (HEAD is detached at 2222222), so a new environment has none to start from. Continue in it (leave out placement), or ask a1 to check out a branch with its commits, then call again.",
+  );
+  assert.deepEqual([kit.spawned(), kit.thread(agentThreadId).status, agent(a1).ended], [spawned, "active", null], "nothing stopped or started");
+
+  kit.git.checkouts.set(environment, "bb/retry-jitter");
+  const local = threadIn(textOf(await call({ placement: WORKTREE })));
+  assert.equal(headOf(local), LATER, "a2 starts at the commit a1 made on the branch it switched to");
+  assert.deepEqual(agent(a2).base, { kind: "cut", from: "a1", branch: "bb/retry-jitter", pushed: null });
+  assert.equal(kit.repo.local.get(branch), COMMITTED, "not cut from the branch on record");
+
+  // Through origin, the proof is asked of the branch checked out, at its head.
+  kit.git.checkouts.set(environmentOf(local), "bb/retry-backoff");
+  kit.commit(local, COMMITTED);
+  assert.equal(pushAndOpen(local), "bb/retry-backoff");
+  const sandbox = threadIn(textOf(await call({ placement: SANDBOX })));
+  assert.deepEqual(kit.thread(sandbox).spawnedWith.environment, {
+    type: "provider",
+    environmentProviderId: "boat-sandbox",
+    inputs: { branch: { kind: "new", baseBranch: "origin/bb/retry-backoff" } },
+    machine: { type: "new", machineProviderId: "boat-sandbox", inputs: { preset: "small" } },
+  });
+  assert.equal(headOf(sandbox), COMMITTED);
 });
 
 test("criterion 2: a1 stopped with uncommitted files: the move is refused naming them, offering the continue; once a1 commits, it moves", async () => {

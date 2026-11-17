@@ -286,7 +286,9 @@ verdict.
   The pull request stays the issue's, with no second "opened" update, and its
   merge makes the issue Done.
 - **A placement named moves the work** to a new environment of it, on a new
-  branch cut from the previous agent's: its commits come along, its
+  branch cut from the previous agent's (the branch checked out in its
+  environment as the move reads it, or the one on record once bb removed
+  that environment): its commits come along, its
   uncommitted files don't, and its pull request stays on the old branch, which
   the result says. The same happens with no placement once bb removed the
   previous environment: a new worktree, or a new sandbox of the same provider
@@ -297,8 +299,9 @@ verdict.
   the agent left, read fresh from GitHub when the one on record differs. The
   plugin never pushes, commits or copies anything for an agent. A move reads
   the previous environment through bb's git plugin first, and again once the
-  holder has stopped, and is refused while it holds uncommitted files or
-  can't be read (a suspended sandbox, which the read doesn't wake).
+  holder has stopped, and is refused while it holds uncommitted files, has
+  no branch checked out, or can't be read (a suspended sandbox, which the
+  read doesn't wake).
 - **Its first message** adds "Where you work" (whose environment, which
   branch, the pull request to push to, and to run `git status` and `git log`
   before changing anything), or for a move "Your branch" (the branch it was
