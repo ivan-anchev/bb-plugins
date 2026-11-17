@@ -69,8 +69,8 @@ export function IssueBoard({ decisions, issues, decisionRow, detailOf }: IssueBo
 type IssueItemProps = { issue: Row; open: boolean; onToggle(): void; rowRef: RefCallback<HTMLElement>; detailOf: IssueBoardProps["detailOf"] };
 
 /**
- * An issue's row, and its detail under it while open, which starts with the title and headline whole:
- * the row fades both out at its edge.
+ * An issue's row, and its detail under it while open. The open row shows its title and headline whole,
+ * so the detail doesn't repeat them; why named by id alone: the row just before it speaks the title.
  */
 function IssueItem({ issue, open, onToggle, rowRef, detailOf }: IssueItemProps) {
   const detailId = useId();
@@ -78,11 +78,7 @@ function IssueItem({ issue, open, onToggle, rowRef, detailOf }: IssueItemProps) 
     <>
       <IssueRow ref={rowRef} issue={issue} open={open} detailId={detailId} onToggle={onToggle} />
       {open && (
-        <div id={detailId} role="region" aria-label={`${issue.id}: ${issue.title}`} className="rmi-detail">
-          <div className="rmi-detail-head">
-            <p className="rmi-detail-title">{issue.title}</p>
-            <p className="rmi-detail-headline">{issue.headline}</p>
-          </div>
+        <div id={detailId} role="region" aria-label={issue.id} className="rmi-detail">
           {detailOf(issue)}
         </div>
       )}

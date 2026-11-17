@@ -1,6 +1,6 @@
 // One issue on the board, Activity Sidebar's tall row (src/ui/row/row.tsx): its status glyph in the
 // 30 slot; its id, kind and title fading out; under them its headline. Pressing the row opens its
-// detail in place. Beside the words, outside the row's button so each is its own control: its pull
+// detail in place, and the row grows to show its title and headline whole, wrapping. Beside the words, outside the row's button so each is its own control: its pull
 // request with CI, and its agent's thread.
 import type { Ref } from "react";
 import type { IssueRow as Row } from "../../../contract.ts";
@@ -41,10 +41,10 @@ export function IssueRow({ ref, issue, open, detailId, onToggle }: IssueRowProps
           <span className="rmi-line">
             <span className="rmi-id">{issue.id}</span>
             <span className="rmi-kind">{PIPELINES[issue.kind].label}</span>
-            <FadingText text={issue.title} />
+            <RowText text={issue.title} whole={open} />
           </span>
           <span className="rmi-headline">
-            <FadingText text={issue.headline} />
+            <RowText text={issue.headline} whole={open} />
           </span>
         </span>
       </button>
@@ -61,6 +61,9 @@ export function IssueRow({ ref, issue, open, detailId, onToggle }: IssueRowProps
     </div>
   );
 }
+
+/** A row's title or headline: whole and wrapping while the row is open, else on one line, fading out at its edge. */
+const RowText = ({ text, whole }: { text: string; whole: boolean }) => (whole ? <span className="rmi-whole">{text}</span> : <FadingText text={text} />);
 
 /** Done and Canceled read quieter: nothing is left to do about them. */
 const QUIET: ReadonlySet<IssueStatus> = new Set(["done", "canceled"]);

@@ -172,7 +172,7 @@ test("a row opens in place to the issue read from the plugin, and only then: its
 
   const row = view.getByRole("button", { name: /\bi1 Build/ });
   fireEvent.click(row);
-  const detail = within(view.getByRole("region", { name: "i1: Title of i1" }));
+  const detail = within(view.getByRole("region", { name: "i1" }));
   await detail.findByText(DETAIL.description);
   assert.deepEqual(opened, [{ coordinatorId: COORDINATOR, issueId: "i1" }]);
   assert.deepEqual(
@@ -187,7 +187,7 @@ test("a row opens in place to the issue read from the plugin, and only then: its
   assert.ok(detail.getByText(/on the agent's own model/));
 
   fireEvent.click(row);
-  assert.equal(view.queryByRole("region", { name: "i1: Title of i1" }), null);
+  assert.equal(view.queryByRole("region", { name: "i1" }), null);
 });
 
 test("a board with no issues says so", async () => {

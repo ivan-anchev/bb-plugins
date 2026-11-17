@@ -119,7 +119,7 @@ test("a row opens its detail in place under it, reading only that issue, and clo
 
   fireEvent.click(todo);
   assert.equal(todo.getAttribute("aria-expanded"), "true");
-  const detail = view.getByRole("region", { name: "i5: Issue i5" });
+  const detail = view.getByRole("region", { name: "i5" });
   assert.equal(todo.getAttribute("aria-controls"), detail.id);
   assert.ok(todo.closest("li")?.contains(detail) === true, "the detail sits under its row");
   assert.ok(within(detail).getByText("Detail of i5"));
@@ -127,7 +127,7 @@ test("a row opens its detail in place under it, reading only that issue, and clo
 
   fireEvent.click(todo);
   assert.equal(todo.getAttribute("aria-expanded"), "false");
-  assert.equal(view.queryByRole("region", { name: "i5: Issue i5" }), null);
+  assert.equal(view.queryByRole("region", { name: "i5" }), null);
   assert.ok(document.activeElement === todo, "focus stays on the row");
 });
 
@@ -141,24 +141,34 @@ test("an open row whose issue moves to another lane stays open there, with focus
 
   const moved = lane(view, /^Verifying/).getByRole("button", { name: /\bi4 Build/ });
   assert.equal(moved.getAttribute("aria-expanded"), "true");
-  assert.ok(view.getByRole("region", { name: "i4: Issue i4" }));
+  assert.ok(view.getByRole("region", { name: "i4" }));
   assert.ok(document.activeElement === moved, "focus moved with the row");
 });
 
-test("an open row's detail shows its title and its headline whole, which the row fades out at its edge", () => {
+test("an open row shows its title and its headline whole, which it fades out at its edge while closed, and its detail doesn't repeat them", () => {
   const title = "Retry failed webhook deliveries with exponential backoff, capped at five attempts, and record each one";
   const headline = "Blocked: Needs a staging key for the webhook sandbox before the retry test can run against it";
+  using _ = narrowRows();
   const { view } = mount([issue("i9", { status: "in-progress", needsYou: headline, headline, title })]);
   const flagged = row(view, "i9");
-  assert.equal(view.queryByRole("region", { name: `i9: ${title}` }), null);
+  const fading = (text: string) => within(flagged).getByText(text).closest("[data-over]") !== null;
+  assert.deepEqual([fading(title), fading(headline)], [true, true], "closed, both run past the row and fade");
 
   fireEvent.click(flagged);
-  const detail = view.getByRole("region", { name: `i9: ${title}` });
-  assert.deepEqual(
-    [within(detail).getByText(title).tagName, within(detail).getByText(headline).tagName],
-    ["P", "P"],
-  );
+  assert.deepEqual([fading(title), fading(headline)], [false, false], "open, both show whole in the row");
+  const detail = view.getByRole("region", { name: "i9" });
+  assert.deepEqual([within(detail).queryByText(title), within(detail).queryByText(headline)], [null, null]);
+  assert.equal(flagged.getAttribute("aria-label")?.split(title).length, 2, "the row speaks the title once");
 });
+
+/** Rows 300px wide, their text 7px a character, while in use: jsdom lays nothing out, and a row fades only text that runs past it. */
+function narrowRows(): Disposable {
+  const width = (property: "scrollWidth" | "clientWidth", of: (el: HTMLElement) => number) =>
+    Object.defineProperty(HTMLElement.prototype, property, { configurable: true, get(this: HTMLElement) { return of(this); } });
+  width("scrollWidth", (el) => (el.textContent ?? "").length * 7);
+  width("clientWidth", () => 300);
+  return { [Symbol.dispose]: () => ["scrollWidth", "clientWidth"].forEach((property) => Reflect.deleteProperty(HTMLElement.prototype, property)) };
+}
 
 const moved = (id: string, fields: Partial<IssueRow>) => ISSUES.map((each) => (each.id === id ? { ...each, ...fields } : each));
 
