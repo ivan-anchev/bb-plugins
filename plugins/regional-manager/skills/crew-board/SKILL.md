@@ -296,7 +296,8 @@ verdict.
   bb keeps after the old worktree is archived or removed. With a sandbox on
   either side the branch goes through origin, so the previous agent must have
   pushed it: the move is allowed once its pull request's head is the commit
-  the agent left, read fresh from GitHub when the one on record differs. The
+  the agent left, read fresh from GitHub at the move, never from the board's
+  last read. The
   plugin never pushes, commits or copies anything for an agent. A move reads
   the previous environment through bb's git plugin first, and again once the
   holder has stopped, and is refused while it holds uncommitted files, has

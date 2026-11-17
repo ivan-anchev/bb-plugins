@@ -226,6 +226,40 @@ test("criterion 5 (sandbox, harness): worktree to sandbox cuts from origin at a1
   assert.equal(kit.store.agent(coordinatorId, a2)?.base.kind, "cut");
 });
 
+test("criterion 5 (sandbox, harness): a move through origin reads the pull request fresh, once for both its judgments: one forced back to an older head since the tick saved the newer is refused", async () => {
+  const { kit, agentThreadId, call, agent, pushAndOpen, branch } = await holding();
+  kit.commit(agentThreadId, COMMITTED);
+  pushAndOpen();
+  await kit.tick(); // the watch saves the pull request at COMMITTED
+  kit.repo.origin.set(branch, HEAD); // git push --force origin HEAD~1:<branch>; a1's checkout stays at COMMITTED
+  kit.github.prs.set(branch, { number: 44, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
+  const [runs, spawned] = [kit.github.runs.length, kit.spawned()];
+
+  const refused = await call({ placement: SANDBOX });
+  assert.ok(isRefusal(refused));
+  assert.match(textOf(refused), /^agent_start is refused: Nothing changed\. a1's branch `bb\/thr_2` isn't shown on origin at its head 1111111/);
+  assert.deepEqual([kit.github.runs.length, kit.spawned(), kit.thread(agentThreadId).status, agent(a1).ended], [runs + 1, spawned, "active", null]);
+
+  pushAndOpen(); // pushed again
+  const moved = threadIn(textOf(await call({ placement: SANDBOX })));
+  assert.equal(kit.github.runs.length, runs + 2, "one read for the start's two judgments, the head unchanged between them");
+  assert.equal(kit.git.heads.get(kit.environment(moved)), COMMITTED);
+});
+
+test("criterion 5 (sandbox, harness): a saved pull request at the head is no proof when GitHub can't be read now: refused with the read's reason, nothing stopped", async () => {
+  const { kit, agentThreadId, call, agent, pushAndOpen } = await holding();
+  kit.commit(agentThreadId, COMMITTED);
+  pushAndOpen();
+  await kit.tick(); // the watch saves the pull request at COMMITTED, the head a1 still has
+  kit.github.failure = Object.assign(new Error("Command failed: gh api graphql"), { code: 1, stdout: "", stderr: "unexpected EOF" });
+  const spawned = kit.spawned();
+
+  const refused = await call({ placement: SANDBOX });
+  assert.ok(isRefusal(refused));
+  assert.match(textOf(refused), /^agent_start is refused: Nothing changed\. Whether a1's branch `bb\/thr_2` is on origin at its head 1111111 can't be read now: couldn't reach GitHub/);
+  assert.deepEqual([kit.spawned(), kit.thread(agentThreadId).status, agent(a1).ended], [spawned, "active", null]);
+});
+
 test("criterion 6 (sandbox, harness): a branch pushed from inside a sandbox is saved by the PR watch at the pushed head within its next read", async () => {
   const { kit, coordinatorId, agentThreadId, pushAndOpen } = await holding({ placement: SANDBOX });
   kit.commit(agentThreadId, COMMITTED); // git commit in the sandbox

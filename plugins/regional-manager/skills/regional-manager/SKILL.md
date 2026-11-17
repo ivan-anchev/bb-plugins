@@ -314,7 +314,8 @@ verdict) stays one.
   branch travels only through origin: ask the agent to push and open a pull
   request first, as the plugin never pushes or commits for it; it is allowed
   once that pull request's head is the commit the agent left (read fresh
-  from GitHub when the one on record differs, so call right after the push).
+  from GitHub at the move, so call right after the push; a move refused
+  because GitHub can't be read says why).
   A move reads the previous environment first and is refused, with nothing
   stopped, when it holds uncommitted files (named), has no branch checked
   out (a detached HEAD), or can't be read, as a suspended sandbox can't:

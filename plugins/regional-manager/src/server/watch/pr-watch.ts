@@ -6,7 +6,7 @@
 // merges. It saves each successful read and records a `pr` event when one changed meaningfully; the
 // verify step's pass, after it in the same tick, settles the verdicts that wait for CI. A failed
 // read keeps what was saved and says why on the board. A handover that moves work through origin
-// also reads one branch at once (atHead), saved the same way.
+// also reads one branch at once (readNow), saved the same way.
 import { issueBranch, type Agent } from "../../model/agent.ts";
 import type { Issue } from "../../model/issue/issue.ts";
 import { shipsCode } from "../../model/issue/kind.ts";
@@ -167,7 +167,7 @@ export function createPrWatch({ bb, store, inbox, gh, now }: Deps) {
   }
 
   /** Reads the branch's pull request now and saves what the read found as the tick does, `agent` being the one last on it. */
-  async function readNow(coordinatorId: CoordinatorId, agent: Agent, branch: string): Promise<PrRead> {
+  async function readOne(coordinatorId: CoordinatorId, agent: Agent, branch: string): Promise<PrRead> {
     const repo = await repoOf(coordinatorId);
     if (repo === null) return { kind: "unread", reason: NOT_ON_GITHUB.reason };
     const handoffAtRead = latestHandoffOf(agent);
@@ -199,16 +199,13 @@ export function createPrWatch({ bb, store, inbox, gh, now }: Deps) {
     },
 
     /**
-     * The branch's pull request as GitHub has it at `head`, for a move that cuts from origin: the one
-     * saved when its head is that commit; else read now, one gh call, and saved. why not wait for the
-     * tick: a quiet repository is read every five minutes, and a regional manager told to push and
-     * call again must not be refused meanwhile. `agent`: the one last on the branch.
+     * The branch's pull request as GitHub has it now, for a move that cuts from origin: one gh call,
+     * after every read still out, saved as the tick saves. why never the saved one: it is what GitHub
+     * showed at an earlier minute, and the branch may have moved since, back included. why not wait
+     * for the tick: a quiet repository is read every five minutes, and a regional manager told to
+     * push and call again must not be refused meanwhile. `agent`: the one last on the branch.
      */
-    async atHead(coordinatorId: CoordinatorId, agent: Agent, branch: string, head: string): Promise<PrRead> {
-      const saved = store.prOfBranch(coordinatorId, branch)?.snapshot ?? null;
-      if (saved !== null && saved.headSha === head) return { kind: "read", pr: saved };
-      return serially(() => readNow(coordinatorId, agent, branch));
-    },
+    readNow: (coordinatorId: CoordinatorId, agent: Agent, branch: string): Promise<PrRead> => serially(() => readOne(coordinatorId, agent, branch)),
   };
 }
 

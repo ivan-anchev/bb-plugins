@@ -35,6 +35,7 @@ import type { Related } from "../../model/issue/relations.ts";
 import { keepsPlaceAfterEnd, type IssueView } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
+import type { PrRead } from "../../model/verdict/pr.ts";
 import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
 import { checkoutReadOf, gitStatusOf, type GitStatusBb } from "../git-status.ts";
 import { inheritedFrom, type Inherited, type ThreadExecutionBb } from "../execution/thread-execution.ts";
@@ -99,6 +100,9 @@ type Spot = { placement: Placement; environment: EnvironmentArgs; base: Base; ch
 /** What a start asks of its issue's agents: its kind, `from`, and the placement named, resolved (null: none named). */
 type Asked = { kind: Kind; from: StartFrom; placement: Placement | null };
 
+/** A start's proof that the branch is on origin at the head: its pull request, as GitHub has it (`agent`: the one last on the branch). */
+type Prove = (agent: Agent, branch: string, head: string) => Promise<PrRead>;
+
 /** A start decided: its issue, what it asked, where it spawns, what it runs on, and the issue's previous agent (null: none). */
 type Decided = { issueId: IssueId; asked: Asked; spot: Spot; runsOn: RunsOn; after: AgentId | null };
 
@@ -153,7 +157,7 @@ type Deps = {
   inbox: Pick<Inbox, "endAgent">;
   memory: MemoryRoot;
   turns: IssueTurns;
-  prs: Pick<PrWatch, "atHead">;
+  prs: Pick<PrWatch, "readNow">;
   /** What bb says about where the regional manager's agents can run, read when agent_start names a placement. */
   placementFacts(id: CoordinatorId): Promise<PlacementFacts>;
   /** Runs after anything that changes a regional manager's board. */
@@ -223,7 +227,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
    * head. A continue reads neither: the spawn wakes a sleeping sandbox, and the new agent inherits
    * whatever is there. null: a clean start.
    */
-  async function previousFor(coordinatorId: CoordinatorId, issueId: IssueId, { kind, from, placement }: Asked): Promise<Previous | null> {
+  async function previousFor(coordinatorId: CoordinatorId, issueId: IssueId, { kind, from, placement }: Asked, prove: Prove): Promise<Previous | null> {
     if (startsClean(kind, from)) return null;
     const found = await previousOf(coordinatorId, issueId);
     if (found === null) return null;
@@ -232,7 +236,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     const now = found.environmentId === null ? null : checkoutReadOf(await gitStatusOf(bb, found.environmentId));
     const plan = cutPlan({ ...found, now }, to);
     const proving = "prove" in plan ? plan.prove : null;
-    const pushed = proving === null || proving.head === null ? null : await prs.atHead(coordinatorId, found.agent, proving.branch, proving.head);
+    const pushed = proving === null || proving.head === null ? null : await prove(found.agent, proving.branch, proving.head);
     return { ...found, now, pushed };
   }
 
@@ -241,8 +245,8 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
    * one of the placement named, or its previous agent's, on a branch cut from its branch for a move;
    * else where the placement named says, a worktree on the regional manager's machine by default.
    */
-  async function spotOf(coordinatorId: CoordinatorId, issueId: IssueId, asked: Asked): Promise<Spot | { refused: string }> {
-    const handover = handoverOf(asked.kind, asked, await previousFor(coordinatorId, issueId, asked));
+  async function spotOf(coordinatorId: CoordinatorId, issueId: IssueId, asked: Asked, prove: Prove): Promise<Spot | { refused: string }> {
+    const handover = handoverOf(asked.kind, asked, await previousFor(coordinatorId, issueId, asked, prove));
     if ("refused" in handover) return handover;
     if (handover.kind === "join") return handover;
     const { placement, base, ref } = handover.kind === "cut" ? { ...handover, ref: refOf(handover.base) } : { placement: asked.placement ?? WORKTREE, base: { kind: "default" } as const, ref: null };
@@ -289,16 +293,32 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
    */
   function start(coordinatorId: CoordinatorId, request: StartRequest): Promise<StartOutcome | Busy> {
     return turns.run(coordinatorId, request.issueId, async () => {
-      const decided = await decide(coordinatorId, request);
+      const prove = provenOnce(coordinatorId);
+      const decided = await decide(coordinatorId, request, prove);
       if ("refused" in decided) return { kind: "refused", reason: decided.refused };
-      const taken = await takeOver(coordinatorId, decided);
+      const taken = await takeOver(coordinatorId, decided, prove);
       if ("refused" in taken) return { kind: "refused", reason: taken.refused };
       return spawn(coordinatorId, decided, taken);
     });
   }
 
+  /**
+   * A start's push proofs: the pull request read fresh from GitHub (readNow), and read again only
+   * when asked at another branch or head. why fresh: a saved read is what GitHub showed at an
+   * earlier minute, and the branch may have moved since, back included. why once per head: a move
+   * is judged twice, before and after the holder stops, and the second needs no new read while the
+   * head it compares is the same.
+   */
+  function provenOnce(coordinatorId: CoordinatorId): Prove {
+    let last: { branch: string; head: string; read: Promise<PrRead> } | null = null;
+    return (agent, branch, head) => {
+      if (last === null || last.branch !== branch || last.head !== head) last = { branch, head, read: prs.readNow(coordinatorId, agent, branch) };
+      return last.read;
+    };
+  }
+
   /** Step 1: where the agent starts and what it runs on, from what bb and the store have now; changes nothing. */
-  async function decide(coordinatorId: CoordinatorId, { issueId, from, execution, placement }: StartRequest): Promise<Decided | { refused: string }> {
+  async function decide(coordinatorId: CoordinatorId, { issueId, from, execution, placement }: StartRequest, prove: Prove): Promise<Decided | { refused: string }> {
     const filed = store.issue(coordinatorId, issueId);
     if (filed === null) return { refused: `You have no issue ${issueId}. crew_catch_up lists your issues.` };
     // why before anything is read: a parent never has an agent, so nothing its earlier agents left, their environments or pull requests, bears on it.
@@ -307,7 +327,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     const named = placement === undefined ? null : placementOf(placement, await placementFacts(coordinatorId));
     if (named !== null && "refused" in named) return named;
     const asked: Asked = { kind: filed.kind, from, placement: named };
-    const spot = await spotOf(coordinatorId, filed.id, asked);
+    const spot = await spotOf(coordinatorId, filed.id, asked, prove);
     if ("refused" in spot) return { refused: `Nothing changed. ${spot.refused}` };
     const runsOn = await executionFor(coordinatorOf(coordinatorId), execution, spot.environment, whereText(spot));
     if ("refused" in runsOn) return runsOn;
@@ -322,14 +342,14 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
    * quieting is, when a move's cut no longer holds, and when the issue can no longer start an agent
    * or changed hands meanwhile, saying what quieting did.
    */
-  async function takeOver(coordinatorId: CoordinatorId, decided: Decided): Promise<Taken | { refused: string }> {
+  async function takeOver(coordinatorId: CoordinatorId, decided: Decided, prove: Prove): Promise<Taken | { refused: string }> {
     const { issueId, runsOn } = decided;
     const holder = holderOf(coordinatorId, issueId);
     const quieted = await quiet(coordinatorId, issueId, holder);
     if ("refused" in quieted) return quieted;
     // why judge a move again: what the previous agent's environment held was read before its turn
     // was stopped, and it may have committed, pushed, switched branch or left files since.
-    const spot = decided.spot.base.kind === "cut" ? await spotOf(coordinatorId, issueId, decided.asked) : decided.spot;
+    const spot = decided.spot.base.kind === "cut" ? await spotOf(coordinatorId, issueId, decided.asked, prove) : decided.spot;
     if ("refused" in spot) return { refused: `${quieted.did}${spot.refused}` };
     const turnSeq = holder === null || holder.threadId === null ? null : await latestTurnSeq(bb, holder.threadId);
     // why decide again here, with no await from here to the write: while the issue quieted, a merge
