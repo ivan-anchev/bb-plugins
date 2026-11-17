@@ -307,8 +307,12 @@ verdict) stays one.
   such as a sandbox for a heavy test run, or a worktree to work on your
   machine. The new agent gets its own new branch, cut from the previous
   agent's branch (the one checked out in its environment now, or, once bb
-  removed that, the one on record): its commits come along, its uncommitted files don't, and
-  its pull request stays on the old branch (the new agent opens its own).
+  removed that, the one on record): its commits come along, its
+  uncommitted files don't, and its pull request stays on the old branch
+  (the new agent opens its own).
+  bb cuts the branch after the start answers, and a branch can move before
+  that, so the result names the commit the new agent expects; it checks for
+  it before changing anything, and hands off blocked if it is missing.
   Worktree to worktree cuts from the local branch, even after the old thread
   is archived or its worktree removed. With a sandbox on either side, the
   branch travels only through origin: ask the agent to push and open a pull

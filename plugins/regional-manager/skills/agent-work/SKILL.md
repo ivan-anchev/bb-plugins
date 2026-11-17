@@ -60,9 +60,13 @@ and nobody else does.
 
 When your first message has "Your branch", the regional manager moved an
 issue another agent held to a new environment, such as a sandbox or a
-worktree, and bb cut a new branch of yours from that agent's branch. Its
-commits are on your branch; files it left uncommitted are not.
+worktree, and bb cut a new branch of yours from that agent's branch. Files
+it left uncommitted are not on your branch. Its commits should be, but the
+branch could move before bb cut yours, so check before you rely on them.
 
+- Before you change anything, check that the commit "Your branch" names is
+  in your checkout, with the command it gives. If it isn't, change nothing:
+  hand off blocked, saying which commit is missing from your branch.
 - Look before you change anything: run `git log`, and read the earlier
   handoffs and verdicts, as above.
 - Work on your own branch. The earlier agent's pull request stays on its

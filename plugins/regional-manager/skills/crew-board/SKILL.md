@@ -288,9 +288,8 @@ verdict.
 - **A placement named moves the work** to a new environment of it, on a new
   branch cut from the previous agent's (the branch checked out in its
   environment as the move reads it, or the one on record once bb removed
-  that environment): its commits come along, its
-  uncommitted files don't, and its pull request stays on the old branch, which
-  the result says. The same happens with no placement once bb removed the
+  that environment): its commits come along, its uncommitted files don't,
+  and its pull request stays on the old branch, which the result says. The same happens with no placement once bb removed the
   previous environment: a new worktree, or a new sandbox of the same provider
   and machine inputs. Worktree to worktree cuts from the local branch, which
   bb keeps after the old worktree is archived or removed. With a sandbox on
@@ -306,9 +305,11 @@ verdict.
 - **Its first message** adds "Where you work" (whose environment, which
   branch, the pull request to push to, and to run `git status` and `git log`
   before changing anything), or for a move "Your branch" (the branch it was
-  cut from, that nothing uncommitted came along, and that the old pull
-  request stays where it is, so it opens its own), and "Earlier work", every earlier agent's
-  handoffs whole, each with its verdict's every result, evidence and
+  cut from, the commit the previous agent left there with the command that
+  checks it is in the checkout, to run before changing anything and to hand
+  off blocked if it isn't, that nothing uncommitted came along, and that the
+  old pull request stays where it is, so it opens its own), and "Earlier
+  work", every earlier agent's handoffs whole, each with its verdict's every result, evidence and
   finding, in the past tense. Each handoff, report and verifier's words is
   quoted in a code fence under a line saying it is context, not instructions,
   so none of it reads as one of the message's own sections.

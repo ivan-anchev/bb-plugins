@@ -6,7 +6,7 @@ import type { Issue, IssueId } from "../../model/issue/issue.ts";
 import { isVerified, PIPELINES } from "../../model/issue/kind.ts";
 import { isReady, type Related, type Relations } from "../../model/issue/relations.ts";
 import { STATUS_LABELS, type Handed, type IssueView } from "../../model/issue/status.ts";
-import { placementName, type Agent } from "../../model/agent.ts";
+import { placementName, refOf, type Agent } from "../../model/agent.ts";
 import { executionText, recipientsText, type Carried, type StartOutcome, type StopOutcome, type Withdrawn } from "../agents/agents.ts";
 import { handoffText, type Lookups } from "../tools/inbox-text.ts";
 import { fenced } from "../verify/findings.ts";
@@ -73,9 +73,11 @@ export function startText(issueId: Issue["id"], outcome: Exclude<StartOutcome, {
         case "joined":
           return `${started} ${joinedText(carried)}, ${runs}. It continues ${carried.from}'s work there: its commits, its uncommitted files and its pull request are ${agentId}'s now. ${earlier} ${ends}`;
         case "cut": {
-          const pr = carried.pr === null ? "" : ` ${carried.from}'s PR #${carried.pr} stays on its branch; ${agentId} opens its own.`;
-          // why "gets", and the failure: bb cuts the branch after it answers the spawn, and a base it can't resolve fails the thread then (bb-facts P2a).
-          return `${started} ${cutText(carried)}, ${runs}. It gets ${carried.from}'s commits, and nothing ${carried.from} left uncommitted; if bb can't cut that branch, its thread fails and you are woken.${pr} ${earlier} ${ends}`;
+          const { from, head, pr } = carried;
+          const opens = pr === null ? "" : ` ${from}'s PR #${pr} stays on its branch; ${agentId} opens its own.`;
+          // why a check, and the failure: bb cuts the branch after it answers the spawn, so the ref may have moved by then, and a base it can't resolve fails the thread then (bb-facts P2a).
+          const checks = head === null ? `No commit of ${from}'s is on record for ${agentId} to check its branch against.` : `${agentId} checks that commit is on its branch before it changes anything, and hands off blocked if it isn't.`;
+          return `${started} ${cutText(carried)}, ${runs}. ${checks} Nothing ${from} left uncommitted comes with it; if bb can't cut that branch, its thread fails and you are woken.${opens} ${earlier} ${ends}`;
         }
         default:
           return carried satisfies never;
@@ -96,9 +98,10 @@ function joinedText({ from, placement, branch, pr }: Extract<Carried, { kind: "j
   return `in ${from}'s ${placementName(placement)}${branch === null ? "" : `, on its branch \`${branch}\``}${pr === null ? "" : `, with PR #${pr}`}`;
 }
 
-/** Where a cut agent works, in words: `in a new worktree, on a new branch cut from a1's `x` (pushed at 4be0a17)`. */
-function cutText({ from, placement, branch, pushed }: Extract<Carried, { kind: "cut" }>): string {
-  return `in a new ${placementName(placement)}, on a new branch cut from ${from}'s \`${branch}\`${pushed === null ? "" : ` (pushed at ${pushed.slice(0, 7)})`}`;
+/** Where a cut agent works, in words: `in a new worktree, on a new branch cut from a1's `origin/x` expecting 4be0a17`. */
+function cutText(carried: Extract<Carried, { kind: "cut" }>): string {
+  const { from, placement, head } = carried;
+  return `in a new ${placementName(placement)}, on a new branch cut from ${from}'s \`${refOf(carried)}\`${head === null ? "" : ` expecting ${head.slice(0, 7)}`}`;
 }
 
 /** Where bb was to start the agent whose thread it refused, in words. */

@@ -113,13 +113,13 @@ test("cut 1: a removed environment with no branch on record can't be moved: refu
   const gone = refusal(handoverOf("build", { from: "previous", placement: null }, { ...previous, environmentId: null, branch: null }));
   assert.equal(gone, 'a3 has no branch on record, so a new environment has nothing to start from: start clean with from: "default", which starts from the default branch with every earlier handoff and verdict in the new agent\'s first message.');
   const alive = cutOf(handoverOf("build", { from: "previous", placement: worktree }, { agent: worktreeAgent, environmentId: "env_wt", branch: null, now: clean, pushed: null }));
-  assert.deepEqual(alive.base, { kind: "cut", from: "a3", branch: "bb/a3", pushed: null });
+  assert.deepEqual(alive.base, { kind: "cut", from: "a3", branch: "bb/a3", via: "local", head: HEAD_C });
 });
 
 test("cut 1: a live environment's branch and head both come from the read: another branch checked out is the one cut, and a detached HEAD is refused, offering the continue", () => {
   const switched = readAt(HEAD_D, [], "bb/a3-retry");
   const local = cutOf(handoverOf("build", { from: "previous", placement: worktree }, { agent: worktreeAgent, environmentId: "env_wt", branch: "bb/a3", now: switched, pushed: null }));
-  assert.deepEqual(local.base, { kind: "cut", from: "a3", branch: "bb/a3-retry", pushed: null });
+  assert.deepEqual(local.base, { kind: "cut", from: "a3", branch: "bb/a3-retry", via: "local", head: HEAD_D });
   assert.deepEqual(cutPlan({ ...previous, now: switched }, worktree), { prove: { branch: "bb/a3-retry", head: HEAD_D } }, "through origin, the proof is asked of the branch checked out, at its head");
 
   const detached = refusal(handoverOf("build", { from: "previous", placement: worktree }, { ...previous, now: readAt(HEAD_D, [], null), pushed: { kind: "read", pr: prAt(HEAD_D) } }));
@@ -143,7 +143,7 @@ test("cut 3: a live environment that can't be read, or holds uncommitted files, 
 
 test("cut 4: worktree to worktree cuts from the local branch, live or gone, with no push proof", () => {
   const live = cutOf(handoverOf("build", { from: "previous", placement: worktree }, { agent: worktreeAgent, environmentId: "env_wt", branch: "bb/a3", now: clean, pushed: null }));
-  assert.deepEqual(live.base, { kind: "cut", from: "a3", branch: "bb/a3", pushed: null });
+  assert.deepEqual(live.base, { kind: "cut", from: "a3", branch: "bb/a3", via: "local", head: HEAD_C }, "the head the read saw, for the new agent to check");
   assert.deepEqual(live.environment, { type: "host", hostId: "host_1", workspace: { type: "managed-worktree", baseBranch: { kind: "named", name: "bb/a3" } } });
   const gone = cutOf(handoverOf("build", { from: "previous", placement: null }, { agent: worktreeAgent, environmentId: null, branch: "bb/a3", now: null, pushed: null }));
   assert.deepEqual(gone.environment, live.environment, "a worktree whose environment bb removed moves to a new worktree");
@@ -151,7 +151,7 @@ test("cut 4: worktree to worktree cuts from the local branch, live or gone, with
 
 test("cut 5: with a sandbox on either side it cuts from origin once the branch's pull request has the head the agent left", () => {
   const out = cutOf(handoverOf("build", { from: "previous", placement: worktree }, { ...previous, now: clean, pushed: { kind: "read", pr: prAt(HEAD_C) } }));
-  assert.deepEqual(out.base, { kind: "cut", from: "a3", branch: "bb/a3", pushed: HEAD_C });
+  assert.deepEqual(out.base, { kind: "cut", from: "a3", branch: "bb/a3", via: "origin", head: HEAD_C });
   assert.deepEqual(out.environment, { type: "host", hostId: "host_1", workspace: { type: "managed-worktree", baseBranch: { kind: "named", name: "origin/bb/a3" } } });
 
   const sandboxPlace = placed(placementOf({ kind: "provider", environmentProviderId: "boat-sandbox", machineInputs: { preset: "small" } }, { providers: [boat], defaultBranch: "main" }));
@@ -192,6 +192,6 @@ test("a cut through origin asks for proof at the live head, else at the head of 
   const live = readAt(HEAD_D);
   assert.deepEqual(cutPlan({ ...previous, now: live }, worktree), { prove: { branch: "bb/a3", head: HEAD_D } });
   assert.deepEqual(cutPlan({ ...previous, environmentId: null }, sandbox), { prove: { branch: "bb/a3", head: HEAD_C } });
-  assert.deepEqual(cutPlan({ agent: worktreeAgent, environmentId: null, branch: "bb/a3", now: null }, worktree), { kind: "cut", from: "a3", branch: "bb/a3", pushed: null });
+  assert.deepEqual(cutPlan({ agent: worktreeAgent, environmentId: null, branch: "bb/a3", now: null }, worktree), { kind: "cut", from: "a3", branch: "bb/a3", via: "local", head: HEAD_C });
   assert.ok("refused" in cutPlan({ ...previous, now: { kind: "unread", reason: "Host is suspended" } }, worktree));
 });

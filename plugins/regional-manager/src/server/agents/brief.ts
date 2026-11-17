@@ -75,14 +75,16 @@ function criteriaSection(kind: Kind, criteria: readonly string[]): string | null
 const WHERE_TO_WORK: Record<Base["kind"], string> = {
   default: "Do it on your own branch.",
   joined: "Do it where an earlier agent left it: see Where you work.",
-  cut: "Do it on your own branch, which starts where an earlier agent's left off: see Your branch.",
+  cut: "Do it on your own branch, which bb cut from an earlier agent's: check it first, as Your branch says.",
 };
 
 /**
  * Where a joined agent works: the previous agent's environment, as it left it, uncommitted files
  * and half-done edits included (SH1), so it looks before it changes anything. Where a cut agent's
- * branch starts: the previous agent's commits, nothing uncommitted, and its pull request left on the
- * previous branch. null: it starts on its own new branch, which its opening line already says.
+ * branch starts: cut from the previous agent's, with nothing uncommitted, and its pull request left
+ * on the previous branch; and the commit it expects there, which it checks for before it changes
+ * anything, as bb cut the branch after the spawn and the ref may have moved by then. null: it starts
+ * on its own new branch, which its opening line already says.
  */
 function whereSection({ base, branch, pr }: StartingPoint): string | null {
   switch (base.kind) {
@@ -94,9 +96,13 @@ function whereSection({ base, branch, pr }: StartingPoint): string | null {
       return `## Where you work\n\nYou continue ${base.from}'s work in its environment, ${on}${pull}. ${base.from} no longer works there. Its commits are here, and so may be files it left uncommitted, half-done edits included. Run \`git status\` and \`git log\` before you change anything, and decide from what you find and the handoffs below what to keep.`;
     }
     case "cut": {
-      const at = base.pushed === null ? `\`${refOf(base)}\`` : `\`${refOf(base)}\`, which ${base.from} pushed at ${base.pushed.slice(0, 7)}`;
-      const pull = pr === null ? "Open a pull request of your own" : `${base.from}'s pull request #${pr} stays on \`${base.branch}\`: don't push to that branch, and open a pull request of your own`;
-      return `## Your branch\n\nYou work in a new environment, on a new branch of your own that bb cut from ${base.from}'s branch ${at}. ${base.from} no longer works on this issue. Its commits are on your branch; nothing it left uncommitted is. ${pull} when your work is ready. Run \`git log\` before you change anything, and decide from it and the handoffs below where to pick up.`;
+      const { from, head } = base;
+      const pull = pr === null ? "Open a pull request of your own" : `${from}'s pull request #${pr} stays on \`${base.branch}\`: don't push to that branch, and open a pull request of your own`;
+      const check =
+        head === null
+          ? `No commit of ${from}'s is on record to check your branch against: run \`git log\` before you change anything`
+          : `${from} left its work at commit \`${head}\`. Before you change anything, check that commit is in your checkout: run \`git merge-base --is-ancestor ${head} HEAD && echo present\`. If it doesn't print \`present\`, change nothing, and call agent_handoff with status blocked, saying commit ${head} is missing from your branch. Once it is there, run \`git log\``;
+      return `## Your branch\n\nYou work in a new environment, on a new branch of your own that bb cut from ${from}'s branch \`${refOf(base)}\`. ${from} no longer works on this issue, and nothing it left uncommitted is on your branch. ${check}, and decide from it and the handoffs below where to pick up. ${pull} when your work is ready.`;
     }
     default:
       return base satisfies never;

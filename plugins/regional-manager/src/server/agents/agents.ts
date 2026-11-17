@@ -119,12 +119,12 @@ type Taken = { issue: Issue; brief: string; blockedBy: Related[]; spot: Spot; ag
 /**
  * What a new agent carries over from the previous one, `from`: `joined`, its environment, made by
  * `placement`, on its branch; `cut`, a new environment of `placement` on a new branch cut from its
- * branch, at the head shown pushed (`pushed`; null: from the local branch). `pr`: the number of the
- * branch's pull request while open as last read (null: none known).
+ * branch, `via` origin or the local branch, expecting `head` there (null: none known). `pr`: the
+ * number of the branch's pull request while open as last read (null: none known).
  */
 export type Carried =
   | { kind: "joined"; from: AgentId; placement: Placement; branch: string | null; pr: number | null }
-  | { kind: "cut"; from: AgentId; placement: Placement; branch: string; pushed: string | null; pr: number | null };
+  | (Extract<Base, { kind: "cut" }> & { placement: Placement; pr: number | null });
 
 /**
  * Where a start stands in its issue's succession of agents: `after`, the issue's previous agent (null: the first);
@@ -467,7 +467,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
       case "joined":
         return { kind: "joined", from: base.from, placement, branch: checkout.branch, pr: openPr(checkout.branch) };
       case "cut":
-        return { kind: "cut", from: base.from, placement, branch: base.branch, pushed: base.pushed, pr: openPr(base.branch) };
+        return { ...base, placement, pr: openPr(base.branch) };
       default:
         return base satisfies never;
     }

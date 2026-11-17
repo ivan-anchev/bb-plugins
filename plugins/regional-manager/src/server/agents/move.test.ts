@@ -46,16 +46,19 @@ test("criterion 1: worktree to worktree: a1's committed work moves to a fresh wo
 
   const result = textOf(await call({ placement: WORKTREE }));
   const next = threadIn(result);
-  assert.match(result, new RegExp(`^Stopped a1 and started a2 on i1 as @thread:${next} in a new worktree, on a new branch cut from a1's \`${branch}\`, on claude-code opus \\(high\\), your own provider, model and reasoning level\\. It gets a1's commits, and nothing a1 left uncommitted; if bb can't cut that branch, its thread fails and you are woken\\. Its first message`));
+  assert.match(result, new RegExp(`^Stopped a1 and started a2 on i1 as @thread:${next} in a new worktree, on a new branch cut from a1's \`${branch}\` expecting 1111111, on claude-code opus \\(high\\), your own provider, model and reasoning level\\. a2 checks that commit is on its branch before it changes anything, and hands off blocked if it isn't\\. Nothing a1 left uncommitted comes with it; if bb can't cut that branch, its thread fails and you are woken\\. Its first message`));
   assert.deepEqual([kit.thread(agentThreadId).status, kit.thread(agentThreadId).archivedAt, agent(a1).ended?.how], ["idle", null, "replaced"], "a1 stopped, never archived");
   assert.deepEqual(kit.thread(next).spawnedWith.environment, { type: "host", hostId: "host_1", workspace: { type: "managed-worktree", baseBranch: { kind: "named", name: branch } } });
   assert.equal(headOf(next), COMMITTED, "git log -1 in a2's worktree is a1's tip");
   assert.notEqual(kit.thread(next).environmentBranchName, branch, "on a branch of its own");
-  assert.deepEqual(agent(a2).base, { kind: "cut", from: "a1", branch, pushed: null });
+  assert.deepEqual(agent(a2).base, { kind: "cut", from: "a1", branch, via: "local", head: COMMITTED });
   assert.equal(kit.github.runs.length, runs, "worktree to worktree needs no push proof");
   const message = kit.thread(next).spawnedWith.prompt ?? "";
-  assert.match(message, /Do it on your own branch, which starts where an earlier agent's left off: see Your branch\./);
-  assert.match(message, new RegExp(`## Your branch\\n\\nYou work in a new environment, on a new branch of your own that bb cut from a1's branch \`${branch}\`\\. a1 no longer works on this issue\\. Its commits are on your branch; nothing it left uncommitted is\\. Open a pull request of your own when your work is ready\\.`));
+  assert.match(message, /Do it on your own branch, which bb cut from an earlier agent's: check it first, as Your branch says\./);
+  assert.equal(
+    message.split("## Your branch\n\n")[1]?.split("\n\n")[0],
+    `You work in a new environment, on a new branch of your own that bb cut from a1's branch \`${branch}\`. a1 no longer works on this issue, and nothing it left uncommitted is on your branch. a1 left its work at commit \`${COMMITTED}\`. Before you change anything, check that commit is in your checkout: run \`git merge-base --is-ancestor ${COMMITTED} HEAD && echo present\`. If it doesn't print \`present\`, change nothing, and call agent_handoff with status blocked, saying commit ${COMMITTED} is missing from your branch. Once it is there, run \`git log\`, and decide from it and the handoffs below where to pick up. Open a pull request of your own when your work is ready.`,
+  );
 });
 
 test("criterion 1: the same move after a1's thread is archived, and after its worktree is removed, still cuts from its local branch", async () => {
@@ -96,7 +99,7 @@ test("criterion 1: a move cuts from the branch a1's environment has checked out,
   kit.git.checkouts.set(environment, "bb/retry-jitter");
   const local = threadIn(textOf(await call({ placement: WORKTREE })));
   assert.equal(headOf(local), LATER, "a2 starts at the commit a1 made on the branch it switched to");
-  assert.deepEqual(agent(a2).base, { kind: "cut", from: "a1", branch: "bb/retry-jitter", pushed: null });
+  assert.deepEqual(agent(a2).base, { kind: "cut", from: "a1", branch: "bb/retry-jitter", via: "local", head: LATER });
   assert.equal(kit.repo.local.get(branch), COMMITTED, "not cut from the branch on record");
 
   // Through origin, the proof is asked of the branch checked out, at its head.
@@ -212,7 +215,7 @@ test("criterion 5 (sandbox, harness): worktree to sandbox cuts from origin at a1
   pushAndOpen();
   const result = textOf(await call({ placement: SANDBOX, execution: { providerId: "codex", model: "gpt-default" } }));
   const next = threadIn(result);
-  assert.match(result, new RegExp(`in a new boat-sandbox environment, on a new branch cut from a1's \`${branch}\` \\(pushed at 1111111\\), on codex gpt-default \\(low\\)\\. It gets a1's commits, and nothing a1 left uncommitted; if bb can't cut that branch, its thread fails and you are woken\\. a1's PR #44 stays on its branch; a2 opens its own\\.`));
+  assert.match(result, new RegExp(`in a new boat-sandbox environment, on a new branch cut from a1's \`origin/${branch}\` expecting 1111111, on codex gpt-default \\(low\\)\\. a2 checks that commit is on its branch before it changes anything, and hands off blocked if it isn't\\. Nothing a1 left uncommitted comes with it; if bb can't cut that branch, its thread fails and you are woken\\. a1's PR #44 stays on its branch; a2 opens its own\\.`));
   assert.deepEqual(kit.thread(next).spawnedWith.environment, {
     type: "provider",
     environmentProviderId: "boat-sandbox",
@@ -222,7 +225,7 @@ test("criterion 5 (sandbox, harness): worktree to sandbox cuts from origin at a1
   assert.equal(headOf(next), COMMITTED, "the new sandbox's HEAD is a1's PR head");
   assert.notEqual(kit.thread(next).environmentBranchName, branch);
   assert.equal(kit.thread(next).providerId, "codex", "the execution named, checked against bb's primary machine");
-  assert.match(kit.thread(next).spawnedWith.prompt ?? "", new RegExp(`cut from a1's branch \`origin/${branch}\`, which a1 pushed at 1111111\\. [^\\n]* a1's pull request #44 stays on \`${branch}\`: don't push to that branch, and open a pull request of your own when your work is ready\\.`));
+  assert.match(kit.thread(next).spawnedWith.prompt ?? "", new RegExp(`cut from a1's branch \`origin/${branch}\`\\. [^\\n]* a1 left its work at commit \`${COMMITTED}\`\\. [^\\n]* a1's pull request #44 stays on \`${branch}\`: don't push to that branch, and open a pull request of your own when your work is ready\\.`));
   assert.equal(kit.store.agent(coordinatorId, a2)?.base.kind, "cut");
 });
 
@@ -258,6 +261,23 @@ test("criterion 5 (sandbox, harness): a saved pull request at the head is no pro
   assert.ok(isRefusal(refused));
   assert.match(textOf(refused), /^agent_start is refused: Nothing changed\. Whether a1's branch `bb\/thr_2` is on origin at its head 1111111 can't be read now: couldn't reach GitHub/);
   assert.deepEqual([kit.spawned(), kit.thread(agentThreadId).status, agent(a1).ended], [spawned, "active", null]);
+});
+
+test("criterion 5 (sandbox, harness): a branch that moves after the proof, before bb cuts, still starts the agent, whose first message names the commit to check for and what to do if it is missing", async () => {
+  const { kit, agentThreadId, call, pushAndOpen, branch } = await holding();
+  kit.commit(agentThreadId, COMMITTED);
+  pushAndOpen();
+  kit.provisioning.holding = true; // bb answers the spawn, then cuts
+
+  const result = textOf(await call({ placement: SANDBOX }));
+  const next = threadIn(result);
+  assert.match(result, new RegExp(`cut from a1's \`origin/${branch}\` expecting 1111111, on [^.]*\\. a2 checks that commit is on its branch before it changes anything, and hands off blocked if it isn't\\.`));
+  kit.repo.origin.set(branch, HEAD); // git push --force origin HEAD~1:<branch>, after the proof
+  kit.provisioning.held.splice(0).forEach((provision) => provision());
+
+  assert.equal(kit.git.heads.get(kit.environment(next)), HEAD, "bb cut the branch as origin had it then, without a1's commit");
+  const message = kit.thread(next).spawnedWith.prompt ?? "";
+  assert.match(message, new RegExp(`check that commit is in your checkout: run \`git merge-base --is-ancestor ${COMMITTED} HEAD && echo present\`\\. If it doesn't print \`present\`, change nothing, and call agent_handoff with status blocked, saying commit ${COMMITTED} is missing from your branch\\.`));
 });
 
 test("criterion 6 (sandbox, harness): a branch pushed from inside a sandbox is saved by the PR watch at the pushed head within its next read", async () => {

@@ -675,6 +675,6 @@ test("a move's fresh read of a pull request waits for a tick's read still out, s
   answer();
   await ticking;
   const result = textOf(await moving);
-  assert.match(result, /on a new branch cut from a1's `bb\/thr_2` \(pushed at 2222222\)/);
+  assert.match(result, /on a new branch cut from a1's `origin\/bb\/thr_2` expecting 2222222/);
   assert.equal(kit.store.prOfBranch(coordinatorId, branch)?.snapshot?.headSha, second, "the newer read is the one saved");
 });

@@ -152,19 +152,21 @@ function inputsOf(inputs: ProviderInputs, ref: string | null): Extract<Environme
  * Where an agent's work starts. `default`: a new branch from the project's default branch.
  * `joined`: in `from`'s environment, on the branch checked out there, with its commits, its
  * uncommitted files and its pull request (sandbox-handover SH1). `cut`: in a new environment, on a
- * new branch bb cut from `from`'s `branch`: from origin's copy when `pushed` names the head its pull
- * request showed there, else from the local branch, which a worktree on the same machine reaches.
+ * new branch bb cut from `from`'s `branch`, `via` origin's copy, once a pull request showed `head`
+ * there, or the local branch, which a worktree on the same machine reaches; `head`, the commit
+ * `from` left on it as last seen (null: none known), which the new agent checks it got. why a
+ * check: bb cuts after the spawn answers, and a branch can move until then.
  */
 export const baseSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("default") }),
   z.object({ kind: z.literal("joined"), from: agentIdSchema }),
-  z.object({ kind: z.literal("cut"), from: agentIdSchema, branch: z.string().min(1), pushed: z.string().min(1).nullable() }),
+  z.object({ kind: z.literal("cut"), from: agentIdSchema, branch: z.string().min(1), via: z.enum(["local", "origin"]), head: z.string().min(1).nullable() }),
 ]);
 export type Base = z.infer<typeof baseSchema>;
 type Cut = Extract<Base, { kind: "cut" }>;
 
-/** The ref bb cuts a cut agent's branch from: `origin/<branch>` once shown pushed, else the local `<branch>`. */
-export const refOf = ({ branch, pushed }: Cut): string => (pushed === null ? branch : `origin/${branch}`);
+/** The ref bb cuts a cut agent's branch from: `origin/<branch>`, or the local `<branch>`. */
+export const refOf = ({ branch, via }: Pick<Cut, "branch" | "via">): string => (via === "origin" ? `origin/${branch}` : branch);
 
 /**
  * Where the agent's work was last seen: its environment, the branch checked out there and its
@@ -284,7 +286,7 @@ export function cutPlan(previous: Omit<Previous, "pushed">, to: Placement): Cut 
   // A worktree's branch is a ref of the project's repository on the regional manager's machine: a new
   // worktree there cuts from it while its agent lives, after it is archived, and after its worktree
   // is removed (bb-facts P1a, P1b(i), P1c).
-  if (to.kind === "worktree" && agent.placement.kind === "worktree") return { kind: "cut", from: agent.id, branch: tip.branch, pushed: null };
+  if (to.kind === "worktree" && agent.placement.kind === "worktree") return { kind: "cut", from: agent.id, ...tip, via: "local" };
   // Anything else reaches the branch only through origin: a sandbox clones from it (SH2), a worktree
   // fetches `origin/<branch>` (P2), and bb puts a sandbox's branch there only if something in the
   // sandbox pushes it (SH4).
@@ -324,7 +326,7 @@ function cutRef(previous: Previous, to: Placement): Cut | { refused: string } {
   if (!("prove" in plan)) return plan;
   const { agent, environmentId, pushed } = previous;
   const { branch, head } = plan.prove;
-  if (head !== null && pushed?.kind === "read" && pushed.pr?.headSha === head) return { kind: "cut", from: agent.id, branch, pushed: head };
+  if (head !== null && pushed?.kind === "read" && pushed.pr?.headSha === head) return { kind: "cut", from: agent.id, branch, via: "origin", head };
   const at = head === null ? "the head it left" : `its head ${head.slice(0, 7)}`;
   if (pushed?.kind === "unread") {
     const then = environmentId === null ? `Call again once GitHub can be read, or ${CLEAN}` : "Continue in its environment (leave out placement), or call again once GitHub can be read.";
