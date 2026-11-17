@@ -131,14 +131,16 @@ container: it never has an agent, and its status rolls up from its
 sub-issues.
 
 - **One level deep.** A sub-issue of a sub-issue, and a parent for an issue
-  that has sub-issues, are refused naming both issues.
+  that has sub-issues, are refused naming both issues and where it can go
+  instead.
 - **No agent on a parent.** `agent_start` on a parent is refused: start
   agents on its sub-issues. Filing a sub-issue under an issue an agent holds
   is refused naming the agent: stop it with `agent_stop` first. Nothing of the
   parent reaches its sub-issues' agents: put what each needs in its own brief.
 - **Kinds.** A build parent holds build and research sub-issues; a research
   parent holds research ones only. A build sub-issue under a research parent,
-  and making a parent research while it holds a build sub-issue, are refused.
+  and making a parent research while it holds a build sub-issue, are refused,
+  saying which kind to keep or which sub-issues to move out first.
 - **Its status rolls up.** While a sub-issue is open: In progress once any
   has started, Todo while any is in Todo or you rested the parent there, else
   Backlog; every sub-issue canceled leaves it where you rested it. Once every

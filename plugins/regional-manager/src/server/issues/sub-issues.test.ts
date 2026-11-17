@@ -54,7 +54,7 @@ test("1: issue_create with a parent files a sub-issue, listed under its parent i
   );
 });
 
-test("2: a sub-issue of a sub-issue, a parent for an issue with sub-issues, and a kind its parent doesn't hold are refused with the reason, filing and changing nothing", async () => {
+test("2: a sub-issue of a sub-issue, a parent for an issue with sub-issues, and a kind its parent doesn't hold are refused with the reason and a way the plan takes, filing and changing nothing", async () => {
   const { call, text, statuses } = await managing();
   await text("issue_create", ISSUE);
   await text("issue_create", { ...ISSUE, title: "Dead letters", parent: "i1" });
@@ -68,12 +68,15 @@ test("2: a sub-issue of a sub-issue, a parent for an issue with sub-issues, and 
   });
   assert.deepEqual(await call("issue_update", { id: "i1", parent: "i3" }), {
     refused: true,
-    text: "i1 can't be a sub-issue of i3: it has sub-issues of its own (i2), and sub-issues go one level deep. Move them under i3 first.",
+    text: "i1 can't be a sub-issue of i3: it has sub-issues of its own (i2), and sub-issues go one level deep. Make them top-level first with parent: null, then put i1 under an open top-level build issue.",
   });
-  assert.deepEqual(await call("issue_create", { ...ISSUE, parent: "i3" }), { refused: true, text: "No issue filed: i5 can't be a build sub-issue of i3: a research issue holds only research sub-issues." });
+  assert.deepEqual(await call("issue_create", { ...ISSUE, parent: "i3" }), {
+    refused: true,
+    text: "No issue filed: i5 can't be a build sub-issue of i3: a research issue holds only research sub-issues. Give i5 no parent, or an open top-level build issue as its parent.",
+  });
   assert.deepEqual(await call("issue_update", { id: "i1", kind: "research" }), {
     refused: true,
-    text: "i1 can't be research: it holds i2, a build issue, and a research issue holds only research sub-issues.",
+    text: "i1 can't be research: it holds i2 (build), and a research issue holds only research sub-issues. Keep its kind, or make i2 top-level first with parent: null.",
   });
   assert.deepEqual(await statuses(), before);
   assert.equal(await text("issue_update", { id: "i4", parent: "i1" }), "Updated i4. Now ready: i3.", "a build parent holds research, and i3, with no sub-issue left, is ready");
@@ -183,7 +186,7 @@ test("7: a parent is canceled only once its sub-issues are closed; every sub-iss
   assert.deepEqual(await statuses(), { i1: "backlog", i2: "canceled", i3: "canceled" });
   assert.equal(await text("issue_update", { id: "i1", status: "canceled" }), "Updated i1.");
   assert.deepEqual(await statuses(), { i1: "canceled", i2: "canceled", i3: "canceled" });
-  assert.deepEqual(await call("issue_create", { ...ISSUE, parent: "i1" }), { refused: true, text: "No issue filed: i4 can't be a sub-issue of i1: i1 is closed. File i4 on its own." });
+  assert.deepEqual(await call("issue_create", { ...ISSUE, parent: "i1" }), { refused: true, text: "No issue filed: i4 can't be a sub-issue of i1: i1 is closed. Give i4 no parent, or an open top-level build issue as its parent." });
 });
 
 type Manager = Awaited<ReturnType<typeof managing>>;
@@ -214,7 +217,7 @@ const I1 = issueIdSchema.parse("i1");
 
 test("filing a sub-issue is judged on its parent as stored when it is written: canceled while bb was read, refused; reopened meanwhile, filed", async () => {
   const canceled = await filedUnderI1While({ title: "Add retries" }, (store, id) => store.updateIssue(id, I1, { closed: { as: "canceled", at: 2_000 } }, { requireUnheld: true, closes: new Map() }));
-  assert.deepEqual(canceled.result, { refused: true, text: "No issue filed: i3 can't be a sub-issue of i1: i1 is closed. File i3 on its own." });
+  assert.deepEqual(canceled.result, { refused: true, text: "No issue filed: i3 can't be a sub-issue of i1: i1 is closed. Give i3 no parent, or an open top-level build issue as its parent." });
   assert.deepEqual(canceled.statuses, { i1: "canceled", i2: "in-progress" });
 
   const reopened = await filedUnderI1While({ status: "canceled" }, (store, id) => store.updateIssue(id, I1, { closed: null }, { requireUnheld: true, closes: new Map() }));
