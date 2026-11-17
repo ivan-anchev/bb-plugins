@@ -18,7 +18,12 @@ test("a sub-issue goes one level deep, under an issue that is no sub-issue and h
   const plan = [planned(1, "build", null), planned(2, "build", 1), planned(3, "build", null)];
   assert.equal(planProblem(plan, planned(4, "build", 1), OPEN), null);
   assert.equal(planProblem(plan, planned(4, "build", 2), OPEN), "i4 can't be a sub-issue of i2: i2 is a sub-issue of i1, and sub-issues go one level deep. Put i4 under i1 instead");
-  assert.equal(planProblem(plan, planned(1, "build", 3), OPEN), "i1 can't be a sub-issue of i3: it has sub-issues of its own (i2), and sub-issues go one level deep. Move them under i3 first");
+  assert.equal(planProblem(plan, planned(1, "build", 3), OPEN), "i1 can't be a sub-issue of i3: it has sub-issues of its own (i2), and sub-issues go one level deep. Make i2 top-level first with parent: null, then put i1 under an open top-level build issue, or leave i1 top-level");
+  assert.equal(
+    planProblem(plan, planned(1, "build", 2), OPEN),
+    "i1 can't be a sub-issue of i2: i2 is a sub-issue of i1, and sub-issues go one level deep. Make i2 top-level first with parent: null, then put i1 under an open top-level build issue, or leave i1 top-level",
+    "under its own sub-issue",
+  );
   assert.equal(planProblem(plan, planned(4, "build", 9), OPEN), "i4 can't be a sub-issue of i9: there is no issue i9. Give i4 no parent, or an open top-level build issue as its parent");
   assert.equal(planProblem(plan, planned(3, "build", 3), OPEN), "i3 can't be a sub-issue of itself. Give i3 no parent, or an open top-level build issue as its parent");
   assert.equal(planProblem(plan, planned(2, "build", null), OPEN), null, "made top-level again");
@@ -74,10 +79,14 @@ test("each refusal of a parent offers only a way the kinds and the plan take", (
   );
   assert.equal(
     planProblem(plan, planned(3, "build", 1), OPEN),
-    "i3 can't be a sub-issue of i1: it has sub-issues of its own (i4), and sub-issues go one level deep. Make them top-level first with parent: null, then put i3 under an open top-level build issue",
+    "i3 can't be a sub-issue of i1: it has sub-issues of its own (i4), and sub-issues go one level deep. Make i4 top-level first with parent: null, then put i3 under an open top-level build issue, or leave i3 top-level",
     "a research i1 can hold neither i3 nor i4",
   );
-  assert.equal(planProblem(plan, planned(1, "research", 3), OPEN), "i1 can't be a sub-issue of i3: it has sub-issues of its own (i2), and sub-issues go one level deep. Move them under i3 first");
+  assert.equal(
+    planProblem(plan, planned(1, "research", 3), OPEN),
+    "i1 can't be a sub-issue of i3: it has sub-issues of its own (i2), and sub-issues go one level deep. Make i2 top-level first with parent: null, then put i1 under an open top-level build or research issue, or leave i1 top-level",
+    "a build i3 holds i1 and i2, but i2 all Done would close i3 on joining it",
+  );
   assert.equal(
     planProblem(plan, planned(2, "build", 1), OPEN),
     "i2 can't be a build sub-issue of i1: a research issue holds only research sub-issues. Keep i2 research, or give it no parent, or an open top-level build issue as its parent",

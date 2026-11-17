@@ -38,13 +38,11 @@ function parentProblem(after: readonly Planned[], changed: Planned, was: Planned
   if (parent.id === changed.id) return `${changed.id} can't be a sub-issue of itself. ${placeInstead(changed)}`;
   if (parent.parentId !== null) {
     const top = after.find(({ id }) => id === parent.parentId);
-    const instead = top !== undefined && holds(top, [changed]) && !isClosed(top) ? `Put ${changed.id} under ${top.id} instead` : placeInstead(changed);
+    // why sub-issues first: an issue with any goes under no parent, and the top of its own sub-issue is itself.
+    const instead = subIssues.length > 0 ? detachFirst(changed, subIssues) : top !== undefined && holds(top, [changed]) && !isClosed(top) ? `Put ${changed.id} under ${top.id} instead` : placeInstead(changed);
     return `${changed.id} can't be a sub-issue of ${parent.id}: ${parent.id} is a sub-issue of ${parent.parentId}, and sub-issues go one level deep. ${instead}`;
   }
-  if (subIssues.length > 0) {
-    const instead = holds(parent, [changed, ...subIssues]) && !isClosed(parent) ? `Move them under ${parent.id} first` : `Make them top-level first with parent: null, then put ${changed.id} under an open top-level ${holdersOf(changed.kind)} issue`;
-    return `${changed.id} can't be a sub-issue of ${parent.id}: it has sub-issues of its own (${ids(subIssues)}), and sub-issues go one level deep. ${instead}`;
-  }
+  if (subIssues.length > 0) return `${changed.id} can't be a sub-issue of ${parent.id}: it has sub-issues of its own (${ids(subIssues)}), and sub-issues go one level deep. ${detachFirst(changed, subIssues)}`;
   // why only when newly named: a sub-issue of a parent closed since keeps it.
   if (was?.parentId !== parent.id && isClosed(parent)) return `${changed.id} can't be a sub-issue of ${parent.id}: ${parent.id} is closed. ${placeInstead(changed)}`;
   return null;
@@ -66,6 +64,14 @@ function kindProblem(after: readonly Planned[], changed: Planned, was: Planned |
   const held = misfits.map(({ id, kind }) => `${id} (${label(kind)})`).join(", ");
   return `${changed.id} can't be ${label(changed.kind)}: it holds ${held}, and ${holdsText(changed.kind)}. Keep its kind, or make ${ids(misfits)} top-level first with parent: null`;
 }
+
+/**
+ * What `issue`, which has `subIssues`, can do instead of taking a parent. why not "move them under
+ * the parent first": sub-issues all Done close the parent they join, and a closed parent takes no
+ * new sub-issue.
+ */
+const detachFirst = (issue: Planned, subIssues: readonly Planned[]): string =>
+  `Make ${ids(subIssues)} top-level first with parent: null, then put ${issue.id} under an open top-level ${holdersOf(issue.kind)} issue, or leave ${issue.id} top-level`;
 
 /** Where `issue` can go instead of under the parent it names, as the plan takes it. */
 const placeInstead = (issue: Planned): string => `Give ${issue.id} ${elsewhere(issue.kind)}`;

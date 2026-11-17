@@ -68,7 +68,7 @@ test("2: a sub-issue of a sub-issue, a parent for an issue with sub-issues, and 
   });
   assert.deepEqual(await call("issue_update", { id: "i1", parent: "i3" }), {
     refused: true,
-    text: "i1 can't be a sub-issue of i3: it has sub-issues of its own (i2), and sub-issues go one level deep. Make them top-level first with parent: null, then put i1 under an open top-level build issue.",
+    text: "i1 can't be a sub-issue of i3: it has sub-issues of its own (i2), and sub-issues go one level deep. Make i2 top-level first with parent: null, then put i1 under an open top-level build issue, or leave i1 top-level.",
   });
   assert.deepEqual(await call("issue_create", { ...ISSUE, parent: "i3" }), {
     refused: true,
@@ -83,7 +83,37 @@ test("2: a sub-issue of a sub-issue, a parent for an issue with sub-issues, and 
   assert.equal(await text("issue_update", { id: "i4", parent: null }), "Updated i4.", "and top-level again");
 });
 
-test("3: agent_start on a parent is refused, and so is filing a sub-issue under an issue an agent holds, naming the agent", async () => {
+test("the way a refusal offers an issue with sub-issues is one the tools take, when the issue is put under its own sub-issue and when its sub-issues are Done", async () => {
+  const own = await managing();
+  await own.text("issue_create", RESEARCH);
+  await own.text("issue_create", { ...RESEARCH, title: "Vault", parent: "i1" });
+  assert.deepEqual(await own.call("issue_update", { id: "i1", parent: "i2" }), {
+    refused: true,
+    text: "i1 can't be a sub-issue of i2: i2 is a sub-issue of i1, and sub-issues go one level deep. Make i2 top-level first with parent: null, then put i1 under an open top-level build or research issue, or leave i1 top-level.",
+  });
+  assert.equal(await own.text("issue_update", { id: "i2", parent: null }), "Updated i2. Now ready: i1.");
+  assert.equal(await own.text("issue_update", { id: "i1", parent: "i2" }), "Updated i1.");
+  assert.deepEqual((await own.kit.rpc.board({ coordinatorId: own.coordinatorId })).issues.map(({ id, parentId }) => [id, parentId]), [["i1", "i2"], ["i2", null]]);
+
+  const done = await managing();
+  await done.text("issue_create", RESEARCH);
+  await done.text("issue_create", { ...RESEARCH, title: "Vault", parent: "i1" });
+  await done.text("issue_create", { ...RESEARCH, title: "Which broker" });
+  const researcher = await done.started("i2");
+  await done.kit.call("agent_handoff", RESEARCH_DONE, researcher);
+  await done.kit.idle(researcher, "Handed off.");
+  await settled();
+  assert.deepEqual(await done.statuses(), { i1: "done", i2: "done", i3: "todo" });
+  assert.deepEqual(await done.call("issue_update", { id: "i1", parent: "i3" }), {
+    refused: true,
+    text: "i1 can't be a sub-issue of i3: it has sub-issues of its own (i2), and sub-issues go one level deep. Make i2 top-level first with parent: null, then put i1 under an open top-level build or research issue, or leave i1 top-level.",
+  });
+  assert.equal(await done.text("issue_update", { id: "i2", parent: null }), "Updated i2. Now ready: i1.");
+  assert.equal(await done.text("issue_update", { id: "i1", parent: "i3" }), "Updated i1.");
+  assert.deepEqual(await done.statuses(), { i1: "todo", i2: "done", i3: "todo" }, "i3, joined by no Done work, stays open");
+});
+
+test("3: agent_start on a parent is refused,and so is filing a sub-issue under an issue an agent holds, naming the agent", async () => {
   const { kit, call, text } = await managing();
   await text("issue_create", ISSUE);
   await text("issue_create", { ...ISSUE, title: "Dead letters", parent: "i1" });
