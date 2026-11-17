@@ -152,6 +152,22 @@
   line-height: 14px;
   color: var(--muted-foreground);
 }
+/* What blocks the issue, ahead of its headline: the plan's fact in the headline's words, its ids set
+   as the row's own id, then a quiet dot. It never shrinks: the headline fades instead. */
+.rmi-blocked {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.rmi-blocked-ids {
+  font-family: var(--font-mono);
+  color: var(--subtle-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.rmi-blocked::after {
+  content: "·";
+  margin-left: 4px;
+  color: var(--subtle-foreground);
+}
 .rmi-pr-cell {
   grid-column: 2;
   grid-row: 1;
@@ -385,6 +401,46 @@ button.rmi-thread-link {
   color: var(--subtle-foreground);
   font-variant-numeric: tabular-nums;
 }
+/* A relation: each other issue a small row, its glyph, id and title, going to it when pressed. */
+.rmi-related-list {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  list-style: none;
+}
+.rmi-related {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 6px;
+  margin: 0 -6px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.rmi-related > .rmi-state,
+.rmi-related > .rmi-id {
+  margin-top: 0.5px;
+}
+.rmi-related-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--muted-foreground);
+}
+@media (hover: hover) {
+  .rmi-related:hover {
+    background: var(--state-hover);
+  }
+  .rmi-related:hover .rmi-related-title {
+    color: var(--foreground);
+  }
+}
+.rmi-related:focus-visible {
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+
 /* The record: each agent on a rule, its handoffs under it. */
 .rmi-record,
 .rmi-handoffs {

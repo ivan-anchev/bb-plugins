@@ -34,7 +34,7 @@ afterEach(cleanup);
 const SHA = "3f2a9c1d8e7b6a5f4e3d2c1b0a9f8e7d6c5b4a39";
 
 function issue(id: string, fields: Partial<IssueRow>): IssueRow {
-  return { id: issueIdSchema.parse(id), kind: "build", parentId: null, subIssues: null, title: `Issue ${id}`, status: "todo", needsYou: null, headline: "Planned", agent: null, pr: null, ...fields };
+  return { id: issueIdSchema.parse(id), kind: "build", parentId: null, subIssues: null, blockedBy: [], title: `Issue ${id}`, status: "todo", needsYou: null, headline: "Planned", agent: null, pr: null, ...fields };
 }
 
 const QUESTION: Decision = { id: decisionIdSchema.parse("d1"), issueId: null, question: "Which license should the repo use?", options: ["MIT", "Apache-2.0"], askedAt: 1_000, answer: null };
@@ -92,6 +92,26 @@ test("Needs you leads with the open decision, then the flagged issue showing its
   for (const name of [/^Backlog/, /^Done/]) assert.equal(laneHeader(view, name).getAttribute("aria-expanded"), "false");
   assert.equal(view.queryByRole("button", { name: /\bi6 Build/ }), null);
   assert.equal(view.queryByRole("button", { name: /\bi7 Build/ }), null);
+});
+
+test("a row says what blocks it ahead of its headline, naming two and counting the rest, in its status's lane; an agent's blocked handoff stays its own headline under Needs you", () => {
+  const blocked = (ids: string[]) => ids.map((each) => issueIdSchema.parse(each));
+  const { view } = mount([
+    issue("i1", { status: "in-progress", needsYou: "Blocked: Needs a staging key", headline: "Blocked: Needs a staging key", agent: { id: agentIdSchema.parse("a1"), threadId: "thr_one" } }),
+    issue("i5", { headline: "Not started", blockedBy: blocked(["i6"]) }),
+    issue("i8", { headline: "Not started", blockedBy: blocked(["i6", "i7", "i9"]) }),
+    issue("i6", { headline: "Not started" }),
+  ]);
+  const todo = lane(view, /^Todo/);
+  assert.match(todo.getByRole("button", { name: /\bi5 Build/ }).textContent ?? "", /blocked by i6Not started$/);
+  assert.match(todo.getByRole("button", { name: /\bi8 Build/ }).textContent ?? "", /blocked by i6, i7 \+1Not started$/, "two named, the rest counted, on its one line");
+  assert.match(row(view, "i8").getAttribute("aria-label") ?? "", /, Todo, blocked by i6, i7, and i9, Not started$/, "every blocker is spoken");
+  assert.doesNotMatch(row(view, "i6").textContent ?? "", /blocked/i, "nothing blocks it, so nothing says so");
+
+  const flagged = lane(view, /^Needs you/).getByRole("button", { name: /\bi1 Build/ });
+  assert.match(flagged.textContent ?? "", /Blocked: Needs a staging key$/);
+  assert.doesNotMatch(flagged.textContent ?? "", /blocked by/);
+  assert.equal(lane(view, /^Needs you/).queryByRole("button", { name: /\bi(5|8) Build/ }), null, "a dependency doesn't put an issue under Needs you");
 });
 
 test("a lane's header unfolds and folds its rows, and focus stays on the header", () => {

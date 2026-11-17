@@ -1,27 +1,38 @@
-// An issue opened in place, read when its row opens: its description, its criteria, and its record:
-// every agent that held it, each handoff it made and the verdict on it.
+// An issue opened in place, read when its row opens: its description, its relations, its criteria,
+// and its record: every agent that held it, each handoff it made and the verdict on it.
 import { experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { coordinatorContract as contract, type IssueDetail as Detail, type IssueRow } from "../../../../contract.ts";
 import { isVerified, type Kind } from "../../../../model/issue/kind.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
 import { ReadFailure } from "../../../ui/read-failure.tsx";
+import type { GoTo } from "../issue-board.tsx";
 import { IssueRecord } from "./issue-record.tsx";
+import { IssueRelations } from "./issue-relations.tsx";
 
-export function IssueDetail({ coordinatorId, issue }: { coordinatorId: CoordinatorId; issue: IssueRow }) {
+type IssueDetailProps = {
+  coordinatorId: CoordinatorId;
+  issue: IssueRow;
+  /** Every issue on the board, which its relations name. */
+  issues: readonly IssueRow[];
+  goTo: GoTo;
+};
+
+export function IssueDetail({ coordinatorId, issue, issues, goTo }: IssueDetailProps) {
   const read = experimental_useRpcQuery({ contract, method: "issue", input: { coordinatorId, issueId: issue.id } });
   return (
     <>
       {read.error !== null && <ReadFailure onRetry={() => void read.refetch()}>Could not read {issue.id}: {read.error.message}</ReadFailure>}
       {read.data === undefined && read.error === null && <p className="rmi-description">Loading…</p>}
-      {read.data !== undefined && <Opened kind={issue.kind} detail={read.data} />}
+      {read.data !== undefined && <Opened kind={issue.kind} detail={read.data} issues={issues} goTo={goTo} />}
     </>
   );
 }
 
-function Opened({ kind, detail: { description, doneCriteria, record } }: { kind: Kind; detail: Detail }) {
+function Opened({ kind, detail: { description, doneCriteria, dependsOn, blocks, record }, issues, goTo }: { kind: Kind; detail: Detail } & Pick<IssueDetailProps, "issues" | "goTo">) {
   return (
     <>
       <p className="rmi-description">{description}</p>
+      <IssueRelations dependsOn={dependsOn} blocks={blocks} issues={issues} goTo={goTo} />
       {doneCriteria.length > 0 && (
         <section className="rmi-part">
           {/* why by kind: a verified kind's criteria are judged; any other's are questions its report answers. */}

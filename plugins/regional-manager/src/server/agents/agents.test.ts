@@ -287,7 +287,7 @@ test("the board puts a running agent's issue In progress, one waiting on an appr
     ["i2", "needs-you", "a2", ids[1]],
     ["i3", "todo", "a3", ids[2]],
   ]);
-  assert.deepEqual(Object.keys(issues[0] ?? {}).sort(), ["agent", "headline", "id", "kind", "needsYou", "parentId", "pr", "status", "subIssues", "title"], "a row sends only what the board shows, its parent and sub-issues for issue 08's board part");
+  assert.deepEqual(Object.keys(issues[0] ?? {}).sort(), ["agent", "blockedBy", "headline", "id", "kind", "needsYou", "parentId", "pr", "status", "subIssues", "title"], "a row sends only what the board shows, its parent and sub-issues for issue 08's board part");
 });
 
 test("crew_catch_up shows the updates, then the board by lane with each issue's agent, then the memory", async () => {

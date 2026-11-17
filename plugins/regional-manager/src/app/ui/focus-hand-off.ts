@@ -49,6 +49,8 @@ type GroupFocus<Group> = {
   target(key: string): RefCallback<HTMLElement>;
   /** On a group's header, which takes it while the item's group is folded. */
   header(group: Group): RefCallback<HTMLElement>;
+  /** Moves focus to the item's target once the next commit has drawn it, as when the user goes to an item in a group being unfolded for it. */
+  moveTo(key: string): void;
 };
 
 /**
@@ -56,11 +58,13 @@ type GroupFocus<Group> = {
  * moving lanes: React removes an item from its old list and mounts it in the new one, or nowhere while
  * the new one is folded. Once the commit is done, focus that was anywhere in the leaving item goes to
  * its target where it landed, or to the header of the group it is in now (`groupOf`, null: in none),
- * or, once the item is gone from every group, to the tab stop of the page it was in.
+ * or, once the item is gone from every group, to the tab stop of the page it was in. `moveTo` sends
+ * focus the same way, to an item that need not have held it.
  */
 export function useFocusKeptAcrossGroups<Group>(groupOf: (key: string) => Group | null): GroupFocus<Group> {
   const kept = useMemo(() => {
-    let leaving: { key: string; page: HTMLElement | null } | null = null;
+    // The focus to hand over once the commit is done: kept by an item that left, or asked for by moveTo.
+    let pending: { key: string; page: HTMLElement | null } | null = null;
     const targets = new Map<string, HTMLElement>();
     const headers = new Map<Group, HTMLElement>();
     return {
@@ -69,17 +73,20 @@ export function useFocusKeptAcrossGroups<Group>(groupOf: (key: string) => Group 
           if (item === null) return;
           return () => {
             // why read the page now: the item is still in it, and nothing of it is once it's gone.
-            if (item.contains(document.activeElement)) leaving = { key, page: pageOf(item) };
+            if (item.contains(document.activeElement)) pending = { key, page: pageOf(item) };
           };
         }),
         target: stablePerKey((key: string) => tracked(targets, key)),
         header: stablePerKey((group: Group) => tracked(headers, group)),
+        moveTo: (key: string) => {
+          pending = { key, page: null };
+        },
       },
-      /** Hands the focus kept to where its item landed; nothing when no item that held it left. */
+      /** Hands the focus pending to where its item landed; nothing when none is. */
       land(groupOf: (key: string) => Group | null) {
-        if (leaving === null) return;
-        const { key, page } = leaving;
-        leaving = null;
+        if (pending === null) return;
+        const { key, page } = pending;
+        pending = null;
         const group = groupOf(key);
         (targets.get(key) ?? (group === null ? undefined : headers.get(group)) ?? page)?.focus();
       },

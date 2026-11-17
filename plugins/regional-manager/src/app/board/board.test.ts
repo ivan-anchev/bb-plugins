@@ -37,6 +37,7 @@ const issue = (id: string, fields: Partial<IssueRow>): IssueRow => ({
   kind: "build",
   parentId: null,
   subIssues: null,
+  blockedBy: [],
   title: `Title of ${id}`,
   status: "todo",
   needsYou: null,
@@ -45,6 +46,7 @@ const issue = (id: string, fields: Partial<IssueRow>): IssueRow => ({
   pr: null,
   ...fields,
 });
+const id = (raw: string) => issueIdSchema.parse(raw);
 const agent = (id: string) => ({ id: agentIdSchema.parse(id), threadId: `thr_${id}` });
 const decision = (id: string, answered: boolean): Decision => ({
   id: decisionIdSchema.parse(id),
@@ -60,6 +62,8 @@ const BLOCKED = "Blocked: Needs a staging key";
 const DETAIL: IssueDetail = {
   description: "Failed webhook deliveries are lost.",
   doneCriteria: ["Retries land", "npm test passes"],
+  dependsOn: [],
+  blocks: [],
   record: [
     {
       agent: { id: agentIdSchema.parse("a1"), threadId: "thr_a1", ended: null },
@@ -100,6 +104,8 @@ const REPORT = "## Recommendation\n\nVault: it keeps card data **inside** our PC
 const researched = (questions: string[]): IssueDetail => ({
   description: "Which vault fits our PCI scope.",
   doneCriteria: questions,
+  dependsOn: [],
+  blocks: [],
   record: [
     {
       agent: { id: agentIdSchema.parse("a2"), threadId: "thr_a2", ended: null },
@@ -134,7 +140,7 @@ type Read = Pick<BoardData, "decisions" | "issues">;
  * of its rows, once drawn; `reread`, the board reading `next` as it does when the plugin changes it.
  * `answer`: what the plugin does with an answer sent; it stores it unless it throws.
  */
-async function mount(data: Read, answer: (input: unknown) => void = () => {}, detail: IssueDetail = DETAIL) {
+async function mount(data: Read, answer: (input: unknown) => void = () => {}, detailOf: (issueId: string) => IssueDetail = () => DETAIL) {
   const opened: unknown[] = [];
   let current = data;
   let served: Read | null = null;
@@ -152,7 +158,7 @@ async function mount(data: Read, answer: (input: unknown) => void = () => {}, de
       },
       issue: (input: unknown) => {
         opened.push(input);
-        return detail;
+        return detailOf(coordinatorContract.issue.input.parse(input).issueId);
       },
     },
   });
@@ -217,6 +223,7 @@ test("a row opens in place to the issue read from the plugin, and only then: its
   assert.equal(detail.getByLabelText("Evidence for criterion 2").closest("details")?.open, true);
   assert.equal(detail.getByLabelText("Evidence for criterion 1").closest("details")?.open, false);
   assert.ok(detail.getByText(/on the agent's own model/));
+  assert.equal(detail.queryByRole("heading", { name: /^(Depends on|Blocks)$/ }), null, "no relations, no section for them");
 
   fireEvent.click(row);
   assert.equal(view.queryByRole("region", { name: "i1" }), null);
@@ -224,7 +231,7 @@ test("a row opens in place to the issue read from the plugin, and only then: its
 
 test("a research row reads Research with no pull request, and opens to its Questions and its report as Markdown, with the file it is saved in and no verdict", async () => {
   const research = issue("i2", { kind: "research", status: "done", headline: "Handed off: Vault fits our PCI scope", agent: agent("a2") });
-  const { view } = await mount({ decisions: [], issues: [research] }, undefined, researched(["Which one fits our PCI scope, and why?"]));
+  const { view } = await mount({ decisions: [], issues: [research] }, undefined, () => researched(["Which one fits our PCI scope, and why?"]));
   fireEvent.click(view.getByRole("button", { name: /^Done/ }));
   const row = view.getByRole("button", { name: /\bi2 Research: Title of i2/ });
   assert.equal(view.queryByRole("link", { name: /^Pull request/ }), null);
@@ -243,12 +250,44 @@ test("a research row reads Research with no pull request, and opens to its Quest
 
 test("a research issue asked no questions opens to no Questions section", async () => {
   const research = issue("i2", { kind: "research", status: "in-progress", headline: "Working", agent: agent("a2") });
-  const { view } = await mount({ decisions: [], issues: [research] }, undefined, researched([]));
+  const { view } = await mount({ decisions: [], issues: [research] }, undefined, () => researched([]));
   fireEvent.click(view.getByRole("button", { name: /\bi2 Research/ }));
   const detail = within(view.getByRole("region", { name: "i2" }));
   await detail.findByText("Which vault fits our PCI scope.");
   assert.equal(detail.queryByText("Questions"), null);
   assert.ok(detail.getByRole("region", { name: "Report reports/i2.md" }));
+});
+
+test("an opened issue lists what it depends on and what it blocks, each by its status, id and title; pressing one unfolds its lane, opens its row and moves focus there", async () => {
+  const relations: Record<string, Pick<IssueDetail, "dependsOn" | "blocks">> = { i1: { dependsOn: [], blocks: [id("i2")] }, i2: { dependsOn: [id("i1")], blocks: [id("i3")] }, i3: { dependsOn: [id("i2")], blocks: [] } };
+  const { view } = await mount(
+    {
+      decisions: [],
+      issues: [
+        issue("i1", { kind: "research", status: "done", title: "Pick a card vault", headline: "Handed off: Vault" }),
+        issue("i2", { title: "Card vault" }),
+        issue("i3", { title: "Vault schema", blockedBy: [id("i2")] }),
+      ],
+    },
+    undefined,
+    (issueId) => ({ ...DETAIL, ...relations[issueId] }),
+  );
+  fireEvent.click(view.getByRole("button", { name: /\bi2 Build/ }));
+  const detail = within(view.getByRole("region", { name: "i2" }));
+  await detail.findByText(DETAIL.description);
+  const listed = (name: string) => within(detail.getByRole("heading", { name }).closest("section") ?? assert.fail(`no ${name}`)).getAllByRole("button").map((button) => button.getAttribute("aria-label"));
+  assert.deepEqual(listed("Depends on"), ["i1: Pick a card vault, Done"]);
+  assert.deepEqual(listed("Blocks"), ["i3: Vault schema, Todo"]);
+  assert.equal(view.getByRole("button", { name: /^Done/ }).getAttribute("aria-expanded"), "false", "i1's lane starts folded");
+
+  fireEvent.click(detail.getByRole("button", { name: "i1: Pick a card vault, Done" }));
+  assert.equal(view.getByRole("button", { name: /^Done/ }).getAttribute("aria-expanded"), "true", "its lane unfolds");
+  const research = view.getByRole("button", { name: /\bi1 Research/ });
+  assert.equal(research.getAttribute("aria-expanded"), "true", "its row opens");
+  assert.ok(document.activeElement === research, "focus is on its row");
+  const opened = within(view.getByRole("region", { name: "i1" }));
+  await opened.findByRole("heading", { name: "Blocks" });
+  assert.equal(opened.queryByRole("heading", { name: "Depends on" }), null, "it depends on nothing");
 });
 
 test("a board with no issues says so", async () => {

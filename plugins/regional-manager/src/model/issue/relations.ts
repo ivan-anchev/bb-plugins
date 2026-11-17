@@ -161,9 +161,12 @@ export function relationsOf(views: readonly Viewed[], { id, dependsOn, parentId 
     parent: parentId === null ? null : related(parentId),
     subIssues: views.filter(({ issue }) => issue.parentId === id).map(({ issue }) => related(issue.id)),
     dependsOn: dependsOn.map(related),
-    blocks: views.filter(({ issue }) => issue.dependsOn.includes(id)).map(({ issue }) => related(issue.id)),
+    blocks: dependentsOf(views.map(({ issue }) => issue), id).map(related),
   };
 }
+
+/** The issues that depend on `id` (that it blocks while it is open), in the order filed. */
+export const dependentsOf = (issues: readonly Shape[], id: IssueId): IssueId[] => issues.filter(({ dependsOn }) => dependsOn.includes(id)).map((issue) => issue.id);
 
 /** The issue's status among `statuses`. */
 export const statusIn = (statuses: ReadonlyMap<IssueId, IssueStatus>, id: IssueId): IssueStatus => named(statuses, id);

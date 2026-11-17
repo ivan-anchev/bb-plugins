@@ -710,11 +710,18 @@ page from its row in the panel, show the same board, live:
   its agent, which opens the agent's thread, and once it has one, its pull
   request: its number in its state's colour, with a dot for its CI, which
   opens it on GitHub. A research issue's row reads "Research" and never has
-  a pull request.
+  a pull request. An issue a dependency blocks starts its headline line with
+  "blocked by i6" (two named, the rest counted: "blocked by i6, i7 +2") and
+  stays in its own status's lane: blocked is not a lane, and doesn't put it
+  under Needs you. That differs from an agent's "Blocked: <summary>"
+  headline, which is the agent asking you for something, under Needs you.
 
 Pressing an issue opens it in place: its row grows to show its title and
 headline whole, which a closed row fades out at its edge, and under it come
-what it is about, **Done when** with its criteria (a research issue's
+what it is about; **Depends on** and **Blocks**, each issue there with its
+status's glyph, id and title, and none when there are none; pressing one goes
+to that issue on the board, unfolding its lane, opening its row and moving
+focus to it; **Done when** with its criteria (a research issue's
 **Questions**, and nothing when it has none), and its **Record**: each
 agent that held it, how it ended, and each handoff it made, the latest one
 open. A research issue's done handoff shows its **Report** first, as the
