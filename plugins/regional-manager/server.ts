@@ -42,12 +42,17 @@ export default function plugin(host: BbPluginApi): void {
     refreshBoard(id);
     unblocked.changed(id);
   };
+  // why one hook: deletion and the tick's reconcile both remove a regional manager through it.
+  const onRemoved = (id: CoordinatorId) => {
+    threadEvents.forget(id);
+    refreshCoordinators();
+  };
   const spawner = createSpawner(bb, store, memory, (role: Role) => (role.kind === "coordinator" ? refreshCoordinators() : onChange(role.coordinatorId)));
   const board = createBoard(bb, store, memory);
   const inbox = createInbox({ bb, store, memory, onChange });
   const unblocked = watchUnblocked({ bb, store, inbox });
   const turns = issueTurns(instance.signal);
-  const agents = createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts: placementFactsReader(bb, store), onChange, onRemoved: refreshCoordinators });
+  const agents = createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
   const issues = createIssues({ bb, store, onChange });
   const verify = createVerify({ bb, store, spawner, inbox, turns });
 
@@ -57,7 +62,7 @@ export default function plugin(host: BbPluginApi): void {
   registerAgentTools(bb, { store, agents });
   registerHandoffTool(bb, { store, verify });
   registerVerdictTool(bb, { store, verify });
-  forwardThreadEvents(bb, { store, agents, onChange, refreshBoard });
+  const threadEvents = forwardThreadEvents(bb, { store, agents, onChange, refreshBoard });
   watchAgentThreads({ bb, store, inbox });
   watchOwnTree({ bb, store, inbox });
   const prWatch = createPrWatch({ bb, store, inbox, gh: runGh });

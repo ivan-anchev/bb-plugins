@@ -558,6 +558,10 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       refreshBoard(id);
       unblocked.changed(id);
     };
+    const onRemoved = (id: CoordinatorId) => {
+      threadEvents.forget(id);
+      refreshCoordinators();
+    };
     const spawner = createSpawner(bb, store, memory, (role) => {
       bindings++;
       if (role.kind !== "coordinator") onChange(role.coordinatorId);
@@ -566,7 +570,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const inbox = createInbox({ bb, store, memory, onChange });
     const unblocked = watchUnblocked({ bb, store, inbox });
     const turns = turnWaitMs === null ? issueTurns(instance.signal) : issueTurns(instance.signal, turnWaitMs);
-    const agents = createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts: placementFactsReader(bb, store), onChange, onRemoved: refreshCoordinators });
+    const agents = createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
     const issues = createIssues({ bb, store, onChange });
     const verify = createVerify({ bb, store, spawner, inbox, turns });
     registerRoles(bb, store);
@@ -575,7 +579,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     registerAgentTools(bb, { store, agents });
     registerHandoffTool(bb, { store, verify });
     registerVerdictTool(bb, { store, verify });
-    forwardThreadEvents(bb, { store, agents, onChange, refreshBoard });
+    const threadEvents = forwardThreadEvents(bb, { store, agents, onChange, refreshBoard });
     watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });
     const prWatch = createPrWatch({ bb, store, inbox, gh });

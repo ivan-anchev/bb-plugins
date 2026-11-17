@@ -50,36 +50,46 @@ type Deps = {
   refreshBoard(id: CoordinatorId): void;
 };
 
-export function forwardThreadEvents(bb: EventsBb, { store, agents, onChange, refreshBoard }: Deps): void {
+/**
+ * Forwards the events, and returns what forgets a removed regional manager's agent threads. why
+ * forget: the status last seen of each is kept until its thread moves, which an idle thread of a
+ * removed manager never does.
+ */
+export function forwardThreadEvents(bb: EventsBb, { store, agents, onChange, refreshBoard }: Deps): { forget(id: CoordinatorId): void } {
   /** The role of a thread this plugin made; null for any other. why the origin first: a cheap filter before touching SQLite. */
   const roleOf = ({ thread }: ThreadEvent) => (thread.originPluginId === bb.pluginId ? store.roleOfThread(thread.id) : null);
 
   /** Runs `then` with the regional manager of an agent thread; nothing for any other thread. */
-  const ofAgent = (then: (id: CoordinatorId) => void) => (payload: ThreadEvent) => {
-    const role = roleOf(payload);
-    if (role?.kind === "agent") then(role.coordinatorId);
-  };
-  /** The status each agent thread had in its last THREAD_NOW_EVENT since its last lifecycle event. */
-  const statusSeen = new Map<string, HolderThread["status"]>();
-  const changed = ofAgent(onChange);
+  const ofAgent =
+    <P extends ThreadEvent>(then: (id: CoordinatorId, payload: P) => void) =>
+    (payload: P) => {
+      const role = roleOf(payload);
+      if (role?.kind === "agent") then(role.coordinatorId, payload);
+    };
+  /** Of each regional manager's agent threads, the status each had in its last THREAD_NOW_EVENT since its last lifecycle event. */
+  const statusSeen = new Map<CoordinatorId, Map<string, HolderThread["status"]>>();
   for (const event of AGENT_THREAD_EVENTS) {
-    bb.events.on(event, (payload) => {
-      // why forget it: the thread moved since, so its next status is news even when it reads as the one seen, as a new turn's `starting` after the last turn's.
-      statusSeen.delete(payload.thread.id);
-      changed(payload);
-    });
+    bb.events.on(
+      event,
+      ofAgent((id, payload) => {
+        // why forget it: the thread moved since, so its next status is news even when it reads as the one seen, as a new turn's `starting` after the last turn's.
+        statusSeen.get(id)?.delete(payload.thread.id);
+        onChange(id);
+      }),
+    );
   }
 
   // why a status only once: the event repeats every second while the thread works, and a repeat
   // changes Needs you at most, so it refreshes the board alone instead of reading every issue again.
-  bb.events.on(THREAD_NOW_EVENT, (payload) => {
-    const role = roleOf(payload);
-    if (role?.kind !== "agent") return;
-    const { id, status } = payload.thread;
-    if (statusSeen.get(id) === status) return refreshBoard(role.coordinatorId);
-    statusSeen.set(id, status);
-    onChange(role.coordinatorId);
-  });
+  bb.events.on(
+    THREAD_NOW_EVENT,
+    ofAgent((id, { thread }: ThreadNowEvent) => {
+      const seen = statusSeen.get(id) ?? new Map<string, HolderThread["status"]>();
+      if (seen.get(thread.id) === thread.status) return refreshBoard(id);
+      statusSeen.set(id, seen.set(thread.id, thread.status));
+      onChange(id);
+    }),
+  );
 
   /** The agent whose thread this is, while it holds its issue. */
   function holderOf(payload: ThreadEvent) {
@@ -102,4 +112,6 @@ export function forwardThreadEvents(bb: EventsBb, { store, agents, onChange, ref
     const agent = holderOf(payload);
     if (agent !== null) await agents.deleted(agent).catch(warned(`end ${agent.id}, whose thread was deleted`));
   });
+
+  return { forget: (id) => void statusSeen.delete(id) };
 }
