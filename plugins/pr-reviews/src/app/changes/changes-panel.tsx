@@ -1,15 +1,17 @@
 // The Changes tab's panel (ported from code-explorer's changes-tree): the header over the file tree
-// and the selected file's diff, side by side. The filters narrow the tree; the summary and the
-// menus' counts stay the whole PR's. The selected file is remembered per PR.
+// and the list of every listed file's diff, side by side. The filters narrow the tree and the list;
+// the summary and the menus' counts stay the whole PR's. A file picked in the tree scrolls the list
+// to it, and the tree follows the file the reader scrolls to, which is remembered per PR: the list
+// opens on it again.
 //
 // REVIEW.md, stable chrome: the header and the tree model are mounted from the first render, before
 // the diff is read, so a header control focused or a menu opened while it loads stays focused or
 // open when it arrives. Until then the panel shows the read's state in one region, and focus there
-// moves to the diff pane that replaces it.
+// moves to the list that replaces it.
 //
-// A thread the reader asked to see from the Summary tab selects its file once the diff is read,
-// clearing the filters if they hide it. Focus waits in the read's region or the diff pane until the
-// thread takes it. A thread whose file has left the diff ends the request there, in the diff pane.
+// A thread the reader asked to see from the Summary tab scrolls the list to its file once the diff
+// is read, clearing the filters if they hide it. Focus waits in the read's region or the list until
+// the thread takes it. A thread whose file has left the diff ends the request there, in the list.
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { PrChanges } from "../../contract.ts";
 import type { DiffFile } from "../../diff/diff-schema.ts";
@@ -19,9 +21,10 @@ import { mergeRefs } from "../ui/merge-refs.ts";
 import { Notice } from "../ui/notice.tsx";
 import { useRememberedState } from "../use-remembered-state.ts";
 import { changeSummaryOf } from "./change-stats.ts";
-import { DiffViewer } from "./diff-viewer.tsx";
 import { extensionCountsOf, filterChangedFiles, isFiltering, kindCountsOf, NO_FILTERS } from "./file-filter.ts";
 import { ChangesHeader } from "./header/changes-header.tsx";
+import { FileList } from "./list/file-list.tsx";
+import type { Jump } from "./list/file-section.tsx";
 import { ReadState } from "./read-state.tsx";
 import { revealTargetOf } from "./reveal-target.ts";
 import { SplitView } from "./split/split-view.tsx";
@@ -47,8 +50,10 @@ export function ChangesPanel({ target, changes, loading, readError, reveal, onRe
   const changedFiles = changes?.files ?? NO_FILES;
   const shownFiles = useMemo(() => filterChangedFiles(changedFiles, pathQuery, filters), [changedFiles, pathQuery, filters]);
   const tree = useMemo(() => changesTreeOf(shownFiles), [shownFiles]);
+  // The file the reader is on, by its tree path.
   const [selectedPath, setSelectedPath] = useRememberedState(rememberedSelections, memoryKey, null);
-  // Set during render, so the file is selected in the render the diff arrives in.
+  const [jump, setJump] = useState<Jump | null>(() => (selectedPath === null ? null : { treePath: selectedPath, reveal: false }));
+  // Set during render, so the list jumps in the render the diff arrives in.
   const [selectedFor, setSelectedFor] = useState(0);
   const revealing = reveal !== null && changes !== null && reveal.asked !== selectedFor ? { asked: reveal.asked, ...revealTargetOf(reveal.path, tree.filesByTreePath, changes.files) } : null;
   if (revealing !== null && revealing.kind !== "absent") {
@@ -58,24 +63,36 @@ export function ChangesPanel({ target, changes, loading, readError, reveal, onRe
       controls.filters.onChange(NO_FILTERS);
     }
     setSelectedPath(revealing.treePath);
+    setJump({ treePath: revealing.treePath, reveal: true });
   }
   const unrevealable = revealing?.kind === "absent";
   useLayoutEffect(() => {
     if (unrevealable) onRevealed();
   }, [unrevealable, onRevealed]);
-  const shownFile = selectedPath === null ? undefined : tree.filesByTreePath.get(selectedPath);
+  const jumpTo = useCallback(
+    (treePath: string) => {
+      setSelectedPath(treePath);
+      setJump({ treePath, reveal: false });
+    },
+    [setSelectedPath],
+  );
+  // The PR at the commit its diff was read at, or null before it is read. Kept while the diff is,
+  // so the list's files don't redraw as the tree follows the reader.
+  const { projectId, number } = target;
+  const headSha = changes?.headSha ?? null;
+  const head = useMemo(() => (headSha === null ? null : { projectId, number, headSha }), [projectId, number, headSha]);
   const model = useTreeModel({
     memoryKey,
     paths: tree.paths,
     gitStatus: tree.gitStatus,
     icons: tree.icons,
     decorations: tree.decorations,
-    selectedPath: shownFile === undefined ? null : selectedPath,
+    selectedPath: selectedPath !== null && tree.filesByTreePath.has(selectedPath) ? selectedPath : null,
   });
   const focusHandOff = useFocusHandOff();
   const content = useRevealFocus(reveal);
   const readStateRef = useMemo(() => mergeRefs(focusHandOff.from, content), [focusHandOff, content]);
-  const viewerRef = useMemo(() => mergeRefs(focusHandOff.to, content), [focusHandOff, content]);
+  const listRef = useMemo(() => mergeRefs(focusHandOff.to, content), [focusHandOff, content]);
   const revealRequest = useMemo(() => ({ reveal, onRevealed }), [reveal, onRevealed]);
   const summary =
     changes === null
@@ -85,7 +102,7 @@ export function ChangesPanel({ target, changes, loading, readError, reveal, onRe
   return (
     <>
       <ChangesHeader controls={controls} summary={summary} extensionCounts={extensionCountsOf(changedFiles)} kindCounts={kindCountsOf(changedFiles)} model={model} />
-      {changes === null ? (
+      {head === null ? (
         <ReadState ref={readStateRef}>
           {readError}
           {loading && <Notice>Loading changes…</Notice>}
@@ -96,11 +113,13 @@ export function ChangesPanel({ target, changes, loading, readError, reveal, onRe
           <SplitView
             tree={
               <>
-                {shownFiles.length === 0 && <Notice>{changes.files.length === 0 ? "No changes." : "No files match the filter."}</Notice>}
-                <TreeView model={model} label="Changed files" onSelectFile={setSelectedPath} />
+                {shownFiles.length === 0 && <Notice>{changedFiles.length === 0 ? "No changes." : "No files match the filter."}</Notice>}
+                <TreeView model={model} label="Changed files" onSelectFile={jumpTo} />
               </>
             }
-            viewer={<DiffViewer ref={viewerRef} file={shownFile ?? null} head={{ ...target, headSha: changes.headSha }} settings={controls.settings.value} />}
+            viewer={
+              <FileList ref={listRef} files={tree.inTreeOrder} head={head} settings={controls.settings.value} jump={jump} onCurrentFile={setSelectedPath} />
+            }
           />
         </ThreadRevealProvider>
       )}
@@ -110,7 +129,7 @@ export function ChangesPanel({ target, changes, loading, readError, reveal, onRe
 
 // why: the row the reader pressed is on the Summary tab, which hides as the Changes tab shows, and
 // focus would drop to the page body (REVIEW.md). The panel's content region takes it, the read's
-// region or the diff pane, until the thread is drawn and takes it in turn.
+// region or the list, until the thread is drawn and takes it in turn.
 function useRevealFocus(reveal: ThreadReveal | null) {
   const content = useRef<HTMLElement | null>(null);
   const asked = reveal?.asked ?? null;

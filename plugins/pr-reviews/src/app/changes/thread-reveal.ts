@@ -1,6 +1,7 @@
 // A review thread the reader asked to see in the Changes tab, from a row of the Summary tab's
-// activity. The Changes panel selects the thread's file; the thread opens if it was folded, and
-// once its diff draws it scrolls into view and takes focus. A thread that is asked for once.
+// activity. The Changes panel scrolls its list to the thread's file and draws its diff; the thread
+// opens if it was folded, and once drawn it scrolls into view and takes focus. A thread that is
+// asked for once.
 import { createContext, useCallback, useContext, type RefCallback } from "react";
 
 /** `asked` counts the requests, so asking for the same thread again shows it again. */

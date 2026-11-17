@@ -91,8 +91,13 @@ function useRememberedExpansion(model: TreeModel, memoryKey: string): void {
   );
 }
 
+// The selected row scrolls into the tree's view, as the list's reader moves on to a file the tree
+// shows further down, without taking the tree's keyboard focus. A row in a closed folder stays put.
 function useSelectionOf(model: TreeModel, selectedPath: string | null): void {
-  useEffect(() => keepOnlySelected(model, selectedPath), [model, selectedPath]);
+  useEffect(() => {
+    if (selectedPath !== null) model.scrollToPath(selectedPath, { focus: false, offset: "nearest" });
+    return keepOnlySelected(model, selectedPath);
+  }, [model, selectedPath]);
 }
 
 function useSyncedPaths(model: TreeModel, paths: readonly string[], memoryKey: string): void {
