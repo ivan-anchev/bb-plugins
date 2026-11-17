@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app and its card on the new-thread screen show (a list in the main pane of your pull requests across every GitHub project, in Authored by me, Needs my review and Recently merged sections with stacked pull requests as trees, one attention dot per row and a Filter that hides the sections you don't watch, a page per pull request with a state badge that changes its state on GitHub (ready for review, convert to draft, close by press and hold, reopen), Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (drawn as bb's composer, with Preview, a Send as chip whose menu picks Ask to ask the review thread, Comment to post a GitHub review comment or Review to add it to a pending review, and one send button; nothing posts before you send, and review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app and its card on the new-thread screen show (a list in the main pane of your pull requests across every GitHub project, in Authored by me, Needs my review and Recently merged sections with stacked pull requests as trees, one attention dot per row, a header with chips that list one section and a Filter that hides the sections you don't watch, and headings that fold their section, a page per pull request with a state badge that changes its state on GitHub (ready for review, convert to draft, close by press and hold, reopen), Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (drawn as bb's composer, with Preview, a Send as chip whose menu picks Ask to ask the review thread, Comment to post a GitHub review comment or Review to add it to a pending review, and one send button; nothing posts before you send, and review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -31,8 +31,19 @@ line instead:
 - **Recently merged**: pull requests you authored or reviewed that merged in
   the last 7 days. Most recently merged first.
 
-**Filter sections.** The Filter icon at the end of the top section title (it
-stays there as you scroll) opens a menu, **Show sections**, with one checkbox
+**Fold a section.** Click a section's heading to fold it to just its heading
+and count; click again to open it. Which sections are folded is kept in this
+browser across reloads, like the Filter's choice.
+
+**The header.** A bar at the top of the list, the height of bb's own pane
+headers, holds the section chips and the Filter icon; it stays put as the list
+scrolls. The chips are **All**, then **Mine**, **Review** and **Merged** for the
+sections the Filter shows. A chip lists only its section; **All** lists every
+shown section again. The chip lasts for this session, not across reloads, and
+hides nothing for good. Hiding the chip's section with the Filter goes back to
+**All**.
+
+**Filter sections.** The Filter icon at the header's end opens a menu, **Show sections**, with one checkbox
 per section and its count, and **Show all sections**. Unchecking a section
 hides it; the menu stays open while you toggle. While any section is hidden
 the Filter icon shows brighter. Hiding all three leaves one line, "All
@@ -103,14 +114,14 @@ the composer.
 
 ## The page
 
-Clicking a row opens that PR's page. Its header shows the PR's state in the sidebar's badge, by name,
-on its own line (green Open, grey Draft, purple Merged, red Closed) with
-`owner/repo #number` beside it, then the title over the author's GitHub avatar
-and login and `base-branch ← head-branch`; and icon buttons, each named by its
-tooltip:
-**Review chat** (opens the review thread's chat beside the page; shown once a
-review has started, see "Review chat" below) and **Open on GitHub** (opens the
-PR on github.com).
+Clicking a row opens that PR's page. It opens on a header bar, as tall as bb's own pane headers
+and ruled off from the page the same way: the PR's state in the sidebar's badge, by name (green
+Open, grey Draft, purple Merged, red Closed), with `owner/repo #number` beside it, and at the bar's
+end **Finish review** while you have a pending review (see "Reviewing on GitHub" below), then icon
+buttons, each named by its tooltip: **Review chat** (opens the review thread's chat beside the
+page; shown once a review has started, see "Review chat" below) and **Open on GitHub** (opens the
+PR on github.com). Under the bar sit the title and the author's GitHub avatar and login with
+`base-branch ← head-branch`.
 
 ### Changing the state
 
@@ -134,8 +145,8 @@ on GitHub since the page read it (Refresh to see it). When GitHub doesn't
 answer within a minute the change may still have happened, so it says to
 Refresh and check before trying again, and never retries by itself.
 
-Under the header sit three tabs, **Summary**, **Changes** and **Guide**; a PR
-opens on Summary. The Changes tab carries the PR's lines added and removed,
+Under the header sit three tabs, **Summary**, **Changes** and **Guide**, as one segmented control:
+the selected tab is raised on a recessed track. A PR opens on Summary. The Changes tab carries the PR's lines added and removed,
 `Changes +A −D`, as GitHub counts them. The header and the tabs stay put, and each tab scrolls on its
 own. Switching tabs keeps the guide where you left it, on the same step and
 scroll position, and Changes on the same file, scroll position and open
@@ -459,7 +470,7 @@ comment on the PR's latest commit, so Review shows only on a diff of it.
 While you have a pending review:
 
 - **Finish review**, with the number of pending comments, sits at the top of
-  the page, beside Review chat, on every tab. It opens a summary field
+  the page, in its header bar beside Review chat, on every tab. It opens a summary field
   (optional) and **Comment**, **Approve** or **Request changes**, then
   **Submit review**, which publishes the review and its comments; or **Discard
   review**, which asks once, then deletes the review and its comments. On your

@@ -26,9 +26,12 @@ or your own.
   bb project whose git remote is on github.com, no picker. **Authored by me** (open, and closed
   in the last 7 days), **Needs my review** (review requested from you or your
   team) and **Recently merged** (yours or reviewed by you, last 7 days), each
-  with its count and a quiet line when empty. The list sits beside the selected
-  review in wide panes. In narrow panes, opening a PR shows its review;
-  **Pull requests** above it returns to the list.
+  with its count and a quiet line when empty. A header above the list holds
+  chips (All, Mine, Review, Merged) that list one section, and a Filter that
+  hides the sections you don't watch; clicking a section's heading folds it.
+  The list sits beside the selected review in wide panes. In narrow panes,
+  opening a PR shows its review; **Pull requests** above it returns to the
+  list.
 - **Compact rows**: one line each, the author's avatar, the title, and a
   badge with the PR's state icon and number, coloured by state. The repo's name shows on hover,
   focus and the open row. At most one dot on the avatar asks for attention:
@@ -37,9 +40,11 @@ or your own.
 - **Stacks as trees**: pull requests built on each other show under "Stack
   #N" (the bottom one) with "3 of 5", bottom first; the stack's pull requests
   listed elsewhere stay in place as dim rows.
-- **A page per pull request**: a state badge for whether it is open, a draft,
-  merged or closed, beside `owner/repo #number`, above its title, author,
-  `base ← branch`, and Review chat and GitHub icon buttons, then three tabs: **Summary**, the author's own
+- **A page per pull request**: a header bar drawn as bb's own pane headers,
+  with a state badge for whether it is open, a draft, merged or closed,
+  `owner/repo #number`, and Review chat and GitHub icon buttons, above its
+  title, author and `base ← branch`, then three tabs in one segmented control:
+  **Summary**, the author's own
   description and the PR's activity beside its reviewers, checks and labels; **Changes**, the
   PR's whole diff, with its `+N −M` on the tab; and **Guide**, which keeps its
   step while you switch and marks a ready guide with a dot.

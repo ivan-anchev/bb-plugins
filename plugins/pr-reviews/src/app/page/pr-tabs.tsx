@@ -1,7 +1,8 @@
-// The PR page's tabs under its header, Summary, Changes then Guide, on the ARIA tabs pattern: one
-// tab stop, ← → Home End to move, and a tab is selected as it is focused. The bar stays put and each panel
-// scrolls on its own. Every panel stays mounted, hidden while another is selected, so the guide
-// keeps its step and scroll position across switches, and Changes its file, scroll and folders.
+// The PR page's tabs under its header, Summary, Changes then Guide, a segmented control on the ARIA
+// tabs pattern: one tab stop, ← → Home End to move, and a tab is selected as it is focused. The bar
+// stays put, with no rule under it, and each panel scrolls on its own. Every panel stays mounted, hidden while another
+// is selected, so the guide keeps its step and scroll position across switches, and Changes its
+// file, scroll and folders.
 import { useId, type KeyboardEvent, type ReactNode } from "react";
 import type { LineCounts } from "../../diff/diff-schema.ts";
 import { labelStatPartsOf } from "../changes/change-stats.ts";
@@ -33,7 +34,7 @@ export function PrTabs({ selected, onSelect, tabs }: PrTabsProps) {
   const ids = useTabIds();
   return (
     <>
-      <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border px-6">
+      <div className="flex h-11 shrink-0 items-center gap-1 px-6">
         <TabList selected={selected} onSelect={onSelect} tabs={tabs} ids={ids} />
         <div className="ml-auto flex items-center">{tabs[selected].barEnd}</div>
       </div>
@@ -84,7 +85,7 @@ function TabList({ selected, onSelect, tabs, ids }: TabListProps) {
     document.getElementById(ids.tab(to))?.focus();
   };
   return (
-    <div role="tablist" aria-label="Pull request" className="flex gap-0.5" onKeyDown={onKeyDown}>
+    <div role="tablist" aria-label="Pull request" className={TAB_LIST_CLASS} onKeyDown={onKeyDown}>
       {TABS.map(({ id, label }) => (
         <button
           key={id}
@@ -105,8 +106,14 @@ function TabList({ selected, onSelect, tabs, ids }: TabListProps) {
   );
 }
 
+// One control: the tabs sit on a recessed track, the selected one raised on it with bb's active
+// state and a hairline ring, as dark surfaces show depth. A hover lifts only the text, so the raised
+// tab stays the one surface on the track. Only the selected tab takes focus, so its focus ring
+// replaces the hairline. The radii nest: the track's 8px is the tab's 6px plus its 2px inset.
+const TAB_LIST_CLASS = "flex gap-0.5 rounded-lg bg-surface-recessed p-0.5";
+
 const TAB_CLASS =
-  "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-sm font-medium text-muted-foreground transition-colors duration-150 ease-out hover:bg-state-hover hover:text-foreground hover:duration-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring aria-selected:bg-state-active aria-selected:text-foreground motion-reduce:transition-none";
+  "inline-flex h-6 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-sm font-medium text-muted-foreground transition-colors duration-150 ease-out hover:text-foreground hover:duration-0 focus-visible:outline-none aria-selected:bg-state-active aria-selected:text-foreground aria-selected:ring-1 aria-selected:ring-border-hairline aria-selected:focus-visible:ring-ring motion-reduce:transition-none";
 
 // → and ← wrap around; Home and End go to the first and the last tab. Undefined for any other key.
 function tabAfterKey(key: string, selected: PrTab): PrTab | undefined {
