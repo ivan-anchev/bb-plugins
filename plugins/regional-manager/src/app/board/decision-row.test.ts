@@ -8,7 +8,8 @@ import { decisionIdSchema, type Decision } from "../../model/decision.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
 
 // QA-02: bb redrawing the board across its breakpoint remounted an open decision and emptied the
-// answer typed into it. The row keeps it in the browser instead, until the decision is answered.
+// answer typed into it. The row keeps it in the browser instead, until the board reads the decision
+// answered (board.test.ts).
 
 const { DecisionRow } = await import("./decision-row.tsx");
 
@@ -46,7 +47,7 @@ function mount(decision: Decision, answers: unknown[] = [], coordinatorId = COOR
   };
 }
 
-test("an unsent answer is still in the field after the board remounts, and once sent and read back answered the browser keeps none", async () => {
+test("an unsent answer is still in the field after the board remounts, and Send sends it; read back answered, the row shows the answer", async () => {
   const answers: unknown[] = [];
   mount(OPEN).type(TYPED);
   cleanup();
@@ -58,14 +59,6 @@ test("an unsent answer is still in the field after the board remounts, and once 
   row.reread(answered(TYPED));
 
   assert.match(row.view.container.textContent ?? "", /You answered: Freeform unsent QA,\nwith a second line/);
-  assert.equal(localStorage.length, 0);
-});
-
-test("a decision answered elsewhere drops the answer typed here, so the browser keeps none", () => {
-  const row = mount(OPEN);
-  row.type("Not sent");
-  row.reread(answered("eu-west"));
-  assert.equal(localStorage.length, 0);
 });
 
 test("the answer typed is kept by regional manager and decision, and an emptied field keeps none", () => {

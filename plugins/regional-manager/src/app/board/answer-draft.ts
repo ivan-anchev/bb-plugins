@@ -1,12 +1,30 @@
 // An answer to an open decision that the user typed and hasn't sent. The browser keeps it, by
 // regional manager and decision, so bb redrawing the board (a resize across its mobile breakpoint
-// remounts it) or a reload loses none of it, until the decision is answered, by it or from elsewhere.
+// remounts it) or a reload loses none of it, until the board reads the decision answered, by it or
+// from elsewhere.
+import { useEffect } from "react";
 import { z } from "zod";
-import { MAX_ANSWER_CHARS, type DecisionId } from "../../model/decision.ts";
+import { MAX_ANSWER_CHARS, type Decision, type DecisionId } from "../../model/decision.ts";
 import type { CoordinatorId } from "../../model/role.ts";
+import { writeStored } from "../ui/stored.ts";
 
 /** Where the browser keeps the answer typed to one decision. */
 export const answerDraftKeyOf = (coordinatorId: CoordinatorId, decisionId: DecisionId): string => `coordinator-decision-answer:${coordinatorId}:${decisionId}`;
 
 /** An answer typed and not sent. why never empty: an emptied field keeps nothing stored. */
 export const answerDraftSchema = z.string().min(1).max(MAX_ANSWER_CHARS);
+
+/**
+ * Drops what the browser keeps for each decision the board reads answered: an answered decision takes
+ * no answer again. why here, not in the decision's row: the answered row is drawn only while Done is
+ * unfolded, and a failed send must keep what was typed, so only the board's read tells it landed.
+ */
+export function useAnsweredDraftsDropped(coordinatorId: CoordinatorId, decisions: readonly Decision[]): void {
+  // why an effect: the drafts live in the browser's storage, outside React.
+  useEffect(
+    function dropAnsweredDrafts() {
+      for (const { id, answer } of decisions) if (answer !== null) writeStored(localStorage, answerDraftKeyOf(coordinatorId, id), null);
+    },
+    [coordinatorId, decisions],
+  );
+}

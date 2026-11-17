@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { afterEach, test } from "node:test";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
-import { cleanup, fireEvent, within } from "@testing-library/react";
-import type { Board as BoardData, IssueDetail, IssueRow } from "../../contract.ts";
+import { act, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
+import { coordinatorContract, type Board as BoardData, type IssueDetail, type IssueRow } from "../../contract.ts";
 import { agentIdSchema } from "../../model/agent.ts";
 import { decisionIdSchema, type Decision } from "../../model/decision.ts";
 import { handoffIdSchema } from "../../model/handoff.ts";
@@ -90,15 +90,34 @@ const DETAIL: IssueDetail = {
   ],
 };
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 
-/** The board reading `data`, and every issue it read in `opened`; each lane's name and the text of each of its rows, once drawn. */
-async function mount(data: Pick<BoardData, "decisions" | "issues">) {
+type Read = Pick<BoardData, "decisions" | "issues">;
+
+/**
+ * The board reading `data`, and every issue it read in `opened`; each lane's name and the text of each
+ * of its rows, once drawn; `reread`, the board reading `next` as it does when the plugin changes it.
+ * `answer`: what the plugin does with an answer sent; it stores it unless it throws.
+ */
+async function mount(data: Read, answer: (input: unknown) => void = () => {}) {
   const opened: unknown[] = [];
+  let current = data;
+  let served: Read | null = null;
   const view = renderSlot({ component: Board }, { coordinatorId: COORDINATOR }, {
+    experimental_rpcContract: coordinatorContract,
     rpc: {
-      board: () => ({ verify: true, ownEdits: null, prUnavailable: null, digest: null, ...data }),
+      board: () => {
+        served = current;
+        return { verify: true, ownEdits: null, prUnavailable: null, digest: null, ...current };
+      },
       setVerify: () => ({}),
+      answerDecision: (input: unknown) => {
+        answer(input);
+        return {};
+      },
       issue: (input: unknown) => {
         opened.push(input);
         return DETAIL;
@@ -111,7 +130,14 @@ async function mount(data: Pick<BoardData, "decisions" | "issues">) {
       const heading = within(section).queryByRole("heading", { level: 2 })?.textContent ?? "";
       return heading === "" || heading === "Digest" ? [] : [[heading, within(section).queryAllByRole("listitem").length] as const];
     });
-  return { view, opened, lanes };
+  async function reread(next: Read) {
+    current = next;
+    await view.experimental_invalidateRpc([`board:${COORDINATOR}`]);
+    // why wait: a read the answer's send started may still be running, and the board reads again after it.
+    await waitFor(() => assert.equal(served, next));
+    await act(async () => {});
+  }
+  return { view, opened, lanes, reread };
 }
 
 test("Needs you leads with open decisions, then flagged issues showing their own status, then a lane per status in order; the last three start folded; empty lanes are not shown", async () => {
@@ -168,4 +194,46 @@ test("a board with no issues says so", async () => {
   const { view, lanes } = await mount({ decisions: [], issues: [] });
   assert.deepEqual(lanes(), []);
   assert.ok(view.getByText("No issues yet."));
+});
+
+const DRAFT_KEY = `coordinator-decision-answer:${COORDINATOR}:d1`;
+const type = (view: Awaited<ReturnType<typeof mount>>["view"], text: string) => fireEvent.change(view.getByRole("textbox", { name: "Your answer" }), { target: { value: text } });
+
+test("an answer sent and read back answered while Done is folded leaves nothing in the browser", async () => {
+  const sent: unknown[] = [];
+  const { view, reread } = await mount({ decisions: [decision("d1", false)], issues: [] }, (input) => sent.push(input));
+  type(view, "A typed answer");
+  assert.equal(localStorage.getItem(DRAFT_KEY), JSON.stringify("A typed answer"));
+
+  await act(async () => fireEvent.click(view.getByRole("button", { name: "Send" })));
+  assert.deepEqual(sent, [{ coordinatorId: COORDINATOR, decisionId: "d1", answer: "A typed answer" }]);
+  assert.equal(localStorage.getItem(DRAFT_KEY), JSON.stringify("A typed answer"), "kept until the board reads it answered");
+  await reread({ decisions: [{ ...decision("d1", false), answer: { text: "A typed answer", at: 2_000 } }], issues: [] });
+
+  assert.equal(view.getByRole("button", { name: /^Done/ }).getAttribute("aria-expanded"), "false", "Done is folded");
+  assert.equal(localStorage.length, 0);
+});
+
+test("a decision answered elsewhere drops the answer typed here while Done is folded, and one left from before is dropped on the next read", async () => {
+  const { view, reread } = await mount({ decisions: [decision("d1", false)], issues: [] });
+  type(view, "Not sent");
+  await reread({ decisions: [decision("d1", true)], issues: [] });
+  assert.equal(localStorage.length, 0);
+  cleanup();
+
+  localStorage.setItem(DRAFT_KEY, JSON.stringify("Left from before"));
+  await mount({ decisions: [decision("d1", true)], issues: [] });
+  await waitFor(() => assert.equal(localStorage.length, 0));
+});
+
+test("a send the plugin refuses keeps the answer typed, in the field and in the browser", async () => {
+  const { view } = await mount({ decisions: [decision("d1", false)], issues: [] }, () => {
+    throw new Error("bb is restarting");
+  });
+  type(view, "Kept");
+  await act(async () => fireEvent.click(view.getByRole("button", { name: "Send" })));
+  await view.findByText(/Could not send your answer/);
+  assert.equal(localStorage.getItem(DRAFT_KEY), JSON.stringify("Kept"));
+  const field = view.getByRole("textbox", { name: "Your answer" });
+  assert.ok(field instanceof HTMLTextAreaElement && field.value === "Kept");
 });

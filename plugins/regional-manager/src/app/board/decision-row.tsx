@@ -1,11 +1,11 @@
 // A decision the regional manager put to the user with crew_ask_user, on an issue row's grid
 // (issue/issue-row.tsx): a question glyph in the 30 slot, its id and question where a title sits.
 // Open, it sits under Needs you with a button for each option and a field for an answer in the
-// user's own words, which the browser keeps until it is sent (see answer-draft.ts). Answered, it
-// sits under Done with the answer. Answering moves it there, and the board moves focus with it, to
-// the answered row.
+// user's own words, which the browser keeps until the board reads it answered (see answer-draft.ts).
+// Answered, it sits under Done with the answer. Answering moves it there, and the board moves focus
+// with it, to the answered row, or to Done's header while Done is folded.
 import { experimental_Icon as Icon, experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
-import { useEffect, useId, useState, type KeyboardEvent, type Ref } from "react";
+import { useId, useState, type KeyboardEvent, type Ref } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
 import { MAX_ANSWER_CHARS, type Decision } from "../../model/decision.ts";
 import type { CoordinatorId } from "../../model/role.ts";
@@ -27,14 +27,7 @@ type DecisionRowProps = { ref: Ref<HTMLDivElement>; coordinatorId: CoordinatorId
 
 export function DecisionRow({ ref, coordinatorId, decision }: DecisionRowProps) {
   const answer = decision.answer;
-  const { value: typed, store } = useStored(localStorage, answerDraftKeyOf(coordinatorId, decision.id), answerDraftSchema);
-  const answeredWithTyped = answer !== null && typed !== null;
-  // why an effect: the typed answer lives in the browser, and an answered decision, by this answer
-  // or from elsewhere, takes none again.
-  useEffect(() => {
-    if (answeredWithTyped) store(null);
-  }, [answeredWithTyped, store]);
-  if (answer === null) return <OpenDecision ref={ref} decision={decision} coordinatorId={coordinatorId} typed={typed ?? ""} onType={(text) => store(text === "" ? null : text)} />;
+  if (answer === null) return <OpenDecision ref={ref} decision={decision} coordinatorId={coordinatorId} />;
   return (
     // why the focus stop: an answer moves the row here, and focus with it, so it lands on what was answered.
     <div ref={ref} tabIndex={-1} className={`${ROW} pb-1.5 outline-none focus-visible:ring-1 focus-visible:ring-ring`}>
@@ -62,18 +55,15 @@ export function DecisionRow({ ref, coordinatorId, decision }: DecisionRowProps) 
   );
 }
 
-type OpenDecisionProps = DecisionRowProps & {
-  /** What the user typed and hasn't sent, as the browser keeps it. */
-  typed: string;
-  onType(text: string): void;
-};
-
 /**
  * An open decision. Choosing an option, or sending the field, answers it; the field keeps what was
  * typed through a failed send, beside its error, and holds bb's Esc while it has text.
  */
-function OpenDecision({ ref, coordinatorId, decision, typed: draft, onType }: OpenDecisionProps) {
+function OpenDecision({ ref, coordinatorId, decision }: DecisionRowProps) {
   const ids = useId();
+  // What the user typed and hasn't sent, as the browser keeps it.
+  const typed = useStored(localStorage, answerDraftKeyOf(coordinatorId, decision.id), answerDraftSchema);
+  const draft = typed.value ?? "";
   const save = experimental_useRpcMutation({ contract, method: "answerDecision" });
   // The answer sent, from the click until the board reads it back and moves the row to Done.
   const [sent, setSent] = useState<string | null>(null);
@@ -128,7 +118,7 @@ function OpenDecision({ ref, coordinatorId, decision, typed: draft, onType }: Op
         >
           <GrowingTextarea
             value={draft}
-            onChange={(event) => onType(event.target.value)}
+            onChange={(event) => typed.store(event.target.value === "" ? null : event.target.value)}
             onKeyDown={onKeyDown}
             readOnly={busy}
             maxLength={MAX_ANSWER_CHARS}

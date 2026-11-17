@@ -6,17 +6,20 @@
 import { experimental_Icon as Icon, experimental_useRpcMutation, experimental_useRpcQuery, Markdown } from "@get-bb/plugin-sdk/app";
 import { useId, useState } from "react";
 import { coordinatorContract as contract, type Board as BoardData } from "../../contract.ts";
+import type { Decision } from "../../model/decision.ts";
 import { filesText } from "../../model/inbox/own-tree.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { ReadFailure } from "../ui/read-failure.tsx";
 import { Switch } from "../ui/switch.tsx";
 import { shortTime } from "../ui/time.ts";
+import { useAnsweredDraftsDropped } from "./answer-draft.ts";
 import { DecisionRow } from "./decision-row.tsx";
 import { IssueDetail } from "./issue/detail/issue-detail.tsx";
 import { IssueBoard } from "./issue/issue-board.tsx";
 
 export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
   const read = experimental_useRpcQuery({ contract, method: "board", input: { coordinatorId } });
+  useAnsweredDraftsDropped(coordinatorId, read.data?.decisions ?? NO_DECISIONS);
   // why: each heading labels its section by id, and a page may show more than one board.
   const ids = useId();
   return (
@@ -42,6 +45,9 @@ export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
     </div>
   );
 }
+
+/** No decisions read yet. why a constant: the drafts are dropped again only when a read changes the list. */
+const NO_DECISIONS: readonly Decision[] = [];
 
 /**
  * The board's switch for verifying done handoffs. It shows what the user asked for while the change
