@@ -2,11 +2,11 @@
 // criteria passed, the commit checked, a checkout or CI that failed it, then each criterion with its
 // evidence. A failed or unverifiable criterion shows its evidence; a passed one keeps it folded.
 import { checkoutText } from "../../../../model/verdict/checkout.ts";
-import { allPassed, ciVerdictOf, failedCheckout, outcome, type CriterionResult, type ShownVerdict as Verdict } from "../../../../model/verdict/verdict.ts";
+import { allPassed, ciVerdictOf, failedCheckout, outcome, type CriterionResult, type ShownVerdict } from "../../../../model/verdict/verdict.ts";
 import { ThreadLink } from "../thread-link.tsx";
 import { DiscloseGlyph } from "./disclose-glyph.tsx";
 
-export function CheckVerdict({ verdict }: { verdict: Verdict }) {
+export function CheckVerdict({ verdict }: { verdict: ShownVerdict }) {
   switch (verdict.state) {
     case "queued":
       return <p className="rmi-verdict-line">Waiting for a verifier</p>;
@@ -35,7 +35,7 @@ export function CheckVerdict({ verdict }: { verdict: Verdict }) {
   }
 }
 
-type ReturnedVerdict = Extract<Verdict, { state: "returned" }>;
+type ReturnedVerdict = Extract<ShownVerdict, { state: "returned" }>;
 
 function Returned({ verdict }: { verdict: ReturnedVerdict }) {
   const passed = verdict.criteria.filter((check) => check.result === "pass").length;
