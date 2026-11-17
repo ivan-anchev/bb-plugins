@@ -4,6 +4,7 @@
 // keeps it folded.
 import { checkoutText } from "../../../model/verdict/checkout.ts";
 import { allPassed, ciVerdictOf, failedCheckout, outcome, type CriterionResult, type Verdict } from "../../../model/verdict/verdict.ts";
+import { DiscloseGlyph } from "./disclose-glyph.tsx";
 import { ThreadLink } from "./thread-link.tsx";
 
 export function CheckVerdict({ verdict }: { verdict: Verdict }) {
@@ -124,6 +125,7 @@ function Criterion({ number, criterion, result, evidence }: { number: number; cr
           <span className="rmi-result" data-result={result}>
             {RESULT_LABEL[result]}
           </span>
+          <DiscloseGlyph />
         </summary>
         {/* why the tab stop: long output scrolls, and the keyboard scrolls only what has focus. */}
         <pre tabIndex={0} aria-label={`Evidence for criterion ${number}`} className="rmi-evidence">

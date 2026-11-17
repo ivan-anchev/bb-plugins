@@ -30,9 +30,10 @@ export function NeedsYouGlyph() {
 function glyph(status: IssueStatus, still: boolean): ReactNode {
   switch (status) {
     case "backlog":
+      // why dots: the working ring at rest is eight dashes; a dashed circle read as it.
       return (
         <Icon>
-          <circle cx="12" cy="12" r="9" strokeWidth={1.75} strokeDasharray="3.5 3.57" />
+          <circle cx="12" cy="12" r="9" strokeWidth={2.25} strokeDasharray="0.01 4.71" />
         </Icon>
       );
     case "todo":

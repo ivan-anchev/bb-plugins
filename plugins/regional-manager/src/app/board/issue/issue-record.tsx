@@ -5,6 +5,7 @@ import type { NextHandoff } from "../../../model/handoff.ts";
 import { shortTime } from "../../ui/time.ts";
 import type { AgentRecord, HandedOff } from "./board-issue.ts";
 import { CheckVerdict } from "./check-verdict.tsx";
+import { DiscloseGlyph } from "./disclose-glyph.tsx";
 import { ThreadLink } from "./thread-link.tsx";
 
 export function IssueRecord({ record }: { record: readonly AgentRecord[] }) {
@@ -43,6 +44,7 @@ function Handoff({ handoff, open }: { handoff: HandedOff; open: boolean }) {
   return (
     <details open={open} className="rmi-handoff">
       <summary>
+        <DiscloseGlyph />
         <span className="rmi-handoff-status" data-status={handoff.status}>
           {STATUS[handoff.status]}
         </span>
