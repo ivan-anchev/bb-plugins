@@ -43,7 +43,7 @@ async function handedTo(options: Parameters<typeof coordinating>[0] = {}, start:
 
 test("a handover stops the holder without archiving it, ends it as replaced, and starts the new agent in its environment, on its branch", async () => {
   const { kit, coordinatorId, agentThreadId, handover, row, agent, firstMessage, handOff } = await handedTo();
-  kit.git.changedFiles.set(kit.thread(agentThreadId).environmentId, 1); // a1 leaves a file uncommitted
+  kit.git.changedFiles.set(kit.environment(agentThreadId), 1); // a1 leaves a file uncommitted
   await handOff(agentThreadId, BLOCKED);
   const result = textOf(await handover());
   const next = threadIn(result);
@@ -150,7 +150,7 @@ test("an environment bb removes between the decision and the spawn ends the new 
   kit.stopRequests.pending = new Promise((resolve) => (answer = resolve));
   const starting = handover();
   await settled();
-  kit.environments.destroyed.add(kit.thread(agentThreadId).environmentId); // the sandbox is reaped while a1 stops
+  kit.environments.destroyed.add(kit.environment(agentThreadId)); // the sandbox is reaped while a1 stops
   answer();
 
   const result = textOf(await starting);
@@ -211,7 +211,7 @@ test("a research issue's handover starts clean, with the earlier handoffs in its
 test("a sandbox agent is continued in its sandbox, which the spawn wakes: nothing reads it first, and the result names it", async () => {
   const sandbox = { placement: { kind: "provider", environmentProviderId: "boat-sandbox", machineInputs: { preset: "small" } } };
   const { kit, agentThreadId, handover } = await handedTo({}, sandbox);
-  const { environmentId } = kit.thread(agentThreadId);
+  const environmentId = kit.environment(agentThreadId);
   kit.git.offline.add(environmentId); // suspended: bb's git plugin can't read it
   const reads = kit.git.calls.length;
 

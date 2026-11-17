@@ -23,7 +23,7 @@ async function holding(start: object = {}) {
   const { agentThreadId } = await startedAgent(kit, threadId, {}, start);
   const call = async (input: object = {}) => kit.call("agent_start", { issue: "i1", ...input }, threadId);
   const agent = (id: typeof a1) => kit.store.agent(coordinatorId, id) ?? assert.fail(`no agent ${id}`);
-  const environmentOf = (thread: string) => kit.thread(thread).environmentId;
+  const environmentOf = (thread: string) => kit.environment(thread);
   /** The commit checked out in the thread's environment, as `git log -1` shows it. */
   const headOf = (thread: string) => kit.git.heads.get(environmentOf(thread)) ?? HEAD;
   /** a1's branch is pushed at its head, and a pull request opened from it. */
@@ -79,7 +79,7 @@ test("criterion 1: the same move after a1's thread is archived, and after its wo
 test("criterion 2: a1 stopped with uncommitted files: the move is refused naming them, offering the continue; once a1 commits, it moves", async () => {
   const { kit, threadId, agentThreadId, call, agent, headOf } = await holding();
   await kit.call("agent_stop", { agent: "a1" }, threadId);
-  kit.git.changedFiles.set(kit.thread(agentThreadId).environmentId, 2);
+  kit.git.changedFiles.set(kit.environment(agentThreadId), 2);
   const spawned = kit.spawned();
 
   const refused = await call({ placement: WORKTREE });
@@ -90,24 +90,24 @@ test("criterion 2: a1 stopped with uncommitted files: the move is refused naming
   );
   assert.deepEqual([kit.spawned(), agent(a1).ended?.how], [spawned, "stopped"], "nothing started, and a1's record is as it was");
 
-  kit.git.changedFiles.delete(kit.thread(agentThreadId).environmentId);
+  kit.git.changedFiles.delete(kit.environment(agentThreadId));
   kit.commit(agentThreadId, COMMITTED);
   assert.equal(headOf(threadIn(textOf(await call({ placement: WORKTREE })))), COMMITTED);
 });
 
 test("criterion 2: a holder that still works is refused before it is stopped; one that leaves files uncommitted while it stops is refused after, still holding", async () => {
   const { kit, agentThreadId, call, agent } = await holding();
-  kit.git.changedFiles.set(kit.thread(agentThreadId).environmentId, 1);
+  kit.git.changedFiles.set(kit.environment(agentThreadId), 1);
   const early = await call({ placement: WORKTREE });
   assert.match(textOf(early), /^agent_start is refused: Nothing changed\. a1 left 1 file uncommitted/);
   assert.deepEqual([kit.thread(agentThreadId).status, agent(a1).ended], ["active", null], "a1 still works");
 
-  kit.git.changedFiles.delete(kit.thread(agentThreadId).environmentId);
+  kit.git.changedFiles.delete(kit.environment(agentThreadId));
   let answer = (): void => assert.fail("bb never received the stop");
   kit.stopRequests.pending = new Promise((resolve) => (answer = resolve));
   const moving = call({ placement: WORKTREE });
   await settled();
-  kit.git.changedFiles.set(kit.thread(agentThreadId).environmentId, 1); // its last edit lands as it stops
+  kit.git.changedFiles.set(kit.environment(agentThreadId), 1); // its last edit lands as it stops
   answer();
   const late = await moving;
   assert.ok(isRefusal(late));
@@ -121,7 +121,7 @@ test("criterion 3: bb refusing the base errors a2 in provisioning; the issue isn
 
   const failed = threadIn(textOf(await call({ placement: WORKTREE })));
   await settled();
-  assert.deepEqual([kit.thread(failed).status, kit.thread(failed).environmentBranchName], ["error", null], "bb's worktree add failed: invalid reference");
+  assert.deepEqual([kit.thread(failed).status, kit.thread(failed).environmentId, kit.thread(failed).environmentBranchName], ["error", null, null], "bb's worktree add failed: invalid reference");
   const woken = kit.store.takeUnread(coordinatorId, Date.now()).filter(({ event }) => event.kind === "failed");
   assert.equal(woken.length, 1, "the manager is woken failed, today's path");
   await kit.tick();

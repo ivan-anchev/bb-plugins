@@ -50,7 +50,7 @@ test("a handoff is stored whole, trimmed, with its turn and a waived verdict, an
 
 test("a handoff records where the agent's work is and what its thread runs on now, so neither is read from it again", async () => {
   const { kit, threadId, coordinatorId, agentThreadId } = await withAgent({ verify: false });
-  const environmentId = kit.thread(agentThreadId).environmentId;
+  const environmentId = kit.environment(agentThreadId);
   kit.git.checkouts.set(environmentId, "retries");
   // The user switches the agent's model in bb's composer before it hands off.
   kit.thread(agentThreadId).execution = { model: "sonnet", reasoningLevel: "low", serviceTier: "default", permissionMode: "auto" };
@@ -155,7 +155,7 @@ test("issue_read ends its status line with one full stop when the agent's summar
 test("a handoff still reading the agent's checkout when the agent is stopped is refused, and stores, checks and starts nothing", async () => {
   const { kit, threadId, coordinatorId, agentThreadId } = await withAgent();
   const before = kit.store.agent(coordinatorId, a1) ?? assert.fail("no agent");
-  kit.git.checkouts.set(kit.thread(agentThreadId).environmentId, "retries");
+  kit.git.checkouts.set(kit.environment(agentThreadId), "retries");
   kit.thread(agentThreadId).execution = { model: "sonnet", reasoningLevel: "low", serviceTier: "default", permissionMode: "auto" };
   kit.git.holding = true;
   const handingOff = kit.call("agent_handoff", DONE, agentThreadId);

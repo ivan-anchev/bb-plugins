@@ -682,7 +682,7 @@ test("a verifier whose sandbox was removed before its verdict reads Couldn't ver
   await handOff();
   const verifierThreadId = verifier();
   // As bb leaves it when the machine is removed: the environment destroyed, the verifier's start failed.
-  kit.environments.destroyed.add(kit.thread(verifierThreadId).environmentId);
+  kit.environments.destroyed.add(kit.environment(verifierThreadId));
   kit.thread(verifierThreadId).status = "error";
   await kit.tick();
   await settled();

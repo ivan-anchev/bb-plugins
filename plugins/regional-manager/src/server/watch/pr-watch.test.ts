@@ -496,7 +496,8 @@ test("a verdict whose settle fails leaves every read of the batch saved, and set
 
 test("a sandbox agent's environment is read by bb's git plugin only as it hands off: never by the board, the badge, issue_read or the watch", async () => {
   const { kit, threadId, coordinatorId, agentThreadId, board, pr, minute } = await agentOnGitHub({ kind: "provider", environmentProviderId: "boat-sandbox", machineInputs: { preset: "small" } });
-  const { environmentId, environmentBranchName } = kit.thread(agentThreadId);
+  const { environmentBranchName } = kit.thread(agentThreadId);
+  const environmentId = kit.environment(agentThreadId);
   const agentReads = () => kit.git.calls.filter((keys) => keys.includes(environmentId)).length;
   kit.git.checkouts.set(environmentId, "add-retries");
   pr();
@@ -523,7 +524,7 @@ test("a sandbox agent's environment is read by bb's git plugin only as it hands 
 
 test("an agent's branch as recorded at a handoff is kept when a later handoff can't read its checkout", async () => {
   const { kit, agentThreadId, row, pr, minute } = await agentOnGitHub();
-  const { environmentId } = kit.thread(agentThreadId);
+  const environmentId = kit.environment(agentThreadId);
   kit.git.checkouts.set(environmentId, "add-retries");
   await kit.call("agent_handoff", BLOCKED, agentThreadId);
   pr({}, "add-retries");

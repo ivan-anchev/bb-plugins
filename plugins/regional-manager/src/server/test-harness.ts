@@ -96,7 +96,7 @@ type FakeExecution = { model: string; reasoningLevel: string; serviceTier: strin
 type FakeThread = HolderThread & {
   id: string;
   providerId: string;
-  environmentId: string;
+  environmentId: string | null;
   execution: FakeExecution | null;
   environmentBranchName: string | null;
   environmentHostId: string | null;
@@ -344,6 +344,12 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     return thread;
   }
 
+  function environmentOf(threadId: string): string {
+    const { environmentId } = fakeThread(threadId);
+    if (environmentId === null) throw new Error(`bb provisioned no environment for ${threadId}`);
+    return environmentId;
+  }
+
   /** A new turn starts in the thread, as when someone sends it a message. */
   function startTurn(thread: FakeThread): void {
     thread.status = "active";
@@ -379,17 +385,18 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       if (reused !== null && environmentRecords.destroyed.has(reused)) throw bbHttpError(409, "environment_unavailable", "Environment unavailable");
       const id = `thr_${++spawned}`;
       metadata.set(id, args.pluginMetadata ?? {});
-      // As bb does, a base it can't resolve fails the thread's provisioning after the spawn answers: the thread errors, with no branch (bb-facts P1b(b), P2a).
+      // As bb does, a base it can't resolve fails the thread's provisioning after the spawn answers: the thread errors, with no environment and no branch (bb-facts P1b(b), P2a; seen live in issue 06).
       const cut = reused === null ? cutFrom(args.environment) : null;
+      const failed = cut !== null && "error" in cut;
       const environmentId = reused ?? `env_${id}`;
       const thread: FakeThread = {
         id,
         status: "active",
         hasPendingInteraction: false,
         ...runsOn(args, args.parentThreadId === undefined ? null : fakeThread(args.parentThreadId)),
-        environmentId,
+        environmentId: failed ? null : environmentId,
         // As bb does, a thread in a reused environment reports the branch bb made that environment on.
-        environmentBranchName: reused === null ? (cut !== null && "error" in cut ? null : `bb/${id}`) : ([...fakeThreads.values()].find((thread) => thread.environmentId === reused)?.environmentBranchName ?? null),
+        environmentBranchName: reused === null ? (failed ? null : `bb/${id}`) : ([...fakeThreads.values()].find((thread) => thread.environmentId === reused)?.environmentBranchName ?? null),
         environmentHostId: "host_1",
         archivedAt: null,
         deletedAt: null,
@@ -508,6 +515,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       const thread = fakeThread(threadId);
       thread.archivedAt = Date.now();
       const { environmentId } = thread;
+      if (environmentId === null) return;
       const lives = [...fakeThreads.values()].some((other) => other.environmentId === environmentId && other.archivedAt === null && other.deletedAt === null);
       if (kinds.sandboxes.has(environmentId) && !lives) environmentRecords.destroyed.add(environmentId);
     },
@@ -688,13 +696,15 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     repo,
     /** The agent commits in its thread's environment: its head moves, and a worktree's branch with it, as both are one ref. */
     commit(threadId: string, sha: string): void {
-      const { environmentId, environmentBranchName } = fakeThread(threadId);
+      const { environmentBranchName } = fakeThread(threadId);
+      const environmentId = environmentOf(threadId);
       git.heads.set(environmentId, sha);
       if (kinds.worktrees.has(environmentId) && environmentBranchName !== null) repo.local.set(environmentBranchName, sha);
     },
     /** The agent pushes its thread's branch to origin, at its environment's head; returns the branch. */
     push(threadId: string): string {
-      const { environmentId, environmentBranchName } = fakeThread(threadId);
+      const { environmentBranchName } = fakeThread(threadId);
+      const environmentId = environmentOf(threadId);
       if (environmentBranchName === null) throw new Error(`${threadId} has no branch to push`);
       repo.origin.set(environmentBranchName, git.heads.get(environmentId) ?? HEAD);
       return environmentBranchName;
@@ -746,6 +756,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     },
     /** A thread bb has, as the plugin can list it, and what it was spawned with. */
     thread: fakeThread,
+    /** The environment bb provisioned for the thread; throws for one whose provisioning failed, which has none. */
+    environment: environmentOf,
     /** How many threads bb has spawned. */
     spawned: () => spawned,
     /** Every message sent to a thread, in order. */
