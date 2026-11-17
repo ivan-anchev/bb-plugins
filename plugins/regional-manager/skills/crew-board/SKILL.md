@@ -46,7 +46,7 @@ and no tool can turn verification on or off.
 | `issue_create` | regional manager | Files an issue: `kind`, `title`, `description`, and optionally `brief`, `doneCriteria`, `status` (todo or backlog) and `verifier`. |
 | `issue_update` | regional manager | Changes an issue's kind (until an agent has started on it), title, description, brief, done-criteria or verifier, or rests, cancels or accepts it with `status`. |
 | `issue_read` | regional manager | Returns one issue whole: status, plan, verifier, its agents and what they ran on, every handoff with its verdict, and its agent's latest answer. |
-| `agent_start` | regional manager | Starts an agent on an issue, optionally naming its `execution` and `placement`. |
+| `agent_start` | regional manager | Starts an agent on an issue, optionally naming its `execution` and `placement`; on an issue that has or had one, hands it over, continuing in the previous agent's environment unless `from` is `default`. |
 | `agent_message` | regional manager | Messages one agent, marked as from the regional manager. |
 | `agent_stop` | regional manager | Stops one agent, and archives its thread with `archive: true`. |
 | `agent_handoff` | agent | Ends the agent's work: done (a build issue's with its commit, a research issue's with its report), blocked or gave up, with a summary and its lists. |
@@ -109,7 +109,8 @@ accepted: its done handoff makes it Done). Any other change, or `backlog`, `todo
 ## Agents
 
 An agent is an ordinary child thread of the regional manager that holds one
-issue for its whole life; an issue has one agent at a time. The manager
+issue for its whole life; an issue has one agent at a time, and passes from
+one to the next by a handover. The manager
 starts it with `agent_start`:
 
 - **Where it runs**: a fresh worktree of the project's default branch on the
@@ -133,8 +134,10 @@ starts it with `agent_start`:
   `agent_handoff`. It can't write memory or start agents.
 
 `agent_start` is refused, and nothing starts, when the issue has no brief, or
-is a build issue with no done-criteria, another agent holds it, it is canceled, accepted or Done,
-or what it would run on or where can't be had.
+is a build issue with no done-criteria, it is canceled, accepted or Done,
+or what it would run on or where can't be had. On an issue that has or had an
+agent, it hands the issue over (see
+[Handing an issue to a new agent](#handing-an-issue-to-a-new-agent)).
 
 The regional manager messages an agent with `agent_message` (it arrives
 marked as from the regional manager, not from you), and stops one with
@@ -154,8 +157,7 @@ while its done handoff is Verifying leaves the issue in Verifying; if that
 check then fails, or can't be had, the issue rests in Todo, and the manager
 hears of the failed check rather than a return to Todo. A check that passes
 still takes it to In review. An ended agent's handoff is refused. To try
-again, the manager starts a fresh agent on the same issue, from the issue's
-brief as it is then.
+again, the manager hands the issue to a new agent.
 
 Archiving or deleting the regional manager archives or deletes its agents
 with it.
@@ -183,6 +185,48 @@ branch for the project.
 - Its verifier runs in the same sandbox, on the agent's own checkout.
 - A sandbox removed before its verifier returns a verdict leaves the issue
   under Needs you as "Couldn't verify", with the reason.
+- `agent_stop` with `archive: true` destroys the sandbox when no other thread
+  lives there, with anything the agent never pushed.
+
+### Handing an issue to a new agent
+
+An issue outlives its agent: `agent_start` on an issue that has or had one is
+a handover, and the issue keeps one record of every agent, handoff and
+verdict.
+
+- **The holder** is stopped and ends as "replaced", never archived: a stopped
+  thread keeps its environment alive, since bb destroys a sandbox within
+  seconds, and retires a worktree a few minutes later, once no live thread is
+  left in it. A verifier checking its work is stopped too, and its late
+  verdict refused. Nobody is woken: the manager did it.
+- **By default the new agent continues** in the previous agent's environment,
+  a worktree or a sandbox alike, as the verifier joins it: the same
+  checkout, branch, commits, uncommitted files and pull request. A suspended
+  sandbox is woken by the start, and nothing reads it before. A worktree whose
+  thread you archived is still joined within the few minutes bb keeps it.
+  The pull request stays the issue's, with no second "opened" update, and its
+  merge makes the issue Done.
+- **Its first message** adds "Where you work" (whose environment, which
+  branch, the pull request to push to, and to run `git status` and `git log`
+  before changing anything) and "Earlier work", every earlier agent's
+  handoffs whole, each with its verdict's results and findings.
+- **What it runs on** is the regional manager's own unless `execution` names
+  one, whatever the previous agent ran on; a named one is checked against
+  what bb can run in that environment before anything is stopped. It gets a
+  fix round of its own.
+- **`from: "default"`** starts clean instead: a new environment from the
+  default branch (a `placement` may name where), with the earlier handoffs
+  and verdicts still in its first message. A research issue's handover always
+  starts clean.
+- **Refused, with nothing stopped**: a `placement` on a handover that
+  continues, or an environment bb removed (`bb environment cleanup`, a
+  reaped sandbox): moving work to a new environment isn't possible yet, so the
+  refusal offers `from: "default"`. A holder bb still reports stopping is
+  refused too. If bb refuses the new agent's thread, as for an environment
+  removed in the meantime, it ends at once and the issue rests in Todo.
+- **The replaced thread** stays stopped in the sidebar, and its sandbox
+  allocated (suspended after 15 idle minutes), until you archive it, which is
+  safe once the new agent lives there.
 
 ## Who runs what
 
@@ -356,10 +400,10 @@ regional manager:
   verification, findings sent back to it (fix round 1)`, in its next wake and
   catch-up.
 - An agent gets **one** such round, counted on the agent before the findings
-  are sent, and kept across reloads; a fresh agent on the issue gets its own.
+  are sent, and kept across reloads; a new agent on the issue gets its own.
   Its next failed verdict sends nothing back: the issue waits under Needs you
   as "✗ Failed verification after its fix round: <summary>", and the regional
-  manager decides: message the agent, ask you, or stop it and start a fresh
+  manager decides: message the agent, ask you, or hand the issue to a new
   one.
 - A crash or reload while the findings are sent, or a send that fails in a
   way that doesn't prove bb refused them (a timeout, a dropped connection, a
@@ -661,3 +705,6 @@ and the Memory page read the new text on their next read.
 - Reminders take no cron expressions and nothing finer than a minute.
 - The plugin never merges, approves or comments on a pull request.
 - An issue has one agent at a time.
+- A handover continues only in the previous agent's environment, or starts
+  clean: it can't yet move the work to a new environment, as after bb
+  removed a sandbox.

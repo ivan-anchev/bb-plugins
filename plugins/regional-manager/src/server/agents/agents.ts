@@ -247,8 +247,9 @@ export function createAgents({ bb, store, spawner, inbox, memory, placementFacts
 
   /**
    * Steps 2 and 3: stops the holder's turn, if one holds the issue, then gives the issue to the new
-   * agent. Refused, with nothing changed but the stop, when the holder is still running, or when
-   * the issue can no longer start an agent or changed hands while it stopped.
+   * agent. Refused with nothing changed when the holder is still running; with nothing changed but
+   * the stop, which the refusal says, when the issue can no longer start an agent or changed hands
+   * while it stopped.
    */
   async function takeOver(coordinatorId: CoordinatorId, { issueId, spot, runsOn }: Decided): Promise<Taken | { refused: string }> {
     const holder = holderOf(coordinatorId, issueId);
@@ -259,11 +260,12 @@ export function createAgents({ bb, store, spawner, inbox, memory, placementFacts
     // why decide again here, with no await from here to the write: while the holder stopped, the
     // manager may have closed the issue or changed its plan, a merge made it Done, or the holder
     // handed off or ended.
+    const stopped = holder === null ? "" : `${holder.id} was stopped, but nothing else changed: `;
     const now = startable(coordinatorId, issueId, (await readIssue(bb, store, { coordinatorId, id: issueId })).view, runsOn);
-    if ("refused" in now) return now;
+    if ("refused" in now) return { refused: `${stopped}${now.refused}` };
     const next: NewAgent = { coordinatorId, issueId, ticket: randomUUID(), ...spot, execution: runsOn.execution, at: Date.now() };
     const inserted = holder === null ? withNoneSuperseded(store.insertAgent(next)) : store.replaceAgent(holder, leftBy(holder, turnSeq), next);
-    if (inserted === null) return { refused: `${issueId} changed hands meanwhile: crew_catch_up shows who holds it now.` };
+    if (inserted === null) return { refused: `${stopped}${issueId} changed hands meanwhile. crew_catch_up shows who holds it now.` };
     await stopVerifiers(bb, inserted.superseded);
     return { ...now, agentId: inserted.agentId, ticket: next.ticket, replaced: holder?.id ?? null };
   }
