@@ -53,7 +53,7 @@ export function issuesStore(db: Db) {
         db()
           .prepare("INSERT INTO issues (coordinator_id, id, kind, title, description, brief, done_criteria, verifier, rest, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
           .run(coordinatorId, filed.id, filed.kind, filed.title, filed.description, filed.brief, JSON.stringify(filed.doneCriteria), jsonOrNull(filed.verifier), filed.rest, at);
-        writeDependencies(db, filed, [], closes);
+        writeDependencies(db, filed, closes);
         return { issue: filed };
       })();
     },
@@ -83,7 +83,7 @@ export function issuesStore(db: Db) {
         db()
           .prepare("UPDATE issues SET kind = ?, title = ?, description = ?, brief = ?, done_criteria = ?, verifier = ?, rest = ?, closed_as = ?, closed_at = ? WHERE coordinator_id = ? AND id = ?")
           .run(next.kind, next.title, next.description, next.brief, JSON.stringify(next.doneCriteria), jsonOrNull(next.verifier), next.rest, next.closed?.as ?? null, next.closed?.at ?? null, coordinatorId, id);
-        if (dependsOn !== undefined) writeDependencies(db, next, now.dependsOn, dependsOn.closes);
+        if (dependsOn !== undefined) writeDependencies(db, next, dependsOn.closes);
         return { issue: next };
       })();
     },
@@ -91,20 +91,22 @@ export function issuesStore(db: Db) {
 }
 
 /**
- * Writes the issue's dependencies over those it had (`was`): a removed one's relation is deleted
- * with the close known of it, a kept one keeps its own, and an added one is written knowing its
- * dependency's close as `closes` says, the read the manager is answered from ("blocked by i1"). So
- * a dependency closed already then is no news, and any close after is (relations.ts
- * unblockedSince). why from that read, though it was made before the write: a dependency that
- * closes in between was told open, and its close is news; one reopened in between and closed again
- * is too. Either way the error falls to an announcement more, never one lost. Kept ones keep their
- * rows, and added ones follow them, so the order written stays.
+ * Writes the issue's dependencies as `dependsOn` lists them, in that order, over the relations it
+ * has: a removed one's relation is deleted with the close known of it, a kept one keeps its own,
+ * and an added one is written knowing its dependency's close as `closes` says, the read the manager
+ * is answered from ("blocked by i1"). So a dependency closed already then is no news, and any close
+ * after is (relations.ts unblockedSince). why from that read, though it was made before the write:
+ * a dependency that closes in between was told open, and its close is news; one reopened in between
+ * and closed again is too. Either way the error falls to an announcement more, never one lost.
+ * why rewrite the kept ones too: relations read back in the order written (ISSUE_COLUMNS), and an
+ * edit can move a kept one, as removing and adding it again puts it last.
  */
-function writeDependencies(db: Db, { coordinatorId, id, dependsOn }: Pick<Issue, "coordinatorId" | "id" | "dependsOn">, was: readonly IssueId[], closes: Closes): void {
-  const remove = db().prepare("DELETE FROM issue_relations WHERE coordinator_id = ? AND issue_id = ? AND depends_on = ?");
-  for (const dependency of was.filter((other) => !dependsOn.includes(other))) remove.run(coordinatorId, id, dependency);
+function writeDependencies(db: Db, { coordinatorId, id, dependsOn }: Pick<Issue, "coordinatorId" | "id" | "dependsOn">, closes: Closes): void {
+  const rows = db().prepare("SELECT depends_on AS dependsOn, known_close AS close FROM issue_relations WHERE coordinator_id = ? AND issue_id = ?").all(coordinatorId, id);
+  const kept = new Map(rows.map((row) => keptRowSchema.parse(row)).map(({ dependsOn: dependency, close }) => [dependency, close]));
+  db().prepare("DELETE FROM issue_relations WHERE coordinator_id = ? AND issue_id = ?").run(coordinatorId, id);
   const insert = db().prepare("INSERT INTO issue_relations (coordinator_id, issue_id, depends_on, known_close) VALUES (?, ?, ?, ?)");
-  for (const dependency of dependsOn.filter((other) => !was.includes(other))) insert.run(coordinatorId, id, dependency, closes.get(dependency) ?? null);
+  for (const dependency of dependsOn) insert.run(coordinatorId, id, dependency, kept.has(dependency) ? kept.get(dependency) : (closes.get(dependency) ?? null));
 }
 
 /** Of each of the regional manager's issues' dependencies, the close it knows of (relations.ts unblockedSince). Call inside the transaction that records what it learned. */
@@ -123,7 +125,8 @@ export function rememberCloses(db: Db, coordinatorId: CoordinatorId, learned: Re
   for (const [issueId, closes] of learned) for (const [dependsOn, close] of closes) remember.run(close, coordinatorId, issueId, dependsOn);
 }
 
-const knownCloseRowSchema = z.object({ issueId: issueIdSchema, dependsOn: issueIdSchema, close: z.string().nullable() });
+const keptRowSchema = z.object({ dependsOn: issueIdSchema, close: z.string().nullable() });
+const knownCloseRowSchema = keptRowSchema.extend({ issueId: issueIdSchema });
 
 /** The dependencies with the change applied: the removed ones gone, the added ones after the rest. */
 const changedDependencies = (dependsOn: readonly IssueId[], { add, remove }: DependencyChange): IssueId[] => unique([...dependsOn.filter((id) => !remove.includes(id)), ...add]);

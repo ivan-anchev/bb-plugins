@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
+import { knownCloses, rememberCloses } from "./issues-store.ts";
 import { EXECUTION, failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "../test-store.ts";
 
 test("issues are numbered i1, i2… within their regional manager, and read back as filed", () => {
@@ -49,7 +50,7 @@ test("an edit that needs the issue unheld is refused while an agent holds it, an
 });
 
 test("an issue's dependencies are stored in the order added, changed by what is added and removed, and read back with it", () => {
-  const { store } = freshStore();
+  const { db, store } = freshStore();
   const [i1, i2, i3] = [1, 2, 3].map(() => filedIssue(store, MANAGER, newIssue(), 2_000).id);
   const filed = filedIssue(store, MANAGER, newIssue({ dependsOn: [i3, i1, i3] }), 2_100);
   assert.deepEqual(store.issue(MANAGER, filed.id)?.dependsOn, [i3, i1]);
@@ -58,6 +59,13 @@ test("an issue's dependencies are stored in the order added, changed by what is 
   assert.deepEqual("issue" in edited && edited.issue.dependsOn, [i1, i2]);
   assert.deepEqual(store.issue(MANAGER, filed.id)?.dependsOn, [i1, i2]);
   assert.deepEqual(store.issue(MANAGER, i1)?.dependsOn, []);
+
+  // why the close known: a kept relation that moves keeps what the manager was told of it.
+  rememberCloses(() => db, MANAGER, new Map([[filed.id, new Map([[i1, "merged #41"]])]]));
+  const moved = store.updateIssue(MANAGER, filed.id, { dependsOn: { add: [i1], remove: [i1], closes: new Map() } }, { requireUnheld: false });
+  assert.deepEqual("issue" in moved && moved.issue.dependsOn, [i2, i1]);
+  assert.deepEqual(store.issue(MANAGER, filed.id)?.dependsOn, [i2, i1]);
+  assert.deepEqual(knownCloses(() => db, MANAGER).get(filed.id), new Map([[i2, null], [i1, "merged #41"]]));
 });
 
 test("a dependency on no issue files nothing, and one that closes a cycle changes nothing of its edit", () => {
