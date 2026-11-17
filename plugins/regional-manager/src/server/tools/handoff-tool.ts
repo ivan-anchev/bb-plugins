@@ -12,8 +12,6 @@ import { checkoutOf, type CheckoutRead } from "../../model/verdict/checkout.ts";
 import { latestTurnSeq, listedThreads, type TurnsBb } from "../agents/threads.ts";
 import { threadExecution, type ThreadExecutionBb } from "../execution/thread-execution.ts";
 import { gitStatusOf, type GitStatus, type GitStatusBb } from "../git-status.ts";
-import type { MemoryRoot } from "../memory/memory-files.ts";
-import { saveReport } from "../memory/report-file.ts";
 import type { Store } from "../store/store.ts";
 import type { Verify } from "../verify/verify.ts";
 import { failed, type ToolsBb } from "./tool-kit.ts";
@@ -25,9 +23,9 @@ type ListedThread = { id: string; providerId: string; environmentId: string | nu
 /** The parts of bb the handoff uses: registering it, the thread's turns, what it runs on, its environment and bb's git plugin's read of it. */
 type HandoffBb = ToolsBb & TurnsBb & GitStatusBb & ThreadExecutionBb & { sdk: { threads: { list(args: { threadIds: string[]; includeHidden: true; limit: number }): Promise<ListedThread[]> } } };
 
-type Deps = { store: Pick<Store, "roleOfThread" | "agent" | "issue" | "record" | "recordCheckout" | "recordExecution">; verify: Pick<Verify, "handoff">; memory: Pick<MemoryRoot, "of"> };
+type Deps = { store: Pick<Store, "roleOfThread" | "agent" | "issue" | "recordCheckout" | "recordExecution">; verify: Pick<Verify, "handoff"> };
 
-export function registerHandoffTool(bb: HandoffBb, { store, verify, memory }: Deps): void {
+export function registerHandoffTool(bb: HandoffBb, { store, verify }: Deps): void {
   /** The caller's agent as stored now. why throw: an agent's role is inserted with its agent, in one transaction. */
   function agentOf(role: Extract<Role, { kind: "agent" }>): Agent {
     const agent = store.agent(role.coordinatorId, role.agentId);
@@ -62,15 +60,12 @@ export function registerHandoffTool(bb: HandoffBb, { store, verify, memory }: De
       const [turnSeq, environment, execution] = await Promise.all([latestTurnSeq(bb, threadId), reading, threadExecution(bb, threadId)]);
       // why throw: this call runs inside a turn, so bb has its turn/started event.
       if (turnSeq === null) throw new Error("bb lists no turn for this thread, so the handoff can't be tied to one. Try again.");
+      const report = reportOf(input, issue.kind);
+      if ("refused" in report) return failed(`${HANDOFF} is refused and nothing was saved: ${report.refused}`);
       // why read the agent again, with no await from here until the handoff is stored: it may have
-      // ended while bb answered, and an agent that no longer holds its issue writes nothing to it; a
-      // report is saved next to the issue's record as stored when the handoff is.
+      // ended while bb answered, and an agent that no longer holds its issue writes nothing to it.
       const agent = agentOf(role);
       if (agent.ended !== null) return endedText(issue.id, agent.ended.how);
-      const files = memory.of(agent.coordinatorId);
-      const earlier = store.record(agent.coordinatorId, issue.id).map(({ handoff }) => handoff);
-      const report = reportOf(input, issue.kind, (text) => saveReport(files, issue.id, earlier, text));
-      if ("refused" in report) return failed(`${HANDOFF} is refused and nothing was saved: ${report.refused}`);
       if (environment !== null) store.recordCheckout(agent.coordinatorId, agent.id, checkoutSeen(agent, environment));
       if (execution !== null) store.recordExecution(agent.coordinatorId, agent.id, execution);
       const checkout = reading === null ? NOT_READ : checkoutRead(environment);

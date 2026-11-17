@@ -503,7 +503,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   function wire() {
     const spawner = createSpawner(bb, store, memory, () => bindings++);
     const board = createBoard(bb, store, memory);
-    const inbox = createInbox({ bb, store, onChange: refreshBoard });
+    const inbox = createInbox({ bb, store, memory, onChange: refreshBoard });
     const agents = createAgents({ bb, store, spawner, inbox, memory, placementFacts: placementFactsReader(bb, store), onChange: refreshBoard, onRemoved: refreshCoordinators });
     const issues = createIssues({ bb, store, onChange: refreshBoard });
     const verify = createVerify({ bb, store, spawner, inbox });
@@ -511,7 +511,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
     registerIssueTools(bb, { store, issues });
     registerAgentTools(bb, { store, agents });
-    registerHandoffTool(bb, { store, verify, memory });
+    registerHandoffTool(bb, { store, verify });
     registerVerdictTool(bb, { store, verify });
     forwardThreadEvents(bb, { store, agents, refreshBoard });
     watchAgentThreads({ bb, store, inbox });

@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { AgentId } from "./agent.ts";
 import type { IssueId } from "./issue/issue.ts";
 import { PIPELINES, type Kind } from "./issue/kind.ts";
-import { memoryFileSchema, type MemoryFile } from "./memory-file.ts";
+import { memoryFileSchema } from "./memory-file.ts";
 import type { CoordinatorId } from "./role.ts";
 
 export const handoffIdSchema = z.uuid().brand<"handoffId">();
@@ -71,10 +71,12 @@ export const handoffIsCurrent = (handoff: Pick<Handoff, "turnSeq">, latestTurnSe
  * union keyed by what is delivered: a kind that delivers something else is a new variant, and a
  * check's subject (check.ts) takes a commit by type.
  */
+const commitDeliverySchema = z.object({ kind: z.literal("commit"), headSha: commitSchema, prUrl: prUrlSchema.nullable() });
+const givenReportSchema = z.object({ kind: z.literal("report"), report: reportSchema });
 export const deliverySchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("commit"), headSha: commitSchema, prUrl: prUrlSchema.nullable() }),
+  commitDeliverySchema,
   /** `file`: where the plugin saved the report in its regional manager's memory as it stored the handoff (report-file.ts). */
-  z.object({ kind: z.literal("report"), report: reportSchema, file: memoryFileSchema }),
+  givenReportSchema.extend({ file: memoryFileSchema }),
 ]);
 export type Delivery = z.infer<typeof deliverySchema>;
 
@@ -85,16 +87,29 @@ export const handoffReportSchema = z.discriminatedUnion("status", [
 ]);
 export type HandoffReport = z.infer<typeof handoffReportSchema>;
 
-/** An agent's handoff. `turnSeq` is the sequence of the `turn/started` event of the turn it was made in. */
-export type Handoff = { id: HandoffId; coordinatorId: CoordinatorId; issueId: IssueId; agentId: AgentId; at: number; turnSeq: number } & HandoffReport;
+/**
+ * A handoff as its agent gave it, before it is stored: a report has no file yet, since the plugin
+ * picks where it goes as it stores the handoff (report-file.ts).
+ */
+export type GivenReport =
+  | Exclude<HandoffReport, { status: "done" }>
+  | (Omit<Extract<HandoffReport, { status: "done" }>, "delivery"> & { delivery: z.infer<typeof commitDeliverySchema> | z.infer<typeof givenReportSchema> });
+
+/** Who made a handoff, when, and in which turn: `turnSeq` is the sequence of the `turn/started` event of the turn it was made in. */
+type Made = { id: HandoffId; coordinatorId: CoordinatorId; issueId: IssueId; agentId: AgentId; at: number; turnSeq: number };
+
+/** An agent's handoff, as stored. */
+export type Handoff = Made & HandoffReport;
+
+/** An agent's handoff, as given and not stored yet. */
+export type GivenHandoff = Made & GivenReport;
 
 /**
  * The handoff an agent of an issue of `kind` gave, as its report, or why it isn't one: a done
  * handoff names what its kind delivers, and whatever else it names is dropped, not refused (a
- * research agent's commit is not its result). `save` keeps a report in its regional manager's
- * memory and says where; it runs only for a done handoff that is not refused.
+ * research agent's commit is not its result).
  */
-export function reportOf({ status, headSha, prUrl, report, ...fields }: z.infer<typeof handoffFieldsSchema>, kind: Kind, save: (report: string) => MemoryFile): HandoffReport | { refused: string } {
+export function reportOf({ status, headSha, prUrl, report, ...fields }: z.infer<typeof handoffFieldsSchema>, kind: Kind): GivenReport | { refused: string } {
   if (status !== "done") return { status, ...fields };
   const { delivers, label } = PIPELINES[kind];
   switch (delivers) {
@@ -103,7 +118,7 @@ export function reportOf({ status, headSha, prUrl, report, ...fields }: z.infer<
       return { status, ...fields, delivery: { kind: "commit", headSha, prUrl: prUrl ?? null } };
     case "report":
       if (report === undefined) return { refused: `A done handoff of a ${label.toLowerCase()} issue needs report: your report, in markdown. It names no commit.` };
-      return { status, ...fields, delivery: { kind: "report", report, file: save(report) } };
+      return { status, ...fields, delivery: { kind: "report", report } };
     default:
       return delivers satisfies never;
   }

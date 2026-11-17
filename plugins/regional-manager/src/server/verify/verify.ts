@@ -8,7 +8,7 @@
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
 import { branchOf, type Agent } from "../../model/agent.ts";
 import { sameModel, type Execution } from "../../model/execution.ts";
-import { handoffIsCurrent, type Handoff } from "../../model/handoff.ts";
+import { handoffIsCurrent, type GivenHandoff, type Handoff } from "../../model/handoff.ts";
 import type { Check, CheckId } from "../../model/verdict/check.ts";
 import type { CheckoutRead } from "../../model/verdict/checkout.ts";
 import { ciOf, type CiVerdict } from "../../model/verdict/pr.ts";
@@ -267,7 +267,7 @@ export function createVerify({ bb, store, spawner, inbox }: Deps) {
      * verifiers of the earlier checks it supersedes, and starts its own when its check is queued for
      * one. Returns its check (null: not done).
      */
-    async handoff(handoff: Handoff, checkout: CheckoutRead): Promise<Check | null> {
+    async handoff(handoff: GivenHandoff, checkout: CheckoutRead): Promise<Check | null> {
       const { check, superseded } = inbox.handoff(handoff, checkout);
       await Promise.all(superseded.map(stop));
       if (check?.verdict.state === "queued") await start(check.id);

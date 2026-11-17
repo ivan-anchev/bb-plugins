@@ -7,6 +7,8 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
+import { memoryStorage } from "../memory-storage.ts";
+import { failWrites } from "../store/test-store.ts";
 import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn } from "../test-harness.ts";
 
 const RESEARCH = {
@@ -22,9 +24,9 @@ const DONE = { status: "done", ...FIELDS, report: REPORT };
 const I1 = issueIdSchema.parse("i1");
 const I1_REPORT = memoryFileSchema.parse("reports/i1.md");
 
-/** A regional manager with research issue i1 filed (RESEARCH, with `fields` over it) and an agent started on it. */
-async function researching(fields: object = {}) {
-  const { kit, threadId, coordinatorId } = await coordinating();
+/** A regional manager over `storage`, with research issue i1 filed (RESEARCH, with `fields` over it) and an agent started on it. */
+async function researching(fields: object = {}, storage = memoryStorage().storage) {
+  const { kit, threadId, coordinatorId } = await coordinating({ storage });
   const call = (tool: string, input: object) => kit.call(tool, input, threadId);
   assert.equal(textOf(await call("issue_create", { ...RESEARCH, ...fields })), "Filed i1 (research) in Todo.");
   const agentThreadId = threadIn(textOf(await call("agent_start", { issue: "i1" })));
@@ -223,4 +225,72 @@ test("issue_read shows a research issue's questions, that nothing verifies it, a
   assert.ok(read.includes("### Verifier\n\nNone: nothing verifies a research issue."), read);
   assert.ok(read.includes(`#### Report\n\nSaved in your memory as reports/i1.md.`) && read.includes(REPORT), read);
   assert.doesNotMatch(read, /### Done when/);
+});
+
+/** The reports/ files in the manager's memory, each with what it holds. */
+const reportFiles = (files: Awaited<ReturnType<typeof researching>>["files"]) => files.list().flatMap((file) => (file.startsWith("reports/") ? [[file, files.read(file).text?.content]] : []));
+
+test("a first report whose handoff can't be stored leaves no file, and its retry saves it to reports/i1.md with its handoff and event", async () => {
+  const { db, storage } = memoryStorage();
+  const { kit, coordinatorId, agentThreadId, files, catchUp } = await researching({}, storage);
+  const allow = failWrites(db, "INSERT", "events");
+  await assert.rejects(kit.call("agent_handoff", DONE, agentThreadId), /forced failure/);
+  assert.deepEqual(reportFiles(files), []);
+  assert.deepEqual(kit.store.record(coordinatorId, I1), []);
+  assert.doesNotMatch(await catchUp(), /handed off/);
+
+  allow();
+  assert.match(textOf(await kit.call("agent_handoff", DONE, agentThreadId)), /^Handed off\. Your regional manager has your report, and i1 is Done/);
+  assert.deepEqual(reportFiles(files), [[I1_REPORT, `${REPORT}\n`]]);
+  assert.deepEqual(
+    kit.store.record(coordinatorId, I1).map(({ handoff }) => handoff.status === "done" && handoff.delivery),
+    [{ kind: "report", report: REPORT, file: I1_REPORT }],
+  );
+  const caughtUp = await catchUp();
+  assert.equal(caughtUp.split(`### i1 "Pick a card vault" (a1) handed off: done`).length, 2, caughtUp);
+  assert.ok(caughtUp.includes(`#### Report\n\nSaved in your memory as reports/i1.md. The plugin gives`), caughtUp);
+});
+
+test("a later report whose handoff can't be stored puts the earlier one back, and its retry replaces it in reports/i1.md, not beside it", async () => {
+  const { db, storage } = memoryStorage();
+  const { kit, coordinatorId, agentThreadId, call, files, catchUp, handOff } = await researching({}, storage);
+  await handOff(DONE);
+  await catchUp();
+  await call("agent_message", { agent: "a1", text: "Add what KMS would cost." });
+  const later = { ...DONE, summary: "Vault fits; KMS costs more", report: "## Recommendation\n\nVault: KMS costs more." };
+
+  const allow = failWrites(db, "INSERT", "events");
+  await assert.rejects(kit.call("agent_handoff", later, agentThreadId), /forced failure/);
+  assert.deepEqual(reportFiles(files), [[I1_REPORT, `${REPORT}\n`]]);
+  assert.deepEqual(
+    kit.store.record(coordinatorId, I1).map(({ handoff }) => handoff.summary),
+    ["Vault fits our PCI scope"],
+  );
+  assert.doesNotMatch(await catchUp(), /handed off/);
+
+  allow();
+  await handOff(later);
+  assert.deepEqual(reportFiles(files), [[I1_REPORT, "## Recommendation\n\nVault: KMS costs more.\n"]]);
+  assert.deepEqual(
+    kit.store.record(coordinatorId, I1).map(({ handoff }) => handoff.status === "done" && handoff.delivery.kind === "report" && [handoff.summary, handoff.delivery.file]),
+    [
+      ["Vault fits our PCI scope", I1_REPORT],
+      ["Vault fits; KMS costs more", I1_REPORT],
+    ],
+  );
+  const caughtUp = await catchUp();
+  assert.equal(caughtUp.split(`### i1 "Pick a card vault" (a1) handed off: done`).length, 2, caughtUp);
+  assert.ok(caughtUp.includes(`#### Report\n\nSaved in your memory as reports/i1.md. The plugin gives`), caughtUp);
+  assert.doesNotMatch(caughtUp, /not as the plugin last saved it/);
+});
+
+test("a report whose handoff is stored keeps its file when the doorbell after it fails", async () => {
+  const { kit, threadId, coordinatorId, statusOf, handOff, files } = await researching();
+  kit.sends.failure = { threadId, error: new Error("bb is restarting"), taken: false };
+  await handOff(DONE);
+  await settled();
+  assert.ok(kit.sendAttempts().includes(threadId), "no doorbell was tried");
+  assert.deepEqual(reportFiles(files), [[I1_REPORT, `${REPORT}\n`]]);
+  assert.equal(kit.store.record(coordinatorId, I1).length, 1);
+  assert.match(await statusOf("i1"), /^Research\. Done: /);
 });
