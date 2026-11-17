@@ -6,9 +6,9 @@
 // is announced with no hook of its own; a read that fails is simply read again on the next change
 // or tick; and a read overtaken by a change is read again, never recorded (current-views.ts).
 import type { PluginLogger } from "@get-bb/plugin-sdk";
-import type { CoordinatorId } from "../../model/role.ts";
-import type { Inbox } from "../inbox/inbox.ts";
-import type { Store } from "../store/store.ts";
+import type { CoordinatorId } from "../../../model/role.ts";
+import type { Inbox } from "../../inbox/inbox.ts";
+import type { Store } from "../../store/store.ts";
 import type { CurrentViews } from "./current-views.ts";
 
 type Deps = {

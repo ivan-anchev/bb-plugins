@@ -10,7 +10,7 @@ import type { Agent } from "../../model/agent.ts";
 import { executionText, recipientsText, type Joined, type StartOutcome, type StopOutcome, type Withdrawn } from "../agents/agents.ts";
 import { handoffText, type Lookups } from "../tools/inbox-text.ts";
 import { fenced } from "../verify/findings.ts";
-import type { IssueRead } from "./issue-facts.ts";
+import type { IssueRead } from "./views/issue-facts.ts";
 
 /** The most of an agent's latest answer issue_read returns. */
 const OUTPUT_BUDGET_CHARS = 12_000;

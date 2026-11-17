@@ -33,7 +33,7 @@ import type { CoordinatorId } from "../../model/role.ts";
 import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
 import { inheritedFrom, type Inherited, type ThreadExecutionBb } from "../execution/thread-execution.ts";
 import type { Inbox } from "../inbox/inbox.ts";
-import { readIssue, type FactsBb, type FactsStore } from "../issues/issue-facts.ts";
+import { readIssue, type FactsBb, type FactsStore } from "../issues/views/issue-facts.ts";
 import type { Busy, IssueTurns } from "../issues/issue-turns.ts";
 import type { MemoryRoot } from "../memory/memory-files.ts";
 import type { Spawner } from "../spawn.ts";

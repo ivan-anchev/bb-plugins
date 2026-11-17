@@ -3,8 +3,8 @@
 // between the read and the act. Reading every issue awaits bb, and a status derived from bb (a
 // report whose turn ended, a merge, a parent's sub-issues) can move meanwhile; an act judged on a
 // read overtaken so would admit or refuse, or record, what is no longer so.
-import type { IssueView } from "../../model/issue/status.ts";
-import type { CoordinatorId } from "../../model/role.ts";
+import type { IssueView } from "../../../model/issue/status.ts";
+import type { CoordinatorId } from "../../../model/role.ts";
 import { readIssues, type FactsBb, type FactsStore } from "./issue-facts.ts";
 
 /**

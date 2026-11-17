@@ -13,8 +13,8 @@ import { executionText } from "../agents/agents.ts";
 import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
 import type { DependencyChange, IssueEdit, NewIssue } from "../store/issue/issues-store.ts";
 import type { Store } from "../store/store.ts";
-import type { CurrentViews } from "./current-views.ts";
-import { readIssues, type FactsBb, type FactsStore, type IssueRead } from "./issue-facts.ts";
+import type { CurrentViews } from "./views/current-views.ts";
+import { readIssues, type FactsBb, type FactsStore, type IssueRead } from "./views/issue-facts.ts";
 import { issueText, verifierText } from "./issue-text.ts";
 
 /** The parts of bb the issues read: their agents' threads and turns, bb's catalog, and an agent's latest answer. */

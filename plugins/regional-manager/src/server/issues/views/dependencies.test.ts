@@ -3,8 +3,8 @@
 // list, and the unblocked announcements. A dependency informs and never refuses, and carries nothing.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { issueIdSchema } from "../../model/issue/issue.ts";
-import { coordinating, HEAD, isRefusal, ISSUE, newThreadRequest, settled, textOf, threadIn, type FakePr } from "../test-harness.ts";
+import { issueIdSchema } from "../../../model/issue/issue.ts";
+import { coordinating, HEAD, isRefusal, ISSUE, newThreadRequest, settled, textOf, threadIn, type FakePr } from "../../test-harness.ts";
 
 const RESEARCH = { kind: "research", title: "Pick a card vault", description: "Which vault fits our PCI scope.", brief: "Compare Vault and KMS.", doneCriteria: [] };
 const REPORT = "## Recommendation\n\nVault: it keeps card data inside our PCI scope.";
