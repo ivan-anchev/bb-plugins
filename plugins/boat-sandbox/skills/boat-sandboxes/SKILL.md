@@ -443,8 +443,10 @@ wrong leaves the chart as it was and says why in one line under it:
 
 A thread that runs on a boat sandbox gets two ways into its sandbox's desktop:
 
-- **Computer card:** a section in the thread's Info tab, under the details,
-  with a drawing of a desktop. Click it (or focus it and press Enter).
+- **Computer card:** a tile in the thread's Info tab, under the details: a
+  drawing of a desktop above a monitor icon and "Computer". The whole tile is
+  one button. Click anywhere on it (or focus it and press Enter). It has no
+  heading and does not fold.
 - **Computer row:** in the New tab's Actions list.
 
 Both open the **Computer page**, a side-panel tab. Opening it again selects
