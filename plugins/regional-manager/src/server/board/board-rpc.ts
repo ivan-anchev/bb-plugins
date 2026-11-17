@@ -25,8 +25,8 @@ export function boardHandlers({ store, board, inbox }: Deps): PluginRpcHandlers<
   return {
     board: ({ coordinatorId }) => board.read(known(coordinatorId)),
 
-    issue: ({ coordinatorId, issueId }) => {
-      const detail = board.detail(known(coordinatorId), issueId);
+    issue: async ({ coordinatorId, issueId }) => {
+      const detail = await board.detail(known(coordinatorId), issueId);
       if (detail === null) throw new Refusal({ code: "not_found", message: `This regional manager has no issue ${issueId}.` });
       return detail;
     },

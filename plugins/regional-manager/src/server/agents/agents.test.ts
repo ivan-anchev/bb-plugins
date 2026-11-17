@@ -369,6 +369,26 @@ assert.equal(doorbells()[0], '[Regional Manager] 1 update. Call crew_catch_up to
   assert.equal(textOf(await kit.call("agent_stop", { agent: "a1" }, threadId)), "a1 had already ended (stopped); nothing changed.");
 });
 
+test("an issue opened on the board links each ended agent's thread while bb has it, archived or not, and none once it is deleted", async () => {
+  const { kit, threadId, coordinatorId, start } = await filed();
+  const stopped = threadIn(textOf(await start()));
+  await kit.call("agent_stop", { agent: "a1" }, threadId);
+  const archived = threadIn(textOf(await start()));
+  await kit.call("agent_stop", { agent: "a2", archive: true }, threadId);
+  await settled();
+  const heldBy = async () => (await kit.rpc.issue({ coordinatorId, issueId: issueIdSchema.parse("i1") })).record.map(({ agent }) => agent);
+  assert.deepEqual(await heldBy(), [
+    { id: "a1", threadId: stopped, ended: "stopped" },
+    { id: "a2", threadId: archived, ended: "stopped" },
+  ]);
+
+  for (const id of [stopped, archived]) kit.thread(id).deletedAt = Date.now();
+  assert.deepEqual(await heldBy(), [
+    { id: "a1", threadId: null, ended: "stopped" },
+    { id: "a2", threadId: null, ended: "stopped" },
+  ]);
+});
+
 test("work that reached In review survives its agent's end, and a stopped agent's handoff is refused", async () => {
   const { kit, threadId, rows, doorbells, start } = await filed({ verify: false });
   const agentThreadId = threadIn(textOf(await start()));

@@ -10,6 +10,7 @@ import type { Handed } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { shownVerdict } from "../../model/verdict/verdict.ts";
+import { threadsById } from "../agents/threads.ts";
 import { readIssues, type FactsBb, type FactsStore, type IssueRead } from "../issues/issue-facts.ts";
 import type { MemoryRoot } from "../memory/memory-files.ts";
 import type { Store } from "../store/store.ts";
@@ -30,12 +31,15 @@ const rowOf = ({ view, agent, threadId }: IssueRead): IssueRow => ({
   pr: view.pr,
 });
 
-/** An agent in an issue's record. why no thread once deleted: there is nothing left to open. */
-const heldBy = ({ id, threadId, ended }: Agent): IssueDetail["record"][number]["agent"] => ({
-  id,
-  threadId: ended?.how === "deleted" ? null : threadId,
-  ended: ended?.how ?? null,
-});
+/**
+ * An agent in an issue's record, with its thread while bb still has it, archived or not (`threads`:
+ * the record's threads as bb lists them now). why bb's listing, not how the agent ended: a thread
+ * archived or kept when its agent ended may be deleted since, and the agent's record never says so.
+ */
+const heldBy = ({ id, threadId, ended }: Agent, threads: ReadonlyMap<string, { id: string; deletedAt: number | null }>): IssueDetail["record"][number]["agent"] => {
+  const thread = threadId === null ? undefined : threads.get(threadId);
+  return { id, threadId: thread === undefined || thread.deletedAt !== null ? null : thread.id, ended: ended?.how ?? null };
+};
 
 /** A handoff in an issue's record, with the verdict on it as the user is shown it. */
 const shownHanded = ({ handoff: { id, at, status, summary, did, evidence, concerns, deviations, findings }, check }: Handed): IssueDetail["record"][number]["handoffs"][number] => ({
@@ -89,18 +93,17 @@ export function createBoard(bb: FactsBb, store: BoardStore, memory: MemoryRoot) 
       };
     },
 
-    /** An issue opened on the board: its plan for the user and its record, from the store alone (null: the regional manager has no such issue). */
-    detail(id: CoordinatorId, issueId: IssueId): IssueDetail | null {
+    /** An issue opened on the board: its plan for the user and its record, from the store, with its agents' threads as bb lists them (null: the regional manager has no such issue). */
+    async detail(id: CoordinatorId, issueId: IssueId): Promise<IssueDetail | null> {
       const issue = store.issue(id, issueId);
       if (issue === null) return null;
       const record = store.record(id, issueId);
+      const agents = store.agents(id).filter((agent) => agent.issueId === issueId);
+      const threads = await threadsById(bb, agents.flatMap(({ threadId }) => (threadId === null ? [] : [threadId])));
       return {
         description: issue.description,
         doneCriteria: issue.doneCriteria,
-        record: store
-          .agents(id)
-          .filter((agent) => agent.issueId === issueId)
-          .map((agent) => ({ agent: heldBy(agent), handoffs: record.filter(({ handoff }) => handoff.agentId === agent.id).map(shownHanded) })),
+        record: agents.map((agent) => ({ agent: heldBy(agent, threads), handoffs: record.filter(({ handoff }) => handoff.agentId === agent.id).map(shownHanded) })),
       };
     },
 
