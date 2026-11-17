@@ -7,6 +7,7 @@
 // the crew tool, the verifier's crew_verdict and the tick can race without a verdict moving twice.
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
 import type { Crew } from "../../model/crew.ts";
+import { sameModel } from "../../model/execution.ts";
 import { handoffIsCurrent, type Handoff, type HandoffId, type NewHandoff } from "../../model/handoff.ts";
 import type { CheckoutRead } from "../../model/verdict/checkout.ts";
 import { ciOf, type CiVerdict } from "../../model/verdict/pr.ts";
@@ -18,7 +19,7 @@ import type { Spawner, VerifierExecution, VerifierRequest } from "../spawn.ts";
 import type { Settlement, Store } from "../store.ts";
 import { findingsMessage } from "./findings.ts";
 import { refusalOf } from "./send-refusal.ts";
-import { sameModel, verifierExecution, type ModelsBb } from "./verifier-model.ts";
+import { verifierExecution, type ModelsBb } from "./verifier-model.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
 type ThreadRow = Awaited<ReturnType<Threads["list"]>>[number];

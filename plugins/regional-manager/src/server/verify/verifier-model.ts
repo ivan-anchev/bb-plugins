@@ -1,6 +1,7 @@
 // What a verifier runs on. Independence is the point: a different model than the crew's when bb
 // has one, and the crew's own only as a last resort, which its verdict then says.
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
+import { sameModel } from "../../model/execution.ts";
 import type { VerifierExecution } from "../spawn.ts";
 
 type Providers = BbPluginApi["sdk"]["providers"];
@@ -32,9 +33,6 @@ export async function verifierExecution(bb: ModelsBb, { worker, coordinator, env
   const sibling = pick(await catalogOf(bb, environmentId, worker.providerId), (model) => model.model !== worker.model);
   return sibling === null ? worker : { providerId: worker.providerId, model: sibling.model, reasoningLevel: sibling.defaultReasoningEffort };
 }
-
-/** Whether two threads run on one provider and model. */
-export const sameModel = (a: Pick<VerifierExecution, "providerId" | "model">, b: Pick<VerifierExecution, "providerId" | "model">): boolean => a.providerId === b.providerId && a.model === b.model;
 
 type Model = Awaited<ReturnType<ModelsBb["sdk"]["providers"]["models"]>>["models"][number];
 

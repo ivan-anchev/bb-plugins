@@ -7,6 +7,7 @@ import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { typedText, type Coordinator } from "../contract.ts";
 import { environmentOf, type Crew } from "../model/crew.ts";
+import type { Execution } from "../model/execution.ts";
 import type { Handoff } from "../model/handoff.ts";
 import { memoryFileSchema } from "../model/memory-file.ts";
 import { coordinatorIdSchema, ticketMetadataSchema, type CrewId, type Role } from "../model/role.ts";
@@ -46,8 +47,8 @@ type SpawnStore = Pick<Store, "insertCoordinator" | "insertCrew" | "insertVerifi
 /** What a crew is saved with: what crew_start asks for, or what a superseded crew had. */
 export type CrewRequest = Pick<Crew, "title" | "brief" | "doneCriteria" | "placement">;
 
-/** What a verifier runs on: chosen by the plugin, never left to bb's default. */
-export type VerifierExecution = { providerId: string; model: string; reasoningLevel: string };
+/** What a verifier runs on: chosen by the plugin, never left to bb's default. Named Execution everywhere in commit 2. */
+export type VerifierExecution = Execution;
 
 /** What a verifier checks: one done handoff of a started crew, in the crew's environment, whose checkout the plugin read as it handed off. */
 export type VerifierRequest = {
