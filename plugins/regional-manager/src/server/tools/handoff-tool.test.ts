@@ -67,7 +67,7 @@ test("an agent's latest handoff is its newest, never another agent's, and an ear
   const otherThreadId = (await startedAgent(kit, threadId, { ...RETRIES, title: "Dead letters" })).agentThreadId;
   await kit.call("agent_handoff", { ...REPORT, status: "blocked" }, agentThreadId);
   const blocked = kit.store.latestHandoff(coordinatorId, a1) ?? assert.fail("no handoff stored");
-  kit.startTurn(agentThreadId);
+  await kit.startTurn(agentThreadId);
   await kit.call("agent_handoff", DONE, agentThreadId);
   await kit.call("agent_handoff", { ...REPORT, status: "gave-up" }, otherThreadId);
 
@@ -139,7 +139,7 @@ test("issue_read places the issue by its agent's thread once it has had a turn s
   await kit.idle(agentThreadId, "Handed off.");
   assert.match(textOf(await kit.call("issue_read", { id: "i1" }, threadId)), /^## i1: Add retries\n\nBuild\. In review: Unverified: Retries land with backoff\./);
 
-  kit.startTurn(agentThreadId);
+  await kit.startTurn(agentThreadId);
   const text = textOf(await kit.call("issue_read", { id: "i1" }, threadId));
   assert.match(text, /^## i1: Add retries\n\nBuild\. In progress: Working\./);
   assert.match(text, /### Its record\n\n#### a1's handoff\n\nStatus: done/);

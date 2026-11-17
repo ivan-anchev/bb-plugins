@@ -169,13 +169,13 @@ test("a verdict on a superseded or stale handoff, or of a stopped agent, sends n
   const superseded = await withAgent();
   await superseded.handOff();
   const replaced = superseded.verifier();
-  superseded.kit.startTurn(superseded.agentThreadId);
+  await superseded.kit.startTurn(superseded.agentThreadId);
   await superseded.handOff();
   assert.ok(isRefusal(await superseded.kit.call("issue_verdict", FAILS, replaced)));
 
   const stale = await withAgent();
   await stale.handOff();
-  stale.kit.startTurn(stale.agentThreadId); // the user types to the agent before its verdict
+  await stale.kit.startTurn(stale.agentThreadId); // the user types to the agent before its verdict
   await stale.kit.call("issue_verdict", FAILS, stale.verifier());
 
   const closed = await withAgent();
@@ -251,7 +251,7 @@ test("a done handoff that supersedes a verdict while its findings are on their w
   const returning = kit.call("issue_verdict", FAILS, verifier());
   await settled();
 
-  kit.startTurn(agentThreadId); // the user asks the agent for one more change while bb takes the findings
+  await kit.startTurn(agentThreadId); // the user asks the agent for one more change while bb takes the findings
   // It waits for i1's turn, which the findings hold until bb takes them.
   const handing = kit.call("agent_handoff", DONE, agentThreadId);
   await settled();
@@ -317,7 +317,7 @@ test("a crash before the findings leave, then an unrelated turn in the agent's t
 
   kit.sends.pending = null;
   kit.reload();
-  kit.startTurn(agentThreadId); // the user asks the agent something before the tick
+  await kit.startTurn(agentThreadId); // the user asks the agent something before the tick
   await kit.tick();
   await settled();
   assert.deepEqual(kit.sent().filter((args) => args.threadId === agentThreadId), [], "nothing is sent on a guess");
@@ -393,7 +393,7 @@ test("an agent turn that starts after the verifier's model is looked up, before 
   let answers = 0;
   // why the first: issue_verdict looks up only the verifier's model; the agent's is the one stored as it handed off.
   kit.modelLookups.answered = () => {
-    if (++answers === 1) kit.startTurn(agentThreadId);
+    if (++answers === 1) void kit.startTurn(agentThreadId);
   };
   await kit.call("issue_verdict", FAILS, verifier());
   await settled();
@@ -629,7 +629,7 @@ test("the switch applies to handoffs made after it, and setting it to what it is
   assert.deepEqual(verdict(), { state: "waived" });
 
   await kit.rpc.setVerify({ coordinatorId, verify: true });
-  kit.startTurn(agentThreadId);
+  await kit.startTurn(agentThreadId);
   await handOff();
   assert.equal(verdict().state, "running");
 });
@@ -733,7 +733,7 @@ test("a second done handoff supersedes the first verdict and stops its verifier,
   const first = latest();
   const firstVerifier = verifier();
 
-  kit.startTurn(agentThreadId); // the user asks the agent for one more change
+  await kit.startTurn(agentThreadId); // the user asks the agent for one more change
   await handOff();
   assert.deepEqual(kit.store.handoff(first.handoff.id)?.check?.verdict, { state: "superseded" });
   assert.equal(kit.thread(firstVerifier).status, "idle", "stopped");

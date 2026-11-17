@@ -4,11 +4,12 @@ import { z } from "zod";
 import { decisionIdSchema, type DecisionId, type Decision } from "../../../model/decision.ts";
 import { inboxEventSchema, type InboxEvent, type StoredEvent } from "../../../model/inbox/inbox-event.ts";
 import { ownTreeEventAfter, type OwnTreeEvent } from "../../../model/inbox/own-tree.ts";
-import { issueIdSchema, type IssueId } from "../../../model/issue/issue.ts";
-import { unblockedSince, type CloseKey, type KnownCloses } from "../../../model/issue/relations.ts";
+import { issueIdSchema } from "../../../model/issue/issue.ts";
+import { unblockedSince } from "../../../model/issue/relations.ts";
 import type { IssueView } from "../../../model/issue/status.ts";
 import { nextDue, reminderIdSchema, type Reminder, type ReminderId } from "../../../model/reminder.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../../model/role.ts";
+import { knownCloses, rememberCloses } from "../issue/issues-store.ts";
 import { json, type Db } from "../rows.ts";
 
 /** Records something to tell the regional manager, neither announced nor read yet. Call inside the transaction that records what it tells. */
@@ -33,17 +34,6 @@ export function inboxStore(db: Db) {
     return { at, event };
   }
 
-  /** Of each issue's dependencies, the close the regional manager knows of. */
-  function knownCloses(coordinatorId: CoordinatorId): KnownCloses {
-    const known = new Map<IssueId, Map<IssueId, CloseKey | null>>();
-    for (const row of db().prepare("SELECT issue_id AS issueId, depends_on AS dependsOn, close FROM known_closes WHERE coordinator_id = ?").all(coordinatorId)) {
-      const { issueId, dependsOn, close } = knownCloseRowSchema.parse(row);
-      const closes = known.get(issueId) ?? new Map<IssueId, CloseKey | null>();
-      known.set(issueId, closes.set(dependsOn, close));
-    }
-    return known;
-  }
-
   return {
     insertEvent: (coordinatorId: CoordinatorId, event: InboxEvent, at: number): void => insertEvent(db, coordinatorId, event, at),
 
@@ -64,26 +54,22 @@ export function inboxStore(db: Db) {
 
     /**
      * Records an `unblocked` event for each issue that every issue as viewed now (`views`, read whole)
-     * says was unblocked since the closes the regional manager knows of, and remembers what it knows
-     * next, deciding from what it knew in the same transaction (see unblockedSince). Returns whether
-     * it recorded one.
+     * says was unblocked since the closes the regional manager knows of its relations, and remembers
+     * the closes it learned on those relations, deciding from what it knew in the same transaction
+     * (see unblockedSince). Returns whether it recorded one.
      */
     recordUnblocked(coordinatorId: CoordinatorId, views: readonly IssueView[], at: number): boolean {
       return db().transaction(() => {
-        const { unblocked, known } = unblockedSince(knownCloses(coordinatorId), views);
-        db().prepare("DELETE FROM known_closes WHERE coordinator_id = ?").run(coordinatorId);
-        const remember = db().prepare("INSERT INTO known_closes (coordinator_id, issue_id, depends_on, close) VALUES (?, ?, ?, ?)");
-        for (const [issueId, closes] of known) for (const [dependsOn, close] of closes) remember.run(coordinatorId, issueId, dependsOn, close);
+        const { unblocked, learned } = unblockedSince(knownCloses(db, coordinatorId), views);
+        rememberCloses(db, coordinatorId, learned);
         for (const unblocking of unblocked) insertEvent(db, coordinatorId, { kind: "unblocked", ...unblocking }, at);
         return unblocked.length > 0;
       })();
     },
 
-    /** Whether an issue of the regional manager depends on another, or did when its issues were last read: whether there is anything to read for what was unblocked. */
+    /** Whether an issue of the regional manager depends on another: whether there is anything to read for what was unblocked. */
     hasDependencies(coordinatorId: CoordinatorId): boolean {
-      const row = db()
-        .prepare("SELECT EXISTS (SELECT 1 FROM issue_relations WHERE coordinator_id = ?) OR EXISTS (SELECT 1 FROM known_closes WHERE coordinator_id = ?) AS any")
-        .get(coordinatorId, coordinatorId);
+      const row = db().prepare("SELECT EXISTS (SELECT 1 FROM issue_relations WHERE coordinator_id = ?) AS any").get(coordinatorId);
       return z.object({ any: z.number() }).parse(row).any === 1;
     },
 
@@ -234,8 +220,6 @@ export function inboxStore(db: Db) {
     },
   };
 }
-
-const knownCloseRowSchema = z.object({ issueId: issueIdSchema, dependsOn: issueIdSchema, close: z.string().nullable() });
 
 const eventRowSchema = z.object({ id: z.number().int(), at: z.number(), event: json(inboxEventSchema) });
 const toEvent = (row: unknown): StoredEvent => eventRowSchema.parse(row);

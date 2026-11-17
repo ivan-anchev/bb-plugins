@@ -242,7 +242,7 @@ test("a newer done handoff replaces a verdict still waiting for CI, so only the 
   await minute();
   await verified();
   const waiting = kit.store.latestHandoff(coordinatorId, a1) ?? assert.fail("no handoff");
-  kit.startTurn(agentThreadId);
+  await kit.startTurn(agentThreadId);
   await kit.call("agent_handoff", { ...DONE, prUrl: PR_URL }, agentThreadId);
   assert.deepEqual(kit.store.handoff(waiting.handoff.id)?.check?.verdict, { ...waiting.check?.verdict, settlement: { kind: "superseded" } }, "its returned verdict kept whole");
   assert.deepEqual(kit.store.waitingForCi(coordinatorId, a1), []);
@@ -520,7 +520,7 @@ test("an agent's branch as recorded at a handoff is kept when a later handoff ca
   assert.equal((await row()).pr, "#41 open CI pending");
 
   kit.git.offline.add(environmentId);
-  kit.startTurn(agentThreadId);
+  await kit.startTurn(agentThreadId);
   await kit.call("agent_handoff", BLOCKED, agentThreadId);
   kit.clock.now += 5 * MINUTE;
   await minute();

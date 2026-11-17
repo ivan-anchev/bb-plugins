@@ -4,6 +4,7 @@
 // (a reload, a reconnect) costs nothing. An archived or deleted agent thread ends its agent, and a
 // deleted regional manager is removed; the tick's reconcile catches any of those missed.
 import type { PluginLogger, PluginThreadEventName } from "@get-bb/plugin-sdk";
+import type { HolderThread } from "../../model/issue/status.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { Store } from "../store/store.ts";
 import type { Agents } from "./agents.ts";
@@ -19,18 +20,25 @@ const AGENT_THREAD_EVENTS = [
 ] as const satisfies readonly PluginThreadEventName[];
 
 /**
+ * bb's event carrying the thread as it is now, at most once a second per thread while it works.
  * why: an approval or a question answered moves an issue out of Needs you without any status
- * change, and bb announces nothing else for it. bb sends this at most once a second per thread
- * while it works, so it refreshes the board alone: the tick reads what was unblocked anyway.
+ * change, and bb announces nothing else for it; and a thread moves to `starting` (In progress,
+ * status.ts) before bb announces `thread.active`, and this is the first that says so.
  */
-const NEEDS_YOU_EVENT = "experimental_thread.events";
+const THREAD_NOW_EVENT = "experimental_thread.events";
 
 type ThreadEvent = { thread: { id: string; originPluginId: string | null } };
+
+/** THREAD_NOW_EVENT, with the field read of the thread as it is now. */
+type ThreadNowEvent = { thread: ThreadEvent["thread"] & Pick<HolderThread, "status"> };
 
 type EventsBb = {
   pluginId: string;
   log: Pick<PluginLogger, "warn">;
-  events: { on(event: (typeof AGENT_THREAD_EVENTS)[number] | typeof NEEDS_YOU_EVENT, handler: (payload: ThreadEvent) => void | Promise<void>): void };
+  events: {
+    on(event: (typeof AGENT_THREAD_EVENTS)[number], handler: (payload: ThreadEvent) => void | Promise<void>): void;
+    on(event: typeof THREAD_NOW_EVENT, handler: (payload: ThreadNowEvent) => void): void;
+  };
 };
 
 type Deps = {
@@ -51,8 +59,27 @@ export function forwardThreadEvents(bb: EventsBb, { store, agents, onChange, ref
     const role = roleOf(payload);
     if (role?.kind === "agent") then(role.coordinatorId);
   };
-  for (const event of AGENT_THREAD_EVENTS) bb.events.on(event, ofAgent(onChange));
-  bb.events.on(NEEDS_YOU_EVENT, ofAgent(refreshBoard));
+  /** The status each agent thread had in its last THREAD_NOW_EVENT since its last lifecycle event. */
+  const statusSeen = new Map<string, HolderThread["status"]>();
+  const changed = ofAgent(onChange);
+  for (const event of AGENT_THREAD_EVENTS) {
+    bb.events.on(event, (payload) => {
+      // why forget it: the thread moved since, so its next status is news even when it reads as the one seen, as a new turn's `starting` after the last turn's.
+      statusSeen.delete(payload.thread.id);
+      changed(payload);
+    });
+  }
+
+  // why a status only once: the event repeats every second while the thread works, and a repeat
+  // changes Needs you at most, so it refreshes the board alone instead of reading every issue again.
+  bb.events.on(THREAD_NOW_EVENT, (payload) => {
+    const role = roleOf(payload);
+    if (role?.kind !== "agent") return;
+    const { id, status } = payload.thread;
+    if (statusSeen.get(id) === status) return refreshBoard(role.coordinatorId);
+    statusSeen.set(id, status);
+    onChange(role.coordinatorId);
+  });
 
   /** The agent whose thread this is, while it holds its issue. */
   function holderOf(payload: ThreadEvent) {

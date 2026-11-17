@@ -55,7 +55,7 @@ test("after a handoff, typing into the agent moves its issue out of Verifying, a
   await kit.idle(agentThreadId, "Handed off.");
   assert.equal((await row())?.lane, "verifying");
 
-  kit.startTurn(agentThreadId); // the user types into the agent's thread
+  await kit.startTurn(agentThreadId); // the user types into the agent's thread
   assert.equal((await row())?.lane, "in-progress");
 
   await kit.idle(agentThreadId, "Answered the user's question.");

@@ -113,7 +113,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
      */
     removeCoordinator(id: CoordinatorId): void {
       db().transaction(() => {
-        for (const table of ["events", "doorbells", "reminders", "decisions", "pr_snapshots", "checks", "handoffs", "agents", "known_closes", "issue_relations", "issues", "memory_revisions"]) {
+        for (const table of ["events", "doorbells", "reminders", "decisions", "pr_snapshots", "checks", "handoffs", "agents", "issue_relations", "issues", "memory_revisions"]) {
           db().prepare(`DELETE FROM ${table} WHERE coordinator_id = ?`).run(id);
         }
         db().prepare("DELETE FROM coordinators WHERE id = ?").run(id);

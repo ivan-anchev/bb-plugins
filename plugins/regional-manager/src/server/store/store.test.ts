@@ -17,7 +17,7 @@ test("a fresh database holds the design's tables and indexes, and nothing else",
       .prepare("SELECT name FROM sqlite_master WHERE type = ? AND name NOT LIKE 'sqlite_%' ORDER BY name")
       .all(type)
       .map((row) => z.object({ name: z.string() }).parse(row).name);
-  assert.deepEqual(names("table"), ["agents", "checks", "coordinators", "decisions", "doorbells", "events", "handoffs", "issue_relations", "issues", "known_closes", "memory_revisions", "pr_snapshots", "reminders", "roles"]);
+  assert.deepEqual(names("table"), ["agents", "checks", "coordinators", "decisions", "doorbells", "events", "handoffs", "issue_relations", "issues", "memory_revisions", "pr_snapshots", "reminders", "roles"]);
   assert.deepEqual(names("index"), [
     "agents_holding",
     "checks_of_issue",

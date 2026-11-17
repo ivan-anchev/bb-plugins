@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { decisionIdSchema } from "../../../model/decision.ts";
+import { closesOf } from "../../../model/issue/relations.ts";
+import { issueViews, type IssueView } from "../../../model/issue/status.ts";
+import type { PrSnapshot } from "../../../model/verdict/pr.ts";
 import { failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER } from "../test-store.ts";
 
 test("a decision may name the issue it flags, and is answered once", () => {
@@ -107,4 +110,55 @@ test("the manager's own working tree is recorded once per state", () => {
   assert.equal(store.recordOwnTree(MANAGER, 2, 3_200), false);
   assert.equal(store.recordOwnTree(MANAGER, 0, 3_300), true);
   assert.deepEqual(store.lastOwnTreeEvent(MANAGER), { at: 3_300, event: { kind: "coordinator-tree-clean" } });
+});
+
+/** i1 merged as #41 when `merged`, i2 canceled by the manager, i3 depending on them as stored: every issue of the manager as viewed with no agent. */
+function mergedOrNot(store: ReturnType<typeof freshStore>["store"]) {
+  const pr: PrSnapshot = { number: 41, url: "https://github.com/acme/webhooks/pull/41", state: "merged", draft: false, review: "none", ci: "pass", headSha: "0123456789abcdef0123456789abcdef01234567", failedChecks: [] };
+  return (merged: boolean): IssueView[] => issueViews(store.issues(MANAGER).map((issue) => ({ issue, holder: null, ended: null, openDecision: false, pr: merged && issue.id === "i1" ? pr : null })));
+}
+
+/** The issues `views` says are unblocked since what is known, recorded, as "i3 by i1 done". */
+function recorded(store: ReturnType<typeof freshStore>["store"], views: readonly IssueView[], at: number): string[] {
+  store.recordUnblocked(MANAGER, views, at);
+  return store.takeUnread(MANAGER, at).flatMap(({ event }) => (event.kind === "unblocked" ? [`${event.issueId} by ${event.by} ${event.closedAs}`] : []));
+}
+
+test("a relation knows its dependency's close from when it is written: kept through edits of the others, gone with it, and written afresh when added again", () => {
+  const { store } = freshStore();
+  const views = mergedOrNot(store);
+  const [i1, i2] = [filedIssue(store, MANAGER, newIssue(), 2_000).id, filedIssue(store, MANAGER, newIssue(), 2_000).id];
+  store.updateIssue(MANAGER, i2, { closed: { as: "canceled", at: 2_050 } }, { requireUnheld: false });
+  const i3 = filedIssue(store, MANAGER, newIssue({ dependsOn: [i1] }), 2_100).id;
+
+  // i1 merged while the manager added i2: the read it was answered from already said so.
+  store.updateIssue(MANAGER, i3, { dependsOn: { add: [i2], remove: [], closes: closesOf(views(true)) } }, { requireUnheld: false });
+  assert.deepEqual(recorded(store, views(true), 3_000), ["i3 by i1 done"], "i1 kept the close it knew, open");
+  assert.deepEqual(recorded(store, views(true), 3_100), []);
+
+  store.updateIssue(MANAGER, i3, { dependsOn: { add: [], remove: [i1], closes: closesOf(views(false)) } }, { requireUnheld: false });
+  store.updateIssue(MANAGER, i3, { dependsOn: { add: [i1], remove: [], closes: closesOf(views(false)) } }, { requireUnheld: false });
+  assert.deepEqual(recorded(store, views(true), 3_200), ["i3 by i1 done"], "added again while open, it knows nothing of its old close");
+  store.updateIssue(MANAGER, i3, { dependsOn: { add: [], remove: [i1], closes: closesOf(views(true)) } }, { requireUnheld: false });
+  store.updateIssue(MANAGER, i3, { dependsOn: { add: [i1], remove: [], closes: closesOf(views(true)) } }, { requireUnheld: false });
+  assert.deepEqual(recorded(store, views(true), 3_300), [], "added again closed, it is no news");
+});
+
+test("an unblocked event that fails to be recorded takes what was learned back with it; the retry records it once", () => {
+  const { db, store } = freshStore();
+  const views = mergedOrNot(store);
+  const i1 = filedIssue(store, MANAGER, newIssue(), 2_000).id;
+  filedIssue(store, MANAGER, newIssue(), 2_000);
+  filedIssue(store, MANAGER, newIssue({ dependsOn: [i1] }), 2_100);
+  const known = () => db.prepare("SELECT issue_id, depends_on, known_close FROM issue_relations").all();
+  const before = known();
+
+  const allow = failWrites(db, "INSERT", "events");
+  assert.throws(() => store.recordUnblocked(MANAGER, views(true), 3_000), /forced failure/);
+  assert.deepEqual(known(), before);
+  assert.deepEqual(store.unannounced(MANAGER), []);
+
+  allow();
+  assert.deepEqual(recorded(store, views(true), 3_100), ["i3 by i1 done"]);
+  assert.deepEqual(recorded(store, views(true), 3_200), []);
 });

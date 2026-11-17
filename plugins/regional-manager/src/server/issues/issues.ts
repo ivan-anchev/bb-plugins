@@ -6,7 +6,7 @@ import type { z } from "zod";
 import type { Agent } from "../../model/agent.ts";
 import { sameModel, type Execution, type RequestedExecution } from "../../model/execution.ts";
 import { verifierProblem, type Issue, type IssueId, type managerStatusSchema } from "../../model/issue/issue.ts";
-import { blockedBy, newlyReady, relationsOf, type Related } from "../../model/issue/relations.ts";
+import { blockedBy, closesOf, newlyReady, relationsOf, type Related } from "../../model/issue/relations.ts";
 import { STATUS_LABELS, type IssueView } from "../../model/issue/status.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { executionText } from "../agents/agents.ts";
@@ -75,7 +75,8 @@ export function createIssues({ bb, store, onChange }: Deps) {
      * Files an issue, numbered after the regional manager's highest, with what blocks it as it is
      * filed; refused when its kind has no verifier, bb can't run the one named, or a dependency names
      * no issue. why the views read before the write, with no await between: an issue filed can't
-     * change any other's status, and a failed read then files nothing.
+     * change any other's status, and a failed read then files nothing. Its dependencies are written
+     * knowing what that read says of them, which is what the manager is told.
      */
     async create(coordinatorId: CoordinatorId, { verifier: requested, ...plan }: IssueRequest): Promise<{ issue: Issue; blockedBy: Related[] } | Refused> {
       const problem = verifierProblem(plan.kind, requested !== undefined);
@@ -83,7 +84,7 @@ export function createIssues({ bb, store, onChange }: Deps) {
       const verifier = requested === undefined ? null : await verifierOf(requested);
       if (verifier !== null && "refused" in verifier) return { refused: `No issue filed. ${verifier.refused}` };
       const views = plan.dependsOn.length === 0 ? [] : await viewsOf(coordinatorId);
-      const filed = store.insertIssue(coordinatorId, { ...plan, verifier }, Date.now());
+      const filed = store.insertIssue(coordinatorId, { ...plan, verifier }, closesOf(views), Date.now());
       if ("refused" in filed) return { refused: `No issue filed: ${filed.refused}` };
       onChange(coordinatorId);
       return { issue: filed.issue, blockedBy: blockedBy(filed.issue, null, (id) => viewOf(views, id).status) };
@@ -96,11 +97,11 @@ export function createIssues({ bb, store, onChange }: Deps) {
      * change applies to, and the issues a status or dependency change made ready (a cancel or an
      * accept closes a dependency; a removed dependency may have been the last open one).
      */
-    async update(issue: Issue, { verifier: requested, status, ...plan }: IssueChange): Promise<{ issue: Issue; note: string | null; nowReady: IssueId[] } | Refused> {
+    async update(issue: Issue, { verifier: requested, status, dependsOn, ...plan }: IssueChange): Promise<{ issue: Issue; note: string | null; nowReady: IssueId[] } | Refused> {
       // undefined: unchanged; null: the plugin picks.
       const verifier = requested === undefined || requested === null ? requested : await verifierOf(requested);
       if (verifier !== undefined && verifier !== null && "refused" in verifier) return verifier;
-      const before = status === undefined && plan.dependsOn === undefined ? null : await viewsOf(issue.coordinatorId);
+      const before = status === undefined && dependsOn === undefined ? null : await viewsOf(issue.coordinatorId);
       const statusChange = before === null || status === undefined ? {} : statusEdit(issue, viewOf(before, issue.id), status);
       if ("refused" in statusChange) return statusChange;
       // why the holder read here, with no await before the write: an agent started meanwhile may run on the verifier's model.
@@ -110,7 +111,9 @@ export function createIssues({ bb, store, onChange }: Deps) {
           refused: `${holder.id} holds ${issue.id} on ${executionText(holder.execution)}, so a verifier on it couldn't check that work independently. Name another model, or stop ${holder.id} with agent_stop and start an agent on another execution.`,
         };
       }
-      const edit: IssueEdit = { ...plan, ...statusChange, ...(verifier === undefined ? {} : { verifier }) };
+      // `before` is read whenever dependencies change: the ones added are written knowing what it says of them.
+      const dependencies = dependsOn === undefined || before === null ? {} : { dependsOn: { ...dependsOn, closes: closesOf(before) } };
+      const edit: IssueEdit = { ...plan, ...statusChange, ...dependencies, ...(verifier === undefined ? {} : { verifier }) };
       const updated = store.updateIssue(issue.coordinatorId, issue.id, edit, { requireUnheld: status !== undefined && status !== "done" });
       if ("refused" in updated) return updated;
       onChange(issue.coordinatorId);

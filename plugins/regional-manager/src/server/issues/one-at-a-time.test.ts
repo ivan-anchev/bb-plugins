@@ -56,7 +56,7 @@ test("a superseded verifier bb won't stop keeps the next verifier from starting 
   await kit.call("agent_handoff", DONE, agentThreadId);
   const [old = assert.fail("no verifier")] = verifiers();
   kit.stopRequests.byThread.set(old.id, bbHttpError(500, "internal", "Stop failed"));
-  kit.startTurn(agentThreadId); // the user asks a1 for one more change
+  await kit.startTurn(agentThreadId); // the user asks a1 for one more change
   await kit.call("agent_handoff", DONE, agentThreadId);
   await kit.idle(agentThreadId, "Handed off.");
 
@@ -110,7 +110,7 @@ test("a queued message the handover can't take back, a failed delete or one the 
   const { kit, threadId, agentThreadId, start } = await onI1();
   kit.thread(agentThreadId).hasPendingInteraction = true;
   await kit.call("agent_message", { agent: "a1", text: "Also cap the backoff at 60s." }, threadId);
-  kit.startTurn(agentThreadId);
+  await kit.startTurn(agentThreadId);
   kit.queueDeletes.failure = new Error("fetch failed");
 
   const refused = await start();
@@ -153,7 +153,7 @@ test("a tick skips an issue whose turn is held, and still serves another issue a
   await kit.call("crew_remind", { note: "check on i2", at: "1m" }, threadId);
   const stops = hold();
   kit.stopRequests.pending = stops.done;
-  kit.startTurn(agentThreadId);
+  await kit.startTurn(agentThreadId);
   const stopping = kit.call("agent_stop", { agent: "a1" }, threadId); // holds i1 while bb stops a1
   await settled();
   // The user archives both agents' threads: the tick ends each agent, in its issue's turn.
@@ -173,7 +173,7 @@ test("a tick skips an issue whose turn is held, and still serves another issue a
 
 test("agent_stop holds i1 until bb answers its reads: a message asked meanwhile is refused after waiting, and never reaches a1", async () => {
   const { kit, threadId, agentThreadId, coordinatorId, start } = await onI1(20);
-  kit.startTurn(agentThreadId);
+  await kit.startTurn(agentThreadId);
   const reads = hold();
   kit.turnEvents.pending = reads.done;
   const stopping = kit.call("agent_stop", { agent: "a1" }, threadId);
@@ -221,7 +221,7 @@ test("a start after agent_stop takes back your message bb still queued for the s
 
 test("a start after agent_stop takes back the findings bb still queued for the stopped a1, so they never wake it beside a2", async () => {
   const { kit, threadId, agentThreadId, start, verifiers } = await onI1();
-  kit.startTurn(agentThreadId);
+  await kit.startTurn(agentThreadId);
   await kit.call("agent_handoff", DONE, agentThreadId); // a1's turn is still running
   await kit.call("issue_verdict", FAILS, verifiers()[0]?.id ?? assert.fail());
   assert.equal(kit.queued(agentThreadId).length, 1, "the findings wait in a1's queue");

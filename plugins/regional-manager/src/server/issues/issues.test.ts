@@ -84,7 +84,7 @@ test("an accepted issue stays Done when its agent, which took another turn since
   await kit.call("agent_handoff", { ...REPORT, status: "done", headSha: HEAD }, agentThreadId);
   await kit.idle(agentThreadId, "Handed off.");
   assert.deepEqual(await update({ status: "done" }), { refused: false, text: "Updated i1." });
-  kit.startTurn(agentThreadId);
+  await kit.startTurn(agentThreadId);
   await kit.idle(agentThreadId, "Tidied up.");
 
   await call("agent_stop", { agent: "a1" });

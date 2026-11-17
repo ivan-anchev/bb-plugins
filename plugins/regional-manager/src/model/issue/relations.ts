@@ -46,50 +46,58 @@ export function newlyReady(before: readonly Viewed[], after: readonly Viewed[]):
 /** An issue unblocked: `by`, the last of its dependencies still open, closed by its work (a merge, a report), and stands `closedAs`. */
 export type Unblocking = { issueId: IssueId; by: IssueId; closedAs: ClosedStatus };
 
-/** A close as the announcement remembers it: one string per close, another for any other close. */
+/** A close as the regional manager knows of it: one string per close, another for any other close. */
 export type CloseKey = string;
 
-/** Of each issue's dependencies, the close the regional manager knows of: null while it has known it open. */
+/** Each issue's close as one read of every issue views it. An issue absent read open, as one filed since that read does: an issue is filed open. */
+export type Closes = ReadonlyMap<IssueId, CloseKey>;
+
+/** Each issue's close as these views, read whole, say. */
+export const closesOf = (views: readonly (Pick<IssueView, "closedBy"> & { issue: Shape })[]): Closes =>
+  new Map(views.flatMap(({ issue, closedBy }) => (closedBy === null ? [] : [[issue.id, closeKey(closedBy)] as const])));
+
+/**
+ * Of each issue's dependencies, the close the regional manager knows of: null while it has known it
+ * open. Every relation has one from the moment it is written (issues-store.ts), and none outlives it.
+ */
 export type KnownCloses = ReadonlyMap<IssueId, ReadonlyMap<IssueId, CloseKey | null>>;
 
 /** An issue as the unblocked announcement reads it. */
 type Announced = Pick<IssueView, "status" | "blockedBy" | "closedBy"> & { issue: Shape };
 
 /**
- * What every issue as viewed now says that `known` doesn't: the issues unblocked since, and what
- * the regional manager knows next. An open issue nothing blocks is unblocked when one of its
- * dependencies closed by its work since (a merge, a report), with another close than the one
- * known: none for a close the manager made (its own result names what that made ready), nor for a
- * dependency first seen, as when the issue is filed depending on one closed already. A dependency
- * that reads open keeps the close known: a research issue a message reopened is news only once
- * another handoff closes it, and one whose agent's thread is gone until the agent ends is no news.
+ * What every issue as viewed now says that `known` doesn't: the issues unblocked since, and the
+ * relations whose dependency closed otherwise than known, with that close to know next. An open
+ * issue nothing blocks is unblocked when one of its dependencies closed by its work since (a merge,
+ * a report), with another close than the one known: none for a close the manager made (its own
+ * result names what that made ready), nor for a dependency closed already when the relation was
+ * written. A dependency that reads open keeps the close known: a research issue a message reopened
+ * is news only once another handoff closes it, and one whose agent's thread is gone until the agent
+ * ends is no news. A relation `known` doesn't hold was removed after the views were read: it has
+ * nothing to tell, nor to remember.
  */
-export function unblockedSince(known: KnownCloses, views: readonly Announced[]): { unblocked: Unblocking[]; known: Map<IssueId, Map<IssueId, CloseKey | null>> } {
+export function unblockedSince(known: KnownCloses, views: readonly Announced[]): { unblocked: Unblocking[]; learned: Map<IssueId, Map<IssueId, CloseKey>> } {
   const byId = new Map(views.map((view) => [view.issue.id, view]));
-  const reads = views.filter(({ issue }) => issue.dependsOn.length > 0).map((view) => ({ view, ...dependenciesRead(view.issue, known.get(view.issue.id), byId) }));
+  const reads = views.flatMap((view) => {
+    const before = known.get(view.issue.id);
+    return before === undefined ? [] : [{ view, ...dependenciesRead(view.issue, before, byId) }];
+  });
   return {
     unblocked: reads.flatMap(({ view: { issue, status, blockedBy }, news: [by] }) => (by !== undefined && !isClosed(status) && blockedBy.length === 0 ? [{ issueId: issue.id, ...by }] : [])),
-    known: new Map(reads.map(({ view, closes }) => [view.issue.id, closes])),
+    learned: new Map(reads.filter(({ closes }) => closes.size > 0).map(({ view, closes }) => [view.issue.id, closes])),
   };
 }
 
-/**
- * The issue's dependencies read against the closes known of them (`before`; undefined: none, as for
- * an issue first seen): the close of each to know next, and those closed by work since, in order.
- */
-function dependenciesRead(issue: Shape, before: ReadonlyMap<IssueId, CloseKey | null> | undefined, byId: ReadonlyMap<IssueId, Announced>) {
-  const closes = new Map<IssueId, CloseKey | null>();
+/** The issue's dependencies read against the closes known of them: the dependencies closed otherwise than known, with that close, and those of them closed by work, in order. */
+function dependenciesRead(issue: Shape, before: ReadonlyMap<IssueId, CloseKey | null>, byId: ReadonlyMap<IssueId, Announced>) {
+  const closes = new Map<IssueId, CloseKey>();
   const news: Omit<Unblocking, "issueId">[] = [];
   for (const dependency of issue.dependsOn) {
+    const was = before.get(dependency);
     const { status, closedBy } = named(byId, dependency);
-    const was = before?.get(dependency);
-    if (closedBy === null) {
-      closes.set(dependency, was ?? null);
-      continue;
-    }
-    const close = closeKey(closedBy);
-    closes.set(dependency, close);
-    if (was !== undefined && close !== was && closedBy.by !== "manager" && isClosed(status)) news.push({ by: dependency, closedAs: status });
+    if (was === undefined || closedBy === null || closeKey(closedBy) === was) continue;
+    closes.set(dependency, closeKey(closedBy));
+    if (closedBy.by !== "manager" && isClosed(status)) news.push({ by: dependency, closedAs: status });
   }
   return { closes, news };
 }

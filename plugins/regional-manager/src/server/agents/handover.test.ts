@@ -134,7 +134,7 @@ test("an agent whose thread the user archived is continued in its worktree, whic
 
 test("a holder bb still reports stopping is not replaced: the start is refused and nothing starts", async () => {
   const { kit, coordinatorId, agentThreadId, handover, agent } = await handedTo({ stops: "stopping" });
-  kit.startTurn(agentThreadId);
+  await kit.startTurn(agentThreadId);
   const spawned = kit.spawned();
   const refused = await handover();
   assert.ok(isRefusal(refused));
@@ -145,7 +145,7 @@ test("a holder bb still reports stopping is not replaced: the start is refused a
 
 test("a removed environment, or a placement named, is refused before anything stops, offering a clean start", async () => {
   const { kit, agentThreadId, handover, agent } = await handedTo();
-  kit.startTurn(agentThreadId);
+  await kit.startTurn(agentThreadId);
   const named = await handover({ placement: { kind: "worktree" } });
   assert.ok(isRefusal(named));
   assert.match(textOf(named), /^agent_start is refused: Nothing changed\. A handover continues in a1's environment, and can't move its work to a placement yet: leave out placement, or start clean with from: "default"/);
@@ -159,7 +159,7 @@ test("a removed environment, or a placement named, is refused before anything st
 
 test("an environment bb removes between the decision and the spawn ends the new agent spawn-failed; the issue rests in Todo and the result says why", async () => {
   const { kit, agentThreadId, handover, row, agent } = await handedTo();
-  kit.startTurn(agentThreadId);
+  await kit.startTurn(agentThreadId);
   let answer = (): void => assert.fail("bb never received the stop");
   kit.stopRequests.pending = new Promise((resolve) => (answer = resolve));
   const starting = handover();
@@ -238,7 +238,7 @@ test("a sandbox agent is continued in its sandbox, which the spawn wakes: nothin
 
 test("an execution named on a handover is checked where the previous agent works before it is stopped; nothing named runs on the manager's own", async () => {
   const { kit, threadId, agentThreadId, handover, agent } = await handedTo({}, { execution: { providerId: "codex", model: "gpt-default" } });
-  kit.startTurn(agentThreadId);
+  await kit.startTurn(agentThreadId);
   const refused = await handover({ execution: { providerId: "gemini", model: "pro" } });
   assert.ok(isRefusal(refused));
   assert.equal(textOf(refused), "agent_start is refused: Nothing changed. Where the agent would run (a1's environment): bb can't run gemini there. bb can run: claude-code, codex.");
@@ -318,7 +318,7 @@ test("a continue whose catalog read is held runs first; a clean start asked mean
 
 test("agent_stop with archive asked while a handover stops a1 finds a1 replaced: it changes nothing and archives nothing", async () => {
   const { kit, threadId, agentThreadId, handover, agent } = await handedTo();
-  kit.startTurn(agentThreadId);
+  await kit.startTurn(agentThreadId);
   const stops = hold();
   kit.stopRequests.pending = stops.done;
   const handing = handover();
@@ -356,7 +356,7 @@ test("findings on their way to a1 when a handover is asked arrive first, and the
 
 test("findings bb queued for a busy a1 are taken back before the handover stops it, so they never wake it", async () => {
   const { kit, coordinatorId, agentThreadId, handover, agent } = await handedTo();
-  kit.startTurn(agentThreadId);
+  await kit.startTurn(agentThreadId);
   await kit.call("agent_handoff", DONE, agentThreadId); // a1's turn is still running
   await settled();
   await kit.call("issue_verdict", FAILS, verifierOf(kit, coordinatorId));
@@ -390,7 +390,7 @@ test("a handoff made while a handover stops its agent waits for i1, then is refu
   const { kit, coordinatorId, agentThreadId, handover } = await handedTo();
   const stops = hold();
   kit.stopRequests.pending = stops.done;
-  kit.startTurn(agentThreadId);
+  await kit.startTurn(agentThreadId);
   const handing = handover();
   await settled();
   // a1 hands off while the handover stops it: the handoff waits for i1.

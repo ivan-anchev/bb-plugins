@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueIdSchema, type IssueId } from "./issue.ts";
 import { handoffIdSchema } from "../handoff.ts";
-import { blockedBy, relationProblem, statusIn, unblockedSince, type KnownCloses } from "./relations.ts";
+import { blockedBy, closesOf, relationProblem, statusIn, unblockedSince, type CloseKey } from "./relations.ts";
 import type { Closure, IssueStatus } from "./status.ts";
 
 const id = (n: number): IssueId => issueIdSchema.parse(`i${n}`);
@@ -26,7 +26,7 @@ test("blocked by is every open dependency, its own and its parent's, once each w
   ]);
 });
 
-test("an issue is unblocked once by each close of a dependency its work made; never by the manager's close, a dependency first seen closed, or one that only read open", () => {
+test("an issue is unblocked once by each close of a dependency its work made; never by the manager's close, a dependency closed when the relation was written, or one that only read open", () => {
   type Dependency = { status: IssueStatus; closedBy: Closure | null };
   const open: Dependency = { status: "in-progress", closedBy: null };
   const merged: Dependency = { status: "done", closedBy: { by: "merge", number: 41 } };
@@ -42,12 +42,19 @@ test("an issue is unblocked once by each close of a dependency its work made; ne
     };
     return [...dependencies.map((dependency, i) => ({ issue: shape(i + 1), blockedBy: [], ...dependency })), dependent(4, 1), dependent(5, 1, 3), dependent(6, 2)];
   };
-  let known: KnownCloses = new Map();
+  // The relations are written as i4, i5 and i6 are filed, knowing what the read their filing answered from said: i2 closed already.
+  const filed = closesOf(views([open, reported(1), open]));
+  const relations = (...on: number[]) => new Map(on.map((n): [IssueId, CloseKey | null] => [id(n), filed.get(id(n)) ?? null]));
+  const known = new Map([
+    [id(4), relations(1)],
+    [id(5), relations(1, 3)],
+    [id(6), relations(2)],
+  ]);
   /** One read of every issue: what it announces, as "i4 by i1". */
   const read = (dependencies: [Dependency, Dependency, Dependency]): string[] => {
-    const result = unblockedSince(known, views(dependencies));
-    known = result.known;
-    return result.unblocked.map(({ issueId, by, closedAs }) => `${issueId} by ${by} ${closedAs}`);
+    const { unblocked, learned } = unblockedSince(known, views(dependencies));
+    for (const [issueId, closes] of learned) for (const [dependency, close] of closes) known.get(issueId)?.set(dependency, close);
+    return unblocked.map(({ issueId, by, closedAs }) => `${issueId} by ${by} ${closedAs}`);
   };
 
   assert.deepEqual(read([open, reported(1), open]), [], "i6 was filed depending on i2 already closed");
@@ -58,4 +65,5 @@ test("an issue is unblocked once by each close of a dependency its work made; ne
   assert.deepEqual(read([merged, reported(1), canceled]), [], "i2 closed by the same handoff again");
   assert.deepEqual(read([merged, open, canceled]), [], "i2 reopened by a message");
   assert.deepEqual(read([merged, reported(2), canceled]), ["i6 by i2 done"], "i2 reported again");
+  assert.deepEqual(unblockedSince(new Map(), views([merged, reported(1), canceled])), { unblocked: [], learned: new Map() }, "relations removed after the views were read tell and remember nothing");
 });

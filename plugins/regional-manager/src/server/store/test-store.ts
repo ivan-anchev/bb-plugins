@@ -37,7 +37,7 @@ export const newIssue = (over: Partial<NewIssue> = {}): NewIssue => ({
 
 /** Files the issue, as the store does, failing the test if it is refused. */
 export function filedIssue(store: Store, coordinatorId: CoordinatorId, issue: NewIssue, at: number): Issue {
-  const filed = store.insertIssue(coordinatorId, issue, at);
+  const filed = store.insertIssue(coordinatorId, issue, new Map(), at);
   if ("refused" in filed) throw new Error(filed.refused);
   return filed.issue;
 }

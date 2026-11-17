@@ -436,8 +436,9 @@ test("an agent thread's status change refreshes its regional manager's board, an
   const before = kit.invalidated().length;
 
   await kit.emit("thread.active", { thread: kit.ref(agentThreadId) });
-  await kit.emit("experimental_thread.events", { thread: kit.ref(agentThreadId) });
+  await kit.threadNow(agentThreadId);
   await kit.emit("thread.active", { thread: kit.ref(threadId) });
+  await kit.threadNow(threadId);
   assert.deepEqual(kit.invalidated().slice(before), [`board:${coordinatorId}`, `board:${coordinatorId}`]);
 });
 

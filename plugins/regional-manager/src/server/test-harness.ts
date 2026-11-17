@@ -63,6 +63,8 @@ type Delivery = Awaited<ReturnType<InboxBb["sdk"]["threads"]["send"]>>;
 type QueuedMessage = Awaited<ReturnType<InboxBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number] & Awaited<ReturnType<AgentsBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number];
 
 type ThreadRef = { id: string; originPluginId: string | null };
+/** A thread as bb's events carry it: the thread as it is now, which the generic thread event reads the status of. */
+type ThreadNow = ThreadRef & Pick<HolderThread, "status">;
 type InteractionPayload = PluginThreadEventPayloads["interaction.pending"]["interaction"]["payload"];
 
 /** The events the plugin listens to, with the fields it reads. */
@@ -75,7 +77,7 @@ type FakeEvents = {
   "thread.unarchived": { thread: ThreadRef };
   "thread.deleted": { thread: ThreadRef };
   "interaction.pending": { thread: ThreadRef; interaction: { payload: InteractionPayload } };
-  "experimental_thread.events": { thread: ThreadRef };
+  "experimental_thread.events": { thread: ThreadNow };
   "message.dispatched": { entry: { id: string } };
   "message.cancelled": { entry: { id: string } };
 };
@@ -581,7 +583,21 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   }
   let plugin = wire();
 
-  const ref = (threadId: string): ThreadRef => ({ id: threadId, originPluginId: PLUGIN_ID });
+  const ref = (threadId: string): ThreadNow => ({ id: threadId, originPluginId: PLUGIN_ID, status: fakeThread(threadId).status });
+
+  const threadNow = (threadId: string): Promise<void> => emit("experimental_thread.events", { thread: ref(threadId) });
+
+  async function starting(threadId: string): Promise<void> {
+    const thread = fakeThread(threadId);
+    startTurn(thread);
+    thread.status = "starting";
+    await threadNow(threadId);
+  }
+
+  async function active(threadId: string): Promise<void> {
+    fakeThread(threadId).status = "active";
+    await emit("thread.active", { thread: ref(threadId) });
+  }
 
   return {
     get store() {
@@ -672,10 +688,22 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     warnings: () => [...warnings],
     /** bb announces this event, and every handler has run. */
     emit,
-    /** A thread this plugin made, as bb's events name it. */
+    /** A thread this plugin made, as bb's events name it, with its status now. */
     ref,
-    /** Someone sends the thread a message: a new turn starts. */
-    startTurn: (threadId: string) => startTurn(fakeThread(threadId)),
+    /**
+     * Someone sends the thread a message, and bb starts a turn as it does: the thread moves to
+     * starting, which only its thread event says, then to active, which bb announces.
+     */
+    async startTurn(threadId: string): Promise<void> {
+      await starting(threadId);
+      await active(threadId);
+    },
+    /** The first half of startTurn: a new turn is starting, and bb sends the thread's event with that status. */
+    starting,
+    /** The second half of startTurn: the turn is active, and bb announces it. */
+    active,
+    /** bb sends the thread's event with the thread as it is now, as it does every second while the thread works. */
+    threadNow,
     /** The thread's turn ends, and bb announces it with its last answer. */
     async idle(threadId: string, lastAssistantText: string | null): Promise<void> {
       const thread = fakeThread(threadId);

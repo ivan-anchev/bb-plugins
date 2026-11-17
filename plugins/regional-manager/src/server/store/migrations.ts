@@ -4,7 +4,7 @@
 //
 // why every table of the design from the start, issue_relations and issues.parent_id included:
 // the schema reads top to bottom in one place. Those two stay empty until dependencies and sub-issues
-// write them. A table a later release needs is appended at the end.
+// write them. A table or column a later release needs is appended at the end.
 
 export const MIGRATIONS: readonly string[] = [
   // A ticket is minted before its thread is spawned, and the thread's metadata carries it until bb
@@ -98,12 +98,11 @@ export const MIGRATIONS: readonly string[] = [
      FOREIGN KEY (coordinator_id, issue_id) REFERENCES issues (coordinator_id, id))`,
   `CREATE INDEX decisions_of_coordinator ON decisions (coordinator_id)`,
 
-  // Of each issue's dependencies, the close the regional manager knows of (null: it has known it
-  // open), by its key (relations.ts unblockedSince): what the next read of every issue is compared
-  // with to announce what was unblocked, once per close. A fact about what the manager was told,
-  // read by nothing else: blocked and ready are derived on every read.
-  `CREATE TABLE known_closes (coordinator_id TEXT NOT NULL, issue_id TEXT NOT NULL, depends_on TEXT NOT NULL, close TEXT,
-     PRIMARY KEY (coordinator_id, issue_id, depends_on),
-     FOREIGN KEY (coordinator_id, issue_id) REFERENCES issues (coordinator_id, id),
-     FOREIGN KEY (coordinator_id, depends_on) REFERENCES issues (coordinator_id, id))`,
+  // Of a dependency, the close the regional manager knows of (null: it has known it open), by its key
+  // (relations.ts unblockedSince): what the next read of every issue is compared with to announce
+  // what was unblocked, once per close. why on the relation: it is written with the relation, from
+  // the read the manager was answered from, and goes with it, so no relation is without one and none
+  // outlives its relation. A fact about what the manager was told, read by nothing else: blocked and
+  // ready are derived on every read.
+  `ALTER TABLE issue_relations ADD COLUMN known_close TEXT`,
 ];

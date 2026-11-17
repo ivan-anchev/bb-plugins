@@ -54,7 +54,7 @@ test("an issue's dependencies are stored in the order added, changed by what is 
   const filed = filedIssue(store, MANAGER, newIssue({ dependsOn: [i3, i1, i3] }), 2_100);
   assert.deepEqual(store.issue(MANAGER, filed.id)?.dependsOn, [i3, i1]);
 
-  const edited = store.updateIssue(MANAGER, filed.id, { dependsOn: { add: [i2, i1], remove: [i3] } }, { requireUnheld: false });
+  const edited = store.updateIssue(MANAGER, filed.id, { dependsOn: { add: [i2, i1], remove: [i3], closes: new Map() } }, { requireUnheld: false });
   assert.deepEqual("issue" in edited && edited.issue.dependsOn, [i1, i2]);
   assert.deepEqual(store.issue(MANAGER, filed.id)?.dependsOn, [i1, i2]);
   assert.deepEqual(store.issue(MANAGER, i1)?.dependsOn, []);
@@ -66,8 +66,8 @@ test("a dependency on no issue files nothing, and one that closes a cycle change
   const i2 = filedIssue(store, MANAGER, newIssue({ dependsOn: [i1.id] }), 2_100);
   const before = store.issues(MANAGER);
 
-  assert.deepEqual(store.insertIssue(MANAGER, newIssue({ dependsOn: [issueIdSchema.parse("i7")] }), 2_300), { refused: "i3 can't depend on i7: there is no issue i7." });
-  assert.deepEqual(store.updateIssue(MANAGER, i1.id, { title: "Retry budget", dependsOn: { add: [i2.id], remove: [] } }, { requireUnheld: false }), {
+  assert.deepEqual(store.insertIssue(MANAGER, newIssue({ dependsOn: [issueIdSchema.parse("i7")] }), new Map(), 2_300), { refused: "i3 can't depend on i7: there is no issue i7." });
+  assert.deepEqual(store.updateIssue(MANAGER, i1.id, { title: "Retry budget", dependsOn: { add: [i2.id], remove: [], closes: new Map() } }, { requireUnheld: false }), {
     refused: "i1 can't depend on i2: that would close a cycle, i1 → i2 → i1.",
   });
   assert.deepEqual(store.issues(MANAGER), before);
@@ -77,11 +77,12 @@ test("a dependency that fails to be written takes the issue's filing, or the res
   const { db, store } = freshStore();
   const i1 = filedIssue(store, MANAGER, newIssue(), 2_000);
   const i2 = filedIssue(store, MANAGER, newIssue({ dependsOn: [i1.id] }), 2_100);
+  const i3 = filedIssue(store, MANAGER, newIssue(), 2_150);
   const allow = failWrites(db, "INSERT", "issue_relations");
-  assert.throws(() => store.insertIssue(MANAGER, newIssue({ dependsOn: [i1.id] }), 2_200), /forced failure/);
-  assert.throws(() => store.updateIssue(MANAGER, i2.id, { title: "Dead letters", dependsOn: { add: [], remove: [] } }, { requireUnheld: false }), /forced failure/);
-  assert.deepEqual(store.issues(MANAGER), [i1, i2]);
+  assert.throws(() => store.insertIssue(MANAGER, newIssue({ dependsOn: [i1.id] }), new Map(), 2_200), /forced failure/);
+  assert.throws(() => store.updateIssue(MANAGER, i2.id, { title: "Dead letters", dependsOn: { add: [i3.id], remove: [i1.id], closes: new Map() } }, { requireUnheld: false }), /forced failure/);
+  assert.deepEqual(store.issues(MANAGER), [i1, i2, i3]);
 
   allow();
-  assert.equal(filedIssue(store, MANAGER, newIssue({ dependsOn: [i1.id] }), 2_200).id, "i3");
+  assert.equal(filedIssue(store, MANAGER, newIssue({ dependsOn: [i1.id] }), 2_200).id, "i4");
 });

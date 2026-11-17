@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueIdSchema } from "../../model/issue/issue.ts";
-import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn, type FakePr } from "../test-harness.ts";
+import { coordinating, HEAD, isRefusal, ISSUE, newThreadRequest, settled, textOf, threadIn, type FakePr } from "../test-harness.ts";
 
 const RESEARCH = { kind: "research", title: "Pick a card vault", description: "Which vault fits our PCI scope.", brief: "Compare Vault and KMS.", doneCriteria: [] };
 const REPORT = "## Recommendation\n\nVault: it keeps card data inside our PCI scope.";
@@ -250,17 +250,51 @@ test("a research agent's new turn while the announcement reads its turns announc
   const idled = kit.idle(agentThreadId, "Handed off.");
   await settled();
   assert.ok(kit.turnEvents.held.length > 0, "no turn read held");
-  // As when the user writes in the agent's thread: bb starts a turn and announces it.
-  kit.startTurn(agentThreadId);
-  await kit.emit("thread.active", { thread: kit.ref(agentThreadId) });
+  // As when the user writes in the agent's thread: bb starts a turn, which only the thread's event says until it is active.
+  await kit.starting(agentThreadId);
   await releaseAll(kit.turnEvents);
   await idled;
   await settled();
 
   assert.deepEqual(await unblocked(), []);
   assert.match(await row("i2"), /; blocked by i1 \(In progress\)$/);
+  await kit.active(agentThreadId);
+  await settled();
+  assert.deepEqual(await unblocked(), []);
   await report();
   assert.deepEqual(await unblocked(), ["i2 by i1 done"]);
+});
+
+test("an agent thread's event that repeats its status reads no issue again, and refreshes the board; a new status reads them", async () => {
+  const { kit, coordinatorId, text } = await managing();
+  await text("issue_create", ISSUE);
+  const builder = threadIn(await text("agent_start", { issue: "i1" }));
+  await text("issue_create", { ...ISSUE, title: "Dead letters", dependsOn: ["i1"] });
+  await kit.threadNow(builder);
+  await settled();
+
+  kit.threadLists.holding = true;
+  const boards = kit.invalidated().length;
+  await kit.threadNow(builder);
+  await settled();
+  assert.deepEqual(kit.threadLists.held, []);
+  assert.deepEqual(kit.invalidated().slice(boards), [`board:${coordinatorId}`]);
+  await kit.starting(builder);
+  await settled();
+  assert.equal(kit.threadLists.held.length, 1);
+  await releaseAll(kit.threadLists);
+
+  // A turn whose events said only `starting` ends; the next one's `starting` is news again.
+  await kit.idle(builder, "Done.");
+  await settled();
+  await releaseAll(kit.threadLists);
+  kit.threadLists.holding = true;
+  await settled();
+  assert.deepEqual(kit.threadLists.held, []);
+  await kit.starting(builder);
+  await settled();
+  assert.equal(kit.threadLists.held.length, 1, "the next turn's starting read nothing");
+  await releaseAll(kit.threadLists);
 });
 
 /** A research agent hands off its report, and its thread then ends `how` before its turn does; the tick runs after. */
@@ -346,4 +380,89 @@ test("merges whose announcement can't read bb are announced by a later tick, aft
   await kit.tick();
   await settled();
   assert.deepEqual((await unblocked()).sort(), ["i3 by i1 done", "i4 by i2 done"]);
+});
+
+test("a dependency that closes after its dependent is filed is announced once, though the first read is overtaken, the next fails and the plugin reloads", async () => {
+  const { kit, text, unblocked, research } = await managing();
+  const { agentThreadId } = await research();
+  await kit.call("agent_handoff", RESEARCH_DONE, agentThreadId);
+  kit.threadLists.holding = true;
+  const filing = text("issue_create", { ...ISSUE, title: "Card vault schema", dependsOn: ["i1"] });
+  await settled();
+  kit.threadLists.held.splice(0).forEach((release) => release());
+  assert.equal(await filing, "Filed i2 (build) in Todo, blocked by i1 (In progress).");
+  await settled();
+  assert.equal(kit.threadLists.held.length, 1, "the announcement's first read is not held");
+
+  kit.threadLists.holding = false;
+  await kit.idle(agentThreadId, "Handed off.");
+  kit.threadLists.failure = new Error("HTTP 503: bb is restarting");
+  kit.threadLists.held.splice(0).forEach((release) => release());
+  await settled();
+  assert.ok(kit.warnings().some((warning) => warning.includes("HTTP 503")), kit.warnings().join("; "));
+
+  kit.threadLists.failure = null;
+  kit.reload();
+  await kit.tick();
+  await settled();
+  assert.deepEqual(await unblocked(), ["i2 by i1 done"]);
+  kit.clock.now += 10 * 60_000;
+  await kit.tick();
+  await settled();
+  assert.deepEqual(await unblocked(), ["i2 by i1 done"]);
+});
+
+test("a dependency removed while open, closed meanwhile and added again closed announces nothing, though a read began before the removal", async () => {
+  const { kit, text, unblocked, research } = await managing();
+  const { agentThreadId, report } = await research();
+  await text("issue_create", { ...ISSUE, title: "Card vault schema", dependsOn: ["i1"] });
+  await settled();
+  kit.threadLists.holding = true;
+  await kit.active(agentThreadId);
+  await settled();
+  assert.equal(kit.threadLists.held.length, 1, "no read held");
+
+  kit.threadLists.holding = false;
+  assert.equal(await text("issue_update", { id: "i2", dependsOn: { remove: ["i1"] } }), "Updated i2. Now ready: i2.");
+  await report();
+  assert.equal(await text("issue_update", { id: "i2", dependsOn: { add: ["i1"] } }), "Updated i2.");
+  await releaseAll(kit.threadLists);
+
+  assert.deepEqual(await unblocked(), []);
+});
+
+test("a regional manager whose reads keep being overtaken holds no other: the tick announces another's merge and rings it", async () => {
+  const busy = await managing();
+  const { kit } = busy;
+  await busy.text("issue_create", ISSUE);
+  await busy.text("agent_start", { issue: "i1" });
+  await busy.text("issue_create", { ...ISSUE, title: "Dead letters", dependsOn: ["i1"] });
+  const other = (await kit.spawner.coordinator(newThreadRequest("Ship the billing export"), true)).threadId;
+  const call = async (tool: string, input: object) => textOf(await kit.call(tool, input, other));
+  await call("issue_create", ISSUE);
+  const builder = threadIn(await call("agent_start", { issue: "i1" }));
+  await call("issue_create", { ...ISSUE, title: "Dead letters", dependsOn: ["i1"] });
+  kit.thread(other).status = "idle";
+  await settled();
+
+  kit.github.prs.set(kit.thread(builder).environmentBranchName ?? assert.fail("no branch"), { number: 41, state: "MERGED", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
+  kit.threadLists.holding = true;
+  let ticked = false;
+  const ticking = kit.tick().then(() => {
+    ticked = true;
+  });
+  // Every bb read answers only after the busy manager changed something again, as a crew at work keeps doing.
+  for (let round = 0; round < 30 && !ticked; round++) {
+    await settled();
+    await busy.text("issue_update", { id: "i1", title: `Add retries, round ${round}` });
+    kit.threadLists.held.splice(0).forEach((release) => release());
+  }
+  const doorbells = kit.sent().filter((args) => args.threadId === other);
+  const tickedWhileBusy = ticked;
+  await releaseAll(kit.threadLists);
+  await ticking;
+
+  assert.ok(tickedWhileBusy, "the tick waited on the busy manager");
+  const doorbell = doorbells.at(-1) ?? assert.fail("no doorbell");
+  assert.match(doorbell.input.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n"), /- i2 "Dead letters" is unblocked: i1 done$/);
 });
