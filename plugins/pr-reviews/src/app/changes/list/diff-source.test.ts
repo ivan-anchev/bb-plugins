@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { DiffFile } from "../../diff/diff-schema.ts";
+import type { DiffFile } from "../../../diff/diff-schema.ts";
 import { diffSourceOf } from "./diff-source.ts";
-import { diffFile } from "./diff-file.fixture.ts";
+import { diffFile } from "../diff-file.fixture.ts";
 
 describe("diffSourceOf", () => {
   test("shows the file's patch", () => {
-    assert.deepEqual(diffSourceOf(diffFile("src/a.ts", { added: 1, removed: 1 })), { kind: "patch", expandable: true });
+    assert.deepEqual(diffSourceOf(diffFile("src/a.ts", { added: 1, removed: 1 })), { kind: "patch", expandable: true, folded: null });
   });
 
   test("a modified or renamed file's unchanged lines can expand; an added or deleted file's patch is all of it", () => {
@@ -35,5 +35,17 @@ describe("diffSourceOf", () => {
     const file = diffFile("empty.txt", { status: "added", added: 0, removed: 0 });
 
     assert.deepEqual(diffSourceOf(file), { kind: "notice", message: "No text changes." });
+  });
+
+  test("folds a lockfile at any size, and any other file over a thousand changed lines", () => {
+    const folded = (path: string, added: number) => {
+      const source = diffSourceOf(diffFile(path, { added, removed: 0 }));
+      return source.kind === "patch" && source.folded !== null;
+    };
+
+    assert.deepEqual(
+      [folded("pnpm-lock.yaml", 3), folded("apps/web/package-lock.json", 3), folded("src/big.ts", 1000), folded("src/big.ts", 1001), folded("src/pnpm-lock.yaml.ts", 3)],
+      [true, true, false, true, false],
+    );
   });
 });

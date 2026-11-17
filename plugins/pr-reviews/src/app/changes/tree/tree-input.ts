@@ -2,6 +2,7 @@
 // status, icons and `+N −M` row decorations for @pierre/trees, from the PR's changed files. Pure.
 import {
   createFileTreeIconResolver,
+  prepareFileTreeInput,
   type FileTreeIconConfig,
   type FileTreeRowDecoration,
   type GitStatusEntry,
@@ -11,12 +12,17 @@ import { fileStatPartsOf, plainTextOf, type StatPart } from "../change-stats.ts"
 
 export type RowDecorations = ReadonlyMap<string, FileTreeRowDecoration>;
 
+/** A changed file, with its path in the tree. */
+export type TreeFile = { treePath: string; file: DiffFile };
+
 type ChangesTreeInput = {
   paths: string[];
   gitStatus: GitStatusEntry[];
   icons: FileTreeIconConfig;
   decorations: RowDecorations;
   filesByTreePath: ReadonlyMap<string, DiffFile>;
+  /** The files in the order the tree lists them. */
+  inTreeOrder: readonly TreeFile[];
 };
 
 const TREE_ICONS: FileTreeIconConfig = {
@@ -51,7 +57,14 @@ export function changesTreeOf(files: readonly DiffFile[]): ChangesTreeInput {
     icons: iconsKeepingOriginalNames(entries.filter(([treePath, file]) => treePath !== file.path)),
     decorations: new Map(entries.flatMap(([path, file]) => statDecorationOf(path, file))),
     filesByTreePath,
+    inTreeOrder: inTreeOrderOf(filesByTreePath),
   };
+}
+
+// The order the tree sorts its paths in, as the tree is built (tree-view.tsx): folders first.
+function inTreeOrderOf(filesByTreePath: ReadonlyMap<string, DiffFile>): TreeFile[] {
+  const { paths } = prepareFileTreeInput([...filesByTreePath.keys()], { flattenEmptyDirectories: true });
+  return paths.map((treePath) => ({ treePath, file: filesByTreePath.get(treePath)! }));
 }
 
 /** Each file by its tree path: its own, unless it collides with a folder's. */

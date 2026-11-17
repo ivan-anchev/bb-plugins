@@ -114,4 +114,17 @@ describe("changesTreeOf", () => {
       createFileTreeIconResolver(plainTree.icons).resolveIcon("file-tree-icon-file", "app/package.json"),
     );
   });
+
+  test("lists the files in the order the tree shows them, folders first", () => {
+    const files = ["b.ts", "a/z.ts", "README.md", "a/b/c/d.ts", ".github/ci.yml", "A.md", "a/a.ts"].map((path) => change(path, "modified"));
+    const tree = changesTreeOf(files);
+    const model = new FileTree({ paths: tree.paths, flattenEmptyDirectories: true, initialExpansion: "open" });
+    const shownFiles = model.getVisibleRows(0, model.getVisibleCount()).filter((row) => row.kind === "file");
+
+    assert.deepEqual(
+      tree.inTreeOrder.map(({ treePath }) => treePath),
+      shownFiles.map((row) => row.path),
+    );
+    assert.deepEqual(tree.inTreeOrder.map(({ file }) => file.path), [".github/ci.yml", "a/b/c/d.ts", "a/a.ts", "a/z.ts", "A.md", "b.ts", "README.md"]);
+  });
 });

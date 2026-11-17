@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app and its card on the new-thread screen show (a list in the main pane of your pull requests across every GitHub project, in Authored by me, Needs my review and Recently merged sections with stacked pull requests as trees, one attention dot per row, a header with chips that list one section and a Filter that hides the sections you don't watch, and headings that fold their section, a page per pull request with a state badge that changes its state on GitHub (ready for review, convert to draft, close by press and hold, reopen), Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree beside a diff drawn like bb's own, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (drawn as bb's composer, with Preview, a Send as chip whose menu picks Ask to ask the review thread, Comment to post a GitHub review comment or Review to add it to a pending review, and one send button; nothing posts before you send, and review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app and its card on the new-thread screen show (a list in the main pane of your pull requests across every GitHub project, in Authored by me, Needs my review and Recently merged sections with stacked pull requests as trees, one attention dot per row, a header with chips that list one section and a Filter that hides the sections you don't watch, and headings that fold their section, a page per pull request with a state badge that changes its state on GitHub (ready for review, convert to draft, close by press and hold, reopen), Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree beside every file's diff in one scrolling list drawn like bb's own, the tree following the file you read, lockfiles and very large diffs folded behind Load diff, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (drawn as bb's composer, with Preview, a Send as chip whose menu picks Ask to ask the review thread, Comment to post a GitHub review comment or Review to add it to a pending review, and one send button; nothing posts before you send, and review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -149,8 +149,9 @@ Under the header sit three tabs, **Summary**, **Changes** and **Guide**, as one 
 the selected tab is raised on a recessed track. A PR opens on Summary. The Changes tab carries the PR's lines added and removed,
 `Changes +A −D`, as GitHub counts them. The header and the tabs stay put, and each tab scrolls on its
 own. Switching tabs keeps the guide where you left it, on the same step and
-scroll position, and Changes on the same file, scroll position and open
-folders. With focus on a tab, ← and → (and Home and End) move between the tabs.
+scroll position, and Changes at the same place in its list and with the same
+open folders. Leaving the PR and coming back opens Changes at the file you were
+reading, until bb reloads. With focus on a tab, ← and → (and Home and End) move between the tabs.
 
 **Summary** shows the PR's own description, rendered as markdown, or "No
 description provided." when the PR has none, and under it the PR's **Activity**
@@ -195,8 +196,8 @@ neighbouring lines and stops at every message.
 - **A review's threads** show under it as rows in a tinted group: the file name
   and line in monospace, the thread's first line, and "resolved", "outdated" or
   both when they apply. A row opens the **Changes** tab at that file, with the
-  thread opened, in view and focused; if the Changes filters hide the file,
-  they are cleared. A thread on a file the diff no longer changes is plain
+  thread opened, in view and focused, its diff drawn even if it was folded;
+  if the Changes filters hide the file, they are cleared. A thread on a file the diff no longer changes is plain
   text, with "not in this diff" after its state, and opens nothing.
 - **Commits and events** (labels, title changes, review requests, assignees,
   milestones, force-pushes, base branch changes, mentions, ready for review,
@@ -239,9 +240,17 @@ tab is opened, not when the page opens.
 - **The tree**: every changed file in its folders, with its `+N −M` (an added
   file shows only `+N`, a deleted one only `−M`, a binary file "Binary") and a
   letter for how it changed (A, M, D or R). Click a file, or move to it with
-  the arrow keys and press Enter or Space, to show its diff.
-- **The diff**: the selected file's header (its path, and its `+N −M` as bb's own diff shows them) over its diff, drawn with bb's own
-  diff engine and code theme, so it looks like bb's diff view.
+  the arrow keys and press Enter or Space, to scroll the list to its diff. As
+  you scroll the list, the tree highlights the file you are reading and keeps
+  its row in view.
+- **The diffs**: every listed file, top to bottom in the tree's order, in one
+  scrolling list, as GitHub's Files changed shows them. Each file is a card:
+  its header (its path, and its `+N −M` as bb's own diff shows them) stays at
+  the top while you read the file, over its diff, drawn with bb's own diff
+  engine and code theme, so it looks like bb's diff view. A file's diff draws
+  as you scroll near it. A lockfile (`pnpm-lock.yaml`, `package-lock.json`,
+  `yarn.lock`, `Cargo.lock` and the like) and any diff of over 1,000 changed
+  lines is folded, with **Load diff** to draw it.
   A binary file, a file renamed without changes, or a file with no changed
   lines shows a sentence saying so instead, with the file's review threads
   under it. Once the file's text at the PR's

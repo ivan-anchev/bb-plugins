@@ -61,8 +61,10 @@ or your own.
   in place. Approvals and reviews whose threads are all resolved are one line
   each. A composer at the foot comments on the PR's conversation; Quote on a
   message quotes it there.
-- **Changes**: every changed file in a tree with its `+N −M`, beside the
-  selected file's diff, drawn like bb's own. Click "N unmodified lines" to
+- **Changes**: every changed file in a tree with its `+N −M`, beside every
+  file's diff in one scrolling list, drawn like bb's own. Click a file to jump
+  to it; the tree follows the file you read. Lockfiles and diffs over 1,000
+  lines fold behind Load diff. Click "N unmodified lines" to
   show the lines between hunks. Filter by path (globs, `!` to exclude), by
   kind, extension or deleted files; switch between Unified and Split, wrap
   lines, and collapse or expand every folder. It needs no guide, and reads

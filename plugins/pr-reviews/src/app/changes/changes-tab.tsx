@@ -1,4 +1,4 @@
-// The Changes tab: the PR's whole diff (base...head) as a file tree beside the selected file's diff,
+// The Changes tab: the PR's whole diff (base...head) as a file tree beside every file's diff,
 // with Code Explorer's header. It needs no guide. The diff is read once the tab is first shown, so
 // a PR opened on Summary never runs `gh pr diff`; after that the page's Refresh re-reads it.
 import { useState } from "react";
