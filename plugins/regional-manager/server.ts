@@ -5,7 +5,7 @@ import { boardTag, COORDINATORS_TAG, coordinatorContract, memoryTag } from "./sr
 import type { CoordinatorId, Role } from "./src/model/role.ts";
 import { registerAgentTools } from "./src/server/agents/agent-tools.ts";
 import { createAgents } from "./src/server/agents/agents.ts";
-import { placementFactsReader } from "./src/server/agents/placement-facts.ts";
+import { placementFactsReader } from "./src/server/agents/environments.ts";
 import { forwardThreadEvents } from "./src/server/agents/thread-events.ts";
 import { boardHandlers } from "./src/server/board/board-rpc.ts";
 import { createBoard } from "./src/server/board/board.ts";
