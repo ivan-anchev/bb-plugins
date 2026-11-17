@@ -6,6 +6,7 @@ import { createStartGate } from "./src/boat/start-gate.ts";
 import { boatHostsRpcHandlers } from "./src/boat-hosts.ts";
 import { launchRpcHandlers } from "./src/catalog/read.ts";
 import { boatCli } from "./src/cli.ts";
+import { computerRpcHandlers } from "./src/computer/read.ts";
 import { boatSandboxContract, PROVIDER_ID } from "./src/contract.ts";
 import { createIdleClock } from "./src/idle-clock.ts";
 import { boatMachineProvider } from "./src/machine-provider.ts";
@@ -28,8 +29,9 @@ export default async function plugin(bb: BbPluginApi): Promise<void> {
   const spend = createSpendCard({ access: boat, kv: bb.storage.kv, ownerId });
   bb.rpc.register(boatSandboxContract, {
     ...launchRpcHandlers(boat),
-    ...boatHostsRpcHandlers(bb.sdk.hosts),
+    ...boatHostsRpcHandlers(bb.sdk),
     ...spendCardRpcHandlers(spend),
+    ...computerRpcHandlers({ sdk: bb.sdk, machines: bb.experimental_machines, access: boat }),
   });
 
   bb.experimental_machines.register(

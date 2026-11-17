@@ -217,6 +217,21 @@ export interface DaySpend {
 }
 
 /**
+ * `POST /sandboxes/{id}/desktop?vnc=1` (OAS `DesktopResponse`): the first calls start x11vnc and noVNC
+ * on the sandbox and answer `desktop.provisioning` (about 25 s, live 2026-11-17), then `desktop.url`
+ * with the noVNC page, its `_token` and VNC password in the query.
+ */
+export const wireVncDesktop = z
+  .discriminatedUnion("type", [
+    z.object({ type: z.literal("desktop.provisioning") }),
+    z.object({ type: z.literal("desktop.url"), desktopUrl: z.url() }),
+  ])
+  .transform((wire): VncDesktop => (wire.type === "desktop.url" ? { status: "ready", url: wire.desktopUrl } : { status: "provisioning" }));
+
+/** boat's noVNC page for a running sandbox, or that boat is still starting it. The URL is a credential. */
+export type VncDesktop = { status: "provisioning" } | { status: "ready"; url: string };
+
+/**
  * One NDJSON line of `POST /sandboxes/{id}/commands` with `stream: true` (OAS `CommandStreamFrame`):
  * `started`, then output chunks, then exactly one `exit` or `error`. `exitCode` is null when a
  * signal ended the command; `retryable` on `error` means the command provably never ran.

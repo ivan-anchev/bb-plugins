@@ -16,6 +16,7 @@ import {
   wireSandboxList,
   wireSandboxMeter,
   wireSavedSnapshotList,
+  wireVncDesktop,
   type Account,
   type CredentialProfile,
   type DaySpend,
@@ -23,6 +24,7 @@ import {
   type Limits,
   type SandboxEnvironment,
   type SavedSnapshot,
+  type VncDesktop,
 } from "./wire.ts";
 
 const BASE_URL = "https://boat.dev/api/v1";
@@ -129,6 +131,11 @@ export interface BoatClient {
   run(id: SandboxId, request: CommandRequest): Promise<{ exitCode: number }>;
   /** Writes `content` to `path`, mode 0644 whatever the directory's umask. */
   writeFile(id: SandboxId, path: string, content: string, signal: AbortSignal): Promise<void>;
+  /**
+   * boat's noVNC page for a running sandbox (`desktop`), never a public one. Throws `machine_not_running`
+   * for a stopped sandbox and `desktop_not_ready` while one starts.
+   */
+  vncDesktop(id: SandboxId, signal: AbortSignal): Promise<VncDesktop>;
 }
 
 export function createBoatClient(apiKey: string): BoatClient {
@@ -207,6 +214,9 @@ export function createBoatClient(apiKey: string): BoatClient {
       const body = { path, content: Buffer.from(content).toString("base64"), encoding: "base64" };
       await call(`/sandboxes/${id}/files`, { method: "PUT", body, signal });
     },
+    // An empty body: `publicAccess` would publish the desktop to anyone with the URL.
+    vncDesktop: async (id, signal) =>
+      wireVncDesktop.parse(await json(`/sandboxes/${id}/desktop?vnc=1`, { method: "POST", body: {}, signal })),
   };
 }
 
