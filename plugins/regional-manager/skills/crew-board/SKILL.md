@@ -121,7 +121,7 @@ starts it with `agent_start`:
   done-criteria (a research agent's under "Questions your report answers",
   followed by how to hand off its report, and no section when it has none),
   and `CREW.md` and `MEMORY.md` as they were at that moment, each file's
-  `#` title on its first line set under the message's own section, and
+  `#` title on its first non-blank line set under the message's own section, and
   nothing after it changed. Put rules every agent
   follows in `CREW.md`: the agent is told its work is its brief and
   done-criteria, and the other memory files are its regional manager's

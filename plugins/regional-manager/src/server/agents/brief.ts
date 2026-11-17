@@ -57,8 +57,16 @@ function criteriaSection(kind: Kind, criteria: readonly string[]): string | null
 function memorySection(file: string, holds: string, note: string | null, text: MemoryText | null): string {
   const lead = [`## ${file}: ${holds}`, ...(note === null ? [] : [note])].join("\n\n");
   if (text === null) return `${lead}\n\n(There is no ${file}.)`;
-  return `${lead}\n\n${nested(text.content.trim())}`;
+  return `${lead}\n\n${nested(withoutOuterBlanks(text.content))}`;
 }
+
+/**
+ * The file without its leading blank lines and its trailing whitespace, neither of which is content. why not `trim()`:
+ * the first non-blank line keeps its indentation, so an indented code line is never read as a heading.
+ */
+const withoutOuterBlanks = (content: string): string => content.replace(LEADING_BLANK_LINES, "").trimEnd();
+
+const LEADING_BLANK_LINES = /^(?:[ \t\r]*\n)+/;
 
 /**
  * The file's title, two levels down, so it sits under the message's `##` section: its first non-blank line, when that is
