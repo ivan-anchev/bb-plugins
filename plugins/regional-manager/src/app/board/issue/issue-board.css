@@ -509,7 +509,7 @@ details[open] > summary > .rmi-disclose {
 .rmi-verdict-meta code {
   font-family: var(--font-mono);
 }
-[data-tone="warning"] { color: var(--warning-text); }
+.rmi-detail [data-tone="warning"] { color: var(--warning-text); }
 .rmi-verdict-meta[data-tone="failed"] { color: var(--destructive-text); }
 .rmi-criteria-checked {
   display: flex;

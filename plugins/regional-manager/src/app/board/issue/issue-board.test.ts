@@ -1,5 +1,6 @@
 import "../../test-browser.ts";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { registerHooks } from "node:module";
 import { afterEach, test } from "node:test";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
@@ -157,4 +158,15 @@ test("a row links its agent's thread and its pull request with CI, apart from op
   );
   assert.equal(row(view, "i2").getAttribute("aria-expanded"), "false");
   assert.deepEqual(read, []);
+});
+
+test("every rule in the board's stylesheet is scoped to the board, so none reaches bb or another plugin", async () => {
+  // why read the file: bb doesn't scope a plugin's stylesheet, so a bare selector styles the whole page.
+  const css = (await readFile(new URL("./issue-board.css", import.meta.url), "utf8")).replace(/\/\*[\s\S]*?\*\//g, "");
+  const selectors = [...css.matchAll(/([^{}]+)\{/g)].flatMap(([, prelude = ""]) => (prelude.trim().startsWith("@") ? [] : prelude.split(",").map((selector) => selector.trim())));
+  assert.ok(selectors.length > 50, "the stylesheet's rules were read");
+  assert.deepEqual(
+    selectors.filter((selector) => !selector.includes(".rmi-")),
+    [],
+  );
 });
