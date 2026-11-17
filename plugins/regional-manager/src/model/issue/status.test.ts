@@ -198,10 +198,13 @@ test("a parent rolls up from its sub-issues: any started is In progress, any in 
   assert.equal(subs[0]?.needsYou, "Blocked: Needs a staging key");
 });
 
-test("once every sub-issue is closed and one is Done: a research parent is Done, by its last close; a build parent waits In review while all are merged", () => {
-  const research = family("research", [reported(6_000), reported(7_000), closedAs("canceled", "research")]);
-  assert.deepEqual([research.parent.status, research.parent.headline, research.parent.closedBy], ["done", "2/3 done", { by: "manager", as: "canceled", at: 9_000 }]);
-  assert.deepEqual(family("research", [closedAs("canceled", "research"), reported(9_500)]).parent.closedBy, { by: "handoff", handoffId: done.id, at: 9_500 });
+test("once every sub-issue is closed and one is Done: a research parent is Done, by its sub-issues' closes; a build parent waits In review while all are merged", () => {
+  const research = family("research", [reported(6_000), { pr: pr("merged") }, closedAs("canceled", "research")]);
+  assert.deepEqual([research.parent.status, research.parent.headline, research.parent.closedBy], [
+    "done",
+    "2/3 done",
+    { by: "sub-issues", closes: [{ by: "handoff", handoffId: done.id }, { by: "merge", number: 12 }, { by: "manager", as: "canceled" }] },
+  ]);
   assert.deepEqual(rolled("research", [reported(6_000), resting("todo")]), at("in-progress", "1/2 done"));
 
   assert.deepEqual(rolled("build", [{ pr: pr("merged") }, closedAs("canceled"), reported(6_000)]), at("in-review", "2/3 done, all merged: accept it with issue_update"));

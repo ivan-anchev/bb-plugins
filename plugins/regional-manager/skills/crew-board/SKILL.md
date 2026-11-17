@@ -156,8 +156,12 @@ it. Its catch-up lists the issues **ready** to start (in Todo, not blocked,
 no sub-issues). When a merge or an agent's handoff closes the last open issue
 another depends on, the manager is woken to say it is unblocked (for a
 parent's dependency, each open sub-issue nothing else blocks, never the
-parent, which has no agent to start); when the manager closes one
-itself, or removes a dependency, its own result names what became ready. A
+parent, which has no agent to start). A research parent closes by its
+sub-issues' reports: the manager is woken when it closes with one it wasn't
+woken for, whatever closed the rest, and moving a sub-issue in or out of it
+wakes nobody. When the manager closes one itself, or removes a dependency, its
+own result names what became ready; its cancel that closes a research parent
+with such a report wakes it once as well. A
 dependency carries nothing between issues: an agent gets another issue's
 report only when the manager names its file in that agent's brief.
 

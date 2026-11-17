@@ -45,7 +45,11 @@ export function newlyReady(before: readonly Viewed[], after: readonly Viewed[]):
 /** An issue unblocked: `by`, the last of its dependencies still open, closed by its work (a merge, a report), and stands `closedAs`. */
 export type Unblocking = { issueId: IssueId; by: IssueId; closedAs: ClosedStatus };
 
-/** A close as the regional manager knows of it: one string per close, another for any other close. */
+/**
+ * The closes by work (a handoff, a merge) the regional manager knows an issue closed by, as stored
+ * on a relation to it: one string per close by work, joined. A close by the manager's act alone
+ * has none.
+ */
 export type CloseKey = string;
 
 /** Each issue's close as one read of every issue views it. An issue absent read open, as one filed since that read does: an issue is filed open. */
@@ -56,8 +60,9 @@ export const closesOf = (views: readonly (Pick<IssueView, "closedBy"> & { issue:
   new Map(views.flatMap(({ issue, closedBy }) => (closedBy === null ? [] : [[issue.id, closedBy] as const])));
 
 /**
- * Of each issue's dependencies, the close the regional manager knows of: null while it has known it
- * open. Every relation has one from the moment it is written (issues-store.ts), and none outlives it.
+ * Of each issue's dependencies, the closes by work the regional manager knows of: null while it has
+ * known of none. Every relation has one from the moment it is written (issues-store.ts), and none
+ * outlives it.
  */
 export type KnownCloses = ReadonlyMap<IssueId, ReadonlyMap<IssueId, CloseKey | null>>;
 
@@ -66,16 +71,19 @@ type Announced = Pick<IssueView, "status" | "blockedBy" | "closedBy"> & { issue:
 
 /**
  * What every issue as viewed now says that `known` doesn't: the issues unblocked since, and the
- * relations whose dependency closed otherwise than known, with that close to know next. An open
- * issue nothing blocks is unblocked when one of its dependencies, or of its parent's, closed by its
- * work since (a merge, a report), with another close than the one known: none for a close the
- * manager made (its own result names what that made ready), nor for a dependency closed already
- * when the relation was written. A dependency that reads open keeps the close known: a research
- * issue a message reopened is news only once another handoff closes it, and one whose agent's
- * thread is gone until the agent ends is no news. A relation `known` doesn't hold was removed after
- * the views were read: it has nothing to tell, nor to remember. why a parent is never announced,
- * its sub-issues instead: a parent has no agent, so it is its sub-issues the manager can start.
- * An issue unblocked through its own relation and its parent's at once is announced once.
+ * relations whose dependency closed by work not known, with every close by work to know next. An
+ * open issue nothing blocks is unblocked when one of its dependencies, or of its parent's, is
+ * closed with work in its close the manager wasn't told of: a merge or a report since, or for a
+ * parent, a sub-issue's. None for a close the manager's act alone made (its own result names what
+ * that made ready), nor for a dependency closed already when the relation was written. A
+ * dependency that reads open keeps what is known: a research issue a message reopened is news only
+ * once another handoff closes it, and one whose agent's thread is gone until the agent ends is no
+ * news. why work not known, rather than a close unlike the known one: a parent's close holds its
+ * sub-issues', and the manager canceling one or moving one out changes that close with no work
+ * done. A relation `known` doesn't hold was removed after the views were read: it has nothing to
+ * tell, nor to remember. why a parent is never announced, its sub-issues instead: a parent has no
+ * agent, so it is its sub-issues the manager can start. An issue unblocked through its own
+ * relation and its parent's at once is announced once.
  */
 export function unblockedSince(known: KnownCloses, views: readonly Announced[]): { unblocked: Unblocking[]; learned: Map<IssueId, Map<IssueId, CloseKey>> } {
   const byId = new Map(views.map((view) => [view.issue.id, view]));
@@ -97,38 +105,53 @@ export function unblockedSince(known: KnownCloses, views: readonly Announced[]):
   };
 }
 
-/** The issue's dependencies read against the closes known of them: the dependencies closed otherwise than known, with that close, and those of them closed by work, in order. */
+/** The issue's dependencies read against the work known of them: those closed with work not known, each with all the work to know now, in order. */
 function dependenciesRead(issue: Shape, before: ReadonlyMap<IssueId, CloseKey | null>, byId: ReadonlyMap<IssueId, Announced>) {
   const closes = new Map<IssueId, CloseKey>();
   const news: Omit<Unblocking, "issueId">[] = [];
   for (const dependency of issue.dependsOn) {
     const was = before.get(dependency);
     const { status, closedBy } = named(byId, dependency);
-    if (was === undefined || closedBy === null || closeKey(closedBy) === was) continue;
-    closes.set(dependency, closeKey(closedBy));
-    if (closedBy.by !== "manager" && isClosed(status)) news.push({ by: dependency, closedAs: status });
+    if (was === undefined || closedBy === null || !isClosed(status)) continue;
+    const known = workIn(was);
+    const fresh = workOf(closedBy).filter((work) => !known.has(work));
+    if (fresh.length === 0) continue;
+    closes.set(dependency, keyOf([...known, ...fresh]));
+    news.push({ by: dependency, closedAs: status });
   }
   return { closes, news };
 }
 
-/** An issue's close as the regional manager knows of it from `closes`: null while it reads open. */
+/** An issue's close as the regional manager knows of it from `closes`: null while it reads open, or closed by no work. */
 export function knownClose(closes: Closes, id: IssueId): CloseKey | null {
   const close = closes.get(id);
-  return close === undefined ? null : closeKey(close);
+  const work = close === undefined ? [] : workOf(close);
+  return work.length === 0 ? null : keyOf(work);
 }
 
-function closeKey(closure: Closure): CloseKey {
+/** The closes by work a close holds, one string each: none for the manager's act; a parent's sub-issues', for its. */
+function workOf(closure: Closure): string[] {
   switch (closure.by) {
     case "manager":
-      return `${closure.as} at ${closure.at}`;
+      return [];
     case "merge":
-      return `merged #${closure.number}`;
+      return [`merged #${closure.number}`];
     case "handoff":
-      return `handed off ${closure.handoffId}`;
+      return [`handed off ${closure.handoffId}`];
+    case "sub-issues":
+      return closure.closes.flatMap(workOf);
     default:
       return closure satisfies never;
   }
 }
+
+/** why sorted: the same work is one key, whatever order its closes came in. */
+const keyOf = (work: readonly string[]): CloseKey => [...work].sort().join(WORK_SEPARATOR);
+
+const workIn = (key: CloseKey | null): ReadonlySet<string> => new Set(key === null ? [] : key.split(WORK_SEPARATOR));
+
+/** why a comma: no close by work's string holds one, and a key of one close reads as that close. */
+const WORK_SEPARATOR = ", ";
 
 /** The relations of `issue` among every issue of its regional manager, as viewed. */
 export function relationsOf(views: readonly Viewed[], { id, dependsOn, parentId }: Shape): Relations {

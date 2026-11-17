@@ -110,10 +110,13 @@ and `dependsOn: { add: ["i2"], remove: ["i4"] }`.
   last open issue another depends on, you are woken with
   `i3 "Card vault schema" is unblocked: i2 done`. A parent's dependency
   closing wakes you for each of its open sub-issues nothing else blocks,
-  never for the parent itself. When you close one yourself
+  never for the parent itself. A research parent closes by its sub-issues'
+  reports: you are woken when it closes with one you weren't woken for, and
+  moving a sub-issue in or out of it wakes nobody. When you close one yourself
   (cancel, or accept as Done) or remove a dependency, the `issue_update`
   result names what became ready instead, as in `Now ready: i3.`, and nothing
-  wakes you.
+  wakes you, unless your cancel closed a research parent with such a report:
+  that wakes you once too.
 - **It carries nothing.** No part of i2, its report included, reaches i3's
   agent through the dependency: its first message is the same as with none.
   Name what it needs in its brief, such as "Read `reports/i2.md` with

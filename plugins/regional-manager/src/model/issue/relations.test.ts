@@ -31,8 +31,8 @@ test("an issue is unblocked once by each close of a dependency its work made; ne
   const open: Dependency = { status: "in-progress", closedBy: null };
   const merged: Dependency = { status: "done", closedBy: { by: "merge", number: 41 } };
   /** Done by the agent's handoff number `n`. */
-  const reported = (n: 1 | 2): Dependency => ({ status: "done", closedBy: { by: "handoff", handoffId: handoffIdSchema.parse(`00000000-0000-4000-8000-00000000000${n}`), at: 8_000 + n } });
-  const canceled: Dependency = { status: "canceled", closedBy: { by: "manager", as: "canceled", at: 9_000 } };
+  const reported = (n: 1 | 2): Dependency => ({ status: "done", closedBy: { by: "handoff", handoffId: handoffIdSchema.parse(`00000000-0000-4000-8000-00000000000${n}`) } });
+  const canceled: Dependency = { status: "canceled", closedBy: { by: "manager", as: "canceled" } };
   /** i1, i2 and i3 as `dependencies` says, and the issues depending on them: i4 on i1, i5 on i1 and i3, i6 on i2. */
   const views = (dependencies: [Dependency, Dependency, Dependency]) => {
     const statuses = new Map(dependencies.map(({ status }, i) => [id(i + 1), status]));

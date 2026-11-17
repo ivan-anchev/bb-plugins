@@ -265,3 +265,94 @@ test("a plan write whose reads keep being overtaken writes nothing and says to t
   assert.deepEqual(await statuses(), { i1: "todo", i2: "in-progress" });
   assert.equal(await text("issue_create", { ...ISSUE, title: "Replay", parent: "i1" }), "Filed i3 (build) as a sub-issue of i1 in Todo.");
 });
+
+/** A research parent i1 with research sub-issues i2 and i3, i4 depending on i1, and one more research sub-issue per `more`, filed i5 on. */
+async function researchFamily(more = 0) {
+  const manager = await managing();
+  await manager.text("issue_create", RESEARCH);
+  await manager.text("issue_create", { ...RESEARCH, title: "Vault", parent: "i1" });
+  await manager.text("issue_create", { ...RESEARCH, title: "KMS", parent: "i1" });
+  await manager.text("issue_create", { ...ISSUE, title: "Card vault schema", dependsOn: ["i1"] });
+  for (let n = 0; n < more; n++) await manager.text("issue_create", { ...RESEARCH, title: `Option ${n + 1}`, parent: "i1" });
+  /**
+   * The agent on the thread reports, and its turn ends. why settled first: the announcement reads a
+   * few times at most while changes keep coming, then waits for the next change or tick, and an
+   * agent just started is several changes.
+   */
+  const report = async (agentThreadId: string) => {
+    await settled();
+    await manager.kit.call("agent_handoff", RESEARCH_DONE, agentThreadId);
+    await manager.kit.idle(agentThreadId, "Handed off.");
+    await settled();
+  };
+  return { ...manager, report };
+}
+
+test("a research parent closed by its last report wakes its dependents once, though the manager canceled a sibling after that report was handed off and before its turn ended", async () => {
+  const { kit, text, statuses, started, unblocked } = await researchFamily();
+  const researcher = await started("i2");
+  await kit.call("agent_handoff", RESEARCH_DONE, researcher);
+  await settled();
+  assert.equal(await text("issue_update", { id: "i3", status: "canceled" }), "Updated i3.");
+  assert.deepEqual(await statuses(), { i1: "in-progress", i2: "in-progress", i3: "canceled", i4: "todo" });
+
+  await kit.idle(researcher, "Handed off.");
+  await settled();
+  assert.deepEqual(await statuses(), { i1: "done", i2: "done", i3: "canceled", i4: "todo" });
+  assert.deepEqual(await unblocked(), ["i4 by i1 done"]);
+  await kit.tick();
+  await settled();
+  assert.deepEqual(await unblocked(), ["i4 by i1 done"]);
+});
+
+test("moving a canceled or a Done sub-issue out of a Done research parent wakes nobody; the manager's cancel that closed it wakes its dependent at most once beside its own result", async () => {
+  const { text, statuses, started, report, unblocked } = await researchFamily(1);
+  await report(await started("i2"));
+  await report(await started("i3"));
+  assert.deepEqual(await unblocked(), []);
+  // The manager's own act is the step that closes i1: its result says what became ready, and one wake may say it again.
+  assert.equal(await text("issue_update", { id: "i5", status: "canceled" }), "Updated i5. Now ready: i4.");
+  await settled();
+  const woken = await unblocked();
+  assert.ok(woken.length <= 1, woken.join("; "));
+
+  assert.equal(await text("issue_update", { id: "i5", parent: null }), "Updated i5.");
+  await settled();
+  assert.equal(await text("issue_update", { id: "i3", parent: null }), "Updated i3.");
+  await settled();
+  assert.deepEqual(await statuses(), { i1: "done", i2: "done", i3: "done", i4: "todo", i5: "canceled" });
+  assert.deepEqual(await unblocked(), woken);
+});
+
+test("a research parent's sub-issue reopened by a message and reported again wakes the parent's dependents again, once", async () => {
+  const { kit, text, statuses, started, report, unblocked } = await researchFamily();
+  const researcher = await started("i2");
+  await report(researcher);
+  await report(await started("i3"));
+  assert.deepEqual(await unblocked(), ["i4 by i1 done"]);
+
+  await text("agent_message", { agent: "a1", text: "Add what KMS would cost." });
+  await settled();
+  assert.deepEqual(await statuses(), { i1: "in-progress", i2: "in-progress", i3: "done", i4: "todo" });
+  assert.deepEqual(await unblocked(), ["i4 by i1 done"]);
+  await report(researcher);
+  assert.deepEqual(await unblocked(), ["i4 by i1 done", "i4 by i1 done"]);
+  await kit.tick();
+  await settled();
+  assert.deepEqual(await unblocked(), ["i4 by i1 done", "i4 by i1 done"]);
+});
+
+test("a research parent's last two sub-issues closing together wake its dependents once", async () => {
+  const { kit, started, unblocked } = await researchFamily();
+  const one = await started("i2");
+  const two = await started("i3");
+  await kit.call("agent_handoff", RESEARCH_DONE, one);
+  await kit.call("agent_handoff", RESEARCH_DONE, two);
+  kit.threadLists.holding = true;
+  await Promise.all([kit.idle(one, "Handed off."), kit.idle(two, "Handed off.")]);
+  await releaseAll(kit.threadLists);
+  assert.deepEqual(await unblocked(), ["i4 by i1 done"]);
+  await kit.tick();
+  await settled();
+  assert.deepEqual(await unblocked(), ["i4 by i1 done"]);
+});

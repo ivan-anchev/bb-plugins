@@ -31,7 +31,7 @@ test("a closed issue takes no new sub-issue, and keeps the ones it has", () => {
 });
 
 test("the manager's closing acts are read from the plan as stored, whatever the read said", () => {
-  const read: Closes = new Map([[id(1), { by: "manager", as: "canceled", at: 9_000 }]]);
+  const read: Closes = new Map([[id(1), { by: "manager", as: "canceled" }]]);
   assert.equal(planProblem([planned(1, "build", null)], planned(2, "build", 1), read), null, "reopened since the read");
   assert.equal(planProblem([canceledAs(planned(1, "build", null))], planned(2, "build", 1), OPEN), "i2 can't be a sub-issue of i1: i1 is closed. File i2 on its own", "canceled since the read");
 });
