@@ -114,7 +114,7 @@ export type StartOutcome =
   | ({ kind: "started"; agentId: AgentId; threadId: string; execution: Execution; inherited: boolean } & Succession)
   | ({ kind: "failed"; agentId: AgentId; error: string } & Succession);
 
-/** What a stop did. An agent ends as stopped only once bb no longer runs its thread; `why` it does: the status bb still reports, or its refusal of the stop. */
+/** What a stop did. An agent ends as stopped only once bb confirms its thread no longer runs; `why` it hasn't: the status bb still reports, or bb's error that left the stop unconfirmed. */
 export type StopOutcome = { kind: "stopped"; archived: boolean } | { kind: "already-ended"; how: EndedHow } | { kind: "still-running"; why: string };
 
 /** What a message did: sent or queued by bb; or nothing, as the agent ended or has no thread yet. */

@@ -61,7 +61,8 @@ export type StopBb = ListBb<ListableThread & { status: string }> & { sdk: { thre
  * lives in its environment, and archiving a sandbox's last live thread destroys it (SH5). why read
  * again after each stop: bb's stop can leave the thread stopping, and a turn is over only once its
  * thread no longer runs. Returns the ones it stopped, and every one bb hasn't confirmed stopped,
- * with the status bb still reports or its refusal of the stop.
+ * with the status bb still reports, or bb's error when the stop or the read after it failed. why
+ * not "wasn't stopped" then: a stop whose answer is lost may have stopped the thread.
  */
 export async function stopRunning(bb: StopBb, threadIds: readonly string[]): Promise<{ stopped: string[]; unstopped: { threadId: string; why: string }[] }> {
   const running = [...(await threadsById(bb, [...threadIds])).values()].filter(isRunning).map(({ id }) => id);
@@ -72,7 +73,7 @@ export async function stopRunning(bb: StopBb, threadIds: readonly string[]): Pro
         const thread = (await threadsById(bb, [threadId])).get(threadId);
         return thread !== undefined && isRunning(thread) ? { threadId, why: `is still ${thread.status}` } : null;
       } catch (error) {
-        return { threadId, why: `wasn't stopped: bb answered ${error instanceof Error ? error.message : String(error)}` };
+        return { threadId, why: `couldn't be confirmed stopped: bb answered ${error instanceof Error ? error.message : String(error)}` };
       }
     }),
   );

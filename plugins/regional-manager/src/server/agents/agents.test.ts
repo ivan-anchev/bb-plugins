@@ -314,6 +314,20 @@ test("agent_stop ends the agent only once bb no longer runs its thread", async (
   assert.equal(kit.store.agents(coordinatorId)[0]?.ended, null);
 });
 
+test("a stop whose answer bb lost is refused as unconfirmed, not as a stop that didn't happen, and agent_stop again ends the agent", async () => {
+  const { kit, threadId, coordinatorId } = await filed();
+  const agentThreadId = threadIn(textOf(await kit.call("agent_start", { issue: "i1" }, threadId)));
+  kit.stopRequests.lost = new Error("socket hang up");
+
+  const refused = textOf(await kit.call("agent_stop", { agent: "a1" }, threadId));
+
+  assert.equal(kit.thread(agentThreadId).status, "idle", "the stop landed");
+  assert.equal(refused, "Asked a1 to stop, but its thread couldn't be confirmed stopped: bb answered socket hang up, so it still holds i1. Call agent_stop again shortly.");
+  assert.equal(kit.store.agents(coordinatorId)[0]?.ended, null);
+  kit.stopRequests.lost = null;
+  assert.match(textOf(await kit.call("agent_stop", { agent: "a1" }, threadId)), /^a1 is stopped; it no longer holds i1\./);
+});
+
 test("an agent that ends its turn by itself while agent_stop waits on bb is reported with its last answer, whether the stop then succeeds or fails", async () => {
   for (const failure of [null, bbHttpError(502, "bad_gateway", "Bad gateway")]) {
     const { kit, threadId, coordinatorId } = await filed();
@@ -328,7 +342,7 @@ test("an agent that ends its turn by itself while agent_stop waits on bb is repo
 
     if (failure === null) assert.match(textOf(await stopping), /^a1 is stopped; it no longer holds i1\./);
     else {
-      assert.match(textOf(await stopping), /^Asked a1 to stop, but its thread wasn't stopped: bb answered HTTP 502: Bad gateway, so it still holds i1\./);
+      assert.match(textOf(await stopping), /^Asked a1 to stop, but its thread couldn't be confirmed stopped: bb answered HTTP 502: Bad gateway, so it still holds i1\./);
       assert.equal(kit.store.agents(coordinatorId)[0]?.ended, null);
     }
     assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /### i1 "Add retries" \(a1\) ended its turn without a handoff\n\nAt [^\n]+ Its last answer, in its own words:\n\nI need the staging key\./);

@@ -283,9 +283,15 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   /**
    * Set `pending` to hold every stop until it settles, as a slow bb does; set `failure` to make every
    * stop reject with it then. `byThread` overrides one thread's stop: an error it rejects with, or
-   * "stopping", which leaves the thread stopping.
+   * "stopping", which leaves the thread stopping. Set `lost` to have every stop land and then reject
+   * with it, as when bb's answer is lost on the way back.
    */
-  const stopRequests: { pending: Promise<void> | null; failure: Error | null; byThread: Map<string, Error | "stopping"> } = { pending: null, failure: null, byThread: new Map() };
+  const stopRequests: { pending: Promise<void> | null; failure: Error | null; lost: Error | null; byThread: Map<string, Error | "stopping"> } = {
+    pending: null,
+    failure: null,
+    lost: null,
+    byThread: new Map(),
+  };
   /** Set `answered` to run as bb answers a thread's model lookup, as when someone acts at that moment. */
   const modelLookups: { answered: ((threadId: string) => void) | null } = { answered: null };
   let store = openStore(storage);
@@ -435,6 +441,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       const interrupted = thread.status !== "idle" && leaves === "idle";
       thread.status = leaves;
       if (interrupted) await emit("thread.idle", { thread: { ...ref(threadId), environmentId: thread.environmentId }, lastAssistantText: "Interrupted halfway." });
+      if (stopRequests.lost !== null) throw stopRequests.lost;
     },
     async archive({ threadId }) {
       fakeThread(threadId).archivedAt = Date.now();

@@ -408,7 +408,7 @@ test("a handoff made while a handover stops its agent waits for i1, then is refu
 });
 
 for (const [how, stop, why] of [
-  ["fails", bbHttpError(500, "internal", "Stop failed"), "wasn't stopped: bb answered HTTP 500: Stop failed"],
+  ["fails", bbHttpError(500, "internal", "Stop failed"), "couldn't be confirmed stopped: bb answered HTTP 500: Stop failed"],
   ["stays stopping", "stopping", "is still stopping"],
 ] as const) {
   test(`a verifier stop that ${how} refuses the handover: a1 keeps i1 and its check, nothing starts, and it can be asked again`, async () => {

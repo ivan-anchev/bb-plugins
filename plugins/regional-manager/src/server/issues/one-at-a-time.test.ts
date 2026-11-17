@@ -63,7 +63,7 @@ test("a superseded verifier bb won't stop keeps the next verifier from starting 
   assert.deepEqual([verifiers().length, check().verdict.state], [1, "queued"], "no second verifier beside the one bb didn't stop");
   const refused = await start();
   assert.ok(isRefusal(refused));
-  assert.equal(textOf(refused), `agent_start is refused: the verifier @thread:${old.id} wasn't stopped: bb answered HTTP 500: Stop failed, so no agent started and a1 still holds i1. Call agent_start again once it has stopped.`);
+  assert.equal(textOf(refused), `agent_start is refused: the verifier @thread:${old.id} couldn't be confirmed stopped: bb answered HTTP 500: Stop failed, so no agent started and a1 still holds i1. Call agent_start again once it has stopped.`);
 
   kit.stopRequests.byThread.delete(old.id);
   await kit.tick();
