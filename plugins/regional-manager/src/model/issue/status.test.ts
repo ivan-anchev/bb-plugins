@@ -100,6 +100,11 @@ test("an issue whose agent's thread runs is In progress, and Needs you when the 
   assert.deepEqual(view(held(thread("error"), { handoff: done, check: null })), at("in-progress", "Its last turn failed", "Its last turn failed"));
 });
 
+test("an agent bb never confirmed a thread for flags its issue, saying what to do", () => {
+  const unconfirmed = "No thread: bb never confirmed starting one. agent_stop ends the agent at once; then agent_start again";
+  assert.deepEqual(view({ holder: { agent: { ...agent, threadId: null }, thread: null, current: null } }), at("in-progress", unconfirmed, unconfirmed));
+});
+
 test("a thread status newer than this plugin's SDK reads as idle, never throws", () => {
   // why the cast: it stands in for a status a newer bb sends, which this SDK's type can't name.
   const fromNewerHost = { status: "hibernating", hasPendingInteraction: false } as unknown as HolderThread;

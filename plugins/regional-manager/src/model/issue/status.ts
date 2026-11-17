@@ -114,6 +114,10 @@ export function placedByLeft(kind: Kind, left: Handed, pr: PrSnapshot | null): P
 /** An issue an agent holds: its thread's state, else its current handoff, places it. */
 function held(kind: Kind, { agent, thread, current }: NonNullable<IssueFacts["holder"]>, pr: PrSnapshot | null): Placing & Pick<IssueView, "placing"> {
   const working = (headline: string) => ({ status: "in-progress", headline, needsYou: null, placing: null }) as const;
+  // why it waits on the user: agent_start binds an agent's thread or ends the agent before it answers,
+  // so one still without a thread is one whose spawn the plugin stopped during and never heard the end
+  // of, and only the manager ends it. A spawn still in flight reads the same for those few moments.
+  if (agent.threadId === null) return { ...flagged(UNCONFIRMED), placing: null };
   if (thread === null) return working("Its thread is gone");
   if (thread.hasPendingInteraction) return { ...flagged("Waiting for an answer or an approval in its thread"), placing: null };
   switch (thread.status) {
@@ -138,6 +142,7 @@ function held(kind: Kind, { agent, thread, current }: NonNullable<IssueFacts["ho
 }
 
 const IDLE = "Its turn ended without a handoff";
+const UNCONFIRMED = "No thread: bb never confirmed starting one. agent_stop ends the agent at once; then agent_start again";
 
 /** A handoff: blocked and gave-up flag the issue; done walks the kind's stages. */
 function byHandoff(kind: Kind, { handoff, check }: Handed, fixRounds: number, pr: PrSnapshot | null): Placing {

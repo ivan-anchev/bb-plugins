@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent.ts";
+import { issueIdSchema } from "../../model/issue/issue.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { coordinating, HEAD, isRefusal, ISSUE, newThreadRequest, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
 
@@ -183,6 +184,21 @@ test("an agent whose spawn failed ends, and its issue rests in Todo with nothing
   assert.deepEqual(await rows(), [["i1", "in-progress", "Working"]]);
   await settled();
   assert.deepEqual(doorbells(), []);
+});
+
+test("an agent whose spawn the plugin never heard the end of flags its issue until agent_stop ends it, and agent_start starts the work again", async () => {
+  const { kit, threadId, coordinatorId, rows, start } = await filed();
+  const unconfirmed = "No thread: bb never confirmed starting one. agent_stop ends the agent at once; then agent_start again";
+  // As agent_start leaves it when the plugin stops before bb answers its spawn: inserted, never bound or ended.
+  const execution = { providerId: "claude-code", model: "opus", reasoningLevel: "high" };
+  kit.store.insertAgent({ coordinatorId, issueId: issueIdSchema.parse("i1"), ticket: "lost-spawn", placement: { kind: "worktree" }, base: { kind: "default" }, execution, at: 2_000 });
+
+  assert.deepEqual(await rows(), [["i1", "needs-you", unconfirmed]]);
+  assert.ok(textOf(await kit.call("crew_catch_up", {}, threadId)).includes(`### Needs you (1)\n- i1 "Add retries" (Build; a1, no thread): ${unconfirmed}`));
+
+  assert.match(textOf(await kit.call("agent_stop", { agent: "a1" }, threadId)), /^a1 is stopped; it no longer holds i1\./);
+  assert.deepEqual(await rows(), [["i1", "todo", "Not started"]]);
+  assert.match(textOf(await start()), /^Started a2 on i1 /);
 });
 
 test("agent_message reaches the agent as a message from the regional manager's thread", async () => {
