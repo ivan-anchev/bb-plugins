@@ -74,7 +74,7 @@ export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
   bb.agents.registerTool({
     name: UPDATE,
     description:
-      "Change one of your issues: its kind (only before any agent has started on it), title, description, brief, done-criteria or verifier, or where it stands. status: backlog or todo rests an issue no agent holds (and reopens a canceled one); canceled closes one no agent holds; done accepts one that is In review (a research issue never is: its agent's done handoff makes it Done). Every other status is the plugin's to say, from what its agents did. A build issue's verifier change applies from its next done handoff on; verifier: null lets the plugin pick again, and drops the one named when the issue becomes research.",
+      "Change one of your issues: its kind (only before any agent has started on it), title, description, brief, done-criteria, verifier or dependencies (dependsOn: add and remove), or where it stands. status: backlog or todo rests an issue no agent holds (and reopens a canceled one); canceled closes one no agent holds; done accepts one that is In review (a research issue never is: its agent's done handoff makes it Done). Every other status is the plugin's to say, from what its agents did. A build issue's verifier change applies from its next done handoff on; verifier: null lets the plugin pick again, and drops the one named when the issue becomes research. A status or dependency change that makes issues ready says so: \"Now ready: i3\".",
     presentation: { label: { pending: "Updating an issue", completed: "Updated an issue" }, icon: { glyph: "Workflow" } },
     parameters: z.strictObject({
       id: issueIdSchema,
@@ -101,7 +101,7 @@ export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
   bb.agents.registerTool({
     name: READ,
     description:
-      "Read one of your issues whole: its status and why, its description, brief and done-criteria, the verifier named, each agent with what it runs on, every handoff with its verdict, and its agent's latest answer.",
+      "Read one of your issues whole: its status and why, what blocks it, its description, brief and done-criteria, what it depends on and what it blocks, the verifier named, each agent with what it runs on, every handoff with its verdict, and its agent's latest answer.",
     presentation: { label: { pending: "Reading an issue", completed: "Read an issue" }, icon: { glyph: "FileText" } },
     parameters: z.object({ id: issueIdSchema }),
     execute: forIssue(READ, (issue) => issues.read(issue)),
