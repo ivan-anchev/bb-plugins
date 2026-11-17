@@ -38,6 +38,9 @@ type PrFound = { snapshot: PrSnapshot; headSeenAt: number; readAt: number; hando
 export const prUnavailableSchema = z.object({ kind: z.enum(["persistent", "transient"]), reason: z.string() });
 export type PrUnavailable = z.infer<typeof prUnavailableSchema>;
 
+/** One read of a branch's pull request: what it found (null: none), or why GitHub couldn't be read. */
+export type PrRead = { kind: "read"; pr: PrSnapshot | null } | { kind: "unread"; reason: string };
+
 /** What the plugin knows of a branch's pull request: the latest read that found it (snapshot null: none has), and why the latest read failed (null: it didn't). */
 export type PrStatus = ({ snapshot: null } | PrFound) & { unavailable: PrUnavailable | null };
 

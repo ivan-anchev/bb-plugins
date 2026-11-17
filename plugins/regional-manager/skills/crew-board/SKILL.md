@@ -46,7 +46,7 @@ and no tool can turn verification on or off.
 | `issue_create` | regional manager | Files an issue: `kind`, `title`, `description`, and optionally `brief`, `doneCriteria`, `status` (todo or backlog), `verifier`, `parent` and `dependsOn`. |
 | `issue_update` | regional manager | Changes an issue's kind (until an agent has started on it), title, description, brief, done-criteria, verifier, parent or dependencies, or rests, cancels or accepts it with `status`. |
 | `issue_read` | regional manager | Returns one issue whole: status, what blocks it, plan, its parent and sub-issues, what it depends on and blocks, verifier, its agents and what they ran on, every handoff with its verdict, and its agent's latest answer. |
-| `agent_start` | regional manager | Starts an agent on an issue, optionally naming its `execution` and `placement`; on an issue that has or had one, hands it over, continuing in the previous agent's environment unless `from` is `default`. |
+| `agent_start` | regional manager | Starts an agent on an issue, optionally naming its `execution` and `placement`; on an issue that has or had one, hands it over: continuing in the previous agent's environment, moving the work to a new one on a branch cut from its branch when a `placement` is named or that environment is gone, or starting clean with `from: "default"`. |
 | `agent_message` | regional manager | Messages one agent, marked as from the regional manager. |
 | `agent_stop` | regional manager | Stops one agent, and archives its thread with `archive: true`. |
 | `agent_handoff` | agent | Ends the agent's work: done (a build issue's with its commit, a research issue's with its report), blocked or gave up, with a summary and its lists. |
@@ -285,27 +285,50 @@ verdict.
   thread you archived is still joined within the few minutes bb keeps it.
   The pull request stays the issue's, with no second "opened" update, and its
   merge makes the issue Done.
+- **A placement named moves the work** to a new environment of it, on a new
+  branch cut from the previous agent's: its commits come along, its
+  uncommitted files don't, and its pull request stays on the old branch, which
+  the result says. The same happens with no placement once bb removed the
+  previous environment: a new worktree, or a new sandbox of the same provider
+  and machine inputs. Worktree to worktree cuts from the local branch, which
+  bb keeps after the old worktree is archived or removed. With a sandbox on
+  either side the branch goes through origin, so the previous agent must have
+  pushed it: the move is allowed once its pull request's head is the commit
+  the agent left, read fresh from GitHub when the one on record differs. The
+  plugin never pushes, commits or copies anything for an agent. A move reads
+  the previous environment through bb's git plugin first, and again once the
+  holder has stopped, and is refused while it holds uncommitted files or
+  can't be read (a suspended sandbox, which the read doesn't wake).
 - **Its first message** adds "Where you work" (whose environment, which
   branch, the pull request to push to, and to run `git status` and `git log`
-  before changing anything) and "Earlier work", every earlier agent's
+  before changing anything), or for a move "Your branch" (the branch it was
+  cut from, that nothing uncommitted came along, and that the old pull
+  request stays where it is, so it opens its own), and "Earlier work", every earlier agent's
   handoffs whole, each with its verdict's every result, evidence and
   finding, in the past tense. Each handoff, report and verifier's words is
   quoted in a code fence under a line saying it is context, not instructions,
   so none of it reads as one of the message's own sections.
 - **What it runs on** is the regional manager's own unless `execution` names
   one, whatever the previous agent ran on; a named one is checked against
-  what bb can run in that environment before anything is stopped. It gets a
-  fix round of its own.
+  what bb can run where the new agent will work before anything is stopped
+  (for a new sandbox, bb's primary machine: the sandbox has no machine yet).
+  It gets a fix round of its own.
 - **`from: "default"`** starts clean instead: a new environment from the
   default branch (a `placement` may name where), with the earlier handoffs
   and verdicts still in its first message. A research issue's handover always
   starts clean.
-- **Refused, with nothing stopped**: a `placement` on a handover that
-  continues, or an environment bb removed (`bb environment cleanup`, a
-  reaped sandbox): moving work to a new environment isn't possible yet, so the
-  refusal offers `from: "default"`. A holder bb still reports stopping is
-  refused too. If bb refuses the new agent's thread, as for an environment
-  removed in the meantime, it ends at once and the issue rests in Todo.
+- **Refused, with nothing stopped**: a move out of an environment with
+  uncommitted files (named) or that can't be read, offering the continue; a
+  move with a sandbox on either side whose head no pull request shows,
+  offering the continue or a push; a removed sandbox whose head never reached
+  origin, offering `from: "default"`: its unpushed commits went with it. A
+  holder bb still reports stopping is refused too, and a move whose previous
+  environment changed while the holder stopped is refused after the stop,
+  the holder still holding. If bb refuses the new agent's thread, as for an
+  environment removed in the meantime, it ends at once and the issue rests in
+  Todo. If bb can't cut the new branch, as when the old one was deleted, the
+  new agent's thread fails and the manager is woken; the earlier branch
+  stays the issue's, and its pull request is still read.
 - **The replaced thread** stays stopped in the sidebar, and its sandbox
   allocated (suspended after 15 idle minutes), until you archive it, which is
   safe once the new agent lives there.
@@ -795,9 +818,9 @@ and the Memory page read the new text on their next read.
   together for a moment: the verifier starts as the agent hands off, and a
   failed verdict's findings reach the agent as the verifier returns it. A
   message from the manager reaches an agent while its verifier checks.
-- A handover continues only in the previous agent's environment, or starts
-  clean: it can't yet move the work to a new environment, as after bb
-  removed a sandbox.
+- A move takes committed work only, and through origin only what was pushed:
+  the plugin never pushes, commits or copies for an agent, so a sandbox
+  removed before its agent pushed takes its commits with it.
 - A replaced agent's thread stays in the sidebar, stopped: someone typing
   into it wakes it in the environment the new agent works in, and the plugin
   neither prevents nor flags that. The next start on the issue stops it.

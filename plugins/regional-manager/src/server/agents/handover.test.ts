@@ -143,20 +143,6 @@ test("a holder bb still reports stopping is not replaced: the start is refused a
   assert.deepEqual([kit.spawned(), kit.store.agents(coordinatorId).length], [spawned, 1]);
 });
 
-test("a removed environment, or a placement named, is refused before anything stops, offering a clean start", async () => {
-  const { kit, agentThreadId, handover, agent } = await handedTo();
-  await kit.startTurn(agentThreadId);
-  const named = await handover({ placement: { kind: "worktree" } });
-  assert.ok(isRefusal(named));
-  assert.match(textOf(named), /^agent_start is refused: Nothing changed\. A handover continues in a1's environment, and can't move its work to a placement yet: leave out placement, or start clean with from: "default"/);
-
-  kit.environments.destroyed.add(kit.thread(agentThreadId).environmentId);
-  const gone = await handover();
-  assert.ok(isRefusal(gone));
-  assert.match(textOf(gone), /^agent_start is refused: Nothing changed\. bb has removed a1's environment, so its work can't be continued there, and moving it to a new one isn't possible yet: start clean with from: "default"/);
-  assert.deepEqual([kit.thread(agentThreadId).status, agent(a1).ended], ["active", null], "a1 still works on i1");
-});
-
 test("an environment bb removes between the decision and the spawn ends the new agent spawn-failed; the issue rests in Todo and the result says why", async () => {
   const { kit, agentThreadId, handover, row, agent } = await handedTo();
   await kit.startTurn(agentThreadId);

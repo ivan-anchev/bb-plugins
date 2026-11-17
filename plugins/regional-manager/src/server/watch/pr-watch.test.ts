@@ -653,3 +653,27 @@ test("a research issue's branch is never read from GitHub, so even a merged pull
   const row = (await kit.rpc.board({ coordinatorId })).issues[0] ?? assert.fail("no row");
   assert.deepEqual([row.kind, row.pr], ["research", null]);
 });
+
+test("a move's fresh read of a pull request waits for a tick's read still out, so the tick's older head never lands over the newer one", async () => {
+  const { kit, threadId, coordinatorId, agentThreadId, branch, pr } = await agentOnGitHub({ kind: "provider", environmentProviderId: "boat-sandbox", machineInputs: { preset: "small" } });
+  const [first, second] = ["1111111111111111111111111111111111111111", "2222222222222222222222222222222222222222"];
+  kit.commit(agentThreadId, first);
+  kit.push(agentThreadId);
+  pr({ head: first });
+  let answer = (): void => assert.fail("gh never ran");
+  kit.github.pending = new Promise((resolve) => (answer = resolve));
+  const ticking = kit.tick(); // its gh answer, as GitHub had it, holds the first head
+  await settled();
+  kit.github.pending = null;
+  kit.commit(agentThreadId, second);
+  kit.push(agentThreadId);
+  pr({ head: second });
+
+  const moving = kit.call("agent_start", { issue: "i1", placement: { kind: "worktree" } }, threadId);
+  await settled();
+  answer();
+  await ticking;
+  const result = textOf(await moving);
+  assert.match(result, /on a new branch cut from a1's `bb\/thr_2` \(pushed at 2222222\)/);
+  assert.equal(kit.store.prOfBranch(coordinatorId, branch)?.snapshot?.headSha, second, "the newer read is the one saved");
+});

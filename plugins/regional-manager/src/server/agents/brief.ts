@@ -4,7 +4,7 @@
 // context and never as instructions. CREW.md and
 // MEMORY.md are copied as they are at the start: the rules every agent follows, and the index of
 // the manager's memory, which is the manager's context and never the agent's instructions.
-import type { AgentId, Base } from "../../model/agent.ts";
+import { refOf, type AgentId, type Base } from "../../model/agent.ts";
 import type { Issue } from "../../model/issue/issue.ts";
 import { isVerified, PIPELINES, type Kind } from "../../model/issue/kind.ts";
 import type { Handed } from "../../model/issue/status.ts";
@@ -75,12 +75,14 @@ function criteriaSection(kind: Kind, criteria: readonly string[]): string | null
 const WHERE_TO_WORK: Record<Base["kind"], string> = {
   default: "Do it on your own branch.",
   joined: "Do it where an earlier agent left it: see Where you work.",
+  cut: "Do it on your own branch, which starts where an earlier agent's left off: see Your branch.",
 };
 
 /**
  * Where a joined agent works: the previous agent's environment, as it left it, uncommitted files
- * and half-done edits included (SH1), so it looks before it changes anything. null: it starts on
- * its own new branch, which its opening line already says.
+ * and half-done edits included (SH1), so it looks before it changes anything. Where a cut agent's
+ * branch starts: the previous agent's commits, nothing uncommitted, and its pull request left on the
+ * previous branch. null: it starts on its own new branch, which its opening line already says.
  */
 function whereSection({ base, branch, pr }: StartingPoint): string | null {
   switch (base.kind) {
@@ -90,6 +92,11 @@ function whereSection({ base, branch, pr }: StartingPoint): string | null {
       const on = branch === null ? "on the branch checked out there" : `on its branch \`${branch}\``;
       const pull = pr === null ? "" : `, whose pull request is #${pr}: push to it, and don't open another`;
       return `## Where you work\n\nYou continue ${base.from}'s work in its environment, ${on}${pull}. ${base.from} no longer works there. Its commits are here, and so may be files it left uncommitted, half-done edits included. Run \`git status\` and \`git log\` before you change anything, and decide from what you find and the handoffs below what to keep.`;
+    }
+    case "cut": {
+      const at = base.pushed === null ? `\`${refOf(base)}\`` : `\`${refOf(base)}\`, which ${base.from} pushed at ${base.pushed.slice(0, 7)}`;
+      const pull = pr === null ? "Open a pull request of your own" : `${base.from}'s pull request #${pr} stays on \`${base.branch}\`: don't push to that branch, and open a pull request of your own`;
+      return `## Your branch\n\nYou work in a new environment, on a new branch of your own that bb cut from ${base.from}'s branch ${at}. ${base.from} no longer works on this issue. Its commits are on your branch; nothing it left uncommitted is. ${pull} when your work is ready. Run \`git log\` before you change anything, and decide from it and the handoffs below where to pick up.`;
     }
     default:
       return base satisfies never;

@@ -293,18 +293,38 @@ verdict) stays one.
   itself changed. It gets a fix round of its own.
 - **What it runs on**: yours, unless you name `execution`, whatever the
   previous agent ran on; `issue_read` lists what each one ran on, so name it
-  again to keep it. A named one is checked against what bb can run in the
-  previous agent's environment before anything is stopped.
+  again to keep it. A named one is checked against what bb can run where the
+  new agent will work before anything is stopped: the previous agent's
+  environment for a continue, your machine for a move to a worktree, bb's
+  primary machine for a move to a new sandbox (if the sandbox can't run it,
+  its thread fails on its first turn and you are woken).
 - **The old thread** stays stopped, never archived by the plugin: it keeps
   the environment alive, since bb destroys a sandbox, or retires a worktree a
   few minutes later, once no live thread is left in it. It stays in the
   sidebar, and a sandbox stays allocated (suspended after 15 idle minutes),
   until the user archives it, which is safe once the new agent lives there.
+- **Moving the work**: name a `placement` to move it to a new environment,
+  such as a sandbox for a heavy test run, or a worktree to work on your
+  machine. The new agent gets its own new branch, cut from the previous
+  agent's branch: its commits come along, its uncommitted files don't, and
+  its pull request stays on the old branch (the new agent opens its own).
+  Worktree to worktree cuts from the local branch, even after the old thread
+  is archived or its worktree removed. With a sandbox on either side, the
+  branch travels only through origin: ask the agent to push and open a pull
+  request first, as the plugin never pushes or commits for it; it is allowed
+  once that pull request's head is the commit the agent left (read fresh
+  from GitHub when the one on record differs, so call right after the push).
+  A move reads the previous environment first and is refused, with nothing
+  stopped, when it holds uncommitted files (named) or can't be read, as a
+  suspended sandbox can't: continue in it instead, or have the agent commit.
+  With no `placement`, a handover whose environment bb removed (a sandbox
+  goes when its last thread is archived) moves too, to a new one like it,
+  the same provider and machine inputs; a sandbox whose head never reached
+  origin is lost, and the refusal offers `from: "default"`.
 - **A clean start**: `from: "default"` gives the new agent a new environment
   from the default branch (a `placement` may name where), with the earlier
   handoffs and verdicts still in its first message. Use it when the earlier
-  work is a wrong turn, or the environment is gone. A research issue's
-  handover always starts clean.
+  work is a wrong turn. A research issue's handover always starts clean.
 - **One at a time**: everything on one issue, `agent_start`, `agent_stop`,
   `agent_message`, its agent's handoff and its verifier's verdict, and the
   plugin starting, reminding or sending findings from a verifier, runs one
@@ -323,14 +343,17 @@ verdict) stays one.
   the issue). A message queued for any of the issue's agents that can't be
   taken back, one the user queued included, refuses it before anything
   stops, naming it and the agent:
-  once bb sends or deletes it, call again. A handover
-  that continues takes no `placement`, and one whose environment bb removed
-  (a sandbox reaped or cleaned up) can't continue: both are refused, offering
-  `from: "default"`; moving the work to a new environment is not possible
-  yet. A thread bb still reports stopping, or won't stop, is refused too:
+  once bb sends or deletes it, call again. A move is refused before anything
+  stops for the reasons in Moving the work, and once more after the holder
+  stopped if its environment changed meanwhile (the holder still holds the
+  issue). A thread bb still reports stopping, or won't stop, is refused too:
   call again shortly.
   If bb refuses the new agent's thread, as for an environment removed in the
   meantime, the issue rests in Todo with no agent, and the result says why.
+  If bb can't cut the new branch (the old branch deleted), the new agent's
+  thread fails and you are woken; `agent_start` without `placement` then
+  continues in the previous environment while bb has it, or `from:
+  "default"` starts clean.
 
 ## Who runs what
 

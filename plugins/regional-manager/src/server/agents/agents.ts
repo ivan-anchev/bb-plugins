@@ -7,10 +7,14 @@ import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
 import type { Coordinator } from "../../contract.ts";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import {
-  branchOf,
+  cutPlan,
   environmentOf,
   handoverOf,
+  issueBranch,
+  moveTo,
   placementOf,
+  refOf,
+  startsClean,
   type Agent,
   type AgentCheckout,
   type AgentId,
@@ -23,6 +27,7 @@ import {
   type RequestedPlacement,
   type StartFrom,
 } from "../../model/agent.ts";
+import type { Kind } from "../../model/issue/kind.ts";
 import { catalogRouting, sameModel, type Execution, type RequestedExecution } from "../../model/execution.ts";
 import { handoffIsCurrent, type HandoffId } from "../../model/handoff.ts";
 import { briefToStart, type Issue, type IssueId } from "../../model/issue/issue.ts";
@@ -31,6 +36,7 @@ import { keepsPlaceAfterEnd, type IssueView } from "../../model/issue/status.ts"
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
+import { checkoutReadOf, gitStatusOf, type GitStatusBb } from "../git-status.ts";
 import { inheritedFrom, type Inherited, type ThreadExecutionBb } from "../execution/thread-execution.ts";
 import type { Inbox } from "../inbox/inbox.ts";
 import { readIssue, type FactsBb, type FactsStore } from "../issues/views/issue-facts.ts";
@@ -39,6 +45,7 @@ import type { MemoryRoot } from "../memory/memory-files.ts";
 import type { Spawner } from "../spawn.ts";
 import type { NewAgent } from "../store/issue/agents-store.ts";
 import type { Store } from "../store/store.ts";
+import type { PrWatch } from "../watch/pr-watch.ts";
 import { agentBrief } from "./brief.ts";
 import { environmentGone, type EnvironmentsBb } from "./environments.ts";
 import { latestTurnSeq, stopRunning, threadsById, type ListBb, type StopBb } from "./threads.ts";
@@ -61,6 +68,7 @@ type ListedThread = {
 
 /** The parts of bb agent actions use, down to the fields they read. */
 type AgentsBb = CatalogBb &
+  GitStatusBb &
   ThreadExecutionBb &
   FactsBb &
   EnvironmentsBb &
@@ -88,29 +96,39 @@ type RunsOn = { execution: Execution; inherited: Pick<Inherited, "serviceTier"> 
 /** Where a start spawns the agent: its placement, its environment, where its work starts and what it inherits there. */
 type Spot = { placement: Placement; environment: EnvironmentArgs; base: Base; checkout: AgentCheckout };
 
-/** A start decided: its issue, where it spawns, what it runs on, and the issue's previous agent (null: none). */
-type Decided = { issueId: IssueId; spot: Spot; runsOn: RunsOn; after: AgentId | null };
+/** What a start asks of its issue's agents: its kind, `from`, and the placement named, resolved (null: none named). */
+type Asked = { kind: Kind; from: StartFrom; placement: Placement | null };
+
+/** A start decided: its issue, what it asked, where it spawns, what it runs on, and the issue's previous agent (null: none). */
+type Decided = { issueId: IssueId; asked: Asked; spot: Spot; runsOn: RunsOn; after: AgentId | null };
 
 /** A regional manager's message a start took back from bb's queue: the agent it was to, which never got it, and its text. */
 export type Withdrawn = { to: AgentId; text: string };
 
 /**
  * The issue taken over: as it was when the new agent was inserted, with the brief it starts from
- * and what blocked it then, the agent, its ticket, the holder it replaced (null: none) and the
- * regional manager's messages to the issue's agents it took back from bb's queue.
+ * and what blocked it then, where it spawns, the agent, its ticket, the holder it replaced (null:
+ * none) and the regional manager's messages to the issue's agents it took back from bb's queue.
  */
-type Taken = { issue: Issue; brief: string; blockedBy: Related[]; agentId: AgentId; ticket: string; replaced: AgentId | null; withdrawn: Withdrawn[] };
+type Taken = { issue: Issue; brief: string; blockedBy: Related[]; spot: Spot; agentId: AgentId; ticket: string; replaced: AgentId | null; withdrawn: Withdrawn[] };
 
-/** The previous agent's environment a new agent joined: whose, what made it, its branch and its pull request's number (null: none known). */
-export type Joined = { from: AgentId; placement: Placement; branch: string | null; pr: number | null };
+/**
+ * What a new agent carries over from the previous one, `from`: `joined`, its environment, made by
+ * `placement`, on its branch; `cut`, a new environment of `placement` on a new branch cut from its
+ * branch, at the head shown pushed (`pushed`; null: from the local branch). `pr`: the number of the
+ * branch's pull request while open as last read (null: none known).
+ */
+export type Carried =
+  | { kind: "joined"; from: AgentId; placement: Placement; branch: string | null; pr: number | null }
+  | { kind: "cut"; from: AgentId; placement: Placement; branch: string; pushed: string | null; pr: number | null };
 
 /**
  * Where a start stands in its issue's succession of agents: `after`, the issue's previous agent (null: the first);
  * `replaced`, the agent it stopped and replaced (null: none held the issue); `withdrawn`, the
- * regional manager's messages to the issue's agents taken back from bb's queue; `joined`, the
- * environment it joined (null: a clean start).
+ * regional manager's messages to the issue's agents taken back from bb's queue; `carried`, what it
+ * carries over from the previous agent (null: a clean start).
  */
-type Succession = { after: AgentId | null; replaced: AgentId | null; withdrawn: Withdrawn[]; joined: Joined | null };
+type Succession = { after: AgentId | null; replaced: AgentId | null; withdrawn: Withdrawn[]; carried: Carried | null };
 
 /**
  * What a start did: refused before anything changed; started, on `execution` (`inherited`: the
@@ -135,6 +153,7 @@ type Deps = {
   inbox: Pick<Inbox, "endAgent">;
   memory: MemoryRoot;
   turns: IssueTurns;
+  prs: Pick<PrWatch, "atHead">;
   /** What bb says about where the regional manager's agents can run, read when agent_start names a placement. */
   placementFacts(id: CoordinatorId): Promise<PlacementFacts>;
   /** Runs after anything that changes a regional manager's board. */
@@ -150,7 +169,7 @@ const MEMORY_INDEX = memoryFileSchema.parse("MEMORY.md");
 const WORKTREE = { kind: "worktree" } as const;
 const NO_CHECKOUT: AgentCheckout = { environmentId: null, branch: null, head: null };
 
-export function createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts, onChange, onRemoved }: Deps) {
+export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, placementFacts, onChange, onRemoved }: Deps) {
   function coordinatorOf(id: CoordinatorId): Coordinator {
     const coordinator = store.coordinator(id);
     // why throw: a tool resolves the caller's role from a bound thread, so its regional manager is bound.
@@ -179,31 +198,56 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, placeme
   }
 
   /**
-   * The issue's latest agent that had a thread, with its environment while bb hasn't destroyed it
-   * and its branch. Reads bb, never the environment itself: a read of a suspended sandbox fails
-   * without waking it (SH5), and a join inherits whatever is there. The environment is the one its
-   * handoffs recorded or it inherited, else its thread's, an archived thread's included.
+   * The issue's previous agent: the latest with a branch, its own as its handoffs recorded or as bb
+   * lists its thread's environment, else the latest with a thread. why not the latest alone: one bb
+   * never cut a branch for, as when it refused the base, would hide the work before it. With its
+   * environment while bb hasn't destroyed it: the one its handoffs recorded or it inherited, else its
+   * thread's, an archived thread's included. Reads bb, never the environment itself.
    */
-  async function previousOf(coordinatorId: CoordinatorId, issueId: IssueId): Promise<Previous | null> {
-    const agent = store
-      .agents(coordinatorId)
-      .filter((each) => each.issueId === issueId && each.threadId !== null)
-      .at(-1);
-    if (agent === undefined || agent.threadId === null) return null;
-    const thread = await listed(agent.threadId);
-    const known = agent.checkout.environmentId ?? thread?.environmentId ?? null;
+  async function previousOf(coordinatorId: CoordinatorId, issueId: IssueId): Promise<Omit<Previous, "now" | "pushed"> | null> {
+    const own = store.agents(coordinatorId).filter((each): each is Agent & { threadId: string } => each.issueId === issueId && each.threadId !== null);
+    const threads = await threadsById(bb, own.map(({ threadId }) => threadId));
+    const threadOf = (agent: Agent & { threadId: string }) => threads.get(agent.threadId) ?? null;
+    const on = issueBranch(own, threadOf);
+    const agent = on?.agent ?? own.at(-1);
+    if (agent === undefined) return null;
+    const known = agent.checkout.environmentId ?? threadOf(agent)?.environmentId ?? null;
     const environmentId = known !== null && !(await environmentGone(bb, known)) ? known : null;
-    return { agent, environmentId, branch: branchOf(agent, thread) };
+    return { agent, environmentId, branch: on?.branch ?? null };
   }
 
-  /** Where a start spawns: in the previous agent's environment for a join; else where the placement named says, a worktree on the regional manager's machine by default. */
-  async function spotOf(coordinatorId: CoordinatorId, handover: Handover, requested: RequestedPlacement | undefined): Promise<Spot | { refused: string }> {
+  /**
+   * The previous agent, and for a move what it decides on, read once: its live environment through
+   * bb's git plugin (a suspended sandbox's read fails without waking it, SH5), and, for a cut through
+   * origin, its branch's pull request at the head it left. A continue reads neither: the spawn wakes
+   * a sleeping sandbox, and the new agent inherits whatever is there. null: a clean start.
+   */
+  async function previousFor(coordinatorId: CoordinatorId, issueId: IssueId, { kind, from, placement }: Asked): Promise<Previous | null> {
+    if (startsClean(kind, from)) return null;
+    const found = await previousOf(coordinatorId, issueId);
+    if (found === null) return null;
+    const to = moveTo(placement, found);
+    if (to === null) return { ...found, now: null, pushed: null };
+    const now = found.environmentId === null ? null : checkoutReadOf(await gitStatusOf(bb, found.environmentId));
+    const plan = cutPlan({ ...found, now }, to);
+    const proving = "prove" in plan ? plan.prove : null;
+    const pushed = proving === null || proving.head === null ? null : await prs.atHead(coordinatorId, found.agent, proving.branch, proving.head);
+    return { ...found, now, pushed };
+  }
+
+  /**
+   * Where a start spawns, or why it can't: in the previous agent's environment for a join; in a new
+   * one of the placement named, or its previous agent's, on a branch cut from its branch for a move;
+   * else where the placement named says, a worktree on the regional manager's machine by default.
+   */
+  async function spotOf(coordinatorId: CoordinatorId, issueId: IssueId, asked: Asked): Promise<Spot | { refused: string }> {
+    const handover = handoverOf(asked.kind, asked, await previousFor(coordinatorId, issueId, asked));
+    if ("refused" in handover) return handover;
     if (handover.kind === "join") return handover;
-    const placement = requested === undefined ? WORKTREE : placementOf(requested, await placementFacts(coordinatorId));
-    if ("refused" in placement) return placement;
+    const { placement, base, ref } = handover.kind === "cut" ? { ...handover, ref: refOf(handover.base) } : { placement: asked.placement ?? WORKTREE, base: { kind: "default" } as const, ref: null };
     const manager = await listed(coordinatorOf(coordinatorId).threadId);
     // why its machine: a worktree agent gets its fresh worktree there, as a child of a live thread does from bb.
-    return { placement, environment: environmentOf(placement, manager?.environmentHostId ?? null), base: { kind: "default" }, checkout: NO_CHECKOUT };
+    return { placement, environment: environmentOf(placement, manager?.environmentHostId ?? null, ref), base, checkout: NO_CHECKOUT };
   }
 
   /**
@@ -230,12 +274,15 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, placeme
    * turn (issue-turns.ts), so it decides on facts no other operation on the issue changes before it
    * is done. The order keeps a sandbox alive, where nothing waits once the last live thread is
    * archived (SH5):
-   * 1. decide where it runs and on what, from what bb has now; a refusal changes nothing;
+   * 1. decide where it runs and on what, from what bb has now; a refusal changes nothing. A move
+   *    reads the previous agent's environment, and its pull request when it cuts through origin;
    * 2. quiet the issue: take back what the plugin queued for the holder, then stop every thread the
    *    plugin started for the issue that bb reports running, and confirm each, never archiving one:
    *    a stopped thread keeps its environment (SH1 (b), SH5). Anything bb doesn't confirm refuses
    *    the start, holder and record intact;
-   * 3. end the holder as replaced, supersede the issue's open checks and insert the new agent, together;
+   * 3. a move out of a live environment reads it again, now that nothing runs there, and is refused
+   *    if what it found no longer allows the cut; then end the holder as replaced, supersede the
+   *    issue's open checks and insert the new agent, together;
    * 4. spawn: a reuse wakes a suspended sandbox and keeps a retiring worktree (SH1). bb refusing it,
    *    as for an environment removed since step 1, ends the new agent as spawn-failed.
    */
@@ -253,27 +300,37 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, placeme
   async function decide(coordinatorId: CoordinatorId, { issueId, from, execution, placement }: StartRequest): Promise<Decided | { refused: string }> {
     const filed = store.issue(coordinatorId, issueId);
     if (filed === null) return { refused: `You have no issue ${issueId}. crew_catch_up lists your issues.` };
-    const previous = await previousOf(coordinatorId, filed.id);
-    const handover = handoverOf(filed.kind, { from, placement }, previous);
-    if ("refused" in handover) return { refused: `Nothing changed. ${handover.refused}` };
-    const spot = await spotOf(coordinatorId, handover, placement);
-    if ("refused" in spot) return spot;
+    // why before anything is read: a parent never has an agent, so nothing its earlier agents left, their environments or pull requests, bears on it.
+    const parent = parentText(filed, store.issues(coordinatorId));
+    if (parent !== null) return { refused: parent };
+    const named = placement === undefined ? null : placementOf(placement, await placementFacts(coordinatorId));
+    if (named !== null && "refused" in named) return named;
+    const asked: Asked = { kind: filed.kind, from, placement: named };
+    const spot = await spotOf(coordinatorId, filed.id, asked);
+    if ("refused" in spot) return { refused: `Nothing changed. ${spot.refused}` };
     const runsOn = await executionFor(coordinatorOf(coordinatorId), execution, spot.environment, whereText(spot));
     if ("refused" in runsOn) return runsOn;
     const ready = startable(coordinatorId, filed.id, (await readIssue(bb, store, filed)).view, runsOn);
     if ("refused" in ready) return ready;
-    return { issueId: filed.id, spot, runsOn, after: previous?.agent.id ?? null };
+    const after = store.agents(coordinatorId).filter((agent) => agent.issueId === filed.id && agent.threadId !== null).at(-1)?.id ?? null;
+    return { issueId: filed.id, asked, spot, runsOn, after };
   }
 
   /**
    * Steps 2 and 3: quiets the issue (see quiet), then gives it to the new agent. Refused when
-   * quieting is, and when the issue can no longer start an agent or changed hands meanwhile, saying
-   * what quieting did.
+   * quieting is, when a move's cut no longer holds, and when the issue can no longer start an agent
+   * or changed hands meanwhile, saying what quieting did.
    */
-  async function takeOver(coordinatorId: CoordinatorId, { issueId, spot, runsOn }: Decided): Promise<Taken | { refused: string }> {
+  async function takeOver(coordinatorId: CoordinatorId, decided: Decided): Promise<Taken | { refused: string }> {
+    const { issueId, runsOn } = decided;
     const holder = holderOf(coordinatorId, issueId);
     const quieted = await quiet(coordinatorId, issueId, holder);
     if ("refused" in quieted) return quieted;
+    // why judge a move again: what the previous agent's environment held was read before its turn
+    // was stopped, and it may have committed, pushed or left files since. The base is a branch name,
+    // so a cut that still holds is the same cut.
+    const spot = decided.spot.base.kind === "cut" ? await spotOf(coordinatorId, issueId, decided.asked) : decided.spot;
+    if ("refused" in spot) return { refused: `${quieted.did}${spot.refused}` };
     const turnSeq = holder === null || holder.threadId === null ? null : await latestTurnSeq(bb, holder.threadId);
     // why decide again here, with no await from here to the write: while the issue quieted, a merge
     // may have made it Done, or the manager filed a sub-issue under it.
@@ -283,7 +340,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, placeme
     const next: NewAgent = { coordinatorId, issueId, ticket: randomUUID(), ...spot, execution: runsOn.execution, at: Date.now() };
     const agentId = holder === null ? store.insertAgent(next) : store.replaceAgent(holder, leftBy(holder, turnSeq), next);
     if (agentId === null) return { refused: `${quieted.did}${issueId} changed hands meanwhile. crew_catch_up shows who holds it now.` };
-    return { ...now, blockedBy: view.blockedBy, agentId, ticket: next.ticket, replaced: holder?.id ?? null, withdrawn: quieted.withdrawn };
+    return { ...now, blockedBy: view.blockedBy, spot, agentId, ticket: next.ticket, replaced: holder?.id ?? null, withdrawn: quieted.withdrawn };
   }
 
   /**
@@ -346,9 +403,10 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, placeme
   }
 
   /** Step 4: spawns the inserted agent's thread with its first message; one bb refuses ends as spawn-failed. */
-  async function spawn(coordinatorId: CoordinatorId, { spot, runsOn, after }: Decided, { issue, brief, blockedBy, agentId, ticket, replaced, withdrawn }: Taken): Promise<StartOutcome> {
+  async function spawn(coordinatorId: CoordinatorId, { runsOn, after }: Decided, { issue, brief, blockedBy, spot, agentId, ticket, replaced, withdrawn }: Taken): Promise<StartOutcome> {
     const { execution, inherited } = runsOn;
-    const succession: Succession = { after, replaced, withdrawn, joined: joinedOf(coordinatorId, spot) };
+    const carried = carriedOf(coordinatorId, spot);
+    const succession: Succession = { after, replaced, withdrawn, carried };
     const started = (threadId: string): StartOutcome => ({ kind: "started", agentId, threadId, execution, inherited: inherited !== null, blockedBy, ...succession });
     onChange(coordinatorId);
     const files = memory.of(coordinatorId);
@@ -356,7 +414,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, placeme
       const prompt = agentBrief(
         agentId,
         { ...issue, brief },
-        { base: spot.base, branch: spot.checkout.branch, pr: succession.joined?.pr ?? null, earlier: store.record(coordinatorId, issue.id) },
+        { base: spot.base, branch: carried?.branch ?? null, pr: carried?.pr ?? null, earlier: store.record(coordinatorId, issue.id) },
         { crewRules: files.read(CREW_RULES).text, index: files.read(MEMORY_INDEX).text },
       );
       return started(await spawner.agent(ticket, { coordinator: coordinatorOf(coordinatorId), title: issue.title, environment: spot.environment, execution, serviceTier: inherited?.serviceTier ?? null, prompt }));
@@ -377,11 +435,22 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, placeme
     return latest !== null && handoffIsCurrent(latest.handoff, turnSeq) ? latest.handoff.id : null;
   }
 
-  /** The previous agent's environment a start joins, with its pull request's number while open as last read; null for a clean start. */
-  function joinedOf(coordinatorId: CoordinatorId, { base, placement, checkout: { branch } }: Spot): Joined | null {
-    if (base.kind !== "joined") return null;
-    const pr = branch === null ? null : (store.prOfBranch(coordinatorId, branch)?.snapshot ?? null);
-    return { from: base.from, placement, branch, pr: pr?.state === "open" ? pr.number : null };
+  /** What a start carries over from the previous agent, with its branch's pull request's number while open as last read; null for a clean start. */
+  function carriedOf(coordinatorId: CoordinatorId, { base, placement, checkout }: Spot): Carried | null {
+    const openPr = (branch: string | null): number | null => {
+      const pr = branch === null ? null : (store.prOfBranch(coordinatorId, branch)?.snapshot ?? null);
+      return pr?.state === "open" ? pr.number : null;
+    };
+    switch (base.kind) {
+      case "default":
+        return null;
+      case "joined":
+        return { kind: "joined", from: base.from, placement, branch: checkout.branch, pr: openPr(checkout.branch) };
+      case "cut":
+        return { kind: "cut", from: base.from, placement, branch: base.branch, pushed: base.pushed, pr: openPr(base.branch) };
+      default:
+        return base satisfies never;
+    }
   }
 
   function holderOf(coordinatorId: CoordinatorId, issueId: IssueId): Agent | null {
