@@ -35,7 +35,7 @@ const onAgent = { issueId: issueIdSchema, agentId: agentIdSchema };
  * names its issue; one about a thread names the agent too; one about a verdict names the check.
  */
 export const inboxEventSchema = z.discriminatedUnion("kind", [
-  /** An agent's handoff no verifier checks, announced at once: blocked or gave up. A done one is announced as `checked`, with its verdict. */
+  /** An agent's handoff no verifier checks, announced at once: blocked, gave up, or done on an issue nothing verifies. A done one a verifier checks is announced as `checked`, with its verdict. */
   z.object({ kind: z.literal("handoff"), ...onAgent, handoffId: handoffIdSchema, status: handoffStatusSchema }),
   /** A check is final and nothing goes back to its agent, or verification was off. */
   z.object({ kind: z.literal("checked"), issueId: issueIdSchema, checkId: checkIdSchema }),

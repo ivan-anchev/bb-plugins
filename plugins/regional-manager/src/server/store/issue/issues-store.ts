@@ -3,7 +3,7 @@
 // nowhere else.
 import { z } from "zod";
 import { executionSchema } from "../../../model/execution.ts";
-import { closedAsSchema, doneCriteriaSchema, issueIdSchema, restSchema, type Issue, type IssueId, type Rest } from "../../../model/issue/issue.ts";
+import { closedAsSchema, doneCriteriaSchema, issueIdSchema, restSchema, verifierProblem, type Issue, type IssueId, type Rest } from "../../../model/issue/issue.ts";
 import { kindSchema } from "../../../model/issue/kind.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../../model/role.ts";
 import { json, jsonOrNull, nullableJson, type Db } from "../rows.ts";
@@ -12,7 +12,7 @@ import { json, jsonOrNull, nullableJson, type Db } from "../rows.ts";
 export type NewIssue = Pick<Issue, "kind" | "title" | "description" | "brief" | "doneCriteria" | "verifier" | "rest">;
 
 /** A change to an issue's plan; a field left out stays as it is. */
-export type IssueEdit = Partial<Pick<Issue, "title" | "description" | "brief" | "doneCriteria" | "verifier" | "rest" | "closed">>;
+export type IssueEdit = Partial<Pick<Issue, "kind" | "title" | "description" | "brief" | "doneCriteria" | "verifier" | "rest" | "closed">>;
 
 /** Puts the issue to rest as `rest`. Call inside the transaction that decides it, as an agent's start does: losing its agent then leaves it in Todo. */
 export function restIssue(db: Db, coordinatorId: CoordinatorId, id: IssueId, rest: Rest): void {
@@ -46,7 +46,9 @@ export function issuesStore(db: Db) {
 
     /**
      * Applies the edit, or says why it can't. `requireUnheld`: refused while an agent holds the
-     * issue, decided in the same transaction, so an agent starting meanwhile is seen.
+     * issue. Decided in the same transaction, so an agent starting meanwhile is seen: the kind is
+     * fixed once any agent has started on the issue, and the plan as it would be must stand
+     * (verifierProblem).
      */
     updateIssue(coordinatorId: CoordinatorId, id: IssueId, edit: IssueEdit, { requireUnheld }: { requireUnheld: boolean }): { issue: Issue } | { refused: string } {
       return db().transaction(() => {
@@ -55,10 +57,15 @@ export function issuesStore(db: Db) {
         if (requireUnheld && db().prepare("SELECT 1 FROM agents WHERE coordinator_id = ? AND issue_id = ? AND ended_at IS NULL").get(coordinatorId, id) !== undefined) {
           return { refused: `An agent holds ${id}. Stop it with agent_stop first.` };
         }
+        if (edit.kind !== undefined && edit.kind !== now.kind && db().prepare("SELECT 1 FROM agents WHERE coordinator_id = ? AND issue_id = ?").get(coordinatorId, id) !== undefined) {
+          return { refused: `An agent has started on ${id}, so its kind stays ${now.kind}. File a new issue of the other kind instead.` };
+        }
         const next: Issue = { ...now, ...edit };
+        const problem = verifierProblem(next.kind, next.verifier !== null);
+        if (problem !== null) return { refused: `${id} can't be changed so: ${problem}. Give verifier: null with the change to drop the one named.` };
         db()
-          .prepare("UPDATE issues SET title = ?, description = ?, brief = ?, done_criteria = ?, verifier = ?, rest = ?, closed_as = ?, closed_at = ? WHERE coordinator_id = ? AND id = ?")
-          .run(next.title, next.description, next.brief, JSON.stringify(next.doneCriteria), jsonOrNull(next.verifier), next.rest, next.closed?.as ?? null, next.closed?.at ?? null, coordinatorId, id);
+          .prepare("UPDATE issues SET kind = ?, title = ?, description = ?, brief = ?, done_criteria = ?, verifier = ?, rest = ?, closed_as = ?, closed_at = ? WHERE coordinator_id = ? AND id = ?")
+          .run(next.kind, next.title, next.description, next.brief, JSON.stringify(next.doneCriteria), jsonOrNull(next.verifier), next.rest, next.closed?.as ?? null, next.closed?.at ?? null, coordinatorId, id);
         return { issue: next };
       })();
     },

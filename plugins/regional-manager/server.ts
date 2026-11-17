@@ -43,7 +43,7 @@ export default function plugin(bb: BbPluginApi): void {
   registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
   registerIssueTools(bb, { store, issues });
   registerAgentTools(bb, { store, agents });
-  registerHandoffTool(bb, { store, verify });
+  registerHandoffTool(bb, { store, verify, memory });
   registerVerdictTool(bb, { store, verify });
   forwardThreadEvents(bb, { store, agents, refreshBoard });
   watchAgentThreads({ bb, store, inbox });

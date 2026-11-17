@@ -37,16 +37,22 @@ export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
   bb.agents.registerTool({
     name: CREATE,
     description:
-      "File an issue: one piece of the work, done by an agent you start on it with agent_start. It is numbered i1, i2… and rests in Todo, or in Backlog when you are proposing it and waiting for the user. kind decides how its done handoffs are checked: build is code on a branch, verified by an independent verifier. A brief and doneCriteria may wait until you start its agent.",
+      "File an issue: one piece of the work, done by an agent you start on it with agent_start. It is numbered i1, i2… and rests in Todo, or in Backlog when you are proposing it and waiting for the user. kind decides what its agent hands off and how it is checked: build is code on a branch, verified by an independent verifier; research is a report (a probe, spike, investigation or design) that nothing verifies, Done as its agent hands it off. A brief, and a build issue's doneCriteria, may wait until you start its agent.",
     presentation: { label: { pending: "Filing an issue", completed: "Filed an issue" }, icon: { glyph: "Workflow" } },
     parameters: z.strictObject({
-      kind: kindSchema.describe("build: code on its own branch, checked by a verifier against the done-criteria."),
+      kind: kindSchema.describe(
+        "build: code on its own branch, checked by a verifier against the done-criteria. research: a report saved in your memory as reports/<issue id>.md; its doneCriteria are the questions it answers, and nobody judges them. It can't change once an agent has started.",
+      ),
       title: titleSchema.describe("A short name for the piece of work; it titles its agent's thread."),
       description: descriptionSchema.describe("What it is about, in plain words, for the user: the board shows it."),
       brief: briefSchema.optional().describe("Everything its agent needs to start without asking: the goal, the context, the constraints, where to look. Required before an agent starts."),
-      doneCriteria: doneCriteriaSchema.optional().describe("Up to 12 criteria, each checkable by running something: a test, a command and its output, a page that shows a thing. At least one before an agent starts."),
+      doneCriteria: doneCriteriaSchema
+        .optional()
+        .describe(
+          "Up to 12. A build issue's: each checkable by running something (a test, a command and its output, a page that shows a thing), at least one before an agent starts. A research issue's: the questions its report answers, none or more.",
+        ),
       status: restSchema.optional().describe("todo (the default): ready to start. backlog: not planned yet, as when you propose it and wait for the user."),
-      verifier: VERIFIER.optional(),
+      verifier: VERIFIER.optional().describe(`${VERIFIER.description} A research issue has none.`),
     }),
     execute: forManager(store, CREATE, async (id, { brief, doneCriteria, status, ...plan }) => {
       const filed = await issues.create(id, { ...plan, brief: brief ?? null, doneCriteria: doneCriteria ?? [], rest: status ?? "todo" });
@@ -57,10 +63,11 @@ export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
   bb.agents.registerTool({
     name: UPDATE,
     description:
-      "Change one of your issues: its title, description, brief, done-criteria or verifier, or where it stands. status: backlog or todo rests an issue no agent holds (and reopens a canceled one); canceled closes one no agent holds; done accepts one that is In review. Every other status is the plugin's to say, from what its agents did. A verifier change applies from the issue's next done handoff on; verifier: null lets the plugin pick again.",
+      "Change one of your issues: its kind (only before any agent has started on it), title, description, brief, done-criteria or verifier, or where it stands. status: backlog or todo rests an issue no agent holds (and reopens a canceled one); canceled closes one no agent holds; done accepts one that is In review (a research issue never is: its agent's done handoff makes it Done). Every other status is the plugin's to say, from what its agents did. A verifier change applies from the issue's next done handoff on; verifier: null lets the plugin pick again.",
     presentation: { label: { pending: "Updating an issue", completed: "Updated an issue" }, icon: { glyph: "Workflow" } },
     parameters: z.strictObject({
       id: issueIdSchema,
+      kind: kindSchema.optional(),
       title: titleSchema.optional(),
       description: descriptionSchema.optional(),
       brief: briefSchema.optional(),

@@ -5,28 +5,41 @@
 import { z } from "zod";
 
 // why no CHECK in SQL: a new kind must not need a table rebuild. The store parses the column with this.
-export const kindSchema = z.enum(["build"]);
+export const kindSchema = z.enum(["build", "research"]);
 export type Kind = z.infer<typeof kindSchema>;
 
 /** A status a done handoff can wait in before Done. Each is left by its own evidence (status.ts STAGES). */
 export type Stage = "verifying" | "in-review";
 
+/**
+ * A kind's pipeline. why a union of paths rather than independent flags: a verifier judges a commit
+ * and a pull request merges one, so only a path that delivers a commit may pass through a stage.
+ */
 type Pipeline = {
   /** The kind as the board's row and crew_catch_up name it. */
   label: string;
-  /** What its done handoff hands over (handoff.ts Delivery). */
-  delivers: "commit";
-  /** The statuses a done handoff passes through, in order, before Done. */
-  stages: readonly Stage[];
-};
+} & (
+  | {
+      /** What its done handoff hands over (handoff.ts Delivery). */
+      delivers: "commit";
+      /** The statuses a done handoff passes through, in order, before Done. */
+      stages: readonly Stage[];
+    }
+  | { delivers: "report"; stages: readonly [] }
+);
 
 export const PIPELINES: Record<Kind, Pipeline> = {
   // Ships code: verified, then waits on the user or its pull request, then Done when it merges.
   build: { label: "Build", delivers: "commit", stages: ["verifying", "in-review"] },
+  // A probe, spike, investigation or design: its report is the result, nobody judges it, and its done handoff is Done.
+  research: { label: "Research", delivers: "report", stages: [] },
 };
 
 /** Whether a verifier judges the kind's done handoffs; it also makes done-criteria required before an agent starts. */
-export const isVerified = (kind: Kind): boolean => PIPELINES[kind].stages.includes("verifying");
+export function isVerified(kind: Kind): boolean {
+  const stages: readonly Stage[] = PIPELINES[kind].stages;
+  return stages.includes("verifying");
+}
 
 /** Whether the kind's done handoff names a commit: the plugin reads the agent's checkout as it hands off, and the PR watch reads its branch. */
 export const shipsCode = (kind: Kind): boolean => PIPELINES[kind].delivers === "commit";

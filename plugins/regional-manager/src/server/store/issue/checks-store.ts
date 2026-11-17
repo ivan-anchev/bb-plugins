@@ -7,6 +7,7 @@ import { agentIdSchema, type AgentId } from "../../../model/agent.ts";
 import { executionSchema } from "../../../model/execution.ts";
 import { handoffIdSchema, handoffReportSchema, type HandoffId, type Handoff } from "../../../model/handoff.ts";
 import { doneCriteriaSchema, issueIdSchema, type IssueId } from "../../../model/issue/issue.ts";
+import { isVerified, kindSchema } from "../../../model/issue/kind.ts";
 import type { Handed } from "../../../model/issue/status.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../../model/role.ts";
 import { checkIdSchema, checkSubjectSchema, type Check, type CheckId } from "../../../model/verdict/check.ts";
@@ -120,11 +121,12 @@ export function checksStore(db: Db) {
     },
 
     /**
-     * An agent's handoff and, when it is done, its check, together. The check copies its issue's
-     * criteria and verifier as they are now, and starts with the verdict firstVerdict gives it on
-     * `checkout`, the agent's environment as read as it handed off: queued for a verifier and
-     * announced with its verdict later, or else announced at once. A done handoff supersedes every
-     * earlier check of the agent still waiting. A blocked or gave-up one is announced at once.
+     * An agent's handoff and, when it is done on an issue of a verified kind, its check, together.
+     * The check copies its issue's criteria and verifier as they are now, and starts with the verdict
+     * firstVerdict gives it on `checkout`, the agent's environment as read as it handed off: queued
+     * for a verifier and announced with its verdict later, or else announced at once. A done handoff
+     * supersedes every earlier check of the agent still waiting. A blocked or gave-up one, and a done
+     * one nothing verifies, is announced at once.
      * Returns its check (null: not done) and the verifier threads of the checks it superseded.
      */
     insertHandoff(handoff: Handoff, checkout: CheckoutRead): { check: Check | null; superseded: string[] } {
@@ -137,9 +139,15 @@ export function checksStore(db: Db) {
           return { check: null, superseded: [] };
         }
         const superseded = supersede(coordinatorId, agentId);
-        const { criteria, verifier } = z
-          .object({ criteria: json(doneCriteriaSchema), verifier: nullableJson(executionSchema) })
-          .parse(db().prepare("SELECT done_criteria AS criteria, verifier FROM issues WHERE coordinator_id = ? AND id = ?").get(coordinatorId, issueId));
+        const { kind, criteria, verifier } = z
+          .object({ kind: kindSchema, criteria: json(doneCriteriaSchema), verifier: nullableJson(executionSchema) })
+          .parse(db().prepare("SELECT kind, done_criteria AS criteria, verifier FROM issues WHERE coordinator_id = ? AND id = ?").get(coordinatorId, issueId));
+        if (!isVerified(kind)) {
+          insertEvent(db, coordinatorId, { kind: "handoff", issueId, agentId, handoffId: id, status: stored.status }, at);
+          return { check: null, superseded };
+        }
+        // why throw: a verified kind delivers a commit (kind.ts Pipeline), and reportOf made this delivery by its kind.
+        if (stored.delivery.kind !== "commit") throw new Error(`A done handoff of ${issueId}, a ${kind} issue, delivers no commit to check.`);
         const { headSha, prUrl } = stored.delivery;
         const made: Check = {
           id: checkIdSchema.parse(randomUUID()),

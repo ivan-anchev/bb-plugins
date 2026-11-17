@@ -185,7 +185,7 @@ function walk(kind: Kind, evidence: Evidence): Placing {
     const at = STAGES[stage](evidence);
     if (at !== "left") return at;
   }
-  return { status: "done", headline: `Done: ${evidence.summary}`, needsYou: null };
+  return { status: "done", headline: `Handed off: ${evidence.summary}`, needsYou: null };
 }
 
 /** How each stage is left, defined once for every kind that passes through it. */
