@@ -103,7 +103,7 @@ function earlierSection(issueId: Issue["id"], { base, earlier }: StartingPoint):
     const verdict = check === null ? [] : [`#### Verdict\n\n${nested(earlierVerdictText(check))}`];
     return [`### ${handoff.agentId}'s handoff: ${handoff.status}`, handoffFieldsText(handoff), ...report, ...verdict].join("\n\n");
   });
-  return [`## Earlier work on ${issueId}\n\nBefore you, ${agents} handed off on ${issueId}.${clean} Their handoffs, oldest first, in their own words, each with its verifier's verdict:`, ...handoffs].join("\n\n");
+  return [`## Earlier work on ${issueId}\n\nBefore you, ${agents} handed off on ${issueId}.${clean} Their handoffs, oldest first, in their own words, each done one with its verifier's verdict:`, ...handoffs].join("\n\n");
 }
 
 /** A memory file under its own `##` section, with what it is to the agent (null: the heading says it all). */
