@@ -102,7 +102,9 @@ export async function quietIssue(bb: QuietBb, store: QuietStore, coordinatorId: 
  * succeeds: a delete bb did, whose answer or the read after it failed, would leave its check
  * counted as reminded, and its verifier's next stop would give the check up with no reminder sent.
  * A reminder bb sent meanwhile may then come twice; a second reminder costs less than a check
- * given up.
+ * given up. why it answers, or throws, only once every thread's work has settled: its caller
+ * releases the issue's turn then, and work still running after that, a reminder marked sent
+ * included, would write over what the issue's next turn did.
  */
 async function withdrawQueued(
   bb: QuietBb,
@@ -116,7 +118,7 @@ async function withdrawQueued(
   const fromManager = ({ senderThreadId }: { senderThreadId: string | null }): boolean => senderThreadId === managerThreadId;
   const listed = await threadsById(bb, threads.map(({ threadId }) => threadId));
   const kept = threads.filter(({ threadId }) => listed.get(threadId)?.deletedAt === null);
-  const each = await Promise.all(
+  const settled = await Promise.allSettled(
     kept.map(async (thread) => {
       const { threadId, agentId } = thread;
       const owed = threadId === owedTo;
@@ -132,6 +134,9 @@ async function withdrawQueued(
       };
     }),
   );
+  const failed = settled.find((one): one is PromiseRejectedResult => one.status === "rejected");
+  if (failed !== undefined) throw failed.reason;
+  const each = settled.flatMap((one) => (one.status === "fulfilled" ? [one.value] : []));
   return { withdrawn: each.flatMap((one) => one.withdrawn), left: each.flatMap((one) => one.left) };
 }
 

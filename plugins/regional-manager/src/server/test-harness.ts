@@ -308,8 +308,11 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
    * Set `lost` to have every delete land and then reject with it, as when bb's answer is lost on the way back; set `deleted` to run as bb deletes one, before it answers.
    */
   const queueDeletes: { failure: Error | null; lost: Error | null; deleted: (() => void) | null } = { failure: null, lost: null, deleted: null };
-  /** Set `failure` to make every read of a thread's queue reject with it, as when bb can't answer. */
-  const queueReads: { failure: Error | null } = { failure: null };
+  /**
+   * Set `failure` to make every read of a thread's queue reject with it, as when bb can't answer.
+   * Set `read` to run as bb reads one, before it answers: the answer, as read then, waits for it, and fails if it throws.
+   */
+  const queueReads: { failure: Error | null; read: ((threadId: string) => Promise<void>) | null } = { failure: null, read: null };
   /**
    * Set `failure` to make every listing of threads by id reject with it, as when bb can't answer.
    * Set `holding` to keep each answer, as read when called, until the test calls its release in `held`.
@@ -504,7 +507,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       async list({ threadId }) {
         if (queueReads.failure !== null) throw queueReads.failure;
         if (fakeThread(threadId).deletedAt !== null) throw bbHttpError(404, "thread_not_found", "Thread not found");
-        return queue.filter((entry) => entry.threadId === threadId);
+        const queued = queue.filter((entry) => entry.threadId === threadId);
+        if (queueReads.read !== null) await queueReads.read(threadId);
+        return queued;
       },
       // As bb does, deleting a message that already left the queue fails, and a deleted one is announced.
       async delete({ queuedMessageId }) {
@@ -750,7 +755,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     turnEvents,
     /** How bb answers a delete of a queued message; a test may make it fail, or lose its answer. */
     queueDeletes,
-    /** How bb answers a read of a thread's queue; a test may make it fail. */
+    /** How bb answers a read of a thread's queue; a test may make it fail, or act as bb reads one. */
     queueReads,
     /** How bb answers a listing of threads by id; a test may make it fail. */
     threadLists,
