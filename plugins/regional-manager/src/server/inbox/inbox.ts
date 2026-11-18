@@ -50,6 +50,7 @@ type InboxBb = {
 type InboxStore = Pick<
   Store,
   | "coordinator"
+  | "awaitsGoal"
   | "issues"
   | "check"
   | "insertHandoff"
@@ -106,8 +107,10 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
     if (disposed || ringing.has(id) || store.doorbell(id) !== null) return;
     const coordinator = store.coordinator(id);
     const events = store.unannounced(id);
-    // why: a coordinating thread whose thread isn't bound yet is rung by the tick once it is.
-    if (coordinator === null || !events.some(({ event }) => wakes(event))) return;
+    // why: a coordinating thread whose thread isn't bound yet is rung by the tick once it is. One still
+    // waiting for its goal is not rung at all: a doorbell would start its first turn in the goal's
+    // place (goal.ts), and the first turn's catch-up reads every event anyway.
+    if (coordinator === null || store.awaitsGoal(id) || !events.some(({ event }) => wakes(event))) return;
     ringing.add(id);
     let delivery: "sent" | "queued";
     try {

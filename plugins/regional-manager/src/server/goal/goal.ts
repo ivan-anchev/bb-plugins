@@ -2,9 +2,10 @@
 // thread before there is one, and bb refuses a thread with no first message, so it is spawned with
 // the plugin's placeholder, which this module's message.dispatch hook holds in bb's queue. The
 // thread waits there, pending, with no environment, session or turn. The user's message then
-// dispatches first, on the execution the placeholder's row carries; the hook writes it to GOAL.md
-// as it lets it through, and holds every other message to the thread until then, so nothing but
-// the goal starts its first turn. After that turn the placeholder is taken out of the queue.
+// dispatches first, on the execution the placeholder's row carries, and the hook writes it to
+// GOAL.md as it lets it through. The hook holds nothing but the placeholder: the inbox rings no
+// manager still waiting for its goal (inbox.ts). After the first turn the placeholder is taken out
+// of the queue.
 //
 // why the placeholder stays until then: its row carries the thread's execution (model, reasoning,
 // permission mode, service tier), and a thread whose row was deleted before its first turn has none.
@@ -21,6 +22,10 @@ import type { Store } from "../store/store.ts";
 
 /** What the plugin spawns a regional manager with: shown on its held row in the thread, and read by the manager if the user sends it anyway (roles.ts). */
 export const PLACEHOLDER = "Type this regional manager's goal below to start it.";
+
+/** What the spawn's submission carries, so the hook knows the spawn's own attempt (spawn.ts). */
+export const PLACEHOLDER_MARK = { placeholder: true } as const;
+const placeholderMarkSchema = z.object({ placeholder: z.literal(true) });
 
 /** Why the row waits, as bb shows it under "Held by Regional Manager". */
 const HOLD_REASON = "Waiting for your goal";
@@ -66,6 +71,9 @@ const HOLD: MessageDispatchHookDecision = { action: "wait", reason: HOLD_REASON 
 export function watchGoals(bb: GoalBb, { store, memory, onChange }: Deps) {
   const warn = (what: string) => (error: unknown) => bb.log.warn(`${what}: ${error instanceof Error ? error.message : String(error)}`);
   const isPlaceholder = (row: QueuedRow): boolean => row.origin === "plugin" && row.originPluginId === bb.pluginId && textOf(row.content) === PLACEHOLDER;
+  /** The spawn's own attempt: the plugin's submission marking the placeholder, carrying the placeholder's text. */
+  const isPlaceholderSubmission = ({ experimental_submission: submission, input }: DispatchContext): boolean =>
+    submission?.pluginId === bb.pluginId && placeholderMarkSchema.safeParse(submission.data).success && textOf(input.blocks) === PLACEHOLDER;
 
   function managerOf(threadId: string): CoordinatorId | null {
     const role = store.roleOfThread(threadId);
@@ -88,7 +96,7 @@ export function watchGoals(bb: GoalBb, { store, memory, onChange }: Deps) {
 
   function decide(ctx: DispatchContext): MessageDispatchHookDecision {
     // why the submission: the spawn's own attempt runs before bb answers the spawn, so before the thread is known to be a regional manager's.
-    const placeholder = ctx.experimental_submission?.pluginId === bb.pluginId || (ctx.queuedMessages.length > 0 && ctx.queuedMessages.every(isPlaceholder));
+    const placeholder = isPlaceholderSubmission(ctx) || (ctx.queuedMessages.length > 0 && ctx.queuedMessages.every(isPlaceholder));
     const id = managerOf(ctx.thread.id);
     const awaiting = id !== null && store.awaitsGoal(id);
     if (placeholder) {
@@ -96,10 +104,7 @@ export function watchGoals(bb: GoalBb, { store, memory, onChange }: Deps) {
       if (id !== null && !awaiting) setImmediate(() => void dropPlaceholder(ctx.thread.id).catch(warn(`Could not read ${ctx.thread.id}'s queue to take its placeholder out`)));
       return HOLD;
     }
-    if (id === null || !awaiting) return PROCEED;
-    // why hold the rest: a doorbell or another thread's message must not start the first turn in the goal's place.
-    if (!fromTheUser(ctx)) return HOLD;
-    take(id, textOf(ctx.input.blocks));
+    if (awaiting && fromTheUser(ctx)) take(id, textOf(ctx.input.blocks));
     return PROCEED;
   }
 

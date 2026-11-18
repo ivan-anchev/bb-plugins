@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { Coordinator, CoordinatorStart } from "../contract.ts";
 import type { Execution } from "../model/execution.ts";
-import { PLACEHOLDER } from "./goal/goal.ts";
+import { PLACEHOLDER, PLACEHOLDER_MARK } from "./goal/goal.ts";
 import { coordinatorIdSchema, ticketMetadataSchema, type Role } from "../model/role.ts";
 import type { MemoryRoot } from "./memory/memory-files.ts";
 import type { Store } from "./store/store.ts";
@@ -102,7 +102,7 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
           title: name,
           input: [{ type: "text", text: PLACEHOLDER, mentions: [] }],
           // why: the hook knows the spawn's own attempt by it, before bb answers the spawn with the thread.
-          pluginSubmission: { pluginId: bb.pluginId, data: { placeholder: true } },
+          pluginSubmission: { pluginId: bb.pluginId, data: PLACEHOLDER_MARK },
         }),
       };
     },

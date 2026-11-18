@@ -91,9 +91,9 @@ export function openMemoryRoot(databasePath: string, revisions: Pick<Store, "mem
           for (const [file, text] of seedFiles()) write(file, text, null);
         },
 
-        /** Writes GOAL.md with the goal unless it exists, so the goal is written once, whoever gives it first. */
+        /** Writes GOAL.md, the goal exactly as the user typed it, unless it exists, so the goal is written once, whoever gives it first. */
         seedGoal(goal: string): void {
-          write(GOAL_FILE, `# Goal\n\n${goal.trim()}\n`, null);
+          write(GOAL_FILE, goal, null);
         },
       };
     },

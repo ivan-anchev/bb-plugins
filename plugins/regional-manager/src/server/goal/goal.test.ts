@@ -80,6 +80,24 @@ const typed = (threadId: string, text: string) => ({ thread: { id: threadId }, i
 /** The plugin's doorbell to the manager, sent now. */
 const doorbell = (text: string) => ({ thread: { id: MANAGER }, initiator: "user" as const, senderThreadId: null, origin: "plugin" as const, originPluginId: PLUGIN_ID, input: { text, blocks: [{ type: "text" as const, text, mentions: [] }] } });
 
+/** The spawn's own attempt: the placeholder as its first message, sent with `submission`. */
+const spawnAttempt = (threadId: string, submission: { pluginId: string; data: null | { placeholder: boolean } }) => ({
+  thread: { id: threadId },
+  initiator: "agent" as const,
+  origin: "plugin" as const,
+  originPluginId: PLUGIN_ID,
+  experimental_submission: submission,
+  input: { text: PLACEHOLDER, blocks: [{ type: "text" as const, text: PLACEHOLDER, mentions: [] }] },
+});
+
+/** The user types the goal with spaces and lines of their own. GOAL.md keeps every one. */
+test("GOAL.md is the goal exactly as the user typed it", () => {
+  const kit = setup();
+  const typedGoal = "  Preserve this goal exactly.  \n\n- with a list\n";
+  kit.dispatch(typed(MANAGER, typedGoal));
+  assert.equal(kit.goal(), typedGoal);
+});
+
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 test("every message to a thread that is no regional manager's, or to one that has its goal, goes through", () => {
@@ -95,22 +113,25 @@ test("every message to a thread that is no regional manager's, or to one that ha
 
 test("only the plugin's placeholder is held for good: on the spawn's own attempt, before the thread is known, and on every re-attempt of its row", () => {
   const kit = setup();
-  assert.deepEqual(kit.dispatch({ thread: { id: "thr_unbound" }, initiator: "agent", origin: "plugin", originPluginId: PLUGIN_ID, experimental_submission: { pluginId: PLUGIN_ID, data: { placeholder: true } } }), WAIT);
+  assert.deepEqual(kit.dispatch(spawnAttempt("thr_unbound", { pluginId: PLUGIN_ID, data: { placeholder: true } })), WAIT);
   assert.deepEqual(kit.dispatch({ thread: { id: MANAGER }, queuedMessages: [placeholderRow("qm_placeholder")] }), WAIT);
   kit.dispatch(typed(MANAGER, "Migrate the webhook service"));
   assert.deepEqual(kit.dispatch({ thread: { id: MANAGER }, queuedMessages: [placeholderRow("qm_placeholder")] }), WAIT);
 
-  // Not the placeholder: another plugin's submission, the same text from someone else, or a row of the plugin's that says something else.
-  assert.deepEqual(kit.dispatch({ ...typed("thr_other", "Go"), experimental_submission: { pluginId: "another-plugin", data: { placeholder: true } } }), PROCEED);
+  // Not the placeholder: another plugin's submission, one of the plugin's own that isn't marked or doesn't carry its text, the same text from someone else, or a row of the plugin's that says something else.
+  assert.deepEqual(kit.dispatch(spawnAttempt("thr_other", { pluginId: "another-plugin", data: { placeholder: true } })), PROCEED);
+  assert.deepEqual(kit.dispatch(spawnAttempt("thr_other", { pluginId: PLUGIN_ID, data: { placeholder: false } })), PROCEED);
+  assert.deepEqual(kit.dispatch(spawnAttempt("thr_other", { pluginId: PLUGIN_ID, data: null })), PROCEED);
+  assert.deepEqual(kit.dispatch({ ...typed("thr_other", "Go"), experimental_submission: { pluginId: PLUGIN_ID, data: { placeholder: true } } }), PROCEED);
   assert.deepEqual(kit.dispatch({ thread: { id: MANAGER }, queuedMessages: [{ ...placeholderRow("qm_user"), origin: "app", originPluginId: null }] }), PROCEED);
   assert.deepEqual(kit.dispatch({ thread: { id: MANAGER }, queuedMessages: [{ ...placeholderRow("qm_doorbell"), content: [{ type: "text", text: "[Regional Manager] a1 handed off", mentions: [] }] }] }), PROCEED);
 });
 
-test("while it waits for its goal, every other message to the manager is held: a doorbell, another thread's message", () => {
+test("while it waits for its goal, every other message to the manager goes through and is not its goal: a doorbell, another thread's message, a message joining a turn", () => {
   const kit = setup();
-  assert.deepEqual(kit.dispatch(doorbell("[Regional Manager] You saved PLAN.md")), WAIT);
-  assert.deepEqual(kit.dispatch({ ...typed(MANAGER, "From a thread"), initiator: "agent", senderThreadId: "thr_sender" }), WAIT);
-  assert.deepEqual(kit.dispatch({ thread: { id: MANAGER }, initiator: "user", senderThreadId: null, origin: "plugin", queuedMessages: [{ ...placeholderRow("qm_doorbell"), content: [{ type: "text", text: "[Regional Manager] You saved PLAN.md", mentions: [] }] }] }), WAIT);
+  assert.deepEqual(kit.dispatch(doorbell("[Regional Manager] You saved PLAN.md")), PROCEED);
+  assert.deepEqual(kit.dispatch({ ...typed(MANAGER, "From a thread"), initiator: "agent", senderThreadId: "thr_sender" }), PROCEED);
+  assert.deepEqual(kit.dispatch({ thread: { id: MANAGER }, initiator: "user", senderThreadId: null, origin: "plugin", queuedMessages: [{ ...placeholderRow("qm_doorbell"), content: [{ type: "text", text: "[Regional Manager] You saved PLAN.md", mentions: [] }] }] }), PROCEED);
   assert.equal(kit.goal(), null);
   assert.equal(kit.store.awaitsGoal(ID), true);
 });
@@ -120,13 +141,13 @@ test("the first message the user types is the goal, written to GOAL.md once: run
   const goal = { ...typed(MANAGER, "ignored"), input: { text: "ignored", blocks: [{ type: "text" as const, text: "Migrate the webhook service", mentions: [] }, { type: "text" as const, text: "Hidden", visibility: "agent-only" as const, mentions: [] }, { type: "text" as const, text: "Keep the old endpoints", mentions: [] }] } };
 
   assert.deepEqual(kit.dispatch(goal), PROCEED);
-  assert.equal(kit.goal(), "# Goal\n\nMigrate the webhook service\n\nKeep the old endpoints\n");
+  assert.equal(kit.goal(), "Migrate the webhook service\n\nKeep the old endpoints");
   assert.equal(kit.store.awaitsGoal(ID), false);
   assert.deepEqual(kit.boards, [ID]);
 
   assert.deepEqual(kit.dispatch(goal), PROCEED);
   assert.deepEqual(kit.dispatch(typed(MANAGER, "Something else")), PROCEED);
-  assert.equal(kit.goal(), "# Goal\n\nMigrate the webhook service\n\nKeep the old endpoints\n");
+  assert.equal(kit.goal(), "Migrate the webhook service\n\nKeep the old endpoints");
   assert.deepEqual(kit.boards, [ID]);
 });
 
@@ -134,7 +155,7 @@ test("a message the user queued while the placeholder ran, sent on a re-attempt,
   const kit = setup();
   const queued = makeQueueEntry({ id: "qm_goal", threadId: MANAGER, origin: "app", content: [{ type: "text", text: "Migrate the webhook service", mentions: [] }] });
   assert.deepEqual(kit.dispatch({ thread: { id: MANAGER }, origin: "app", input: { text: "Migrate the webhook service", blocks: queued.content }, queuedMessages: [queued] }), PROCEED);
-  assert.equal(kit.goal(), "# Goal\n\nMigrate the webhook service\n");
+  assert.equal(kit.goal(), "Migrate the webhook service");
 });
 
 test("when its own code throws, the message goes through and the reason is logged", () => {
@@ -177,7 +198,7 @@ test("the catch-up takes the goal from the user's first message the hook missed,
 
   kit.requested.push(turn("agent", "From a thread", "thr_sender"), turn("user", "Migrate the webhook service"), turn("user", "And then this"));
   await kit.goals.recover(ID);
-  assert.equal(kit.goal(), "# Goal\n\nMigrate the webhook service\n");
+  assert.equal(kit.goal(), "Migrate the webhook service");
   assert.equal(kit.store.awaitsGoal(ID), false);
 });
 
@@ -186,5 +207,5 @@ test("after the placeholder was sent anyway, the next message the user types is 
   // The user's Send now on the placeholder skips the hook: bb sends it, and the hook never sees it.
   kit.queue.splice(0);
   assert.deepEqual(kit.dispatch(typed(MANAGER, "Migrate the webhook service")), PROCEED);
-  assert.equal(kit.goal(), "# Goal\n\nMigrate the webhook service\n");
+  assert.equal(kit.goal(), "Migrate the webhook service");
 });

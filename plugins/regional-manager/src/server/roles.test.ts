@@ -62,7 +62,7 @@ test("crew_catch_up returns the seeded memory with the goal the user typed", asy
 
   const text = textOf(await kit.call("crew_catch_up", {}, threadId));
   for (const file of ["MEMORY.md", "GOAL.md", "PLAN.md", "PREFERENCES.md", "CREW.md", "DIGEST.md"]) assert.match(text, new RegExp(`^## ${file} \\(version \\w+\\)$`, "m"));
-  assert.match(text, /## GOAL\.md \(version \w+\)\n\n# Goal\n\nMigrate the webhook service/);
+  assert.match(text, /## GOAL\.md \(version \w+\)\n\nMigrate the webhook service/);
 });
 
 test("crew_memory_read reads one file, and says so when there is none", async () => {

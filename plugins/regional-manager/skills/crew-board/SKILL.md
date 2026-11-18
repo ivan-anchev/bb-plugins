@@ -36,10 +36,10 @@ and no plugin settings. Its one setting belongs to each regional manager: the
    "Give it a name." and takes the focus.
 8. Type the goal in the thread and send it. It is the thread's first message:
    bb makes the environment you picked and starts the thread on what you
-   picked, and the plugin writes the message to `GOAL.md`. Until then, the
-   plugin holds every other message to the thread, its own wake messages
-   included. After that first turn the plugin's held message leaves the
-   queue.
+   picked, and the plugin writes the message to `GOAL.md`, exactly as you
+   typed it. Until then, the plugin sends the thread none of its own wake
+   messages; its first turn reads every update anyway. After that first turn
+   the plugin's held message leaves the queue.
 
 If you press **Send now** on the held message, the regional manager gets it
 first and answers that it is waiting for your goal; your next message is the

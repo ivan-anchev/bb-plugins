@@ -18,7 +18,7 @@ test("a started coordinator holds its role and is listed, its thread pending wit
 
   assert.deepEqual(kit.giveGoal(threadId, "Migrate the webhook service"), { action: "proceed" });
   assert.equal(kit.thread(threadId).status, "active");
-  assert.equal(readFileSync(goalFile, "utf8"), "# Goal\n\nMigrate the webhook service\n");
+  assert.equal(readFileSync(goalFile, "utf8"), "Migrate the webhook service");
 });
 
 test("binding twice, by the spawn answer and by thread.created, binds once", async () => {

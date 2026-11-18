@@ -30,7 +30,7 @@ test("seeding writes the core files but GOAL.md, with MEMORY.md indexing them in
   assert.match(readFileSync(join(memory.dir, "MEMORY.md"), "utf8"), /^- CREW\.md: rules every agent follows\.$/m);
 
   memory.seedGoal("  Migrate the webhook service\n");
-  assert.equal(readFileSync(join(memory.dir, "GOAL.md"), "utf8"), "# Goal\n\nMigrate the webhook service\n");
+  assert.equal(readFileSync(join(memory.dir, "GOAL.md"), "utf8"), "  Migrate the webhook service\n", "the goal exactly as typed");
 });
 
 test("seeding again keeps every file as it is, and a second goal leaves the first in GOAL.md", () => {
@@ -42,7 +42,7 @@ test("seeding again keeps every file as it is, and a second goal leaves the firs
   memory.seedGoal("Something else");
 
   assert.equal(readFileSync(join(memory.dir, "PLAN.md"), "utf8"), "# Plan\n\n1. Inventory the endpoints\n");
-  assert.equal(readFileSync(join(memory.dir, "GOAL.md"), "utf8"), "# Goal\n\nMigrate the webhook service\n");
+  assert.equal(readFileSync(join(memory.dir, "GOAL.md"), "utf8"), "Migrate the webhook service");
 });
 
 test("a write naming the file's current version replaces it and gives its new version", () => {
