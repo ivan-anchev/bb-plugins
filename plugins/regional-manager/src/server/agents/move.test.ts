@@ -188,6 +188,17 @@ test("criterion 4: a research issue's move starts clean: no cut, no read of its 
   assert.deepEqual([kit.git.calls.length, kit.github.runs.length], [reads, runs]);
 });
 
+test("a move of a blocked issue says what blocks it, as every start does", async () => {
+  const { kit, threadId, agentThreadId, call } = await holding();
+  await kit.call("issue_create", { kind: "build", title: "Retry budget", description: "How many retries we can afford." }, threadId);
+  await kit.call("issue_update", { id: "i1", dependsOn: { add: ["i2"] } }, threadId);
+  kit.commit(agentThreadId, COMMITTED);
+
+  const moved = textOf(await call({ placement: WORKTREE }));
+  assert.match(moved, /^Stopped a1 and started a2 on i1 as @thread:\w+ in a new worktree, on a new branch cut from a1's /);
+  assert.match(moved, / i1 is blocked by i2 \(Todo\): its agent started anyway, and has nothing of that work but what its brief names\.$/);
+});
+
 test("an issue split into sub-issues since its agent stopped is refused as a parent before a move reads anything: not its agent's sandbox, nor its pull request", async () => {
   const { kit, threadId, agentThreadId, call, pushAndOpen } = await holding({ placement: SANDBOX });
   kit.commit(agentThreadId, COMMITTED);
