@@ -351,3 +351,23 @@ test("verification switched off while a final check runs leaves that check to fi
   await returns(PASSES);
   assert.deepEqual(await row(), at("done", "✓ Final check passed"));
 });
+
+test("a final check superseded by an agent started on the parent while it had no sub-issues is due again once they are back, and starts", async () => {
+  const { call, mergeAll, row, finalChecks, latest, tick } = await withParent();
+  await mergeAll();
+  const steps: [string, object][] = [
+    ["issue_update", { id: "i2", parent: null }],
+    ["issue_update", { id: "i3", parent: null }],
+    ["agent_start", { issue: "i1" }],
+    ["agent_stop", { agent: "a3" }],
+    ["issue_update", { id: "i2", parent: "i1" }],
+    ["issue_update", { id: "i3", parent: "i1" }],
+  ];
+  for (const [tool, input] of steps) assert.equal((await call(tool, input)).refused, false, `${tool} ${JSON.stringify(input)}`);
+  assert.equal(latest().verdict.state, "superseded");
+  assert.deepEqual(await row(), at("verifying", "Final check due"));
+  await tick();
+  assert.deepEqual(finalChecks().map(({ verdict }) => verdict.state), ["superseded", "running"]);
+  assert.deepEqual(latest().subject.merged, ["i2", "i3"]);
+  assert.deepEqual(await row(), at("verifying", "Final check running"));
+});

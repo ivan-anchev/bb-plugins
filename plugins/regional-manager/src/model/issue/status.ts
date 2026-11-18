@@ -166,27 +166,31 @@ function parentView({ issue, openDecision, finalCheck }: IssueFacts, subIssues: 
 
 /**
  * Where its final check puts a build parent whose Done build sub-issues (`merged`) are all merged.
- * A check is due when none was made, or the latest judged less merged work than there is now (a
- * fix filed as a sub-issue since, Done and merged): the tick starts it (final-check.ts), unless the
- * parent has no done-criteria to check, which only the manager can write. Else the latest places
- * it: Verifying while it runs, Done when it passed, In review for the manager to accept when
- * verification was off, In progress and flagged when it failed or couldn't run. why a research or
- * canceled sub-issue since doesn't make one due: the default branch holds the same work.
+ * A check is due when none was made, the latest judged less merged work than there is now (a fix
+ * filed as a sub-issue since, Done and merged), or the latest was superseded before it judged
+ * anything (an agent started on the parent while it had no sub-issues): the tick starts it
+ * (final-check.ts), unless the parent has no done-criteria to check, which only the manager can
+ * write. Else the latest places it: Verifying while it runs, Done when it passed, In review for
+ * the manager to accept when verification was off, In progress and flagged when it failed or
+ * couldn't run. why a research or canceled sub-issue since doesn't make one due: the default
+ * branch holds the same work.
  */
 function finalCheckPlaces(issue: Issue, latest: FinalCheck | null, merged: IssueId[]): Placing & Pick<Placed, "placing" | "closedBy" | "finalCheckDue"> {
   const open = { closedBy: null, finalCheckDue: null };
-  if (latest === null || merged.some((id) => !latest.subject.merged.includes(id))) {
-    if (issue.doneCriteria.length === 0) return { ...flagged(`${issue.id} has no done-criteria for its final check`), placing: null, ...open };
-    return { status: "verifying", headline: "Final check due", needsYou: null, placing: null, closedBy: null, finalCheckDue: merged };
-  }
+  const due = (): Placing & Pick<Placed, "placing" | "closedBy" | "finalCheckDue"> =>
+    issue.doneCriteria.length === 0
+      ? { ...flagged(`${issue.id} has no done-criteria for its final check`), placing: null, ...open }
+      : { status: "verifying", headline: "Final check due", needsYou: null, placing: null, closedBy: null, finalCheckDue: merged };
+  if (latest === null || merged.some((id) => !latest.subject.merged.includes(id))) return due();
   const placing = { placing: latest };
   const result = outcome(latest.verdict);
   switch (result) {
     case "pending":
     case "waiting-for-ci":
-    // why running: a newer one supersedes it, and only once one is made, which is then the latest.
-    case "superseded":
       return { status: "verifying", headline: "Final check running", needsYou: null, ...placing, ...open };
+    // why due, never running: a superseded check judged nothing, and no newer one was made after it.
+    case "superseded":
+      return due();
     case "pass":
       return { status: "done", headline: "✓ Final check passed", needsYou: null, ...placing, closedBy: { by: "final-check", checkId: latest.id }, finalCheckDue: null };
     case "unverified":

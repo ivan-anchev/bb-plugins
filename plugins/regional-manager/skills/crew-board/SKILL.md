@@ -153,7 +153,10 @@ running". The verifier gets the parent's criteria and description and no
 commit: when it returns its verdict, the plugin reads its worktree through
 bb's git plugin and judges the commit it holds then, on a clean tree, so a
 file it changed or added there fails the verdict. A worktree the plugin can't
-read ends the check without a verdict.
+read ends the check without a verdict. A check superseded before it returned,
+as when an agent was started on the parent while it had no sub-issues, judged
+nothing: once the parent's work is all merged under it again, a new one is
+due.
 
 It runs on the parent's named verifier when bb lists it on the manager's
 machine and no agent that held a Done build sub-issue of the parent ran on
