@@ -119,7 +119,7 @@ test("criterion 1: a move cuts from the branch a1's environment has checked out,
 test("criterion 2: a1 stopped with uncommitted files: the move is refused naming them, offering the continue; once a1 commits, it moves", async () => {
   const { kit, threadId, agentThreadId, call, agent, headOf } = await holding();
   await kit.call("agent_stop", { agent: "a1" }, threadId);
-  kit.git.changedFiles.set(kit.environment(agentThreadId), 2);
+  kit.git.changedFiles.set(kit.environment(agentThreadId), ["scratch-1.txt", "scratch-2.txt"]);
   const spawned = kit.spawned();
 
   const refused = await call({ placement: WORKTREE });
@@ -137,7 +137,7 @@ test("criterion 2: a1 stopped with uncommitted files: the move is refused naming
 
 test("criterion 2: a holder that still works is refused before it is stopped; one that leaves files uncommitted while it stops is refused after, still holding", async () => {
   const { kit, agentThreadId, call, agent } = await holding();
-  kit.git.changedFiles.set(kit.environment(agentThreadId), 1);
+  kit.git.changedFiles.set(kit.environment(agentThreadId), ["scratch-1.txt"]);
   const early = await call({ placement: WORKTREE });
   assert.match(textOf(early), /^agent_start is refused: Nothing changed\. a1 left 1 file uncommitted/);
   assert.deepEqual([kit.thread(agentThreadId).status, agent(a1).ended], ["active", null], "a1 still works");
@@ -147,7 +147,7 @@ test("criterion 2: a holder that still works is refused before it is stopped; on
   kit.stopRequests.pending = new Promise((resolve) => (answer = resolve));
   const moving = call({ placement: WORKTREE });
   await settled();
-  kit.git.changedFiles.set(kit.environment(agentThreadId), 1); // its last edit lands as it stops
+  kit.git.changedFiles.set(kit.environment(agentThreadId), ["scratch-1.txt"]); // its last edit lands as it stops
   answer();
   const late = await moving;
   assert.ok(isRefusal(late));

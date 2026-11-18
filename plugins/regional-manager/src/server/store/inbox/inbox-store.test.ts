@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { decisionIdSchema } from "../../../model/decision.ts";
+import { memoryFileSchema } from "../../../model/memory-file.ts";
 import { closesOf } from "../../../model/issue/relations.ts";
 import { issueViews, type IssueView } from "../../../model/issue/status.ts";
 import type { PrSnapshot } from "../../../model/verdict/pr.ts";
@@ -39,7 +40,7 @@ test("an answer that fails before the manager is told leaves the decision unansw
 
 test("a doorbell announces its events once; one that never reached its thread makes them unannounced again; a catch-up reads each once", () => {
   const { store } = freshStore();
-  store.insertEvent(MANAGER, { kind: "coordinator-edited-files", fileCount: 2 }, 3_000);
+  store.insertEvent(MANAGER, { kind: "memory-edited", file: memoryFileSchema.parse("PLAN.md") }, 3_000);
   const [event] = store.unannounced(MANAGER);
   assert.deepEqual(store.coordinatorsToRing(), [MANAGER]);
 
@@ -57,7 +58,7 @@ test("a doorbell announces its events once; one that never reached its thread ma
 
 test("a doorbell whose queued message fails to be kept leaves its events unannounced, and retried announces them", () => {
   const { db, store } = freshStore();
-  store.insertEvent(MANAGER, { kind: "coordinator-edited-files", fileCount: 2 }, 3_000);
+  store.insertEvent(MANAGER, { kind: "memory-edited", file: memoryFileSchema.parse("PLAN.md") }, 3_000);
   const [event] = store.unannounced(MANAGER);
 
   const restore = failWrites(db, "INSERT", "doorbells");
@@ -73,7 +74,7 @@ test("a doorbell whose queued message fails to be kept leaves its events unannou
 
 test("a reopen that fails before its events are unannounced keeps the doorbell, and retried makes them unannounced", () => {
   const { db, store } = freshStore();
-  store.insertEvent(MANAGER, { kind: "coordinator-edited-files", fileCount: 2 }, 3_000);
+  store.insertEvent(MANAGER, { kind: "memory-edited", file: memoryFileSchema.parse("PLAN.md") }, 3_000);
   const [event] = store.unannounced(MANAGER);
   store.announce(MANAGER, [event!.id], "msg_1", 3_100);
 
@@ -103,13 +104,30 @@ test("a reminder fires once when due; a repeating one moves to its next time", (
   assert.deepEqual(store.cancelReminder(MANAGER, daily.id), { ...daily, dueAt: 5_000 + 86_400_000 });
 });
 
-test("the manager's own working tree is recorded once per state", () => {
+test("the manager's own working tree records a draft once per set of files, and none for the files it kept", () => {
   const { store } = freshStore();
-  assert.equal(store.recordOwnTree(MANAGER, 0, 3_000), false);
-  assert.equal(store.recordOwnTree(MANAGER, 2, 3_100), true);
-  assert.equal(store.recordOwnTree(MANAGER, 2, 3_200), false);
-  assert.equal(store.recordOwnTree(MANAGER, 0, 3_300), true);
-  assert.deepEqual(store.lastOwnTreeEvent(MANAGER), { at: 3_300, event: { kind: "coordinator-tree-clean" } });
+  assert.equal(store.recordOwnTree(MANAGER, [], 3_000), false);
+  assert.equal(store.recordOwnTree(MANAGER, ["a.ts"], 3_100), true);
+  assert.equal(store.recordOwnTree(MANAGER, ["a.ts"], 3_200), false);
+  store.keepOwnTree(MANAGER, ["a.ts", "README.md"]);
+  assert.equal(store.recordOwnTree(MANAGER, ["README.md", "a.ts"], 3_300), false);
+  assert.equal(store.recordOwnTree(MANAGER, ["README.md", "b.ts"], 3_400), true);
+  assert.deepEqual(
+    store.unannounced(MANAGER).map(({ event }) => event),
+    [
+      { kind: "coordinator-draft", files: ["a.ts"], branch: "regional-manager/6f1c2a52/draft-2e4" },
+      { kind: "coordinator-draft", files: ["b.ts"], branch: "regional-manager/6f1c2a52/draft-2mg" },
+    ],
+  );
+});
+
+test("a draft whose event fails to be written leaves the tree as it was, and retried records it", () => {
+  const { db, store } = freshStore();
+  const restore = failWrites(db, "INSERT", "events");
+  assert.throws(() => store.recordOwnTree(MANAGER, ["a.ts"], 3_000), /forced failure/);
+  restore();
+  assert.equal(store.recordOwnTree(MANAGER, ["a.ts"], 3_100), true, "the failed read was not remembered as told");
+  assert.deepEqual(store.unannounced(MANAGER).map(({ event }) => event.kind), ["coordinator-draft"]);
 });
 
 /** i1 merged as #41 when `merged`, i2 canceled by the manager, i3 depending on them as stored: every issue of the manager as viewed with no agent. */

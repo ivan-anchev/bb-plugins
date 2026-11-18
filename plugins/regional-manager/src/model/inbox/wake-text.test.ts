@@ -10,7 +10,7 @@ import { checkIdSchema, type Check, type CheckId } from "../verdict/check.ts";
 import type { Verdict } from "../verdict/verdict.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import type { InboxEvent, StoredEvent } from "./inbox-event.ts";
-import { doorbellText } from "./wake-text.ts";
+import { doorbellInput } from "./wake-text.ts";
 
 const i1 = issueIdSchema.parse("i1");
 const i2 = issueIdSchema.parse("i2");
@@ -22,6 +22,14 @@ const titles = new Map([
 ]);
 const stored = (events: InboxEvent[]): StoredEvent[] => events.map((event, i) => ({ id: i + 1, at: 1_000 + i, event }));
 const noChecks = { titles, check: () => null, decision: () => null };
+
+/** The doorbell of events the user is shown, as the one part of its message. */
+function doorbellText(events: readonly StoredEvent[], lookups: Parameters<typeof doorbellInput>[1]): string {
+  const [part, ...rest] = doorbellInput(events, lookups);
+  assert.deepEqual(rest, []);
+  assert.equal(part?.visibility, undefined);
+  return part.text;
+}
 
 const WRITTEN = "The user approved the merge";
 const k1 = checkIdSchema.parse("5d6c1e0a-2b3f-4a5e-8c7d-9e0f1a2b3c4d");
@@ -123,4 +131,16 @@ test("an answered decision is announced with the regional manager's own question
   const answered: Decision = { id: d1, issueId: null, question: "Target main or release/2?", options: ["main", "release/2"], askedAt: 1_000, answer: { text: WRITTEN, at: 2_000 } };
   const text = doorbellText(stored([{ kind: "decision-answered", decisionId: d1 }]), { ...noChecks, decision: (id) => (id === d1 ? answered : null) });
   assert.equal(text, `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- The user answered your question d1: Target main or release/2?`);
+});
+
+test("a draft in the manager's own tree is told in a part only the thread sees, apart from what the user is shown", () => {
+  const draft: InboxEvent = { kind: "coordinator-draft", files: ["a.ts", "b.ts"], branch: "regional-manager/6f1c2a52/draft-2e4" };
+  const memoryEdited: InboxEvent = { kind: "memory-edited", file: memoryFileSchema.parse("PLAN.md") };
+  const hiddenLine = `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- Your turn left 2 files changed that the user didn't ask for: hand the draft to an agent`;
+
+  assert.deepEqual(doorbellInput(stored([draft]), noChecks), [{ type: "text", text: hiddenLine, mentions: [], visibility: "agent-only" }]);
+  assert.deepEqual(doorbellInput(stored([memoryEdited, draft]), noChecks), [
+    { type: "text", text: `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- The user edited PLAN.md`, mentions: [] },
+    { type: "text", text: hiddenLine, mentions: [], visibility: "agent-only" },
+  ]);
 });

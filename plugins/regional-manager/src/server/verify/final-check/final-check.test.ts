@@ -196,7 +196,7 @@ test("4: two ticks, or a tick racing a sub-issue filed under the parent, never l
 test("5: a verifier that leaves a dirty tree fails the checkout rule; one idle without a verdict is nudged once, then could-not-run and Needs you; an unreadable worktree is could-not-run", async () => {
   const dirty = await withParent();
   await dirty.mergeAll();
-  dirty.kit.git.changedFiles.set(dirty.kit.environment(dirty.verifier()), 1);
+  dirty.kit.git.changedFiles.set(dirty.kit.environment(dirty.verifier()), ["scratch-1.txt"]);
   await dirty.returns(PASSES);
   assert.deepEqual(await dirty.row(), at("in-progress", "✗ Final check failed", "✗ Final check failed"));
   assert.match(await dirty.text("crew_catch_up", {}), /Failed verification: the verifier's worktree wasn't clean\. 1 of 1 criteria passed on main at b{40}, by a verifier on codex gpt-default\. bb's git plugin read the verifier's worktree as it returned its verdict: the working tree had 1 changed file: \?\? scratch-1\.txt\./);

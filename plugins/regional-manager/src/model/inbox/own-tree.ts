@@ -1,23 +1,37 @@
-// The coordinating thread's own working tree. Its rules say it never edits project files, and bb
-// can't enforce that, so the plugin reads the tree when each of its turns ends and tells it, and
-// the user on its board, when files changed. This is detection, not a guarantee: a change it
-// committed, or one made and undone within a turn, leaves the tree clean.
-import type { InboxEvent } from "./inbox-event.ts";
-
-/** An event about the coordinating thread's own working tree. */
-export type OwnTreeEvent = Extract<InboxEvent, { kind: "coordinator-edited-files" | "coordinator-tree-clean" }>;
-
-/** How many changed files the board warns of after `last`, the latest such event: 0 when none is warned of. */
-export const warnedFileCount = (last: OwnTreeEvent | null): number => (last?.kind === "coordinator-edited-files" ? last.fileCount : 0);
+// The coordinating thread's own working tree. Its rules say it edits no project file unless the
+// user's own message asks it to, and bb can't enforce that, so the plugin reads the tree when each
+// of its turns ends. Files changed there that the user didn't ask for are a draft: the plugin tells
+// only the thread, which saves it on a branch of its own and hands it to an agent. This is
+// detection, not a guarantee: a change it committed, or one made and undone within a turn, leaves
+// the tree clean, and a kept file changed again is not seen.
+import type { CoordinatorId } from "../role.ts";
 
 /**
- * What a read of `fileCount` changed files records after `last`: nothing when the board already
- * says so, else the new count, or that the tree is clean again. Once per state, never per turn.
+ * What the plugin remembers of the tree: `kept`, the changed files the thread kept, saying the user
+ * asked it to change them (keep_edits); `drafted`, the other changed files the latest read found,
+ * which the thread was told of once.
  */
-export function ownTreeEventAfter(last: OwnTreeEvent | null, fileCount: number): OwnTreeEvent | null {
-  if (fileCount === warnedFileCount(last)) return null;
-  return fileCount === 0 ? { kind: "coordinator-tree-clean" } : { kind: "coordinator-edited-files", fileCount };
+export type OwnTree = { kept: string[]; drafted: string[] };
+
+export const CLEAN_TREE: OwnTree = { kept: [], drafted: [] };
+
+/**
+ * What a turn-end read of the `changed` files does to `tree`: the tree as remembered after it, and
+ * the draft to tell the thread of (null: none, or the same one it was told of). A kept file no longer
+ * changed is forgotten, so a later change to it is a draft again.
+ */
+export function afterTurn(tree: OwnTree, changed: readonly string[]): { tree: OwnTree; draft: string[] | null } {
+  const kept = tree.kept.filter((path) => changed.includes(path));
+  const unasked = changed.filter((path) => !kept.includes(path));
+  const told = unasked.length === tree.drafted.length && unasked.every((path) => tree.drafted.includes(path));
+  return { tree: { kept, drafted: unasked }, draft: unasked.length === 0 || told ? null : unasked };
 }
+
+/** The tree once the thread kept every file `changed` now, as keep_edits does. */
+export const keptAll = (changed: readonly string[]): OwnTree => ({ kept: [...changed], drafted: [] });
+
+/** The branch a draft found `at` is saved on: one per draft, so no two drafts share one. */
+export const draftBranch = (id: CoordinatorId, at: number): string => `regional-manager/${id.slice(0, 8)}/draft-${at.toString(36)}`;
 
 /** A count of changed files, in words: "1 file", "3 files". */
 export const filesText = (count: number): string => (count === 1 ? "1 file" : `${count} files`);

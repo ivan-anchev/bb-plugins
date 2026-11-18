@@ -8,7 +8,7 @@ import { DISPLAY_NAME } from "../name.ts";
 import { coordinating, harness, HEAD, isRefusal, newThreadRequest, settled, startedAgent, textOf } from "./test-harness.ts";
 import { finalCheckBrief } from "./verify/verifier-brief.ts";
 
-const COORDINATOR_TOOLS = ["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "issue_create", "issue_update", "issue_read", "agent_start", "agent_message", "agent_stop"];
+const COORDINATOR_TOOLS = ["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "keep_edits", "issue_create", "issue_update", "issue_read", "agent_start", "agent_message", "agent_stop"];
 
 test("a regional manager is offered its tools, its skill and rules naming the product", async () => {
   const kit = harness();
@@ -43,6 +43,18 @@ test("crew_catch_up opens with who the thread is", async () => {
   const { kit, threadId, coordinatorId } = await coordinating();
   const text = textOf(await kit.call("crew_catch_up", {}, threadId));
   assert.equal(text.split("\n")[0], `You are regional manager ${coordinatorId}: the plugin made this thread one when it started it.`);
+});
+
+test("the rules and the playbook say a manager never does the work itself unless the user's own message asks it to, and then exactly that", async () => {
+  const kit = harness();
+  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
+  const rules = kit.configurationFor(threadId, {}).instructions ?? "";
+  const playbook = readFileSync(join(import.meta.dirname, "..", "..", "skills", "regional-manager", "SKILL.md"), "utf8").replaceAll(/\s+/g, " ");
+
+  assert.match(rules.split("\n")[1] ?? "", /^- Load the regional-manager skill, your playbook, first\./, "the playbook first, near the top");
+  assert.match(rules, /The plugin made this thread one when it started it; `bb status` shows no roles\./);
+  assert.match(rules, /You never edit project files, run builds or commit yourself, unless the user's own message tells you to do a specific thing yourself: then do exactly that and no more, and call keep_edits\./);
+  assert.match(playbook, /You never do the work yourself \(no editing project files, no builds, no commits\), unless the user's own message tells you to do a specific thing yourself: then do exactly that and no more, and call `keep_edits`/);
 });
 
 test("its first session, before any bind, is configured from its unbound ticket", async () => {

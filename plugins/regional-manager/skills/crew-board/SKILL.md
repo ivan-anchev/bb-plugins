@@ -50,6 +50,7 @@ and no tool can turn verification on or off.
 | `crew_memory_write` | regional manager | Writes one memory file whole, naming the version it read (null to create one); a stale write returns the current text instead. |
 | `crew_remind` | regional manager | Sets a reminder (`note`, `at`, optional `every`) or cancels one (`cancel`). |
 | `crew_ask_user` | regional manager | Puts a one-line question, with up to five options, on its board, optionally naming the issue it is about. |
+| `keep_edits` | regional manager | Keeps the files changed in its own working tree as they are, after it made a change your own message told it to make itself. |
 | `issue_create` | regional manager | Files an issue: `kind`, `title`, `description`, and optionally `brief`, `doneCriteria`, `status` (todo or backlog), `verifier`, `parent` and `dependsOn`. |
 | `issue_update` | regional manager | Changes an issue's kind (until an agent has started on it), title, description, brief, done-criteria, verifier, parent or dependencies, or rests, cancels or accepts it with `status`. |
 | `issue_read` | regional manager | Returns one issue whole: status, what blocks it, plan, its parent and sub-issues, what it depends on and blocks, verifier, its agents and what they ran on, every handoff with its verdict, and its agent's latest answer. |
@@ -59,9 +60,11 @@ and no tool can turn verification on or off.
 | `agent_handoff` | agent | Ends the agent's work: done (a build issue's with its commit, a research issue's with its report), blocked or gave up, with a summary and its lists. |
 | `issue_verdict` | verifier | Returns each criterion's result and evidence, and findings, for the handoff it checks. |
 
-The regional manager also gets its rules (call `crew_catch_up` first every
-turn, never edit project files, build or commit itself, delegate with a
-brief and done-criteria) and the `regional-manager` skill, its playbook. An
+The regional manager also gets its rules (load its playbook and call
+`crew_catch_up` first, never edit project files, build or commit itself
+unless your own message tells it to do a specific thing itself, delegate
+with a brief and done-criteria) and the `regional-manager` skill, its
+playbook. An
 agent gets the `agent-work` skill and a verifier the `verifying` skill. A
 memory file name that leaves the memory folder or doesn't end in `.md` is
 rejected.
@@ -510,10 +513,12 @@ issue and its agent, such as
 `- i3 "Metrics" (a3) returned to Todo: its agent was stopped`,
 `- i4 "Card vault schema" is unblocked: i2 done`,
 `- The user edited PLAN.md`, `- Your reminder r1: check on i1`,
-`- The user answered your question d1: Target main or release/2?` or
-`- Your own environment has 2 files changed after your turn: hand the change to an agent`.
-The tree being clean again, like a fix round sent back, wakes nobody: it is
-listed in the next message and catch-up.
+or `- The user answered your question d1: Target main or release/2?`. A fix
+round sent back wakes nobody: it is listed in the next message and catch-up.
+One update, a draft the manager left in its own working tree (see
+[Edits it makes itself](#edits-it-makes-itself)), goes in a part of the
+message only the thread sees; a message with nothing else isn't shown to
+you at all.
 
 The message reaches the thread as if you typed it, so it holds only facts the
 plugin derived and what the thread wrote itself (its issues' titles, its
@@ -778,36 +783,36 @@ answer there.
 ## Edits it makes itself
 
 A regional manager's rules say it never edits project files, builds or
-commits. bb can't enforce that (there is no read-only mode, and a plugin can't
-take a provider's file tools away), so the plugin **detects** it instead:
+commits, unless your own message tells it to do a specific thing itself:
+then it does exactly that and calls `keep_edits`, which keeps the files
+it changed as they are. bb can't enforce the rule (there is no read-only
+mode, and a plugin can't take a provider's file tools away), so the plugin
+**detects** a slip and has the manager put it right, without involving you:
 
 - **When**: each time one of the regional manager's turns ends, the plugin
   reads its own environment's working tree through bb's git plugin
   (`bb--git` `status`). Agents' and verifiers' turns aren't read.
-- **Changed files** (any modified, added, deleted or untracked file) put a
-  warning at the top of its board, under the switch: how many files changed
-  in its own environment, when its turn ended, and that it was told to hand
-  the change to an agent. The thread is woken with `- Your own environment
-  has 2 files changed after your turn: hand the change to an agent`, and its
-  `crew_catch_up` tells it to propose, in a decision on its board, an issue
-  whose agent redoes the change on its own branch (always: it starts that
-  agent only once you agree), and to ask you there whether to discard the
-  changes in its environment; or, if you made the changes, to leave them and
-  say so in its digest. It never stashes, reverts, checks out or deletes
-  anything there, not even its own changes, since you may have edited the
-  same files: discarding them is yours to do.
-- **Once per state**: a turn that ends with the same number of changed files
-  records nothing new and wakes nobody, after a reload too, since the plugin
-  compares with the last warning it stored. A different number warns again.
-- **A clean tree** at the end of a later turn clears the warning, and its
-  next catch-up says the tree is clean again. That doesn't wake it.
+- **A draft**: files changed there (modified, added, deleted or untracked)
+  that it didn't keep. Nothing goes on its board and nothing asks you. The
+  thread is woken with a message only it sees, and its `crew_catch_up` gives
+  it one command that saves the draft as a commit on a branch of its own,
+  `regional-manager/<id>/draft-<time>`, and switches back, leaving its tree
+  clean. It then files an issue whose brief starts by cherry-picking that
+  branch, and starts its agent in a worktree. It never stashes, reverts or
+  deletes the draft, and the branch keeps any edit of yours in those files:
+  `git log -p <branch>` shows it, and `git cherry-pick <branch>` brings it
+  back. If you made the changes, it leaves them.
+- **Once per draft**: a turn that ends with the same files changed records
+  nothing new and wakes nobody, after a reload too. Another set wakes it
+  again. A clean tree is recorded silently.
 - **Nothing is recorded** for an environment outside git, or when bb's git
-  plugin can't read it (its machine is offline, or the read fails); the
-  warning stays as it was, and the server log says why.
-- **It is not a guarantee.** A change the thread committed, or made and
-  undid within one turn, leaves the tree clean and isn't seen. The plugin
-  never blocks or reverts an edit. The plugin itself writes nothing in the
-  thread's environment: its memory files live on the bb server.
+  plugin can't read it (its machine is offline, or the read fails), and the
+  server log says why.
+- **It is not a guarantee.** A change the thread committed, made and undid
+  within one turn, or made again to a file it kept, isn't seen. The plugin
+  never blocks or reverts an edit, and writes nothing in the thread's
+  environment itself: the manager runs the command, and its memory files
+  live on the bb server.
 
 ## The board
 
@@ -815,9 +820,6 @@ The **Board** tab in a regional manager's side panel, and the **Board**
 page from its row in the panel, show the same board, live:
 
 - **Verify done handoffs**: the switch for this regional manager.
-- **Files changed in its own environment**: a warning with how many, and
-  when its turn ended, while the latest read of its working tree found
-  changed files (see [Edits it makes itself](#edits-it-makes-itself)).
 - **PR status unavailable: <why>**, only while the latest read of a pull
   request failed.
 - **Digest**: `DIGEST.md`, the regional manager's latest summary for you,
@@ -963,8 +965,8 @@ and the Memory page read the new text on their next read.
 - **bb's git plugin** (`bb--git`, built in), to read the commit, tree and
   branch an agent has checked out as it hands off, and the regional manager's
   own working tree as each of its turns ends. When it can't read an agent's,
-  its done handoff can't be verified; when it can't read the manager's, no
-  edit warning is recorded.
+  its done handoff can't be verified; when it can't read the manager's, a
+  draft there isn't seen.
 - **An environment provider**, such as the boat-sandbox plugin, only for
   agents you want off the regional manager's machine.
 

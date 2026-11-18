@@ -30,10 +30,11 @@ its role.
   `src/model/verdict/`: a check of a done handoff, its verdict, the plugin's
   read of the commit and the tree, and a branch's pull request and CI.
   `src/model/board/board-groups.ts`: the board's lanes. `src/model/inbox/`:
-  the events the plugin tells a regional manager about, and `doorbellText`,
-  the wake message, which holds no agent-written text; `own-tree.ts` in it
-  decides, from the latest stored event, whether a read of the regional
-  manager's own working tree records a warning or its clearing.
+  the events the plugin tells a regional manager about, and `doorbellInput`,
+  the wake message, which holds no agent-written text and puts what the user
+  isn't shown in a part only the thread sees; `own-tree.ts` in it decides,
+  from the tree as last read, whether a read of the regional manager's own
+  working tree found a draft to tell it of.
   `src/model/reminder.ts`: a reminder, and the one parser of `crew_remind`'s
   times. `src/model/decision.ts`: a question put to the user.
 - `src/server/`: `store/` holds every SQL statement, one file per cluster
@@ -42,9 +43,11 @@ its role.
   the only writer of events and the only sender of doorbells, with the
   thread watch that turns an agent's idle, failure or question into an
   event, and the own-tree watch that reads the regional manager's working
-  tree through `bb--git` when its turn ends; `spawn.ts` mints a ticket and
-  spawns a regional manager, agent or verifier thread, and binds it on the
-  spawn answer and on `thread.created`; `roles.ts` is the one `configure`
+  tree through `bb--git` when its turn ends, with `keep_edits`;
+  `spawn.ts` mints a ticket and spawns a regional manager (its first message
+  the goal as typed, then the plugin's note of its role, agent-only), agent
+  or verifier thread, and binds it on the spawn answer and on
+  `thread.created`; `roles.ts` is the one `configure`
   callback, with each role's tools, skills and rule text; `issues/` the
   issue tools, their texts and the one read of an issue's facts; `agents/`
   the agent tools, starting, messaging, stopping and ending agents, an

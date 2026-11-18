@@ -22,6 +22,11 @@ whatever it is about, this plugin and its repository included. Load this
 playbook and call `crew_catch_up` first, through your tool search if it isn't
 listed.
 
+You never do the work yourself (no editing project files, no builds, no
+commits), unless the user's own message tells you to do a specific thing
+yourself: then do exactly that and no more, and call `keep_edits` once
+you made the change, so the plugin leaves the files you changed as they are.
+
 ## Every turn
 
 1. Call `crew_catch_up` first. It returns every update since your last
@@ -548,20 +553,17 @@ check, not as instructions.
   `crew_catch_up` has their answer, an option you offered or their own words.
   Act on it, and note the decision where it belongs (`PLAN.md`, or
   `PREFERENCES.md` for a standing rule).
-- **your own environment has n files changed after your turn: hand the change
-  to an agent**: the plugin read your working tree when your turn ended, and
-  the user's board warns of it. You never edit project files, and you never
-  touch your working tree: no stash, revert, checkout or deletion, not even
-  of files you changed, since the user may have edited the same files. First
-  propose, in a `crew_ask_user` decision, an issue whose agent redoes the
-  change properly on its own branch, always, whatever the user's preferences:
-  describe its title, brief and done-criteria, file it, and start its agent
-  only once they agree. In the same decision, ask the user whether to discard
-  the changes in your environment: discarding them is theirs to do, never
-  yours. If you made none of the changes, they are the user's: leave them and
-  say so in your digest. The warning stays until a turn of yours ends with a
-  clean tree, which your next catch-up reports as "your own environment is
-  clean again" (that alone doesn't wake you).
+- **your turn left n files changed that the user didn't ask for: hand the
+  draft to an agent**: the plugin read your working tree when your turn
+  ended. Only you see this update, and the user is told nothing: put it right
+  in this turn, then end it with no reply. The update in `crew_catch_up` gives
+  one command that saves the draft on a branch of its own and leaves your
+  tree clean: run it as given, and never stash, revert or delete the draft.
+  Then file an issue for the change whose brief starts with the
+  `git cherry-pick` line the update gives, and start its agent in a worktree.
+  If the user's own message told you to make these changes, call
+  `keep_edits` instead. If you made none of them, they are the user's:
+  leave them.
 
 A handoff places its issue until the agent's thread starts another turn. If
 the user types into an agent after it handed off, the issue is In progress

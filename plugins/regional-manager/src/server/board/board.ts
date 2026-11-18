@@ -5,7 +5,6 @@ import type { Board, IssueDetail, IssueRow } from "../../contract.ts";
 import type { Agent } from "../../model/agent.ts";
 import type { HandoffReport } from "../../model/handoff.ts";
 import { needsYou, type NeedsYou } from "../../model/board/board-groups.ts";
-import { warnedFileCount } from "../../model/inbox/own-tree.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
 import { dependentsOf } from "../../model/issue/relations.ts";
 import type { Handed } from "../../model/issue/status.ts";
@@ -19,7 +18,7 @@ import type { Store } from "../store/store.ts";
 
 const DIGEST = memoryFileSchema.parse("DIGEST.md");
 
-type BoardStore = FactsStore & Pick<Store, "verifies" | "lastOwnTreeEvent" | "issue" | "record">;
+type BoardStore = FactsStore & Pick<Store, "verifies" | "issue" | "record">;
 
 /** An issue's row on the board. */
 const rowOf = ({ view, agent, threadId }: IssueRead): IssueRow => ({
@@ -79,18 +78,11 @@ export function createBoard(bb: FactsBb, store: BoardStore, memory: MemoryRoot) 
     return null;
   }
 
-  /** The warning of changed files in the regional manager's own working tree, from the latest event about it. */
-  function ownEdits(id: CoordinatorId): Board["ownEdits"] {
-    const last = store.lastOwnTreeEvent(id);
-    const fileCount = warnedFileCount(last?.event ?? null);
-    return last === null || fileCount === 0 ? null : { fileCount, at: last.at };
-  }
-
   return {
     /** Every issue of the regional manager, viewed now. */
     issues: (id: CoordinatorId): Promise<IssueRead[]> => readIssues(bb, store, id),
 
-    /** The board as the user sees it: the verification switch, the warning of its own edits, why PR status is unavailable, the digest, the decisions, then every issue's row. */
+    /** The board as the user sees it: the verification switch, why PR status is unavailable, the digest, the decisions, then every issue's row. */
     async read(id: CoordinatorId): Promise<Board> {
       const files = memory.of(id);
       const text = files.read(DIGEST).text;
@@ -98,7 +90,6 @@ export function createBoard(bb: FactsBb, store: BoardStore, memory: MemoryRoot) 
       const reads = await readIssues(bb, store, id);
       return {
         verify: store.verifies(id),
-        ownEdits: ownEdits(id),
         prUnavailable: prUnavailable(id, reads),
         digest: text === null || modifiedAt === null ? null : { content: text.content, modifiedAt },
         decisions: store.decisions(id),

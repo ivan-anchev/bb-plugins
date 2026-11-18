@@ -65,15 +65,12 @@ const issueRowSchema = z.object({
 export type IssueRow = z.infer<typeof issueRowSchema>;
 
 /**
- * The board: whether done handoffs are verified, how many files had changed in the coordinating
- * thread's own working tree when the turn that warned of them ended, and when (null: none, or it
- * was clean again since), why the latest read of an issue's pull request failed (null: none did),
+ * The board: whether done handoffs are verified, why the latest read of an issue's pull request failed (null: none did),
  * DIGEST.md and when it last changed (null: there is none), every decision put to the user in the
  * order asked, then every issue in the order filed.
  */
 const boardSchema = z.object({
   verify: z.boolean(),
-  ownEdits: z.object({ fileCount: z.number().int().min(1), at: z.number() }).nullable(),
   prUnavailable: z.string().nullable(),
   digest: z.object({ content: z.string(), modifiedAt: z.number() }).nullable(),
   decisions: z.array(decisionSchema),

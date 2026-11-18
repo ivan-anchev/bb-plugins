@@ -504,7 +504,7 @@ test("an agent bb reads at the claimed commit on a clean tree is judged on its c
 
 test("a tree bb reads with changes fails the verdict with bb's evidence, whatever the criteria say, and goes back to the agent as its fix round", async () => {
   const { kit, threadId, coordinatorId, agentThreadId, row, verifier, handOff, verdictReturned } = await withAgent();
-  kit.git.changedFiles.set(kit.thread(agentThreadId).environmentId ?? assert.fail("no environment"), 2);
+  kit.git.changedFiles.set(kit.thread(agentThreadId).environmentId ?? assert.fail("no environment"), ["scratch-1.txt", "scratch-2.txt"]);
   await handOff();
   const prompt = kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no prompt");
   assert.match(prompt, /the working tree had 2 changed files: \?\? scratch-1\.txt, \?\? scratch-2\.txt\. The plugin judges[^\n]*This already fails the verdict, whatever you find; check every criterion anyway/);

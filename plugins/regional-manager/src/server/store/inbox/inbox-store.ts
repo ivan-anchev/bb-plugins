@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { decisionIdSchema, type DecisionId, type Decision } from "../../../model/decision.ts";
 import { inboxEventSchema, type InboxEvent, type StoredEvent } from "../../../model/inbox/inbox-event.ts";
-import { ownTreeEventAfter, type OwnTreeEvent } from "../../../model/inbox/own-tree.ts";
+import { afterTurn, CLEAN_TREE, draftBranch, keptAll, type OwnTree } from "../../../model/inbox/own-tree.ts";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
 import { unblockedSince } from "../../../model/issue/relations.ts";
 import type { IssueView } from "../../../model/issue/status.ts";
@@ -18,38 +18,38 @@ export function insertEvent(db: Db, coordinatorId: CoordinatorId, event: InboxEv
 }
 
 export function inboxStore(db: Db) {
-  /** The latest event about the regional manager's own working tree, with when it was recorded; null when none was. */
-  function lastOwnTreeEvent(coordinatorId: CoordinatorId): { at: number; event: OwnTreeEvent } | null {
-    const row = db()
-      .prepare(
-        `SELECT id, at, event FROM events
-          WHERE coordinator_id = ? AND json_extract(event, '$.kind') IN ('coordinator-edited-files', 'coordinator-tree-clean')
-          ORDER BY id DESC LIMIT 1`,
-      )
-      .get(coordinatorId);
-    if (row === undefined) return null;
-    const { at, event } = toEvent(row);
-    // why throw: the clause picks only these kinds.
-    if (event.kind !== "coordinator-edited-files" && event.kind !== "coordinator-tree-clean") throw new Error(`The event ${event.kind} is not about the working tree`);
-    return { at, event };
+  /** The regional manager's own working tree as last read; clean when it was never read. */
+  function ownTree(coordinatorId: CoordinatorId): OwnTree {
+    const row = db().prepare("SELECT kept, drafted FROM own_trees WHERE coordinator_id = ?").get(coordinatorId);
+    return row === undefined ? CLEAN_TREE : ownTreeRowSchema.parse(row);
+  }
+
+  function saveOwnTree(coordinatorId: CoordinatorId, { kept, drafted }: OwnTree): void {
+    db()
+      .prepare("INSERT INTO own_trees (coordinator_id, kept, drafted) VALUES (?, ?, ?) ON CONFLICT (coordinator_id) DO UPDATE SET kept = excluded.kept, drafted = excluded.drafted")
+      .run(coordinatorId, JSON.stringify(kept), JSON.stringify(drafted));
   }
 
   return {
     insertEvent: (coordinatorId: CoordinatorId, event: InboxEvent, at: number): void => insertEvent(db, coordinatorId, event, at),
 
-    lastOwnTreeEvent,
-
     /**
-     * Records what a read of `fileCount` changed files in the regional manager's own working tree
-     * says that its latest such event doesn't (see ownTreeEventAfter), deciding from that event in
-     * the same transaction. Returns whether it recorded one.
+     * Records what a turn-end read of the `changed` files in the regional manager's own working tree
+     * says (see afterTurn), deciding from the tree as last read in the same transaction: a
+     * `coordinator-draft` event when it found one to tell of. Returns whether it recorded one.
      */
-    recordOwnTree(coordinatorId: CoordinatorId, fileCount: number, at: number): boolean {
+    recordOwnTree(coordinatorId: CoordinatorId, changed: readonly string[], at: number): boolean {
       return db().transaction(() => {
-        const event = ownTreeEventAfter(lastOwnTreeEvent(coordinatorId)?.event ?? null, fileCount);
-        if (event !== null) insertEvent(db, coordinatorId, event, at);
-        return event !== null;
+        const { tree, draft } = afterTurn(ownTree(coordinatorId), changed);
+        saveOwnTree(coordinatorId, tree);
+        if (draft !== null) insertEvent(db, coordinatorId, { kind: "coordinator-draft", files: draft, branch: draftBranch(coordinatorId, at) }, at);
+        return draft !== null;
       })();
+    },
+
+    /** Keeps every file `changed` now in the regional manager's own working tree: the user asked it to change them (keep_edits). */
+    keepOwnTree(coordinatorId: CoordinatorId, changed: readonly string[]): void {
+      saveOwnTree(coordinatorId, keptAll(changed));
     },
 
     /**
@@ -223,6 +223,8 @@ export function inboxStore(db: Db) {
 
 const eventRowSchema = z.object({ id: z.number().int(), at: z.number(), event: json(inboxEventSchema) });
 const toEvent = (row: unknown): StoredEvent => eventRowSchema.parse(row);
+
+const ownTreeRowSchema = z.object({ kept: json(z.array(z.string())), drafted: json(z.array(z.string())) });
 
 /** A reminder's row id is its number: `r7` is row 7. */
 const reminderRowIdSchema = z.number().int().transform((id) => reminderIdSchema.parse(`r${id}`));

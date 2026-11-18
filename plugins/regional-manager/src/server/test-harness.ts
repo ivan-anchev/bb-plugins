@@ -256,8 +256,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   /**
    * bb's git plugin as the plugin reaches it, by environment id: the branch each has checked out
    * (absent: none, as when detached; bb checks out the branch it made a new environment on), the
-   * commit (absent: HEAD), how many files changed in its
-   * working tree (absent: none),
+   * commit (absent: HEAD), the files changed in its working tree (absent: none),
    * the ones outside git, the ones whose machine it can't read, and a row a newer bb--git answers
    * instead, in a shape the plugin's contract doesn't name; and the keys of every `status` call.
    * Set `holding` to keep each answer, as read when called, until the test calls its release in `held`.
@@ -265,7 +264,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   const git: {
     checkouts: Map<string, string>;
     heads: Map<string, string>;
-    changedFiles: Map<string, number>;
+    changedFiles: Map<string, string[]>;
     nonGit: Set<string>;
     offline: Set<string>;
     newer: Map<string, object>;
@@ -342,10 +341,12 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   // why a generic function: it keeps each event's handlers typed by that event.
   const handlersOf = <E extends FakeEventName>(event: E): Handlers[E] => (handlers[event] ??= []);
   const fakeThreads = new Map<string, FakeThread>();
-  const queue: (QueuedMessage & { threadId: string; text: string })[] = [];
+  const queue: (QueuedMessage & { threadId: string; text: string; shown: boolean })[] = [];
   /** Every message that reached a thread and started its turn: sent at once, or dispatched from the queue. */
-  const delivered: { threadId: string; text: string }[] = [];
+  // why `shown`: bb leaves a message out of the user's timeline when every part of it is agent-only.
+  const delivered: { threadId: string; text: string; shown: boolean }[] = [];
   const textOfInput = (args: SendArgs): string => args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n");
+  const shownOf = (args: SendArgs): boolean => args.input.some((part) => part.visibility !== "agent-only");
   const sent: SendArgs[] = [];
   const attempted: string[] = [];
   const invalidated: string[] = [];
@@ -495,12 +496,12 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       };
       if ((args.mode === "queue-if-active" && thread.status !== "idle") || (args.mode === "auto" && thread.hasPendingInteraction)) {
         const text = textOfInput(args);
-        const entry: (typeof queue)[number] = { id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: args.senderThreadId ?? null, content: [{ type: "text", text, mentions: [] }], threadId: args.threadId, text };
+        const entry: (typeof queue)[number] = { id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: args.senderThreadId ?? null, content: [{ type: "text", text, mentions: [] }], threadId: args.threadId, text, shown: shownOf(args) };
         queue.push(entry);
         return answer({ delivery: "queued", queuedMessage: { id: entry.id } });
       }
       startTurn(thread);
-      delivered.push({ threadId: args.threadId, text: textOfInput(args) });
+      delivered.push({ threadId: args.threadId, text: textOfInput(args), shown: shownOf(args) });
       return answer({ delivery: "sent" });
     },
     queuedMessages: {
@@ -600,12 +601,12 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     if (git.offline.has(environmentId)) return { outcome: "unavailable", failure: { code: "unknown", workspacePath: "/work/webhooks", message: "The environment's machine is offline" } };
     const branchName = git.checkouts.get(environmentId);
     const headSha = git.heads.get(environmentId) ?? HEAD;
-    const fileCount = git.changedFiles.get(environmentId) ?? 0;
+    const changed = git.changedFiles.get(environmentId) ?? [];
     return {
       outcome: "available",
       workspace: {
         checkout: branchName === undefined ? { kind: "detached", headSha } : { kind: "branch", branchName, headSha },
-        workingTree: { fileCount, files: Array.from({ length: fileCount }, (_, i) => ({ path: `scratch-${i + 1}.txt`, status: "??", insertions: null, deletions: null })) },
+        workingTree: { fileCount: changed.length, files: changed.map((path) => ({ path, status: "??", insertions: null, deletions: null })) },
       },
     };
   }
@@ -852,11 +853,13 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     },
     /** The text of every message that reached the thread and started a turn, in order. */
     delivered: (threadId: string) => delivered.filter((message) => message.threadId === threadId).map((message) => message.text),
+    /** The messages that reached the thread that its timeline shows the user, in order: bb leaves out one whose parts are all agent-only. */
+    shownToUser: (threadId: string) => delivered.filter((message) => message.threadId === threadId && message.shown).map((message) => message.text),
     /** The messages bb holds queued for the thread, oldest first. */
     queued: (threadId: string) => queue.filter((entry) => entry.threadId === threadId).map((entry) => entry.id),
     /** The user queues a message for the thread from bb's composer, as while it runs. */
     userQueues(threadId: string, text: string): void {
-      queue.push({ id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: null, content: [{ type: "text", text, mentions: [] }], threadId, text });
+      queue.push({ id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: null, content: [{ type: "text", text, mentions: [] }], threadId, text, shown: true });
     },
     /** bb sends a queued message and announces it; `silently`: the announcement is missed, as during a reload. */
     async dispatch(queuedMessageId: string, { silently = false } = {}): Promise<void> {
@@ -864,7 +867,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       const [entry] = queue.splice(at, 1);
       if (entry === undefined) throw new Error(`Nothing queued as ${queuedMessageId}`);
       startTurn(fakeThread(entry.threadId));
-      delivered.push({ threadId: entry.threadId, text: entry.text });
+      delivered.push({ threadId: entry.threadId, text: entry.text, shown: entry.shown });
       if (!silently) await emit("message.dispatched", { entry: { id: entry.id } });
     },
     /** bb fails to send a queued message and spends its retries, leaving it in the queue for the user. */

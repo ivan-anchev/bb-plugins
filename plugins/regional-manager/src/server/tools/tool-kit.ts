@@ -29,11 +29,11 @@ export const refusedBusy = (tool: string, { busy }: Busy): PluginAgentToolResult
 export function forManager<Input>(
   store: { roleOfThread(threadId: string): Role | null },
   tool: string,
-  run: (id: CoordinatorId, input: Input) => PluginAgentToolResult | Promise<PluginAgentToolResult>,
+  run: (id: CoordinatorId, input: Input, ctx: PluginAgentToolContext) => PluginAgentToolResult | Promise<PluginAgentToolResult>,
 ): (input: Input, ctx: PluginAgentToolContext) => PluginAgentToolResult | Promise<PluginAgentToolResult> {
-  return (input, { threadId }) => {
-    const role = store.roleOfThread(threadId);
+  return (input, ctx) => {
+    const role = store.roleOfThread(ctx.threadId);
     if (role?.kind !== "coordinator") return failed(`${tool} is refused: only a regional manager can use it, and this thread was not started as one. Carry on without it.`);
-    return run(role.coordinatorId, input);
+    return run(role.coordinatorId, input, ctx);
   };
 }

@@ -7,7 +7,7 @@ import type { Agent, AgentId, EndedHow } from "../../model/agent.ts";
 import type { DecisionId } from "../../model/decision.ts";
 import type { GivenHandoff, Handoff, HandoffId } from "../../model/handoff.ts";
 import { wakes, type InboxEvent, type StoredEvent } from "../../model/inbox/inbox-event.ts";
-import { doorbellText } from "../../model/inbox/wake-text.ts";
+import { doorbellInput } from "../../model/inbox/wake-text.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
 import type { IssueView } from "../../model/issue/status.ts";
 import type { CoordinatorId } from "../../model/role.ts";
@@ -111,7 +111,8 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
     ringing.add(id);
     let delivery: "sent" | "queued";
     try {
-      const sent = await bb.sdk.threads.send({ threadId: coordinator.threadId, input: [{ type: "text", text: doorbellText(events, { titles: new Map(store.issues(id).map(({ id, title }) => [id, title])), check: store.check, decision: store.decision }), mentions: [] }], mode: "queue-if-active" });
+      const input = doorbellInput(events, { titles: new Map(store.issues(id).map(({ id, title }) => [id, title])), check: store.check, decision: store.decision });
+      const sent = await bb.sdk.threads.send({ threadId: coordinator.threadId, input, mode: "queue-if-active" });
       // why record a send that lands after a dispose: it happened, and announcing it again would ring twice.
       store.announce(id, events.map((event) => event.id), sent.delivery === "queued" ? sent.queuedMessage.id : null, Date.now());
       delivery = sent.delivery;
@@ -284,12 +285,9 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
       return outcome;
     },
 
-    /**
-     * A read of the coordinating thread's own working tree as its turn ended: records it when the
-     * board doesn't already say it (see ownTreeEventAfter), then rings, which a clean tree alone doesn't.
-     */
-    ownTreeRead(id: CoordinatorId, fileCount: number): void {
-      if (store.recordOwnTree(id, fileCount, Date.now())) recorded(id);
+    /** A read of the `changed` files in the coordinating thread's own working tree as its turn ended: rings when it found a draft to tell of (see afterTurn). */
+    ownTreeRead(id: CoordinatorId, changed: readonly string[]): void {
+      if (store.recordOwnTree(id, changed, Date.now())) recorded(id);
     },
 
     /**

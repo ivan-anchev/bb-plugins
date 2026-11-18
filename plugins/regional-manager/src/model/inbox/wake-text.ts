@@ -11,7 +11,7 @@ import type { Check, CheckId } from "../verdict/check.ts";
 import { PR_CHANGE_WORDS } from "../verdict/pr.ts";
 import { ciVerdictOf, mayHaveReachedAgent, outcome } from "../verdict/verdict.ts";
 import { DISPLAY_NAME } from "../../name.ts";
-import type { InboxEvent, StoredEvent } from "./inbox-event.ts";
+import { shownToUser, type InboxEvent, type StoredEvent } from "./inbox-event.ts";
 import { filesText } from "./own-tree.ts";
 
 type Lookups = {
@@ -21,7 +21,24 @@ type Lookups = {
   decision(id: DecisionId): Decision | null;
 };
 
-export function doorbellText(events: readonly StoredEvent[], lookups: Lookups): string {
+/** A part of the doorbell's message, as bb takes it: `agent-only`, the user doesn't see it. */
+type DoorbellPart = { type: "text"; text: string; mentions: never[]; visibility?: "agent-only" };
+
+/**
+ * The doorbell as the parts of one message: the events the user is shown, then the others in a part
+ * only the thread sees (see shownToUser). bb leaves a message out of the user's timeline when all of
+ * its parts are agent-only, so a doorbell of hidden events alone doesn't show at all.
+ */
+export function doorbellInput(events: readonly StoredEvent[], lookups: Lookups): DoorbellPart[] {
+  const shown = events.filter(({ event }) => shownToUser(event));
+  const hidden = events.filter(({ event }) => !shownToUser(event));
+  return [
+    ...(shown.length === 0 ? [] : [{ type: "text" as const, text: doorbellText(shown, lookups), mentions: [] }]),
+    ...(hidden.length === 0 ? [] : [{ type: "text" as const, text: doorbellText(hidden, lookups), mentions: [], visibility: "agent-only" as const }]),
+  ];
+}
+
+function doorbellText(events: readonly StoredEvent[], lookups: Lookups): string {
   const count = events.length === 1 ? "1 update" : `${events.length} updates`;
   const lines = events.map(({ event }) => `- ${line(event, lookups)}`);
   return [`[${DISPLAY_NAME}] ${count}. Call crew_catch_up to read ${events.length === 1 ? "it" : "them"} in full.`, ...lines].join("\n");
@@ -32,8 +49,7 @@ function line(event: InboxEvent, { titles, check, decision }: Lookups): string {
   if (event.kind === "verification-toggled") return `The user turned verification of done handoffs ${event.verify ? "on" : "off"}`;
   if (event.kind === "reminder") return `Your reminder ${event.reminderId}: ${event.note}`;
   if (event.kind === "decision-answered") return `The user answered your question ${event.decisionId}: ${askedOf(decision(event.decisionId)).question}`;
-  if (event.kind === "coordinator-edited-files") return `Your own environment has ${filesText(event.fileCount)} changed after your turn: hand the change to an agent`;
-  if (event.kind === "coordinator-tree-clean") return "Your own environment is clean again";
+  if (event.kind === "coordinator-draft") return `Your turn left ${filesText(event.files.length)} changed that the user didn't ask for: hand the draft to an agent`;
   if (event.kind === "checked") return checkedLine(checkedOf(check(event.checkId)), titles);
   if (event.kind === "unblocked") return `${titled(event.issueId, titles)} is unblocked: ${event.by} ${event.closedAs}`;
   const on = issueName(event.issueId, titles, event.agentId);

@@ -43,7 +43,7 @@ async function handedTo(options: Parameters<typeof coordinating>[0] = {}, start:
 
 test("a handover stops the holder without archiving it, ends it as replaced, and starts the new agent in its environment, on its branch", async () => {
   const { kit, coordinatorId, agentThreadId, handover, row, agent, firstMessage, handOff } = await handedTo();
-  kit.git.changedFiles.set(kit.environment(agentThreadId), 1); // a1 leaves a file uncommitted
+  kit.git.changedFiles.set(kit.environment(agentThreadId), ["scratch-1.txt"]); // a1 leaves a file uncommitted
   await handOff(agentThreadId, BLOCKED);
   const result = textOf(await handover());
   const next = threadIn(result);
