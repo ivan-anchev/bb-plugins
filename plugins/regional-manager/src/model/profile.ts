@@ -8,7 +8,7 @@ import { z } from "zod";
  * so `experimental_Icon` draws it without the plugin registering a glyph.
  */
 export const AVATAR_ICONS = ["Workflow", "Bot", "Brain", "Beaker", "Bug", "Code", "Terminal", "Target", "Zap", "Star", "Coffee", "Globe", "Megaphone02", "Toolbox", "Puzzle", "Layers", "ChartColumn", "SecurityCheck", "Explore", "Cloud", "Mail", "Calendar", "Laptop", "Smartphone"] as const;
-export type AvatarIcon = (typeof AVATAR_ICONS)[number];
+type AvatarIcon = (typeof AVATAR_ICONS)[number];
 
 /** What each icon is called aloud. */
 export const AVATAR_ICON_LABELS: Record<AvatarIcon, string> = {
@@ -30,7 +30,7 @@ export const AVATAR_ICON_LABELS: Record<AvatarIcon, string> = {
   Layers: "Layers",
   ChartColumn: "Chart",
   SecurityCheck: "Shield",
-  Explore: "Compass",
+  Explore: "Book",
   Cloud: "Cloud",
   Mail: "Mail",
   Calendar: "Calendar",

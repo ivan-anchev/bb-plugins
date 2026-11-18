@@ -6,7 +6,7 @@ import type { CoordinatorId } from "../../model/role.ts";
 import type { Store } from "../store/store.ts";
 
 // The part of bb an edit uses, as narrow as the code reads it: it renames, and reads nothing back.
-export type ProfileBb = { sdk: { threads: { update(args: Pick<Parameters<BbPluginApi["sdk"]["threads"]["update"]>[0], "threadId" | "title">): Promise<unknown> } } };
+type ProfileBb = { sdk: { threads: { update(args: Pick<Parameters<BbPluginApi["sdk"]["threads"]["update"]>[0], "threadId" | "title">): Promise<unknown> } } };
 
 type Deps = {
   bb: ProfileBb;
