@@ -50,8 +50,10 @@ const settlementSchema = z.discriminatedUnion("kind", [
 ]);
 
 /**
- * The verifier's verdict on the claimed commit `headSha`: each criterion in the issue's order, and
- * the model bb ran it on. `sameModel`: no other model was available, so it ran on the agent's own.
+ * The verifier's verdict on the commit `headSha` (the agent's claim; for a final check, the one its
+ * own worktree held as it returned) and `checkout`, bb's read of the tree it was judged in: each
+ * criterion in the issue's order, and the model bb ran it on. `sameModel`: no other model was
+ * available, so it ran on the model of an agent whose work it checks.
  * why a default: a verdict stored before settlements existed was settled as it was stored.
  */
 const returnedSchema = z.object({
@@ -66,11 +68,14 @@ const returnedSchema = z.object({
   settlement: settlementSchema.default({ kind: "checked", refused: null, ci: { kind: "none" } }),
 });
 
-// Each state up to a returned verdict keeps `checkout`, the agent's environment as bb's git plugin read it when the agent handed off.
+// Each state up to a returned verdict keeps `checkout`, the agent's environment as bb's git plugin
+// read it when the agent handed off; null for a final check, whose verifier's own worktree is read
+// when it returns.
+const pendingCheckoutSchema = checkoutSchema.nullable();
 /** Verification is on and no verifier has started yet. */
-const queuedSchema = z.object({ state: z.literal("queued"), checkout: checkoutSchema });
+const queuedSchema = z.object({ state: z.literal("queued"), checkout: pendingCheckoutSchema });
 /** A verifier thread is checking; `nudged` once it went idle without a verdict and was asked again. */
-const runningSchema = z.object({ state: z.literal("running"), verifierThreadId: verifierThreadIdSchema, nudged: z.boolean(), checkout: checkoutSchema });
+const runningSchema = z.object({ state: z.literal("running"), verifierThreadId: verifierThreadIdSchema, nudged: z.boolean(), checkout: pendingCheckoutSchema });
 /** No verdict will come: bb's git plugin couldn't read the agent's environment, or the verifier never started or stopped without one. Its thread, if it had one. */
 const couldNotRunSchema = z.object({ state: z.literal("could-not-run"), verifierThreadId: verifierThreadIdSchema.nullable(), reason: z.string() });
 /** A newer done handoff from the same agent, or a handover, replaced this one before its verdict. */
@@ -122,13 +127,15 @@ export const shownVerdict = (verdict: Verdict): ShownVerdict => shownVerdictSche
 type Outcome = "pending" | "waiting-for-ci" | "pass" | "fail" | "could-not-run" | "superseded" | "unverified";
 
 /**
- * The verdict a done handoff starts with: waived while verification is off, else queued for a
- * verifier on the checkout read. A checkout bb's git plugin couldn't read can't be verified, and
- * never counts as the agent's failure, so it goes to the coordinating thread as it is, without a
- * verifier or a fix round.
+ * The verdict a check starts with: waived while verification is off, else queued for a verifier. A
+ * done handoff's is queued on the checkout read as it handed off (`read`); a checkout bb's git
+ * plugin couldn't read can't be verified, and never counts as the agent's failure, so it goes to
+ * the coordinating thread as it is, without a verifier or a fix round. A final check's (`read`
+ * null) is never refused here: its verifier's worktree is read when it returns.
  */
-export function firstVerdict(verifies: boolean, read: CheckoutRead): Verdict {
+export function firstVerdict(verifies: boolean, read: CheckoutRead | null): Verdict {
   if (!verifies) return { state: "waived" };
+  if (read === null) return { state: "queued", checkout: null };
   if (read.kind === "unread") return { state: "could-not-run", verifierThreadId: null, reason: `bb's git plugin couldn't read the agent's commit and working tree as it handed off (${read.reason})` };
   return { state: "queued", checkout: read.checkout };
 }

@@ -50,7 +50,7 @@ const checkedWith = (verdict: Verdict, verifier: Execution | null = null): Hande
 });
 
 /** a1, as stored when it handed off, on `execution`. */
-const agentOn = (execution: Execution) => ({ agent: (): Agent => ({ id: agentId, coordinatorId, issueId, placement: { kind: "worktree" }, base: { kind: "default" }, execution, threadId: "thr_a1", checkout: { environmentId: null, branch: null, head: null }, fixRounds: 0, startedAt: 1_000, ended: null }) });
+const agentOn = (execution: Execution) => ({ agents: (): Agent[] => [{ id: agentId, coordinatorId, issueId, placement: { kind: "worktree" }, base: { kind: "default" }, execution, threadId: "thr_a1", checkout: { environmentId: null, branch: null, head: null }, fixRounds: 0, startedAt: 1_000, ended: null }] });
 
 const returned = (results: CriterionResult[], ranOn: Pick<Execution, "providerId" | "model"> = { providerId: "codex", model: "gpt-default" }, sameModel = false): Extract<Verdict, { state: "returned" }> => ({
   state: "returned",

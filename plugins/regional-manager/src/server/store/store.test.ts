@@ -80,7 +80,7 @@ test("removing a regional manager removes everything it owns, and nothing of ano
     store.memoryRevision(manager, memoryFileSchema.parse("MEMORY.md"), "v1");
     store.savePrRead(manager, "bb/retries", { issueId: id, agentId }, null, null, 3_000);
     filedIssue(store, manager, { ...newIssue(), dependsOn: [id] }, 3_000);
-    store.recordUnblocked(manager, issueViews(store.issues(manager).map((issue) => ({ issue, holder: null, ended: null, pr: null, openDecision: false }))), 3_000);
+    store.recordUnblocked(manager, issueViews(store.issues(manager).map((issue) => ({ issue, holder: null, ended: null, pr: null, openDecision: false, finalCheck: null }))), 3_000);
   }
 
   store.removeCoordinator(MANAGER);

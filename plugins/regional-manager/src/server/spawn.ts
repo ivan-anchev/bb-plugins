@@ -107,9 +107,10 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
     },
 
     /**
-     * Spawns a hidden verifier for a check: a child of the agent's thread, in the environment it
-     * names, so it checks the very tree the agent committed in. Its check starts running when its
-     * ticket binds. Returns its thread.
+     * Spawns a hidden verifier for a check, as the request says: a handoff's, a child of the agent's
+     * thread in the agent's environment, so it checks the very tree the agent committed in; a final
+     * check's, a child of the regional manager's thread in a fresh worktree. Its check starts running
+     * when its ticket binds. Returns its thread.
      */
     verifier({ role, ...request }: VerifierRequest): Promise<string> {
       const ticket = randomUUID();

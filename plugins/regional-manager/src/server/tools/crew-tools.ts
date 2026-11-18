@@ -27,7 +27,7 @@ const ASK_USER = "crew_ask_user";
 export const CREW_TOOLS = [CATCH_UP, MEMORY_READ, MEMORY_WRITE, REMIND, ASK_USER];
 
 type Deps = {
-  store: Pick<Store, "roleOfThread" | "issue" | "issues" | "agent" | "handoff" | "check" | "reminders" | "insertReminder" | "cancelReminder" | "decision" | "decisions" | "insertDecision">;
+  store: Pick<Store, "roleOfThread" | "issue" | "issues" | "agent" | "agents" | "handoff" | "check" | "reminders" | "insertReminder" | "cancelReminder" | "decision" | "decisions" | "insertDecision">;
   inbox: Pick<Inbox, "takeUnread">;
   memory: MemoryRoot;
   board: Pick<BoardReader, "issues">;
@@ -47,7 +47,7 @@ export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, on
         titles: new Map(store.issues(id).map((issue) => [issue.id, issue.title])),
         handoff: store.handoff,
         check: store.check,
-        agent: (agentId) => store.agent(id, agentId),
+        agents: () => store.agents(id),
         decision: store.decision,
       });
       // why caught: the updates and the memory are still worth reading when bb's thread list can't be.

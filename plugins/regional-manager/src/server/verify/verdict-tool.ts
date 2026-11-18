@@ -1,6 +1,7 @@
 // A verifier's own tool: issue_verdict, its judgement of each done-criterion with the evidence it
-// ran. Its overall outcome is never reported: the plugin derives it (model/verdict.ts). The caller's
-// role comes from the plugin's database by its thread id.
+// ran. Its overall outcome is never reported: the plugin derives it (model/verdict.ts), on the
+// commit and tree the check judges (verify.ts returned). The caller's role comes from the plugin's
+// database by its thread id.
 import { z } from "zod";
 import { MAX_CRITERIA, type DoneCriteria } from "../../model/issue/issue.ts";
 import { criterionResultSchema } from "../../model/verdict/verdict.ts";
@@ -26,12 +27,12 @@ const verdictInputSchema = z.object({
 });
 type VerdictInput = z.infer<typeof verdictInputSchema>;
 
-type Deps = { store: Pick<Store, "roleOfThread" | "check" | "agent">; verify: Pick<Verify, "returned"> };
+type Deps = { store: Pick<Store, "roleOfThread" | "check">; verify: Pick<Verify, "returned"> };
 
 export function registerVerdictTool(bb: ToolsBb, { store, verify }: Deps): void {
   bb.agents.registerTool({
     name: VERDICT,
-    description: "Your verdict on the agent's done handoff: one result per done-criterion, with the evidence you ran. Call it once, last, then stop.",
+    description: "Your verdict on what your first message asks you to check: one result per done-criterion, with the evidence you ran. Call it once, last, then stop.",
     instructions: VERDICT_INSTRUCTIONS,
     presentation: { label: { pending: "Returning the verdict", completed: "Returned the verdict" }, icon: { glyph: "Check" } },
     parameters: verdictInputSchema,
@@ -39,24 +40,25 @@ export function registerVerdictTool(bb: ToolsBb, { store, verify }: Deps): void 
       const role = store.roleOfThread(threadId);
       if (role?.kind !== "verifier") return failed(`${VERDICT} is refused: only a verifier thread the plugin started returns a verdict, and this thread is not one. Carry on without it.`);
       const check = store.check(role.checkId);
-      const agent = check === null ? null : store.agent(check.coordinatorId, check.subject.agentId);
-      // why throw: a verifier is started for a check of an agent's handoff, and both are kept while their regional manager is.
-      if (check === null || agent === null) throw new Error(`The check ${role.checkId} this verifier runs is missing.`);
+      // why throw: a verifier is started for a check, and checks are kept while their regional manager is.
+      if (check === null) throw new Error(`The check ${role.checkId} this verifier runs is missing.`);
       if (check.verdict.state !== "running" || check.verdict.verifierThreadId !== threadId) return failed(NOT_RUNNING);
-      const report = reportOf(input, check.subject.headSha, check.criteria);
+      const report = reportOf(input, check.criteria);
       if (typeof report === "string") return failed(`${VERDICT} is refused and nothing was saved: ${report}`);
-      // why the agent's stored execution: it is what made the work, recorded as it handed off.
-      const stored = await verify.returned(check.id, threadId, [agent.execution], report);
-      if (stored !== true && stored !== false) return refusedBusy(VERDICT, stored);
-      if (!stored) return failed(NOT_RUNNING);
-      const passed = report.criteria.filter((check) => check.result === "pass").length;
-      return `Verdict recorded: ${passed} of ${report.criteria.length} criteria passed. Stop here; don't change anything in this environment.`;
+      const received = await verify.returned(check.id, threadId, report);
+      if (received === "not-running") return failed(NOT_RUNNING);
+      if (received === "recorded") {
+        const passed = report.criteria.filter((check) => check.result === "pass").length;
+        return `Verdict recorded: ${passed} of ${report.criteria.length} criteria passed. Stop here; don't change anything in this environment.`;
+      }
+      if ("unread" in received) return failed(`${VERDICT} is refused and nothing was saved: bb's git plugin couldn't read your worktree (${received.unread}), so the plugin couldn't judge its commit, and this final check ends without a verdict. Stop here.`);
+      return refusedBusy(VERDICT, received);
     },
   });
 }
 
-/** The verdict on the claimed commit `headSha`, each criterion named by its text, in the check's order; or why it can't be taken. */
-function reportOf(input: VerdictInput, headSha: string, doneCriteria: DoneCriteria): VerifierReport | string {
+/** The verdict, each criterion named by its text, in the check's order; or why it can't be taken. */
+function reportOf(input: VerdictInput, doneCriteria: DoneCriteria): VerifierReport | string {
   const numbers = input.criteria.map((check) => check.criterion);
   const missing = doneCriteria.flatMap((_, i) => (numbers.includes(i + 1) ? [] : [i + 1]));
   const unknown = numbers.filter((number) => number > doneCriteria.length);
@@ -66,7 +68,6 @@ function reportOf(input: VerdictInput, headSha: string, doneCriteria: DoneCriter
   if (repeated.length > 0) return `judge each done-criterion once; ${repeated.join(", ")} appears more than once.`;
   const byNumber = new Map(input.criteria.map((check) => [check.criterion, check]));
   return {
-    headSha,
     findings: input.findings,
     criteria: doneCriteria.map((criterion, i) => {
       const check = byNumber.get(i + 1);
@@ -77,8 +78,8 @@ function reportOf(input: VerdictInput, headSha: string, doneCriteria: DoneCriter
   };
 }
 
-const NOT_RUNNING = `${VERDICT} is refused and nothing was saved: this handoff no longer waits for your verdict (a newer handoff replaced it, or it already has one). Stop here.`;
+const NOT_RUNNING = `${VERDICT} is refused and nothing was saved: this check no longer waits for your verdict (a newer handoff or final check replaced it, or it already has one). Stop here.`;
 
-const VERDICT_INSTRUCTIONS = `Returning your verdict: call issue_verdict once, as your last action, then stop. The plugin judges the commit and the tree itself, from bb's read in your first message; you judge only the criteria.
+const VERDICT_INSTRUCTIONS = `Returning your verdict: call issue_verdict once, as your last action, then stop. The plugin judges the commit and the tree itself, through bb's git plugin (your first message says when it reads them); you judge only the criteria.
 - criteria: one entry per done-criterion, by its number in your first message: result pass, fail or unverifiable, and evidence quoting what you ran and what it printed (up to 4,000 characters).
 - findings: problems no criterion covers, up to 20. [] for none.`;

@@ -15,7 +15,7 @@ type ListedThread = HolderThread & { id: string; environmentBranchName: string |
 /** The parts of bb the views read: the agents' threads and their turns. */
 export type FactsBb = ListBb<ListedThread> & TurnsBb;
 
-export type FactsStore = Pick<Store, "issues" | "agents" | "decisions" | "latestHandoff" | "handoff" | "prOfBranch">;
+export type FactsStore = Pick<Store, "issues" | "agents" | "decisions" | "latestHandoff" | "handoff" | "prOfBranch" | "finalChecks">;
 
 /**
  * One issue, viewed, with its latest agent (null: none started), that agent's thread while bb runs
@@ -44,6 +44,7 @@ export async function readIssues(bb: FactsBb, store: FactsStore, coordinatorId: 
         ended: endedBy(store, latest),
         pr: branch === null ? null : (store.prOfBranch(coordinatorId, branch)?.snapshot ?? null),
         openDecision: openDecisions.has(issue.id),
+        finalCheck: store.finalChecks(coordinatorId, issue.id).at(-1) ?? null,
       };
       const live = latest === null ? null : threadOf(latest);
       return { facts, agent: latest, threadId: live !== null && isLive(live) ? live.id : null, branch };

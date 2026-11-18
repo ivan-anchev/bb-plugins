@@ -5,7 +5,7 @@ import { boardTag, COORDINATORS_TAG, coordinatorContract, memoryTag } from "./sr
 import type { CoordinatorId, Role } from "./src/model/role.ts";
 import { registerAgentTools } from "./src/server/agents/agent-tools.ts";
 import { createAgents } from "./src/server/agents/agents.ts";
-import { placementFactsReader } from "./src/server/agents/environments.ts";
+import { defaultBranchReader, placementFactsReader } from "./src/server/agents/environments.ts";
 import { forwardThreadEvents } from "./src/server/agents/thread-events.ts";
 import { boardHandlers } from "./src/server/board/board-rpc.ts";
 import { createBoard } from "./src/server/board/board.ts";
@@ -25,6 +25,7 @@ import { createSpawner } from "./src/server/spawn.ts";
 import { openStore } from "./src/server/store/store.ts";
 import { registerCrewTools } from "./src/server/tools/crew-tools.ts";
 import { registerHandoffTool } from "./src/server/tools/handoff-tool.ts";
+import { createFinalChecks } from "./src/server/verify/final-check/final-checks.ts";
 import { registerVerdictTool } from "./src/server/verify/verdict-tool.ts";
 import { createVerify } from "./src/server/verify/verify.ts";
 import { runGh } from "./src/server/watch/host-command.ts";
@@ -60,6 +61,7 @@ export default function plugin(host: BbPluginApi): void {
   const agents = createAgents({ bb, store, spawner, inbox, memory, turns, prs: prWatch, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
   const issues = createIssues({ bb, store, views, onChange });
   const verify = createVerify({ bb, store, spawner, inbox, turns });
+  const finalChecks = createFinalChecks({ bb, store, views, turns, verify, defaultBranch: defaultBranchReader(bb, store), now: Date.now });
 
   registerRoles(bb, store);
   registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
@@ -74,11 +76,13 @@ export default function plugin(host: BbPluginApi): void {
     // why each caught: a pass that can't read bb or GitHub must not keep the next from running, nor the doorbells from ringing.
     // why the agents first: they remove a regional manager bb deleted before any later pass could ring it.
     // why the PR reads before the verifiers: a verdict waiting for CI settles on this tick's read.
+    // why the final checks between them: a merge read this tick makes its parent's check this tick, and a check the verifiers' pass then finds busy is the final checks' turn's to start.
     // why nothing waits for the issues' turns the agents' and the verifiers' passes start: a call bb
     // never answers holds only its own issue, which every tick skips until it answers (issue-turns.ts).
     // why what was unblocked after both, and before the ring: a merge read this tick is announced in the same doorbell.
     await agents.reconcile().catch((error: unknown) => bb.log.warn(`Could not reconcile the agents; the next tick tries again: ${messageOf(error)}`));
     await prWatch.tick(Date.now()).catch((error: unknown) => bb.log.warn(`Could not read the issues' pull requests; the next tick tries again: ${messageOf(error)}`));
+    await finalChecks.tick().catch((error: unknown) => bb.log.warn(`Could not read which final checks are due; the next tick tries again: ${messageOf(error)}`));
     await verify.reconcile().catch((error: unknown) => bb.log.warn(`Could not reconcile the verifiers; the next tick tries again: ${messageOf(error)}`));
     await unblocked.tick();
     await inbox.tick(Date.now());

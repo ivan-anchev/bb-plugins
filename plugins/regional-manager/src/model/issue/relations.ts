@@ -74,7 +74,7 @@ type Announced = Pick<IssueView, "status" | "blockedBy" | "closedBy"> & { issue:
  * relations whose dependency closed by work not known, with every close by work to know next. An
  * open issue nothing blocks is unblocked when one of its dependencies, or of its parent's, is
  * closed with work in its close the manager wasn't told of: a merge or a report since, or for a
- * parent, a sub-issue's. None for a close the manager's act alone made (its own result names what
+ * parent, a sub-issue's or its passed final check. None for a close the manager's act alone made (its own result names what
  * that made ready), nor for a dependency closed already when the relation was written. A
  * dependency that reads open keeps what is known: a research issue a message reopened is news only
  * once another handoff closes it, and one whose agent's thread is gone until the agent ends is no
@@ -129,7 +129,7 @@ export function knownClose(closes: Closes, id: IssueId): CloseKey | null {
   return work.length === 0 ? null : keyOf(work);
 }
 
-/** The closes by work a close holds, one string each: none for the manager's act; a parent's sub-issues', for its. */
+/** The closes by work a close holds, one string each: none for the manager's act; a parent's sub-issues', for its; a build parent's, the final check that passed. */
 function workOf(closure: Closure): string[] {
   switch (closure.by) {
     case "manager":
@@ -140,6 +140,8 @@ function workOf(closure: Closure): string[] {
       return [`handed off ${closure.handoffId}`];
     case "sub-issues":
       return closure.closes.flatMap(workOf);
+    case "final-check":
+      return [`final check ${closure.checkId}`];
     default:
       return closure satisfies never;
   }

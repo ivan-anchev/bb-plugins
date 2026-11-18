@@ -13,7 +13,7 @@ import type { HolderThread } from "../model/issue/status.ts";
 import type { CoordinatorId } from "../model/role.ts";
 import { registerAgentTools } from "./agents/agent-tools.ts";
 import { createAgents } from "./agents/agents.ts";
-import { placementFactsReader } from "./agents/environments.ts";
+import { defaultBranchReader, placementFactsReader } from "./agents/environments.ts";
 import { forwardThreadEvents } from "./agents/thread-events.ts";
 import type { TurnsBb } from "./agents/threads.ts";
 import { boardHandlers } from "./board/board-rpc.ts";
@@ -37,6 +37,7 @@ import { openStore } from "./store/store.ts";
 import { registerCrewTools } from "./tools/crew-tools.ts";
 import { registerHandoffTool } from "./tools/handoff-tool.ts";
 import type { ToolsBb } from "./tools/tool-kit.ts";
+import { createFinalChecks } from "./verify/final-check/final-checks.ts";
 import { registerVerdictTool } from "./verify/verdict-tool.ts";
 import { createVerify } from "./verify/verify.ts";
 import { createPrWatch } from "./watch/pr-watch.ts";
@@ -654,6 +655,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const agents = createAgents({ bb, store, spawner, inbox, memory, turns, prs: prWatch, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
     const issues = createIssues({ bb, store, views, onChange });
     const verify = createVerify({ bb, store, spawner, inbox, turns });
+    const finalChecks = createFinalChecks({ bb, store, views, turns, verify, defaultBranch: defaultBranchReader(bb, store), now: () => clock.now });
     registerRoles(bb, store);
     registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
     registerIssueTools(bb, { store, issues });
@@ -663,7 +665,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const threadEvents = forwardThreadEvents(bb, { store, agents, onChange, refreshBoard });
     watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });
-    return { spawner, inbox, verify, agents, prWatch, unblocked, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }) } };
+    return { spawner, inbox, verify, agents, prWatch, finalChecks, unblocked, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }) } };
   }
   let plugin = wire();
 
@@ -747,6 +749,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       const warned = (pass: string) => (error: unknown) => fakeBb.log.warn(`Could not ${pass}; the next tick tries again: ${error instanceof Error ? error.message : String(error)}`);
       await plugin.agents.reconcile().catch(warned("reconcile the agents"));
       await plugin.prWatch.tick(clock.now).catch(warned("read the issues' pull requests"));
+      await plugin.finalChecks.tick().catch(warned("read which final checks are due"));
       await plugin.verify.reconcile().catch(warned("reconcile the verifiers"));
       await plugin.unblocked.tick();
       await plugin.inbox.tick(clock.now);

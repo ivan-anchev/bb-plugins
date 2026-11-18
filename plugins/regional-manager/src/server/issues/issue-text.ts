@@ -8,8 +8,9 @@ import { isReady, type Related, type Relations } from "../../model/issue/relatio
 import { headlineText, STATUS_LABELS, type Handed, type IssueView } from "../../model/issue/status.ts";
 import { placementName, refOf, type Agent } from "../../model/agent.ts";
 import { executionText, recipientsText, type Carried, type StartOutcome, type StopOutcome, type Withdrawn } from "../agents/agents.ts";
-import { handoffText, type Lookups } from "../tools/inbox-text.ts";
+import { finalCheckText, handoffText, type Lookups } from "../tools/inbox-text.ts";
 import { fenced } from "../verify/findings.ts";
+import type { FinalCheck } from "../../model/verdict/check.ts";
 import type { IssueRead } from "./views/issue-facts.ts";
 
 /** The most of an agent's latest answer issue_read returns. */
@@ -175,15 +176,24 @@ export function stopText(agent: Agent, outcome: StopOutcome): string {
 /** What a verifier named on an issue applies to: nothing on a kind nothing verifies. */
 export function verifierText(issue: Issue): string {
   if (!isVerified(issue.kind)) return `${issue.id} has no verifier: nothing verifies a ${PIPELINES[issue.kind].label.toLowerCase()} issue.`;
-  return issue.verifier === null ? `${issue.id}'s verifier is the plugin's pick again.` : `${issue.id}'s done handoffs are checked on ${executionText(issue.verifier)}, from its next handoff on; a check already running keeps its own.`;
+  return issue.verifier === null
+    ? `${issue.id}'s verifier is the plugin's pick again.`
+    : `${issue.id}'s done handoffs, and its final check as a parent, are checked on ${executionText(issue.verifier)} from the next one on; a check already running keeps its own.`;
 }
 
 /**
  * An issue whole: its status and why, what blocks it, its plan, its relations, the verifier named,
- * each agent with what it runs on, every handoff of every agent with its verdict, and its agent's
- * latest answer (null: none).
+ * each agent with what it runs on, every handoff of every agent with its verdict, a build parent's
+ * final checks, oldest first, and its agent's latest answer (null: none).
  */
-export function issueText({ view, threadId, branch }: IssueRead, relations: Relations, agents: readonly Agent[], record: readonly Handed[], output: string | null, lookups: Pick<Lookups, "agent">): string {
+export function issueText(
+  { view, threadId, branch }: IssueRead,
+  relations: Relations,
+  agents: readonly Agent[],
+  record: { handed: readonly Handed[]; finalChecks: readonly FinalCheck[] },
+  output: string | null,
+  lookups: Pick<Lookups, "agents">,
+): string {
   const { issue } = view;
   const answer =
     output === null
@@ -200,7 +210,8 @@ export function issueText({ view, threadId, branch }: IssueRead, relations: Rela
     `### Relations\n\n${relationsText(relations)}`,
     `### Verifier\n\n${verifierLine(issue)}`,
     `### Agents\n\n${agents.length === 0 ? "None started." : agents.map((agent) => agentLine(agent, threadId)).join("\n")}`,
-    `### Its record\n\n${record.length === 0 ? "No handoff yet." : record.map((handed) => `#### ${handed.handoff.agentId}'s handoff\n\n${handoffText(handed, lookups)}`).join("\n\n")}`,
+    `### Its record\n\n${record.handed.length === 0 ? "No handoff yet." : record.handed.map((handed) => `#### ${handed.handoff.agentId}'s handoff\n\n${handoffText(handed, lookups)}`).join("\n\n")}`,
+    ...(record.finalChecks.length === 0 ? [] : [`### Its final checks\n\n${record.finalChecks.map((check) => `#### ${new Date(check.at).toISOString()}\n\n${finalCheckText(check, lookups)}`).join("\n\n")}`]),
     `### Its agent's latest answer\n\n${answer}`,
   ].join("\n\n");
 }

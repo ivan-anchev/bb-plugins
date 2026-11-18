@@ -262,7 +262,7 @@ test("canceling a parent is judged on its sub-issues as they are when it is writ
   await kit.call("agent_handoff", RESEARCH_DONE, researcher);
   await kit.idle(researcher, "Handed off.");
   await settled();
-  assert.deepEqual(await statuses(), { i1: "in-review", i2: "done" });
+  assert.deepEqual(await statuses(), { i1: "verifying", i2: "done" });
 
   kit.turnEvents.holding = true;
   const canceling = call("issue_update", { id: "i1", status: "canceled" });
