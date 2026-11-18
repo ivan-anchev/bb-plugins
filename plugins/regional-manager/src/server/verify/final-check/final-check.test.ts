@@ -90,7 +90,7 @@ test("1: once every sub-issue is merged the parent's final check is due, and wit
   const thread = kit.thread(verifier());
   assert.deepEqual(
     [thread.spawnedWith.parentThreadId, thread.spawnedWith.lifecycleOwnerThreadId, thread.spawnedWith.visibility, thread.spawnedWith.environment],
-    [threadId, threadId, "hidden", { type: "host", hostId: "host_1", workspace: { type: "managed-worktree", baseBranch: { kind: "default" } } }],
+    [threadId, threadId, "hidden", { type: "host", hostId: "host_1", workspace: { type: "managed-worktree", baseBranch: { kind: "named", name: "origin/main" } } }],
   );
   assert.equal(kit.git.heads.get(kit.environment(thread.id)), MERGED, "origin's tip, though the local main is behind");
   assert.equal(kit.repo.local.get("main"), HEAD);
@@ -344,6 +344,24 @@ test("a final check that passes after the manager canceled the parent leaves it 
   assert.match(caughtUp, /Verified: 1 of 1 criteria passed on main/);
   assert.doesNotMatch(caughtUp, /i1 is Done/);
   assert.match(caughtUp, /\n\ni1 is Canceled\. This final check no longer places it: the board below says where it stands\./);
+});
+
+test("a final check's verifier starts on the branch the check recorded, though bb's default branch changed before it spawned", async () => {
+  const { kit, text, mergeAll, latest, verifier, returns } = await withParent();
+  // bb is slow to list the models the verifier can run on, after the check was made on main.
+  kit.providers.holding = true;
+  await mergeAll();
+  assert.deepEqual([latest().subject.kind === "final" && latest().subject.defaultBranch, latest().verdict.state], ["main", "queued"]);
+  kit.environments.defaultBranch = "trunk";
+  kit.repo.origin.set("trunk", "c".repeat(40));
+  kit.providers.holding = false;
+  kit.providers.held.splice(0).forEach((release) => release());
+  await settled();
+  const thread = kit.thread(verifier());
+  assert.deepEqual(thread.spawnedWith.environment, { type: "host", hostId: "host_1", workspace: { type: "managed-worktree", baseBranch: { kind: "named", name: "origin/main" } } });
+  assert.equal(kit.git.heads.get(kit.environment(thread.id)), MERGED, "origin's main, not trunk");
+  await returns(PASSES);
+  assert.match(await text("crew_catch_up", {}), /Verified: 1 of 1 criteria passed on main at b{40}/);
 });
 
 test("a sub-issue merged while a final check runs supersedes it, and stops its verifier before the next starts", async () => {

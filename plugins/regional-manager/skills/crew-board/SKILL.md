@@ -145,10 +145,12 @@ A build parent's own done-criteria are checked on the default branch once
 all of its work is there. Once every sub-issue is closed and every Done build
 sub-issue's pull request merged, the parent is Verifying, "Final check due",
 and within a minute the plugin starts a hidden verifier, a child of the
-regional manager's thread, in a fresh worktree of the default branch on the
-manager's machine. bb fetches origin first, so the worktree starts at
-origin's tip even when the local branch is behind; the check is made only
-after the merges it waits for were read. The parent reads "Final check
+regional manager's thread, in a fresh worktree on the manager's machine of
+the default branch bb named when the check was made, asked for as
+`origin/<branch>`. bb fetches it first, so the worktree starts at origin's
+tip even when the local branch is behind, and on that branch even if bb's
+default changed since; the check is made only after the merges it waits for
+were read. The parent reads "Final check
 running". The verifier gets the parent's criteria and description and no
 commit: when it returns its verdict, the plugin reads its worktree through
 bb's git plugin and judges the commit it holds then, on a clean tree, so a

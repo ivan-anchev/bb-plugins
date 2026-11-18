@@ -1,8 +1,10 @@
 // A final check's verifier: where it runs and on what, and the tree it judged. It is a hidden child
-// of the regional manager's thread in a fresh managed worktree of the default branch on the
-// manager's machine, which bb fetches from origin and starts at origin's tip even when the local
-// branch is behind (bb-facts P4), after the merges that made the check due were seen. It shares
-// that worktree with nobody, and the commit judged is the one it holds when the verifier returns.
+// of the regional manager's thread in a fresh managed worktree of the default branch the check
+// recorded, on the manager's machine. It is asked for as `origin/<branch>`, which bb fetches and
+// starts at origin's tip even when the local branch is behind (bb-facts P2, P4), after the merges
+// that made the check due were seen. why named, never bb's default: bb resolves its default when it
+// provisions, which may be another branch than the one the check recorded and every text names. It
+// shares that worktree with nobody, and the commit judged is the one it holds when it returns.
 import type { Coordinator } from "../../../contract.ts";
 import { environmentOf } from "../../../model/agent.ts";
 import { catalogRouting, type Execution } from "../../../model/execution.ts";
@@ -30,7 +32,7 @@ export type FinalVerifierBb = ListBb<ListedThread> & CatalogBb & ThreadExecution
 export async function finalVerifierRequest(bb: FinalVerifierBb, { check, coordinator, issue, theirs }: { check: FinalCheck; coordinator: Coordinator; issue: Issue; theirs: Execution[] }): Promise<VerifierRequest> {
   const manager = (await listedThreads<ListedThread>(bb, [coordinator.threadId])).get(coordinator.threadId);
   if (manager === undefined) throw new Error("the regional manager's thread was archived or deleted");
-  const environment = environmentOf({ kind: "worktree" }, manager.environmentHostId, null);
+  const environment = environmentOf({ kind: "worktree" }, manager.environmentHostId, `origin/${check.subject.defaultBranch}`);
   const execution = await verifierExecution(bb, { named: check.verifier, manager: await threadExecution(bb, coordinator.threadId), theirs, routing: catalogRouting(environment) });
   return {
     role: { kind: "verifier", coordinatorId: coordinator.id, issueId: issue.id, checkId: check.id },
