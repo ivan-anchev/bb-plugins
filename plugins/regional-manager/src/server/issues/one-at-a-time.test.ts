@@ -648,6 +648,56 @@ test("R140: a reminder taken back while its check still runs can come again: the
   assert.deepEqual(statusesOf(kit, agentThreadId, verifier), ["idle", "active"]);
 });
 
+test("R142: a reminder bb deleted is owed again though bb's next read of the queue fails, so the verifier's stop without a verdict reminds it instead of giving the check up", async () => {
+  const on = await onI1();
+  const { kit, threadId, agentThreadId, check } = on;
+  const verifier = await handedOff(on);
+  await reminderQueuedBehind(kit, verifier);
+  kit.queueDeletes.deleted = () => (kit.queueReads.failure = bbHttpError(503, "unavailable", "bb is restarting"));
+  await assert.rejects(kit.call("agent_message", { agent: "a1", text: "Please add jitter." }, threadId), /bb is restarting/);
+  kit.queueDeletes.deleted = null;
+  kit.queueReads.failure = null;
+  assert.deepEqual([kit.queued(verifier), kit.delivered(verifier).filter(isReminder), check().verdict.state], [[], [], "running"], "taken back before it reached the verifier, the check left");
+
+  await kit.idle(verifier, "The background command's turn ended, no verdict.");
+  const { verdict } = check();
+  assert.deepEqual([verdict.state, kit.delivered(verifier).filter(isReminder).length], ["running", 1], "reminded once, not given up on");
+  assert.deepEqual(statusesOf(kit, agentThreadId, verifier), ["idle", "active"]);
+});
+
+test("R142: a reminder bb deleted is owed again though bb's answer to the delete is lost, so the next look reminds the verifier", async () => {
+  const on = await onI1();
+  const { kit, threadId, agentThreadId, check } = on;
+  const verifier = await handedOff(on);
+  await reminderQueuedBehind(kit, verifier);
+  kit.queueDeletes.lost = new Error("socket hang up after deleting the message");
+  kit.sends.failure = { threadId: agentThreadId, error: bbHttpError(409, "thread_not_writable", "Thread is busy"), taken: false };
+  await assert.rejects(kit.call("agent_message", { agent: "a1", text: "Please add jitter." }, threadId));
+  kit.queueDeletes.lost = null;
+  kit.sends.failure = null;
+  assert.deepEqual([kit.queued(verifier), kit.delivered(verifier).filter(isReminder)], [[], []], "taken back before it reached the verifier");
+
+  await kit.tick(); // the stop's idle event may already have looked again
+  await settled();
+  const { verdict } = check();
+  assert.deepEqual([verdict.state, kit.delivered(verifier).filter(isReminder).length], ["running", 1], "reminded once, not given up on");
+  assert.deepEqual(statusesOf(kit, agentThreadId, verifier), ["idle", "active"]);
+});
+
+test("R142: a reminder bb couldn't delete still counts as sent once bb's queue shows it, so it comes once, and the verifier's next stop without a verdict gives the check up", async () => {
+  const on = await onI1();
+  const { kit, threadId, check } = on;
+  const verifier = await handedOff(on);
+  const reminder = await reminderQueuedBehind(kit, verifier);
+  kit.queueDeletes.failure = new Error("fetch failed");
+  assert.match(textOf(await kit.call("agent_message", { agent: "a1", text: "Please add jitter." }, threadId)), /^agent_message is refused/);
+  kit.queueDeletes.failure = null;
+
+  await kit.dispatch(reminder);
+  await kit.idle(verifier, "Still no verdict.");
+  assert.deepEqual([check().verdict.state, kit.delivered(verifier).filter(isReminder).length], ["could-not-run", 1], "reminded once, then given up on");
+});
+
 const isReminder = (text: string): boolean => text.includes("without calling issue_verdict");
 
 test("R141: the reminder stops a1 idle with a background command first, after a manager's message bb took but whose answer was lost, so a1 never wakes beside the reminded verifier", async () => {

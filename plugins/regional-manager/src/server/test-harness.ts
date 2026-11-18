@@ -303,8 +303,13 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
    * Set `holding` to keep each answer, as read when called, until the test calls its release in `held`.
    */
   const turnEvents: { failure: Error | null; pending: Promise<void> | null; holding: boolean; held: (() => void)[] } = { failure: null, pending: null, holding: false, held: [] };
-  /** Set `failure` to make every delete of a queued message reject with it, leaving the message queued, as when bb can't be reached. */
-  const queueDeletes: { failure: Error | null } = { failure: null };
+  /**
+   * Set `failure` to make every delete of a queued message reject with it, leaving the message queued, as when bb can't be reached.
+   * Set `lost` to have every delete land and then reject with it, as when bb's answer is lost on the way back; set `deleted` to run as bb deletes one, before it answers.
+   */
+  const queueDeletes: { failure: Error | null; lost: Error | null; deleted: (() => void) | null } = { failure: null, lost: null, deleted: null };
+  /** Set `failure` to make every read of a thread's queue reject with it, as when bb can't answer. */
+  const queueReads: { failure: Error | null } = { failure: null };
   /**
    * Set `failure` to make every listing of threads by id reject with it, as when bb can't answer.
    * Set `holding` to keep each answer, as read when called, until the test calls its release in `held`.
@@ -497,6 +502,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     },
     queuedMessages: {
       async list({ threadId }) {
+        if (queueReads.failure !== null) throw queueReads.failure;
         if (fakeThread(threadId).deletedAt !== null) throw bbHttpError(404, "thread_not_found", "Thread not found");
         return queue.filter((entry) => entry.threadId === threadId);
       },
@@ -506,7 +512,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         const at = queue.findIndex((entry) => entry.id === queuedMessageId);
         if (at === -1) throw new Error(`No queued message ${queuedMessageId}`);
         queue.splice(at, 1);
+        queueDeletes.deleted?.();
         await emit("message.cancelled", { entry: { id: queuedMessageId } });
+        if (queueDeletes.lost !== null) throw queueDeletes.lost;
         return { ok: true };
       },
     },
@@ -740,8 +748,10 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     },
     /** How bb answers a read of a thread's turns; a test may hold it or make it fail. */
     turnEvents,
-    /** How bb answers a delete of a queued message; a test may make it fail. */
+    /** How bb answers a delete of a queued message; a test may make it fail, or lose its answer. */
     queueDeletes,
+    /** How bb answers a read of a thread's queue; a test may make it fail. */
+    queueReads,
     /** How bb answers a listing of threads by id; a test may make it fail. */
     threadLists,
     /** How bb answers a stop; a test may hold it or make it fail. */

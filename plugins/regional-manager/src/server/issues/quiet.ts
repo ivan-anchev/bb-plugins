@@ -77,8 +77,7 @@ export async function quietIssue(bb: QuietBb, store: QuietStore, coordinatorId: 
   const threads = store.issueThreads(coordinatorId, issueId).filter(({ threadId }) => to.kind === "new-agent" || threadId !== to.threadId);
   const named = (threadId: string): string => threadName({ threadId, agentId: threads.find((thread) => thread.threadId === threadId)?.agentId ?? null });
   const owedTo = to.kind === "new-agent" ? null : (holderOf(store.agents(coordinatorId), issueId)?.threadId ?? null);
-  const { withdrawn, reminded, left } = await withdrawQueued(bb, coordinator.threadId, threads, owedTo);
-  for (const threadId of reminded) remindAgain(store, threadId);
+  const { withdrawn, left } = await withdrawQueued(bb, store, coordinator.threadId, threads, owedTo);
   if (left.length > 0) return { kind: "left", withdrawn, stopped: [], left };
   const { stopped, unstopped } = await stopThreads(bb, threads.map(({ threadId }) => threadId));
   const done = { withdrawn, stopped: stopped.map(named) };
@@ -91,24 +90,30 @@ export async function quietIssue(bb: QuietBb, store: QuietStore, coordinatorId: 
  * which bb would send once a thread's turn stops: the regional manager's to agents and the plugin's
  * reminders to verifiers, both sent from the manager's thread (`managerThreadId`), and the issue's
  * verifiers' findings to agents, as bb names their sender. Then reads each queue again, and returns
- * everything still there that bb would send (`left`), a message someone else queued included; the
- * manager's messages it took back, with the agent each was to (`withdrawn`); and the verifiers
- * whose reminder it took back (`reminded`). why a person's message is left: it isn't the plugin's
- * to delete. why the holder's (`owedTo`, null: none kept) are left too: the holder keeps the issue
- * and is owed them, the manager's next instruction or a verifier's findings, which nothing else
- * would bring again; they are its next work, so the thread taking the environment waits for them.
+ * everything still there that bb would send (`left`), a message someone else queued included; and
+ * the manager's messages it took back, with the agent each was to (`withdrawn`). A verifier's
+ * reminder it finds is owed again (see oweReminder) unless the second read shows bb still has it.
+ * why a person's message is left: it isn't the plugin's to delete. why the holder's (`owedTo`,
+ * null: none kept) are left too: the holder keeps the issue and is owed them, the manager's next
+ * instruction or a verifier's findings, which nothing else would bring again; they are its next work, so the thread taking the environment waits for them.
  * why read again, not trust a delete's answer: bb refuses one for a message it sent meanwhile and
  * fails one it never reached alike. One bb sent meanwhile reached its thread, and the stop after
- * this ends the turn it started.
+ * this ends the turn it started. why a reminder is owed again before its delete, not once quieting
+ * succeeds: a delete bb did, whose answer or the read after it failed, would leave its check
+ * counted as reminded, and its verifier's next stop would give the check up with no reminder sent.
+ * A reminder bb sent meanwhile may then come twice; a second reminder costs less than a check
+ * given up.
  */
 async function withdrawQueued(
   bb: QuietBb,
+  store: QuietStore,
   managerThreadId: string,
   threads: IssueThread[],
   owedTo: string | null,
-): Promise<{ withdrawn: Withdrawn[]; reminded: string[]; left: Left[] }> {
+): Promise<{ withdrawn: Withdrawn[]; left: Left[] }> {
   const ours = new Set([managerThreadId, ...threads.map((thread) => thread.threadId)]);
   const queue = bb.sdk.threads.queuedMessages;
+  const fromManager = ({ senderThreadId }: { senderThreadId: string | null }): boolean => senderThreadId === managerThreadId;
   const listed = await threadsById(bb, threads.map(({ threadId }) => threadId));
   const kept = threads.filter(({ threadId }) => listed.get(threadId)?.deletedAt === null);
   const each = await Promise.all(
@@ -116,22 +121,27 @@ async function withdrawQueued(
       const { threadId, agentId } = thread;
       const owed = threadId === owedTo;
       const mine = owed ? [] : (await queue.list({ threadId })).filter((message) => bbSends(message) && message.senderThreadId !== null && ours.has(message.senderThreadId));
+      const reminder = agentId === null && mine.some(fromManager);
+      if (reminder) oweReminder(store, threadId, true);
       const deleted = await Promise.all(mine.map(({ id }) => queue.delete({ threadId, queuedMessageId: id }).then(() => true, () => false)));
-      const fromManager = mine.filter(({ senderThreadId }, i) => deleted[i] && senderThreadId === managerThreadId);
+      const still = (await queue.list({ threadId })).filter(bbSends);
+      if (reminder && still.some(fromManager)) oweReminder(store, threadId, false);
       return {
-        withdrawn: agentId === null ? [] : fromManager.map(({ content }) => ({ to: agentId, text: textOf(content) })),
-        reminded: agentId === null && fromManager.length > 0 ? [threadId] : [],
-        left: (await queue.list({ threadId })).filter(bbSends).map(({ senderThreadId }) => ({ to: threadName(thread), what: senderText(managerThreadId, ours, senderThreadId, agentId === null), owed })),
+        withdrawn: agentId === null ? [] : mine.filter((message, i) => deleted[i] && fromManager(message)).map(({ content }) => ({ to: agentId, text: textOf(content) })),
+        left: still.map(({ senderThreadId }) => ({ to: threadName(thread), what: senderText(managerThreadId, ours, senderThreadId, agentId === null), owed })),
       };
     }),
   );
-  return { withdrawn: each.flatMap((one) => one.withdrawn), reminded: each.flatMap((one) => one.reminded), left: each.flatMap((one) => one.left) };
+  return { withdrawn: each.flatMap((one) => one.withdrawn), left: each.flatMap((one) => one.left) };
 }
 
-/** A verifier's reminder was taken back before bb sent it: while its check still runs there, the reminder can come again. */
-function remindAgain(store: QuietStore, verifierThreadId: string): void {
+/**
+ * Whether a verifier's reminder is owed again (`owed`): while its check still runs there, one taken
+ * back from bb's queue before bb sent it can come again; one bb still has counts as sent.
+ */
+function oweReminder(store: QuietStore, verifierThreadId: string, owed: boolean): void {
   const role = store.roleOfThread(verifierThreadId);
-  if (role?.kind === "verifier") store.markNudged(role.checkId, verifierThreadId, false);
+  if (role?.kind === "verifier") store.markNudged(role.checkId, verifierThreadId, !owed);
 }
 
 /** A queued message, in words, by its sender: the manager's message to an agent, the plugin's reminder to a verifier (`toVerifier`), a verifier's findings, a person's, or another thread's. */
