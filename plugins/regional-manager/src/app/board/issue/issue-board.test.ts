@@ -273,22 +273,31 @@ test("a parent's sub-issues sit indented under it in its lane, each with its own
   );
   assert.match(within(subs).getByRole("button", { name: /\bi4 Build/ }).textContent ?? "", /blocked by i5/);
   const parent = row(view, "i1");
-  assert.equal(parent.closest(".rmi-rowbox")?.querySelector(".rmi-sub-count")?.textContent, "1/3");
+  assert.equal(parent.closest(".rmi-rowbox")?.querySelector(".rmi-count-cell")?.textContent, "1/3");
   assert.match(parent.getAttribute("aria-label") ?? "", /, In progress, 1 of 3 sub-issues done$/);
   assert.equal(lane(view, /^Todo/).queryByRole("button", { name: /\bi4 Build/ }), null, "a Todo sub-issue sits in its parent's lane, not Todo");
 });
 
-test("a parent says its count once, at the right, flagged or not; its headline says only why it is flagged", () => {
+test("a parent says its count once, on its first line at the right, headline or not; with none the row is that one line", () => {
   const unmerged = "i2 isn't merged, so i1's work isn't all on the default branch";
   const { view, reread } = mount(SPLIT, []);
   const counted = () => {
     const box = row(view, "i1").closest(".rmi-rowbox") ?? assert.fail("no row box");
-    return { words: row(view, "i1").textContent, count: box.querySelector(".rmi-sub-count")?.textContent, label: row(view, "i1").getAttribute("aria-label") };
+    return {
+      words: row(view, "i1").textContent,
+      count: box.querySelector(".rmi-count-cell")?.textContent,
+      oneLine: box.hasAttribute("data-one-line"),
+      secondLine: box.querySelector(".rmi-headline") !== null,
+      label: row(view, "i1").getAttribute("aria-label"),
+    };
   };
-  assert.deepEqual(counted(), { words: "i1BuildCard vault", count: "1/3", label: "i1 Build: Card vault, In progress, 1 of 3 sub-issues done" });
+  assert.deepEqual(counted(), { words: "i1BuildCard vault", count: "1/3", oneLine: true, secondLine: false, label: "i1 Build: Card vault, In progress, 1 of 3 sub-issues done" });
 
   act(() => reread(SPLIT.map((each) => (each.id === "i1" ? { ...each, needsYou: unmerged, headline: unmerged } : each))));
-  assert.deepEqual(counted(), { words: `i1BuildCard vault${unmerged}`, count: "1/3", label: `i1 Build: Card vault, In progress, 1 of 3 sub-issues done, ${unmerged}` });
+  assert.deepEqual(
+    counted(),
+    { words: `i1BuildCard vault${unmerged}`, count: "1/3", oneLine: false, secondLine: true, label: `i1 Build: Card vault, In progress, 1 of 3 sub-issues done, ${unmerged}` },
+  );
 });
 
 test("a flagged sub-issue sits under its parent and flat under Needs you, each naming its parent to a screen reader and the flat one ahead of its id; each row opens on its own", () => {

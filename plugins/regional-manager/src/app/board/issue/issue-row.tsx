@@ -1,8 +1,10 @@
 // One issue on the board, Activity Sidebar's tall row (src/ui/row/row.tsx): its status glyph in the
-// 30 slot; its id, kind and title fading out; under them what blocks it and its headline, if anything. Pressing the row opens its
+// 30 slot; its id, kind and title fading out; under them what blocks it and its headline, if anything:
+// with neither, as for a parent whose count says it all, the row is its one line. Pressing the row opens its
 // detail in place, and the row grows to show its title and headline whole, wrapping. Beside the words, outside the row's button so each is its own control: its pull
-// request with CI, and its agent's thread; a parent, which never has an agent, counts its sub-issues
-// Done there instead. A sub-issue's row away from its parent names the parent ahead of its id.
+// request with CI, and its agent's thread; a parent, which never has either, counts its sub-issues
+// Done on its first line instead, where it stays whether a headline comes or goes. A sub-issue's row
+// away from its parent names the parent ahead of its id.
 import type { Ref } from "react";
 import type { IssueRow as Row } from "../../../contract.ts";
 import type { IssueId } from "../../../model/issue/issue.ts";
@@ -25,8 +27,9 @@ type IssueRowProps = {
 };
 
 export function IssueRow({ ref, issue, under, open, detailId, onToggle }: IssueRowProps) {
+  const secondLine = issue.blockedBy.length > 0 || issue.headline !== null;
   return (
-    <div className="rmi-rowbox" data-open={open || undefined}>
+    <div className="rmi-rowbox" data-open={open || undefined} data-one-line={!secondLine || undefined}>
       <button
         ref={ref}
         type="button"
@@ -55,10 +58,12 @@ export function IssueRow({ ref, issue, under, open, detailId, onToggle }: IssueR
             <span className="rmi-kind">{PIPELINES[issue.kind].label}</span>
             <RowText text={issue.title} whole={open} />
           </span>
-          <span className="rmi-headline">
-            {issue.blockedBy.length > 0 && <Blockers ids={issue.blockedBy} />}
-            {issue.headline !== null && <RowText text={issue.headline} whole={open} />}
-          </span>
+          {secondLine && (
+            <span className="rmi-headline">
+              {issue.blockedBy.length > 0 && <Blockers ids={issue.blockedBy} />}
+              {issue.headline !== null && <RowText text={issue.headline} whole={open} />}
+            </span>
+          )}
         </span>
       </button>
       {issue.pr !== null && (
@@ -67,7 +72,7 @@ export function IssueRow({ ref, issue, under, open, detailId, onToggle }: IssueR
         </span>
       )}
       {issue.subIssues !== null ? (
-        <span className="rmi-agent-cell rmi-sub-count" aria-hidden>
+        <span className="rmi-count-cell" aria-hidden>
           {issue.subIssues.done}/{issue.subIssues.total}
         </span>
       ) : (
