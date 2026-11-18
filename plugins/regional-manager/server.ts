@@ -15,8 +15,9 @@ import { watchAgentThreads } from "./src/server/inbox/thread-watch.ts";
 import { registerIssueTools } from "./src/server/issues/issue-tools.ts";
 import { issueTurns } from "./src/server/issues/issue-turns.ts";
 import { createIssues } from "./src/server/issues/issues.ts";
+import { currentViews } from "./src/server/issues/views/current-views.ts";
 import { pluginInstance } from "./src/server/lifetime.ts";
-import { watchUnblocked } from "./src/server/issues/unblocked.ts";
+import { watchUnblocked } from "./src/server/issues/views/unblocked.ts";
 import { openMemoryRoot } from "./src/server/memory/memory-files.ts";
 import { memoryHandlers } from "./src/server/memory/memory-rpc.ts";
 import { registerRoles } from "./src/server/roles.ts";
@@ -37,9 +38,11 @@ export default function plugin(host: BbPluginApi): void {
   bb.log.info(`Memory files are in ${memory.dir}`);
   const refreshBoard = (id: CoordinatorId) => bb.rpc.experimental_invalidate([boardTag(id)]);
   const refreshCoordinators = () => bb.rpc.experimental_invalidate([COORDINATORS_TAG]);
-  // why one hook: whatever changes what a regional manager's views are derived from changes its board and may unblock an issue.
+  // why one hook: whatever changes what a regional manager's views are derived from changes its board, makes a read begun before it stale, and may unblock an issue.
+  // A store write is counted by the store as it commits (current-views.ts); views.changed is for what bb moved, a message starting an agent's turn or bb saying a thread moved.
   const onChange = (id: CoordinatorId) => {
     refreshBoard(id);
+    views.changed(id);
     unblocked.changed(id);
   };
   // why one hook: deletion and the tick's reconcile both remove a regional manager through it.
@@ -50,10 +53,11 @@ export default function plugin(host: BbPluginApi): void {
   const spawner = createSpawner(bb, store, memory, (role: Role) => (role.kind === "coordinator" ? refreshCoordinators() : onChange(role.coordinatorId)));
   const board = createBoard(bb, store, memory);
   const inbox = createInbox({ bb, store, memory, onChange });
-  const unblocked = watchUnblocked({ bb, store, inbox });
+  const views = currentViews({ bb, store });
+  const unblocked = watchUnblocked({ bb, store, views, inbox });
   const turns = issueTurns(instance.signal);
   const agents = createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
-  const issues = createIssues({ bb, store, onChange });
+  const issues = createIssues({ bb, store, views, onChange });
   const verify = createVerify({ bb, store, spawner, inbox, turns });
 
   registerRoles(bb, store);

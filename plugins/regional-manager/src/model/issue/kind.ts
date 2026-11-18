@@ -18,6 +18,8 @@ export type Stage = "verifying" | "in-review";
 type Pipeline = {
   /** The kind as the board's row and crew_catch_up name it. */
   label: string;
+  /** The kinds its sub-issues may be (brief, open question 7). */
+  holds: readonly Kind[];
 } & (
   | {
       /** What its done handoff hands over (handoff.ts Delivery). */
@@ -30,9 +32,11 @@ type Pipeline = {
 
 export const PIPELINES: Record<Kind, Pipeline> = {
   // Ships code: verified, then waits on the user or its pull request, then Done when it merges.
-  build: { label: "Build", delivers: "commit", stages: ["verifying", "in-review"] },
+  // why it holds research too: code work often starts from a question answered first.
+  build: { label: "Build", holds: ["build", "research"], delivers: "commit", stages: ["verifying", "in-review"] },
   // A probe, spike, investigation or design: its report is the result, nobody judges it, and its done handoff is Done.
-  research: { label: "Research", delivers: "report", stages: [] },
+  // why only research under it: it closes with its last sub-issue, and code work under it would close it unmerged and unchecked.
+  research: { label: "Research", holds: ["research"], delivers: "report", stages: [] },
 };
 
 /** Whether a verifier judges the kind's done handoffs; it also makes done-criteria required before an agent starts. */

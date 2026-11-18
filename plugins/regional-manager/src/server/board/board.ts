@@ -12,7 +12,7 @@ import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { shownVerdict } from "../../model/verdict/verdict.ts";
 import { threadsById } from "../agents/threads.ts";
-import { readIssues, type FactsBb, type FactsStore, type IssueRead } from "../issues/issue-facts.ts";
+import { readIssues, type FactsBb, type FactsStore, type IssueRead } from "../issues/views/issue-facts.ts";
 import type { MemoryRoot } from "../memory/memory-files.ts";
 import type { Store } from "../store/store.ts";
 
@@ -24,6 +24,8 @@ type BoardStore = FactsStore & Pick<Store, "verifies" | "lastOwnTreeEvent" | "is
 const rowOf = ({ view, agent, threadId }: IssueRead): IssueRow => ({
   id: view.issue.id,
   kind: view.issue.kind,
+  parentId: view.issue.parentId,
+  subIssues: view.subIssues,
   title: view.issue.title,
   status: view.status,
   needsYou: view.needsYou,

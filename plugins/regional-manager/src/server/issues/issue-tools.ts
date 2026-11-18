@@ -35,6 +35,10 @@ const DEPENDS_ON = z
     "Issues that must be Done or Canceled before this one is ready, such as [\"i2\"]. It informs and never refuses: an agent can still start on it, and nothing of those issues reaches its agent but what its brief names. A dependency that would close a cycle is refused.",
   );
 
+const PARENT = issueIdSchema.describe(
+  "The issue this one is a sub-issue of, one level deep. A parent never has an agent: start agents on its sub-issues, and its status rolls up from theirs. Its dependencies block them. A build parent holds build and research sub-issues; a research parent holds research ones only.",
+);
+
 export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
   /** The tool runs on one of the caller's issues; an id it has none by is refused. */
   function forIssue<Input extends { id: IssueId }>(tool: string, run: (issue: Issue, input: Input) => PluginAgentToolResult | Promise<PluginAgentToolResult>) {
@@ -47,7 +51,7 @@ export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
   bb.agents.registerTool({
     name: CREATE,
     description:
-      "File an issue: one piece of the work, done by an agent you start on it with agent_start. It is numbered i1, i2… and rests in Todo, or in Backlog when you are proposing it and waiting for the user. kind decides what its agent hands off and how it is checked: build is code on a branch, verified by an independent verifier; research is a report (a probe, spike, investigation or design) that nothing verifies, Done as its agent hands it off. A brief, and a build issue's doneCriteria, may wait until you start its agent.",
+      "File an issue: one piece of the work, done by an agent you start on it with agent_start. It is numbered i1, i2… and rests in Todo, or in Backlog when you are proposing it and waiting for the user. kind decides what its agent hands off and how it is checked: build is code on a branch, verified by an independent verifier; research is a report (a probe, spike, investigation or design) that nothing verifies, Done as its agent hands it off. A brief, and a build issue's doneCriteria, may wait until you start its agent. To split work, file sub-issues under it with parent.",
     presentation: { label: { pending: "Filing an issue", completed: "Filed an issue" }, icon: { glyph: "Workflow" } },
     parameters: z.strictObject({
       kind: kindSchema.describe(
@@ -63,10 +67,11 @@ export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
         ),
       status: restSchema.optional().describe("todo (the default): ready to start. backlog: not planned yet, as when you propose it and wait for the user."),
       verifier: VERIFIER.optional().describe(`${VERIFIER.description} A research issue has none.`),
+      parent: PARENT.optional(),
       dependsOn: DEPENDS_ON.optional(),
     }),
-    execute: forManager(store, CREATE, async (id, { brief, doneCriteria, status, dependsOn, ...plan }) => {
-      const filed = await issues.create(id, { ...plan, brief: brief ?? null, doneCriteria: doneCriteria ?? [], rest: status ?? "todo", dependsOn: dependsOn ?? [] });
+    execute: forManager(store, CREATE, async (id, { brief, doneCriteria, status, parent, dependsOn, ...plan }) => {
+      const filed = await issues.create(id, { ...plan, brief: brief ?? null, doneCriteria: doneCriteria ?? [], rest: status ?? "todo", parentId: parent ?? null, dependsOn: dependsOn ?? [] });
       return "refused" in filed ? failed(filed.refused) : filedText(filed.issue, filed.blockedBy);
     }),
   });
@@ -74,7 +79,7 @@ export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
   bb.agents.registerTool({
     name: UPDATE,
     description:
-      "Change one of your issues: its kind (only before any agent has started on it), title, description, brief, done-criteria, verifier or dependencies (dependsOn: add and remove), or where it stands. status: backlog or todo rests an issue no agent holds (and reopens a canceled one); canceled closes one no agent holds; done accepts one that is In review (a research issue never is: its agent's done handoff makes it Done). Every other status is the plugin's to say, from what its agents did. A build issue's verifier change applies from its next done handoff on; verifier: null lets the plugin pick again, and drops the one named when the issue becomes research. A status or dependency change that makes issues ready says so: \"Now ready: i3\".",
+      "Change one of your issues: its kind (only before any agent has started on it), title, description, brief, done-criteria, verifier, parent or dependencies (dependsOn: add and remove), or where it stands. status: backlog or todo rests an issue no agent holds (and reopens a canceled one); canceled closes one no agent holds, and a parent only once its sub-issues are closed; done accepts one that is In review (a build parent is once its sub-issues are closed and merged; a research issue never is: its agent's done handoff makes it Done, and a research parent is Done with its last sub-issue). Every other status is the plugin's to say, from what its agents did. A build issue's verifier change applies from its next done handoff on; verifier: null lets the plugin pick again, and drops the one named when the issue becomes research. A status or dependency change that makes issues ready says so: \"Now ready: i3\".",
     presentation: { label: { pending: "Updating an issue", completed: "Updated an issue" }, icon: { glyph: "Workflow" } },
     parameters: z.strictObject({
       id: issueIdSchema,
@@ -85,13 +90,14 @@ export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
       doneCriteria: doneCriteriaSchema.optional(),
       status: managerStatusSchema.optional(),
       verifier: VERIFIER.nullable().optional(),
+      parent: PARENT.nullable().optional().describe(`${PARENT.description} null makes it top-level again.`),
       dependsOn: z
         .strictObject({ add: DEPENDS_ON.default([]), remove: z.array(issueIdSchema).max(MAX_DEPENDENCIES).default([]).describe("Issues it no longer depends on.") })
         .optional()
         .describe("Change what it depends on: add issues to wait for, remove ones it no longer waits for."),
     }),
-    execute: forIssue(UPDATE, async (issue, { id: _, ...change }) => {
-      const updated = await issues.update(issue, change);
+    execute: forIssue(UPDATE, async (issue, { id: _, parent, ...change }) => {
+      const updated = await issues.update(issue, { ...change, ...(parent === undefined ? {} : { parentId: parent }) });
       if ("refused" in updated) return failed(updated.refused);
       const ready = updated.nowReady.length === 0 ? null : `Now ready: ${updated.nowReady.join(", ")}.`;
       return [`Updated ${issue.id}.`, updated.note, ready].filter((line) => line !== null).join(" ");
@@ -101,7 +107,7 @@ export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
   bb.agents.registerTool({
     name: READ,
     description:
-      "Read one of your issues whole: its status and why, what blocks it, its description, brief and done-criteria, what it depends on and what it blocks, the verifier named, each agent with what it runs on, every handoff with its verdict, and its agent's latest answer.",
+      "Read one of your issues whole: its status and why, what blocks it, its description, brief and done-criteria, its parent and sub-issues, what it depends on and what it blocks, the verifier named, each agent with what it runs on, every handoff with its verdict, and its agent's latest answer.",
     presentation: { label: { pending: "Reading an issue", completed: "Read an issue" }, icon: { glyph: "FileText" } },
     parameters: z.object({ id: issueIdSchema }),
     execute: forIssue(READ, (issue) => issues.read(issue)),

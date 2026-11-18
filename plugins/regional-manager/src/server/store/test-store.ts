@@ -31,6 +31,7 @@ export const newIssue = (over: Partial<NewIssue> = {}): NewIssue => ({
   doneCriteria: ["npm test passes"],
   verifier: null,
   rest: "todo",
+  parentId: null,
   dependsOn: [],
   ...over,
 });

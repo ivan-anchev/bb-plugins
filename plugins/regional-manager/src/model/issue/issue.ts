@@ -53,7 +53,9 @@ export type Issue = {
   /** What checks its done handoffs, as the manager named it; null: the plugin picks. */
   verifier: Execution | null;
   rest: Rest;
-  /** The issues it depends on, in the order added: it is blocked while any of them is open (relations.ts). */
+  /** The issue it is a sub-issue of, one level deep (plan.ts); null: none. A parent has no agent, and its status rolls up from its sub-issues (status.ts). */
+  parentId: IssueId | null;
+  /** The issues it depends on, in the order added: it is blocked while any of them, or of its parent's, is open (relations.ts). */
   dependsOn: IssueId[];
   closed: null | { as: z.infer<typeof closedAsSchema>; at: number };
   createdAt: number;

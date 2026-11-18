@@ -17,7 +17,9 @@ test("a fresh database holds the design's tables and indexes, and nothing else",
       .prepare("SELECT name FROM sqlite_master WHERE type = ? AND name NOT LIKE 'sqlite_%' ORDER BY name")
       .all(type)
       .map((row) => z.object({ name: z.string() }).parse(row).name);
-  assert.deepEqual(names("table"), ["agents", "checks", "coordinators", "decisions", "doorbells", "events", "handoffs", "issue_relations", "issues", "memory_revisions", "pr_snapshots", "reminders", "roles"]);
+  assert.deepEqual(names("table"), ["agents", "checks", "coordinators", "decisions", "doorbells", "events", "fact_writes", "handoffs", "issue_relations", "issues", "memory_revisions", "pr_snapshots", "reminders", "roles"]);
+  const facts = ["agents", "checks", "decisions", "handoffs", "issue_relations", "issues", "pr_snapshots"];
+  assert.deepEqual(names("trigger"), [...facts.flatMap((table) => ["deleted", "inserted", "updated"].map((write) => `${table}_${write}`)), "roles_bound"]);
   assert.deepEqual(names("index"), [
     "agents_holding",
     "checks_of_issue",
@@ -99,6 +101,46 @@ test("removing a regional manager removes everything it owns, and nothing of ano
   assert.equal(store.decisions(OTHER_MANAGER).length, 1);
   assert.equal(store.hasDependencies(OTHER_MANAGER), true);
   assert.equal(store.roleOfThread("thr_manager_2")?.kind, "coordinator");
+  assert.deepEqual([store.factWrites(MANAGER), store.factWrites(OTHER_MANAGER) > 0], [0, true]);
+});
+
+test("every write to what an issue's view is read from counts for its regional manager as it commits; a write rolled back, another manager's, and one the views never read count nothing", () => {
+  const { db, store } = freshStore();
+  const at = () => store.factWrites(MANAGER);
+  const counted = <T>(what: string, write: () => T): T => {
+    const before = at();
+    const result = write();
+    assert.ok(at() > before, `${what} counts`);
+    return result;
+  };
+  const uncounted = (what: string, write: () => unknown): void => {
+    const before = at();
+    write();
+    assert.equal(at(), before, `${what} counts nothing`);
+  };
+  const unheld = { requireUnheld: false, closes: new Map() };
+
+  const i1 = counted("an issue filed", () => filedIssue(store, MANAGER, newIssue(), 2_000).id);
+  const i2 = counted("an issue filed with a dependency", () => filedIssue(store, MANAGER, newIssue({ dependsOn: [i1] }), 2_000).id);
+  counted("an issue edited", () => store.updateIssue(MANAGER, i1, { title: "Retries, with jitter" }, unheld));
+  counted("a dependency removed", () => store.updateIssue(MANAGER, i2, { dependsOn: { add: [], remove: [i1] } }, unheld));
+  const next: NewAgent = { coordinatorId: MANAGER, issueId: i1, ticket: "agent-1", placement: { kind: "worktree" }, base: { kind: "default" }, checkout: { environmentId: null, branch: null, head: null }, execution: EXECUTION, at: 2_000 };
+  const agentId = counted("an agent started", () => store.insertAgent(next)) ?? assert.fail("no agent");
+  counted("its thread bound", () => store.bindTicket("agent-1", "thr_agent-1"));
+  const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
+  const done: Handoff = { id: handoffIdSchema.parse(randomUUID()), coordinatorId: MANAGER, issueId: i1, agentId, at: 3_000, turnSeq: 1, ...report, status: "done", delivery: { kind: "commit", headSha: "a".repeat(40), prUrl: null } };
+  counted("a done handoff", () => store.insertHandoff(done, { kind: "unread", reason: "unused" }));
+  counted("a pull request read", () => store.savePrRead(MANAGER, "bb/retries", { issueId: i1, agentId }, null, null, 3_000));
+  const decision = counted("a decision asked", () => store.insertDecision(MANAGER, { question: "Which queue?", options: [], issueId: i1 }, 3_000));
+  counted("a decision answered", () => store.answerDecision(MANAGER, decision.id, "SQS", 3_100));
+  counted("the agent ended", () => store.endAgent({ coordinatorId: MANAGER, id: agentId, issueId: i1 }, "stopped", null, false, 4_000));
+
+  const allow = failWrites(db, "INSERT", "issue_relations");
+  uncounted("a write rolled back", () => assert.throws(() => store.updateIssue(MANAGER, i2, { title: "Dead letters", dependsOn: { add: [i1], remove: [] } }, unheld), /forced failure/));
+  allow();
+  uncounted("another manager's issue", () => filedIssue(store, OTHER_MANAGER, newIssue(), 5_000));
+  uncounted("a reminder", () => store.insertReminder(MANAGER, { note: "Look again", dueAt: 9_000, everyMs: null }));
+  uncounted("a memory revision", () => store.memoryRevision(MANAGER, memoryFileSchema.parse("MEMORY.md"), "v1"));
 });
 
 /** a1 holding i1 with a done handoff whose check runs in `thr_verifier`, and a2 as a handover would insert it. */

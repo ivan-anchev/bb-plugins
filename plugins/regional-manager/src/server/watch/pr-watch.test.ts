@@ -74,7 +74,7 @@ test("an agent that opens a pull request shows #n on its row within a tick, and 
 });
 
 test("a verdict that passes while CI is pending waits under Verifying as waiting for CI, then goes to In review the tick CI passes", async () => {
-  const { kit, row, doorbells, events, pr, minute, verified } = await agentOnGitHub();
+  const { kit, threadId, row, doorbells, events, pr, minute, verified } = await agentOnGitHub();
   pr();
   await minute();
   await verified();
@@ -83,14 +83,25 @@ test("a verdict that passes while CI is pending waits under Verifying as waiting
   await minute();
   assert.equal(doorbells().length, before, "a verdict waiting for CI wakes nobody");
 
+  // why hold bb's turn reads: the verdict settles in i1's turn, which the tick starts and doesn't
+  // wait for, so nothing orders it before the tick's ring. Held, it is still settling as the tick rings.
   pr({ rollup: "SUCCESS" });
+  kit.turnEvents.holding = true;
   await minute();
+  assert.equal(kit.turnEvents.held.length, 1, "the verdict's turn read held");
+  assert.equal(doorbells().at(-1), '[Regional Manager] 1 update. Call crew_catch_up to read it in full.\n- i1 "Add retries" (a1) PR #41: CI passed');
+  assert.deepEqual(events(), [], "the doorbell carried the CI result");
+
+  kit.turnEvents.holding = false;
+  kit.turnEvents.held.splice(0).forEach((release) => release());
+  await settled();
   assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" });
-  // why together: the tick rings for the read, and the verdict settles in i1's turn, which the tick
-  // doesn't wait for; it is in the same doorbell only because it settled while the announcer's pass
-  // (unblocked.ts) ran before the ring, else it waits for the next one.
-  assert.equal(doorbells().at(-1), '[Regional Manager] 2 updates. Call crew_catch_up to read them in full.\n- i1 "Add retries" (a1) PR #41: CI passed\n- i1 "Add retries" (a1) handed off: done, verified');
-  assert.deepEqual(events(), [], "the doorbell carried the verdict");
+  assert.deepEqual(events(), ["checked"], "the verdict waits for the doorbell still queued");
+  await kit.dispatch(kit.queued(threadId)[0] ?? assert.fail("no doorbell queued"));
+  await minute();
+  const verdicts = doorbells().filter((doorbell) => doorbell.includes("handed off: done, verified"));
+  assert.deepEqual(verdicts, ['[Regional Manager] 1 update. Call crew_catch_up to read it in full.\n- i1 "Add retries" (a1) handed off: done, verified'], "announced once");
+  assert.deepEqual(events(), []);
 });
 
 test("the same verdict with failing CI fails, and the findings sent back to the agent name the failed checks", async () => {

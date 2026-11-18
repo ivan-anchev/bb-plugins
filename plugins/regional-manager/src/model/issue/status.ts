@@ -10,8 +10,8 @@ import type { Check } from "../verdict/check.ts";
 import type { CiVerdict, PrSnapshot } from "../verdict/pr.ts";
 import { NOT_CLEAN } from "../verdict/checkout.ts";
 import { allPassed, ciVerdictOf, failedCheckout, mayHaveReachedAgent, outcome, type Verdict } from "../verdict/verdict.ts";
-import type { Issue } from "./issue.ts";
-import { PIPELINES, type Kind, type Stage } from "./kind.ts";
+import type { Issue, IssueId } from "./issue.ts";
+import { isVerified, PIPELINES, shipsCode, type Kind, type Stage } from "./kind.ts";
 import { blockedBy, isClosed, statusIn, type Related } from "./relations.ts";
 
 export const issueStatusSchema = z.enum(["backlog", "todo", "in-progress", "verifying", "in-review", "done", "canceled"]);
@@ -59,33 +59,44 @@ export type IssueView = {
   /** The check whose verdict places it (the board's verdict), or null. */
   placing: Check | null;
   pr: PrSnapshot | null;
-  /** The open issues it depends on, each with its status; none once it is closed itself. Derived from the other views, never stored. */
+  /** The open issues it or its parent depends on, each with its status; none once it is closed itself. Derived from the other views, never stored. */
   blockedBy: Related[];
+  /** A parent's sub-issues: how many are Done, of how many; null for an issue with none. */
+  subIssues: { done: number; total: number } | null;
   /** What closed it (null: it is open). */
   closedBy: Closure | null;
 };
 
 /**
- * What closed an issue: the manager's act, its pull request merged, or the handoff that made it
- * Done. Two closes of one issue are the same close only when these are equal: a research issue
- * reopened and reported again is closed by another handoff.
+ * What closed an issue, the one place that says why it is closed: the manager's act, its pull
+ * request merged, the handoff that made it Done, or for a parent, the close of each of its
+ * sub-issues. A research issue reopened and reported again is closed by another handoff.
  */
-export type Closure = { by: "manager"; as: NonNullable<Issue["closed"]>["as"]; at: number } | { by: "merge"; number: number } | { by: "handoff"; handoffId: HandoffId };
+export type Closure = { by: "manager"; as: NonNullable<Issue["closed"]>["as"] } | { by: "merge"; number: number } | { by: "handoff"; handoffId: HandoffId } | { by: "sub-issues"; closes: Closure[] };
 
-/** A view before its dependencies are read: where its own facts place it. */
+/** A view before its dependencies are read: where its own facts, or its sub-issues, place it. */
 type Placed = Omit<IssueView, "blockedBy">;
 
 type Placing = Pick<IssueView, "status" | "headline" | "needsYou">;
 
 /**
- * Every issue of one regional manager, viewed: each placed by its own facts, then blocked by the
- * statuses so placed. why from the same views: what blocks an issue can never disagree with the
- * status shown for its dependency.
+ * Every issue of one regional manager, viewed: each leaf placed by its own facts, then each parent
+ * by its sub-issues so placed, then every issue blocked by the statuses so placed. why from the same
+ * views: what blocks an issue can never disagree with the status shown for its dependency.
  */
 export function issueViews(all: readonly IssueFacts[]): IssueView[] {
-  const placed = all.map(issueView);
+  const leaves = all.map(issueView);
+  const subIssuesOf = (id: IssueId): Placed[] => leaves.filter(({ issue }) => issue.parentId === id);
+  const placed = all.map((facts, i) => {
+    const subIssues = subIssuesOf(facts.issue.id);
+    return subIssues.length === 0 ? at(leaves, i) : parentView(facts, subIssues);
+  });
   const statuses = new Map(placed.map(({ issue, status }) => [issue.id, status]));
-  return placed.map((view) => ({ ...view, blockedBy: isClosed(view.status) ? [] : blockedBy(view.issue, null, (id) => statusIn(statuses, id)) }));
+  const issues = new Map(all.map(({ issue }) => [issue.id, issue]));
+  return placed.map((view) => {
+    const parent = view.issue.parentId === null ? null : (issues.get(view.issue.parentId) ?? null);
+    return { ...view, blockedBy: isClosed(view.status) ? [] : blockedBy(view.issue, parent, (id) => statusIn(statuses, id)) };
+  });
 }
 
 const ASKED = "Waiting on your answer to its decision";
@@ -94,7 +105,7 @@ const ASKED = "Waiting on your answer to its decision";
 const CLOSED = { canceled: { status: "canceled", headline: "Canceled" }, accepted: { status: "done", headline: "Accepted" } } as const;
 
 function issueView({ issue, holder, ended, pr, openDecision }: IssueFacts): Placed {
-  const base = { issue, holder: holder?.agent ?? null, pr, placing: null };
+  const base = { issue, holder: holder?.agent ?? null, pr, placing: null, subIssues: null };
   const final = finalOf(issue, pr);
   if (final !== null) return { ...base, ...final, needsYou: null };
   const asked = openDecision ? ASKED : null;
@@ -109,7 +120,42 @@ function issueView({ issue, holder, ended, pr, openDecision }: IssueFacts): Plac
 }
 
 /** The handoff that placed the issue, as what closed it when that is Done; null for any other place. */
-const handedOffClose = ({ status }: Pick<Placing, "status">, handed: Handed | null): Closure | null => (status === "done" && handed !== null ? { by: "handoff", handoffId: handed.handoff.id } : null);
+const handedOffClose = ({ status }: Pick<Placing, "status">, handed: Handed | null): Closure | null =>
+  status === "done" && handed !== null ? { by: "handoff", handoffId: handed.handoff.id } : null;
+
+/**
+ * A parent, placed by its sub-issues (`subIssues`, each placed by its own facts); it has no agent of
+ * its own. Closed by the manager, as closed. Once every sub-issue is closed and one is Done: a kind
+ * nothing verifies is Done, closed by its sub-issues' closes, whoever made each; a verified kind
+ * waits In review for the manager to accept it, In progress and flagged while a Done sub-issue that
+ * ships code isn't merged. Before that: In progress once any sub-issue started, Todo while any is in Todo or the
+ * manager rests the parent there, else Backlog. why every sub-issue canceled reads as not started:
+ * nothing of the parent was done, so it rests where the manager put it.
+ */
+function parentView({ issue, openDecision }: IssueFacts, subIssues: readonly Placed[]): Placed {
+  const done = subIssues.filter(({ status }) => status === "done");
+  const base = { issue, holder: null, pr: null, placing: null, subIssues: { done: done.length, total: subIssues.length } };
+  const count = `${done.length}/${subIssues.length} done`;
+  const final = finalOf(issue, null);
+  if (final !== null) return { ...base, ...final, needsYou: null };
+  const asked = openDecision ? ASKED : null;
+  if (done.length > 0 && subIssues.every(({ status }) => isClosed(status))) {
+    if (!isVerified(issue.kind)) return { ...base, status: "done", headline: count, needsYou: null, closedBy: closedBySubIssues(subIssues) };
+    const unmerged = done.filter(({ issue: sub, pr }) => shipsCode(sub.kind) && pr?.state !== "merged").map(({ issue: sub }) => sub.id);
+    if (unmerged.length > 0) return { ...base, ...flagged(`${unmerged.join(", ")} ${unmerged.length === 1 ? "isn't" : "aren't"} merged, so ${issue.id}'s work isn't all on the default branch`), closedBy: null };
+    return { ...base, status: "in-review", headline: `${count}, all merged: accept it with issue_update`, needsYou: asked, closedBy: null };
+  }
+  const started = subIssues.some(({ status }) => status !== "backlog" && status !== "todo" && status !== "canceled");
+  const status = started ? "in-progress" : subIssues.some(({ status }) => status === "todo") ? "todo" : issue.rest;
+  return { ...base, status, headline: count, needsYou: asked, closedBy: null };
+}
+
+/**
+ * A parent's close by its sub-issues, all closed: each one's close, whoever made it. why every one,
+ * not the last: which closed last is not known (a report closes as its turn ends, after the
+ * handoff), and the work that closed the parent is all of theirs (relations.ts unblockedSince).
+ */
+const closedBySubIssues = (subIssues: readonly Placed[]): Closure => ({ by: "sub-issues", closes: subIssues.flatMap(({ closedBy }) => (closedBy === null ? [] : [closedBy])) });
 
 /** Why an issue rests where the manager put it: in Todo, how its latest agent ended (null: none ever started). */
 function restingHeadline(rest: Issue["rest"], endedHow: EndedHow | null): string {
@@ -135,7 +181,7 @@ function restingHeadline(rest: Issue["rest"], endedHow: EndedHow | null): string
  * pending or failed then is never sent back.
  */
 function finalOf(issue: Issue, pr: PrSnapshot | null): Pick<IssueView, "status" | "headline" | "closedBy"> | null {
-  if (issue.closed !== null) return { ...CLOSED[issue.closed.as], closedBy: { by: "manager", ...issue.closed } };
+  if (issue.closed !== null) return { ...CLOSED[issue.closed.as], closedBy: { by: "manager", as: issue.closed.as } };
   return pr?.state === "merged" ? { status: "done", headline: `Merged #${pr.number}`, closedBy: { by: "merge", number: pr.number } } : null;
 }
 
@@ -247,6 +293,13 @@ const STAGES: Record<Stage, (evidence: Evidence) => Placing | "left"> = {
     return { status: "in-review", headline: outcome(verdict) === "pass" ? `✓ Verified${passNote(ciOfReturned(verdict))}: ${summary}` : `Unverified: ${summary}`, needsYou: null };
   },
 };
+
+/** why throw: issueViews places one view per facts, in order. */
+function at(views: readonly Placed[], i: number): Placed {
+  const view = views[i];
+  if (view === undefined) throw new Error(`No view for issue ${i}`);
+  return view;
+}
 
 /** why throw: a verified kind's done handoff is stored with its check, in one transaction. */
 function checked(check: Check | null): Check {

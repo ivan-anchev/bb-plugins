@@ -2,12 +2,12 @@
 // a turn read only for a holder that is idle with a handoff to judge. The board, crew_catch_up,
 // issue_read, issue_update and the unblocked announcement all view issues here, so a status has one
 // derivation.
-import { issueBranch, type Agent } from "../../model/agent.ts";
-import type { Issue } from "../../model/issue/issue.ts";
-import { issueViews, type HolderThread, type IssueFacts, type IssueView } from "../../model/issue/status.ts";
-import type { CoordinatorId } from "../../model/role.ts";
-import type { Store } from "../store/store.ts";
-import { ifCurrent, isLive, threadsById, type ListBb, type TurnsBb } from "../agents/threads.ts";
+import { issueBranch, type Agent } from "../../../model/agent.ts";
+import type { Issue } from "../../../model/issue/issue.ts";
+import { issueViews, type HolderThread, type IssueFacts, type IssueView } from "../../../model/issue/status.ts";
+import type { CoordinatorId } from "../../../model/role.ts";
+import type { Store } from "../../store/store.ts";
+import { ifCurrent, isLive, threadsById, type ListBb, type TurnsBb } from "../../agents/threads.ts";
 
 /** An agent's thread as the views read it. */
 type ListedThread = HolderThread & { id: string; environmentBranchName: string | null; archivedAt: number | null; deletedAt: number | null };

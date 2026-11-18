@@ -3,8 +3,8 @@
 // list, and the unblocked announcements. A dependency informs and never refuses, and carries nothing.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { issueIdSchema } from "../../model/issue/issue.ts";
-import { coordinating, HEAD, isRefusal, ISSUE, newThreadRequest, settled, textOf, threadIn, type FakePr } from "../test-harness.ts";
+import { issueIdSchema } from "../../../model/issue/issue.ts";
+import { coordinating, HEAD, isRefusal, ISSUE, newThreadRequest, settled, textOf, threadIn, type FakePr } from "../../test-harness.ts";
 
 const RESEARCH = { kind: "research", title: "Pick a card vault", description: "Which vault fits our PCI scope.", brief: "Compare Vault and KMS.", doneCriteria: [] };
 const REPORT = "## Recommendation\n\nVault: it keeps card data inside our PCI scope.";
@@ -59,8 +59,8 @@ test("an issue filed depending on another is blocked by it as filed, in issue_re
 
   const dependent = await text("issue_read", { id: "i2" });
   assert.match(dependent, /^Build\. Todo: Not started\. Blocked by i1 \(Todo\)\. Thread: no thread\.$/m);
-  assert.match(dependent, /### Relations\n\nDepends on: i1 \(Todo\)\.\nBlocks: nothing\./);
-  assert.match(await text("issue_read", { id: "i1" }), /### Relations\n\nDepends on: nothing\.\nBlocks: i2 \(Todo\)\./);
+  assert.match(dependent, /### Relations\n\nParent: none\.\nSub-issues: none\.\nDepends on: i1 \(Todo\)\.\nBlocks: nothing\./);
+  assert.match(await text("issue_read", { id: "i1" }), /### Relations\n\nParent: none\.\nSub-issues: none\.\nDepends on: nothing\.\nBlocks: i2 \(Todo\)\./);
   assert.equal(await row("i2"), '- i2 "Add retries" (Build; no agent): Not started; blocked by i1 (Todo)');
   assert.equal(await row("i1"), '- i1 "Retry budget" (Build; no agent): Not started');
 });
@@ -94,21 +94,21 @@ test("a research dependency's report unblocks its dependent with a wake; a messa
   const { report } = await research();
   await text("issue_create", { ...ISSUE, title: "Card vault schema", dependsOn: ["i1"] });
   assert.match(await row("i2"), /; blocked by i1 \(In progress\)$/);
-  assert.equal(await readyLine(), "Ready: none (in Todo, and nothing they depend on is open).");
+  assert.equal(await readyLine(), "Ready: none (in Todo, no sub-issues, and nothing they or their parent depend on is open).");
 
   managerIdle();
   await report();
   assert.match(doorbells().at(-1) ?? assert.fail("no doorbell"), /\n- i2 "Card vault schema" is unblocked: i1 done$/);
-  assert.match(await catchUp(), /### i2 "Card vault schema" is unblocked: i1 done\n\nAt [^\n]* i1 was the last issue i2 depends on that was still open\. Nothing of i1 reaches i2 on its own:/);
+  assert.match(await catchUp(), /### i2 "Card vault schema" is unblocked: i1 done\n\nAt [^\n]* i1 was the last open issue blocking i2, as its own dependency or its parent's\. Nothing of i1 reaches i2 on its own:/);
   assert.equal(await row("i2"), '- i2 "Card vault schema" (Build; no agent): Not started');
-  assert.equal(await readyLine(), "Ready: i2 (in Todo, and nothing they depend on is open).");
+  assert.equal(await readyLine(), "Ready: i2 (in Todo, no sub-issues, and nothing they or their parent depend on is open).");
 
   await call("agent_message", { agent: "a1", text: "Add what KMS would cost." });
   assert.match(await row("i2"), /; blocked by i1 \(In progress\)$/);
-  assert.equal(await readyLine(), "Ready: none (in Todo, and nothing they depend on is open).");
+  assert.equal(await readyLine(), "Ready: none (in Todo, no sub-issues, and nothing they or their parent depend on is open).");
   await report({ ...RESEARCH_DONE, summary: "Vault fits; KMS costs more" });
   assert.deepEqual(await unblocked(), ["i2 by i1 done", "i2 by i1 done"]);
-  assert.equal(await readyLine(), "Ready: i2 (in Todo, and nothing they depend on is open).");
+  assert.equal(await readyLine(), "Ready: i2 (in Todo, no sub-issues, and nothing they or their parent depend on is open).");
 });
 
 test("a handoff that closes nothing, or closes an issue nothing waits on, announces nothing", async () => {
@@ -145,7 +145,7 @@ test("a build dependency whose pull request merges unblocks its dependent once; 
   await kit.tick();
   await settled();
   assert.deepEqual(await unblocked(), ["i3 by i1 done"]);
-  assert.equal(await readyLine(), "Ready: i2, i3 (in Todo, and nothing they depend on is open).");
+  assert.equal(await readyLine(), "Ready: i2, i3 (in Todo, no sub-issues, and nothing they or their parent depend on is open).");
 });
 
 test("two dependencies closing at once announce their dependent once, and its status is right", async () => {
@@ -204,7 +204,7 @@ test("catch-up's ready line lists the Todo issues nothing blocks: not a blocked 
   await text("issue_create", { ...ISSUE, title: "Alerts" });
   await text("agent_start", { issue: "i4" });
   await text("issue_update", { id: "i5", status: "canceled" });
-  assert.equal(await readyLine(), "Ready: i1 (in Todo, and nothing they depend on is open).");
+  assert.equal(await readyLine(), "Ready: i1 (in Todo, no sub-issues, and nothing they or their parent depend on is open).");
 });
 
 /** Releases every bb answer held, until none is: a release can lead to another held read. */
@@ -330,6 +330,25 @@ for (const how of ["deleted", "archived", "deleted unseen"] as const) {
     assert.deepEqual(await unblocked(), ["i2 by i1 done"]);
   });
 }
+
+test("a research agent the tick ends in its issue's turn, after the tick's own pass read nothing to announce, unblocks its dependent from that turn", async () => {
+  const { kit, text, unblocked, research } = await managing();
+  const { agentThreadId } = await research();
+  await text("issue_create", { ...ISSUE, title: "Card vault schema", dependsOn: ["i1"] });
+  await settled();
+  await kit.call("agent_handoff", RESEARCH_DONE, agentThreadId);
+  // why archived unseen, its turn read held: only the tick's reconcile ends a1, in i1's turn, which the tick doesn't wait for.
+  kit.thread(agentThreadId).archivedAt = Date.now();
+  let release = (): void => assert.fail("never held");
+  kit.turnEvents.pending = new Promise<void>((resolve) => (release = resolve));
+  await kit.tick();
+  assert.deepEqual(await unblocked(), [], "the tick's pass ran while a1 still held i1");
+
+  kit.turnEvents.pending = null;
+  release();
+  await settled();
+  assert.deepEqual(await unblocked(), ["i2 by i1 done"]);
+});
 
 test("a research agent ended after its turn ended on its report announces nothing more", async () => {
   const { kit, text, unblocked, research } = await managing();

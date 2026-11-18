@@ -33,7 +33,7 @@ import type { CoordinatorId } from "../../model/role.ts";
 import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
 import { inheritedFrom, type Inherited, type ThreadExecutionBb } from "../execution/thread-execution.ts";
 import type { Inbox } from "../inbox/inbox.ts";
-import { readIssue, type FactsBb, type FactsStore } from "../issues/issue-facts.ts";
+import { readIssue, type FactsBb, type FactsStore } from "../issues/views/issue-facts.ts";
 import type { Busy, IssueTurns } from "../issues/issue-turns.ts";
 import type { MemoryRoot } from "../memory/memory-files.ts";
 import type { Spawner } from "../spawn.ts";
@@ -208,11 +208,12 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, placeme
 
   /**
    * The issue as the store has it now, with the brief its agent starts from, or why no agent can
-   * start on it (`view`: as read just now). Call with no await before the write it allows.
+   * start on it (`view`: as read just now), as when it is a parent. Call with no await before the
+   * write it allows.
    */
   function startable(coordinatorId: CoordinatorId, issueId: IssueId, view: IssueView, { execution, inherited }: RunsOn): { issue: Issue; brief: string } | { refused: string } {
     const issue = issueOf(coordinatorId, issueId);
-    const final = finalText(issue, view);
+    const final = finalText(issue, view) ?? parentText(issue, store.issues(coordinatorId));
     if (final !== null) return { refused: final };
     const planned = briefToStart(issue);
     if ("refused" in planned) return planned;
@@ -275,7 +276,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, placeme
     if ("refused" in quieted) return quieted;
     const turnSeq = holder === null || holder.threadId === null ? null : await latestTurnSeq(bb, holder.threadId);
     // why decide again here, with no await from here to the write: while the issue quieted, a merge
-    // may have made it Done.
+    // may have made it Done, or the manager filed a sub-issue under it.
     const { view } = await readIssue(bb, store, { coordinatorId, id: issueId });
     const now = startable(coordinatorId, issueId, view, runsOn);
     if ("refused" in now) return { refused: `${quieted.did}${now.refused}` };
@@ -526,6 +527,12 @@ function finalText(issue: Issue, view: IssueView): string | null {
 
 /** Where the agent would run, in words, for a refusal of what it would run on. */
 const whereText = ({ base, placement }: Spot): string => (base.kind === "joined" ? `${base.from}'s environment` : placementText(placement));
+
+/** Why no agent can start on the issue: it is a parent; null when it isn't. */
+function parentText(issue: Issue, issues: readonly Issue[]): string | null {
+  const subIssues = issues.filter(({ parentId }) => parentId === issue.id).map(({ id }) => id);
+  return subIssues.length === 0 ? null : `${issue.id} has sub-issues (${subIssues.join(", ")}), and a parent has no agent of its own: start agents on them.`;
+}
 
 /** An execution in words: `codex gpt-5.4 (high)`. */
 export const executionText = ({ providerId, model, reasoningLevel }: Execution): string => `${providerId} ${model}${reasoningLevel === "" ? "" : ` (${reasoningLevel})`}`;
