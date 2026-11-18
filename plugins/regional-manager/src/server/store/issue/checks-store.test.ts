@@ -34,6 +34,7 @@ const returned = (verifierThreadId: string, result: "pass" | "fail"): Received =
   state: "returned",
   verifierThreadId,
   headSha: SHA,
+  checkout: CLEAN.checkout,
   criteria: [{ criterion: "npm test passes", result, evidence: "npm test" }],
   findings: [],
   model: { providerId: "claude-code", model: "sonnet" },
@@ -138,6 +139,7 @@ test("a fix round claimed before its findings are sent survives a reload, and se
     state: "returned",
     verifierThreadId: "thr_verifier",
     headSha: SHA,
+    checkout: CLEAN.checkout,
     criteria: [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }],
     findings: [],
     model: { providerId: "claude-code", model: "sonnet" },
@@ -260,4 +262,74 @@ test("a verifier's ticket that binds after its check was superseded leaves the c
   store.insertHandoff(handoff(issue.id, agentId, "done", 3_100), CLEAN);
   store.bindTicket("verifier-1", "thr_verifier_1");
   assert.deepEqual(store.check(stale.id)?.verdict, { state: "superseded" });
+});
+
+/** A build parent i1 with a merged sub-issue i2, its criteria and verifier named. */
+function withParent() {
+  const { db, store } = freshStore();
+  const parent = filedIssue(store, MANAGER, newIssue({ title: "Card vault", doneCriteria: ["npm run vault-suite passes"], verifier: EXECUTION }), 2_000);
+  const sub = filedIssue(store, MANAGER, newIssue({ parentId: parent.id }), 2_100);
+  return { db, store, parent, sub };
+}
+
+test("a final check copies its parent's criteria and verifier, supersedes the one still open, and counts as a change as it is made, starts and returns", () => {
+  const { store, parent, sub } = withParent();
+  const writes = () => store.factWrites(MANAGER);
+  const before = writes();
+  const first = store.insertFinalCheck(MANAGER, parent.id, { defaultBranch: "main", merged: [sub.id] }, 4_000);
+  assert.ok(writes() > before, "made");
+  assert.deepEqual(
+    { criteria: first.criteria, verifier: first.verifier, subject: first.subject, verdict: first.verdict },
+    { criteria: ["npm run vault-suite passes"], verifier: EXECUTION, subject: { kind: "final", defaultBranch: "main", merged: [sub.id] }, verdict: { state: "queued", checkout: null } },
+  );
+  assert.deepEqual(events(store), [], "nobody is told until it has a verdict");
+
+  store.insertVerifierTicket("final-1", { kind: "verifier", coordinatorId: MANAGER, issueId: parent.id, checkId: first.id }, 4_100);
+  const queued = writes();
+  store.bindTicket("final-1", "thr_final_1");
+  assert.ok(writes() > queued, "started");
+  const running = writes();
+  assert.ok(store.receiveVerdict(first.id, { ...returned("thr_final_1", "pass"), headSha: "b".repeat(40), checkout: { headSha: "b".repeat(40), changedFiles: [], changedFileCount: 0 } }));
+  assert.ok(writes() > running, "returned");
+
+  const second = store.insertFinalCheck(MANAGER, parent.id, { defaultBranch: "main", merged: [sub.id] }, 5_000);
+  assert.deepEqual(
+    store.finalChecks(MANAGER, parent.id).map(({ id, verdict }) => [id, verdict.state]),
+    [
+      [first.id, "returned"],
+      [second.id, "queued"],
+    ],
+    "a returned one is kept as it is",
+  );
+  const third = store.insertFinalCheck(MANAGER, parent.id, { defaultBranch: "main", merged: [sub.id] }, 6_000);
+  assert.deepEqual(
+    store.finalChecks(MANAGER, parent.id).map(({ id, verdict }) => [id, verdict.state]),
+    [
+      [first.id, "returned"],
+      [second.id, "superseded"],
+      [third.id, "queued"],
+    ],
+  );
+  assert.deepEqual(store.finalChecks(MANAGER, sub.id), [], "a handoff's check is no final check");
+});
+
+test("a final check made while verification is off is waived and announced at once; a failed announcement rolls back the supersede and the check with it", () => {
+  const { db, store, parent, sub } = withParent();
+  const open = store.insertFinalCheck(MANAGER, parent.id, { defaultBranch: "main", merged: [sub.id] }, 4_000);
+  store.setVerify(MANAGER, false, 4_500);
+  const seen = events(store).length;
+
+  const allow = failWrites(db, "INSERT", "events");
+  assert.throws(() => store.insertFinalCheck(MANAGER, parent.id, { defaultBranch: "main", merged: [sub.id] }, 5_000), /forced failure/);
+  assert.deepEqual(
+    store.finalChecks(MANAGER, parent.id).map(({ id, verdict }) => [id, verdict.state]),
+    [[open.id, "queued"]],
+    "nothing of it was written",
+  );
+  allow();
+
+  const waived = store.insertFinalCheck(MANAGER, parent.id, { defaultBranch: "main", merged: [sub.id] }, 5_000);
+  assert.deepEqual(waived.verdict, { state: "waived" });
+  assert.deepEqual(events(store).slice(seen), [{ kind: "checked", issueId: parent.id, checkId: waived.id }]);
+  assert.equal(store.check(open.id)?.verdict.state, "superseded");
 });

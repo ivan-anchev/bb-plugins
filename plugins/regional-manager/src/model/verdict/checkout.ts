@@ -1,6 +1,7 @@
 // The plugin's own check of a done handoff, before any criterion: that the agent's environment had
 // the claimed commit checked out on a clean working tree. bb's git plugin reads it on the
-// environment's machine as the agent hands off. why not the verifier's shell: a provider can run
+// environment's machine as the agent hands off; for a build parent's final check, the verifier's
+// own worktree as it returns, whose commit is the one judged. why not the verifier's shell: a provider can run
 // each command in a sandbox of its own, which shows files that aren't in the agent's tree (Claude
 // Code's showed a boat sandbox's home dotfiles as untracked), and so fails clean work.
 import { z } from "zod";
@@ -49,4 +50,14 @@ export function checkoutText(claimed: string, checkout: Checkout): string {
   const problems = checkoutProblems(claimed, checkout);
   const read = "bb's git plugin read the agent's environment as it handed off";
   return problems.length === 0 ? `${read}: the claimed commit ${claimed} checked out, on a clean working tree.` : `${read}: ${problems.join("; ")}.`;
+}
+
+/**
+ * A final check's tree in a sentence: its verifier's own worktree, read as it returned its verdict.
+ * Its commit is the one judged, so only a changed file fails it.
+ */
+export function worktreeText(checkout: Checkout): string {
+  const problems = checkoutProblems(checkout.headSha, checkout);
+  const read = "bb's git plugin read the verifier's worktree as it returned its verdict";
+  return problems.length === 0 ? `${read}: commit ${checkout.headSha}, on a clean working tree.` : `${read}: ${problems.join("; ")}.`;
 }

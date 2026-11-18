@@ -689,7 +689,7 @@ test("a verifier whose sandbox was removed before its verdict reads Couldn't ver
   assert.deepEqual(verdict(), {
     state: "could-not-run",
     verifierThreadId,
-    reason: "the agent's environment was removed (a sandbox removed or reaped) before its verifier returned a verdict",
+    reason: "its environment was removed (a sandbox removed or reaped) before its verifier returned a verdict",
   });
   assert.deepEqual(kit.delivered(verifierThreadId), [], "no reminder to a thread that can't run");
   assert.deepEqual([(await row()).lane, (await row()).headline], ["needs-you", "Couldn't verify: Retries land with backoff"]);
@@ -843,7 +843,7 @@ test("a verifier named while a check runs leaves that check as it is, and applie
   const running = verifier();
   assert.equal(
     textOf(await kit.call("issue_update", { id: "i1", verifier: { providerId: "claude-code", model: "sonnet" } }, threadId)),
-    "Updated i1. i1's done handoffs are checked on claude-code sonnet (medium), from its next handoff on; a check already running keeps its own.",
+    "Updated i1. claude-code sonnet (medium) is now i1's first choice of verifier for its done handoffs, and its final check as a parent, from the next one on: each runs on it when bb lists it where the check runs and no agent whose work it checks ran on it. A check already running keeps its own.",
   );
   assert.equal(check().verifier, null);
   assert.equal(verifier(), running);

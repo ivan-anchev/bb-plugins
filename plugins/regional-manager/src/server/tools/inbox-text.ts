@@ -9,11 +9,11 @@ import type { StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { filesText } from "../../model/inbox/own-tree.ts";
 import { askedOf, checkedOf, issueName, titled } from "../../model/inbox/wake-text.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
-import type { Handed } from "../../model/issue/status.ts";
+import { STATUS_LABELS, type Handed, type IssueView } from "../../model/issue/status.ts";
 import type { MemoryFile } from "../../model/memory-file.ts";
 import { intervalText, type Reminder } from "../../model/reminder.ts";
-import type { Check, CheckId } from "../../model/verdict/check.ts";
-import { checkoutText, NOT_CLEAN } from "../../model/verdict/checkout.ts";
+import { checkedAgents, type Check, type CheckId, type FinalCheck, type HandoffCheck } from "../../model/verdict/check.ts";
+import { checkoutText, NOT_CLEAN, worktreeText } from "../../model/verdict/checkout.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
 import { allPassed, ciVerdictOf, failedCheckout, judge, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
 import { reportFileOf } from "../memory/report-file.ts";
@@ -24,8 +24,11 @@ export type Lookups = {
   titles: ReadonlyMap<IssueId, string>;
   handoff(id: HandoffId): Handed | null;
   check(id: CheckId): Check | null;
-  agent(id: AgentId): Agent | null;
+  /** Every agent of the regional manager. */
+  agents(): readonly Agent[];
   decision(id: DecisionId): Decision | null;
+  /** The issue's view, as the board in the same catch-up places it; null when bb's thread list couldn't be read. */
+  view(id: IssueId): IssueView | null;
 };
 
 /** The updates section of a catch-up: every event it returned, oldest first. */
@@ -53,9 +56,18 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
   if (event.kind === "coordinator-tree-clean") return `### Your own environment is clean again\n\n${when} Your turn ended with no changed files in your working tree, so the warning is gone from the board.`;
   if (event.kind === "checked") {
     const check = checkedOf(lookups.check(event.checkId));
-    const handed = handedOf(check.subject.handoffId, lookups);
-    const yours = outcome(check.verdict) === "fail" ? `\n\n${fixRoundNote(check.verdict)}${FAILED_IS_YOURS}` : "";
-    return `### ${issueName(event.issueId, titles, check.subject.agentId)} handed off: done\n\n${when} Its report, in its own words:\n\n${handoffText(handed, lookups)}${yours}`;
+    const { subject } = check;
+    switch (subject.kind) {
+      case "handoff": {
+        const handed = handedOf(subject.handoffId, lookups);
+        const yours = outcome(check.verdict) === "fail" ? `\n\n${fixRoundNote(check.verdict)}${FAILED_IS_YOURS}` : "";
+        return `### ${issueName(event.issueId, titles, subject.agentId)} handed off: done\n\n${when} Its report, in its own words:\n\n${handoffText(handed, lookups)}${yours}`;
+      }
+      case "final":
+        return `### ${titled(event.issueId, titles)} final check\n\n${when} ${finalCheckText({ ...check, subject }, lookups)}\n\n${finalNextStep({ ...check, subject }, lookups.view(event.issueId))}`;
+      default:
+        return subject satisfies never;
+    }
   }
   if (event.kind === "unblocked") {
     return `### ${titled(event.issueId, titles)} is unblocked: ${event.by} ${event.closedAs}\n\n${when} ${event.by} was the last open issue blocking ${event.issueId}, as its own dependency or its parent's. Nothing of ${event.by} reaches ${event.issueId} on its own: what its agent needs from it, such as a report's file, goes in its brief or a message to its agent. The board below says where ${event.issueId} stands now.`;
@@ -67,8 +79,10 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
       return `### ${on} handed off: ${handed.handoff.status}\n\n${when} Its report, in its own words:\n\n${handoffText(handed, lookups)}`;
     }
     case "sent-back": {
-      const check = checkedOf(lookups.check(event.checkId));
-      return `### ${on} handed off: done, failed verification, findings sent back to it\n\n${when} The plugin sent the verifier's findings to ${event.agentId} as its automatic fix round ${event.round}. Nothing to do yet: it fixes them and hands off again, and a new verifier checks that. If that fails too, it comes to you. Its report, in its own words:\n\n${handoffText(handedOf(check.subject.handoffId, lookups), lookups)}`;
+      const { subject } = checkedOf(lookups.check(event.checkId));
+      // why throw: only a handoff's verdict goes back to an agent.
+      if (subject.kind !== "handoff") throw new Error(`The check ${event.checkId} sent back judges no handoff.`);
+      return `### ${on} handed off: done, failed verification, findings sent back to it\n\n${when} The plugin sent the verifier's findings to ${event.agentId} as its automatic fix round ${event.round}. Nothing to do yet: it fixes them and hands off again, and a new verifier checks that. If that fails too, it comes to you. Its report, in its own words:\n\n${handoffText(handedOf(subject.handoffId, lookups), lookups)}`;
     }
     case "idle-without-handoff":
       return `### ${on} ended its turn without a handoff\n\n${when} ${event.lastAnswer === null ? "It gave no answer." : `Its last answer, in its own words:\n\n${event.lastAnswer.trim()}`}`;
@@ -136,12 +150,47 @@ const FAILED_IS_YOURS =
   "It failed verification and is yours to decide: message the agent with agent_message, stop it with agent_stop and start a fresh agent on the issue with agent_start, or ask the user.";
 
 /** A handoff whole: its status, summary, and commit and pull request, every item of every list, then a done one's report or verdict. */
-export function handoffText({ handoff, check }: Handed, lookups: Pick<Lookups, "agent">): string {
+export function handoffText({ handoff, check }: Handed, lookups: Pick<Lookups, "agents">): string {
   const report = [handoffFieldsText(handoff)];
   const delivery = handoff.status === "done" ? handoff.delivery : null;
   if (delivery?.kind === "report") report.push(`#### Report\n\n${reportFileText(handoff.issueId, delivery.file)}\n\n${delivery.report}`);
-  if (check !== null) report.push(`#### Verdict\n\n${verdictText(check, lookups.agent(check.subject.agentId))}`);
+  if (check !== null) report.push(`#### Verdict\n\n${verdictText(check, lookups)}`);
   return report.join("\n\n");
+}
+
+/** A final check whole, as crew_catch_up and issue_read print it: "Final check on main at 4be0a17: …", or where it stands. */
+export function finalCheckText(check: FinalCheck, lookups: Pick<Lookups, "agents">): string {
+  const { merged } = check.subject;
+  return `Final check of ${merged.length === 0 ? "the default branch" : `the merged work of ${merged.join(", ")}`}: ${verdictText(check, lookups)}`;
+}
+
+/**
+ * What the regional manager does about a final check made final, by where its parent stands now
+ * (`view`, as the board in the same catch-up places it; null: bb's thread list couldn't be read).
+ * why from the view, never from the check's outcome: a sub-issue filed under the parent, or the
+ * manager's close, places it instead of a verdict that returned after it.
+ */
+function finalNextStep({ id, issueId, verdict }: FinalCheck, view: IssueView | null): string {
+  if (view === null) return `Where ${issueId} stands now couldn't be read with the board: call crew_catch_up again before you act on it.`;
+  const now = `${issueId} is ${STATUS_LABELS[view.status]}${view.needsYou === null ? "" : " and Needs you"}`;
+  if (view.placing?.id !== id) return `${now}. This final check no longer places it: the board below says where it stands.`;
+  const result = outcome(verdict);
+  switch (result) {
+    case "pass":
+      return `${now}.`;
+    case "fail":
+    case "could-not-run":
+      return `${now}. File the fix as a new sub-issue of ${issueId} (issue_create with parent "${issueId}") and start its agent: once it is Done and merged, a new final check starts by itself. A final check never goes back to anyone, and isn't run again without new merged work. Or ask the user.`;
+    case "unverified":
+      return `${now}: nobody checked it on the default branch. Read what its sub-issues did, then accept it with issue_update { id: "${issueId}", status: "done" }, or ask the user.`;
+    case "pending":
+    case "waiting-for-ci":
+    case "superseded":
+      // why: a checked event is recorded once the verdict is final, which none of these is.
+      return "";
+    default:
+      return result satisfies never;
+  }
 }
 
 /** A handoff's own fields: its status, summary, and commit and pull request, then every item of every list under its `####` heading. */
@@ -203,8 +252,9 @@ function ciLine(verdict: Extract<Verdict, { state: "returned" }>, ci: CiVerdict 
   }
 }
 
-/** What the plugin's check found. A verifier's evidence is its own words, marked as such. `agent`: whose work it checks. */
-function verdictText({ verdict, verifier, issueId, subject }: Check, agent: Agent | null): string {
+/** What the plugin's check found. A verifier's evidence is its own words, marked as such. */
+function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
+  const { verdict, subject } = check;
   switch (verdict.state) {
     case "queued":
     case "running":
@@ -214,14 +264,16 @@ function verdictText({ verdict, verifier, issueId, subject }: Check, agent: Agen
       const passed = ci === null ? allPassed(verdict) : judge(verdict, ci) === "pass";
       const label = passed ? (ci === null ? "Passed every criterion" : "Verified") : "Failed verification";
       // why the checkout and CI first when they failed the verdict: its criteria may all have passed.
-      const reasons = [...(failedCheckout(verdict) === null ? [] : [NOT_CLEAN.toLowerCase()]), ...(ci?.kind === "fail" ? [`CI failed on #${ci.number}`] : [])];
+      const reasons = [...(failedCheckout(verdict) === null ? [] : [notCleanReason(check)]), ...(ci?.kind === "fail" ? [`CI failed on #${ci.number}`] : [])];
       const reason = reasons.length === 0 ? "" : ` ${reasons.join(", and ")}.`;
       const count = verdict.criteria.filter((check) => check.result === "pass").length;
-      const by = verifiedOn(verdict, verifier, issueId, subject.agentId, agent);
+      const by = verifiedOn(verdict, check, checkedAgents(check, lookups.agents()));
+      const counted = `${label}:${reason} ${count} of ${verdict.criteria.length} criteria passed`;
       const head = [
-        `${label}:${reason} ${count} of ${verdict.criteria.length} criteria passed, checked at ${verdict.headSha} by a verifier on ${by}.`,
-        checkoutText(verdict.headSha, verdict.checkout),
-        ciLine(verdict, ci),
+        subject.kind === "handoff" ? `${counted}, checked at ${verdict.headSha} by a verifier on ${by}.` : `${counted} on ${subject.defaultBranch} at ${verdict.headSha}, by a verifier on ${by}.`,
+        subject.kind === "handoff" ? checkoutText(verdict.headSha, verdict.checkout) : worktreeText(verdict.checkout),
+        // why none for a final check: it judges the default branch, with no pull request to wait for.
+        subject.kind === "handoff" ? ciLine(verdict, ci) : "",
         "Each result, with its evidence in the verifier's words:",
       ]
         .filter((part) => part !== "")
@@ -233,7 +285,7 @@ function verdictText({ verdict, verifier, issueId, subject }: Check, agent: Agen
     case "could-not-run":
       return `Couldn't verify: ${verdict.reason}. Nobody has checked it against the done-criteria.`;
     case "superseded":
-      return "Replaced by a newer handoff before its verdict; that one is checked instead.";
+      return subject.kind === "handoff" ? "Replaced by a newer handoff before its verdict; that one is checked instead." : "Replaced by a newer final check before its verdict; that one is checked instead.";
     case "waived":
       return "Unverified: verification was off, so nobody has checked it against the done-criteria.";
     default:
@@ -241,16 +293,44 @@ function verdictText({ verdict, verifier, issueId, subject }: Check, agent: Agen
   }
 }
 
+/** Why the tree failed a verdict, whatever its criteria say: the agent's claimed commit wasn't checked out on a clean tree; a final check's verifier's worktree wasn't clean. */
+function notCleanReason({ subject }: Check): string {
+  switch (subject.kind) {
+    case "handoff":
+      return NOT_CLEAN.toLowerCase();
+    case "final":
+      return "the verifier's worktree wasn't clean";
+    default:
+      return subject satisfies never;
+  }
+}
+
 /**
  * What a verifier ran on, and why: on the verifier named on the issue, as named; else why not the
- * one named (the agent did the work on it, or bb can't run it where the agent works); and when it
- * is the agent's own model, that no other was available.
+ * one named (an agent whose work it checks did that work on it, or bb can't run it where the check
+ * runs); and whenever it is the model of one of those agents (`theirs`), that no other was
+ * available, the one named included.
  */
-function verifiedOn(verdict: Extract<Verdict, { state: "returned" }>, named: Check["verifier"], issueId: IssueId, agentId: AgentId, agent: Agent | null): string {
+function verifiedOn(verdict: Extract<Verdict, { state: "returned" }>, { verifier: named, issueId, subject }: Check, theirs: readonly Agent[]): string {
   const ran = `${verdict.model.providerId} ${verdict.model.model}`;
-  const own = verdict.sameModel ? `, ${agentId}'s own model, as no other was available` : "";
+  const ownerOf = (model: Pick<Agent["execution"], "providerId" | "model">) => theirs.find(({ execution }) => sameModel(execution, model))?.id ?? null;
+  const owner = verdict.sameModel ? ownerOf(verdict.model) : null;
+  const own = owner === null ? "" : `, ${owner}'s own model, as no other was available`;
   if (named === null) return `${ran}${own}`;
-  if (sameModel(named, verdict.model)) return `${ran}, as named on ${issueId}`;
-  const why = agent !== null && sameModel(named, agent.execution) ? `${agentId} did the work on it` : `bb can't run it in ${agentId}'s environment`;
+  if (sameModel(named, verdict.model)) return own === "" ? `${ran}, as named on ${issueId}` : `${ran}${own}; it is also the one named on ${issueId}`;
+  const namedOwner = ownerOf(named);
+  const why = namedOwner !== null ? `${namedOwner} did the work on it` : `bb can't run it ${whereChecked(subject)}`;
   return `${ran}${own}, not the ${named.providerId} ${named.model} named on ${issueId}: ${why}`;
+}
+
+/** Where a check's verifier runs, as a place bb can or can't run a model: the agent's environment; for a final check, the regional manager's machine. */
+function whereChecked(subject: Check["subject"]): string {
+  switch (subject.kind) {
+    case "handoff":
+      return `in ${subject.agentId}'s environment`;
+    case "final":
+      return "on your machine";
+    default:
+      return subject satisfies never;
+  }
 }

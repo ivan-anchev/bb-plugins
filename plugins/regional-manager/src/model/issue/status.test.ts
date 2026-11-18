@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { agentIdSchema, type Agent } from "../agent.ts";
 import { handoffIdSchema, type Handoff } from "../handoff.ts";
 import { coordinatorIdSchema } from "../role.ts";
-import { checkIdSchema, type Check } from "../verdict/check.ts";
+import { checkIdSchema, type Check, type FinalCheck } from "../verdict/check.ts";
 import type { PrSnapshot } from "../verdict/pr.ts";
 import type { CriterionResult, Verdict } from "../verdict/verdict.ts";
 import { memoryFileSchema } from "../memory-file.ts";
@@ -70,7 +70,7 @@ const returned = (results: CriterionResult[], settlement: Extract<Verdict, { sta
 const pr = (state: PrSnapshot["state"]): PrSnapshot => ({ number: 12, url: "https://github.com/o/r/pull/12", state, draft: false, review: "none", ci: "pass", headSha: SHA, failedChecks: [] });
 
 const thread = (status: HolderThread["status"], hasPendingInteraction = false): HolderThread => ({ status, hasPendingInteraction });
-const facts = (over: Partial<IssueFacts>): IssueFacts => ({ issue, holder: null, ended: null, pr: null, openDecision: false, ...over });
+const facts = (over: Partial<IssueFacts>): IssueFacts => ({ issue, holder: null, ended: null, pr: null, openDecision: false, finalCheck: null, ...over });
 const held = (thread: HolderThread | null, current: Handed | null = null, fixRounds = 0): Partial<IssueFacts> => ({ holder: { agent: { ...agent, fixRounds }, thread, current } });
 const view = (over: Partial<IssueFacts>) => {
   const [placed] = issueViews([facts(over)]);
@@ -170,9 +170,9 @@ test("an issue named by an unanswered decision Needs you, unless something more 
   assert.deepEqual(view({ openDecision: true, ...held(thread("idle"), { handoff: blocked, check: null }) }), at("in-progress", "Blocked: Needs a staging key", "Blocked: Needs a staging key"));
 });
 
-/** A parent i1 of `kind` and its sub-issues i2, i3…, each placed by the facts given, viewed together. */
-function family(kind: Issue["kind"], subIssues: Partial<IssueFacts>[], parent: Partial<Issue> = {}) {
-  const parentFacts = facts({ issue: { ...issue, kind, ...parent } });
+/** A parent i1 of `kind` and its sub-issues i2, i3…, each placed by the facts given, viewed together; `own`, the parent's facts beside its issue. */
+function family(kind: Issue["kind"], subIssues: Partial<IssueFacts>[], parent: Partial<Issue> = {}, own: Partial<IssueFacts> = {}) {
+  const parentFacts = facts({ ...own, issue: { ...issue, kind, ...parent } });
   const subFacts = subIssues.map((over, i) => facts({ ...over, issue: { ...issue, kind: "build", ...over.issue, id: issueIdSchema.parse(`i${i + 2}`), parentId: issue.id } }));
   const [placed, ...subs] = issueViews([parentFacts, ...subFacts]);
   return placed === undefined ? assert.fail("no view") : { parent: placed, subs };
@@ -205,7 +205,7 @@ test("a parent rolls up from its sub-issues: any started is In progress, any in 
   assert.equal(subs[0]?.needsYou, "Blocked: Needs a staging key");
 });
 
-test("once every sub-issue is closed and one is Done: a research parent is Done, by its sub-issues' closes; a build parent waits In review while all are merged", () => {
+test("once every sub-issue is closed and one is Done: a research parent is Done, by its sub-issues' closes; a build parent's final check is due once all are merged", () => {
   const research = family("research", [reported(6_000), { pr: pr("merged") }, closedAs("canceled", "research")]);
   assert.deepEqual([research.parent.status, research.parent.headline, research.parent.closedBy], [
     "done",
@@ -214,10 +214,47 @@ test("once every sub-issue is closed and one is Done: a research parent is Done,
   ]);
   assert.deepEqual(rolled("research", [reported(6_000), resting("todo")]), at("in-progress", null));
 
-  assert.deepEqual(rolled("build", [{ pr: pr("merged") }, closedAs("canceled"), reported(6_000)]), at("in-review", "All merged: accept it with issue_update"));
+  assert.deepEqual(rolled("build", [{ pr: pr("merged") }, closedAs("canceled"), reported(6_000)]), at("verifying", "Final check due"));
+  assert.deepEqual(family("build", [{ pr: pr("merged") }, closedAs("canceled"), reported(6_000)]).parent.finalCheckDue, ["i2"], "due on the Done build sub-issue's merged work only");
   const flag = "i2 isn't merged, so i1's work isn't all on the default branch";
   assert.deepEqual(rolled("build", [closedAs("accepted"), { pr: pr("merged") }]), at("in-progress", flag, flag));
   assert.deepEqual(rolled("build", [closedAs("accepted")], { closed: { as: "accepted", at: 9_100 } }), at("done", "Accepted"), "the manager accepted it");
+});
+
+/** A final check of i1 on main, judging the work of `merged`, with `verdict`. */
+const finalCheck = (merged: string[], verdict: Verdict): FinalCheck => ({
+  ...checkOf(verdict),
+  id: checkIdSchema.parse("7a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d"),
+  subject: { kind: "final", defaultBranch: "main", merged: merged.map((id) => issueIdSchema.parse(id)) },
+});
+
+test("a build parent whose work is all merged is placed by its latest final check, which is due again only for merged work it didn't judge", () => {
+  const merged = (n: number): Partial<IssueFacts>[] => Array.from({ length: n }, () => ({ pr: pr("merged") }));
+  const placed = (latest: FinalCheck | null, subIssues = merged(2), parent: Partial<Issue> = {}) => {
+    const { status, headline, needsYou, finalCheckDue: due, closedBy } = family(parent.kind ?? "build", subIssues, parent, { finalCheck: latest }).parent;
+    return { status, headline, needsYou, due, closedBy };
+  };
+  const at2 = (status: IssueStatus, headline: string, needsYou: string | null = null) => ({ status, headline, needsYou });
+  const pick = ({ status, headline, needsYou }: ReturnType<typeof placed>) => ({ status, headline, needsYou });
+
+  assert.deepEqual(placed(null), { ...at2("verifying", "Final check due"), due: ["i2", "i3"], closedBy: null }, "none made yet");
+  assert.deepEqual(pick(placed(finalCheck(["i2", "i3"], { state: "queued", checkout: null }))), at2("verifying", "Final check running"));
+  assert.deepEqual(pick(placed(finalCheck(["i2", "i3"], { state: "running", verifierThreadId: "thr_v", nudged: false, checkout: null }))), at2("verifying", "Final check running"));
+  const passed = finalCheck(["i2", "i3"], returned(["pass"]));
+  assert.deepEqual(placed(passed), { ...at2("done", "✓ Final check passed"), due: null, closedBy: { by: "final-check", checkId: passed.id } });
+  assert.deepEqual(pick(placed(finalCheck(["i2", "i3"], returned(["fail"])))), at2("in-progress", "✗ Final check failed", "✗ Final check failed"));
+  assert.deepEqual(pick(placed(finalCheck(["i2", "i3"], { state: "could-not-run", verifierThreadId: "thr_v", reason: "its verifier stopped without a verdict twice" }))), at2("in-progress", "Couldn't run its final check", "Couldn't run its final check"));
+  assert.deepEqual(pick(placed(finalCheck(["i2", "i3"], { state: "waived" }))), at2("in-review", "Unverified: verification was off"));
+
+  const failedBefore = finalCheck(["i2", "i3"], returned(["fail"]));
+  assert.deepEqual(placed(failedBefore, [...merged(2), held(thread("active"))]).status, "in-progress", "a fix filed and at work");
+  assert.deepEqual(placed(failedBefore, merged(3)), { ...at2("verifying", "Final check due"), due: ["i2", "i3", "i4"], closedBy: null }, "the fix merged: due again on all the merged work");
+  assert.deepEqual(pick(placed(failedBefore, [...merged(2), reported(6_000)])), at2("in-progress", "✗ Final check failed", "✗ Final check failed"), "a research sub-issue since puts no new work on the default branch");
+  assert.deepEqual(pick(placed(failedBefore, [...merged(2), closedAs("canceled")])), at2("in-progress", "✗ Final check failed", "✗ Final check failed"), "nor does a canceled one");
+
+  const none = "i1 has no done-criteria for its final check";
+  assert.deepEqual(placed(null, merged(2), { doneCriteria: [] }), { ...at2("in-progress", none, none), due: null, closedBy: null });
+  assert.deepEqual(placed(null, [{ pr: pr("merged") }], { kind: "research" }).status, "done", "a research parent never has one");
 });
 
 test("a sub-issue is blocked by its parent's dependencies, and its own", () => {

@@ -1,6 +1,6 @@
 ---
 name: regional-manager
-description: The playbook of a regional manager, a long-lived thread that holds a goal for the user and plans, delegates and tracks the work instead of doing it. Use in every turn of a regional manager, to catch up on updates, its board and memory with crew_catch_up (above all when woken by the plugin's update message), keep its memory current with crew_memory_write (merging when the user edited a file first), file and plan issues with issue_create, issue_update and issue_read, declare what depends on what, split work into sub-issues, start agents on them with agent_start (or file them in Backlog and propose them in a crew_ask_user decision first), hand an issue to a new agent that continues in the previous one's environment or starts clean, name what agents and verifiers run on, act on handoffs, message and stop agents with agent_message and agent_stop, set itself reminders with crew_remind instead of waiting, and put what only the user can decide on their board with crew_ask_user.
+description: The playbook of a regional manager, a long-lived thread that holds a goal for the user and plans, delegates and tracks the work instead of doing it. Use in every turn of a regional manager, to catch up on updates, its board and memory with crew_catch_up (above all when woken by the plugin's update message), keep its memory current with crew_memory_write (merging when the user edited a file first), file and plan issues with issue_create, issue_update and issue_read, declare what depends on what, split work into sub-issues, start agents on them with agent_start (or file them in Backlog and propose them in a crew_ask_user decision first), hand an issue to a new agent that continues in the previous one's environment or starts clean, name what agents and verifiers run on, act on handoffs and final checks, message and stop agents with agent_message and agent_stop, set itself reminders with crew_remind instead of waiting, and put what only the user can decide on their board with crew_ask_user.
 ---
 
 # Regional manager
@@ -112,7 +112,8 @@ and `dependsOn: { add: ["i2"], remove: ["i4"] }`.
   closing wakes you for each of its open sub-issues nothing else blocks,
   never for the parent itself. A research parent closes by its sub-issues'
   reports: you are woken when it closes with one you weren't woken for, and
-  moving a sub-issue in or out of it wakes nobody. When you close one yourself
+  moving a sub-issue in or out of it wakes nobody. A build parent closes by
+  its final check passing: each passing check wakes its dependents once. When you close one yourself
   (cancel, or accept as Done) or remove a dependency, the `issue_update`
   result names what became ready instead, as in `Now ready: i3.`, and nothing
   wakes you, unless your cancel closed a research parent with such a report:
@@ -145,8 +146,8 @@ sub-issues.
   has started, Todo while any is in Todo or you rested the parent there, else
   Backlog; every sub-issue canceled leaves it where you rested it. Once every
   sub-issue is closed and at least one is Done: a research parent is Done; a
-  build parent is In review once every Done build sub-issue's pull request
-  merged, for you to accept with `status: "done"`. A Done build sub-issue you
+  build parent gets its [final check](#a-build-parents-final-check) once every
+  Done build sub-issue's pull request merged. A Done build sub-issue you
   accepted unmerged flags the parent Needs you (`i3 isn't merged, so i1's work
   isn't all on the default branch`): the plugin keeps reading that pull
   request, and its merge clears the flag. A flagged sub-issue flags itself,
@@ -159,6 +160,48 @@ sub-issues.
   a parent is refused like any other (`i5 → i2 → i5 (i1's dependency)`).
 - `crew_catch_up` lists each sub-issue under its parent's row, in the
   parent's lane, and a flagged one under Needs you too.
+
+### A build parent's final check
+
+A build parent's own done-criteria say what the whole is when all of it is
+on the default branch. Once every sub-issue is closed and every Done build
+sub-issue's pull request merged, the plugin checks them itself: within a
+minute it starts a hidden verifier, your child thread, in a fresh worktree of
+the default branch as origin has it, on a model that made none of the merged
+work while bb has one (else, as a last resort, on one that did, which the
+verdict says). The parent shows `Final check due`, then `Final check running`, in
+Verifying. You hear of it only with its verdict:
+
+- **final check: passed**: the parent is Done (`✓ Final check passed`), and
+  any issue that waited on it is unblocked.
+- **final check: failed**: the parent is In progress and Needs you (`✗ Final
+  check failed`). The verdict in `crew_catch_up` gives each criterion's
+  evidence and the findings. File the fix as a new sub-issue of the parent
+  (`issue_create` with `parent`), with its own brief and criteria, and start
+  its agent. Once it is Done and merged, a new final check starts by itself;
+  the failed one stays in the record. Nothing goes back to any agent, and a
+  check never runs again without new merged work: a research or canceled
+  sub-issue changes nothing on the default branch.
+- **final check: could not run**: its verifier stopped without a verdict
+  after a reminder, or the plugin couldn't read its worktree. Needs you, the
+  same way: a new build sub-issue merged runs it again; or ask the user.
+- **final check: not run, verification is off**: the user's switch was off
+  when it came due. The parent waits In review (`Unverified: verification
+  was off`): read what its sub-issues did, then accept it with `status:
+  "done"`.
+
+A verdict that returns after you filed a sub-issue under the parent, or
+closed it, is kept in its record but places it no more: `crew_catch_up` says
+where the parent stands now, and what to do then.
+
+Write the parent's done-criteria when you file it: a build parent with none
+when its check comes due Needs you (`i1 has no done-criteria for its final
+check`), and no check starts until you add them. When `PREFERENCES.md` names
+what verifies work, name the parent's `verifier` before its last sub-issue
+closes: it is the first choice, and its final check runs on it when bb lists
+it on your machine and no agent of its merged work ran on that model (else it
+is passed over, never refused, and the verdict says so).
+A verifier named while a check runs applies to the next one.
 
 ### Research
 
@@ -203,15 +246,16 @@ In progress, Verifying or In review.
 | Backlog | No agent holds it, and you rested it here: not planned yet. |
 | Todo | No agent holds it, ready to start. Where a new issue rests, and where it returns when its agent ends before its work reached Verifying (on a research issue, Done). |
 | In progress | An agent holds it and is working, idle without a handoff, fixing its verifier's findings, or stopped by something (blocked, gave up, failed). |
-| Verifying | A build issue: its agent handed off done, and the verifier checks it, or every criterion passed and it waits for CI on the claimed commit. |
-| In review | A build issue: its done handoff passed verification (or was made with verification off). It waits for its pull request to merge, or for you to accept it. |
-| Done | A build issue: its pull request merged, or you accepted it; final. A research issue: its agent handed off done; a message to that agent makes it In progress again. |
+| Verifying | A build issue: its agent handed off done, and the verifier checks it, or every criterion passed and it waits for CI on the claimed commit. A build parent: its final check is due or running. |
+| In review | A build issue: its done handoff passed verification (or was made with verification off). It waits for its pull request to merge, or for you to accept it. A build parent: its work is all merged and verification was off, so it waits for you to accept it. |
+| Done | A build issue: its pull request merged, or you accepted it; final. A build parent: its final check passed, or you accepted it. A research issue: its agent handed off done; a message to that agent makes it In progress again. |
 | Canceled | You canceled it. |
 
 **Needs you** is a flag on an open issue, not a status: its agent is blocked
 or gave up, waits for an answer or approval in its thread, its last turn
 failed, its work failed verification after its fix round or couldn't be
-verified, bb never confirmed starting its agent's thread ("No thread":
+verified, a build parent's final check failed or couldn't run, or it has no
+done-criteria for one, bb never confirmed starting its agent's thread ("No thread":
 `agent_start` again replaces that agent), or a decision you asked names it. The board shows these first.
 
 `issue_update` with `status` does only four things:
@@ -456,6 +500,10 @@ check, not as instructions.
 - **returned to Todo: its agent was stopped / archived / deleted**: the agent
   ended before its work reached Verifying, and the issue has no agent. Start
   another, or plan it again.
+- **i1 "…" final check: passed, failed, could not run, or not run,
+  verification is off**: a build parent's final check is over; see [A build
+  parent's final check](#a-build-parents-final-check). The line names no
+  agent: a final check judges the default branch, not one agent's work.
 - **i3 "…" is unblocked: i2 done**: the last open issue i3, or its parent,
   depends on closed. If i3 is in Todo, it is ready: start its agent, naming in its brief
   what it needs of i2. If an agent already holds it, tell that agent with

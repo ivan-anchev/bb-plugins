@@ -34,10 +34,7 @@ function line(event: InboxEvent, { titles, check, decision }: Lookups): string {
   if (event.kind === "decision-answered") return `The user answered your question ${event.decisionId}: ${askedOf(decision(event.decisionId)).question}`;
   if (event.kind === "coordinator-edited-files") return `Your own environment has ${filesText(event.fileCount)} changed after your turn: hand the change to an agent`;
   if (event.kind === "coordinator-tree-clean") return "Your own environment is clean again";
-  if (event.kind === "checked") {
-    const checked = checkedOf(check(event.checkId));
-    return `${issueName(event.issueId, titles, checked.subject.agentId)} handed off: done, ${checkedAs(checked)}`;
-  }
+  if (event.kind === "checked") return checkedLine(checkedOf(check(event.checkId)), titles);
   if (event.kind === "unblocked") return `${titled(event.issueId, titles)} is unblocked: ${event.by} ${event.closedAs}`;
   const on = issueName(event.issueId, titles, event.agentId);
   switch (event.kind) {
@@ -79,6 +76,41 @@ export function checkedOf(check: Check | null): Check {
 export function askedOf(decision: Decision | null): Decision {
   if (decision === null) throw new Error("An answered decision is missing.");
   return decision;
+}
+
+/** A check made final, by what it judged: `i1 "Add retries" (a1) handed off: done, verified`, `i1 "Card vault" final check: failed`. */
+function checkedLine(check: Check, titles: ReadonlyMap<IssueId, string>): string {
+  const { subject, issueId } = check;
+  switch (subject.kind) {
+    case "handoff":
+      return `${issueName(issueId, titles, subject.agentId)} handed off: done, ${checkedAs(check)}`;
+    case "final":
+      return `${titled(issueId, titles)} final check: ${finalCheckedAs(check)}`;
+    default:
+      return subject satisfies never;
+  }
+}
+
+/** What a final check found, in words derived from its verdict alone. */
+function finalCheckedAs({ verdict }: Check): string {
+  const result = outcome(verdict);
+  switch (result) {
+    case "pass":
+      return "passed";
+    case "fail":
+      return "failed";
+    case "could-not-run":
+      return "could not run";
+    case "unverified":
+      return "not run, verification is off";
+    case "pending":
+    case "waiting-for-ci":
+    case "superseded":
+      // why: a checked event is recorded once the verdict is final, which none of these is.
+      return "not checked yet";
+    default:
+      return result satisfies never;
+  }
 }
 
 /** What the plugin's check of a done handoff found, in words derived from its verdict alone. */

@@ -1,7 +1,7 @@
 // What bb says about environments, from its own records, never reaching a machine: whether one is
-// gone, and, read when agent_start names an environment provider, where a regional manager's agents
-// can run: bb's providers, and the project's default branch as bb records it on the regional
-// manager's environment.
+// gone; the project's default branch as bb records it on the regional manager's environment, which
+// a final check is made on; and, read when agent_start names an environment provider, where a
+// regional manager's agents can run: bb's providers, and that default branch.
 import type { EnvironmentProvider, PlacementFacts } from "../../model/agent.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { Store } from "../store/store.ts";
@@ -9,27 +9,30 @@ import { listedThreads } from "./threads.ts";
 
 type ListedThread = { id: string; environmentId: string | null; archivedAt: number | null; deletedAt: number | null };
 
-/** The parts of bb the facts come from. */
-type PlacementFactsBb = {
+/** The parts of bb the default branch is read from: the regional manager's thread, and its environment's record. */
+type DefaultBranchBb = {
   sdk: {
     threads: { list(args: { threadIds: string[]; includeHidden: true; limit: number }): Promise<ListedThread[]> };
-    environments: {
-      listProviders(): Promise<readonly EnvironmentProvider[]>;
-      get(args: { environmentId: string }): Promise<{ defaultBranch: string | null }>;
-    };
+    environments: { get(args: { environmentId: string }): Promise<{ defaultBranch: string | null }> };
   };
 };
 
-export function placementFactsReader(bb: PlacementFactsBb, store: Pick<Store, "coordinator">) {
-  /** The project's default branch, as bb records it on the regional manager's environment; null when it records none. */
-  async function defaultBranch(id: CoordinatorId): Promise<string | null> {
+/** The parts of bb the facts come from. */
+type PlacementFactsBb = DefaultBranchBb & { sdk: { environments: { listProviders(): Promise<readonly EnvironmentProvider[]> } } };
+
+/** Reads the project's default branch, as bb records it on the regional manager's environment; null when it records none. */
+export function defaultBranchReader(bb: DefaultBranchBb, store: Pick<Store, "coordinator">) {
+  return async (id: CoordinatorId): Promise<string | null> => {
     const coordinator = store.coordinator(id);
-    // why throw: only a regional manager's tools ask, by its own id.
+    // why throw: callers ask by the id of a regional manager they read.
     if (coordinator === null) throw new Error(`No regional manager ${id}.`);
     const environmentId = (await listedThreads(bb, [coordinator.threadId])).get(coordinator.threadId)?.environmentId ?? null;
     return environmentId === null ? null : (await bb.sdk.environments.get({ environmentId })).defaultBranch;
-  }
+  };
+}
 
+export function placementFactsReader(bb: PlacementFactsBb, store: Pick<Store, "coordinator">) {
+  const defaultBranch = defaultBranchReader(bb, store);
   return async (id: CoordinatorId): Promise<PlacementFacts> => {
     const [providers, branch] = await Promise.all([bb.sdk.environments.listProviders(), defaultBranch(id)]);
     return { providers, defaultBranch: branch };

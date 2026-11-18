@@ -125,11 +125,12 @@ A parent's status rolls up from its sub-issues, derived like any other:
   any is in Todo or the manager rested the parent there, else Backlog. Every
   sub-issue canceled leaves the parent where the manager rested it.
 - Once every sub-issue is closed and at least one is Done: a research parent
-  is Done. A build parent is In review once every Done build sub-issue's pull
-  request merged, and the manager accepts it as Done. A build sub-issue the
-  manager accepted unmerged flags the parent Needs you ("i3 isn't merged, so
-  i1's work isn't all on the default branch"); the plugin keeps reading that
-  pull request, and its merge clears the flag.
+  is Done. A build parent gets its final check once every Done build
+  sub-issue's pull request merged (see [A build parent's final
+  check](#a-build-parents-final-check)). A build sub-issue the manager
+  accepted unmerged flags the parent Needs you ("i3 isn't merged, so i1's
+  work isn't all on the default branch"); the plugin keeps reading that pull
+  request, and its merge clears the flag.
 
 A flagged sub-issue flags itself, not its parent. A parent is canceled only
 once its sub-issues are closed, and a closed parent takes no new sub-issue.
@@ -137,6 +138,65 @@ A parent's dependencies block each of its sub-issues. The manager's catch-up
 lists each sub-issue under its parent, and a flagged one under Needs you too,
 as the board shows them (see [The board](#the-board));
 `issue_read` names an issue's parent and sub-issues.
+
+### A build parent's final check
+
+A build parent's own done-criteria are checked on the default branch once
+all of its work is there. Once every sub-issue is closed and every Done build
+sub-issue's pull request merged, the parent is Verifying, "Final check due",
+and within a minute the plugin starts a hidden verifier, a child of the
+regional manager's thread, in a fresh worktree on the manager's machine of
+the default branch bb named when the check was made, asked for as
+`origin/<branch>`. bb fetches it first, so the worktree starts at origin's
+tip even when the local branch is behind, and on that branch even if bb's
+default changed since; the check is made only after the merges it waits for
+were read. The parent reads "Final check
+running". The verifier gets the parent's criteria and description and no
+commit: when it returns its verdict, the plugin reads its worktree through
+bb's git plugin and judges the commit it holds then, on a clean tree, so a
+file it changed or added there fails the verdict. A worktree the plugin can't
+read ends the check without a verdict. A check superseded before it returned,
+as when an agent was started on the parent while it had no sub-issues, judged
+nothing: once the parent's work is all merged under it again, a new one is
+due.
+
+It runs on the parent's named verifier when bb lists it on the manager's
+machine and no agent that held a Done build sub-issue of the parent ran on
+it; else on the manager's model unless one of those agents ran on it; else on
+another available provider's default model; else on one of theirs, which the
+verdict says. Naming a verifier while a check runs applies to the next one.
+It is nudged once if it ends a turn without a verdict, as any verifier is,
+and could-not-run after that.
+
+- **Passed**: the parent is Done ("✓ Final check passed"), closed by that
+  check, and any issue waiting on it is unblocked, once.
+- **Failed** or **couldn't run**: the parent is In progress and Needs you
+  ("✗ Final check failed", "Couldn't run its final check"). Nothing goes back
+  to any agent, and there is no fix round: the manager files the fix as a new
+  sub-issue, which puts the parent In progress, and once that sub-issue is
+  Done and merged a new final check starts by itself. A check never runs
+  again without new merged work: a research or canceled sub-issue changes
+  nothing on the default branch.
+- **Verification off** when it comes due: no verifier starts. The parent is
+  In review, "Unverified: verification was off", for the manager to accept.
+  A check already running when verification is switched off still finishes.
+- A verdict that returns after a sub-issue was filed under the parent, or the
+  parent was closed, is kept in its record and places it no more; the
+  manager's catch-up says where the parent stands now, from the same view the
+  board shows.
+- A build parent with no done-criteria when its check comes due Needs you
+  ("i1 has no done-criteria for its final check"), and none starts until
+  criteria are written. With no default branch on record in bb, none starts
+  and the parent stays "Final check due". A research parent never has one.
+
+The manager is woken with `i1 "Card vault" final check: failed` (or passed,
+could not run, not run, verification is off), which quotes nothing;
+`crew_catch_up` and `issue_read` print the verdict whole, with the default
+branch and commit it judged and which model it ran on ("as named on i1", or
+"a3's own model, as no other was available"). Each final check stays in the
+parent's record. After its verdict, the verifier's thread and its worktree
+are left as they are, for the user to open from the verdict; they go when the
+regional manager is archived, as its children.
 
 ### Dependencies
 
@@ -160,7 +220,8 @@ parent's dependency, each open sub-issue nothing else blocks, never the
 parent, which has no agent to start). A research parent closes by its
 sub-issues' reports: the manager is woken when it closes with one it wasn't
 woken for, whatever closed the rest, and moving a sub-issue in or out of it
-wakes nobody. When the manager closes one itself, or removes a dependency, its
+wakes nobody. A build parent closes by its final check passing: each passing
+check wakes its dependents once. When the manager closes one itself, or removes a dependency, its
 own result names what became ready; its cancel that closes a research parent
 with such a report wakes it once as well. A
 dependency carries nothing between issues: an agent gets another issue's
@@ -400,9 +461,12 @@ work with `agent_handoff`, and the plugin records everything it sees:
 - **An agent ended a turn without a handoff**, with its last answer.
 - **An issue returned to Todo**: its agent was stopped, archived or deleted
   before its work reached Verifying.
-- **An issue was unblocked**: a pull request's merge or an agent's handoff
-  closed the last open issue it, or its parent, depends on (see
-  [Dependencies](#dependencies)).
+- **A build parent's final check is over**: passed, failed, could not run,
+  or not run as verification is off (see [A build parent's final
+  check](#a-build-parents-final-check)).
+- **An issue was unblocked**: a pull request's merge, an agent's handoff or
+  a final check that passed closed the last open issue it, or its parent,
+  depends on (see [Dependencies](#dependencies)).
 - **An issue's pull request changed** (see
   [Pull requests and CI](#pull-requests-and-ci)): it opened, reopened, merged
   or closed, its CI passed or failed, or a review approved it or asked for
@@ -718,11 +782,15 @@ page from its row in the panel, show the same board, live:
   headline, which is the agent asking you for something, under Needs you.
 - **Sub-issues** sit indented one level under their parent's row, in the
   parent's lane whatever their own status, each with its own glyph and
-  everything a row has. The parent, which never has an agent, shows how many
-  of its sub-issues are Done where an agent would be ("1/3"), and its
-  headline says only what that count doesn't: why it is flagged, that it
-  waits to be accepted, or nothing. The catch-up, with no such cell, leads a
-  parent's line with the count ("1/3 done"). A flagged
+  everything a row has. The parent, which never has an agent or a pull
+  request, shows how many of its sub-issues are Done at the right of its
+  first line ("1/3"), and its headline says only what that count doesn't:
+  why it is flagged, where its final check stands ("Final check due", "Final
+  check running", "✓ Final check passed", "✗ Final check failed"), or
+  nothing. With nothing under its title the row is that one line; a headline
+  coming or going adds or takes its second line and moves nothing else. The
+  catch-up, with no such cell, leads a parent's line with the count ("1/3
+  done"). A flagged
   sub-issue is also listed flat under Needs you, its parent's id ahead of its
   own ("i1›i3"). A lane's count is its rows: a parent counts once, its
   sub-issues by its own count. Folding a lane folds its parents with their
@@ -753,7 +821,12 @@ one folds it away until you open it. The verifier's findings follow. It warns
 when the check had to run on the agent's own model, but names no provider or
 model. A verdict still to come says so, with the verifier's thread while it
 checks, and one that couldn't be had says why. Then what the agent reported:
-what it did, its evidence, concerns, deviations and findings. Pressing the
+what it did, its evidence, concerns, deviations and findings. A build
+parent's detail lists its **Final checks** above its record, oldest first,
+the latest open, each as "Passed", "Failed", "Running", "Couldn't run",
+"Replaced" or "Not run" on its default branch, with its time; opened, it is
+read as a handoff's verdict is, its commit as "On main at 4be0a17" and a
+dirty worktree as "Not a clean tree". Pressing the
 issue again closes it. The brief is the agent's, so the board doesn't show it.
 
 A handoff places its issue until the agent's thread starts another turn: type

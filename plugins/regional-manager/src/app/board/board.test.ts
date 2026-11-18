@@ -11,6 +11,8 @@ import { handoffIdSchema } from "../../model/handoff.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
+import type { ShownVerdict } from "../../model/verdict/verdict.ts";
+import { shortTime } from "../ui/time.ts";
 
 // The board as bb mounts it, reading the plugin: its lanes from the board's read, and an issue's
 // detail from the `issue` read, made only when its row opens.
@@ -116,6 +118,7 @@ const DETAIL: IssueDetail = {
       ],
     },
   ],
+  finalChecks: [],
 };
 
 const REPORT = "## Recommendation\n\nVault: it keeps card data **inside** our PCI scope.";
@@ -146,6 +149,7 @@ const researched = (questions: string[]): IssueDetail => ({
       ],
     },
   ],
+  finalChecks: [],
 });
 
 afterEach(() => {
@@ -247,6 +251,48 @@ test("a row opens in place to the issue read from the plugin, and only then: its
 
   fireEvent.click(row);
   assert.equal(view.queryByRole("region", { name: "i1" }), null);
+});
+
+test("a build parent opens to its final checks, oldest first and the latest open, each on its default branch with the verdict's criteria, evidence, findings and verifier", async () => {
+  const MERGED = "b".repeat(40);
+  const failed: ShownVerdict = {
+    state: "returned",
+    verifierThreadId: "thr_final_1",
+    headSha: MERGED,
+    checkout: { headSha: MERGED, changedFiles: ["?? scratch.txt"], changedFileCount: 1 },
+    criteria: [{ criterion: "npm run vault-suite passes", result: "fail", evidence: "not ok 4 - tokens survive a restart" }],
+    findings: ["The vault client logs card numbers"],
+    sameModel: false,
+    settlement: { kind: "checked", ci: { kind: "none" } },
+  };
+  const parent: IssueDetail = {
+    ...DETAIL,
+    doneCriteria: ["npm run vault-suite passes"],
+    record: [],
+    finalChecks: [
+      { at: 4_000, defaultBranch: "main", verdict: failed },
+      { at: 5_000, defaultBranch: "main", verdict: { state: "running", verifierThreadId: "thr_final_2" } },
+    ],
+  };
+  const { view } = await mount({ decisions: [], issues: [issue("i1", { status: "verifying", headline: "Final check running", subIssues: { done: 2, total: 2 } })] }, () => {}, () => parent);
+  fireEvent.click(view.getByRole("button", { name: /\bi1 Build/ }));
+  const detail = within(view.getByRole("region", { name: "i1" }));
+  await detail.findByText("Final checks");
+  const checks = detail.getAllByRole("group").filter((group) => group.parentElement?.parentElement?.classList.contains("rmi-final-checks"));
+  assert.deepEqual(
+    checks.map((check) => [check.querySelector("summary")?.textContent, check.hasAttribute("open")]),
+    [
+      [`Failedon main${shortTime(4_000)}`, false],
+      [`Runningon main${shortTime(5_000)}`, true],
+    ],
+  );
+  assert.ok(within(checks[1] ?? assert.fail("no running check")).getByRole("button", { name: "Open Verifier's thread" }), "the running one links its verifier");
+  fireEvent.click(checks[0]?.querySelector("summary") ?? assert.fail("no summary"));
+  assert.ok(detail.getByText("0 of 1 criterion passed"));
+  assert.match(detail.getByText(/^On main at/).textContent ?? "", /^On main at bbbbbbb$/);
+  assert.match(detail.getByText(/^Not a clean tree\./).textContent ?? "", /the working tree had 1 changed file: \?\? scratch\.txt/);
+  assert.match(detail.getByLabelText("Evidence for criterion 1").textContent ?? "", /tokens survive a restart/);
+  assert.ok(detail.getByText("The vault client logs card numbers"));
 });
 
 test("a research row reads Research with no pull request, and opens to its Questions and its report as Markdown, with the file it is saved in and no verdict", async () => {

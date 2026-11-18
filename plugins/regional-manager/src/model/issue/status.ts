@@ -1,12 +1,12 @@
 // Where an issue stands, why, whether it waits on the user, and what blocks it: derived from its
 // stored plan and the facts beside it, never stored. Pure, so the board, crew_catch_up, issue_read,
-// the rail badge, the PR watch and the unblocked announcements share one definition. The kind enters in one place: a done handoff walks its
+// the rail badge, the PR watch, the final checks' pass and the unblocked announcements share one definition. The kind enters in one place: a done handoff walks its
 // kind's stages (walk); everything that reads an IssueStatus never sees a kind.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import type { Agent, EndedHow } from "../agent.ts";
 import type { Handoff, HandoffId } from "../handoff.ts";
-import type { Check } from "../verdict/check.ts";
+import type { Check, CheckId, FinalCheck } from "../verdict/check.ts";
 import type { CiVerdict, PrSnapshot } from "../verdict/pr.ts";
 import { NOT_CLEAN } from "../verdict/checkout.ts";
 import { allPassed, ciVerdictOf, failedCheckout, mayHaveReachedAgent, outcome, type Verdict } from "../verdict/verdict.ts";
@@ -47,6 +47,8 @@ export type IssueFacts = {
   pr: PrSnapshot | null;
   /** An unanswered decision names it. */
   openDecision: boolean;
+  /** Its latest final check (null: none was made, as for every issue but a build parent whose work was all merged). */
+  finalCheck: FinalCheck | null;
 };
 
 export type IssueView = {
@@ -66,14 +68,22 @@ export type IssueView = {
   subIssues: { done: number; total: number } | null;
   /** What closed it (null: it is open). */
   closedBy: Closure | null;
+  /** A build parent whose final check is due: its Done build sub-issues, whose merged work the check judges. Null when none is due. */
+  finalCheckDue: IssueId[] | null;
 };
 
 /**
  * What closed an issue, the one place that says why it is closed: the manager's act, its pull
- * request merged, the handoff that made it Done, or for a parent, the close of each of its
- * sub-issues. A research issue reopened and reported again is closed by another handoff.
+ * request merged, the handoff that made it Done, for a parent the close of each of its sub-issues,
+ * or for a build parent the final check that passed. A research issue reopened and reported again
+ * is closed by another handoff; a build parent whose fix was checked again, by another final check.
  */
-export type Closure = { by: "manager"; as: NonNullable<Issue["closed"]>["as"] } | { by: "merge"; number: number } | { by: "handoff"; handoffId: HandoffId } | { by: "sub-issues"; closes: Closure[] };
+export type Closure =
+  | { by: "manager"; as: NonNullable<Issue["closed"]>["as"] }
+  | { by: "merge"; number: number }
+  | { by: "handoff"; handoffId: HandoffId }
+  | { by: "sub-issues"; closes: Closure[] }
+  | { by: "final-check"; checkId: CheckId };
 
 /** A view before its dependencies are read: where its own facts, or its sub-issues, place it. */
 type Placed = Omit<IssueView, "blockedBy">;
@@ -106,7 +116,7 @@ const ASKED = "Waiting on your answer to its decision";
 const CLOSED = { canceled: { status: "canceled", headline: "Canceled" }, accepted: { status: "done", headline: "Accepted" } } as const;
 
 function issueView({ issue, holder, ended, pr, openDecision }: IssueFacts): Placed {
-  const base = { issue, holder: holder?.agent ?? null, pr, placing: null, subIssues: null };
+  const base = { issue, holder: holder?.agent ?? null, pr, placing: null, subIssues: null, finalCheckDue: null };
   const final = finalOf(issue, pr);
   if (final !== null) return { ...base, ...final, needsYou: null };
   const asked = openDecision ? ASKED : null;
@@ -127,29 +137,72 @@ const handedOffClose = ({ status }: Pick<Placing, "status">, handed: Handed | nu
 /**
  * A parent, placed by its sub-issues (`subIssues`, each placed by its own facts); it has no agent of
  * its own. Closed by the manager, as closed. Once every sub-issue is closed and one is Done: a kind
- * nothing verifies is Done, closed by its sub-issues' closes, whoever made each; a verified kind
- * waits In review for the manager to accept it, In progress and flagged while a Done sub-issue that
- * ships code isn't merged. Before that: In progress once any sub-issue started, Todo while any is in Todo or the
- * manager rests the parent there, else Backlog. why every sub-issue canceled reads as not started:
- * nothing of the parent was done, so it rests where the manager put it. Its headline says only what
- * its count doesn't (headlineText joins the two): why it is flagged, that it waits to be accepted, or
- * the manager's close; else none.
+ * nothing verifies is Done, closed by its sub-issues' closes, whoever made each; a verified kind is
+ * In progress and flagged while a Done sub-issue that ships code isn't merged, and once all are,
+ * its final check places it (finalCheckPlaces). Before that: In progress once any sub-issue
+ * started, Todo while any is in Todo or the manager rests the parent there, else Backlog. why every
+ * sub-issue canceled reads as not started: nothing of the parent was done, so it rests where the
+ * manager put it. Its headline says only what its count doesn't (headlineText joins the two): why
+ * it is flagged, where its final check stands, or the manager's close; else none.
  */
-function parentView({ issue, openDecision }: IssueFacts, subIssues: readonly Placed[]): Placed {
+function parentView({ issue, openDecision, finalCheck }: IssueFacts, subIssues: readonly Placed[]): Placed {
   const done = subIssues.filter(({ status }) => status === "done");
-  const base = { issue, holder: null, pr: null, placing: null, subIssues: { done: done.length, total: subIssues.length } };
+  const base = { issue, holder: null, pr: null, placing: null, subIssues: { done: done.length, total: subIssues.length }, finalCheckDue: null };
   const final = finalOf(issue, null);
   if (final !== null) return { ...base, ...final, needsYou: null };
   const asked = openDecision ? ASKED : null;
   if (done.length > 0 && subIssues.every(({ status }) => isClosed(status))) {
     if (!isVerified(issue.kind)) return { ...base, status: "done", headline: null, needsYou: null, closedBy: closedBySubIssues(subIssues) };
-    const unmerged = done.filter(({ issue: sub, pr }) => shipsCode(sub.kind) && pr?.state !== "merged").map(({ issue: sub }) => sub.id);
+    const builds = done.filter(({ issue: sub }) => shipsCode(sub.kind));
+    const unmerged = builds.filter(({ pr }) => pr?.state !== "merged").map(({ issue: sub }) => sub.id);
     if (unmerged.length > 0) return { ...base, ...flagged(`${unmerged.join(", ")} ${unmerged.length === 1 ? "isn't" : "aren't"} merged, so ${issue.id}'s work isn't all on the default branch`), closedBy: null };
-    return { ...base, status: "in-review", headline: "All merged: accept it with issue_update", needsYou: asked, closedBy: null };
+    const placed = finalCheckPlaces(issue, finalCheck, builds.map(({ issue: sub }) => sub.id));
+    return { ...base, ...placed, needsYou: placed.needsYou ?? asked };
   }
   const started = subIssues.some(({ status }) => status !== "backlog" && status !== "todo" && status !== "canceled");
   const status = started ? "in-progress" : subIssues.some(({ status }) => status === "todo") ? "todo" : issue.rest;
   return { ...base, status, headline: asked, needsYou: asked, closedBy: null };
+}
+
+/**
+ * Where its final check puts a build parent whose Done build sub-issues (`merged`) are all merged.
+ * A check is due when none was made, the latest judged less merged work than there is now (a fix
+ * filed as a sub-issue since, Done and merged), or the latest was superseded before it judged
+ * anything (an agent started on the parent while it had no sub-issues): the tick starts it
+ * (final-check.ts), unless the parent has no done-criteria to check, which only the manager can
+ * write. Else the latest places it: Verifying while it runs, Done when it passed, In review for
+ * the manager to accept when verification was off, In progress and flagged when it failed or
+ * couldn't run. why a research or canceled sub-issue since doesn't make one due: the default
+ * branch holds the same work.
+ */
+function finalCheckPlaces(issue: Issue, latest: FinalCheck | null, merged: IssueId[]): Placing & Pick<Placed, "placing" | "closedBy" | "finalCheckDue"> {
+  const open = { closedBy: null, finalCheckDue: null };
+  const due = (): Placing & Pick<Placed, "placing" | "closedBy" | "finalCheckDue"> =>
+    issue.doneCriteria.length === 0
+      ? { ...flagged(`${issue.id} has no done-criteria for its final check`), placing: null, ...open }
+      : { status: "verifying", headline: "Final check due", needsYou: null, placing: null, closedBy: null, finalCheckDue: merged };
+  if (latest === null || merged.some((id) => !latest.subject.merged.includes(id))) return due();
+  const placing = { placing: latest };
+  const result = outcome(latest.verdict);
+  switch (result) {
+    case "pending":
+    case "waiting-for-ci":
+      return { status: "verifying", headline: "Final check running", needsYou: null, ...placing, ...open };
+    // why due, never running: a superseded check judged nothing, and no newer one was made after it.
+    case "superseded":
+      return due();
+    case "pass":
+      return { status: "done", headline: "✓ Final check passed", needsYou: null, ...placing, closedBy: { by: "final-check", checkId: latest.id }, finalCheckDue: null };
+    case "unverified":
+      // why not Done: no parent is Done unchecked without the manager's accept.
+      return { status: "in-review", headline: "Unverified: verification was off", needsYou: null, ...placing, ...open };
+    case "fail":
+      return { ...flagged("✗ Final check failed"), ...placing, ...open };
+    case "could-not-run":
+      return { ...flagged("Couldn't run its final check"), ...placing, ...open };
+    default:
+      return result satisfies never;
+  }
 }
 
 /**

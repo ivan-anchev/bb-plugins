@@ -4,10 +4,10 @@
 // (a reload, a reconnect) costs nothing. An archived or deleted agent thread ends its agent, and a
 // deleted regional manager is removed; the tick's reconcile catches any of those missed.
 import type { PluginLogger, PluginThreadEventName } from "@get-bb/plugin-sdk";
-import type { HolderThread } from "../../model/issue/status.ts";
-import type { CoordinatorId } from "../../model/role.ts";
-import type { Store } from "../store/store.ts";
-import type { Agents } from "./agents.ts";
+import type { HolderThread } from "../../../model/issue/status.ts";
+import type { CoordinatorId } from "../../../model/role.ts";
+import type { Store } from "../../store/store.ts";
+import type { Agents } from "../agents.ts";
 
 const AGENT_THREAD_EVENTS = [
   "thread.active",

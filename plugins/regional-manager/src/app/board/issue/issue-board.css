@@ -150,10 +150,12 @@
   font-size: 11px;
   color: var(--subtle-foreground);
 }
+/* A row with nothing under its title (a parent whose count says it all) is its one line. */
+.rmi-rowbox[data-one-line] {
+  grid-template-rows: 30px;
+}
 /* Under the title (Activity's second line, pulled up under it): the headline, in Activity's readable
-   second-line colour. Ids, kinds, counts and times stay subtle, as in Activity and the theme. It keeps
-   its line with nothing on it (a parent whose count says it all), so a row open or closed keeps its
-   height and the count cell beside it its place. */
+   second-line colour. Ids, kinds, counts and times stay subtle, as in Activity and the theme. */
 .rmi-headline {
   display: flex;
   align-items: center;
@@ -166,8 +168,14 @@
   line-height: 14px;
   color: var(--muted-foreground);
 }
-/* A parent's sub-issues Done of all, where an agent would be: a count, quiet as the row's id. */
-.rmi-sub-count {
+/* A parent's sub-issues Done of all, at the right of its first line, where a pull request would be:
+   a count, quiet as the row's id. It holds its place whether a headline comes or goes under it. */
+.rmi-count-cell {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  padding-right: 8px;
   font-size: 11px;
   line-height: 14px;
   color: var(--subtle-foreground);
@@ -220,7 +228,6 @@
 .rmi-row[aria-expanded="true"] .rmi-headline {
   align-items: flex-start;
   height: auto;
-  min-height: 23px; /* its 14px line, empty or not, and the 9px under it */
   padding-bottom: 9px;
 }
 .rmi-whole {
@@ -471,9 +478,10 @@ button.rmi-related {
   box-shadow: inset 0 0 0 1.5px var(--ring);
 }
 
-/* The record: each agent on a rule, its handoffs under it. */
+/* The record: each agent on a rule, its handoffs under it. A parent's final checks list as handoffs do, with no agent above them. */
 .rmi-record,
-.rmi-handoffs {
+.rmi-handoffs,
+.rmi-final-checks {
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -489,6 +497,9 @@ button.rmi-related {
   font-size: 11px;
   line-height: 14px;
   color: var(--muted-foreground);
+}
+.rmi-final-checks {
+  gap: 4px;
 }
 .rmi-handoffs {
   gap: 4px;
@@ -524,8 +535,10 @@ button.rmi-related {
   font-weight: 500;
   color: var(--foreground);
 }
-.rmi-handoff-status[data-status="blocked"] { color: var(--warning-text); }
-.rmi-handoff-status[data-status="gave-up"] { color: var(--destructive-text); }
+.rmi-handoff-status[data-status="blocked"],
+.rmi-handoff-status[data-tone="warning"] { color: var(--warning-text); }
+.rmi-handoff-status[data-status="gave-up"],
+.rmi-handoff-status[data-tone="failed"] { color: var(--destructive-text); }
 .rmi-handoff-summary {
   flex: 1 1 auto;
   min-width: 0;

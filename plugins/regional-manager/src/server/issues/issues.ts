@@ -22,7 +22,7 @@ type IssuesBb = FactsBb & CatalogBb & { sdk: { threads: { output(args: { threadI
 
 type Deps = {
   bb: IssuesBb;
-  store: FactsStore & Pick<Store, "issue" | "insertIssue" | "updateIssue" | "record" | "check" | "agent">;
+  store: FactsStore & Pick<Store, "issue" | "insertIssue" | "updateIssue" | "record" | "check" | "agent" | "finalChecks">;
   views: Pick<CurrentViews, "whileCurrent">;
   /** Runs after anything that changes a regional manager's board. */
   onChange(id: CoordinatorId): void;
@@ -144,7 +144,8 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
       const agents = store.agents(coordinatorId).filter((agent) => agent.issueId === id);
       const output = read.threadId === null ? null : (await bb.sdk.threads.output({ threadId: read.threadId })).output;
       const views = reads.map(({ view }) => view);
-      return issueText(read, relationsOf(views, read.view.issue), agents, store.record(coordinatorId, id), output, { agent: (agentId) => store.agent(coordinatorId, agentId) });
+      const record = { handed: store.record(coordinatorId, id), finalChecks: store.finalChecks(coordinatorId, id) };
+      return issueText(read, relationsOf(views, read.view.issue), agents, record, output, { agents: () => store.agents(coordinatorId) });
     },
   };
 }
