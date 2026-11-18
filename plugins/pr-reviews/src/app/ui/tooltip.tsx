@@ -18,6 +18,9 @@ type TooltipProps = {
   /** Layout classes for the hover area, which is the trigger's box in its parent: "min-w-0" lets a
    *  truncating trigger shrink in a flex row. */
   className?: string;
+  /** Shows the tooltip whatever the pointer and focus do, while true: a word the trigger asks the
+   *  reader to see now, such as a hold's nudge to keep holding. */
+  forced?: boolean;
   /** Renders the trigger; pass `describedBy` to its `aria-describedby`. */
   children: (describedBy: string) => ReactNode;
 };
@@ -30,11 +33,11 @@ const PLACEMENTS = {
   "bottom-end": "top-full right-0 pt-1.5",
 } as const satisfies Record<Placement, string>;
 
-export function Tooltip({ content, placement = "top", className = "", children }: TooltipProps) {
+export function Tooltip({ content, placement = "top", className = "", forced = false, children }: TooltipProps) {
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const [dismissed, setDismissed] = useState(false);
-  const open = (hovered || focused) && !dismissed;
+  const open = forced || ((hovered || focused) && !dismissed);
   const id = useId();
   useDismissOnEscape(open, setDismissed);
   return (
