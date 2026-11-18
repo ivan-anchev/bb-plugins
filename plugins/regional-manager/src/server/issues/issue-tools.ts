@@ -80,7 +80,7 @@ export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
     name: UPDATE,
     description:
       "Change one of your issues: its kind (only before any agent has started on it), title, description, brief, done-criteria, verifier, parent or dependencies (dependsOn: add and remove), or where it stands. status: backlog or todo rests an issue no agent holds (and reopens a canceled one); canceled closes one no agent holds, and a parent only once its sub-issues are closed; done accepts one that is In review (a build parent is once its sub-issues are closed and merged while verification is off; with it on, its final check passing makes it Done; a research issue never is: its agent's done handoff makes it Done, and a research parent is Done with its last sub-issue). Every other status is the plugin's to say, from what its agents did. A build issue's verifier change applies from its next done handoff on, or a parent's from its next final check; verifier: null lets the plugin pick again, and drops the one named when the issue becomes research. A status or dependency change that makes issues ready says so: \"Now ready: i3\".",
-    presentation: { label: { pending: "Updating an issue", completed: "Updated an issue" }, icon: { glyph: "Workflow" } },
+    presentation: { label: { pending: "Updating an issue", completed: "Updated an issue" }, icon: { glyph: "Workflow" }, suppress: true },
     parameters: z.strictObject({
       id: issueIdSchema,
       kind: kindSchema.optional(),
@@ -108,7 +108,7 @@ export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
     name: READ,
     description:
       "Read one of your issues whole: its status and why, what blocks it, its description, brief and done-criteria, its parent and sub-issues, what it depends on and what it blocks, the verifier named, each agent with what it runs on, every handoff with its verdict, and its agent's latest answer.",
-    presentation: { label: { pending: "Reading an issue", completed: "Read an issue" }, icon: { glyph: "FileText" } },
+    presentation: { label: { pending: "Reading an issue", completed: "Read an issue" }, icon: { glyph: "FileText" }, suppress: true },
     parameters: z.object({ id: issueIdSchema }),
     execute: forIssue(READ, (issue) => issues.read(issue)),
   });

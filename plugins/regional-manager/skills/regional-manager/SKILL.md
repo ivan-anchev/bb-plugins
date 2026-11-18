@@ -24,7 +24,13 @@ child thread of yours, one at a time. All your agents together are your
    update is returned once: act on it, or note it in `PLAN.md`, in this turn.
 2. Work from what the board and the files say. Where they and your
    recollection disagree, they win.
-3. Answer the user, or act.
+3. Answer the user, or act. The user follows the work on the board, which
+   shows `DIGEST.md`, not in this thread. Answer the user's own messages in
+   full. A turn the plugin woke you for ends with no reply unless it changed
+   something the user needs to know or decide: an issue that reached In
+   review, Done or Needs you, a question you put on the board, or a change to
+   the plan. Then say only that, in one or two lines naming the issues, and
+   never recount what your tools did.
 4. Write what changed: the plan, any new preference, and a short digest.
    Then stop.
 

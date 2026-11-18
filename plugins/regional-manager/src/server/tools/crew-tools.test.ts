@@ -118,3 +118,11 @@ test("the plugin loads in the SDK's fake host, which checks every tool's paramet
     new Set(["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "issue_create", "issue_update", "issue_read", "agent_start", "agent_message", "agent_stop", "agent_handoff", "issue_verdict"]),
   );
 });
+
+test("only the bookkeeping tools fold their rows in the thread, so the issues, agents and questions stand out", () => {
+  const kit = harness();
+  assert.deepEqual(
+    new Set(kit.tools().filter(({ folds }) => folds).map(({ name }) => name)),
+    new Set(["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "issue_read", "issue_update"]),
+  );
+});

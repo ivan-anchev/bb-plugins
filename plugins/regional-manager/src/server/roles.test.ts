@@ -21,6 +21,16 @@ test("a regional manager is offered its tools, its skill and rules naming the pr
   assert.ok(configuration.instructions?.includes(`starting "[${DISPLAY_NAME}]"`), "its wake messages are headed with the product's name");
 });
 
+test("a regional manager reads in its rules and its skill that a turn it was woken for ends quiet unless something needs the user, and then in a line or two", async () => {
+  const kit = harness();
+  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
+  const skill = readFileSync(join(import.meta.dirname, "..", "..", "skills", "regional-manager", "SKILL.md"), "utf8").replace(/\s+/g, " ").replaceAll("`", "");
+
+  const rule = "A turn the plugin woke you for ends with no reply unless it changed something the user needs to know or decide: an issue that reached In review, Done or Needs you, a question you put on the board, or a change to the plan. Then say only that, in one or two lines naming the issues, and never recount what your tools did.";
+  const read = { rules: kit.configurationFor(threadId, {}).instructions, skill };
+  for (const [where, text] of Object.entries(read)) assert.ok(text?.includes(rule), `${where} lacks the rule`);
+});
+
 test("its first session, before any bind, is configured from its unbound ticket", async () => {
   const kit = harness({ created: false, answer: "lost" });
   await assert.rejects(kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true));

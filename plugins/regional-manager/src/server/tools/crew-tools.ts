@@ -40,7 +40,7 @@ export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, on
     name: CATCH_UP,
     description:
       "Catch up: returns every update since your last catch-up in full (agents' handoffs, a done one with its verifier's verdict, agents that failed, wait on the user, stopped without a handoff or ended before their work was done, issues unblocked, pull requests, your reminders that came due, the user's answers to your questions, and the user's memory edits and verification switch), then the board (every issue you filed, under Needs you, In review, Verifying, In progress, Todo, Backlog, Done or Canceled, with its agent, thread and branch, and what blocks it) and the issues ready to start (in Todo, not blocked), the questions still waiting for the user, your reminders with their ids, and your memory files (MEMORY.md, GOAL.md, PLAN.md, PREFERENCES.md, CREW.md, DIGEST.md) in full, each with its version, and names any other memory file. Each update is returned once. Call it first on every wake.",
-    presentation: { label: { pending: "Catching up", completed: "Caught up" }, icon: { glyph: "Workflow" } },
+    presentation: { label: { pending: "Catching up", completed: "Caught up" }, icon: { glyph: "Workflow" }, suppress: true },
     parameters: z.object({}),
     execute: forManager(store, CATCH_UP, async (id) => {
       // why caught: the updates and the memory are still worth reading when bb's thread list can't be.
@@ -60,7 +60,7 @@ export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, on
   bb.agents.registerTool({
     name: MEMORY_READ,
     description: "Read one memory file by its name in the memory folder, such as PLAN.md or notes/api.md. Returns its text and its version.",
-    presentation: { label: { pending: "Reading memory", completed: "Read memory" }, icon: { glyph: "FileText" } },
+    presentation: { label: { pending: "Reading memory", completed: "Read memory" }, icon: { glyph: "FileText" }, suppress: true },
     parameters: z.object({ file: memoryFileSchema }),
     execute: ({ file }, { threadId }) => {
       const role = store.roleOfThread(threadId);
@@ -74,7 +74,7 @@ export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, on
     name: MEMORY_WRITE,
     description:
       "Write one memory file whole, such as PLAN.md or notes/api.md. baseVersion is the version crew_catch_up or crew_memory_read last gave for that file, or null to create a new one. If the file changed since (the user edits these files too), nothing is written and you get its current text and version: merge your change into it and write again.",
-    presentation: { label: { pending: "Writing memory", completed: "Wrote memory" }, icon: { glyph: "FileText" } },
+    presentation: { label: { pending: "Writing memory", completed: "Wrote memory" }, icon: { glyph: "FileText" }, suppress: true },
     parameters: z.object({ file: memoryFileSchema, content: memoryContentSchema, baseVersion: memoryVersionSchema }),
     execute: forManager(store, MEMORY_WRITE, (id, { file, content, baseVersion }) => writeResult(file, memory.of(id).write(file, content, baseVersion))),
   });
@@ -83,7 +83,7 @@ export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, on
     name: REMIND,
     description:
       "Set yourself a reminder instead of waiting or polling: when it comes due, the plugin wakes you with its note. Give note and at, and every to repeat it; or give only cancel to cancel one. Due reminders are checked once a minute. A repeating one that was missed several times (the server was down) wakes you once, then keeps its times. crew_catch_up lists your reminders with their ids.",
-    presentation: { label: { pending: "Updating reminders", completed: "Updated reminders" }, icon: { glyph: "Clock" } },
+    presentation: { label: { pending: "Updating reminders", completed: "Updated reminders" }, icon: { glyph: "Clock" }, suppress: true },
     parameters: z.object({
       note: reminderNoteSchema.optional().describe("What to do when it comes due, in one line, such as \"check on i1\". It wakes you as written. Required unless you give cancel."),
       at: z.string().optional().describe(`When it first comes due: ${AT_FORMS}. Required unless you give cancel.`),
