@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type { CommentRequest } from "../comments/comment-schema.ts";
-import { addReplyArgs, addThreadArgs, discardArgs, parseAddedThread, parseViewerReview, submitArgs, viewerReviewArgs } from "./pending-review.ts";
+import { addReplyArgs, addReviewArgs, addThreadArgs, discardArgs, parseAddedThread, parseViewerReview, submitArgs, viewerReviewArgs } from "./pending-review.ts";
 import { liveComments, parseThreadsPage, toThread } from "./pr-comments.ts";
 import { repoSchema } from "./repo.ts";
 
@@ -80,4 +80,8 @@ test("a reply, a submit and a discard each name the pending review", () => {
   assert.deepEqual(variablesOf(addReplyArgs("PRRT_1", "PRR_1", "Pending reply")), ["-f", "thread=PRRT_1", "-f", "review=PRR_1", "-f", "body=Pending reply"]);
   assert.deepEqual(variablesOf(submitArgs("PRR_1", "REQUEST_CHANGES", "")), ["-f", "review=PRR_1", "-f", "event=REQUEST_CHANGES", "-f", "body="]);
   assert.deepEqual(variablesOf(discardArgs("PRR_1")), ["-f", "review=PRR_1"]);
+});
+
+test("a review with none pending names the PR, and goes as its event at once", () => {
+  assert.deepEqual(variablesOf(addReviewArgs(PR_ID, "APPROVE", "")), ["-f", `pr=${PR_ID}`, "-f", "event=APPROVE", "-f", "body="]);
 });

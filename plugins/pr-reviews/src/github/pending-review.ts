@@ -1,6 +1,6 @@
 // The reader's pending review through GitHub's GraphQL API: the read of it, and the mutations that
-// add a comment or a reply to it, submit it and discard it, as `gh api graphql` arguments, with
-// the parses of their responses. gh.ts runs them. Pure.
+// add a comment or a reply to it, submit it and discard it, or submit a review with none pending,
+// as `gh api graphql` arguments, with the parses of their responses. gh.ts runs them. Pure.
 import { z } from "zod";
 import { githubSideOf, type CommentRequest } from "../comments/comment-schema.ts";
 import type { ReviewEvent, ViewerReview } from "../comments/review-schema.ts";
@@ -72,6 +72,13 @@ const SUBMIT = `mutation($review: ID!, $event: PullRequestReviewEvent!, $body: S
 
 /** Submits the pending review as `event`, with `body` ("" for none) as its summary. */
 export const submitArgs = (reviewId: string, event: ReviewEvent, body: string) => graphqlArgs(SUBMIT, { review: reviewId, event, body });
+
+// why one mutation: given an event, GitHub submits the review it starts at once.
+const ADD_REVIEW = `mutation($pr: ID!, $event: PullRequestReviewEvent!, $body: String) {
+  addPullRequestReview(input: { pullRequestId: $pr, event: $event, body: $body }) { pullRequestReview { id } } }`;
+
+/** Submits a new review of the PR `pullRequestId` (its node id) as `event`, with `body` ("" for none), for a reader with no pending review. */
+export const addReviewArgs = (pullRequestId: string, event: ReviewEvent, body: string) => graphqlArgs(ADD_REVIEW, { pr: pullRequestId, event, body });
 
 const DISCARD = "mutation($review: ID!) { deletePullRequestReview(input: { pullRequestReviewId: $review }) { pullRequestReview { id } } }";
 

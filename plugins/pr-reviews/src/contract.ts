@@ -311,8 +311,12 @@ export const prReviewsContract = defineRpcContract({
   addToReview: { input: prRefSchema.extend({ request: commentRequestSchema, reviewId: z.string().nullable() }), output: empty },
   /** Adds a reply in the review thread `threadId` (its node id) to the pending review `reviewId`. */
   addReplyToReview: { input: prRefSchema.extend({ threadId: z.string(), reviewId: z.string(), body: commentBodySchema }), output: empty },
-  /** Submits the pending review, publishing its comments, with an optional summary (`body` "" for none). */
-  submitReview: { input: prRefSchema.extend({ reviewId: z.string(), event: reviewEventSchema, body: z.string().max(GITHUB_BODY_LIMIT) }), output: empty },
+  /**
+   * Submits the reader's pending review `reviewId`, publishing its comments, with an optional
+   * summary (`body` "" for none); with none pending (null), submits a review with no comments,
+   * which GitHub takes as a comment only with a body.
+   */
+  submitReview: { input: prRefSchema.extend({ reviewId: z.string().nullable(), event: reviewEventSchema, body: z.string().max(GITHUB_BODY_LIMIT) }), output: empty },
   /** Deletes the pending review and every comment in it. */
   discardReview: { input: prRefSchema.extend({ reviewId: z.string() }), output: empty },
 });

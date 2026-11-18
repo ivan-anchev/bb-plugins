@@ -99,9 +99,9 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
   // The PR's comments, and the PR with its reviewers' states, re-read once GitHub has submitted or
   // discarded the review. A refusal leaves both as they are, so Finish review stays open with
   // GitHub's words beside the reader's summary.
-  async function reviewed(target: { projectId: string; number: number }, write: () => Promise<void>): Promise<Record<string, never>> {
+  async function reviewed(target: { projectId: string; number: number }, write: (repo: Repo) => Promise<void>): Promise<Record<string, never>> {
     const repo = await repoOf(target.projectId);
-    await write();
+    await write(repo);
     bb.rpc.experimental_invalidate([commentsTag(target), repoTag(repo)]);
     return {};
   }
@@ -207,7 +207,7 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
         return {};
       }),
 
-    submitReview: ({ reviewId, event, body, ...target }) => reviewed(target, () => submitReview(reviewId, event, body)),
+    submitReview: ({ reviewId, event, body, ...target }) => reviewed(target, (repo) => submitReview(repo, target.number, reviewId, event, body)),
 
     discardReview: ({ reviewId, ...target }) => reviewed(target, () => discardReview(reviewId)),
   };

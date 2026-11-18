@@ -117,7 +117,7 @@ the composer.
 Clicking a row opens that PR's page. It opens on a header bar, as tall as bb's own pane headers
 and ruled off from the page the same way: the PR's state in the sidebar's badge, by name (green
 Open, grey Draft, purple Merged, red Closed), with `owner/repo #number` beside it, and at the bar's
-end **Finish review** while you have a pending review (see "Reviewing on GitHub" below), then icon
+end **Review**, or **Finish review** while you have a pending review (see "Reviewing on GitHub" below), then icon
 buttons, each named by its tooltip: **Review chat** (opens the review thread's chat beside the
 page; shown once a review has started, see "Review chat" below) and **Open on GitHub** (opens the
 PR on github.com). Under the bar sit the title and the author's GitHub avatar and login with
@@ -493,6 +493,15 @@ While you have a pending review:
   too, its tooltip giving the reason.
 - If GitHub refuses the submit (a review submitted or discarded elsewhere, or
   no network), its words show in Finish review and your summary stays.
+
+With no pending review, on a PR you didn't write, the same place holds
+**Review**, as GitHub's "Review changes" does: it approves, requests changes
+or comments at once, with no line comments first. Its popover has a comment
+field, required for Comment (GitHub refuses an empty one) and optional for
+Approve and Request changes, the same three choices and **Submit review**;
+there is nothing to discard. Once GitHub has it, the control says "Review
+submitted" for a moment, then offers Review again. On your own PR it doesn't
+show: comment from the Summary tab's composer instead.
 
 A review started elsewhere shows after Refresh. A Comment that GitHub refuses
 because a review went pending elsewhere says to add it to your review instead,

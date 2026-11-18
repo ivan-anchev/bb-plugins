@@ -1,8 +1,9 @@
 // The PR header: a pane header bar, then the masthead. The bar holds the PR's state badge, with
-// `owner/repo #number` beside it, and at its end Finish review while the reader has a pending
-// review on GitHub, then icon actions (Review chat when a review thread exists, then GitHub). The
-// badge opens a menu of the state changes GitHub allows. Under the bar, the masthead is the title
-// above the identity row (author, `base ← head`). The PR's line counts are on the Changes tab.
+// `owner/repo #number` beside it, and at its end Review, or Finish review while the reader has a
+// pending review on GitHub (review-submit.tsx), then icon actions (Review chat when a review
+// thread exists, then GitHub). The badge opens a menu of the state changes GitHub allows. Under
+// the bar, the masthead is the title above the identity row (author, `base ← head`). The PR's
+// line counts are on the Changes tab.
 import { Fragment, useState, type RefObject } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { PrDetail, PrState, StateChange } from "../../contract.ts";
