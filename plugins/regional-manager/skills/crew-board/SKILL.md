@@ -262,8 +262,9 @@ agent, it hands the issue over (see
 
 The regional manager messages an agent with `agent_message` (it arrives
 marked as from the manager's thread, which the agent's first message names,
-under a line calling it the manager's next instruction, not from you), and
-stops one with
+under a line calling it the manager's next instruction, not from you; to an
+agent whose done handoff is being checked, it stops the verifier first and
+drops that check, see [Verification](#verification)), and stops one with
 `agent_stop`, which archives its thread too when asked. An agent stopped
 mid-turn before it hands off can be followed by two updates: that it ended its
 turn without a handoff and, when its issue returns to Todo, that it was
@@ -347,7 +348,7 @@ verdict.
   minute's pass never waits, and skips a busy issue until the next minute.
   Before a verifier starts, every other verifier of the issue that bb reports
   running is stopped; one bb doesn't confirm keeps it queued for the next
-  minute. A verifier starts only while its agent is idle (see
+  minute. An agent and its own verifier never run together (see
   [Verification](#verification)).
 - **By default the new agent continues** in the previous agent's environment,
   a worktree or a sandbox alike, as the verifier joins it: the same
@@ -532,9 +533,10 @@ a **verifier** for each one:
 
 - **Where**: a hidden thread, a child of the agent's thread, in the agent's
   own environment. Archiving the regional manager takes it along.
-- **When**: once the agent's turn that handed off has ended. The plugin never
-  starts or reminds a verifier while bb reports its agent running, and sends
-  its findings back only once bb reports it no longer running. bb saying a
+- **When**: once the agent's turn that handed off has ended. An agent and its
+  own verifier never run at the same time in that environment: a verifier
+  starts, or is reminded, only while bb reports its agent idle, and its
+  findings go back only once bb reports it no longer running. bb saying a
   thread went idle sets it off; the once-a-minute tick catches one the plugin
   missed.
 - **On what model**: the issue's named verifier first (see
@@ -572,6 +574,14 @@ a **verifier** for each one:
   only the newer handoff is checked and announced.
 - **A verifier that never started** (the plugin reloaded at that moment) is
   started by the once-a-minute tick.
+- **A manager's message mid-check**: `agent_message` to an agent whose done
+  handoff is still being checked means the manager wants more work, so the
+  check is moot. Its verifier is stopped first (while bb doesn't confirm it
+  stopped, the message is refused and nothing is sent), then the message is
+  sent and the check dropped: nothing reports on that handoff, the result
+  says so, and the agent's next done handoff is checked afresh. A verdict
+  already returned is kept: it goes to the manager, with no fix round, and
+  one waiting for CI waits on.
 
 Turn verification off or on with the switch at the top of the board (or on
 the New page when starting). It applies to handoffs made after it: turning it
@@ -614,8 +624,8 @@ regional manager:
   under Needs you as "✗ Failed verification, its findings may or may not have
   reached it: <summary>", and the regional manager is woken to decide.
 - Nothing is sent back for a handoff that is no longer the agent's current
-  one (the agent was messaged or handed off again before its findings were
-  sent), or for
+  one (someone typed to the agent, the manager messaged it, or it handed off
+  again before its findings were sent), or for
   an agent that has ended. When bb refuses the message before taking it (the
   agent's thread is archived, deleted or can't take a message), its round is
   given back, and the regional manager's catch-up says bb refused the
@@ -939,12 +949,10 @@ and the Memory page read the new text on their next read.
   committed one isn't seen, and nothing is blocked or reverted.
 - Reminders take no cron expressions and nothing finer than a minute.
 - The plugin never merges, approves or comments on a pull request.
-- The plugin starts and wakes an agent's verifier only while the agent is
-  idle, and sends findings only once the verifier no longer runs, but a
-  message from the manager reaches an agent while its verifier checks. Typing
-  into an agent's thread while its verifier checks, or into a verifier's
-  while its agent works, runs both in the same environment, and the plugin
-  neither prevents nor flags that.
+- The plugin never runs an agent and its own verifier together, but you can:
+  typing into an agent's thread while its verifier checks, or into a
+  verifier's while its agent works, runs both in the same environment, and
+  the plugin neither prevents nor flags that.
 - A move takes committed work only, and through origin only what was pushed:
   the plugin never pushes, commits or copies for an agent, so a sandbox
   removed before its agent pushed takes its commits with it.

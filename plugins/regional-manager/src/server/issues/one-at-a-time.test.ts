@@ -297,7 +297,7 @@ test("findings on their way when the plugin is disposed settle nothing once bb a
 
 // An agent and its own verifier share its environment, and the plugin never runs them together:
 // a verifier starts or is reminded only while bb reports its agent idle, findings go back only once
-// bb reports the verifier no longer running.
+// bb reports the verifier no longer running, and a manager's message stops a running check first.
 
 /** The statuses of a1's thread and of a verifier's, in that order. */
 const statusesOf = (kit: Awaited<ReturnType<typeof onI1>>["kit"], agentThreadId: string, verifier: string) => [kit.thread(agentThreadId).status, kit.thread(verifier).status];
@@ -404,6 +404,63 @@ test("a verifier still running on the tick after its verdict is stopped first, t
   await kit.tick();
   await settled();
   assert.deepEqual([...statusesOf(kit, agentThreadId, verifier), kit.delivered(agentThreadId).filter((text) => text.startsWith("## Verifier findings")).length], ["active", "idle", 1]);
+});
+
+test("B1: agent_message to a1 while its verifier checks stops the verifier first, drops the check, then sends; the next done handoff is checked afresh", async () => {
+  const on = await onI1();
+  const { kit, threadId, agentThreadId, verifiers, check } = on;
+  const verifier = await handedOff(on);
+  const dropped = check().id;
+  const result = textOf(await kit.call("agent_message", { agent: "a1", text: "Please add jitter." }, threadId));
+  assert.equal(result, "Sent to a1. The check of a1's last done handoff was dropped before its verdict, as you asked for more work: nothing reports on that handoff, and a1's next done handoff is checked afresh.");
+  assert.deepEqual([...statusesOf(kit, agentThreadId, verifier), kit.store.check(dropped)?.verdict.state], ["active", "idle", "superseded"]);
+  assert.equal(kit.delivered(agentThreadId).at(-1), "Your regional manager's next instruction, on i1:\n\nPlease add jitter.", "marked as the manager's next instruction");
+  await kit.tick();
+  assert.deepEqual(kit.delivered(verifier), [], "no reminder to the dropped check's verifier");
+
+  await kit.idle(agentThreadId, "Added jitter.");
+  const next = await handedOff(on);
+  assert.deepEqual([verifiers().length, check().verdict.state, ...statusesOf(kit, agentThreadId, next)], [2, "running", "idle", "active"]);
+});
+
+test("agent_message to a1 while its done handoff's check is still queued drops the check as it steers a1's turn", async () => {
+  const { kit, threadId, agentThreadId, verifiers, check } = await onI1();
+  await kit.startTurn(agentThreadId);
+  await kit.call("agent_handoff", DONE, agentThreadId);
+  assert.match(textOf(await kit.call("agent_message", { agent: "a1", text: "Please add jitter." }, threadId)), /^Sent to a1\. The check of a1's last done handoff was dropped/);
+  await kit.idle(agentThreadId, "Added jitter.");
+  assert.deepEqual([check().verdict.state, verifiers().length], ["superseded", 0], "no verifier for the dropped check");
+});
+
+test("agent_message to a1 whose verifier bb doesn't confirm stopped is refused and sends nothing; once it stops, the message goes", async () => {
+  const on = await onI1();
+  const { kit, threadId, agentThreadId, check } = on;
+  const verifier = await handedOff(on);
+  kit.stopRequests.byThread.set(verifier, bbHttpError(500, "internal", "Stop failed"));
+  const refused = await kit.call("agent_message", { agent: "a1", text: "Please add jitter." }, threadId);
+  assert.ok(isRefusal(refused));
+  assert.equal(
+    textOf(refused),
+    `agent_message is refused and nothing was sent: the verifier @thread:${verifier} of i1 couldn't be confirmed stopped: bb answered HTTP 500: Stop failed, and a1 never runs beside its verifier. Call agent_message again once it has stopped.`,
+  );
+  assert.deepEqual([kit.sendAttempts().includes(agentThreadId), check().verdict.state, ...statusesOf(kit, agentThreadId, verifier)], [false, "running", "idle", "active"]);
+
+  kit.stopRequests.byThread.delete(verifier);
+  assert.match(textOf(await kit.call("agent_message", { agent: "a1", text: "Please add jitter." }, threadId)), /^Sent to a1\. The check/);
+  assert.deepEqual(statusesOf(kit, agentThreadId, verifier), ["active", "idle"]);
+});
+
+test("agent_message while a1's findings are owed stops the verifier and sends; the verdict then goes to the manager, not back to a1", async () => {
+  const on = await onI1();
+  const { kit, threadId, coordinatorId, agentThreadId, check } = on;
+  const verifier = await handedOff(on);
+  await kit.call("issue_verdict", FAILS, verifier);
+  assert.equal(textOf(await kit.call("agent_message", { agent: "a1", text: "Please add jitter." }, threadId)), "Sent to a1.");
+  await settled();
+  const { verdict } = check();
+  assert.deepEqual([verdict.state === "returned" && verdict.settlement.kind, kit.store.agent(coordinatorId, a1)?.fixRounds], ["checked", 0]);
+  assert.deepEqual(kit.delivered(agentThreadId), ["Your regional manager's next instruction, on i1:\n\nPlease add jitter."], "no findings sent after the manager's message");
+  assert.deepEqual(statusesOf(kit, agentThreadId, verifier), ["active", "idle"]);
 });
 
 test("B7: a quiet verifier isn't reminded while a person has woken a1; the reminder comes once a1 is idle again", async () => {

@@ -49,7 +49,7 @@ import type { Store } from "../store/store.ts";
 import type { PrWatch } from "../watch/pr-watch.ts";
 import { agentBrief } from "./brief.ts";
 import { environmentGone, type EnvironmentsBb } from "./environments.ts";
-import { latestTurnSeq, stopThreads, threadsById, type ListBb, type StopBb } from "./threads.ts";
+import { latestTurnSeq, stopRunning, stopThreads, threadsById, type ListBb, type StopBb } from "./threads.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
 type QueuedMessage = Awaited<ReturnType<Threads["queuedMessages"]["list"]>>[number];
@@ -147,12 +147,21 @@ export type StartOutcome =
 /** What a stop did. An agent ends as stopped only once bb confirms its thread no longer runs; `why` it hasn't: the status bb still reports, or bb's error that left the stop unconfirmed. */
 export type StopOutcome = { kind: "stopped"; archived: boolean } | { kind: "already-ended"; how: EndedHow } | { kind: "still-running"; why: string };
 
-/** What a message did: sent or queued by bb; or nothing, as the agent ended or has no thread yet. */
-export type MessageOutcome = { kind: "sent" | "queued" | "unbound" } | { kind: "already-ended"; how: EndedHow };
+/**
+ * What a message did: sent or queued by bb, `dropped` saying whether it superseded the check of the
+ * agent's done handoff still waiting for its verifier; or nothing, as the agent ended or has no
+ * thread yet, or as a verifier of its issue bb hasn't confirmed stopped (`why`: as for a stop).
+ */
+export type MessageOutcome =
+  | { kind: "sent" | "queued"; dropped: boolean }
+  | { kind: "unbound" }
+  | { kind: "already-ended"; how: EndedHow }
+  | { kind: "verifier-running"; verifierThreadId: string; why: string };
 
 type Deps = {
   bb: AgentsBb;
-  store: FactsStore & Pick<Store, "coordinator" | "coordinators" | "issue" | "agent" | "issueThreads" | "insertAgent" | "replaceAgent" | "record" | "agentTicket" | "removeCoordinator">;
+  store: FactsStore &
+    Pick<Store, "coordinator" | "coordinators" | "issue" | "agent" | "issueThreads" | "insertAgent" | "replaceAgent" | "record" | "agentTicket" | "removeCoordinator" | "supersedeOpenChecks">;
   spawner: Pick<Spawner, "agent">;
   inbox: Pick<Inbox, "endAgent">;
   memory: MemoryRoot;
@@ -541,20 +550,31 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
      * Sends the text as a message from the regional manager: it steers a running turn, starts one,
      * or waits in bb's queue. In its issue's turn, to an agent that still holds it, so a handover
      * never has it wake the agent it replaced; a handover takes back one still waiting in the queue.
+     * First it stops every verifier of the issue bb reports running, and confirms each, as the agent
+     * never runs beside its own verifier; with one unconfirmed, it sends nothing. Once sent, it drops
+     * the check of the agent's done handoff still waiting for its verifier: the manager asked for
+     * more work, so that handoff is no longer the agent's last word, and its next done handoff is
+     * checked afresh. A returned verdict is kept: it settles as it would after any later turn of the
+     * agent's, to the manager, with no fix round.
      */
     message: ({ coordinatorId, id, issueId }: Agent, text: string): Promise<MessageOutcome | Busy> =>
       turns.run(coordinatorId, issueId, async () => {
         const agent = agentOf(coordinatorId, id);
         if (agent.ended !== null) return { kind: "already-ended", how: agent.ended.how };
         if (agent.threadId === null) return { kind: "unbound" };
+        const verifiers = store.issueThreads(coordinatorId, issueId).flatMap(({ threadId, agentId }) => (agentId === null ? [threadId] : []));
+        const [unstopped] = (await stopRunning(bb, verifiers)).unstopped;
+        if (unstopped !== undefined) return { kind: "verifier-running", verifierThreadId: unstopped.threadId, why: unstopped.why };
         const { delivery } = await bb.sdk.threads.send({
           threadId: agent.threadId,
           senderThreadId: coordinatorOf(coordinatorId).threadId,
           mode: "auto",
           input: [{ type: "text", text, mentions: [] }],
         });
+        // why after the send: one that fails leaves the check to go on once the agent is idle again.
+        const dropped = store.supersedeOpenChecks(coordinatorId, issueId);
         onChange(coordinatorId);
-        return { kind: delivery };
+        return { kind: delivery, dropped };
       }),
 
     /**

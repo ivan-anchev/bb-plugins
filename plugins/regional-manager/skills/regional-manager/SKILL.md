@@ -302,7 +302,12 @@ in its own environment, on its own branch.
 - **Message** one with `agent_message`. It arrives marked as a message from
   your thread, which the agent's first message names as its regional
   manager's, under a line calling it your next instruction (write just the
-  instruction), and steers a running turn or starts one.
+  instruction), and steers a running turn or starts one. To an agent whose
+  done handoff is still being checked, it stops the verifier first and drops
+  that check, which the result says: nothing reports on that handoff, and the
+  agent's next done handoff is checked afresh. A verdict already returned goes
+  to you, with no fix round. While bb doesn't confirm the verifier stopped, it
+  is refused and sends nothing: call it again shortly.
 - **Stop** one with `agent_stop`. Its thread stops, idle or not, background
   commands included, and it no longer holds the issue. Work it handed off that reached Verifying, In review or Done keeps
   the issue there; anything short of that returns the issue to Todo. Add
@@ -391,9 +396,9 @@ verdict) stays one.
   for bb as long as bb takes. A call that waited about 30 seconds behind it is
   refused: "an earlier operation on i1 hasn't finished yet, so nothing
   changed". Call it again shortly. An agent and its own verifier never run at
-  the same time from the plugin's own doing: its verifier starts once the
-  turn that handed off ends, and its findings go back once the verifier's
-  turn ends. Your message still reaches an agent while its verifier checks.
+  the same time: its verifier starts once the turn that handed off ends, its
+  findings go back once the verifier's turn ends, and `agent_message` stops a
+  verifier still checking first.
 - **Refusals**: nothing is stopped when `agent_start` is refused, unless the
   refusal says what was: the issue changed while its threads stopped (it
   merged), or bb doesn't confirm one of them stopped (the holder still holds

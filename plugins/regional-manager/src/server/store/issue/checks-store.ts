@@ -61,11 +61,7 @@ function waitingForCi(db: Db, coordinatorId: CoordinatorId, agentId: AgentId): C
  * still run: whatever starts next on the issue asks bb, and stops it. Call inside a transaction.
  */
 export function supersedeChecks(db: Db, coordinatorId: CoordinatorId, issueId: IssueId): void {
-  const open = db()
-    .prepare(`SELECT ${CHECK_COLUMNS} FROM checks WHERE coordinator_id = ? AND issue_id = ? AND json_extract(verdict, '$.state') IN ('queued', 'running')`)
-    .all(coordinatorId, issueId)
-    .map(toOpenCheck);
-  for (const { id } of open) writeVerdict(db, id, { state: "superseded" });
+  supersedeOpen(db, coordinatorId, issueId);
   const waiting = db()
     .prepare("SELECT id FROM checks WHERE coordinator_id = ? AND issue_id = ? AND json_extract(verdict, '$.settlement.kind') = 'waiting-for-ci'")
     .all(coordinatorId, issueId)
@@ -76,6 +72,16 @@ export function supersedeChecks(db: Db, coordinatorId: CoordinatorId, issueId: I
     if (verdict?.state !== "returned") throw new Error(`The check ${checkId} waits for CI with no returned verdict.`);
     writeVerdict(db, checkId, { ...verdict, settlement: { kind: "superseded" } });
   }
+}
+
+/** Marks every check of the issue waiting for its verifier to start or to return as superseded, in one statement; says whether there was one. */
+function supersedeOpen(db: Db, coordinatorId: CoordinatorId, issueId: IssueId): boolean {
+  const superseded: Verdict = { state: "superseded" };
+  return (
+    db()
+      .prepare("UPDATE checks SET verdict = ? WHERE coordinator_id = ? AND issue_id = ? AND json_extract(verdict, '$.state') IN ('queued', 'running')")
+      .run(JSON.stringify(superseded), coordinatorId, issueId).changes > 0
+  );
 }
 
 export function checksStore(db: Db) {
@@ -244,6 +250,13 @@ export function checksStore(db: Db) {
     openChecks(): OpenCheck[] {
       return db().prepare(`SELECT ${CHECK_COLUMNS} FROM checks WHERE json_extract(verdict, '$.state') IN ('queued', 'running') ORDER BY rowid`).all().map(toOpenCheck);
     },
+
+    /**
+     * Drops the issue's check still waiting for its verifier to start or to return, as superseded:
+     * its agent was asked for more work, so the handoff it judges is no longer the agent's last
+     * word. A returned verdict is kept as it is. Says whether there was one.
+     */
+    supersedeOpenChecks: (coordinatorId: CoordinatorId, issueId: IssueId): boolean => supersedeOpen(db, coordinatorId, issueId),
 
     /** Marks a running check's verifier as nudged, once; says whether this call did. */
     markNudged(checkId: CheckId, verifierThreadId: string): boolean {
