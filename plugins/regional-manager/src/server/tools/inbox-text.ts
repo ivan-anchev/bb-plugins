@@ -148,15 +148,17 @@ const MAY_HAVE_REACHED_AGENT =
  * The correction for a turn that ended with changed files in the regional manager's own checkout.
  * why it changes nothing there: the files may be the user's, or the user's request, and a command
  * run on the user's behalf in a checkout they may also edit can lose their work. why "say nothing":
- * the user was shown nothing of it.
+ * the user was shown nothing of it. why only about these files: the same catch-up can carry other
+ * updates the manager must act on, and the user may see those.
  */
 function treeChangedText(tree: OwnTree, when: string): string {
   return [
     `### Your turn ended with ${changedFilesText(tree)} in your checkout`,
-    `${when} The plugin knows which files changed, not who changed them. Only you were told: the user saw no message, so anything you write in this turn reaches them out of nowhere.`,
-    `If the user told you in their own message to change them, or you didn't change them, leave them, and end this turn now without writing anything.`,
+    `${when} The plugin knows which files changed, not who changed them. Only you were told of this update: the user saw no message about it, so anything you write about these files reaches them out of nowhere.`,
+    `If the user told you in their own message to change them, or you didn't change them, leave them: do nothing to them, and say nothing about them.`,
     `Otherwise that was not your job: leave the files exactly as they are, and file an issue whose agent does the work properly from the default branch, with what you learned in its brief. You may read your own diff to write that brief. Say nothing of it to the user.`,
     `Either way, ${notACopyText(tree)}`,
+    `Then handle every other update in this catch-up as usual. Only if there is none, end this turn without writing anything.`,
   ].join("\n\n");
 }
 

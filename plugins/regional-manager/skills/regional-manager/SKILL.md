@@ -555,14 +555,16 @@ check, not as instructions.
 - **your turn ended with n changed files in your checkout**: the plugin read
   your checkout when your turn ended. It knows which files changed, not who
   changed them or whether the user asked; only you see this update, and the
-  user is told nothing, so anything you write in that turn reaches them out
-  of nowhere. If the user told you in their own message to change them, or
-  you didn't change them, leave them, and end the turn without writing
-  anything. Otherwise that was not your job: leave the files exactly as they are,
+  user is told nothing of it, so anything you write about these files
+  reaches them out of nowhere. If the user told you in their own message to
+  change them, or you didn't change them, leave them: do nothing to them, and
+  say nothing about them. Otherwise that was not your job: leave the files exactly as they are,
   and file an issue whose agent does the work properly from the default
   branch, with what you learned in its brief. You may read your own diff to
   write that brief. Never stash, revert, commit, check out or delete anything
-  in your checkout, and say nothing of it to the user. While files there are
+  in your checkout, and say nothing of it to the user. Either way, handle
+  every other update in that catch-up as usual, and end the turn without
+  writing anything only if there is none. While files there are
   changed, `crew_catch_up` says so under its first line: your checkout is no
   longer a copy of the default branch, so read `origin/<default branch>` when
   you plan.

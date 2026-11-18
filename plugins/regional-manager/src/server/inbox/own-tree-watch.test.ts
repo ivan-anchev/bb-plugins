@@ -68,7 +68,7 @@ test("a turn that ends with changed files wakes the Coordinator unseen by the us
   assert.match(text, /^You are regional manager [\w-]+: the plugin made this thread one when it started it\.\n/);
   assert.equal(text.split("\n")[1], CHECKOUT_LINE("2 changed files"));
   assert.deepEqual(corrections(text), ["2 changed files"]);
-  assert.match(text, /The plugin knows which files changed, not who changed them\. Only you were told: the user saw no message, so anything you write in this turn reaches them out of nowhere\.\n\nIf the user told you in their own message to change them, or you didn't change them, leave them, and end this turn now without writing anything\./);
+  assert.match(text, /The plugin knows which files changed, not who changed them\. Only you were told of this update: the user saw no message about it, so anything you write about these files reaches them out of nowhere\.\n\nIf the user told you in their own message to change them, or you didn't change them, leave them: do nothing to them, and say nothing about them\./);
   assert.match(text, /Otherwise that was not your job: leave the files exactly as they are, and file an issue whose agent does the work properly from the default branch, with what you learned in its brief\. You may read your own diff to write that brief\./);
   assert.doesNotMatch(text, MUTATING_GIT, "no command that changes the checkout");
 });
@@ -296,4 +296,17 @@ test("a checkout bb's git plugin names no default branch for is still read, and 
   assert.deepEqual(doorbells(), [CHANGED_LINE("1 changed file")]);
   assert.deepEqual(kit.warnings(), []);
   assert.equal((await catchUp()).split("\n")[1], "Your checkout has 1 changed file, so your checkout is no longer a copy of the default branch: read the default branch as origin has it when you plan.");
+});
+
+test("a correction caught up with another update keeps the manager quiet about the files only: it still acts on the rest", async () => {
+  const { kit, threadId, turnEnds, catchUp } = await working();
+  const { agentThreadId } = await startedAgent(kit, threadId);
+  await turnEnds(["README.md"]);
+  await kit.call("agent_handoff", { status: "blocked", summary: "Which target branch?", did: [], evidence: [], concerns: ["Needs the target"], deviations: [], findings: [] }, agentThreadId);
+  await settled();
+
+  const text = await catchUp();
+  assert.match(text, /## Updates\n\n2 updates since your last catch-up, oldest first\.\n\n### Your turn ended with 1 changed file in your checkout\n/);
+  assert.match(text, /leave them: do nothing to them, and say nothing about them\.[\s\S]*\n\nThen handle every other update in this catch-up as usual\. Only if there is none, end this turn without writing anything\.\n\n### i1 "Add retries" \(a1\) handed off: blocked\n/);
+  assert.doesNotMatch(text, /end this turn now/, "nothing tells it to drop the handoff");
 });

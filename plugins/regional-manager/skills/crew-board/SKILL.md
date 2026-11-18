@@ -797,10 +797,12 @@ involving you:
   manager is told "at least" the count.
 - **What happens**: nothing goes on its board and nothing asks you. The
   thread is woken with a message only it sees. If your own message told it
-  to change those files, or it didn't change them, it leaves them and ends
-  that turn without writing anything. Otherwise it leaves the files
+  to change those files, or it didn't change them, it leaves them and says
+  nothing about them. Otherwise it leaves the files
   exactly as they are and files an issue whose agent does the work properly
-  from the default branch, with what it learned in the brief. Nobody moves,
+  from the default branch, with what it learned in the brief. Either way it
+  handles the other updates of that catch-up as usual, and ends the turn
+  without writing anything only when there are none. Nobody moves,
   commits, stashes or deletes anything in its checkout: neither the plugin
   nor the manager.
 - **While files there are changed**, its `crew_catch_up` says so under its
