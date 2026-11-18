@@ -105,4 +105,27 @@ export const MIGRATIONS: readonly string[] = [
   // outlives its relation. A fact about what the manager was told, read by nothing else: blocked and
   // ready are derived on every read.
   `ALTER TABLE issue_relations ADD COLUMN known_close TEXT`,
+
+  // How many times each regional manager's issue facts were written: a row added to, changed in or
+  // removed from any table its issues are viewed from (issue-facts.ts), or an agent's thread bound.
+  // A read of its issues is current while this stays as it was when the read began
+  // (current-views.ts). why triggers: the count moves in the statement that writes, inside its
+  // transaction, so no write can forget it or count it late, and a write added later is counted by
+  // the table it writes. A table the views come to read later gets its triggers appended after this.
+  [
+    `CREATE TABLE fact_writes (coordinator_id TEXT PRIMARY KEY, writes INTEGER NOT NULL)`,
+    ...["issues", "issue_relations", "agents", "handoffs", "checks", "pr_snapshots", "decisions"].flatMap((table) => [
+      countWrites(`${table}_inserted`, `INSERT ON ${table}`, "NEW.coordinator_id"),
+      countWrites(`${table}_updated`, `UPDATE ON ${table}`, "NEW.coordinator_id"),
+      countWrites(`${table}_deleted`, `DELETE ON ${table}`, "OLD.coordinator_id"),
+    ]),
+    countWrites("roles_bound", "UPDATE OF thread_id ON roles", "json_extract(NEW.role, '$.coordinatorId')"),
+  ].join(";\n"),
 ];
+
+/** The trigger `name`: after each row `on` names, one more write of the regional manager `manager` names. */
+function countWrites(name: string, on: string, manager: string): string {
+  return `CREATE TRIGGER ${name} AFTER ${on} BEGIN
+     INSERT INTO fact_writes (coordinator_id, writes) VALUES (${manager}, 1) ON CONFLICT (coordinator_id) DO UPDATE SET writes = writes + 1;
+   END`;
+}

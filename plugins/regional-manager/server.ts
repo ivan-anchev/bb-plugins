@@ -39,6 +39,7 @@ export default function plugin(host: BbPluginApi): void {
   const refreshBoard = (id: CoordinatorId) => bb.rpc.experimental_invalidate([boardTag(id)]);
   const refreshCoordinators = () => bb.rpc.experimental_invalidate([COORDINATORS_TAG]);
   // why one hook: whatever changes what a regional manager's views are derived from changes its board, makes a read begun before it stale, and may unblock an issue.
+  // A store write is counted by the store as it commits (current-views.ts); views.changed is for what bb moved, a message starting an agent's turn or bb saying a thread moved.
   const onChange = (id: CoordinatorId) => {
     refreshBoard(id);
     views.changed(id);

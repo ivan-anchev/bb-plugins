@@ -52,7 +52,7 @@ export function watchUnblocked({ bb, store, views, inbox }: Deps) {
   }
 
   return {
-    /** Something the regional manager's views are derived from changed (current-views.ts changed first): reads them, or has the read running read them again. A failure, or a pass out of reads, waits for the next change or tick. */
+    /** Something the regional manager's views are derived from changed (the store counted its write as it committed, or current-views.ts was told first of what bb moved): reads them, or has the read running read them again. A failure, or a pass out of reads, waits for the next change or tick. */
     changed(id: CoordinatorId): void {
       settled(id).catch((error: unknown) => bb.log.warn(`Could not read what ${id}'s issues unblocked; the next tick tries again: ${messageOf(error)}`));
     },

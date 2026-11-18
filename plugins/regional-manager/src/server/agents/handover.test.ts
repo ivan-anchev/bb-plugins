@@ -429,6 +429,36 @@ for (const [how, stop, why] of [
   });
 }
 
+test("an accept whose read is answered just after a handover gives i1 to a2 is judged on i1 as a2 holds it: refused, and a2 works on", async () => {
+  const { kit, threadId, coordinatorId, agentThreadId, row, agent, handOff } = await handedTo({ verify: false });
+  await handOff(agentThreadId);
+  assert.deepEqual(await row(), ["in-review", "Unverified: Retries land with backoff"]);
+
+  kit.turnEvents.holding = true;
+  const handingOver = kit.call("agent_start", { issue: "i1" }, threadId);
+  for (const read of ["the decision's read of i1", "a1's latest turn"]) {
+    await settled();
+    assert.equal(kit.turnEvents.held.length, 1, read);
+    kit.turnEvents.held.shift()?.();
+  }
+  await settled();
+  const accepting = kit.call("issue_update", { id: "i1", status: "done" }, threadId);
+  await settled();
+  const [handover, accept] = kit.turnEvents.held.splice(0);
+  assert.ok(handover !== undefined && accept !== undefined, "the handover's last read of i1 and the accept's read are both held");
+  kit.turnEvents.holding = false;
+  handover();
+  // why one microtask: the handover writes a2 in, then awaits before it goes on; the accept's read is answered in that gap.
+  await Promise.resolve();
+  accept();
+
+  assert.match(textOf(await handingOver), /^Stopped a1 and started a2 on i1 /);
+  const accepted = await accepting;
+  assert.deepEqual([isRefusal(accepted), textOf(accepted)], [true, "i1 is In progress (Working), so it can't be marked Done: only an issue In review can."]);
+  assert.deepEqual([agent(a1).ended?.how, agent(a2).ended], ["replaced", null]);
+  assert.deepEqual(await row(), ["in-progress", "Working"]);
+});
+
 test("an earlier verdict that passed, with a finding, reaches the new agent whole, every criterion with its evidence", async () => {
   const { kit, threadId, coordinatorId, agentThreadId, handover, firstMessage, handOff } = await handedTo();
   await handOff(agentThreadId);

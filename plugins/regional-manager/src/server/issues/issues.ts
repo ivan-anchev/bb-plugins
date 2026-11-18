@@ -89,16 +89,12 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
       if (problem !== null) return { refused: `No issue filed: ${problem}. Leave verifier out.` };
       const verifier = requested === undefined ? null : await verifierOf(requested);
       if (verifier !== null && "refused" in verifier) return { refused: `No issue filed. ${verifier.refused}` };
-      const file = (views: IssueView[]) => {
-        const filed = store.insertIssue(coordinatorId, { ...plan, verifier }, closesOf(views), Date.now());
-        // why told here, with no await after the commit: a read already done must not pass its currency check against what this filing changed.
-        if (!("refused" in filed)) onChange(coordinatorId);
-        return { filed, views };
-      };
+      const file = (views: IssueView[]) => ({ filed: store.insertIssue(coordinatorId, { ...plan, verifier }, closesOf(views), Date.now()), views });
       const written = plan.dependsOn.length === 0 && plan.parentId === null ? { acted: file([]) } : await current.whileCurrent(coordinatorId, file);
       if (written === null) return { refused: `No issue filed: ${OVERTAKEN}` };
       const { filed, views } = written.acted;
       if ("refused" in filed) return { refused: `No issue filed: ${filed.refused}` };
+      onChange(coordinatorId);
       const parent = plan.parentId === null ? null : viewOf(views, plan.parentId).issue;
       return { issue: filed.issue, blockedBy: blockedBy(filed.issue, parent, (id) => viewOf(views, id).status) };
     },
@@ -128,16 +124,14 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
         }
         const edit: IssueEdit = { ...plan, ...statusChange, ...(dependsOn === undefined ? {} : { dependsOn }), ...(verifier === undefined ? {} : { verifier }) };
         const updated = store.updateIssue(issue.coordinatorId, issue.id, edit, { requireUnheld: status !== undefined && status !== "done", closes: closesOf(before ?? []) });
-        if ("refused" in updated) return updated;
-        // why told here, with no await after the commit: a read already done must not pass its currency check against what this write changed.
-        onChange(issue.coordinatorId);
-        return { issue: updated.issue, before };
+        return "refused" in updated ? updated : { issue: updated.issue, before };
       };
       // why views current as it is written (current-views.ts), whenever a status, parent or dependency changes: the only changes judged by them.
       const written = status === undefined && dependsOn === undefined && plan.parentId === undefined ? { acted: write(null) } : await current.whileCurrent(issue.coordinatorId, write);
       if (written === null) return { refused: `${issue.id} is unchanged: ${OVERTAKEN}` };
       if ("refused" in written.acted) return written.acted;
       const { issue: updated, before } = written.acted;
+      onChange(issue.coordinatorId);
       const nowReady = before === null ? [] : newlyReady(before, await viewsOf(issue.coordinatorId));
       return { issue: updated, note: requested === undefined ? null : verifierText(updated), nowReady };
     },

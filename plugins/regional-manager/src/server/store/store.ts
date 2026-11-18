@@ -109,16 +109,23 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     /**
      * Removes a regional manager whose thread bb deleted, and everything it owns, together. bb
      * deletes its agents and verifiers with it, so nothing it holds can be acted on, and a doorbell
-     * to it would fail on every tick. why children first: the handle enforces foreign keys.
+     * to it would fail on every tick. why children first: the handle enforces foreign keys. why
+     * fact_writes after the rest: deleting them counts writes there.
      */
     removeCoordinator(id: CoordinatorId): void {
       db().transaction(() => {
-        for (const table of ["events", "doorbells", "reminders", "decisions", "pr_snapshots", "checks", "handoffs", "agents", "issue_relations", "issues", "memory_revisions"]) {
+        for (const table of ["events", "doorbells", "reminders", "decisions", "pr_snapshots", "checks", "handoffs", "agents", "issue_relations", "issues", "memory_revisions", "fact_writes"]) {
           db().prepare(`DELETE FROM ${table} WHERE coordinator_id = ?`).run(id);
         }
         db().prepare("DELETE FROM coordinators WHERE id = ?").run(id);
         db().prepare("DELETE FROM roles WHERE json_extract(role, '$.coordinatorId') = ?").run(id);
       })();
+    },
+
+    /** How many times the regional manager's issue facts were written (migrations.ts fact_writes): every write a status can follow moves it as it commits. */
+    factWrites(id: CoordinatorId): number {
+      const row = db().prepare("SELECT writes FROM fact_writes WHERE coordinator_id = ?").get(id);
+      return row === undefined ? 0 : z.object({ writes: z.number().int() }).parse(row).writes;
     },
 
     /**
