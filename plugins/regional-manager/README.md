@@ -31,7 +31,8 @@ its role.
   read of the commit and the tree, and a branch's pull request and CI.
   `src/model/board/board-groups.ts`: the board's lanes. `src/model/inbox/`:
   the events the plugin tells a regional manager about, and `doorbellText`,
-  the wake message, which holds no agent-written text; `own-tree.ts` in it
+  the wake message: an instruction only the model reads, then the facts the
+  user sees, with no agent-written text; `own-tree.ts` in it
   decides, from the latest stored event, whether a read of the regional
   manager's own working tree records a warning or its clearing.
   `src/model/reminder.ts`: a reminder, and the one parser of `crew_remind`'s

@@ -1,7 +1,8 @@
 // The only writer of events, and the only thing that wakes a regional manager. Each event is
-// stored first, then announced by a doorbell: one short message that lists what happened, while the
-// whole of it waits for crew_catch_up. Ringing derives everything from the database, so ringing
-// again (on every tick, after a reload) sends only what no doorbell has announced yet.
+// stored first, then announced by a doorbell: one short message that lists what happened (see
+// doorbellText), while the whole of it waits for crew_catch_up. Ringing derives everything from the
+// database, so ringing again (on every tick, after a reload) sends only what no doorbell has
+// announced yet.
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
 import type { Agent, AgentId, EndedHow } from "../../model/agent.ts";
 import type { DecisionId } from "../../model/decision.ts";
@@ -111,7 +112,13 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
     ringing.add(id);
     let delivery: "sent" | "queued";
     try {
-      const sent = await bb.sdk.threads.send({ threadId: coordinator.threadId, input: [{ type: "text", text: doorbellText(events, { titles: new Map(store.issues(id).map(({ id, title }) => [id, title])), check: store.check, decision: store.decision }), mentions: [] }], mode: "queue-if-active" });
+      const { instruction, facts } = doorbellText(events, { titles: new Map(store.issues(id).map(({ id, title }) => [id, title])), check: store.check, decision: store.decision });
+      // why two parts: the user sees only the facts; the model reads the instruction first, then them.
+      const input: SendArgs["input"] = [
+        { type: "text", text: instruction, visibility: "agent-only", mentions: [] },
+        { type: "text", text: facts, mentions: [] },
+      ];
+      const sent = await bb.sdk.threads.send({ threadId: coordinator.threadId, input, mode: "queue-if-active" });
       // why record a send that lands after a dispose: it happened, and announcing it again would ring twice.
       store.announce(id, events.map((event) => event.id), sent.delivery === "queued" ? sent.queuedMessage.id : null, Date.now());
       delivery = sent.delivery;

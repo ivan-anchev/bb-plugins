@@ -51,7 +51,7 @@ async function withParent({ verify = true, parent = {}, start = {} }: { verify?:
     const { status, headline, needsYou } = (await kit.rpc.board({ coordinatorId })).issues.find((issue) => issue.id === id) ?? assert.fail(`no row ${id}`);
     return { status, headline, needsYou };
   };
-  const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
+  const doorbells = () => kit.doorbellsSent(threadId);
   /** Both sub-issues' pull requests merge, and a tick reads them. */
   const mergeAll = async () => {
     for (const builder of builders) merge(builder);
@@ -106,7 +106,7 @@ test("2: a final check that passes every criterion makes the parent Done, wakes 
   assert.deepEqual(await row(), at("done", "✓ Final check passed"));
   await tick();
   await tick();
-  assert.match(doorbells().join("\n"), /- i1 "Card vault" final check: passed/);
+  assert.match(doorbells().map(({ facts }) => facts).join("\n"), /i1 "Card vault" final check: passed/);
   const caughtUp = await text("crew_catch_up", {});
   assert.match(caughtUp, /### i1 "Card vault" final check\n\nAt [^\n]+ Final check of the merged work of i2, i3: Verified: 1 of 1 criteria passed on main at b{40}, by a verifier on codex gpt-default\. bb's git plugin read the verifier's worktree as it returned its verdict: commit b{40}, on a clean working tree\. Each result/);
   assert.match(caughtUp, /i1 is Done\./);
@@ -123,8 +123,8 @@ test("3: a failed final check flags the parent, wakes the manager with a line th
   await returns(FAILS);
   await tick();
   assert.deepEqual(await row(), at("in-progress", "✗ Final check failed", "✗ Final check failed"));
-  const line = doorbells().join("\n");
-  assert.match(line, /- i1 "Card vault" final check: failed\n?/);
+  const line = doorbells().map(({ facts }) => facts).join("\n");
+  assert.match(line, /i1 "Card vault" final check: failed\n?/);
   assert.doesNotMatch(line, /vault-suite|card numbers|tokens survive/, "no word of the verifier's");
   assert.deepEqual(
     kit.sent().slice(sentBefore).filter(({ threadId }) => builders.includes(threadId)),
@@ -215,7 +215,7 @@ test("5: a verifier that leaves a dirty tree fails the checkout rule; one idle w
   await idle.tick();
   assert.equal(idle.latest().verdict.state, "could-not-run");
   assert.deepEqual(await idle.row(), at("in-progress", "Couldn't run its final check", "Couldn't run its final check"));
-  assert.match(idle.doorbells().join("\n"), /- i1 "Card vault" final check: could not run/);
+  assert.match(idle.doorbells().map(({ facts }) => facts).join("\n"), /i1 "Card vault" final check: could not run/);
 
   const offline = await withParent();
   await offline.mergeAll();
@@ -233,7 +233,7 @@ test("6: with verification off no verifier starts, the parent waits In review un
   await off.mergeAll();
   assert.equal(off.kit.spawned(), spawned, "no verifier");
   assert.deepEqual(await off.row(), at("in-review", "Unverified: verification was off"));
-  assert.match(off.doorbells().join("\n"), /- i1 "Card vault" final check: not run, verification is off/);
+  assert.match(off.doorbells().map(({ facts }) => facts).join("\n"), /- i1 "Card vault" final check: not run, verification is off/);
   assert.equal(await off.text("issue_update", { id: "i1", status: "done" }), "Updated i1.");
   assert.deepEqual(await off.row(), at("done", "Accepted"));
 

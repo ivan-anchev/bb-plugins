@@ -1,9 +1,10 @@
 // The doorbell: the short message that wakes a regional manager. It reaches the thread as a
-// user-role message, so it holds only facts the plugin derived (an issue's and an agent's id, a
-// handoff's status, a memory file's name) and text the regional manager itself wrote: the titles it
-// gave its issues, the notes of its reminders and the questions it asked the user. Anything an agent
-// or a verifier wrote, and the user's answers, are read through crew_catch_up, as a tool result,
-// never here.
+// user-role message in two parts: an instruction to call crew_catch_up, which only the model reads,
+// then the facts, which the user sees too. So it holds only facts the plugin derived (an issue's and
+// an agent's id, a handoff's status, a memory file's name) and text the regional manager itself
+// wrote: the titles it gave its issues, the notes of its reminders and the questions it asked the
+// user. Anything an agent or a verifier wrote, and the user's answers, are read through
+// crew_catch_up, as a tool result, never here.
 import type { AgentId } from "../agent.ts";
 import type { Decision, DecisionId } from "../decision.ts";
 import type { IssueId } from "../issue/issue.ts";
@@ -21,10 +22,22 @@ type Lookups = {
   decision(id: DecisionId): Decision | null;
 };
 
-export function doorbellText(events: readonly StoredEvent[], lookups: Lookups): string {
-  const count = events.length === 1 ? "1 update" : `${events.length} updates`;
-  const lines = events.map(({ event }) => `- ${line(event, lookups)}`);
-  return [`[${DISPLAY_NAME}] ${count}. Call crew_catch_up to read ${events.length === 1 ? "it" : "them"} in full.`, ...lines].join("\n");
+/**
+ * A doorbell's two parts. `instruction`, which only the model reads, says to call crew_catch_up.
+ * `facts`, which the user sees, is one update's line, or a count and then one line per update.
+ * why the facts never open with a bracket: bb takes a message starting `[bb message from thread:`
+ * for one from another thread.
+ */
+export type DoorbellText = { instruction: string; facts: string };
+
+export function doorbellText(events: readonly StoredEvent[], lookups: Lookups): DoorbellText {
+  const one = events.length === 1;
+  const count = one ? "1 update" : `${events.length} updates`;
+  const lines = events.map(({ event }) => line(event, lookups));
+  return {
+    instruction: `[${DISPLAY_NAME}] ${count}. Call crew_catch_up to read ${one ? "it" : "them"} in full.`,
+    facts: (one ? lines : [count, ...lines.map((line) => `- ${line}`)]).join("\n"),
+  };
 }
 
 function line(event: InboxEvent, { titles, check, decision }: Lookups): string {

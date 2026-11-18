@@ -9,7 +9,7 @@ import { issueIdSchema } from "../../model/issue/issue.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { memoryStorage } from "../memory-storage.ts";
 import { failWrites } from "../store/test-store.ts";
-import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn } from "../test-harness.ts";
+import { coordinating, doorbellOf, HEAD, isRefusal, ISSUE, settled, textOf, threadIn } from "../test-harness.ts";
 
 const RESEARCH = {
   kind: "research",
@@ -98,8 +98,7 @@ test("a research done handoff is Done at once: no verifier, no git read, a commi
   assert.deepEqual(handoff.status === "done" && handoff.delivery, { kind: "report", report: REPORT, file: I1_REPORT });
   assert.equal(await statusOf("i1"), `Research. Done: Handed off: Vault fits our PCI scope. Thread: @thread:${agentThreadId}, branch \`bb/${agentThreadId}\`.`);
 
-  const doorbell = kit.sent().filter((args) => args.threadId === threadId).at(-1)?.input.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("") ?? "";
-  assert.match(doorbell, /- i1 "Pick a card vault" \(a1\) handed off: done$/);
+  assert.deepEqual(kit.doorbellsSent(threadId).at(-1), doorbellOf(`i1 "Pick a card vault" (a1) handed off: done`));
   const caughtUp = await catchUp();
   assert.ok(caughtUp.includes(`### i1 "Pick a card vault" (a1) handed off: done`), caughtUp);
   assert.ok(caughtUp.includes(`#### Report\n\nSaved in your memory as reports/i1.md. The plugin gives it to no agent: name the file in the brief of an agent that needs it, which reads it with crew_memory_read.\n\n${REPORT}`), caughtUp);

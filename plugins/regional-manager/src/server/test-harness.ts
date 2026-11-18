@@ -9,8 +9,10 @@ import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { createFakePluginHost, type FakePluginHarness } from "@get-bb/plugin-sdk/testing";
 import { z } from "zod";
 import type { EnvironmentProvider } from "../model/agent.ts";
+import type { DoorbellText } from "../model/inbox/wake-text.ts";
 import type { HolderThread } from "../model/issue/status.ts";
 import type { CoordinatorId } from "../model/role.ts";
+import { DISPLAY_NAME } from "../name.ts";
 import { registerAgentTools } from "./agents/agent-tools.ts";
 import { createAgents } from "./agents/agents.ts";
 import { defaultBranchReader, placementFactsReader } from "./agents/environments.ts";
@@ -342,10 +344,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   // why a generic function: it keeps each event's handlers typed by that event.
   const handlersOf = <E extends FakeEventName>(event: E): Handlers[E] => (handlers[event] ??= []);
   const fakeThreads = new Map<string, FakeThread>();
-  const queue: (QueuedMessage & { threadId: string; text: string })[] = [];
+  const queue: (QueuedMessage & { threadId: string; input: SendArgs["input"] })[] = [];
   /** Every message that reached a thread and started its turn: sent at once, or dispatched from the queue. */
-  const delivered: { threadId: string; text: string }[] = [];
-  const textOfInput = (args: SendArgs): string => args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n");
+  const delivered: { threadId: string; input: SendArgs["input"] }[] = [];
   const sent: SendArgs[] = [];
   const attempted: string[] = [];
   const invalidated: string[] = [];
@@ -494,13 +495,12 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         return sends.unanswered ? new Promise(() => {}) : delivery;
       };
       if ((args.mode === "queue-if-active" && thread.status !== "idle") || (args.mode === "auto" && thread.hasPendingInteraction)) {
-        const text = textOfInput(args);
-        const entry: (typeof queue)[number] = { id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: args.senderThreadId ?? null, content: [{ type: "text", text, mentions: [] }], threadId: args.threadId, text };
+        const entry: (typeof queue)[number] = { id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: args.senderThreadId ?? null, content: [{ type: "text", text: modelText(args.input), mentions: [] }], threadId: args.threadId, input: args.input };
         queue.push(entry);
         return answer({ delivery: "queued", queuedMessage: { id: entry.id } });
       }
       startTurn(thread);
-      delivered.push({ threadId: args.threadId, text: textOfInput(args) });
+      delivered.push({ threadId: args.threadId, input: args.input });
       return answer({ delivery: "sent" });
     },
     queuedMessages: {
@@ -807,6 +807,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     spawned: () => spawned,
     /** Every message sent to a thread, in order. */
     sent: () => [...sent],
+    /** Every doorbell sent to the thread, queued ones included, in order. */
+    doorbellsSent: (threadId: string) => doorbellsIn(sent.filter((args) => args.threadId === threadId)),
     /** The thread of every send the plugin attempted, refused ones included, in order. */
     sendAttempts: () => [...attempted],
     /** Every RPC tag invalidated, in order. */
@@ -850,13 +852,15 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       await starting(threadId);
       await active(threadId);
     },
-    /** The text of every message that reached the thread and started a turn, in order. */
-    delivered: (threadId: string) => delivered.filter((message) => message.threadId === threadId).map((message) => message.text),
+    /** The text of every message that reached the thread and started a turn, in order, as its model reads it. */
+    delivered: (threadId: string) => delivered.filter((message) => message.threadId === threadId).map((message) => modelText(message.input)),
+    /** Every doorbell that reached the thread and started a turn, in order. */
+    doorbellsDelivered: (threadId: string) => doorbellsIn(delivered.filter((message) => message.threadId === threadId)),
     /** The messages bb holds queued for the thread, oldest first. */
     queued: (threadId: string) => queue.filter((entry) => entry.threadId === threadId).map((entry) => entry.id),
     /** The user queues a message for the thread from bb's composer, as while it runs. */
     userQueues(threadId: string, text: string): void {
-      queue.push({ id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: null, content: [{ type: "text", text, mentions: [] }], threadId, text });
+      queue.push({ id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: null, content: [{ type: "text", text, mentions: [] }], threadId, input: [{ type: "text", text, mentions: [] }] });
     },
     /** bb sends a queued message and announces it; `silently`: the announcement is missed, as during a reload. */
     async dispatch(queuedMessageId: string, { silently = false } = {}): Promise<void> {
@@ -864,7 +868,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       const [entry] = queue.splice(at, 1);
       if (entry === undefined) throw new Error(`Nothing queued as ${queuedMessageId}`);
       startTurn(fakeThread(entry.threadId));
-      delivered.push({ threadId: entry.threadId, text: entry.text });
+      delivered.push({ threadId: entry.threadId, input: entry.input });
       if (!silently) await emit("message.dispatched", { entry: { id: entry.id } });
     },
     /** bb fails to send a queued message and spends its retries, leaving it in the queue for the user. */
@@ -921,6 +925,27 @@ export async function coordinating({ verify = true, spawns, stops, storage, turn
  */
 export function bbHttpError(status: number, code: string, message: string): Error {
   return Object.assign(new Error(`HTTP ${status}: ${message}`), { name: "BbHttpError", status, code, body: { code, message } });
+}
+
+type TextPart = Extract<SendArgs["input"][number], { type: "text" }>;
+const textParts = (input: SendArgs["input"]): TextPart[] => input.flatMap((part) => (part.type === "text" ? [part] : []));
+const joined = (parts: readonly TextPart[]): string => parts.map((part) => part.text).join("\n");
+const isAgentOnly = (part: TextPart): boolean => part.visibility === "agent-only";
+
+/** A message's text as its model reads it: every text part, the agent-only ones included. */
+const modelText = (input: SendArgs["input"]): string => joined(textParts(input));
+
+/** The doorbells among these messages, split as bb splits them: the instruction only the model reads, and the facts the user sees. */
+function doorbellsIn(messages: readonly { input: SendArgs["input"] }[]): DoorbellText[] {
+  const split = messages.map(({ input }) => textParts(input)).map((parts) => ({ instruction: joined(parts.filter(isAgentOnly)), facts: joined(parts.filter((part) => !isAgentOnly(part))) }));
+  return split.filter(({ instruction }) => instruction.startsWith(`[${DISPLAY_NAME}]`));
+}
+
+/** The doorbell for these update lines, one per update, as wake-text.test.ts pins its words. */
+export function doorbellOf(first: string, ...rest: string[]): DoorbellText {
+  if (rest.length === 0) return { instruction: `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.`, facts: first };
+  const count = `${rest.length + 1} updates`;
+  return { instruction: `[${DISPLAY_NAME}] ${count}. Call crew_catch_up to read them in full.`, facts: [count, ...[first, ...rest].map((line) => `- ${line}`)].join("\n") };
 }
 
 /** Lets every ring started in the background finish: each one awaits only the fake bb. */

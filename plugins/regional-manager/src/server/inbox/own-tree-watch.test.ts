@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { coordinatorContract } from "../../contract.ts";
-import { DISPLAY_NAME } from "../../name.ts";
-import { coordinating, settled, startedAgent, textOf } from "../test-harness.ts";
+import { coordinating, doorbellOf, settled, startedAgent, textOf } from "../test-harness.ts";
 
 /** A Coordinator whose first turn is running, in its own environment. */
 async function working() {
@@ -38,7 +37,7 @@ async function working() {
       };
     },
     /** Every doorbell that reached it, in order. */
-    doorbells: () => kit.delivered(threadId).filter((text) => text.startsWith(`[${DISPLAY_NAME}]`)),
+    doorbells: () => kit.doorbellsDelivered(threadId),
     /** The board's warning, as the app reads it: bb parses each RPC's result with its contract. */
     warning: async () => coordinatorContract.board.output.parse(await kit.rpc.board({ coordinatorId })).ownEdits,
     catchUp: async () => textOf(await kit.call("crew_catch_up", {}, threadId)),
@@ -52,7 +51,7 @@ test("a turn that ends with changed files in the Coordinator's own environment w
   const shown = await warning();
   assert.equal(shown?.fileCount, 2);
   assert.ok(shown !== null && Math.abs(shown.at - Date.now()) < 5_000, "with when its turn ended");
-  assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- Your own environment has 2 files changed after your turn: hand the change to an agent`]);
+  assert.deepEqual(doorbells(), [doorbellOf(`Your own environment has 2 files changed after your turn: hand the change to an agent`)]);
   const text = await catchUp();
   assert.match(text, /### Your own environment has 2 files changed\n\nAt [^\n]+ bb's git plugin read changed files in your working tree when your turn ended/);
   assert.match(text, /you never touch your working tree: no stash, revert, checkout or deletion/);
@@ -75,7 +74,7 @@ test("a second turn that ends with the same count records nothing new; a differe
 
   await turnEnds(3);
   assert.equal(doorbells().length, 2);
-  assert.match(doorbells()[1] ?? "", /- Your own environment has 3 files changed after your turn/);
+  assert.match(doorbells()[1]?.facts ?? "", /^Your own environment has 3 files changed after your turn/);
   assert.equal((await warning())?.fileCount, 3);
 });
 

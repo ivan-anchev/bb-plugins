@@ -494,9 +494,11 @@ issue's done handoff included, as `- i2 "Pick a card vault" (a2) handed off:
 done`. `crew_catch_up` then prints its report whole with the file it was
 saved to.
 
-Each one wakes the regional manager with one short message: the plugin's
-name in brackets, how many updates there are, and one line each, naming the
-issue and its agent, such as
+Each one wakes the regional manager with one short message in two parts.
+The first, the plugin's name in brackets, how many updates there are and an
+instruction to call `crew_catch_up`, reaches only the model: you never see
+it. You see only the facts: one update's line, or how many updates there
+are and then one line each, naming the issue and its agent, such as
 `- i1 "Add retries" (a1) handed off: done, failed verification`,
 `- i2 "Dead letters" (a2) handed off: blocked`,
 `- i1 "Add retries" (a1) PR #41: CI passed`,

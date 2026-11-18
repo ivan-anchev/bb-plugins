@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { laneOf } from "../../model/board/board-groups.ts";
 import type { PluginThreadEventPayloads } from "@get-bb/plugin-sdk";
-import { coordinating, settled, startedAgent, textOf } from "../test-harness.ts";
+import { coordinating, doorbellOf, settled, startedAgent, textOf } from "../test-harness.ts";
 
 const DONE = {
   status: "done",
@@ -19,7 +19,7 @@ async function withAgent() {
   const { kit, threadId, coordinatorId } = await coordinating();
   const agentThreadId = (await startedAgent(kit, threadId, { title: "Add retries", brief: "Retry deliveries." })).agentThreadId;
   kit.thread(threadId).status = "idle";
-  const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
+  const doorbells = () => kit.doorbellsSent(threadId);
   const row = async () => {
     const issue = (await kit.rpc.board({ coordinatorId })).issues[0];
     return issue === undefined ? undefined : { ...issue, lane: laneOf(issue) };
@@ -32,8 +32,8 @@ test("an agent that goes idle without a handoff is announced, its last answer on
   await kit.idle(agentThreadId, "I stopped halfway: the staging key is missing.");
   await settled();
 
-  assert.deepEqual(doorbells().map((text) => text.split("\n")[1]), [`- i1 "Add retries" (a1) ended its turn without a handoff`]);
-  assert.doesNotMatch(doorbells().join("\n"), /staging key/);
+  assert.deepEqual(doorbells().map(({ facts }) => facts), [`i1 "Add retries" (a1) ended its turn without a handoff`]);
+  assert.doesNotMatch(doorbells().map(({ facts }) => facts).join("\n"), /staging key/);
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /### i1 "Add retries" \(a1\) ended its turn without a handoff\n\nAt [^\n]+ Its last answer, in its own words:\n\nI stopped halfway: the staging key is missing\./);
   assert.deepEqual([(await row())?.lane, (await row())?.headline], ["in-progress", "Its turn ended without a handoff"]);
 });
@@ -46,7 +46,7 @@ test("an agent whose turn ends after its handoff is not announced as stopping wi
 
   assert.equal(doorbells().length, 1);
   assert.deepEqual(kit.store.unannounced(coordinatorId), []);
-  assert.match(doorbells()[0] ?? "", /handed off: blocked/);
+  assert.match(doorbells()[0]?.facts ?? "", /handed off: blocked/);
 });
 
 test("after a handoff, typing into the agent moves its issue out of Verifying, and its end with no new handoff is announced", async () => {
@@ -61,7 +61,7 @@ test("after a handoff, typing into the agent moves its issue out of Verifying, a
   await kit.idle(agentThreadId, "Answered the user's question.");
   await settled();
   assert.deepEqual([(await row())?.lane, (await row())?.headline], ["in-progress", "Its turn ended without a handoff"]);
-  assert.match(doorbells().at(-1) ?? "", /i1 "Add retries" \(a1\) ended its turn without a handoff/);
+  assert.match(doorbells().at(-1)?.facts ?? "", /i1 "Add retries" \(a1\) ended its turn without a handoff/);
 });
 
 test("a failed agent is announced, with bb's error in crew_catch_up", async () => {
@@ -70,7 +70,7 @@ test("a failed agent is announced, with bb's error in crew_catch_up", async () =
   await kit.emit("thread.failed", { thread: kit.ref(agentThreadId), error: "Provider rate limit reached" });
   await settled();
 
-  assert.match(doorbells()[0] ?? "", /\n- i1 "Add retries" \(a1\) failed$/);
+  assert.deepEqual(doorbells()[0], doorbellOf(`i1 "Add retries" (a1) failed`));
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /### i1 "Add retries" \(a1\) failed\n\nAt [^\n]+ bb's error:\n\nProvider rate limit reached Read the issue with issue_read/);
 });
 
@@ -89,7 +89,7 @@ test("an agent's approval prompt is announced as waiting on the user, with what 
   });
   await settled();
 
-  assert.match(doorbells()[0] ?? "", /i1 "Add retries" \(a1\) is waiting on the user in its thread$/);
+  assert.match(doorbells()[0]?.facts ?? "", /i1 "Add retries" \(a1\) is waiting on the user in its thread$/);
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /It asks, in its own words:\n\nAsks to approve the command `rm -rf \.cache`: It deletes the build cache/);
 });
 
@@ -115,7 +115,7 @@ test("an archived agent thread ends its agent: its issue returns to Todo, and it
 
   assert.equal(kit.store.agents(coordinatorId)[0]?.ended?.how, "archived");
   assert.deepEqual([(await row())?.lane, (await row())?.headline, (await row())?.agent?.threadId], ["todo", "Its agent was archived", null]);
-  assert.deepEqual(doorbells().map((text) => text.split("\n")[1]), [`- i1 "Add retries" (a1) returned to Todo: its agent was archived`]);
+  assert.deepEqual(doorbells().map(({ facts }) => facts), [`i1 "Add retries" (a1) returned to Todo: its agent was archived`]);
 });
 
 test("events about other threads, another plugin's or an ended agent's, are ignored", async () => {

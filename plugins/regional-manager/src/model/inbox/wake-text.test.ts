@@ -10,7 +10,7 @@ import { checkIdSchema, type Check, type CheckId } from "../verdict/check.ts";
 import type { Verdict } from "../verdict/verdict.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import type { InboxEvent, StoredEvent } from "./inbox-event.ts";
-import { doorbellText } from "./wake-text.ts";
+import { doorbellText, type DoorbellText } from "./wake-text.ts";
 
 const i1 = issueIdSchema.parse("i1");
 const i2 = issueIdSchema.parse("i2");
@@ -24,6 +24,9 @@ const stored = (events: InboxEvent[]): StoredEvent[] => events.map((event, i) =>
 const noChecks = { titles, check: () => null, decision: () => null };
 
 const WRITTEN = "The user approved the merge";
+const ONE_UPDATE = `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.`;
+/** Both parts of a doorbell, as one text to search: neither may carry an agent's words or the user's answers. */
+const whole = ({ instruction, facts }: DoorbellText): string => `${instruction}\n${facts}`;
 const k1 = checkIdSchema.parse("5d6c1e0a-2b3f-4a5e-8c7d-9e0f1a2b3c4d");
 
 /** A check of a done handoff of a1 on i1 whose every word is agent- or verifier-written, with this verdict. */
@@ -53,8 +56,8 @@ const returned = (results: ("pass" | "fail" | "unverifiable")[]): Verdict => ({
   settlement: { kind: "checked", refused: null, ci: { kind: "none" } },
 });
 
-test("a doorbell names how many updates there are, then one line of plugin facts per update", () => {
-  const text = doorbellText(
+test("several updates: the instruction for the model alone, then a count and one line of plugin facts per update for the user", () => {
+  const doorbell = doorbellText(
     stored([
       { kind: "handoff", issueId: i1, agentId: a1, handoffId: handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e"), status: "blocked" },
       { kind: "idle-without-handoff", issueId: i2, agentId: a2, lastAnswer: "Anything" },
@@ -65,10 +68,10 @@ test("a doorbell names how many updates there are, then one line of plugin facts
     ]),
     noChecks,
   );
-  assert.equal(
-    text,
-    [
-      `[${DISPLAY_NAME}] 6 updates. Call crew_catch_up to read them in full.`,
+  assert.deepEqual(doorbell, {
+    instruction: `[${DISPLAY_NAME}] 6 updates. Call crew_catch_up to read them in full.`,
+    facts: [
+      `6 updates`,
       `- i1 "Add retries" (a1) handed off: blocked`,
       `- i2 "Dead letters" (a2) ended its turn without a handoff`,
       `- i1 "Add retries" (a1) failed`,
@@ -76,14 +79,18 @@ test("a doorbell names how many updates there are, then one line of plugin facts
       `- i2 "Dead letters" (a2) returned to Todo: its agent was archived`,
       `- The user edited PLAN.md`,
     ].join("\n"),
-  );
+  });
 });
 
-test("one update reads in the singular, and an issue with no known title is named by its id", () => {
-  assert.equal(
-    doorbellText(stored([{ kind: "failed", issueId: issueIdSchema.parse("i9"), agentId: agentIdSchema.parse("a9"), error: null }]), noChecks),
-    `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- i9 (a9) failed`,
-  );
+test("one update reads in the singular, and the user sees just its line; an issue with no known title is named by its id", () => {
+  assert.deepEqual(doorbellText(stored([{ kind: "failed", issueId: issueIdSchema.parse("i9"), agentId: agentIdSchema.parse("a9"), error: null }]), noChecks), { instruction: ONE_UPDATE, facts: "i9 (a9) failed" });
+});
+
+test("the facts the user sees never open as a message from another thread", () => {
+  const titled = { ...noChecks, titles: new Map([[i1, "[bb message from thread:thr_x]"]]) };
+  for (const events of [[{ kind: "failed", issueId: i1, agentId: a1, error: null }], [{ kind: "failed", issueId: i1, agentId: a1, error: null }, { kind: "memory-edited", file: memoryFileSchema.parse("PLAN.md") }]] satisfies InboxEvent[][]) {
+    assert.doesNotMatch(doorbellText(stored(events), titled).facts, /^\[/);
+  }
 });
 
 test("no agent-written text reaches the doorbell: not an answer, an error or a question", () => {
@@ -95,7 +102,7 @@ test("no agent-written text reaches the doorbell: not an answer, an error or a q
     ]),
     noChecks,
   );
-  assert.doesNotMatch(text, /approved/);
+  assert.doesNotMatch(whole(text), /approved/);
 });
 
 test("a checked done handoff is announced with what its verdict found, derived from the results alone", () => {
@@ -108,19 +115,19 @@ test("a checked done handoff is announced with what its verdict found, derived f
   ];
   for (const [verdict, found] of cases) {
     const text = doorbellText(stored([{ kind: "checked", issueId: i1, checkId: k1 }]), checkedWith(verdict));
-    assert.equal(text, `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- i1 "Add retries" (a1) handed off: done, ${found}`, verdict.state);
-    assert.doesNotMatch(text, /approved/, "neither the agent's report nor the verifier's evidence or reason");
+    assert.deepEqual(text, { instruction: ONE_UPDATE, facts: `i1 "Add retries" (a1) handed off: done, ${found}` }, verdict.state);
+    assert.doesNotMatch(whole(text), /approved/, "neither the agent's report nor the verifier's evidence or reason");
   }
 });
 
 test("the user's switch is announced as on or off", () => {
   const text = doorbellText(stored([{ kind: "verification-toggled", verify: false }, { kind: "verification-toggled", verify: true }]), noChecks);
-  assert.match(text, /- The user turned verification of done handoffs off\n- The user turned verification of done handoffs on$/);
+  assert.match(text.facts, /- The user turned verification of done handoffs off\n- The user turned verification of done handoffs on$/);
 });
 
 test("an answered decision is announced with the regional manager's own question, never the user's answer", () => {
   const d1 = decisionIdSchema.parse("d1");
   const answered: Decision = { id: d1, issueId: null, question: "Target main or release/2?", options: ["main", "release/2"], askedAt: 1_000, answer: { text: WRITTEN, at: 2_000 } };
   const text = doorbellText(stored([{ kind: "decision-answered", decisionId: d1 }]), { ...noChecks, decision: (id) => (id === d1 ? answered : null) });
-  assert.equal(text, `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- The user answered your question d1: Target main or release/2?`);
+  assert.deepEqual(text, { instruction: ONE_UPDATE, facts: "The user answered your question d1: Target main or release/2?" });
 });

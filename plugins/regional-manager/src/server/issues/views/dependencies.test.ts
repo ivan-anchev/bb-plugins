@@ -33,7 +33,7 @@ async function managing() {
   const board = async () => (await catchUp()).split("## Board\n\n")[1]?.split("\n\n## Decisions")[0] ?? assert.fail("no board");
   const row = async (id: string) => (await board()).split("\n").find((line) => line.startsWith(`- ${id} `)) ?? assert.fail(`no row for ${id}`);
   const readyLine = async () => (await board()).split("\n").find((line) => line.startsWith("Ready: ")) ?? assert.fail("no ready line");
-  const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
+  const doorbells = () => kit.doorbellsSent(threadId);
   /** The manager's turn ends, so the next doorbell reaches it at once. */
   const managerIdle = () => {
     kit.thread(threadId).status = "idle";
@@ -98,7 +98,7 @@ test("a research dependency's report unblocks its dependent with a wake; a messa
 
   managerIdle();
   await report();
-  assert.match(doorbells().at(-1) ?? assert.fail("no doorbell"), /\n- i2 "Card vault schema" is unblocked: i1 done$/);
+  assert.match((doorbells().at(-1) ?? assert.fail("no doorbell")).facts, /^i2 "Card vault schema" is unblocked: i1 done$/);
   assert.match(await catchUp(), /### i2 "Card vault schema" is unblocked: i1 done\n\nAt [^\n]* i1 was the last open issue blocking i2, as its own dependency or its parent's\. Nothing of i1 reaches i2 on its own:/);
   assert.equal(await row("i2"), '- i2 "Card vault schema" (Build; no agent): Not started');
   assert.equal(await readyLine(), "Ready: i2 (in Todo, no sub-issues, and nothing they or their parent depend on is open).");
@@ -140,7 +140,7 @@ test("a build dependency whose pull request merges unblocks its dependent once; 
   kit.github.prs.set(branch, { number: 41, state: "MERGED", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
   await kit.tick();
   await settled();
-  assert.match(doorbells().at(-1) ?? assert.fail("no doorbell"), /- i1 "Add retries" \(a1\) PR #41: merged\n- i3 "Dead letters" is unblocked: i1 done$/);
+  assert.match((doorbells().at(-1) ?? assert.fail("no doorbell")).facts, /- i1 "Add retries" \(a1\) PR #41: merged\n- i3 "Dead letters" is unblocked: i1 done$/);
   kit.clock.now += 10 * 60_000;
   await kit.tick();
   await settled();
