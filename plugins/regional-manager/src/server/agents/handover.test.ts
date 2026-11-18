@@ -169,8 +169,9 @@ test("the new agent gets a fix round of its own; the replaced agent's running ve
     return verdict?.state === "running" ? verdict.verifierThreadId : assert.fail(`the verdict is ${verdict?.state}`);
   };
   await handOff(agentThreadId);
-  await kit.call("issue_verdict", FAILS, verifierOf()); // a1's fix round goes back to it
-  await settled();
+  const first = verifierOf();
+  await kit.call("issue_verdict", FAILS, first); // a1's fix round goes back to it
+  await kit.idle(first, "Verdict returned.");
   await kit.idle(agentThreadId, "Fixed.");
   await handOff(agentThreadId);
   const running = verifierOf();
@@ -189,7 +190,7 @@ test("the new agent gets a fix round of its own; the replaced agent's running ve
   assert.equal(kit.thread(verdict.verifierThreadId).spawnedWith.parentThreadId, next, "a2's verifier is its own child");
   assert.deepEqual(kit.thread(verdict.verifierThreadId).spawnedWith.environment, { type: "reuse", environmentId: kit.thread(agentThreadId).environmentId }, "in the shared environment");
   await kit.call("issue_verdict", FAILS, verdict.verifierThreadId);
-  await settled();
+  await kit.idle(verdict.verifierThreadId, "Verdict returned.");
   assert.equal(agent(a2).fixRounds, 1, "a2's first failed verdict went back to it");
   assert.match(kit.delivered(next).at(-1) ?? "", /^## Verifier findings: 1 of 2 done-criteria not met/);
 });
@@ -337,8 +338,9 @@ test("findings on their way to a1 when a handover is asked arrive first, and the
   await handOff(agentThreadId);
   const sends = hold();
   kit.sends.pending = sends.done;
-  const verdict = kit.call("issue_verdict", FAILS, verifierOf(kit, coordinatorId));
-  await settled();
+  const verifier = verifierOf(kit, coordinatorId);
+  await kit.call("issue_verdict", FAILS, verifier);
+  await kit.idle(verifier, "Verdict returned.");
   const sending = kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict;
   assert.equal(sending?.state === "returned" && sending.settlement.kind, "sending-back");
   const handing = handover();
@@ -346,7 +348,6 @@ test("findings on their way to a1 when a handover is asked arrive first, and the
   assert.equal(agent(a1).ended, null, "the handover waits for the findings");
   kit.sends.pending = null;
   sends.release();
-  await verdict;
   const next = threadIn(textOf(await handing));
 
   assert.match(kit.delivered(agentThreadId).at(-1) ?? "", /^## Verifier findings/);
@@ -354,12 +355,12 @@ test("findings on their way to a1 when a handover is asked arrive first, and the
 });
 
 test("findings bb queued for a busy a1 are taken back before the handover stops it, so they never wake it", async () => {
-  const { kit, coordinatorId, agentThreadId, handover, agent } = await handedTo();
-  await kit.startTurn(agentThreadId);
-  await kit.call("agent_handoff", DONE, agentThreadId); // a1's turn is still running
-  await settled();
-  await kit.call("issue_verdict", FAILS, verifierOf(kit, coordinatorId));
-  await settled();
+  const { kit, coordinatorId, agentThreadId, handover, agent, handOff } = await handedTo();
+  await handOff(agentThreadId);
+  const verifier = verifierOf(kit, coordinatorId);
+  await kit.call("issue_verdict", FAILS, verifier);
+  kit.thread(agentThreadId).status = "starting"; // a turn someone started in a1's thread, which bb lists no event of yet
+  await kit.idle(verifier, "Verdict returned.");
   assert.equal(kit.queued(agentThreadId).length, 1, "the findings wait in a1's queue");
 
   await handover();
@@ -370,10 +371,9 @@ test("the plugin's reminder bb queued for a verifier behind a turn someone start
   const { kit, threadId, coordinatorId, agentThreadId, handover, handOff } = await handedTo();
   await handOff(agentThreadId);
   const verifier = verifierOf(kit, coordinatorId);
-  await kit.idle(verifier, "Forgot the verdict.");
   let release = (): void => assert.fail("the reminder was never sent");
   kit.sends.pending = new Promise((resolve) => (release = resolve));
-  await kit.tick(); // the tick reads the verifier idle; its reminder waits at bb
+  await kit.idle(verifier, "Forgot the verdict."); // the plugin reads the verifier idle; its reminder waits at bb
   kit.startTurn(verifier); // the user messages the current verifier before the reminder arrives
   kit.sends.pending = null;
   release();
@@ -404,16 +404,15 @@ test("a person's message queued for a verifier refuses a handover, as one for an
 
 test("a verifier whose start is held when a handover is asked starts first, and the handover stops it before a2 starts", async () => {
   const { kit, coordinatorId, agentThreadId, handover } = await handedTo();
+  await kit.call("agent_handoff", DONE, agentThreadId);
   kit.providers.holding = true;
-  const handing = kit.call("agent_handoff", DONE, agentThreadId);
-  await settled();
+  await kit.idle(agentThreadId, "Handed off.");
   assert.ok(kit.providers.held.length > 0, "the verifier's start reads the catalog");
   const check = kit.store.latestHandoff(coordinatorId, a1)?.check ?? assert.fail("no check");
   const starting = handover();
   await settled();
   kit.providers.holding = false;
   kit.providers.held.splice(0).forEach((release) => release());
-  await handing;
   const next = threadIn(textOf(await starting));
 
   const verifier = [...Array(kit.spawned()).keys()].map((i) => kit.thread(`thr_${i + 1}`)).find((thread) => thread.spawnedWith.parentThreadId === agentThreadId) ?? assert.fail("no verifier");

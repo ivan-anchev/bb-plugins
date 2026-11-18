@@ -69,7 +69,7 @@ export default function plugin(host: BbPluginApi): void {
   registerAgentTools(bb, { store, agents });
   registerHandoffTool(bb, { store, verify });
   registerVerdictTool(bb, { store, verify });
-  const threadEvents = forwardThreadEvents(bb, { store, agents, onChange, refreshBoard });
+  const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard });
   watchAgentThreads({ bb, store, inbox });
   watchOwnTree({ bb, store, inbox });
   bb.background.schedule("watch", "* * * * *", async () => {

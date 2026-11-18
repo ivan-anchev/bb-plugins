@@ -34,19 +34,20 @@ async function onI1(turnWaitMs?: number) {
 
 test("a newer done handoff asked while the first's verifier starts waits for i1, then stops that verifier before starting its own; the handover leaves none running", async () => {
   const { kit, coordinatorId, agentThreadId, start, verifiers } = await onI1();
+  await kit.call("agent_handoff", DONE, agentThreadId);
   kit.providers.holding = true;
-  const first = kit.call("agent_handoff", DONE, agentThreadId);
-  await settled();
+  await kit.idle(agentThreadId, "Handed off.");
   assert.ok(kit.providers.held.length > 0, "the first verifier's start reads the catalog");
+  await kit.startTurn(agentThreadId); // the user asks a1 for one more change
   const second = kit.call("agent_handoff", DONE, agentThreadId);
   await settled();
   assert.equal(kit.store.record(coordinatorId, i1).length, 1, "the second waits for i1, storing nothing yet");
   kit.providers.holding = false;
   kit.providers.held.splice(0).forEach((release) => release());
-  await Promise.all([first, second]);
+  await second;
+  await kit.idle(agentThreadId, "Handed off.");
 
   assert.deepEqual(verifiers().map(({ status }) => status), ["idle", "active"], "the first verifier stopped before the second started");
-  await kit.idle(agentThreadId, "Handed off.");
   const next = threadIn(textOf(await start()));
   assert.deepEqual([...verifiers().map(({ status }) => status), kit.thread(next).status], ["idle", "idle", "active"], "only a2 runs");
 });
@@ -54,6 +55,7 @@ test("a newer done handoff asked while the first's verifier starts waits for i1,
 test("a superseded verifier bb won't stop keeps the next verifier from starting and refuses the handover, naming it; once bb stops it, both go ahead", async () => {
   const { kit, agentThreadId, start, verifiers, check } = await onI1();
   await kit.call("agent_handoff", DONE, agentThreadId);
+  await kit.idle(agentThreadId, "Handed off.");
   const [old = assert.fail("no verifier")] = verifiers();
   kit.stopRequests.byThread.set(old.id, bbHttpError(500, "internal", "Stop failed"));
   await kit.startTurn(agentThreadId); // the user asks a1 for one more change
@@ -79,15 +81,16 @@ test("findings on their way hold i1: a handover that waited past the bound is re
   await kit.idle(agentThreadId, "Handed off.");
   const sends = hold();
   kit.sends.pending = sends.done;
-  const returning = kit.call("issue_verdict", FAILS, verifiers()[0]?.id ?? assert.fail());
-  await settled();
+  const verifier = verifiers()[0]?.id ?? assert.fail();
+  await kit.call("issue_verdict", FAILS, verifier);
+  await kit.idle(verifier, "Verdict returned.");
 
   const refused = await start();
   assert.equal(textOf(refused), "agent_start is refused: an earlier operation on i1 hasn't finished yet, so nothing changed. Call agent_start again in a minute.");
   assert.deepEqual([kit.store.agent(check().coordinatorId, a1)?.ended, kit.thread(agentThreadId).status], [null, "idle"], "nothing stopped, nothing replaced");
   kit.sends.pending = null;
   sends.release();
-  await returning;
+  await settled();
   assert.equal(kit.thread(agentThreadId).status, "active", "the findings started a1's fix turn");
 
   const next = threadIn(textOf(await start()));
@@ -124,15 +127,14 @@ test("a queued message the handover can't take back, a failed delete or one the 
   assert.match(textOf(await start()), /^agent_start is refused: bb still has a message from the user queued for a1/);
 });
 
-test("the tick's follow decides on what bb says once it holds i1: a reminder still on its way keeps the next tick off i1, and the verifier it woke is not given up on", async () => {
+test("the follow decides on what bb says once it holds i1: a reminder still on its way keeps the tick off i1, and the verifier it woke is not given up on", async () => {
   const { kit, agentThreadId, verifiers, check } = await onI1();
   await kit.call("agent_handoff", DONE, agentThreadId);
   await kit.idle(agentThreadId, "Handed off.");
   const verifier = verifiers()[0]?.id ?? assert.fail();
-  await kit.idle(verifier, "All pass.");
   const sends = hold();
   kit.sends.pending = sends.done;
-  await kit.tick();
+  await kit.idle(verifier, "All pass."); // the plugin hears it idle; its reminder waits at bb
   const { verdict } = check();
   assert.equal(verdict.state === "running" && verdict.nudged, true, "the reminder is on its way");
   await kit.tick();
@@ -221,9 +223,12 @@ test("a start after agent_stop takes back your message bb still queued for the s
 
 test("a start after agent_stop takes back the findings bb still queued for the stopped a1, so they never wake it beside a2", async () => {
   const { kit, threadId, agentThreadId, start, verifiers } = await onI1();
-  await kit.startTurn(agentThreadId);
-  await kit.call("agent_handoff", DONE, agentThreadId); // a1's turn is still running
-  await kit.call("issue_verdict", FAILS, verifiers()[0]?.id ?? assert.fail());
+  await kit.call("agent_handoff", DONE, agentThreadId);
+  await kit.idle(agentThreadId, "Handed off.");
+  const verifier = verifiers()[0]?.id ?? assert.fail();
+  await kit.call("issue_verdict", FAILS, verifier);
+  kit.thread(agentThreadId).status = "starting"; // a turn someone started in a1's thread, which bb lists no event of yet
+  await kit.idle(verifier, "Verdict returned.");
   assert.equal(kit.queued(agentThreadId).length, 1, "the findings wait in a1's queue");
   await kit.call("agent_stop", { agent: "a1" }, threadId);
 
@@ -267,23 +272,150 @@ test("an agent end the tick started and didn't wait for writes nothing once the 
 test("findings on their way when the plugin is disposed settle nothing once bb answers, which leaves the verdict to the reloaded plugin", async () => {
   const { kit, coordinatorId, agentThreadId, verifiers, check } = await onI1();
   await kit.call("agent_handoff", DONE, agentThreadId);
+  await kit.idle(agentThreadId, "Handed off.");
   const sends = hold();
   kit.sends.pending = sends.done;
-  const verdict = kit.call("issue_verdict", FAILS, verifiers()[0]?.id ?? assert.fail());
-  await settled();
+  const verifier = verifiers()[0]?.id ?? assert.fail();
+  await kit.call("issue_verdict", FAILS, verifier);
+  await kit.idle(verifier, "Verdict returned.");
   const sending = check().verdict;
   assert.equal(sending.state === "returned" && sending.settlement.kind, "sending-back");
 
   kit.dispose();
   kit.sends.pending = null;
   sends.release();
-  await verdict;
+  await settled();
   const after = kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict;
   assert.equal(after?.state === "returned" && after.settlement.kind, "sending-back", "nothing settled it after disposal");
-  assert.match(kit.warnings().at(-1) ?? "", /^Could not settle the verdict of check \S+ yet; the next tick tries again: Regional Manager was reloaded or disabled/);
+  assert.match(kit.warnings().at(-1) ?? "", /^Could not look at the checks of i1 again; the next tick tries again: Regional Manager was reloaded or disabled/);
 
   kit.reload();
   await kit.tick();
   const reloaded = kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict;
   assert.equal(reloaded?.state === "returned" && reloaded.settlement.kind, "maybe-sent-back");
+});
+
+// An agent and its own verifier share its environment, and the plugin never runs them together:
+// a verifier starts or is reminded only while bb reports its agent idle, findings go back only once
+// bb reports the verifier no longer running.
+
+/** The statuses of a1's thread and of a verifier's, in that order. */
+const statusesOf = (kit: Awaited<ReturnType<typeof onI1>>["kit"], agentThreadId: string, verifier: string) => [kit.thread(agentThreadId).status, kit.thread(verifier).status];
+
+/** a1 hands off as done from a turn of its own, as an agent does, and that turn ends; returns its verifier, running. */
+async function handedOff({ kit, agentThreadId, verifiers }: Awaited<ReturnType<typeof onI1>>): Promise<string> {
+  await kit.startTurn(agentThreadId);
+  await kit.call("agent_handoff", DONE, agentThreadId);
+  await kit.idle(agentThreadId, "Handed off.");
+  return verifiers().at(-1)?.id ?? assert.fail("no verifier");
+}
+
+test("B3: a done handoff queues its check while a1's turn runs; its verifier starts only once bb reports a1 idle", async () => {
+  const { kit, agentThreadId, verifiers, check } = await onI1();
+  await kit.startTurn(agentThreadId);
+  assert.match(textOf(await kit.call("agent_handoff", DONE, agentThreadId)), /^Handed off\. Once this turn of yours ends, a verifier checks your commit/);
+  await kit.tick();
+  assert.deepEqual([verifiers().length, check().verdict.state], [0, "queued"], "no verifier beside the turn that handed off, from the tool or the tick");
+
+  await kit.idle(agentThreadId, "Handed off.");
+  const [verifier = assert.fail("no verifier")] = verifiers();
+  assert.deepEqual([check().verdict.state, ...statusesOf(kit, agentThreadId, verifier.id)], ["running", "idle", "active"]);
+});
+
+test("a check whose agent's idle event was missed, as across a reload, is started by the tick once bb reports a1 idle", async () => {
+  const { kit, agentThreadId, verifiers, check } = await onI1();
+  await kit.startTurn(agentThreadId);
+  await kit.call("agent_handoff", DONE, agentThreadId);
+  kit.reload();
+  kit.thread(agentThreadId).status = "idle"; // its turn ended while no plugin heard it
+  assert.deepEqual([check().verdict.state, verifiers().length], ["queued", 0]);
+  await kit.tick();
+  await settled();
+  assert.deepEqual([check().verdict.state, verifiers().length], ["running", 1]);
+});
+
+test("a1 woken by a person while its check is queued: the verifier waits for that turn too, then checks, and its failed verdict goes to the manager, not back to a1", async () => {
+  const { kit, coordinatorId, agentThreadId, verifiers, check } = await onI1();
+  await kit.startTurn(agentThreadId);
+  await kit.call("agent_handoff", DONE, agentThreadId);
+  await kit.startTurn(agentThreadId); // the user asks a1 for one more thing before the plugin hears it idle
+  await kit.tick();
+  assert.deepEqual([verifiers().length, check().verdict.state], [0, "queued"], "no verifier while the user's turn runs");
+
+  await kit.idle(agentThreadId, "Done that too.");
+  const [verifier = assert.fail("no verifier")] = verifiers();
+  assert.deepEqual(statusesOf(kit, agentThreadId, verifier.id), ["idle", "active"]);
+  await kit.call("issue_verdict", FAILS, verifier.id);
+  await kit.idle(verifier.id, "Verdict returned.");
+  assert.deepEqual(kit.sent().filter((args) => args.threadId === agentThreadId), [], "a turn followed the handoff, so its findings are the manager's");
+  const { verdict } = check();
+  assert.deepEqual([verdict.state === "returned" && verdict.settlement.kind, kit.store.agent(coordinatorId, a1)?.fixRounds], ["checked", 0]);
+});
+
+test("B2: a failed verdict is stored at once, but its findings wait for the verifier's turn to end, then wake a1", async () => {
+  const on = await onI1();
+  const { kit, coordinatorId, agentThreadId, check } = on;
+  const verifier = await handedOff(on);
+  assert.match(textOf(await kit.call("issue_verdict", FAILS, verifier)), /^Verdict recorded/);
+  const owed = check().verdict;
+  assert.equal(owed.state === "returned" && owed.settlement.kind, "pending", "owed: stored, not yet sent");
+  assert.deepEqual([kit.sent().filter((args) => args.threadId === agentThreadId), ...statusesOf(kit, agentThreadId, verifier)], [[], "idle", "active"], "a1 not woken beside its verifier");
+
+  await kit.idle(verifier, "Verdict returned.");
+  assert.match(kit.delivered(agentThreadId).at(-1) ?? "", /^## Verifier findings/);
+  assert.deepEqual([...statusesOf(kit, agentThreadId, verifier), kit.store.agent(coordinatorId, a1)?.fixRounds], ["active", "idle", 1]);
+});
+
+test("findings owed across a reload are sent by the tick once bb reports the verifier idle, once", async () => {
+  const on = await onI1();
+  const { kit, coordinatorId, agentThreadId, check } = on;
+  const verifier = await handedOff(on);
+  await kit.call("issue_verdict", FAILS, verifier);
+  const owed = check().verdict;
+  assert.deepEqual([owed.state === "returned" && owed.settlement.kind, kit.delivered(agentThreadId)], ["pending", []], "owed as the plugin reloads");
+  kit.reload();
+  kit.thread(verifier).status = "idle"; // its turn ended while no plugin heard it
+  await kit.tick();
+  await settled();
+  await kit.tick();
+  await settled();
+  assert.equal(kit.delivered(agentThreadId).filter((text) => text.startsWith("## Verifier findings")).length, 1);
+  const sent = check().verdict;
+  assert.deepEqual([sent.state === "returned" && sent.settlement.kind, kit.store.agent(coordinatorId, a1)?.fixRounds], ["sent-back", 1]);
+});
+
+test("a verifier still running on the tick after its verdict is stopped first, then its findings go; one bb doesn't confirm stopped keeps them owed, Verifying, and the tick tries again", async () => {
+  const on = await onI1();
+  const { kit, coordinatorId, agentThreadId, check } = on;
+  const verifier = await handedOff(on);
+  await kit.call("issue_verdict", FAILS, verifier); // and its turn runs on, never ending
+  kit.stopRequests.byThread.set(verifier, "stopping");
+  await kit.tick();
+  await settled();
+  const owed = check().verdict;
+  assert.deepEqual([owed.state === "returned" && owed.settlement.kind, ...statusesOf(kit, agentThreadId, verifier)], ["pending", "idle", "stopping"], "nothing sent beside it");
+  assert.match(kit.warnings().at(-1) ?? "", new RegExp(`^The verifier ${verifier} of i1 is still stopping, so its findings wait; the next tick tries again\\.`));
+  const board = await kit.rpc.board({ coordinatorId });
+  assert.equal(board.issues[0]?.headline, "Verifying: Retries land with backoff");
+  assert.deepEqual(kit.store.unannounced(coordinatorId), [], "the manager hears nothing yet");
+
+  kit.stopRequests.byThread.delete(verifier);
+  kit.thread(verifier).status = "active";
+  await kit.tick();
+  await settled();
+  assert.deepEqual([...statusesOf(kit, agentThreadId, verifier), kit.delivered(agentThreadId).filter((text) => text.startsWith("## Verifier findings")).length], ["active", "idle", 1]);
+});
+
+test("B7: a quiet verifier isn't reminded while a person has woken a1; the reminder comes once a1 is idle again", async () => {
+  const on = await onI1();
+  const { kit, agentThreadId } = on;
+  const verifier = await handedOff(on);
+  await kit.startTurn(agentThreadId); // the user asks a1 something while its verifier checks
+  await kit.idle(verifier, "Forgot to return the verdict.");
+  await kit.tick();
+  assert.deepEqual([kit.delivered(verifier), ...statusesOf(kit, agentThreadId, verifier)], [[], "active", "idle"], "no reminder beside a1");
+
+  await kit.idle(agentThreadId, "Answered.");
+  assert.match(kit.delivered(verifier).join(), /without calling issue_verdict/);
+  assert.deepEqual(statusesOf(kit, agentThreadId, verifier), ["idle", "active"]);
 });

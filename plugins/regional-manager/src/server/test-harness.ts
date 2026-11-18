@@ -666,7 +666,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     registerAgentTools(bb, { store, agents });
     registerHandoffTool(bb, { store, verify });
     registerVerdictTool(bb, { store, verify });
-    const threadEvents = forwardThreadEvents(bb, { store, agents, onChange, refreshBoard });
+    const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard });
     watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });
     return { spawner, inbox, verify, agents, prWatch, finalChecks, unblocked, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }) } };
@@ -816,11 +816,12 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     active,
     /** bb sends the thread's event with the thread as it is now, as it does every second while the thread works. */
     threadNow,
-    /** The thread's turn ends, and bb announces it with its last answer. */
+    /** The thread's turn ends, bb announces it with its last answer, and what the plugin started on hearing it, without waiting for it, has run. */
     async idle(threadId: string, lastAssistantText: string | null): Promise<void> {
       const thread = fakeThread(threadId);
       thread.status = "idle";
       await emit("thread.idle", { thread: { ...ref(threadId), environmentId: thread.environmentId }, lastAssistantText });
+      await settled();
     },
     /** The thread's turn left a background command running, which bb doesn't count: the thread reads idle once its turn ends. */
     leavesBackground(threadId: string): void {

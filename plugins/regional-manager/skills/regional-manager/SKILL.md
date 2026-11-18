@@ -390,10 +390,10 @@ verdict) stays one.
   message to an agent a handover replaced meanwhile does nothing. One waits
   for bb as long as bb takes. A call that waited about 30 seconds behind it is
   refused: "an earlier operation on i1 hasn't finished yet, so nothing
-  changed". Call it again shortly. This orders the plugin's calls, not the
-  threads they start: an agent and its own verifier run together for a
-  moment as it hands off and as the verdict comes back, and your message
-  reaches an agent while its verifier checks.
+  changed". Call it again shortly. An agent and its own verifier never run at
+  the same time from the plugin's own doing: its verifier starts once the
+  turn that handed off ends, and its findings go back once the verifier's
+  turn ends. Your message still reaches an agent while its verifier checks.
 - **Refusals**: nothing is stopped when `agent_start` is refused, unless the
   refusal says what was: the issue changed while its threads stopped (it
   merged), or bb doesn't confirm one of them stopped (the holder still holds

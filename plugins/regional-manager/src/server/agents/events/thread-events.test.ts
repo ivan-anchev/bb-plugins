@@ -28,6 +28,7 @@ function forwarded() {
     {
       store: { roleOfThread: (threadId) => roles.get(threadId) ?? null, agent: () => null },
       agents: { archived: async () => undefined, deleted: async () => undefined, remove: () => undefined },
+      verify: { lookAgain: async () => undefined },
       onChange: (id: CoordinatorId) => void calls.push(`change ${id === MANAGER ? "manager" : "other"}`),
       refreshBoard: (id: CoordinatorId) => void calls.push(`board ${id === MANAGER ? "manager" : "other"}`),
     },

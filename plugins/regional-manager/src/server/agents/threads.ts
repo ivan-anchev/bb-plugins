@@ -100,4 +100,4 @@ async function stopEach(bb: StopBb, threads: readonly StoppableThread[]): Promis
 }
 
 /** Whether bb runs a turn in the thread: live, and neither idle nor failed. */
-const isRunning = (thread: StoppableThread): boolean => isLive(thread) && thread.status !== "idle" && thread.status !== "error";
+export const isRunning = (thread: StoppableThread): boolean => isLive(thread) && thread.status !== "idle" && thread.status !== "error";
