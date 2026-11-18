@@ -54,7 +54,8 @@ export type IssueView = {
   status: IssueStatus;
   /** Why it waits on the user, or null. A flag on an open issue, never a status. */
   needsYou: string | null;
-  headline: string;
+  /** What it is doing or why it rests, in a line; for a parent, only what its count of Done sub-issues doesn't say (null: nothing). */
+  headline: string | null;
   holder: Agent | null;
   /** The check whose verdict places it (the board's verdict), or null. */
   placing: Check | null;
@@ -130,24 +131,34 @@ const handedOffClose = ({ status }: Pick<Placing, "status">, handed: Handed | nu
  * waits In review for the manager to accept it, In progress and flagged while a Done sub-issue that
  * ships code isn't merged. Before that: In progress once any sub-issue started, Todo while any is in Todo or the
  * manager rests the parent there, else Backlog. why every sub-issue canceled reads as not started:
- * nothing of the parent was done, so it rests where the manager put it.
+ * nothing of the parent was done, so it rests where the manager put it. Its headline says only what
+ * its count doesn't (headlineText joins the two): why it is flagged, that it waits to be accepted, or
+ * the manager's close; else none.
  */
 function parentView({ issue, openDecision }: IssueFacts, subIssues: readonly Placed[]): Placed {
   const done = subIssues.filter(({ status }) => status === "done");
   const base = { issue, holder: null, pr: null, placing: null, subIssues: { done: done.length, total: subIssues.length } };
-  const count = `${done.length}/${subIssues.length} done`;
   const final = finalOf(issue, null);
   if (final !== null) return { ...base, ...final, needsYou: null };
   const asked = openDecision ? ASKED : null;
   if (done.length > 0 && subIssues.every(({ status }) => isClosed(status))) {
-    if (!isVerified(issue.kind)) return { ...base, status: "done", headline: count, needsYou: null, closedBy: closedBySubIssues(subIssues) };
+    if (!isVerified(issue.kind)) return { ...base, status: "done", headline: null, needsYou: null, closedBy: closedBySubIssues(subIssues) };
     const unmerged = done.filter(({ issue: sub, pr }) => shipsCode(sub.kind) && pr?.state !== "merged").map(({ issue: sub }) => sub.id);
     if (unmerged.length > 0) return { ...base, ...flagged(`${unmerged.join(", ")} ${unmerged.length === 1 ? "isn't" : "aren't"} merged, so ${issue.id}'s work isn't all on the default branch`), closedBy: null };
-    return { ...base, status: "in-review", headline: `${count}, all merged: accept it with issue_update`, needsYou: asked, closedBy: null };
+    return { ...base, status: "in-review", headline: "All merged: accept it with issue_update", needsYou: asked, closedBy: null };
   }
   const started = subIssues.some(({ status }) => status !== "backlog" && status !== "todo" && status !== "canceled");
   const status = started ? "in-progress" : subIssues.some(({ status }) => status === "todo") ? "todo" : issue.rest;
-  return { ...base, status, headline: count, needsYou: asked, closedBy: null };
+  return { ...base, status, headline: asked, needsYou: asked, closedBy: null };
+}
+
+/**
+ * A view's headline as text prints it, with no cell for a parent's count: the count leads ("1/3
+ * done"), then what the headline adds ("1/3 done. All merged: accept it with issue_update").
+ */
+export function headlineText({ headline, subIssues }: Pick<IssueView, "headline" | "subIssues">): string {
+  const count = subIssues === null ? null : `${subIssues.done}/${subIssues.total} done`;
+  return [count, headline].filter((part) => part !== null).join(". ");
 }
 
 /**

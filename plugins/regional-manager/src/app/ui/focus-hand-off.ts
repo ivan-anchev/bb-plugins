@@ -43,24 +43,43 @@ export function handFocusToPage(region: HTMLElement | null): (() => void) | unde
 
 /** The refs that keep focus as items move between groups (useFocusKeptAcrossGroups). Each is stable per key. */
 type GroupFocus<Group> = {
-  /** On the whole item: focus anywhere in it as it leaves (its row, a link beside it, its open detail) is kept. */
+  /** On the whole item: focus anywhere in it as it leaves (its row, a link beside it, its open detail) is kept; in an item nested in another, by the nested one. */
   item(key: string): RefCallback<HTMLElement>;
   /** On the element of the item that takes the focus kept, where the item lands. */
   target(key: string): RefCallback<HTMLElement>;
   /** On a group's header, which takes it while the item's group is folded. */
   header(group: Group): RefCallback<HTMLElement>;
+  /**
+   * Moves focus to the item's target once the next commit has drawn it, as when the user goes to an
+   * item in a group being unfolded for it, without scrolling to it: `landed` gets the target, to
+   * bring it into view as it needs, and returns what lets go of whatever it started there. That is
+   * let go once the target leaves (its item moves groups or is gone) or the next moveTo lands.
+   */
+  moveTo(key: string, landed: Landed): void;
 };
+
+/** What moveTo does with the target it landed on: returns what lets go of it. */
+type Landed = (target: HTMLElement) => () => void;
 
 /**
  * Focus kept by items that move from one group to another, some groups folded, such as a board's rows
  * moving lanes: React removes an item from its old list and mounts it in the new one, or nowhere while
  * the new one is folded. Once the commit is done, focus that was anywhere in the leaving item goes to
  * its target where it landed, or to the header of the group it is in now (`groupOf`, null: in none),
- * or, once the item is gone from every group, to the tab stop of the page it was in.
+ * or, once the item is gone from every group, to the tab stop of the page it was in. `moveTo` sends
+ * focus the same way, to an item that need not have held it, and leaves scrolling to it to the caller.
  */
 export function useFocusKeptAcrossGroups<Group>(groupOf: (key: string) => Group | null): GroupFocus<Group> {
   const kept = useMemo(() => {
-    let leaving: { key: string; page: HTMLElement | null } | null = null;
+    // The focus to hand over once the commit is done: kept by an item that left (landed: null, as
+    // focus scrolls), or asked for by moveTo.
+    let pending: { key: string; page: HTMLElement | null; landed: Landed | null } | null = null;
+    // What the last moveTo started on the target it landed on, held until that target leaves or the next one lands (REVIEW.md: no async work outlives its owner).
+    let held: { target: HTMLElement; letGo: () => void } | null = null;
+    const letGo = () => {
+      held?.letGo();
+      held = null;
+    };
     const targets = new Map<string, HTMLElement>();
     const headers = new Map<Group, HTMLElement>();
     return {
@@ -68,20 +87,41 @@ export function useFocusKeptAcrossGroups<Group>(groupOf: (key: string) => Group 
         item: stablePerKey((key: string): RefCallback<HTMLElement> => (item) => {
           if (item === null) return;
           return () => {
+            // why the last one wins: React detaches a removed tree's refs parent first, so of an item
+            // nested in another (a sub-issue under its parent), the nested one's cleanup runs last.
             // why read the page now: the item is still in it, and nothing of it is once it's gone.
-            if (item.contains(document.activeElement)) leaving = { key, page: pageOf(item) };
+            if (item.contains(document.activeElement)) pending = { key, page: pageOf(item), landed: null };
           };
         }),
-        target: stablePerKey((key: string) => tracked(targets, key)),
+        target: stablePerKey((key: string): RefCallback<HTMLElement> => {
+          const track = tracked(targets, key);
+          return (target) => {
+            const untrack = track(target);
+            return () => {
+              untrack?.();
+              if (held?.target === target) letGo();
+            };
+          };
+        }),
         header: stablePerKey((group: Group) => tracked(headers, group)),
+        moveTo: (key: string, landed: Landed) => {
+          pending = { key, page: null, landed };
+        },
       },
-      /** Hands the focus kept to where its item landed; nothing when no item that held it left. */
+      /** Hands the focus pending to where its item landed; nothing when none is. */
       land(groupOf: (key: string) => Group | null) {
-        if (leaving === null) return;
-        const { key, page } = leaving;
-        leaving = null;
+        if (pending === null) return;
+        const { key, page, landed } = pending;
+        pending = null;
+        const target = targets.get(key);
+        if (target !== undefined && landed !== null) {
+          target.focus({ preventScroll: true });
+          letGo();
+          held = { target, letGo: landed(target) };
+          return;
+        }
         const group = groupOf(key);
-        (targets.get(key) ?? (group === null ? undefined : headers.get(group)) ?? page)?.focus();
+        (target ?? (group === null ? undefined : headers.get(group)) ?? page)?.focus();
       },
     };
   }, []);
@@ -97,7 +137,7 @@ export function useFocusKeptAcrossGroups<Group>(groupOf: (key: string) => Group 
 const pageOf = (element: HTMLElement): HTMLElement | null => element.parentElement?.closest<HTMLElement>('[tabindex="0"]') ?? null;
 
 /** A ref that keeps `map` pointing at the element mounted for `key`. */
-function tracked<Key>(map: Map<Key, HTMLElement>, key: Key): RefCallback<HTMLElement> {
+function tracked<Key>(map: Map<Key, HTMLElement>, key: Key): (element: HTMLElement | null) => (() => void) | undefined {
   return (element) => {
     if (element === null) return;
     map.set(key, element);

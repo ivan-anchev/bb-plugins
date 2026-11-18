@@ -43,7 +43,8 @@ const shownAgentSchema = z.object({ id: agentIdSchema, threadId: z.string().null
 
 /**
  * One issue on the board, as its view reads now: its kind, its parent (null: none), how many of its
- * sub-issues are Done of how many (null: it has none), its status, why it waits on the user (null:
+ * sub-issues are Done of how many (null: it has none), the open issues it or its parent depends on
+ * (none: nothing blocks it), its status, why it waits on the user (null:
  * it doesn't; the board then shows it under Needs you, its status on the row), its latest agent
  * (null: none started) with that agent's thread while bb runs it (null: archived or deleted), and
  * its pull request as last read (null: none seen). Its verdicts are in its detail (`issue`).
@@ -53,10 +54,11 @@ const issueRowSchema = z.object({
   kind: kindSchema,
   parentId: issueIdSchema.nullable(),
   subIssues: z.object({ done: z.number().int().nonnegative(), total: z.number().int().positive() }).nullable(),
+  blockedBy: z.array(issueIdSchema),
   title: z.string(),
   status: issueStatusSchema,
   needsYou: z.string().nullable(),
-  headline: z.string(),
+  headline: z.string().nullable(),
   agent: shownAgentSchema.nullable(),
   pr: prSnapshotSchema.nullable(),
 });
@@ -80,7 +82,8 @@ const boardSchema = z.object({
 export type Board = z.infer<typeof boardSchema>;
 
 /**
- * An issue opened on the board: what it is about, its done-criteria, and its record: every agent
+ * An issue opened on the board: what it is about, its done-criteria, the issues it depends on and
+ * the issues that depend on it (each with its title and status on its own row), and its record: every agent
  * that held it, oldest first, with its thread (null: none to open) and how it ended (null: it holds
  * the issue now), and each handoff it made, oldest first, with the verdict on it (null: none was
  * asked for, as for a blocked handoff). No brief: that is the agent's.
@@ -88,6 +91,8 @@ export type Board = z.infer<typeof boardSchema>;
 const issueDetailSchema = z.object({
   description: descriptionSchema,
   doneCriteria: doneCriteriaSchema,
+  dependsOn: z.array(issueIdSchema),
+  blocks: z.array(issueIdSchema),
   record: z.array(
     z.object({
       agent: shownAgentSchema.extend({ ended: endedHowSchema.nullable() }),

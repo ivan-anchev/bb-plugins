@@ -71,6 +71,13 @@
   list-style: none;
 }
 
+/* A parent's sub-issues, one level in, under its row and its open detail: each glyph sits under the
+   parent's id, and the words keep the rest of the width. */
+.rmi-list.rmi-sub-issues {
+  margin: 0;
+  padding-left: 16px;
+}
+
 /* --- An issue's row: Activity's tall row, its 30 slot, its words, the flat wash ----------------- */
 /* The row's button spans its words; its pull request and its agent sit beside them, on the same wash. */
 .rmi-rowbox {
@@ -133,13 +140,20 @@
   color: var(--subtle-foreground);
   font-variant-numeric: tabular-nums;
 }
+/* A sub-issue's row away from its parent leads with the parent's id: "i4›i5", one id, the chevron
+   kept to its own mono cell so the three read as one unit. */
+.rmi-crumb {
+  margin-inline: 1px;
+}
 .rmi-kind {
   flex: 0 0 auto;
   font-size: 11px;
   color: var(--subtle-foreground);
 }
 /* Under the title (Activity's second line, pulled up under it): the headline, in Activity's readable
-   second-line colour. Ids, kinds, counts and times stay subtle, as in Activity and the theme. */
+   second-line colour. Ids, kinds, counts and times stay subtle, as in Activity and the theme. It keeps
+   its line with nothing on it (a parent whose count says it all), so a row open or closed keeps its
+   height and the count cell beside it its place. */
 .rmi-headline {
   display: flex;
   align-items: center;
@@ -151,6 +165,30 @@
   font-size: 11px;
   line-height: 14px;
   color: var(--muted-foreground);
+}
+/* A parent's sub-issues Done of all, where an agent would be: a count, quiet as the row's id. */
+.rmi-sub-count {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--subtle-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+/* What blocks the issue, ahead of its headline: the plan's fact in the headline's words, its ids set
+   as the row's own id, then a quiet dot. It never shrinks: the headline fades instead. */
+.rmi-blocked {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.rmi-blocked-ids {
+  font-family: var(--font-mono);
+  color: var(--subtle-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.rmi-blocked::after {
+  content: "·";
+  margin-left: 4px;
+  color: var(--subtle-foreground);
 }
 .rmi-pr-cell {
   grid-column: 2;
@@ -182,6 +220,7 @@
 .rmi-row[aria-expanded="true"] .rmi-headline {
   align-items: flex-start;
   height: auto;
+  min-height: 23px; /* its 14px line, empty or not, and the 9px under it */
   padding-bottom: 9px;
 }
 .rmi-whole {
@@ -385,6 +424,53 @@ button.rmi-thread-link {
   color: var(--subtle-foreground);
   font-variant-numeric: tabular-nums;
 }
+/* A relation: each other issue a small row, its glyph, id and title, going to it when pressed; one the board hasn't read yet, its id alone. */
+.rmi-related-list {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  list-style: none;
+}
+.rmi-related {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 6px;
+  margin: 0 -6px;
+  border-radius: 6px;
+}
+button.rmi-related {
+  cursor: pointer;
+}
+.rmi-related > .rmi-state,
+.rmi-related > .rmi-id {
+  margin-top: 0.5px;
+}
+.rmi-related-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--muted-foreground);
+}
+.rmi-related-through {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--subtle-foreground);
+}
+@media (hover: hover) {
+  button.rmi-related:hover {
+    background: var(--state-hover);
+  }
+  button.rmi-related:hover .rmi-related-title {
+    color: var(--foreground);
+  }
+}
+.rmi-related:focus-visible {
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+
 /* The record: each agent on a rule, its handoffs under it. */
 .rmi-record,
 .rmi-handoffs {

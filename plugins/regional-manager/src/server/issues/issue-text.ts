@@ -1,11 +1,11 @@
 // What the issue and agent tools say to the regional manager. An issue is always named by its id
 // and an agent by its id, with a link to its thread, so the manager can both act on them and point
 // the user at them.
-import { byLane, LANE_LABELS, laneOf } from "../../model/board/board-groups.ts";
+import { boardGroups, LANE_LABELS, type BoardItem } from "../../model/board/board-groups.ts";
 import type { Issue, IssueId } from "../../model/issue/issue.ts";
 import { isVerified, PIPELINES } from "../../model/issue/kind.ts";
 import { isReady, type Related, type Relations } from "../../model/issue/relations.ts";
-import { STATUS_LABELS, type Handed, type IssueView } from "../../model/issue/status.ts";
+import { headlineText, STATUS_LABELS, type Handed, type IssueView } from "../../model/issue/status.ts";
 import { placementName, refOf, type Agent } from "../../model/agent.ts";
 import { executionText, recipientsText, type Carried, type StartOutcome, type StopOutcome, type Withdrawn } from "../agents/agents.ts";
 import { handoffText, type Lookups } from "../tools/inbox-text.ts";
@@ -25,22 +25,30 @@ const threadLink = (threadId: string | null): string => (threadId === null ? "no
 export function boardText(reads: readonly IssueRead[] | { error: string }): string {
   if ("error" in reads) return `## Board\n\nCould not read your agents' threads from bb: ${reads.error}. Call crew_catch_up again before relying on any issue's status.`;
   if (reads.length === 0) return "## Board\n\nNo issues yet. File one with issue_create.";
-  const subIssuesOf = (read: IssueRead): IssueRead[] => reads.filter(({ view }) => view.issue.parentId === read.view.issue.id);
-  const rows = reads.flatMap((read) => {
-    if (read.view.issue.parentId === null) return [{ lane: laneOf(read.view), read, subIssues: subIssuesOf(read) }];
-    return read.view.needsYou === null ? [] : [{ lane: "needs-you" as const, read, subIssues: [] }];
-  });
-  const lanes = byLane(rows).map(({ lane, rows: inLane }) =>
-    [`### ${LANE_LABELS[lane]} (${inLane.length})`, ...inLane.flatMap(({ read, subIssues }) => [rowLine(read), ...subIssues.map((sub) => `  ${rowLine(sub)}`)])].join("\n"),
-  );
+  const placed = reads.map((read) => ({ ...read, id: read.view.issue.id, parentId: read.view.issue.parentId, status: read.view.status, needsYou: read.view.needsYou }));
+  const lanes = boardGroups([], placed).map(({ lane, rows }) => [`### ${LANE_LABELS[lane]} (${rows.length})`, ...rows.flatMap(laneLines)].join("\n"));
   return ["## Board", ...lanes, readyLine(reads.map(({ view }) => view))].join("\n\n");
+}
+
+/** A row's lines in its lane: an issue's, each of its sub-issues indented under it. why no decision: catch-up lists them in their own section. */
+function laneLines(item: BoardItem<IssueRead>): string[] {
+  switch (item.kind) {
+    case "decision":
+      return [];
+    case "issue":
+      return [rowLine(item.issue), ...item.subIssues.map((sub) => `  ${rowLine(sub)}`)];
+    case "flagged-sub-issue":
+      return [rowLine(item.issue)];
+    default:
+      return item satisfies never;
+  }
 }
 
 function rowLine({ view, agent, threadId, branch }: IssueRead): string {
   const { issue } = view;
   const held = view.subIssues !== null ? "parent" : agent === null ? "no agent" : `${agent.id}${agent.ended === null ? "" : ` (${agent.ended.how})`}, ${threadLink(threadId)}`;
   const under = issue.parentId === null ? "" : `, under ${issue.parentId}`;
-  return `- ${issue.id} "${issue.title}" (${PIPELINES[issue.kind].label}; ${held}${under}${branch === null ? "" : `, on branch \`${branch}\``}): ${view.headline}${blockedText(view.blockedBy, "; blocked by ")}`;
+  return `- ${issue.id} "${issue.title}" (${PIPELINES[issue.kind].label}; ${held}${under}${branch === null ? "" : `, on branch \`${branch}\``}): ${headlineText(view)}${blockedText(view.blockedBy, "; blocked by ")}`;
 }
 
 /** The issues in Todo that nothing blocks: those an agent can start on without waiting. */
@@ -185,7 +193,7 @@ export function issueText({ view, threadId, branch }: IssueRead, relations: Rela
         : `${output.slice(0, OUTPUT_BUDGET_CHARS)}\n\n[Cut here: it has ${output.length} characters. Read the rest in its thread.]`;
   return [
     `## ${issue.id}: ${issue.title}`,
-    `${PIPELINES[issue.kind].label}. ${sentence(`${STATUS_LABELS[view.status]}: ${view.headline}`)}${view.needsYou === null ? "" : " Needs you."}${blockedText(view.blockedBy, " Blocked by ")}${view.blockedBy.length === 0 ? "" : "."} Thread: ${threadLink(threadId)}${branch === null ? "" : `, branch \`${branch}\``}.`,
+    `${PIPELINES[issue.kind].label}. ${sentence(`${STATUS_LABELS[view.status]}: ${headlineText(view)}`)}${view.needsYou === null ? "" : " Needs you."}${blockedText(view.blockedBy, " Blocked by ")}${view.blockedBy.length === 0 ? "" : "."} Thread: ${threadLink(threadId)}${branch === null ? "" : `, branch \`${branch}\``}.`,
     `### What it is about\n\n${issue.description.trim()}`,
     `### Brief\n\n${issue.brief?.trim() ?? "None yet."}`,
     criteriaText(issue),

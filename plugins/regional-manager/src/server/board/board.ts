@@ -7,6 +7,7 @@ import type { HandoffReport } from "../../model/handoff.ts";
 import { needsYou, type NeedsYou } from "../../model/board/board-groups.ts";
 import { warnedFileCount } from "../../model/inbox/own-tree.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
+import { dependentsOf } from "../../model/issue/relations.ts";
 import type { Handed } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
@@ -26,6 +27,7 @@ const rowOf = ({ view, agent, threadId }: IssueRead): IssueRow => ({
   kind: view.issue.kind,
   parentId: view.issue.parentId,
   subIssues: view.subIssues,
+  blockedBy: view.blockedBy.map(({ id }) => id),
   title: view.issue.title,
   status: view.status,
   needsYou: view.needsYou,
@@ -104,7 +106,7 @@ export function createBoard(bb: FactsBb, store: BoardStore, memory: MemoryRoot) 
       };
     },
 
-    /** An issue opened on the board: its plan for the user and its record, from the store, with its agents' threads as bb lists them (null: the regional manager has no such issue). */
+    /** An issue opened on the board: its plan for the user, what it depends on and what depends on it, and its record, from the store, with its agents' threads as bb lists them (null: the regional manager has no such issue). */
     async detail(id: CoordinatorId, issueId: IssueId): Promise<IssueDetail | null> {
       const issue = store.issue(id, issueId);
       if (issue === null) return null;
@@ -114,6 +116,8 @@ export function createBoard(bb: FactsBb, store: BoardStore, memory: MemoryRoot) 
       return {
         description: issue.description,
         doneCriteria: issue.doneCriteria,
+        dependsOn: issue.dependsOn,
+        blocks: dependentsOf(store.issues(id), issueId),
         record: agents.map((agent) => ({ agent: heldBy(agent, threads), handoffs: record.filter(({ handoff }) => handoff.agentId === agent.id).map(shownHanded) })),
       };
     },
