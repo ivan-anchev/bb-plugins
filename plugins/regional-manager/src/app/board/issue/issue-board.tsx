@@ -21,8 +21,8 @@ type IssueBoardProps = {
   issues: readonly Row[];
   /** A decision's row; `ref`, on the element that takes focus once it moves from Needs you to Done. */
   decisionRow(decision: Decision, ref: RefCallback<HTMLElement>): ReactNode;
-  /** An open issue's detail, under its row; `goTo`, to go to another issue on the board. */
-  detailOf(issue: Row, goTo: GoTo): ReactNode;
+  /** An open issue's detail, under its row; `under`, the parent its row is shown away from (null: none); `goTo`, to go to another issue on the board. */
+  detailOf(issue: Row, under: IssueId | null, goTo: GoTo): ReactNode;
 };
 
 /** Goes to an issue on the board: unfolds its lane, opens its row and moves focus to it. */
@@ -47,7 +47,7 @@ export function IssueBoard({ decisions, issues, decisionRow, detailOf }: IssueBo
 
   /** An issue's row and its detail, opened by `rowKey`; why a key apart from its id: a flagged sub-issue has two rows, each opening on its own. */
   const issueItem = (issue: Row, rowKey: string, under: IssueId | null = null) => (
-    <IssueItem issue={issue} under={under} open={opened.has(rowKey)} onToggle={() => setOpened((current) => toggled(current, rowKey))} rowRef={focus.target(rowKey)} detail={(shown) => detailOf(shown, goTo)} />
+    <IssueItem issue={issue} under={under} open={opened.has(rowKey)} onToggle={() => setOpened((current) => toggled(current, rowKey))} rowRef={focus.target(rowKey)} detail={(shown) => detailOf(shown, under, goTo)} />
   );
 
   function item(entry: BoardItem<Row>): ReactNode {

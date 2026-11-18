@@ -38,7 +38,7 @@ export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
             decisions={data.decisions}
             issues={data.issues}
             decisionRow={(decision, ref) => <DecisionRow ref={ref} coordinatorId={coordinatorId} decision={decision} />}
-            detailOf={(issue, goTo) => <IssueDetail coordinatorId={coordinatorId} issue={issue} issues={data.issues} goTo={goTo} />}
+            detailOf={(issue, under, goTo) => <IssueDetail coordinatorId={coordinatorId} issue={issue} under={under} issues={data.issues} goTo={goTo} />}
           />
           {data.issues.length === 0 && <p className="px-2 text-sm text-muted-foreground">No issues yet.</p>}
         </>

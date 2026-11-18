@@ -3,6 +3,7 @@
 import { experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { coordinatorContract as contract, type IssueDetail as Detail, type IssueRow } from "../../../../contract.ts";
 import { isVerified } from "../../../../model/issue/kind.ts";
+import type { IssueId } from "../../../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
 import { ReadFailure } from "../../../ui/read-failure.tsx";
 import type { GoTo } from "../issue-board.tsx";
@@ -12,27 +13,29 @@ import { IssueRelations } from "./issue-relations.tsx";
 type IssueDetailProps = {
   coordinatorId: CoordinatorId;
   issue: IssueRow;
+  /** The parent its row is shown away from, else null (issue-relations.tsx). */
+  under: IssueId | null;
   /** Every issue on the board, which its relations name. */
   issues: readonly IssueRow[];
   goTo: GoTo;
 };
 
-export function IssueDetail({ coordinatorId, issue, issues, goTo }: IssueDetailProps) {
+export function IssueDetail({ coordinatorId, issue, under, issues, goTo }: IssueDetailProps) {
   const read = experimental_useRpcQuery({ contract, method: "issue", input: { coordinatorId, issueId: issue.id } });
   return (
     <>
       {read.error !== null && <ReadFailure onRetry={() => void read.refetch()}>Could not read {issue.id}: {read.error.message}</ReadFailure>}
       {read.data === undefined && read.error === null && <p className="rmi-description">Loading…</p>}
-      {read.data !== undefined && <Opened issue={issue} detail={read.data} issues={issues} goTo={goTo} />}
+      {read.data !== undefined && <Opened issue={issue} under={under} detail={read.data} issues={issues} goTo={goTo} />}
     </>
   );
 }
 
-function Opened({ issue, detail: { description, doneCriteria, dependsOn, blocks, record }, issues, goTo }: Omit<IssueDetailProps, "coordinatorId"> & { detail: Detail }) {
+function Opened({ issue, under, detail: { description, doneCriteria, dependsOn, blocks, record }, issues, goTo }: Omit<IssueDetailProps, "coordinatorId"> & { detail: Detail }) {
   return (
     <>
       <p className="rmi-description">{description}</p>
-      <IssueRelations issue={issue} dependsOn={dependsOn} blocks={blocks} issues={issues} goTo={goTo} />
+      <IssueRelations issue={issue} under={under} dependsOn={dependsOn} blocks={blocks} issues={issues} goTo={goTo} />
       {doneCriteria.length > 0 && (
         <section className="rmi-part">
           {/* why by kind: a verified kind's criteria are judged; any other's are questions its report answers. */}

@@ -730,9 +730,10 @@ page from its row in the panel, show the same board, live:
 
 Pressing an issue opens it in place: its row grows to show its title and
 headline whole, which a closed row fades out at its edge, and under it come
-what it is about; its **Parent** or its **Sub-issues**, **Depends on** (a
-sub-issue's lists its parent's open dependencies too, "through i1") and
-**Blocks**, each issue there with its status's glyph, id and title, and none
+what it is about; its **Parent**, only on a flagged sub-issue's row under
+Needs you, away from its parent (rows nest sub-issues already, so a detail
+lists none); **Depends on** (a sub-issue's lists its parent's open
+dependencies too, "through i1") and **Blocks**, each issue there with its status's glyph, id and title, and none
 when there are none; pressing one goes
 to that issue on the board, unfolding its lane, opening its row and moving
 focus to it; **Done when** with its criteria (a research issue's
