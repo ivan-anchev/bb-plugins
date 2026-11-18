@@ -52,10 +52,14 @@ type GroupFocus<Group> = {
   /**
    * Moves focus to the item's target once the next commit has drawn it, as when the user goes to an
    * item in a group being unfolded for it, without scrolling to it: `landed` gets the target, to
-   * bring it into view as it needs.
+   * bring it into view as it needs, and returns what lets go of whatever it started there. That is
+   * let go once the target leaves (its item moves groups or is gone) or the next moveTo lands.
    */
-  moveTo(key: string, landed: (target: HTMLElement) => void): void;
+  moveTo(key: string, landed: Landed): void;
 };
+
+/** What moveTo does with the target it landed on: returns what lets go of it. */
+type Landed = (target: HTMLElement) => () => void;
 
 /**
  * Focus kept by items that move from one group to another, some groups folded, such as a board's rows
@@ -69,7 +73,13 @@ export function useFocusKeptAcrossGroups<Group>(groupOf: (key: string) => Group 
   const kept = useMemo(() => {
     // The focus to hand over once the commit is done: kept by an item that left (landed: null, as
     // focus scrolls), or asked for by moveTo.
-    let pending: { key: string; page: HTMLElement | null; landed: ((target: HTMLElement) => void) | null } | null = null;
+    let pending: { key: string; page: HTMLElement | null; landed: Landed | null } | null = null;
+    // What the last moveTo started on the target it landed on, held until that target leaves or the next one lands (REVIEW.md: no async work outlives its owner).
+    let held: { target: HTMLElement; letGo: () => void } | null = null;
+    const letGo = () => {
+      held?.letGo();
+      held = null;
+    };
     const targets = new Map<string, HTMLElement>();
     const headers = new Map<Group, HTMLElement>();
     return {
@@ -83,9 +93,18 @@ export function useFocusKeptAcrossGroups<Group>(groupOf: (key: string) => Group 
             if (item.contains(document.activeElement)) pending = { key, page: pageOf(item), landed: null };
           };
         }),
-        target: stablePerKey((key: string) => tracked(targets, key)),
+        target: stablePerKey((key: string): RefCallback<HTMLElement> => {
+          const track = tracked(targets, key);
+          return (target) => {
+            const untrack = track(target);
+            return () => {
+              untrack?.();
+              if (held?.target === target) letGo();
+            };
+          };
+        }),
         header: stablePerKey((group: Group) => tracked(headers, group)),
-        moveTo: (key: string, landed: (target: HTMLElement) => void) => {
+        moveTo: (key: string, landed: Landed) => {
           pending = { key, page: null, landed };
         },
       },
@@ -97,7 +116,8 @@ export function useFocusKeptAcrossGroups<Group>(groupOf: (key: string) => Group 
         const target = targets.get(key);
         if (target !== undefined && landed !== null) {
           target.focus({ preventScroll: true });
-          landed(target);
+          letGo();
+          held = { target, letGo: landed(target) };
           return;
         }
         const group = groupOf(key);
@@ -117,7 +137,7 @@ export function useFocusKeptAcrossGroups<Group>(groupOf: (key: string) => Group 
 const pageOf = (element: HTMLElement): HTMLElement | null => element.parentElement?.closest<HTMLElement>('[tabindex="0"]') ?? null;
 
 /** A ref that keeps `map` pointing at the element mounted for `key`. */
-function tracked<Key>(map: Map<Key, HTMLElement>, key: Key): RefCallback<HTMLElement> {
+function tracked<Key>(map: Map<Key, HTMLElement>, key: Key): (element: HTMLElement | null) => (() => void) | undefined {
   return (element) => {
     if (element === null) return;
     map.set(key, element);

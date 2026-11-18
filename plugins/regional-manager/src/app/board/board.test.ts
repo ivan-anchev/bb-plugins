@@ -20,10 +20,11 @@ registerHooks({ load: (url, context, nextLoad) => (url.endsWith(".css") ? { form
 // why: jsdom has none of these; the rows measure their titles, the working ring and going to an issue
 // ask for Reduce motion (on unless a test turns it off), and the ring for a canvas. Going to an issue
 // scrolls its row, which jsdom doesn't do: each scroll asked for is recorded in `scrolls`. jsdom lays
-// nothing out, so `resized` stands in for the browser telling every observer a size changed.
+// nothing out, so `resized` stands in for the browser telling every observer a size changed;
+// `observing` holds each observer connected, with the element it observes.
 let reduceMotion = true;
-const observing = new Set<() => void>();
-const resized = () => act(() => [...observing].forEach((changed) => changed()));
+const observing = new Map<() => void, Element>();
+const resized = () => act(() => [...observing.keys()].forEach((changed) => changed()));
 Object.assign(globalThis, {
   ResizeObserver: class {
     // why no entries: the board's observers only re-measure, reading no entry.
@@ -31,8 +32,8 @@ Object.assign(globalThis, {
     constructor(changed: () => void) {
       this.#changed = changed;
     }
-    observe() {
-      observing.add(this.#changed);
+    observe(target: Element) {
+      observing.set(this.#changed, target);
     }
     disconnect() {
       observing.delete(this.#changed);
@@ -321,6 +322,35 @@ test("an opened issue lists what it depends on and what it blocks, each by its s
   reduceMotion = true;
   assert.deepEqual(scrolls, [{ label: view.getByRole("button", { name: /\bi2 Build/ }).getAttribute("aria-label"), options: { block: "start", behavior: "smooth" } }], "smoothly otherwise");
   assert.ok(document.activeElement === view.getByRole("button", { name: /\bi2 Build/ }));
+});
+
+test("an issue gone to lets go of the page once a read moves its row to another lane or off the board, with no move of the user's", async () => {
+  const board = (i1: Partial<IssueRow> | null): Read => ({
+    decisions: [],
+    issues: [...(i1 === null ? [] : [issue("i1", { status: "done", title: "Pick a card vault", ...i1 })]), issue("i2", { title: "Card vault" })],
+  });
+  const { view, reread } = await mount(board({}), undefined, (issueId) => ({ ...DETAIL, dependsOn: issueId === "i2" ? [id("i1")] : [] }));
+  const watchingGone = () => [...observing.values()].filter((element) => !element.isConnected);
+  const goToI1 = async () => {
+    const detail = within(view.getByRole("region", { name: "i2" }));
+    fireEvent.click(await detail.findByRole("button", { name: /^i1: Pick a card vault/ }));
+    scrolls.length = 0;
+    resized();
+    assert.equal(scrolls.length, 1, "held at the top as it draws");
+  };
+  fireEvent.click(view.getByRole("button", { name: /\bi2 Build/ }));
+
+  await goToI1();
+  await reread(board({ status: "in-progress" }));
+  scrolls.length = 0;
+  resized();
+  assert.deepEqual([scrolls, watchingGone()], [[], []], "moved to In progress, the row it held is gone, and nothing watches it");
+
+  await goToI1();
+  await reread(board(null));
+  scrolls.length = 0;
+  resized();
+  assert.deepEqual([scrolls, watchingGone()], [[], []], "gone from the board, nothing watches its row");
 });
 
 test("a detail leaves the nesting to the rows: a parent lists no sub-issues and a sub-issue under it no parent; the flat copy under Needs you names its Parent and goes there; a parent's dependency blocks its sub-issue through it", async () => {
