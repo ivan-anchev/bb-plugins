@@ -6,6 +6,7 @@ import { agentIdSchema, requestedPlacementSchema, startFromSchema, type Agent, t
 import { requestedExecutionSchema } from "../../model/execution.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { startText, stopText } from "../issues/issue-text.ts";
+import { unquietText } from "../issues/quiet.ts";
 import type { Store } from "../store/store.ts";
 import { failed, forManager, refusedBusy, type ToolsBb } from "../tools/tool-kit.ts";
 import type { Agents } from "./agents.ts";
@@ -60,7 +61,8 @@ export function registerAgentTools(bb: ToolsBb, { store, agents }: Deps): void {
 
   bb.agents.registerTool({
     name: MESSAGE,
-    description: "Message one of your agents. It arrives in the agent's thread as a message from you, not from the user, under a line calling it your next instruction: it steers a running turn, or starts a new one.",
+    description:
+      "Message one of your agents. It arrives in the agent's thread as a message from you, not from the user, under a line calling it your next instruction: it steers a running turn, or starts a new one. An agent never runs beside its own verifier: a verifier still checking its done handoff is stopped first, and that check is dropped, so its next done handoff is checked afresh.",
     presentation: { label: { pending: "Messaging an agent", completed: "Messaged an agent" }, icon: { glyph: "SideChat" } },
     parameters: z.object({ agent: agentIdSchema, text: z.string().trim().min(1).max(20_000) }),
     execute: forAgent(MESSAGE, async (agent, { text }) => {
@@ -68,13 +70,17 @@ export function registerAgentTools(bb: ToolsBb, { store, agents }: Deps): void {
       if ("busy" in outcome) return refusedBusy(MESSAGE, outcome);
       switch (outcome.kind) {
         case "sent":
-          return `Sent to ${agent.id}.`;
+          return `Sent to ${agent.id}.${droppedText(agent, outcome.dropped)}`;
         case "queued":
-          return `Queued for ${agent.id}: it is waiting on the user or busy, and gets your message once it is free.`;
+          return `Queued for ${agent.id}: it is waiting on the user or busy, and gets your message once it is free.${droppedText(agent, outcome.dropped)}`;
         case "already-ended":
           return failed(`${agent.id} was ${outcome.how}, so it takes no more messages. Start a new agent on ${agent.issueId} with agent_start.`);
         case "unbound":
           return failed(`${agent.id} has no thread to message yet: bb hasn't confirmed one.`);
+        case "unquiet": {
+          const until = outcome.unquiet.kind === "left" ? "bb has sent or deleted it" : "it has stopped";
+          return failed(`${MESSAGE} is refused and nothing was sent: ${unquietText(outcome.unquiet)}, and ${agent.id} never runs beside another thread of ${agent.issueId}. Call ${MESSAGE} again once ${until}.`);
+        }
         default:
           return outcome satisfies never;
       }
@@ -106,3 +112,7 @@ export function registerAgentTools(bb: ToolsBb, { store, agents }: Deps): void {
  * what it is, so even a model that doubts the header follows it (QA Q20).
  */
 const managerMessage = (agent: Agent, text: string): string => `Your regional manager's next instruction, on ${agent.issueId}:\n\n${text}`;
+
+/** What a message did to the check of the agent's done handoff, in a sentence that follows its delivery ("" when it had none waiting). */
+const droppedText = (agent: Agent, dropped: boolean): string =>
+  dropped ? ` The check of ${agent.id}'s last done handoff was dropped before its verdict, as you asked for more work: nothing reports on that handoff, and ${agent.id}'s next done handoff is checked afresh.` : "";

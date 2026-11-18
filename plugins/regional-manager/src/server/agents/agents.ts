@@ -10,6 +10,7 @@ import {
   cutPlan,
   environmentOf,
   handoverOf,
+  holderOf,
   issueBranch,
   moveTo,
   placementOf,
@@ -42,6 +43,7 @@ import { inheritedFrom, type Inherited, type ThreadExecutionBb } from "../execut
 import type { Inbox } from "../inbox/inbox.ts";
 import { readIssue, type FactsBb, type FactsStore } from "../issues/views/issue-facts.ts";
 import type { Busy, IssueTurns } from "../issues/issue-turns.ts";
+import { didText, quietIssue, recipientsText, unquietText, type QuietBb, type Unquiet, type Withdrawn } from "../issues/quiet.ts";
 import type { MemoryRoot } from "../memory/memory-files.ts";
 import type { Spawner } from "../spawn.ts";
 import type { NewAgent } from "../store/issue/agents-store.ts";
@@ -49,10 +51,9 @@ import type { Store } from "../store/store.ts";
 import type { PrWatch } from "../watch/pr-watch.ts";
 import { agentBrief } from "./brief.ts";
 import { environmentGone, type EnvironmentsBb } from "./environments.ts";
-import { latestTurnSeq, stopThreads, threadsById, type ListBb, type StopBb } from "./threads.ts";
+import { latestTurnSeq, stopThreads, threadsById, type ListBb } from "./threads.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
-type QueuedMessage = Awaited<ReturnType<Threads["queuedMessages"]["list"]>>[number];
 type EnvironmentArgs = NewThreadRequest["environment"];
 
 /** An agent's or a regional manager's thread as the agents read it. */
@@ -73,17 +74,13 @@ type AgentsBb = CatalogBb &
   ThreadExecutionBb &
   FactsBb &
   EnvironmentsBb &
-  StopBb &
+  QuietBb &
   ListBb<ListedThread> & {
     log: Pick<PluginLogger, "warn">;
     sdk: {
       threads: {
         send(args: Parameters<Threads["send"]>[0]): Promise<{ delivery: "sent" | "queued" }>;
         archive(args: { threadId: string }): Promise<unknown>;
-        queuedMessages: {
-          list(args: { threadId: string }): Promise<Pick<QueuedMessage, "id" | "senderThreadId" | "state" | "content">[]>;
-          delete(args: { threadId: string; queuedMessageId: string }): Promise<unknown>;
-        };
       };
     };
   };
@@ -105,9 +102,6 @@ type Prove = (agent: Agent, branch: string, head: string) => Promise<PrRead>;
 
 /** A start decided: its issue, what it asked, where it spawns, what it runs on, and the issue's previous agent (null: none). */
 type Decided = { issueId: IssueId; asked: Asked; spot: Spot; runsOn: RunsOn; after: AgentId | null };
-
-/** A regional manager's message a start took back from bb's queue: the agent it was to, which never got it, and its text. */
-export type Withdrawn = { to: AgentId; text: string };
 
 /**
  * The issue taken over: as it was when the new agent was inserted, with the brief it starts from
@@ -147,12 +141,24 @@ export type StartOutcome =
 /** What a stop did. An agent ends as stopped only once bb confirms its thread no longer runs; `why` it hasn't: the status bb still reports, or bb's error that left the stop unconfirmed. */
 export type StopOutcome = { kind: "stopped"; archived: boolean } | { kind: "already-ended"; how: EndedHow } | { kind: "still-running"; why: string };
 
-/** What a message did: sent or queued by bb; or nothing, as the agent ended or has no thread yet. */
-export type MessageOutcome = { kind: "sent" | "queued" | "unbound" } | { kind: "already-ended"; how: EndedHow };
+/**
+ * What a message did: sent or queued by bb, `dropped` saying whether it superseded the check of the
+ * agent's done handoff still waiting for its verifier; or nothing, as the agent ended or has no
+ * thread yet, or as its issue's other threads aren't quiet (see quietIssue).
+ */
+export type MessageOutcome =
+  | { kind: "sent" | "queued"; dropped: boolean }
+  | { kind: "unbound" }
+  | { kind: "already-ended"; how: EndedHow }
+  | { kind: "unquiet"; unquiet: Unquiet };
 
 type Deps = {
   bb: AgentsBb;
-  store: FactsStore & Pick<Store, "coordinator" | "coordinators" | "issue" | "agent" | "issueThreads" | "insertAgent" | "replaceAgent" | "record" | "agentTicket" | "removeCoordinator">;
+  store: FactsStore &
+    Pick<
+      Store,
+      "coordinator" | "coordinators" | "issue" | "agent" | "issueThreads" | "roleOfThread" | "markNudged" | "insertAgent" | "replaceAgent" | "record" | "agentTicket" | "removeCoordinator" | "supersedeOpenChecks"
+    >;
   spawner: Pick<Spawner, "agent">;
   inbox: Pick<Inbox, "endAgent">;
   memory: MemoryRoot;
@@ -281,10 +287,11 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
    * archived (SH5):
    * 1. decide where it runs and on what, from what bb has now; a refusal changes nothing. A move
    *    reads the previous agent's environment, and its pull request when it cuts through origin;
-   * 2. quiet the issue: take back what the plugin queued for the holder, then stop every live thread
-   *    the plugin started for the issue, idle ones too, and confirm each, never archiving one:
-   *    a stopped thread keeps its environment (SH1 (b), SH5). Anything bb doesn't confirm refuses
-   *    the start, holder and record intact;
+   * 2. quiet the issue for the new agent (see quietIssue): take back what the plugin queued for any
+   *    of its threads, the holder's included, then stop every live thread the plugin started for
+   *    the issue, idle ones too, and confirm each, never archiving one: a stopped thread keeps its
+   *    environment (SH1 (b), SH5). Anything bb doesn't confirm refuses the start, holder and
+   *    record intact;
    * 3. a move out of a live environment reads it again, now that nothing runs there, and is refused
    *    if what it found no longer allows the cut; then end the holder as replaced, supersede the
    *    issue's open checks and insert the new agent, together;
@@ -338,14 +345,14 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
   }
 
   /**
-   * Steps 2 and 3: quiets the issue (see quiet), then gives it to the new agent. Refused when
+   * Steps 2 and 3: quiets the issue (see quietForStart), then gives it to the new agent. Refused when
    * quieting is, when a move's cut no longer holds, and when the issue can no longer start an agent
    * or changed hands meanwhile, saying what quieting did.
    */
   async function takeOver(coordinatorId: CoordinatorId, decided: Decided, prove: Prove): Promise<Taken | { refused: string }> {
     const { issueId, runsOn } = decided;
-    const holder = holderOf(coordinatorId, issueId);
-    const quieted = await quiet(coordinatorId, issueId, holder);
+    const holder = holderOf(store.agents(coordinatorId), issueId);
+    const quieted = await quietForStart(coordinatorId, issueId, holder);
     if ("refused" in quieted) return quieted;
     // why judge a move again: what the previous agent's environment held was read before its turn
     // was stopped, and it may have committed, pushed, switched branch or left files since.
@@ -364,70 +371,27 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
   }
 
   /**
-   * Quiets the issue before a new agent starts on it: takes back what the plugin queued for any of
-   * the issue's agents, the holder and every earlier one (see withdrawQueued), then stops every live
-   * thread the plugin started for the issue, the holder's, its verifiers' and any earlier agent's,
-   * whatever status bb reports, and confirms each. why every earlier agent: one agent_stop ended
-   * still has what bb queued for it, which would wake it beside the new agent. why idle ones too: an
-   * idle thread can still run a background command, whose finish would wake it (see stopThreads).
-   * Returns the manager's messages it took back, and what it did in words (`did`), to lead a refusal
-   * that follows; else why the start is refused, with what it did.
+   * Quiets the issue for a new agent (see quietIssue), which replaces the holder: what the plugin
+   * queued for any of the issue's threads is taken back, and the manager's messages to agents among
+   * it are returned to be quoted. Returns those, and what it did in words (`did`), to lead a refusal
+   * that follows; else why the start is refused, with what it did. why a message left in bb's
+   * queue, as one a person queued, refuses: once sent, it wakes its thread beside the new agent.
    */
-  async function quiet(coordinatorId: CoordinatorId, issueId: IssueId, holder: Agent | null): Promise<{ withdrawn: Withdrawn[]; did: string } | { refused: string }> {
-    const threads = store.issueThreads(coordinatorId, issueId);
-    const named = (threadId: string): string => threadName({ threadId, agentId: threads.find((thread) => thread.threadId === threadId)?.agentId ?? null });
-    const { withdrawn, left } = await withdrawQueued(coordinatorOf(coordinatorId).threadId, threads);
-    const { stopped, unstopped } = left.length > 0 ? { stopped: [], unstopped: [] } : await stopThreads(bb, threads.map(({ threadId }) => threadId));
-    const did = didText(withdrawn, stopped.map(named));
+  async function quietForStart(coordinatorId: CoordinatorId, issueId: IssueId, holder: Agent | null): Promise<{ withdrawn: Withdrawn[]; did: string } | { refused: string }> {
+    const quieted = await quietIssue(bb, store, coordinatorId, issueId, { kind: "new-agent" });
     const holds = holder === null ? "" : ` and ${holder.id} still holds ${issueId}`;
-    if (left.length > 0) {
-      const queued = left.map(({ what, to }) => `${what} queued for ${to}`).join(", and ");
-      return { refused: `${did}bb still has ${queued} and couldn't take it back; once sent, it would wake ${recipientsText(left)} beside a new agent, so no agent started${holds}. Call agent_start again once bb has sent or deleted it.` };
+    switch (quieted.kind) {
+      case "quiet": {
+        const did = didText(quieted);
+        return { withdrawn: quieted.withdrawn, did: did === "" ? "" : `${did}nothing else changed: ` };
+      }
+      case "left":
+        return { refused: `${unquietText(quieted)}; once sent, it would wake ${recipientsText(quieted.left)} beside a new agent, so no agent started${holds}. Call agent_start again once bb has sent or deleted it.` };
+      case "unstopped":
+        return { refused: `${unquietText(quieted)}, so no agent started${holds}. Call agent_start again once it has stopped.` };
+      default:
+        return quieted satisfies never;
     }
-    if (unstopped.length > 0) {
-      const running = unstopped.map(({ threadId, why }) => `${named(threadId)} ${why}`).join(", and ");
-      return { refused: `${did}${running}, so no agent started${holds}. Call agent_start again once it has stopped.` };
-    }
-    return { withdrawn, did: did === "" ? "" : `${did}nothing else changed: ` };
-  }
-
-  /**
-   * Takes back the messages the plugin queued in bb for the issue's threads (`threads`: every thread
-   * of the issue, its agents' and its verifiers') that bb still has, which bb would send once a
-   * thread's turn stops: the regional manager's to its agents and the plugin's reminders to
-   * verifiers, both sent from the manager's thread (`managerThreadId`), and the issue's verifiers'
-   * findings, as bb names their sender. Then reads each queue again, and returns, in words,
-   * everything still there that bb would send (`left`), with the thread it was for, a message
-   * someone else queued included, and the manager's messages to agents bb deleted, with the agent
-   * each was to (`withdrawn`). why a person's message left for a verifier refuses the start, as one
-   * for an agent does: once sent, it wakes that verifier beside the new agent, and it isn't the
-   * plugin's to delete. why read again, not trust a delete's answer: bb refuses one for a message
-   * it sent meanwhile and fails one it never reached alike. One bb sent meanwhile reached its
-   * thread, and the stop after this ends the turn it started.
-   */
-  async function withdrawQueued(managerThreadId: string, threads: IssueThread[]): Promise<{ withdrawn: Withdrawn[]; left: { to: string; what: string }[] }> {
-    const ours = new Set([managerThreadId, ...threads.map((thread) => thread.threadId)]);
-    const queue = bb.sdk.threads.queuedMessages;
-    const listed = await threadsById(bb, threads.map(({ threadId }) => threadId));
-    const kept = threads.filter(({ threadId }) => listed.get(threadId)?.deletedAt === null);
-    const sender = (senderThreadId: string | null, toVerifier: boolean): string => {
-      if (senderThreadId === managerThreadId) return toVerifier ? "the plugin's reminder" : "your message";
-      if (senderThreadId === null) return "a message from the user";
-      return ours.has(senderThreadId) ? `findings from the verifier @thread:${senderThreadId}` : `a message from @thread:${senderThreadId}`;
-    };
-    const each = await Promise.all(
-      kept.map(async (thread) => {
-        const { threadId, agentId } = thread;
-        const mine = (await queue.list({ threadId })).filter((message) => bbSends(message) && message.senderThreadId !== null && ours.has(message.senderThreadId));
-        const deleted = await Promise.all(mine.map(({ id }) => queue.delete({ threadId, queuedMessageId: id }).then(() => true, () => false)));
-        const toManager = mine.filter(({ senderThreadId }, i) => deleted[i] && senderThreadId === managerThreadId);
-        return {
-          withdrawn: agentId === null ? [] : toManager.map(({ content }) => ({ to: agentId, text: textOf(content) })),
-          left: (await queue.list({ threadId })).filter(bbSends).map(({ senderThreadId }) => ({ to: threadName(thread), what: sender(senderThreadId, agentId === null) })),
-        };
-      }),
-    );
-    return { withdrawn: each.flatMap((one) => one.withdrawn), left: each.flatMap((one) => one.left) };
   }
 
   /** Step 4: spawns the inserted agent's thread with its first message; one bb refuses ends as spawn-failed. */
@@ -480,10 +444,6 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
       default:
         return base satisfies never;
     }
-  }
-
-  function holderOf(coordinatorId: CoordinatorId, issueId: IssueId): Agent | null {
-    return store.agents(coordinatorId).find((agent) => agent.issueId === issueId && agent.ended === null) ?? null;
   }
 
   /**
@@ -541,20 +501,30 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
      * Sends the text as a message from the regional manager: it steers a running turn, starts one,
      * or waits in bb's queue. In its issue's turn, to an agent that still holds it, so a handover
      * never has it wake the agent it replaced; a handover takes back one still waiting in the queue.
+     * First it quiets the issue's other threads, its verifiers' and any ended agent's (see
+     * quietIssue), as the agent never runs beside its own verifier; while they aren't quiet, it
+     * sends nothing. Once sent, it drops the check of the agent's done handoff still waiting for its
+     * verifier: the manager asked for more work, so that handoff is no longer the agent's last word,
+     * and its next done handoff is checked afresh. A returned verdict is kept: it settles as it
+     * would after any later turn of the agent's, to the manager, with no fix round.
      */
     message: ({ coordinatorId, id, issueId }: Agent, text: string): Promise<MessageOutcome | Busy> =>
       turns.run(coordinatorId, issueId, async () => {
         const agent = agentOf(coordinatorId, id);
         if (agent.ended !== null) return { kind: "already-ended", how: agent.ended.how };
         if (agent.threadId === null) return { kind: "unbound" };
+        const quieted = await quietIssue(bb, store, coordinatorId, issueId, { kind: "thread", threadId: agent.threadId });
+        if (quieted.kind !== "quiet") return { kind: "unquiet", unquiet: quieted };
         const { delivery } = await bb.sdk.threads.send({
           threadId: agent.threadId,
           senderThreadId: coordinatorOf(coordinatorId).threadId,
           mode: "auto",
           input: [{ type: "text", text, mentions: [] }],
         });
+        // why after the send: one that fails leaves the check to go on once the agent is idle again.
+        const dropped = store.supersedeOpenChecks(coordinatorId, issueId);
         onChange(coordinatorId);
-        return { kind: delivery };
+        return { kind: delivery, dropped };
       }),
 
     /**
@@ -645,28 +615,5 @@ function placementText(placement: Placement): string {
       return placement satisfies never;
   }
 }
-
-/** What quieting an issue did before a refusal, in words that lead it ("" when nothing). */
-function didText(withdrawn: readonly Withdrawn[], stopped: readonly string[]): string {
-  const to = recipientsText(withdrawn);
-  const took = withdrawn.length === 0 ? [] : [`took back ${withdrawn.length === 1 ? "your message" : `your ${withdrawn.length} messages`} to ${to}, which ${to} never got`];
-  const did = [...took, ...(stopped.length === 0 ? [] : [`stopped ${stopped.join(" and ")}`])].join(" and ");
-  return did === "" ? "" : `${did.charAt(0).toUpperCase()}${did.slice(1)}, but `;
-}
-
-/** The threads the messages were to, in words: `a1`, `a1 and the verifier @thread:thr_7`. */
-export const recipientsText = (messages: readonly { to: string }[]): string => [...new Set(messages.map(({ to }) => to))].join(" and ");
-
-/** One of the threads the plugin started for an issue: an agent's, or (agentId null) a verifier's. */
-type IssueThread = { threadId: string; agentId: AgentId | null };
-
-/** A thread of an issue, in words: its agent's id, or `the verifier @thread:thr_7`. */
-const threadName = ({ threadId, agentId }: IssueThread): string => agentId ?? `the verifier @thread:${threadId}`;
-
-/** A queued message's text. */
-const textOf = (content: QueuedMessage["content"]): string => content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n");
-
-/** Whether bb sends a queued message on its own: every one but a message whose retries bb spent, which waits for the user. */
-const bbSends = ({ state }: { state: string }): boolean => state !== "failed_exhausted";
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));

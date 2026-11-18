@@ -29,7 +29,8 @@ const roundSchema = z.number().int().min(1);
 const settledCiSchema = ciVerdictSchema.default({ kind: "none" });
 
 /**
- * What became of a returned verdict. `pending`: nobody has been told yet. `waiting-for-ci`: it
+ * What became of a returned verdict. `pending`: nobody has been told yet; a failed one's findings
+ * may be owed to the agent, sent once its verifier no longer runs. `waiting-for-ci`: it
  * passed every criterion, and CI on its commit is still to come. `sending-back`: its findings are
  * on their way to the agent as fix round `round`, already counted on the agent. `sent-back`: the
  * agent has them. `maybe-sent-back`: the plugin stopped while they were on their way, or the send

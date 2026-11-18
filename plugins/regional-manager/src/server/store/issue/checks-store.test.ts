@@ -113,15 +113,18 @@ test("a newer done handoff supersedes the issue's checks still waiting", () => {
   assert.deepEqual(store.record(MANAGER, issue.id).map(({ check }) => check?.verdict.state), ["superseded", "superseded", "queued"]);
 });
 
-test("a check starts running as its verifier's ticket binds, is nudged once, and is given up only from where it is", () => {
+test("a check starts running as its verifier's ticket binds, is nudged once, un-nudged once, and is given up only from where it is", () => {
   const { store, issue, agentId } = withAgent();
   const check = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), CLEAN));
   store.insertVerifierTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id }, 3_000);
   assert.deepEqual(store.bindTicket("verifier-1", "thr_verifier"), { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id });
   assert.deepEqual(store.check(check.id)?.verdict, { state: "running", verifierThreadId: "thr_verifier", nudged: false, checkout: CLEAN.checkout });
 
-  assert.equal(store.markNudged(check.id, "thr_verifier"), true);
-  assert.equal(store.markNudged(check.id, "thr_verifier"), false);
+  assert.equal(store.markNudged(check.id, "thr_verifier", true), true);
+  assert.equal(store.markNudged(check.id, "thr_verifier", true), false);
+  assert.equal(store.markNudged(check.id, "thr_other", false), false, "only for its running verifier");
+  assert.equal(store.markNudged(check.id, "thr_verifier", false), true, "its reminder was taken back from bb's queue");
+  assert.equal(store.markNudged(check.id, "thr_verifier", false), false);
 
   const gaveUp = { state: "could-not-run", verifierThreadId: "thr_verifier", reason: "its verifier stopped without a verdict" } as const;
   assert.equal(store.giveUpCheck(check.id, { state: "queued" }, gaveUp, 4_000), null, "it isn't queued any more");

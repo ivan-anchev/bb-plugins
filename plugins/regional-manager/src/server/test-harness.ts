@@ -303,8 +303,16 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
    * Set `holding` to keep each answer, as read when called, until the test calls its release in `held`.
    */
   const turnEvents: { failure: Error | null; pending: Promise<void> | null; holding: boolean; held: (() => void)[] } = { failure: null, pending: null, holding: false, held: [] };
-  /** Set `failure` to make every delete of a queued message reject with it, leaving the message queued, as when bb can't be reached. */
-  const queueDeletes: { failure: Error | null } = { failure: null };
+  /**
+   * Set `failure` to make every delete of a queued message reject with it, leaving the message queued, as when bb can't be reached.
+   * Set `lost` to have every delete land and then reject with it, as when bb's answer is lost on the way back; set `deleted` to run as bb deletes one, before it answers.
+   */
+  const queueDeletes: { failure: Error | null; lost: Error | null; deleted: (() => void) | null } = { failure: null, lost: null, deleted: null };
+  /**
+   * Set `failure` to make every read of a thread's queue reject with it, as when bb can't answer.
+   * Set `read` to run as bb reads one, before it answers: the answer, as read then, waits for it, and fails if it throws.
+   */
+  const queueReads: { failure: Error | null; read: ((threadId: string) => Promise<void>) | null } = { failure: null, read: null };
   /**
    * Set `failure` to make every listing of threads by id reject with it, as when bb can't answer.
    * Set `holding` to keep each answer, as read when called, until the test calls its release in `held`.
@@ -497,8 +505,11 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     },
     queuedMessages: {
       async list({ threadId }) {
+        if (queueReads.failure !== null) throw queueReads.failure;
         if (fakeThread(threadId).deletedAt !== null) throw bbHttpError(404, "thread_not_found", "Thread not found");
-        return queue.filter((entry) => entry.threadId === threadId);
+        const queued = queue.filter((entry) => entry.threadId === threadId);
+        if (queueReads.read !== null) await queueReads.read(threadId);
+        return queued;
       },
       // As bb does, deleting a message that already left the queue fails, and a deleted one is announced.
       async delete({ queuedMessageId }) {
@@ -506,7 +517,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         const at = queue.findIndex((entry) => entry.id === queuedMessageId);
         if (at === -1) throw new Error(`No queued message ${queuedMessageId}`);
         queue.splice(at, 1);
+        queueDeletes.deleted?.();
         await emit("message.cancelled", { entry: { id: queuedMessageId } });
+        if (queueDeletes.lost !== null) throw queueDeletes.lost;
         return { ok: true };
       },
     },
@@ -666,7 +679,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     registerAgentTools(bb, { store, agents });
     registerHandoffTool(bb, { store, verify });
     registerVerdictTool(bb, { store, verify });
-    const threadEvents = forwardThreadEvents(bb, { store, agents, onChange, refreshBoard });
+    const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard });
     watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });
     return { spawner, inbox, verify, agents, prWatch, finalChecks, unblocked, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }) } };
@@ -740,8 +753,10 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     },
     /** How bb answers a read of a thread's turns; a test may hold it or make it fail. */
     turnEvents,
-    /** How bb answers a delete of a queued message; a test may make it fail. */
+    /** How bb answers a delete of a queued message; a test may make it fail, or lose its answer. */
     queueDeletes,
+    /** How bb answers a read of a thread's queue; a test may make it fail, or act as bb reads one. */
+    queueReads,
     /** How bb answers a listing of threads by id; a test may make it fail. */
     threadLists,
     /** How bb answers a stop; a test may hold it or make it fail. */
@@ -816,11 +831,12 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     active,
     /** bb sends the thread's event with the thread as it is now, as it does every second while the thread works. */
     threadNow,
-    /** The thread's turn ends, and bb announces it with its last answer. */
+    /** The thread's turn ends, bb announces it with its last answer, and what the plugin started on hearing it, without waiting for it, has run. */
     async idle(threadId: string, lastAssistantText: string | null): Promise<void> {
       const thread = fakeThread(threadId);
       thread.status = "idle";
       await emit("thread.idle", { thread: { ...ref(threadId), environmentId: thread.environmentId }, lastAssistantText });
+      await settled();
     },
     /** The thread's turn left a background command running, which bb doesn't count: the thread reads idle once its turn ends. */
     leavesBackground(threadId: string): void {

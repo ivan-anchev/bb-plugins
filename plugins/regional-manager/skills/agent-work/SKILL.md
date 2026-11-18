@@ -146,12 +146,15 @@ files before you call `agent_handoff`. It also records your branch and the
 provider and model you run on.
 
 After a `done` handoff, an independent verifier usually checks your commit in
-your environment, rerunning what proves each criterion: your regional manager
-hears of your handoff only with its verdict. Leave your environment as it is
-until you hear back from the verifier or your regional manager.
+your environment once your turn ends, rerunning what proves each criterion:
+your regional manager hears of your handoff only with its verdict. Your thread
+is stopped each time your environment goes to the verifier, as it starts and
+if it is reminded to return its verdict, which ends any command you left
+running in the background; your handoff stands. Leave your environment as it is until you
+hear back from the verifier or your regional manager.
 
-If your first verdict fails, its findings come back to you as a message from
-the verifier thread, headed "Verifier findings": each criterion that didn't
+If your first verdict fails, its findings come back to you, once the verifier
+has finished, as a message from the verifier thread, headed "Verifier findings": each criterion that didn't
 pass, with the verifier's evidence, what was wrong with the commit or the tree,
 the CI checks that failed, and its other findings. Fix each one, commit, check
 every criterion again, and call `agent_handoff` with `done` and your new

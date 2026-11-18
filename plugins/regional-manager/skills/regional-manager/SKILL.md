@@ -302,7 +302,15 @@ in its own environment, on its own branch.
 - **Message** one with `agent_message`. It arrives marked as a message from
   your thread, which the agent's first message names as its regional
   manager's, under a line calling it your next instruction (write just the
-  instruction), and steers a running turn or starts one.
+  instruction), and steers a running turn or starts one. It quiets the
+  issue's other threads first, its verifiers above all: the plugin's
+  reminders queued for them are taken back, and each is stopped, idle or
+  not. To an agent whose done handoff is still being
+  checked, that drops the check, which the result says: nothing reports on
+  that handoff, and the agent's next done handoff is checked afresh. A verdict
+  already returned goes to you, with no fix round. While bb doesn't confirm a
+  verifier stopped, or has a message the user queued for one, it is refused
+  and sends nothing, naming it: call it again shortly.
 - **Stop** one with `agent_stop`. Its thread stops, idle or not, background
   commands included, and it no longer holds the issue. Work it handed off that reached Verifying, In review or Done keeps
   the issue there; anything short of that returns the issue to Todo. Add
@@ -390,10 +398,17 @@ verdict) stays one.
   message to an agent a handover replaced meanwhile does nothing. One waits
   for bb as long as bb takes. A call that waited about 30 seconds behind it is
   refused: "an earlier operation on i1 hasn't finished yet, so nothing
-  changed". Call it again shortly. This orders the plugin's calls, not the
-  threads they start: an agent and its own verifier run together for a
-  moment as it hands off and as the verdict comes back, and your message
-  reaches an agent while its verifier checks.
+  changed". Call it again shortly. An agent and its own verifier never run at
+  the same time: its verifier starts once the turn that handed off ends, its
+  findings go back once the verifier's turn ends, and `agent_message` quiets
+  the issue's verifiers first. Each time the environment changes hands (a
+  handover, a verifier starting or reminded, findings, your message), the
+  issue's other threads are quieted the same way: what the plugin queued for
+  them is taken back, and each is stopped, idle or not, which ends a command
+  it left running in the background. An agent stopped so after its done
+  handoff keeps it, and you hear of no stop; your message still queued for
+  an agent that keeps its issue is never taken back, and its verifier waits
+  for it.
 - **Refusals**: nothing is stopped when `agent_start` is refused, unless the
   refusal says what was: the issue changed while its threads stopped (it
   merged), or bb doesn't confirm one of them stopped (the holder still holds

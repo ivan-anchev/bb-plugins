@@ -127,7 +127,7 @@ test("a verifier reads in its rules, both kinds of first message, issue_verdict'
   const criterion = "A recovery agent finds marker.txt at the pushed head";
   const { agentThreadId } = await startedAgent(kit, threadId, { doneCriteria: [criterion] });
   await kit.call("agent_handoff", { status: "done", summary: "Pushed the marker", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD }, agentThreadId);
-  await settled();
+  await kit.idle(agentThreadId, "Handed off.");
   const verdict = kit.store.latestHandoff(coordinatorId, agentIdSchema.parse("a1"))?.check?.verdict;
   const verifier = verdict?.state === "running" ? verdict.verifierThreadId : assert.fail("no verifier running");
   const finalCheck = finalCheckBrief({ id: issueIdSchema.parse("i1"), title: "Recovery", description: "Recover a lost sandbox." }, { criteria: [criterion], subject: { kind: "final", defaultBranch: "main", merged: [issueIdSchema.parse("i2")] } });

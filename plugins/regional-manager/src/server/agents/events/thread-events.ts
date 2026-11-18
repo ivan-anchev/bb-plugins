@@ -2,11 +2,14 @@
 // event only says that what its regional manager's views are derived from changed, so they are read
 // again (the board, what was unblocked), and those derive everything on each read, so a missed event
 // (a reload, a reconnect) costs nothing. An archived or deleted agent thread ends its agent, and a
-// deleted regional manager is removed; the tick's reconcile catches any of those missed.
+// deleted regional manager is removed; an agent's or a verifier's thread going idle or failing has
+// the verify step look at its issue's checks again; the tick's reconcile catches any of those missed.
 import type { PluginLogger, PluginThreadEventName } from "@get-bb/plugin-sdk";
+import type { IssueId } from "../../../model/issue/issue.ts";
 import type { HolderThread } from "../../../model/issue/status.ts";
 import type { CoordinatorId } from "../../../model/role.ts";
 import type { Store } from "../../store/store.ts";
+import type { Verify } from "../../verify/verify.ts";
 import type { Agents } from "../agents.ts";
 
 const AGENT_THREAD_EVENTS = [
@@ -44,6 +47,7 @@ type EventsBb = {
 type Deps = {
   store: Pick<Store, "roleOfThread" | "agent">;
   agents: Pick<Agents, "archived" | "deleted" | "remove">;
+  verify: Pick<Verify, "lookAgain">;
   /** Runs after something the regional manager's views are derived from changed. */
   onChange(id: CoordinatorId): void;
   /** Reads the regional manager's board again. */
@@ -55,7 +59,7 @@ type Deps = {
  * forget: the status last seen of each is kept until its thread moves, which an idle thread of a
  * removed manager never does.
  */
-export function forwardThreadEvents(bb: EventsBb, { store, agents, onChange, refreshBoard }: Deps): { forget(id: CoordinatorId): void } {
+export function forwardThreadEvents(bb: EventsBb, { store, agents, verify, onChange, refreshBoard }: Deps): { forget(id: CoordinatorId): void } {
   /** The role of a thread this plugin made; null for any other. why the origin first: a cheap filter before touching SQLite. */
   const roleOf = ({ thread }: ThreadEvent) => (thread.originPluginId === bb.pluginId ? store.roleOfThread(thread.id) : null);
 
@@ -112,6 +116,33 @@ export function forwardThreadEvents(bb: EventsBb, { store, agents, onChange, ref
     const agent = holderOf(payload);
     if (agent !== null) await agents.deleted(agent).catch(warned(`end ${agent.id}, whose thread was deleted`));
   });
+
+  /** The issue of an agent's or a verifier's thread; null for any other. */
+  function issueOf(payload: ThreadEvent): { coordinatorId: CoordinatorId; issueId: IssueId } | null {
+    const role = roleOf(payload);
+    switch (role?.kind) {
+      case "agent": {
+        const agent = store.agent(role.coordinatorId, role.agentId);
+        return agent === null ? null : { coordinatorId: agent.coordinatorId, issueId: agent.issueId };
+      }
+      case "verifier":
+        return { coordinatorId: role.coordinatorId, issueId: role.issueId };
+      case "coordinator":
+      case undefined:
+        return null;
+      default:
+        return role satisfies never;
+    }
+  }
+
+  // why not wait for it: the look takes the issue's turn, which the operation that stopped the
+  // thread may still hold, and bb's other handlers needn't wait on it.
+  for (const event of ["thread.idle", "thread.failed"] as const) {
+    bb.events.on(event, (payload) => {
+      const issue = issueOf(payload);
+      if (issue !== null) void verify.lookAgain(issue.coordinatorId, issue.issueId).catch(warned(`look at the checks of ${issue.issueId} again`));
+    });
+  }
 
   return { forget: (id) => void statusSeen.delete(id) };
 }

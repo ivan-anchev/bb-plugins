@@ -206,6 +206,10 @@ export type Agent = {
 export const branchOf = (agent: Pick<Agent, "checkout">, thread: { environmentBranchName: string | null } | null): string | null =>
   agent.checkout.branch ?? thread?.environmentBranchName ?? null;
 
+/** The agent holding the issue now, among a regional manager's agents: the one not ended (null: none). */
+export const holderOf = <A extends Pick<Agent, "issueId" | "ended">>(agents: readonly A[], issueId: IssueId): A | null =>
+  agents.find((agent) => agent.issueId === issueId && agent.ended === null) ?? null;
+
 /** What agent_start asks of an issue that had an agent: `previous` continues its work, `default` starts clean. */
 export const startFromSchema = z.enum(["previous", "default"]);
 export type StartFrom = z.infer<typeof startFromSchema>;

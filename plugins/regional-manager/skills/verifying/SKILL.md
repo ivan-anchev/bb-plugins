@@ -77,7 +77,9 @@ Call `issue_verdict` once, as your last action, then stop:
 
 If it is an agent's first failed verdict on a done handoff, the plugin sends
 the agent each criterion that didn't pass, with your evidence, and your
-findings, as a message from your thread, for it to fix. A final check's
+findings, as a message from your thread, for it to fix, once your turn ends
+and your thread is stopped, which ends any command you left running in the
+background: the agent never works beside you. A final check's
 verdict goes to the regional manager only, which files the fix as new work.
 Either way, write evidence and findings someone can act on: the failing
 command and its failing lines, not a summary.
