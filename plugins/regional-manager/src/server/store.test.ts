@@ -41,13 +41,13 @@ test("an unbound ticket configures only while unbound", () => {
   assert.equal(store.roleFor("thr_a", null)?.kind, "coordinator");
 });
 
-const crewInput = (ticket: string) => ({ coordinatorId: ID, ticket, title: "Retries", brief: "Retry deliveries.", doneCriteria: ["npm test passes"], placement: { kind: "worktree" } as const, execution: null, createdAt: 2_000 });
+const crewInput = (ticket: string) => ({ coordinatorId: ID, ticket, title: "Retries", brief: "Retry deliveries.", doneCriteria: ["npm test passes"], placement: { kind: "worktree" } as const, createdAt: 2_000 });
 
-test("crews are numbered c1, c2… within their coordinating thread, and are drafts until their ticket binds", () => {
+test("crews are numbered c1, c2… within their coordinating thread, and are unstarted until their ticket binds", () => {
   const store = storeWithTicket();
   assert.equal(store.insertCrew(crewInput("crew-1")), "c1");
   assert.equal(store.insertCrew(crewInput("crew-2")), "c2");
-  assert.deepEqual(store.crews(ID).map((crew) => [crew.id, crew.launch]), [["c1", { kind: "draft" }], ["c2", { kind: "draft" }]]);
+  assert.deepEqual(store.crews(ID).map((crew) => [crew.id, crew.launch]), [["c1", { kind: "unstarted" }], ["c2", { kind: "unstarted" }]]);
 
   assert.deepEqual(store.bindTicket("crew-2", "thr_c2"), { kind: "crew", coordinatorId: ID, crewId: "c2" });
   assert.deepEqual(store.crew(ID, crewIdSchema.parse("c2"))?.launch, { kind: "started", threadId: "thr_c2" });

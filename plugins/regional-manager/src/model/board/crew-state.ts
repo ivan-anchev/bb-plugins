@@ -42,7 +42,7 @@ export type CrewThread = Pick<ThreadRow, "status" | "hasPendingInteraction">;
  */
 export function crewState(crew: Crew, thread: CrewThread | null, handoff: Handoff | null, pr: PrSnapshot | null): { state: BoardState; headline: string } {
   if (crew.closed !== null) return { state: "done", headline: CLOSED[crew.closed.kind] };
-  if (crew.launch.kind === "draft") return { state: "needs-you", headline: `Draft: ${crew.title}` };
+  if (crew.launch.kind === "unstarted") return { state: "needs-you", headline: "No thread: bb hasn't started one" };
   if (pr?.state === "merged") return { state: "done", headline: `Merged #${pr.number}` };
   if (thread === null) return { state: "done", headline: "Its thread was archived or deleted" };
   if (thread.hasPendingInteraction) return { state: "needs-you", headline: "Waiting for an answer or an approval in its thread" };

@@ -57,7 +57,7 @@ export function placementOf(requested: RequestedPlacement, { providers, defaultB
   const { environmentProviderId, machineInputs } = requested;
   const provider = providers.find(({ id }) => id === environmentProviderId);
   if (provider === undefined) return { refused: `bb has no environment provider ${environmentProviderId}. It has: ${providers.map(({ id }) => id).join(", ")}.` };
-  if (provider.inputs !== null && !provider.acceptsEmptyInputs) return { refused: `${environmentProviderId} needs inputs crew_start can't give it. The user can pick it in a draft's editor.` };
+  if (provider.inputs !== null && !provider.acceptsEmptyInputs) return { refused: `${environmentProviderId} needs inputs crew_start can't give it.` };
   const machine = machineOf(provider, machineInputs);
   if (machine !== null && "refused" in machine) return machine;
   // The branch the crew's own branch starts from; undefined: the provider makes none.
@@ -79,14 +79,13 @@ function machineOf(
   return { machineProviderId, inputs: inputs ?? {} };
 }
 
-// why only `type` is checked: the plugin reads nothing inside an environment. bb's composer made
-// it, or placementOf did from bb's provider list, and bb validates it at the spawn.
-export const environmentSchema = z.custom<EnvironmentArgs>((value) => z.looseObject({ type: z.string() }).safeParse(value).success, "Expected an environment from bb's composer");
+// why only `type` is checked: the plugin reads nothing inside an environment. placementOf made it
+// from bb's provider list, and bb validates it at the spawn.
+const environmentSchema = z.custom<EnvironmentArgs>((value) => z.looseObject({ type: z.string() }).safeParse(value).success, "Expected an environment bb spawns in");
 
 /**
  * Where a crew's thread runs: a fresh worktree on the coordinating thread's machine, or the
- * environment bb spawns it in, as the user chose it in the draft editor or as crew_start's
- * provider placement resolved to.
+ * environment bb spawns it in, as crew_start's provider placement resolved to.
  */
 export const placementSchema = z.discriminatedUnion("kind", [worktreePlacementSchema, z.object({ kind: z.literal("chosen"), environment: environmentSchema })]);
 export type Placement = z.infer<typeof placementSchema>;
@@ -103,26 +102,12 @@ export function environmentOf(placement: Placement, hostId: string | null): Envi
   }
 }
 
-/** The model a crew runs on, as the user picked it in bb's composer, forwarded to the spawn whole. */
-export type Execution = Pick<NewThreadRequest, "providerId" | "model" | "reasoningLevel" | "permissionMode" | "serviceTier" | "sessionOptions" | "executionInputSources">;
-
-// why only these are checked: the draft editor seeds bb's composer with them. The rest goes to the
-// spawn unchanged, and bb validates it there.
-const executionFieldsSchema = z.looseObject({
-  providerId: z.string().min(1),
-  model: z.string().min(1),
-  reasoningLevel: z.string(),
-  permissionMode: z.enum(["accept-edits", "auto", "full"]),
-  serviceTier: z.string().optional(),
-});
-export const executionSchema = z.custom<Execution>((value) => executionFieldsSchema.safeParse(value).success, "Expected the model bb's composer picked");
-
 /** What the crew should do, everything it needs to start without asking. */
 export const briefSchema = z.string().trim().min(1).max(20_000);
 
 /** The most done-criteria a crew has, and the most characters in one. */
 export const MAX_CRITERIA = 12;
-export const MAX_CRITERION_CHARS = 500;
+const MAX_CRITERION_CHARS = 500;
 
 /** What "done" means for a crew: each one checkable by running something. */
 export const doneCriteriaSchema = z.array(z.string().trim().min(1).max(MAX_CRITERION_CHARS)).min(1).max(MAX_CRITERIA);
@@ -138,13 +123,11 @@ export type Crew = {
   brief: string;
   doneCriteria: string[];
   placement: Placement;
-  /** Null: its coordinating thread's provider and model when it starts, with auto permissions. */
-  execution: Execution | null;
   /**
-   * A draft has no thread yet: it waits for the user's Start, or its spawn never confirmed one.
-   * Either way Start spawns it from what is stored.
+   * Unstarted: bb has confirmed no thread for it yet. It is saved before its spawn, so a thread bb
+   * makes binds to it even when bb's answer is lost; a spawn that failed leaves it so.
    */
-  launch: { kind: "draft" } | { kind: "started"; threadId: string };
+  launch: { kind: "unstarted" } | { kind: "started"; threadId: string };
   closed: null | { kind: ClosedKind; at: number };
   /** The branch its thread had checked out at its latest handoff, as bb's git plugin read it then; null: none read yet. */
   branch: string | null;
@@ -162,6 +145,3 @@ export const branchOf = (crew: Pick<Crew, "branch">, thread: { environmentBranch
 
 /** Each crew's title by its id, as the coordinating thread gave it in crew_start. */
 export const titlesOf = (crews: readonly Crew[]): ReadonlyMap<CrewId, string> => new Map(crews.map((crew) => [crew.id, crew.title]));
-
-/** What the user changes in a draft, all from bb's composer but the criteria: everything but its title. */
-export type DraftEdit = Pick<Crew, "brief" | "doneCriteria"> & { execution: Execution; placement: Extract<Placement, { kind: "chosen" }> };

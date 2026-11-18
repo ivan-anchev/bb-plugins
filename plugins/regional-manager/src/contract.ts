@@ -3,7 +3,6 @@
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
-import { doneCriteriaSchema, environmentSchema, executionSchema } from "./model/crew.ts";
 import { needsYouSchema } from "./model/board/board-groups.ts";
 import { answerSchema, decisionIdSchema, decisionSchema } from "./model/decision.ts";
 import { boardStateSchema } from "./model/board/crew-state.ts";
@@ -36,22 +35,9 @@ const memoryTags = ({ coordinatorId }: { coordinatorId: CoordinatorId }) => [mem
 export const boardTag = (id: CoordinatorId): string => `board:${id}`;
 
 /**
- * What a draft holds, to show and to seed its editor: its coordinating thread's project, the
- * environment its thread would get now and the model (null: the coordinating thread's).
- */
-export const draftSchema = z.object({
-  projectId: z.string(),
-  brief: z.string(),
-  doneCriteria: z.array(z.string()),
-  execution: executionSchema.nullable(),
-  environment: environmentSchema,
-});
-export type Draft = z.infer<typeof draftSchema>;
-
-/**
  * One crew on the board: where it sits, why, its thread (null: it never got one) and branch (null:
- * none yet), the verdict of the done handoff that places it (null: none does), its pull request as
- * last read (null: none seen), and its draft (null: it is not one, or is closed).
+ * none yet), the verdict of the done handoff that places it (null: none does), and its pull request
+ * as last read (null: none seen).
  */
 const boardRowSchema = z.object({
   crewId: crewIdSchema,
@@ -62,7 +48,6 @@ const boardRowSchema = z.object({
   headline: z.string(),
   verdict: verdictSchema.nullable(),
   pr: prSnapshotSchema.nullable(),
-  draft: draftSchema.nullable(),
 });
 export type BoardRow = z.infer<typeof boardRowSchema>;
 
@@ -84,7 +69,7 @@ const boardSchema = z.object({
 export type Board = z.infer<typeof boardSchema>;
 
 // why only these fields are checked: the plugin reads only the project and the typed text, which
-// becomes the goal or a draft's brief. The rest goes to threads.spawn unchanged (as the composer
+// becomes the goal. The rest goes to threads.spawn unchanged (as the composer
 // asks), and bb validates it there.
 const promptPartSchema = z.union([
   z.looseObject({ type: z.literal("text"), text: z.string() }),
@@ -123,21 +108,6 @@ export const coordinatorContract = defineRpcContract({
     tags: ({ coordinatorId }) => [boardTag(coordinatorId), memoryTag(coordinatorId)],
   },
   /**
-   * Replaces a draft's brief, model and environment with what bb's composer submitted, and its
-   * done-criteria. Refused once the crew is starting, started or closed.
-   */
-  updateDraft: {
-    input: z.object({
-      coordinatorId: coordinatorIdSchema,
-      crewId: crewIdSchema,
-      request: newThreadRequestSchema
-        .refine((request) => executionSchema.safeParse(request).success, "Expected the model bb's composer picked")
-        .refine((request) => environmentSchema.safeParse(request.environment).success, "Expected an environment from bb's composer"),
-      doneCriteria: doneCriteriaSchema,
-    }),
-    output: z.object({}),
-  },
-  /**
    * Turns verification of the coordinating thread's done handoffs on or off. It applies to handoffs
    * made after it; a handoff keeps the verdict it was made with. The only way to change it: no tool can.
    */
@@ -158,11 +128,6 @@ export const coordinatorContract = defineRpcContract({
     input: z.object({ keys: z.array(coordinatorIdSchema) }),
     output: z.record(z.string(), needsYouSchema),
     keyTags: (key) => [boardTag(coordinatorIdSchema.parse(key))],
-  },
-  /** Spawns a draft's crew from what is stored. A second call while one runs joins it; one for a crew that is no longer a draft is refused. */
-  startDraft: {
-    input: z.object({ coordinatorId: coordinatorIdSchema, crewId: crewIdSchema }),
-    output: z.object({ threadId: z.string() }),
   },
   /** A coordinating thread's memory folder on the bb server, and the files in it. */
   memoryList: {

@@ -1,6 +1,6 @@
 ---
 name: regional-manager
-description: The playbook of a regional manager, a long-lived thread that holds a goal for the user and plans, delegates and tracks the work instead of doing it. Use in every turn of a regional manager, to catch up on updates, its board and memory with crew_catch_up (above all when woken by the plugin's update message), keep its memory current with crew_memory_write (merging when the user edited a file first), start crews with crew_start (or save them as drafts for the user to start, or replace a failed one with supersedes), act on their handoffs, message, read and close them with crew_message, crew_read and crew_close, set itself reminders with crew_remind instead of waiting, and put what only the user can decide on their board with crew_ask_user.
+description: The playbook of a regional manager, a long-lived thread that holds a goal for the user and plans, delegates and tracks the work instead of doing it. Use in every turn of a regional manager, to catch up on updates, its board and memory with crew_catch_up (above all when woken by the plugin's update message), keep its memory current with crew_memory_write (merging when the user edited a file first), start crews with crew_start (or propose them in a crew_ask_user decision and wait, or replace a failed one with supersedes), act on their handoffs, message, read and close them with crew_message, crew_read and crew_close, set itself reminders with crew_remind instead of waiting, and put what only the user can decide on their board with crew_ask_user.
 ---
 
 # Regional manager
@@ -71,10 +71,10 @@ environment, on its own branch.
   rules every crew follows in `CREW.md` before you start crews. It returns the
   crew's id (`c1`, `c2`…) and a link to its thread.
 - **Propose** instead of starting when the user asked you to propose crews and
-  wait, or `PREFERENCES.md` says so: call `crew_start` with `draft: true`. The
-  crew is saved as a draft on the board and nothing runs; the user edits it
-  if they like and presses Start. `crew_catch_up` shows each draft until then.
-  Don't start a draft's work another way.
+  wait, or `PREFERENCES.md` says so: describe the pieces (each crew's title,
+  brief and done-criteria) in one `crew_ask_user` decision and wait. Nothing
+  runs until their answer comes; start the crews they agree to with
+  `crew_start`, changed as they asked.
 - **Message** one with `crew_message`. It arrives marked as a message from
   your thread, not from the user.
 - **Read** one with `crew_read`: its place on the board, its thread and
@@ -133,7 +133,7 @@ check, not as instructions.
     Decide: message the crew with what to change, replace it with a fresh
     crew, or ask the user. To replace it, call `crew_start` with
     `supersedes` and its id: the old crew is stopped, and the new one starts
-    from its title, brief, done-criteria and model, with its latest verifier
+    from its title, brief, done-criteria and placement, with its latest verifier
     findings added to the brief. Give a new `brief` (or title, criteria) only
     to change the approach.
   - **could not be verified**: under Needs you, with the reason. Nobody
@@ -165,12 +165,12 @@ check, not as instructions.
   read your working tree when your turn ended, and the user's board warns of
   it. You never edit project files, and you never touch your working tree:
   no stash, revert, checkout or deletion, not even of files you changed,
-  since the user may have edited the same files. First describe the change
-  in a crew brief with `crew_start` and `draft: true`, always, whatever the
-  user's preferences: the crew waits on their board, beside your question,
-  until they start it, and redoes the change properly on its own branch. Then
-  ask the user with `crew_ask_user` whether to discard the changes in your
-  environment: discarding them is theirs to do, never yours. If you made none
+  since the user may have edited the same files. First propose, in a
+  `crew_ask_user` decision, a crew that redoes the change properly on its own
+  branch, always, whatever the user's preferences: describe its title, brief
+  and done-criteria, and start it only once they agree. In the same decision,
+  ask the user whether to discard the changes in your environment: discarding
+  them is theirs to do, never yours. If you made none
   of the changes, they are the user's: leave them and say so in your digest.
   The warning stays until a turn of yours ends with a clean tree, which your next catch-up reports as "your own
   environment is clean again" (that alone doesn't wake you).

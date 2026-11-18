@@ -1,13 +1,13 @@
-// What a coordinating thread and the user do to crews: start one or save it as a draft, edit and
-// start a draft, message one, read one, close one, replace one with a fresh one. Each action reads the crew from the plugin's
-// database and its thread from bb, and ends by refreshing the board.
-import { experimental_PluginRpcRefusal as Refusal, type BbPluginApi } from "@get-bb/plugin-sdk";
+// What a coordinating thread does to crews: start one, message one, read one, close one, replace one
+// with a fresh one. Each action reads the crew from the plugin's database and its thread from bb,
+// and ends by refreshing the board.
+import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { Coordinator } from "../../contract.ts";
-import { branchOf, type ClosedKind, type Crew, type DraftEdit } from "../../model/crew.ts";
+import { branchOf, type ClosedKind, type Crew } from "../../model/crew.ts";
 import { crewState } from "../../model/board/crew-state.ts";
 import { handoffIsCurrent, type Handoff } from "../../model/handoff.ts";
 import { supersedingBrief } from "../verify/findings.ts";
-import type { CoordinatorId, CrewId } from "../../model/role.ts";
+import type { CoordinatorId } from "../../model/role.ts";
 import type { CrewLaunch, CrewRequest, Spawner } from "../spawn.ts";
 import type { Store } from "../store.ts";
 import { listedThreads, type BoardBb } from "./board/board.ts";
@@ -36,17 +36,14 @@ export type CloseOutcome =
   | { kind: "already-closed"; as: ClosedKind }
   | { kind: "still-running"; status: string };
 
-/** What crew_start did: saved the crew as a draft, or spawned its thread. */
-export type StartOutcome = CrewLaunch | { crewId: CrewId; kind: "drafted" };
-
 /**
  * What a replacement did: the old crew is closed (`closedAs`: stopped now, or as it already was) and
  * the new one started, or nothing started because the old one's thread still runs.
  */
-export type SupersedeOutcome = { kind: "replaced"; closedAs: ClosedKind; start: StartOutcome } | Extract<CloseOutcome, { kind: "still-running" }>;
+export type SupersedeOutcome = { kind: "replaced"; closedAs: ClosedKind; start: CrewLaunch } | Extract<CloseOutcome, { kind: "still-running" }>;
 
 /** What a replacement may change; anything left out is the old crew's. */
-type Changes = Partial<Pick<Crew, "title" | "brief" | "doneCriteria" | "placement">> & { draft: boolean };
+type Changes = Partial<Pick<Crew, "title" | "brief" | "doneCriteria" | "placement">>;
 
 /**
  * One crew whole: its row on the board, its latest handoff (null: none) and whether it is current
@@ -63,7 +60,7 @@ export type CrewDetail = {
 
 type Deps = {
   bb: CrewsBb;
-  store: Pick<Store, "coordinator" | "crew" | "updateDraft" | "closeCrew" | "latestHandoff" | "latestReturnedVerdict" | "prStatus">;
+  store: Pick<Store, "coordinator" | "crew" | "closeCrew" | "latestHandoff" | "latestReturnedVerdict" | "prStatus">;
   spawner: Pick<Spawner, "saveCrew" | "launch">;
   /** Runs after anything that changes a coordinating thread's board. */
   onChange(id: CoordinatorId): void;
@@ -80,34 +77,8 @@ export function createCrews({ bb, store, spawner, onChange }: Deps) {
   }
 
   async function threadOf(crew: Crew) {
-    if (crew.launch.kind === "draft") return null;
+    if (crew.launch.kind === "unstarted") return null;
     return (await listedThreads(bb, [crew.launch.threadId])).get(crew.launch.threadId) ?? null;
-  }
-
-  // A second Start while one is in flight for the same crew joins it, so a double click spawns one
-  // thread. Once one lands the crew is no longer a draft, and a later Start is refused.
-  const launching = new Map<string, Promise<CrewLaunch>>();
-  const keyOf = (id: CoordinatorId, crewId: CrewId) => `${id}/${crewId}`;
-
-  function launchOnce(id: CoordinatorId, crewId: CrewId, launch: () => Promise<CrewLaunch>): Promise<CrewLaunch> {
-    const key = keyOf(id, crewId);
-    const pending = launching.get(key);
-    if (pending !== undefined) return pending;
-    const started = launch().finally(() => {
-      launching.delete(key);
-      onChange(id);
-    });
-    launching.set(key, started);
-    return started;
-  }
-
-  /** The crew, or a refusal naming why it is not a draft the user can change or start. */
-  function draftOf(id: CoordinatorId, crewId: CrewId): Crew {
-    const crew = store.crew(id, crewId);
-    if (crew === null) throw new Refusal({ code: "not_found", message: `There is no crew ${crewId}.` });
-    if (crew.closed !== null) throw new Refusal({ code: "conflict", message: `${crewId} is ${crew.closed.kind}, so it can't be started or edited.` });
-    if (crew.launch.kind === "started") throw new Refusal({ code: "conflict", message: `${crewId} has already started, so it is no longer a draft.` });
-    return crew;
   }
 
   function record(crew: Crew, as: ClosedKind): CloseOutcome {
@@ -115,23 +86,25 @@ export function createCrews({ bb, store, spawner, onChange }: Deps) {
     return { kind: "closed", as };
   }
 
-  /**
-   * Saves the crew, then spawns its thread unless it is a draft. why save first: a spawn that
-   * fails or crashes leaves a draft the user can start.
-   */
-  function start(id: CoordinatorId, request: CrewRequest & { draft: boolean }): Promise<StartOutcome> {
+  /** Saves the crew, then spawns its thread. why save first: see Crew's `launch`. */
+  async function start(id: CoordinatorId, request: CrewRequest): Promise<CrewLaunch> {
     const coordinator = coordinatorOf(id);
-    const { draft, ...crewRequest } = request;
-    const crewId = spawner.saveCrew(coordinator, crewRequest);
+    const crewId = spawner.saveCrew(coordinator, request);
     onChange(id);
-    if (draft) return Promise.resolve({ crewId, kind: "drafted" });
-    return launchOnce(id, crewId, () => spawner.launch(coordinator, draftOf(id, crewId)));
+    const crew = store.crew(id, crewId);
+    // why throw: it was saved just above.
+    if (crew === null) throw new Error(`The crew ${crewId} of ${id} was not saved.`);
+    try {
+      return await spawner.launch(coordinator, crew);
+    } finally {
+      onChange(id);
+    }
   }
 
   async function close(crew: Crew, action: CloseAction): Promise<CloseOutcome> {
     if (crew.closed !== null) return { kind: "already-closed", as: crew.closed.kind };
     try {
-      if (crew.launch.kind === "draft") return record(crew, CLOSED_AS[action]);
+      if (crew.launch.kind === "unstarted") return record(crew, CLOSED_AS[action]);
       const threadId = crew.launch.threadId;
       switch (action) {
         case "resolve":
@@ -157,19 +130,6 @@ export function createCrews({ bb, store, spawner, onChange }: Deps) {
 
   return {
     start,
-
-    /** The user's Start on a draft: spawns it from what is stored. */
-    startDraft(id: CoordinatorId, crewId: CrewId): Promise<CrewLaunch> {
-      return launchOnce(id, crewId, async () => spawner.launch(coordinatorOf(id), draftOf(id, crewId)));
-    },
-
-    /** The user's edit of a draft, refused once it is starting, started or closed. */
-    updateDraft(id: CoordinatorId, crewId: CrewId, edit: DraftEdit): void {
-      if (launching.has(keyOf(id, crewId))) throw new Refusal({ code: "conflict", message: `${crewId} is starting, so it can no longer be edited.` });
-      draftOf(id, crewId);
-      store.updateDraft(id, crewId, edit);
-      onChange(id);
-    },
 
     /** Sends the text as a message from the coordinating thread: it steers a running turn or starts one. */
     async message(crew: Crew & { launch: { kind: "started" } }, text: string): Promise<"sent" | "queued"> {
@@ -202,10 +162,10 @@ export function createCrews({ bb, store, spawner, onChange }: Deps) {
 
     /**
      * Replaces a crew with a fresh one: stops it and closes it as stopped, then starts a crew from
-     * its title, brief, done-criteria, placement and model, each unless `changes` gives another, with
+     * its title, brief, done-criteria and placement, each unless `changes` gives another, with
      * its latest verdict's findings after the brief. Starts nothing while its thread still runs.
      */
-    async supersede(old: Crew, { draft, ...changes }: Changes): Promise<SupersedeOutcome> {
+    async supersede(old: Crew, changes: Changes): Promise<SupersedeOutcome> {
       const closed = await close(old, "stop");
       if (closed.kind === "still-running") return closed;
       // why read after the stop: a verifier of its work may have returned meanwhile.
@@ -215,8 +175,6 @@ export function createCrews({ bb, store, spawner, onChange }: Deps) {
         brief: supersedingBrief(old, changes.brief ?? old.brief, verdict),
         doneCriteria: changes.doneCriteria ?? old.doneCriteria,
         placement: changes.placement ?? old.placement,
-        execution: old.execution,
-        draft,
       });
       return { kind: "replaced", closedAs: closed.as, start: started };
     },

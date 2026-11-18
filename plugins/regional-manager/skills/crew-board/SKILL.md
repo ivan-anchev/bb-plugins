@@ -1,6 +1,6 @@
 ---
 name: crew-board
-description: Explain the Regional Manager plugin (bb-plugin-regional-manager). Its rail panel starts long-lived regional managers. Each keeps its memory in markdown files, sets itself reminders, asks the user for decisions on its board, and starts crew threads (or drafts) from a brief and done-criteria. A crew ends with a handoff; a done one is checked by a hidden verifier unless switched off, and a first failed verdict goes back to the crew. PRs and CI are watched through gh; a pass waits for CI. The Board shows the digest, decisions, crews grouped from Needs you to Done, and a warning when the thread edits files itself. Use when the user asks how to start a regional manager or crew, what the board, a row or verdict means, how verification or CI checks work, why PR status is unavailable, why a crew got findings, how to replace a crew, what an update is, why the thread woke or the board warns of edits, how reminders or decisions work, where memory lives, which thread has which tools, or how drafts work.
+description: Explain the Regional Manager plugin (bb-plugin-regional-manager). Its rail panel starts long-lived regional managers. Each keeps its memory in markdown files, sets itself reminders, asks the user for decisions on its board, and starts crew threads from a brief and done-criteria. A crew ends with a handoff; a done one is checked by a hidden verifier unless switched off, and a first failed verdict goes back to the crew. PRs and CI are watched through gh; a pass waits for CI. The Board shows the digest, decisions, crews grouped from Needs you to Done, and a warning when the thread edits files itself. Use when the user asks how to start a regional manager or crew, what the board, a row or verdict means, how verification or CI checks work, why PR status is unavailable, why a crew got findings, how to replace a crew, what an update is, why the thread woke or the board warns of edits, how reminders or decisions work, where memory lives, which thread has which tools, or how proposing crews works.
 ---
 
 # Regional managers
@@ -76,7 +76,7 @@ refused.
 | `crew_catch_up` | regional manager | Returns every update since its last catch-up, whole, then the board, then its core memory files with their versions. |
 | `crew_memory_read` | regional manager, crew, verifier | Reads one memory file, such as `PLAN.md` or `notes/api.md`, with its version. |
 | `crew_memory_write` | regional manager | Writes one memory file whole, naming the version it read (null to create one); a stale write returns the current text instead. |
-| `crew_start` | regional manager | Starts a crew from a title, brief, 1 to 12 done-criteria and a placement; `draft: true` saves a draft, `supersedes` replaces a crew. |
+| `crew_start` | regional manager | Starts a crew from a title, brief, 1 to 12 done-criteria and a placement; `supersedes` replaces a crew. |
 | `crew_message` | regional manager | Messages one crew, marked as from the regional manager. |
 | `crew_read` | regional manager | Returns one crew's state, branch, brief, criteria, latest handoff and latest answer. |
 | `crew_close` | regional manager | Resolves, stops or archives one crew. |
@@ -94,11 +94,10 @@ it with `crew_start`:
   regional manager's machine, on its own branch; or, when the regional
   manager names one, an environment provider such as `boat-sandbox` (see
   [Crews in a sandbox](#crews-in-a-sandbox)). It runs with auto permissions.
-- **What it runs on**: the provider and model picked in its draft's editor;
-  otherwise its regional manager's provider, model, reasoning level and
-  service tier as they are when it starts. Never bb's default: if bb has no
-  model on record for the regional manager, the crew stays a draft and says
-  why.
+- **What it runs on**: its regional manager's provider, model, reasoning
+  level and service tier as they are when it starts. Never bb's default: if
+  bb has no model on record for the regional manager, the crew gets no
+  thread and says why.
 - **Its first message**: the brief, the done-criteria (1 to 12, required), and `CREW.md` and `MEMORY.md`
   as they were at that moment. Put rules every crew follows in `CREW.md`.
 - **Its id**: `c1`, `c2`… within its regional manager. Its thread is
@@ -143,51 +142,19 @@ branch for the project.
   the sandbox provider's idle sweep) leaves the crew under Needs you as
   "Couldn't verify", with the reason.
 
-## Drafts
+## Proposing crews
 
-Tell the regional manager to propose crews and wait for you, and it calls
-`crew_start` with `draft: true`: the crew is saved, numbered and shown on the
-board, and no thread starts. Its rules tell it to do this whenever you asked
-it to propose and wait, or `PREFERENCES.md` says so.
+Tell the regional manager to propose crews and wait for you, and it
+describes the pieces (each crew's title, brief and done-criteria) in one
+decision on its board (see [Decisions](#decisions)) and starts nothing. Its
+rules tell it to do this whenever you asked it to propose and wait, or
+`PREFERENCES.md` says so. Your answer wakes it, and it starts the crews you
+agreed to, changed as you asked.
 
-A draft sits under **Needs you**, headed "Draft: <title>", with the first line
-of its brief and two buttons:
-
-- **Edit** opens the draft under its row: bb's own new-thread composer holding
-  the brief, with its model, environment and permission pickers, and the
-  done-criteria as a list you can change, add to (up to 12) or remove from.
-  Each criterion's field grows to show all of it. In a criterion, Enter starts
-  the next one (the text after the caret moves into it), Shift+Enter breaks
-  the line, and Backspace at its start joins it to the one above, or removes
-  it when it is empty.
-  Until you pick one, the model picker shows the composer's own default, not
-  the regional manager's model, and saving stores what it shows. The environment
-  is a fresh worktree on the regional manager's machine (or the provider it
-  named). The composer's own send button stores it all; **Cancel** drops your
-  changes, and the next **Edit** starts from what is stored. While it is open,
-  Esc doesn't leave the page.
-  The project stays the regional manager's, and a brief is text only.
-- **An open edit is kept** in the browser (localStorage) until you save or
-  cancel it: a reload, a restart or bb redrawing the panel brings back the
-  open editor, your brief and your done-criteria, and every tab of that
-  browser shows the same edit. A model or environment you picked but haven't
-  saved goes back to the draft's: bb's composer keeps those picks only while
-  it is on screen. If the
-  draft is saved somewhere else meanwhile (another browser or device), the
-  editor says which parts changed and shows the saved version in full; saving
-  puts yours over it, and **Drop mine and edit the saved version** takes it
-  instead. If the crew starts or is closed elsewhere first, its row says your
-  edit wasn't used until you dismiss it.
-- **Start** spawns the crew from what is stored, exactly as `crew_start` does
-  without `draft`: CREW.md and MEMORY.md are copied as they are at that
-  moment. The row moves to its new group and keeps keyboard focus. A second
-  click while it starts joins the first, so one thread starts. A crew that
-  started or is closed can't be started or edited again.
-
-A crew whose spawn bb never confirmed is a draft too, so **Start** tries it
-again. `crew_catch_up` lists every draft as waiting for you, and `crew_close`
-closes one like any crew. Starting a draft doesn't wake the regional
-manager; it sees the crew on its next catch-up.
+A crew whose spawn bb never confirmed has no thread. It sits under **Needs
+you** as "No thread: bb hasn't started one", and nothing starts it: the
+regional manager is told why bb didn't, and closes it with `crew_close` and
+starts the work again.
 
 ## Handoffs and updates
 
@@ -328,12 +295,12 @@ failed on its commit) doesn't wait for the regional manager:
 
 `crew_start` with `supersedes: "c3"` stops c3 and closes it as stopped (it
 shows under Done), then starts a fresh crew from c3's title, brief,
-done-criteria, placement and model. Its brief ends with c3's latest verdict
+done-criteria and placement. Its brief ends with c3's latest verdict
 under "Previous attempt's verifier findings": each criterion that didn't pass,
 with its evidence, and the findings. The regional manager may give a new
 title, brief, done-criteria or placement; the findings are added either way.
-Nothing starts while c3's thread is still stopping, and a draft can't be
-replaced.
+Nothing starts while c3's thread is still stopping, and a crew with no
+thread can't be replaced.
 
 Turn verification off or on with the switch at the top of the board (or on
 the New page when starting). It applies to handoffs made after it: turning it
@@ -457,9 +424,9 @@ take a provider's file tools away), so the plugin **detects** it instead:
   in its own environment, when its turn ended, and that it was told to hand
   the change to a crew. The thread is woken
   with `- Your own environment has 2 files changed after your turn: hand the
-  change to a crew`, and its `crew_catch_up` tells it to describe the change
-  in a crew brief saved as a draft (always: it never starts that crew
-  itself), so a crew you start redoes it on its own branch, then ask you on its board whether to discard the changes in
+  change to a crew`, and its `crew_catch_up` tells it to propose, in a
+  decision on its board, a crew that redoes the change on its own branch
+  (always: it starts that crew only once you agree), and to ask you there whether to discard the changes in
   its environment; or, if you made the changes, to leave them and say so in
   its digest. It never stashes, reverts, checks out or deletes anything
   there, not even its own changes, since you may have edited the same
@@ -497,8 +464,8 @@ page from its row in the panel, show the same board:
   environment on),
   then, once it has one, its pull request: its number, which opens it on
   GitHub, its state, its CI and its review. Grouped:
-  - **Needs you**: a draft waiting for you to start it, waiting for your
-    answer or approval in its thread, its last turn failed, it handed
+  - **Needs you**: it has no thread because bb never started one, it is
+    waiting for your answer or approval in its thread, its last turn failed, it handed
     off as blocked ("Blocked: <summary>") or gave up ("Gave up: <summary>"),
     its done handoff failed verification ("✗ Failed verification after its
     fix round: <summary>", or without "after its fix round" when the
@@ -600,5 +567,4 @@ and the Memory page read the new text on their next read.
   committed one isn't seen, and nothing is blocked or reverted.
 - Reminders take no cron expressions and nothing finer than a minute.
 - The plugin never merges, approves or comments on a pull request.
-- The regional manager chooses no model for a crew; it gets the
-  regional manager's unless you pick one in a draft's editor.
+- Nobody chooses a model for a crew; it gets the regional manager's.

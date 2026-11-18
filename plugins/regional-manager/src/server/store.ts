@@ -3,7 +3,7 @@
 import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { coordinatorSchema, type Coordinator } from "../contract.ts";
-import { closedKindSchema, doneCriteriaSchema, executionSchema, placementSchema, type ClosedKind, type Crew, type DraftEdit } from "../model/crew.ts";
+import { closedKindSchema, doneCriteriaSchema, placementSchema, type ClosedKind, type Crew } from "../model/crew.ts";
 import { decisionIdSchema, type Decision, type DecisionId } from "../model/decision.ts";
 import { handoffIdSchema, handoffReportSchema, type Handoff, type HandoffId, type NewHandoff } from "../model/handoff.ts";
 import { inboxEventSchema, type InboxEvent, type StoredEvent } from "../model/inbox/inbox-event.ts";
@@ -34,7 +34,7 @@ const MIGRATIONS = [
      ticket TEXT UNIQUE REFERENCES roles (ticket), title TEXT NOT NULL, brief TEXT NOT NULL,
      done_criteria TEXT NOT NULL, placement TEXT NOT NULL, created_at INTEGER NOT NULL,
      closed_as TEXT, closed_at INTEGER, PRIMARY KEY (coordinator_id, id))`,
-  // The model the user picked for a draft in bb's composer; null for the coordinating thread's.
+  // The model the user once picked for a draft, which no longer exists. Unread: a migration is never removed.
   `ALTER TABLE crews ADD COLUMN execution TEXT`,
   // A crew's handoff, as it wrote it (why JSON: read and written whole), and the turn it was made in.
   `CREATE TABLE handoffs (id TEXT PRIMARY KEY, coordinator_id TEXT NOT NULL, crew_id TEXT NOT NULL, report TEXT NOT NULL,
@@ -84,8 +84,7 @@ const MIGRATIONS = [
   `CREATE INDEX decisions_of_coordinator ON decisions (coordinator_id)`,
   // Every end of a coordinating thread's turn reads its latest event about its own working tree, and so does its board.
   `CREATE INDEX events_own_tree ON events (coordinator_id, id) WHERE json_extract(event, '$.kind') IN ('coordinator-edited-files', 'coordinator-tree-clean')`,
-  // crew_start's provider placement is stored as the environment bb spawns in, as a draft's chosen
-  // one is. This rewrites the earlier provider shapes into the environment each spawned in: with
+  // crew_start's provider placement is stored as the environment bb spawns in. This rewrites the earlier provider shapes into the environment each spawned in: with
   // no inputs (null), or with the inputs and new machine stored.
   `UPDATE crews SET placement = json_object('kind', 'chosen', 'environment', json(CASE
      WHEN json_type(placement, '$.machine') = 'object' THEN json_object('type', 'provider', 'environmentProviderId', json_extract(placement, '$.environmentProviderId'),
@@ -155,7 +154,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
   function crews(coordinatorId: CoordinatorId, crewId: CrewId | null): Crew[] {
     return db()
       .prepare(
-        `SELECT k.coordinator_id AS coordinatorId, k.id, k.title, k.brief, k.done_criteria AS doneCriteria, k.placement, k.execution, k.branch,
+        `SELECT k.coordinator_id AS coordinatorId, k.id, k.title, k.brief, k.done_criteria AS doneCriteria, k.placement, k.branch,
                 k.fix_rounds AS fixRounds, k.created_at AS createdAt, k.closed_as AS closedAs, k.closed_at AS closedAt, r.thread_id AS threadId
            FROM crews k LEFT JOIN roles r ON r.ticket = k.ticket
           WHERE k.coordinator_id = ? AND (? IS NULL OR k.id = ?)
@@ -341,14 +340,14 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
      * The crew and its unbound ticket, together or not at all, numbered after the coordinating
      * thread's last crew. why one transaction: two starts at once can't take the same number.
      */
-    insertCrew(crew: Pick<Crew, "coordinatorId" | "title" | "brief" | "doneCriteria" | "placement" | "execution" | "createdAt"> & { ticket: string }): CrewId {
+    insertCrew(crew: Pick<Crew, "coordinatorId" | "title" | "brief" | "doneCriteria" | "placement" | "createdAt"> & { ticket: string }): CrewId {
       return db().transaction(() => {
         const { count } = z.object({ count: z.number() }).parse(db().prepare("SELECT count(*) AS count FROM crews WHERE coordinator_id = ?").get(crew.coordinatorId));
         const id = crewIdSchema.parse(`c${count + 1}`);
         insertTicket(crew.ticket, { kind: "crew", coordinatorId: crew.coordinatorId, crewId: id }, crew.createdAt);
         db()
-          .prepare("INSERT INTO crews (coordinator_id, id, ticket, title, brief, done_criteria, placement, execution, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-          .run(crew.coordinatorId, id, crew.ticket, crew.title, crew.brief, JSON.stringify(crew.doneCriteria), JSON.stringify(crew.placement), crew.execution === null ? null : JSON.stringify(crew.execution), crew.createdAt);
+          .prepare("INSERT INTO crews (coordinator_id, id, ticket, title, brief, done_criteria, placement, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+          .run(crew.coordinatorId, id, crew.ticket, crew.title, crew.brief, JSON.stringify(crew.doneCriteria), JSON.stringify(crew.placement), crew.createdAt);
         return id;
       })();
     },
@@ -412,13 +411,6 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     crewTicket(coordinatorId: CoordinatorId, crewId: CrewId): string {
       const row = db().prepare("SELECT ticket FROM crews WHERE coordinator_id = ? AND id = ?").get(coordinatorId, crewId);
       return z.object({ ticket: z.string() }).parse(row).ticket;
-    },
-
-    /** Replaces a draft's brief, criteria, model and placement. */
-    updateDraft(coordinatorId: CoordinatorId, crewId: CrewId, edit: DraftEdit): void {
-      db()
-        .prepare("UPDATE crews SET brief = ?, done_criteria = ?, execution = ?, placement = ? WHERE coordinator_id = ? AND id = ?")
-        .run(edit.brief, JSON.stringify(edit.doneCriteria), JSON.stringify(edit.execution), JSON.stringify(edit.placement), coordinatorId, crewId);
     },
 
     /** Records the branch the crew's thread had checked out as it handed off. */
@@ -835,10 +827,6 @@ const crewRowSchema = z.object({
   brief: z.string(),
   doneCriteria: z.string().transform((json) => doneCriteriaSchema.parse(JSON.parse(json))),
   placement: z.string().transform((json) => placementSchema.parse(JSON.parse(json))),
-  execution: z
-    .string()
-    .nullable()
-    .transform((json) => (json === null ? null : executionSchema.parse(JSON.parse(json)))),
   branch: z.string().nullable(),
   fixRounds: z.number().int(),
   createdAt: z.number(),
@@ -914,7 +902,7 @@ function toCrew(row: unknown): Crew {
   const { closedAs, closedAt, threadId, ...crew } = crewRowSchema.parse(row);
   return {
     ...crew,
-    launch: threadId === null ? { kind: "draft" } : { kind: "started", threadId },
+    launch: threadId === null ? { kind: "unstarted" } : { kind: "started", threadId },
     closed: closedAs === null || closedAt === null ? null : { kind: closedAs, at: closedAt },
   };
 }

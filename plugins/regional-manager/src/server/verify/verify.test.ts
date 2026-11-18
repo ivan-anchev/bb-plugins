@@ -393,7 +393,7 @@ test("crew_start with supersedes stops the crew and starts a fresh one with its 
   assert.match(prompt, /## Brief\n\nRetry failed deliveries with backoff\.\n\n## Previous attempt's verifier findings\n\nCrew c1 worked on this before you, on its own branch, and was stopped\. Its latest verdict, on its commit `0123456`: 1 of 2 done-criteria not met\./);
   assert.match(prompt, /### 1\. npm test passes\n\n\*\*Failed\.\*\* The verifier's evidence:\n\n```\n\$ npm test\nnot ok 13 - backoff caps at 6000/);
   assert.match(prompt, /## Done when\n\n[^\n]*\n\n1\. npm test passes\n2\. npm run lint prints no errors\n/);
-  assert.deepEqual([providerId, execution?.model], ["claude-code", "opus"], "the regional manager's, as any crew without a picked model");
+  assert.deepEqual([providerId, execution?.model], ["claude-code", "opus"], "the regional manager's, as every crew's");
   assert.equal("executionInputSources" in spawnedWith, false);
   assert.deepEqual(
     (await kit.rpc.board({ coordinatorId })).rows.map((r) => [r.crewId, r.state, r.headline]),
@@ -404,12 +404,14 @@ test("crew_start with supersedes stops the crew and starts a fresh one with its 
   );
 });
 
-test("crew_start with supersedes takes a new title and brief, says when no verdict came, and refuses an unknown crew, a draft, and a new crew with fields missing", async () => {
+test("crew_start with supersedes takes a new title and brief, says when no verdict came, and refuses an unknown crew, one with no thread, and a new crew with fields missing", async () => {
   const { kit, threadId } = await withCrew();
-  await kit.call("crew_start", { title: "Dead letters", brief: "Park undeliverable events.", doneCriteria: ["npm test passes"], draft: true }, threadId);
+  Object.assign(kit.spawns, { created: false, answer: "lost" });
+  await kit.call("crew_start", { title: "Dead letters", brief: "Park undeliverable events.", doneCriteria: ["npm test passes"] }, threadId);
+  Object.assign(kit.spawns, { created: true, answer: "thread" });
   const refusals: [unknown, RegExp][] = [
     [{ supersedes: "c9" }, /You have no crew c9/],
-    [{ supersedes: "c2" }, /c2 is a draft that never ran/],
+    [{ supersedes: "c2" }, /c2 never got a thread, so there is nothing to replace/],
     [{ title: "Retries" }, /needs a title, a brief and doneCriteria to start a new crew/],
   ];
   for (const [input, reason] of refusals) {

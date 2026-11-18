@@ -485,7 +485,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     watchCrewThreads({ bb, store, inbox, onChange: refreshBoard });
     watchOwnTree({ bb, store, inbox });
     const prWatch = createPrWatch({ bb, store, inbox, gh });
-    return { spawner, inbox, verify, prWatch, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, crews, inbox }) } };
+    return { spawner, inbox, verify, prWatch, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }) } };
   }
   let plugin = wire();
 

@@ -111,9 +111,10 @@ export function registerCoordinatorTools(bb: ToolsBb, { store, inbox, memory, cr
   bb.agents.registerTool({
     name: START,
     description:
-      "Start a crew: a child thread of yours that does one piece of the work in its own environment, on its own branch. Its first message is your brief, the done-criteria, and CREW.md and MEMORY.md as they are when it starts. Returns the crew's id (c1, c2…) and a link to its thread. With draft: true it only saves the crew as a draft on the user's board, where they start it, or edit it first: use that whenever the user asked you to propose crews and wait for them. With supersedes it replaces one of your crews with a fresh one: the old crew is stopped and closed, and the new one starts from its title, brief, done-criteria, placement and model, with its latest verifier findings added to the brief.",
+      "Start a crew: a child thread of yours that does one piece of the work in its own environment, on its own branch. Its first message is your brief, the done-criteria, and CREW.md and MEMORY.md as they are when it starts. Returns the crew's id (c1, c2…) and a link to its thread. When the user asked you to propose crews and wait, don't call it yet: describe the crews in a crew_ask_user decision first. With supersedes it replaces one of your crews with a fresh one: the old crew is stopped and closed, and the new one starts from its title, brief, done-criteria and placement, with its latest verifier findings added to the brief.",
     presentation: { label: { pending: "Starting a crew", completed: "Started a crew" }, icon: { glyph: "Workflow" } },
-    parameters: z.object({
+    // why strict: an unknown field, such as the `draft` it once took, would be dropped and the crew started.
+    parameters: z.strictObject({
       title: z.string().trim().min(1).max(80).optional().describe("A short name for the piece of work; it titles the crew's thread. Required unless you give supersedes."),
       brief: briefSchema
         .optional()
@@ -126,23 +127,22 @@ export function registerCoordinatorTools(bb: ToolsBb, { store, inbox, memory, cr
         .describe(
           'worktree (the default): a fresh worktree of the default branch on your machine. provider: an environment provider such as boat-sandbox, named by environmentProviderId, with machineInputs for the machine it makes, such as {"preset": "small"} for boat-sandbox (`bb environment providers --json` shows each one\'s machineInputs). A sandbox crew gets its own new branch from the default branch.',
         ),
-      draft: z.boolean().default(false).describe("true: save it as a draft for the user to start, or edit and start, and start no thread now."),
       supersedes: crewIdSchema
         .optional()
         .describe("The id of one of your crews to replace, typically one whose work failed verification twice. Leave out title, brief, doneCriteria and placement to keep its own; any you give replace them."),
     }),
-    execute: forCoordinator(START, async (id, { supersedes, draft, placement: requested, ...fields }) => {
+    execute: forCoordinator(START, async (id, { supersedes, placement: requested, ...fields }) => {
       const placement = requested === undefined ? undefined : placementOf(requested, await placementFacts(id));
       if (placement !== undefined && "refused" in placement) return failed(placement.refused);
       if (supersedes !== undefined) {
         const old = store.crew(id, supersedes);
         if (old === null) return failed(`You have no crew ${supersedes}. crew_catch_up lists your crews.`);
-        if (!isStarted(old)) return failed(`${supersedes} is a draft that never ran, so there is nothing to replace: the user edits or starts it on the board, or close it with crew_close.`);
-        return supersedeText(supersedes, await crews.supersede(old, { ...fields, placement, draft }));
+        if (!isStarted(old)) return failed(`${supersedes} never got a thread, so there is nothing to replace: close it with crew_close and start a new crew.`);
+        return supersedeText(supersedes, await crews.supersede(old, { ...fields, placement }));
       }
       const { title, brief, doneCriteria } = fields;
       if (title === undefined || brief === undefined || doneCriteria === undefined) return failed(`${START} needs a title, a brief and doneCriteria to start a new crew; only with supersedes can you leave them out.`);
-      return startText(await crews.start(id, { title, brief, doneCriteria, placement: placement ?? WORKTREE, execution: null, draft }));
+      return startText(await crews.start(id, { title, brief, doneCriteria, placement: placement ?? WORKTREE }));
     }),
   });
 
@@ -153,7 +153,7 @@ export function registerCoordinatorTools(bb: ToolsBb, { store, inbox, memory, cr
     parameters: z.object({ crewId: crewIdSchema, text: z.string().trim().min(1).max(20_000) }),
     execute: forCrew(MESSAGE, async (crew, { text }) => {
       if (crew.closed !== null) return failed(`${crew.id} is ${crew.closed.kind}, so it takes no more messages. Start a new crew for more work.`);
-      if (!isStarted(crew)) return failed(`${crew.id} is a draft with no thread to message: it waits for the user to start it.`);
+      if (!isStarted(crew)) return failed(`${crew.id} has no thread to message: bb never started one. Close it with crew_close and start a new crew.`);
       const delivery = await crews.message(crew, text);
       return delivery === "sent" ? `Sent to ${crew.id}.` : `Queued for ${crew.id}: it is waiting on the user or busy, and gets your message once it is free.`;
     }),

@@ -53,7 +53,7 @@ export default function plugin(bb: BbPluginApi): void {
     coordinators: () => ({ coordinators: store.coordinators() }),
     primaryHost: async () => ({ hostId: (await bb.sdk.system.config()).primaryHostId }),
     startCoordinator: ({ request, verify }) => spawner.coordinator(request, verify),
-    ...boardHandlers({ store, board, crews, inbox }),
+    ...boardHandlers({ store, board, inbox }),
     ...memoryHandlers(store, memory, inbox),
   });
 }

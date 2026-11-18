@@ -13,7 +13,6 @@ const crew: Crew = {
   brief: "Retry failed deliveries with backoff.",
   doneCriteria: ["npm test passes"],
   placement: { kind: "worktree" },
-  execution: null,
   launch: { kind: "started", threadId: "thr_1" },
   closed: null,
   branch: null,
@@ -47,8 +46,8 @@ test("a crew whose turn failed Needs you", () => {
   assert.deepEqual(crewState(crew, thread("error"), null, null), { state: "needs-you", headline: "Its last turn failed" });
 });
 
-test("a draft, saved for the user or never confirmed by bb, Needs you under its title", () => {
-  assert.deepEqual(crewState({ ...crew, launch: { kind: "draft" } }, null, null, null), { state: "needs-you", headline: "Draft: Add retries to the webhook sender" });
+test("a crew bb hasn't confirmed a thread for Needs you", () => {
+  assert.deepEqual(crewState({ ...crew, launch: { kind: "unstarted" } }, null, null, null), { state: "needs-you", headline: "No thread: bb hasn't started one" });
 });
 
 test("a closed crew is Done, whatever its thread is doing", () => {

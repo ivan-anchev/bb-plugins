@@ -43,8 +43,8 @@ type SpawnBb = {
 
 type SpawnStore = Pick<Store, "insertCoordinator" | "insertCrew" | "insertVerifierTicket" | "crewTicket" | "bindTicket" | "crew">;
 
-/** What a crew is saved with: what crew_start asks for, or what a superseded crew had. `execution` null: see Crew. */
-export type CrewRequest = Pick<Crew, "title" | "brief" | "doneCriteria" | "placement" | "execution">;
+/** What a crew is saved with: what crew_start asks for, or what a superseded crew had. */
+export type CrewRequest = Pick<Crew, "title" | "brief" | "doneCriteria" | "placement">;
 
 /** What a verifier runs on: chosen by the plugin, never left to bb's default. */
 export type VerifierExecution = { providerId: string; model: string; reasoningLevel: string };
@@ -59,7 +59,7 @@ export type VerifierRequest = {
   execution: VerifierExecution;
 };
 
-/** A crew's spawn: its thread, or why bb didn't confirm one, which leaves the crew a draft. */
+/** A crew's spawn: its thread, or why bb didn't confirm one, which leaves the crew unstarted. */
 export type CrewLaunch = { crewId: CrewId } & ({ kind: "started"; threadId: string } | { kind: "failed"; error: string });
 
 // why auto: a crew works unattended, and a permission prompt on every edit would hold it until the
@@ -100,13 +100,13 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
   }
 
   /**
-   * A crew whose draft names no model runs on its coordinating thread's provider and model as they
-   * are now. why not leave it to bb: bb gives a child its parent's only while that provider is
-   * available and the parent has a turn on record, and its own default otherwise.
+   * A crew runs on its coordinating thread's provider and model as they are now. why not leave it
+   * to bb: bb gives a child its parent's only while that provider is available and the parent has a
+   * turn on record, and its own default otherwise.
    */
   async function inheritedExecution(coordinator: CoordinatorThread): Promise<SpawnExecution> {
     const options = await bb.sdk.threads.defaultExecutionOptions({ threadId: coordinator.id });
-    if (options === null) throw new Error("bb has no model on record for the regional manager, so the crew has none to inherit. Pick one in its draft's editor.");
+    if (options === null) throw new Error("bb has no model on record for the regional manager, so the crew has none to inherit.");
     const { model, reasoningLevel, serviceTier } = options;
     return { providerId: coordinator.providerId, model, reasoningLevel, serviceTier, permissionMode: CREW_PERMISSION_MODE };
   }
@@ -125,15 +125,14 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
       return { threadId: await spawnWith(ticket, picked(request)) };
     },
 
-    /** Saves a crew as a draft: its row and its unbound ticket. Nothing runs until it is launched. */
+    /** Saves a crew: its row and its unbound ticket. Nothing runs until it is launched. */
     saveCrew(coordinator: Coordinator, request: CrewRequest): CrewId {
       return store.insertCrew({ coordinatorId: coordinator.id, ticket: randomUUID(), ...request, createdAt: Date.now() });
     },
 
     /**
-     * Spawns a draft's thread from what is stored, as a child of the coordinating thread, on the
-     * model its draft names, else the coordinating thread's. A spawn that fails leaves it a draft on
-     * the board, to be started again.
+     * Spawns a saved crew's thread from what is stored, as a child of the coordinating thread, on
+     * the coordinating thread's provider and model. A spawn that fails leaves the crew unstarted.
      */
     async launch(coordinator: Coordinator, crew: Crew): Promise<CrewLaunch> {
       const files = memory.of(coordinator.id);
@@ -147,7 +146,7 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
           lifecycleOwnerThreadId: coordinator.threadId,
           // why off: bb's own report cuts a crew's answer at 4,000 characters; the plugin owns wakes.
           parentNotifications: "off",
-          ...(crew.execution === null ? await inheritedExecution(parent) : picked(crew.execution)),
+          ...(await inheritedExecution(parent)),
           // why its machine: a worktree crew gets its fresh worktree there, as a child of a live thread does from bb.
           environment: environmentOf(crew.placement, parent.environmentHostId),
           prompt: crewBrief(crew, { crewRules: files.read(CREW_RULES).text, index: files.read(MEMORY_INDEX).text }),
