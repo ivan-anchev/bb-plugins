@@ -105,6 +105,8 @@ type FakeThread = HolderThread & {
   deletedAt: number | null;
   spawnedWith: SpawnArgs;
   turns: number[];
+  /** Background commands its turns left running. As on bb 0.49 (seen live), a stop ends them, idle thread or not. */
+  background: number;
 };
 
 /** What bb runs a spawn on when it names no provider or model that bb counts. */
@@ -326,7 +328,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   const memoryWrites: CoordinatorId[] = [];
   const memory = openMemoryRoot(join(mkdtempSync(join(tmpdir(), "coordinator-test-")), "data.db"), openedStore, (id) => memoryWrites.push(id));
   const metadata = new Map<string, Metadata>();
-  const tools = new Map<string, { parameters: z.ZodType; run(input: unknown, threadId: string): Promise<PluginAgentToolResult> }>();
+  const tools = new Map<string, { parameters: z.ZodType; instructions: string | null; run(input: unknown, threadId: string): Promise<PluginAgentToolResult> }>();
   let configure: ((context: PluginAgentConfigurationContext) => PluginAgentConfiguration) | null = null;
   const handlers: Partial<Handlers> = {};
   // why a generic function: it keeps each event's handlers typed by that event.
@@ -435,6 +437,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         deletedAt: null,
         spawnedWith: args,
         turns: [],
+        background: 0,
       };
       fakeThreads.set(id, thread);
       if (reused === null && provisioning.holding) provisioning.held.push(() => provision(thread));
@@ -529,6 +532,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       const leaves = own ?? stops;
       const interrupted = thread.status !== "idle" && leaves === "idle";
       thread.status = leaves;
+      thread.background = 0;
       if (interrupted) await emit("thread.idle", { thread: { ...ref(threadId), environmentId: thread.environmentId }, lastAssistantText: "Interrupted halfway." });
       if (stopRequests.lost !== null) throw stopRequests.lost;
     },
@@ -545,7 +549,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   } satisfies SpawnBb["sdk"]["threads"] & AgentsBb["sdk"]["threads"] & IssuesBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] & VerifyBb["sdk"]["threads"] & PrWatchBb["sdk"]["threads"];
   const agents: ToolsBb["agents"] & Parameters<typeof registerRoles>[0]["agents"] = {
     registerTool(tool) {
-      tools.set(tool.name, { parameters: tool.parameters, run: async (input, threadId) => tool.execute(tool.parameters.parse(input), { threadId, projectId: "prj_1", signal: new AbortController().signal }) });
+      tools.set(tool.name, { parameters: tool.parameters, instructions: tool.instructions ?? null, run: async (input, threadId) => tool.execute(tool.parameters.parse(input), { threadId, projectId: "prj_1", signal: new AbortController().signal }) });
     },
     configure(provider) {
       configure = provider;
@@ -818,6 +822,18 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       thread.status = "idle";
       await emit("thread.idle", { thread: { ...ref(threadId), environmentId: thread.environmentId }, lastAssistantText });
     },
+    /** The thread's turn left a background command running, which bb doesn't count: the thread reads idle once its turn ends. */
+    leavesBackground(threadId: string): void {
+      fakeThread(threadId).background += 1;
+    },
+    /** The thread's background commands finish. As bb does (seen live), the provider then starts a new turn there, with no message, unless a stop ended them. */
+    async backgroundFinishes(threadId: string): Promise<void> {
+      const thread = fakeThread(threadId);
+      if (thread.background === 0) return;
+      thread.background = 0;
+      await starting(threadId);
+      await active(threadId);
+    },
     /** The text of every message that reached the thread and started a turn, in order. */
     delivered: (threadId: string) => delivered.filter((message) => message.threadId === threadId).map((message) => message.text),
     /** The messages bb holds queued for the thread, oldest first. */
@@ -863,8 +879,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       if (configure === null) throw new Error("No configure callback");
       return configure(configurationContext(threadId, pluginMetadata));
     },
-    /** Every tool the plugin registered, by name, with its parameters. */
-    tools: () => [...tools].map(([name, { parameters }]) => ({ name, parameters })),
+    /** Every tool the plugin registered, by name, with its parameters and the instructions bb injects with it (null: none). */
+    tools: () => [...tools].map(([name, { parameters, instructions }]) => ({ name, parameters, instructions })),
     /** Calls the tool as the thread's agent would. */
     async call(tool: string, input: unknown, threadId: string): Promise<PluginAgentToolResult> {
       const registered = tools.get(tool);

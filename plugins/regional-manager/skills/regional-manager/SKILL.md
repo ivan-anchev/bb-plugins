@@ -300,9 +300,11 @@ in its own environment, on its own branch.
   them in one `crew_ask_user` decision. Start their agents only once their
   answer says to, changing the issues first with `issue_update` as they asked.
 - **Message** one with `agent_message`. It arrives marked as a message from
-  your thread, not from the user, and steers a running turn or starts one.
-- **Stop** one with `agent_stop`. Its turn stops and it no longer holds the
-  issue. Work it handed off that reached Verifying, In review or Done keeps
+  your thread, which the agent's first message names as its regional
+  manager's, under a line calling it your next instruction (write just the
+  instruction), and steers a running turn or starts one.
+- **Stop** one with `agent_stop`. Its thread stops, idle or not, background
+  commands included, and it no longer holds the issue. Work it handed off that reached Verifying, In review or Done keeps
   the issue there; anything short of that returns the issue to Todo. Add
   `archive: true` only when its work is finished or no longer wanted:
   archiving a sandbox agent's thread destroys the sandbox when no other thread
@@ -324,9 +326,9 @@ verdict) stays one.
   for any of the issue's agents, the holder or one you stopped, and the
   plugin's reminders queued for its verifiers, are taken back (the result
   quotes yours, naming the agent: it never got them); then
-  every thread the plugin started on the issue that
-  bb reports running, the holder, a verifier, an earlier agent, is stopped,
-  and the holder ends as replaced. A verifier's verdict still to come is
+  every live thread the plugin started on the issue, the holder, a verifier,
+  an earlier agent, is stopped, idle or not, which also ends any background
+  command its turn left running, and the holder ends as replaced. A verifier's verdict still to come is
   dropped. A verdict that passed
   and waits for CI is kept whole, never judged on CI. The new agent continues where it stopped, in its environment: the
   same checkout, branch, commits, uncommitted files (half-done edits

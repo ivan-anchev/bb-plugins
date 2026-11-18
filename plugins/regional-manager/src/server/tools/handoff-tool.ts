@@ -72,7 +72,7 @@ export function registerHandoffTool(bb: HandoffBb, { store, verify }: Deps): voi
       if (verdict === null) return "Handed off. Your regional manager has your report. Stop here.";
       if (verdict.state === "waived") return "Handed off. Your regional manager has your report, marked unverified: verification is off. Stop here.";
       if (verdict.state === "could-not-run") return `Handed off. Your regional manager has your report, marked couldn't verify: ${verdict.reason}. Stop here.`;
-      return "Handed off. A verifier now checks your commit against the done-criteria in this environment, and your regional manager gets your report with its verdict. If it fails, its findings may come back to you here, as a message from the verifier. Stop here, and change nothing in this environment until you hear back.";
+      return "Handed off. A verifier now checks your commit against the done-criteria in this environment, and your regional manager gets your report with its verdict. If it fails, its findings may come back to you here, as a message from the verifier. Stop here, and change nothing in this environment until you hear back from the verifier or your regional manager.";
     },
   });
 }

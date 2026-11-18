@@ -250,13 +250,29 @@ test("an agent whose spawn the plugin never heard the end of flags its issue unt
   assert.match(textOf(await start()), /^Started a2 on i1 /);
 });
 
+test("an agent's first message and rules name its regional manager's thread, the one bb heads agent_message with, as its next instruction, which a done handoff waits for too", async () => {
+  const { kit, threadId, start } = await filed();
+  const agentThreadId = threadIn(textOf(await start()));
+
+  const prompt = kit.thread(agentThreadId).spawnedWith.prompt ?? assert.fail("spawned without a prompt");
+  assert.match(prompt, new RegExp(`^# i1: Add retries\\n\\nYou are agent a1, working on issue i1\\. Your regional manager, your parent thread ${threadId}, started you with this brief\\.`));
+  assert.ok(prompt.includes(`\n\nA message headed \`[bb message from thread:${threadId}]\` is from your regional manager: its next instruction to you. Follow it, after a handoff too.\n\n## What it is about`), prompt);
+  assert.match(kit.configurationFor(agentThreadId, {}).instructions ?? "", /Naming your regional manager's thread, which your first message names, it is your regional manager's next instruction: follow it, after a handoff too\./);
+  const handedOff = textOf(await kit.call("agent_handoff", { ...REPORT, status: "done", headSha: HEAD }, agentThreadId));
+  assert.ok(handedOff.endsWith("Stop here, and change nothing in this environment until you hear back from the verifier or your regional manager."), handedOff);
+
+  await kit.call("agent_message", { agent: "a1", text: "Also log each retry." }, threadId);
+  const toAgent = kit.sent().filter((args) => args.threadId === agentThreadId);
+  assert.deepEqual(toAgent.map(({ senderThreadId, input }) => [senderThreadId, input]), [[threadId, [{ type: "text", text: "Your regional manager's next instruction, on i1:\n\nAlso log each retry.", mentions: [] }]]]);
+});
+
 test("agent_message reaches the agent as a message from the regional manager's thread", async () => {
   const { kit, threadId, start } = await filed();
   const agentThreadId = threadIn(textOf(await start()));
 
   assert.equal(textOf(await kit.call("agent_message", { agent: "a1", text: "Use exponential backoff." }, threadId)), "Sent to a1.");
   assert.deepEqual(kit.sent().map(({ threadId: to, senderThreadId, mode, input }) => ({ to, senderThreadId, mode, input })), [
-    { to: agentThreadId, senderThreadId: threadId, mode: "auto", input: [{ type: "text", text: "Use exponential backoff.", mentions: [] }] },
+    { to: agentThreadId, senderThreadId: threadId, mode: "auto", input: [{ type: "text", text: "Your regional manager's next instruction, on i1:\n\nUse exponential backoff.", mentions: [] }] },
   ]);
 });
 
@@ -312,6 +328,19 @@ test("agent_stop ends the agent only once bb no longer runs its thread", async (
 
   assert.match(textOf(await kit.call("agent_stop", { agent: "a1" }, threadId)), /still stopping, so it still holds i1/);
   assert.equal(kit.store.agents(coordinatorId)[0]?.ended, null);
+});
+
+test("agent_stop stops an idle agent's thread too, so a background command it left running never wakes it", async () => {
+  const { kit, threadId } = await filed();
+  const agentThreadId = threadIn(textOf(await kit.call("agent_start", { issue: "i1" }, threadId)));
+  kit.leavesBackground(agentThreadId);
+  await kit.idle(agentThreadId, "Waiting on the sleep in the background.");
+  const turns = kit.thread(agentThreadId).turns.length;
+
+  assert.match(textOf(await kit.call("agent_stop", { agent: "a1" }, threadId)), /^a1 is stopped; it no longer holds i1\./);
+  await kit.backgroundFinishes(agentThreadId);
+
+  assert.deepEqual([kit.thread(agentThreadId).status, kit.thread(agentThreadId).turns.length], ["idle", turns], "a1 never woke");
 });
 
 test("a stop whose answer bb lost is refused as unconfirmed, not as a stop that didn't happen, and agent_stop again ends the agent", async () => {

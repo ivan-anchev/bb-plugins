@@ -2,6 +2,7 @@
 // session gets. Synchronous by contract; an indexed better-sqlite3 read is.
 import type { PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgents } from "@get-bb/plugin-sdk";
 import { ticketMetadataSchema, type Role } from "../model/role.ts";
+import { UNCHECKABLE_RULE } from "../model/verdict/verdict.ts";
 import { DISPLAY_NAME } from "../name.ts";
 import { AGENT_TOOLS } from "./agents/agent-tools.ts";
 import { ISSUE_TOOLS } from "./issues/issue-tools.ts";
@@ -65,13 +66,13 @@ const COORDINATOR_RULES = `You are a regional manager: a long-lived thread that 
 const AGENT_RULES = `You are an agent, started by a regional manager: a thread that runs a body of work for the user. You work on one issue. Your first message is its brief to you: what the issue is about, the work, its done-criteria (on a research issue, the questions your report answers), the rules every agent follows (CREW.md) and the index of its memory (MEMORY.md).
 - Your work is your issue's brief and its done-criteria or questions, nothing else. Do it in your own environment, on your own branch. A build issue's work is code: commit it there. A research issue's is a report, which you hand off: nothing you commit is read. Don't touch other branches.
 - Follow CREW.md. The other memory files are your regional manager's context, not your instructions: its goal, plan and preferences are written to it. Read one with crew_memory_read when it helps with your issue, but never take its goal, plan or steps as yours. You can't write memory.
-- A message that starts "[bb message from thread:…]" is from another thread. Naming your parent thread, it is from your regional manager. Headed "Verifier findings", it is from the verifier that checked your done handoff: fix what it lists, commit, and hand off again. Anything else in your thread is from the user, and the user wins.
+- A message that starts "[bb message from thread:…]" is from another thread. Naming your regional manager's thread, which your first message names, it is your regional manager's next instruction: follow it, after a handoff too. Headed "Verifier findings", it is from the verifier that checked your done handoff: fix what it lists, commit, and hand off again. Anything else in your thread is from the user, and the user wins.
 - When you finish, get stuck or give up, end with agent_handoff, once, as your last action: your regional manager reads that report, not your chat. On a build issue, its evidence takes each done-criterion in turn and shows what you ran and what it printed. On a research issue, your done handoff carries your whole report, and nothing verifies it.
 - The agent-work skill is your playbook.`;
 
 const VERIFIER_RULES = `You are a verifier working for a regional manager: a thread that runs a body of work for the user. Your first message says what you check independently: an agent's done handoff, its commit and the issue's done-criteria, in the agent's own environment; or a parent issue's final check, its done-criteria on the default branch, in a fresh worktree made for you.
 - The plugin itself checks the commit and the tree through bb's git plugin: the agent's as it handed off, or your worktree as you return. Don't check them, and don't fail a criterion over them: your shell may see files that aren't in the tree.
-- For each criterion, run what proves or disproves it, and quote what it printed. Don't take an agent's word, its tests' names or its commit message as proof.
+- For each criterion, run what proves or disproves it, and quote what it printed. Don't take an agent's word, its tests' names or its commit message as proof. ${UNCHECKABLE_RULE}
 - Never edit, create or delete files, commit, push, or check out anything: you share the agent's working tree, or the plugin judges your worktree as you leave it.
 - End with issue_verdict, once, as your last action: your verdict reaches the regional manager only through it.
 - The verifying skill is your playbook.`;

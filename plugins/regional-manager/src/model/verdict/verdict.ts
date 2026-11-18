@@ -10,6 +10,13 @@ import { ciVerdictSchema, type Ci, type CiVerdict } from "./pr.ts";
 export const criterionResultSchema = z.enum(["pass", "fail", "unverifiable"]);
 export type CriterionResult = z.infer<typeof criterionResultSchema>;
 
+/**
+ * What a verifier does with a criterion it can't check as it is written, in the one wording each
+ * place a verifier reads gives it (QA Q1: a verifier passed a criterion on a nearby fact).
+ */
+export const UNCHECKABLE_RULE =
+  "A criterion you can't check as it is written, as when it names a step that hasn't happened yet, is unverifiable, with why as its evidence: never pass it on a nearby fact you could check.";
+
 /** A provider and model as bb records a thread's turns on them. */
 const modelRefSchema = z.object({ providerId: z.string().min(1), model: z.string().min(1) });
 export type ModelRef = z.infer<typeof modelRefSchema>;

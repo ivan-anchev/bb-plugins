@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
+import { agentIdSchema } from "../model/agent.ts";
+import { issueIdSchema } from "../model/issue/issue.ts";
 import { DISPLAY_NAME } from "../name.ts";
-import { harness, isRefusal, newThreadRequest, startedAgent, textOf } from "./test-harness.ts";
+import { coordinating, harness, HEAD, isRefusal, newThreadRequest, settled, startedAgent, textOf } from "./test-harness.ts";
+import { finalCheckBrief } from "./verify/verifier-brief.ts";
 
 const COORDINATOR_TOOLS = ["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "issue_create", "issue_update", "issue_read", "agent_start", "agent_message", "agent_stop"];
 
@@ -116,3 +121,26 @@ test("an agent thread reads its regional manager's memory, and is refused the ma
   assert.equal(kit.store.agents(role.coordinatorId).length, 1, "the agent started no agent");
   assert.match(textOf(await kit.call("crew_memory_read", { file: "PLAN.md" }, threadId)), /No plan yet/);
 });
+
+test("a verifier reads in its rules, both kinds of first message, issue_verdict's instructions and its skill that a criterion it can't check as written is unverifiable, never passed on a nearby fact", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  const criterion = "A recovery agent finds marker.txt at the pushed head";
+  const { agentThreadId } = await startedAgent(kit, threadId, { doneCriteria: [criterion] });
+  await kit.call("agent_handoff", { status: "done", summary: "Pushed the marker", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD }, agentThreadId);
+  await settled();
+  const verdict = kit.store.latestHandoff(coordinatorId, agentIdSchema.parse("a1"))?.check?.verdict;
+  const verifier = verdict?.state === "running" ? verdict.verifierThreadId : assert.fail("no verifier running");
+  const finalCheck = finalCheckBrief({ id: issueIdSchema.parse("i1"), title: "Recovery", description: "Recover a lost sandbox." }, { criteria: [criterion], subject: { kind: "final", defaultBranch: "main", merged: [issueIdSchema.parse("i2")] } });
+  const skill = readFileSync(join(import.meta.dirname, "..", "..", "skills", "verifying", "SKILL.md"), "utf8").replace(/\s+/g, " ");
+
+  const rule = "A criterion you can't check as it is written, as when it names a step that hasn't happened yet, is unverifiable, with why as its evidence: never pass it on a nearby fact you could check.";
+  const read = {
+    rules: kit.configurationFor(verifier, {}).instructions,
+    handoffCheck: kit.thread(verifier).spawnedWith.prompt,
+    finalCheck,
+    issue_verdict: kit.tools().find(({ name }) => name === "issue_verdict")?.instructions,
+    skill,
+  };
+  for (const [where, text] of Object.entries(read)) assert.ok(text?.includes(rule), `${where} lacks the rule`);
+});
+

@@ -4,7 +4,7 @@
 // database by its thread id.
 import { z } from "zod";
 import { MAX_CRITERIA, type DoneCriteria } from "../../model/issue/issue.ts";
-import { criterionResultSchema } from "../../model/verdict/verdict.ts";
+import { criterionResultSchema, UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 import type { Store } from "../store/store.ts";
 import { failed, refusedBusy, type ToolsBb } from "../tools/tool-kit.ts";
 import type { Verify, VerifierReport } from "./verify.ts";
@@ -16,7 +16,7 @@ const verdictInputSchema = z.object({
     .array(
       z.object({
         criterion: z.number().int().min(1).max(MAX_CRITERIA).describe("The criterion's number in your first message."),
-        result: criterionResultSchema.describe("pass: what you ran proves it. fail: what you ran disproves it. unverifiable: you could not run anything that decides it."),
+        result: criterionResultSchema.describe("pass: what you ran proves it as it is written. fail: what you ran disproves it. unverifiable: you couldn't check it as it is written; say why in evidence."),
         evidence: z.string().trim().min(1).max(4_000).describe("The command you ran and what it printed, quoted; for a fail, the failing lines."),
       }),
     )
@@ -81,5 +81,5 @@ function reportOf(input: VerdictInput, doneCriteria: DoneCriteria): VerifierRepo
 const NOT_RUNNING = `${VERDICT} is refused and nothing was saved: this check no longer waits for your verdict (a newer handoff or final check replaced it, or it already has one). Stop here.`;
 
 const VERDICT_INSTRUCTIONS = `Returning your verdict: call issue_verdict once, as your last action, then stop. The plugin judges the commit and the tree itself, through bb's git plugin (your first message says when it reads them); you judge only the criteria.
-- criteria: one entry per done-criterion, by its number in your first message: result pass, fail or unverifiable, and evidence quoting what you ran and what it printed (up to 4,000 characters).
+- criteria: one entry per done-criterion, by its number in your first message: result pass, fail or unverifiable, and evidence quoting what you ran and what it printed (up to 4,000 characters). ${UNCHECKABLE_RULE}
 - findings: problems no criterion covers, up to 20. [] for none.`;

@@ -49,7 +49,7 @@ import type { Store } from "../store/store.ts";
 import type { PrWatch } from "../watch/pr-watch.ts";
 import { agentBrief } from "./brief.ts";
 import { environmentGone, type EnvironmentsBb } from "./environments.ts";
-import { latestTurnSeq, stopRunning, threadsById, type ListBb, type StopBb } from "./threads.ts";
+import { latestTurnSeq, stopThreads, threadsById, type ListBb, type StopBb } from "./threads.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
 type QueuedMessage = Awaited<ReturnType<Threads["queuedMessages"]["list"]>>[number];
@@ -281,8 +281,8 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
    * archived (SH5):
    * 1. decide where it runs and on what, from what bb has now; a refusal changes nothing. A move
    *    reads the previous agent's environment, and its pull request when it cuts through origin;
-   * 2. quiet the issue: take back what the plugin queued for the holder, then stop every thread the
-   *    plugin started for the issue that bb reports running, and confirm each, never archiving one:
+   * 2. quiet the issue: take back what the plugin queued for the holder, then stop every live thread
+   *    the plugin started for the issue, idle ones too, and confirm each, never archiving one:
    *    a stopped thread keeps its environment (SH1 (b), SH5). Anything bb doesn't confirm refuses
    *    the start, holder and record intact;
    * 3. a move out of a live environment reads it again, now that nothing runs there, and is refused
@@ -365,19 +365,19 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
 
   /**
    * Quiets the issue before a new agent starts on it: takes back what the plugin queued for any of
-   * the issue's agents, the holder and every earlier one (see withdrawQueued), then stops every
-   * thread the plugin started for the issue that bb reports running, the holder's, its verifiers'
-   * and any earlier agent's, and confirms each. why every earlier agent: one agent_stop ended still
-   * has what bb queued for it, which would wake it beside the new agent. why ask bb, not the record:
-   * a thread runs or not whatever the plugin last wrote about it. Returns the manager's messages it
-   * took back, and what it did in words (`did`), to lead a refusal that follows; else why the start
-   * is refused, with what it did.
+   * the issue's agents, the holder and every earlier one (see withdrawQueued), then stops every live
+   * thread the plugin started for the issue, the holder's, its verifiers' and any earlier agent's,
+   * whatever status bb reports, and confirms each. why every earlier agent: one agent_stop ended
+   * still has what bb queued for it, which would wake it beside the new agent. why idle ones too: an
+   * idle thread can still run a background command, whose finish would wake it (see stopThreads).
+   * Returns the manager's messages it took back, and what it did in words (`did`), to lead a refusal
+   * that follows; else why the start is refused, with what it did.
    */
   async function quiet(coordinatorId: CoordinatorId, issueId: IssueId, holder: Agent | null): Promise<{ withdrawn: Withdrawn[]; did: string } | { refused: string }> {
     const threads = store.issueThreads(coordinatorId, issueId);
     const named = (threadId: string): string => threadName({ threadId, agentId: threads.find((thread) => thread.threadId === threadId)?.agentId ?? null });
     const { withdrawn, left } = await withdrawQueued(coordinatorOf(coordinatorId).threadId, threads);
-    const { stopped, unstopped } = left.length > 0 ? { stopped: [], unstopped: [] } : await stopRunning(bb, threads.map(({ threadId }) => threadId));
+    const { stopped, unstopped } = left.length > 0 ? { stopped: [], unstopped: [] } : await stopThreads(bb, threads.map(({ threadId }) => threadId));
     const did = didText(withdrawn, stopped.map(named));
     const holds = holder === null ? "" : ` and ${holder.id} still holds ${issueId}`;
     if (left.length > 0) {
@@ -441,6 +441,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     try {
       const prompt = agentBrief(
         agentId,
+        coordinatorOf(coordinatorId).threadId,
         { ...issue, brief },
         { base: spot.base, branch: carried?.branch ?? null, pr: carried?.pr ?? null, earlier: store.record(coordinatorId, issue.id) },
         { crewRules: files.read(CREW_RULES).text, index: files.read(MEMORY_INDEX).text },
@@ -557,17 +558,17 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
       }),
 
     /**
-     * Stops the agent's turn and ends it once bb no longer runs its thread; then archives its thread
-     * when asked, which destroys a sandbox no other thread lives in. Never archives otherwise. In its
-     * issue's turn, so an agent a handover replaced meanwhile is already ended, and its thread, now
-     * its successor's environment, is never archived.
+     * Stops the agent's thread, idle or not (see stopThreads), and ends the agent once bb no longer
+     * runs it; then archives its thread when asked, which destroys a sandbox no other thread lives
+     * in. Never archives otherwise. In its issue's turn, so an agent a handover replaced meanwhile is
+     * already ended, and its thread, now its successor's environment, is never archived.
      */
     stop: ({ coordinatorId, id, issueId }: Agent, archive: boolean): Promise<StopOutcome | Busy> =>
       turns.run(coordinatorId, issueId, async () => {
         const agent = agentOf(coordinatorId, id);
         if (agent.ended !== null) return { kind: "already-ended", how: agent.ended.how };
         const { threadId } = agent;
-        const [unstopped] = threadId === null ? [] : (await stopRunning(bb, [threadId])).unstopped;
+        const [unstopped] = threadId === null ? [] : (await stopThreads(bb, [threadId])).unstopped;
         if (unstopped !== undefined) return { kind: "still-running", why: unstopped.why };
         await end(agent, "stopped");
         if (archive && threadId !== null) await bb.sdk.threads.archive({ threadId });

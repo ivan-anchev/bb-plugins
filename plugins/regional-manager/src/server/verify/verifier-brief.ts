@@ -6,6 +6,7 @@ import type { AgentId } from "../../model/agent.ts";
 import type { Issue } from "../../model/issue/issue.ts";
 import type { FinalCheck, HandoffCheck } from "../../model/verdict/check.ts";
 import { checkoutProblems, checkoutText, type Checkout } from "../../model/verdict/checkout.ts";
+import { UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 
 /** A handoff's verifier's: the commit the agent claims, in the agent's own environment. */
 export function verifierBrief(issue: Pick<Issue, "id" | "title"> & { brief: string }, check: Pick<HandoffCheck, "criteria" | "subject">, checkout: Checkout): string {
@@ -16,7 +17,7 @@ export function verifierBrief(issue: Pick<Issue, "id" | "title"> & { brief: stri
     `## The commit and the tree, as the plugin read them\n\n${checkoutText(headSha, checkout)} ${checkoutNote(agentId, headSha, checkout)}`,
     criteriaPart(check.criteria),
     `## The issue's brief, for context\n\n${issue.brief.trim()}`,
-    `## Rules\n\nRun whatever proves or disproves each criterion, and quote what it printed. Never edit, commit, push or check out anything: you share ${agentId}'s working tree.`,
+    `## Rules\n\nRun whatever proves or disproves each criterion, and quote what it printed. ${UNCHECKABLE_RULE} Never edit, commit, push or check out anything: you share ${agentId}'s working tree.`,
   ].join("\n\n");
 }
 
@@ -33,7 +34,7 @@ export function finalCheckBrief(issue: Pick<Issue, "id" | "title" | "description
     `## The commit and the tree\n\nNo commit is named. When you call issue_verdict, the plugin reads this worktree through bb's git plugin and judges the commit it holds then, on a clean tree: a file changed or added there that git shows fails the verdict, whatever you find. Don't check the commit or the tree yourself, and don't fail a criterion over them.`,
     criteriaPart(check.criteria),
     `## ${issue.id}, for context\n\n${issue.description.trim()}`,
-    `## Rules\n\nRun whatever proves or disproves each criterion, and quote what it printed. Never edit, commit, push or check out anything: judge the worktree as it is.`,
+    `## Rules\n\nRun whatever proves or disproves each criterion, and quote what it printed. ${UNCHECKABLE_RULE} Never edit, commit, push or check out anything: judge the worktree as it is.`,
   ].join("\n\n");
 }
 

@@ -261,7 +261,9 @@ agent, it hands the issue over (see
 [Handing an issue to a new agent](#handing-an-issue-to-a-new-agent)).
 
 The regional manager messages an agent with `agent_message` (it arrives
-marked as from the regional manager, not from you), and stops one with
+marked as from the manager's thread, which the agent's first message names,
+under a line calling it the manager's next instruction, not from you), and
+stops one with
 `agent_stop`, which archives its thread too when asked. An agent stopped
 mid-turn before it hands off can be followed by two updates: that it ended its
 turn without a handoff and, when its issue returns to Todo, that it was
@@ -326,8 +328,11 @@ verdict.
   got each. One that can't be taken back, or that the user queued for an
   agent or a verifier, refuses the start: once sent, it would wake that
   thread beside the new agent. Then
-  every thread the plugin started on the issue that bb reports running (the
-  holder, a verifier, an earlier agent) is stopped, never archived; a late
+  every live thread the plugin started on the issue (the holder, a verifier,
+  an earlier agent) is stopped, never archived, idle or not: bb's stop also
+  ends a background command a turn left running, whose finish would
+  otherwise start a new turn there. `agent_stop` stops an idle thread the
+  same way. A late
   verdict is refused. Until bb confirms each stopped, the start is refused and
   the holder keeps the issue. Every check of the issue still waiting is
   superseded; a verdict that passed and waits for CI is kept whole, marked
@@ -544,7 +549,9 @@ a **verifier** for each one:
   quotes the output. It never edits, commits or pushes, and it gets none of
   the agent's own report, only the issue's brief and criteria. It ends with
   `issue_verdict`: each criterion `pass`, `fail` or `unverifiable`, with its
-  evidence, and any findings. A verdict that skips, repeats or invents a
+  evidence, and any findings. A criterion it can't check as it is written,
+  as one naming a step that hasn't happened yet, is unverifiable, never
+  passed on a nearby fact. A verdict that skips, repeats or invents a
   criterion is refused.
 - **Outcome**: derived, never stored. Verified only when the commit and the
   tree were as claimed, every criterion passed, and CI didn't fail on the

@@ -1,6 +1,7 @@
 // An agent thread's first message: everything it needs to start without asking. The description,
-// brief and done-criteria are its regional manager's, and they are its work. On an issue that had
-// agents before, where it works and every earlier handoff with its verdict come next, quoted as
+// brief and done-criteria are its regional manager's, and they are its work. It names the manager's
+// thread, so the agent knows a message from it as the manager's next instruction (agent-tools.ts
+// managerMessage). On an issue that had agents before, where it works and every earlier handoff with its verdict come next, quoted as
 // context and never as instructions. CREW.md and
 // MEMORY.md are copied as they are at the start: the rules every agent follows, and the index of
 // the manager's memory, which is the manager's context and never the agent's instructions.
@@ -27,6 +28,7 @@ const MEMORY_IS_CONTEXT =
 
 export function agentBrief(
   agentId: AgentId,
+  managerThreadId: string,
   issue: Pick<Issue, "id" | "kind" | "title" | "description" | "doneCriteria"> & { brief: string },
   start: StartingPoint,
   memory: { crewRules: MemoryText | null; index: MemoryText | null },
@@ -34,7 +36,8 @@ export function agentBrief(
   const { work, handingOff } = BY_DELIVERY[PIPELINES[issue.kind].delivers];
   return [
     `# ${issue.id}: ${issue.title}`,
-    `You are agent ${agentId}, working on issue ${issue.id}. Your parent thread, a regional manager, started you with this brief. ${work}${PIPELINES[issue.kind].delivers === "commit" ? ` ${WHERE_TO_WORK[start.base.kind]}` : ""}`,
+    `You are agent ${agentId}, working on issue ${issue.id}. Your regional manager, your parent thread ${managerThreadId}, started you with this brief. ${work}${PIPELINES[issue.kind].delivers === "commit" ? ` ${WHERE_TO_WORK[start.base.kind]}` : ""}`,
+    `A message headed \`[bb message from thread:${managerThreadId}]\` is from your regional manager: its next instruction to you. Follow it, after a handoff too.`,
     `## What it is about\n\n${issue.description.trim()}`,
     `## Brief\n\n${issue.brief.trim()}`,
     criteriaSection(issue.kind, issue.doneCriteria),

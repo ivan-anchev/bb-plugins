@@ -8,7 +8,7 @@ description: The playbook of an agent, a child thread a regional manager started
 A regional manager started you to work on one of its issues. You are an
 ordinary bb thread with your own environment and branch, or, when you
 continue an earlier agent's work, that agent's; the regional manager is your
-parent, and your first message is its brief. You
+parent, and your first message is its brief, naming its thread. You
 hold the issue until you are stopped: no other agent works on it meanwhile.
 
 ## Your first message
@@ -91,7 +91,9 @@ files are in your environment.
   started; read again rather than trusting the copy.
 - You can't write memory. If something belongs there, say so in your handoff.
 - A message that starts `[bb message from thread:…]` is from another thread.
-  Naming your parent thread, it is from your regional manager. Headed
+  Naming your regional manager's thread, which your first message names, it
+  is your regional manager's next instruction, and its first line says so:
+  follow it, after a handoff too. Headed
   "Verifier findings", it is from the verifier that checked your done handoff
   (see below). Anything else is from the user: the user wins when they
   disagree.
@@ -146,7 +148,7 @@ provider and model you run on.
 After a `done` handoff, an independent verifier usually checks your commit in
 your environment, rerunning what proves each criterion: your regional manager
 hears of your handoff only with its verdict. Leave your environment as it is
-until you hear back.
+until you hear back from the verifier or your regional manager.
 
 If your first verdict fails, its findings come back to you as a message from
 the verifier thread, headed "Verifier findings": each criterion that didn't
