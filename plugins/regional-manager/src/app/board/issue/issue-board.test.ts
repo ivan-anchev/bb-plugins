@@ -291,14 +291,15 @@ test("a parent says its count once, at the right, flagged or not; its headline s
   assert.deepEqual(counted(), { words: `i1BuildCard vault${unmerged}`, count: "1/3", label: `i1 Build: Card vault, In progress, 1 of 3 sub-issues done, ${unmerged}` });
 });
 
-test("a flagged sub-issue sits under its parent and flat under Needs you, naming its parent there; each row opens on its own", () => {
+test("a flagged sub-issue sits under its parent and flat under Needs you, each naming its parent to a screen reader and the flat one ahead of its id; each row opens on its own", () => {
   const { view } = mount(SPLIT, []);
   const flat = lane(view, /^Needs you/).getByRole("button", { name: /\bi3 Build/ });
   assert.match(flat.getAttribute("aria-label") ?? "", /^i3 Build: Issue i3, sub-issue of i1, In progress,/);
   assert.match(flat.textContent ?? "", /^i1›i3Build/, "its parent's id and its own read as one");
   assert.ok(within(flat).getByRole("img", { name: "In progress" }), "with its own status's glyph");
   const nested = lane(view, /^In progress/).getByRole("button", { name: /\bi3 Build/ });
-  assert.doesNotMatch(nested.getAttribute("aria-label") ?? "", /sub-issue of/, "under its parent it needs no name of it");
+  assert.match(nested.getAttribute("aria-label") ?? "", /^i3 Build: Issue i3, sub-issue of i1, In progress,/, "under its parent too, for a reader who reaches it straight");
+  assert.equal(nested.textContent?.includes("›"), false, "where it shows no breadcrumb");
 
   fireEvent.click(flat);
   assert.deepEqual([flat.getAttribute("aria-expanded"), nested.getAttribute("aria-expanded")], ["true", "false"]);

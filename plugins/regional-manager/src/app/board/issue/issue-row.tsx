@@ -33,7 +33,7 @@ export function IssueRow({ ref, issue, under, open, detailId, onToggle }: IssueR
         className="rmi-row"
         data-strong={issue.needsYou !== null || undefined}
         data-quiet={QUIET.has(issue.status) || undefined}
-        aria-label={spoken(issue, under)}
+        aria-label={spoken(issue)}
         aria-expanded={open}
         aria-controls={open ? detailId : undefined}
         onClick={onToggle}
@@ -110,12 +110,13 @@ const QUIET: ReadonlySet<IssueStatus> = new Set(["done", "canceled"]);
 /**
  * "i3 Build: Add the hello note, In review, ✓ Verified: …"; "i4 Build: Retry queue, Todo, blocked by
  * i2 and i3, Not started"; "i1 Build: Card vault, In progress, 1 of 3 sub-issues done";
- * "i5 Build: Vault schema, sub-issue of i1, In progress, Blocked: …".
+ * "i5 Build: Vault schema, sub-issue of i1, In progress, Blocked: …". why a sub-issue names its parent
+ * under it too: a reader who tabs or lists buttons straight to it hears no nesting.
  */
-const spoken = (issue: Row, under: IssueId | null): string =>
+const spoken = (issue: Row): string =>
   [
     `${issue.id} ${PIPELINES[issue.kind].label}: ${issue.title}`,
-    ...(under === null ? [] : [`sub-issue of ${under}`]),
+    ...(issue.parentId === null ? [] : [`sub-issue of ${issue.parentId}`]),
     STATUS_LABELS[issue.status],
     ...(issue.subIssues === null ? [] : [`${issue.subIssues.done} of ${issue.subIssues.total} sub-issues done`]),
     ...blockedText(issue.blockedBy),
