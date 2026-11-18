@@ -10,11 +10,13 @@ import { filesText } from "../../model/inbox/own-tree.ts";
 import { askedOf, checkedOf, issueName } from "../../model/inbox/wake-text.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
 import type { Handed } from "../../model/issue/status.ts";
+import type { MemoryFile } from "../../model/memory-file.ts";
 import { intervalText, type Reminder } from "../../model/reminder.ts";
 import type { Check, CheckId } from "../../model/verdict/check.ts";
 import { checkoutText, NOT_CLEAN } from "../../model/verdict/checkout.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
 import { allPassed, ciVerdictOf, failedCheckout, judge, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
+import { reportFileOf } from "../memory/report-file.ts";
 
 /** What the texts look up, all within one regional manager. */
 export type Lookups = {
@@ -39,7 +41,7 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
   if (event.kind === "memory-edited") return `### The user edited ${event.file}\n\n${when} Its current text is in the memory below, or read it with crew_memory_read.`;
   if (event.kind === "verification-toggled") {
     return event.verify
-      ? `### The user turned verification on\n\n${when} Done handoffs made from now on get an independent verifier, and reach you with its verdict.`
+      ? `### The user turned verification on\n\n${when} Build issues' done handoffs made from now on get an independent verifier, and reach you with its verdict. A research issue's is never verified.`
       : `### The user turned verification off\n\n${when} Done handoffs made from now on reach you unverified: read their evidence before you call the work done.`;
   }
   if (event.kind === "reminder") {
@@ -130,10 +132,11 @@ const MOVE_TO_AN_AGENT =
 const FAILED_IS_YOURS =
   "It failed verification and is yours to decide: message the agent with agent_message, stop it with agent_stop and start a fresh agent on the issue with agent_start, or ask the user.";
 
-/** A handoff whole: its status, summary, commit and pull request, every item of every list, then a done one's verdict. */
+/** A handoff whole: its status, summary, and commit and pull request, every item of every list, then a done one's report or verdict. */
 export function handoffText({ handoff, check }: Handed, lookups: Pick<Lookups, "agent">): string {
   const head = [`Status: ${handoff.status}`, `Summary: ${handoff.summary}`];
-  if (handoff.status === "done") head.push(`Commit: ${handoff.delivery.headSha}`, `Pull request: ${handoff.delivery.prUrl ?? "none"}`);
+  const delivery = handoff.status === "done" ? handoff.delivery : null;
+  if (delivery?.kind === "commit") head.push(`Commit: ${delivery.headSha}`, `Pull request: ${delivery.prUrl ?? "none"}`);
   const lists = (
     [
       ["Did", handoff.did],
@@ -144,8 +147,16 @@ export function handoffText({ handoff, check }: Handed, lookups: Pick<Lookups, "
     ] as const
   ).map(([name, items]) => `#### ${name}\n\n${items.length === 0 ? "None." : items.map((item) => `- ${item.replaceAll("\n", "\n  ")}`).join("\n")}`);
   const report = [head.join("\n"), ...lists];
+  if (delivery?.kind === "report") report.push(`#### Report\n\n${reportFileText(handoff.issueId, delivery.file)}\n\n${delivery.report}`);
   if (check !== null) report.push(`#### Verdict\n\n${verdictText(check, lookups.agent(check.subject.agentId))}`);
   return report.join("\n\n");
+}
+
+/** Where a report was saved, and that handing it on is the regional manager's. */
+function reportFileText(issueId: IssueId, file: MemoryFile): string {
+  const home = reportFileOf(issueId);
+  const kept = file === home ? "" : ` ${home} is not as the plugin last saved it there (someone edited or wrote it), so it is kept as it is.`;
+  return `Saved in your memory as ${file}.${kept} The plugin gives it to no agent: name the file in the brief of an agent that needs it, which reads it with crew_memory_read.`;
 }
 
 /** A pull request as the plugin read it from GitHub. Check names are GitHub's, as the repository's CI names them. */

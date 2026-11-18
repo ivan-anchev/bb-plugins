@@ -503,7 +503,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   function wire() {
     const spawner = createSpawner(bb, store, memory, () => bindings++);
     const board = createBoard(bb, store, memory);
-    const inbox = createInbox({ bb, store, onChange: refreshBoard });
+    const inbox = createInbox({ bb, store, memory, onChange: refreshBoard });
     const agents = createAgents({ bb, store, spawner, inbox, memory, placementFacts: placementFactsReader(bb, store), onChange: refreshBoard, onRemoved: refreshCoordinators });
     const issues = createIssues({ bb, store, onChange: refreshBoard });
     const verify = createVerify({ bb, store, spawner, inbox });

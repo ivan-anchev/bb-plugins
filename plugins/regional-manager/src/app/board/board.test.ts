@@ -8,6 +8,7 @@ import { coordinatorContract, type Board as BoardData, type IssueDetail, type Is
 import { agentIdSchema } from "../../model/agent.ts";
 import { decisionIdSchema, type Decision } from "../../model/decision.ts";
 import { handoffIdSchema } from "../../model/handoff.ts";
+import { memoryFileSchema } from "../../model/memory-file.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
 
@@ -71,6 +72,7 @@ const DETAIL: IssueDetail = {
           concerns: [],
           deviations: [],
           findings: [],
+          report: null,
           verdict: {
             state: "returned",
             verifierThreadId: "thr_verifier",
@@ -90,6 +92,34 @@ const DETAIL: IssueDetail = {
   ],
 };
 
+const REPORT = "## Recommendation\n\nVault: it keeps card data **inside** our PCI scope.";
+
+/** A research issue opened on the board, asked `questions`, whose agent handed off a report. */
+const researched = (questions: string[]): IssueDetail => ({
+  description: "Which vault fits our PCI scope.",
+  doneCriteria: questions,
+  record: [
+    {
+      agent: { id: agentIdSchema.parse("a2"), threadId: "thr_a2", ended: null },
+      handoffs: [
+        {
+          id: handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e"),
+          at: 3_000,
+          status: "done",
+          summary: "Vault fits our PCI scope",
+          did: ["Read both vendors' PCI guides"],
+          evidence: [],
+          concerns: [],
+          deviations: [],
+          findings: [],
+          report: { report: REPORT, file: memoryFileSchema.parse("reports/i2.md") },
+          verdict: null,
+        },
+      ],
+    },
+  ],
+});
+
 afterEach(() => {
   cleanup();
   localStorage.clear();
@@ -102,7 +132,7 @@ type Read = Pick<BoardData, "decisions" | "issues">;
  * of its rows, once drawn; `reread`, the board reading `next` as it does when the plugin changes it.
  * `answer`: what the plugin does with an answer sent; it stores it unless it throws.
  */
-async function mount(data: Read, answer: (input: unknown) => void = () => {}) {
+async function mount(data: Read, answer: (input: unknown) => void = () => {}, detail: IssueDetail = DETAIL) {
   const opened: unknown[] = [];
   let current = data;
   let served: Read | null = null;
@@ -120,7 +150,7 @@ async function mount(data: Read, answer: (input: unknown) => void = () => {}) {
       },
       issue: (input: unknown) => {
         opened.push(input);
-        return DETAIL;
+        return detail;
       },
     },
   });
@@ -188,6 +218,35 @@ test("a row opens in place to the issue read from the plugin, and only then: its
 
   fireEvent.click(row);
   assert.equal(view.queryByRole("region", { name: "i1" }), null);
+});
+
+test("a research row reads Research with no pull request, and opens to its Questions and its report as Markdown, with the file it is saved in and no verdict", async () => {
+  const research = issue("i2", { kind: "research", status: "done", headline: "Handed off: Vault fits our PCI scope", agent: agent("a2") });
+  const { view } = await mount({ decisions: [], issues: [research] }, undefined, researched(["Which one fits our PCI scope, and why?"]));
+  fireEvent.click(view.getByRole("button", { name: /^Done/ }));
+  const row = view.getByRole("button", { name: /\bi2 Research: Title of i2/ });
+  assert.equal(view.queryByRole("link", { name: /^Pull request/ }), null);
+
+  fireEvent.click(row);
+  const detail = within(view.getByRole("region", { name: "i2" }));
+  await detail.findByText("Questions");
+  assert.equal(detail.queryByText("Done when"), null);
+  const report = detail.getByRole("region", { name: "Report reports/i2.md" });
+  assert.equal(report.tabIndex, 0, "the keyboard reaches the report to scroll it");
+  // why its source: the SDK's test kit stands in for bb's Markdown with the text it is given; bb renders it.
+  assert.equal(within(report).getByTestId("bb-markdown").textContent, REPORT, "the report goes whole to bb's Markdown");
+  assert.equal(detail.queryByText(/criteri(on|a) passed|Waiting for a verifier|Being verified|Not verified/), null);
+  assert.equal(detail.queryByRole("button", { name: /Verifier/ }), null);
+});
+
+test("a research issue asked no questions opens to no Questions section", async () => {
+  const research = issue("i2", { kind: "research", status: "in-progress", headline: "Working", agent: agent("a2") });
+  const { view } = await mount({ decisions: [], issues: [research] }, undefined, researched([]));
+  fireEvent.click(view.getByRole("button", { name: /\bi2 Research/ }));
+  const detail = within(view.getByRole("region", { name: "i2" }));
+  await detail.findByText("Which vault fits our PCI scope.");
+  assert.equal(detail.queryByText("Questions"), null);
+  assert.ok(detail.getByRole("region", { name: "Report reports/i2.md" }));
 });
 
 test("a board with no issues says so", async () => {

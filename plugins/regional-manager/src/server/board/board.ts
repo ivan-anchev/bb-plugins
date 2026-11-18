@@ -3,6 +3,7 @@
 // only say when to read again.
 import type { Board, IssueDetail, IssueRow } from "../../contract.ts";
 import type { Agent } from "../../model/agent.ts";
+import type { HandoffReport } from "../../model/handoff.ts";
 import { needsYou, type NeedsYou } from "../../model/board/board-groups.ts";
 import { warnedFileCount } from "../../model/inbox/own-tree.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
@@ -41,19 +42,27 @@ const heldBy = ({ id, threadId, ended }: Agent, threads: ReadonlyMap<string, { i
   return { id, threadId: thread === undefined || thread.deletedAt !== null ? null : thread.id, ended: ended?.how ?? null };
 };
 
-/** A handoff in an issue's record, with the verdict on it as the user is shown it. */
-const shownHanded = ({ handoff: { id, at, status, summary, did, evidence, concerns, deviations, findings }, check }: Handed): IssueDetail["record"][number]["handoffs"][number] => ({
-  id,
-  at,
-  status,
-  summary,
-  did,
-  evidence,
-  concerns,
-  deviations,
-  findings,
-  verdict: check === null ? null : shownVerdict(check.verdict),
-});
+type ShownHanded = IssueDetail["record"][number]["handoffs"][number];
+
+/** A handoff in an issue's record, with the report it delivered and the verdict on it as the user is shown them. */
+const shownHanded = ({ handoff, check }: Handed): ShownHanded => {
+  const { id, at, status, summary, did, evidence, concerns, deviations, findings } = handoff;
+  return { id, at, status, summary, did, evidence, concerns, deviations, findings, report: reportIn(handoff), verdict: check === null ? null : shownVerdict(check.verdict) };
+};
+
+/** The report a done handoff delivered, and the file it was saved to; null for any other handoff. */
+function reportIn(handoff: HandoffReport): ShownHanded["report"] {
+  if (handoff.status !== "done") return null;
+  const { delivery } = handoff;
+  switch (delivery.kind) {
+    case "commit":
+      return null;
+    case "report":
+      return { report: delivery.report, file: delivery.file };
+    default:
+      return delivery satisfies never;
+  }
+}
 
 export function createBoard(bb: FactsBb, store: BoardStore, memory: MemoryRoot) {
   /** Why the latest read of an open issue's pull request failed, the first one's; null when none did. */

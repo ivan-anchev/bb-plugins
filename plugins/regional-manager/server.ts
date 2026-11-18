@@ -34,7 +34,7 @@ export default function plugin(bb: BbPluginApi): void {
   const refreshCoordinators = () => bb.rpc.experimental_invalidate([COORDINATORS_TAG]);
   const spawner = createSpawner(bb, store, memory, (role: Role) => (role.kind === "coordinator" ? refreshCoordinators() : refreshBoard(role.coordinatorId)));
   const board = createBoard(bb, store, memory);
-  const inbox = createInbox({ bb, store, onChange: refreshBoard });
+  const inbox = createInbox({ bb, store, memory, onChange: refreshBoard });
   const agents = createAgents({ bb, store, spawner, inbox, memory, placementFacts: placementFactsReader(bb, store), onChange: refreshBoard, onRemoved: refreshCoordinators });
   const issues = createIssues({ bb, store, onChange: refreshBoard });
   const verify = createVerify({ bb, store, spawner, inbox });

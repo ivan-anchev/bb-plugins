@@ -1,5 +1,8 @@
 // An issue's record: each agent that held it, oldest first, how it ended, and its handoffs. A
-// handoff opens to the verdict on it, then what the agent reported; the latest is open.
+// handoff opens to the report it delivered or the verdict on it, then what the agent reported; the
+// latest is open.
+import { Markdown } from "@get-bb/plugin-sdk/app";
+import { useId } from "react";
 import type { IssueDetail } from "../../../../contract.ts";
 import type { EndedHow } from "../../../../model/agent.ts";
 import type { HandoffReport } from "../../../../model/handoff.ts";
@@ -54,6 +57,7 @@ function Handoff({ handoff, open }: { handoff: HandedOff; open: boolean }) {
         <time dateTime={new Date(handoff.at).toISOString()}>{shortTime(handoff.at)}</time>
       </summary>
       <div className="rmi-handoff-body">
+        {handoff.report !== null && <Report {...handoff.report} />}
         {handoff.verdict !== null && <CheckVerdict verdict={handoff.verdict} />}
         {reported.map(({ title, items, code }) => (
           <section key={title} className="rmi-reported">
@@ -67,6 +71,25 @@ function Handoff({ handoff, open }: { handoff: HandedOff; open: boolean }) {
         ))}
       </div>
     </details>
+  );
+}
+
+/**
+ * A research handoff's report, as the Markdown it is, and the memory file it was saved to, where the
+ * user reads and edits it in the Memory editor. why a box that scrolls: a report runs to 20,000
+ * characters, and the board stays the board; the tab stop lets the keyboard scroll it (REVIEW.md).
+ */
+function Report({ report, file }: NonNullable<HandedOff["report"]>) {
+  const headId = useId();
+  return (
+    <section className="rmi-reported">
+      <h4 id={headId} className="rmi-report-head">
+        Report <span className="rmi-report-file">{file}</span>
+      </h4>
+      <div tabIndex={0} role="region" aria-labelledby={headId} className="rmi-report">
+        <Markdown content={report} />
+      </div>
+    </section>
   );
 }
 

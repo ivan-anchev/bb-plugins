@@ -11,7 +11,7 @@
 // the editor can tell which of two sightings is the later. A file edited on disk gets its next
 // revision when it is next read.
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { memoryFileSchema, type MemoryFile, type MemorySnapshot, type MemoryVersion, type WriteOutcome } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
@@ -62,10 +62,19 @@ export function openMemoryRoot(databasePath: string, revisions: Pick<Store, "mem
         return { outcome: "saved", version, revision };
       }
 
+      /** Deletes the file if it is still `baseVersion`; otherwise leaves it as it is. */
+      function remove(file: MemoryFile, baseVersion: string): void {
+        if (read(file).text?.version !== baseVersion) return;
+        rmSync(pathOf(file));
+        revisions.memoryRevision(id, file, null);
+        onWritten(id);
+      }
+
       return {
         dir,
         read,
         write,
+        remove,
 
         /** When the file last changed on disk, in epoch ms; null when there is no such file. */
         modifiedAt: (file: MemoryFile): number | null => statSync(pathOf(file), { throwIfNoEntry: false })?.mtimeMs ?? null,

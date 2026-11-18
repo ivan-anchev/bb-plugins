@@ -33,10 +33,10 @@ test("issue_create files a build issue in Todo, or in Backlog, numbered per regi
   assert.equal(textOf(await kit.call("issue_create", ISSUE, other.threadId)), "Filed i1 (build) in Todo.");
 });
 
-test("issue_create rejects a missing kind, a blank or a thirteenth criterion, or a field it doesn't take, and files nothing", async () => {
+test("issue_create rejects a missing or unknown kind, a blank or a thirteenth criterion, or a field it doesn't take, and files nothing", async () => {
   const { kit, coordinatorId, call } = await managing();
   const { kind: _, ...kindless } = ISSUE;
-  for (const input of [kindless, { ...ISSUE, kind: "research" }, { ...ISSUE, doneCriteria: [" "] }, { ...ISSUE, doneCriteria: Array.from({ length: 13 }, (_, i) => `criterion ${i}`) }, { ...ISSUE, draft: true }]) {
+  for (const input of [kindless, { ...ISSUE, kind: "chore" }, { ...ISSUE, doneCriteria: [" "] }, { ...ISSUE, doneCriteria: Array.from({ length: 13 }, (_, i) => `criterion ${i}`) }, { ...ISSUE, draft: true }]) {
     await assert.rejects(call("issue_create", input));
   }
   assert.deepEqual(kit.store.issues(coordinatorId), []);

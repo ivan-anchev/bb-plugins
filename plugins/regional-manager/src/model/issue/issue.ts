@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { Execution } from "../execution.ts";
 import { ONE_LINE } from "../one-line.ts";
 import type { CoordinatorId } from "../role.ts";
-import { minCriteria, type Kind } from "./kind.ts";
+import { isVerified, minCriteria, PIPELINES, type Kind } from "./kind.ts";
 
 /** An issue's id within its regional manager: `i1`, `i2`… never reused. */
 export const issueIdSchema = z.string().regex(/^i[1-9][0-9]*$/, "An issue id is i1, i2 and so on").brand<"issueId">();
@@ -63,4 +63,15 @@ export function briefToStart(issue: Pick<Issue, "id" | "kind" | "brief" | "doneC
   const fewest = minCriteria(issue.kind);
   if (issue.doneCriteria.length < fewest) return { refused: `${issue.id} needs done-criteria (at least ${fewest}) before an agent starts. Add doneCriteria with issue_update.` };
   return { brief: issue.brief };
+}
+
+/**
+ * Why an issue of `kind` can't have a verifier named, or null when it can. why one rule, read on
+ * the plan as it would be: filing a research issue with a verifier, naming one on a research issue,
+ * and making an issue that names one research would each leave a verifier that never runs.
+ */
+export function verifierProblem(kind: Kind, namesVerifier: boolean): string | null {
+  if (!namesVerifier || isVerified(kind)) return null;
+  const label = PIPELINES[kind].label.toLowerCase();
+  return `a ${label} issue has no verifier: nothing verifies it`;
 }

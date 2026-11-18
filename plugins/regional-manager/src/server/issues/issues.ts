@@ -5,7 +5,7 @@
 import type { z } from "zod";
 import type { Agent } from "../../model/agent.ts";
 import { sameModel, type Execution, type RequestedExecution } from "../../model/execution.ts";
-import type { Issue, managerStatusSchema } from "../../model/issue/issue.ts";
+import { verifierProblem, type Issue, type managerStatusSchema } from "../../model/issue/issue.ts";
 import { STATUS_LABELS } from "../../model/issue/status.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { executionText } from "../agents/agents.ts";
@@ -29,7 +29,7 @@ type Deps = {
 type IssueRequest = Omit<NewIssue, "verifier"> & { verifier?: RequestedExecution };
 
 /** What issue_update changes; a field left out stays. `verifier: null` gives the choice back to the plugin. */
-type IssueChange = Partial<Pick<Issue, "title" | "description" | "doneCriteria">> & {
+type IssueChange = Partial<Pick<Issue, "kind" | "title" | "description" | "doneCriteria">> & {
   brief?: string;
   verifier?: RequestedExecution | null;
   status?: z.infer<typeof managerStatusSchema>;
@@ -67,8 +67,10 @@ export function createIssues({ bb, store, onChange }: Deps) {
   }
 
   return {
-    /** Files an issue, numbered after the regional manager's highest; refused when bb can't run the verifier named. */
+    /** Files an issue, numbered after the regional manager's highest; refused when its kind has no verifier or bb can't run the one named. */
     async create(coordinatorId: CoordinatorId, { verifier: requested, ...plan }: IssueRequest): Promise<Issue | Refused> {
+      const problem = verifierProblem(plan.kind, requested !== undefined);
+      if (problem !== null) return { refused: `No issue filed: ${problem}. Leave verifier out.` };
       const verifier = requested === undefined ? null : await verifierOf(requested);
       if (verifier !== null && "refused" in verifier) return { refused: `No issue filed. ${verifier.refused}` };
       const issue = store.insertIssue(coordinatorId, { ...plan, verifier }, Date.now());

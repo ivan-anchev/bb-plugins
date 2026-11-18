@@ -3,7 +3,7 @@
 // the user at them.
 import { byLane, LANE_LABELS, laneOf } from "../../model/board/board-groups.ts";
 import type { Issue } from "../../model/issue/issue.ts";
-import { PIPELINES } from "../../model/issue/kind.ts";
+import { isVerified, PIPELINES } from "../../model/issue/kind.ts";
 import { STATUS_LABELS, type Handed } from "../../model/issue/status.ts";
 import type { Agent } from "../../model/agent.ts";
 import { executionText, type StartOutcome, type StopOutcome } from "../agents/agents.ts";
@@ -61,9 +61,11 @@ export function stopText(agent: Agent, outcome: StopOutcome): string {
   }
 }
 
-/** What a verifier named on an issue applies to. */
-export const verifierText = (issue: Issue): string =>
-  issue.verifier === null ? `${issue.id}'s verifier is the plugin's pick again.` : `${issue.id}'s done handoffs are checked on ${executionText(issue.verifier)}, from its next handoff on; a check already running keeps its own.`;
+/** What a verifier named on an issue applies to: nothing on a kind nothing verifies. */
+export function verifierText(issue: Issue): string {
+  if (!isVerified(issue.kind)) return `${issue.id} has no verifier: nothing verifies a ${PIPELINES[issue.kind].label.toLowerCase()} issue.`;
+  return issue.verifier === null ? `${issue.id}'s verifier is the plugin's pick again.` : `${issue.id}'s done handoffs are checked on ${executionText(issue.verifier)}, from its next handoff on; a check already running keeps its own.`;
+}
 
 /**
  * An issue whole: its status and why, its plan, the verifier named, each agent with what it runs
@@ -82,12 +84,25 @@ export function issueText({ view, threadId, branch }: IssueRead, agents: readonl
     `${PIPELINES[issue.kind].label}. ${sentence(`${STATUS_LABELS[view.status]}: ${view.headline}`)}${view.needsYou === null ? "" : " Needs you."} Thread: ${threadLink(threadId)}${branch === null ? "" : `, branch \`${branch}\``}.`,
     `### What it is about\n\n${issue.description.trim()}`,
     `### Brief\n\n${issue.brief?.trim() ?? "None yet."}`,
-    `### Done when\n\n${issue.doneCriteria.length === 0 ? "No criteria yet." : issue.doneCriteria.map((criterion, i) => `${i + 1}. ${criterion}`).join("\n")}`,
-    `### Verifier\n\n${issue.verifier === null ? "None named: the plugin picks one independent of its agent." : `Named: ${executionText(issue.verifier)}.`}`,
+    criteriaText(issue),
+    `### Verifier\n\n${verifierLine(issue)}`,
     `### Agents\n\n${agents.length === 0 ? "None started." : agents.map((agent) => agentLine(agent, threadId)).join("\n")}`,
     `### Its record\n\n${record.length === 0 ? "No handoff yet." : record.map((handed) => `#### ${handed.handoff.agentId}'s handoff\n\n${handoffText(handed, lookups)}`).join("\n\n")}`,
     `### Its agent's latest answer\n\n${answer}`,
   ].join("\n\n");
+}
+
+/** The criteria under their heading: a verified kind's are done-criteria, any other's the questions its report answers. */
+function criteriaText({ kind, doneCriteria }: Issue): string {
+  const verified = isVerified(kind);
+  const numbered = doneCriteria.map((criterion, i) => `${i + 1}. ${criterion}`).join("\n");
+  return `### ${verified ? "Done when" : "Questions"}\n\n${doneCriteria.length > 0 ? numbered : verified ? "No criteria yet." : "None."}`;
+}
+
+/** Who checks its done handoffs. */
+function verifierLine({ kind, verifier }: Issue): string {
+  if (!isVerified(kind)) return `None: nothing verifies a ${PIPELINES[kind].label.toLowerCase()} issue.`;
+  return verifier === null ? "None named: the plugin picks one independent of its agent." : `Named: ${executionText(verifier)}.`;
 }
 
 /** The text as a sentence: with a full stop, unless an agent's summary ending it already has one. */

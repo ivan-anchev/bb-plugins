@@ -1,6 +1,6 @@
 ---
 name: crew-board
-description: Explain the Regional Manager plugin (bb-plugin-regional-manager). Its rail panel starts long-lived regional managers that keep memory in markdown files, plan the work as issues, start an agent (a child thread) on each issue, set reminders and ask the user for decisions on a board; all of one manager's agents are its crew. An agent ends with a handoff; a done one is checked by a hidden verifier unless switched off, and a first failed verdict goes back to the agent. PRs and CI are watched through gh. The Board lists issues by their seven statuses, with Needs you first. Use when the user asks how to start a regional manager or an agent, what an issue's status or a verdict means, how verification or CI checks work, what an agent or verifier runs on, why PR status is unavailable, why an agent got findings or an issue returned to Todo, what an update is, why the thread woke or the board warns of edits, how reminders or decisions work, where memory lives, or which thread has which tools.
+description: Explain the Regional Manager plugin (bb-plugin-regional-manager). Its panel starts long-lived regional managers that keep memory in markdown files, plan the work as build or research issues, start an agent (a child thread) on each, set reminders and ask the user on a board; all of one manager's agents are its crew. An agent ends with a handoff; a build issue's done one is checked by a hidden verifier unless switched off, and a first failed verdict goes back to the agent; a research issue's carries a report saved to memory. PRs and CI are watched through gh. The Board lists issues by status, Needs you first. Use when the user asks how to start a regional manager or an agent, what an issue's kind, status or a verdict means, how verification or CI checks work, what an agent or verifier runs on, why PR status is unavailable, why an agent got findings or an issue returned to Todo, why the thread woke or the board warns of edits, how reminders or decisions work, where memory lives, or which thread has which tools.
 ---
 
 # Regional managers
@@ -21,7 +21,8 @@ and no plugin settings. Its one setting belongs to each regional manager: the
    running bb, and **auto** permissions. Change any picker as with any new
    thread.
 4. Leave **Verify done handoffs** on (below the composer) to have every done
-   handoff checked before the thread hears of it, or turn it off.
+   handoff of build work checked before the thread hears of it, or turn it
+   off.
 5. Type the goal and submit. The new thread opens.
 
 The panel lists every regional manager bb still lists, under its project,
@@ -43,17 +44,17 @@ and no tool can turn verification on or off.
 | `crew_remind` | regional manager | Sets a reminder (`note`, `at`, optional `every`) or cancels one (`cancel`). |
 | `crew_ask_user` | regional manager | Puts a one-line question, with up to five options, on its board, optionally naming the issue it is about. |
 | `issue_create` | regional manager | Files an issue: `kind`, `title`, `description`, and optionally `brief`, `doneCriteria`, `status` (todo or backlog) and `verifier`. |
-| `issue_update` | regional manager | Changes an issue's title, description, brief, done-criteria or verifier, or rests, cancels or accepts it with `status`. |
+| `issue_update` | regional manager | Changes an issue's kind (until an agent has started on it), title, description, brief, done-criteria or verifier, or rests, cancels or accepts it with `status`. |
 | `issue_read` | regional manager | Returns one issue whole: status, plan, verifier, its agents and what they ran on, every handoff with its verdict, and its agent's latest answer. |
 | `agent_start` | regional manager | Starts an agent on an issue, optionally naming its `execution` and `placement`. |
 | `agent_message` | regional manager | Messages one agent, marked as from the regional manager. |
 | `agent_stop` | regional manager | Stops one agent, and archives its thread with `archive: true`. |
-| `agent_handoff` | agent | Ends the agent's work: done (with its commit), blocked or gave up, with a summary and its lists. |
+| `agent_handoff` | agent | Ends the agent's work: done (a build issue's with its commit, a research issue's with its report), blocked or gave up, with a summary and its lists. |
 | `issue_verdict` | verifier | Returns each criterion's result and evidence, and findings, for the handoff it checks. |
 
 The regional manager also gets its rules (call `crew_catch_up` first every
-turn, never edit project files, build or commit itself, delegate with
-checkable done-criteria) and the `regional-manager` skill, its playbook. An
+turn, never edit project files, build or commit itself, delegate with a
+brief and done-criteria) and the `regional-manager` skill, its playbook. An
 agent gets the `agent-work` skill and a verifier the `verifying` skill. A
 memory file name that leaves the memory folder or doesn't end in `.md` is
 rejected.
@@ -62,20 +63,30 @@ rejected.
 
 An issue is one piece of the work, filed with `issue_create` and numbered
 `i1`, `i2`… within its regional manager (an id is never reused). It has a
-kind (only `build` today: code on its own branch, checked by a verifier), a
-title, a description for you, and before an agent can start, a brief and 1 to
-12 done-criteria, each checkable by running something.
+kind, a title, a description for you, and before an agent can start, a brief
+and its done-criteria. The kind is one of two, and can change only until an
+agent has started on the issue:
+
+- **Build**: code on its own branch, checked by a verifier against 1 to 12
+  done-criteria, each checkable by running something.
+- **Research**: a probe, spike, investigation or design whose result is a
+  report. Its done-criteria, 0 to 12, are the questions the report answers,
+  and nobody judges them. Nothing verifies it: naming a verifier on a research
+  issue is refused, and so is making an issue that names one research. Its
+  agent's done handoff carries the report and names no commit, and the
+  plugin saves the report in the manager's memory (see
+  [Research reports](#research-reports)).
 
 An issue's status is derived from what its agents did, never stored:
 
 | Status | When |
 | --- | --- |
 | Backlog | No agent holds it, and the manager rested it here: not planned yet. |
-| Todo | No agent holds it, ready to start. A new issue rests here, and returns here when its agent ends before its work reached Verifying. |
+| Todo | No agent holds it, ready to start. A new issue rests here, and returns here when its agent ends before its work reached Verifying (on a research issue, Done). |
 | In progress | An agent holds it: working, starting, idle without a handoff, fixing its verifier's findings, blocked, gave up, or its last turn failed. |
-| Verifying | Its agent handed off done, and the verifier checks it, or every criterion passed and it waits for CI. |
-| In review | Its done handoff passed ("✓ Verified"), or was made with verification off ("Unverified"). |
-| Done | Its pull request merged ("Merged #41"), or the manager accepted it. Final. |
+| Verifying | A build issue: its agent handed off done, and the verifier checks it, or every criterion passed and it waits for CI. |
+| In review | A build issue: its done handoff passed ("✓ Verified"), or was made with verification off ("Unverified"). |
+| Done | A build issue: its pull request merged ("Merged #41"), or the manager accepted it; final. A research issue: its agent handed off done ("Handed off: <summary>"); a message to that agent makes it In progress again until its next handoff. |
 | Canceled | The manager canceled it. |
 
 **Needs you** is a flag on an open issue, shown above every status: its agent
@@ -91,7 +102,8 @@ with `agent_start`), or one of the manager's open decisions names it.
 The manager sets a status in only four ways, with `issue_update`: `backlog`
 or `todo` rests an issue no agent holds (and reopens a canceled one),
 `canceled` closes one no agent holds, and `done` accepts one In review, even
-while its agent still holds it. Any other change, or `backlog`, `todo` or
+while its agent still holds it (a research issue is never In review, so never
+accepted: its done handoff makes it Done). Any other change, or `backlog`, `todo` or
 `canceled` while an agent holds the issue, is refused naming why.
 
 ## Agents
@@ -106,10 +118,13 @@ starts it with `agent_start`:
   [Agents in a sandbox](#agents-in-a-sandbox)). It runs with auto permissions.
 - **What it runs on**: see [Who runs what](#who-runs-what).
 - **Its first message**: the issue's description, brief and numbered
-  done-criteria, and `CREW.md` and `MEMORY.md` as they were at that moment,
-  their `#` headings outside code set under the message's own. Put rules
-  every agent follows in `CREW.md`: the agent is told its work is its brief
-  and done-criteria, and the other memory files are its regional manager's
+  done-criteria (a research agent's under "Questions your report answers",
+  followed by how to hand off its report, and no section when it has none),
+  and `CREW.md` and `MEMORY.md` as they were at that moment, each file's
+  `#` title on its first non-blank line set under the message's own section, and
+  nothing after it changed. Put rules every agent
+  follows in `CREW.md`: the agent is told its work is its brief and
+  done-criteria, and the other memory files are its regional manager's
   context, not its instructions.
 - **Its id**: `a1`, `a2`… within its regional manager, never reused. Its
   thread is titled with the issue's title and sits under the regional
@@ -117,8 +132,8 @@ starts it with `agent_start`:
 - **What it gets**: its rules, the `agent-work` skill, `crew_memory_read` and
   `agent_handoff`. It can't write memory or start agents.
 
-`agent_start` is refused, and nothing starts, when the issue has no brief or
-no done-criteria, another agent holds it, it is canceled, accepted or Done,
+`agent_start` is refused, and nothing starts, when the issue has no brief, or
+is a build issue with no done-criteria, another agent holds it, it is canceled, accepted or Done,
 or what it would run on or where can't be had.
 
 The regional manager messages an agent with `agent_message` (it arrives
@@ -180,7 +195,7 @@ branch for the project.
   refused. The start's result says which, and `issue_read` lists each agent
   with what it ran on, as recorded at its latest handoff (so a model you
   switch in the agent's composer counts from its next handoff).
-- **A verifier** runs on the issue's `verifier`, named on `issue_create` or
+- **A verifier** runs on a build issue's `verifier`, named on `issue_create` or
   `issue_update`, when bb can run it in the agent's environment and it isn't
   the agent's model. Otherwise, or with none named, the plugin picks: the
   regional manager's model, if the agent runs on another; else the default
@@ -214,8 +229,9 @@ you asked.
 bb's own report to the parent is off for agents. Instead, an agent ends its
 work with `agent_handoff`, and the plugin records everything it sees:
 
-- **A handoff**: `done` (with the commit, required, and a pull request link
-  if there is one), `blocked` or `gave-up`; a one-line summary (up to 120
+- **A handoff**: `done` (a build issue's with the commit, required, and a
+  pull request link if there is one; a research issue's with its report,
+  required, up to 20,000 characters, and no commit), `blocked` or `gave-up`; a one-line summary (up to 120
   characters); and what it did, its evidence, concerns, deviations and
   findings (up to 50 items each, each up to 2,000 characters). It is stored
   whole.
@@ -237,8 +253,11 @@ work with `agent_handoff`, and the plugin records everything it sees:
   [Edits it makes itself](#edits-it-makes-itself)), or with the tree clean
   again after that.
 
-A `done` handoff is announced only together with its verdict (see
-[Verification](#verification)); everything else at once.
+A build issue's `done` handoff is announced only together with its verdict
+(see [Verification](#verification)); everything else at once, a research
+issue's done handoff included, as `- i2 "Pick a card vault" (a2) handed off:
+done`. `crew_catch_up` then prints its report whole with the file it was
+saved to.
 
 Each one wakes the regional manager with one short message: the plugin's
 name in brackets, how many updates there are, and one line each, naming the
@@ -271,7 +290,9 @@ it out of the queue and sends what it announced again.
 
 ## Verification
 
-Every `done` handoff claims an exact commit. While a regional manager's
+Every `done` handoff of a build issue claims an exact commit. A research
+issue's names none and is never verified: no verifier starts, and the plugin
+reads nothing of the agent's environment. While a regional manager's
 **Verify done handoffs** switch is on (the default), the plugin itself starts
 a **verifier** for each one:
 
@@ -359,7 +380,9 @@ regional manager:
 bb tells plugins nothing about pull requests, so the plugin reads them itself,
 with `gh` on the machine running bb, on the same once-a-minute tick:
 
-- **What**: each open issue's newest pull request from its branch: the branch
+- **What**: each open build issue's newest pull request from its branch (a
+  research issue's branch is never read, so a pull request there changes
+  nothing): the branch
   of its latest agent that has one, as that agent had it checked out at its
   latest handoff (read once through bb's git plugin as it hands off), else the
   one bb made its environment on. It is read whether or not that agent's
@@ -522,13 +545,19 @@ page from its row in the panel, show the same board, live:
   "Verifying: <summary>", "✓ Verified: <summary>" or "Blocked: <summary>"),
   its agent, which opens the agent's thread, and once it has one, its pull
   request: its number in its state's colour, with a dot for its CI, which
-  opens it on GitHub.
+  opens it on GitHub. A research issue's row reads "Research" and never has
+  a pull request.
 
 Pressing an issue opens it in place: its row grows to show its title and
 headline whole, which a closed row fades out at its edge, and under it come
-what it is about, **Done when** with its criteria, and its **Record**: each agent that held it, how it
-ended, and each handoff it made, the latest one open. A handoff shows the
-verdict on it first: how many criteria passed, a link to the verifier thread,
+what it is about, **Done when** with its criteria (a research issue's
+**Questions**, and nothing when it has none), and its **Record**: each
+agent that held it, how it ended, and each handoff it made, the latest one
+open. A research issue's done handoff shows its **Report** first, as the
+Markdown it is, beside the memory file it was saved to (such as
+`reports/i2.md`): a long report scrolls in its own box, and the file holds
+it whole in the Memory editor. Nothing verifies it, so it has no verdict.
+A build issue's handoff shows the verdict on it first: how many criteria passed, a link to the verifier thread,
 and the commit checked; the plugin's own read when that commit wasn't checked
 out on a clean tree; what CI said about that commit when it failed, couldn't
 be checked or is still to come; then each criterion with Pass, Fail or
@@ -559,6 +588,26 @@ server log names the parent folder when the plugin loads. It starts with:
 - `DIGEST.md`: the latest summary for the user.
 
 The thread may add others, such as `notes/api.md`.
+
+## Research reports
+
+When a research issue's agent hands off done, the plugin saves its report to
+`reports/<issue id>.md` in the manager's memory folder, as it stores the
+handoff. The handoff keeps the report as the agent wrote it; the file is the
+manager's copy. You can read and edit it in the Memory editor, and any agent
+reads it with `crew_memory_read`. The plugin gives it to no agent: the
+manager hands it on by naming the file in the brief of an agent that needs
+it, and an agent started without that sees none of it. The plugin never
+edits `MEMORY.md`.
+
+A later report on the same issue (after the manager messaged its agent)
+replaces `reports/<issue id>.md` only while that file is gone or still
+exactly as the plugin last saved it. If you or the manager edited it, or
+someone wrote it before the plugin saved anything there, it stays as it is,
+and the new report goes beside it, as `reports/<issue id>-2.md`, then
+`-3.md` and so on. `crew_catch_up` names the file each report went to and
+says why when it isn't `reports/<issue id>.md`. Nothing anyone wrote is
+replaced, and the handoff never fails over it.
 
 ## Read and edit memory
 
@@ -611,5 +660,4 @@ and the Memory page read the new text on their next read.
   committed one isn't seen, and nothing is blocked or reverted.
 - Reminders take no cron expressions and nothing finer than a minute.
 - The plugin never merges, approves or comments on a pull request.
-- Only build issues exist: one agent per issue at a time, verified against its
-  done-criteria.
+- An issue has one agent at a time.

@@ -5,7 +5,7 @@
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
 import type { Agent, AgentId, EndedHow } from "../../model/agent.ts";
 import type { DecisionId } from "../../model/decision.ts";
-import type { Handoff, HandoffId } from "../../model/handoff.ts";
+import type { GivenHandoff, Handoff, HandoffId } from "../../model/handoff.ts";
 import { wakes, type InboxEvent, type StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { doorbellText } from "../../model/inbox/wake-text.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
@@ -15,6 +15,8 @@ import type { CheckoutRead } from "../../model/verdict/checkout.ts";
 import type { PrSnapshot, PrUnavailable } from "../../model/verdict/pr.ts";
 import type { Verdict } from "../../model/verdict/verdict.ts";
 import { isLive, threadsById } from "../agents/threads.ts";
+import type { MemoryRoot } from "../memory/memory-files.ts";
+import { storeReport } from "../memory/report-file.ts";
 import type { Settlement, VerdictFrom } from "../store/issue/checks-store.ts";
 import type { Store } from "../store/store.ts";
 
@@ -50,6 +52,7 @@ type InboxStore = Pick<
   | "issues"
   | "check"
   | "insertHandoff"
+  | "record"
   | "giveUpCheck"
   | "settleReturned"
   | "endAgent"
@@ -77,13 +80,15 @@ type Doorbell = ReturnType<Store["doorbells"]>[number];
 type Deps = {
   bb: InboxBb;
   store: InboxStore;
+  /** Where a research report is saved as its handoff is stored. */
+  memory: Pick<MemoryRoot, "of">;
   /** Runs after every event, to refresh the coordinating thread's board. */
   onChange(id: CoordinatorId): void;
 };
 
 export type Inbox = ReturnType<typeof createInbox>;
 
-export function createInbox({ bb, store, onChange }: Deps) {
+export function createInbox({ bb, store, memory, onChange }: Deps) {
   // why: two events at once must not race two sends, and a send in flight must finish before the next.
   const ringing = new Set<CoordinatorId>();
   let disposed = false;
@@ -197,6 +202,15 @@ export function createInbox({ bb, store, onChange }: Deps) {
     }
   }
 
+  /** Stores the handoff with `insert`, with the file its report is saved to when it delivers one. */
+  function stored<T>(given: GivenHandoff, insert: (handoff: Handoff) => T): T {
+    if (given.status !== "done") return insert(given);
+    const { delivery } = given;
+    if (delivery.kind === "commit") return insert({ ...given, delivery });
+    const earlier = store.record(given.coordinatorId, given.issueId).map(({ handoff }) => handoff);
+    return storeReport(memory.of(given.coordinatorId), given.issueId, earlier, delivery.report, (file) => insert({ ...given, delivery: { ...delivery, file } }));
+  }
+
   function recorded(id: CoordinatorId): void {
     onChange(id);
     ringSoon(id);
@@ -212,12 +226,13 @@ export function createInbox({ bb, store, onChange }: Deps) {
 
   return {
     /**
-     * Stores the handoff with its check, and its event unless a verifier is still to check it, then
-     * wakes its regional manager. Returns what the store did (see insertHandoff).
+     * Stores the handoff with its check, and its event unless a verifier is still to check it, saving
+     * a report it delivers to its file together with it (see storeReport), then wakes its regional
+     * manager. Returns what the store did (see insertHandoff).
      */
-    handoff(handoff: Handoff, checkout: CheckoutRead): ReturnType<Store["insertHandoff"]> {
-      const inserted = store.insertHandoff(handoff, checkout);
-      recorded(handoff.coordinatorId);
+    handoff(given: GivenHandoff, checkout: CheckoutRead): ReturnType<Store["insertHandoff"]> {
+      const inserted = stored(given, (handoff) => store.insertHandoff(handoff, checkout));
+      recorded(given.coordinatorId);
       return inserted;
     },
 
