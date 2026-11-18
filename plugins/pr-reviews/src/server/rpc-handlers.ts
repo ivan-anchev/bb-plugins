@@ -2,9 +2,9 @@
 // review state, read the sidebar's PRs across projects, stored guides, a PR's live diff and its
 // comments, record the PR pages the reader opens, hand review actions to `reviews`, post the
 // comments a reader chose to, alone or in their pending review, which they submit or discard, and
-// change a PR's state. A thin shell; the logic lives in the modules it calls.
+// change or merge a PR. A thin shell; the logic lives in the modules it calls.
 import { experimental_PluginRpcRefusal as Refusal, type BbPluginApi, type ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
-import { commentsTag, INBOX_TAG, prReviewsContract, prsOf, repoTag, VISITS_TAG, type GitHubProject, type UnreadableProject } from "../contract.ts";
+import { commentsTag, INBOX_TAG, prReviewsContract, prsOf, repoTag, VISITS_TAG, type GitHubProject, type MergeMethod, type StateChange, type UnreadableProject } from "../contract.ts";
 import { parsePrDiff } from "../diff/parse-pr-diff.ts";
 import {
   addReviewComment,
@@ -12,6 +12,7 @@ import {
   changePrState,
   discardReview,
   listOpenPrs,
+  mergePr,
   postComment,
   postConversationComment,
   postReply,
@@ -66,6 +67,14 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
     invalidate: () => bb.rpc.experimental_invalidate([INBOX_TAG]),
   });
   bb.onDispose(sidebarCatchUp.dispose);
+
+  // The page header reads the PR under its repo's tag, and the sidebar under its own, so both
+  // show the new state. The sidebar reads GitHub's search, which can still list the old state at
+  // first: the catch-up has it read again once the search lists the new one.
+  function stateChanged(repo: Repo, number: number, change: StateChange | MergeMethod): void {
+    bb.rpc.experimental_invalidate([repoTag(repo), INBOX_TAG]);
+    sidebarCatchUp.follow(repo, number, change);
+  }
 
   async function repoOf(projectId: string): Promise<Repo> {
     const project = (await bb.sdk.projects.list()).find((candidate) => candidate.id === projectId);
@@ -184,14 +193,17 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
 
     postConversationComment: ({ body, ...target }) => posted(target, (repo) => postConversationComment(repo, target.number, body)),
 
-    // The page header reads the PR under its repo's tag, and the sidebar under its own, so both
-    // show the new state. The sidebar reads GitHub's search, which can still list the old state at
-    // first: the catch-up has it read again once the search lists the new one.
     async changePrState({ projectId, number, change }) {
       const repo = await repoOf(projectId);
       await changePrState(repo, number, change);
-      bb.rpc.experimental_invalidate([repoTag(repo), INBOX_TAG]);
-      sidebarCatchUp.follow(repo, number, change);
+      stateChanged(repo, number, change);
+      return {};
+    },
+
+    async mergePr({ projectId, number, method, headSha }) {
+      const repo = await repoOf(projectId);
+      await mergePr(repo, number, method, headSha);
+      stateChanged(repo, number, method);
       return {};
     },
 

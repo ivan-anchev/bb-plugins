@@ -1,9 +1,9 @@
 // The PR header: a pane header bar, then the masthead. The bar holds the PR's state badge, with
 // `owner/repo #number` beside it, and at its end Review, or Finish review while the reader has a
-// pending review on GitHub (review-submit.tsx), then icon actions (Review chat when a review
-// thread exists, then GitHub). The badge opens a menu of the state changes GitHub allows. Under
-// the bar, the masthead is the title above the identity row (author, `base ← head`). The PR's
-// line counts are on the Changes tab.
+// pending review on GitHub (review-submit.tsx), Merge while the PR is open (merge-button.tsx),
+// then icon actions (Review chat when a review thread exists, then GitHub). The badge opens a menu
+// of the state changes GitHub allows. Under the bar, the masthead is the title above the identity
+// row (author, `base ← head`). The PR's line counts are on the Changes tab.
 import { Fragment, useState, type RefObject } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { PrDetail, PrState, StateChange } from "../../contract.ts";
@@ -15,6 +15,7 @@ import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "../ui/m
 import { PrStateBadge } from "../ui/pr-state-badge.tsx";
 import { Spinner } from "../ui/spinner.tsx";
 import { HOLD_MS, useHold } from "../ui/use-hold.ts";
+import { MergeButton } from "./merge-button.tsx";
 import { PrIdentity } from "./pr-identity.tsx";
 import { ReviewSubmit } from "./review-submit.tsx";
 
@@ -33,6 +34,7 @@ export function PrHeader({ target, repo, pr, hasReviewThread, title }: PrHeaderP
         {/* -mr-1.5 lines the last glyph, not its hit area, up with the bar's right edge. */}
         <div className="-mr-1.5 ml-auto flex shrink-0 items-center gap-1">
           <ReviewSubmit target={target} focusAfter={title} />
+          <MergeButton target={target} pr={pr} focusAfter={title} />
           {hasReviewThread && <ReviewChatIconButton />}
           <IconLink icon="Github" label="Open on GitHub" href={pr.url} />
         </div>

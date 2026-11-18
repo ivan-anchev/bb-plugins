@@ -36,6 +36,7 @@ mock.module("../github/gh.ts", {
     postReply: posted("reply"),
     postConversationComment: posted("conversation"),
     changePrState: changedState,
+    mergePr: async (...args: unknown[]) => void events.push(`merge ${JSON.stringify(args)}`),
     addReviewComment: wrote("add-to-review"),
     addReviewReply: wrote("reply-in-review"),
     submitReview: wrote("submit"),
@@ -179,6 +180,20 @@ test("a state change runs in the project's repo, re-reads the repo's PRs and the
   assert.deepEqual(events.slice(2), [`invalidate ${INBOX_TAG}`]);
   await nextRead();
   assert.equal(events.length, 3);
+});
+
+test("a merge runs in the project's repo by the chosen method at the page's head, then re-reads as a state change does", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const plugin = handlersWith([PROJECT]);
+  events.length = 0;
+  searchFinds = [{ section: "merged", pr: { ...pullRequest40, state: "MERGED" } }];
+
+  await call(plugin.mergePr, { ...TARGET, method: "squash", headSha: "abc123" });
+  assert.deepEqual(events, [`merge ${JSON.stringify(["ivan-anchev/bb-plugins", 40, "squash", "abc123"])}`, `invalidate ${repoTag(repoSchema.parse("ivan-anchev/bb-plugins"))},${INBOX_TAG}`]);
+
+  t.mock.timers.tick(3_000);
+  await new Promise(setImmediate);
+  assert.deepEqual(events.slice(2), [`invalidate ${INBOX_TAG}`]);
 });
 
 test("disposing the plugin stops a state change's sidebar re-reads", async (t) => {

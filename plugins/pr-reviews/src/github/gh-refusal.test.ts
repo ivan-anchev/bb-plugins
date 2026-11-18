@@ -12,7 +12,8 @@ import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 // public PR, and the *-eof fixtures through a proxy that drops every connection; their repo is
 // renamed octo-org/widgets.
 // graphql-submit-refused and comment-while-review-pending-422 are from PR #2 of the private sandbox
-// ivan-anchev/pr-reviews-review-mode-sandbox, with a pending review open.
+// ivan-anchev/pr-reviews-review-mode-sandbox, with a pending review open; merge-head-moved is a
+// merge of its PR #4 by a head a push had since replaced, recorded with gh 2.97.0.
 const recorded = (name: string) => parseHostCommandFailure(JSON.parse(readFileSync(new URL(`./fixtures/gh-failures/${name}.json`, import.meta.url), "utf8")));
 
 const refusalOf = (refusalOrFailure: Refusal | HostCommandFailure) => {
@@ -103,6 +104,13 @@ test("a state change the PR's state on GitHub no longer allows says why, without
 
   assert.deepEqual(refusalOf(ghStateRefusalFor(recorded("close-merged"))), merged);
   assert.deepEqual(refusalOf(ghStateRefusalFor(recorded("reopen-merged"))), merged);
+});
+
+test("a merge after a push moved the PR's head asks to see the new commits first", () => {
+  assert.deepEqual(refusalOf(ghStateRefusalFor(recorded("merge-head-moved"))), {
+    code: "invalid",
+    message: "New commits were pushed to this pull request since the page loaded. Refresh to see them before you merge.",
+  });
 });
 
 // gh prints the same "is closed" line for a merged PR as for a closed one, for ready and draft alike.
