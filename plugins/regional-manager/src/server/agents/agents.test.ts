@@ -250,13 +250,29 @@ test("an agent whose spawn the plugin never heard the end of flags its issue unt
   assert.match(textOf(await start()), /^Started a2 on i1 /);
 });
 
+test("an agent's first message and rules name its regional manager's thread, the one bb heads agent_message with, as its next instruction, which a done handoff waits for too", async () => {
+  const { kit, threadId, start } = await filed();
+  const agentThreadId = threadIn(textOf(await start()));
+
+  const prompt = kit.thread(agentThreadId).spawnedWith.prompt ?? assert.fail("spawned without a prompt");
+  assert.match(prompt, new RegExp(`^# i1: Add retries\\n\\nYou are agent a1, working on issue i1\\. Your regional manager, your parent thread ${threadId}, started you with this brief\\.`));
+  assert.ok(prompt.includes(`\n\nA message headed \`[bb message from thread:${threadId}]\` is from your regional manager: its next instruction to you. Follow it, after a handoff too.\n\n## What it is about`), prompt);
+  assert.match(kit.configurationFor(agentThreadId, {}).instructions ?? "", /Naming your regional manager's thread, which your first message names, it is your regional manager's next instruction: follow it, after a handoff too\./);
+  const handedOff = textOf(await kit.call("agent_handoff", { ...REPORT, status: "done", headSha: HEAD }, agentThreadId));
+  assert.ok(handedOff.endsWith("Stop here, and change nothing in this environment until you hear back from the verifier or your regional manager."), handedOff);
+
+  await kit.call("agent_message", { agent: "a1", text: "Also log each retry." }, threadId);
+  const toAgent = kit.sent().filter((args) => args.threadId === agentThreadId);
+  assert.deepEqual(toAgent.map(({ senderThreadId, input }) => [senderThreadId, input]), [[threadId, [{ type: "text", text: "Your regional manager's next instruction, on i1:\n\nAlso log each retry.", mentions: [] }]]]);
+});
+
 test("agent_message reaches the agent as a message from the regional manager's thread", async () => {
   const { kit, threadId, start } = await filed();
   const agentThreadId = threadIn(textOf(await start()));
 
   assert.equal(textOf(await kit.call("agent_message", { agent: "a1", text: "Use exponential backoff." }, threadId)), "Sent to a1.");
   assert.deepEqual(kit.sent().map(({ threadId: to, senderThreadId, mode, input }) => ({ to, senderThreadId, mode, input })), [
-    { to: agentThreadId, senderThreadId: threadId, mode: "auto", input: [{ type: "text", text: "Use exponential backoff.", mentions: [] }] },
+    { to: agentThreadId, senderThreadId: threadId, mode: "auto", input: [{ type: "text", text: "Your regional manager's next instruction, on i1:\n\nUse exponential backoff.", mentions: [] }] },
   ]);
 });
 

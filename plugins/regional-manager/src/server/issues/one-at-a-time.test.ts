@@ -102,8 +102,8 @@ test("a message bb queued for a1 is taken back before the handover stops it, and
 
   const result = textOf(await start());
   assert.match(result, /^Stopped a1 and started a2/);
-  assert.ok(result.endsWith("Your message to a1 still waited in bb's queue, so it was taken back before anything started, and a1 never got it:\n\n```\nAlso cap the backoff at 60s.\n```"), result);
-  assert.deepEqual([kit.queued(agentThreadId), kit.delivered(agentThreadId).includes("Also cap the backoff at 60s.")], [[], false]);
+  assert.ok(result.endsWith("Your message to a1 still waited in bb's queue, so it was taken back before anything started, and a1 never got it:\n\n```\nYour regional manager's next instruction, on i1:\n\nAlso cap the backoff at 60s.\n```"), result);
+  assert.deepEqual([kit.queued(agentThreadId), kit.delivered(agentThreadId).includes("Your regional manager's next instruction, on i1:\n\nAlso cap the backoff at 60s.")], [[], false]);
 });
 
 test("a queued message the handover can't take back, a failed delete or one the user queued, refuses it, naming the message; nothing is stopped", async () => {
@@ -215,8 +215,8 @@ test("a start after agent_stop takes back your message bb still queued for the s
 
   const result = textOf(await start());
   assert.match(result, /^Started a2 on i1/);
-  assert.ok(result.endsWith("Your message to a1 still waited in bb's queue, so it was taken back before anything started, and a1 never got it:\n\n```\nPlease add jitter.\n```"), result);
-  assert.deepEqual([kit.queued(agentThreadId), kit.delivered(agentThreadId).includes("Please add jitter.")], [[], false]);
+  assert.ok(result.endsWith("Your message to a1 still waited in bb's queue, so it was taken back before anything started, and a1 never got it:\n\n```\nYour regional manager's next instruction, on i1:\n\nPlease add jitter.\n```"), result);
+  assert.deepEqual([kit.queued(agentThreadId), kit.delivered(agentThreadId).includes("Your regional manager's next instruction, on i1:\n\nPlease add jitter.")], [[], false]);
 });
 
 test("a start after agent_stop takes back the findings bb still queued for the stopped a1, so they never wake it beside a2", async () => {

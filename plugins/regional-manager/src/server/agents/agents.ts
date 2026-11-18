@@ -441,6 +441,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     try {
       const prompt = agentBrief(
         agentId,
+        coordinatorOf(coordinatorId).threadId,
         { ...issue, brief },
         { base: spot.base, branch: carried?.branch ?? null, pr: carried?.pr ?? null, earlier: store.record(coordinatorId, issue.id) },
         { crewRules: files.read(CREW_RULES).text, index: files.read(MEMORY_INDEX).text },

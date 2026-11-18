@@ -300,7 +300,9 @@ in its own environment, on its own branch.
   them in one `crew_ask_user` decision. Start their agents only once their
   answer says to, changing the issues first with `issue_update` as they asked.
 - **Message** one with `agent_message`. It arrives marked as a message from
-  your thread, not from the user, and steers a running turn or starts one.
+  your thread, which the agent's first message names as its regional
+  manager's, under a line calling it your next instruction (write just the
+  instruction), and steers a running turn or starts one.
 - **Stop** one with `agent_stop`. Its thread stops, idle or not, background
   commands included, and it no longer holds the issue. Work it handed off that reached Verifying, In review or Done keeps
   the issue there; anything short of that returns the issue to Todo. Add

@@ -60,11 +60,11 @@ export function registerAgentTools(bb: ToolsBb, { store, agents }: Deps): void {
 
   bb.agents.registerTool({
     name: MESSAGE,
-    description: "Message one of your agents. It arrives in the agent's thread as a message from you, not from the user: it steers a running turn, or starts a new one.",
+    description: "Message one of your agents. It arrives in the agent's thread as a message from you, not from the user, under a line calling it your next instruction: it steers a running turn, or starts a new one.",
     presentation: { label: { pending: "Messaging an agent", completed: "Messaged an agent" }, icon: { glyph: "SideChat" } },
     parameters: z.object({ agent: agentIdSchema, text: z.string().trim().min(1).max(20_000) }),
     execute: forAgent(MESSAGE, async (agent, { text }) => {
-      const outcome = await agents.message(agent, text);
+      const outcome = await agents.message(agent, managerMessage(agent, text));
       if ("busy" in outcome) return refusedBusy(MESSAGE, outcome);
       switch (outcome.kind) {
         case "sent":
@@ -99,3 +99,10 @@ export function registerAgentTools(bb: ToolsBb, { store, agents }: Deps): void {
     }),
   });
 }
+
+/**
+ * The regional manager's message as its agent gets it: under bb's `[bb message from thread:…]`
+ * header, which names the manager's thread its first message names, a line saying whose it is and
+ * what it is, so even a model that doubts the header follows it (QA Q20).
+ */
+const managerMessage = (agent: Agent, text: string): string => `Your regional manager's next instruction, on ${agent.issueId}:\n\n${text}`;

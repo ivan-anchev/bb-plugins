@@ -261,7 +261,9 @@ agent, it hands the issue over (see
 [Handing an issue to a new agent](#handing-an-issue-to-a-new-agent)).
 
 The regional manager messages an agent with `agent_message` (it arrives
-marked as from the regional manager, not from you), and stops one with
+marked as from the manager's thread, which the agent's first message names,
+under a line calling it the manager's next instruction, not from you), and
+stops one with
 `agent_stop`, which archives its thread too when asked. An agent stopped
 mid-turn before it hands off can be followed by two updates: that it ended its
 turn without a handoff and, when its issue returns to Todo, that it was
