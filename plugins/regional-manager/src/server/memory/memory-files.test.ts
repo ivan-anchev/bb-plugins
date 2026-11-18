@@ -6,16 +6,14 @@ import { join, win32 } from "node:path";
 import { test } from "node:test";
 import { memoryFileSchema, type MemoryFile } from "../../model/memory-file.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
-import { memoryStorage } from "../memory-storage.ts";
-import { openStore } from "../store.ts";
+import { freshStore, MANAGER as ID, OTHER_MANAGER } from "../store/test-store.ts";
 import { openMemoryRoot } from "./memory-files.ts";
 
-const ID = coordinatorIdSchema.parse("6f1c2a52-6b8e-4c43-9a51-1d6a3c0b7e10");
 const PLAN = memoryFileSchema.parse("PLAN.md");
 
 function freshMemory() {
   const writes: string[] = [];
-  const store = openStore(memoryStorage().storage);
+  const { store } = freshStore();
   const memory = openMemoryRoot(join(mkdtempSync(join(tmpdir(), "coordinator-memory-")), "data.db"), store, (id) => writes.push(id)).of(ID);
   return Object.assign(memory, { writes });
 }
@@ -23,12 +21,13 @@ function freshMemory() {
 const versionOf = (memory: ReturnType<typeof freshMemory>, file: MemoryFile) => memory.read(file).text?.version ?? null;
 const revisionOf = (memory: ReturnType<typeof freshMemory>, file: MemoryFile) => memory.read(file).revision;
 
-test("seeding writes the six core files, with the goal in GOAL.md", () => {
+test("seeding writes the six core files, with the goal in GOAL.md and MEMORY.md indexing them in the plugin's words", () => {
   const memory = freshMemory();
   memory.seed("Migrate the webhook service");
 
   assert.deepEqual(readdirSync(memory.dir).sort(), ["CREW.md", "DIGEST.md", "GOAL.md", "MEMORY.md", "PLAN.md", "PREFERENCES.md"]);
   assert.equal(readFileSync(join(memory.dir, "GOAL.md"), "utf8"), "# Goal\n\nMigrate the webhook service\n");
+  assert.match(readFileSync(join(memory.dir, "MEMORY.md"), "utf8"), /^- CREW\.md: rules every agent follows\.$/m);
 });
 
 test("seeding again keeps every file as it is", () => {
@@ -160,9 +159,9 @@ test("an edit on disk that a write finds is the next revision, and the write's o
 });
 
 test("each coordinator's files count their revisions apart", () => {
-  const store = openStore(memoryStorage().storage);
+  const { store } = freshStore();
   const root = openMemoryRoot(join(mkdtempSync(join(tmpdir(), "coordinator-memory-")), "data.db"), store, () => {});
-  const other = coordinatorIdSchema.parse("0b9e7c1d-2f3a-4b5c-8d6e-7f8091a2b3c4");
+  const other = OTHER_MANAGER;
   root.of(ID).write(PLAN, "# One\n", null);
   root.of(ID).write(PLAN, "# Two\n", root.of(ID).read(PLAN).text?.version ?? null);
   root.of(other).write(PLAN, "# One\n", null);

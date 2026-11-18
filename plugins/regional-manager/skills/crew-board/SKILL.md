@@ -1,15 +1,16 @@
 ---
 name: crew-board
-description: Explain the Regional Manager plugin (bb-plugin-regional-manager). Its rail panel starts long-lived regional managers. Each keeps its memory in markdown files, sets itself reminders, asks the user for decisions on its board, and starts crew threads from a brief and done-criteria. A crew ends with a handoff; a done one is checked by a hidden verifier unless switched off, and a first failed verdict goes back to the crew. PRs and CI are watched through gh; a pass waits for CI. The Board shows the digest, decisions, crews grouped from Needs you to Done, and a warning when the thread edits files itself. Use when the user asks how to start a regional manager or crew, what the board, a row or verdict means, how verification or CI checks work, why PR status is unavailable, why a crew got findings, how to replace a crew, what an update is, why the thread woke or the board warns of edits, how reminders or decisions work, where memory lives, which thread has which tools, or how proposing crews works.
+description: Explain the Regional Manager plugin (bb-plugin-regional-manager). Its rail panel starts long-lived regional managers that keep memory in markdown files, plan the work as issues, start an agent (a child thread) on each issue, set reminders and ask the user for decisions on a board; all of one manager's agents are its crew. An agent ends with a handoff; a done one is checked by a hidden verifier unless switched off, and a first failed verdict goes back to the agent. PRs and CI are watched through gh. The Board lists issues by their seven statuses, with Needs you first. Use when the user asks how to start a regional manager or an agent, what an issue's status or a verdict means, how verification or CI checks work, what an agent or verifier runs on, why PR status is unavailable, why an agent got findings or an issue returned to Todo, what an update is, why the thread woke or the board warns of edits, how reminders or decisions work, where memory lives, or which thread has which tools.
 ---
 
 # Regional managers
 
 This plugin turns one ordinary bb thread into a long-lived **regional
-manager**: it holds a goal, keeps its memory in files, plans the work, and
-hands each piece to a **crew thread**. It has no CLI commands and no plugin
-settings. Its one setting belongs to each regional manager: the **Verify
-done handoffs** switch (see [Verification](#verification)).
+manager**: it holds a goal, keeps its memory in files, and plans the work as
+**issues**. It starts an **agent**, a child thread, on each issue to do the
+work; all of one manager's agents are its **crew**. It has no CLI commands
+and no plugin settings. Its one setting belongs to each regional manager: the
+**Verify done handoffs** switch (see [Verification](#verification)).
 
 ## Start one
 
@@ -20,8 +21,7 @@ done handoffs** switch (see [Verification](#verification)).
    running bb, and **auto** permissions. Change any picker as with any new
    thread.
 4. Leave **Verify done handoffs** on (below the composer) to have every done
-   handoff checked before the thread hears of it, or turn it off (see
-   [Verification](#verification)).
+   handoff checked before the thread hears of it, or turn it off.
 5. Type the goal and submit. The new thread opens.
 
 The panel lists every regional manager bb still lists, under its project,
@@ -29,152 +29,208 @@ newest first, with bb's status glyph. A row opens its thread, its **Board**
 button opens its board, and its **Memory** button opens its memory files. An
 archived or deleted thread drops off the list.
 
-## What the thread gets
-
-From its first turn the thread has:
-
-- its rules: call `crew_catch_up` first at the start of every turn, never edit
-  project files, build or commit itself, and delegate with checkable
-  done-criteria;
-- the `regional-manager` skill, its playbook;
-- nine tools:
-  - `crew_catch_up` returns every update since its last catch-up in full
-    (below), the board, then its core memory files in full,
-    each with its version, in a fixed order, up to 40,000 characters; files
-    past that are named so it can read them alone, and so is every other
-    memory file.
-  - `crew_memory_read` reads one memory file by name, such as `PLAN.md` or
-    `notes/api.md`, with its version.
-  - `crew_memory_write` writes one memory file whole, naming the version it
-    read (or none, to create a file). If the file changed since, nothing is
-    written and it gets the current text to merge into and write again.
-  - `crew_start`, `crew_message`, `crew_read` and `crew_close` start and
-    manage its crews (below). `crew_start` with `supersedes` replaces one
-    (see [Replacing a crew](#replacing-a-crew)).
-  - `crew_remind` sets or cancels one of its reminders (see
-    [Reminders](#reminders)).
-  - `crew_ask_user` puts a decision to you on its board (see
-    [Decisions](#decisions)).
-
-  A name that leaves the memory folder or doesn't end in `.md` is rejected.
-  Its rules tell it to keep its plan in `PLAN.md`, each standing preference
-  you give it in `PREFERENCES.md`, and a digest in `DIGEST.md`.
-
-A crew thread is offered only `crew_memory_read` and `crew_handoff`, and a
-verifier thread only `crew_memory_read` and `crew_verdict`. Any other thread
-is offered none of these tools, and a call from one is refused. No tool can
-turn verification on or off. A thread's role comes
-from the plugin's own database, so editing a thread's metadata grants nothing.
-
 ## Tools
 
-Every tool, by the thread that gets it. A call from any other thread is
-refused.
+Each role gets its tools from the plugin's own database, so editing a
+thread's metadata grants nothing. A call from any other thread is refused,
+and no tool can turn verification on or off.
 
 | Tool | Thread | What it does |
 | --- | --- | --- |
-| `crew_catch_up` | regional manager | Returns every update since its last catch-up, whole, then the board, then its core memory files with their versions. |
-| `crew_memory_read` | regional manager, crew, verifier | Reads one memory file, such as `PLAN.md` or `notes/api.md`, with its version. |
+| `crew_catch_up` | regional manager | Returns every update since its last catch-up, whole, then the board, the questions still waiting, its reminders, and its core memory files with their versions. |
+| `crew_memory_read` | regional manager, agent, verifier | Reads one memory file, such as `PLAN.md` or `notes/api.md`, with its version. |
 | `crew_memory_write` | regional manager | Writes one memory file whole, naming the version it read (null to create one); a stale write returns the current text instead. |
-| `crew_start` | regional manager | Starts a crew from a title, brief, 1 to 12 done-criteria and a placement; `supersedes` replaces a crew. |
-| `crew_message` | regional manager | Messages one crew, marked as from the regional manager. |
-| `crew_read` | regional manager | Returns one crew's state, branch, brief, criteria, latest handoff and latest answer. |
-| `crew_close` | regional manager | Resolves, stops or archives one crew. |
 | `crew_remind` | regional manager | Sets a reminder (`note`, `at`, optional `every`) or cancels one (`cancel`). |
-| `crew_ask_user` | regional manager | Puts a one-line question, with up to five options, on its board. |
-| `crew_handoff` | crew | Ends the crew's work: done (with its commit), blocked or gave up, with a summary and its lists. |
-| `crew_verdict` | verifier | Returns each criterion's result and evidence, and findings, for the handoff it checks. |
+| `crew_ask_user` | regional manager | Puts a one-line question, with up to five options, on its board, optionally naming the issue it is about. |
+| `issue_create` | regional manager | Files an issue: `kind`, `title`, `description`, and optionally `brief`, `doneCriteria`, `status` (todo or backlog) and `verifier`. |
+| `issue_update` | regional manager | Changes an issue's title, description, brief, done-criteria or verifier, or rests, cancels or accepts it with `status`. |
+| `issue_read` | regional manager | Returns one issue whole: status, plan, verifier, its agents and what they ran on, every handoff with its verdict, and its agent's latest answer. |
+| `agent_start` | regional manager | Starts an agent on an issue, optionally naming its `execution` and `placement`. |
+| `agent_message` | regional manager | Messages one agent, marked as from the regional manager. |
+| `agent_stop` | regional manager | Stops one agent, and archives its thread with `archive: true`. |
+| `agent_handoff` | agent | Ends the agent's work: done (with its commit), blocked or gave up, with a summary and its lists. |
+| `issue_verdict` | verifier | Returns each criterion's result and evidence, and findings, for the handoff it checks. |
 
-## Crews
+The regional manager also gets its rules (call `crew_catch_up` first every
+turn, never edit project files, build or commit itself, delegate with
+checkable done-criteria) and the `regional-manager` skill, its playbook. An
+agent gets the `agent-work` skill and a verifier the `verifying` skill. A
+memory file name that leaves the memory folder or doesn't end in `.md` is
+rejected.
 
-A crew is an ordinary child thread of the regional manager, which starts
-it with `crew_start`:
+## Issues
+
+An issue is one piece of the work, filed with `issue_create` and numbered
+`i1`, `i2`… within its regional manager (an id is never reused). It has a
+kind (only `build` today: code on its own branch, checked by a verifier), a
+title, a description for you, and before an agent can start, a brief and 1 to
+12 done-criteria, each checkable by running something.
+
+An issue's status is derived from what its agents did, never stored:
+
+| Status | When |
+| --- | --- |
+| Backlog | No agent holds it, and the manager rested it here: not planned yet. |
+| Todo | No agent holds it, ready to start. A new issue rests here, and returns here when its agent ends before its work reached Verifying. |
+| In progress | An agent holds it: working, starting, idle without a handoff, fixing its verifier's findings, blocked, gave up, or its last turn failed. |
+| Verifying | Its agent handed off done, and the verifier checks it, or every criterion passed and it waits for CI. |
+| In review | Its done handoff passed ("✓ Verified"), or was made with verification off ("Unverified"). |
+| Done | Its pull request merged ("Merged #41"), or the manager accepted it. Final. |
+| Canceled | The manager canceled it. |
+
+**Needs you** is a flag on an open issue, shown above every status: its agent
+is blocked or gave up, waits for your answer or approval in its thread, its
+last turn failed, its work failed verification after its fix round ("✗ Failed
+verification after its fix round", "✗ CI failed on #41", or "✗ Not the claimed
+commit on a clean tree" when the plugin's own read failed it), its findings
+may or may not have reached it, it couldn't be verified, bb never confirmed starting
+its agent's thread ("No thread: bb never confirmed starting one": the manager
+ends that agent with `agent_stop`, which ends it at once, and starts another
+with `agent_start`), or one of the manager's open decisions names it.
+
+The manager sets a status in only four ways, with `issue_update`: `backlog`
+or `todo` rests an issue no agent holds (and reopens a canceled one),
+`canceled` closes one no agent holds, and `done` accepts one In review, even
+while its agent still holds it. Any other change, or `backlog`, `todo` or
+`canceled` while an agent holds the issue, is refused naming why.
+
+## Agents
+
+An agent is an ordinary child thread of the regional manager that holds one
+issue for its whole life; an issue has one agent at a time. The manager
+starts it with `agent_start`:
 
 - **Where it runs**: a fresh worktree of the project's default branch on the
-  regional manager's machine, on its own branch; or, when the regional
-  manager names one, an environment provider such as `boat-sandbox` (see
-  [Crews in a sandbox](#crews-in-a-sandbox)). It runs with auto permissions.
-- **What it runs on**: its regional manager's provider, model, reasoning
-  level and service tier as they are when it starts. Never bb's default: if
-  bb has no model on record for the regional manager, the crew gets no
-  thread and says why.
-- **Its first message**: the brief, the done-criteria (1 to 12, required), and `CREW.md` and `MEMORY.md`
-  as they were at that moment. Put rules every crew follows in `CREW.md`.
-- **Its id**: `c1`, `c2`… within its regional manager. Its thread is
-  titled with the crew's title and sits under the regional manager in
-  bb's sidebar.
-- **What it gets**: its rules, the `crew-work` skill, `crew_memory_read` and
-  `crew_handoff`. It can't write memory or start crews.
+  regional manager's machine, on its own branch; or, when the manager names
+  one, an environment provider such as `boat-sandbox` (see
+  [Agents in a sandbox](#agents-in-a-sandbox)). It runs with auto permissions.
+- **What it runs on**: see [Who runs what](#who-runs-what).
+- **Its first message**: the issue's description, brief and numbered
+  done-criteria, and `CREW.md` and `MEMORY.md` as they were at that moment,
+  their `#` headings outside code set under the message's own. Put rules
+  every agent follows in `CREW.md`: the agent is told its work is its brief
+  and done-criteria, and the other memory files are its regional manager's
+  context, not its instructions.
+- **Its id**: `a1`, `a2`… within its regional manager, never reused. Its
+  thread is titled with the issue's title and sits under the regional
+  manager in bb's sidebar.
+- **What it gets**: its rules, the `agent-work` skill, `crew_memory_read` and
+  `agent_handoff`. It can't write memory or start agents.
 
-The regional manager messages a crew with `crew_message` (it arrives
-marked as from the regional manager, not from you), reads it with
-`crew_read`, and closes it with `crew_close`: **resolve** accepts its work,
-**stop** stops its turn (recorded once bb confirms the thread stopped), and
-**archive** archives its thread. You can open any crew's thread and type into
-it like any thread.
+`agent_start` is refused, and nothing starts, when the issue has no brief or
+no done-criteria, another agent holds it, it is canceled, accepted or Done,
+or what it would run on or where can't be had.
 
-Archiving or deleting the regional manager archives or deletes its crews
+The regional manager messages an agent with `agent_message` (it arrives
+marked as from the regional manager, not from you), and stops one with
+`agent_stop`, which archives its thread too when asked. An agent stopped
+mid-turn before it hands off can be followed by two updates: that it ended its
+turn without a handoff and, when its issue returns to Todo, that it was
+stopped. bb gives no cause for an idle, so the plugin reports both. You can
+open any agent's thread and type into it like any thread.
+
+An agent ends when it is stopped, or when you archive or delete its thread.
+Its issue keeps its place if the agent's work had reached Verifying, In
+review or Done; otherwise the issue returns to Todo and the manager is woken
+with "returned to Todo". Its row then says how the agent ended ("Its agent was
+stopped", "archived" or "deleted", or "bb never started its agent's thread");
+only an issue no agent ever started reads "Not started". An agent stopped
+while its done handoff is Verifying leaves the issue in Verifying; if that
+check then fails, or can't be had, the issue rests in Todo, and the manager
+hears of the failed check rather than a return to Todo. A check that passes
+still takes it to In review. An ended agent's handoff is refused. To try
+again, the manager starts a fresh agent on the same issue, from the issue's
+brief as it is then.
+
+Archiving or deleting the regional manager archives or deletes its agents
 with it.
 
-### Crews in a sandbox
+### Agents in a sandbox
 
-`crew_start` with `placement: {"kind": "provider", "environmentProviderId":
-"boat-sandbox"}` starts the crew on a new machine from that environment
+`agent_start` with `placement: {"kind": "provider", "environmentProviderId":
+"boat-sandbox"}` starts the agent on a new machine from that environment
 provider, here a boat sandbox with the project cloned and a new branch made
-from its default branch, which bb names and records, so the crew works on its
-own branch from the start, as a worktree crew does.
-`machineInputs` sets that machine's inputs, such as `{"preset": "small"}` for a
-small boat sandbox; `bb environment providers --json` lists each provider's.
-Without them the provider's defaults apply. The plugin checks the provider
-with bb first: one bb doesn't have, one that needs inputs the plugin can't
-give, or `machineInputs` for one that makes no machine, is refused and nothing
-is saved, and so is one that needs a new branch when bb records no default
+from its default branch, which bb names and records, so the agent works on
+its own branch from the start, as a worktree agent does. `machineInputs` sets
+that machine's inputs, such as `{"preset": "small"}` for a small boat sandbox;
+`bb environment providers --json` lists each provider's. Without them the
+provider's defaults apply. The plugin checks the provider with bb first: one
+bb doesn't have, one that needs inputs the plugin can't give, or
+`machineInputs` for one that makes no machine, is refused and nothing is
+saved, and so is one that needs a new branch when bb records no default
 branch for the project.
 
-- The crew's tools run on the bb server, so `crew_memory_read` and
-  `crew_handoff` work from the sandbox as from any machine.
-- The plugin never reads the sandbox just to learn the crew's branch, since
+- The agent's tools run on the bb server, so `crew_memory_read` and
+  `agent_handoff` work from the sandbox as from any machine.
+- The plugin never reads the sandbox just to learn the agent's branch, since
   a read could wake it or keep it from idling: the branch is the one bb made,
-  until the crew hands off on another (see
-  [Pull requests and CI](#pull-requests-and-ci)).
-- Its verifier runs in the same sandbox, on the crew's own checkout.
-- A sandbox removed before its verifier returns a verdict (by hand, or by
-  the sandbox provider's idle sweep) leaves the crew under Needs you as
-  "Couldn't verify", with the reason.
+  until the agent hands off on another.
+- Its verifier runs in the same sandbox, on the agent's own checkout.
+- A sandbox removed before its verifier returns a verdict leaves the issue
+  under Needs you as "Couldn't verify", with the reason.
 
-## Proposing crews
+## Who runs what
 
-Tell the regional manager to propose crews and wait for you, and it
-describes the pieces (each crew's title, brief and done-criteria) in one
-decision on its board (see [Decisions](#decisions)) and starts nothing. Its
-rules tell it to do this whenever you asked it to propose and wait, or
-`PREFERENCES.md` says so. Your answer wakes it, and it starts the crews you
-agreed to, changed as you asked.
+- **An agent** runs on the provider, model and reasoning level the manager
+  names with `agent_start`'s `execution` (`providerId`, `model`, and
+  optionally `reasoningLevel`, else the model's default in bb's catalog).
+  Named nothing, it runs on the regional manager's own provider, model,
+  reasoning level and service tier as they are when it starts, never on bb's
+  default: if bb has no model on record for the manager yet, the start is
+  refused. The start's result says which, and `issue_read` lists each agent
+  with what it ran on, as recorded at its latest handoff (so a model you
+  switch in the agent's composer counts from its next handoff).
+- **A verifier** runs on the issue's `verifier`, named on `issue_create` or
+  `issue_update`, when bb can run it in the agent's environment and it isn't
+  the agent's model. Otherwise, or with none named, the plugin picks: the
+  regional manager's model, if the agent runs on another; else the default
+  model of another provider bb can run there; else another model of the
+  agent's provider; else the agent's own, which the verdict then says.
+  `verifier: null` gives the choice back to the plugin. A change applies from
+  the issue's next done handoff; a check already running keeps its own.
+- **Refusals**: an unknown provider, one bb lists as unavailable there, or a
+  model its catalog doesn't list is refused before anything changes, naming
+  what bb can run there (providers it lists as available and can load the
+  models of) and, for a known provider, its models. A verifier on
+  the model of the agent holding the issue is refused, and so is an agent on
+  its issue's verifier; each refusal offers the other change.
+- **Your choices**: tell the regional manager once, such as "build on codex
+  gpt-5.4, verify on claude-code opus". Its rules keep it in
+  `PREFERENCES.md` and name both on every issue and agent it covers. The
+  board shows no model names; the manager's `crew_catch_up` and `issue_read`
+  do.
 
-A crew whose spawn bb never confirmed has no thread. It sits under **Needs
-you** as "No thread: bb hasn't started one", and nothing starts it: the
-regional manager is told why bb didn't, and closes it with `crew_close` and
-starts the work again.
+## Proposing work
+
+Tell the regional manager to propose work and wait for you, and it files the
+issues in Backlog and describes them in one decision on its board (see
+[Decisions](#decisions)), starting no agent. Its rules tell it to do this
+whenever you asked it to propose and wait, or `PREFERENCES.md` says so. Your
+answer wakes it, and it starts agents on the issues you agreed to, changed as
+you asked.
 
 ## Handoffs and updates
 
-bb's own report to the parent is off for crews. Instead, a crew ends its work
-with `crew_handoff`, and the plugin stores everything it sees:
+bb's own report to the parent is off for agents. Instead, an agent ends its
+work with `agent_handoff`, and the plugin records everything it sees:
 
 - **A handoff**: `done` (with the commit, required, and a pull request link
   if there is one), `blocked` or `gave-up`; a one-line summary (up to 120
   characters); and what it did, its evidence, concerns, deviations and
   findings (up to 50 items each, each up to 2,000 characters). It is stored
-  whole. Only a crew thread can hand off; a call from any other thread is
-  refused.
-- **A crew failed**, with bb's error.
-- **A crew waits on the user**: a question or an approval in its thread.
-- **A crew ended a turn without a handoff**, with its last answer.
+  whole.
+- **An agent failed**, with bb's error.
+- **An agent waits on the user**: a question or an approval in its thread.
+- **An agent ended a turn without a handoff**, with its last answer.
+- **An issue returned to Todo**: its agent was stopped, archived or deleted
+  before its work reached Verifying.
+- **An issue's pull request changed** (see
+  [Pull requests and CI](#pull-requests-and-ci)): it opened, reopened, merged
+  or closed, its CI passed or failed, or a review approved it or asked for
+  changes. A new CI run starting is not an update.
 - **The user saved a memory file** in the Memory editor. The thread's own
   writes don't count.
-- **A crew's pull request changed** (see [Pull requests and CI](#pull-requests-and-ci)):
-  it opened, reopened, merged or closed, its CI passed or failed, or a review
-  approved it or asked for changes. A new CI run starting is not an update.
+- **The user turned verification on or off.**
 - **One of the thread's reminders came due** (see [Reminders](#reminders)).
 - **You answered one of its decisions** (see [Decisions](#decisions)).
 - **Its own turn ended with changed files in its working tree** (see
@@ -182,25 +238,27 @@ with `crew_handoff`, and the plugin stores everything it sees:
   again after that.
 
 A `done` handoff is announced only together with its verdict (see
-[Verification](#verification)); a blocked or gave-up one, and everything
-else, at once. The user turning verification on or off is an update too.
+[Verification](#verification)); everything else at once.
 
 Each one wakes the regional manager with one short message: the plugin's
-name in brackets, how many updates there are, and one line each, such as
-`- c1 "Add retries" handed off: done, failed verification`,
-`- c2 "Dead letters" handed off: blocked`, `- c1 "Add retries" PR #41: CI
-passed`, `- The user edited PLAN.md`, `- Your reminder r1: check on c1`,
+name in brackets, how many updates there are, and one line each, naming the
+issue and its agent, such as
+`- i1 "Add retries" (a1) handed off: done, failed verification`,
+`- i2 "Dead letters" (a2) handed off: blocked`,
+`- i1 "Add retries" (a1) PR #41: CI passed`,
+`- i3 "Metrics" (a3) returned to Todo: its agent was stopped`,
+`- The user edited PLAN.md`, `- Your reminder r1: check on i1`,
 `- The user answered your question d1: Target main or release/2?` or
-`- Your own environment has 2 files changed after your turn: hand the change to a crew`.
+`- Your own environment has 2 files changed after your turn: hand the change to an agent`.
 The tree being clean again, like a fix round sent back, wakes nobody: it is
 listed in the next message and catch-up.
+
 The message reaches the thread as if you typed it, so it holds only facts the
-plugin derived and what the thread wrote itself (the titles it gave its crews,
-the notes of its reminders and the questions it asked you): never a crew's
-summary, answer, error or question, a verifier's evidence, nor your answer to
-a decision. Those are in
-`crew_catch_up`, which returns every update since the last catch-up, whole,
-once.
+plugin derived and what the thread wrote itself (its issues' titles, its
+reminders' notes and the questions it asked you): never an agent's summary,
+answer, error or question, a verifier's evidence, nor your answer to a
+decision. Those are in `crew_catch_up`, which returns every update since the
+last catch-up, whole, once.
 
 The message never interrupts a running turn: it waits in the thread's queue
 until the turn ends. While one waits, the next updates wait for it to be
@@ -217,123 +275,116 @@ Every `done` handoff claims an exact commit. While a regional manager's
 **Verify done handoffs** switch is on (the default), the plugin itself starts
 a **verifier** for each one:
 
-- **Where**: a hidden thread, a child of the crew's thread, in the crew's own
-  environment. Archiving the regional manager takes it along.
-- **On what model**: the regional manager's, if the crew runs on another;
-  else the default model of another provider bb can run there; else another
-  model of the crew's provider; else the crew's own, which the verdict then
-  says. The provider and model are always chosen by the plugin, never left to
-  bb's default.
+- **Where**: a hidden thread, a child of the agent's thread, in the agent's
+  own environment. Archiving the regional manager takes it along.
+- **On what model**: the issue's named verifier first (see
+  [Who runs what](#who-runs-what)), never the agent's model while bb has
+  another.
 - **The commit and the tree**: the plugin checks them itself, not the
-  verifier. As the crew hands off, it reads the crew's environment through
+  verifier. As the agent hands off, it reads the agent's environment through
   bb's git plugin on its machine: HEAD must be the claimed commit, on a clean
   working tree. The verifier is given that read, labelled as the plugin's,
   and is told not to judge them again: a provider's per-command sandbox can
-  show files the crew's tree doesn't have, and failed clean work. When the
-  read is wrong (another commit, or changed files), the verdict fails with
-  it as evidence, shown above the criteria, and goes back to the crew like
-  any first failure. When bb's git plugin can't read it (the plugin off, the
-  machine unreachable, not a git repository), no verifier starts: the crew
-  reads "Couldn't verify" under Needs you with the reason, and no fix round
-  is spent.
+  show files the agent's tree doesn't have. When the read is wrong (another
+  commit, or changed files), the verdict fails with it as evidence, shown
+  above the criteria, and goes back to the agent like any first failure. When
+  bb's git plugin can't read it (the plugin off, the machine unreachable, not
+  a git repository), no verifier starts: the issue reads "Couldn't verify"
+  under Needs you with the reason, and no fix round is spent.
 - **What it does**: runs what proves or disproves each done-criterion and
   quotes the output. It never edits, commits or pushes, and it gets none of
-  the crew's own report. It ends with `crew_verdict`: each criterion `pass`,
-  `fail` or `unverifiable`, with its evidence, and any findings. A verdict
-  that skips, repeats or invents a criterion is refused.
+  the agent's own report, only the issue's brief and criteria. It ends with
+  `issue_verdict`: each criterion `pass`, `fail` or `unverifiable`, with its
+  evidence, and any findings. A verdict that skips, repeats or invents a
+  criterion is refused.
 - **Outcome**: derived, never stored. Verified only when the commit and the
-  tree were as claimed, every criterion passed, and CI didn't fail on the commit when the crew has a pull request
-  (see [Pull requests and CI](#pull-requests-and-ci)); an unverifiable
-  criterion is not a pass.
+  tree were as claimed, every criterion passed, and CI didn't fail on the
+  commit when the issue has a pull request; an unverifiable criterion is not a
+  pass. The manager's catch-up says which model checked it and why, as in
+  "on claude-code opus, as named on i1".
 - **No verdict**: a verifier that ends a turn without one is reminded once;
   a second time, or a verifier bb wouldn't start, whose thread was archived,
-  or whose environment bb removed (its sandbox was removed or reaped), reads
-  "Couldn't verify" with the reason.
-- **A newer done handoff** from the same crew stops the older verifier, and
+  or whose environment bb removed, reads "Couldn't verify" with the reason.
+- **A newer done handoff** from the same agent stops the older verifier, and
   only the newer handoff is checked and announced.
 - **A verifier that never started** (the plugin reloaded at that moment) is
   started by the once-a-minute tick.
 
+Turn verification off or on with the switch at the top of the board (or on
+the New page when starting). It applies to handoffs made after it: turning it
+back on doesn't check earlier ones. Each change tells the regional manager.
+With it off, a done handoff goes to In review as "Unverified: <summary>".
+
 ### One automatic fix round
 
-A crew's first failed verdict (any criterion failed or unverifiable, or CI
-failed on its commit) doesn't wait for the regional manager:
+An agent's first failed verdict (any criterion failed or unverifiable, the
+commit or the tree wrong, or CI failed on its commit) doesn't wait for the
+regional manager:
 
-- The plugin sends the crew's thread one message, **from the verifier
-  thread**: bb shows it as another thread's message, so the crew never takes
+- The plugin sends the agent's thread one message, **from the verifier
+  thread**: bb shows it as another thread's message, so the agent never takes
   it for yours. It is headed "Verifier findings" and holds each criterion that
   didn't pass, with the verifier's evidence, the checks that failed when CI
   did, and its other findings.
-- The crew starts working on it at once (or after its running turn), so its
-  row moves to Working. It commits, hands off again, and a new verifier checks
-  the new commit: Verifying, then Ready for review or Needs you.
-- Until bb has taken the findings, the row stays Verifying.
-- The regional manager has nothing to do, so this alone doesn't wake it.
-  It is listed, as in `- c1 "Add retries" handed off: done, failed
-  verification, findings sent back to it (fix round 1)`, in its next doorbell
-  (whatever rings it next) and its next catch-up.
-- A crew gets **one** such round, counted on the crew before the findings are
-  sent, and kept across reloads. Its next failed verdict sends nothing
-  back: the row waits under Needs you as "✗ Failed verification after its fix
-  round: <summary>", and the regional manager decides: message the crew,
-  ask you, or replace it.
+- The agent starts working on it at once (or after its running turn), so its
+  issue is In progress again. It commits, hands off again, and a new verifier
+  checks the new commit.
+- Until bb has taken the findings, the issue stays Verifying.
+- The regional manager has nothing to do, so this alone doesn't wake it. It
+  is listed, as in `- i1 "Add retries" (a1) handed off: done, failed
+  verification, findings sent back to it (fix round 1)`, in its next wake and
+  catch-up.
+- An agent gets **one** such round, counted on the agent before the findings
+  are sent, and kept across reloads; a fresh agent on the issue gets its own.
+  Its next failed verdict sends nothing back: the issue waits under Needs you
+  as "✗ Failed verification after its fix round: <summary>", and the regional
+  manager decides: message the agent, ask you, or stop it and start a fresh
+  one.
 - A crash or reload while the findings are sent, or a send that fails in a
   way that doesn't prove bb refused them (a timeout, a dropped connection, a
   server error), leaves no record in bb that shows whether they arrived. They
-  are never sent again on a guess: the round stays spent, the row waits under
-  Needs you as "✗ Failed verification, its findings may or may not have
-  reached it: <summary>", and the regional manager is woken to read the
-  crew's thread and decide.
-- Nothing is sent back for a handoff that is no longer the crew's current one
-  (the crew was messaged or handed off again before its verdict), or for a
-  closed crew. When bb refuses the message before taking it (the crew's thread
-  is archived, deleted or can't take a message), its round is given back, and
-  the regional manager's catch-up says bb refused the findings, with bb's
-  answer. Either way the verdict goes to the regional manager.
-
-### Replacing a crew
-
-`crew_start` with `supersedes: "c3"` stops c3 and closes it as stopped (it
-shows under Done), then starts a fresh crew from c3's title, brief,
-done-criteria and placement. Its brief ends with c3's latest verdict
-under "Previous attempt's verifier findings": each criterion that didn't pass,
-with its evidence, and the findings. The regional manager may give a new
-title, brief, done-criteria or placement; the findings are added either way.
-Nothing starts while c3's thread is still stopping, and a crew with no
-thread can't be replaced.
-
-Turn verification off or on with the switch at the top of the board (or on
-the New page when starting). It applies to handoffs made after it: turning it
-back on doesn't check earlier ones. Each change tells the regional
-manager. With it off, a done handoff waits under Ready for review as
-"Unverified: <summary>".
+  are never sent again on a guess: the round stays spent, the issue waits
+  under Needs you as "✗ Failed verification, its findings may or may not have
+  reached it: <summary>", and the regional manager is woken to decide.
+- Nothing is sent back for a handoff that is no longer the agent's current
+  one (the agent was messaged or handed off again before its verdict), or for
+  an agent that has ended. When bb refuses the message before taking it (the
+  agent's thread is archived, deleted or can't take a message), its round is
+  given back, and the regional manager's catch-up says bb refused the
+  findings, with bb's answer. Either way the verdict goes to the regional
+  manager.
 
 ## Pull requests and CI
 
 bb tells plugins nothing about pull requests, so the plugin reads them itself,
 with `gh` on the machine running bb, on the same once-a-minute tick:
 
-- **What**: each open, started crew's newest pull request from its branch:
-  the one it had checked out at its latest handoff, read once through bb's
-  git plugin as it hands off, while it is awake anyway; else the one bb made
-  its environment on. Nothing else reads a crew's environment for its branch,
-  so a crew in a sandbox is never woken for it. For each, its number, state (open, draft, merged, closed), review (approved, changes
-  requested) and its CI on its head commit, as GitHub's merge box rolls the
-  checks up (passing, failing with the failed checks' names, running, or no
-  checks). A check state GitHub adds later counts as running, never as a pass.
+- **What**: each open issue's newest pull request from its branch: the branch
+  of its latest agent that has one, as that agent had it checked out at its
+  latest handoff (read once through bb's git plugin as it hands off), else the
+  one bb made its environment on. It is read whether or not that agent's
+  thread is still there, so an issue In review becomes Done when its pull
+  request merges even after its agent's thread was archived. Nothing else
+  reads an agent's environment for its branch. For each, its number, state
+  (open, draft, merged, closed), review (approved, changes requested) and its
+  CI on its head commit, as GitHub's merge box rolls the checks up (passing,
+  failing with the failed checks' names, running, or no checks). A check
+  state GitHub adds later counts as running, never as a pass.
 - **How often**: one `gh api graphql` call per GitHub repository for all its
-  crews. A repository is read every tick while any of its crews' CI is running
-  or a verdict waits for CI, else every five minutes. A closed crew, or one
-  whose thread is gone, is never read. A crew whose pull request was read
-  merged or closed isn't read again until it hands off again. Only projects
-  whose git remote is on github.com are read.
+  branches. A repository is read every tick while any CI there is running or a
+  verdict waits for CI, else every five minutes. A canceled or accepted issue
+  isn't read. A branch whose pull request was read merged or closed isn't read
+  again until its agent hands off again. Only projects whose git remote is on
+  github.com are read.
+- **A merge makes the issue Done**, whatever its agent is doing; a check still
+  pending or failed then is never sent back.
 - **A verdict waits for CI**: a done handoff that passed every criterion, when
-  it names a pull request or one is known for the crew, waits under Verifying
-  as "Waiting for CI on #41: <summary>" (or "Waiting for CI" before the
-  pull request is seen) until CI finishes on the very commit the handoff
-  claims; CI on another commit says nothing about it. CI passing makes it
-  verified, and it moves to Landing within about a minute. CI failing makes it
-  a failure, which goes back to the crew as above, naming the failed checks.
+  it names a pull request or one is known for the issue, waits under Verifying
+  as "Waiting for CI on #41: <summary>" (or "Waiting for CI" before the pull
+  request is seen) until CI finishes on the very commit the handoff claims;
+  CI on another commit says nothing about it. CI passing makes it verified,
+  and it moves to In review within about a minute. CI failing makes it a
+  failure, which goes back to the agent as above, naming the failed checks.
   Only then does the regional manager hear of it. A handoff with no pull
   request named or known doesn't wait. No checks on the claimed commit is not
   a pass: right after a push GitHub may not have attached them yet, so it
@@ -361,16 +412,16 @@ Rather than wait or poll, a regional manager sets itself a reminder with
 `crew_remind`:
 
 - **Set one** with a `note` (one line, up to 500 characters, such as "check
-  on c1") and `at`, when it first comes due: `"2m"`, `"in 2h"` or `"3d"` from
+  on i1") and `at`, when it first comes due: `"2m"`, `"in 2h"` or `"3d"` from
   now (whole minutes, hours or days), or an ISO 8601 time with its offset,
   such as `"2026-11-16T17:00+02:00"` (the thread can't know the server's time
   zone, so a time without one is refused). Add `every`, such as `"30m"`,
   `"2h"` or `"every 1d"`, to repeat it. A time the plugin can't read, a date
   that doesn't exist (such as `2027-02-29`), or one in the past, is refused
-  with the forms it accepts, and nothing is set. It
-  returns the reminder's id: `r1`, `r2`… An id is never reused.
+  with the forms it accepts, and nothing is set. It returns the reminder's
+  id: `r1`, `r2`… An id is never reused.
 - **When it comes due**, the once-a-minute tick wakes the thread with its
-  note, as in `- Your reminder r1: check on c1`, within about a minute. A
+  note, as in `- Your reminder r1: check on i1`, within about a minute. A
   one-off is then gone. A repeating one moves to its next time after now, so
   one missed several times while bb was down wakes the thread once, and keeps
   its schedule.
@@ -386,28 +437,31 @@ Rather than wait or poll, a regional manager sets itself a reminder with
 
 When only you can decide something, a regional manager asks with
 `crew_ask_user`: a one-line question (up to 500 characters) and up to five
-options (each one line, up to 80 characters, no two alike), or none. It
-returns at once and the thread keeps working: the question never waits as a
-form in its thread, where it would hold every update meant to wake it. It
-gets an id: `d1`, `d2`… An id is never reused.
+options (each one line, up to 80 characters, no two alike), or none, and
+optionally the issue it is about. It returns at once and the thread keeps
+working: the question never waits as a form in its thread, where it would
+hold every update meant to wake it. It gets an id: `d1`, `d2`… An id is never
+reused.
 
-The decision shows on the board under **Needs you**, above the crews there,
+The decision shows on the board under **Needs you**, above the issues there,
 with a button for each option and a field to answer in your own words: Enter
 sends it and Shift+Enter breaks the line, and Esc doesn't leave the page while
 it has text. A send that fails keeps your text, with the error under it. Text
 you haven't sent stays in the browser, through a resize or a reload, until you
-send it or the decision is answered elsewhere. Your
-answer moves the decision to **Done**, with the answer and when you gave it,
-and wakes the thread; its `crew_catch_up` returns your answer, as the option
-you chose or in your own words, with its question. A decision is answered
-once: a second answer, as from another window, is refused.
+send it or the decision is answered elsewhere. An issue the decision names
+also waits under Needs you until you answer. Your answer moves the decision to
+**Done**, with the answer and when you gave it, and wakes the thread; its
+`crew_catch_up` returns your answer, as the option you chose or in your own
+words, with its question. A decision is answered once: a second answer, as
+from another window, is refused.
 
 The panel's entry in the navigation rail counts everything under **Needs
-you** on every board the panel lists: open decisions and crews alike, the same
-rows each board shows there. Its name says which, as "3 need you: 1 decision,
-2 crews". It drops as you answer a decision or a crew leaves Needs you.
+you** on every board the panel lists: open decisions and issues alike, the
+same rows each board shows there. Its name says which, as "3 need you: 1
+decision, 2 issues". It drops as you answer a decision or an issue leaves
+Needs you.
 
-A crew's own question or approval stays in the crew's thread, for you to
+An agent's own question or approval stays in the agent's thread, for you to
 answer there.
 
 ## Edits it makes itself
@@ -416,21 +470,21 @@ A regional manager's rules say it never edits project files, builds or
 commits. bb can't enforce that (there is no read-only mode, and a plugin can't
 take a provider's file tools away), so the plugin **detects** it instead:
 
-- **When**: each time one of the regional manager's turns ends, the
-  plugin reads its own environment's working tree through bb's git plugin
-  (`bb--git` `status`). Crews' and verifiers' turns aren't read.
+- **When**: each time one of the regional manager's turns ends, the plugin
+  reads its own environment's working tree through bb's git plugin
+  (`bb--git` `status`). Agents' and verifiers' turns aren't read.
 - **Changed files** (any modified, added, deleted or untracked file) put a
   warning at the top of its board, under the switch: how many files changed
   in its own environment, when its turn ended, and that it was told to hand
-  the change to a crew. The thread is woken
-  with `- Your own environment has 2 files changed after your turn: hand the
-  change to a crew`, and its `crew_catch_up` tells it to propose, in a
-  decision on its board, a crew that redoes the change on its own branch
-  (always: it starts that crew only once you agree), and to ask you there whether to discard the changes in
-  its environment; or, if you made the changes, to leave them and say so in
-  its digest. It never stashes, reverts, checks out or deletes anything
-  there, not even its own changes, since you may have edited the same
-  files: discarding them is yours to do.
+  the change to an agent. The thread is woken with `- Your own environment
+  has 2 files changed after your turn: hand the change to an agent`, and its
+  `crew_catch_up` tells it to propose, in a decision on its board, an issue
+  whose agent redoes the change on its own branch (always: it starts that
+  agent only once you agree), and to ask you there whether to discard the
+  changes in its environment; or, if you made the changes, to leave them and
+  say so in its digest. It never stashes, reverts, checks out or deletes
+  anything there, not even its own changes, since you may have edited the
+  same files: discarding them is yours to do.
 - **Once per state**: a turn that ends with the same number of changed files
   records nothing new and wakes nobody, after a reload too, since the plugin
   compares with the last warning it stored. A different number warns again.
@@ -447,71 +501,53 @@ take a provider's file tools away), so the plugin **detects** it instead:
 ## The board
 
 The **Board** tab in a regional manager's side panel, and the **Board**
-page from its row in the panel, show the same board:
+page from its row in the panel, show the same board, live:
 
 - **Verify done handoffs**: the switch for this regional manager.
 - **Files changed in its own environment**: a warning with how many, and
   when its turn ended, while the latest read of its working tree found
   changed files (see [Edits it makes itself](#edits-it-makes-itself)).
-- **PR status unavailable: <why>**, only while the latest read of a crew's
-  pull request failed.
+- **PR status unavailable: <why>**, only while the latest read of a pull
+  request failed.
 - **Digest**: `DIGEST.md`, the regional manager's latest summary for you,
   and when it last changed.
-- **Decisions** the thread put to you (see [Decisions](#decisions)): open
-  under Needs you, answered under Done, each above the crews in its group.
-- **Crews**, each with its id, title, a one-line headline and its branch (the
-  one it had checked out at its latest handoff, else the one bb made its
-  environment on),
-  then, once it has one, its pull request: its number, which opens it on
-  GitHub, its state, its CI and its review. Grouped:
-  - **Needs you**: it has no thread because bb never started one, it is
-    waiting for your answer or approval in its thread, its last turn failed, it handed
-    off as blocked ("Blocked: <summary>") or gave up ("Gave up: <summary>"),
-    its done handoff failed verification ("✗ Failed verification after its
-    fix round: <summary>", or without "after its fix round" when the
-    findings couldn't be sent back; "✗ CI failed on #41 …" when every
-    criterion passed but CI failed), or it couldn't be verified ("Couldn't
-    verify: <summary>").
-  - **Ready for review**: it handed off as done and passed ("✓ Verified:
-    <summary>"), or it handed off while verification was off ("Unverified:
-    <summary>"), and it has no open pull request.
-  - **Verifying**: its verifier is starting or checking ("Verifying:
-    <summary>"), or every criterion passed and it waits for CI ("Waiting for
-    CI on #41: <summary>"). **Verifier** opens the hidden verifier thread.
-  - **Working**: its thread is running, starting, waiting to start or
-    stopping, as while it fixes findings sent back to it.
-  - **Landing**: as Ready for review, with its pull request open, approved
-    or not.
-  - **Idle**: its turn ended without a handoff.
-  - **Done**: resolved, stopped or archived through `crew_close`, its pull
-    request merged ("Merged #41"), or its thread was archived or deleted.
+- **Lanes**: Needs you, then In review, Verifying, In progress, Todo,
+  Backlog, Done and Canceled. Needs you holds the open decisions put to you,
+  then the issues flagged Needs you; answered decisions sit under Done.
+- **Issues**, each with its id, title, kind, a one-line headline that says why
+  it is where it is (such as "Working", "Verifying: <summary>", "✓ Verified:
+  <summary>" or "Blocked: <summary>"), its agent and branch, and once it has
+  one, its pull request: its number, which opens it on GitHub, its state,
+  its CI and its review. A row with a live agent thread opens it.
 
-A row placed by a verdict has a **Verdict** button. It opens the verdict
-under the row: how many criteria passed, the commit checked and the provider
-and model it ran on, then each criterion with Pass, Fail or Unverifiable. A
-failed or unverifiable criterion shows its evidence; a passed one folds it
-away until you open it. Findings follow, and **Open verifier thread** opens
-the verifier. What CI said about the commit follows the model: passed, failed
-with the failed checks, not checked and why, or still to finish. A verdict
-that couldn't be had shows why.
+An issue placed by a verdict has a **Verdict** button. It opens the verdict
+under the row: how many criteria passed and the commit checked; the
+plugin's own read when that commit wasn't checked out on a clean tree; what
+CI said about that commit (passed, failed with the failed checks' names, no
+checks, not checked with why, or still waiting for it); then each criterion
+with Pass, Fail or Unverifiable. A failed or unverifiable criterion
+shows its evidence; a passed one folds it away until you open it. Findings
+follow, with a link to the verifier thread. It warns when the check had to
+run on the agent's own model, but names no provider or model. A verdict that
+couldn't be had shows why. While it verifies, **Verifier** opens the hidden
+verifier thread.
 
-A handoff places its crew until the crew's thread starts another turn: type
-into a crew that handed off and it moves to Working, then to Idle if it ends
-without a new handoff. A row with a thread opens it. Rows move between groups
-as the threads change, without a reload. A thread status this plugin doesn't know shows as
-Idle.
+A handoff places its issue until the agent's thread starts another turn: type
+into an agent that handed off and its issue moves back to In progress. Rows
+move between lanes as the threads change, without a reload. A thread status
+this plugin doesn't know reads as idle.
 
 ## Memory files
 
 Each regional manager has its own folder on the bb server:
-`<bb data dir>/plugins/regional-manager/memory/<regional manager id>/`. The server log
-names the parent folder when the plugin loads. It starts with:
+`<bb data dir>/plugins/regional-manager/memory/<regional manager id>/`. The
+server log names the parent folder when the plugin loads. It starts with:
 
 - `MEMORY.md`: the index of the files.
 - `GOAL.md`: the goal typed in the composer.
 - `PLAN.md`: the plan.
 - `PREFERENCES.md`: the user's standing preferences, one per line.
-- `CREW.md`: rules every crew thread will follow.
+- `CREW.md`: rules every agent will follow.
 - `DIGEST.md`: the latest summary for the user.
 
 The thread may add others, such as `notes/api.md`.
@@ -547,14 +583,14 @@ and the Memory page read the new text on their next read.
 
 - **`gh`, signed in, on the machine running bb**, for pull requests and CI.
   Without it the board says "PR status unavailable: <why>" and verdicts that
-  would wait for CI pass as "CI not checked" (see
-  [Pull requests and CI](#pull-requests-and-ci)).
-- **bb's git plugin** (`bb--git`, built in), to read the branch a crew has
-  checked out as it hands off, and the regional manager's own working tree
-  as each of its turns ends. When it can't read one, the crew keeps the branch
-  recorded before (else bb's), and no edit warning is recorded.
-- **An environment provider**, such as the boat-sandbox plugin, only for crews
-  you want off the regional manager's machine.
+  would wait for CI pass as "CI not checked".
+- **bb's git plugin** (`bb--git`, built in), to read the commit, tree and
+  branch an agent has checked out as it hands off, and the regional manager's
+  own working tree as each of its turns ends. When it can't read an agent's,
+  its done handoff can't be verified; when it can't read the manager's, no
+  edit warning is recorded.
+- **An environment provider**, such as the boat-sandbox plugin, only for
+  agents you want off the regional manager's machine.
 
 ## Limits
 
@@ -567,4 +603,5 @@ and the Memory page read the new text on their next read.
   committed one isn't seen, and nothing is blocked or reverted.
 - Reminders take no cron expressions and nothing finer than a minute.
 - The plugin never merges, approves or comments on a pull request.
-- Nobody chooses a model for a crew; it gets the regional manager's.
+- Only build issues exist: one agent per issue at a time, verified against its
+  done-criteria.

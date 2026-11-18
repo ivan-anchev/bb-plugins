@@ -1,24 +1,27 @@
-// The only writer of events, and the only thing that wakes a coordinating thread. Each event is
+// The only writer of events, and the only thing that wakes a regional manager. Each event is
 // stored first, then announced by a doorbell: one short message that lists what happened, while the
 // whole of it waits for crew_catch_up. Ringing derives everything from the database, so ringing
 // again (on every tick, after a reload) sends only what no doorbell has announced yet.
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
-import { titlesOf } from "../../model/crew.ts";
+import type { Agent, AgentId, EndedHow } from "../../model/agent.ts";
 import type { DecisionId } from "../../model/decision.ts";
-import type { HandoffId, NewHandoff } from "../../model/handoff.ts";
+import type { Handoff, HandoffId } from "../../model/handoff.ts";
 import { wakes, type InboxEvent, type StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { doorbellText } from "../../model/inbox/wake-text.ts";
-import type { PrSnapshot, PrUnavailable } from "../../model/verdict/pr.ts";
-import type { CoordinatorId, CrewId } from "../../model/role.ts";
+import type { IssueId } from "../../model/issue/issue.ts";
+import type { CoordinatorId } from "../../model/role.ts";
+import type { CheckId } from "../../model/verdict/check.ts";
 import type { CheckoutRead } from "../../model/verdict/checkout.ts";
+import type { PrSnapshot, PrUnavailable } from "../../model/verdict/pr.ts";
 import type { Verdict } from "../../model/verdict/verdict.ts";
-import { threadsById } from "../crew/board/board.ts";
-import type { Settlement, Store, VerdictFrom } from "../store.ts";
+import { isLive, threadsById } from "../agents/threads.ts";
+import type { Settlement, VerdictFrom } from "../store/issue/checks-store.ts";
+import type { Store } from "../store/store.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
 type SendArgs = Parameters<Threads["send"]>[0];
 
-/** A coordinating thread as the tick reads it, to fire its reminders. */
+/** A regional manager's thread as the tick reads it, to fire its reminders. */
 type ListedThread = { id: string; archivedAt: number | null; deletedAt: number | null };
 
 /** A message bb holds in a thread's queue, down to the fields the tick reads. */
@@ -44,11 +47,12 @@ type InboxBb = {
 type InboxStore = Pick<
   Store,
   | "coordinator"
-  | "crews"
-  | "handoff"
+  | "issues"
+  | "check"
   | "insertHandoff"
-  | "giveUpVerdict"
+  | "giveUpCheck"
   | "settleReturned"
+  | "endAgent"
   | "setVerify"
   | "insertEvent"
   | "unannounced"
@@ -63,7 +67,6 @@ type InboxStore = Pick<
   | "markPrUnavailable"
   | "dueReminders"
   | "fireReminder"
-  | "deleteReminders"
   | "decision"
   | "answerDecision"
   | "recordOwnTree"
@@ -101,7 +104,7 @@ export function createInbox({ bb, store, onChange }: Deps) {
     ringing.add(id);
     let delivery: "sent" | "queued";
     try {
-      const sent = await bb.sdk.threads.send({ threadId: coordinator.threadId, input: [{ type: "text", text: doorbellText(events, { titles: titlesOf(store.crews(id)), handoff: store.handoff, decision: store.decision }), mentions: [] }], mode: "queue-if-active" });
+      const sent = await bb.sdk.threads.send({ threadId: coordinator.threadId, input: [{ type: "text", text: doorbellText(events, { titles: new Map(store.issues(id).map(({ id, title }) => [id, title])), check: store.check, decision: store.decision }), mentions: [] }], mode: "queue-if-active" });
       // why record a send that lands after a dispose: it happened, and announcing it again would ring twice.
       store.announce(id, events.map((event) => event.id), sent.delivery === "queued" ? sent.queuedMessage.id : null, Date.now());
       delivery = sent.delivery;
@@ -177,22 +180,20 @@ export function createInbox({ bb, store, onChange }: Deps) {
   }
 
   /**
-   * Records every reminder due at `now` whose coordinating thread bb lists, unless it was cancelled
-   * or recorded since it was read (see fireReminder). One of a thread bb lists as archived stays
-   * due, and fires once the thread is unarchived. Every reminder of a thread bb deleted is deleted,
-   * so none is read again. why no ring here: the tick's own ring follows, so one doorbell carries
-   * them with whatever else the tick found.
+   * Records every reminder due at `now` whose regional manager bb runs, unless it was cancelled or
+   * recorded since it was read (see fireReminder). One of a thread bb lists as archived stays due,
+   * and fires once the thread is unarchived; a deleted manager's are removed with it by the agents'
+   * reconcile. why no ring here: the tick's own ring follows, so one doorbell carries them with
+   * whatever else the tick found.
    */
   async function fireDueReminders(now: number): Promise<void> {
     const due = store.dueReminders(now);
     if (due.length === 0) return;
     const threads = await threadsById(bb, [...new Set(due.map((reminder) => reminder.threadId))]);
     if (disposed) return;
-    for (const { id, coordinatorId, threadId } of due) {
+    for (const { id, threadId } of due) {
       const thread = threads.get(threadId);
-      // why both: bb leaves a deleted thread out of a list by id, or lists it with deletedAt.
-      if (thread === undefined || thread.deletedAt !== null) store.deleteReminders(coordinatorId);
-      else if (thread.archivedAt === null) store.fireReminder(id, now);
+      if (thread !== undefined && isLive(thread)) store.fireReminder(id, now);
     }
   }
 
@@ -211,41 +212,46 @@ export function createInbox({ bb, store, onChange }: Deps) {
 
   return {
     /**
-     * Stores the handoff with its verdict, and its event unless a verifier is still to check it, then
-     * wakes its coordinating thread. Returns what the store did (see insertHandoff).
+     * Stores the handoff with its check, and its event unless a verifier is still to check it, then
+     * wakes its regional manager. Returns what the store did (see insertHandoff).
      */
-    handoff(handoff: NewHandoff, checkout: CheckoutRead): ReturnType<Store["insertHandoff"]> {
+    handoff(handoff: Handoff, checkout: CheckoutRead): ReturnType<Store["insertHandoff"]> {
       const inserted = store.insertHandoff(handoff, checkout);
       recorded(handoff.coordinatorId);
       return inserted;
     },
 
-    /** Gives up on a waiting verdict and announces it checked, if it is still where `from` says. */
-    giveUpVerdict(handoffId: HandoffId, from: VerdictFrom, verdict: Extract<Verdict, { state: "could-not-run" }>): void {
-      const id = store.giveUpVerdict(handoffId, from, verdict, Date.now());
+    /** Gives up on a waiting check and announces it checked, if it is still where `from` says. */
+    giveUpCheck(checkId: CheckId, from: VerdictFrom, verdict: Extract<Verdict, { state: "could-not-run" }>): void {
+      const id = store.giveUpCheck(checkId, from, verdict, Date.now());
       if (id !== null) recorded(id);
     },
 
     /** Settles a returned verdict as `as` says and announces it, unless it was settled already (see settleReturned). */
-    settleVerdict(handoffId: HandoffId, as: Settlement): void {
-      const id = store.settleReturned(handoffId, as, Date.now());
+    settleCheck(checkId: CheckId, as: Settlement): void {
+      const id = store.settleReturned(checkId, as, Date.now());
       if (id !== null) recorded(id);
     },
 
+    /** Ends the agent with what it left, and tells its regional manager when its issue returned to Todo (see endAgent). */
+    endAgent(agent: Pick<Agent, "coordinatorId" | "id" | "issueId">, how: EndedHow, left: HandoffId | null, placed: boolean): void {
+      if (store.endAgent(agent, how, left, placed, Date.now())) recorded(agent.coordinatorId);
+    },
+
     /**
-     * Saves a successful read of a crew's pull request (null: none), begun at the crew's handoff
-     * `handoffAtRead`, with a `pr` event when it changed meaningfully. The board reads it again either way: its CI may have moved. why no ring
-     * here: the watch reads only on the tick, whose own ring follows, and a verdict the read settles
-     * rings first, so one doorbell carries both.
+     * Saves a successful read of a branch's pull request (null: none), begun at the handoff
+     * `handoffAtRead`, with a `pr` event naming `on` when it changed meaningfully. The board reads it
+     * again either way: its CI may have moved. why no ring here: the watch reads only on the tick,
+     * whose own ring follows, and a verdict the read settles rings first, so one doorbell carries both.
      */
-    prRead(coordinatorId: CoordinatorId, crewId: CrewId, pr: PrSnapshot | null, handoffAtRead: HandoffId | null, at: number): void {
-      store.savePrRead(coordinatorId, crewId, pr, handoffAtRead, at);
+    prRead(coordinatorId: CoordinatorId, branch: string, on: { issueId: IssueId; agentId: AgentId }, pr: PrSnapshot | null, handoffAtRead: HandoffId | null, at: number): void {
+      store.savePrRead(coordinatorId, branch, on, pr, handoffAtRead, at);
       onChange(coordinatorId);
     },
 
-    /** Records why reading a crew's pull request failed, and whether that lasts; its snapshot stays, and nobody is woken. */
-    prUnavailable(coordinatorId: CoordinatorId, crewId: CrewId, unavailable: PrUnavailable, at: number): void {
-      store.markPrUnavailable(coordinatorId, crewId, unavailable, at);
+    /** Records why reading a branch's pull request failed, and whether that lasts; its snapshot stays, and nobody is woken. */
+    prUnavailable(coordinatorId: CoordinatorId, branch: string, unavailable: PrUnavailable, at: number): void {
+      store.markPrUnavailable(coordinatorId, branch, unavailable, at);
       onChange(coordinatorId);
     },
 

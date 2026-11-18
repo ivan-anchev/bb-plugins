@@ -35,7 +35,7 @@ function server() {
     const stored = files.get(file);
     return stored === undefined ? { text: null, revision: memoryRevisionSchema.parse(0) } : { text: { content: stored.content, version: stored.version }, revision: memoryRevisionSchema.parse(stored.revision) };
   };
-  /** Someone else writes the file, as the Coordinator does. */
+  /** Someone else writes the file, as the regional manager does. */
   const write = (file: MemoryFile, content: string): { version: string; revision: number } => {
     const revision = (files.get(file)?.revision ?? 0) + 1;
     const version = `v${revision}`;

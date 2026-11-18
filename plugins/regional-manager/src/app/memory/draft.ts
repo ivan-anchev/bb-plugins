@@ -1,6 +1,6 @@
 // What the Memory editor shows for one file: the file as last known, or the user's draft over it.
 // Only the user's edit is state; everything else follows the current read, so a write by the
-// Coordinator shows at once in a file the user isn't editing. The draft and the save live apart:
+// regional manager shows at once in a file the user isn't editing. The draft and the save live apart:
 // the draft in the browser, so a remount or a reload keeps it, and the save with the page, whose
 // write it waits for.
 import { z } from "zod";
@@ -11,11 +11,11 @@ import type { CoordinatorId } from "../../model/role.ts";
 const draftSchema = z.object({ text: z.string(), base: memoryVersionSchema });
 export type Draft = z.infer<typeof draftSchema>;
 
-/** Every unsaved draft of one coordinating thread's memory, by file, as the browser keeps them. */
+/** Every unsaved draft of one regional manager's memory, by file, as the browser keeps them. */
 export const draftsSchema = z.partialRecord(memoryFileSchema, draftSchema);
 type Drafts = z.infer<typeof draftsSchema>;
 
-/** Where the browser keeps a coordinating thread's drafts. */
+/** Where the browser keeps a regional manager's drafts. */
 export const draftsKeyOf = (coordinatorId: CoordinatorId): string => `coordinator-memory-drafts:${coordinatorId}`;
 
 /** The drafts with `file`'s replaced, or dropped for null; null once none is left, so nothing stays stored. */

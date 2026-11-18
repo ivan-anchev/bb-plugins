@@ -1,35 +1,39 @@
 // Tests only: the server's modules wired as server.ts wires them, over an in-memory database, a
 // temporary memory folder and a fake bb that records what the plugin registers.
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgentToolResult, PluginStorage, PluginThreadEventPayloads } from "@get-bb/plugin-sdk";
+import type { BbPluginApi, PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgentToolResult, PluginStorage, PluginThreadEventPayloads } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
-import type { z } from "zod";
-import type { CrewThread } from "../model/board/crew-state.ts";
-import type { EnvironmentProvider } from "../model/crew.ts";
+import { createFakePluginHost, type FakePluginHarness } from "@get-bb/plugin-sdk/testing";
+import { z } from "zod";
+import type { EnvironmentProvider } from "../model/agent.ts";
+import type { HolderThread } from "../model/issue/status.ts";
 import type { CoordinatorId } from "../model/role.ts";
-import { boardHandlers } from "./crew/board/board-rpc.ts";
-import { createBoard } from "./crew/board/board.ts";
-import { placementFactsReader } from "./crew/placement-facts.ts";
-import { createCrews } from "./crew/crews.ts";
-import type { TurnsBb } from "./crew/handoffs.ts";
-import { forwardCrewThreadEvents } from "./crew/thread-events.ts";
+import { registerAgentTools } from "./agents/agent-tools.ts";
+import { createAgents } from "./agents/agents.ts";
+import { placementFactsReader } from "./agents/placement-facts.ts";
+import { forwardThreadEvents } from "./agents/thread-events.ts";
+import type { TurnsBb } from "./agents/threads.ts";
+import { boardHandlers } from "./board/board-rpc.ts";
+import { createBoard } from "./board/board.ts";
+import type { CatalogBb } from "./execution/catalog.ts";
 import { createInbox } from "./inbox/inbox.ts";
 import { watchOwnTree } from "./inbox/own-tree-watch.ts";
-import { watchCrewThreads } from "./inbox/thread-watch.ts";
+import { watchAgentThreads } from "./inbox/thread-watch.ts";
+import { registerIssueTools } from "./issues/issue-tools.ts";
+import { createIssues } from "./issues/issues.ts";
 import { openMemoryRoot } from "./memory/memory-files.ts";
 import { memoryHandlers } from "./memory/memory-rpc.ts";
 import { memoryStorage } from "./memory-storage.ts";
 import { registerRoles } from "./roles.ts";
 import { createSpawner } from "./spawn.ts";
-import { openStore } from "./store.ts";
-import { registerCoordinatorTools } from "./tools/coordinator-tools.ts";
+import { openStore } from "./store/store.ts";
 import { registerCrewTools } from "./tools/crew-tools.ts";
+import { registerHandoffTool } from "./tools/handoff-tool.ts";
 import type { ToolsBb } from "./tools/tool-kit.ts";
 import { registerVerdictTool } from "./verify/verdict-tool.ts";
-import type { ModelsBb } from "./verify/verifier-model.ts";
 import { createVerify } from "./verify/verify.ts";
 import { createPrWatch } from "./watch/pr-watch.ts";
 
@@ -46,11 +50,12 @@ type SpawnBb = Parameters<typeof createSpawner>[0];
 
 type Metadata = Awaited<ReturnType<SpawnBb["sdk"]["threads"]["getPluginMetadata"]>>;
 type SpawnArgs = Parameters<SpawnBb["sdk"]["threads"]["spawn"]>[0];
-type CrewsBb = Parameters<typeof createCrews>[0]["bb"];
+type AgentsBb = Parameters<typeof createAgents>[0]["bb"];
+type IssuesBb = Parameters<typeof createIssues>[0]["bb"];
 type InboxBb = Parameters<typeof createInbox>[0]["bb"];
 type VerifyBb = Parameters<typeof createVerify>[0]["bb"];
 type PrWatchBb = Parameters<typeof createPrWatch>[0]["bb"];
-type SendArgs = Parameters<CrewsBb["sdk"]["threads"]["send"]>[0];
+type SendArgs = Parameters<AgentsBb["sdk"]["threads"]["send"]>[0];
 type Delivery = Awaited<ReturnType<InboxBb["sdk"]["threads"]["send"]>>;
 type QueuedMessage = Awaited<ReturnType<InboxBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number];
 
@@ -82,7 +87,7 @@ type FakeExecution = { model: string; reasoningLevel: string; serviceTier: strin
  * and model bb runs it on (null: bb has no turn of it on record), and the sequence of each of its
  * turns, oldest first.
  */
-type FakeThread = CrewThread & {
+type FakeThread = HolderThread & {
   id: string;
   providerId: string;
   environmentId: string;
@@ -208,8 +213,11 @@ type Storage = Pick<PluginStorage, "database" | "migrate">;
 /** `storage`: the plugin's database, as bb keeps it across reloads; a test may give one an earlier version of the plugin used. */
 export function harness(spawns: SpawnBehaviour = { created: true, answer: "thread" }, stops: StopBehaviour = "idle", storage: Storage = memoryStorage().storage) {
   const behaviour = { ...spawns };
-  /** The providers bb lists, in its order; a test may replace them. */
-  const providers = { list: structuredClone(PROVIDERS) };
+  /**
+   * The providers bb lists, in its order; a test may replace them. Set `holding` to keep each answer
+   * of a provider's models, as read when called, until the test calls its release in `held`.
+   */
+  const providers: { list: FakeProvider[]; holding: boolean; held: (() => void)[] } = { list: structuredClone(PROVIDERS), holding: false, held: [] };
   /**
    * Set `failure` to make every send to its thread reject with its error: before bb takes the
    * message, or after, when `taken`, as when the connection drops while bb answers. Set `pending`
@@ -265,6 +273,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   const turnEvents: { failure: Error | null } = { failure: null };
   /** Set `failure` to make every listing of threads by id reject with it, as when bb can't answer. */
   const threadLists: { failure: Error | null } = { failure: null };
+  /** Set `pending` to hold every stop until it settles, as a slow bb does; set `failure` to make every stop reject with it then. */
+  const stopRequests: { pending: Promise<void> | null; failure: Error | null } = { pending: null, failure: null };
   /** Set `answered` to run as bb answers a thread's model lookup, as when someone acts at that moment. */
   const modelLookups: { answered: ((threadId: string) => void) | null } = { answered: null };
   let store = openStore(storage);
@@ -282,6 +292,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   const delivered: { threadId: string; text: string }[] = [];
   const textOfInput = (args: SendArgs): string => args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n");
   const sent: SendArgs[] = [];
+  const attempted: string[] = [];
   const invalidated: string[] = [];
   const warnings: string[] = [];
   const disposers: (() => void)[] = [];
@@ -306,7 +317,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     for (const handler of handlersOf(event)) await handler(payload);
   }
 
-  const threads: SpawnBb["sdk"]["threads"] & CrewsBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] & VerifyBb["sdk"]["threads"] & PrWatchBb["sdk"]["threads"] = {
+  const threads = {
     async spawn(args) {
       const id = `thr_${++spawned}`;
       metadata.set(id, args.pluginMetadata ?? {});
@@ -334,8 +345,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       if (value === undefined) throw new Error(`No thread ${threadId}`);
       return value;
     },
-    // As bb does, listing by id includes archived and deleted threads.
-    list: async ({ threadIds }) => {
+    // As bb does, listing by id includes archived and deleted threads. why optional: bb's SDK lists without ids too; the plugin always names them.
+    list: async ({ threadIds }: { threadIds?: readonly string[] } = {}) => {
+      if (threadIds === undefined) throw new Error("The plugin lists threads by id");
       if (threadLists.failure !== null) throw threadLists.failure;
       return threadIds.flatMap((id) => fakeThreads.get(id) ?? []);
     },
@@ -347,6 +359,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     // As bb does, a deleted or archived thread refuses a message before taking it, a
     // queue-if-active message to a busy thread is queued, and any other starts a turn.
     async send(args): Promise<Delivery> {
+      attempted.push(args.threadId);
       await sends.pending;
       const thread = fakeThread(args.threadId);
       if (thread.deletedAt !== null) throw bbHttpError(404, "thread_not_found", "Thread not found");
@@ -378,21 +391,30 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         return { ok: true };
       },
     },
+    // As bb does, a deleted thread's events are gone; an archived one's stay readable.
     events: {
-      list: async ({ threadId }) => {
+      list: async ({ threadId }: { threadId: string }) => {
         if (turnEvents.failure !== null) throw turnEvents.failure;
-        const latest = fakeThread(threadId).turns.at(-1);
+        const thread = fakeThread(threadId);
+        if (thread.deletedAt !== null) throw bbHttpError(404, "thread_not_found", "Thread not found");
+        const latest = thread.turns.at(-1);
         return latest === undefined ? [] : [{ seq: latest }];
       },
     },
+    // As bb does, a stop that ends a running turn announces the thread idle, with the interrupted turn's last answer.
     async stop({ threadId }) {
-      fakeThread(threadId).status = stops;
+      await stopRequests.pending;
+      if (stopRequests.failure !== null) throw stopRequests.failure;
+      const thread = fakeThread(threadId);
+      const interrupted = thread.status !== "idle" && stops === "idle";
+      thread.status = stops;
+      if (interrupted) await emit("thread.idle", { thread: { ...ref(threadId), environmentId: thread.environmentId }, lastAssistantText: "Interrupted halfway." });
     },
     async archive({ threadId }) {
       fakeThread(threadId).archivedAt = Date.now();
     },
     output: async () => ({ output: "Done: npm test passes." }),
-  };
+  } satisfies SpawnBb["sdk"]["threads"] & AgentsBb["sdk"]["threads"] & IssuesBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] & VerifyBb["sdk"]["threads"] & PrWatchBb["sdk"]["threads"];
   const agents: ToolsBb["agents"] & Parameters<typeof registerRoles>[0]["agents"] = {
     registerTool(tool) {
       tools.set(tool.name, { parameters: tool.parameters, run: async (input, threadId) => tool.execute(tool.parameters.parse(input), { threadId, projectId: "prj_1", signal: new AbortController().signal }) });
@@ -401,13 +423,16 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       configure = provider;
     },
   };
-  const providersArea: ModelsBb["sdk"]["providers"] = {
+  // why satisfies, and an optional provider: bb's SDK takes either call without arguments, and the plugin always names the provider.
+  const providersArea = {
     list: async () => providers.list.map(({ id, available }) => ({ id, available })),
-    async models({ providerId }) {
+    async models({ providerId }: { providerId?: string } = {}) {
+      if (providerId === undefined) throw new Error("The plugin names the provider whose models it reads");
       const models = providers.list.find((provider) => provider.id === providerId)?.models ?? null;
+      if (providers.holding) await new Promise<void>((release) => providers.held.push(release));
       return models === null ? { modelLoadError: { code: "auth_required", detail: null, providerId }, models: [] } : { modelLoadError: null, models };
     },
-  };
+  } satisfies CatalogBb["sdk"]["providers"];
   const projects = { get: async (_: { projectId: string }) => ({ gitRemoteUrl: github.remote }) };
   /**
    * bb's environments: the ones it has destroyed, as when their sandbox was removed (every other one
@@ -440,10 +465,12 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     };
   }
   const plugins = {
-    async callRpc<T>({ pluginId, method, input, outputSchema }: { pluginId: string; method: string; input: { keys: string[] }; outputSchema: z.ZodType<T> }): Promise<T> {
+    // why any input: bb's SDK takes any JSON; git's status RPC takes the keys of the environments to read.
+    async callRpc<T>({ pluginId, method, input, outputSchema }: { pluginId?: string; method: string; input?: unknown; outputSchema: z.ZodType<T> }): Promise<T> {
       if (pluginId !== "bb--git" || method !== "status") throw new Error(`No rpc ${pluginId} ${method}`);
-      git.calls.push(input.keys);
-      const answer = outputSchema.parse(Object.fromEntries(input.keys.map((key) => [key, gitStatus(key)])));
+      const { keys } = z.object({ keys: z.array(z.string()) }).parse(input);
+      git.calls.push(keys);
+      const answer = outputSchema.parse(Object.fromEntries(keys.map((key) => [key, gitStatus(key)])));
       if (git.holding) await new Promise<void>((release) => git.held.push(release));
       return answer;
     },
@@ -470,22 +497,27 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
 
   const refreshBoard = (id: CoordinatorId) => invalidated.push(`board:${id}`);
 
+  const refreshCoordinators = () => invalidated.push("coordinators");
+
   /** The plugin's modules over the store and the fake bb, wired as server.ts wires them. */
   function wire() {
     const spawner = createSpawner(bb, store, memory, () => bindings++);
     const board = createBoard(bb, store, memory);
-    const crews = createCrews({ bb, store, spawner, onChange: refreshBoard });
     const inbox = createInbox({ bb, store, onChange: refreshBoard });
+    const agents = createAgents({ bb, store, spawner, inbox, memory, placementFacts: placementFactsReader(bb, store), onChange: refreshBoard, onRemoved: refreshCoordinators });
+    const issues = createIssues({ bb, store, onChange: refreshBoard });
     const verify = createVerify({ bb, store, spawner, inbox });
     registerRoles(bb, store);
-    registerCoordinatorTools(bb, { store, inbox, memory, crews, board, placementFacts: placementFactsReader(bb, store), onChange: refreshBoard });
-    registerCrewTools(bb, { store, verify });
+    registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
+    registerIssueTools(bb, { store, issues });
+    registerAgentTools(bb, { store, agents });
+    registerHandoffTool(bb, { store, verify });
     registerVerdictTool(bb, { store, verify });
-    forwardCrewThreadEvents(bb, store, refreshBoard);
-    watchCrewThreads({ bb, store, inbox, onChange: refreshBoard });
+    forwardThreadEvents(bb, { store, agents, refreshBoard });
+    watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });
     const prWatch = createPrWatch({ bb, store, inbox, gh });
-    return { spawner, inbox, verify, prWatch, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }) } };
+    return { spawner, inbox, verify, agents, prWatch, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }) } };
   }
   let plugin = wire();
 
@@ -505,7 +537,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     sends,
     /** What happens as bb answers a model lookup; a test may set it. */
     modelLookups,
-    /** The providers bb lists, in its order; a test may replace them. */
+    /** The providers bb lists, in its order; a test may replace them, or hold the reads of their models. */
     providers,
     /** The inbox, as the tools and the verify step write to it. */
     get inbox() {
@@ -525,10 +557,13 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     turnEvents,
     /** How bb answers a listing of threads by id; a test may make it fail. */
     threadLists,
+    /** How bb answers a stop; a test may hold it or make it fail. */
+    stopRequests,
     /** The time the next tick runs at; a test may move it on. */
     clock,
     /** The schedule's once-a-minute pass, as server.ts runs it, at the clock's time. */
     async tick(): Promise<void> {
+      await plugin.agents.reconcile().catch((error: unknown) => bb.log.warn(`Could not reconcile the agents; the next tick tries again: ${error instanceof Error ? error.message : String(error)}`));
       await plugin.prWatch.tick(clock.now);
       await plugin.verify.reconcile();
       await plugin.inbox.tick(clock.now);
@@ -545,12 +580,26 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       store = openStore(storage);
       plugin = wire();
     },
+    /**
+     * bb loads the plugin from this entry point, as it loads server.ts: over the SDK's fake plugin
+     * host, whose bb is a whole BbPluginApi, with this fake bb's threads, providers, projects,
+     * plugins and environments as its SDK; any other SDK call throws, naming itself. It runs beside
+     * the harness's wiring, on a database of its own. The host's harness, to call what the entry
+     * point registered and read it back.
+     */
+    load(entry: (bb: BbPluginApi) => void): FakePluginHarness {
+      const host = createFakePluginHost({ pluginId: PLUGIN_ID, sdk: bb.sdk, agentSkillIds: manifestSkillIds() });
+      entry(host.bb);
+      return host.harness;
+    },
     /** A thread bb has, as the plugin can list it, and what it was spawned with. */
     thread: fakeThread,
     /** How many threads bb has spawned. */
     spawned: () => spawned,
     /** Every message sent to a thread, in order. */
     sent: () => [...sent],
+    /** The thread of every send the plugin attempted, refused ones included, in order. */
+    sendAttempts: () => [...attempted],
     /** Every RPC tag invalidated, in order. */
     invalidated: () => [...invalidated],
     /** Every warning the plugin logged, in order. */
@@ -619,7 +668,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   };
 }
 
-/** A harness with one coordinating thread started, verifying its crews' done handoffs unless `verify` is false; its thread and its id. */
+/** A harness with one coordinating thread started, verifying its agents' done handoffs unless `verify` is false; its thread and its id. */
 export async function coordinating({ verify = true, spawns, stops, storage }: { verify?: boolean; spawns?: SpawnBehaviour; stops?: StopBehaviour; storage?: Storage } = {}) {
   const kit = harness(spawns, stops, storage);
   const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), verify);
@@ -661,6 +710,13 @@ export const textOf = (result: PluginAgentToolResult): string => (typeof result 
 
 export const isRefusal = (result: PluginAgentToolResult): boolean => typeof result !== "string" && result.isError === true;
 
+/** The skills the plugin's manifest declares, as bb reads them: each folder in the directories its bb.skills names. */
+function manifestSkillIds(): string[] {
+  const root = join(import.meta.dirname, "../..");
+  const manifest = z.object({ bb: z.object({ skills: z.array(z.string()) }) }).parse(JSON.parse(readFileSync(join(root, "package.json"), "utf8")));
+  return manifest.bb.skills.flatMap((dir) => readdirSync(join(root, dir)));
+}
+
 function configurationContext(threadId: string, pluginMetadata: PluginAgentConfigurationContext["pluginMetadata"]): PluginAgentConfigurationContext {
   return {
     pluginMetadata,
@@ -671,4 +727,19 @@ function configurationContext(threadId: string, pluginMetadata: PluginAgentConfi
     provider: { id: "claude-code", model: "opus", capabilities: { supportsNativeUserQuestion: true } },
     origin: { kind: null, pluginId: null },
   };
+}
+
+/** A build issue as most tests file it: a brief, and one done-criterion. */
+export const ISSUE = { kind: "build", title: "Add retries", description: "Failed webhook deliveries are lost.", brief: "Retry failed deliveries with backoff.", doneCriteria: ["npm test passes"] };
+
+/** The id issue_create's answer names. */
+export const issueIn = (text: string): string => /Filed (i\d+)/.exec(text)?.[1] ?? assert.fail(`no issue filed: ${text}`);
+
+/**
+ * The regional manager `threadId` files an issue (ISSUE, with `fields` over it) and starts an agent
+ * on it (with `start` added to agent_start's input); returns the issue's id and the agent's thread.
+ */
+export async function startedAgent(kit: ReturnType<typeof harness>, threadId: string, fields: object = {}, start: object = {}): Promise<{ issue: string; agentThreadId: string }> {
+  const issue = issueIn(textOf(await kit.call("issue_create", { ...ISSUE, ...fields }, threadId)));
+  return { issue, agentThreadId: threadIn(textOf(await kit.call("agent_start", { issue, ...start }, threadId))) };
 }

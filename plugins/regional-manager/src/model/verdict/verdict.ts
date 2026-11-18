@@ -1,4 +1,4 @@
-// A done handoff's verdict: whether the commit the crew claimed was what it left checked out, as the
+// A done handoff's verdict: whether the commit the agent claimed was what it left checked out, as the
 // plugin read it, whether an independent verifier thread checked the work against each
 // done-criterion, and what it found. Pass or fail is never stored: `judge` derives it, so the
 // board, the catch-up and the doorbell can't disagree.
@@ -24,8 +24,8 @@ const settledCiSchema = ciVerdictSchema.default({ kind: "none" });
 /**
  * What became of a returned verdict. `pending`: nobody has been told yet. `waiting-for-ci`: it
  * passed every criterion, and CI on its commit is still to come. `sending-back`: its findings are
- * on their way to the crew as fix round `round`, already counted on the crew. `sent-back`: the
- * crew has them. `maybe-sent-back`: the plugin stopped while they were on their way, or the send
+ * on their way to the agent as fix round `round`, already counted on the agent. `sent-back`: the
+ * agent has them. `maybe-sent-back`: the plugin stopped while they were on their way, or the send
  * failed in a way that doesn't show whether bb took them, so it is final and its coordinating
  * thread's, with the round still spent. `checked`: it is final, and its coordinating thread's;
  * `refused` is bb's answer when it refused the findings sent back, else null. Each that settled
@@ -40,15 +40,15 @@ const settlementSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("checked"), refused: z.string().nullable(), ci: settledCiSchema }),
 ]);
 
-/** Each state up to a returned verdict keeps `checkout`, the crew's environment as bb's git plugin read it when the crew handed off. */
+/** Each state up to a returned verdict keeps `checkout`, the agent's environment as bb's git plugin read it when the agent handed off. */
 export const verdictSchema = z.discriminatedUnion("state", [
   /** Verification is on and no verifier has started yet. */
   z.object({ state: z.literal("queued"), checkout: checkoutSchema }),
   /** A verifier thread is checking; `nudged` once it went idle without a verdict and was asked again. */
   z.object({ state: z.literal("running"), verifierThreadId: verifierThreadIdSchema, nudged: z.boolean(), checkout: checkoutSchema }),
   /**
-   * The verifier's verdict on the claimed commit `headSha`: each criterion in the crew's order, and
-   * the model bb ran it on. `sameModel`: no other model was available, so it ran on the crew's own.
+   * The verifier's verdict on the claimed commit `headSha`: each criterion in the issue's order, and
+   * the model bb ran it on. `sameModel`: no other model was available, so it ran on the agent's own.
    * why a default: a verdict stored before settlements existed was settled as it was stored.
    */
   z.object({
@@ -62,11 +62,11 @@ export const verdictSchema = z.discriminatedUnion("state", [
     sameModel: z.boolean(),
     settlement: settlementSchema.default({ kind: "checked", refused: null, ci: { kind: "none" } }),
   }),
-  /** No verdict will come: bb's git plugin couldn't read the crew's environment, or the verifier never started or stopped without one. Its thread, if it had one. */
+  /** No verdict will come: bb's git plugin couldn't read the agent's environment, or the verifier never started or stopped without one. Its thread, if it had one. */
   z.object({ state: z.literal("could-not-run"), verifierThreadId: verifierThreadIdSchema.nullable(), reason: z.string() }),
-  /** A newer done handoff from the same crew replaced this one before its verdict. */
+  /** A newer done handoff from the same agent replaced this one before its verdict. */
   z.object({ state: z.literal("superseded") }),
-  /** Verification was off when the crew handed off. */
+  /** Verification was off when the agent handed off. */
   z.object({ state: z.literal("waived") }),
 ]);
 export type Verdict = z.infer<typeof verdictSchema>;
@@ -81,12 +81,12 @@ type Outcome = "pending" | "waiting-for-ci" | "pass" | "fail" | "could-not-run" 
 /**
  * The verdict a done handoff starts with: waived while verification is off, else queued for a
  * verifier on the checkout read. A checkout bb's git plugin couldn't read can't be verified, and
- * never counts as the crew's failure, so it goes to the coordinating thread as it is, without a
+ * never counts as the agent's failure, so it goes to the coordinating thread as it is, without a
  * verifier or a fix round.
  */
 export function firstVerdict(verifies: boolean, read: CheckoutRead): Verdict {
   if (!verifies) return { state: "waived" };
-  if (read.kind === "unread") return { state: "could-not-run", verifierThreadId: null, reason: `bb's git plugin couldn't read the crew's commit and working tree as it handed off (${read.reason})` };
+  if (read.kind === "unread") return { state: "could-not-run", verifierThreadId: null, reason: `bb's git plugin couldn't read the agent's commit and working tree as it handed off (${read.reason})` };
   return { state: "queued", checkout: read.checkout };
 }
 
@@ -98,7 +98,7 @@ export function outcome(verdict: Verdict): Outcome {
     case "returned": {
       const ci = ciVerdictOf(verdict);
       if (ci !== null) return judge(verdict, ci);
-      // why pending until settled: the row says Verifying until the findings reach the crew or the verdict is final.
+      // why pending until settled: the row says Verifying until the findings reach the agent or the verdict is final.
       return verdict.settlement.kind === "waiting-for-ci" ? "waiting-for-ci" : "pending";
     }
     case "could-not-run":
@@ -151,8 +151,8 @@ export function ciVerdictOf(verdict: Returned): CiVerdict | null {
   }
 }
 
-/** Whether a returned verdict is final: its findings reached the crew, or it is its coordinating thread's. why by its CI: every settled verdict keeps one. */
+/** Whether a returned verdict is final: its findings reached the agent, or it is its coordinating thread's. why by its CI: every settled verdict keeps one. */
 export const isSettled = (verdict: Returned): boolean => ciVerdictOf(verdict) !== null;
 
-/** Whether a verdict's findings may or may not have reached its crew (see `maybe-sent-back`). */
-export const mayHaveReachedCrew = (verdict: Verdict): boolean => verdict.state === "returned" && verdict.settlement.kind === "maybe-sent-back";
+/** Whether a verdict's findings may or may not have reached its agent (see `maybe-sent-back`). */
+export const mayHaveReachedAgent = (verdict: Verdict): boolean => verdict.state === "returned" && verdict.settlement.kind === "maybe-sent-back";

@@ -1,36 +1,19 @@
-// What the plugin tells a coordinating thread about: every fact it observes about the crews and the
+// What the plugin tells a regional manager about: every fact it observes about its issues, agents and
 // memory, the reminders it set itself and the user's answers to its decisions, stored whole.
-// Crew-written text (an answer, an error, a question) lives only here and in crew_catch_up, never in
+// Agent-written text (an answer, an error, a question) lives only here and in crew_catch_up, never in
 // the doorbell that announces it; so does the user's answer to a decision, kept with the decision.
 import { z } from "zod";
+import { agentIdSchema, endedHowSchema } from "../agent.ts";
 import { decisionIdSchema } from "../decision.ts";
 import { handoffIdSchema, handoffStatusSchema } from "../handoff.ts";
+import { issueIdSchema } from "../issue/issue.ts";
 import { memoryFileSchema } from "../memory-file.ts";
 import { reminderIdSchema, reminderNoteSchema } from "../reminder.ts";
+import { checkIdSchema } from "../verdict/check.ts";
 import { prChangeSchema, prSnapshotSchema } from "../verdict/pr.ts";
-import { crewIdSchema } from "../role.ts";
 
-export const inboxEventSchema = z.discriminatedUnion("kind", [
-  /**
-   * A crew called crew_handoff. A done one is announced here only if it was handed off before
-   * verification existed; since then a done handoff is announced as `checked`.
-   */
-  z.object({ kind: z.literal("handoff"), crewId: crewIdSchema, handoffId: handoffIdSchema, status: handoffStatusSchema }),
-  /**
-   * A crew's done handoff and its verdict, together: once the verdict is final and nothing goes back
-   * to the crew, or at once when verification was off.
-   */
-  z.object({ kind: z.literal("checked"), crewId: crewIdSchema, handoffId: handoffIdSchema }),
-  /** A crew's done handoff failed its verdict, and the plugin sent the findings back to the crew as its fix round `round`. */
-  z.object({ kind: z.literal("sent-back"), crewId: crewIdSchema, handoffId: handoffIdSchema, round: z.number().int().min(1) }),
-  /** A crew's turn ended with no current handoff; `lastAnswer` is its last answer, whole (null: none). */
-  z.object({ kind: z.literal("idle-without-handoff"), crewId: crewIdSchema, lastAnswer: z.string().nullable() }),
-  /** A crew's thread failed; `error` is bb's message for it (null: none). */
-  z.object({ kind: z.literal("failed"), crewId: crewIdSchema, error: z.string().nullable() }),
-  /** A crew waits on the user's answer or approval in its thread; `question` says what it asks. */
-  z.object({ kind: z.literal("needs-input"), crewId: crewIdSchema, question: z.string() }),
-  /** A crew's pull request changed meaningfully (see meaningfulChanges): what changed, and the pull request as read then. */
-  z.object({ kind: z.literal("pr"), crewId: crewIdSchema, pr: prSnapshotSchema, changes: z.array(prChangeSchema).min(1) }),
+/** What the plugin tells a regional manager about itself, its memory, its reminders and its decisions: no issue or agent in them. */
+const managerEvents = [
   /** The user turned verification of done handoffs on or off on the board. */
   z.object({ kind: z.literal("verification-toggled"), verify: z.boolean() }),
   /** The user saved a memory file in the Memory editor. */
@@ -43,6 +26,32 @@ export const inboxEventSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("coordinator-edited-files"), fileCount: z.number().int().min(1) }),
   /** A turn of the coordinating thread ended with its own working tree clean again, after a `coordinator-edited-files`. */
   z.object({ kind: z.literal("coordinator-tree-clean") }),
+] as const;
+
+const onAgent = { issueId: issueIdSchema, agentId: agentIdSchema };
+
+/**
+ * What the plugin tells a regional manager about its issues and agents. Every event about work
+ * names its issue; one about a thread names the agent too; one about a verdict names the check.
+ */
+export const inboxEventSchema = z.discriminatedUnion("kind", [
+  /** An agent's handoff no verifier checks, announced at once: blocked or gave up. A done one is announced as `checked`, with its verdict. */
+  z.object({ kind: z.literal("handoff"), ...onAgent, handoffId: handoffIdSchema, status: handoffStatusSchema }),
+  /** A check is final and nothing goes back to its agent, or verification was off. */
+  z.object({ kind: z.literal("checked"), issueId: issueIdSchema, checkId: checkIdSchema }),
+  /** A check failed, and the plugin sent its findings back to the agent as its fix round `round`. */
+  z.object({ kind: z.literal("sent-back"), ...onAgent, checkId: checkIdSchema, round: z.number().int().min(1) }),
+  /** An agent's turn ended with no current handoff; `lastAnswer` is its last answer, whole (null: none). */
+  z.object({ kind: z.literal("idle-without-handoff"), ...onAgent, lastAnswer: z.string().nullable() }),
+  /** An agent's thread failed; `error` is bb's message for it (null: none). */
+  z.object({ kind: z.literal("failed"), ...onAgent, error: z.string().nullable() }),
+  /** An agent waits on the user's answer or approval in its thread; `question` says what it asks. */
+  z.object({ kind: z.literal("needs-input"), ...onAgent, question: z.string() }),
+  /** The pull request of the agent's branch changed meaningfully (see meaningfulChanges): what changed, and the pull request as read then. */
+  z.object({ kind: z.literal("pr"), ...onAgent, pr: prSnapshotSchema, changes: z.array(prChangeSchema).min(1) }),
+  /** The issue's agent ended before its work reached Verifying, In review or Done, so the issue rests in Todo again. */
+  z.object({ kind: z.literal("returned-to-todo"), ...onAgent, how: endedHowSchema.exclude(["spawn-failed"]) }),
+  ...managerEvents,
 ]);
 export type InboxEvent = z.infer<typeof inboxEventSchema>;
 
@@ -54,7 +63,7 @@ export type StoredEvent = { id: number; at: number; event: InboxEvent };
  * unannounced, for the next one that does, and is listed in that doorbell and in the catch-up. why
  * `sent-back` and `coordinator-tree-clean` don't: they leave the thread nothing to do, and a turn
  * costs tokens and context. why `coordinator-edited-files` does: only the thread can move its change
- * to a crew, and with no crew at work nothing else may wake it for hours. It can't wake the thread
+ * to an agent, and with no agent at work nothing else may wake it for hours. It can't wake the thread
  * in a loop: the turn it starts ends with the same count, which records nothing.
  */
 const WAKES: Record<InboxEvent["kind"], boolean> = {
@@ -65,6 +74,8 @@ const WAKES: Record<InboxEvent["kind"], boolean> = {
   failed: true,
   "needs-input": true,
   pr: true,
+  // why: only the regional manager can plan the issue again.
+  "returned-to-todo": true,
   "verification-toggled": true,
   "memory-edited": true,
   reminder: true,

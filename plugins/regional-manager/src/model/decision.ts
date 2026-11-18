@@ -3,7 +3,7 @@
 // given. The question and options are the thread's own words, so its doorbell may quote the
 // question; the answer is the user's, and reaches the thread only through crew_catch_up.
 import { z } from "zod";
-import type { BoardState } from "./board/crew-state.ts";
+import { issueIdSchema } from "./issue/issue.ts";
 import { ONE_LINE } from "./one-line.ts";
 
 /** A decision's id: `d1`, `d2`… across every coordinating thread, never reused. */
@@ -22,15 +22,16 @@ export const optionsSchema = z
 export const MAX_ANSWER_CHARS = 5_000;
 export const answerSchema = z.string().trim().min(1).max(MAX_ANSWER_CHARS);
 
-/** A decision as the board and crew_catch_up read it: the user's answer and when they gave it, null until they do. */
+/**
+ * A decision as the board and crew_catch_up read it: the issue it flags Needs you until the user
+ * answers (null: none), and the user's answer and when they gave it, null until they do.
+ */
 export const decisionSchema = z.object({
   id: decisionIdSchema,
+  issueId: issueIdSchema.nullable(),
   question: z.string(),
   options: z.array(z.string()),
   askedAt: z.number(),
   answer: z.object({ text: z.string(), at: z.number() }).nullable(),
 });
 export type Decision = z.infer<typeof decisionSchema>;
-
-/** Where a decision sits on the board: under Needs you until the user answers it, then Done. */
-export const decisionState = (decision: Decision): BoardState => (decision.answer === null ? "needs-you" : "done");

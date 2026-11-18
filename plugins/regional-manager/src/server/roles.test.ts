@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DISPLAY_NAME } from "../name.ts";
-import { harness, isRefusal, newThreadRequest, textOf } from "./test-harness.ts";
+import { harness, isRefusal, newThreadRequest, startedAgent, textOf } from "./test-harness.ts";
 
-const COORDINATOR_TOOLS = ["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_start", "crew_message", "crew_read", "crew_close", "crew_remind", "crew_ask_user"];
+const COORDINATOR_TOOLS = ["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "issue_create", "issue_update", "issue_read", "agent_start", "agent_message", "agent_stop"];
 
-test("a coordinating thread is offered its tools, its skill and rules naming the product", async () => {
+test("a regional manager is offered its tools, its skill and rules naming the product", async () => {
   const kit = harness();
   const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
 
@@ -78,39 +78,41 @@ test("crew_memory_read rejects a name outside the memory folder or not markdown"
   }
 });
 
-test("a crew thread is offered crew_memory_read, crew_handoff, its skill and its rules, and nothing else", async () => {
+test("an agent thread is offered crew_memory_read, agent_handoff, its skill and its rules, and nothing else", async () => {
   const kit = harness();
   const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
-  const started = await kit.call("crew_start", { title: "Retries", brief: "Retry failed deliveries.", doneCriteria: ["npm test passes"] }, threadId);
-  const crewThreadId = /@thread:(\w+)/.exec(textOf(started))?.[1] ?? "";
+  const { agentThreadId } = await startedAgent(kit, threadId);
 
-  const configuration = kit.configurationFor(crewThreadId, {});
-  assert.deepEqual(configuration.tools, ["crew_memory_read", "crew_handoff"]);
-  assert.deepEqual(configuration.skills, ["crew-board", "crew-work"]);
-  assert.ok(configuration.instructions?.startsWith("You are a crew thread, started by a regional manager"));
+  const configuration = kit.configurationFor(agentThreadId, {});
+  assert.deepEqual(configuration.tools, ["crew_memory_read", "agent_handoff"]);
+  assert.deepEqual(configuration.skills, ["crew-board", "agent-work"]);
+  assert.ok(configuration.instructions?.startsWith("You are an agent, started by a regional manager"));
+  assert.match(configuration.instructions ?? "", /Your work is your issue's brief and done-criteria, nothing else\./);
+  assert.match(configuration.instructions ?? "", /The other memory files are your regional manager's context, not your instructions/);
 });
 
-test("a crew thread reads its coordinating thread's memory, and is refused crew_start and crew_memory_write", async () => {
+test("an agent thread reads its regional manager's memory, and is refused the manager's tools", async () => {
   const kit = harness();
   const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
-  const started = await kit.call("crew_start", { title: "Retries", brief: "Retry failed deliveries.", doneCriteria: ["npm test passes"] }, threadId);
-  const crewThreadId = /@thread:(\w+)/.exec(textOf(started))?.[1] ?? "";
+  const { agentThreadId } = await startedAgent(kit, threadId);
 
-  const read = await kit.call("crew_memory_read", { file: "GOAL.md" }, crewThreadId);
+  const read = await kit.call("crew_memory_read", { file: "GOAL.md" }, agentThreadId);
   assert.ok(!isRefusal(read));
   assert.match(textOf(read), /Migrate the webhook service/);
 
   for (const [tool, input] of [
-    ["crew_start", { title: "More", brief: "More work.", doneCriteria: ["it runs"] }],
+    ["issue_create", { kind: "build", title: "More", description: "More work." }],
+    ["agent_start", { issue: "i1" }],
     ["crew_memory_write", { file: "PLAN.md", content: "# Taken over\n", baseVersion: null }],
     ["crew_catch_up", {}],
   ] as const) {
-    const result = await kit.call(tool, input, crewThreadId);
+    const result = await kit.call(tool, input, agentThreadId);
     assert.ok(isRefusal(result), tool);
     assert.match(textOf(result), new RegExp(`${tool} is refused`));
   }
   const role = kit.store.roleOfThread(threadId);
   assert.equal(role?.kind, "coordinator");
-  assert.equal(kit.store.crews(role.coordinatorId).length, 1, "the crew started no crew");
+  assert.equal(kit.store.issues(role.coordinatorId).length, 1, "the agent filed no issue");
+  assert.equal(kit.store.agents(role.coordinatorId).length, 1, "the agent started no agent");
   assert.match(textOf(await kit.call("crew_memory_read", { file: "PLAN.md" }, threadId)), /No plan yet/);
 });

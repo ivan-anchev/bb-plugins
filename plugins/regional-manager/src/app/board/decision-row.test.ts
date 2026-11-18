@@ -13,7 +13,7 @@ import { coordinatorIdSchema } from "../../model/role.ts";
 const { DecisionRow } = await import("./decision-row.tsx");
 
 const COORDINATOR = coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10");
-const OPEN: Decision = { id: decisionIdSchema.parse("d2"), question: "Which zone first?", options: ["eu-west", "us-east"], askedAt: 1_000, answer: null };
+const OPEN: Decision = { id: decisionIdSchema.parse("d2"), issueId: null, question: "Which zone first?", options: ["eu-west", "us-east"], askedAt: 1_000, answer: null };
 const TYPED = "Freeform unsent QA,\nwith a second line";
 const answered = (text: string): Decision => ({ ...OPEN, answer: { text, at: 2_000 } });
 
@@ -68,7 +68,7 @@ test("a decision answered elsewhere drops the answer typed here, so the browser 
   assert.equal(localStorage.length, 0);
 });
 
-test("the answer typed is kept by Coordinator and decision, and an emptied field keeps none", () => {
+test("the answer typed is kept by regional manager and decision, and an emptied field keeps none", () => {
   mount(OPEN).type(TYPED);
   cleanup();
   assert.equal(mount({ ...OPEN, id: decisionIdSchema.parse("d1") }).field().value, "", "another decision has none");

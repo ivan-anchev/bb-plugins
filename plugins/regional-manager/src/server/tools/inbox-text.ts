@@ -1,21 +1,28 @@
-// What crew_catch_up and crew_read say about events, handoffs, reminders and decisions: everything,
-// whole, however long. This is where a crew's own words, and the user's answers, reach the
-// coordinating thread, as a tool result, each marked as whose they are.
+// What crew_catch_up and issue_read say about events, handoffs, reminders and decisions:
+// everything, whole, however long. This is where an agent's own words, a verifier's, and the user's
+// answers reach the regional manager, as a tool result, each marked as whose they are.
+import { sameModel } from "../../model/execution.ts";
+import type { Agent, AgentId } from "../../model/agent.ts";
 import type { Decision, DecisionId } from "../../model/decision.ts";
-import type { Handoff, HandoffId } from "../../model/handoff.ts";
-import type { InboxEvent, StoredEvent } from "../../model/inbox/inbox-event.ts";
+import type { HandoffId } from "../../model/handoff.ts";
+import type { StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { filesText } from "../../model/inbox/own-tree.ts";
-import { askedOf } from "../../model/inbox/wake-text.ts";
+import { askedOf, checkedOf, issueName } from "../../model/inbox/wake-text.ts";
+import type { IssueId } from "../../model/issue/issue.ts";
+import type { Handed } from "../../model/issue/status.ts";
 import { intervalText, type Reminder } from "../../model/reminder.ts";
-import { checkoutText } from "../../model/verdict/checkout.ts";
+import type { Check, CheckId } from "../../model/verdict/check.ts";
+import { checkoutText, NOT_CLEAN } from "../../model/verdict/checkout.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
-import type { CrewId } from "../../model/role.ts";
-import { allPassed, ciVerdictOf, judge, mayHaveReachedCrew, outcome, type Verdict } from "../../model/verdict/verdict.ts";
+import { allPassed, ciVerdictOf, failedCheckout, judge, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
 
-type Lookups = {
-  /** Each crew's title, as the coordinating thread gave it. */
-  titles: ReadonlyMap<CrewId, string>;
-  handoff(id: HandoffId): Handoff | null;
+/** What the texts look up, all within one regional manager. */
+export type Lookups = {
+  /** Each issue's title, as the regional manager gave it. */
+  titles: ReadonlyMap<IssueId, string>;
+  handoff(id: HandoffId): Handed | null;
+  check(id: CheckId): Check | null;
+  agent(id: AgentId): Agent | null;
   decision(id: DecisionId): Decision | null;
 };
 
@@ -26,7 +33,8 @@ export function updatesText(events: readonly StoredEvent[], lookups: Lookups): s
   return [`## Updates\n\n${count} since your last catch-up, oldest first.`, ...events.map((stored) => eventText(stored, lookups))].join("\n\n");
 }
 
-function eventText({ event, at }: StoredEvent, { titles, handoff, decision }: Lookups): string {
+function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
+  const { titles, decision } = lookups;
   const when = `At ${new Date(at).toISOString()}.`;
   if (event.kind === "memory-edited") return `### The user edited ${event.file}\n\n${when} Its current text is in the memory below, or read it with crew_memory_read.`;
   if (event.kind === "verification-toggled") {
@@ -39,26 +47,34 @@ function eventText({ event, at }: StoredEvent, { titles, handoff, decision }: Lo
     return `### Your reminder ${event.reminderId}: ${event.note}\n\n${when} It was due at ${new Date(event.dueAt).toISOString()}. ${repeats}`;
   }
   if (event.kind === "decision-answered") return answeredText(askedOf(decision(event.decisionId)), when);
-  if (event.kind === "coordinator-edited-files") return `### Your own environment has ${filesText(event.fileCount)} changed\n\n${when} ${MOVE_TO_A_CREW}`;
+  if (event.kind === "coordinator-edited-files") return `### Your own environment has ${filesText(event.fileCount)} changed\n\n${when} ${MOVE_TO_AN_AGENT}`;
   if (event.kind === "coordinator-tree-clean") return `### Your own environment is clean again\n\n${when} Your turn ended with no changed files in your working tree, so the warning is gone from the board.`;
-  const crew = crewName(event, titles);
+  if (event.kind === "checked") {
+    const check = checkedOf(lookups.check(event.checkId));
+    const handed = handedOf(check.subject.handoffId, lookups);
+    const yours = outcome(check.verdict) === "fail" ? `\n\n${fixRoundNote(check.verdict)}${FAILED_IS_YOURS}` : "";
+    return `### ${issueName(event.issueId, titles, check.subject.agentId)} handed off: done\n\n${when} Its report, in its own words:\n\n${handoffText(handed, lookups)}${yours}`;
+  }
+  const on = issueName(event.issueId, titles, event.agentId);
   switch (event.kind) {
-    case "handoff":
-    case "checked": {
-      const report = handoffOf(event, handoff);
-      const yours = report.status === "done" && outcome(report.verdict) === "fail" ? `\n\n${fixRoundNote(report.verdict)}${FAILED_IS_YOURS}` : "";
-      return `### ${crew} handed off: ${report.status}\n\n${when} Its report, in its own words:\n\n${handoffText(report)}${yours}`;
+    case "handoff": {
+      const handed = handedOf(event.handoffId, lookups);
+      return `### ${on} handed off: ${handed.handoff.status}\n\n${when} Its report, in its own words:\n\n${handoffText(handed, lookups)}`;
     }
-    case "sent-back":
-      return `### ${crew} handed off: done, failed verification, findings sent back to it\n\n${when} The plugin sent the verifier's findings to the crew as its automatic fix round ${event.round}. Nothing to do yet: it fixes them and hands off again, and a new verifier checks that. If that fails too, it comes to you. Its report, in its own words:\n\n${handoffText(handoffOf(event, handoff))}`;
+    case "sent-back": {
+      const check = checkedOf(lookups.check(event.checkId));
+      return `### ${on} handed off: done, failed verification, findings sent back to it\n\n${when} The plugin sent the verifier's findings to ${event.agentId} as its automatic fix round ${event.round}. Nothing to do yet: it fixes them and hands off again, and a new verifier checks that. If that fails too, it comes to you. Its report, in its own words:\n\n${handoffText(handedOf(check.subject.handoffId, lookups), lookups)}`;
+    }
     case "idle-without-handoff":
-      return `### ${crew} ended its turn without a handoff\n\n${when} ${event.lastAnswer === null ? "It gave no answer." : `Its last answer, in its own words:\n\n${event.lastAnswer.trim()}`}`;
+      return `### ${on} ended its turn without a handoff\n\n${when} ${event.lastAnswer === null ? "It gave no answer." : `Its last answer, in its own words:\n\n${event.lastAnswer.trim()}`}`;
     case "failed":
-      return `### ${crew} failed\n\n${when} ${event.error === null ? "bb gave no error message." : `bb's error:\n\n${event.error.trim()}`} Read its thread with crew_read before deciding what to do.`;
+      return `### ${on} failed\n\n${when} ${event.error === null ? "bb gave no error message." : `bb's error:\n\n${event.error.trim()}`} Read the issue with issue_read before deciding what to do.`;
     case "needs-input":
-      return `### ${crew} is waiting on the user in its thread\n\n${when} Only the user can answer it there; tell them in your digest. It asks, in its own words:\n\n${event.question.trim()}`;
+      return `### ${on} is waiting on the user in its thread\n\n${when} Only the user can answer it there; tell them in your digest. It asks, in its own words:\n\n${event.question.trim()}`;
     case "pr":
-      return `### ${crew} PR #${event.pr.number}: ${event.changes.map((change) => PR_CHANGE_WORDS[change]).join(", ")}\n\n${when} ${prText(event.pr)} A done handoff's verdict that waits for CI settles on its own; you hear of it then.`;
+      return `### ${on} PR #${event.pr.number}: ${event.changes.map((change) => PR_CHANGE_WORDS[change]).join(", ")}\n\n${when} ${prText(event.pr)} A done handoff's verdict that waits for CI settles on its own; you hear of it then.`;
+    case "returned-to-todo":
+      return `### ${on} returned to Todo\n\n${when} ${event.agentId} was ${event.how} before its work reached Verifying, In review or Done, so ${event.issueId} rests in Todo with no agent. Start one with agent_start, or plan it again with issue_update.`;
     default:
       return event satisfies never;
   }
@@ -91,38 +107,33 @@ export function reminderText({ id, note, dueAt, everyMs }: Reminder): string {
   return `${id}, due ${new Date(dueAt).toISOString()}${everyMs === null ? "" : `, then every ${intervalText(everyMs)}`}: ${note}`;
 }
 
-/** The handoff an event names. why throw: an event is inserted with its handoff, in one transaction. */
-function handoffOf(event: { handoffId: HandoffId }, handoff: Lookups["handoff"]): Handoff {
-  const report = handoff(event.handoffId);
-  if (report === null) throw new Error(`The handoff ${event.handoffId} is missing.`);
-  return report;
+/** The handoff an event or a check names. why throw: each is inserted with its handoff, in one transaction. */
+function handedOf(id: HandoffId, { handoff }: Lookups): Handed {
+  const handed = handoff(id);
+  if (handed === null) throw new Error(`The handoff ${id} is missing.`);
+  return handed;
 }
 
 /** What became of the fix round of a failed verdict that is the coordinating thread's, when it was tried. */
 function fixRoundNote(verdict: Verdict): string {
-  if (mayHaveReachedCrew(verdict)) return MAY_HAVE_REACHED_CREW;
+  if (mayHaveReachedAgent(verdict)) return MAY_HAVE_REACHED_AGENT;
   const refused = verdict.state === "returned" && verdict.settlement.kind === "checked" ? verdict.settlement.refused : null;
-  return refused === null ? "" : `bb refused the verifier's findings when the plugin sent them to the crew as its automatic fix round, so the crew never got them and the round is not spent. bb answered: ${refused}. `;
+  return refused === null ? "" : `bb refused the verifier's findings when the plugin sent them to the agent as its automatic fix round, so the agent never got them and the round is not spent. bb answered: ${refused}. `;
 }
 
-const MAY_HAVE_REACHED_CREW =
-  "The plugin was cut off while it sent the verifier's findings to the crew as its automatic fix round (it stopped, or bb's answer never came back whole), and nothing bb keeps shows whether they arrived: they may or may not have. Read its thread with crew_read before you message it, so it doesn't get them twice. ";
+const MAY_HAVE_REACHED_AGENT =
+  "The plugin was cut off while it sent the verifier's findings to the agent as its automatic fix round (it stopped, or bb's answer never came back whole), and nothing bb keeps shows whether they arrived: they may or may not have. Read the issue with issue_read before you message the agent, so it doesn't get them twice. ";
 
-const MOVE_TO_A_CREW =
-  "bb's git plugin read changed files in your working tree when your turn ended, and the board warns the user of it. You never edit project files yourself, and you never touch your working tree: no stash, revert, checkout or deletion, not even of files you changed, since the user may have edited the same files. First propose, in a crew_ask_user decision, a crew that redoes the change properly on its own branch, always, whatever the user's preferences: describe its title, brief and done-criteria, and start it only once they agree. In the same decision, ask the user whether to discard the changes in your environment: discarding them is theirs to do, never yours. If you made none of these changes, they are the user's: leave them and say so in your digest. The warning stays until a turn of yours ends with a clean tree.";
+const MOVE_TO_AN_AGENT =
+  "bb's git plugin read changed files in your working tree when your turn ended, and the board warns the user of it. You never edit project files yourself, and you never touch your working tree: no stash, revert, checkout or deletion, not even of files you changed, since the user may have edited the same files. First propose, in a crew_ask_user decision, an issue whose agent redoes the change properly on its own branch, always, whatever the user's preferences: describe its title, brief and done-criteria, file it with issue_create, and start its agent only once they agree. In the same decision, ask the user whether to discard the changes in your environment: discarding them is theirs to do, never yours. If you made none of these changes, they are the user's: leave them and say so in your digest. The warning stays until a turn of yours ends with a clean tree.";
 
 const FAILED_IS_YOURS =
-  "It failed verification and is yours to decide: message the crew with crew_message, replace it with a fresh crew through crew_start with supersedes (which carries its brief and these findings), or ask the user.";
-
-const crewName = (event: Extract<InboxEvent, { crewId: CrewId }>, titles: ReadonlyMap<CrewId, string>): string => {
-  const title = titles.get(event.crewId);
-  return title === undefined ? event.crewId : `${event.crewId} "${title}"`;
-};
+  "It failed verification and is yours to decide: message the agent with agent_message, stop it with agent_stop and start a fresh agent on the issue with agent_start, or ask the user.";
 
 /** A handoff whole: its status, summary, commit and pull request, every item of every list, then a done one's verdict. */
-export function handoffText(handoff: Handoff): string {
+export function handoffText({ handoff, check }: Handed, lookups: Pick<Lookups, "agent">): string {
   const head = [`Status: ${handoff.status}`, `Summary: ${handoff.summary}`];
-  if (handoff.status === "done") head.push(`Commit: ${handoff.headSha}`, `Pull request: ${handoff.prUrl ?? "none"}`);
+  if (handoff.status === "done") head.push(`Commit: ${handoff.delivery.headSha}`, `Pull request: ${handoff.delivery.prUrl ?? "none"}`);
   const lists = (
     [
       ["Did", handoff.did],
@@ -133,7 +144,7 @@ export function handoffText(handoff: Handoff): string {
     ] as const
   ).map(([name, items]) => `#### ${name}\n\n${items.length === 0 ? "None." : items.map((item) => `- ${item.replaceAll("\n", "\n  ")}`).join("\n")}`);
   const report = [head.join("\n"), ...lists];
-  if (handoff.status === "done") report.push(`#### Verdict\n\n${verdictText(handoff.verdict)}`);
+  if (check !== null) report.push(`#### Verdict\n\n${verdictText(check, lookups.agent(check.subject.agentId))}`);
   return report.join("\n\n");
 }
 
@@ -169,8 +180,8 @@ function ciLine(verdict: Extract<Verdict, { state: "returned" }>, ci: CiVerdict 
   }
 }
 
-/** What the plugin's check found. A verifier's evidence is its own words, marked as such. */
-function verdictText(verdict: Verdict): string {
+/** What the plugin's check found. A verifier's evidence is its own words, marked as such. `agent`: whose work it checks. */
+function verdictText({ verdict, verifier, issueId, subject }: Check, agent: Agent | null): string {
   switch (verdict.state) {
     case "queued":
     case "running":
@@ -179,10 +190,13 @@ function verdictText(verdict: Verdict): string {
       const ci = ciVerdictOf(verdict);
       const passed = ci === null ? allPassed(verdict) : judge(verdict, ci) === "pass";
       const label = passed ? (ci === null ? "Passed every criterion" : "Verified") : "Failed verification";
+      // why the checkout and CI first when they failed the verdict: its criteria may all have passed.
+      const reasons = [...(failedCheckout(verdict) === null ? [] : [NOT_CLEAN.toLowerCase()]), ...(ci?.kind === "fail" ? [`CI failed on #${ci.number}`] : [])];
+      const reason = reasons.length === 0 ? "" : ` ${reasons.join(", and ")}.`;
       const count = verdict.criteria.filter((check) => check.result === "pass").length;
-      const by = `${verdict.model.providerId} ${verdict.model.model}${verdict.sameModel ? ", the crew's own model, as no other was available" : ""}`;
+      const by = verifiedOn(verdict, verifier, issueId, subject.agentId, agent);
       const head = [
-        `${label}: ${count} of ${verdict.criteria.length} criteria passed, checked at ${verdict.headSha} by a verifier on ${by}.`,
+        `${label}:${reason} ${count} of ${verdict.criteria.length} criteria passed, checked at ${verdict.headSha} by a verifier on ${by}.`,
         checkoutText(verdict.headSha, verdict.checkout),
         ciLine(verdict, ci),
         "Each result, with its evidence in the verifier's words:",
@@ -202,4 +216,18 @@ function verdictText(verdict: Verdict): string {
     default:
       return verdict satisfies never;
   }
+}
+
+/**
+ * What a verifier ran on, and why: on the verifier named on the issue, as named; else why not the
+ * one named (the agent did the work on it, or bb can't run it where the agent works); and when it
+ * is the agent's own model, that no other was available.
+ */
+function verifiedOn(verdict: Extract<Verdict, { state: "returned" }>, named: Check["verifier"], issueId: IssueId, agentId: AgentId, agent: Agent | null): string {
+  const ran = `${verdict.model.providerId} ${verdict.model.model}`;
+  const own = verdict.sameModel ? `, ${agentId}'s own model, as no other was available` : "";
+  if (named === null) return `${ran}${own}`;
+  if (sameModel(named, verdict.model)) return `${ran}, as named on ${issueId}`;
+  const why = agent !== null && sameModel(named, agent.execution) ? `${agentId} did the work on it` : `bb can't run it in ${agentId}'s environment`;
+  return `${ran}${own}, not the ${named.providerId} ${named.model} named on ${issueId}: ${why}`;
 }

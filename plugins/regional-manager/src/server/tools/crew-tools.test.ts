@@ -1,132 +1,120 @@
 import assert from "node:assert/strict";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
-import { crewIdSchema } from "../../model/role.ts";
-import { coordinating, isRefusal, textOf, threadIn } from "../test-harness.ts";
+import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
+import plugin from "../../../server.ts";
+import { coordinatorContract } from "../../contract.ts";
+import { memoryFileSchema } from "../../model/memory-file.ts";
+import { coordinatorIdSchema } from "../../model/role.ts";
+import { harness, isRefusal, newThreadRequest, textOf } from "../test-harness.ts";
 
-const RETRIES = { title: "Add retries", brief: "Retry failed webhook deliveries with backoff.", doneCriteria: ["npm test passes"] };
-const REPORT = { summary: "Retries land with backoff", did: ["Added exponential backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [] };
-const DONE = { status: "done", ...REPORT, headSha: "0123456789abcdef0123456789abcdef01234567" };
-const c1 = crewIdSchema.parse("c1");
 
-async function withCrew({ verify = true } = {}) {
-  const { kit, threadId, coordinatorId } = await coordinating({ verify });
-  const crewThreadId = threadIn(textOf(await kit.call("crew_start", RETRIES, threadId)));
-  return { kit, threadId, coordinatorId, crewThreadId };
+const PLAN = memoryFileSchema.parse("PLAN.md");
+
+async function started() {
+  const kit = harness();
+  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
+  const role = kit.store.roleOfThread(threadId);
+  assert.equal(role?.kind, "coordinator");
+  return { kit, threadId, coordinatorId: role.coordinatorId, dir: kit.memory.of(role.coordinatorId).dir };
 }
 
-test("crew_handoff from a thread that is not a crew is refused, and nothing is stored or rung", async () => {
-  const { kit, threadId, coordinatorId } = await withCrew();
-  for (const caller of [threadId, "thr_forged"]) {
-    const result = await kit.call("crew_handoff", DONE, caller);
-    assert.ok(isRefusal(result), caller);
-    assert.match(textOf(result), /crew_handoff is refused: only a crew thread/);
+/** The version a catch-up shows for a file, as the agent would read it off. */
+const versionIn = (text: string, file: string): string | undefined => new RegExp(`^## ${file.replace(".", "\\.")} \\(version (\\w+)\\)$`, "m").exec(text)?.[1];
+
+test("a file written with crew_memory_write is in the next catch-up and in the Memory editor's reads", async () => {
+  const { kit, threadId, coordinatorId } = await started();
+  const before = textOf(await kit.call("crew_catch_up", {}, threadId));
+
+  const plan = "# Plan\n\n1. Inventory the endpoints\n";
+  assert.match(textOf(await kit.call("crew_memory_write", { file: "PLAN.md", content: plan, baseVersion: versionIn(before, "PLAN.md") }, threadId)), /^Saved PLAN\.md, now version \w+\.$/);
+  assert.equal(textOf(await kit.call("crew_memory_write", { file: "notes/api.md", content: "# API\n", baseVersion: null }, threadId)), `Saved notes/api.md, now version ${kit.memory.of(coordinatorId).read(memoryFileSchema.parse("notes/api.md")).text?.version}.`);
+
+  const after = textOf(await kit.call("crew_catch_up", {}, threadId));
+  assert.match(after, /## PLAN\.md \(version \w+\)\n\n# Plan\n\n1\. Inventory the endpoints/);
+  assert.match(after, /Other memory files, read each with crew_memory_read: notes\/api\.md\./);
+
+  assert.deepEqual((await kit.rpc.memoryList({ coordinatorId })).files.slice(-2), ["DIGEST.md", "notes/api.md"]);
+  assert.equal((await kit.rpc.memoryRead({ coordinatorId, file: PLAN })).text?.content, plan);
+  assert.deepEqual(kit.memoryWrites().slice(-2), [coordinatorId, coordinatorId], "each write refreshes the editor");
+});
+
+test("a Coordinator write from before the user's save is refused with the user's text, and its merge then saves", async () => {
+  const { kit, threadId, coordinatorId, dir } = await started();
+  const read = versionIn(textOf(await kit.call("crew_catch_up", {}, threadId)), "PLAN.md");
+  const userRead = (await kit.rpc.memoryRead({ coordinatorId, file: PLAN })).text;
+  assert.equal(userRead?.version, read);
+  const saved = await kit.rpc.memoryWrite({ coordinatorId, file: PLAN, content: "# Plan\n\n1. The user's step\n", baseVersion: read ?? null });
+  assert.equal(saved.outcome, "saved");
+
+  const refused = await kit.call("crew_memory_write", { file: "PLAN.md", content: "# Plan\n\n1. The Coordinator's step\n", baseVersion: read }, threadId);
+  assert.ok(isRefusal(refused));
+  assert.match(textOf(refused), /changed since you read it/);
+  assert.match(textOf(refused), /## PLAN\.md \(version \w+\)\n\n# Plan\n\n1\. The user's step/);
+  assert.equal(readFileSync(join(dir, "PLAN.md"), "utf8"), "# Plan\n\n1. The user's step\n");
+
+  const merged = "# Plan\n\n1. The user's step\n2. The Coordinator's step\n";
+  assert.ok(!isRefusal(await kit.call("crew_memory_write", { file: "PLAN.md", content: merged, baseVersion: versionIn(textOf(refused), "PLAN.md") }, threadId)));
+  assert.equal(readFileSync(join(dir, "PLAN.md"), "utf8"), merged);
+});
+
+test("the editor's save from a stale read is refused too, and the Coordinator's text is kept", async () => {
+  const { kit, threadId, coordinatorId, dir } = await started();
+  const userRead = (await kit.rpc.memoryRead({ coordinatorId, file: PLAN })).text;
+  await kit.call("crew_memory_write", { file: "PLAN.md", content: "# Plan\n\nThe Coordinator's plan\n", baseVersion: userRead?.version ?? null }, threadId);
+
+  const outcome = await kit.rpc.memoryWrite({ coordinatorId, file: PLAN, content: "# Plan\n\nThe user's plan\n", baseVersion: userRead?.version ?? null });
+  assert.equal(outcome.outcome, "conflict");
+  assert.equal(outcome.outcome === "conflict" ? outcome.current.text?.content : undefined, "# Plan\n\nThe Coordinator's plan\n");
+  assert.equal(readFileSync(join(dir, "PLAN.md"), "utf8"), "# Plan\n\nThe Coordinator's plan\n");
+});
+
+test("crew_memory_write from a thread that is not a Coordinator is refused and writes nothing", async () => {
+  const { kit, coordinatorId, dir } = await started();
+  const plan = readFileSync(join(dir, "PLAN.md"), "utf8");
+
+  for (const file of ["PLAN.md", "notes/api.md"]) {
+    const result = await kit.call("crew_memory_write", { file, content: "# Taken over\n", baseVersion: null }, "thr_forged");
+    assert.ok(isRefusal(result));
+    assert.match(textOf(result), /crew_memory_write is refused/);
   }
-  assert.equal(kit.store.latestHandoff(coordinatorId, c1), null);
-  assert.deepEqual(kit.store.unannounced(coordinatorId), []);
-  assert.deepEqual(kit.sent(), []);
+  assert.equal(readFileSync(join(dir, "PLAN.md"), "utf8"), plan);
+  assert.deepEqual(kit.memory.of(coordinatorId).list(), ["MEMORY.md", "GOAL.md", "PLAN.md", "PREFERENCES.md", "CREW.md", "DIGEST.md"]);
 });
 
-test("a handoff is stored whole, trimmed, with its turn and a waived verdict, and reads back as written", async () => {
-  const { kit, coordinatorId, crewThreadId } = await withCrew({ verify: false });
-  const result = await kit.call("crew_handoff", { ...DONE, summary: "  Retries land with backoff ", prUrl: "https://github.com/acme/webhooks/pull/7" }, crewThreadId);
-  assert.match(textOf(result), /^Handed off\. Your regional manager has your report, marked unverified/);
+test("crew_memory_write and the editor's save reject a name outside the memory folder or not markdown", async () => {
+  const { kit, threadId, coordinatorId } = await started();
 
-  const { id, at, ...stored } = kit.store.latestHandoff(coordinatorId, c1) ?? assert.fail("no handoff stored");
-  assert.deepEqual(stored, {
-    coordinatorId,
-    crewId: c1,
-    turnSeq: kit.thread(crewThreadId).turns.at(-1),
-    ...DONE,
-    status: "done",
-    prUrl: "https://github.com/acme/webhooks/pull/7",
-    verdict: { state: "waived" },
-  });
-  assert.deepEqual(kit.store.handoff(id), kit.store.latestHandoff(coordinatorId, c1));
-});
-
-test("a crew's latest handoff is its newest, never another crew's, and an earlier one still reads by its id", async () => {
-  const { kit, threadId, coordinatorId, crewThreadId } = await withCrew();
-  const otherThreadId = threadIn(textOf(await kit.call("crew_start", { ...RETRIES, title: "Dead letters" }, threadId)));
-  await kit.call("crew_handoff", { ...REPORT, status: "blocked" }, crewThreadId);
-  const blocked = kit.store.latestHandoff(coordinatorId, c1) ?? assert.fail("no handoff stored");
-  kit.startTurn(crewThreadId);
-  await kit.call("crew_handoff", DONE, crewThreadId);
-  await kit.call("crew_handoff", { ...REPORT, status: "gave-up" }, otherThreadId);
-
-  assert.equal(kit.store.latestHandoff(coordinatorId, c1)?.status, "done");
-  assert.equal(kit.store.latestHandoff(coordinatorId, crewIdSchema.parse("c2"))?.status, "gave-up");
-  assert.deepEqual(kit.store.handoff(blocked.id), blocked);
-});
-
-test("a handoff outside its bounds is rejected, and a done one needs its commit", async () => {
-  const { kit, coordinatorId, crewThreadId } = await withCrew();
-  const { headSha: _, ...doneWithoutCommit } = DONE;
-  for (const input of [
-    doneWithoutCommit,
-    { ...DONE, headSha: "abc123" },
-    { ...DONE, summary: "x".repeat(121) },
-    { ...DONE, summary: "Two\nlines" },
-    { ...DONE, evidence: Array.from({ length: 51 }, () => "ran it") },
-    { ...DONE, evidence: ["x".repeat(2_001)] },
-    { ...DONE, prUrl: "javascript:alert(1)" },
-    { ...DONE, status: "finished" },
-  ]) {
-    await assert.rejects(kit.call("crew_handoff", input, crewThreadId));
-  }
-  assert.equal(kit.store.latestHandoff(coordinatorId, c1), null);
-
-  assert.ok(!isRefusal(await kit.call("crew_handoff", { ...REPORT, status: "blocked" }, crewThreadId)), "blocked needs no commit");
-});
-
-test("a closed crew's handoff is refused", async () => {
-  const { kit, threadId, coordinatorId, crewThreadId } = await withCrew();
-  await kit.call("crew_close", { crewId: "c1", action: "resolve" }, threadId);
-  const result = await kit.call("crew_handoff", DONE, crewThreadId);
-  assert.ok(isRefusal(result));
-  assert.match(textOf(result), /closed you as resolved/);
-  assert.equal(kit.store.latestHandoff(coordinatorId, c1), null);
-});
-
-test("with verification off, once its turn ends a done handoff is Ready for review as Unverified, and a blocked or gave-up one Needs you", async () => {
-  const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
-  const crews: [string, Record<string, unknown>][] = [];
-  for (const [title, input] of [
-    ["Done", DONE],
-    ["Blocked", { ...REPORT, status: "blocked", summary: "Needs a staging key" }],
-    ["Gave up", { ...REPORT, status: "gave-up", summary: "The queue API rejects batches" }],
-  ] as const) {
-    crews.push([threadIn(textOf(await kit.call("crew_start", { ...RETRIES, title }, threadId))), input]);
-  }
-  for (const [crewThreadId, input] of crews) {
-    await kit.call("crew_handoff", input, crewThreadId);
-    await kit.idle(crewThreadId, "Handed off.");
-  }
-
-  assert.deepEqual((await kit.rpc.board({ coordinatorId })).rows.map((row) => [row.crewId, row.state, row.headline]), [
-    ["c1", "ready-for-review", "Unverified: Retries land with backoff"],
-    ["c2", "needs-you", "Blocked: Needs a staging key"],
-    ["c3", "needs-you", "Gave up: The queue API rejects batches"],
-  ]);
-});
-
-test("a handoff of 50 evidence items of 2,000 characters comes back whole from crew_catch_up and crew_read", async () => {
-  const { kit, threadId, crewThreadId } = await withCrew({ verify: false });
-  // Each item is numbered at its start and ends in "$", so a missing or cut one can't match.
-  const evidence = Array.from({ length: 50 }, (_, i) => `${String(i).padStart(2, "0")}${"e".repeat(1_997)}$`);
-  await kit.call("crew_handoff", { ...DONE, evidence }, crewThreadId);
-
-  for (const text of [textOf(await kit.call("crew_catch_up", {}, threadId)), textOf(await kit.call("crew_read", { crewId: "c1" }, threadId))]) {
-    for (const item of evidence) assert.ok(text.includes(`- ${item}`), `item ${item.slice(0, 2)} is missing or cut`);
-    assert.match(text, /Status: done\nSummary: Retries land with backoff\nCommit: 0123456789abcdef0123456789abcdef01234567\nPull request: none/);
-    assert.match(text, /#### Verdict\n\nUnverified: verification was off, so nobody has checked it against the done-criteria\./);
+  for (const file of ["../x.md", "/etc/x.md", "notes.txt", "notes/../../data.md"]) {
+    await assert.rejects(kit.call("crew_memory_write", { file, content: "x", baseVersion: null }, threadId), /memory file is a \.md path inside the memory folder/, file);
+    assert.equal(coordinatorContract.memoryWrite.input.safeParse({ coordinatorId, file, content: "x", baseVersion: null }).success, false, file);
   }
 });
 
-test("crew_read says when the crew has had a turn since its latest handoff", async () => {
-  const { kit, threadId, crewThreadId } = await withCrew();
-  await kit.call("crew_handoff", DONE, crewThreadId);
-  assert.doesNotMatch(textOf(await kit.call("crew_read", { crewId: "c1" }, threadId)), /had a turn since/);
+test("the Memory editor's reads and writes refuse a coordinating thread that was never started", async () => {
+  const { kit } = await started();
+  const unknown = { coordinatorId: coordinatorIdSchema.parse("00000000-0000-4000-8000-000000000000") };
 
-  kit.startTurn(crewThreadId);
-  assert.match(textOf(await kit.call("crew_read", { crewId: "c1" }, threadId)), /### Its latest handoff\n\nIts thread has had a turn since, so this no longer places it on the board\.\n\nStatus: done/);
+  assert.throws(() => kit.rpc.memoryList(unknown), /no regional manager/);
+  assert.throws(() => kit.rpc.memoryWrite({ ...unknown, file: PLAN, content: "x", baseVersion: null }), /no regional manager/);
+});
+
+test("a catch-up past its budget names the files it left out", async () => {
+  const { kit, threadId, dir } = await started();
+  writeFileSync(join(dir, "PLAN.md"), "x".repeat(45_000));
+
+  const text = textOf(await kit.call("crew_catch_up", {}, threadId));
+  assert.match(text, /## GOAL\.md/);
+  assert.doesNotMatch(text, /## PLAN\.md/);
+  assert.match(text, /Not shown, to keep this short: PLAN\.md\./);
+});
+
+test("the plugin loads in the SDK's fake host, which checks every tool's parameters as bb does", () => {
+  const { bb, harness: host } = createFakePluginHost();
+  plugin(bb);
+  assert.deepEqual(
+    new Set(host.registrations.agentTools.map(({ name }) => name)),
+    new Set(["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "issue_create", "issue_update", "issue_read", "agent_start", "agent_message", "agent_stop", "agent_handoff", "issue_verdict"]),
+  );
 });
