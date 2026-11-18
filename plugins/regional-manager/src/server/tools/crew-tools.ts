@@ -53,7 +53,7 @@ export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, on
         decision: store.decision,
         view: (issueId) => ("error" in issues ? null : (issues.find(({ view }) => view.issue.id === issueId)?.view ?? null)),
       });
-      return `${updates}\n\n${boardText(issues)}\n\n${openDecisionsText(store.decisions(id))}\n\n${remindersText(store.reminders(id))}\n\n${catchUpText(memory.of(id))}`;
+      return `${identityText(id)}\n\n${updates}\n\n${boardText(issues)}\n\n${openDecisionsText(store.decisions(id))}\n\n${remindersText(store.reminders(id))}\n\n${catchUpText(memory.of(id))}`;
     }),
   });
 
@@ -135,3 +135,6 @@ function memoryOwner(role: Role): CoordinatorId {
       return role.coordinatorId;
   }
 }
+
+/** Who the caller is, where a manager that doubts its role looks: bb status shows no roles. */
+const identityText = (id: CoordinatorId): string => `You are regional manager ${id}: the plugin made this thread one when it started it.`;

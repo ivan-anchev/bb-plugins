@@ -39,7 +39,7 @@ test("two agents that hand off at once to an idle regional manager: one doorbell
   assert.equal(kit.queued(threadId).length, 1, "the second waits in bb's queue behind the turn the first started");
 
   const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
-  assert.match(caughtUp, /^## Updates\n\n2 updates since your last catch-up, oldest first\./);
+  assert.match(caughtUp, /^You are regional manager [\w-]+: the plugin made this thread one when it started it\.\n\n## Updates\n\n2 updates since your last catch-up, oldest first\./);
   assert.match(caughtUp, /### i1 "Add retries" \(a1\) handed off: done\n\nAt [^\n]+ Its report, in its own words:\n\nStatus: done\nSummary: Retries land with backoff\nCommit: 0123456789abcdef0123456789abcdef01234567[\s\S]*#### Verdict\n\nUnverified: verification was off/);
   assert.match(caughtUp, /### i2 "Dead letters" \(a2\) handed off: blocked\n\n[^\n]+\n\nStatus: blocked\nSummary: Needs a staging key\n\n#### Did\n\n- Added exponential backoff\n\n#### Evidence\n\n- npm test: 12 passing\n\n#### Concerns\n\n- The staging queue is shared\n\n#### Deviations\n\nNone\./);
   assert.ok(caughtUp.indexOf("## Updates") < caughtUp.indexOf("## Board"));
@@ -85,7 +85,7 @@ test("crew_catch_up returns each update once", async () => {
   await kit.call("agent_handoff", DONE, agentThreads[0]);
 
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /1 update since your last catch-up/);
-  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /^## Updates\n\nNothing new since your last catch-up\./);
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /\n\n## Updates\n\nNothing new since your last catch-up\./);
 });
 
 test("no doorbell holds an agent's words: not its summary, its last answer, its error or its question", async () => {

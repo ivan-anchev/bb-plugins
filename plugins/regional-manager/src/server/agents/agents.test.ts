@@ -313,7 +313,7 @@ test("crew_catch_up shows the updates, then the board by lane with each issue's 
   await kit.call("issue_create", { ...RETRIES, title: "Dead letters", status: "backlog" }, threadId);
 
   const text = textOf(await kit.call("crew_catch_up", {}, threadId));
-  assert.match(text, /^## Updates\n\nNothing new since your last catch-up\.\n\n## Board/);
+  assert.match(text, /^You are regional manager [\w-]+: the plugin made this thread one when it started it\.\n\n## Updates\n\nNothing new since your last catch-up\.\n\n## Board/);
   assert.ok(
     text.includes(
       `## Board\n\n### In progress (1)\n- i1 "Add retries" (Build; a1, @thread:${agentThreadId}, on branch \`bb/${agentThreadId}\`): Its turn ended without a handoff\n\n### Backlog (1)\n- i2 "Dead letters" (Build; no agent): Not planned`,

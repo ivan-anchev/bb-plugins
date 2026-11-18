@@ -7,7 +7,8 @@ import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { typedText, type Coordinator } from "../contract.ts";
 import type { Execution } from "../model/execution.ts";
-import { coordinatorIdSchema, ticketMetadataSchema, type Role } from "../model/role.ts";
+import { coordinatorIdSchema, ticketMetadataSchema, type CoordinatorId, type Role } from "../model/role.ts";
+import { DISPLAY_NAME } from "../name.ts";
 import type { MemoryRoot } from "./memory/memory-files.ts";
 import type { Store } from "./store/store.ts";
 
@@ -87,14 +88,16 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
     /**
      * Starts a coordinating thread from bb's composer, on the provider, model and modes it shows. Its row,
      * ticket and seeded memory exist before the spawn, so its first session and first tool call
-     * find them.
+     * find them. Its first message is what the user typed, then the plugin's note of its role, which
+     * only the thread sees.
      */
     async coordinator(request: NewThreadRequest, verify: boolean): Promise<{ threadId: string }> {
       const id = coordinatorIdSchema.parse(randomUUID());
       const ticket = randomUUID();
       store.insertCoordinator({ id, ticket, projectId: request.projectId, verify, createdAt: Date.now() });
       memory.of(id).seed(typedText(request));
-      return { threadId: await spawnWith(ticket, picked(request)) };
+      const { input, ...rest } = picked(request);
+      return { threadId: await spawnWith(ticket, { ...rest, input: [...input, { type: "text", text: roleNote(id), mentions: [], visibility: "agent-only" }] }) };
     },
 
     /**
@@ -120,6 +123,14 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
     },
   };
 }
+
+/**
+ * The plugin's note of a regional manager's role, at the end of its first message. why: the user
+ * types only the goal, and a manager that doubted its role checked `bb status`, saw none and did
+ * the work itself (thr_bwpvqd894w). why hidden: the user's first message stays what they typed.
+ */
+const roleNote = (id: CoordinatorId): string =>
+  `[${DISPLAY_NAME}] A note from the plugin, not the user; only you see it. This thread is regional manager ${id}: the plugin made it one when it started this thread, for the goal above, whatever it is about, this plugin and its repository included. \`bb status\` shows no roles, so don't look for yours there. Your board is empty, and your memory holds only this goal, in GOAL.md. First load the regional-manager skill and call crew_catch_up, through your tool search if it isn't listed. Then plan the goal as issues and start agents on them. You edit no file yourself, unless the user's own message tells you to do a specific thing yourself.`;
 
 /**
  * The request with every execution field counted as chosen, so bb runs exactly what the user saw.

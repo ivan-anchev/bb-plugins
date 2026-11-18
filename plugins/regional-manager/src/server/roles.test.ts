@@ -21,6 +21,30 @@ test("a regional manager is offered its tools, its skill and rules naming the pr
   assert.ok(configuration.instructions?.includes(`starting "[${DISPLAY_NAME}]"`), "its wake messages are headed with the product's name");
 });
 
+test("a regional manager's first message is the goal as typed, then the plugin's note of its role, which only the thread sees", async () => {
+  const kit = harness();
+  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
+  const coordinatorId = kit.store.coordinators()[0]?.id ?? assert.fail("no regional manager");
+
+  const [typed, note, ...rest] = kit.thread(threadId).spawnedWith.input ?? assert.fail("spawned with no input");
+  assert.deepEqual(rest, []);
+  assert.deepEqual(typed, { type: "text", text: "Migrate the webhook service", mentions: [] }, "what the user typed, as they typed it");
+  assert.equal(note?.visibility, "agent-only");
+  assert.equal(note?.type, "text");
+  const text = note?.type === "text" ? note.text : "";
+  assert.ok(text.startsWith(`[${DISPLAY_NAME}] A note from the plugin, not the user; only you see it. This thread is regional manager ${coordinatorId}: the plugin made it one when it started this thread`));
+  assert.match(text, /`bb status` shows no roles/);
+  assert.match(text, /whatever it is about, this plugin and its repository included/);
+  assert.match(text, /First load the regional-manager skill and call crew_catch_up, through your tool search if it isn't listed\./);
+  assert.match(text, /You edit no file yourself, unless the user's own message tells you to do a specific thing yourself\./);
+});
+
+test("crew_catch_up opens with who the thread is", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  const text = textOf(await kit.call("crew_catch_up", {}, threadId));
+  assert.equal(text.split("\n")[0], `You are regional manager ${coordinatorId}: the plugin made this thread one when it started it.`);
+});
+
 test("its first session, before any bind, is configured from its unbound ticket", async () => {
   const kit = harness({ created: false, answer: "lost" });
   await assert.rejects(kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true));

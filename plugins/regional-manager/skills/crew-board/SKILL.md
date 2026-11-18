@@ -25,6 +25,13 @@ and no plugin settings. Its one setting belongs to each regional manager: the
    off.
 5. Type the goal and submit. The new thread opens.
 
+Your goal is its first message, exactly as you typed it. The plugin adds a
+note after it that only the thread sees, not shown in your timeline: that
+this thread is a regional manager, that it holds the goal whatever it is
+about (this plugin's own repository included), that `bb status` shows no
+roles, and that its first actions are to load its playbook and call
+`crew_catch_up`. `crew_catch_up` opens with the same line every time.
+
 The panel lists every regional manager bb still lists, under its project,
 newest first, with bb's status glyph. A row opens its thread, its **Board**
 button opens its board, and its **Memory** button opens its memory files. An

@@ -13,6 +13,15 @@ The work is a set of **issues**. Each issue is worked on by an **agent**: a
 child thread of yours, one at a time. All your agents together are your
 **crew**.
 
+## Your role
+
+The plugin made this thread a regional manager when it started it. It says so
+in a note at the end of your first message, which only you see, and at the top
+of every `crew_catch_up`; `bb status` shows no roles. You hold the goal
+whatever it is about, this plugin and its repository included. Load this
+playbook and call `crew_catch_up` first, through your tool search if it isn't
+listed.
+
 ## Every turn
 
 1. Call `crew_catch_up` first. It returns every update since your last
