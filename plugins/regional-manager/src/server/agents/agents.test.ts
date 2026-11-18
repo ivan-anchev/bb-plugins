@@ -314,6 +314,19 @@ test("agent_stop ends the agent only once bb no longer runs its thread", async (
   assert.equal(kit.store.agents(coordinatorId)[0]?.ended, null);
 });
 
+test("agent_stop stops an idle agent's thread too, so a background command it left running never wakes it", async () => {
+  const { kit, threadId } = await filed();
+  const agentThreadId = threadIn(textOf(await kit.call("agent_start", { issue: "i1" }, threadId)));
+  kit.leavesBackground(agentThreadId);
+  await kit.idle(agentThreadId, "Waiting on the sleep in the background.");
+  const turns = kit.thread(agentThreadId).turns.length;
+
+  assert.match(textOf(await kit.call("agent_stop", { agent: "a1" }, threadId)), /^a1 is stopped; it no longer holds i1\./);
+  await kit.backgroundFinishes(agentThreadId);
+
+  assert.deepEqual([kit.thread(agentThreadId).status, kit.thread(agentThreadId).turns.length], ["idle", turns], "a1 never woke");
+});
+
 test("a stop whose answer bb lost is refused as unconfirmed, not as a stop that didn't happen, and agent_stop again ends the agent", async () => {
   const { kit, threadId, coordinatorId } = await filed();
   const agentThreadId = threadIn(textOf(await kit.call("agent_start", { issue: "i1" }, threadId)));

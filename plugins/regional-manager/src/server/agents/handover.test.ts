@@ -194,6 +194,19 @@ test("the new agent gets a fix round of its own; the replaced agent's running ve
   assert.match(kit.delivered(next).at(-1) ?? "", /^## Verifier findings: 1 of 2 done-criteria not met/);
 });
 
+test("a holder idle with a background command still running is stopped by a handover, so the command's finish never wakes it beside its successor", async () => {
+  const { kit, agentThreadId, handover, agent } = await handedTo();
+  kit.leavesBackground(agentThreadId); // a1's turn ended with a background sleep still running: bb reports it idle
+  const turns = kit.thread(agentThreadId).turns.length;
+
+  const next = threadIn(textOf(await handover()));
+  await kit.backgroundFinishes(agentThreadId);
+
+  assert.deepEqual([kit.thread(agentThreadId).status, kit.thread(agentThreadId).turns.length], ["idle", turns], "a1 never woke");
+  assert.equal(agent(a1).ended?.how, "replaced");
+  assert.equal(kit.thread(next).status, "active");
+});
+
 test("a research issue's handover starts clean, with the earlier handoffs in its first message", async () => {
   const { kit, threadId } = await coordinating();
   const { agentThreadId } = await startedAgent(kit, threadId, { kind: "research", doneCriteria: ["Which queue?"] });

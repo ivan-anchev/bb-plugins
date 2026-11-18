@@ -326,8 +326,11 @@ verdict.
   got each. One that can't be taken back, or that the user queued for an
   agent or a verifier, refuses the start: once sent, it would wake that
   thread beside the new agent. Then
-  every thread the plugin started on the issue that bb reports running (the
-  holder, a verifier, an earlier agent) is stopped, never archived; a late
+  every live thread the plugin started on the issue (the holder, a verifier,
+  an earlier agent) is stopped, never archived, idle or not: bb's stop also
+  ends a background command a turn left running, whose finish would
+  otherwise start a new turn there. `agent_stop` stops an idle thread the
+  same way. A late
   verdict is refused. Until bb confirms each stopped, the start is refused and
   the holder keeps the issue. Every check of the issue still waiting is
   superseded; a verdict that passed and waits for CI is kept whole, marked
