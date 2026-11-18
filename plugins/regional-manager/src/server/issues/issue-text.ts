@@ -173,12 +173,12 @@ export function stopText(agent: Agent, outcome: StopOutcome): string {
   }
 }
 
-/** What a verifier named on an issue applies to: nothing on a kind nothing verifies. */
+/** What a verifier named on an issue applies to, as the first choice (verifier-model.ts): nothing on a kind nothing verifies. */
 export function verifierText(issue: Issue): string {
   if (!isVerified(issue.kind)) return `${issue.id} has no verifier: nothing verifies a ${PIPELINES[issue.kind].label.toLowerCase()} issue.`;
   return issue.verifier === null
     ? `${issue.id}'s verifier is the plugin's pick again.`
-    : `${issue.id}'s done handoffs, and its final check as a parent, are checked on ${executionText(issue.verifier)} from the next one on; a check already running keeps its own.`;
+    : `${executionText(issue.verifier)} is now ${issue.id}'s first choice of verifier for its done handoffs, and its final check as a parent, from the next one on: each runs on it when bb lists it where the check runs and no agent whose work it checks ran on it. A check already running keeps its own.`;
 }
 
 /**

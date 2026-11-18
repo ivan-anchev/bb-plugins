@@ -289,10 +289,28 @@ test("8: the final check runs on the parent's named verifier unless an agent of 
   await alone.returns(PASSES);
   assert.match(await alone.text("crew_catch_up", {}), /by a verifier on claude-code opus, a1's own model, as no other was available\./);
 
+  // The named one is the only model there, and the agents' own: passed over, then the last resort.
+  const namedAlone = await withParent({ parent: { verifier: { providerId: "claude-code", model: "opus" } } });
+  namedAlone.kit.providers.list = [{ id: "claude-code", available: true, models: [{ model: "opus", isDefault: true, defaultReasoningEffort: "high" }] }];
+  await namedAlone.mergeAll();
+  assert.deepEqual(runsOn(namedAlone.kit, namedAlone.verifier()), ["claude-code", "opus"]);
+  await namedAlone.returns(PASSES);
+  const { verdict } = namedAlone.latest();
+  assert.equal(verdict.state === "returned" && verdict.sameModel, true);
+  assert.match(await namedAlone.text("crew_catch_up", {}), /by a verifier on claude-code opus, a1's own model, as no other was available; it is also the one named on i1\./);
+
+  // Naming the agents' model on the parent promises it only as the first choice.
+  const namedTheirs = await withParent();
+  const note = await namedTheirs.text("issue_update", { id: "i1", verifier: { providerId: "claude-code", model: "opus" } });
+  assert.doesNotMatch(note, /are checked on/);
+  assert.match(note, /claude-code opus \(high\) is now i1's first choice of verifier for its done handoffs, and its final check as a parent, from the next one on: each runs on it when bb lists it where the check runs and no agent whose work it checks ran on it\./);
+  await namedTheirs.mergeAll();
+  assert.deepEqual(runsOn(namedTheirs.kit, namedTheirs.verifier()), ["codex", "gpt-default"]);
+
   const renamed = await withParent();
   await renamed.mergeAll();
   const running = renamed.verifier();
-  assert.match(await renamed.text("issue_update", { id: "i1", verifier: { providerId: "claude-code", model: "sonnet" } }), /a check already running keeps its own\./);
+  assert.match(await renamed.text("issue_update", { id: "i1", verifier: { providerId: "claude-code", model: "sonnet" } }), /A check already running keeps its own\./);
   assert.equal(renamed.latest().verifier, null);
   assert.equal(renamed.verifier(), running);
   await renamed.returns(FAILS);

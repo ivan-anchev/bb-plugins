@@ -308,7 +308,8 @@ function notCleanReason({ subject }: Check): string {
 /**
  * What a verifier ran on, and why: on the verifier named on the issue, as named; else why not the
  * one named (an agent whose work it checks did that work on it, or bb can't run it where the check
- * runs); and when it is the model of one of those agents (`theirs`), that no other was available.
+ * runs); and whenever it is the model of one of those agents (`theirs`), that no other was
+ * available, the one named included.
  */
 function verifiedOn(verdict: Extract<Verdict, { state: "returned" }>, { verifier: named, issueId, subject }: Check, theirs: readonly Agent[]): string {
   const ran = `${verdict.model.providerId} ${verdict.model.model}`;
@@ -316,7 +317,7 @@ function verifiedOn(verdict: Extract<Verdict, { state: "returned" }>, { verifier
   const owner = verdict.sameModel ? ownerOf(verdict.model) : null;
   const own = owner === null ? "" : `, ${owner}'s own model, as no other was available`;
   if (named === null) return `${ran}${own}`;
-  if (sameModel(named, verdict.model)) return `${ran}, as named on ${issueId}`;
+  if (sameModel(named, verdict.model)) return own === "" ? `${ran}, as named on ${issueId}` : `${ran}${own}; it is also the one named on ${issueId}`;
   const namedOwner = ownerOf(named);
   const why = namedOwner !== null ? `${namedOwner} did the work on it` : `bb can't run it ${whereChecked(subject)}`;
   return `${ran}${own}, not the ${named.providerId} ${named.model} named on ${issueId}: ${why}`;

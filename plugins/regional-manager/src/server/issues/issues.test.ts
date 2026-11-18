@@ -110,7 +110,7 @@ test("a verifier named on an issue is stored with its catalog default reasoning 
 
   assert.deepEqual(await update({ verifier: { providerId: "codex", model: "gpt-default", reasoningLevel: "high" } }), {
     refused: false,
-    text: "Updated i1. i1's done handoffs, and its final check as a parent, are checked on codex gpt-default (high) from the next one on; a check already running keeps its own.",
+    text: "Updated i1. codex gpt-default (high) is now i1's first choice of verifier for its done handoffs, and its final check as a parent, from the next one on: each runs on it when bb lists it where the check runs and no agent whose work it checks ran on it. A check already running keeps its own.",
   });
   assert.deepEqual(await update({ verifier: null }), { refused: false, text: "Updated i1. i1's verifier is the plugin's pick again." });
   assert.equal(kit.store.issue(coordinatorId, ISSUE_ID)?.verifier, null);

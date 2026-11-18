@@ -168,7 +168,8 @@ on the default branch. Once every sub-issue is closed and every Done build
 sub-issue's pull request merged, the plugin checks them itself: within a
 minute it starts a hidden verifier, your child thread, in a fresh worktree of
 the default branch as origin has it, on a model that made none of the merged
-work. The parent shows `Final check due`, then `Final check running`, in
+work while bb has one (else, as a last resort, on one that did, which the
+verdict says). The parent shows `Final check due`, then `Final check running`, in
 Verifying. You hear of it only with its verdict:
 
 - **final check: passed**: the parent is Done (`✓ Final check passed`), and
@@ -197,8 +198,9 @@ Write the parent's done-criteria when you file it: a build parent with none
 when its check comes due Needs you (`i1 has no done-criteria for its final
 check`), and no check starts until you add them. When `PREFERENCES.md` names
 what verifies work, name the parent's `verifier` before its last sub-issue
-closes: its final check runs on it, unless an agent of its merged work ran on
-that model (then it is passed over, never refused, and the verdict says so).
+closes: it is the first choice, and its final check runs on it when bb lists
+it on your machine and no agent of its merged work ran on that model (else it
+is passed over, never refused, and the verdict says so).
 A verifier named while a check runs applies to the next one.
 
 ### Research
