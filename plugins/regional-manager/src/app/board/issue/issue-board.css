@@ -424,7 +424,7 @@ button.rmi-thread-link {
   color: var(--subtle-foreground);
   font-variant-numeric: tabular-nums;
 }
-/* A relation: each other issue a small row, its glyph, id and title, going to it when pressed. */
+/* A relation: each other issue a small row, its glyph, id and title, going to it when pressed; one the board hasn't read yet, its id alone. */
 .rmi-related-list {
   display: flex;
   flex-direction: column;
@@ -441,6 +441,8 @@ button.rmi-thread-link {
   padding: 3px 6px;
   margin: 0 -6px;
   border-radius: 6px;
+}
+button.rmi-related {
   cursor: pointer;
 }
 .rmi-related > .rmi-state,
@@ -458,10 +460,10 @@ button.rmi-thread-link {
   color: var(--subtle-foreground);
 }
 @media (hover: hover) {
-  .rmi-related:hover {
+  button.rmi-related:hover {
     background: var(--state-hover);
   }
-  .rmi-related:hover .rmi-related-title {
+  button.rmi-related:hover .rmi-related-title {
     color: var(--foreground);
   }
 }

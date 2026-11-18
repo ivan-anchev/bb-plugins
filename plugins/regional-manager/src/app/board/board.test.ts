@@ -324,6 +324,22 @@ test("an opened issue lists what it depends on and what it blocks, each by its s
   assert.ok(document.activeElement === view.getByRole("button", { name: /\bi2 Build/ }));
 });
 
+test("a relation to an issue the board hasn't read yet shows its id alone, nothing to press, and the board's next read makes it the issue's entry, going to it", async () => {
+  const pickVault = issue("i1", { kind: "research", title: "Pick a card vault", headline: "Researching" });
+  const { view, reread } = await mount({ decisions: [], issues: [pickVault] }, undefined, (issueId) => ({ ...DETAIL, blocks: issueId === "i1" ? [id("i2")] : [] }));
+  fireEvent.click(view.getByRole("button", { name: /\bi1 Research/ }));
+  const detail = within(view.getByRole("region", { name: "i1" }));
+  await detail.findByText(DETAIL.description);
+  const blocks = () => within(detail.queryByRole("heading", { name: "Blocks" })?.closest("section") ?? assert.fail("no Blocks section"));
+  assert.deepEqual(blocks().getAllByRole("listitem").map((entry) => entry.textContent), ["i2"], "filed since the board's read, it is listed by its id");
+  assert.equal(blocks().queryByRole("button"), null, "with no row to go to, nothing to press");
+
+  await reread({ decisions: [], issues: [pickVault, issue("i2", { title: "Card vault", blockedBy: [id("i1")] })] });
+  fireEvent.click(blocks().getByRole("button", { name: "i2: Card vault, Todo" }));
+  const card = view.getByRole("button", { name: /\bi2 Build/ });
+  assert.ok(document.activeElement === card && card.getAttribute("aria-expanded") === "true", "once read, it goes to i2's row");
+});
+
 test("an issue gone to lets go of the page once a read moves its row to another lane or off the board, with no move of the user's", async () => {
   const board = (i1: Partial<IssueRow> | null): Read => ({
     decisions: [],
