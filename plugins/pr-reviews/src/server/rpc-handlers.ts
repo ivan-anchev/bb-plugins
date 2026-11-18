@@ -202,9 +202,9 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
 
     async mergePr({ projectId, number, method, headSha }) {
       const repo = await repoOf(projectId);
-      await mergePr(repo, number, method, headSha);
+      const outcome = await mergePr(repo, number, method, headSha);
       stateChanged(repo, number, method);
-      return {};
+      return { outcome };
     },
 
     addToReview: ({ request, reviewId, ...target }) =>

@@ -15,7 +15,7 @@ const pr = (commits: string[]): PrDetail => ({
   baseRefName: "main",
   state: "OPEN",
   commits,
-  additions: 1, deletions: 1, checks: [], reviewers: [], labels: [], mergeMethods: ["merge"], conflicting: false,
+  additions: 1, deletions: 1, checks: [], reviewers: [], labels: [], mergeMethods: ["merge"], conflicting: false, stack: null,
 });
 
 test("no commits since a guide for the PR's head", () => {

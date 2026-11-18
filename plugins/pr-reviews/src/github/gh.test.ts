@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
 import { parsePrDetail } from "./gh.ts";
 
 // `gh pr view 42 --json <DETAIL_FIELDS>` for this repo, trimmed; each test swaps in the fields it covers.
@@ -47,6 +48,9 @@ const PR_42 = {
 // `gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed` for this repo.
 const REPO_SETTINGS = { mergeCommitAllowed: true, squashMergeAllowed: true, rebaseMergeAllowed: true };
 
+// `gh api repos/ivan-anchev/bb-plugins/stacks?pull_request=42`: in no stack.
+const NO_STACKS: unknown = [];
+
 function review(login: string, state: string) {
   return { author: { login }, authorAssociation: "NONE", body: "", commit: { oid: "" }, id: "", includesCreatedEdit: false, reactionGroups: [], state, submittedAt: "2026-11-07T20:59:18Z" };
 }
@@ -55,7 +59,7 @@ const user = (login: string) => ({ __typename: "User", login });
 const team = (name: string) => ({ __typename: "Team", name, slug: `ivan-anchev/${name.toLowerCase()}` });
 
 test("maps PR #42: when it opened, its checks with names, outcomes and details pages, its commenting reviewer, no labels", () => {
-  const pr = parsePrDetail(PR_42, REPO_SETTINGS);
+  const pr = parsePrDetail(PR_42, REPO_SETTINGS, NO_STACKS);
   assert.equal(pr.createdAt, "2026-11-07T20:41:09Z");
   assert.deepEqual(pr.checks, [
     { name: "check", outcome: "passing", url: "https://github.com/ivan-anchev/bb-plugins/actions/runs/42456126179/job/128655411994" },
@@ -70,7 +74,7 @@ test("requested users and teams await review, ahead of those who reviewed", () =
     ...PR_42,
     reviewRequests: [user("octocat"), team("Platform")],
     latestReviews: [review("alice", "APPROVED"), review("bob", "CHANGES_REQUESTED"), review("carol", "COMMENTED")],
-  }, REPO_SETTINGS);
+  }, REPO_SETTINGS, NO_STACKS);
   assert.deepEqual(pr.reviewers, [
     { kind: "user", login: "octocat", status: "awaiting" },
     { kind: "team", name: "Platform" },
@@ -81,7 +85,7 @@ test("requested users and teams await review, ahead of those who reviewed", () =
 });
 
 test("a reviewer re-requested after an older review awaits review, once", () => {
-  const pr = parsePrDetail({ ...PR_42, reviewRequests: [user("alice")], latestReviews: [review("alice", "CHANGES_REQUESTED")] }, REPO_SETTINGS);
+  const pr = parsePrDetail({ ...PR_42, reviewRequests: [user("alice")], latestReviews: [review("alice", "CHANGES_REQUESTED")] }, REPO_SETTINGS, NO_STACKS);
   assert.deepEqual(pr.reviewers, [{ kind: "user", login: "alice", status: "awaiting" }]);
 });
 
@@ -90,7 +94,7 @@ test("a dismissed or draft review, a state GitHub adds later, and an unknown req
     ...PR_42,
     reviewRequests: [{ __typename: "Mannequin", login: "imported" }, user("octocat")],
     latestReviews: [review("dave", "DISMISSED"), review("erin", "PENDING"), review("frank", "BRAND_NEW_STATE"), review("alice", "APPROVED")],
-  }, REPO_SETTINGS);
+  }, REPO_SETTINGS, NO_STACKS);
   assert.deepEqual(pr.reviewers, [
     { kind: "user", login: "octocat", status: "awaiting" },
     { kind: "user", login: "alice", status: "approved" },
@@ -98,7 +102,7 @@ test("a dismissed or draft review, a state GitHub adds later, and an unknown req
 });
 
 test("an open draft is a draft; a closed one is closed, as on GitHub", () => {
-  const stateOf = (state: string, isDraft: boolean) => parsePrDetail({ ...PR_42, state, isDraft }, REPO_SETTINGS).state;
+  const stateOf = (state: string, isDraft: boolean) => parsePrDetail({ ...PR_42, state, isDraft }, REPO_SETTINGS, NO_STACKS).state;
   assert.deepEqual([stateOf("OPEN", false), stateOf("OPEN", true), stateOf("CLOSED", true), stateOf("MERGED", false)], ["OPEN", "DRAFT", "CLOSED", "MERGED"]);
 });
 
@@ -109,7 +113,7 @@ test("labels keep their name and gain a CSS hex color", () => {
       { id: "LA_1", name: "bug", description: "Something isn't working", color: "d73a4a" },
       { id: "LA_2", name: "good first issue", description: "", color: "7057FF" },
     ],
-  }, REPO_SETTINGS);
+  }, REPO_SETTINGS, NO_STACKS);
   assert.deepEqual(pr.labels, [
     { name: "bug", color: "#d73a4a" },
     { name: "good first issue", color: "#7057FF" },
@@ -117,10 +121,22 @@ test("labels keep their name and gain a CSS hex color", () => {
 });
 
 test("the merge methods are the ones the repo allows, merge commit first; only a found conflict marks the PR conflicting", () => {
-  const pr = parsePrDetail({ ...PR_42, mergeable: "CONFLICTING" }, { ...REPO_SETTINGS, mergeCommitAllowed: false });
+  const pr = parsePrDetail({ ...PR_42, mergeable: "CONFLICTING" }, { ...REPO_SETTINGS, mergeCommitAllowed: false }, NO_STACKS);
   assert.deepEqual(pr.mergeMethods, ["squash", "rebase"]);
   assert.equal(pr.conflicting, true);
-  const conflictingWhen = (mergeable: string) => parsePrDetail({ ...PR_42, mergeable }, REPO_SETTINGS).conflicting;
+  const conflictingWhen = (mergeable: string) => parsePrDetail({ ...PR_42, mergeable }, REPO_SETTINGS, NO_STACKS).conflicting;
   assert.deepEqual([conflictingWhen("MERGEABLE"), conflictingWhen("UNKNOWN")], [false, false]);
-  assert.deepEqual(parsePrDetail(PR_42, REPO_SETTINGS).mergeMethods, ["merge", "squash", "rebase"]);
+  assert.deepEqual(parsePrDetail(PR_42, REPO_SETTINGS, NO_STACKS).mergeMethods, ["merge", "squash", "rebase"]);
+});
+
+test("a PR in no stack, or on a GitHub with no stacks, has no stack", () => {
+  assert.equal(parsePrDetail(PR_42, REPO_SETTINGS, NO_STACKS).stack, null);
+  assert.equal(parsePrDetail(PR_42, REPO_SETTINGS, null).stack, null);
+});
+
+test("a stacked PR's stack is the one GitHub lists it in", () => {
+  const stacks = JSON.parse(readFileSync(new URL("./fixtures/stacks/stack-193.json", import.meta.url), "utf8"));
+  const pr = parsePrDetail({ ...PR_42, number: 192 }, REPO_SETTINGS, stacks);
+  assert.equal(pr.stack?.number, 193);
+  assert.equal(pr.stack?.base, "main");
 });

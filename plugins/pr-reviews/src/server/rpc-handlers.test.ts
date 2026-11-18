@@ -36,7 +36,10 @@ mock.module("../github/gh.ts", {
     postReply: posted("reply"),
     postConversationComment: posted("conversation"),
     changePrState: changedState,
-    mergePr: async (...args: unknown[]) => void events.push(`merge ${JSON.stringify(args)}`),
+    mergePr: async (...args: unknown[]) => {
+      events.push(`merge ${JSON.stringify(args)}`);
+      return "merged";
+    },
     addReviewComment: wrote("add-to-review"),
     addReviewReply: wrote("reply-in-review"),
     submitReview: wrote("submit"),

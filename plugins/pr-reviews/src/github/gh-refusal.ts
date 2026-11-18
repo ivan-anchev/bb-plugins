@@ -68,6 +68,18 @@ export function ghStateRefusalFor(failure: HostCommandFailure): Refusal {
   return ghRefusalFor(failure);
 }
 
+/**
+ * A stack merge GitHub's merge API turned down without answering how it stands (stack-merge.ts),
+ * or whose call the timeout stopped, which may have started the merge: it is never retried.
+ */
+export function ghStackMergeRefusalFor(failure: HostCommandFailure): Refusal {
+  if (failure.killed) return invalid("GitHub didn't answer in time. The stack may be merging: Refresh to check before trying again.");
+  // why GitHub's own words: a 409 or 422 names what it refused, such as a head that moved.
+  const status = Number(HTTP_STATUS.exec(failure.stderr)?.[1] ?? 0);
+  if (status === 409 || status === 422) return invalid(`GitHub refused the merge: ${githubWordsOf(failure)}`);
+  return ghRefusalFor(failure);
+}
+
 const invalid = (message: string) => new Refusal({ code: "invalid", message });
 
 // GitHub's words when a comment is posted on its own while the reader has a pending review.
