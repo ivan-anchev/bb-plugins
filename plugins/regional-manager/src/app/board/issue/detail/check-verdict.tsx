@@ -8,7 +8,7 @@ import { ThreadLink } from "../thread-link.tsx";
 import { DiscloseGlyph } from "./disclose-glyph.tsx";
 
 /** What a verdict judged: an agent's done handoff, or a build parent's final check on its default branch. */
-export type Judged = { kind: "handoff" } | { kind: "final"; defaultBranch: string };
+type Judged = { kind: "handoff" } | { kind: "final"; defaultBranch: string };
 
 export function CheckVerdict({ verdict, judged }: { verdict: ShownVerdict; judged: Judged }) {
   switch (verdict.state) {

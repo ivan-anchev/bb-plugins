@@ -69,7 +69,7 @@ type Deps = {
 export type VerifierReport = Pick<Extract<Verdict, { state: "returned" }>, "findings"> & { criteria: { criterion: string; result: CriterionResult; evidence: string }[] };
 
 /** What became of a verifier's report: stored; refused, as its check no longer waits for it; or, for a final check, why its worktree couldn't be read, which ended the check as could-not-run. */
-export type Received = "recorded" | "not-running" | { unread: string };
+type Received = "recorded" | "not-running" | { unread: string };
 
 /**
  * An agent's handoff as its tool made it, before it waits for its issue's turn: the handoff and the
