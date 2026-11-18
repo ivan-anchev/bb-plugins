@@ -5,8 +5,11 @@ import { decisionIdSchema, type DecisionId, type Decision } from "../../../model
 import { inboxEventSchema, type InboxEvent, type StoredEvent } from "../../../model/inbox/inbox-event.ts";
 import { ownTreeEventAfter, type OwnTreeEvent } from "../../../model/inbox/own-tree.ts";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
+import { unblockedSince } from "../../../model/issue/relations.ts";
+import type { IssueView } from "../../../model/issue/status.ts";
 import { nextDue, reminderIdSchema, type Reminder, type ReminderId } from "../../../model/reminder.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../../model/role.ts";
+import { knownCloses, rememberCloses } from "../issue/issues-store.ts";
 import { json, type Db } from "../rows.ts";
 
 /** Records something to tell the regional manager, neither announced nor read yet. Call inside the transaction that records what it tells. */
@@ -47,6 +50,27 @@ export function inboxStore(db: Db) {
         if (event !== null) insertEvent(db, coordinatorId, event, at);
         return event !== null;
       })();
+    },
+
+    /**
+     * Records an `unblocked` event for each issue that every issue as viewed now (`views`, read whole)
+     * says was unblocked since the closes the regional manager knows of its relations, and remembers
+     * the closes it learned on those relations, deciding from what it knew in the same transaction
+     * (see unblockedSince). Returns whether it recorded one.
+     */
+    recordUnblocked(coordinatorId: CoordinatorId, views: readonly IssueView[], at: number): boolean {
+      return db().transaction(() => {
+        const { unblocked, learned } = unblockedSince(knownCloses(db, coordinatorId), views);
+        rememberCloses(db, coordinatorId, learned);
+        for (const unblocking of unblocked) insertEvent(db, coordinatorId, { kind: "unblocked", ...unblocking }, at);
+        return unblocked.length > 0;
+      })();
+    },
+
+    /** Whether an issue of the regional manager depends on another: whether there is anything to read for what was unblocked. */
+    hasDependencies(coordinatorId: CoordinatorId): boolean {
+      const row = db().prepare("SELECT EXISTS (SELECT 1 FROM issue_relations WHERE coordinator_id = ?) AS any").get(coordinatorId);
+      return z.object({ any: z.number() }).parse(row).any === 1;
     },
 
     /** The events no doorbell has announced and no catch-up has returned, in the order recorded. */

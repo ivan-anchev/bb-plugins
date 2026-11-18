@@ -84,7 +84,7 @@ test("an accepted issue stays Done when its agent, which took another turn since
   await kit.call("agent_handoff", { ...REPORT, status: "done", headSha: HEAD }, agentThreadId);
   await kit.idle(agentThreadId, "Handed off.");
   assert.deepEqual(await update({ status: "done" }), { refused: false, text: "Updated i1." });
-  kit.startTurn(agentThreadId);
+  await kit.startTurn(agentThreadId);
   await kit.idle(agentThreadId, "Tidied up.");
 
   await call("agent_stop", { agent: "a1" });
@@ -92,13 +92,13 @@ test("an accepted issue stays Done when its agent, which took another turn since
   assert.ok(!kit.store.unannounced(coordinatorId).some(({ event }) => event.kind === "returned-to-todo"), "nothing returned to Todo");
 });
 
-test("an issue no agent holds is canceled, and reopened into Todo; no agent starts on a canceled one", async () => {
+test("an issue no agent holds is canceled, and reopened into Todo, ready again; no agent starts on a canceled one", async () => {
   const { call, update, statuses } = await managing();
   await call("issue_create", ISSUE);
   assert.deepEqual(await update({ status: "canceled" }), { refused: false, text: "Updated i1." });
   assert.deepEqual(await statuses(), [["i1", "canceled"]]);
   assert.equal(textOf(await call("agent_start", { issue: "i1" })), "agent_start is refused: i1 is canceled, so no agent can start on it.");
-  assert.deepEqual(await update({ status: "todo" }), { refused: false, text: "Updated i1." });
+  assert.deepEqual(await update({ status: "todo" }), { refused: false, text: "Updated i1. Now ready: i1." });
   assert.deepEqual(await statuses(), [["i1", "todo"]]);
 });
 

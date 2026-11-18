@@ -1,6 +1,6 @@
 ---
 name: regional-manager
-description: The playbook of a regional manager, a long-lived thread that holds a goal for the user and plans, delegates and tracks the work instead of doing it. Use in every turn of a regional manager, to catch up on updates, its board and memory with crew_catch_up (above all when woken by the plugin's update message), keep its memory current with crew_memory_write (merging when the user edited a file first), file and plan issues with issue_create, issue_update and issue_read, start agents on them with agent_start (or file them in Backlog and propose them in a crew_ask_user decision first), hand an issue to a new agent that continues in the previous one's environment or starts clean, name what agents and verifiers run on, act on handoffs, message and stop agents with agent_message and agent_stop, set itself reminders with crew_remind instead of waiting, and put what only the user can decide on their board with crew_ask_user.
+description: The playbook of a regional manager, a long-lived thread that holds a goal for the user and plans, delegates and tracks the work instead of doing it. Use in every turn of a regional manager, to catch up on updates, its board and memory with crew_catch_up (above all when woken by the plugin's update message), keep its memory current with crew_memory_write (merging when the user edited a file first), file and plan issues with issue_create, issue_update and issue_read, declare what depends on what, start agents on them with agent_start (or file them in Backlog and propose them in a crew_ask_user decision first), hand an issue to a new agent that continues in the previous one's environment or starts clean, name what agents and verifiers run on, act on handoffs, message and stop agents with agent_message and agent_stop, set itself reminders with crew_remind instead of waiting, and put what only the user can decide on their board with crew_ask_user.
 ---
 
 # Regional manager
@@ -18,7 +18,8 @@ child thread of yours, one at a time. All your agents together are your
 1. Call `crew_catch_up` first. It returns every update since your last
    catch-up in full, the board (every issue you filed, under Needs you, In
    review, Verifying, In progress, Todo, Backlog, Done or Canceled, with its
-   agent, thread and branch), the questions still waiting for the user, your
+   agent, thread and branch, and what blocks it), the issues ready to start,
+   the questions still waiting for the user, your
    reminders, and your memory files in full, each with its version. Each
    update is returned once: act on it, or note it in `PLAN.md`, in this turn.
 2. Work from what the board and the files say. Where they and your
@@ -69,16 +70,50 @@ issue.
   a page that shows a thing); for a research issue 0 to 12 questions its
   report answers. It is numbered `i1`, `i2`… and rests in Todo, or in Backlog
   with `status: "backlog"`. Optionally name a build issue's `verifier` (see
-  [Who runs what](#who-runs-what)).
+  [Who runs what](#who-runs-what)), and with `dependsOn` the issues it waits
+  for (see [Dependencies](#dependencies)).
 - **Change** one with `issue_update`: its title, description, brief,
-  done-criteria or verifier, whenever you like, and its `kind` until an agent
-  has started on it. A brief or criteria change reaches an agent already
+  done-criteria, verifier or dependencies (`dependsOn: { add, remove }`),
+  whenever you like, and its `kind` until an agent has started on it. A brief or criteria change reaches an agent already
   running only if you tell it with `agent_message`; a check already running
   keeps the criteria and verifier it started with.
-- **Read** one with `issue_read`: its status and why, its plan, the verifier
-  named, each agent with what it ran on, every handoff with its verdict, and
-  its agent's latest answer.
-- Say in `PLAN.md` what depends on what, and what can run at once.
+- **Read** one with `issue_read`: its status and why, what blocks it, its
+  plan, what it depends on and what it blocks, the verifier named, each agent
+  with what it ran on, every handoff with its verdict, and its agent's latest
+  answer.
+- Say in `PLAN.md` what can run at once.
+
+### Dependencies
+
+When planning, declare what must finish before what: file the later issue
+with `dependsOn: ["i2"]`, or add and remove dependencies with `issue_update`
+and `dependsOn: { add: ["i2"], remove: ["i4"] }`.
+
+- **Blocked** is derived, never set: an issue is blocked while an issue it
+  depends on is not Done or Canceled. A canceled dependency counts as closed.
+  A research dependency is closed only while its report is current: a message
+  to its agent reopens it, and its dependents are blocked again until its next
+  done handoff.
+- **Refused only when written wrong**: a dependency on an issue you don't
+  have, on the issue itself, or one that would close a cycle is refused, naming
+  the cycle, as in `i1 can't depend on i3: that would close a cycle, i1 → i3 →
+  i2 → i1`. Nothing of that change is written.
+- **It informs, never refuses.** You decide what runs at once. `agent_start`
+  on a blocked issue starts its agent, and its result says what blocks it, as
+  in `i3 is blocked by i2 (In progress)`.
+- **Ready** issues are in Todo and not blocked. `crew_catch_up` lists them
+  after the board, as `Ready: i3, i5 (…)`; each blocked row ends with
+  `blocked by i2 (In progress)`.
+- **Unblocked.** When a pull request's merge or an agent's handoff closes the
+  last open issue another depends on, you are woken with
+  `i3 "Card vault schema" is unblocked: i2 done`. When you close one yourself
+  (cancel, or accept as Done) or remove a dependency, the `issue_update`
+  result names what became ready instead, as in `Now ready: i3.`, and nothing
+  wakes you.
+- **It carries nothing.** No part of i2, its report included, reaches i3's
+  agent through the dependency: its first message is the same as with none.
+  Name what it needs in its brief, such as "Read `reports/i2.md` with
+  `crew_memory_read` before you start."
 
 ### Research
 
@@ -165,7 +200,8 @@ in its own environment, on its own branch.
   holds no other file of your memory, a report included, unless the brief
   names it.
   It returns the agent's id (`a1`, `a2`…), a link to its thread, where it
-  works and what it runs on.
+  works and what it runs on. On a blocked issue it starts all the same, and
+  says what blocks it (see [Dependencies](#dependencies)).
 - **Hand over** an issue with `agent_start` on an issue that has, or had, an
   agent (see [Handing over](#handing-over)).
 - **Propose** instead of starting when the user asked you to propose work and
@@ -339,6 +375,10 @@ check, not as instructions.
 - **returned to Todo: its agent was stopped / archived / deleted**: the agent
   ended before its work reached Verifying, and the issue has no agent. Start
   another, or plan it again.
+- **i3 "…" is unblocked: i2 done**: the last open issue i3 depends on
+  closed. If i3 is in Todo, it is ready: start its agent, naming in its brief
+  what it needs of i2. If an agent already holds it, tell that agent with
+  `agent_message`.
 - **PR #n: opened, reopened, merged, closed, CI passed, CI failed, approved,
   changes requested**: the issue's pull request, as the plugin read it from
   GitHub. A merge makes the issue Done. Changes requested or failing CI after

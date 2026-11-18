@@ -38,6 +38,7 @@ function line(event: InboxEvent, { titles, check, decision }: Lookups): string {
     const checked = checkedOf(check(event.checkId));
     return `${issueName(event.issueId, titles, checked.subject.agentId)} handed off: done, ${checkedAs(checked)}`;
   }
+  if (event.kind === "unblocked") return `${titled(event.issueId, titles)} is unblocked: ${event.by} ${event.closedAs}`;
   const on = issueName(event.issueId, titles, event.agentId);
   switch (event.kind) {
     case "handoff":
@@ -60,9 +61,12 @@ function line(event: InboxEvent, { titles, check, decision }: Lookups): string {
 }
 
 /** An issue as a wake line names it: its id, its title, and the agent the line is about, as `i1 "Add retries" (a1)`. */
-export function issueName(issueId: IssueId, titles: ReadonlyMap<IssueId, string>, agentId: AgentId): string {
+export const issueName = (issueId: IssueId, titles: ReadonlyMap<IssueId, string>, agentId: AgentId): string => `${titled(issueId, titles)} (${agentId})`;
+
+/** An issue by its id and its title, as `i1 "Add retries"`. */
+export function titled(issueId: IssueId, titles: ReadonlyMap<IssueId, string>): string {
   const title = titles.get(issueId);
-  return `${title === undefined ? issueId : `${issueId} "${title}"`} (${agentId})`;
+  return title === undefined ? issueId : `${issueId} "${title}"`;
 }
 
 /** The check a `checked` event names. why throw: the event is inserted with its check, in one transaction. */

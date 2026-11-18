@@ -26,6 +26,7 @@ import {
 import { catalogRouting, sameModel, type Execution, type RequestedExecution } from "../../model/execution.ts";
 import { handoffIsCurrent, type HandoffId } from "../../model/handoff.ts";
 import { briefToStart, type Issue, type IssueId } from "../../model/issue/issue.ts";
+import type { Related } from "../../model/issue/relations.ts";
 import { keepsPlaceAfterEnd, type IssueView } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
@@ -94,11 +95,11 @@ type Decided = { issueId: IssueId; spot: Spot; runsOn: RunsOn; after: AgentId | 
 export type Withdrawn = { to: AgentId; text: string };
 
 /**
- * The issue taken over: as it was when the new agent was inserted, with the brief it starts from,
- * the agent, its ticket, the holder it replaced (null: none) and the regional manager's messages to
- * the issue's agents it took back from bb's queue.
+ * The issue taken over: as it was when the new agent was inserted, with the brief it starts from
+ * and what blocked it then, the agent, its ticket, the holder it replaced (null: none) and the
+ * regional manager's messages to the issue's agents it took back from bb's queue.
  */
-type Taken = { issue: Issue; brief: string; agentId: AgentId; ticket: string; replaced: AgentId | null; withdrawn: Withdrawn[] };
+type Taken = { issue: Issue; brief: string; blockedBy: Related[]; agentId: AgentId; ticket: string; replaced: AgentId | null; withdrawn: Withdrawn[] };
 
 /** The previous agent's environment a new agent joined: whose, what made it, its branch and its pull request's number (null: none known). */
 export type Joined = { from: AgentId; placement: Placement; branch: string | null; pr: number | null };
@@ -111,10 +112,14 @@ export type Joined = { from: AgentId; placement: Placement; branch: string | nul
  */
 type Succession = { after: AgentId | null; replaced: AgentId | null; withdrawn: Withdrawn[]; joined: Joined | null };
 
-/** What a start did: refused before anything changed; started, on `execution` (`inherited`: the regional manager's own); or inserted and then refused by bb. */
+/**
+ * What a start did: refused before anything changed; started, on `execution` (`inherited`: the
+ * regional manager's own), on an issue `blockedBy` these as it started (a dependency informs, never
+ * refuses); or inserted and then refused by bb.
+ */
 export type StartOutcome =
   | { kind: "refused"; reason: string }
-  | ({ kind: "started"; agentId: AgentId; threadId: string; execution: Execution; inherited: boolean } & Succession)
+  | ({ kind: "started"; agentId: AgentId; threadId: string; execution: Execution; inherited: boolean; blockedBy: Related[] } & Succession)
   | ({ kind: "failed"; agentId: AgentId; error: string } & Succession);
 
 /** What a stop did. An agent ends as stopped only once bb confirms its thread no longer runs; `why` it hasn't: the status bb still reports, or bb's error that left the stop unconfirmed. */
@@ -271,12 +276,13 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, placeme
     const turnSeq = holder === null || holder.threadId === null ? null : await latestTurnSeq(bb, holder.threadId);
     // why decide again here, with no await from here to the write: while the issue quieted, a merge
     // may have made it Done.
-    const now = startable(coordinatorId, issueId, (await readIssue(bb, store, { coordinatorId, id: issueId })).view, runsOn);
+    const { view } = await readIssue(bb, store, { coordinatorId, id: issueId });
+    const now = startable(coordinatorId, issueId, view, runsOn);
     if ("refused" in now) return { refused: `${quieted.did}${now.refused}` };
     const next: NewAgent = { coordinatorId, issueId, ticket: randomUUID(), ...spot, execution: runsOn.execution, at: Date.now() };
     const agentId = holder === null ? store.insertAgent(next) : store.replaceAgent(holder, leftBy(holder, turnSeq), next);
     if (agentId === null) return { refused: `${quieted.did}${issueId} changed hands meanwhile. crew_catch_up shows who holds it now.` };
-    return { ...now, agentId, ticket: next.ticket, replaced: holder?.id ?? null, withdrawn: quieted.withdrawn };
+    return { ...now, blockedBy: view.blockedBy, agentId, ticket: next.ticket, replaced: holder?.id ?? null, withdrawn: quieted.withdrawn };
   }
 
   /**
@@ -339,10 +345,10 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, placeme
   }
 
   /** Step 4: spawns the inserted agent's thread with its first message; one bb refuses ends as spawn-failed. */
-  async function spawn(coordinatorId: CoordinatorId, { spot, runsOn, after }: Decided, { issue, brief, agentId, ticket, replaced, withdrawn }: Taken): Promise<StartOutcome> {
+  async function spawn(coordinatorId: CoordinatorId, { spot, runsOn, after }: Decided, { issue, brief, blockedBy, agentId, ticket, replaced, withdrawn }: Taken): Promise<StartOutcome> {
     const { execution, inherited } = runsOn;
     const succession: Succession = { after, replaced, withdrawn, joined: joinedOf(coordinatorId, spot) };
-    const started = (threadId: string): StartOutcome => ({ kind: "started", agentId, threadId, execution, inherited: inherited !== null, ...succession });
+    const started = (threadId: string): StartOutcome => ({ kind: "started", agentId, threadId, execution, inherited: inherited !== null, blockedBy, ...succession });
     onChange(coordinatorId);
     const files = memory.of(coordinatorId);
     try {

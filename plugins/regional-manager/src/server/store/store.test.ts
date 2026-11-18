@@ -3,11 +3,12 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { z } from "zod";
 import { handoffIdSchema, type Handoff } from "../../model/handoff.ts";
+import { issueViews } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { memoryStorage } from "../memory-storage.ts";
 import type { NewAgent } from "./issue/agents-store.ts";
 import { openStore } from "./store.ts";
-import { EXECUTION, failWrites, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "./test-store.ts";
+import { EXECUTION, failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "./test-store.ts";
 
 test("a fresh database holds the design's tables and indexes, and nothing else", () => {
   const { db } = freshStore();
@@ -36,7 +37,7 @@ test("a fresh database holds the design's tables and indexes, and nothing else",
 
 test("a store opened again, as after a reload, keeps what was stored", () => {
   const { storage, store } = freshStore();
-  const filed = store.insertIssue(MANAGER, newIssue(), 2_000);
+  const filed = filedIssue(store, MANAGER, newIssue(), 2_000);
   assert.deepEqual(openStore(storage).issue(MANAGER, filed.id), filed);
 });
 
@@ -66,7 +67,7 @@ test("a regional manager is listed once its thread is bound, and its unbound tic
 test("removing a regional manager removes everything it owns, and nothing of another's", () => {
   const { store } = freshStore();
   for (const manager of [MANAGER, OTHER_MANAGER]) {
-    const { id } = store.insertIssue(manager, newIssue(), 2_000);
+    const { id } = filedIssue(store, manager, newIssue(), 2_000);
     const agentId = startAgent(store, id, `agent-of-${manager}`, manager);
     store.insertHandoff(
       { id: handoffIdSchema.parse(randomUUID()), coordinatorId: manager, issueId: id, agentId, at: 3_000, turnSeq: 1, status: "blocked", summary: "Stuck", did: [], evidence: [], concerns: [], deviations: [], findings: [] },
@@ -76,6 +77,8 @@ test("removing a regional manager removes everything it owns, and nothing of ano
     store.insertReminder(manager, { note: "Look again", dueAt: 9_000, everyMs: null });
     store.memoryRevision(manager, memoryFileSchema.parse("MEMORY.md"), "v1");
     store.savePrRead(manager, "bb/retries", { issueId: id, agentId }, null, null, 3_000);
+    filedIssue(store, manager, { ...newIssue(), dependsOn: [id] }, 3_000);
+    store.recordUnblocked(manager, issueViews(store.issues(manager).map((issue) => ({ issue, holder: null, ended: null, pr: null, openDecision: false }))), 3_000);
   }
 
   store.removeCoordinator(MANAGER);
@@ -88,18 +91,20 @@ test("removing a regional manager removes everything it owns, and nothing of ano
   assert.equal(store.roleOfThread("thr_manager_1"), null);
   assert.equal(store.roleOfThread(`thr_agent-of-${MANAGER}`), null);
   assert.equal(store.prOfBranch(MANAGER, "bb/retries"), null);
+  assert.equal(store.hasDependencies(MANAGER), false);
   assert.deepEqual(store.coordinatorsToRing(), [OTHER_MANAGER]);
 
-  assert.equal(store.issues(OTHER_MANAGER).length, 1);
+  assert.equal(store.issues(OTHER_MANAGER).length, 2);
   assert.equal(store.agents(OTHER_MANAGER).length, 1);
   assert.equal(store.decisions(OTHER_MANAGER).length, 1);
+  assert.equal(store.hasDependencies(OTHER_MANAGER), true);
   assert.equal(store.roleOfThread("thr_manager_2")?.kind, "coordinator");
 });
 
 /** a1 holding i1 with a done handoff whose check runs in `thr_verifier`, and a2 as a handover would insert it. */
 function handingOver() {
   const { db, store } = freshStore();
-  const { id: issueId } = store.insertIssue(MANAGER, newIssue(), 2_000);
+  const { id: issueId } = filedIssue(store, MANAGER, newIssue(), 2_000);
   const holder = { coordinatorId: MANAGER, id: startAgent(store, issueId, "agent-1"), issueId };
   const handoffId = handoffIdSchema.parse(randomUUID());
   const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [] };

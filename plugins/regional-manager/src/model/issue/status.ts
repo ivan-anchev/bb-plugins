@@ -1,17 +1,18 @@
-// Where an issue stands, why, and whether it waits on the user: derived from its stored plan and
-// the facts beside it, never stored. Pure, so the board, crew_catch_up, issue_read, the rail badge
-// and the PR watch share one definition. The kind enters in one place: a done handoff walks its
+// Where an issue stands, why, whether it waits on the user, and what blocks it: derived from its
+// stored plan and the facts beside it, never stored. Pure, so the board, crew_catch_up, issue_read,
+// the rail badge, the PR watch and the unblocked announcements share one definition. The kind enters in one place: a done handoff walks its
 // kind's stages (walk); everything that reads an IssueStatus never sees a kind.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import type { Agent, EndedHow } from "../agent.ts";
-import type { Handoff } from "../handoff.ts";
+import type { Handoff, HandoffId } from "../handoff.ts";
 import type { Check } from "../verdict/check.ts";
 import type { CiVerdict, PrSnapshot } from "../verdict/pr.ts";
 import { NOT_CLEAN } from "../verdict/checkout.ts";
 import { allPassed, ciVerdictOf, failedCheckout, mayHaveReachedAgent, outcome, type Verdict } from "../verdict/verdict.ts";
 import type { Issue } from "./issue.ts";
 import { PIPELINES, type Kind, type Stage } from "./kind.ts";
+import { blockedBy, isClosed, statusIn, type Related } from "./relations.ts";
 
 export const issueStatusSchema = z.enum(["backlog", "todo", "in-progress", "verifying", "in-review", "done", "canceled"]);
 export type IssueStatus = z.infer<typeof issueStatusSchema>;
@@ -58,32 +59,57 @@ export type IssueView = {
   /** The check whose verdict places it (the board's verdict), or null. */
   placing: Check | null;
   pr: PrSnapshot | null;
+  /** The open issues it depends on, each with its status; none once it is closed itself. Derived from the other views, never stored. */
+  blockedBy: Related[];
+  /** What closed it (null: it is open). */
+  closedBy: Closure | null;
 };
+
+/**
+ * What closed an issue: the manager's act, its pull request merged, or the handoff that made it
+ * Done. Two closes of one issue are the same close only when these are equal: a research issue
+ * reopened and reported again is closed by another handoff.
+ */
+export type Closure = { by: "manager"; as: NonNullable<Issue["closed"]>["as"]; at: number } | { by: "merge"; number: number } | { by: "handoff"; handoffId: HandoffId };
+
+/** A view before its dependencies are read: where its own facts place it. */
+type Placed = Omit<IssueView, "blockedBy">;
 
 type Placing = Pick<IssueView, "status" | "headline" | "needsYou">;
 
-/** Every issue of one regional manager, viewed. */
-export const issueViews = (all: readonly IssueFacts[]): IssueView[] => all.map(issueView);
+/**
+ * Every issue of one regional manager, viewed: each placed by its own facts, then blocked by the
+ * statuses so placed. why from the same views: what blocks an issue can never disagree with the
+ * status shown for its dependency.
+ */
+export function issueViews(all: readonly IssueFacts[]): IssueView[] {
+  const placed = all.map(issueView);
+  const statuses = new Map(placed.map(({ issue, status }) => [issue.id, status]));
+  return placed.map((view) => ({ ...view, blockedBy: isClosed(view.status) ? [] : blockedBy(view.issue, null, (id) => statusIn(statuses, id)) }));
+}
 
 const ASKED = "Waiting on your answer to its decision";
 
 /** How the manager's two closing acts place an issue. */
 const CLOSED = { canceled: { status: "canceled", headline: "Canceled" }, accepted: { status: "done", headline: "Accepted" } } as const;
 
-function issueView({ issue, holder, ended, pr, openDecision }: IssueFacts): IssueView {
+function issueView({ issue, holder, ended, pr, openDecision }: IssueFacts): Placed {
   const base = { issue, holder: holder?.agent ?? null, pr, placing: null };
   const final = finalOf(issue, pr);
   if (final !== null) return { ...base, ...final, needsYou: null };
   const asked = openDecision ? ASKED : null;
   if (holder !== null) {
     const placed = held(issue.kind, holder, pr);
-    return { ...base, ...placed, needsYou: placed.needsYou ?? asked };
+    return { ...base, ...placed, needsYou: placed.needsYou ?? asked, closedBy: handedOffClose(placed, holder.current) };
   }
   const left = ended?.left ?? null;
   const after = left === null ? null : placedByLeft(issue.kind, left, pr);
-  if (left !== null && after !== null) return { ...base, ...after, placing: left.check, needsYou: after.needsYou ?? asked };
-  return { ...base, status: issue.rest, headline: restingHeadline(issue.rest, ended?.how ?? null), needsYou: asked };
+  if (left !== null && after !== null) return { ...base, ...after, placing: left.check, needsYou: after.needsYou ?? asked, closedBy: handedOffClose(after, left) };
+  return { ...base, status: issue.rest, headline: restingHeadline(issue.rest, ended?.how ?? null), needsYou: asked, closedBy: null };
 }
+
+/** The handoff that placed the issue, as what closed it when that is Done; null for any other place. */
+const handedOffClose = ({ status }: Pick<Placing, "status">, handed: Handed | null): Closure | null => (status === "done" && handed !== null ? { by: "handoff", handoffId: handed.handoff.id } : null);
 
 /** Why an issue rests where the manager put it: in Todo, how its latest agent ended (null: none ever started). */
 function restingHeadline(rest: Issue["rest"], endedHow: EndedHow | null): string {
@@ -108,9 +134,9 @@ function restingHeadline(rest: Issue["rest"], endedHow: EndedHow | null): string
  * its agents: a merge is the user's act and final, whatever its thread does next; a check still
  * pending or failed then is never sent back.
  */
-function finalOf(issue: Issue, pr: PrSnapshot | null): Pick<Placing, "status" | "headline"> | null {
-  if (issue.closed !== null) return CLOSED[issue.closed.as];
-  return pr?.state === "merged" ? { status: "done", headline: `Merged #${pr.number}` } : null;
+function finalOf(issue: Issue, pr: PrSnapshot | null): Pick<IssueView, "status" | "headline" | "closedBy"> | null {
+  if (issue.closed !== null) return { ...CLOSED[issue.closed.as], closedBy: { by: "manager", ...issue.closed } };
+  return pr?.state === "merged" ? { status: "done", headline: `Merged #${pr.number}`, closedBy: { by: "merge", number: pr.number } } : null;
 }
 
 /**

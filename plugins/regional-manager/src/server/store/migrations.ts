@@ -3,8 +3,8 @@
 // list only grows. Nothing here drops, renames or rewrites a table.
 //
 // why every table of the design from the start, issue_relations and issues.parent_id included:
-// later releases then add no table, and the schema reads top to bottom in one place. Those two stay
-// empty until dependencies and sub-issues write them.
+// the schema reads top to bottom in one place. Those two stay empty until dependencies and sub-issues
+// write them. A table or column a later release needs is appended at the end.
 
 export const MIGRATIONS: readonly string[] = [
   // A ticket is minted before its thread is spawned, and the thread's metadata carries it until bb
@@ -97,4 +97,12 @@ export const MIGRATIONS: readonly string[] = [
      issue_id TEXT, question TEXT NOT NULL, options TEXT NOT NULL, asked_at INTEGER NOT NULL, answer TEXT, answered_at INTEGER,
      FOREIGN KEY (coordinator_id, issue_id) REFERENCES issues (coordinator_id, id))`,
   `CREATE INDEX decisions_of_coordinator ON decisions (coordinator_id)`,
+
+  // Of a dependency, the close the regional manager knows of (null: it has known it open), by its key
+  // (relations.ts unblockedSince): what the next read of every issue is compared with to announce
+  // what was unblocked, once per close. why on the relation: it is written with the relation, from
+  // the read the manager was answered from, and goes with it, so no relation is without one and none
+  // outlives its relation. A fact about what the manager was told, read by nothing else: blocked and
+  // ready are derived on every read.
+  `ALTER TABLE issue_relations ADD COLUMN known_close TEXT`,
 ];

@@ -16,6 +16,7 @@ import { registerIssueTools } from "./src/server/issues/issue-tools.ts";
 import { issueTurns } from "./src/server/issues/issue-turns.ts";
 import { createIssues } from "./src/server/issues/issues.ts";
 import { pluginInstance } from "./src/server/lifetime.ts";
+import { watchUnblocked } from "./src/server/issues/unblocked.ts";
 import { openMemoryRoot } from "./src/server/memory/memory-files.ts";
 import { memoryHandlers } from "./src/server/memory/memory-rpc.ts";
 import { registerRoles } from "./src/server/roles.ts";
@@ -36,12 +37,23 @@ export default function plugin(host: BbPluginApi): void {
   bb.log.info(`Memory files are in ${memory.dir}`);
   const refreshBoard = (id: CoordinatorId) => bb.rpc.experimental_invalidate([boardTag(id)]);
   const refreshCoordinators = () => bb.rpc.experimental_invalidate([COORDINATORS_TAG]);
-  const spawner = createSpawner(bb, store, memory, (role: Role) => (role.kind === "coordinator" ? refreshCoordinators() : refreshBoard(role.coordinatorId)));
+  // why one hook: whatever changes what a regional manager's views are derived from changes its board and may unblock an issue.
+  const onChange = (id: CoordinatorId) => {
+    refreshBoard(id);
+    unblocked.changed(id);
+  };
+  // why one hook: deletion and the tick's reconcile both remove a regional manager through it.
+  const onRemoved = (id: CoordinatorId) => {
+    threadEvents.forget(id);
+    refreshCoordinators();
+  };
+  const spawner = createSpawner(bb, store, memory, (role: Role) => (role.kind === "coordinator" ? refreshCoordinators() : onChange(role.coordinatorId)));
   const board = createBoard(bb, store, memory);
-  const inbox = createInbox({ bb, store, memory, onChange: refreshBoard });
+  const inbox = createInbox({ bb, store, memory, onChange });
+  const unblocked = watchUnblocked({ bb, store, inbox });
   const turns = issueTurns(instance.signal);
-  const agents = createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts: placementFactsReader(bb, store), onChange: refreshBoard, onRemoved: refreshCoordinators });
-  const issues = createIssues({ bb, store, onChange: refreshBoard });
+  const agents = createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
+  const issues = createIssues({ bb, store, onChange });
   const verify = createVerify({ bb, store, spawner, inbox, turns });
 
   registerRoles(bb, store);
@@ -50,7 +62,7 @@ export default function plugin(host: BbPluginApi): void {
   registerAgentTools(bb, { store, agents });
   registerHandoffTool(bb, { store, verify });
   registerVerdictTool(bb, { store, verify });
-  forwardThreadEvents(bb, { store, agents, refreshBoard });
+  const threadEvents = forwardThreadEvents(bb, { store, agents, onChange, refreshBoard });
   watchAgentThreads({ bb, store, inbox });
   watchOwnTree({ bb, store, inbox });
   const prWatch = createPrWatch({ bb, store, inbox, gh: runGh });
@@ -60,9 +72,11 @@ export default function plugin(host: BbPluginApi): void {
     // why the PR reads before the verifiers: a verdict waiting for CI settles on this tick's read.
     // why nothing waits for the issues' turns the agents' and the verifiers' passes start: a call bb
     // never answers holds only its own issue, which every tick skips until it answers (issue-turns.ts).
+    // why what was unblocked after both, and before the ring: a merge read this tick is announced in the same doorbell.
     await agents.reconcile().catch((error: unknown) => bb.log.warn(`Could not reconcile the agents; the next tick tries again: ${messageOf(error)}`));
     await prWatch.tick(Date.now()).catch((error: unknown) => bb.log.warn(`Could not read the issues' pull requests; the next tick tries again: ${messageOf(error)}`));
     await verify.reconcile().catch((error: unknown) => bb.log.warn(`Could not reconcile the verifiers; the next tick tries again: ${messageOf(error)}`));
+    await unblocked.tick();
     await inbox.tick(Date.now());
   });
 

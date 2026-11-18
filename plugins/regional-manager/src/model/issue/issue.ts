@@ -53,6 +53,8 @@ export type Issue = {
   /** What checks its done handoffs, as the manager named it; null: the plugin picks. */
   verifier: Execution | null;
   rest: Rest;
+  /** The issues it depends on, in the order added: it is blocked while any of them is open (relations.ts). */
+  dependsOn: IssueId[];
   closed: null | { as: z.infer<typeof closedAsSchema>; at: number };
   createdAt: number;
 };

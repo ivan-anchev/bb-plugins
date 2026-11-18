@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { executionOf } from "../../../model/execution.ts";
 import { handoffIdSchema } from "../../../model/handoff.ts";
-import { EXECUTION, failWrites, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "../test-store.ts";
+import { EXECUTION, failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "../test-store.ts";
 
 test("agents are numbered a1, a2… within their regional manager, across issues, and an agent's start puts its issue in Todo", () => {
   const { store } = freshStore();
-  const first = store.insertIssue(MANAGER, newIssue({ rest: "backlog" }), 2_000);
-  const second = store.insertIssue(MANAGER, newIssue(), 2_000);
-  const elsewhere = store.insertIssue(OTHER_MANAGER, newIssue(), 2_000);
+  const first = filedIssue(store, MANAGER, newIssue({ rest: "backlog" }), 2_000);
+  const second = filedIssue(store, MANAGER, newIssue(), 2_000);
+  const elsewhere = filedIssue(store, OTHER_MANAGER, newIssue(), 2_000);
 
   assert.deepEqual([startAgent(store, first.id, "agent-1"), startAgent(store, second.id, "agent-2"), startAgent(store, elsewhere.id, "agent-3", OTHER_MANAGER)], ["a1", "a2", "a1"]);
   assert.equal(store.issue(MANAGER, first.id)?.rest, "todo");
@@ -30,7 +30,7 @@ test("agents are numbered a1, a2… within their regional manager, across issues
 
 test("an agent's thread is null until its ticket binds", () => {
   const { store } = freshStore();
-  const { id } = store.insertIssue(MANAGER, newIssue(), 2_000);
+  const { id } = filedIssue(store, MANAGER, newIssue(), 2_000);
   const agentId = store.insertAgent({ coordinatorId: MANAGER, issueId: id, ticket: "agent-1", placement: { kind: "worktree" }, base: { kind: "default" }, checkout: { environmentId: null, branch: null, head: null }, execution: EXECUTION, at: 2_000 });
   assert.equal(agentId, "a1");
   assert.equal(store.agents(MANAGER)[0]?.threadId, null);
@@ -39,7 +39,7 @@ test("an agent's thread is null until its ticket binds", () => {
 
 test("an ended agent's ticket never binds: a thread bb makes for it late gets no role, and the agent no thread", () => {
   const { store } = freshStore();
-  const { id } = store.insertIssue(MANAGER, newIssue(), 2_000);
+  const { id } = filedIssue(store, MANAGER, newIssue(), 2_000);
   const agent = { coordinatorId: MANAGER, id: store.insertAgent({ coordinatorId: MANAGER, issueId: id, ticket: "agent-1", placement: { kind: "worktree" }, base: { kind: "default" }, checkout: { environmentId: null, branch: null, head: null }, execution: EXECUTION, at: 2_000 }) ?? assert.fail("no agent"), issueId: id };
   store.endAgent(agent, "replaced", null, true, 3_000);
   assert.equal(store.bindTicket("agent-1", "thr_late"), null);
@@ -48,7 +48,7 @@ test("an ended agent's ticket never binds: a thread bb makes for it late gets no
 
 test("an issue has one agent at a time: a second start is refused until the first ends, and ids are never reused", () => {
   const { store } = freshStore();
-  const { id } = store.insertIssue(MANAGER, newIssue(), 2_000);
+  const { id } = filedIssue(store, MANAGER, newIssue(), 2_000);
   const first = startAgent(store, id, "agent-1");
   assert.equal(store.insertAgent({ coordinatorId: MANAGER, issueId: id, ticket: "agent-2", placement: { kind: "worktree" }, base: { kind: "default" }, checkout: { environmentId: null, branch: null, head: null }, execution: EXECUTION, at: 2_100 }), null);
   assert.equal(store.roleFor("thr_x", "agent-2"), null, "a refused start mints no ticket");
@@ -59,7 +59,7 @@ test("an issue has one agent at a time: a second start is refused until the firs
 
 test("an agent id is never reused: one started after a gap is numbered after the highest", () => {
   const { db, store } = freshStore();
-  const [one, two, three] = [1, 2, 3].map(() => store.insertIssue(MANAGER, newIssue(), 2_000).id);
+  const [one, two, three] = [1, 2, 3].map(() => filedIssue(store, MANAGER, newIssue(), 2_000).id);
   startAgent(store, one!, "agent-1");
   startAgent(store, two!, "agent-2");
   // why a raw delete: the store never deletes an agent, but whatever does must not free its id.
@@ -69,7 +69,7 @@ test("an agent id is never reused: one started after a gap is numbered after the
 
 test("the database itself refuses a second agent holding an issue, and takes one once the first ended", () => {
   const { db, store } = freshStore();
-  const { id } = store.insertIssue(MANAGER, newIssue(), 2_000);
+  const { id } = filedIssue(store, MANAGER, newIssue(), 2_000);
   const first = startAgent(store, id, "agent-1");
   // why raw SQL: insertAgent refuses before it writes, so only a write past it reaches the index.
   db.prepare("INSERT INTO roles (ticket, role, created_at) VALUES ('agent-2', '{}', 2100)").run();
@@ -86,7 +86,7 @@ test("the database itself refuses a second agent holding an issue, and takes one
 
 test("an agent's start that fails partway leaves no agent, no ticket, and its issue where it was", () => {
   const { db, store } = freshStore();
-  const { id } = store.insertIssue(MANAGER, newIssue({ rest: "backlog" }), 2_000);
+  const { id } = filedIssue(store, MANAGER, newIssue({ rest: "backlog" }), 2_000);
   failWrites(db, "UPDATE", "issues");
   assert.throws(() => startAgent(store, id, "agent-1"), /forced failure/);
   assert.deepEqual(store.agents(MANAGER), []);
@@ -97,7 +97,7 @@ test("an agent's start that fails partway leaves no agent, no ticket, and its is
 test("an agent ends once, and the manager is told its issue returned to Todo only when nothing it left places it", () => {
   const { store } = freshStore();
   const left = handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e");
-  const issues = [1, 2, 3].map(() => store.insertIssue(MANAGER, newIssue(), 2_000));
+  const issues = [1, 2, 3].map(() => filedIssue(store, MANAGER, newIssue(), 2_000));
   const [returned, placed, neverStarted] = issues.map(({ id }, n) => ({ coordinatorId: MANAGER, id: startAgent(store, id, `agent-${n}`), issueId: id }));
 
   assert.equal(store.endAgent(returned!, "archived", null, false, 3_000), true);
@@ -115,7 +115,7 @@ test("an agent ends once, and the manager is told its issue returned to Todo onl
 
 test("an agent's end that fails before the manager is told leaves the agent holding its issue", () => {
   const { db, store } = freshStore();
-  const { id } = store.insertIssue(MANAGER, newIssue(), 2_000);
+  const { id } = filedIssue(store, MANAGER, newIssue(), 2_000);
   const agent = { coordinatorId: MANAGER, id: startAgent(store, id, "agent-1"), issueId: id };
   failWrites(db, "INSERT", "events");
   assert.throws(() => store.endAgent(agent, "archived", null, false, 3_000), /forced failure/);
@@ -124,7 +124,7 @@ test("an agent's end that fails before the manager is told leaves the agent hold
 
 test("where an agent's work was last seen, and what it ran on, are recorded as it hands off", () => {
   const { store } = freshStore();
-  const { id } = store.insertIssue(MANAGER, newIssue(), 2_000);
+  const { id } = filedIssue(store, MANAGER, newIssue(), 2_000);
   const agentId = startAgent(store, id, "agent-1");
   const checkout = { environmentId: "env_1", branch: "bb/retries", head: "a".repeat(40) };
   const switched = { providerId: "claude-code", model: "opus", reasoningLevel: "high" };
@@ -139,7 +139,7 @@ test("an execution resolved to a catalog's empty default reasoning level is stor
   const { store } = freshStore();
   const execution = executionOf({ providerId: "codex", model: "gpt-5.4" }, { providers: [{ id: "codex", available: true }], models: [{ model: "gpt-5.4", isDefault: true, defaultReasoningEffort: "" }] });
   if ("refused" in execution) assert.fail(execution.refused);
-  const issue = store.insertIssue(MANAGER, newIssue({ verifier: execution }), 2_000);
+  const issue = filedIssue(store, MANAGER, newIssue({ verifier: execution }), 2_000);
   const agentId = store.insertAgent({ coordinatorId: MANAGER, issueId: issue.id, ticket: "agent-1", placement: { kind: "worktree" }, base: { kind: "default" }, checkout: { environmentId: null, branch: null, head: null }, execution, at: 2_000 }) ?? assert.fail("the issue already had an agent");
 
   const stored = { providerId: "codex", model: "gpt-5.4", reasoningLevel: "" };

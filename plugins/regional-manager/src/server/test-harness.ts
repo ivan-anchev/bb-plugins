@@ -26,6 +26,7 @@ import { registerIssueTools } from "./issues/issue-tools.ts";
 import { issueTurns } from "./issues/issue-turns.ts";
 import { createIssues } from "./issues/issues.ts";
 import { pluginInstance } from "./lifetime.ts";
+import { watchUnblocked } from "./issues/unblocked.ts";
 import { openMemoryRoot } from "./memory/memory-files.ts";
 import { memoryHandlers } from "./memory/memory-rpc.ts";
 import { memoryStorage } from "./memory-storage.ts";
@@ -62,6 +63,8 @@ type Delivery = Awaited<ReturnType<InboxBb["sdk"]["threads"]["send"]>>;
 type QueuedMessage = Awaited<ReturnType<InboxBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number] & Awaited<ReturnType<AgentsBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number];
 
 type ThreadRef = { id: string; originPluginId: string | null };
+/** A thread as bb's events carry it: the thread as it is now, which the generic thread event reads the status of. */
+type ThreadNow = ThreadRef & Pick<HolderThread, "status">;
 type InteractionPayload = PluginThreadEventPayloads["interaction.pending"]["interaction"]["payload"];
 
 /** The events the plugin listens to, with the fields it reads. */
@@ -74,7 +77,7 @@ type FakeEvents = {
   "thread.unarchived": { thread: ThreadRef };
   "thread.deleted": { thread: ThreadRef };
   "interaction.pending": { thread: ThreadRef; interaction: { payload: InteractionPayload } };
-  "experimental_thread.events": { thread: ThreadRef };
+  "experimental_thread.events": { thread: ThreadNow };
   "message.dispatched": { entry: { id: string } };
   "message.cancelled": { entry: { id: string } };
 };
@@ -275,12 +278,18 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     holding: false,
     held: [],
   };
-  /** Set `failure` to make every read of a thread's turns reject with it, as when bb can't answer; set `pending` to hold every read until it settles. */
-  const turnEvents: { failure: Error | null; pending: Promise<void> | null } = { failure: null, pending: null };
+  /**
+   * Set `failure` to make every read of a thread's turns reject with it, as when bb can't answer; set `pending` to hold every read until it settles.
+   * Set `holding` to keep each answer, as read when called, until the test calls its release in `held`.
+   */
+  const turnEvents: { failure: Error | null; pending: Promise<void> | null; holding: boolean; held: (() => void)[] } = { failure: null, pending: null, holding: false, held: [] };
   /** Set `failure` to make every delete of a queued message reject with it, leaving the message queued, as when bb can't be reached. */
   const queueDeletes: { failure: Error | null } = { failure: null };
-  /** Set `failure` to make every listing of threads by id reject with it, as when bb can't answer. */
-  const threadLists: { failure: Error | null } = { failure: null };
+  /**
+   * Set `failure` to make every listing of threads by id reject with it, as when bb can't answer.
+   * Set `holding` to keep each answer, as read when called, until the test calls its release in `held`.
+   */
+  const threadLists: { failure: Error | null; holding: boolean; held: (() => void)[] } = { failure: null, holding: false, held: [] };
   /**
    * Set `pending` to hold every stop until it settles, as a slow bb does; set `failure` to make every
    * stop reject with it then. `byThread` overrides one thread's stop: an error it rejects with, or
@@ -368,14 +377,16 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       return value;
     },
     // As bb does, listing by id includes archived and deleted threads. why optional: bb's SDK lists without ids too; the plugin always names them.
-    // As bb does, each row is a copy: what the plugin read stays as read while the thread moves on.
+    // As bb does, each row is a copy, its turns included: what the plugin read stays as read while the thread moves on.
     list: async ({ threadIds }: { threadIds?: readonly string[] } = {}) => {
       if (threadIds === undefined) throw new Error("The plugin lists threads by id");
       if (threadLists.failure !== null) throw threadLists.failure;
-      return threadIds.flatMap((id) => {
+      const listed = threadIds.flatMap((id) => {
         const thread = fakeThreads.get(id);
-        return thread === undefined ? [] : [{ ...thread }];
+        return thread === undefined ? [] : [{ ...thread, turns: [...thread.turns] }];
       });
+      if (threadLists.holding) await new Promise<void>((release) => threadLists.held.push(release));
+      return listed;
     },
     async defaultExecutionOptions({ threadId }) {
       const { execution } = fakeThread(threadId);
@@ -431,6 +442,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         const thread = fakeThread(threadId);
         if (thread.deletedAt !== null) throw bbHttpError(404, "thread_not_found", "Thread not found");
         const latest = thread.turns.at(-1);
+        if (turnEvents.holding) await new Promise<void>((release) => turnEvents.held.push(release));
         return latest === undefined ? [] : [{ seq: latest }];
       },
     },
@@ -542,12 +554,24 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const { bb } = instance;
     // why shadowed: the modules act through the store bound to their instance; the tests read the store as it is.
     const store = instance.bind(openedStore);
-    const spawner = createSpawner(bb, store, memory, () => bindings++);
+    const onChange = (id: CoordinatorId) => {
+      refreshBoard(id);
+      unblocked.changed(id);
+    };
+    const onRemoved = (id: CoordinatorId) => {
+      threadEvents.forget(id);
+      refreshCoordinators();
+    };
+    const spawner = createSpawner(bb, store, memory, (role) => {
+      bindings++;
+      if (role.kind !== "coordinator") onChange(role.coordinatorId);
+    });
     const board = createBoard(bb, store, memory);
-    const inbox = createInbox({ bb, store, memory, onChange: refreshBoard });
+    const inbox = createInbox({ bb, store, memory, onChange });
+    const unblocked = watchUnblocked({ bb, store, inbox });
     const turns = turnWaitMs === null ? issueTurns(instance.signal) : issueTurns(instance.signal, turnWaitMs);
-    const agents = createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts: placementFactsReader(bb, store), onChange: refreshBoard, onRemoved: refreshCoordinators });
-    const issues = createIssues({ bb, store, onChange: refreshBoard });
+    const agents = createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
+    const issues = createIssues({ bb, store, onChange });
     const verify = createVerify({ bb, store, spawner, inbox, turns });
     registerRoles(bb, store);
     registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
@@ -555,15 +579,29 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     registerAgentTools(bb, { store, agents });
     registerHandoffTool(bb, { store, verify });
     registerVerdictTool(bb, { store, verify });
-    forwardThreadEvents(bb, { store, agents, refreshBoard });
+    const threadEvents = forwardThreadEvents(bb, { store, agents, onChange, refreshBoard });
     watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });
     const prWatch = createPrWatch({ bb, store, inbox, gh });
-    return { spawner, inbox, verify, agents, prWatch, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }) } };
+    return { spawner, inbox, verify, agents, prWatch, unblocked, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }) } };
   }
   let plugin = wire();
 
-  const ref = (threadId: string): ThreadRef => ({ id: threadId, originPluginId: PLUGIN_ID });
+  const ref = (threadId: string): ThreadNow => ({ id: threadId, originPluginId: PLUGIN_ID, status: fakeThread(threadId).status });
+
+  const threadNow = (threadId: string): Promise<void> => emit("experimental_thread.events", { thread: ref(threadId) });
+
+  async function starting(threadId: string): Promise<void> {
+    const thread = fakeThread(threadId);
+    startTurn(thread);
+    thread.status = "starting";
+    await threadNow(threadId);
+  }
+
+  async function active(threadId: string): Promise<void> {
+    fakeThread(threadId).status = "active";
+    await emit("thread.active", { thread: ref(threadId) });
+  }
 
   return {
     get store() {
@@ -607,9 +645,11 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     clock,
     /** The schedule's once-a-minute pass, as server.ts runs it, at the clock's time. */
     async tick(): Promise<void> {
-      await plugin.agents.reconcile().catch((error: unknown) => fakeBb.log.warn(`Could not reconcile the agents; the next tick tries again: ${error instanceof Error ? error.message : String(error)}`));
-      await plugin.prWatch.tick(clock.now);
-      await plugin.verify.reconcile().catch((error: unknown) => fakeBb.log.warn(`Could not reconcile the verifiers; the next tick tries again: ${error instanceof Error ? error.message : String(error)}`));
+      const warned = (pass: string) => (error: unknown) => fakeBb.log.warn(`Could not ${pass}; the next tick tries again: ${error instanceof Error ? error.message : String(error)}`);
+      await plugin.agents.reconcile().catch(warned("reconcile the agents"));
+      await plugin.prWatch.tick(clock.now).catch(warned("read the issues' pull requests"));
+      await plugin.verify.reconcile().catch(warned("reconcile the verifiers"));
+      await plugin.unblocked.tick();
       await plugin.inbox.tick(clock.now);
       // why: the issues' turns the pass started run on, unwaited for, as on the server; this fake answers them at once unless a test holds bb.
       await settled();
@@ -652,10 +692,22 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     warnings: () => [...warnings],
     /** bb announces this event, and every handler has run. */
     emit,
-    /** A thread this plugin made, as bb's events name it. */
+    /** A thread this plugin made, as bb's events name it, with its status now. */
     ref,
-    /** Someone sends the thread a message: a new turn starts. */
-    startTurn: (threadId: string) => startTurn(fakeThread(threadId)),
+    /**
+     * Someone sends the thread a message, and bb starts a turn as it does: the thread moves to
+     * starting, which only its thread event says, then to active, which bb announces.
+     */
+    async startTurn(threadId: string): Promise<void> {
+      await starting(threadId);
+      await active(threadId);
+    },
+    /** The first half of startTurn: a new turn is starting, and bb sends the thread's event with that status. */
+    starting,
+    /** The second half of startTurn: the turn is active, and bb announces it. */
+    active,
+    /** bb sends the thread's event with the thread as it is now, as it does every second while the thread works. */
+    threadNow,
     /** The thread's turn ends, and bb announces it with its last answer. */
     async idle(threadId: string, lastAssistantText: string | null): Promise<void> {
       const thread = fakeThread(threadId);

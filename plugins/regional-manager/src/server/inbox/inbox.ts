@@ -9,6 +9,7 @@ import type { GivenHandoff, Handoff, HandoffId } from "../../model/handoff.ts";
 import { wakes, type InboxEvent, type StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { doorbellText } from "../../model/inbox/wake-text.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
+import type { IssueView } from "../../model/issue/status.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { CheckId } from "../../model/verdict/check.ts";
 import type { CheckoutRead } from "../../model/verdict/checkout.ts";
@@ -73,6 +74,7 @@ type InboxStore = Pick<
   | "decision"
   | "answerDecision"
   | "recordOwnTree"
+  | "recordUnblocked"
 >;
 
 type Doorbell = ReturnType<Store["doorbells"]>[number];
@@ -288,6 +290,14 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
      */
     ownTreeRead(id: CoordinatorId, fileCount: number): void {
       if (store.recordOwnTree(id, fileCount, Date.now())) recorded(id);
+    },
+
+    /**
+     * Records what every issue as viewed just now (`views`, read whole) says was unblocked since the
+     * last such read (see recordUnblocked), and wakes the coordinating thread when it recorded one.
+     */
+    unblocked(id: CoordinatorId, views: readonly IssueView[]): void {
+      if (store.recordUnblocked(id, views, Date.now())) recorded(id);
     },
 
     /** Stores the event, then wakes its coordinating thread. A crash between the two is rung by the next tick. */

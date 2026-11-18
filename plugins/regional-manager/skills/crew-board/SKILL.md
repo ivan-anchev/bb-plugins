@@ -38,14 +38,14 @@ and no tool can turn verification on or off.
 
 | Tool | Thread | What it does |
 | --- | --- | --- |
-| `crew_catch_up` | regional manager | Returns every update since its last catch-up, whole, then the board, the questions still waiting, its reminders, and its core memory files with their versions. |
+| `crew_catch_up` | regional manager | Returns every update since its last catch-up, whole, then the board with what blocks each issue and the issues ready to start, the questions still waiting, its reminders, and its core memory files with their versions. |
 | `crew_memory_read` | regional manager, agent, verifier | Reads one memory file, such as `PLAN.md` or `notes/api.md`, with its version. |
 | `crew_memory_write` | regional manager | Writes one memory file whole, naming the version it read (null to create one); a stale write returns the current text instead. |
 | `crew_remind` | regional manager | Sets a reminder (`note`, `at`, optional `every`) or cancels one (`cancel`). |
 | `crew_ask_user` | regional manager | Puts a one-line question, with up to five options, on its board, optionally naming the issue it is about. |
-| `issue_create` | regional manager | Files an issue: `kind`, `title`, `description`, and optionally `brief`, `doneCriteria`, `status` (todo or backlog) and `verifier`. |
-| `issue_update` | regional manager | Changes an issue's kind (until an agent has started on it), title, description, brief, done-criteria or verifier, or rests, cancels or accepts it with `status`. |
-| `issue_read` | regional manager | Returns one issue whole: status, plan, verifier, its agents and what they ran on, every handoff with its verdict, and its agent's latest answer. |
+| `issue_create` | regional manager | Files an issue: `kind`, `title`, `description`, and optionally `brief`, `doneCriteria`, `status` (todo or backlog), `verifier` and `dependsOn`. |
+| `issue_update` | regional manager | Changes an issue's kind (until an agent has started on it), title, description, brief, done-criteria, verifier or dependencies, or rests, cancels or accepts it with `status`. |
+| `issue_read` | regional manager | Returns one issue whole: status, what blocks it, plan, what it depends on and blocks, verifier, its agents and what they ran on, every handoff with its verdict, and its agent's latest answer. |
 | `agent_start` | regional manager | Starts an agent on an issue, optionally naming its `execution` and `placement`; on an issue that has or had one, hands it over, continuing in the previous agent's environment unless `from` is `default`. |
 | `agent_message` | regional manager | Messages one agent, marked as from the regional manager. |
 | `agent_stop` | regional manager | Stops one agent, and archives its thread with `archive: true`. |
@@ -105,6 +105,26 @@ or `todo` rests an issue no agent holds (and reopens a canceled one),
 while its agent still holds it (a research issue is never In review, so never
 accepted: its done handoff makes it Done). Any other change, or `backlog`, `todo` or
 `canceled` while an agent holds the issue, is refused naming why.
+
+### Dependencies
+
+An issue can depend on others (`dependsOn` on `issue_create`, added and
+removed with `issue_update`), seen from the other side as "blocks". It is
+**blocked** while one of them is not Done or Canceled: derived on every read
+from the same statuses the board shows, never stored, so it can't go stale. A
+research dependency closes with its report and reopens when its agent is
+messaged, and its dependents are blocked again until the next report. A
+dependency on an issue the manager doesn't have, on the issue itself, or that
+would close a cycle is refused, naming the cycle (`i1 → i3 → i2 → i1`).
+
+Dependencies inform and never refuse: the manager decides what runs at once,
+and can start an agent on a blocked issue, whose start result says what blocks
+it. Its catch-up lists the issues **ready** to start (in Todo, not blocked).
+When a merge or an agent's handoff closes the last open issue another depends
+on, the manager is woken to say it is unblocked; when the manager closes one
+itself, or removes a dependency, its own result names what became ready. A
+dependency carries nothing between issues: an agent gets another issue's
+report only when the manager names its file in that agent's brief.
 
 ## Agents
 
@@ -307,6 +327,8 @@ work with `agent_handoff`, and the plugin records everything it sees:
 - **An agent ended a turn without a handoff**, with its last answer.
 - **An issue returned to Todo**: its agent was stopped, archived or deleted
   before its work reached Verifying.
+- **An issue was unblocked**: a pull request's merge or an agent's handoff
+  closed the last open issue it depends on (see [Dependencies](#dependencies)).
 - **An issue's pull request changed** (see
   [Pull requests and CI](#pull-requests-and-ci)): it opened, reopened, merged
   or closed, its CI passed or failed, or a review approved it or asked for
@@ -333,6 +355,7 @@ issue and its agent, such as
 `- i2 "Dead letters" (a2) handed off: blocked`,
 `- i1 "Add retries" (a1) PR #41: CI passed`,
 `- i3 "Metrics" (a3) returned to Todo: its agent was stopped`,
+`- i4 "Card vault schema" is unblocked: i2 done`,
 `- The user edited PLAN.md`, `- Your reminder r1: check on i1`,
 `- The user answered your question d1: Target main or release/2?` or
 `- Your own environment has 2 files changed after your turn: hand the change to an agent`.
@@ -737,3 +760,11 @@ and the Memory page read the new text on their next read.
 - A replaced agent's thread stays in the sidebar, stopped: someone typing
   into it wakes it in the environment the new agent works in, and the plugin
   neither prevents nor flags that. The next start on the issue stops it.
+- **An unblocked wake can come late.** The plugin reads every issue again
+  after anything an issue's status depends on changes. If bb's threads can't
+  be read then, or the plugin reloads, the next minute's pass reads again and
+  wakes the manager. If the manager's agents keep changing things while it
+  reads, the wake waits until they pause: each later change and each minute's
+  pass tries again. Either way it wakes the manager once for each close after
+  the dependency was added. Meanwhile the catch-up's ready list and every
+  blocked row are right, since they are derived on each read.
