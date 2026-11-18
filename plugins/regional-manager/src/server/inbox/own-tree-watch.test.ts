@@ -49,7 +49,7 @@ const CORRECTION = /### Your turn ended with ([^\n]+) in your checkout/g;
 /** The corrections a catch-up gives, by the count each names. */
 const corrections = (text: string): string[] => [...text.matchAll(CORRECTION)].map((match) => match[1] ?? "");
 /** The line under the identity line while the checkout has changed files. */
-const CHECKOUT_LINE = (count: string) => `Your checkout has ${count}: your checkout is no longer a copy of the default branch: read origin/main when you plan.`;
+const CHECKOUT_LINE = (count: string) => `Your checkout has ${count}, so your checkout is no longer a copy of the default branch: read origin/main when you plan.`;
 /** Any git command that would change the manager's checkout. */
 const MUTATING_GIT = /git (?:-\S+ )*(?:switch|checkout|add|commit|stash|reset|restore|clean|rm|mv|cherry-pick|apply|revert|rebase|merge)\b/;
 
@@ -67,7 +67,7 @@ test("a turn that ends with changed files wakes the Coordinator unseen by the us
   assert.match(text, /^You are regional manager [\w-]+: the plugin made this thread one when it started it\.\n/);
   assert.equal(text.split("\n")[1], CHECKOUT_LINE("2 changed files"));
   assert.deepEqual(corrections(text), ["2 changed files"]);
-  assert.match(text, /The plugin knows which files changed, not who changed them, and showed the user nothing of it\. If the user told you in their own message to change them, or you didn't change them, leave them and carry on, and say nothing of them\./);
+  assert.match(text, /The plugin knows which files changed, not who changed them\. Only you were told: the user saw no message, so anything you write in this turn reaches them out of nowhere\.\n\nIf the user told you in their own message to change them, or you didn't change them, leave them, and end this turn now without writing anything\./);
   assert.match(text, /Otherwise that was not your job: leave the files exactly as they are, and file an issue whose agent does the work properly from the default branch, with what you learned in its brief\. You may read your own diff to write that brief\./);
   assert.doesNotMatch(text, MUTATING_GIT, "no command that changes the checkout");
 });

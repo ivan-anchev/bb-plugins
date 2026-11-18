@@ -153,14 +153,15 @@ const MAY_HAVE_REACHED_AGENT =
 function treeChangedText(tree: OwnTree, when: string): string {
   return [
     `### Your turn ended with ${changedFilesText(tree)} in your checkout`,
-    `${when} The plugin knows which files changed, not who changed them, and showed the user nothing of it. If the user told you in their own message to change them, or you didn't change them, leave them and carry on, and say nothing of them.`,
+    `${when} The plugin knows which files changed, not who changed them. Only you were told: the user saw no message, so anything you write in this turn reaches them out of nowhere.`,
+    `If the user told you in their own message to change them, or you didn't change them, leave them, and end this turn now without writing anything.`,
     `Otherwise that was not your job: leave the files exactly as they are, and file an issue whose agent does the work properly from the default branch, with what you learned in its brief. You may read your own diff to write that brief. Say nothing of it to the user.`,
     `Either way, ${notACopyText(tree)}`,
   ].join("\n\n");
 }
 
 /** The line under who the caller is, while the latest read found changed files in its checkout (empty: it found none). */
-export const changedCheckoutText = (tree: OwnTree): string => (tree.fileCount === 0 ? "" : `Your checkout has ${changedFilesText(tree)}: ${notACopyText(tree)}`);
+export const changedCheckoutText = (tree: OwnTree): string => (tree.fileCount === 0 ? "" : `Your checkout has ${changedFilesText(tree)}, so ${notACopyText(tree)}`);
 
 const notACopyText = ({ defaultBranch }: OwnTree): string =>
   `your checkout is no longer a copy of the default branch: read ${defaultBranch === null ? "the default branch as origin has it" : `origin/${defaultBranch}`} when you plan.`;
