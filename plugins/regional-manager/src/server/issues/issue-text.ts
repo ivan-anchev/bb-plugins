@@ -7,10 +7,11 @@ import { isVerified, PIPELINES } from "../../model/issue/kind.ts";
 import { isReady, type Related, type Relations } from "../../model/issue/relations.ts";
 import { headlineText, STATUS_LABELS, type Handed, type IssueView } from "../../model/issue/status.ts";
 import { placementName, refOf, type Agent } from "../../model/agent.ts";
-import { executionText, recipientsText, type Carried, type StartOutcome, type StopOutcome, type Withdrawn } from "../agents/agents.ts";
+import { executionText, type Carried, type StartOutcome, type StopOutcome } from "../agents/agents.ts";
 import { finalCheckText, handoffText, type Lookups } from "../tools/inbox-text.ts";
 import { fenced } from "../verify/findings.ts";
 import type { FinalCheck } from "../../model/verdict/check.ts";
+import { recipientsText, type Withdrawn } from "./quiet.ts";
 import type { IssueRead } from "./views/issue-facts.ts";
 
 /** The most of an agent's latest answer issue_read returns. */

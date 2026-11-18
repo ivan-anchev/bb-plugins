@@ -395,7 +395,7 @@ test("a verifier still running on the tick after its verdict is stopped first, t
   await settled();
   const owed = check().verdict;
   assert.deepEqual([owed.state === "returned" && owed.settlement.kind, ...statusesOf(kit, agentThreadId, verifier)], ["pending", "idle", "stopping"], "nothing sent beside it");
-  assert.match(kit.warnings().at(-1) ?? "", new RegExp(`^The verifier ${verifier} of i1 is still stopping, so its findings wait; the next tick tries again\\.`));
+  assert.match(kit.warnings().at(-1) ?? "", new RegExp(`^On i1: the verifier @thread:${verifier} is still stopping, so its findings wait; the next tick tries again\\.`));
   const board = await kit.rpc.board({ coordinatorId });
   assert.equal(board.issues[0]?.headline, "Verifying: Retries land with backoff");
   assert.deepEqual(kit.store.unannounced(coordinatorId), [], "the manager hears nothing yet");
@@ -442,7 +442,7 @@ test("agent_message to a1 whose verifier bb doesn't confirm stopped is refused a
   assert.ok(isRefusal(refused));
   assert.equal(
     textOf(refused),
-    `agent_message is refused and nothing was sent: the verifier @thread:${verifier} of i1 couldn't be confirmed stopped: bb answered HTTP 500: Stop failed, and a1 never runs beside its verifier. Call agent_message again once it has stopped.`,
+    `agent_message is refused and nothing was sent: the verifier @thread:${verifier} couldn't be confirmed stopped: bb answered HTTP 500: Stop failed, and a1 never runs beside another thread of i1. Call agent_message again once it has stopped.`,
   );
   assert.deepEqual([kit.sendAttempts().includes(agentThreadId), check().verdict.state, ...statusesOf(kit, agentThreadId, verifier)], [false, "running", "idle", "active"]);
 
@@ -508,7 +508,7 @@ test("a1 that bb doesn't confirm stopped after its done handoff keeps its check 
   kit.leavesBackground(agentThreadId);
   await kit.idle(agentThreadId, "Handed off.");
   assert.deepEqual([check().verdict.state, verifiers().length], ["queued", 0], "no verifier while a1 may still wake");
-  assert.match(kit.warnings().at(-1) ?? "", new RegExp(`^The thread ${agentThreadId} of i1 couldn't be confirmed stopped: bb answered HTTP 500: Stop failed, so no verifier starts there yet; the next tick tries again\\.`));
+  assert.match(kit.warnings().at(-1) ?? "", /^On i1: a1 couldn't be confirmed stopped: bb answered HTTP 500: Stop failed, so no verifier starts there yet; the next tick tries again\./);
   assert.deepEqual(kit.store.unannounced(coordinatorId), []);
 
   kit.stopRequests.byThread.delete(agentThreadId);
@@ -562,7 +562,7 @@ test("agent_message stops a1's verifier idle with a background command before it
   kit.stopRequests.byThread.set(verifier, bbHttpError(500, "internal", "Stop failed"));
   const refused = await kit.call("agent_message", { agent: "a1", text: "Please add jitter." }, threadId);
   assert.ok(isRefusal(refused));
-  assert.match(textOf(refused), new RegExp(`^agent_message is refused and nothing was sent: the verifier @thread:${verifier} of i1 couldn't be confirmed stopped`));
+  assert.match(textOf(refused), new RegExp(`^agent_message is refused and nothing was sent: the verifier @thread:${verifier} couldn't be confirmed stopped`));
   assert.deepEqual([kit.delivered(agentThreadId), kit.thread(agentThreadId).status], [[], "idle"], "nothing sent");
 
   kit.stopRequests.byThread.delete(verifier);
@@ -570,4 +570,118 @@ test("agent_message stops a1's verifier idle with a background command before it
   const turns = kit.thread(verifier).turns.length;
   await kit.backgroundFinishes(verifier);
   assert.deepEqual([kit.thread(verifier).turns.length, ...statusesOf(kit, agentThreadId, verifier)], [turns, "active", "idle"], "the verifier never woke beside a1");
+});
+
+// Each place that gives i1's environment to one thread quiets every other thread of i1 the same way
+// (quiet.ts): takes back what the plugin queued for it, stops it whatever bb reports, and confirms.
+// A reminder bb queued behind a verifier's own turn is what a stop alone leaves (R140).
+
+/**
+ * The verifier goes idle without a verdict while its turn left a background command; as the plugin's
+ * look reads its environment, the command finishes and starts a new turn there, so bb queues the
+ * plugin's reminder behind it. Returns the reminder's id in bb's queue.
+ */
+async function reminderQueuedBehind(kit: Awaited<ReturnType<typeof onI1>>["kit"], verifier: string): Promise<string> {
+  kit.leavesBackground(verifier);
+  kit.environments.holding = true;
+  await kit.idle(verifier, "Forgot the verdict.");
+  assert.ok(kit.environments.held.length > 0, "the look reads the verifier's environment");
+  await kit.backgroundFinishes(verifier);
+  kit.environments.holding = false;
+  kit.environments.held.splice(0).forEach((release) => release());
+  await settled();
+  const [reminder = assert.fail("no reminder queued")] = kit.queued(verifier);
+  assert.equal(kit.thread(verifier).status, "active");
+  return reminder;
+}
+
+const GIVING_PLACES: [string, (on: Awaited<ReturnType<typeof onI1>>, verifier: string) => Promise<string>][] = [
+  ["a handover", async ({ start }) => threadIn(textOf(await start()))],
+  ["the next verifier's start", async (on) => handedOff(on)],
+  [
+    "the findings to a1",
+    async ({ kit, agentThreadId }, verifier) => {
+      await kit.call("issue_verdict", FAILS, verifier);
+      await kit.tick();
+      await settled();
+      assert.match(kit.delivered(agentThreadId).at(-1) ?? "", /^## Verifier findings/);
+      return agentThreadId;
+    },
+  ],
+  [
+    "the manager's message to a1",
+    async ({ kit, threadId, agentThreadId }) => {
+      assert.match(textOf(await kit.call("agent_message", { agent: "a1", text: "Please add jitter." }, threadId)), /^Sent to a1\. The check/);
+      return agentThreadId;
+    },
+  ],
+];
+
+for (const [place, give] of GIVING_PLACES) {
+  test(`R140: ${place} takes back the reminder bb queued behind the verifier's own turn, and stops it, so it never wakes beside the thread given i1's environment`, async () => {
+    const on = await onI1();
+    const { kit } = on;
+    const verifier = await handedOff(on);
+    const reminder = await reminderQueuedBehind(kit, verifier);
+
+    const given = await give(on, verifier);
+    assert.deepEqual([kit.queued(verifier), kit.thread(verifier).status, kit.thread(given).status], [[], "idle", "active"], `${reminder} taken back, the verifier stopped`);
+    await kit.backgroundFinishes(verifier);
+    assert.equal(kit.thread(verifier).status, "idle", "nothing left to wake it");
+  });
+}
+
+test("R140: a reminder taken back while its check still runs can come again: the manager's message bb refused leaves the check, and the next look reminds the verifier", async () => {
+  const on = await onI1();
+  const { kit, threadId, agentThreadId, check } = on;
+  const verifier = await handedOff(on);
+  await reminderQueuedBehind(kit, verifier);
+  kit.sends.failure = { threadId: agentThreadId, error: bbHttpError(409, "thread_not_writable", "Thread is busy"), taken: false };
+  await assert.rejects(kit.call("agent_message", { agent: "a1", text: "Please add jitter." }, threadId));
+  kit.sends.failure = null;
+  assert.deepEqual([kit.queued(verifier), kit.delivered(verifier).filter(isReminder)], [[], []], "taken back before it reached the verifier");
+
+  await kit.tick(); // the stop's idle event may already have looked again
+  await settled();
+  const { verdict } = check();
+  assert.deepEqual([verdict.state, kit.delivered(verifier).filter(isReminder).length], ["running", 1], "reminded once, not given up on");
+  assert.deepEqual(statusesOf(kit, agentThreadId, verifier), ["idle", "active"]);
+});
+
+const isReminder = (text: string): boolean => text.includes("without calling issue_verdict");
+
+test("R141: the reminder stops a1 idle with a background command first, after a manager's message bb took but whose answer was lost, so a1 never wakes beside the reminded verifier", async () => {
+  const on = await onI1();
+  const { kit, threadId, agentThreadId, check } = on;
+  const verifier = await handedOff(on);
+  kit.sends.failure = { threadId: agentThreadId, error: new Error("socket hang up after accepting message"), taken: true };
+  await assert.rejects(kit.call("agent_message", { agent: "a1", text: "Please add jitter." }, threadId));
+  kit.sends.failure = null;
+  await settled();
+  assert.deepEqual([check().verdict.state, kit.thread(agentThreadId).status], ["running", "active"], "bb started a1; the check stays, as nothing says the message landed");
+
+  kit.leavesBackground(agentThreadId);
+  await kit.call("agent_handoff", { ...DONE, status: "blocked", summary: "Waiting for an external service" }, agentThreadId);
+  await kit.idle(agentThreadId, "Handed off blocked.");
+  assert.deepEqual(statusesOf(kit, agentThreadId, verifier), ["idle", "active"], "the verifier was reminded");
+  await kit.backgroundFinishes(agentThreadId);
+  assert.deepEqual(statusesOf(kit, agentThreadId, verifier), ["idle", "active"], "a1's background command ended with the stop before the reminder");
+});
+
+test("a manager's message bb still holds for a1 keeps its verifier from starting, and is never taken back: it is a1's next work", async () => {
+  const { kit, threadId, agentThreadId, verifiers, check } = await onI1();
+  await kit.startTurn(agentThreadId);
+  await kit.call("agent_handoff", DONE, agentThreadId);
+  kit.thread(agentThreadId).hasPendingInteraction = true; // a1 waits on the user's approval
+  kit.sends.failure = { threadId: agentThreadId, error: new Error("socket hang up after accepting message"), taken: true };
+  await assert.rejects(kit.call("agent_message", { agent: "a1", text: "Please add jitter." }, threadId));
+  kit.sends.failure = null;
+  kit.thread(agentThreadId).hasPendingInteraction = false;
+  const [message = assert.fail("not queued")] = kit.queued(agentThreadId);
+
+  await kit.idle(agentThreadId, "Handed off.");
+  assert.deepEqual([kit.queued(agentThreadId), verifiers().length, check().verdict.state], [[message], 0, "queued"], "no verifier while a1 has its message to come");
+  assert.match(kit.warnings().at(-1) ?? "", /^On i1: a1 is still to get your message from bb's queue, so no verifier starts there yet; the next tick tries again\.$/);
+  await kit.dispatch(message);
+  assert.match(kit.delivered(agentThreadId).at(-1) ?? "", /Please add jitter\.$/);
 });

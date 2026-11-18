@@ -263,8 +263,9 @@ agent, it hands the issue over (see
 The regional manager messages an agent with `agent_message` (it arrives
 marked as from the manager's thread, which the agent's first message names,
 under a line calling it the manager's next instruction, not from you; it
-stops the issue's verifiers first, and to an agent whose done handoff is being
-checked, drops that check, see [Verification](#verification)), and stops one with
+quiets the issue's other threads first, its verifiers above all, and to an
+agent whose done handoff is being checked, drops that check, see
+[Verification](#verification)), and stops one with
 `agent_stop`, which archives its thread too when asked. An agent stopped
 mid-turn before it hands off can be followed by two updates: that it ended its
 turn without a handoff and, when its issue returns to Todo, that it was
@@ -346,10 +347,10 @@ verdict.
   answers it, however long that takes. A tool call that waited about 30
   seconds is refused, having changed nothing, and can be called again; the
   minute's pass never waits, and skips a busy issue until the next minute.
-  Before a verifier starts, the agent whose handoff it checks and every other
-  verifier of the issue are stopped, idle or not; one bb doesn't confirm
-  keeps it queued for the next minute. An agent and its own verifier never run together (see
-  [Verification](#verification)).
+  Before a verifier starts, the issue's other threads, the agent whose
+  handoff it checks and every other verifier, are quieted (see
+  [Verification](#verification)); while they aren't, it stays queued for the
+  next look or minute. An agent and its own verifier never run together.
 - **By default the new agent continues** in the previous agent's environment,
   a worktree or a sandbox alike, as the verifier joins it: the same
   checkout, branch, commits, uncommitted files and pull request. A suspended
@@ -536,15 +537,25 @@ a **verifier** for each one:
 - **When**: once the agent's turn that handed off has ended. An agent and its
   own verifier never run at the same time in that environment: a verifier
   starts, or is reminded, only while bb reports its agent idle, and its
-  findings go back only once bb reports it no longer running. Where the
-  environment changes hands, the side giving it up is stopped, idle or not:
-  the agent before its verifier starts, the verifier before its findings go,
-  and the issue's verifiers before the manager's message. bb's stop ends a
-  command a turn left running in the background, whose finish would
-  otherwise start a new turn there by itself. Stopping the idle agent ends
-  nothing of its work: its done handoff stands, the issue stays Verifying,
-  and the manager hears of no stop. bb saying a thread went idle sets it off;
-  the once-a-minute tick catches one the plugin missed.
+  findings go back only once bb reports it no longer running. Each time the
+  environment changes hands (a handover, a verifier starting, a verifier
+  reminded, findings going back, the manager's message), every other thread
+  of the issue is quieted the same way first: what the plugin queued for it
+  in bb (the manager's messages, findings, reminders) is taken back and
+  confirmed gone by reading bb's queue again, then it is stopped, idle or
+  not, and confirmed stopped. bb's stop ends a command a turn left running in
+  the background, whose finish would otherwise start a new turn there by
+  itself, and a message left in bb's queue would be sent as the turn stops.
+  Two things are never taken back: a message the user queued, and, while the
+  agent keeps the issue, what is queued for it (the manager's message or
+  findings, its next work). Either keeps a verifier from starting or being
+  reminded until bb has sent it, and refuses a handover or the manager's
+  message until bb has sent or deleted the user's. A reminder taken back
+  comes again at a later look; findings left owed go once the verifier is
+  quiet. Stopping the idle agent ends nothing of its work: its done handoff
+  stands, the issue stays Verifying, and the manager hears of no stop. bb
+  saying a thread went idle sets it off; the once-a-minute tick catches one
+  the plugin missed.
 - **On what model**: the issue's named verifier first (see
   [Who runs what](#who-runs-what)), never the agent's model while bb has
   another.
@@ -582,9 +593,10 @@ a **verifier** for each one:
   started by the once-a-minute tick.
 - **A manager's message mid-check**: `agent_message` to an agent whose done
   handoff is still being checked means the manager wants more work, so the
-  check is moot. Its verifier is stopped first, as every verifier of the
-  issue is before any message, idle or not (while bb doesn't confirm one
-  stopped, the message is refused and nothing is sent), then the message is
+  check is moot. Its verifier is quieted first, as every other thread of the
+  issue is before any message (while bb doesn't confirm one stopped, or has
+  a message the user queued for one, the message is refused and nothing is
+  sent), then the message is
   sent and the check dropped: nothing reports on that handoff, the result
   says so, and the agent's next done handoff is checked afresh. A verdict
   already returned is kept: it goes to the manager, with no fix round, and
@@ -609,9 +621,11 @@ regional manager:
 - The agent starts working on it at once (or after its running turn), so its
   issue is In progress again. It commits, hands off again, and a new verifier
   checks the new commit.
-- Until bb has taken the findings, the issue stays Verifying. The verifier is
-  stopped before they go, idle or not, so a command it left running in the
-  background can't wake it beside the agent. One still running at the next
+- Until bb has taken the findings, the issue stays Verifying. The verifier,
+  and every other thread of the issue but the agent, is quieted before they
+  go: a reminder queued for it is taken back, and it is stopped, idle or
+  not, so a command it left running in the background can't wake it beside
+  the agent. One still running at the next
   minute's tick, its verdict returned, is stopped then, so the findings wait
   about a minute at most; one bb doesn't confirm stopped keeps them waiting,
   and the tick tries again. A reload in between loses

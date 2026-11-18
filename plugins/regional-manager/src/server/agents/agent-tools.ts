@@ -6,6 +6,7 @@ import { agentIdSchema, requestedPlacementSchema, startFromSchema, type Agent, t
 import { requestedExecutionSchema } from "../../model/execution.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { startText, stopText } from "../issues/issue-text.ts";
+import { unquietText } from "../issues/quiet.ts";
 import type { Store } from "../store/store.ts";
 import { failed, forManager, refusedBusy, type ToolsBb } from "../tools/tool-kit.ts";
 import type { Agents } from "./agents.ts";
@@ -76,10 +77,10 @@ export function registerAgentTools(bb: ToolsBb, { store, agents }: Deps): void {
           return failed(`${agent.id} was ${outcome.how}, so it takes no more messages. Start a new agent on ${agent.issueId} with agent_start.`);
         case "unbound":
           return failed(`${agent.id} has no thread to message yet: bb hasn't confirmed one.`);
-        case "verifier-running":
-          return failed(
-            `${MESSAGE} is refused and nothing was sent: the verifier @thread:${outcome.verifierThreadId} of ${agent.issueId} ${outcome.why}, and ${agent.id} never runs beside its verifier. Call ${MESSAGE} again once it has stopped.`,
-          );
+        case "unquiet": {
+          const until = outcome.unquiet.kind === "left" ? "bb has sent or deleted it" : "it has stopped";
+          return failed(`${MESSAGE} is refused and nothing was sent: ${unquietText(outcome.unquiet)}, and ${agent.id} never runs beside another thread of ${agent.issueId}. Call ${MESSAGE} again once ${until}.`);
+        }
         default:
           return outcome satisfies never;
       }

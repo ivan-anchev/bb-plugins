@@ -258,12 +258,16 @@ export function checksStore(db: Db) {
      */
     supersedeOpenChecks: (coordinatorId: CoordinatorId, issueId: IssueId): boolean => supersedeOpen(db, coordinatorId, issueId),
 
-    /** Marks a running check's verifier as nudged, once; says whether this call did. */
-    markNudged(checkId: CheckId, verifierThreadId: string): boolean {
+    /**
+     * Marks a running check's verifier as nudged (`nudged` true), once; or as not, as when its
+     * reminder was taken back from bb's queue before bb sent it, so it can come again. Says whether
+     * this call changed it.
+     */
+    markNudged(checkId: CheckId, verifierThreadId: string, nudged: boolean): boolean {
       return db().transaction(() => {
         const current = verdictOf(db, checkId);
-        if (current?.state !== "running" || current.verifierThreadId !== verifierThreadId || current.nudged) return false;
-        return moveVerdict(checkId, { state: "running", verifierThreadId }, { ...current, nudged: true });
+        if (current?.state !== "running" || current.verifierThreadId !== verifierThreadId || current.nudged === nudged) return false;
+        return moveVerdict(checkId, { state: "running", verifierThreadId }, { ...current, nudged });
       })();
     },
 

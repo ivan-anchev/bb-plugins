@@ -148,8 +148,9 @@ provider and model you run on.
 After a `done` handoff, an independent verifier usually checks your commit in
 your environment once your turn ends, rerunning what proves each criterion:
 your regional manager hears of your handoff only with its verdict. Your thread
-is stopped as the verifier starts, which ends any command you left running in
-the background; your handoff stands. Leave your environment as it is until you
+is stopped each time your environment goes to the verifier, as it starts and
+if it is reminded to return its verdict, which ends any command you left
+running in the background; your handoff stands. Leave your environment as it is until you
 hear back from the verifier or your regional manager.
 
 If your first verdict fails, its findings come back to you, once the verifier

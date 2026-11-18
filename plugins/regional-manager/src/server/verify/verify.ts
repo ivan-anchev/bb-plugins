@@ -10,11 +10,12 @@
 //
 // An agent and its own verifier share an environment, and never run at the same time: a verifier
 // starts, or is reminded, only while bb reports its agent's thread idle, and findings go back only
-// once bb reports the verifier's no longer running. Where the environment changes hands, as a
-// verifier starts and as findings go back, the side giving it up is stopped whatever bb reports
-// (see stopThreads): a thread bb reports idle can still hold a background command whose finish
-// wakes it. bb saying a thread went idle is only the trigger to look again (lookAgain), and the
-// tick looks again for anything missed. A final check's verifier has a worktree of its own and
+// once bb reports the verifier's no longer running. Each time the environment changes hands, as a
+// verifier starts, as one is reminded and as findings go back, the issue's other threads are
+// quieted first (see quietIssue): what the plugin queued for them taken back, each stopped whatever
+// bb reports, as a thread bb reports idle can still hold a background command whose finish wakes
+// it, and each confirmed stopped. bb saying a thread went idle is only the trigger to look again
+// (lookAgain), and the tick looks again for anything missed. A final check's verifier has a worktree of its own and
 // checks no agent's handoff, so nothing waits for it.
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
 import { branchOf, type Agent, type AgentCheckout, type EndedHow } from "../../model/agent.ts";
@@ -28,11 +29,12 @@ import type { Checkout, CheckoutRead } from "../../model/verdict/checkout.ts";
 import { ciOf, type CiVerdict } from "../../model/verdict/pr.ts";
 import { isSettled, judge, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
 import { environmentGone, type EnvironmentsBb } from "../agents/environments.ts";
-import { isRunning, latestTurnSeq, listedThreads, stopThreads, threadsById, type StopBb, type TurnsBb } from "../agents/threads.ts";
+import { isRunning, latestTurnSeq, listedThreads, threadsById, type TurnsBb } from "../agents/threads.ts";
 import type { CatalogBb } from "../execution/catalog.ts";
 import { threadExecution, type ThreadExecutionBb } from "../execution/thread-execution.ts";
 import type { Inbox } from "../inbox/inbox.ts";
 import type { Busy, IssueTurns } from "../issues/issue-turns.ts";
+import { quietIssue, unquietText, type GivenTo, type QuietBb } from "../issues/quiet.ts";
 import type { Spawner, VerifierRequest } from "../spawn.ts";
 import type { Settlement } from "../store/issue/checks-store.ts";
 import type { Store } from "../store/store.ts";
@@ -54,7 +56,7 @@ type VerifyBb = CatalogBb &
   ThreadExecutionBb &
   EnvironmentsBb &
   FinalVerifierBb &
-  StopBb & {
+  QuietBb & {
     log: Pick<PluginLogger, "warn">;
     sdk: {
       threads: {
@@ -68,7 +70,22 @@ type Deps = {
   bb: VerifyBb;
   store: Pick<
     Store,
-    "check" | "handoff" | "agent" | "agents" | "issue" | "coordinator" | "issueThreads" | "recordCheckout" | "recordExecution" | "openChecks" | "markNudged" | "receiveVerdict" | "claimFixRound" | "unsettledChecks" | "prOfBranch"
+    | "check"
+    | "handoff"
+    | "agent"
+    | "agents"
+    | "issue"
+    | "coordinator"
+    | "issueThreads"
+    | "roleOfThread"
+    | "recordCheckout"
+    | "recordExecution"
+    | "openChecks"
+    | "markNudged"
+    | "receiveVerdict"
+    | "claimFixRound"
+    | "unsettledChecks"
+    | "prOfBranch"
   >;
   spawner: Pick<Spawner, "verifier">;
   inbox: Pick<Inbox, "handoff" | "giveUpCheck" | "settleCheck">;
@@ -188,20 +205,18 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
   }
 
   /**
-   * In its issue's turn: once bb reports idle the agent whose handoff the check judges, stops it and
-   * every verifier of the issue, a superseded check's included, whatever bb reports (see
-   * stopThreads), then starts the check's verifier while it is queued. With one bb hasn't confirmed
-   * stopped, it starts none, and the tick tries again; one bb won't start is recorded as
-   * could-not-run. Stopping the idle agent ends no turn and starts none, so its done handoff stays
-   * current: nothing reads it as stopped without one.
+   * In its issue's turn: once bb reports idle the agent whose handoff the check judges, quiets the
+   * issue for the verifier (see quietIssue), that agent and every other verifier, a superseded
+   * check's included, then starts the check's verifier while it is queued. While the issue isn't
+   * quiet, as while the agent is still to get a message bb queued for it, it starts none, and the
+   * next look or tick tries again; one bb won't start is recorded as could-not-run. Stopping the
+   * idle agent ends no turn and starts none, so its done handoff stays current: nothing reads it as
+   * stopped without one.
    */
   async function startInTurn(check: Check): Promise<void> {
-    const { id, coordinatorId, issueId } = check;
+    const { id } = check;
     if (await agentRuns(check)) return;
-    const verifiers = store.issueThreads(coordinatorId, issueId).flatMap(({ threadId, agentId }) => (agentId === null ? [threadId] : []));
-    const { unstopped } = await stopThreads(bb, [...verifiers, ...agentThreadOf(check)]);
-    for (const { threadId, why } of unstopped) bb.log.warn(`The thread ${threadId} of ${issueId} ${why}, so no verifier starts there yet; the next tick tries again.`);
-    if (unstopped.length > 0) return;
+    if (!(await quietFor(check, { kind: "thread", threadId: null }, "no verifier starts there yet"))) return;
     try {
       const request = await requestFor(id);
       if (request === null) return;
@@ -215,9 +230,10 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
   /**
    * In its issue's turn: a running check whose verifier is gone, or idle without a verdict, is
    * nudged once, then given up on. One whose environment bb destroyed is given up on at once, since
-   * a reminder can't run there. Reads the check and its verifier as it decides. The reminder waits
-   * while bb reports the agent whose handoff it checks running, as when someone woke it, and comes
-   * once that agent is idle again.
+   * a reminder can't run there. Reads the check and its verifier as it decides. The reminder gives
+   * the environment back to the verifier, so it waits while bb reports the agent whose handoff it
+   * checks running, as when someone woke it, and then while the issue's other threads aren't quiet
+   * for it (see quietIssue); it comes at a later look once they are.
    */
   async function followInTurn(checkId: CheckId): Promise<void> {
     const { verdict, coordinatorId } = checkOf(checkId);
@@ -231,17 +247,31 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
     const destroyed = thread.environmentId !== null && (await environmentGone(bb, thread.environmentId));
     if (destroyed) return void giveUp("its environment was removed (a sandbox removed or reaped) before its verifier returned a verdict");
     if (verdict.nudged) return void giveUp("its verifier stopped without a verdict twice, the second time after a reminder");
-    if (await agentRuns(checkOf(checkId))) return;
-    // why from the regional manager's thread: a handover takes back what the plugin queued by its
-    // sender, and a reminder bb queued behind a turn would otherwise wake a superseded verifier.
+    const check = checkOf(checkId);
+    if (await agentRuns(check)) return;
+    if (!(await quietFor(check, { kind: "thread", threadId: verifierThreadId }, "its verifier isn't reminded yet"))) return;
+    // why from the regional manager's thread: quieting takes back what the plugin queued by its
+    // sender, and a reminder bb queued behind a turn would otherwise wake its verifier later.
     const managerThreadId = managerThreadOf(coordinatorId);
-    // why mark first: a nudge sent twice would double the verifier's work; a lost one only ends it sooner.
-    if (!store.markNudged(checkId, verifierThreadId)) return;
+    // why mark first: a nudge sent twice would double the verifier's work; a lost one only ends it
+    // sooner. One taken back from bb's queue is unmarked (see quietIssue).
+    if (!store.markNudged(checkId, verifierThreadId, true)) return;
     try {
       await bb.sdk.threads.send({ threadId: thread.id, senderThreadId: managerThreadId, mode: "queue-if-active", input: [{ type: "text", text: NUDGE, mentions: [] }] });
     } catch (error) {
       bb.log.warn(`Could not remind the verifier ${thread.id} to return its verdict: ${messageOf(error)}`);
     }
+  }
+
+  /**
+   * Quiets the check's issue for the thread taking its environment (`to`, see quietIssue); says
+   * whether it is quiet. While it isn't, logs why, and what waits (`waits`), for the next look or
+   * tick to try again.
+   */
+  async function quietFor({ coordinatorId, issueId }: Check, to: GivenTo, waits: string): Promise<boolean> {
+    const quieted = await quietIssue(bb, store, coordinatorId, issueId, to);
+    if (quieted.kind !== "quiet") bb.log.warn(`On ${issueId}: ${unquietText(quieted)}, so ${waits}; the next tick tries again.`);
+    return quieted.kind === "quiet";
   }
 
   /** Whether bb reports running the thread of the agent whose handoff the check judges; never for a final check, which judges none. */
@@ -325,22 +355,19 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
   }
 
   /**
-   * Settles a handoff's returned verdict, but sends its findings only once bb confirms its verifier
-   * stopped, since they wake the agent in the verifier's environment. Until then its settlement
-   * stays pending: owed, as the tick finds it after a reload too. From inside issue_verdict the
-   * verifier is still running, so they wait for its idle event or the tick; a look again stops the
-   * verifier whatever bb reports (see stopThreads), as it has returned its verdict and has nothing
-   * left to do, which also bounds the wait to the tick's.
+   * Settles a handoff's returned verdict, but sends its findings only once the issue is quiet for
+   * the agent (see quietIssue), its verifier included, since they wake the agent in the verifier's
+   * environment. Until then its settlement stays pending: owed, as the tick finds it after a reload
+   * too. From inside issue_verdict the verifier is still running, so they wait for its idle event
+   * or the tick; a look again stops the verifier whatever bb reports, as it has returned its
+   * verdict and has nothing left to do, which also bounds the wait to the tick's.
    */
   async function settleHandoffInTurn(check: HandoffCheck, by: Settler): Promise<void> {
     const first = await stepNow(check);
     if (first === null) return;
     if (first.step.kind !== "send") return inbox.settleCheck(check.id, first.step);
     if (by === "verdict-tool") return;
-    const { verifierThreadId } = first.unsettled.verdict;
-    const { unstopped } = await stopThreads(bb, [verifierThreadId]);
-    for (const { why } of unstopped) bb.log.warn(`The verifier ${verifierThreadId} of ${check.issueId} ${why}, so its findings wait; the next tick tries again.`);
-    if (unstopped.length > 0) return;
+    if (!(await quietFor(check, { kind: "thread", threadId: first.unsettled.agent.threadId }, "its findings wait"))) return;
     // why decide again: bb was asked meanwhile, and the agent may have moved on.
     const now = await stepNow(check);
     if (now === null) return;
