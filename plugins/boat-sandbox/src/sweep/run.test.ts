@@ -74,6 +74,7 @@ function world(hosts: FakeHost[], orphans: Sandbox[] = []) {
     resume: unused,
     run: unused,
     writeFile: unused,
+    vncDesktop: unused,
     async get(id) {
       lookedUp.push(id);
       return onBoat().find((each) => each.id === id) ?? null;

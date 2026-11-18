@@ -55,6 +55,7 @@ function fakeBoat() {
     githubApp: () => Promise.reject(new Error("create never reads the GitHub App")),
     meter: () => Promise.reject(new Error("create never reads the meter")),
     dailySpend: () => Promise.reject(new Error("create never reads the daily spend")),
+    vncDesktop: () => Promise.reject(new Error("create never reads the desktop")),
     get: async (id) => sandboxes.get(id) ?? null,
     list: async (labels) =>
       [...sandboxes.values()].filter((sandbox) => Object.entries(labels).every(([key, value]) => sandbox.labels[key] === value)),

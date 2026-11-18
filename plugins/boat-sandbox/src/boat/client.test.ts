@@ -140,3 +140,24 @@ test("dailySpend refuses a day without its date or its machine dollars", async (
     await assert.rejects(createBoatClient("boat_test").dailySpend(AbortSignal.timeout(10_000)), { name: "ZodError" });
   }
 });
+
+test("the desktop view is asked of boat as a private noVNC page, and both of boat's answers are read", async () => {
+  // The two answers boat gave live on 2026-11-17, secrets replaced.
+  const answers = [
+    { ok: true, type: "desktop.provisioning", provisioning: true, message: "Preparing VNC desktop…" },
+    { ok: true, type: "desktop.url", mode: "vnc", desktopUrl: "https://box-node-1-6080.on.boat.dev/vnc.html?autoconnect=true&password=pw&_token=tk" },
+  ];
+  const fetch = mock.method(globalThis, "fetch", async () => Response.json(answers[fetch.mock.callCount()]));
+  const client = createBoatClient("boat_test");
+
+  assert.deepEqual(await client.vncDesktop(SANDBOX, AbortSignal.timeout(1_000)), { status: "provisioning" });
+  assert.deepEqual(await client.vncDesktop(SANDBOX, AbortSignal.timeout(1_000)), {
+    status: "ready",
+    url: "https://box-node-1-6080.on.boat.dev/vnc.html?autoconnect=true&password=pw&_token=tk",
+  });
+  const [url, init] = fetch.mock.calls[0]!.arguments;
+  assert.equal(String(url), "https://boat.dev/api/v1/sandboxes/bx_a8k84ben/desktop?vnc=1");
+  assert.equal(init?.method, "POST");
+  // why: `publicAccess` would publish the desktop to anyone holding the URL.
+  assert.equal(init?.body, "{}");
+});

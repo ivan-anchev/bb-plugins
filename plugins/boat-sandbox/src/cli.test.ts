@@ -71,6 +71,7 @@ function accountWith(account: Account): { access: BoatAccess; machineEnvironment
     setTtl: unused,
     run: unused,
     writeFile: unused,
+    vncDesktop: unused,
   };
   const session: BoatSession = {
     status: "available",

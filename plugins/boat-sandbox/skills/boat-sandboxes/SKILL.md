@@ -1,6 +1,6 @@
 ---
 name: boat-sandboxes
-description: The boat Sandbox plugin, which starts bb threads on new boat.dev sandboxes (`bb thread spawn --environment-provider boat-sandbox --machine-inputs '{"preset":"small"}'`, or boat Sandbox in the new-thread picker), stops them when idle, resumes them on a follow-up, and deletes them with `bb machine remove`. Covers its settings (API key, Stop after idle, Default size, Default template, Default environment), presets, templates (boat saved snapshots, `--machine-inputs '{"template":"<name>"}'`, `bb boat templates`), environments (`--machine-inputs '{"environment":"<name>"}'`, which decide the sign-ins, GitHub token and secrets a sandbox gets), Claude Code and Codex sign-ins from boat, GitHub (bb's forwarded login, else boat's token over HTTPS, SSH remotes included), the AI proxy, start limits, idle stops and resumes, the auto-stop lease, failed creates, drift between bb and boat, leaked sandboxes, `bb boat status`, `bb boat templates`, `bb boat sandboxes`, and the boat spend card on the New thread screen (30 days of spend, running sandboxes, money left, and its Backfill 30 days action). Use when a user sets up or uses boat.dev sandboxes for bb, asks why one stopped, resumed, failed or was stopped as an orphan, or asks what the boat spend card shows or why it is blank.
+description: The boat Sandbox plugin, which starts bb threads on new boat.dev sandboxes (`bb thread spawn --environment-provider boat-sandbox --machine-inputs '{"preset":"small"}'`, or boat Sandbox in the new-thread picker), stops them when idle, resumes them on a follow-up, and deletes them with `bb machine remove`. Covers its settings (API key, Stop after idle, Default size, Default template, Default environment), presets, templates (boat saved snapshots, `--machine-inputs '{"template":"<name>"}'`, `bb boat templates`), environments (`--machine-inputs '{"environment":"<name>"}'`, which decide the sign-ins, GitHub token and secrets a sandbox gets), Claude Code and Codex sign-ins from boat, GitHub (bb's forwarded login, else boat's token over HTTPS, SSH remotes included), the AI proxy, start limits, idle stops and resumes, the auto-stop lease, failed creates, drift between bb and boat, leaked sandboxes, `bb boat status`, `bb boat templates`, `bb boat sandboxes`, the boat spend card on the New thread screen (30 days of spend, running sandboxes, money left, and its Backfill 30 days action), and the Computer card and page in a boat thread's side panel (the sandbox's desktop live and view only through boat's noVNC view). Use when a user sets up or uses boat.dev sandboxes for bb, asks why one stopped, resumed, failed or was stopped as an orphan, asks what the boat spend card shows or why it is blank, or asks how to watch a sandbox's desktop or why the Computer page shows no desktop.
 ---
 
 # boat Sandbox
@@ -438,6 +438,53 @@ wrong leaves the chart as it was and says why in one line under it:
   answered another error (`HTTP 404` and so on), its reply no longer has a
   `day` and `machineDollars` for each day ("boat changed its reply"), or boat
   couldn't be reached.
+
+## The Computer card and page
+
+A thread that runs on a boat sandbox gets two ways into its sandbox's desktop:
+
+- **Computer card:** a tile in the thread's Info tab, under the details: a
+  drawing of a desktop above a monitor icon and "Computer". The whole tile is
+  one button. Click anywhere on it (or focus it and press Enter). It has no
+  heading and does not fold.
+- **Computer row:** in the New tab's Actions list.
+
+Both open the **Computer page**, a side-panel tab. Opening it again selects
+the same tab. Threads on any other machine (a local worktree, Modal, the bb
+server) show neither. The page shows boat's noVNC view of the sandbox's screen
+(Xorg `:0`, 1920×1080), live and scaled to the panel's width, with "View only"
+under it. Clicks, keys, scrolling and the clipboard on it never reach the
+sandbox: noVNC runs with `view_only=true`, and the page makes the frame inert
+so focus never enters it. noVNC draws its own control-bar handle at the left
+edge and a "Connected" banner for a moment; neither does anything here.
+
+Instead of the desktop, the page says in one line:
+
+- "Starting the desktop view. This takes about half a minute the first time.":
+  boat starts x11vnc and noVNC on the sandbox
+  the first time anyone looks after the sandbox is made (about 20–30 s, live).
+  Later looks take a few seconds.
+- "The sandbox is starting.": boat is starting it, or answered
+  `desktop_not_ready`.
+- "The sandbox is stopped. It resumes when the thread works again.": it is
+  stopped or stopping (also boat's `machine_not_running`). Send the thread a
+  follow-up to resume it, or `bb machine resume <machine>`.
+- "boat refused the desktop view: …": boat answered another error, such as a
+  key without the `desktop` scope (the `ci` preset has it).
+- The settings problem, when there is no key or boat refuses it.
+
+The page reads again every few seconds while it shows (3 s while starting,
+5 s while stopped, 10 s while live), so it follows a stop and comes back to
+the live desktop by itself after a resume, with no reload. It asks boat for a
+fresh desktop URL each time it opens. It never wakes, stops or extends a
+sandbox, never asks for a public URL, and watching does not count as thread
+activity, so the idle stop still applies. boat charges nothing extra for the
+view.
+
+The desktop URL carries noVNC's password and boat's access token. View only is
+enforced in boat's noVNC page, not by x11vnc, so the URL would allow control if
+opened on its own. The page never shows it; the API key stays on the bb
+server. Taking control from bb is not available yet.
 
 ## `bb boat sandboxes`
 

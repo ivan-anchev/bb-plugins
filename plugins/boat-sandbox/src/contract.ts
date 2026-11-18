@@ -1,4 +1,5 @@
-// What the app and the server share: the provider id and the RPC methods the chip, the sidebar and the homepage card call.
+// What the app and the server share: the provider id and the RPC methods the chip, the sidebar, the homepage card
+// and the Computer card and page call.
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { launchChoices } from "./launch.ts";
@@ -56,6 +57,22 @@ const backfillSpendReply = z.discriminatedUnion("status", [
 
 export type BackfillSpendReply = z.output<typeof backfillSpendReply>;
 
+/**
+ * What the Computer page shows for a thread's environment. `provisioning` is boat starting the desktop
+ * view itself (about 25 s, on the first look after each start); `ready` carries boat's noVNC page,
+ * view-only and scaled to its frame. Its URL is a credential: ask again on each look, never keep it.
+ */
+const computerView = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("not-boat") }),
+  z.object({ status: z.literal("starting") }),
+  z.object({ status: z.literal("provisioning") }),
+  z.object({ status: z.literal("ready"), url: z.url() }),
+  z.object({ status: z.literal("stopped") }),
+  z.object({ status: z.literal("unavailable"), message: z.string() }),
+]);
+
+export type ComputerView = z.output<typeof computerView>;
+
 // launchChoices is untagged: boat changes snapshots and environments out of band, so there is nothing to invalidate
 // on; the chip reads again whenever its menu opens.
 export const boatSandboxContract = defineRpcContract({
@@ -81,5 +98,17 @@ export const boatSandboxContract = defineRpcContract({
     input: z.object({ keys: z.array(z.string()) }),
     output: z.record(z.string(), z.boolean()),
     experimental_description: "whether each bb host is a boat sandbox machine",
+  },
+  // Keyed by bb environment id. Untagged for the same reason: an environment never changes host.
+  boatEnvironments: {
+    input: z.object({ keys: z.array(z.string()) }),
+    output: z.record(z.string(), z.boolean()),
+    experimental_description: "whether each bb environment runs on a boat sandbox machine",
+  },
+  // Untagged: the page reads again on its own while it shows, since boat starts and stops sandboxes by itself.
+  computer: {
+    input: z.object({ environmentId: z.string() }),
+    output: computerView,
+    experimental_description: "the boat sandbox desktop behind a bb environment, as a view-only noVNC page, or why there is none",
   },
 });
