@@ -43,14 +43,24 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     ...checksStore(db),
     ...prStore(db),
 
-    /** The regional manager and its unbound ticket, together or not at all. */
+    /** The regional manager, waiting for its goal, and its unbound ticket, together or not at all. */
     insertCoordinator({ id, ticket, projectId, verify, description, avatar, createdAt }: { id: CoordinatorId; ticket: string; projectId: string; verify: boolean; createdAt: number } & KeptProfile): void {
       db().transaction(() => {
         insertTicket(db, ticket, { kind: "coordinator", coordinatorId: id }, createdAt);
         db()
-          .prepare("INSERT INTO coordinators (id, ticket, project_id, verify, description, avatar, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+          .prepare("INSERT INTO coordinators (id, ticket, project_id, verify, description, avatar, awaiting_goal, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)")
           .run(id, ticket, projectId, Number(verify), description, JSON.stringify(avatar), createdAt);
       })();
+    },
+
+    /** Whether the regional manager still waits for its goal (migrations.ts awaiting_goal). */
+    awaitsGoal(id: CoordinatorId): boolean {
+      return db().prepare("SELECT 1 FROM coordinators WHERE id = ? AND awaiting_goal = 1").get(id) !== undefined;
+    },
+
+    /** The regional manager has its goal, and waits for it no more. */
+    goalGiven(id: CoordinatorId): void {
+      db().prepare("UPDATE coordinators SET awaiting_goal = 0 WHERE id = ?").run(id);
     },
 
     /** Replaces what the plugin keeps of the regional manager's profile. */

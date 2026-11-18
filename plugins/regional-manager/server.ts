@@ -9,6 +9,8 @@ import { defaultBranchReader, placementFactsReader } from "./src/server/agents/e
 import { forwardThreadEvents } from "./src/server/agents/events/thread-events.ts";
 import { boardHandlers } from "./src/server/board/board-rpc.ts";
 import { createBoard } from "./src/server/board/board.ts";
+import { newSeed } from "./src/server/execution/new-seed.ts";
+import { watchGoals } from "./src/server/goal/goal.ts";
 import { createInbox } from "./src/server/inbox/inbox.ts";
 import { watchOwnTree } from "./src/server/inbox/own-tree-watch.ts";
 import { watchAgentThreads } from "./src/server/inbox/thread-watch.ts";
@@ -65,7 +67,8 @@ export default function plugin(host: BbPluginApi): void {
   const finalChecks = createFinalChecks({ bb, store, views, turns, verify, defaultBranch: defaultBranchReader(bb, store), now: Date.now });
 
   registerRoles(bb, store);
-  registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
+  const goals = watchGoals(bb, { store, memory, onChange: refreshBoard });
+  registerCrewTools(bb, { store, inbox, memory, goals, board, onChange: refreshBoard });
   registerIssueTools(bb, { store, issues });
   registerAgentTools(bb, { store, agents });
   registerHandoffTool(bb, { store, verify });
@@ -91,7 +94,7 @@ export default function plugin(host: BbPluginApi): void {
 
   bb.rpc.register(coordinatorContract, {
     coordinators: () => ({ coordinators: store.coordinators() }),
-    primaryHost: async () => ({ hostId: (await bb.sdk.system.config()).primaryHostId }),
+    newSeed: () => newSeed(bb),
     startCoordinator: (start) => spawner.coordinator(start),
     ...profileHandlers({ bb, store, onChange: refreshCoordinators }),
     ...boardHandlers({ store, board, inbox }),

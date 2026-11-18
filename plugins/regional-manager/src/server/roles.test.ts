@@ -55,9 +55,10 @@ test("a bound ticket copied into another thread grants it nothing", async () => 
   assert.ok(isRefusal(await kit.call("crew_memory_read", { file: "GOAL.md" }, "thr_fork")));
 });
 
-test("crew_catch_up returns the seeded memory with the goal", async () => {
+test("crew_catch_up returns the seeded memory with the goal the user typed", async () => {
   const kit = harness();
   const { threadId } = await kit.spawner.coordinator(coordinatorStart("Migrate the webhook service"));
+  kit.giveGoal(threadId, "Migrate the webhook service");
 
   const text = textOf(await kit.call("crew_catch_up", {}, threadId));
   for (const file of ["MEMORY.md", "GOAL.md", "PLAN.md", "PREFERENCES.md", "CREW.md", "DIGEST.md"]) assert.match(text, new RegExp(`^## ${file} \\(version \\w+\\)$`, "m"));
@@ -67,6 +68,7 @@ test("crew_catch_up returns the seeded memory with the goal", async () => {
 test("crew_memory_read reads one file, and says so when there is none", async () => {
   const kit = harness();
   const { threadId } = await kit.spawner.coordinator(coordinatorStart("Migrate the webhook service"));
+  kit.giveGoal(threadId, "Migrate the webhook service");
 
   assert.match(textOf(await kit.call("crew_memory_read", { file: "GOAL.md" }, threadId)), /Migrate the webhook service/);
   const missing = await kit.call("crew_memory_read", { file: "notes/api.md" }, threadId);
@@ -99,6 +101,7 @@ test("an agent thread is offered crew_memory_read, agent_handoff, its skill and 
 test("an agent thread reads its regional manager's memory, and is refused the manager's tools", async () => {
   const kit = harness();
   const { threadId } = await kit.spawner.coordinator(coordinatorStart("Migrate the webhook service"));
+  kit.giveGoal(threadId, "Migrate the webhook service");
   const { agentThreadId } = await startedAgent(kit, threadId);
 
   const read = await kit.call("crew_memory_read", { file: "GOAL.md" }, agentThreadId);

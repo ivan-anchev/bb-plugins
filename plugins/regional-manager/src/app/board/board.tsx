@@ -1,4 +1,4 @@
-// The board of one regional manager: its verification switch, a warning while its own working
+// The board of one regional manager: that it waits for its goal while it does, its verification switch, a warning while its own working
 // tree has changed files, why PR status is unavailable when it is, and its digest, then its
 // decisions and issues in lanes (issue/issue-board.tsx), each issue opening in place to its
 // detail. The Board tab in the thread and the Board page in the panel both draw it, from one read;
@@ -30,6 +30,7 @@ export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
       {data === undefined && read.error === null && <p className="px-2 text-sm text-muted-foreground">Loading the board…</p>}
       {data !== undefined && (
         <>
+          {data.awaitingGoal && <p className="px-2 text-sm text-muted-foreground">Waiting for its goal: type it in its thread to start it.</p>}
           <VerifySwitch coordinatorId={coordinatorId} verify={data.verify} />
           {data.ownEdits !== null && <OwnEdits {...data.ownEdits} />}
           {data.prUnavailable !== null && <PrUnavailable reason={data.prUnavailable} />}

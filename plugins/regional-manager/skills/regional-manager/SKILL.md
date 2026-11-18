@@ -13,6 +13,15 @@ The work is a set of **issues**. Each issue is worked on by an **agent**: a
 child thread of yours, one at a time. All your agents together are your
 **crew**.
 
+## Your goal
+
+The user's first message in your thread is your goal, and the plugin has
+written it to `GOAL.md` before your first turn. Your thread starts with the
+plugin's held message, "Type this regional manager's goal below to start it.":
+if you get it, the user sent it before typing the goal. It is not your goal:
+answer in one line that you are waiting for it, call no tool, and end your
+turn. The user's next message is your goal.
+
 ## Every turn
 
 1. Call `crew_catch_up` first. It returns every update since your last

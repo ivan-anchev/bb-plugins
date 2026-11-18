@@ -86,9 +86,14 @@ export function openMemoryRoot(databasePath: string, revisions: Pick<Store, "mem
           return [...CORE_FILES.filter((file) => names.includes(file)), ...others];
         },
 
-        /** Writes each core file that doesn't exist yet, so seeding twice changes nothing. */
-        seed(goal: string): void {
-          for (const [file, text] of seedFiles(goal)) write(file, text, null);
+        /** Writes each core file but GOAL.md that doesn't exist yet, so seeding twice changes nothing. GOAL.md waits for the goal (seedGoal). */
+        seed(): void {
+          for (const [file, text] of seedFiles()) write(file, text, null);
+        },
+
+        /** Writes GOAL.md with the goal unless it exists, so the goal is written once, whoever gives it first. */
+        seedGoal(goal: string): void {
+          write(GOAL_FILE, `# Goal\n\n${goal.trim()}\n`, null);
         },
       };
     },
@@ -115,7 +120,9 @@ function markdownUnder(dir: string): MemoryFile[] {
   });
 }
 
-function seedFiles(goal: string): [MemoryFile, string][] {
+const GOAL_FILE = memoryFileSchema.parse("GOAL.md");
+
+function seedFiles(): [MemoryFile, string][] {
   const files: [string, string][] = [
     [
       "MEMORY.md",
@@ -130,7 +137,6 @@ The index of this memory. Each file holds one kind of thing:
 - DIGEST.md: the latest summary for the user.
 `,
     ],
-    ["GOAL.md", `# Goal\n\n${goal.trim()}\n`],
     ["PLAN.md", "# Plan\n\nNo plan yet.\n"],
     ["PREFERENCES.md", "# Preferences\n\nOne rule per line: the date, then the user's words.\n"],
     ["CREW.md", "# Crew rules\n\nNone yet.\n"],

@@ -69,13 +69,14 @@ const issueRowSchema = z.object({
 export type IssueRow = z.infer<typeof issueRowSchema>;
 
 /**
- * The board: whether done handoffs are verified, how many files had changed in the coordinating
+ * The board: whether the regional manager still waits for its goal in its thread, whether done handoffs are verified, how many files had changed in the coordinating
  * thread's own working tree when the turn that warned of them ended, and when (null: none, or it
  * was clean again since), why the latest read of an issue's pull request failed (null: none did),
  * DIGEST.md and when it last changed (null: there is none), every decision put to the user in the
  * order asked, then every issue in the order filed.
  */
 const boardSchema = z.object({
+  awaitingGoal: z.boolean(),
   verify: z.boolean(),
   ownEdits: z.object({ fileCount: z.number().int().min(1), at: z.number() }).nullable(),
   prUnavailable: z.string().nullable(),
@@ -112,25 +113,33 @@ const issueDetailSchema = z.object({
 });
 export type IssueDetail = z.infer<typeof issueDetailSchema>;
 
-// why only these fields are checked: the plugin reads only the project and the typed text, which
-// becomes the goal. The rest goes to threads.spawn unchanged (as the composer
-// asks), and bb validates it there.
-const promptPartSchema = z.union([
-  z.looseObject({ type: z.literal("text"), text: z.string() }),
-  z.looseObject({ type: z.string().refine((type) => type !== "text") }),
-]);
-const newThreadRequestSchema = z.custom<NewThreadRequest>(
-  (value) => z.looseObject({ projectId: z.string().min(1), input: z.array(promptPartSchema) }).safeParse(value).success,
-  "Expected the composer's new-thread request",
-);
+/**
+ * Where and on what a new regional manager runs, as the New page picks it: its project, provider,
+ * model, reasoning level, service tier (left out: the provider has none), permission mode and
+ * environment, which go to threads.spawn as they are. why the environment checked only for its
+ * type: bb validates it at the spawn, and the plugin reads nothing in it.
+ */
+const managerRequestSchema = z.object({
+  projectId: z.string().min(1),
+  providerId: z.string().min(1),
+  model: z.string().min(1),
+  reasoningLevel: z.string(),
+  serviceTier: z.string().optional(),
+  permissionMode: z.enum(["accept-edits", "auto", "full"]),
+  environment: z.custom<NewThreadRequest["environment"]>((value) => z.looseObject({ type: z.string() }).safeParse(value).success, "Expected where the thread runs, as threads.spawn takes it"),
+});
+export type ManagerRequest = z.infer<typeof managerRequestSchema>;
 
-/** The text the user typed in bb's composer: every text part, in order. */
-export const typedText = (request: NewThreadRequest): string =>
-  request.input.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n\n");
-
-/** What starts a regional manager: the composer's request, its verification switch and its profile. */
-const coordinatorStartSchema = z.object({ request: newThreadRequestSchema, verify: z.boolean(), profile: profileSchema });
+/** What starts a regional manager: where and on what it runs, its verification switch and its profile. Its goal comes later, in its thread. */
+const coordinatorStartSchema = z.object({ request: managerRequestSchema, verify: z.boolean(), profile: profileSchema });
 export type CoordinatorStart = z.infer<typeof coordinatorStartSchema>;
+
+/** What the New page starts from: the machine running bb (null before one has joined), and bb's default provider and its default model there (null: none bb can run). */
+const newSeedSchema = z.object({
+  hostId: z.string().nullable(),
+  execution: z.object({ providerId: z.string().min(1), model: z.string().min(1), reasoningLevel: z.string() }).nullable(),
+});
+export type NewSeed = z.infer<typeof newSeedSchema>;
 
 export const coordinatorContract = defineRpcContract({
   /** Every regional manager whose thread exists, newest first. */
@@ -139,14 +148,14 @@ export const coordinatorContract = defineRpcContract({
     output: z.object({ coordinators: z.array(coordinatorSchema) }),
     tags: () => [COORDINATORS_TAG],
   },
-  /** The machine running bb, where the New page seeds a fresh worktree; null before one has joined. */
-  primaryHost: {
+  /** What the New page starts from (newSeedSchema). */
+  newSeed: {
     input: z.object({}),
-    output: z.object({ hostId: z.string().nullable() }),
+    output: newSeedSchema,
   },
   /**
-   * Starts a regional manager from bb's new-thread composer; the request's text is its goal, and its
-   * thread is titled with the profile's name. `verify`: verify its agents' done handoffs.
+   * Starts a regional manager from the New page, titled with the profile's name, its thread waiting
+   * for its goal, which the user types there. `verify`: verify its agents' done handoffs.
    */
   startCoordinator: {
     input: coordinatorStartSchema,

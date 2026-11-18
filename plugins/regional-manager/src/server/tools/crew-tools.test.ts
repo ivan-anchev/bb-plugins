@@ -15,6 +15,7 @@ const PLAN = memoryFileSchema.parse("PLAN.md");
 async function started() {
   const kit = harness();
   const { threadId } = await kit.spawner.coordinator(coordinatorStart("Migrate the webhook service"));
+  kit.giveGoal(threadId, "Migrate the webhook service");
   const role = kit.store.roleOfThread(threadId);
   assert.equal(role?.kind, "coordinator");
   return { kit, threadId, coordinatorId: role.coordinatorId, dir: kit.memory.of(role.coordinatorId).dir };

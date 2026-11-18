@@ -173,7 +173,7 @@ test("a doorbell bb gave up sending is taken out of its queue by the tick, and w
   assert.deepEqual(kit.queued(threadId), [], "the failed doorbell is taken out of bb's queue");
   assert.equal(kit.store.doorbell(coordinatorId), null);
   assert.deepEqual(kit.delivered(threadId), [`[${DISPLAY_NAME}] 2 updates. Call crew_catch_up to read them in full.\n- i1 "Add retries" (a1) handed off: done, unverified\n- i2 "Dead letters" (a2) handed off: blocked`]);
-  assert.match(kit.warnings().join("\n"), /bb gave up sending the doorbell qm_1 [^\n]*: The provider exited before the turn started/);
+  assert.match(kit.warnings().join("\n"), new RegExp(`bb gave up sending the doorbell ${failed} [^\\n]*: The provider exited before the turn started`));
 });
 
 test("saving a file in the Memory editor wakes the Coordinator with the file's name; its own writes don't", async () => {

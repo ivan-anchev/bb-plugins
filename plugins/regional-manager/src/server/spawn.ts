@@ -4,8 +4,9 @@
 // a spawn answer that never arrives still leaves the thread its role.
 import { randomUUID } from "node:crypto";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
-import { typedText, type Coordinator, type CoordinatorStart } from "../contract.ts";
+import type { Coordinator, CoordinatorStart } from "../contract.ts";
 import type { Execution } from "../model/execution.ts";
+import { PLACEHOLDER } from "./goal/goal.ts";
 import { coordinatorIdSchema, ticketMetadataSchema, type Role } from "../model/role.ts";
 import type { MemoryRoot } from "./memory/memory-files.ts";
 import type { Store } from "./store/store.ts";
@@ -84,16 +85,26 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
 
   return {
     /**
-     * Starts a coordinating thread from bb's composer, on the provider, model and modes it shows,
-     * titled with its profile's name. Its row, ticket and seeded memory exist before the spawn, so
-     * its first session and first tool call find them.
+     * Starts a coordinating thread as the New page picked it, titled with its profile's name, its
+     * first message the placeholder the goal hook holds until the user types the goal (goal.ts).
+     * Its row, ticket and seeded memory exist before the spawn, so its first session and first tool
+     * call find them. why no executionInputSources: bb then counts every execution field as chosen,
+     * so it runs exactly what the page showed.
      */
     async coordinator({ request, verify, profile: { name, ...kept } }: CoordinatorStart): Promise<{ threadId: string }> {
       const id = coordinatorIdSchema.parse(randomUUID());
       const ticket = randomUUID();
       store.insertCoordinator({ id, ticket, projectId: request.projectId, verify, ...kept, createdAt: Date.now() });
-      memory.of(id).seed(typedText(request));
-      return { threadId: await spawnWith(ticket, { ...picked(request), title: name }) };
+      memory.of(id).seed();
+      return {
+        threadId: await spawnWith(ticket, {
+          ...request,
+          title: name,
+          input: [{ type: "text", text: PLACEHOLDER, mentions: [] }],
+          // why: the hook knows the spawn's own attempt by it, before bb answers the spawn with the thread.
+          pluginSubmission: { pluginId: bb.pluginId, data: { placeholder: true } },
+        }),
+      };
     },
 
     /**
@@ -118,14 +129,4 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
       return spawnChild(ticket, request, { visibility: "hidden" });
     },
   };
-}
-
-/**
- * The request with every execution field counted as chosen, so bb runs exactly what the user saw.
- * why without `executionInputSources`: bb counts every field of a spawn that has none. With one, bb
- * drops each field it leaves unmarked, and bb's composer leaves a field unmarked until the user
- * touches it; a dropped permission mode becomes the parent's.
- */
-function picked<T extends { executionInputSources?: unknown }>({ executionInputSources: _, ...request }: T): Omit<T, "executionInputSources"> {
-  return request;
 }
