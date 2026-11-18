@@ -14,7 +14,7 @@ import type { CoordinatorId } from "../model/role.ts";
 import { registerAgentTools } from "./agents/agent-tools.ts";
 import { createAgents } from "./agents/agents.ts";
 import { defaultBranchReader, placementFactsReader } from "./agents/environments.ts";
-import { forwardThreadEvents } from "./agents/thread-events.ts";
+import { forwardThreadEvents } from "./agents/events/thread-events.ts";
 import type { TurnsBb } from "./agents/threads.ts";
 import { boardHandlers } from "./board/board-rpc.ts";
 import { createBoard } from "./board/board.ts";

@@ -6,7 +6,7 @@ import type { CoordinatorId, Role } from "./src/model/role.ts";
 import { registerAgentTools } from "./src/server/agents/agent-tools.ts";
 import { createAgents } from "./src/server/agents/agents.ts";
 import { defaultBranchReader, placementFactsReader } from "./src/server/agents/environments.ts";
-import { forwardThreadEvents } from "./src/server/agents/thread-events.ts";
+import { forwardThreadEvents } from "./src/server/agents/events/thread-events.ts";
 import { boardHandlers } from "./src/server/board/board-rpc.ts";
 import { createBoard } from "./src/server/board/board.ts";
 import { createInbox } from "./src/server/inbox/inbox.ts";
