@@ -1,12 +1,16 @@
-// The verdict on one handoff, as the user is shown it (no model: the board names none): how many
-// criteria passed, the commit checked, a checkout or CI that failed it, then each criterion with its
-// evidence. A failed or unverifiable criterion shows its evidence; a passed one keeps it folded.
-import { checkoutText } from "../../../../model/verdict/checkout.ts";
+// The verdict on one handoff, or on a build parent's final check, as the user is shown it (no
+// model: the board names none): how many criteria passed, the commit checked, a checkout or CI that
+// failed it, then each criterion with its evidence. A failed or unverifiable criterion shows its
+// evidence; a passed one keeps it folded.
+import { checkoutText, worktreeText } from "../../../../model/verdict/checkout.ts";
 import { allPassed, ciVerdictOf, failedCheckout, outcome, type CriterionResult, type ShownVerdict } from "../../../../model/verdict/verdict.ts";
 import { ThreadLink } from "../thread-link.tsx";
 import { DiscloseGlyph } from "./disclose-glyph.tsx";
 
-export function CheckVerdict({ verdict }: { verdict: ShownVerdict }) {
+/** What a verdict judged: an agent's done handoff, or a build parent's final check on its default branch. */
+export type Judged = { kind: "handoff" } | { kind: "final"; defaultBranch: string };
+
+export function CheckVerdict({ verdict, judged }: { verdict: ShownVerdict; judged: Judged }) {
   switch (verdict.state) {
     case "queued":
       return <p className="rmi-verdict-line">Waiting for a verifier</p>;
@@ -18,7 +22,7 @@ export function CheckVerdict({ verdict }: { verdict: ShownVerdict }) {
         </p>
       );
     case "returned":
-      return <Returned verdict={verdict} />;
+      return <Returned verdict={verdict} judged={judged} />;
     case "could-not-run":
       return (
         <p className="rmi-verdict-line" data-tone="warning">
@@ -27,7 +31,7 @@ export function CheckVerdict({ verdict }: { verdict: ShownVerdict }) {
         </p>
       );
     case "superseded":
-      return <p className="rmi-verdict-line">Replaced before its verdict, by a newer handoff or a new agent</p>;
+      return <p className="rmi-verdict-line">{judged.kind === "handoff" ? "Replaced before its verdict, by a newer handoff or a new agent" : "Replaced before its verdict, by a newer final check"}</p>;
     case "waived":
       return <p className="rmi-verdict-line">Not verified: verification was off</p>;
     default:
@@ -37,7 +41,7 @@ export function CheckVerdict({ verdict }: { verdict: ShownVerdict }) {
 
 type ReturnedVerdict = Extract<ShownVerdict, { state: "returned" }>;
 
-function Returned({ verdict }: { verdict: ReturnedVerdict }) {
+function Returned({ verdict, judged }: { verdict: ReturnedVerdict; judged: Judged }) {
   const passed = verdict.criteria.filter((check) => check.result === "pass").length;
   // why: one on its way back to the agent failed its criteria, though nobody has been told yet.
   const failed = outcome(verdict) === "fail" || !allPassed(verdict);
@@ -51,10 +55,10 @@ function Returned({ verdict }: { verdict: ReturnedVerdict }) {
         <ThreadLink name="Verifier" threadId={verdict.verifierThreadId} />
       </p>
       <p className="rmi-verdict-meta">
-        Checked <code>{verdict.headSha.slice(0, 7)}</code>
-        {verdict.sameModel && <span data-tone="warning"> on the agent's own model</span>}
+        {judged.kind === "handoff" ? "Checked" : `On ${judged.defaultBranch} at`} <code>{verdict.headSha.slice(0, 7)}</code>
+        {verdict.sameModel && <span data-tone="warning">{judged.kind === "handoff" ? " on the agent's own model" : " on the model of an agent whose work it checks"}</span>}
       </p>
-      <CheckoutLine verdict={verdict} />
+      <CheckoutLine verdict={verdict} judged={judged} />
       <CiLine verdict={verdict} />
       <ol className="rmi-criteria-checked">
         {verdict.criteria.map((check, i) => (
@@ -75,13 +79,13 @@ function Returned({ verdict }: { verdict: ReturnedVerdict }) {
   );
 }
 
-/** The checkout as bb's git plugin read it, when it wasn't the claimed commit on a clean tree. */
-function CheckoutLine({ verdict }: { verdict: ReturnedVerdict }) {
+/** The checkout as bb's git plugin read it, when it wasn't the claimed commit on a clean tree (for a final check, when its verifier's worktree wasn't clean). */
+function CheckoutLine({ verdict, judged }: { verdict: ReturnedVerdict; judged: Judged }) {
   const failed = failedCheckout(verdict);
   if (failed === null) return null;
   return (
     <p className="rmi-verdict-meta" data-tone="failed">
-      Not the claimed commit on a clean tree. {checkoutText(verdict.headSha, failed)}
+      {judged.kind === "handoff" ? `Not the claimed commit on a clean tree. ${checkoutText(verdict.headSha, failed)}` : `Not a clean tree. ${worktreeText(failed)}`}
     </p>
   );
 }

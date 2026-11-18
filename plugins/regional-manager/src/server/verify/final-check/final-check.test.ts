@@ -302,6 +302,21 @@ test("8: the final check runs on the parent's named verifier unless an agent of 
   assert.deepEqual(runsOn(renamed.kit, renamed.verifier()), ["claude-code", "sonnet"]);
 });
 
+test("an opened parent sends its final checks, each with only what its detail shows; its row only its headline", async () => {
+  const { kit, coordinatorId, mergeAll, returns } = await withParent();
+  await mergeAll();
+  await returns(FAILS);
+  const { finalChecks } = await kit.rpc.issue({ coordinatorId, issueId: i1 });
+  assert.equal(finalChecks.length, 1);
+  const [shown = assert.fail("no final check")] = finalChecks;
+  assert.deepEqual(Object.keys(shown).sort(), ["at", "defaultBranch", "verdict"]);
+  assert.equal(shown.defaultBranch, "main");
+  assert.deepEqual(Object.keys(shown.verdict).sort(), ["checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"], "no model");
+  const row = (await kit.rpc.board({ coordinatorId })).issues[0] ?? assert.fail("no row");
+  assert.deepEqual(Object.keys(row).sort(), ["agent", "blockedBy", "headline", "id", "kind", "needsYou", "parentId", "pr", "status", "subIssues", "title"]);
+  assert.deepEqual((await kit.rpc.issue({ coordinatorId, issueId: issueIdSchema.parse("i2") })).finalChecks, [], "a sub-issue has none");
+});
+
 test("a verdict that arrives after a sub-issue was filed under the parent is kept, and closes nothing while that sub-issue is open; its merge makes the next check", async () => {
   const { text, started, merge, mergeAll, returns, row, finalChecks, latest, tick } = await withParent();
   await mergeAll();

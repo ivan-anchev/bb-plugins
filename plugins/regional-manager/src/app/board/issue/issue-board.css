@@ -471,9 +471,10 @@ button.rmi-related {
   box-shadow: inset 0 0 0 1.5px var(--ring);
 }
 
-/* The record: each agent on a rule, its handoffs under it. */
+/* The record: each agent on a rule, its handoffs under it. A parent's final checks list as handoffs do, with no agent above them. */
 .rmi-record,
-.rmi-handoffs {
+.rmi-handoffs,
+.rmi-final-checks {
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -489,6 +490,9 @@ button.rmi-related {
   font-size: 11px;
   line-height: 14px;
   color: var(--muted-foreground);
+}
+.rmi-final-checks {
+  gap: 4px;
 }
 .rmi-handoffs {
   gap: 4px;
@@ -524,8 +528,10 @@ button.rmi-related {
   font-weight: 500;
   color: var(--foreground);
 }
-.rmi-handoff-status[data-status="blocked"] { color: var(--warning-text); }
-.rmi-handoff-status[data-status="gave-up"] { color: var(--destructive-text); }
+.rmi-handoff-status[data-status="blocked"],
+.rmi-handoff-status[data-tone="warning"] { color: var(--warning-text); }
+.rmi-handoff-status[data-status="gave-up"],
+.rmi-handoff-status[data-tone="failed"] { color: var(--destructive-text); }
 .rmi-handoff-summary {
   flex: 1 1 auto;
   min-width: 0;

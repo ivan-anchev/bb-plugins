@@ -81,12 +81,17 @@ const boardSchema = z.object({
 });
 export type Board = z.infer<typeof boardSchema>;
 
+/** A build parent's final check as its detail shows it: when it was made, the default branch it judges, and its verdict. */
+const shownFinalCheckSchema = z.object({ at: z.number(), defaultBranch: z.string().min(1), verdict: shownVerdictSchema });
+export type ShownFinalCheck = z.infer<typeof shownFinalCheckSchema>;
+
 /**
  * An issue opened on the board: what it is about, its done-criteria, the issues it depends on and
- * the issues that depend on it (each with its title and status on its own row), and its record: every agent
+ * the issues that depend on it (each with its title and status on its own row), its record: every agent
  * that held it, oldest first, with its thread (null: none to open) and how it ended (null: it holds
  * the issue now), and each handoff it made, oldest first, with the verdict on it (null: none was
- * asked for, as for a blocked handoff). No brief: that is the agent's.
+ * asked for, as for a blocked handoff); and a build parent's final checks, oldest first (none for
+ * any other issue). No brief: that is the agent's.
  */
 const issueDetailSchema = z.object({
   description: descriptionSchema,
@@ -99,6 +104,7 @@ const issueDetailSchema = z.object({
       handoffs: z.array(shownHandoffSchema.extend({ verdict: shownVerdictSchema.nullable() })),
     }),
   ),
+  finalChecks: z.array(shownFinalCheckSchema),
 });
 export type IssueDetail = z.infer<typeof issueDetailSchema>;
 

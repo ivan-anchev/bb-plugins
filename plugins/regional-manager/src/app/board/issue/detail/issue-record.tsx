@@ -58,7 +58,7 @@ function Handoff({ handoff, open }: { handoff: HandedOff; open: boolean }) {
       </summary>
       <div className="rmi-handoff-body">
         {handoff.report !== null && <Report {...handoff.report} />}
-        {handoff.verdict !== null && <CheckVerdict verdict={handoff.verdict} />}
+        {handoff.verdict !== null && <CheckVerdict verdict={handoff.verdict} judged={HANDOFF} />}
         {reported.map(({ title, items, code }) => (
           <section key={title} className="rmi-reported">
             <h4>{title}</h4>
@@ -92,6 +92,8 @@ function Report({ report, file }: NonNullable<HandedOff["report"]>) {
     </section>
   );
 }
+
+const HANDOFF = { kind: "handoff" } as const;
 
 const STATUS: Record<HandoffReport["status"], string> = { done: "Done", blocked: "Blocked", "gave-up": "Gave up" };
 

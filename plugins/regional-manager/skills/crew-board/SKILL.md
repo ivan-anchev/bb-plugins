@@ -809,7 +809,12 @@ one folds it away until you open it. The verifier's findings follow. It warns
 when the check had to run on the agent's own model, but names no provider or
 model. A verdict still to come says so, with the verifier's thread while it
 checks, and one that couldn't be had says why. Then what the agent reported:
-what it did, its evidence, concerns, deviations and findings. Pressing the
+what it did, its evidence, concerns, deviations and findings. A build
+parent's detail lists its **Final checks** above its record, oldest first,
+the latest open, each as "Passed", "Failed", "Running", "Couldn't run",
+"Replaced" or "Not run" on its default branch, with its time; opened, it is
+read as a handoff's verdict is, its commit as "On main at 4be0a17" and a
+dirty worktree as "Not a clean tree". Pressing the
 issue again closes it. The brief is the agent's, so the board doesn't show it.
 
 A handoff places its issue until the agent's thread starts another turn: type
