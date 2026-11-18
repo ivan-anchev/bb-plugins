@@ -155,9 +155,8 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
   /**
    * Checks a queued doorbell against bb's queue. One bb no longer has was sent or dropped while the
    * plugin wasn't listening, so it is forgotten. One bb gave up on never reached the thread and
-   * would hold every later doorbell back, and an outdated one announces what this version no longer
-   * tells (see the migrations): each is forgotten, what it announced is announced again, and it is
-   * taken out of bb's queue.
+   * would hold every later doorbell back, so it is forgotten, what it announced is announced again,
+   * and it is taken out of bb's queue.
    */
   async function check(doorbell: Doorbell): Promise<void> {
     const queue = await queueOf(doorbell);
@@ -165,8 +164,7 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
     const queued = queue.find((message) => message.id === doorbell.queuedMessageId);
     if (queued === undefined) store.clearDoorbell(doorbell.queuedMessageId);
     // why only exhausted: one bb still retries may yet be sent.
-    else if (queued.state === "failed_exhausted") await ringAgain(doorbell, `bb gave up sending it: ${queued.failureReason ?? "no reason given"}`);
-    else if (doorbell.outdated) await ringAgain(doorbell, "it announces what this version of the plugin no longer tells");
+    else if (queued.state === "failed_exhausted") await giveUp(doorbell, queued.failureReason);
   }
 
   /** The thread's queue, or null when bb can't be read: a failed read is not proof that the doorbell is gone. */
@@ -179,15 +177,15 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
     }
   }
 
-  async function ringAgain({ coordinatorId, threadId, queuedMessageId }: Doorbell, why: string): Promise<void> {
-    bb.log.warn(`The doorbell ${queuedMessageId} to ${threadId} (${coordinatorId}) is taken back and rings again: ${why}`);
+  async function giveUp({ coordinatorId, threadId, queuedMessageId }: Doorbell, failureReason: string | null): Promise<void> {
+    bb.log.warn(`bb gave up sending the doorbell ${queuedMessageId} to ${threadId} (${coordinatorId}), so it rings again: ${failureReason ?? "no reason given"}`);
     // why reopen first: bb answers the delete with message.cancelled, whose handler clears the doorbell
     // and rings; that ring must already include what this doorbell announced.
     store.reopenDoorbell(queuedMessageId);
     try {
       await bb.sdk.threads.queuedMessages.delete({ threadId, queuedMessageId });
     } catch (error) {
-      bb.log.warn(`Could not take the doorbell ${queuedMessageId} out of the queue of ${threadId}; it stays there: ${messageOf(error)}`);
+      bb.log.warn(`Could not take the failed doorbell ${queuedMessageId} out of the queue of ${threadId}; it stays there, failed: ${messageOf(error)}`);
     }
   }
 

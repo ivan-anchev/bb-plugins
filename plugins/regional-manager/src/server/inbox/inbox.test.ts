@@ -174,7 +174,7 @@ test("a doorbell bb gave up sending is taken out of its queue by the tick, and w
   assert.deepEqual(kit.queued(threadId), [], "the failed doorbell is taken out of bb's queue");
   assert.equal(kit.store.doorbell(coordinatorId), null);
   assert.deepEqual(kit.delivered(threadId), [`[${DISPLAY_NAME}] 2 updates. Call crew_catch_up to read them in full.\n- i1 "Add retries" (a1) handed off: done, unverified\n- i2 "Dead letters" (a2) handed off: blocked`]);
-  assert.match(kit.warnings().join("\n"), /The doorbell qm_1 [^\n]* is taken back and rings again: bb gave up sending it: The provider exited before the turn started/);
+  assert.match(kit.warnings().join("\n"), /bb gave up sending the doorbell qm_1 [^\n]*: The provider exited before the turn started/);
 });
 
 test("saving a file in the Memory editor wakes the Coordinator with the file's name; its own writes don't", async () => {
@@ -207,29 +207,28 @@ test("once the plugin is disposed, nothing rings", async () => {
   assert.deepEqual(doorbells(), []);
 });
 
-test("an update from 0.2.0 takes back a queued doorbell that warned the user of the manager's edits, and rings again without the warning", async () => {
+test("an update from 0.2.0 deletes the events of the kinds it no longer reads, and leaves 0.2.0's queued doorbell to settle as any other", async () => {
   const { db, storage } = memoryStorage();
   // why 28: the statements 0.2.0 shipped; the plugin runs as 0.2.0 did on its schema until it is reloaded as this version.
   let shipped = 28;
   const upgrading: typeof storage = { database: storage.database, migrate: (handle, statements) => storage.migrate(handle, statements.slice(0, shipped)) };
   const { kit, threadId, coordinatorId } = await coordinating({ verify: false, storage: upgrading });
   kit.thread(threadId).status = "active";
-  // 0.2.0's doorbell, as it waits in bb's queue for the turn to end, and the events it announced.
+  // 0.2.0's doorbell, as it waits in bb's queue for the turn to end, the events it announced, and a clean tree recorded since.
   kit.userQueues(threadId, `[${DISPLAY_NAME}] 2 updates. Call crew_catch_up to read them in full.\n- Your own environment has 2 files changed after your turn: hand the change to an agent\n- The user edited PLAN.md`);
   const [warning = ""] = kit.queued(threadId);
-  const event = db.prepare("INSERT INTO events (coordinator_id, event, at, announced_at) VALUES (?, ?, 2, 2)");
-  event.run(coordinatorId, JSON.stringify({ kind: "coordinator-edited-files", fileCount: 2 }));
-  event.run(coordinatorId, JSON.stringify({ kind: "memory-edited", file: "PLAN.md" }));
+  const event = db.prepare("INSERT INTO events (coordinator_id, event, at, announced_at) VALUES (?, ?, 2, ?)");
+  event.run(coordinatorId, JSON.stringify({ kind: "coordinator-edited-files", fileCount: 2 }), 2);
+  event.run(coordinatorId, JSON.stringify({ kind: "memory-edited", file: "PLAN.md" }), 2);
+  event.run(coordinatorId, JSON.stringify({ kind: "coordinator-tree-clean" }), null);
   db.prepare("INSERT INTO doorbells (coordinator_id, queued_message_id) VALUES (?, ?)").run(coordinatorId, warning);
 
   shipped = Infinity;
   kit.reload();
-  kit.thread(threadId).status = "idle";
   await kit.tick();
+  assert.deepEqual(kit.queued(threadId), [warning], "0.2.0's queued doorbell is not taken back");
+  assert.equal(kit.store.doorbell(coordinatorId), warning, "and it still holds the next one back");
 
-  assert.deepEqual(kit.queued(threadId), [], "the old doorbell is out of bb's queue before it was sent");
-  assert.deepEqual(kit.shownToUser(threadId), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- The user edited PLAN.md`], "rung again without the warning");
-  assert.equal(kit.store.doorbell(coordinatorId), null);
   const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
-  assert.match(caughtUp, /## Updates\n\n1 update since your last catch-up, oldest first\.\n\n### The user edited PLAN\.md/);
+  assert.match(caughtUp, /## Updates\n\n1 update since your last catch-up, oldest first\.\n\n### The user edited PLAN\.md/, "the events of the removed kinds are gone, and the rest read");
 });
