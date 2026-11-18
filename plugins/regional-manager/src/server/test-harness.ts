@@ -380,6 +380,11 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       const { name } = environment.workspace.baseBranch;
       return named(name, name.startsWith("origin/") ? onOrigin(name) : repo.local.get(name));
     }
+    // As bb does, a fresh worktree of the default branch fetches origin first and starts at origin's tip, even when the local branch is behind (bb-facts P4).
+    if (environment?.type === "host" && environment.workspace?.type === "managed-worktree") {
+      const branch = environmentRecords.defaultBranch ?? "main";
+      return named(`origin/${branch}`, onOrigin(branch));
+    }
     const inputs: unknown = environment?.type === "provider" ? environment.inputs : null;
     const base = z.object({ branch: z.object({ baseBranch: z.string() }) }).safeParse(inputs);
     return base.success ? named(base.data.branch.baseBranch, onOrigin(base.data.branch.baseBranch)) : { tip: HEAD };
@@ -387,7 +392,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
 
   /**
    * bb provisions a new thread's environment: it cuts the thread's branch from its base as the
-   * repository has it now, and checks it out; or, for a base it can't resolve, fails the thread, with
+   * repository has it now (a worktree of the default branch from origin's), and checks it out; or, for a base it can't resolve, fails the thread, with
    * no environment and no branch, announcing that after the spawn answered (bb-facts P1b(b), P2a;
    * seen live in issue 06).
    */
