@@ -47,7 +47,7 @@ test("a doorbell announces its events once; one that never reached its thread ma
 
   store.announce(MANAGER, [event!.id], "msg_1", 3_100);
   assert.deepEqual(store.coordinatorsToRing(), []);
-  assert.deepEqual(store.doorbells(), [{ coordinatorId: MANAGER, threadId: "thr_manager_1", queuedMessageId: "msg_1" }]);
+  assert.deepEqual(store.doorbells(), [{ coordinatorId: MANAGER, threadId: "thr_manager_1", queuedMessageId: "msg_1", stale: false }]);
 
   store.reopenDoorbell("msg_1");
   assert.equal(store.doorbell(MANAGER), null);
@@ -144,6 +144,40 @@ test("a correction whose event fails to be written leaves the checkout as last r
   assert.deepEqual(store.ownTree(MANAGER), CLEAN_TREE, "nothing of the read was saved");
   assert.equal(store.recordOwnTree(MANAGER, read(["a.ts"]), 3_100), true, "the failed read was not remembered");
   assert.deepEqual(unreadKinds(store), ["coordinator-tree-changed"]);
+});
+
+test("a read that replaces the correction a queued doorbell announced marks it stale and makes the unread events unannounced; one whose write fails changes none of that", () => {
+  const { db, store } = freshStore();
+  store.recordOwnTree(MANAGER, read(["a.ts"]), 3_000);
+  store.insertEvent(MANAGER, { kind: "memory-edited", file: memoryFileSchema.parse("PLAN.md") }, 3_050);
+  store.announce(MANAGER, store.unannounced(MANAGER).map(({ id }) => id), "msg_1", 3_100);
+
+  const restore = failWrites(db, "INSERT", "events");
+  assert.throws(() => store.recordOwnTree(MANAGER, read(["a.ts", "b.ts"]), 3_200), /forced failure/);
+  restore();
+  assert.equal(store.staleDoorbell(MANAGER), null);
+  assert.deepEqual(unreadKinds(store), [], "both still announced");
+  assert.deepEqual(store.ownTree(MANAGER), read(["a.ts"]));
+
+  assert.equal(store.recordOwnTree(MANAGER, read(["a.ts", "b.ts"]), 3_300), true);
+  assert.equal(store.staleDoorbell(MANAGER), "msg_1");
+  assert.equal(store.doorbell(MANAGER), "msg_1", "kept until bb confirms it gone");
+  assert.deepEqual(unreadKinds(store), ["memory-edited", "coordinator-tree-changed"], "the doorbell rung once it is gone names the update it carried, and the newer correction");
+});
+
+test("a catch-up marks the queued doorbell stale with the events it reads; one whose mark fails reads nothing", () => {
+  const { db, store } = freshStore();
+  store.insertEvent(MANAGER, { kind: "memory-edited", file: memoryFileSchema.parse("PLAN.md") }, 3_000);
+  const [event] = store.unannounced(MANAGER);
+  store.announce(MANAGER, [event!.id], "msg_1", 3_100);
+
+  const restore = failWrites(db, "UPDATE", "doorbells");
+  assert.throws(() => store.takeUnread(MANAGER, 3_200), /forced failure/);
+  restore();
+  assert.equal(store.staleDoorbell(MANAGER), null);
+
+  assert.deepEqual(store.takeUnread(MANAGER, 3_300), [event]);
+  assert.equal(store.staleDoorbell(MANAGER), "msg_1");
 });
 
 /** i1 merged as #41 when `merged`, i2 canceled by the manager, i3 depending on them as stored: every issue of the manager as viewed with no agent. */

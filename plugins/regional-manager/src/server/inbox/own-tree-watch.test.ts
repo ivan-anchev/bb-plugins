@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { coordinatorContract } from "../../contract.ts";
+import { memoryFileSchema } from "../../model/memory-file.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import { coordinating, settled, startedAgent, textOf } from "../test-harness.ts";
 
@@ -198,4 +199,91 @@ test("a read still waiting when the plugin is reloaded or disabled records nothi
   assert.deepEqual(doorbells(), []);
   assert.match(await catchUp(), /Nothing new since your last catch-up/);
   assert.deepEqual(kit.warnings(), []);
+});
+
+/**
+ * A Coordinator whose turn ended with `changed` files while another turn of it began before bb's
+ * git plugin answered, so the correction waits in bb's queue; with `alsoQueued`, an update the
+ * user made meanwhile waits in the same doorbell. Returns that doorbell's id.
+ */
+async function correctionQueued(changed: string[], { alsoQueued = false } = {}) {
+  const started = await working();
+  const { kit, threadId, coordinatorId, turnEndsHeld } = started;
+  const read = await turnEndsHeld(changed);
+  kit.thread(threadId).status = "active";
+  if (alsoQueued) kit.store.insertEvent(coordinatorId, { kind: "memory-edited", file: memoryFileSchema.parse("PLAN.md") }, Date.now());
+  await read.answer();
+  kit.git.holding = false;
+  const [queued = assert.fail("no doorbell queued")] = kit.queued(threadId);
+  return { ...started, queued };
+}
+
+const MEMORY_LINE = `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- The user edited PLAN.md`;
+
+test("a clean read takes back the queued doorbell of the correction it retired, so nothing wakes the Coordinator", async () => {
+  const { kit, threadId, queued, turnEnds, doorbells, catchUp } = await correctionQueued(["a.ts"]);
+  assert.deepEqual(kit.queued(threadId), [queued]);
+  await turnEnds([]);
+
+  assert.deepEqual(kit.queued(threadId), [], "taken out of bb's queue before it was sent");
+  assert.deepEqual(doorbells(), []);
+  assert.match(await catchUp(), /Nothing new since your last catch-up/);
+});
+
+test("a newer read with other changed files replaces the queued doorbell: one doorbell, with the newer count", async () => {
+  const { kit, threadId, coordinatorId, queued, turnEndsHeld, doorbells, catchUp } = await correctionQueued(["a.ts"]);
+  const newer = await turnEndsHeld(["a.ts", "b.ts"]);
+  kit.thread(threadId).status = "active";
+  await newer.answer();
+
+  const [rebuilt = assert.fail("nothing queued")] = kit.queued(threadId);
+  assert.notEqual(rebuilt, queued, "the older doorbell is out of bb's queue");
+  assert.equal(kit.store.doorbell(coordinatorId), rebuilt);
+  await kit.dispatch(rebuilt);
+  assert.deepEqual(doorbells(), [CHANGED_LINE("2 changed files")]);
+  assert.deepEqual(corrections(await catchUp()), ["2 changed files"]);
+});
+
+test("a queued doorbell taken back for a retired correction rings again with the other update it carried", async () => {
+  const { kit, threadId, coordinatorId, queued, turnEnds, doorbells, catchUp } = await correctionQueued(["a.ts"], { alsoQueued: true });
+  assert.deepEqual(kit.store.unannounced(coordinatorId), [], "both updates are in the queued doorbell");
+  await turnEnds([]);
+
+  assert.ok(!kit.queued(threadId).includes(queued));
+  assert.deepEqual(doorbells(), [MEMORY_LINE]);
+  const text = await catchUp();
+  assert.deepEqual(corrections(text), []);
+  assert.match(text, /### The user edited PLAN\.md/);
+});
+
+test("a doorbell bb refuses to take back is kept, holding any other back, and the tick takes it back after a reload", async () => {
+  const { kit, threadId, coordinatorId, queued, turnEnds, doorbells } = await correctionQueued(["a.ts"], { alsoQueued: true });
+  kit.queueDeletes.failure = new Error("bb is restarting");
+  await turnEnds([]);
+
+  assert.deepEqual(kit.queued(threadId), [queued], "still in bb's queue");
+  assert.equal(kit.store.doorbell(coordinatorId), queued, "its id is kept");
+  assert.deepEqual(doorbells(), [], "and nothing replaces it yet");
+  assert.match(kit.warnings().join("\n"), /Could not take back the stale doorbell qm_1; the tick tries again unless bb sent it: bb is restarting/);
+  await kit.tick();
+  assert.deepEqual(kit.queued(threadId), [queued], "a refused retry keeps it too");
+
+  kit.queueDeletes.failure = null;
+  kit.reload();
+  await kit.tick();
+  assert.deepEqual(kit.queued(threadId), []);
+  assert.deepEqual(doorbells(), [MEMORY_LINE]);
+  assert.equal(kit.store.doorbell(coordinatorId), null);
+});
+
+test("a doorbell taken back whose answer is lost still rings again once, and the tick sends nothing more", async () => {
+  const { kit, threadId, coordinatorId, turnEnds, doorbells } = await correctionQueued(["a.ts"], { alsoQueued: true });
+  kit.queueDeletes.lost = new Error("socket hang up");
+  await turnEnds([]);
+  kit.queueDeletes.lost = null;
+  await kit.tick();
+
+  assert.deepEqual(kit.queued(threadId), []);
+  assert.deepEqual(doorbells(), [MEMORY_LINE]);
+  assert.equal(kit.store.doorbell(coordinatorId), null);
 });
