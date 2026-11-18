@@ -136,11 +136,11 @@ function SubmitPopover({ target, reviewId, author, pending, panel, onDone }: Sub
     >
       <PopoverTrigger asChild>
         {reviewId === null ? (
-          <Button variant="secondary" size="sm">
+          <Button variant="ghost" size="toolbar">
             Review
           </Button>
         ) : (
-          <Button variant="secondary" size="sm" aria-label={`Finish review, ${pending} pending ${pending === 1 ? "comment" : "comments"}`}>
+          <Button variant="ghost" size="toolbar" aria-label={`Finish review, ${pending} pending ${pending === 1 ? "comment" : "comments"}`}>
             Finish review
             {pending > 0 && <span className={`min-w-4 rounded-full px-1 text-center text-[11px] leading-4 tabular-nums ${PENDING_TONE}`}>{pending}</span>}
           </Button>

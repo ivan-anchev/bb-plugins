@@ -22,6 +22,9 @@ const VARIANTS = {
 const SIZES = {
   default: "h-9 px-4 py-2 text-sm",
   sm: "h-8 rounded-md px-3 text-xs",
+  // A header bar's text action, at its icon actions' height and icon size, so a ghost one sits
+  // among them. why `!`: the base's size-4 for icons matches the same elements just as strongly.
+  toolbar: "h-7 rounded-md px-2 text-xs [&_[data-icon-root]]:size-3.5!",
   icon: "h-9 w-9 text-sm",
 } as const;
 

@@ -148,20 +148,20 @@ Refresh and check before trying again, and never retries by itself.
 
 ### Merging
 
-An open PR whose repository allows merging has a **Merge** button in the header bar, with a
-chevron beside it when the repository allows more than one method. The chevron's menu lists the
+An open PR whose repository allows merging has a **Merge** button in the header bar, a quiet
+toolbar action like Review beside it, with a purple merge mark, and a chevron beside it when the repository allows more than one method. The chevron's menu lists the
 methods the repository allows, each with a line on what it does: **Merge** (a merge commit),
 **Squash and merge** and **Rebase and merge**. The one you pick names the button. It starts on
 Merge, or on the first method allowed when the repository turns merge commits off. A draft, a
 closed PR and a merged one have no Merge button.
 
 A merge can't be undone, so the button merges only after you hold it about 0.7 seconds, with the
-pointer or with Enter or Space, as a light wash fills it; a shorter press says "Keep holding", and
-its tooltip says "Hold to merge" (or "Hold to squash and merge"). While `gh` runs it reads
-"Merging…". It merges only the head the page shows: if commits were pushed since the page read
+pointer or with Enter or Space, as a purple wash fills it. Its tooltip says "Hold to merge" (or
+"Hold to squash and merge"), and a shorter press shows it at once saying "Keep holding to merge".
+While `gh` runs a spinner takes the merge mark's place. It merges only the head the page shows: if commits were pushed since the page read
 the PR, GitHub refuses, and the button says "New commits were pushed to this pull request since
 the page loaded. Refresh to see them before you merge." A branch GitHub found conflicting can't
-merge: the button stays inert and its tooltip says so. Any other refusal, such as a required
+merge: the button stays inert, a warning takes the merge mark's place, and its tooltip says why. Any other refusal, such as a required
 review or check (branch protection), shows in GitHub's words under the button until you press
 Esc or click away. Once GitHub has merged, the button reads "Merged" until the badge turns
 purple Merged; the sidebar row follows as it does for a state change.
