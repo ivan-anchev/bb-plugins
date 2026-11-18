@@ -108,15 +108,15 @@ export function inboxStore(db: Db) {
       return row === undefined ? null : z.object({ id: z.string() }).parse(row).id;
     },
 
-    /** Every queued doorbell, with the thread it waits in. */
-    doorbells(): { coordinatorId: CoordinatorId; threadId: string; queuedMessageId: string }[] {
+    /** Every queued doorbell, with the thread it waits in, and whether it announces what this version no longer tells (see the migrations). */
+    doorbells(): { coordinatorId: CoordinatorId; threadId: string; queuedMessageId: string; outdated: boolean }[] {
       return db()
         .prepare(
-          `SELECT d.coordinator_id AS coordinatorId, r.thread_id AS threadId, d.queued_message_id AS queuedMessageId
+          `SELECT d.coordinator_id AS coordinatorId, r.thread_id AS threadId, d.queued_message_id AS queuedMessageId, d.outdated
              FROM doorbells d JOIN coordinators c ON c.id = d.coordinator_id JOIN roles r ON r.ticket = c.ticket`,
         )
         .all()
-        .map((row) => z.object({ coordinatorId: coordinatorIdSchema, threadId: z.string(), queuedMessageId: z.string() }).parse(row));
+        .map((row) => z.object({ coordinatorId: coordinatorIdSchema, threadId: z.string(), queuedMessageId: z.string(), outdated: z.number().transform((flag) => flag === 1) }).parse(row));
     },
 
     /** Forgets the queued doorbell with this message id, and returns whose it was (null: no doorbell has it). */

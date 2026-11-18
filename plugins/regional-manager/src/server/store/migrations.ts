@@ -127,9 +127,22 @@ export const MIGRATIONS: readonly string[] = [
   // why JSON: the list is read and written whole.
   `CREATE TABLE own_trees (coordinator_id TEXT PRIMARY KEY REFERENCES coordinators (id), files TEXT NOT NULL,
      file_count INTEGER NOT NULL, default_branch TEXT)`,
+  // A queued doorbell that announces what this version no longer tells, to be taken back and rung
+  // again without it (inbox.ts check).
+  `ALTER TABLE doorbells ADD COLUMN outdated INTEGER NOT NULL DEFAULT 0`,
   // Up to 0.2.0, a turn that ended with changed files warned on the board and was recorded as an
-  // event of a kind no longer read; a clean tree as another. why deleted, not kept: they are read
-  // and announced, and the warning they made is gone. The index events_own_tree stays, matching nothing.
+  // event of a kind no longer read, and its doorbell warned the user in their timeline; a clean tree
+  // was another kind. A doorbell still queued may announce one: it is marked outdated, so the tick
+  // takes it out of bb's queue before it shows, and rings again without it. why every queued
+  // doorbell with such an event unread: a doorbell names no events, and one rung again for nothing
+  // costs a line. The events are then deleted: they are read and announced, and the warning they made
+  // is gone. The index events_own_tree stays, matching nothing.
+  // why decisions are left as they are: 0.2.0's rules had the manager ask the user, with
+  // crew_ask_user, whether to discard its edits, and nothing tells that question from any other the
+  // manager asked, so an open one stays on the board for the user to answer. The one install of 0.2.0
+  // is checked by hand for one before it is updated.
+  `UPDATE doorbells SET outdated = 1 WHERE coordinator_id IN (SELECT coordinator_id FROM events
+     WHERE json_extract(event, '$.kind') IN ('coordinator-edited-files', 'coordinator-tree-clean') AND announced_at IS NOT NULL AND read_at IS NULL)`,
   `DELETE FROM events WHERE json_extract(event, '$.kind') IN ('coordinator-edited-files', 'coordinator-tree-clean')`,
 ];
 

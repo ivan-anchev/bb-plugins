@@ -47,7 +47,7 @@ test("a doorbell announces its events once; one that never reached its thread ma
 
   store.announce(MANAGER, [event!.id], "msg_1", 3_100);
   assert.deepEqual(store.coordinatorsToRing(), []);
-  assert.deepEqual(store.doorbells(), [{ coordinatorId: MANAGER, threadId: "thr_manager_1", queuedMessageId: "msg_1" }]);
+  assert.deepEqual(store.doorbells(), [{ coordinatorId: MANAGER, threadId: "thr_manager_1", queuedMessageId: "msg_1", outdated: false }]);
 
   store.reopenDoorbell("msg_1");
   assert.equal(store.doorbell(MANAGER), null);
