@@ -1,5 +1,5 @@
 // One issue on the board, Activity Sidebar's tall row (src/ui/row/row.tsx): its status glyph in the
-// 30 slot; its id, kind and title fading out; under them what blocks it, if anything, and its headline. Pressing the row opens its
+// 30 slot; its id, kind and title fading out; under them what blocks it and its headline, if anything. Pressing the row opens its
 // detail in place, and the row grows to show its title and headline whole, wrapping. Beside the words, outside the row's button so each is its own control: its pull
 // request with CI, and its agent's thread; a parent, which never has an agent, counts its sub-issues
 // Done there instead. A sub-issue's row away from its parent names the parent ahead of its id.
@@ -50,7 +50,7 @@ export function IssueRow({ ref, issue, under, open, detailId, onToggle }: IssueR
           </span>
           <span className="rmi-headline">
             {issue.blockedBy.length > 0 && <Blockers ids={issue.blockedBy} />}
-            <RowText text={issue.headline} whole={open} />
+            {issue.headline !== null && <RowText text={issue.headline} whole={open} />}
           </span>
         </span>
       </button>
@@ -102,7 +102,7 @@ const QUIET: ReadonlySet<IssueStatus> = new Set(["done", "canceled"]);
 
 /**
  * "i3 Build: Add the hello note, In review, ✓ Verified: …"; "i4 Build: Retry queue, Todo, blocked by
- * i2 and i3, Not started"; "i1 Build: Card vault, In progress, 1 of 3 sub-issues done, 1/3 done";
+ * i2 and i3, Not started"; "i1 Build: Card vault, In progress, 1 of 3 sub-issues done";
  * "i5 Build: Vault schema, sub-issue of i1, In progress, Blocked: …".
  */
 const spoken = (issue: Row, under: IssueId | null): string =>
@@ -112,7 +112,7 @@ const spoken = (issue: Row, under: IssueId | null): string =>
     STATUS_LABELS[issue.status],
     ...(issue.subIssues === null ? [] : [`${issue.subIssues.done} of ${issue.subIssues.total} sub-issues done`]),
     ...blockedText(issue.blockedBy),
-    issue.headline,
+    ...(issue.headline === null ? [] : [issue.headline]),
   ].join(", ");
 
 /** Every blocker, spoken: none when nothing blocks it. */

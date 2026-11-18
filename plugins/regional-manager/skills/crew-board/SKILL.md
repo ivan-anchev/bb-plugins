@@ -719,7 +719,10 @@ page from its row in the panel, show the same board, live:
 - **Sub-issues** sit indented one level under their parent's row, in the
   parent's lane whatever their own status, each with its own glyph and
   everything a row has. The parent, which never has an agent, shows how many
-  of its sub-issues are Done where an agent would be ("1/3"). A flagged
+  of its sub-issues are Done where an agent would be ("1/3"), and its
+  headline says only what that count doesn't: why it is flagged, that it
+  waits to be accepted, or nothing. The catch-up, with no such cell, leads a
+  parent's line with the count ("1/3 done"). A flagged
   sub-issue is also listed flat under Needs you, its parent's id ahead of its
   own ("i1 › i3"). A lane's count is its rows: a parent counts once, its
   sub-issues by its own count. Folding a lane folds its parents with their

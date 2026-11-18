@@ -76,7 +76,7 @@ const view = (over: Partial<IssueFacts>) => {
   const [placed] = issueViews([facts(over)]);
   return placed === undefined ? assert.fail("no view") : { status: placed.status, headline: placed.headline, needsYou: placed.needsYou };
 };
-const at = (status: IssueStatus, headline: string, needsYou: string | null = null) => ({ status, headline, needsYou });
+const at = (status: IssueStatus, headline: string | null, needsYou: string | null = null) => ({ status, headline, needsYou });
 
 test("an issue no agent's work places rests where the manager put it", () => {
   assert.deepEqual(view({}), at("todo", "Not started"));
@@ -185,13 +185,20 @@ const resting = (rest: Issue["rest"]): Partial<IssueFacts> => ({ issue: { ...iss
 const closedAs = (as: "canceled" | "accepted", kind: Issue["kind"] = "build"): Partial<IssueFacts> => ({ issue: { ...issue, kind, closed: { as, at: 9_000 } } });
 const reported = (at: number): Partial<IssueFacts> => ({ issue: { ...issue, kind: "research" }, ...held(thread("idle"), { handoff: { ...done, at, delivery: { kind: "report", report: "Use Stripe.", file: memoryFileSchema.parse("reports/i2.md") } }, check: null }) });
 
+test("a parent's headline says only what its count of Done sub-issues doesn't: nothing, or why it Needs you", () => {
+  const asked = "Waiting on your answer to its decision";
+  assert.deepEqual(rolled("build", [resting("todo")]), at("todo", null));
+  const [parent = assert.fail("no view")] = issueViews([facts({ openDecision: true }), facts({ issue: { ...issue, id: issueIdSchema.parse("i2"), parentId: issue.id } })]);
+  assert.deepEqual({ status: parent.status, headline: parent.headline, needsYou: parent.needsYou }, at("todo", asked, asked));
+});
+
 test("a parent rolls up from its sub-issues: any started is In progress, any in Todo or the parent resting there Todo, else Backlog", () => {
-  assert.deepEqual(rolled("build", [resting("todo"), resting("backlog")]), at("todo", "0/2 done"));
-  assert.deepEqual(rolled("build", [resting("backlog"), held(thread("active"))]), at("in-progress", "0/2 done"));
-  assert.deepEqual(rolled("build", [resting("backlog")], { rest: "backlog" }), at("backlog", "0/1 done"));
-  assert.deepEqual(rolled("build", [resting("backlog")]), at("todo", "0/1 done"), "the parent rests in Todo");
-  assert.deepEqual(rolled("build", [closedAs("canceled"), closedAs("canceled")], { rest: "backlog" }), at("backlog", "0/2 done"), "every sub-issue canceled");
-  assert.deepEqual(rolled("build", [closedAs("canceled")]), at("todo", "0/1 done"));
+  assert.deepEqual(rolled("build", [resting("todo"), resting("backlog")]), at("todo", null));
+  assert.deepEqual(rolled("build", [resting("backlog"), held(thread("active"))]), at("in-progress", null));
+  assert.deepEqual(rolled("build", [resting("backlog")], { rest: "backlog" }), at("backlog", null));
+  assert.deepEqual(rolled("build", [resting("backlog")]), at("todo", null), "the parent rests in Todo");
+  assert.deepEqual(rolled("build", [closedAs("canceled"), closedAs("canceled")], { rest: "backlog" }), at("backlog", null), "every sub-issue canceled");
+  assert.deepEqual(rolled("build", [closedAs("canceled")]), at("todo", null));
   assert.deepEqual(rolled("build", [{ openDecision: false }], { closed: { as: "canceled", at: 9_000 } }), at("canceled", "Canceled"));
   const { parent, subs } = family("build", [held(thread("idle"), { handoff: blocked, check: null }), resting("todo")]);
   assert.deepEqual([parent.status, parent.needsYou, parent.subIssues, parent.holder], ["in-progress", null, { done: 0, total: 2 }, null], "a flagged sub-issue flags itself, not its parent");
@@ -202,12 +209,12 @@ test("once every sub-issue is closed and one is Done: a research parent is Done,
   const research = family("research", [reported(6_000), { pr: pr("merged") }, closedAs("canceled", "research")]);
   assert.deepEqual([research.parent.status, research.parent.headline, research.parent.closedBy], [
     "done",
-    "2/3 done",
+    null,
     { by: "sub-issues", closes: [{ by: "handoff", handoffId: done.id }, { by: "merge", number: 12 }, { by: "manager", as: "canceled" }] },
   ]);
-  assert.deepEqual(rolled("research", [reported(6_000), resting("todo")]), at("in-progress", "1/2 done"));
+  assert.deepEqual(rolled("research", [reported(6_000), resting("todo")]), at("in-progress", null));
 
-  assert.deepEqual(rolled("build", [{ pr: pr("merged") }, closedAs("canceled"), reported(6_000)]), at("in-review", "2/3 done, all merged: accept it with issue_update"));
+  assert.deepEqual(rolled("build", [{ pr: pr("merged") }, closedAs("canceled"), reported(6_000)]), at("in-review", "All merged: accept it with issue_update"));
   const flag = "i2 isn't merged, so i1's work isn't all on the default branch";
   assert.deepEqual(rolled("build", [closedAs("accepted"), { pr: pr("merged") }]), at("in-progress", flag, flag));
   assert.deepEqual(rolled("build", [closedAs("accepted")], { closed: { as: "accepted", at: 9_100 } }), at("done", "Accepted"), "the manager accepted it");

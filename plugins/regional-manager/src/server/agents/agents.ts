@@ -32,7 +32,7 @@ import { catalogRouting, sameModel, type Execution, type RequestedExecution } fr
 import { handoffIsCurrent, type HandoffId } from "../../model/handoff.ts";
 import { briefToStart, type Issue, type IssueId } from "../../model/issue/issue.ts";
 import type { Related } from "../../model/issue/relations.ts";
-import { keepsPlaceAfterEnd, type IssueView } from "../../model/issue/status.ts";
+import { headlineText, keepsPlaceAfterEnd, type IssueView } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { PrRead } from "../../model/verdict/pr.ts";
@@ -619,7 +619,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
 /** Why no agent can start on the issue: the manager closed it, or a merge made it Done (`view`: as read just now); null when one can. */
 function finalText(issue: Issue, view: IssueView): string | null {
   if (issue.closed !== null) return `${issue.id} is ${issue.closed.as === "canceled" ? "canceled" : "accepted as done"}, so no agent can start on it.`;
-  return view.status === "done" ? `${issue.id} is Done (${view.headline}), so no agent can start on it.` : null;
+  return view.status === "done" ? `${issue.id} is Done (${headlineText(view)}), so no agent can start on it.` : null;
 }
 
 /** Where the agent would run, in words, for a refusal of what it would run on. */

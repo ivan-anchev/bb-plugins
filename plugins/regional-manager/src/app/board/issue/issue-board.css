@@ -146,7 +146,9 @@
   color: var(--subtle-foreground);
 }
 /* Under the title (Activity's second line, pulled up under it): the headline, in Activity's readable
-   second-line colour. Ids, kinds, counts and times stay subtle, as in Activity and the theme. */
+   second-line colour. Ids, kinds, counts and times stay subtle, as in Activity and the theme. It keeps
+   its line with nothing on it (a parent whose count says it all), so a row open or closed keeps its
+   height and the count cell beside it its place. */
 .rmi-headline {
   display: flex;
   align-items: center;
@@ -213,6 +215,7 @@
 .rmi-row[aria-expanded="true"] .rmi-headline {
   align-items: flex-start;
   height: auto;
+  min-height: 23px; /* its 14px line, empty or not, and the 9px under it */
   padding-bottom: 9px;
 }
 .rmi-whole {

@@ -297,7 +297,7 @@ test("a parent opens to its sub-issues and a sub-issue to its parent, each going
       decisions: [],
       issues: [
         issue("i9", { kind: "research", status: "backlog", title: "Pick a vault", headline: "Not planned" }),
-        issue("i1", { title: "Card vault", subIssues: { done: 0, total: 1 }, blockedBy: [id("i9")], headline: "0/1 done" }),
+        issue("i1", { title: "Card vault", subIssues: { done: 0, total: 1 }, blockedBy: [id("i9")], headline: null }),
         issue("i2", { title: "Vault schema", parentId: id("i1"), blockedBy: [id("i9")] }),
       ],
     },

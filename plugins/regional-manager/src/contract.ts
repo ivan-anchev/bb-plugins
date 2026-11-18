@@ -58,7 +58,7 @@ const issueRowSchema = z.object({
   title: z.string(),
   status: issueStatusSchema,
   needsYou: z.string().nullable(),
-  headline: z.string(),
+  headline: z.string().nullable(),
   agent: shownAgentSchema.nullable(),
   pr: prSnapshotSchema.nullable(),
 });

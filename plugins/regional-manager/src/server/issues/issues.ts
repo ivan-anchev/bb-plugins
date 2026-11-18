@@ -7,7 +7,7 @@ import type { Agent } from "../../model/agent.ts";
 import { sameModel, type Execution, type RequestedExecution } from "../../model/execution.ts";
 import { verifierProblem, type Issue, type IssueId, type managerStatusSchema } from "../../model/issue/issue.ts";
 import { blockedBy, closesOf, newlyReady, relationsOf, type Related } from "../../model/issue/relations.ts";
-import { STATUS_LABELS, type IssueView } from "../../model/issue/status.ts";
+import { headlineText, STATUS_LABELS, type IssueView } from "../../model/issue/status.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { executionText } from "../agents/agents.ts";
 import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
@@ -67,7 +67,7 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
    * (updateIssue checks that again). A parent's open sub-issues are the plan's to refuse (plan.ts).
    */
   function statusEdit(issue: Issue, view: IssueView, status: NonNullable<IssueChange["status"]>): IssueEdit | Refused {
-    const now = `${issue.id} is ${STATUS_LABELS[view.status]} (${view.headline})`;
+    const now = `${issue.id} is ${STATUS_LABELS[view.status]} (${headlineText(view)})`;
     if (status === "done") return view.status === "in-review" ? { closed: { as: "accepted", at: Date.now() } } : { refused: `${now}, so it can't be marked Done: only an issue In review can.` };
     const holder = holderOf(issue);
     if (holder !== null) return { refused: `${holder.id} holds ${issue.id}, so it can't be ${status === "canceled" ? "canceled" : `moved to ${STATUS_LABELS[status]}`}. Stop ${holder.id} with agent_stop first.` };

@@ -248,7 +248,7 @@ const STAGING = "Blocked: Needs a staging key";
 
 /** A parent In progress, i1, with three sub-issues: one Done, one flagged by its agent's blocked handoff, one blocked by a dependency; and a top-level Todo. */
 const SPLIT: IssueRow[] = [
-  issue("i1", { title: "Card vault", status: "in-progress", subIssues: { done: 1, total: 3 }, headline: "1/3 done" }),
+  issue("i1", { title: "Card vault", status: "in-progress", subIssues: { done: 1, total: 3 }, headline: null }),
   issue("i2", { parentId: I1, status: "done", headline: "Merged #12" }),
   issue("i3", { parentId: I1, status: "in-progress", needsYou: STAGING, headline: STAGING, agent: { id: agentIdSchema.parse("a3"), threadId: "thr_three" } }),
   issue("i4", { parentId: I1, status: "todo", headline: "Not started", blockedBy: [issueIdSchema.parse("i5")] }),
@@ -274,8 +274,21 @@ test("a parent's sub-issues sit indented under it in its lane, each with its own
   assert.match(within(subs).getByRole("button", { name: /\bi4 Build/ }).textContent ?? "", /blocked by i5/);
   const parent = row(view, "i1");
   assert.equal(parent.closest(".rmi-rowbox")?.querySelector(".rmi-sub-count")?.textContent, "1/3");
-  assert.match(parent.getAttribute("aria-label") ?? "", /, In progress, 1 of 3 sub-issues done,/);
+  assert.match(parent.getAttribute("aria-label") ?? "", /, In progress, 1 of 3 sub-issues done$/);
   assert.equal(lane(view, /^Todo/).queryByRole("button", { name: /\bi4 Build/ }), null, "a Todo sub-issue sits in its parent's lane, not Todo");
+});
+
+test("a parent says its count once, at the right, flagged or not; its headline says only why it is flagged", () => {
+  const unmerged = "i2 isn't merged, so i1's work isn't all on the default branch";
+  const { view, reread } = mount(SPLIT, []);
+  const counted = () => {
+    const box = row(view, "i1").closest(".rmi-rowbox") ?? assert.fail("no row box");
+    return { words: row(view, "i1").textContent, count: box.querySelector(".rmi-sub-count")?.textContent, label: row(view, "i1").getAttribute("aria-label") };
+  };
+  assert.deepEqual(counted(), { words: "i1BuildCard vault", count: "1/3", label: "i1 Build: Card vault, In progress, 1 of 3 sub-issues done" });
+
+  act(() => reread(SPLIT.map((each) => (each.id === "i1" ? { ...each, needsYou: unmerged, headline: unmerged } : each))));
+  assert.deepEqual(counted(), { words: `i1BuildCard vault${unmerged}`, count: "1/3", label: `i1 Build: Card vault, In progress, 1 of 3 sub-issues done, ${unmerged}` });
 });
 
 test("a flagged sub-issue sits under its parent and flat under Needs you, naming its parent there; each row opens on its own", () => {
