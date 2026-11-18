@@ -189,6 +189,10 @@ Verifying. You hear of it only with its verdict:
   was off`): read what its sub-issues did, then accept it with `status:
   "done"`.
 
+A verdict that returns after you filed a sub-issue under the parent, or
+closed it, is kept in its record but places it no more: `crew_catch_up` says
+where the parent stands now, and what to do then.
+
 Write the parent's done-criteria when you file it: a build parent with none
 when its check comes due Needs you (`i1 has no done-criteria for its final
 check`), and no check starts until you add them. When `PREFERENCES.md` names

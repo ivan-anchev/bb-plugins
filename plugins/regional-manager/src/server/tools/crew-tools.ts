@@ -43,15 +43,16 @@ export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, on
     presentation: { label: { pending: "Catching up", completed: "Caught up" }, icon: { glyph: "Workflow" } },
     parameters: z.object({}),
     execute: forManager(store, CATCH_UP, async (id) => {
+      // why caught: the updates and the memory are still worth reading when bb's thread list can't be.
+      const issues = await board.issues(id).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
       const updates = updatesText(inbox.takeUnread(id), {
         titles: new Map(store.issues(id).map((issue) => [issue.id, issue.title])),
         handoff: store.handoff,
         check: store.check,
         agents: () => store.agents(id),
         decision: store.decision,
+        view: (issueId) => ("error" in issues ? null : (issues.find(({ view }) => view.issue.id === issueId)?.view ?? null)),
       });
-      // why caught: the updates and the memory are still worth reading when bb's thread list can't be.
-      const issues = await board.issues(id).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
       return `${updates}\n\n${boardText(issues)}\n\n${openDecisionsText(store.decisions(id))}\n\n${remindersText(store.reminders(id))}\n\n${catchUpText(memory.of(id))}`;
     }),
   });

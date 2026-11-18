@@ -178,6 +178,10 @@ and could-not-run after that.
 - **Verification off** when it comes due: no verifier starts. The parent is
   In review, "Unverified: verification was off", for the manager to accept.
   A check already running when verification is switched off still finishes.
+- A verdict that returns after a sub-issue was filed under the parent, or the
+  parent was closed, is kept in its record and places it no more; the
+  manager's catch-up says where the parent stands now, from the same view the
+  board shows.
 - A build parent with no done-criteria when its check comes due Needs you
   ("i1 has no done-criteria for its final check"), and none starts until
   criteria are written. With no default branch on record in bb, none starts

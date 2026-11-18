@@ -323,11 +323,27 @@ test("a verdict that arrives after a sub-issue was filed under the parent is kep
   await text("issue_create", { ...SUB, title: "Keep tokens across restarts" });
   assert.match(await returns(PASSES), /^Verdict recorded/);
   assert.deepEqual(await row(), at("in-progress", null));
+  const caughtUp = await text("crew_catch_up", {});
+  assert.match(caughtUp, /Verified: 1 of 1 criteria passed on main/);
+  assert.doesNotMatch(caughtUp, /i1 is Done/);
+  assert.match(caughtUp, /\n\ni1 is In progress\. This final check no longer places it: the board below says where it stands\./);
   merge(await started("i4"), "c".repeat(40));
   await tick();
   assert.equal(finalChecks().length, 2);
   assert.deepEqual(latest().subject.merged, ["i2", "i3", "i4"]);
   assert.deepEqual(await row(), at("verifying", "Final check running"));
+});
+
+test("a final check that passes after the manager canceled the parent leaves it Canceled, and catch-up says so", async () => {
+  const { text, mergeAll, returns, row } = await withParent();
+  await mergeAll();
+  assert.equal(await text("issue_update", { id: "i1", status: "canceled" }), "Updated i1.");
+  assert.match(await returns(PASSES), /^Verdict recorded/);
+  assert.equal((await row()).status, "canceled");
+  const caughtUp = await text("crew_catch_up", {});
+  assert.match(caughtUp, /Verified: 1 of 1 criteria passed on main/);
+  assert.doesNotMatch(caughtUp, /i1 is Done/);
+  assert.match(caughtUp, /\n\ni1 is Canceled\. This final check no longer places it: the board below says where it stands\./);
 });
 
 test("a sub-issue merged while a final check runs supersedes it, and stops its verifier before the next starts", async () => {

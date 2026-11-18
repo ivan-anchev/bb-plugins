@@ -9,7 +9,7 @@ import type { StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { filesText } from "../../model/inbox/own-tree.ts";
 import { askedOf, checkedOf, issueName, titled } from "../../model/inbox/wake-text.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
-import type { Handed } from "../../model/issue/status.ts";
+import { STATUS_LABELS, type Handed, type IssueView } from "../../model/issue/status.ts";
 import type { MemoryFile } from "../../model/memory-file.ts";
 import { intervalText, type Reminder } from "../../model/reminder.ts";
 import { checkedAgents, type Check, type CheckId, type FinalCheck, type HandoffCheck } from "../../model/verdict/check.ts";
@@ -27,6 +27,8 @@ export type Lookups = {
   /** Every agent of the regional manager. */
   agents(): readonly Agent[];
   decision(id: DecisionId): Decision | null;
+  /** The issue's view, as the board in the same catch-up places it; null when bb's thread list couldn't be read. */
+  view(id: IssueId): IssueView | null;
 };
 
 /** The updates section of a catch-up: every event it returned, oldest first. */
@@ -62,7 +64,7 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
         return `### ${issueName(event.issueId, titles, subject.agentId)} handed off: done\n\n${when} Its report, in its own words:\n\n${handoffText(handed, lookups)}${yours}`;
       }
       case "final":
-        return `### ${titled(event.issueId, titles)} final check\n\n${when} ${finalCheckText({ ...check, subject }, lookups)}\n\n${finalNextStep({ ...check, subject })}`;
+        return `### ${titled(event.issueId, titles)} final check\n\n${when} ${finalCheckText({ ...check, subject }, lookups)}\n\n${finalNextStep({ ...check, subject }, lookups.view(event.issueId))}`;
       default:
         return subject satisfies never;
     }
@@ -162,17 +164,25 @@ export function finalCheckText(check: FinalCheck, lookups: Pick<Lookups, "agents
   return `Final check of ${merged.length === 0 ? "the default branch" : `the merged work of ${merged.join(", ")}`}: ${verdictText(check, lookups)}`;
 }
 
-/** What the regional manager does about a final check made final. */
-function finalNextStep({ issueId, verdict }: FinalCheck): string {
+/**
+ * What the regional manager does about a final check made final, by where its parent stands now
+ * (`view`, as the board in the same catch-up places it; null: bb's thread list couldn't be read).
+ * why from the view, never from the check's outcome: a sub-issue filed under the parent, or the
+ * manager's close, places it instead of a verdict that returned after it.
+ */
+function finalNextStep({ id, issueId, verdict }: FinalCheck, view: IssueView | null): string {
+  if (view === null) return `Where ${issueId} stands now couldn't be read with the board: call crew_catch_up again before you act on it.`;
+  const now = `${issueId} is ${STATUS_LABELS[view.status]}${view.needsYou === null ? "" : " and Needs you"}`;
+  if (view.placing?.id !== id) return `${now}. This final check no longer places it: the board below says where it stands.`;
   const result = outcome(verdict);
   switch (result) {
     case "pass":
-      return `${issueId} is Done.`;
+      return `${now}.`;
     case "fail":
     case "could-not-run":
-      return `${issueId} is In progress and Needs you. File the fix as a new sub-issue of ${issueId} (issue_create with parent "${issueId}") and start its agent: once it is Done and merged, a new final check starts by itself. A final check never goes back to anyone, and isn't run again without new merged work. Or ask the user.`;
+      return `${now}. File the fix as a new sub-issue of ${issueId} (issue_create with parent "${issueId}") and start its agent: once it is Done and merged, a new final check starts by itself. A final check never goes back to anyone, and isn't run again without new merged work. Or ask the user.`;
     case "unverified":
-      return `${issueId} is In review: nobody checked it on the default branch. Read what its sub-issues did, then accept it with issue_update { id: "${issueId}", status: "done" }, or ask the user.`;
+      return `${now}: nobody checked it on the default branch. Read what its sub-issues did, then accept it with issue_update { id: "${issueId}", status: "done" }, or ask the user.`;
     case "pending":
     case "waiting-for-ci":
     case "superseded":
