@@ -12,7 +12,7 @@ its role.
 
 - `server.ts`, `app.tsx`: composition roots, registrations only.
 - `src/contract.ts`: the rpc contract (`coordinators`, `primaryHost`,
-  `startCoordinator`, `board`, `issue`, `setVerify`, `answerDecision`, `needsYou`,
+  `startCoordinator`, `setProfile`, `board`, `issue`, `setVerify`, `answerDecision`, `needsYou`,
   `memoryList`, `memoryRead`, `memoryWrite`;
   tags `coordinators`, `board:<regional manager id>` and `memory:<regional manager id>`).
 - `src/model/role.ts`: the role a thread holds (coordinator, agent or
@@ -36,6 +36,9 @@ its role.
   manager's own working tree records a warning or its clearing.
   `src/model/reminder.ts`: a reminder, and the one parser of `crew_remind`'s
   times. `src/model/decision.ts`: a question put to the user.
+  `src/model/profile.ts`: a regional manager's profile (name, description,
+  avatar) and the icons an avatar can be; the name is the thread's title,
+  which bb keeps, and the store keeps the rest.
 - `src/server/`: `store/` holds every SQL statement, one file per cluster
   (issues, agents, checks, inbox, pull requests) composed by `store.ts`, and
   `migrations.ts`, the one list of statements, which only grows; `inbox/` is
@@ -58,11 +61,15 @@ its role.
   verification switch and the answers to decisions); `memory/` the memory
   files beside `data.db` (compare-and-swap writes through a temp file and a
   rename) and the Memory editor's rpc handlers (a save there wakes the
-  regional manager). `server.ts` runs the once-a-minute tick: agents, then
+  regional manager); `profile/` the profile's edit, which retitles the
+  thread before it stores the rest, one edit per regional manager at a time.
+  `server.ts` runs the once-a-minute tick: agents, then
   the PR watch, then the verifiers, then the inbox (due reminders, unsent
   doorbells).
 - `src/app/panel/`: the nav panel, its list, and the New page around bb's
-  new-thread composer. `src/app/board/`: the Board, its thread tab and its
+  new-thread composer. `src/app/profile/`: the avatar tile, and the profile's fields, shared by
+  the New page and the board page's in-place editor, and `useProfile`, the name
+  from bb's thread list joined with what the plugin keeps. `src/app/board/`: the Board, its thread tab and its
   panel page; `issue/` its lanes and issue rows, `issue/detail/` an issue
   opened in place. `src/app/memory/`: the Memory page and its editor.
 - `skills/regional-manager/`: the regional manager's playbook, selected only

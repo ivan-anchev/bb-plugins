@@ -4,8 +4,7 @@
 // a spawn answer that never arrives still leaves the thread its role.
 import { randomUUID } from "node:crypto";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
-import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
-import { typedText, type Coordinator } from "../contract.ts";
+import { typedText, type Coordinator, type CoordinatorStart } from "../contract.ts";
 import type { Execution } from "../model/execution.ts";
 import { coordinatorIdSchema, ticketMetadataSchema, type Role } from "../model/role.ts";
 import type { MemoryRoot } from "./memory/memory-files.ts";
@@ -85,16 +84,16 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
 
   return {
     /**
-     * Starts a coordinating thread from bb's composer, on the provider, model and modes it shows. Its row,
-     * ticket and seeded memory exist before the spawn, so its first session and first tool call
-     * find them.
+     * Starts a coordinating thread from bb's composer, on the provider, model and modes it shows,
+     * titled with its profile's name. Its row, ticket and seeded memory exist before the spawn, so
+     * its first session and first tool call find them.
      */
-    async coordinator(request: NewThreadRequest, verify: boolean): Promise<{ threadId: string }> {
+    async coordinator({ request, verify, profile: { name, ...kept } }: CoordinatorStart): Promise<{ threadId: string }> {
       const id = coordinatorIdSchema.parse(randomUUID());
       const ticket = randomUUID();
-      store.insertCoordinator({ id, ticket, projectId: request.projectId, verify, createdAt: Date.now() });
+      store.insertCoordinator({ id, ticket, projectId: request.projectId, verify, ...kept, createdAt: Date.now() });
       memory.of(id).seed(typedText(request));
-      return { threadId: await spawnWith(ticket, picked(request)) };
+      return { threadId: await spawnWith(ticket, { ...picked(request), title: name }) };
     },
 
     /**

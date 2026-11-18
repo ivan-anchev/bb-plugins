@@ -1,5 +1,5 @@
-// The panel's root page: every regional manager, under its project, newest first. A row opens
-// its thread; its buttons open its board and its memory.
+// The panel's root page: every regional manager, under its project, newest first, by its avatar,
+// name and description. A row opens its thread; its buttons open its board and its memory.
 import {
   experimental_Icon as Icon,
   experimental_ThreadStatusGlyph as ThreadStatusGlyph,
@@ -11,6 +11,7 @@ import {
 import type { Ref } from "react";
 import { coordinatorContract as contract, type Coordinator } from "../../contract.ts";
 import type { CoordinatorId } from "../../model/role.ts";
+import { AvatarTile } from "../profile/avatar.tsx";
 import { Button } from "../ui/button.tsx";
 import { ReadFailure } from "../ui/read-failure.tsx";
 import { listView } from "./coordinator-groups.ts";
@@ -57,12 +58,18 @@ function Row({ coordinator, thread, onOpenBoard, onOpenMemory }: { coordinator: 
       <button
         type="button"
         onClick={() => navigate.toThread(thread.id)}
-        className="flex h-9 min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-md px-2 text-left text-sm hover:bg-state-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-state-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
-        <span className="flex size-4 shrink-0 items-center justify-center">
-          <ThreadStatusGlyph indicator={thread.indicator} size="compact" />
+        <AvatarTile avatar={coordinator.avatar} size="sm" />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="min-w-0 truncate font-medium">{thread.displayTitle}</span>
+            <span className="flex size-4 shrink-0 items-center justify-center">
+              <ThreadStatusGlyph indicator={thread.indicator} size="compact" />
+            </span>
+          </span>
+          {coordinator.description !== null && <span className="truncate text-xs text-muted-foreground">{coordinator.description}</span>}
         </span>
-        <span className="min-w-0 flex-1 truncate">{thread.displayTitle}</span>
       </button>
       <Button variant="ghost" size="sm" aria-label={`Board of ${thread.displayTitle}`} onClick={() => onOpenBoard(coordinator.id)}>
         <Icon name="LayoutList" aria-hidden />

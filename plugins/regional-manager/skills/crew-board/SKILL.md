@@ -1,6 +1,6 @@
 ---
 name: crew-board
-description: Explain the Regional Manager plugin (bb-plugin-regional-manager). Its panel starts long-lived regional managers that keep memory in markdown files, plan the work as build or research issues, start an agent (a child thread) on each, set reminders and ask the user on a board; all of one manager's agents are its crew. An agent ends with a handoff; a build issue's done one is checked by a hidden verifier unless switched off, and a first failed verdict goes back to the agent; a research issue's carries a report saved to memory. PRs and CI are watched through gh. The Board lists issues by status, Needs you first. Use when the user asks how to start a regional manager or an agent, what an issue's kind, status or a verdict means, how verification or CI checks work, what an agent or verifier runs on, why PR status is unavailable, why an agent got findings or an issue returned to Todo, why the thread woke or the board warns of edits, how reminders or decisions work, where memory lives, or which thread has which tools.
+description: Explain the Regional Manager plugin (bb-plugin-regional-manager). Its panel starts long-lived regional managers that keep memory in markdown files, plan the work as build or research issues, start an agent (a child thread) on each, set reminders and ask the user on a board; all of one manager's agents are its crew. An agent ends with a handoff; a build issue's done one is checked by a hidden verifier unless switched off, and a first failed verdict goes back to the agent; a research issue's carries a report saved to memory. gh watches PRs and CI. The Board lists issues by status. Use when the user asks how to start, name or rename a regional manager or start an agent, what an issue's kind, status or a verdict means, how verification or CI checks work, what an agent or verifier runs on, why PR status is unavailable, why an agent got findings or an issue returned to Todo, why the thread woke or the board warns of edits, how reminders or decisions work, where memory lives, or which thread has which tools.
 ---
 
 # Regional managers
@@ -16,19 +16,44 @@ and no plugin settings. Its one setting belongs to each regional manager: the
 
 1. Open the plugin's panel in bb's navigation rail.
 2. Press **New** in its title bar.
-3. bb's own new-thread composer opens, seeded with your first project (in the
-   sidebar's order), a fresh worktree of its default branch on the machine
-   running bb, and **auto** permissions. Change any picker as with any new
-   thread.
-4. Leave **Verify done handoffs** on (below the composer) to have every done
+3. Give it a **name**, an optional **description**, and pick an **icon** (see
+   [Profile](#profile)).
+4. Below them, bb's own new-thread composer, seeded with your first project
+   (in the sidebar's order), a fresh worktree of its default branch on the
+   machine running bb, and **auto** permissions. Change any picker as with
+   any new thread.
+5. Leave **Verify done handoffs** on (below the composer) to have every done
    handoff of build work checked before the thread hears of it, or turn it
    off.
-5. Type the goal and submit. The new thread opens.
+6. Type the goal and submit. The new thread opens, titled with the name. A
+   submit with no name is refused: the name field says "Give it a name." and
+   takes the focus, and the composer keeps your goal.
 
 The panel lists every regional manager bb still lists, under its project,
-newest first, with bb's status glyph. A row opens its thread, its **Board**
-button opens its board, and its **Memory** button opens its memory files. An
-archived or deleted thread drops off the list.
+newest first: its icon, its name with bb's status glyph, and its description
+below them. A row opens its thread, its **Board** button opens its board, and
+its **Memory** button opens its memory files. An archived or deleted thread
+drops off the list.
+
+## Profile
+
+Each regional manager has a profile: a **name**, up to 80 characters, an
+optional **description**, up to 500, and an **icon**, one of 24 of bb's own
+(Workflow, the plugin's, unless you pick another).
+
+- **The name is the thread's title.** bb keeps it; the plugin stores only the
+  description and the icon. Renaming the thread in bb's sidebar renames the
+  manager in the panel too, and an edit of the name renames the thread.
+- **Edit it** from the **Board** page in the panel: **Edit** beside Memory
+  opens the name, description and icons in place; **Save** keeps them, and
+  **Cancel** drops the edit. Esc closes an edit only while nothing in it
+  changed. An open edit, and what you typed in it, survive bb redrawing the
+  panel and a reload. A save renames the thread first, so one bb refuses
+  changes nothing.
+- **Managers started before profiles** have the Workflow icon and no
+  description; their name is the title their thread already had.
+- The New page keeps what you typed in the profile's fields until the
+  manager starts, as the composer keeps its goal.
 
 ## Tools
 
@@ -805,7 +830,9 @@ take a provider's file tools away), so the plugin **detects** it instead:
 ## The board
 
 The **Board** tab in a regional manager's side panel, and the **Board**
-page from its row in the panel, show the same board, live:
+page from its row in the panel, show the same board, live; the page shows it
+under the manager's icon, name and description, with **Edit** (see
+[Profile](#profile)):
 
 - **Verify done handoffs**: the switch for this regional manager.
 - **Files changed in its own environment**: a warning with how many, and

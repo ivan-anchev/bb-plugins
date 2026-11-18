@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { laneOf } from "../../model/board/board-groups.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
-import { coordinating, HEAD, isRefusal, ISSUE, newThreadRequest, settled, textOf, threadIn } from "../test-harness.ts";
+import { coordinating, HEAD, isRefusal, ISSUE, coordinatorStart, settled, textOf, threadIn } from "../test-harness.ts";
 
 const ISSUE_ID = issueIdSchema.parse("i1");
 const REPORT = { summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
@@ -29,7 +29,7 @@ test("issue_create files a build issue in Todo, or in Backlog, numbered per regi
 
   assert.equal(textOf(await call("issue_update", { id: "i2", status: "canceled" })), "Updated i2.");
   assert.equal(textOf(await call("issue_create", ISSUE)), "Filed i3 (build) in Todo.");
-  const other = await kit.spawner.coordinator(newThreadRequest("Retire the cron box"), true);
+  const other = await kit.spawner.coordinator(coordinatorStart("Retire the cron box"));
   assert.equal(textOf(await kit.call("issue_create", ISSUE, other.threadId)), "Filed i1 (build) in Todo.");
 });
 

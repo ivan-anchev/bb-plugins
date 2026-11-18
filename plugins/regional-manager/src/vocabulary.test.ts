@@ -16,7 +16,7 @@ import { test } from "node:test";
 import { makePluginAgentConfigurationContext } from "@get-bb/plugin-sdk/testing";
 import plugin from "../server.ts";
 import { coordinatorContract } from "./contract.ts";
-import { harness, newThreadRequest } from "./server/test-harness.ts";
+import { coordinatorStart, harness } from "./server/test-harness.ts";
 
 const PLUGIN = join(import.meta.dirname, "..");
 
@@ -46,7 +46,7 @@ test(`no retired single-thread name, no "crew" given one thread's things, and no
 
 test("the only tools named crew_ are the five about every agent at once", async () => {
   const loaded = harness().load(plugin);
-  const { threadId } = coordinatorContract.startCoordinator.output.parse(await loaded.callRpc("startCoordinator", { request: newThreadRequest("Migrate the webhook service"), verify: true }));
+  const { threadId } = coordinatorContract.startCoordinator.output.parse(await loaded.callRpc("startCoordinator", coordinatorStart("Migrate the webhook service")));
   const configured = await loaded.resolveAgentConfiguration(makePluginAgentConfigurationContext({ thread: { id: threadId } }));
   // why: bb refuses a configuration naming a tool or skill it doesn't have, and gives the thread nothing.
   assert.deepEqual(loaded.logEntries.filter(({ level }) => level !== "info"), [], "bb refused the entry point's configuration");

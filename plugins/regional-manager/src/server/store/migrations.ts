@@ -121,6 +121,12 @@ export const MIGRATIONS: readonly string[] = [
     ]),
     countWrites("roles_bound", "UPDATE OF thread_id ON roles", "json_extract(NEW.role, '$.coordinatorId')"),
   ].join(";\n"),
+
+  // A regional manager's profile but its name, which is its thread's title (profile.ts): its
+  // description (null: none) and its avatar, as JSON, read and written whole. One started before
+  // profiles has no description and the plugin's own icon. why the literal: a statement never changes.
+  `ALTER TABLE coordinators ADD COLUMN description TEXT`,
+  `ALTER TABLE coordinators ADD COLUMN avatar TEXT NOT NULL DEFAULT '{"kind":"icon","icon":"Workflow"}'`,
 ];
 
 /** The trigger `name`: after each row `on` names, one more write of the regional manager `manager` names. */

@@ -1,6 +1,7 @@
-// The New page: bb's own new-thread composer, seeded with a fresh worktree and auto permissions,
-// and the switch for verifying its agents' done handoffs. The composer owns the user's choices; the
-// server forwards them, its provider and model marked as chosen, and adds the role.
+// The New page: the new regional manager's profile, bb's own new-thread composer, seeded with a
+// fresh worktree and auto permissions, and the switch for verifying its agents' done handoffs. The
+// composer owns the user's choices; the server forwards them, its provider and model marked as
+// chosen, titles the thread with the profile's name, and adds the role.
 import {
   experimental_Icon as Icon,
   experimental_NewThreadComposer as NewThreadComposer,
@@ -11,10 +12,13 @@ import {
   useBbNavigate,
   type NewThreadRequest,
 } from "@get-bb/plugin-sdk/app";
-import { useState, type Ref } from "react";
+import { useRef, useState, type Ref } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
+import { EMPTY_DRAFT, NAME_MISSING, NEW_PROFILE_KEY, profileDraftSchema, profileOf } from "../profile/profile-draft.ts";
+import { ProfileFields } from "../profile/profile-fields.tsx";
 import { Button } from "../ui/button.tsx";
 import { ReadFailure } from "../ui/read-failure.tsx";
+import { useStored } from "../ui/stored.ts";
 import { Switch } from "../ui/switch.tsx";
 import { composerSeed, type ComposerSeed } from "./composer-seed.ts";
 
@@ -23,10 +27,22 @@ export function NewCoordinator({ ref, onBack }: { ref: Ref<HTMLDivElement>; onBa
   const navigate = useBbNavigate();
   const start = experimental_useRpcMutation({ contract, method: "startCoordinator" });
   const [verify, setVerify] = useState(true);
+  const stored = useStored(localStorage, NEW_PROFILE_KEY, profileDraftSchema);
+  const draft = stored.value ?? EMPTY_DRAFT;
+  // Whether a start found no name: the field says so from then on, until it has one.
+  const [tried, setTried] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const profile = profileOf(draft);
 
   // The composer keeps the draft when this throws, so a failed start never loses the goal.
   async function submit(request: NewThreadRequest) {
-    const { threadId } = await start.mutate({ request, verify });
+    if (profile === null) {
+      setTried(true);
+      nameRef.current?.focus();
+      throw new Error(NAME_MISSING);
+    }
+    const { threadId } = await start.mutate({ request, verify, profile });
+    stored.store(null);
     navigate.toThread(threadId);
   }
 
@@ -42,6 +58,9 @@ export function NewCoordinator({ ref, onBack }: { ref: Ref<HTMLDivElement>; onBa
           <p className="px-3 text-sm text-muted-foreground">
             Describe the goal. A new regional manager starts in a fresh worktree, reads its memory, and plans the work.
           </p>
+        </div>
+        <div className="px-3">
+          <ProfileFields value={draft} onChange={stored.store} nameError={tried && profile === null ? NAME_MISSING : null} nameRef={nameRef} />
         </div>
         {seed === null && host.error !== null && (
           <ReadFailure onRetry={() => void host.refetch()}>Could not find the machine running bb: {host.error.message}</ReadFailure>

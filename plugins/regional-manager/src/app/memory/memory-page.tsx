@@ -10,7 +10,7 @@ import { Button } from "../ui/button.tsx";
 import { useHoldEscape } from "../ui/hold-escape.ts";
 import { ReadFailure } from "../ui/read-failure.tsx";
 import { useStored } from "../ui/stored.ts";
-import { useThreadTitle } from "../ui/use-thread-title.ts";
+import { useProfile } from "../profile/use-profile.ts";
 import { MemoryEditor } from "./memory-editor.tsx";
 import { useFileEdits } from "./use-file-edits.ts";
 
@@ -18,7 +18,7 @@ type MemoryPageProps = { ref: Ref<HTMLDivElement>; coordinatorId: CoordinatorId;
 
 export function MemoryPage({ ref, coordinatorId, onBack }: MemoryPageProps) {
   const list = experimental_useRpcQuery({ contract, method: "memoryList", input: { coordinatorId } });
-  const title = useThreadTitle(coordinatorId);
+  const title = useProfile(coordinatorId)?.name ?? null;
   // why session storage: the file this tab has open survives bb redrawing the panel and a reload, as its draft does.
   const picked = useStored(sessionStorage, pickedKeyOf(coordinatorId), memoryFileSchema);
   const edits = useFileEdits(coordinatorId);
