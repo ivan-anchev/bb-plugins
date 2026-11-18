@@ -328,7 +328,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   const memoryWrites: CoordinatorId[] = [];
   const memory = openMemoryRoot(join(mkdtempSync(join(tmpdir(), "coordinator-test-")), "data.db"), openedStore, (id) => memoryWrites.push(id));
   const metadata = new Map<string, Metadata>();
-  const tools = new Map<string, { parameters: z.ZodType; run(input: unknown, threadId: string): Promise<PluginAgentToolResult> }>();
+  const tools = new Map<string, { parameters: z.ZodType; instructions: string | null; run(input: unknown, threadId: string): Promise<PluginAgentToolResult> }>();
   let configure: ((context: PluginAgentConfigurationContext) => PluginAgentConfiguration) | null = null;
   const handlers: Partial<Handlers> = {};
   // why a generic function: it keeps each event's handlers typed by that event.
@@ -549,7 +549,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   } satisfies SpawnBb["sdk"]["threads"] & AgentsBb["sdk"]["threads"] & IssuesBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] & VerifyBb["sdk"]["threads"] & PrWatchBb["sdk"]["threads"];
   const agents: ToolsBb["agents"] & Parameters<typeof registerRoles>[0]["agents"] = {
     registerTool(tool) {
-      tools.set(tool.name, { parameters: tool.parameters, run: async (input, threadId) => tool.execute(tool.parameters.parse(input), { threadId, projectId: "prj_1", signal: new AbortController().signal }) });
+      tools.set(tool.name, { parameters: tool.parameters, instructions: tool.instructions ?? null, run: async (input, threadId) => tool.execute(tool.parameters.parse(input), { threadId, projectId: "prj_1", signal: new AbortController().signal }) });
     },
     configure(provider) {
       configure = provider;
@@ -879,8 +879,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       if (configure === null) throw new Error("No configure callback");
       return configure(configurationContext(threadId, pluginMetadata));
     },
-    /** Every tool the plugin registered, by name, with its parameters. */
-    tools: () => [...tools].map(([name, { parameters }]) => ({ name, parameters })),
+    /** Every tool the plugin registered, by name, with its parameters and the instructions bb injects with it (null: none). */
+    tools: () => [...tools].map(([name, { parameters, instructions }]) => ({ name, parameters, instructions })),
     /** Calls the tool as the thread's agent would. */
     async call(tool: string, input: unknown, threadId: string): Promise<PluginAgentToolResult> {
       const registered = tools.get(tool);

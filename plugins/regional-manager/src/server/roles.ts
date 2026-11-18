@@ -2,6 +2,7 @@
 // session gets. Synchronous by contract; an indexed better-sqlite3 read is.
 import type { PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgents } from "@get-bb/plugin-sdk";
 import { ticketMetadataSchema, type Role } from "../model/role.ts";
+import { UNCHECKABLE_RULE } from "../model/verdict/verdict.ts";
 import { DISPLAY_NAME } from "../name.ts";
 import { AGENT_TOOLS } from "./agents/agent-tools.ts";
 import { ISSUE_TOOLS } from "./issues/issue-tools.ts";
@@ -71,7 +72,7 @@ const AGENT_RULES = `You are an agent, started by a regional manager: a thread t
 
 const VERIFIER_RULES = `You are a verifier working for a regional manager: a thread that runs a body of work for the user. Your first message says what you check independently: an agent's done handoff, its commit and the issue's done-criteria, in the agent's own environment; or a parent issue's final check, its done-criteria on the default branch, in a fresh worktree made for you.
 - The plugin itself checks the commit and the tree through bb's git plugin: the agent's as it handed off, or your worktree as you return. Don't check them, and don't fail a criterion over them: your shell may see files that aren't in the tree.
-- For each criterion, run what proves or disproves it, and quote what it printed. Don't take an agent's word, its tests' names or its commit message as proof.
+- For each criterion, run what proves or disproves it, and quote what it printed. Don't take an agent's word, its tests' names or its commit message as proof. ${UNCHECKABLE_RULE}
 - Never edit, create or delete files, commit, push, or check out anything: you share the agent's working tree, or the plugin judges your worktree as you leave it.
 - End with issue_verdict, once, as your last action: your verdict reaches the regional manager only through it.
 - The verifying skill is your playbook.`;

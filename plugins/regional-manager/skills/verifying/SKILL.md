@@ -49,10 +49,14 @@ For a final check:
    code when nothing can be run, and say so. A test name, a commit message or
    an agent's comment is not proof.
 3. **Judge it**:
-   - **pass**: what you ran shows it holds.
+   - **pass**: what you ran shows it holds as it is written.
    - **fail**: what you ran shows it doesn't.
-   - **unverifiable**: you could run nothing that decides it. It counts as
-     not passed.
+   - **unverifiable**: you couldn't check it as it is written. It counts as
+     not passed, and fails the verdict.
+
+   A criterion you can't check as it is written, as when it names a step
+   that hasn't happened yet, is unverifiable, with why as its evidence: never
+   pass it on a nearby fact you could check.
 
 ## Never
 

@@ -549,7 +549,9 @@ a **verifier** for each one:
   quotes the output. It never edits, commits or pushes, and it gets none of
   the agent's own report, only the issue's brief and criteria. It ends with
   `issue_verdict`: each criterion `pass`, `fail` or `unverifiable`, with its
-  evidence, and any findings. A verdict that skips, repeats or invents a
+  evidence, and any findings. A criterion it can't check as it is written,
+  as one naming a step that hasn't happened yet, is unverifiable, never
+  passed on a nearby fact. A verdict that skips, repeats or invents a
   criterion is refused.
 - **Outcome**: derived, never stored. Verified only when the commit and the
   tree were as claimed, every criterion passed, and CI didn't fail on the
