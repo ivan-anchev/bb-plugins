@@ -4,6 +4,7 @@
 // wake an agent's sandbox, or keep it from idling. why not bb's record of the branch: bb records the
 // branch an environment was made on and keeps it when the agent checks out another.
 import { z } from "zod";
+import { checkoutOf, type CheckoutRead } from "../model/verdict/checkout.ts";
 
 /** The commit and branch checked out; null for each that bb's git plugin can't name (detached, unborn, unknown). */
 const checkoutRowSchema = z.union([
@@ -78,3 +79,17 @@ export async function gitStatusOf(bb: GitStatusBb, environmentId: string, signal
 }
 
 const unread = (reason: string): GitStatus => ({ kind: "unread", reason });
+
+/** The checkout a read shows: its branch, commit and changed files, or why it names no commit. */
+export function checkoutReadOf(status: GitStatus): CheckoutRead {
+  switch (status.kind) {
+    case "read":
+      return status.headSha === null ? { kind: "unread", reason: "it named no commit checked out" } : { kind: "read", branch: status.branch, checkout: checkoutOf(status.headSha, status.changedFiles, status.changedFileCount) };
+    case "not-git":
+      return { kind: "unread", reason: "the environment is not a git repository" };
+    case "unread":
+      return status;
+    default:
+      return status satisfies never;
+  }
+}

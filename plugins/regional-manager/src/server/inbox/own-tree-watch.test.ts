@@ -8,7 +8,7 @@ import { coordinating, settled, startedAgent, textOf } from "../test-harness.ts"
 async function working() {
   const started = await coordinating();
   const { kit, threadId, coordinatorId } = started;
-  const environmentId = kit.thread(threadId).environmentId;
+  const environmentId = kit.environment(threadId);
   return {
     ...started,
     environmentId,
@@ -134,7 +134,7 @@ test("a read bb's git plugin can't make, or answers in a shape the plugin can't 
 test("an agent's changed files are its work: only the regional manager's own turns are read", async () => {
   const { kit, threadId, warning } = await working();
   const agentThreadId = (await startedAgent(kit, threadId)).agentThreadId;
-  kit.git.changedFiles.set(kit.thread(agentThreadId).environmentId, 5);
+  kit.git.changedFiles.set(kit.environment(agentThreadId), 5);
   await kit.idle(agentThreadId, "Halfway.");
   await settled();
   assert.deepEqual(kit.git.calls, [], "no read for an agent's turn");

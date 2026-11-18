@@ -5,7 +5,7 @@ import { boardTag, COORDINATORS_TAG, coordinatorContract, memoryTag } from "./sr
 import type { CoordinatorId, Role } from "./src/model/role.ts";
 import { registerAgentTools } from "./src/server/agents/agent-tools.ts";
 import { createAgents } from "./src/server/agents/agents.ts";
-import { placementFactsReader } from "./src/server/agents/placement-facts.ts";
+import { placementFactsReader } from "./src/server/agents/environments.ts";
 import { forwardThreadEvents } from "./src/server/agents/thread-events.ts";
 import { boardHandlers } from "./src/server/board/board-rpc.ts";
 import { createBoard } from "./src/server/board/board.ts";
@@ -56,7 +56,8 @@ export default function plugin(host: BbPluginApi): void {
   const views = currentViews({ bb, store });
   const unblocked = watchUnblocked({ bb, store, views, inbox });
   const turns = issueTurns(instance.signal);
-  const agents = createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
+  const prWatch = createPrWatch({ bb, store, inbox, gh: runGh, now: Date.now });
+  const agents = createAgents({ bb, store, spawner, inbox, memory, turns, prs: prWatch, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
   const issues = createIssues({ bb, store, views, onChange });
   const verify = createVerify({ bb, store, spawner, inbox, turns });
 
@@ -69,7 +70,6 @@ export default function plugin(host: BbPluginApi): void {
   const threadEvents = forwardThreadEvents(bb, { store, agents, onChange, refreshBoard });
   watchAgentThreads({ bb, store, inbox });
   watchOwnTree({ bb, store, inbox });
-  const prWatch = createPrWatch({ bb, store, inbox, gh: runGh });
   bb.background.schedule("watch", "* * * * *", async () => {
     // why each caught: a pass that can't read bb or GitHub must not keep the next from running, nor the doorbells from ringing.
     // why the agents first: they remove a regional manager bb deleted before any later pass could ring it.

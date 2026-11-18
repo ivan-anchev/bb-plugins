@@ -6,8 +6,8 @@ import type { Issue, IssueId } from "../../model/issue/issue.ts";
 import { isVerified, PIPELINES } from "../../model/issue/kind.ts";
 import { isReady, type Related, type Relations } from "../../model/issue/relations.ts";
 import { STATUS_LABELS, type Handed, type IssueView } from "../../model/issue/status.ts";
-import type { Agent } from "../../model/agent.ts";
-import { executionText, recipientsText, type Joined, type StartOutcome, type StopOutcome, type Withdrawn } from "../agents/agents.ts";
+import { placementName, refOf, type Agent } from "../../model/agent.ts";
+import { executionText, recipientsText, type Carried, type StartOutcome, type StopOutcome, type Withdrawn } from "../agents/agents.ts";
 import { handoffText, type Lookups } from "../tools/inbox-text.ts";
 import { fenced } from "../verify/findings.ts";
 import type { IssueRead } from "./views/issue-facts.ts";
@@ -62,20 +62,31 @@ export const filedText = (issue: Issue, blockedBy: readonly Related[]): string =
 export function startText(issueId: Issue["id"], outcome: Exclude<StartOutcome, { kind: "refused" }>): string {
   switch (outcome.kind) {
     case "started": {
-      const { agentId, threadId, execution, inherited, blockedBy, after, replaced, withdrawn, joined } = outcome;
+      const { agentId, threadId, execution, inherited, blockedBy, after, replaced, withdrawn, carried } = outcome;
       const started = `${replaced === null ? "Started" : `Stopped ${replaced} and started`} ${agentId} on ${issueId} as @thread:${threadId}`;
       const runs = `on ${executionText(execution)}${inherited ? ", your own provider, model and reasoning level" : ""}`;
       const ends = `It ends its work with a handoff, and you are woken when it hands off, fails, waits on the user or stops without one.${startedBlockedText(issueId, blockedBy)}${withdrawnText(withdrawn)}`;
       if (after === null) return `${started}, ${runs}. It works in its own environment on its own branch, and its brief arrived as a message from you. ${ends}`;
       const earlier = `Its first message, from you, holds the issue's plan and every earlier handoff and verdict.${replaced === null ? "" : ` ${replacedText(replaced)}`}`;
-      if (joined === null) return `${started}, ${runs}. It starts clean, in its own environment from the default branch. ${earlier} ${ends}`;
-      return `${started} ${joinedText(joined)}, ${runs}. It continues ${joined.from}'s work there: its commits, its uncommitted files and its pull request are ${agentId}'s now. ${earlier} ${ends}`;
+      if (carried === null) return `${started}, ${runs}. It starts clean, in its own environment from the default branch. ${earlier} ${ends}`;
+      switch (carried.kind) {
+        case "joined":
+          return `${started} ${joinedText(carried)}, ${runs}. It continues ${carried.from}'s work there: its commits, its uncommitted files and its pull request are ${agentId}'s now. ${earlier} ${ends}`;
+        case "cut": {
+          const { from, head, pr } = carried;
+          const opens = pr === null ? "" : ` ${from}'s PR #${pr} stays on its branch; ${agentId} opens its own.`;
+          // why a check, and the failure: bb cuts the branch after it answers the spawn, so the ref may have moved by then, and a base it can't resolve fails the thread then (bb-facts P2a).
+          const checks = head === null ? `No commit of ${from}'s is on record for ${agentId} to check its branch against.` : `${agentId} checks that commit is on its branch before it changes anything, and hands off blocked if it isn't.`;
+          return `${started} ${cutText(carried)}, ${runs}. ${checks} Nothing ${from} left uncommitted comes with it; if bb can't cut that branch, its thread fails and you are woken.${opens} ${earlier} ${ends}`;
+        }
+        default:
+          return carried satisfies never;
+      }
     }
     case "failed": {
-      const { agentId, error, replaced, withdrawn, joined } = outcome;
+      const { agentId, error, replaced, withdrawn, carried } = outcome;
       const was = replaced === null ? "" : ` ${replaced} was stopped and replaced, and stays so.`;
-      const retry = joined === null ? "call agent_start again, or tell the user" : `if bb removed ${joined.from}'s environment, start clean with agent_start and from: "default"; otherwise call agent_start again, or tell the user`;
-      return `bb did not start ${agentId}'s thread${joined === null ? "" : ` in ${joined.from}'s environment`}: ${error}.${was} ${issueId} has no agent and rests in Todo: ${retry}.${withdrawnText(withdrawn)}`;
+      return `bb did not start ${agentId}'s thread${carried === null ? "" : ` ${whereFailed(carried)}`}: ${error}.${was} ${issueId} has no agent and rests in Todo: ${retryText(carried)}.${withdrawnText(withdrawn)}`;
     }
     default:
       return outcome satisfies never;
@@ -83,9 +94,40 @@ export function startText(issueId: Issue["id"], outcome: Exclude<StartOutcome, {
 }
 
 /** Where a joined agent works, in words: `in a1's worktree, on its branch `x`, with PR #44`. */
-function joinedText({ from, placement, branch, pr }: Joined): string {
-  const place = placement.kind === "worktree" ? "worktree" : `${placement.environmentProviderId} environment`;
-  return `in ${from}'s ${place}${branch === null ? "" : `, on its branch \`${branch}\``}${pr === null ? "" : `, with PR #${pr}`}`;
+function joinedText({ from, placement, branch, pr }: Extract<Carried, { kind: "joined" }>): string {
+  return `in ${from}'s ${placementName(placement)}${branch === null ? "" : `, on its branch \`${branch}\``}${pr === null ? "" : `, with PR #${pr}`}`;
+}
+
+/** Where a cut agent works, in words: `in a new worktree, on a new branch cut from a1's `origin/x` expecting 4be0a17`. */
+function cutText(carried: Extract<Carried, { kind: "cut" }>): string {
+  const { from, placement, head } = carried;
+  return `in a new ${placementName(placement)}, on a new branch cut from ${from}'s \`${refOf(carried)}\`${head === null ? "" : ` expecting ${head.slice(0, 7)}`}`;
+}
+
+/** Where bb was to start the agent whose thread it refused, in words. */
+function whereFailed(carried: Carried): string {
+  switch (carried.kind) {
+    case "joined":
+      return `in ${carried.from}'s environment`;
+    case "cut":
+      return cutText(carried);
+    default:
+      return carried satisfies never;
+  }
+}
+
+/** What to do after bb refused a new agent's thread. */
+function retryText(carried: Carried | null): string {
+  if (carried === null) return "call agent_start again, or tell the user";
+  const clean = `start clean with agent_start and from: "default"`;
+  switch (carried.kind) {
+    case "joined":
+      return `if bb removed ${carried.from}'s environment, ${clean}; otherwise call agent_start again, or tell the user`;
+    case "cut":
+      return `call agent_start again (without placement, it continues in ${carried.from}'s environment while bb still has it), or ${clean}`;
+    default:
+      return carried satisfies never;
+  }
 }
 
 /** What becomes of a replaced agent's thread: the plugin never archives it. */

@@ -13,7 +13,7 @@ import type { HolderThread } from "../model/issue/status.ts";
 import type { CoordinatorId } from "../model/role.ts";
 import { registerAgentTools } from "./agents/agent-tools.ts";
 import { createAgents } from "./agents/agents.ts";
-import { placementFactsReader } from "./agents/placement-facts.ts";
+import { placementFactsReader } from "./agents/environments.ts";
 import { forwardThreadEvents } from "./agents/thread-events.ts";
 import type { TurnsBb } from "./agents/threads.ts";
 import { boardHandlers } from "./board/board-rpc.ts";
@@ -96,7 +96,7 @@ type FakeExecution = { model: string; reasoningLevel: string; serviceTier: strin
 type FakeThread = HolderThread & {
   id: string;
   providerId: string;
-  environmentId: string;
+  environmentId: string | null;
   execution: FakeExecution | null;
   environmentBranchName: string | null;
   environmentHostId: string | null;
@@ -252,7 +252,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   const clock = { now: 1_000_000 };
   /**
    * bb's git plugin as the plugin reaches it, by environment id: the branch each has checked out
-   * (absent: none, as when detached), the commit (absent: HEAD), how many files changed in its
+   * (absent: none, as when detached; bb checks out the branch it made a new environment on), the
+   * commit (absent: HEAD), how many files changed in its
    * working tree (absent: none),
    * the ones outside git, the ones whose machine it can't read, and a row a newer bb--git answers
    * instead, in a shape the plugin's contract doesn't name; and the keys of every `status` call.
@@ -279,6 +280,21 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     holding: false,
     held: [],
   };
+  /**
+   * The project's repository as bb cuts new branches from it: the branches of its checkout on the
+   * regional manager's machine (`local`), which every worktree's branch is, kept after its worktree
+   * is removed (bb-facts P1c), and origin's (`origin`), each with its tip. A sandbox's branch is in
+   * neither: only a push puts it on origin (SH4). A test commits and pushes with commit and push.
+   */
+  const repo: { local: Map<string, string>; origin: Map<string, string> } = { local: new Map([["main", HEAD]]), origin: new Map([["main", HEAD]]) };
+  /**
+   * Set `holding` to have bb answer each spawn of a new environment before it provisions it, as bb
+   * does, until the test calls its provisioning in `held`: the thread has no environment meanwhile,
+   * and its branch is cut from its base as the repository has it then.
+   */
+  const provisioning: { holding: boolean; held: (() => void)[] } = { holding: false, held: [] };
+  /** The environments bb made as a worktree, and as a sandbox, by id. */
+  const kinds: { worktrees: Set<string>; sandboxes: Set<string> } = { worktrees: new Set(), sandboxes: new Set() };
   /**
    * Set `failure` to make every read of a thread's turns reject with it, as when bb can't answer; set `pending` to hold every read until it settles.
    * Set `holding` to keep each answer, as read when called, until the test calls its release in `held`.
@@ -335,6 +351,12 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     return thread;
   }
 
+  function environmentOf(threadId: string): string {
+    const { environmentId } = fakeThread(threadId);
+    if (environmentId === null) throw new Error(`bb provisioned no environment for ${threadId}`);
+    return environmentId;
+  }
+
   /** A new turn starts in the thread, as when someone sends it a message. */
   function startTurn(thread: FakeThread): void {
     thread.status = "active";
@@ -343,6 +365,48 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
 
   async function emit<E extends FakeEventName>(event: E, payload: FakeEvents[E]): Promise<void> {
     for (const handler of handlersOf(event)) await handler(payload);
+  }
+
+  /**
+   * The commit bb cuts a new environment's branch from, as it resolves the base it was given; or why
+   * it can't. A worktree's named base is a local branch, or `origin/<branch>`, which bb fetches; a bare
+   * name with no local branch is an invalid reference, and bb fetches no commit (bb-facts P1b, P2). A
+   * sandbox clones from origin, so its base must be there in either form (SH2).
+   */
+  function cutFrom(environment: SpawnArgs["environment"]): { tip: string } | { error: string } {
+    const named = (name: string, tip: string | undefined) => (tip === undefined ? { error: `git worktree add failed: fatal: invalid reference: ${name}` } : { tip });
+    const onOrigin = (name: string) => repo.origin.get(name.replace(/^origin\//, ""));
+    if (environment?.type === "host" && environment.workspace?.type === "managed-worktree" && environment.workspace.baseBranch?.kind === "named") {
+      const { name } = environment.workspace.baseBranch;
+      return named(name, name.startsWith("origin/") ? onOrigin(name) : repo.local.get(name));
+    }
+    const inputs: unknown = environment?.type === "provider" ? environment.inputs : null;
+    const base = z.object({ branch: z.object({ baseBranch: z.string() }) }).safeParse(inputs);
+    return base.success ? named(base.data.branch.baseBranch, onOrigin(base.data.branch.baseBranch)) : { tip: HEAD };
+  }
+
+  /**
+   * bb provisions a new thread's environment: it cuts the thread's branch from its base as the
+   * repository has it now, and checks it out; or, for a base it can't resolve, fails the thread, with
+   * no environment and no branch, announcing that after the spawn answered (bb-facts P1b(b), P2a;
+   * seen live in issue 06).
+   */
+  function provision(thread: FakeThread): void {
+    const { id, spawnedWith } = thread;
+    const cut = cutFrom(spawnedWith.environment);
+    if ("error" in cut) {
+      thread.status = "error";
+      setTimeout(() => void emit("thread.failed", { thread: ref(id), error: `thread_provisioning_failed: ${cut.error}` }), 0);
+      return;
+    }
+    const environmentId = `env_${id}`;
+    Object.assign(thread, { environmentId, environmentBranchName: `bb/${id}` });
+    git.heads.set(environmentId, cut.tip);
+    git.checkouts.set(environmentId, `bb/${id}`);
+    if (spawnedWith.environment?.type === "host") {
+      kinds.worktrees.add(environmentId);
+      repo.local.set(`bb/${id}`, cut.tip);
+    } else kinds.sandboxes.add(environmentId);
   }
 
   const threads = {
@@ -357,9 +421,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         status: "active",
         hasPendingInteraction: false,
         ...runsOn(args, args.parentThreadId === undefined ? null : fakeThread(args.parentThreadId)),
-        environmentId: reused ?? `env_${id}`,
+        environmentId: reused,
         // As bb does, a thread in a reused environment reports the branch bb made that environment on.
-        environmentBranchName: reused === null ? `bb/${id}` : ([...fakeThreads.values()].find((thread) => thread.environmentId === reused)?.environmentBranchName ?? null),
+        environmentBranchName: reused === null ? null : ([...fakeThreads.values()].find((thread) => thread.environmentId === reused)?.environmentBranchName ?? null),
         environmentHostId: "host_1",
         archivedAt: null,
         deletedAt: null,
@@ -367,7 +431,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         turns: [],
       };
       fakeThreads.set(id, thread);
-      startTurn(thread);
+      if (reused === null && provisioning.holding) provisioning.held.push(() => provision(thread));
+      else if (reused === null) provision(thread);
+      if (thread.status !== "error") startTurn(thread);
       if (behaviour.created) await emit("thread.created", { thread: { id, originPluginId: PLUGIN_ID } });
       if (behaviour.answer === "lost") throw new Error("socket hang up");
       return { id };
@@ -460,8 +526,14 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       if (interrupted) await emit("thread.idle", { thread: { ...ref(threadId), environmentId: thread.environmentId }, lastAssistantText: "Interrupted halfway." });
       if (stopRequests.lost !== null) throw stopRequests.lost;
     },
+    // As bb does, archiving the last live thread of a sandbox destroys it within seconds (SH5); a worktree stays a few minutes (SH1).
     async archive({ threadId }) {
-      fakeThread(threadId).archivedAt = Date.now();
+      const thread = fakeThread(threadId);
+      thread.archivedAt = Date.now();
+      const { environmentId } = thread;
+      if (environmentId === null) return;
+      const lives = [...fakeThreads.values()].some((other) => other.environmentId === environmentId && other.archivedAt === null && other.deletedAt === null);
+      if (kinds.sandboxes.has(environmentId) && !lives) environmentRecords.destroyed.add(environmentId);
     },
     output: async () => ({ output: "Done: npm test passes." }),
   } satisfies SpawnBb["sdk"]["threads"] & AgentsBb["sdk"]["threads"] & IssuesBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] & VerifyBb["sdk"]["threads"] & PrWatchBb["sdk"]["threads"];
@@ -573,7 +645,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const views = currentViews({ bb, store });
     const unblocked = watchUnblocked({ bb, store, views, inbox });
     const turns = turnWaitMs === null ? issueTurns(instance.signal) : issueTurns(instance.signal, turnWaitMs);
-    const agents = createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
+    const prWatch = createPrWatch({ bb, store, inbox, gh, now: () => clock.now });
+    const agents = createAgents({ bb, store, spawner, inbox, memory, turns, prs: prWatch, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
     const issues = createIssues({ bb, store, views, onChange });
     const verify = createVerify({ bb, store, spawner, inbox, turns });
     registerRoles(bb, store);
@@ -585,7 +658,6 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const threadEvents = forwardThreadEvents(bb, { store, agents, onChange, refreshBoard });
     watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });
-    const prWatch = createPrWatch({ bb, store, inbox, gh });
     return { spawner, inbox, verify, agents, prWatch, unblocked, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }) } };
   }
   let plugin = wire();
@@ -636,6 +708,25 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     git,
     /** bb's environments as the plugin reads them; a test destroys one to remove its sandbox, changes the default branch, or holds the reads. */
     environments: environmentRecords,
+    /** The project's repository, locally and on origin; a test deletes a local branch, as a person can. */
+    repo,
+    /** How bb provisions a new thread's environment; a test may hold it until after the spawn answers. */
+    provisioning,
+    /** The agent commits in its thread's environment: its head moves, and a worktree's branch checked out with it, as both are one ref. */
+    commit(threadId: string, sha: string): void {
+      const environmentId = environmentOf(threadId);
+      const branch = git.checkouts.get(environmentId);
+      git.heads.set(environmentId, sha);
+      if (kinds.worktrees.has(environmentId) && branch !== undefined) repo.local.set(branch, sha);
+    },
+    /** The agent pushes the branch checked out in its thread's environment to origin, at its head; returns the branch. */
+    push(threadId: string): string {
+      const environmentId = environmentOf(threadId);
+      const branch = git.checkouts.get(environmentId);
+      if (branch === undefined) throw new Error(`${threadId} has no branch checked out to push`);
+      repo.origin.set(branch, git.heads.get(environmentId) ?? HEAD);
+      return branch;
+    },
     /** How bb answers a read of a thread's turns; a test may hold it or make it fail. */
     turnEvents,
     /** How bb answers a delete of a queued message; a test may make it fail. */
@@ -683,6 +774,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     },
     /** A thread bb has, as the plugin can list it, and what it was spawned with. */
     thread: fakeThread,
+    /** The environment bb provisioned for the thread; throws for one whose provisioning failed, which has none. */
+    environment: environmentOf,
     /** How many threads bb has spawned. */
     spawned: () => spawned,
     /** Every message sent to a thread, in order. */

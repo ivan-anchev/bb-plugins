@@ -1,6 +1,6 @@
 ---
 name: agent-work
-description: The playbook of an agent, a child thread a regional manager started to work on one issue on its own branch, or to continue an earlier agent's work in its environment. Use in every turn of an agent thread, to read the issue's description, brief and done-criteria (or a research issue's questions) in its first message, look before changing an environment it continues in, read the earlier agents' handoffs and verdicts, follow the rules every agent follows (CREW.md), read the regional manager's memory with crew_memory_read, tell its messages and its verifier's findings from the user's, fix those findings, and end its work with one agent_handoff call that reports done, blocked or gave-up, a build issue's done with its commit and evidence for each done-criterion and a research issue's done with its report.
+description: The playbook of an agent, a child thread a regional manager started to work on one issue on its own branch, to continue an earlier agent's work in its environment, or to carry it on in a new environment on a branch cut from that agent's. Use in every turn of an agent thread, to read the issue's description, brief and done-criteria (or a research issue's questions) in its first message, look before changing an environment it continues in or a branch it starts from, read the earlier agents' handoffs and verdicts, follow the rules every agent follows (CREW.md), read the regional manager's memory with crew_memory_read, tell its messages and its verifier's findings from the user's, fix those findings, and end its work with one agent_handoff call that reports done, blocked or gave-up, a build issue's done with its commit and evidence for each done-criterion and a research issue's done with its report.
 ---
 
 # Agent work
@@ -24,6 +24,9 @@ It holds everything you start from:
   questions, numbered. Answer each in your report; nobody judges them.
 - **Where you work**, when you continue an earlier agent's work: its
   environment, its branch and the pull request to push to (see below).
+- **Your branch**, when you carry an earlier agent's work on in a new
+  environment: the branch yours was cut from, and its pull request, which
+  stays where it is (see below).
 - **Earlier work**, when the issue had agents before you: each one's
   handoffs, in its own words, each with its verifier's verdict, the failed
   criteria's evidence and the findings.
@@ -53,9 +56,26 @@ and nobody else does.
   a second one.
 - The earlier verdicts' findings are not yet fixed unless the code shows it.
 
-Without "Where you work", you start clean from the default branch, even when
-"Earlier work" is there: none of the earlier commits or files are in your
-environment.
+## Carrying earlier work on
+
+When your first message has "Your branch", the regional manager moved an
+issue another agent held to a new environment, such as a sandbox or a
+worktree, and bb cut a new branch of yours from that agent's branch. Files
+it left uncommitted are not on your branch. Its commits should be, but the
+branch could move before bb cut yours, so check before you rely on them.
+
+- Before you change anything, check that the commit "Your branch" names is
+  in your checkout, with the command it gives. If it isn't, change nothing:
+  hand off blocked, saying which commit is missing from your branch.
+- Look before you change anything: run `git log`, and read the earlier
+  handoffs and verdicts, as above.
+- Work on your own branch. The earlier agent's pull request stays on its
+  branch: never push to that branch. Open a pull request of your own from
+  yours when your work is ready.
+
+Without "Where you work" or "Your branch", you start clean from the default
+branch, even when "Earlier work" is there: none of the earlier commits or
+files are in your environment.
 
 ## While you work
 

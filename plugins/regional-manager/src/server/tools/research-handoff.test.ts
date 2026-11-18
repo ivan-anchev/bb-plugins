@@ -92,7 +92,7 @@ test("a research done handoff is Done at once: no verifier, no git read, a commi
   await settled();
 
   assert.equal(kit.spawned(), spawned, "a verifier thread was spawned");
-  assert.deepEqual(kit.git.calls.filter((call) => call.includes(kit.thread(agentThreadId).environmentId)), [], "the agent's checkout was read");
+  assert.deepEqual(kit.git.calls.filter((call) => call.includes(kit.environment(agentThreadId))), [], "the agent's checkout was read");
   const { handoff, check } = kit.store.record(coordinatorId, I1)[0] ?? assert.fail("no handoff stored");
   assert.equal(check, null);
   assert.deepEqual(handoff.status === "done" && handoff.delivery, { kind: "report", report: REPORT, file: I1_REPORT });

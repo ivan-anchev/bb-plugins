@@ -43,7 +43,7 @@ async function handedTo(options: Parameters<typeof coordinating>[0] = {}, start:
 
 test("a handover stops the holder without archiving it, ends it as replaced, and starts the new agent in its environment, on its branch", async () => {
   const { kit, coordinatorId, agentThreadId, handover, row, agent, firstMessage, handOff } = await handedTo();
-  kit.git.changedFiles.set(kit.thread(agentThreadId).environmentId, 1); // a1 leaves a file uncommitted
+  kit.git.changedFiles.set(kit.environment(agentThreadId), 1); // a1 leaves a file uncommitted
   await handOff(agentThreadId, BLOCKED);
   const result = textOf(await handover());
   const next = threadIn(result);
@@ -143,20 +143,6 @@ test("a holder bb still reports stopping is not replaced: the start is refused a
   assert.deepEqual([kit.spawned(), kit.store.agents(coordinatorId).length], [spawned, 1]);
 });
 
-test("a removed environment, or a placement named, is refused before anything stops, offering a clean start", async () => {
-  const { kit, agentThreadId, handover, agent } = await handedTo();
-  await kit.startTurn(agentThreadId);
-  const named = await handover({ placement: { kind: "worktree" } });
-  assert.ok(isRefusal(named));
-  assert.match(textOf(named), /^agent_start is refused: Nothing changed\. A handover continues in a1's environment, and can't move its work to a placement yet: leave out placement, or start clean with from: "default"/);
-
-  kit.environments.destroyed.add(kit.thread(agentThreadId).environmentId);
-  const gone = await handover();
-  assert.ok(isRefusal(gone));
-  assert.match(textOf(gone), /^agent_start is refused: Nothing changed\. bb has removed a1's environment, so its work can't be continued there, and moving it to a new one isn't possible yet: start clean with from: "default"/);
-  assert.deepEqual([kit.thread(agentThreadId).status, agent(a1).ended], ["active", null], "a1 still works on i1");
-});
-
 test("an environment bb removes between the decision and the spawn ends the new agent spawn-failed; the issue rests in Todo and the result says why", async () => {
   const { kit, agentThreadId, handover, row, agent } = await handedTo();
   await kit.startTurn(agentThreadId);
@@ -164,7 +150,7 @@ test("an environment bb removes between the decision and the spawn ends the new 
   kit.stopRequests.pending = new Promise((resolve) => (answer = resolve));
   const starting = handover();
   await settled();
-  kit.environments.destroyed.add(kit.thread(agentThreadId).environmentId); // the sandbox is reaped while a1 stops
+  kit.environments.destroyed.add(kit.environment(agentThreadId)); // the sandbox is reaped while a1 stops
   answer();
 
   const result = textOf(await starting);
@@ -225,7 +211,7 @@ test("a research issue's handover starts clean, with the earlier handoffs in its
 test("a sandbox agent is continued in its sandbox, which the spawn wakes: nothing reads it first, and the result names it", async () => {
   const sandbox = { placement: { kind: "provider", environmentProviderId: "boat-sandbox", machineInputs: { preset: "small" } } };
   const { kit, agentThreadId, handover } = await handedTo({}, sandbox);
-  const { environmentId } = kit.thread(agentThreadId);
+  const environmentId = kit.environment(agentThreadId);
   kit.git.offline.add(environmentId); // suspended: bb's git plugin can't read it
   const reads = kit.git.calls.length;
 
@@ -365,6 +351,42 @@ test("findings bb queued for a busy a1 are taken back before the handover stops 
 
   await handover();
   assert.deepEqual([kit.queued(agentThreadId), kit.thread(agentThreadId).status, agent(a1).ended?.how], [[], "idle", "replaced"]);
+});
+
+test("the plugin's reminder bb queued for a verifier behind a turn someone started there is taken back before the handover stops it, so it never wakes the superseded verifier beside a2", async () => {
+  const { kit, threadId, coordinatorId, agentThreadId, handover, handOff } = await handedTo();
+  await handOff(agentThreadId);
+  const verifier = verifierOf(kit, coordinatorId);
+  await kit.idle(verifier, "Forgot the verdict.");
+  let release = (): void => assert.fail("the reminder was never sent");
+  kit.sends.pending = new Promise((resolve) => (release = resolve));
+  await kit.tick(); // the tick reads the verifier idle; its reminder waits at bb
+  kit.startTurn(verifier); // the user messages the current verifier before the reminder arrives
+  kit.sends.pending = null;
+  release();
+  await settled();
+  const [reminder] = kit.queued(verifier);
+  assert.ok(reminder, "bb queued the reminder behind the user's turn");
+  assert.equal(kit.sent().at(-1)?.senderThreadId, threadId, "sent as from the regional manager's thread");
+
+  const next = threadIn(textOf(await handover()));
+  assert.deepEqual([kit.queued(verifier), kit.thread(verifier).status, kit.thread(next).status], [[], "idle", "active"], "taken back, then the verifier stopped: nothing left to wake it");
+  assert.equal(kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict.state, "superseded");
+});
+
+test("a person's message queued for a verifier refuses a handover, as one for an agent does: it isn't the plugin's to delete, and once sent it would wake the verifier beside the new agent", async () => {
+  const { kit, coordinatorId, agentThreadId, handover, agent, handOff } = await handedTo();
+  await handOff(agentThreadId);
+  const verifier = verifierOf(kit, coordinatorId);
+  kit.userQueues(verifier, "Check the lint output too.");
+
+  const refused = await handover();
+  assert.ok(isRefusal(refused));
+  assert.equal(
+    textOf(refused),
+    `agent_start is refused: bb still has a message from the user queued for the verifier @thread:${verifier} and couldn't take it back; once sent, it would wake the verifier @thread:${verifier} beside a new agent, so no agent started and a1 still holds i1. Call agent_start again once bb has sent or deleted it.`,
+  );
+  assert.deepEqual([kit.queued(verifier).length, kit.thread(verifier).status, agent(a1).ended], [1, "active", null], "the message is left alone, and nothing stopped");
 });
 
 test("a verifier whose start is held when a handover is asked starts first, and the handover stops it before a2 starts", async () => {

@@ -8,6 +8,8 @@ import type { HandoffId } from "./handoff.ts";
 import type { IssueId } from "./issue/issue.ts";
 import { shipsCode, type Kind } from "./issue/kind.ts";
 import type { CoordinatorId } from "./role.ts";
+import type { CheckoutRead } from "./verdict/checkout.ts";
+import type { PrRead } from "./verdict/pr.ts";
 
 type EnvironmentArgs = NewThreadRequest["environment"];
 
@@ -113,28 +115,34 @@ function machineOf(
   return { machineProviderId, inputs: inputs ?? {} };
 }
 
-/** The environment bb spawns an agent in. `hostId` is the regional manager's machine (null: bb's default). */
-export function environmentOf(placement: Placement, hostId: string | null): EnvironmentArgs {
+/**
+ * The environment bb spawns an agent in. `hostId` is the regional manager's machine (null: bb's
+ * default); `ref`, the branch bb cuts the agent's own branch from (null: the default branch). why a
+ * branch name, never a commit: bb fetches `origin/<branch>` before cutting from it, and never fetches
+ * a commit (bb-facts P1b, P2).
+ */
+export function environmentOf(placement: Placement, hostId: string | null, ref: string | null): EnvironmentArgs {
   switch (placement.kind) {
     case "worktree":
-      return { type: "host", hostId: hostId ?? undefined, workspace: { type: "managed-worktree", baseBranch: { kind: "default" } } };
+      return { type: "host", hostId: hostId ?? undefined, workspace: { type: "managed-worktree", baseBranch: ref === null ? { kind: "default" } : { kind: "named", name: ref } } };
     case "provider": {
       const { environmentProviderId, inputs, machine } = placement;
-      return { type: "provider", environmentProviderId, inputs: inputsOf(inputs), ...(machine && { machine: { type: "new", ...machine } }) };
+      return { type: "provider", environmentProviderId, inputs: inputsOf(inputs, ref), ...(machine && { machine: { type: "new", ...machine } }) };
     }
     default:
       return placement satisfies never;
   }
 }
 
-function inputsOf(inputs: ProviderInputs): Extract<EnvironmentArgs, { type: "provider" }>["inputs"] {
+/** A provider's inputs at the spawn; a new branch is cut from `ref` when one is named. */
+function inputsOf(inputs: ProviderInputs, ref: string | null): Extract<EnvironmentArgs, { type: "provider" }>["inputs"] {
   switch (inputs.kind) {
     case "none":
       return null;
     case "defaults":
       return {};
     case "new-branch":
-      return { branch: { kind: "new", baseBranch: inputs.baseBranch } };
+      return { branch: { kind: "new", baseBranch: ref ?? inputs.baseBranch } };
     default:
       return inputs satisfies never;
   }
@@ -143,10 +151,22 @@ function inputsOf(inputs: ProviderInputs): Extract<EnvironmentArgs, { type: "pro
 /**
  * Where an agent's work starts. `default`: a new branch from the project's default branch.
  * `joined`: in `from`'s environment, on the branch checked out there, with its commits, its
- * uncommitted files and its pull request (sandbox-handover SH1).
+ * uncommitted files and its pull request (sandbox-handover SH1). `cut`: in a new environment, on a
+ * new branch bb cut from `from`'s `branch`, `via` origin's copy, once a pull request showed `head`
+ * there, or the local branch, which a worktree on the same machine reaches; `head`, the commit
+ * `from` left on it as last seen (null: none known), which the new agent checks it got. why a
+ * check: bb cuts after the spawn answers, and a branch can move until then.
  */
-export const baseSchema = z.discriminatedUnion("kind", [z.object({ kind: z.literal("default") }), z.object({ kind: z.literal("joined"), from: agentIdSchema })]);
+export const baseSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("default") }),
+  z.object({ kind: z.literal("joined"), from: agentIdSchema }),
+  z.object({ kind: z.literal("cut"), from: agentIdSchema, branch: z.string().min(1), via: z.enum(["local", "origin"]), head: z.string().min(1).nullable() }),
+]);
 export type Base = z.infer<typeof baseSchema>;
+type Cut = Extract<Base, { kind: "cut" }>;
+
+/** The ref bb cuts a cut agent's branch from: `origin/<branch>`, or the local `<branch>`. */
+export const refOf = ({ branch, via }: Pick<Cut, "branch" | "via">): string => (via === "origin" ? `origin/${branch}` : branch);
 
 /**
  * Where the agent's work was last seen: its environment, the branch checked out there and its
@@ -191,41 +211,158 @@ export const startFromSchema = z.enum(["previous", "default"]);
 export type StartFrom = z.infer<typeof startFromSchema>;
 
 /**
- * The issue's latest agent that had a thread, as a handover finds it before anything changes: its
- * environment while bb hasn't destroyed it (null: destroyed, or never known), and its branch (null:
- * none on record).
+ * The issue's previous agent as a handover finds it, before anything changes: its environment while
+ * bb hasn't destroyed it (null: destroyed, or never known), and its branch (null: none on record).
+ * For a move only, read once: `now`, its live environment as bb's git plugin read it, the branch
+ * checked out there with its head and changed files, and `pushed`, the cut's branch's pull request
+ * as GitHub had it, when the cut goes through origin (null: not read).
  */
-export type Previous = { agent: Agent; environmentId: string | null; branch: string | null };
+export type Previous = { agent: Agent; environmentId: string | null; branch: string | null; now: CheckoutRead | null; pushed: PrRead | null };
 
 /**
  * Where a new agent starts. `clean`: where agent_start's placement says, from the default branch, as
  * a first agent does. `join`: in the previous agent's environment, which bb reuses as it does for a
- * verifier, with its checkout inherited.
+ * verifier, with its checkout inherited. `cut`: in a new environment of `placement`, on a new branch
+ * cut from the previous agent's.
  */
-export type Handover = { kind: "clean" } | { kind: "join"; base: Extract<Base, { kind: "joined" }>; placement: Placement; environment: EnvironmentArgs; checkout: AgentCheckout };
+export type Handover =
+  | { kind: "clean" }
+  | { kind: "join"; base: Extract<Base, { kind: "joined" }>; placement: Placement; environment: EnvironmentArgs; checkout: AgentCheckout }
+  | { kind: "cut"; base: Cut; placement: Placement };
+
+/** What agent_start asked of a handover: `from`, and the placement it named, resolved (null: none named). */
+type HandoverRequest = { from: StartFrom; placement: Placement | null };
+
+/** Whether a start is clean whatever came before: `from: "default"`, or a kind that ships no code, whose work is its report and reaches the new agent in its first message. */
+export const startsClean = (kind: Kind, from: StartFrom): boolean => from === "default" || !shipsCode(kind);
 
 /**
  * Where an agent of a `kind` issue starts, or why it can't, decided before anything changes (pure).
- * Clean: no earlier agent with a thread, `from: "default"`, or a kind that ships no code, whose
- * work is its report and reaches the new agent in its first message. Continue: nothing named and
- * the previous environment still there, whatever runs it, idle, stopped, archived within a
- * worktree's grace or suspended, which the spawn wakes (SH1, SH5). Anything else would move the
- * work to a new environment, which this version can't, so it is refused.
+ * Clean: no earlier agent with a thread, or startsClean. Continue: nothing named and the previous
+ * environment still there, whatever runs it, idle, stopped, archived within a worktree's grace or
+ * suspended, which the spawn wakes (SH1, SH5). Move: a placement named, or the environment gone; the
+ * work goes to a new environment on a branch cut from the previous agent's (cutRef).
  */
-export function handoverOf(kind: Kind, request: { from: StartFrom; placement: RequestedPlacement | undefined }, previous: Previous | null): Handover | { refused: string } {
-  if (previous === null || request.from === "default" || !shipsCode(kind)) return { kind: "clean" };
+export function handoverOf(kind: Kind, request: HandoverRequest, previous: Previous | null): Handover | { refused: string } {
+  if (previous === null || startsClean(kind, request.from)) return { kind: "clean" };
   const { agent, environmentId, branch } = previous;
-  const clean = `start clean with from: "default", which starts from the default branch with every earlier handoff and verdict in the new agent's first message.`;
-  if (request.placement !== undefined) return { refused: `A handover continues in ${agent.id}'s environment, and can't move its work to a placement yet: leave out placement, or ${clean}` };
-  if (environmentId === null) return { refused: `bb has removed ${agent.id}'s environment, so its work can't be continued there, and moving it to a new one isn't possible yet: ${clean}` };
-  return {
-    kind: "join",
-    base: { kind: "joined", from: agent.id },
-    placement: agent.placement,
-    environment: { type: "reuse", environmentId },
-    checkout: { environmentId, branch, head: agent.checkout.head },
-  };
+  const to = moveTo(request.placement, previous);
+  if (to === null && environmentId !== null) {
+    return {
+      kind: "join",
+      base: { kind: "joined", from: agent.id },
+      placement: agent.placement,
+      environment: { type: "reuse", environmentId },
+      checkout: { environmentId, branch, head: agent.checkout.head },
+    };
+  }
+  const cut = cutRef(previous, to ?? agent.placement);
+  return "refused" in cut ? cut : { kind: "cut", base: cut, placement: to ?? agent.placement };
 }
+
+/**
+ * Where a handover moves the work: the placement named; else, once bb destroyed the previous
+ * environment, a new one like it, a sandbox of the same provider and machine inputs (a sandbox goes
+ * at its last thread's archive, SH5; a worktree a few minutes after, SH1). null: it continues.
+ */
+export const moveTo = (named: Placement | null, { agent, environmentId }: Pick<Previous, "agent" | "environmentId">): Placement | null =>
+  named ?? (environmentId === null ? agent.placement : null);
+
+/** The branch a move cuts from, and the head the previous agent left there (null: none known). */
+type Tip = { branch: string; head: string | null };
+
+/**
+ * How a move of the previous agent's work to `to` gets its branch, from what the move read
+ * (`pushed` aside): from the local branch, as a cut; once its pull request shows the head pushed
+ * (`prove`: the branch, and the head to find there, null when none is known); or why it can't,
+ * naming the fact behind it and a start that does work. Every refusal comes first, in this order.
+ */
+export function cutPlan(previous: Omit<Previous, "pushed">, to: Placement): Cut | { prove: Tip } | { refused: string } {
+  const { agent, environmentId } = previous;
+  const orContinue = environmentId !== null ? "continue in its environment (leave out placement), or " : "";
+  if (to.kind === "provider" && to.inputs.kind !== "new-branch") return { refused: `${to.environmentProviderId} takes no branch, so an agent there can't start from ${agent.id}'s: ${orContinue}${CLEAN}` };
+  const tip = tipOf(previous);
+  if ("refused" in tip) return tip;
+  // A worktree's branch is a ref of the project's repository on the regional manager's machine: a new
+  // worktree there cuts from it while its agent lives, after it is archived, and after its worktree
+  // is removed (bb-facts P1a, P1b(i), P1c).
+  if (to.kind === "worktree" && agent.placement.kind === "worktree") return { kind: "cut", from: agent.id, ...tip, via: "local" };
+  // Anything else reaches the branch only through origin: a sandbox clones from it (SH2), a worktree
+  // fetches `origin/<branch>` (P2), and bb puts a sandbox's branch there only if something in the
+  // sandbox pushes it (SH4).
+  return { prove: tip };
+}
+
+/**
+ * Where the previous agent's work is, for a move: in a live environment, the branch checked out and
+ * its head, as the one read just made shows them together; once bb destroyed it, the branch on record
+ * and the head its last handoff recorded. Or why there is none to cut from. why the live branch: an
+ * agent may have checked out another, and committed there. The graft: a new environment gets
+ * committed work alone, so what a live one holds uncommitted would stay behind; a continue inherits it.
+ */
+function tipOf({ agent, environmentId, branch, now }: Omit<Previous, "pushed">): Tip | { refused: string } {
+  if (environmentId === null) {
+    return branch === null ? { refused: `${agent.id} has no branch on record, so a new environment has nothing to start from: ${CLEAN}` } : { branch, head: agent.checkout.head };
+  }
+  if (now?.kind !== "read") {
+    const why = now === null ? "it wasn't read" : now.reason;
+    return { refused: `bb's git plugin can't read ${agent.id}'s environment now (${why}), so what ${agent.id} left uncommitted there is unknown. Continue in it instead (leave out placement; that wakes a sleeping sandbox), or call again once it can be read.` };
+  }
+  if (now.branch === null) {
+    return { refused: `${agent.id}'s environment has no branch checked out (HEAD is detached at ${now.checkout.headSha.slice(0, 7)}), so a new environment has none to start from. Continue in it (leave out placement), or ask ${agent.id} to check out a branch with its commits, then call again.` };
+  }
+  if (now.checkout.changedFileCount > 0) {
+    return { refused: `${agent.id} left ${uncommittedText(now.checkout)} in its environment, which a new environment wouldn't get. Continue in it (leave out placement), or ask ${agent.id} to commit them, then call again.` };
+  }
+  return { branch: now.branch, head: now.checkout.headSha };
+}
+
+/**
+ * The cut a move makes, or why it can't (pure; cutPlan's order): through origin only once the
+ * branch's pull request has the head the agent left (tipOf), which proves it pushed (SH4).
+ */
+function cutRef(previous: Previous, to: Placement): Cut | { refused: string } {
+  const plan = cutPlan(previous, to);
+  if (!("prove" in plan)) return plan;
+  const { agent, environmentId, pushed } = previous;
+  const { branch, head } = plan.prove;
+  if (head !== null && pushed?.kind === "read" && pushed.pr?.headSha === head) return { kind: "cut", from: agent.id, branch, via: "origin", head };
+  const at = head === null ? "the head it left" : `its head ${head.slice(0, 7)}`;
+  if (pushed?.kind === "unread") {
+    const then = environmentId === null ? `Call again once GitHub can be read, or ${CLEAN}` : "Continue in its environment (leave out placement), or call again once GitHub can be read.";
+    return { refused: `Whether ${agent.id}'s branch \`${branch}\` is on origin at ${at} can't be read now: ${pushed.reason}. ${then}` };
+  }
+  const reaches = "a move with a sandbox on either side reaches the branch only through origin, and only a pull request whose head is that commit shows it was pushed";
+  if (environmentId !== null) {
+    return { refused: `${agent.id}'s branch \`${branch}\` isn't shown on origin at ${at}: ${reaches}. Continue in its environment (leave out placement), or ask ${agent.id} to push and open a pull request, then call again.` };
+  }
+  const removed = `bb removed ${agent.id}'s ${placementName(agent.placement)}, and nothing shows its branch \`${branch}\` reached origin at ${at} (no pull request has that head)`;
+  return { refused: `${removed}: ${keptText(agent.placement)}` };
+}
+
+/** What became of a removed environment's unpushed commits, and the start that works from there. */
+function keptText(placement: Placement): string {
+  switch (placement.kind) {
+    // A worktree's branch outlives it (bb-facts P1c).
+    case "worktree":
+      return `its commits are still on that branch on your machine, which a new worktree reaches. Leave out placement, or name a worktree, and the new agent starts on a branch cut from it; it can push and open its pull request, and a move to a sandbox works after that. Or ${CLEAN}`;
+    case "provider":
+      return `its unpushed commits went with it. ${CLEAN.charAt(0).toUpperCase()}${CLEAN.slice(1)}`;
+    default:
+      return placement satisfies never;
+  }
+}
+
+const CLEAN = `start clean with from: "default", which starts from the default branch with every earlier handoff and verdict in the new agent's first message.`;
+
+/** Changed files as read, in words: `2 files uncommitted (?? a.txt,  M b.ts)`. */
+function uncommittedText({ changedFiles, changedFileCount }: { changedFiles: readonly string[]; changedFileCount: number }): string {
+  const more = changedFileCount - changedFiles.length;
+  return `${changedFileCount === 1 ? "1 file" : `${changedFileCount} files`} uncommitted (${changedFiles.join(", ")}${more > 0 ? `, and ${more} more` : ""})`;
+}
+
+/** What made an environment, in words: `worktree`, `boat-sandbox environment`. */
+export const placementName = (placement: Placement): string => (placement.kind === "worktree" ? "worktree" : `${placement.environmentProviderId} environment`);
 
 /**
  * An issue's branch: that of its latest agent with one (`own`: its agents in the order started;

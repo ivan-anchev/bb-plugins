@@ -5,12 +5,13 @@
 // issue In review whose agent's thread was archived still becomes Done when its pull request
 // merges. It saves each successful read and records a `pr` event when one changed meaningfully; the
 // verify step's pass, after it in the same tick, settles the verdicts that wait for CI. A failed
-// read keeps what was saved and says why on the board.
+// read keeps what was saved and says why on the board. A handover that moves work through origin
+// also reads one branch at once (readNow), saved the same way.
 import { issueBranch, type Agent } from "../../model/agent.ts";
 import type { Issue } from "../../model/issue/issue.ts";
 import { shipsCode } from "../../model/issue/kind.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { ciRunning, type PrSnapshot, type PrUnavailable } from "../../model/verdict/pr.ts";
+import { ciRunning, type PrRead, type PrSnapshot, type PrUnavailable } from "../../model/verdict/pr.ts";
 import { threadsById } from "../agents/threads.ts";
 import type { Inbox } from "../inbox/inbox.ts";
 import type { Store } from "../store/store.ts";
@@ -38,22 +39,44 @@ type WatchBb = {
 
 type Deps = {
   bb: WatchBb;
-  store: Pick<Store, "coordinators" | "issues" | "issue" | "agents" | "prOfBranch" | "waitingForCi" | "latestHandoff">;
+  store: Pick<Store, "coordinator" | "coordinators" | "issues" | "issue" | "agents" | "prOfBranch" | "waitingForCi" | "latestHandoff">;
   inbox: Pick<Inbox, "prRead" | "prUnavailable">;
   /** Runs gh with these arguments and resolves to its stdout; rejects as Node's execFile does. */
   gh(args: string[]): Promise<string>;
+  /** The time a read outside the tick is saved at. */
+  now(): number;
 };
 
 /** A branch the watch reads: its regional manager, the agent last on it, in a repository on GitHub (null: its project's remote isn't). */
 type Watched = { coordinatorId: CoordinatorId; agent: Agent; branch: string; repo: Repo | null };
 
-export function createPrWatch({ bb, store, inbox, gh }: Deps) {
+export type PrWatch = ReturnType<typeof createPrWatch>;
+
+export function createPrWatch({ bb, store, inbox, gh, now }: Deps) {
   // why: a tick that outlasts the minute must not overlap the next, or one read could save over a newer one.
   let running = false;
   let disposed = false;
   bb.onDispose(() => {
     disposed = true;
   });
+  // The latest read asked for, the tick's or a move's, settled once it and every one before it are.
+  // why one at a time: a read saves what GitHub said as it began, so one that overlapped a later one
+  // could save an older head over a newer.
+  let reads: Promise<unknown> = Promise.resolve();
+  function serially<T>(read: () => Promise<T>): Promise<T> {
+    const next = reads.then(read, read);
+    reads = next.catch(() => {});
+    return next;
+  }
+
+  /** The repository a regional manager's project is on, on GitHub; null when its git remote isn't. */
+  async function repoOf(coordinatorId: CoordinatorId): Promise<Repo | null> {
+    const coordinator = store.coordinator(coordinatorId);
+    // why throw: a move reads the pull request of its own regional manager's issue.
+    if (coordinator === null) throw new Error(`No regional manager ${coordinatorId}.`);
+    const { gitRemoteUrl } = await bb.sdk.projects.get({ projectId: coordinator.projectId });
+    return gitRemoteUrl === null ? null : parseGitHubRepo(gitRemoteUrl);
+  }
 
   /**
    * Every open issue's branch (issueBranch), of a kind that ships code, whose pull request may still
@@ -66,8 +89,7 @@ export function createPrWatch({ bb, store, inbox, gh }: Deps) {
       const open = issues.filter((issue) => watches(issue, issues));
       const agents = store.agents(coordinator.id).filter((agent) => open.some((issue) => issue.id === agent.issueId));
       if (agents.length === 0) continue;
-      const { gitRemoteUrl } = await bb.sdk.projects.get({ projectId: coordinator.projectId });
-      const repo = gitRemoteUrl === null ? null : parseGitHubRepo(gitRemoteUrl);
+      const repo = await repoOf(coordinator.id);
       // why archived ones too: an agent's branch outlives its thread.
       const threads = await threadsById(bb, agents.flatMap(({ threadId }) => (threadId === null ? [] : [threadId])));
       const threadOf = (agent: Agent) => (agent.threadId === null ? null : (threads.get(agent.threadId) ?? null));
@@ -144,20 +166,46 @@ export function createPrWatch({ bb, store, inbox, gh }: Deps) {
     }
   }
 
+  /** Reads the branch's pull request now and saves what the read found as the tick does, `agent` being the one last on it. */
+  async function readOne(coordinatorId: CoordinatorId, agent: Agent, branch: string): Promise<PrRead> {
+    const repo = await repoOf(coordinatorId);
+    if (repo === null) return { kind: "unread", reason: NOT_ON_GITHUB.reason };
+    const handoffAtRead = latestHandoffOf(agent);
+    const result = await read(repo, [branch]);
+    if (result.kind === "unavailable") {
+      inbox.prUnavailable(coordinatorId, branch, result.unavailable, now());
+      return { kind: "unread", reason: result.unavailable.reason };
+    }
+    const pr = result.prs.get(branch) ?? null;
+    inbox.prRead(coordinatorId, branch, { issueId: agent.issueId, agentId: agent.id }, pr, handoffAtRead, now());
+    return { kind: "read", pr };
+  }
+
   return {
     /** The tick's pass: reads every repository that is due. A branch no open issue's latest agent is on is never read. */
-    async tick(now: number): Promise<void> {
+    async tick(at: number): Promise<void> {
       if (disposed || running) return;
       running = true;
       try {
-        for (const branches of (await watched()).values()) {
-          if (disposed) return;
-          if (due(branches, now)) await poll(branches, now);
-        }
+        await serially(async () => {
+          for (const branches of (await watched()).values()) {
+            if (disposed) return;
+            if (due(branches, at)) await poll(branches, at);
+          }
+        });
       } finally {
         running = false;
       }
     },
+
+    /**
+     * The branch's pull request as GitHub has it now, for a move that cuts from origin: one gh call,
+     * after every read still out, saved as the tick saves. why never the saved one: it is what GitHub
+     * showed at an earlier minute, and the branch may have moved since, back included. why not wait
+     * for the tick: a quiet repository is read every five minutes, and a regional manager told to
+     * push and call again must not be refused meanwhile. `agent`: the one last on the branch.
+     */
+    readNow: (coordinatorId: CoordinatorId, agent: Agent, branch: string): Promise<PrRead> => serially(() => readOne(coordinatorId, agent, branch)),
   };
 }
 

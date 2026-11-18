@@ -31,14 +31,14 @@ export function registerAgentTools(bb: ToolsBb, { store, agents }: Deps): void {
   bb.agents.registerTool({
     name: START,
     description:
-      "Start an agent on one of your issues: a child thread of yours that does the issue's work. Its first message is the issue's description, brief and done-criteria, and CREW.md and MEMORY.md as they are when it starts. The issue needs a brief and its done-criteria first. On an issue that has or had an agent, it is a handover: the agent holding it is stopped (never archived) and replaced, and the new one continues in the previous agent's environment, on its branch, with its commits, its uncommitted files and its pull request, unless from is default; its first message adds every earlier handoff and verdict. Returns the agent's id (a1, a2…), a link to its thread, where it works and what it runs on. When the user asked you to propose work and wait, don't call it yet: file the issues in Backlog and ask with crew_ask_user first.",
+      "Start an agent on one of your issues: a child thread of yours that does the issue's work. Its first message is the issue's description, brief and done-criteria, and CREW.md and MEMORY.md as they are when it starts. The issue needs a brief and its done-criteria first. On an issue that has or had an agent, it is a handover: the agent holding it is stopped (never archived) and replaced, and the new one continues in the previous agent's environment, on its branch, with its commits, its uncommitted files and its pull request. With a placement named, or once bb removed that environment, it moves instead: a new environment, on a new branch cut from the previous agent's, for its commits only, which the new agent checks it got; from default starts clean. Its first message adds every earlier handoff and verdict. Returns the agent's id (a1, a2…), a link to its thread, where it works and what it runs on. When the user asked you to propose work and wait, don't call it yet: file the issues in Backlog and ask with crew_ask_user first.",
     presentation: { label: { pending: "Starting an agent", completed: "Started an agent" }, icon: { glyph: "Workflow" } },
     parameters: z.strictObject({
       issue: issueIdSchema.describe("The issue the agent works on, such as i1."),
       from: startFromSchema
         .default("previous")
         .describe(
-          "On an issue that had an agent: previous (the default) continues in that agent's environment, on its branch; default starts clean, in a new environment from the default branch. A research issue's agent always starts clean. Ignored on an issue that never had one.",
+          "On an issue that had an agent: previous (the default) carries its work on: in its environment, on its branch, or, with a placement named or its environment gone, in a new one on a branch cut from its branch; default starts clean, in a new environment from the default branch. A research issue's agent always starts clean. Ignored on an issue that never had one.",
         ),
       execution: requestedExecutionSchema
         .optional()
@@ -48,7 +48,7 @@ export function registerAgentTools(bb: ToolsBb, { store, agents }: Deps): void {
       placement: requestedPlacementSchema
         .optional()
         .describe(
-          'Where a new environment is made: worktree (the default), a fresh worktree of the default branch on your machine; provider, an environment provider such as boat-sandbox, named by environmentProviderId, with machineInputs for the machine it makes, such as {"preset": "small"} for boat-sandbox (`bb environment providers --json` shows each one\'s machineInputs). A sandbox agent gets its own new branch from the default branch. A handover that continues takes no placement: it works where the previous agent did.',
+          'Where a new environment is made: worktree (the default), a fresh worktree on your machine; provider, an environment provider such as boat-sandbox, named by environmentProviderId, with machineInputs for the machine it makes, such as {"preset": "small"} for boat-sandbox (`bb environment providers --json` shows each one\'s machineInputs). A first or clean agent gets its own new branch from the default branch. On a handover, naming one moves the work: the new agent gets its own branch cut from the previous agent\'s, refused while that agent\'s environment holds uncommitted files or can\'t be read; with a sandbox on either side, only once its head is pushed and a pull request shows it. Leave it out to continue where the previous agent worked.',
         ),
     }),
     execute: forManager(store, START, async (id, { issue, from, execution, placement }) => {

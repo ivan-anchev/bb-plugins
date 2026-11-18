@@ -496,7 +496,8 @@ test("a verdict whose settle fails leaves every read of the batch saved, and set
 
 test("a sandbox agent's environment is read by bb's git plugin only as it hands off: never by the board, the badge, issue_read or the watch", async () => {
   const { kit, threadId, coordinatorId, agentThreadId, board, pr, minute } = await agentOnGitHub({ kind: "provider", environmentProviderId: "boat-sandbox", machineInputs: { preset: "small" } });
-  const { environmentId, environmentBranchName } = kit.thread(agentThreadId);
+  const { environmentBranchName } = kit.thread(agentThreadId);
+  const environmentId = kit.environment(agentThreadId);
   const agentReads = () => kit.git.calls.filter((keys) => keys.includes(environmentId)).length;
   kit.git.checkouts.set(environmentId, "add-retries");
   pr();
@@ -523,7 +524,7 @@ test("a sandbox agent's environment is read by bb's git plugin only as it hands 
 
 test("an agent's branch as recorded at a handoff is kept when a later handoff can't read its checkout", async () => {
   const { kit, agentThreadId, row, pr, minute } = await agentOnGitHub();
-  const { environmentId } = kit.thread(agentThreadId);
+  const environmentId = kit.environment(agentThreadId);
   kit.git.checkouts.set(environmentId, "add-retries");
   await kit.call("agent_handoff", BLOCKED, agentThreadId);
   pr({}, "add-retries");
@@ -652,4 +653,28 @@ test("a research issue's branch is never read from GitHub, so even a merged pull
   assert.match(textOf(await kit.call("issue_read", { id: "i1" }, threadId)), /\n\nResearch\. In progress: Working\./);
   const row = (await kit.rpc.board({ coordinatorId })).issues[0] ?? assert.fail("no row");
   assert.deepEqual([row.kind, row.pr], ["research", null]);
+});
+
+test("a move's fresh read of a pull request waits for a tick's read still out, so the tick's older head never lands over the newer one", async () => {
+  const { kit, threadId, coordinatorId, agentThreadId, branch, pr } = await agentOnGitHub({ kind: "provider", environmentProviderId: "boat-sandbox", machineInputs: { preset: "small" } });
+  const [first, second] = ["1111111111111111111111111111111111111111", "2222222222222222222222222222222222222222"];
+  kit.commit(agentThreadId, first);
+  kit.push(agentThreadId);
+  pr({ head: first });
+  let answer = (): void => assert.fail("gh never ran");
+  kit.github.pending = new Promise((resolve) => (answer = resolve));
+  const ticking = kit.tick(); // its gh answer, as GitHub had it, holds the first head
+  await settled();
+  kit.github.pending = null;
+  kit.commit(agentThreadId, second);
+  kit.push(agentThreadId);
+  pr({ head: second });
+
+  const moving = kit.call("agent_start", { issue: "i1", placement: { kind: "worktree" } }, threadId);
+  await settled();
+  answer();
+  await ticking;
+  const result = textOf(await moving);
+  assert.match(result, /on a new branch cut from a1's `origin\/bb\/thr_2` expecting 2222222/);
+  assert.equal(kit.store.prOfBranch(coordinatorId, branch)?.snapshot?.headSha, second, "the newer read is the one saved");
 });

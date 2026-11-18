@@ -61,5 +61,6 @@ criterion. Fix the call and make it again. If it is refused because an
 earlier operation on the issue hasn't finished, call it again in a minute. If it says the handoff no longer
 waits for your verdict, a newer handoff replaced it: stop.
 
-If you end a turn without it, the plugin reminds you once. A second turn
-without it records that the work couldn't be verified.
+If you end a turn without it, the plugin reminds you once, with a message
+that bb shows as from your regional manager's thread. A second turn without
+it records that the work couldn't be verified.
