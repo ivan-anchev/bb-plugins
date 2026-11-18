@@ -148,10 +148,10 @@ test("an open row whose issue moves to another lane stays open there, with focus
   assert.ok(document.activeElement === moved, "focus moved with the row");
 });
 
-test("an open row shows its title and its headline whole, which it fades out at its edge while closed, and its detail doesn't repeat them", () => {
+test("an open row shows its title and its headline whole, which it fades out at its edge while closed, and its detail doesn't repeat them", (t) => {
   const title = "Retry failed webhook deliveries with exponential backoff, capped at five attempts, and record each one";
   const headline = "Blocked: Needs a staging key for the webhook sandbox before the retry test can run against it";
-  using _ = narrowRows();
+  t.after(narrowRows());
   const { view } = mount([issue("i9", { status: "in-progress", needsYou: headline, headline, title })]);
   const flagged = row(view, "i9");
   const fading = (text: string) => within(flagged).getByText(text).closest("[data-over]") !== null;
@@ -164,13 +164,13 @@ test("an open row shows its title and its headline whole, which it fades out at 
   assert.equal(flagged.getAttribute("aria-label")?.split(title).length, 2, "the row speaks the title once");
 });
 
-/** Rows 300px wide, their text 7px a character, while in use: jsdom lays nothing out, and a row fades only text that runs past it. */
-function narrowRows(): Disposable {
+/** Rows 300px wide, their text 7px a character, until the returned restore runs: jsdom lays nothing out, and a row fades only text that runs past it. */
+function narrowRows(): () => void {
   const width = (property: "scrollWidth" | "clientWidth", of: (el: HTMLElement) => number) =>
     Object.defineProperty(HTMLElement.prototype, property, { configurable: true, get(this: HTMLElement) { return of(this); } });
   width("scrollWidth", (el) => (el.textContent ?? "").length * 7);
   width("clientWidth", () => 300);
-  return { [Symbol.dispose]: () => ["scrollWidth", "clientWidth"].forEach((property) => Reflect.deleteProperty(HTMLElement.prototype, property)) };
+  return () => ["scrollWidth", "clientWidth"].forEach((property) => Reflect.deleteProperty(HTMLElement.prototype, property));
 }
 
 const moved = (id: string, fields: Partial<IssueRow>) => ISSUES.map((each) => (each.id === id ? { ...each, ...fields } : each));
