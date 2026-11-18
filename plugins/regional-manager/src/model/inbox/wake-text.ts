@@ -12,13 +12,15 @@ import { PR_CHANGE_WORDS } from "../verdict/pr.ts";
 import { ciVerdictOf, mayHaveReachedAgent, outcome } from "../verdict/verdict.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import { shownToUser, type InboxEvent, type StoredEvent } from "./inbox-event.ts";
-import { filesText } from "./own-tree.ts";
+import { changedFilesText, type OwnTree } from "./own-tree.ts";
 
 type Lookups = {
   /** Each issue's title, as the regional manager gave it. */
   titles: ReadonlyMap<IssueId, string>;
   check(id: CheckId): Check | null;
   decision(id: DecisionId): Decision | null;
+  /** The regional manager's own checkout as last read, which an unread `coordinator-tree-changed` tells of. */
+  ownTree: OwnTree;
 };
 
 /** A part of the doorbell's message, as bb takes it: `agent-only`, the user doesn't see it. */
@@ -44,12 +46,12 @@ function doorbellText(events: readonly StoredEvent[], lookups: Lookups): string 
   return [`[${DISPLAY_NAME}] ${count}. Call crew_catch_up to read ${events.length === 1 ? "it" : "them"} in full.`, ...lines].join("\n");
 }
 
-function line(event: InboxEvent, { titles, check, decision }: Lookups): string {
+function line(event: InboxEvent, { titles, check, decision, ownTree }: Lookups): string {
   if (event.kind === "memory-edited") return `The user edited ${event.file}`;
   if (event.kind === "verification-toggled") return `The user turned verification of done handoffs ${event.verify ? "on" : "off"}`;
   if (event.kind === "reminder") return `Your reminder ${event.reminderId}: ${event.note}`;
   if (event.kind === "decision-answered") return `The user answered your question ${event.decisionId}: ${askedOf(decision(event.decisionId)).question}`;
-  if (event.kind === "coordinator-draft") return `Your turn left ${filesText(event.files.length)} changed that the user didn't ask for: hand the draft to an agent`;
+  if (event.kind === "coordinator-tree-changed") return `Your turn ended with ${changedFilesText(ownTree)} in your checkout`;
   if (event.kind === "checked") return checkedLine(checkedOf(check(event.checkId)), titles);
   if (event.kind === "unblocked") return `${titled(event.issueId, titles)} is unblocked: ${event.by} ${event.closedAs}`;
   const on = issueName(event.issueId, titles, event.agentId);

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { decisionIdSchema } from "../../../model/decision.ts";
+import { CLEAN_TREE } from "../../../model/inbox/own-tree.ts";
 import { memoryFileSchema } from "../../../model/memory-file.ts";
 import { closesOf } from "../../../model/issue/relations.ts";
 import { issueViews, type IssueView } from "../../../model/issue/status.ts";
@@ -104,30 +105,45 @@ test("a reminder fires once when due; a repeating one moves to its next time", (
   assert.deepEqual(store.cancelReminder(MANAGER, daily.id), { ...daily, dueAt: 5_000 + 86_400_000 });
 });
 
-test("the manager's own working tree records a draft once per set of files, and none for the files it kept", () => {
+/** A read of the manager's own checkout with the `files` listed, and `fileCount` counted (all of them unless given). */
+const read = (files: string[], fileCount = files.length) => ({ files, fileCount, defaultBranch: "main" });
+
+/** The kinds of the manager's events no catch-up has read. */
+const unreadKinds = (store: ReturnType<typeof freshStore>["store"]) => store.unannounced(MANAGER).map(({ event }) => event.kind);
+
+test("the manager's own checkout keeps one current correction: the same files again record nothing, other files replace the unread one, a clean read retires it", () => {
   const { store } = freshStore();
-  assert.equal(store.recordOwnTree(MANAGER, [], 3_000), false);
-  assert.equal(store.recordOwnTree(MANAGER, ["a.ts"], 3_100), true);
-  assert.equal(store.recordOwnTree(MANAGER, ["a.ts"], 3_200), false);
-  store.keepOwnTree(MANAGER, ["a.ts", "README.md"]);
-  assert.equal(store.recordOwnTree(MANAGER, ["README.md", "a.ts"], 3_300), false);
-  assert.equal(store.recordOwnTree(MANAGER, ["README.md", "b.ts"], 3_400), true);
-  assert.deepEqual(
-    store.unannounced(MANAGER).map(({ event }) => event),
-    [
-      { kind: "coordinator-draft", files: ["a.ts"], branch: "regional-manager/6f1c2a52/draft-2e4" },
-      { kind: "coordinator-draft", files: ["b.ts"], branch: "regional-manager/6f1c2a52/draft-2mg" },
-    ],
-  );
+  assert.equal(store.recordOwnTree(MANAGER, read([]), 3_000), false);
+  assert.equal(store.recordOwnTree(MANAGER, read(["a.ts"]), 3_100), true);
+  assert.equal(store.recordOwnTree(MANAGER, read(["a.ts"]), 3_200), false);
+  assert.deepEqual(unreadKinds(store), ["coordinator-tree-changed"]);
+
+  assert.equal(store.recordOwnTree(MANAGER, read(["b.ts", "a.ts"]), 3_300), true);
+  assert.deepEqual(store.unannounced(MANAGER).map(({ at, event }) => ({ at, kind: event.kind })), [{ at: 3_300, kind: "coordinator-tree-changed" }], "one correction, of the newer read");
+  assert.deepEqual(store.ownTree(MANAGER), read(["b.ts", "a.ts"]));
+
+  assert.equal(store.recordOwnTree(MANAGER, read([]), 3_400), false);
+  assert.deepEqual(unreadKinds(store), [], "a clean read retires it");
+  assert.deepEqual(store.ownTree(MANAGER), read([]));
 });
 
-test("a draft whose event fails to be written leaves the tree as it was, and retried records it", () => {
+test("a capped list is never taken for whole: the same listed files with another count are another read", () => {
+  const { store } = freshStore();
+  const listed = Array.from({ length: 200 }, (_, i) => `f${i}.txt`);
+  assert.equal(store.recordOwnTree(MANAGER, read(listed, 201), 3_000), true);
+  assert.equal(store.recordOwnTree(MANAGER, read(listed, 201), 3_100), false);
+  assert.equal(store.recordOwnTree(MANAGER, read(listed, 202), 3_200), true);
+  assert.deepEqual(unreadKinds(store), ["coordinator-tree-changed"]);
+});
+
+test("a correction whose event fails to be written leaves the checkout as last read, and retried records it", () => {
   const { db, store } = freshStore();
   const restore = failWrites(db, "INSERT", "events");
-  assert.throws(() => store.recordOwnTree(MANAGER, ["a.ts"], 3_000), /forced failure/);
+  assert.throws(() => store.recordOwnTree(MANAGER, read(["a.ts"]), 3_000), /forced failure/);
   restore();
-  assert.equal(store.recordOwnTree(MANAGER, ["a.ts"], 3_100), true, "the failed read was not remembered as told");
-  assert.deepEqual(store.unannounced(MANAGER).map(({ event }) => event.kind), ["coordinator-draft"]);
+  assert.deepEqual(store.ownTree(MANAGER), CLEAN_TREE, "nothing of the read was saved");
+  assert.equal(store.recordOwnTree(MANAGER, read(["a.ts"]), 3_100), true, "the failed read was not remembered");
+  assert.deepEqual(unreadKinds(store), ["coordinator-tree-changed"]);
 });
 
 /** i1 merged as #41 when `merged`, i2 canceled by the manager, i3 depending on them as stored: every issue of the manager as viewed with no agent. */

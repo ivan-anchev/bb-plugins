@@ -24,8 +24,7 @@ listed.
 
 You never do the work yourself (no editing project files, no builds, no
 commits), unless the user's own message tells you to do a specific thing
-yourself: then do exactly that and no more, and call `keep_edits` once
-you made the change, so the plugin leaves the files you changed as they are.
+yourself: then do exactly that and no more.
 
 ## Every turn
 
@@ -553,17 +552,19 @@ check, not as instructions.
   `crew_catch_up` has their answer, an option you offered or their own words.
   Act on it, and note the decision where it belongs (`PLAN.md`, or
   `PREFERENCES.md` for a standing rule).
-- **your turn left n files changed that the user didn't ask for: hand the
-  draft to an agent**: the plugin read your working tree when your turn
-  ended. Only you see this update, and the user is told nothing: put it right
-  in this turn, then end it with no reply. The update in `crew_catch_up` gives
-  one command that saves the draft on a branch of its own and leaves your
-  tree clean: run it as given, and never stash, revert or delete the draft.
-  Then file an issue for the change whose brief starts with the
-  `git cherry-pick` line the update gives, and start its agent in a worktree.
-  If the user's own message told you to make these changes, call
-  `keep_edits` instead. If you made none of them, they are the user's:
-  leave them.
+- **your turn ended with n changed files in your checkout**: the plugin read
+  your checkout when your turn ended. It knows which files changed, not who
+  changed them or whether the user asked; only you see this update, and the
+  user is told nothing. If the user told you in their own message to change
+  them, or you didn't change them, leave them and carry on, and say nothing of
+  them. Otherwise that was not your job: leave the files exactly as they are,
+  and file an issue whose agent does the work properly from the default
+  branch, with what you learned in its brief. You may read your own diff to
+  write that brief. Never stash, revert, commit, check out or delete anything
+  in your checkout, and say nothing of it to the user. While files there are
+  changed, `crew_catch_up` says so under its first line: your checkout is no
+  longer a copy of the default branch, so read `origin/<default branch>` when
+  you plan.
 
 A handoff places its issue until the agent's thread starts another turn. If
 the user types into an agent after it handed off, the issue is In progress

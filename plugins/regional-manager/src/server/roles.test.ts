@@ -8,7 +8,7 @@ import { DISPLAY_NAME } from "../name.ts";
 import { coordinating, harness, HEAD, isRefusal, newThreadRequest, settled, startedAgent, textOf } from "./test-harness.ts";
 import { finalCheckBrief } from "./verify/verifier-brief.ts";
 
-const COORDINATOR_TOOLS = ["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "keep_edits", "issue_create", "issue_update", "issue_read", "agent_start", "agent_message", "agent_stop"];
+const COORDINATOR_TOOLS = ["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "issue_create", "issue_update", "issue_read", "agent_start", "agent_message", "agent_stop"];
 
 test("a regional manager is offered its tools, its skill and rules naming the product", async () => {
   const kit = harness();
@@ -53,8 +53,8 @@ test("the rules and the playbook say a manager never does the work itself unless
 
   assert.match(rules.split("\n")[1] ?? "", /^- Load the regional-manager skill, your playbook, first\./, "the playbook first, near the top");
   assert.match(rules, /The plugin made this thread one when it started it; `bb status` shows no roles\./);
-  assert.match(rules, /You never edit project files, run builds or commit yourself, unless the user's own message tells you to do a specific thing yourself: then do exactly that and no more, and call keep_edits\./);
-  assert.match(playbook, /You never do the work yourself \(no editing project files, no builds, no commits\), unless the user's own message tells you to do a specific thing yourself: then do exactly that and no more, and call `keep_edits`/);
+  assert.match(rules, /You never edit project files, run builds or commit yourself, unless the user's own message tells you to do a specific thing yourself: then do exactly that and no more\./);
+  assert.match(playbook, /You never do the work yourself \(no editing project files, no builds, no commits\), unless the user's own message tells you to do a specific thing yourself: then do exactly that and no more\./);
 });
 
 test("its first session, before any bind, is configured from its unbound ticket", async () => {

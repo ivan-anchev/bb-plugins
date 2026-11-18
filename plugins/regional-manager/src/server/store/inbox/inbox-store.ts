@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { decisionIdSchema, type DecisionId, type Decision } from "../../../model/decision.ts";
 import { inboxEventSchema, type InboxEvent, type StoredEvent } from "../../../model/inbox/inbox-event.ts";
-import { afterTurn, CLEAN_TREE, draftBranch, keptAll, type OwnTree } from "../../../model/inbox/own-tree.ts";
+import { CLEAN_TREE, sameFiles, type OwnTree } from "../../../model/inbox/own-tree.ts";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
 import { unblockedSince } from "../../../model/issue/relations.ts";
 import type { IssueView } from "../../../model/issue/status.ts";
@@ -18,38 +18,36 @@ export function insertEvent(db: Db, coordinatorId: CoordinatorId, event: InboxEv
 }
 
 export function inboxStore(db: Db) {
-  /** The regional manager's own working tree as last read; clean when it was never read. */
+  /** The regional manager's own checkout as last read; clean when it was never read. */
   function ownTree(coordinatorId: CoordinatorId): OwnTree {
-    const row = db().prepare("SELECT kept, drafted FROM own_trees WHERE coordinator_id = ?").get(coordinatorId);
+    const row = db().prepare("SELECT files, file_count AS fileCount, default_branch AS defaultBranch FROM own_trees WHERE coordinator_id = ?").get(coordinatorId);
     return row === undefined ? CLEAN_TREE : ownTreeRowSchema.parse(row);
-  }
-
-  function saveOwnTree(coordinatorId: CoordinatorId, { kept, drafted }: OwnTree): void {
-    db()
-      .prepare("INSERT INTO own_trees (coordinator_id, kept, drafted) VALUES (?, ?, ?) ON CONFLICT (coordinator_id) DO UPDATE SET kept = excluded.kept, drafted = excluded.drafted")
-      .run(coordinatorId, JSON.stringify(kept), JSON.stringify(drafted));
   }
 
   return {
     insertEvent: (coordinatorId: CoordinatorId, event: InboxEvent, at: number): void => insertEvent(db, coordinatorId, event, at),
 
-    /**
-     * Records what a turn-end read of the `changed` files in the regional manager's own working tree
-     * says (see afterTurn), deciding from the tree as last read in the same transaction: a
-     * `coordinator-draft` event when it found one to tell of. Returns whether it recorded one.
-     */
-    recordOwnTree(coordinatorId: CoordinatorId, changed: readonly string[], at: number): boolean {
-      return db().transaction(() => {
-        const { tree, draft } = afterTurn(ownTree(coordinatorId), changed);
-        saveOwnTree(coordinatorId, tree);
-        if (draft !== null) insertEvent(db, coordinatorId, { kind: "coordinator-draft", files: draft, branch: draftBranch(coordinatorId, at) }, at);
-        return draft !== null;
-      })();
-    },
+    ownTree,
 
-    /** Keeps every file `changed` now in the regional manager's own working tree: the user asked it to change them (keep_edits). */
-    keepOwnTree(coordinatorId: CoordinatorId, changed: readonly string[]): void {
-      saveOwnTree(coordinatorId, keptAll(changed));
+    /**
+     * Saves a turn-end read of the regional manager's own checkout, and keeps one current correction:
+     * when it found other files than the read before it, it retires the unread
+     * `coordinator-tree-changed` event, which told of an older read, and records a new one if the
+     * checkout has changed files, deciding from the read before it in the same transaction. Returns
+     * whether it recorded one.
+     */
+    recordOwnTree(coordinatorId: CoordinatorId, read: OwnTree, at: number): boolean {
+      return db().transaction(() => {
+        const changed = !sameFiles(ownTree(coordinatorId), read);
+        db()
+          .prepare("INSERT INTO own_trees (coordinator_id, files, file_count, default_branch) VALUES (?, ?, ?, ?) ON CONFLICT (coordinator_id) DO UPDATE SET files = excluded.files, file_count = excluded.file_count, default_branch = excluded.default_branch")
+          .run(coordinatorId, JSON.stringify(read.files), read.fileCount, read.defaultBranch);
+        if (!changed) return false;
+        db().prepare("DELETE FROM events WHERE coordinator_id = ? AND read_at IS NULL AND json_extract(event, '$.kind') = 'coordinator-tree-changed'").run(coordinatorId);
+        if (read.fileCount === 0) return false;
+        insertEvent(db, coordinatorId, { kind: "coordinator-tree-changed" }, at);
+        return true;
+      })();
     },
 
     /**
@@ -224,7 +222,7 @@ export function inboxStore(db: Db) {
 const eventRowSchema = z.object({ id: z.number().int(), at: z.number(), event: json(inboxEventSchema) });
 const toEvent = (row: unknown): StoredEvent => eventRowSchema.parse(row);
 
-const ownTreeRowSchema = z.object({ kept: json(z.array(z.string())), drafted: json(z.array(z.string())) });
+const ownTreeRowSchema = z.object({ files: json(z.array(z.string())), fileCount: z.number().int().min(0), defaultBranch: z.string().nullable() });
 
 /** A reminder's row id is its number: `r7` is row 7. */
 const reminderRowIdSchema = z.number().int().transform((id) => reminderIdSchema.parse(`r${id}`));

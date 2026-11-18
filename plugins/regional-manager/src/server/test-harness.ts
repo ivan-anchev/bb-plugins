@@ -606,7 +606,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       outcome: "available",
       workspace: {
         checkout: branchName === undefined ? { kind: "detached", headSha } : { kind: "branch", branchName, headSha },
-        workingTree: { fileCount: changed.length, files: changed.map((path) => ({ path, status: "??", insertions: null, deletions: null })) },
+        // why sliced: as bb 0.49's git plugin does, it counts every changed file and lists the first 200.
+        workingTree: { fileCount: changed.length, files: changed.slice(0, 200).map((path) => ({ path, status: "??", insertions: null, deletions: null })) },
+        branch: { currentBranch: branchName ?? null, defaultBranch: "main" },
       },
     };
   }

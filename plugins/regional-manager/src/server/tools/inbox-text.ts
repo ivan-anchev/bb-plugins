@@ -6,7 +6,7 @@ import type { Agent, AgentId } from "../../model/agent.ts";
 import type { Decision, DecisionId } from "../../model/decision.ts";
 import type { Handoff, HandoffId } from "../../model/handoff.ts";
 import type { StoredEvent } from "../../model/inbox/inbox-event.ts";
-import { filesText } from "../../model/inbox/own-tree.ts";
+import { changedFilesText, type OwnTree } from "../../model/inbox/own-tree.ts";
 import { askedOf, checkedOf, issueName, titled } from "../../model/inbox/wake-text.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
 import { STATUS_LABELS, type Handed, type IssueView } from "../../model/issue/status.ts";
@@ -29,6 +29,8 @@ export type Lookups = {
   decision(id: DecisionId): Decision | null;
   /** The issue's view, as the board in the same catch-up places it; null when bb's thread list couldn't be read. */
   view(id: IssueId): IssueView | null;
+  /** The regional manager's own checkout as last read, which an unread `coordinator-tree-changed` tells of. */
+  ownTree: OwnTree;
 };
 
 /** The updates section of a catch-up: every event it returned, oldest first. */
@@ -52,7 +54,7 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
     return `### Your reminder ${event.reminderId}: ${event.note}\n\n${when} It was due at ${new Date(event.dueAt).toISOString()}. ${repeats}`;
   }
   if (event.kind === "decision-answered") return answeredText(askedOf(decision(event.decisionId)), when);
-  if (event.kind === "coordinator-draft") return draftText(event, when);
+  if (event.kind === "coordinator-tree-changed") return treeChangedText(lookups.ownTree, when);
   if (event.kind === "checked") {
     const check = checkedOf(lookups.check(event.checkId));
     const { subject } = check;
@@ -143,24 +145,25 @@ const MAY_HAVE_REACHED_AGENT =
   "The plugin was cut off while it sent the verifier's findings to the agent as its automatic fix round (it stopped, or bb's answer never came back whole), and nothing bb keeps shows whether they arrived: they may or may not have. Read the issue with issue_read before you message the agent, so it doesn't get them twice. ";
 
 /**
- * A draft the regional manager left in its own working tree, and how it puts it right: saved on its
- * own branch, which nothing discards, then an issue whose agent starts from it. why the manager runs
- * git: no part of bb a plugin reaches runs a command in the manager's environment and hides it from
- * the user. why the files named: a kept file stays in the tree.
+ * The correction for a turn that ended with changed files in the regional manager's own checkout.
+ * why it changes nothing there: the files may be the user's, or the user's request, and a command
+ * run on the user's behalf in a checkout they may also edit can lose their work. why "say nothing":
+ * the user was shown nothing of it.
  */
-function draftText({ files, branch }: Extract<StoredEvent["event"], { kind: "coordinator-draft" }>, when: string): string {
-  const save = `git switch -c ${branch} && git add -A -- ${files.map(shellQuoted).join(" ")} && git commit -qm "Regional manager draft" && git switch -`;
+function treeChangedText(tree: OwnTree, when: string): string {
   return [
-    `### Your turn left ${filesText(files.length)} changed that the user didn't ask for`,
-    `${when} ${files.map((file) => `\`${file}\``).join(", ")}. You don't edit files yourself: an agent does. Put it right in this turn, then end it with no reply: the plugin showed the user nothing, and nothing of it is theirs to read.`,
-    `1. Save the draft on a branch of its own, which leaves your working tree clean, with this one command: \`${save}\`. Never stash, revert or delete it: the branch keeps it, with any edit of the user's in those files.`,
-    `2. Hand it to an agent: file an issue for the change whose brief starts "Start from the regional manager's draft: run \`git cherry-pick ${branch}\` first.", and start its agent in a worktree, the default, which sees that branch. If an agent of yours already holds this work, message it that line instead.`,
-    "If the user's own message told you to make exactly these changes yourself, call keep_edits instead. If you made none of them, they are the user's: leave them.",
+    `### Your turn ended with ${changedFilesText(tree)} in your checkout`,
+    `${when} The plugin knows which files changed, not who changed them, and showed the user nothing of it. If the user told you in their own message to change them, or you didn't change them, leave them and carry on, and say nothing of them.`,
+    `Otherwise that was not your job: leave the files exactly as they are, and file an issue whose agent does the work properly from the default branch, with what you learned in its brief. You may read your own diff to write that brief. Say nothing of it to the user.`,
+    `Either way, ${notACopyText(tree)}`,
   ].join("\n\n");
 }
 
-/** A path as one shell word. */
-const shellQuoted = (path: string): string => `'${path.replaceAll("'", `'\\''`)}'`;
+/** The line under who the caller is, while the latest read found changed files in its checkout (empty: it found none). */
+export const changedCheckoutText = (tree: OwnTree): string => (tree.fileCount === 0 ? "" : `Your checkout has ${changedFilesText(tree)}: ${notACopyText(tree)}`);
+
+const notACopyText = ({ defaultBranch }: OwnTree): string =>
+  `your checkout is no longer a copy of the default branch: read ${defaultBranch === null ? "the default branch as origin has it" : `origin/${defaultBranch}`} when you plan.`;
 
 const FAILED_IS_YOURS =
   "It failed verification and is yours to decide: message the agent with agent_message, stop it with agent_stop and start a fresh agent on the issue with agent_start, or ask the user.";

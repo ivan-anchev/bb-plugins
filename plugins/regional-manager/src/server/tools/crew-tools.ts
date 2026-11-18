@@ -13,7 +13,7 @@ import type { Inbox } from "../inbox/inbox.ts";
 import { boardText } from "../issues/issue-text.ts";
 import type { MemoryRoot } from "../memory/memory-files.ts";
 import type { Store } from "../store/store.ts";
-import { openDecisionsText, remindersText, reminderText, updatesText } from "./inbox-text.ts";
+import { changedCheckoutText, openDecisionsText, remindersText, reminderText, updatesText } from "./inbox-text.ts";
 import { catchUpText, readText, writeResult } from "./memory-text.ts";
 import { failed, forManager, type ToolsBb } from "./tool-kit.ts";
 
@@ -27,7 +27,7 @@ const ASK_USER = "crew_ask_user";
 export const CREW_TOOLS = [CATCH_UP, MEMORY_READ, MEMORY_WRITE, REMIND, ASK_USER];
 
 type Deps = {
-  store: Pick<Store, "roleOfThread" | "issue" | "issues" | "agent" | "agents" | "handoff" | "check" | "reminders" | "insertReminder" | "cancelReminder" | "decision" | "decisions" | "insertDecision">;
+  store: Pick<Store, "roleOfThread" | "issue" | "issues" | "agent" | "agents" | "handoff" | "check" | "reminders" | "insertReminder" | "cancelReminder" | "decision" | "decisions" | "insertDecision" | "ownTree">;
   inbox: Pick<Inbox, "takeUnread">;
   memory: MemoryRoot;
   board: Pick<BoardReader, "issues">;
@@ -39,12 +39,13 @@ export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, on
   bb.agents.registerTool({
     name: CATCH_UP,
     description:
-      "Catch up: returns every update since your last catch-up in full (agents' handoffs, a done one with its verifier's verdict, agents that failed, wait on the user, stopped without a handoff or ended before their work was done, issues unblocked, pull requests, your reminders that came due, the user's answers to your questions, and the user's memory edits and verification switch), then the board (every issue you filed, under Needs you, In review, Verifying, In progress, Todo, Backlog, Done or Canceled, with its agent, thread and branch, and what blocks it) and the issues ready to start (in Todo, not blocked), the questions still waiting for the user, your reminders with their ids, and your memory files (MEMORY.md, GOAL.md, PLAN.md, PREFERENCES.md, CREW.md, DIGEST.md) in full, each with its version, and names any other memory file. Each update is returned once. Call it first on every wake.",
+      "Catch up: returns every update since your last catch-up in full (agents' handoffs, a done one with its verifier's verdict, agents that failed, wait on the user, stopped without a handoff or ended before their work was done, issues unblocked, pull requests, your reminders that came due, the user's answers to your questions, the user's memory edits and verification switch, and changed files your own turn left in your checkout), then the board (every issue you filed, under Needs you, In review, Verifying, In progress, Todo, Backlog, Done or Canceled, with its agent, thread and branch, and what blocks it) and the issues ready to start (in Todo, not blocked), the questions still waiting for the user, your reminders with their ids, and your memory files (MEMORY.md, GOAL.md, PLAN.md, PREFERENCES.md, CREW.md, DIGEST.md) in full, each with its version, and names any other memory file. Each update is returned once. Call it first on every wake.",
     presentation: { label: { pending: "Catching up", completed: "Caught up" }, icon: { glyph: "Workflow" } },
     parameters: z.object({}),
     execute: forManager(store, CATCH_UP, async (id) => {
       // why caught: the updates and the memory are still worth reading when bb's thread list can't be.
       const issues = await board.issues(id).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
+      const ownTree = store.ownTree(id);
       const updates = updatesText(inbox.takeUnread(id), {
         titles: new Map(store.issues(id).map((issue) => [issue.id, issue.title])),
         handoff: store.handoff,
@@ -52,8 +53,10 @@ export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, on
         agents: () => store.agents(id),
         decision: store.decision,
         view: (issueId) => ("error" in issues ? null : (issues.find(({ view }) => view.issue.id === issueId)?.view ?? null)),
+        ownTree,
       });
-      return `${identityText(id)}\n\n${updates}\n\n${boardText(issues)}\n\n${openDecisionsText(store.decisions(id))}\n\n${remindersText(store.reminders(id))}\n\n${catchUpText(memory.of(id))}`;
+      const checkout = changedCheckoutText(ownTree);
+      return `${identityText(id)}${checkout === "" ? "" : `\n${checkout}`}\n\n${updates}\n\n${boardText(issues)}\n\n${openDecisionsText(store.decisions(id))}\n\n${remindersText(store.reminders(id))}\n\n${catchUpText(memory.of(id))}`;
     }),
   });
 

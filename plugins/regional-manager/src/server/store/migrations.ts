@@ -122,10 +122,11 @@ export const MIGRATIONS: readonly string[] = [
     countWrites("roles_bound", "UPDATE OF thread_id ON roles", "json_extract(NEW.role, '$.coordinatorId')"),
   ].join(";\n"),
 
-  // The regional manager's own working tree as last read (own-tree.ts OwnTree): the changed files it
-  // kept, as the user asked it to change them, and the other changed files it was last told of. why
-  // JSON: each list is read and written whole.
-  `CREATE TABLE own_trees (coordinator_id TEXT PRIMARY KEY REFERENCES coordinators (id), kept TEXT NOT NULL, drafted TEXT NOT NULL)`,
+  // The regional manager's own checkout as its latest turn-end read found it (own-tree.ts OwnTree):
+  // the changed files bb's git plugin listed, how many it counted, and the default branch it named.
+  // why JSON: the list is read and written whole.
+  `CREATE TABLE own_trees (coordinator_id TEXT PRIMARY KEY REFERENCES coordinators (id), files TEXT NOT NULL,
+     file_count INTEGER NOT NULL, default_branch TEXT)`,
   // Up to 0.2.0, a turn that ended with changed files warned on the board and was recorded as an
   // event of a kind no longer read; a clean tree as another. why deleted, not kept: they are read
   // and announced, and the warning they made is gone. The index events_own_tree stays, matching nothing.

@@ -23,8 +23,12 @@ const managerEvents = [
   z.object({ kind: z.literal("reminder"), reminderId: reminderIdSchema, note: reminderNoteSchema, dueAt: z.number(), everyMs: z.number().int().positive().nullable() }),
   /** The user answered a decision the coordinating thread put to them with crew_ask_user. */
   z.object({ kind: z.literal("decision-answered"), decisionId: decisionIdSchema }),
-  /** A turn of the coordinating thread ended with `files` changed in its own working tree that the user didn't ask for, to be saved on `branch` (see afterTurn). */
-  z.object({ kind: z.literal("coordinator-draft"), files: z.array(z.string().min(1)).min(1), branch: z.string().min(1) }),
+  /**
+   * A turn of the coordinating thread ended with changed files in its own checkout, other than the
+   * last read found. why no fields: what it says is the latest read (own-tree.ts), which an unread
+   * one always matches, as a newer read retires it (see recordOwnTree).
+   */
+  z.object({ kind: z.literal("coordinator-tree-changed") }),
 ] as const;
 
 const onAgent = { issueId: issueIdSchema, agentId: agentIdSchema };
@@ -63,9 +67,9 @@ export type StoredEvent = { id: number; at: number; event: InboxEvent };
  * Whether an event of each kind wakes its coordinating thread on its own. One that doesn't waits,
  * unannounced, for the next one that does, and is listed in that doorbell and in the catch-up. why
  * `sent-back` doesn't: it leaves the thread nothing to do, and a turn costs tokens and context. why
- * `coordinator-draft` does: only the thread can move its draft to an agent, and with no agent at
- * work nothing else may wake it for hours. It can't wake the thread in a loop: the turn it starts
- * ends with the same draft, which records nothing.
+ * `coordinator-tree-changed` does: only the thread can tell whether the user asked for the change
+ * and hand it to an agent if not, and with no agent at work nothing else may wake it for hours. It
+ * can't wake the thread in a loop: the turn it starts ends with the same files, which records nothing.
  */
 const WAKES: Record<InboxEvent["kind"], boolean> = {
   handoff: true,
@@ -83,13 +87,13 @@ const WAKES: Record<InboxEvent["kind"], boolean> = {
   "memory-edited": true,
   reminder: true,
   "decision-answered": true,
-  "coordinator-draft": true,
+  "coordinator-tree-changed": true,
 };
 
 export const wakes = (event: InboxEvent): boolean => WAKES[event.kind];
 
 /**
- * Whether the doorbell shows the event to the user. why a draft isn't: the user asked for a
- * manager that puts its own slip right without involving them, and the draft reaches an agent.
+ * Whether the doorbell shows the event to the user. why a changed checkout isn't: the user asked for
+ * a manager that puts its own slip right without involving them.
  */
-export const shownToUser = (event: InboxEvent): boolean => event.kind !== "coordinator-draft";
+export const shownToUser = (event: InboxEvent): boolean => event.kind !== "coordinator-tree-changed";

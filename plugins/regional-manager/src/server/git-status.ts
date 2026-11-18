@@ -24,6 +24,8 @@ const statusRowSchema = z.union([
     workspace: z.object({
       checkout: checkoutRowSchema,
       workingTree: z.object({ fileCount: z.number().int().min(0), files: z.array(z.object({ path: z.string(), status: z.string() })) }),
+      // why optional: only the regional manager's own read names it, in a line, and a row without it must still read.
+      branch: z.object({ defaultBranch: z.string().min(1) }).optional(),
     }),
   }),
   z.object({ outcome: z.literal("not_applicable") }),
@@ -37,9 +39,13 @@ type StatusRow = z.infer<typeof statusRowSchema>;
 /** A changed file in a working tree, as bb's git plugin lists it: its path, and its `git status --short` code. */
 type ChangedFile = { path: string; status: string };
 
-/** What bb's git plugin read: the environment's checkout and working tree, that it isn't a git repository, or why it couldn't say. */
+/**
+ * What bb's git plugin read: the environment's checkout and working tree (`changedFileCount` counts
+ * every changed file, `changedFiles` lists at most bb's cap of them) and the default branch it names,
+ * that it isn't a git repository, or why it couldn't say.
+ */
 export type GitStatus =
-  | { kind: "read"; branch: string | null; headSha: string | null; changedFiles: ChangedFile[]; changedFileCount: number }
+  | { kind: "read"; branch: string | null; headSha: string | null; changedFiles: ChangedFile[]; changedFileCount: number; defaultBranch: string | null }
   | { kind: "not-git" }
   | { kind: "unread"; reason: string };
 
@@ -62,8 +68,8 @@ export async function gitStatusOf(bb: GitStatusBb, environmentId: string, signal
   if (row === undefined) return unread("bb's git plugin returned no row for it");
   switch (row.outcome) {
     case "available": {
-      const { checkout, workingTree } = row.workspace;
-      return { kind: "read", ...checkout, changedFiles: workingTree.files, changedFileCount: workingTree.fileCount };
+      const { checkout, workingTree, branch } = row.workspace;
+      return { kind: "read", ...checkout, changedFiles: workingTree.files, changedFileCount: workingTree.fileCount, defaultBranch: branch?.defaultBranch ?? null };
     }
     case "not_applicable":
       return { kind: "not-git" };

@@ -115,6 +115,6 @@ test("the plugin loads in the SDK's fake host, which checks every tool's paramet
   plugin(bb);
   assert.deepEqual(
     new Set(host.registrations.agentTools.map(({ name }) => name)),
-    new Set(["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "keep_edits", "issue_create", "issue_update", "issue_read", "agent_start", "agent_message", "agent_stop", "agent_handoff", "issue_verdict"]),
+    new Set(["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "issue_create", "issue_update", "issue_read", "agent_start", "agent_message", "agent_stop", "agent_handoff", "issue_verdict"]),
   );
 });

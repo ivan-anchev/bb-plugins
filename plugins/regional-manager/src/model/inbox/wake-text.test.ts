@@ -10,6 +10,7 @@ import { checkIdSchema, type Check, type CheckId } from "../verdict/check.ts";
 import type { Verdict } from "../verdict/verdict.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import type { InboxEvent, StoredEvent } from "./inbox-event.ts";
+import { CLEAN_TREE } from "./own-tree.ts";
 import { doorbellInput } from "./wake-text.ts";
 
 const i1 = issueIdSchema.parse("i1");
@@ -21,7 +22,7 @@ const titles = new Map([
   [i2, "Dead letters"],
 ]);
 const stored = (events: InboxEvent[]): StoredEvent[] => events.map((event, i) => ({ id: i + 1, at: 1_000 + i, event }));
-const noChecks = { titles, check: () => null, decision: () => null };
+const noChecks = { titles, check: () => null, decision: () => null, ownTree: CLEAN_TREE };
 
 /** The doorbell of events the user is shown, as the one part of its message. */
 function doorbellText(events: readonly StoredEvent[], lookups: Parameters<typeof doorbellInput>[1]): string {
@@ -35,7 +36,7 @@ const WRITTEN = "The user approved the merge";
 const k1 = checkIdSchema.parse("5d6c1e0a-2b3f-4a5e-8c7d-9e0f1a2b3c4d");
 
 /** A check of a done handoff of a1 on i1 whose every word is agent- or verifier-written, with this verdict. */
-function checkedWith(verdict: Verdict): { titles: typeof titles; check(id: CheckId): Check | null; decision(): null } {
+function checkedWith(verdict: Verdict): Parameters<typeof doorbellInput>[1] {
   const check: Check = {
     id: k1,
     coordinatorId: coordinatorIdSchema.parse("6f1c2a52-6b8e-4c43-9a51-1d6a3c0b7e10"),
@@ -46,7 +47,7 @@ function checkedWith(verdict: Verdict): { titles: typeof titles; check(id: Check
     subject: { kind: "handoff", agentId: a1, handoffId: handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e"), headSha: "0123456789abcdef0123456789abcdef01234567", prUrl: null },
     verdict,
   };
-  return { titles, check: (id) => (id === k1 ? check : null), decision: () => null };
+  return { ...noChecks, check: (id) => (id === k1 ? check : null) };
 }
 
 const returned = (results: ("pass" | "fail" | "unverifiable")[]): Verdict => ({
@@ -133,13 +134,14 @@ test("an answered decision is announced with the regional manager's own question
   assert.equal(text, `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- The user answered your question d1: Target main or release/2?`);
 });
 
-test("a draft in the manager's own tree is told in a part only the thread sees, apart from what the user is shown", () => {
-  const draft: InboxEvent = { kind: "coordinator-draft", files: ["a.ts", "b.ts"], branch: "regional-manager/6f1c2a52/draft-2e4" };
+test("a changed checkout is told in a part only the thread sees, apart from what the user is shown, with the count of the latest read", () => {
+  const changed: InboxEvent = { kind: "coordinator-tree-changed" };
   const memoryEdited: InboxEvent = { kind: "memory-edited", file: memoryFileSchema.parse("PLAN.md") };
-  const hiddenLine = `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- Your turn left 2 files changed that the user didn't ask for: hand the draft to an agent`;
+  const ownTree = { files: ["a.ts", "b.ts"], fileCount: 2, defaultBranch: "main" };
+  const hiddenLine = `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- Your turn ended with 2 changed files in your checkout`;
 
-  assert.deepEqual(doorbellInput(stored([draft]), noChecks), [{ type: "text", text: hiddenLine, mentions: [], visibility: "agent-only" }]);
-  assert.deepEqual(doorbellInput(stored([memoryEdited, draft]), noChecks), [
+  assert.deepEqual(doorbellInput(stored([changed]), { ...noChecks, ownTree }), [{ type: "text", text: hiddenLine, mentions: [], visibility: "agent-only" }]);
+  assert.deepEqual(doorbellInput(stored([memoryEdited, changed]), { ...noChecks, ownTree }), [
     { type: "text", text: `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- The user edited PLAN.md`, mentions: [] },
     { type: "text", text: hiddenLine, mentions: [], visibility: "agent-only" },
   ]);
