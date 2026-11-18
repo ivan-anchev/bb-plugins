@@ -257,7 +257,7 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
      * Saves a successful read of a branch's pull request (null: none), begun at the handoff
      * `handoffAtRead`, with a `pr` event naming `on` when it changed meaningfully. The board reads it
      * again either way: its CI may have moved. why no ring here: the watch reads only on the tick,
-     * whose own ring follows, and a verdict the read settles rings first, so one doorbell carries both.
+     * whose own ring follows.
      */
     prRead(coordinatorId: CoordinatorId, branch: string, on: { issueId: IssueId; agentId: AgentId }, pr: PrSnapshot | null, handoffAtRead: HandoffId | null, at: number): void {
       store.savePrRead(coordinatorId, branch, on, pr, handoffAtRead, at);

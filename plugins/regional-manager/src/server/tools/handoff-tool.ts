@@ -14,7 +14,7 @@ import { threadExecution, type ThreadExecutionBb } from "../execution/thread-exe
 import { gitStatusOf, type GitStatus, type GitStatusBb } from "../git-status.ts";
 import type { Store } from "../store/store.ts";
 import type { Verify } from "../verify/verify.ts";
-import { failed, type ToolsBb } from "./tool-kit.ts";
+import { failed, refusedBusy, type ToolsBb } from "./tool-kit.ts";
 
 export const HANDOFF = "agent_handoff";
 
@@ -23,7 +23,7 @@ type ListedThread = { id: string; providerId: string; environmentId: string | nu
 /** The parts of bb the handoff uses: registering it, the thread's turns, what it runs on, its environment and bb's git plugin's read of it. */
 type HandoffBb = ToolsBb & TurnsBb & GitStatusBb & ThreadExecutionBb & { sdk: { threads: { list(args: { threadIds: string[]; includeHidden: true; limit: number }): Promise<ListedThread[]> } } };
 
-type Deps = { store: Pick<Store, "roleOfThread" | "agent" | "issue" | "recordCheckout" | "recordExecution">; verify: Pick<Verify, "handoff"> };
+type Deps = { store: Pick<Store, "roleOfThread" | "agent" | "issue">; verify: Pick<Verify, "handoff"> };
 
 export function registerHandoffTool(bb: HandoffBb, { store, verify }: Deps): void {
   /** The caller's agent as stored now. why throw: an agent's role is inserted with its agent, in one transaction. */
@@ -62,15 +62,12 @@ export function registerHandoffTool(bb: HandoffBb, { store, verify }: Deps): voi
       if (turnSeq === null) throw new Error("bb lists no turn for this thread, so the handoff can't be tied to one. Try again.");
       const report = reportOf(input, issue.kind);
       if ("refused" in report) return failed(`${HANDOFF} is refused and nothing was saved: ${report.refused}`);
-      // why read the agent again, with no await from here until the handoff is stored: it may have
-      // ended while bb answered, and an agent that no longer holds its issue writes nothing to it.
-      const agent = agentOf(role);
-      if (agent.ended !== null) return endedText(issue.id, agent.ended.how);
-      if (environment !== null) store.recordCheckout(agent.coordinatorId, agent.id, checkoutSeen(agent, environment));
-      if (execution !== null) store.recordExecution(agent.coordinatorId, agent.id, execution);
       const checkout = reading === null ? NOT_READ : checkoutRead(environment);
-      const check = await verify.handoff({ id: handoffIdSchema.parse(randomUUID()), coordinatorId: agent.coordinatorId, issueId: issue.id, agentId: agent.id, at: Date.now(), turnSeq, ...report }, checkout);
-      const verdict = check?.verdict ?? null;
+      const handoff = { id: handoffIdSchema.parse(randomUUID()), coordinatorId: caller.coordinatorId, issueId: issue.id, agentId: caller.id, at: Date.now(), turnSeq, ...report };
+      const outcome = await verify.handoff({ handoff, checkout, seen: environment === null ? null : checkoutSeen(caller, environment), execution });
+      if ("busy" in outcome) return refusedBusy(HANDOFF, outcome);
+      if ("ended" in outcome) return endedText(issue.id, outcome.ended);
+      const verdict = outcome.check?.verdict ?? null;
       if (verdict === null && report.status === "done") return `Handed off. Your regional manager has your report, and ${issue.id} is Done: nothing verifies a ${PIPELINES[issue.kind].label.toLowerCase()} issue. Stop here.`;
       if (verdict === null) return "Handed off. Your regional manager has your report. Stop here.";
       if (verdict.state === "waived") return "Handed off. Your regional manager has your report, marked unverified: verification is off. Stop here.";

@@ -6,6 +6,7 @@ import { z } from "zod";
 import type { Execution } from "./execution.ts";
 import type { HandoffId } from "./handoff.ts";
 import type { IssueId } from "./issue/issue.ts";
+import { shipsCode, type Kind } from "./issue/kind.ts";
 import type { CoordinatorId } from "./role.ts";
 
 type EnvironmentArgs = NewThreadRequest["environment"];
@@ -139,19 +140,24 @@ function inputsOf(inputs: ProviderInputs): Extract<EnvironmentArgs, { type: "pro
   }
 }
 
-/** Where an agent's work starts. `default`: a new branch from the project's default branch. */
-export const baseSchema = z.discriminatedUnion("kind", [z.object({ kind: z.literal("default") })]);
+/**
+ * Where an agent's work starts. `default`: a new branch from the project's default branch.
+ * `joined`: in `from`'s environment, on the branch checked out there, with its commits, its
+ * uncommitted files and its pull request (sandbox-handover SH1).
+ */
+export const baseSchema = z.discriminatedUnion("kind", [z.object({ kind: z.literal("default") }), z.object({ kind: z.literal("joined"), from: agentIdSchema })]);
 export type Base = z.infer<typeof baseSchema>;
 
 /**
  * Where the agent's work was last seen: its environment, the branch checked out there and its
- * commit, as bb's git plugin read them at its latest handoff (null for each not read yet). why
- * stored: reading them at any other time could wake an agent's sandbox.
+ * commit, as bb's git plugin read them at its latest handoff, or as a joined agent inherited them
+ * (null for each not known yet). why stored: reading them at any other time could wake an agent's
+ * sandbox.
  */
 export type AgentCheckout = { environmentId: string | null; branch: string | null; head: string | null };
 
-/** How an agent stopped holding its issue. `spawn-failed`: bb never confirmed its thread. */
-export const endedHowSchema = z.enum(["stopped", "archived", "deleted", "spawn-failed"]);
+/** How an agent stopped holding its issue. `replaced`: a handover gave its issue to a new agent. `spawn-failed`: bb never confirmed its thread. */
+export const endedHowSchema = z.enum(["stopped", "archived", "deleted", "replaced", "spawn-failed"]);
 export type EndedHow = z.infer<typeof endedHowSchema>;
 
 export type Agent = {
@@ -179,6 +185,47 @@ export type Agent = {
  */
 export const branchOf = (agent: Pick<Agent, "checkout">, thread: { environmentBranchName: string | null } | null): string | null =>
   agent.checkout.branch ?? thread?.environmentBranchName ?? null;
+
+/** What agent_start asks of an issue that had an agent: `previous` continues its work, `default` starts clean. */
+export const startFromSchema = z.enum(["previous", "default"]);
+export type StartFrom = z.infer<typeof startFromSchema>;
+
+/**
+ * The issue's latest agent that had a thread, as a handover finds it before anything changes: its
+ * environment while bb hasn't destroyed it (null: destroyed, or never known), and its branch (null:
+ * none on record).
+ */
+export type Previous = { agent: Agent; environmentId: string | null; branch: string | null };
+
+/**
+ * Where a new agent starts. `clean`: where agent_start's placement says, from the default branch, as
+ * a first agent does. `join`: in the previous agent's environment, which bb reuses as it does for a
+ * verifier, with its checkout inherited.
+ */
+export type Handover = { kind: "clean" } | { kind: "join"; base: Extract<Base, { kind: "joined" }>; placement: Placement; environment: EnvironmentArgs; checkout: AgentCheckout };
+
+/**
+ * Where an agent of a `kind` issue starts, or why it can't, decided before anything changes (pure).
+ * Clean: no earlier agent with a thread, `from: "default"`, or a kind that ships no code, whose
+ * work is its report and reaches the new agent in its first message. Continue: nothing named and
+ * the previous environment still there, whatever runs it, idle, stopped, archived within a
+ * worktree's grace or suspended, which the spawn wakes (SH1, SH5). Anything else would move the
+ * work to a new environment, which this version can't, so it is refused.
+ */
+export function handoverOf(kind: Kind, request: { from: StartFrom; placement: RequestedPlacement | undefined }, previous: Previous | null): Handover | { refused: string } {
+  if (previous === null || request.from === "default" || !shipsCode(kind)) return { kind: "clean" };
+  const { agent, environmentId, branch } = previous;
+  const clean = `start clean with from: "default", which starts from the default branch with every earlier handoff and verdict in the new agent's first message.`;
+  if (request.placement !== undefined) return { refused: `A handover continues in ${agent.id}'s environment, and can't move its work to a placement yet: leave out placement, or ${clean}` };
+  if (environmentId === null) return { refused: `bb has removed ${agent.id}'s environment, so its work can't be continued there, and moving it to a new one isn't possible yet: ${clean}` };
+  return {
+    kind: "join",
+    base: { kind: "joined", from: agent.id },
+    placement: agent.placement,
+    environment: { type: "reuse", environmentId },
+    checkout: { environmentId, branch, head: agent.checkout.head },
+  };
+}
 
 /**
  * An issue's branch: that of its latest agent with one (`own`: its agents in the order started;

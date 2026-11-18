@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { z } from "zod";
-import { handoffIdSchema } from "../../model/handoff.ts";
+import { handoffIdSchema, type Handoff } from "../../model/handoff.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { memoryStorage } from "../memory-storage.ts";
+import type { NewAgent } from "./issue/agents-store.ts";
 import { openStore } from "./store.ts";
-import { freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "./test-store.ts";
+import { EXECUTION, failWrites, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "./test-store.ts";
 
 test("a fresh database holds the design's tables and indexes, and nothing else", () => {
   const { db } = freshStore();
@@ -93,4 +94,45 @@ test("removing a regional manager removes everything it owns, and nothing of ano
   assert.equal(store.agents(OTHER_MANAGER).length, 1);
   assert.equal(store.decisions(OTHER_MANAGER).length, 1);
   assert.equal(store.roleOfThread("thr_manager_2")?.kind, "coordinator");
+});
+
+/** a1 holding i1 with a done handoff whose check runs in `thr_verifier`, and a2 as a handover would insert it. */
+function handingOver() {
+  const { db, store } = freshStore();
+  const { id: issueId } = store.insertIssue(MANAGER, newIssue(), 2_000);
+  const holder = { coordinatorId: MANAGER, id: startAgent(store, issueId, "agent-1"), issueId };
+  const handoffId = handoffIdSchema.parse(randomUUID());
+  const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
+  const done: Handoff = { id: handoffId, coordinatorId: MANAGER, issueId, agentId: holder.id, at: 3_000, turnSeq: 1, ...report, status: "done", delivery: { kind: "commit", headSha: "a".repeat(40), prUrl: null } };
+  const check = store.insertHandoff(done, { kind: "read", checkout: { headSha: "a".repeat(40), changedFiles: [], changedFileCount: 0 } }) ?? assert.fail("no check");
+  store.insertVerifierTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId, checkId: check.id }, 3_000);
+  store.bindTicket("verifier-1", "thr_verifier");
+  const next: NewAgent = { coordinatorId: MANAGER, issueId, ticket: "agent-2", placement: { kind: "worktree" }, base: { kind: "joined", from: holder.id }, checkout: { environmentId: "env_1", branch: "bb/a1", head: null }, execution: EXECUTION, at: 4_000 };
+  return { db, store, holder, handoffId, check, next };
+}
+
+test("a handover ends the holder as replaced with what it left, supersedes its waiting check and inserts the new agent with its inherited checkout, together", () => {
+  const { store, holder, handoffId, check, next } = handingOver();
+  assert.equal(store.replaceAgent(holder, handoffId, next), "a2");
+  const [a1, a2] = store.agents(MANAGER);
+  assert.deepEqual(a1?.ended, { how: "replaced", at: 4_000, left: handoffId });
+  assert.deepEqual([a2?.base, a2?.checkout, a2?.ended], [{ kind: "joined", from: "a1" }, { environmentId: "env_1", branch: "bb/a1", head: null }, null]);
+  assert.deepEqual(store.check(check.id)?.verdict, { state: "superseded" });
+  assert.deepEqual(store.unannounced(MANAGER), [], "the manager, who handed the issue over, is told nothing");
+  assert.equal(store.replaceAgent(holder, null, { ...next, ticket: "agent-3" }), null, "a holder that no longer holds is replaced once");
+  assert.equal(store.agents(MANAGER).length, 2);
+});
+
+test("a handover whose insert fails writes nothing: the holder still holds, and its check still runs", () => {
+  const { db, store, holder, handoffId, check, next } = handingOver();
+  const allow = failWrites(db, "INSERT", "agents");
+  assert.throws(() => store.replaceAgent(holder, handoffId, next), /forced failure/);
+  assert.deepEqual(
+    store.agents(MANAGER).map(({ id, ended }) => [id, ended]),
+    [["a1", null]],
+  );
+  assert.equal(store.check(check.id)?.verdict.state, "running");
+  assert.equal(store.roleFor("thr_x", "agent-2"), null, "no ticket minted");
+  allow();
+  assert.equal(store.replaceAgent(holder, handoffId, next), "a2");
 });

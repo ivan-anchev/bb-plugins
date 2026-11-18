@@ -2,12 +2,12 @@
 // child thread holding one issue for its whole life.
 import type { PluginAgentToolResult } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { agentIdSchema, requestedPlacementSchema, type Agent, type AgentId } from "../../model/agent.ts";
+import { agentIdSchema, requestedPlacementSchema, startFromSchema, type Agent, type AgentId } from "../../model/agent.ts";
 import { requestedExecutionSchema } from "../../model/execution.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { startText, stopText } from "../issues/issue-text.ts";
 import type { Store } from "../store/store.ts";
-import { failed, forManager, type ToolsBb } from "../tools/tool-kit.ts";
+import { failed, forManager, refusedBusy, type ToolsBb } from "../tools/tool-kit.ts";
 import type { Agents } from "./agents.ts";
 
 const START = "agent_start";
@@ -31,21 +31,29 @@ export function registerAgentTools(bb: ToolsBb, { store, agents }: Deps): void {
   bb.agents.registerTool({
     name: START,
     description:
-      "Start an agent on one of your issues: a child thread of yours that does the issue's work in its own environment, on its own branch. Its first message is the issue's description, brief and done-criteria, and CREW.md and MEMORY.md as they are when it starts. The issue needs a brief and its done-criteria first, and no agent holding it. Returns the agent's id (a1, a2…), a link to its thread, and what it runs on. When the user asked you to propose work and wait, don't call it yet: file the issues in Backlog and ask with crew_ask_user first.",
+      "Start an agent on one of your issues: a child thread of yours that does the issue's work. Its first message is the issue's description, brief and done-criteria, and CREW.md and MEMORY.md as they are when it starts. The issue needs a brief and its done-criteria first. On an issue that has or had an agent, it is a handover: the agent holding it is stopped (never archived) and replaced, and the new one continues in the previous agent's environment, on its branch, with its commits, its uncommitted files and its pull request, unless from is default; its first message adds every earlier handoff and verdict. Returns the agent's id (a1, a2…), a link to its thread, where it works and what it runs on. When the user asked you to propose work and wait, don't call it yet: file the issues in Backlog and ask with crew_ask_user first.",
     presentation: { label: { pending: "Starting an agent", completed: "Started an agent" }, icon: { glyph: "Workflow" } },
     parameters: z.strictObject({
       issue: issueIdSchema.describe("The issue the agent works on, such as i1."),
+      from: startFromSchema
+        .default("previous")
+        .describe(
+          "On an issue that had an agent: previous (the default) continues in that agent's environment, on its branch; default starts clean, in a new environment from the default branch. A research issue's agent always starts clean. Ignored on an issue that never had one.",
+        ),
       execution: requestedExecutionSchema
         .optional()
-        .describe("What the agent runs on: a provider and a model bb can run where it will work, and optionally a reasoning level (left out: the model's default). Left out, it runs on your own provider, model and reasoning level."),
+        .describe(
+          "What the agent runs on: a provider and a model bb can run where it will work, and optionally a reasoning level (left out: the model's default). Left out, it runs on your own provider, model and reasoning level, on a handover too, whatever the previous agent ran on.",
+        ),
       placement: requestedPlacementSchema
         .optional()
         .describe(
-          'worktree (the default): a fresh worktree of the default branch on your machine. provider: an environment provider such as boat-sandbox, named by environmentProviderId, with machineInputs for the machine it makes, such as {"preset": "small"} for boat-sandbox (`bb environment providers --json` shows each one\'s machineInputs). A sandbox agent gets its own new branch from the default branch.',
+          'Where a new environment is made: worktree (the default), a fresh worktree of the default branch on your machine; provider, an environment provider such as boat-sandbox, named by environmentProviderId, with machineInputs for the machine it makes, such as {"preset": "small"} for boat-sandbox (`bb environment providers --json` shows each one\'s machineInputs). A sandbox agent gets its own new branch from the default branch. A handover that continues takes no placement: it works where the previous agent did.',
         ),
     }),
-    execute: forManager(store, START, async (id, { issue, execution, placement }) => {
-      const outcome = await agents.start(id, { issueId: issue, execution, placement });
+    execute: forManager(store, START, async (id, { issue, from, execution, placement }) => {
+      const outcome = await agents.start(id, { issueId: issue, from, execution, placement });
+      if ("busy" in outcome) return refusedBusy(START, outcome);
       return outcome.kind === "refused" ? failed(`${START} is refused: ${outcome.reason}`) : startText(issue, outcome);
     }),
   });
@@ -56,10 +64,20 @@ export function registerAgentTools(bb: ToolsBb, { store, agents }: Deps): void {
     presentation: { label: { pending: "Messaging an agent", completed: "Messaged an agent" }, icon: { glyph: "SideChat" } },
     parameters: z.object({ agent: agentIdSchema, text: z.string().trim().min(1).max(20_000) }),
     execute: forAgent(MESSAGE, async (agent, { text }) => {
-      if (agent.ended !== null) return failed(`${agent.id} was ${agent.ended.how}, so it takes no more messages. Start a new agent on ${agent.issueId} with agent_start.`);
-      if (agent.threadId === null) return failed(`${agent.id} has no thread to message yet: bb hasn't confirmed one.`);
-      const delivery = await agents.message({ ...agent, threadId: agent.threadId }, text);
-      return delivery === "sent" ? `Sent to ${agent.id}.` : `Queued for ${agent.id}: it is waiting on the user or busy, and gets your message once it is free.`;
+      const outcome = await agents.message(agent, text);
+      if ("busy" in outcome) return refusedBusy(MESSAGE, outcome);
+      switch (outcome.kind) {
+        case "sent":
+          return `Sent to ${agent.id}.`;
+        case "queued":
+          return `Queued for ${agent.id}: it is waiting on the user or busy, and gets your message once it is free.`;
+        case "already-ended":
+          return failed(`${agent.id} was ${outcome.how}, so it takes no more messages. Start a new agent on ${agent.issueId} with agent_start.`);
+        case "unbound":
+          return failed(`${agent.id} has no thread to message yet: bb hasn't confirmed one.`);
+        default:
+          return outcome satisfies never;
+      }
     }),
   });
 
@@ -68,7 +86,16 @@ export function registerAgentTools(bb: ToolsBb, { store, agents }: Deps): void {
     description:
       "Stop one of your agents: its turn stops and it no longer holds its issue. Work it handed off that reached Verifying, In review or Done keeps its issue there; anything short of that returns the issue to Todo. Its thread is kept, unless archive is true.",
     presentation: { label: { pending: "Stopping an agent", completed: "Stopped an agent" }, icon: { glyph: "Check" } },
-    parameters: z.object({ agent: agentIdSchema, archive: z.boolean().default(false).describe("Archive its thread too, once it is stopped.") }),
-    execute: forAgent(STOP, async (agent, { archive }) => stopText(agent, await agents.stop(agent, archive))),
+    parameters: z.object({
+      agent: agentIdSchema,
+      archive: z
+        .boolean()
+        .default(false)
+        .describe("Archive its thread too, once it is stopped. bb then destroys a sandbox no other thread lives in, unpushed work included, and retires a worktree after a few minutes."),
+    }),
+    execute: forAgent(STOP, async (agent, { archive }) => {
+      const outcome = await agents.stop(agent, archive);
+      return "busy" in outcome ? refusedBusy(STOP, outcome) : stopText(agent, outcome);
+    }),
   });
 }

@@ -1,10 +1,12 @@
 // What a verdict found, written for an agent: a checkout that wasn't the claimed commit on a clean
 // tree, as bb's git plugin read it, each done-criterion it didn't pass, with the verifier's
 // evidence, CI's failure on its pull request, and its findings. It reaches the agent as the
-// verifier's message when a failed verdict goes back for its fix round.
+// verifier's message when a failed verdict goes back for its fix round. And what an earlier agent's
+// verdict found, whole and in the past tense, for the agent that takes its issue over.
 import { checkoutText } from "../../model/verdict/checkout.ts";
 import type { CiVerdict } from "../../model/verdict/pr.ts";
-import { failedCheckout, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
+import type { Check } from "../../model/verdict/check.ts";
+import { allPassed, ciVerdictOf, failedCheckout, judge, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
 
 type Returned = Extract<Verdict, { state: "returned" }>;
 
@@ -16,6 +18,49 @@ export function findingsMessage(verdict: Returned, ci: CiVerdict): string {
     whatFailed(verdict, ci),
   ].join("\n\n");
 }
+
+/**
+ * What the check of an earlier agent's done handoff found, for the agent that takes its issue over,
+ * in past-tense words that describe and ask nothing: every criterion with its result and the
+ * verifier's evidence, the checkout and CI as they were, and every finding, whatever the result;
+ * or why nobody checked it. The verifier's own words are quoted, so none of their Markdown reads as
+ * the message's.
+ */
+export function earlierVerdictText({ verdict }: Check): string {
+  switch (verdict.state) {
+    case "queued":
+    case "running":
+    case "superseded":
+      return "Not checked: a newer handoff or the handover came before its verdict.";
+    case "could-not-run":
+      return `Not checked: ${verdict.reason}.`;
+    case "waived":
+      return "Not checked: verification was off.";
+    case "returned":
+      return returnedText(verdict);
+    default:
+      return verdict satisfies never;
+  }
+}
+
+/** A returned verdict as it stood: its result, the checkout and CI when they failed it or CI never came, each criterion, then the findings. */
+function returnedText(verdict: Returned): string {
+  const ci = ciVerdictOf(verdict);
+  const passed = ci === null ? allPassed(verdict) : judge(verdict, ci) === "pass";
+  const at = `at \`${short(verdict.headSha)}\``;
+  const failed = failedCheckout(verdict);
+  const result = [
+    passed ? `Passed ${at}: every done-criterion was met.` : `Failed ${at}: ${notPassed(verdict, ci)}.`,
+    ...(failed === null ? [] : [checkoutText(verdict.headSha, failed)]),
+    ...(ci?.kind === "fail" ? [`CI failed on #${ci.number}. ${ciFailure(ci.failedChecks)}`] : []),
+    ...(verdict.settlement.kind === "superseded" ? ["CI was still to finish on this commit when a newer handoff or the handover replaced it, so it was never judged."] : []),
+  ].join(" ");
+  const criteria = verdict.criteria.map(({ criterion, result, evidence }, i) => `${i + 1}. ${criterion}: ${PAST[result]}. The verifier's evidence:\n\n${fenced(evidence)}`);
+  const findings = verdict.findings.length === 0 ? "It found nothing else." : `Its other findings, in its words:\n\n${fenced(verdict.findings.map((finding) => `- ${finding}`).join("\n"))}`;
+  return [result, ...criteria, findings].join("\n\n");
+}
+
+const PAST: Record<CriterionResult, string> = { pass: "passed", fail: "failed", unverifiable: "couldn't be checked" };
 
 /** How many done-criteria the verdict didn't pass, and whether the checkout or CI failed, in words. `ci`: null while the verdict was not settled. */
 function notPassed(verdict: Returned, ci: CiVerdict | null): string {
@@ -47,8 +92,8 @@ const ciFailure = (failedChecks: readonly string[]): string =>
 
 const RESULT: Record<Exclude<CriterionResult, "pass">, string> = { fail: "Failed", unverifiable: "Couldn't be checked" };
 
-/** The text in a code block whose fence no run of backticks inside it can close. */
-function fenced(text: string): string {
+/** The text in a code block whose fence no run of backticks inside it can close: quoted whole, so none of its Markdown reads as the text around it. */
+export function fenced(text: string): string {
   const longest = Math.max(2, ...[...text.matchAll(/`+/g)].map(([run]) => run.length));
   const fence = "`".repeat(longest + 1);
   return `${fence}\n${text}\n${fence}`;

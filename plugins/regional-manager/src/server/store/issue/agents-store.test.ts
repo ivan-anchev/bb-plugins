@@ -31,17 +31,26 @@ test("agents are numbered a1, a2… within their regional manager, across issues
 test("an agent's thread is null until its ticket binds", () => {
   const { store } = freshStore();
   const { id } = store.insertIssue(MANAGER, newIssue(), 2_000);
-  const agentId = store.insertAgent({ coordinatorId: MANAGER, issueId: id, ticket: "agent-1", placement: { kind: "worktree" }, base: { kind: "default" }, execution: EXECUTION, at: 2_000 });
+  const agentId = store.insertAgent({ coordinatorId: MANAGER, issueId: id, ticket: "agent-1", placement: { kind: "worktree" }, base: { kind: "default" }, checkout: { environmentId: null, branch: null, head: null }, execution: EXECUTION, at: 2_000 });
   assert.equal(agentId, "a1");
   assert.equal(store.agents(MANAGER)[0]?.threadId, null);
   assert.equal(store.roleFor("thr_new", "agent-1")?.kind, "agent");
+});
+
+test("an ended agent's ticket never binds: a thread bb makes for it late gets no role, and the agent no thread", () => {
+  const { store } = freshStore();
+  const { id } = store.insertIssue(MANAGER, newIssue(), 2_000);
+  const agent = { coordinatorId: MANAGER, id: store.insertAgent({ coordinatorId: MANAGER, issueId: id, ticket: "agent-1", placement: { kind: "worktree" }, base: { kind: "default" }, checkout: { environmentId: null, branch: null, head: null }, execution: EXECUTION, at: 2_000 }) ?? assert.fail("no agent"), issueId: id };
+  store.endAgent(agent, "replaced", null, true, 3_000);
+  assert.equal(store.bindTicket("agent-1", "thr_late"), null);
+  assert.deepEqual([store.roleOfThread("thr_late"), store.agent(MANAGER, agent.id)?.threadId], [null, null]);
 });
 
 test("an issue has one agent at a time: a second start is refused until the first ends, and ids are never reused", () => {
   const { store } = freshStore();
   const { id } = store.insertIssue(MANAGER, newIssue(), 2_000);
   const first = startAgent(store, id, "agent-1");
-  assert.equal(store.insertAgent({ coordinatorId: MANAGER, issueId: id, ticket: "agent-2", placement: { kind: "worktree" }, base: { kind: "default" }, execution: EXECUTION, at: 2_100 }), null);
+  assert.equal(store.insertAgent({ coordinatorId: MANAGER, issueId: id, ticket: "agent-2", placement: { kind: "worktree" }, base: { kind: "default" }, checkout: { environmentId: null, branch: null, head: null }, execution: EXECUTION, at: 2_100 }), null);
   assert.equal(store.roleFor("thr_x", "agent-2"), null, "a refused start mints no ticket");
 
   store.endAgent({ coordinatorId: MANAGER, id: first, issueId: id }, "stopped", null, false, 3_000);
@@ -131,7 +140,7 @@ test("an execution resolved to a catalog's empty default reasoning level is stor
   const execution = executionOf({ providerId: "codex", model: "gpt-5.4" }, { providers: [{ id: "codex", available: true }], models: [{ model: "gpt-5.4", isDefault: true, defaultReasoningEffort: "" }] });
   if ("refused" in execution) assert.fail(execution.refused);
   const issue = store.insertIssue(MANAGER, newIssue({ verifier: execution }), 2_000);
-  const agentId = store.insertAgent({ coordinatorId: MANAGER, issueId: issue.id, ticket: "agent-1", placement: { kind: "worktree" }, base: { kind: "default" }, execution, at: 2_000 }) ?? assert.fail("the issue already had an agent");
+  const agentId = store.insertAgent({ coordinatorId: MANAGER, issueId: issue.id, ticket: "agent-1", placement: { kind: "worktree" }, base: { kind: "default" }, checkout: { environmentId: null, branch: null, head: null }, execution, at: 2_000 }) ?? assert.fail("the issue already had an agent");
 
   const stored = { providerId: "codex", model: "gpt-5.4", reasoningLevel: "" };
   assert.deepEqual([store.issue(MANAGER, issue.id)?.verifier, store.agent(MANAGER, agentId)?.execution], [stored, stored]);

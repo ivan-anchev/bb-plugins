@@ -95,4 +95,4 @@ function Report({ report, file }: NonNullable<HandedOff["report"]>) {
 
 const STATUS: Record<HandoffReport["status"], string> = { done: "Done", blocked: "Blocked", "gave-up": "Gave up" };
 
-const ENDED: Record<EndedHow, string> = { stopped: "Stopped", archived: "Archived", deleted: "Deleted", "spawn-failed": "Never started" };
+const ENDED: Record<EndedHow, string> = { stopped: "Stopped", archived: "Archived", deleted: "Deleted", replaced: "Replaced", "spawn-failed": "Never started" };

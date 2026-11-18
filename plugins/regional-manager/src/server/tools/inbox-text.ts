@@ -4,7 +4,7 @@
 import { sameModel } from "../../model/execution.ts";
 import type { Agent, AgentId } from "../../model/agent.ts";
 import type { Decision, DecisionId } from "../../model/decision.ts";
-import type { HandoffId } from "../../model/handoff.ts";
+import type { Handoff, HandoffId } from "../../model/handoff.ts";
 import type { StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { filesText } from "../../model/inbox/own-tree.ts";
 import { askedOf, checkedOf, issueName } from "../../model/inbox/wake-text.ts";
@@ -134,6 +134,15 @@ const FAILED_IS_YOURS =
 
 /** A handoff whole: its status, summary, and commit and pull request, every item of every list, then a done one's report or verdict. */
 export function handoffText({ handoff, check }: Handed, lookups: Pick<Lookups, "agent">): string {
+  const report = [handoffFieldsText(handoff)];
+  const delivery = handoff.status === "done" ? handoff.delivery : null;
+  if (delivery?.kind === "report") report.push(`#### Report\n\n${reportFileText(handoff.issueId, delivery.file)}\n\n${delivery.report}`);
+  if (check !== null) report.push(`#### Verdict\n\n${verdictText(check, lookups.agent(check.subject.agentId))}`);
+  return report.join("\n\n");
+}
+
+/** A handoff's own fields: its status, summary, and commit and pull request, then every item of every list under its `####` heading. */
+export function handoffFieldsText(handoff: Handoff): string {
   const head = [`Status: ${handoff.status}`, `Summary: ${handoff.summary}`];
   const delivery = handoff.status === "done" ? handoff.delivery : null;
   if (delivery?.kind === "commit") head.push(`Commit: ${delivery.headSha}`, `Pull request: ${delivery.prUrl ?? "none"}`);
@@ -146,10 +155,7 @@ export function handoffText({ handoff, check }: Handed, lookups: Pick<Lookups, "
       ["Findings", handoff.findings],
     ] as const
   ).map(([name, items]) => `#### ${name}\n\n${items.length === 0 ? "None." : items.map((item) => `- ${item.replaceAll("\n", "\n  ")}`).join("\n")}`);
-  const report = [head.join("\n"), ...lists];
-  if (delivery?.kind === "report") report.push(`#### Report\n\n${reportFileText(handoff.issueId, delivery.file)}\n\n${delivery.report}`);
-  if (check !== null) report.push(`#### Verdict\n\n${verdictText(check, lookups.agent(check.subject.agentId))}`);
-  return report.join("\n\n");
+  return [head.join("\n"), ...lists].join("\n\n");
 }
 
 /** Where a report was saved, and that handing it on is the regional manager's. */
@@ -172,9 +178,12 @@ function prText(pr: PrSnapshot): string {
   return `It is ${state} (${pr.url}), with ${review}; CI on its head ${pr.headSha.slice(0, 7)}: ${ci}.`;
 }
 
-/** What CI said about a verdict's commit, in a line (empty: the verdict is still to settle, and doesn't wait for CI). */
+/** What CI said about a verdict's commit, in a line (empty: the verdict is still to settle, and doesn't wait for CI). A verdict superseded while it waited never had CI judged. */
 function ciLine(verdict: Extract<Verdict, { state: "returned" }>, ci: CiVerdict | null): string {
-  if (ci === null) return verdict.settlement.kind === "waiting-for-ci" ? "CI: still to finish on this commit; the verdict waits for it." : "";
+  if (ci === null) {
+    if (verdict.settlement.kind === "waiting-for-ci") return "CI: still to finish on this commit; the verdict waits for it.";
+    return verdict.settlement.kind === "superseded" ? "CI: not waited for; a newer handoff or a handover replaced it first." : "";
+  }
   switch (ci.kind) {
     case "none":
       return "CI: no pull request to wait for.";

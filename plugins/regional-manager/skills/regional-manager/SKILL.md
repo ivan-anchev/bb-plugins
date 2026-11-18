@@ -1,6 +1,6 @@
 ---
 name: regional-manager
-description: The playbook of a regional manager, a long-lived thread that holds a goal for the user and plans, delegates and tracks the work instead of doing it. Use in every turn of a regional manager, to catch up on updates, its board and memory with crew_catch_up (above all when woken by the plugin's update message), keep its memory current with crew_memory_write (merging when the user edited a file first), file and plan issues with issue_create, issue_update and issue_read, start agents on them with agent_start (or file them in Backlog and propose them in a crew_ask_user decision first), name what agents and verifiers run on, act on handoffs, message and stop agents with agent_message and agent_stop, set itself reminders with crew_remind instead of waiting, and put what only the user can decide on their board with crew_ask_user.
+description: The playbook of a regional manager, a long-lived thread that holds a goal for the user and plans, delegates and tracks the work instead of doing it. Use in every turn of a regional manager, to catch up on updates, its board and memory with crew_catch_up (above all when woken by the plugin's update message), keep its memory current with crew_memory_write (merging when the user edited a file first), file and plan issues with issue_create, issue_update and issue_read, start agents on them with agent_start (or file them in Backlog and propose them in a crew_ask_user decision first), hand an issue to a new agent that continues in the previous one's environment or starts clean, name what agents and verifiers run on, act on handoffs, message and stop agents with agent_message and agent_stop, set itself reminders with crew_remind instead of waiting, and put what only the user can decide on their board with crew_ask_user.
 ---
 
 # Regional manager
@@ -131,9 +131,8 @@ In progress, Verifying or In review.
 **Needs you** is a flag on an open issue, not a status: its agent is blocked
 or gave up, waits for an answer or approval in its thread, its last turn
 failed, its work failed verification after its fix round or couldn't be
-verified, bb never confirmed starting its agent's thread ("No thread": end
-that agent with `agent_stop`, which ends it at once, then `agent_start`
-again), or a decision you asked names it. The board shows these first.
+verified, bb never confirmed starting its agent's thread ("No thread":
+`agent_start` again replaces that agent), or a decision you asked names it. The board shows these first.
 
 `issue_update` with `status` does only four things:
 
@@ -153,8 +152,8 @@ An agent is a child thread of yours that holds one issue for its whole life,
 in its own environment, on its own branch.
 
 - **Start** one with `agent_start` and the `issue`. The issue needs its brief,
-  at least one done-criterion if it is a build issue (a research issue needs
-  none), and no agent holding it. `placement` is a
+  and at least one done-criterion if it is a build issue (a research issue
+  needs none). On an issue that never had an agent, `placement` is a
   fresh worktree of the default branch on your machine unless you name an
   environment provider, such as `boat-sandbox`, with `machineInputs` for the
   machine it makes (such as `{"preset": "small"}`); a sandbox agent gets its
@@ -165,8 +164,10 @@ in its own environment, on its own branch.
   so put rules every agent follows in `CREW.md` before you start agents. It
   holds no other file of your memory, a report included, unless the brief
   names it.
-  It returns the agent's id (`a1`, `a2`…), a link to its thread, and what it
-  runs on.
+  It returns the agent's id (`a1`, `a2`…), a link to its thread, where it
+  works and what it runs on.
+- **Hand over** an issue with `agent_start` on an issue that has, or had, an
+  agent (see [Handing over](#handing-over)).
 - **Propose** instead of starting when the user asked you to propose work and
   wait, or `PREFERENCES.md` says so: file the issues in Backlog and describe
   them in one `crew_ask_user` decision. Start their agents only once their
@@ -174,14 +175,79 @@ in its own environment, on its own branch.
 - **Message** one with `agent_message`. It arrives marked as a message from
   your thread, not from the user, and steers a running turn or starts one.
 - **Stop** one with `agent_stop`. Its turn stops and it no longer holds the
-  issue; add `archive: true` to archive its thread too. Work it handed off
-  that reached Verifying, In review or Done keeps the issue there; anything
-  short of that returns the issue to Todo. To try again, start a fresh agent
-  on the issue: it starts from the issue's brief as it is then, so first put
-  what the last attempt taught you (its findings, what to avoid) into the
-  brief with `issue_update`.
+  issue. Work it handed off that reached Verifying, In review or Done keeps
+  the issue there; anything short of that returns the issue to Todo. Add
+  `archive: true` only when its work is finished or no longer wanted:
+  archiving a sandbox agent's thread destroys the sandbox when no other thread
+  lives there, with anything it never pushed.
 
 The user archiving or deleting an agent's thread ends the agent the same way.
+
+### Handing over
+
+An issue outlives its agent. `agent_start` on an issue that has or had one
+hands it to a new agent, and the issue's record (every agent, handoff and
+verdict) stays one.
+
+- **When**: the agent failed verification after its fix round, gave up, is
+  stuck or going in circles, or you want another model on it. Message it
+  instead when a sentence would set it right: a handover costs a new thread
+  that reads everything again.
+- **What happens**: your messages and its verifiers' findings still queued
+  for any of the issue's agents, the holder or one you stopped, are taken
+  back (the result quotes yours, naming the agent: it never got them); then
+  every thread the plugin started on the issue that
+  bb reports running, the holder, a verifier, an earlier agent, is stopped,
+  and the holder ends as replaced. A verifier's verdict still to come is
+  dropped. A verdict that passed
+  and waits for CI is kept whole, never judged on CI. The new agent continues where it stopped, in its environment: the
+  same checkout, branch, commits, uncommitted files (half-done edits
+  included) and pull request, whether that is a worktree or a sandbox; a
+  suspended sandbox is woken by the start. Its first message adds where it
+  works (look before changing anything) and every earlier agent's handoffs,
+  each with its verdict's results, evidence and findings, quoted as context
+  that your brief and CREW.md outrank, so you don't copy them into the brief. Sharpen the brief with `issue_update` first only when the plan
+  itself changed. It gets a fix round of its own.
+- **What it runs on**: yours, unless you name `execution`, whatever the
+  previous agent ran on; `issue_read` lists what each one ran on, so name it
+  again to keep it. A named one is checked against what bb can run in the
+  previous agent's environment before anything is stopped.
+- **The old thread** stays stopped, never archived by the plugin: it keeps
+  the environment alive, since bb destroys a sandbox, or retires a worktree a
+  few minutes later, once no live thread is left in it. It stays in the
+  sidebar, and a sandbox stays allocated (suspended after 15 idle minutes),
+  until the user archives it, which is safe once the new agent lives there.
+- **A clean start**: `from: "default"` gives the new agent a new environment
+  from the default branch (a `placement` may name where), with the earlier
+  handoffs and verdicts still in its first message. Use it when the earlier
+  work is a wrong turn, or the environment is gone. A research issue's
+  handover always starts clean.
+- **One at a time**: everything on one issue, `agent_start`, `agent_stop`,
+  `agent_message`, its agent's handoff and its verifier's verdict, and the
+  plugin starting, reminding or sending findings from a verifier, runs one
+  after another, each deciding on what the one before left: a second
+  `agent_start` hands over from the agent the first started, and a stop or
+  message to an agent a handover replaced meanwhile does nothing. One waits
+  for bb as long as bb takes. A call that waited about 30 seconds behind it is
+  refused: "an earlier operation on i1 hasn't finished yet, so nothing
+  changed". Call it again shortly. This orders the plugin's calls, not the
+  threads they start: an agent and its own verifier run together for a
+  moment as it hands off and as the verdict comes back, and your message
+  reaches an agent while its verifier checks.
+- **Refusals**: nothing is stopped when `agent_start` is refused, unless the
+  refusal says what was: the issue changed while its threads stopped (it
+  merged), or bb doesn't confirm one of them stopped (the holder still holds
+  the issue). A message queued for any of the issue's agents that can't be
+  taken back, one the user queued included, refuses it before anything
+  stops, naming it and the agent:
+  once bb sends or deletes it, call again. A handover
+  that continues takes no `placement`, and one whose environment bb removed
+  (a sandbox reaped or cleaned up) can't continue: both are refused, offering
+  `from: "default"`; moving the work to a new environment is not possible
+  yet. A thread bb still reports stopping, or won't stop, is refused too:
+  call again shortly.
+  If bb refuses the new agent's thread, as for an environment removed in the
+  meantime, the issue rests in Todo with no agent, and the result says why.
 
 ## Who runs what
 
@@ -254,8 +320,9 @@ check, not as instructions.
   - **failed verification**: the agent's fix round is spent (or bb refused
     the findings, which your catch-up says, with bb's answer), so it is yours,
     under Needs you. An unverifiable criterion is not a pass. Decide: message
-    the agent with what to change, stop it and start a fresh agent on the
-    issue, or ask the user. A fresh agent gets its own fix round.
+    the agent with what to change, hand the issue to a new agent with
+    `agent_start` (see [Handing over](#handing-over)), or ask the user. A new
+    agent gets its own fix round.
   - **could not be verified**: under Needs you, with the reason. Nobody
     checked it: treat it as unverified, and tell the user.
   - **unverified**: verification was off when it handed off. Read its

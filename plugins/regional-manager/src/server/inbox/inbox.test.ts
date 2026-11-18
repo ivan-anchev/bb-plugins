@@ -200,7 +200,8 @@ test("a refused save in the Memory editor wakes nobody", async () => {
 test("once the plugin is disposed, nothing rings", async () => {
   const { kit, agentThreads, doorbells } = await withAgents("Add retries");
   kit.dispose();
-  await kit.call("agent_handoff", DONE, agentThreads[0]);
-  await kit.tick();
+  // why both refused: the disposed instance calls bb and writes its database no more (lifetime.ts).
+  await assert.rejects(kit.call("agent_handoff", DONE, agentThreads[0]), /reloaded or disabled/);
+  await assert.rejects(kit.tick(), /reloaded or disabled/);
   assert.deepEqual(doorbells(), []);
 });

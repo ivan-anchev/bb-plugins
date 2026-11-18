@@ -124,15 +124,6 @@ test("agent_start is refused, starting nothing, on an issue with no brief or no 
   assert.equal(kit.spawned(), 1, "only the regional manager was spawned");
 });
 
-test("a second agent_start on an issue its agent holds is refused naming the agent", async () => {
-  const { kit, coordinatorId, start } = await filed();
-  await start();
-  const second = await start();
-  assert.ok(isRefusal(second));
-  assert.equal(textOf(second), "agent_start is refused: a1 holds i1. An issue has one agent at a time: stop a1 with agent_stop first.");
-  assert.equal(kit.store.agents(coordinatorId).length, 1);
-});
-
 test("agent_start runs the agent on the execution named, and issue_read lists it on the agent", async () => {
   const { kit, threadId, start } = await filed();
   const result = textOf(await start({ execution: { providerId: "codex", model: "gpt-default", reasoningLevel: "high" } }));
@@ -151,7 +142,7 @@ test("an execution bb can't run where the agent would work is refused before any
   kit.providers.list = kit.providers.list.map((provider) => (provider.id === "codex" ? { ...provider, available: false } : provider));
   // As bb lists a provider whose executable is missing: available, with models it can't load.
   kit.providers.list.push({ id: "pi", available: true, models: null });
-  const where = "agent_start is refused: Nothing started. Where the agent would run (a fresh worktree on your machine):";
+  const where = "agent_start is refused: Nothing changed. Where the agent would run (a fresh worktree on your machine):";
   for (const [execution, refusal] of [
     [{ providerId: "gemini", model: "pro" }, "bb can't run gemini there. bb can run: claude-code."],
     [{ providerId: "codex", model: "gpt-default" }, "bb can't run codex there. bb can run: claude-code."],
@@ -249,7 +240,7 @@ test("an agent whose spawn the plugin never heard the end of flags its issue unt
   const unconfirmed = "No thread: bb never confirmed starting one. agent_stop ends the agent at once; then agent_start again";
   // As agent_start leaves it when the plugin stops before bb answers its spawn: inserted, never bound or ended.
   const execution = { providerId: "claude-code", model: "opus", reasoningLevel: "high" };
-  kit.store.insertAgent({ coordinatorId, issueId: issueIdSchema.parse("i1"), ticket: "lost-spawn", placement: { kind: "worktree" }, base: { kind: "default" }, execution, at: 2_000 });
+  kit.store.insertAgent({ coordinatorId, issueId: issueIdSchema.parse("i1"), ticket: "lost-spawn", placement: { kind: "worktree" }, base: { kind: "default" }, checkout: { environmentId: null, branch: null, head: null }, execution, at: 2_000 });
 
   assert.deepEqual(await rows(), [["i1", "needs-you", unconfirmed]]);
   assert.ok(textOf(await kit.call("crew_catch_up", {}, threadId)).includes(`### Needs you (1)\n- i1 "Add retries" (Build; a1, no thread): ${unconfirmed}`));
@@ -323,6 +314,20 @@ test("agent_stop ends the agent only once bb no longer runs its thread", async (
   assert.equal(kit.store.agents(coordinatorId)[0]?.ended, null);
 });
 
+test("a stop whose answer bb lost is refused as unconfirmed, not as a stop that didn't happen, and agent_stop again ends the agent", async () => {
+  const { kit, threadId, coordinatorId } = await filed();
+  const agentThreadId = threadIn(textOf(await kit.call("agent_start", { issue: "i1" }, threadId)));
+  kit.stopRequests.lost = new Error("socket hang up");
+
+  const refused = textOf(await kit.call("agent_stop", { agent: "a1" }, threadId));
+
+  assert.equal(kit.thread(agentThreadId).status, "idle", "the stop landed");
+  assert.equal(refused, "Asked a1 to stop, but its thread couldn't be confirmed stopped: bb answered socket hang up, so it still holds i1. Call agent_stop again shortly.");
+  assert.equal(kit.store.agents(coordinatorId)[0]?.ended, null);
+  kit.stopRequests.lost = null;
+  assert.match(textOf(await kit.call("agent_stop", { agent: "a1" }, threadId)), /^a1 is stopped; it no longer holds i1\./);
+});
+
 test("an agent that ends its turn by itself while agent_stop waits on bb is reported with its last answer, whether the stop then succeeds or fails", async () => {
   for (const failure of [null, bbHttpError(502, "bad_gateway", "Bad gateway")]) {
     const { kit, threadId, coordinatorId } = await filed();
@@ -337,7 +342,7 @@ test("an agent that ends its turn by itself while agent_stop waits on bb is repo
 
     if (failure === null) assert.match(textOf(await stopping), /^a1 is stopped; it no longer holds i1\./);
     else {
-      await assert.rejects(stopping, /Bad gateway/);
+      assert.match(textOf(await stopping), /^Asked a1 to stop, but its thread couldn't be confirmed stopped: bb answered HTTP 502: Bad gateway, so it still holds i1\./);
       assert.equal(kit.store.agents(coordinatorId)[0]?.ended, null);
     }
     assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /### i1 "Add retries" \(a1\) ended its turn without a handoff\n\nAt [^\n]+ Its last answer, in its own words:\n\nI need the staging key\./);
@@ -451,7 +456,10 @@ test("an agent whose thread was archived or deleted while the plugin wasn't list
     ["i1", "todo", "Its agent was archived"],
     ["i2", "todo", "Its agent was deleted"],
   ]);
-  assert.deepEqual(doorbells().flatMap((text) => text.split("\n").slice(1)), ['- i1 "Add retries" (a1) returned to Todo: its agent was archived', '- i2 "Dead letters" (a2) returned to Todo: its agent was deleted']);
+  // why sorted: each issue's end runs in its own turn, side by side.
+  assert.deepEqual(doorbells().flatMap((text) => text.split("\n").slice(1)).sort(), ['- i1 "Add retries" (a1) returned to Todo: its agent was archived', '- i2 "Dead letters" (a2) returned to Todo: its agent was deleted']);
+  // why: a start reads the queues of the issue's earlier agents that bb still has, and bb no longer has a2's.
+  assert.match(textOf(await kit.call("agent_start", { issue: "i2", from: "default" }, threadId)), /^Started a3 on i2/);
 });
 
 for (const first of ["agent", "manager", "neither"] as const) {

@@ -23,7 +23,9 @@ import { createInbox } from "./inbox/inbox.ts";
 import { watchOwnTree } from "./inbox/own-tree-watch.ts";
 import { watchAgentThreads } from "./inbox/thread-watch.ts";
 import { registerIssueTools } from "./issues/issue-tools.ts";
+import { issueTurns } from "./issues/issue-turns.ts";
 import { createIssues } from "./issues/issues.ts";
+import { pluginInstance } from "./lifetime.ts";
 import { openMemoryRoot } from "./memory/memory-files.ts";
 import { memoryHandlers } from "./memory/memory-rpc.ts";
 import { memoryStorage } from "./memory-storage.ts";
@@ -57,7 +59,7 @@ type VerifyBb = Parameters<typeof createVerify>[0]["bb"];
 type PrWatchBb = Parameters<typeof createPrWatch>[0]["bb"];
 type SendArgs = Parameters<AgentsBb["sdk"]["threads"]["send"]>[0];
 type Delivery = Awaited<ReturnType<InboxBb["sdk"]["threads"]["send"]>>;
-type QueuedMessage = Awaited<ReturnType<InboxBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number];
+type QueuedMessage = Awaited<ReturnType<InboxBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number] & Awaited<ReturnType<AgentsBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number];
 
 type ThreadRef = { id: string; originPluginId: string | null };
 type InteractionPayload = PluginThreadEventPayloads["interaction.pending"]["interaction"]["payload"];
@@ -210,8 +212,12 @@ type StopBehaviour = "idle" | "stopping";
 
 type Storage = Pick<PluginStorage, "database" | "migrate">;
 
-/** `storage`: the plugin's database, as bb keeps it across reloads; a test may give one an earlier version of the plugin used. */
-export function harness(spawns: SpawnBehaviour = { created: true, answer: "thread" }, stops: StopBehaviour = "idle", storage: Storage = memoryStorage().storage) {
+/**
+ * `storage`: the plugin's database, as bb keeps it across reloads; a test may give one an earlier
+ * version of the plugin used. `turnWaitMs`: how long a tool call waits for its issue's turn (null:
+ * the plugin's own bound); a test shortens it to see a call refused.
+ */
+export function harness(spawns: SpawnBehaviour = { created: true, answer: "thread" }, stops: StopBehaviour = "idle", storage: Storage = memoryStorage().storage, turnWaitMs: number | null = null) {
   const behaviour = { ...spawns };
   /**
    * The providers bb lists, in its order; a test may replace them. Set `holding` to keep each answer
@@ -269,17 +275,29 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     holding: false,
     held: [],
   };
-  /** Set `failure` to make every read of a thread's turns reject with it, as when bb can't answer. */
-  const turnEvents: { failure: Error | null } = { failure: null };
+  /** Set `failure` to make every read of a thread's turns reject with it, as when bb can't answer; set `pending` to hold every read until it settles. */
+  const turnEvents: { failure: Error | null; pending: Promise<void> | null } = { failure: null, pending: null };
+  /** Set `failure` to make every delete of a queued message reject with it, leaving the message queued, as when bb can't be reached. */
+  const queueDeletes: { failure: Error | null } = { failure: null };
   /** Set `failure` to make every listing of threads by id reject with it, as when bb can't answer. */
   const threadLists: { failure: Error | null } = { failure: null };
-  /** Set `pending` to hold every stop until it settles, as a slow bb does; set `failure` to make every stop reject with it then. */
-  const stopRequests: { pending: Promise<void> | null; failure: Error | null } = { pending: null, failure: null };
+  /**
+   * Set `pending` to hold every stop until it settles, as a slow bb does; set `failure` to make every
+   * stop reject with it then. `byThread` overrides one thread's stop: an error it rejects with, or
+   * "stopping", which leaves the thread stopping. Set `lost` to have every stop land and then reject
+   * with it, as when bb's answer is lost on the way back.
+   */
+  const stopRequests: { pending: Promise<void> | null; failure: Error | null; lost: Error | null; byThread: Map<string, Error | "stopping"> } = {
+    pending: null,
+    failure: null,
+    lost: null,
+    byThread: new Map(),
+  };
   /** Set `answered` to run as bb answers a thread's model lookup, as when someone acts at that moment. */
   const modelLookups: { answered: ((threadId: string) => void) | null } = { answered: null };
-  let store = openStore(storage);
+  let openedStore = openStore(storage);
   const memoryWrites: CoordinatorId[] = [];
-  const memory = openMemoryRoot(join(mkdtempSync(join(tmpdir(), "coordinator-test-")), "data.db"), store, (id) => memoryWrites.push(id));
+  const memory = openMemoryRoot(join(mkdtempSync(join(tmpdir(), "coordinator-test-")), "data.db"), openedStore, (id) => memoryWrites.push(id));
   const metadata = new Map<string, Metadata>();
   const tools = new Map<string, { parameters: z.ZodType; run(input: unknown, threadId: string): Promise<PluginAgentToolResult> }>();
   let configure: ((context: PluginAgentConfigurationContext) => PluginAgentConfiguration) | null = null;
@@ -319,6 +337,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
 
   const threads = {
     async spawn(args) {
+      const reused = args.environment?.type === "reuse" ? args.environment.environmentId : null;
+      // As bb does, a reuse of an environment it destroyed is refused before any thread exists (a local one answers so; a sandbox's "HTTP 404: Host is unavailable").
+      if (reused !== null && environmentRecords.destroyed.has(reused)) throw bbHttpError(409, "environment_unavailable", "Environment unavailable");
       const id = `thr_${++spawned}`;
       metadata.set(id, args.pluginMetadata ?? {});
       const thread: FakeThread = {
@@ -326,8 +347,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         status: "active",
         hasPendingInteraction: false,
         ...runsOn(args, args.parentThreadId === undefined ? null : fakeThread(args.parentThreadId)),
-        environmentId: args.environment?.type === "reuse" ? args.environment.environmentId : `env_${id}`,
-        environmentBranchName: `bb/${id}`,
+        environmentId: reused ?? `env_${id}`,
+        // As bb does, a thread in a reused environment reports the branch bb made that environment on.
+        environmentBranchName: reused === null ? `bb/${id}` : ([...fakeThreads.values()].find((thread) => thread.environmentId === reused)?.environmentBranchName ?? null),
         environmentHostId: "host_1",
         archivedAt: null,
         deletedAt: null,
@@ -346,10 +368,14 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       return value;
     },
     // As bb does, listing by id includes archived and deleted threads. why optional: bb's SDK lists without ids too; the plugin always names them.
+    // As bb does, each row is a copy: what the plugin read stays as read while the thread moves on.
     list: async ({ threadIds }: { threadIds?: readonly string[] } = {}) => {
       if (threadIds === undefined) throw new Error("The plugin lists threads by id");
       if (threadLists.failure !== null) throw threadLists.failure;
-      return threadIds.flatMap((id) => fakeThreads.get(id) ?? []);
+      return threadIds.flatMap((id) => {
+        const thread = fakeThreads.get(id);
+        return thread === undefined ? [] : [{ ...thread }];
+      });
     },
     async defaultExecutionOptions({ threadId }) {
       const { execution } = fakeThread(threadId);
@@ -357,7 +383,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       return execution;
     },
     // As bb does, a deleted or archived thread refuses a message before taking it, a
-    // queue-if-active message to a busy thread is queued, and any other starts a turn.
+    // queue-if-active message to a busy thread is queued, and so is an auto one to a thread waiting
+    // on an interaction; any other starts a turn.
     async send(args): Promise<Delivery> {
       attempted.push(args.threadId);
       await sends.pending;
@@ -371,8 +398,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         if (failure !== null) throw failure.error;
         return sends.unanswered ? new Promise(() => {}) : delivery;
       };
-      if (args.mode === "queue-if-active" && thread.status !== "idle") {
-        const entry: (typeof queue)[number] = { id: `qm_${++queued}`, state: "queued", failureReason: null, threadId: args.threadId, text: textOfInput(args) };
+      if ((args.mode === "queue-if-active" && thread.status !== "idle") || (args.mode === "auto" && thread.hasPendingInteraction)) {
+        const text = textOfInput(args);
+        const entry: (typeof queue)[number] = { id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: args.senderThreadId ?? null, content: [{ type: "text", text, mentions: [] }], threadId: args.threadId, text };
         queue.push(entry);
         return answer({ delivery: "queued", queuedMessage: { id: entry.id } });
       }
@@ -381,9 +409,13 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       return answer({ delivery: "sent" });
     },
     queuedMessages: {
-      list: async ({ threadId }) => queue.filter((entry) => entry.threadId === threadId),
+      async list({ threadId }) {
+        if (fakeThread(threadId).deletedAt !== null) throw bbHttpError(404, "thread_not_found", "Thread not found");
+        return queue.filter((entry) => entry.threadId === threadId);
+      },
       // As bb does, deleting a message that already left the queue fails, and a deleted one is announced.
       async delete({ queuedMessageId }) {
+        if (queueDeletes.failure !== null) throw queueDeletes.failure;
         const at = queue.findIndex((entry) => entry.id === queuedMessageId);
         if (at === -1) throw new Error(`No queued message ${queuedMessageId}`);
         queue.splice(at, 1);
@@ -394,6 +426,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     // As bb does, a deleted thread's events are gone; an archived one's stay readable.
     events: {
       list: async ({ threadId }: { threadId: string }) => {
+        await turnEvents.pending;
         if (turnEvents.failure !== null) throw turnEvents.failure;
         const thread = fakeThread(threadId);
         if (thread.deletedAt !== null) throw bbHttpError(404, "thread_not_found", "Thread not found");
@@ -404,11 +437,15 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     // As bb does, a stop that ends a running turn announces the thread idle, with the interrupted turn's last answer.
     async stop({ threadId }) {
       await stopRequests.pending;
+      const own = stopRequests.byThread.get(threadId);
+      if (own instanceof Error) throw own;
       if (stopRequests.failure !== null) throw stopRequests.failure;
       const thread = fakeThread(threadId);
-      const interrupted = thread.status !== "idle" && stops === "idle";
-      thread.status = stops;
+      const leaves = own ?? stops;
+      const interrupted = thread.status !== "idle" && leaves === "idle";
+      thread.status = leaves;
       if (interrupted) await emit("thread.idle", { thread: { ...ref(threadId), environmentId: thread.environmentId }, lastAssistantText: "Interrupted halfway." });
+      if (stopRequests.lost !== null) throw stopRequests.lost;
     },
     async archive({ threadId }) {
       fakeThread(threadId).archivedAt = Date.now();
@@ -482,7 +519,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     await github.pending;
     return answer;
   }
-  const bb = {
+  const fakeBb = {
     pluginId: PLUGIN_ID,
     sdk: { threads, providers: providersArea, projects, plugins, environments },
     log: { warn: (message: string) => void warnings.push(message) },
@@ -501,12 +538,17 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
 
   /** The plugin's modules over the store and the fake bb, wired as server.ts wires them. */
   function wire() {
+    const instance = pluginInstance(fakeBb);
+    const { bb } = instance;
+    // why shadowed: the modules act through the store bound to their instance; the tests read the store as it is.
+    const store = instance.bind(openedStore);
     const spawner = createSpawner(bb, store, memory, () => bindings++);
     const board = createBoard(bb, store, memory);
     const inbox = createInbox({ bb, store, memory, onChange: refreshBoard });
-    const agents = createAgents({ bb, store, spawner, inbox, memory, placementFacts: placementFactsReader(bb, store), onChange: refreshBoard, onRemoved: refreshCoordinators });
+    const turns = turnWaitMs === null ? issueTurns(instance.signal) : issueTurns(instance.signal, turnWaitMs);
+    const agents = createAgents({ bb, store, spawner, inbox, memory, turns, placementFacts: placementFactsReader(bb, store), onChange: refreshBoard, onRemoved: refreshCoordinators });
     const issues = createIssues({ bb, store, onChange: refreshBoard });
-    const verify = createVerify({ bb, store, spawner, inbox });
+    const verify = createVerify({ bb, store, spawner, inbox, turns });
     registerRoles(bb, store);
     registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
     registerIssueTools(bb, { store, issues });
@@ -525,7 +567,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
 
   return {
     get store() {
-      return store;
+      return openedStore;
     },
     memory,
     get spawner() {
@@ -553,8 +595,10 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     git,
     /** bb's environments as the plugin reads them; a test destroys one to remove its sandbox, changes the default branch, or holds the reads. */
     environments: environmentRecords,
-    /** How bb answers a read of a thread's turns; a test may make it fail. */
+    /** How bb answers a read of a thread's turns; a test may hold it or make it fail. */
     turnEvents,
+    /** How bb answers a delete of a queued message; a test may make it fail. */
+    queueDeletes,
     /** How bb answers a listing of threads by id; a test may make it fail. */
     threadLists,
     /** How bb answers a stop; a test may hold it or make it fail. */
@@ -563,10 +607,12 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     clock,
     /** The schedule's once-a-minute pass, as server.ts runs it, at the clock's time. */
     async tick(): Promise<void> {
-      await plugin.agents.reconcile().catch((error: unknown) => bb.log.warn(`Could not reconcile the agents; the next tick tries again: ${error instanceof Error ? error.message : String(error)}`));
+      await plugin.agents.reconcile().catch((error: unknown) => fakeBb.log.warn(`Could not reconcile the agents; the next tick tries again: ${error instanceof Error ? error.message : String(error)}`));
       await plugin.prWatch.tick(clock.now);
-      await plugin.verify.reconcile();
+      await plugin.verify.reconcile().catch((error: unknown) => fakeBb.log.warn(`Could not reconcile the verifiers; the next tick tries again: ${error instanceof Error ? error.message : String(error)}`));
       await plugin.inbox.tick(clock.now);
+      // why: the issues' turns the pass started run on, unwaited for, as on the server; this fake answers them at once unless a test holds bb.
+      await settled();
     },
     /**
      * bb reloads the plugin, as after a crash: the old modules are disposed and forgotten, with
@@ -577,7 +623,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       for (const registered of Object.values(handlers)) registered.length = 0;
       tools.clear();
       // why open it again: the reloaded plugin does, which runs the migrations it hasn't, as after an upgrade.
-      store = openStore(storage);
+      openedStore = openStore(storage);
       plugin = wire();
     },
     /**
@@ -588,7 +634,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
      * point registered and read it back.
      */
     load(entry: (bb: BbPluginApi) => void): FakePluginHarness {
-      const host = createFakePluginHost({ pluginId: PLUGIN_ID, sdk: bb.sdk, agentSkillIds: manifestSkillIds() });
+      const host = createFakePluginHost({ pluginId: PLUGIN_ID, sdk: fakeBb.sdk, agentSkillIds: manifestSkillIds() });
       entry(host.bb);
       return host.harness;
     },
@@ -620,6 +666,10 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     delivered: (threadId: string) => delivered.filter((message) => message.threadId === threadId).map((message) => message.text),
     /** The messages bb holds queued for the thread, oldest first. */
     queued: (threadId: string) => queue.filter((entry) => entry.threadId === threadId).map((entry) => entry.id),
+    /** The user queues a message for the thread from bb's composer, as while it runs. */
+    userQueues(threadId: string, text: string): void {
+      queue.push({ id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: null, content: [{ type: "text", text, mentions: [] }], threadId, text });
+    },
     /** bb sends a queued message and announces it; `silently`: the announcement is missed, as during a reload. */
     async dispatch(queuedMessageId: string, { silently = false } = {}): Promise<void> {
       const at = queue.findIndex((entry) => entry.id === queuedMessageId);
@@ -669,8 +719,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
 }
 
 /** A harness with one coordinating thread started, verifying its agents' done handoffs unless `verify` is false; its thread and its id. */
-export async function coordinating({ verify = true, spawns, stops, storage }: { verify?: boolean; spawns?: SpawnBehaviour; stops?: StopBehaviour; storage?: Storage } = {}) {
-  const kit = harness(spawns, stops, storage);
+export async function coordinating({ verify = true, spawns, stops, storage, turnWaitMs }: { verify?: boolean; spawns?: SpawnBehaviour; stops?: StopBehaviour; storage?: Storage; turnWaitMs?: number } = {}) {
+  const kit = harness(spawns, stops, storage, turnWaitMs);
   const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), verify);
   const role = kit.store.roleOfThread(threadId);
   assert.equal(role?.kind, "coordinator");

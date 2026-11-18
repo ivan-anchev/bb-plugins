@@ -24,8 +24,8 @@ function withAgent() {
   return { db, storage, store, issue, agentId: startAgent(store, issue.id, "agent-1") };
 }
 
-function checkOf(made: { check: Check | null }): Check {
-  return made.check ?? assert.fail("the done handoff made no check");
+function checkOf(made: Check | null): Check {
+  return made ?? assert.fail("the done handoff made no check");
 }
 
 type Received = Parameters<Store["receiveVerdict"]>[1];
@@ -94,11 +94,11 @@ test("a done handoff no verifier will check is announced at once: verification o
 test("a blocked handoff gets no check and is announced at once", () => {
   const { store, issue, agentId } = withAgent();
   const blocked = handoff(issue.id, agentId, "blocked");
-  assert.deepEqual(store.insertHandoff(blocked, CLEAN), { check: null, superseded: [] });
+  assert.equal(store.insertHandoff(blocked, CLEAN), null);
   assert.deepEqual(events(store), [{ kind: "handoff", issueId: issue.id, agentId, handoffId: blocked.id, status: "blocked" }]);
 });
 
-test("a newer done handoff supersedes the agent's checks still waiting, and returns the verifiers to stop", () => {
+test("a newer done handoff supersedes the issue's checks still waiting", () => {
   const { store, issue, agentId } = withAgent();
   const queued = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done", 3_000), CLEAN));
   const running = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done", 3_100), CLEAN));
@@ -107,7 +107,6 @@ test("a newer done handoff supersedes the agent's checks still waiting, and retu
 
   const newest = store.insertHandoff(handoff(issue.id, agentId, "done", 3_200), CLEAN);
 
-  assert.deepEqual(newest.superseded, ["thr_verifier"]);
   assert.deepEqual([store.check(queued.id)?.verdict, store.check(running.id)?.verdict], [{ state: "superseded" }, { state: "superseded" }]);
   assert.deepEqual(store.openChecks().map(({ id }) => id), [checkOf(newest).id]);
   assert.deepEqual(store.record(MANAGER, issue.id).map(({ check }) => check?.verdict.state), ["superseded", "superseded", "queued"]);
@@ -166,8 +165,9 @@ test("a verdict that passed waits for CI, and one settled as checked gives back 
   assert.deepEqual(store.waitingForCi(MANAGER, agentId), [passed.id]);
   assert.deepEqual(events(store), [], "nobody is told while it waits for CI");
 
+  const waiting = store.check(passed.id)?.verdict;
   const failed = runningCheck(store, issue.id, agentId, 2);
-  assert.deepEqual(store.check(passed.id)?.verdict, { state: "superseded" }, "a newer done handoff supersedes one waiting for CI");
+  assert.deepEqual(store.check(passed.id)?.verdict, { ...waiting, settlement: { kind: "superseded" } }, "a newer done handoff supersedes one waiting for CI, its verdict kept whole");
   store.receiveVerdict(failed.id, returned("thr_verifier_2", "fail"));
   store.claimFixRound(failed.id, { kind: "none" });
   assert.equal(store.settleReturned(failed.id, { kind: "checked", refused: "bb refused the message", ci: { kind: "none" } }, 4_100), MANAGER);
@@ -243,12 +243,13 @@ test("a verdict, a give-up or a CI result that arrives after its check settled o
   const waiting = runningCheck(store, issue.id, agentId, 2);
   store.receiveVerdict(waiting.id, returned("thr_verifier_2", "pass"));
   store.settleReturned(waiting.id, { kind: "waiting-for-ci" }, 4_200);
+  const waited = store.check(waiting.id)?.verdict;
   const superseded = runningCheck(store, issue.id, agentId, 3);
   runningCheck(store, issue.id, agentId, 4);
   assert.equal(store.settleReturned(waiting.id, CHECKED, 4_300), null, "CI on a superseded commit");
   assert.equal(store.receiveVerdict(superseded.id, returned("thr_verifier_3", "pass")), false);
   assert.equal(store.giveUpCheck(superseded.id, running(3), gaveUp(3), 4_300), null);
-  assert.deepEqual([store.check(waiting.id)?.verdict, store.check(superseded.id)?.verdict], [{ state: "superseded" }, { state: "superseded" }]);
+  assert.deepEqual([store.check(waiting.id)?.verdict, store.check(superseded.id)?.verdict], [{ ...waited, settlement: { kind: "superseded" } }, { state: "superseded" }]);
   assert.deepEqual(events(store), [{ kind: "checked", issueId: issue.id, checkId: settled.id }]);
 });
 

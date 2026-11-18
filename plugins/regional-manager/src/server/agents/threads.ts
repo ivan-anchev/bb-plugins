@@ -52,3 +52,33 @@ export async function ifCurrent<Handed extends { handoff: Pick<Handoff, "turnSeq
   if (handed === null) return null;
   return handoffIsCurrent(handed.handoff, await latestTurnSeq(bb, threadId)) ? handed : null;
 }
+
+/** The part of bb stopping a turn uses: the threads' statuses, and the stop. */
+export type StopBb = ListBb<ListableThread & { status: string }> & { sdk: { threads: { stop(args: { threadId: string }): Promise<unknown> } } };
+
+/**
+ * Stops every thread among `threadIds` that bb reports running, never archiving one: a thread
+ * lives in its environment, and archiving a sandbox's last live thread destroys it (SH5). why read
+ * again after each stop: bb's stop can leave the thread stopping, and a turn is over only once its
+ * thread no longer runs. Returns the ones it stopped, and every one bb hasn't confirmed stopped,
+ * with the status bb still reports, or bb's error when the stop or the read after it failed. why
+ * not "wasn't stopped" then: a stop whose answer is lost may have stopped the thread.
+ */
+export async function stopRunning(bb: StopBb, threadIds: readonly string[]): Promise<{ stopped: string[]; unstopped: { threadId: string; why: string }[] }> {
+  const running = [...(await threadsById(bb, [...threadIds])).values()].filter(isRunning).map(({ id }) => id);
+  const stops = await Promise.all(
+    running.map(async (threadId) => {
+      try {
+        await bb.sdk.threads.stop({ threadId });
+        const thread = (await threadsById(bb, [threadId])).get(threadId);
+        return thread !== undefined && isRunning(thread) ? { threadId, why: `is still ${thread.status}` } : null;
+      } catch (error) {
+        return { threadId, why: `couldn't be confirmed stopped: bb answered ${error instanceof Error ? error.message : String(error)}` };
+      }
+    }),
+  );
+  return { stopped: running.filter((_, i) => stops[i] === null), unstopped: stops.filter((stop) => stop !== null) };
+}
+
+/** Whether bb runs a turn in the thread: live, and neither idle nor failed. */
+const isRunning = (thread: ListableThread & { status: string }): boolean => isLive(thread) && thread.status !== "idle" && thread.status !== "error";

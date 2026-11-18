@@ -5,7 +5,7 @@ import { z } from "zod";
 import { MAX_CRITERIA, type DoneCriteria } from "../../model/issue/issue.ts";
 import { criterionResultSchema } from "../../model/verdict/verdict.ts";
 import type { Store } from "../store/store.ts";
-import { failed, type ToolsBb } from "../tools/tool-kit.ts";
+import { failed, refusedBusy, type ToolsBb } from "../tools/tool-kit.ts";
 import type { Verify, VerifierReport } from "./verify.ts";
 
 export const VERDICT = "issue_verdict";
@@ -46,7 +46,9 @@ export function registerVerdictTool(bb: ToolsBb, { store, verify }: Deps): void 
       const report = reportOf(input, check.subject.headSha, check.criteria);
       if (typeof report === "string") return failed(`${VERDICT} is refused and nothing was saved: ${report}`);
       // why the agent's stored execution: it is what made the work, recorded as it handed off.
-      if (!(await verify.returned(check.id, threadId, [agent.execution], report))) return failed(NOT_RUNNING);
+      const stored = await verify.returned(check.id, threadId, [agent.execution], report);
+      if (stored !== true && stored !== false) return refusedBusy(VERDICT, stored);
+      if (!stored) return failed(NOT_RUNNING);
       const passed = report.criteria.filter((check) => check.result === "pass").length;
       return `Verdict recorded: ${passed} of ${report.criteria.length} criteria passed. Stop here; don't change anything in this environment.`;
     },
