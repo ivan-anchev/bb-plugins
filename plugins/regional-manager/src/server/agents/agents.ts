@@ -49,7 +49,7 @@ import type { Store } from "../store/store.ts";
 import type { PrWatch } from "../watch/pr-watch.ts";
 import { agentBrief } from "./brief.ts";
 import { environmentGone, type EnvironmentsBb } from "./environments.ts";
-import { latestTurnSeq, stopRunning, stopThreads, threadsById, type ListBb, type StopBb } from "./threads.ts";
+import { latestTurnSeq, stopThreads, threadsById, type ListBb, type StopBb } from "./threads.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
 type QueuedMessage = Awaited<ReturnType<Threads["queuedMessages"]["list"]>>[number];
@@ -550,12 +550,12 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
      * Sends the text as a message from the regional manager: it steers a running turn, starts one,
      * or waits in bb's queue. In its issue's turn, to an agent that still holds it, so a handover
      * never has it wake the agent it replaced; a handover takes back one still waiting in the queue.
-     * First it stops every verifier of the issue bb reports running, and confirms each, as the agent
-     * never runs beside its own verifier; with one unconfirmed, it sends nothing. Once sent, it drops
-     * the check of the agent's done handoff still waiting for its verifier: the manager asked for
-     * more work, so that handoff is no longer the agent's last word, and its next done handoff is
-     * checked afresh. A returned verdict is kept: it settles as it would after any later turn of the
-     * agent's, to the manager, with no fix round.
+     * First it stops every verifier of the issue, whatever bb reports (see stopThreads), and
+     * confirms each, as the agent never runs beside its own verifier; with one unconfirmed, it sends
+     * nothing. Once sent, it drops the check of the agent's done handoff still waiting for its
+     * verifier: the manager asked for more work, so that handoff is no longer the agent's last word,
+     * and its next done handoff is checked afresh. A returned verdict is kept: it settles as it
+     * would after any later turn of the agent's, to the manager, with no fix round.
      */
     message: ({ coordinatorId, id, issueId }: Agent, text: string): Promise<MessageOutcome | Busy> =>
       turns.run(coordinatorId, issueId, async () => {
@@ -563,7 +563,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
         if (agent.ended !== null) return { kind: "already-ended", how: agent.ended.how };
         if (agent.threadId === null) return { kind: "unbound" };
         const verifiers = store.issueThreads(coordinatorId, issueId).flatMap(({ threadId, agentId }) => (agentId === null ? [threadId] : []));
-        const [unstopped] = (await stopRunning(bb, verifiers)).unstopped;
+        const [unstopped] = (await stopThreads(bb, verifiers)).unstopped;
         if (unstopped !== undefined) return { kind: "verifier-running", verifierThreadId: unstopped.threadId, why: unstopped.why };
         const { delivery } = await bb.sdk.threads.send({
           threadId: agent.threadId,

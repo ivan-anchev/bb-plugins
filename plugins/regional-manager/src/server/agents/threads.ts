@@ -58,33 +58,23 @@ export type StopBb = ListBb<StoppableThread> & { sdk: { threads: { stop(args: { 
 
 type StoppableThread = ListableThread & { status: string };
 
-/** What a stop did: the threads bb reported running that it stopped, and every one bb hasn't confirmed stopped, with why (see stopEach). */
+/** What a stop did: the threads bb reported running that it stopped, and every one bb hasn't confirmed stopped, with why (see stopThreads). */
 type Stopped = { stopped: string[]; unstopped: { threadId: string; why: string }[] };
 
-/** Stops every thread among `threadIds` that bb reports running, never archiving one (see stopEach). */
-export async function stopRunning(bb: StopBb, threadIds: readonly string[]): Promise<Stopped> {
-  return stopEach(bb, [...(await threadsById(bb, [...threadIds])).values()].filter(isRunning));
-}
-
 /**
- * Stops every live thread among `threadIds`, whatever status bb reports, never archiving one (see
- * stopEach). why idle ones too: a turn can end with a background command still running, and when it
- * finishes the provider starts a new turn in the thread by itself; bb's stop ends those commands,
- * on an idle thread too, and nothing wakes the thread after (seen live on bb 0.49, QA Q22).
+ * Stops every live thread among `threadIds`, whatever status bb reports, never archiving one: a
+ * thread lives in its environment, and archiving a sandbox's last live thread destroys it (SH5).
+ * why idle ones too: a turn can end with a background command still running, and when it finishes
+ * the provider starts a new turn in the thread by itself; bb's stop ends those commands, on an idle
+ * thread too, and nothing wakes the thread after (seen live on bb 0.49, QA Q22). why read again
+ * after each stop: bb's stop can leave the thread stopping, and a turn is over only once its thread
+ * no longer runs. Returns the ones bb reported running that it stopped, and every one bb hasn't
+ * confirmed stopped, with the status bb still reports, or bb's error when the stop or the read
+ * after it failed. why not "wasn't stopped" then: a stop whose answer is lost may have stopped the
+ * thread.
  */
 export async function stopThreads(bb: StopBb, threadIds: readonly string[]): Promise<Stopped> {
-  return stopEach(bb, [...(await listedThreads(bb, [...threadIds])).values()]);
-}
-
-/**
- * Stops each thread, never archiving one: a thread lives in its environment, and archiving a
- * sandbox's last live thread destroys it (SH5). why read again after each stop: bb's stop can leave
- * the thread stopping, and a turn is over only once its thread no longer runs. Returns the ones bb
- * reported running that it stopped, and every one bb hasn't confirmed stopped, with the status bb
- * still reports, or bb's error when the stop or the read after it failed. why not "wasn't stopped"
- * then: a stop whose answer is lost may have stopped the thread.
- */
-async function stopEach(bb: StopBb, threads: readonly StoppableThread[]): Promise<Stopped> {
+  const threads = [...(await listedThreads(bb, [...threadIds])).values()];
   const stops = await Promise.all(
     threads.map(async ({ id: threadId }) => {
       try {

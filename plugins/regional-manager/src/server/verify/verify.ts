@@ -10,9 +10,12 @@
 //
 // An agent and its own verifier share an environment, and never run at the same time: a verifier
 // starts, or is reminded, only while bb reports its agent's thread idle, and findings go back only
-// once bb reports the verifier's no longer running. bb saying a thread went idle is only the
-// trigger to look again (lookAgain), and the tick looks again for anything missed. A final check's
-// verifier has a worktree of its own and checks no agent's handoff, so nothing waits for it.
+// once bb reports the verifier's no longer running. Where the environment changes hands, as a
+// verifier starts and as findings go back, the side giving it up is stopped whatever bb reports
+// (see stopThreads): a thread bb reports idle can still hold a background command whose finish
+// wakes it. bb saying a thread went idle is only the trigger to look again (lookAgain), and the
+// tick looks again for anything missed. A final check's verifier has a worktree of its own and
+// checks no agent's handoff, so nothing waits for it.
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
 import { branchOf, type Agent, type AgentCheckout, type EndedHow } from "../../model/agent.ts";
 import { sameModel, type Execution } from "../../model/execution.ts";
@@ -25,7 +28,7 @@ import type { Checkout, CheckoutRead } from "../../model/verdict/checkout.ts";
 import { ciOf, type CiVerdict } from "../../model/verdict/pr.ts";
 import { isSettled, judge, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
 import { environmentGone, type EnvironmentsBb } from "../agents/environments.ts";
-import { isRunning, latestTurnSeq, listedThreads, stopRunning, threadsById, type StopBb, type TurnsBb } from "../agents/threads.ts";
+import { isRunning, latestTurnSeq, listedThreads, stopThreads, threadsById, type StopBb, type TurnsBb } from "../agents/threads.ts";
 import type { CatalogBb } from "../execution/catalog.ts";
 import { threadExecution, type ThreadExecutionBb } from "../execution/thread-execution.ts";
 import type { Inbox } from "../inbox/inbox.ts";
@@ -185,15 +188,19 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
   }
 
   /**
-   * In its issue's turn: stops every verifier of the issue bb reports running, a superseded check's
-   * included, then starts the check's verifier while it is queued and, for a handoff's, its agent's
-   * thread is idle. With one bb hasn't confirmed stopped, it starts none, and the tick tries again;
-   * one bb won't start is recorded as could-not-run.
+   * In its issue's turn: once bb reports idle the agent whose handoff the check judges, stops it and
+   * every verifier of the issue, a superseded check's included, whatever bb reports (see
+   * stopThreads), then starts the check's verifier while it is queued. With one bb hasn't confirmed
+   * stopped, it starts none, and the tick tries again; one bb won't start is recorded as
+   * could-not-run. Stopping the idle agent ends no turn and starts none, so its done handoff stays
+   * current: nothing reads it as stopped without one.
    */
-  async function startInTurn({ id, coordinatorId, issueId }: Check): Promise<void> {
+  async function startInTurn(check: Check): Promise<void> {
+    const { id, coordinatorId, issueId } = check;
+    if (await agentRuns(check)) return;
     const verifiers = store.issueThreads(coordinatorId, issueId).flatMap(({ threadId, agentId }) => (agentId === null ? [threadId] : []));
-    const { unstopped } = await stopRunning(bb, verifiers);
-    for (const { threadId, why } of unstopped) bb.log.warn(`The verifier ${threadId} of ${issueId} ${why}, so no other verifier starts there yet; the next tick tries again.`);
+    const { unstopped } = await stopThreads(bb, [...verifiers, ...agentThreadOf(check)]);
+    for (const { threadId, why } of unstopped) bb.log.warn(`The thread ${threadId} of ${issueId} ${why}, so no verifier starts there yet; the next tick tries again.`);
     if (unstopped.length > 0) return;
     try {
       const request = await requestFor(id);
@@ -239,15 +246,20 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
 
   /** Whether bb reports running the thread of the agent whose handoff the check judges; never for a final check, which judges none. */
   async function agentRuns(check: Check): Promise<boolean> {
+    const [threadId] = agentThreadOf(check);
+    if (threadId === undefined) return false;
+    const thread = (await listedThreads(bb, [threadId])).get(threadId);
+    return thread !== undefined && isRunning(thread);
+  }
+
+  /** The thread of the agent whose handoff the check judges; none for a final check, which judges none. */
+  function agentThreadOf(check: Check): string[] {
     const { subject } = check;
     switch (subject.kind) {
-      case "handoff": {
-        const { threadId } = agentOf({ ...check, subject });
-        const thread = (await listedThreads(bb, [threadId])).get(threadId);
-        return thread !== undefined && isRunning(thread);
-      }
+      case "handoff":
+        return [agentOf({ ...check, subject }).threadId];
       case "final":
-        return false;
+        return [];
       default:
         return subject satisfies never;
     }
@@ -313,12 +325,12 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
   }
 
   /**
-   * Settles a handoff's returned verdict, but sends its findings only once bb reports its verifier no
-   * longer running, since they wake the agent in the verifier's environment. Until then its
-   * settlement stays pending: owed, as the tick finds it after a reload too. From inside
-   * issue_verdict the verifier is still running, so they wait for its idle event or the tick; a look
-   * again stops a verifier still running, as it has returned its verdict and has nothing left to do,
-   * and so bounds the wait to the tick's.
+   * Settles a handoff's returned verdict, but sends its findings only once bb confirms its verifier
+   * stopped, since they wake the agent in the verifier's environment. Until then its settlement
+   * stays pending: owed, as the tick finds it after a reload too. From inside issue_verdict the
+   * verifier is still running, so they wait for its idle event or the tick; a look again stops the
+   * verifier whatever bb reports (see stopThreads), as it has returned its verdict and has nothing
+   * left to do, which also bounds the wait to the tick's.
    */
   async function settleHandoffInTurn(check: HandoffCheck, by: Settler): Promise<void> {
     const first = await stepNow(check);
@@ -326,7 +338,7 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
     if (first.step.kind !== "send") return inbox.settleCheck(check.id, first.step);
     if (by === "verdict-tool") return;
     const { verifierThreadId } = first.unsettled.verdict;
-    const { unstopped } = await stopRunning(bb, [verifierThreadId]);
+    const { unstopped } = await stopThreads(bb, [verifierThreadId]);
     for (const { why } of unstopped) bb.log.warn(`The verifier ${verifierThreadId} of ${check.issueId} ${why}, so its findings wait; the next tick tries again.`);
     if (unstopped.length > 0) return;
     // why decide again: bb was asked meanwhile, and the agent may have moved on.

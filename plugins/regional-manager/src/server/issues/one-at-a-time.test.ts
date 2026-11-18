@@ -11,6 +11,7 @@ const a1 = agentIdSchema.parse("a1");
 const i1 = issueIdSchema.parse("i1");
 const DONE = { status: "done", summary: "Retries land with backoff", did: ["Added exponential backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [], headSha: HEAD };
 const FAILS = { criteria: [{ criterion: 1, result: "fail", evidence: "$ npm test\nnot ok 13" }], findings: [] };
+const PASSES = { criteria: [{ criterion: 1, result: "pass", evidence: "$ npm test\nok" }], findings: [] };
 
 /** A promise bb's fake waits on, and the function that lets it go. */
 function hold(): { done: Promise<void>; release: () => void } {
@@ -475,4 +476,98 @@ test("B7: a quiet verifier isn't reminded while a person has woken a1; the remin
   await kit.idle(agentThreadId, "Answered.");
   assert.match(kit.delivered(verifier).join(), /without calling issue_verdict/);
   assert.deepEqual(statusesOf(kit, agentThreadId, verifier), ["idle", "active"]);
+});
+
+// Where the environment changes hands, the side giving it up is stopped whatever bb reports: a
+// thread bb reports idle can still hold a background command, whose finish starts a new turn there
+// by itself unless a stop ended it (kit.leavesBackground, kit.backgroundFinishes).
+
+test("a1 idle with a background command after its done handoff is stopped before its verifier starts, so it never wakes beside it; its handoff stands, i1 stays Verifying, and the manager hears nothing", async () => {
+  const { kit, coordinatorId, agentThreadId, verifiers, check } = await onI1();
+  await kit.startTurn(agentThreadId);
+  await kit.call("agent_handoff", DONE, agentThreadId);
+  kit.leavesBackground(agentThreadId); // its turn ended with a background sleep still running: bb reports it idle
+  await kit.idle(agentThreadId, "Handed off.");
+  const [verifier = assert.fail("no verifier")] = verifiers();
+  const turns = kit.thread(agentThreadId).turns.length;
+  await kit.backgroundFinishes(agentThreadId);
+  assert.deepEqual([kit.thread(agentThreadId).turns.length, ...statusesOf(kit, agentThreadId, verifier.id)], [turns, "idle", "active"], "a1 never woke beside its verifier");
+
+  await kit.idle(agentThreadId, "Handed off."); // were bb to announce the stop of an idle thread
+  assert.deepEqual([check().verdict.state, kit.store.agent(coordinatorId, a1)?.ended], ["running", null], "a1 still holds i1, its done handoff checked");
+  const board = await kit.rpc.board({ coordinatorId });
+  assert.equal(board.issues[0]?.headline, "Verifying: Retries land with backoff");
+  assert.deepEqual(kit.store.unannounced(coordinatorId), [], "the manager hears nothing: neither a stop nor a turn ended without a handoff");
+});
+
+test("a1 that bb doesn't confirm stopped after its done handoff keeps its check queued and the manager unaware; the tick starts the verifier once bb stops it", async () => {
+  const { kit, coordinatorId, agentThreadId, verifiers, check } = await onI1();
+  kit.stopRequests.byThread.set(agentThreadId, bbHttpError(500, "internal", "Stop failed"));
+  await kit.startTurn(agentThreadId);
+  await kit.call("agent_handoff", DONE, agentThreadId);
+  kit.leavesBackground(agentThreadId);
+  await kit.idle(agentThreadId, "Handed off.");
+  assert.deepEqual([check().verdict.state, verifiers().length], ["queued", 0], "no verifier while a1 may still wake");
+  assert.match(kit.warnings().at(-1) ?? "", new RegExp(`^The thread ${agentThreadId} of i1 couldn't be confirmed stopped: bb answered HTTP 500: Stop failed, so no verifier starts there yet; the next tick tries again\\.`));
+  assert.deepEqual(kit.store.unannounced(coordinatorId), []);
+
+  kit.stopRequests.byThread.delete(agentThreadId);
+  await kit.tick();
+  await settled();
+  const [verifier = assert.fail("no verifier")] = verifiers();
+  await kit.backgroundFinishes(agentThreadId);
+  assert.deepEqual([check().verdict.state, ...statusesOf(kit, agentThreadId, verifier.id)], ["running", "idle", "active"]);
+});
+
+test("a verifier idle with a background command is stopped before the issue's next verifier starts, so it never wakes beside it", async () => {
+  const on = await onI1();
+  const { kit, check } = on;
+  const first = await handedOff(on);
+  await kit.call("issue_verdict", PASSES, first);
+  kit.leavesBackground(first); // it left a dev server running as its turn ended: bb reports it idle
+  await kit.idle(first, "Verdict returned.");
+  const second = await handedOff(on); // the user asks a1 for one more change, and it hands off again
+  const turns = kit.thread(first).turns.length;
+  await kit.backgroundFinishes(first);
+  assert.deepEqual([kit.thread(first).turns.length, kit.thread(first).status, kit.thread(second).status, check().verdict.state], [turns, "idle", "active", "running"], "the first verifier never woke beside the second");
+});
+
+test("a verifier idle with a background command after its failed verdict is stopped before its findings wake a1, and one bb doesn't confirm stopped keeps them owed", async () => {
+  const on = await onI1();
+  const { kit, agentThreadId, check } = on;
+  const verifier = await handedOff(on);
+  await kit.call("issue_verdict", FAILS, verifier);
+  kit.leavesBackground(verifier);
+  kit.stopRequests.byThread.set(verifier, bbHttpError(500, "internal", "Stop failed"));
+  await kit.idle(verifier, "Verdict returned.");
+  const owed = check().verdict;
+  assert.deepEqual([owed.state === "returned" && owed.settlement.kind, kit.delivered(agentThreadId)], ["pending", []], "owed while the verifier may still wake");
+
+  kit.stopRequests.byThread.delete(verifier);
+  await kit.tick();
+  await settled();
+  assert.match(kit.delivered(agentThreadId).at(-1) ?? "", /^## Verifier findings/);
+  const turns = kit.thread(verifier).turns.length;
+  await kit.backgroundFinishes(verifier);
+  assert.deepEqual([kit.thread(verifier).turns.length, ...statusesOf(kit, agentThreadId, verifier)], [turns, "active", "idle"], "the verifier never woke beside a1");
+});
+
+test("agent_message stops a1's verifier idle with a background command before it reaches a1, and is refused while bb doesn't confirm it stopped", async () => {
+  const on = await onI1();
+  const { kit, threadId, agentThreadId } = on;
+  const verifier = await handedOff(on);
+  await kit.call("issue_verdict", PASSES, verifier);
+  kit.leavesBackground(verifier);
+  await kit.idle(verifier, "Verdict returned.");
+  kit.stopRequests.byThread.set(verifier, bbHttpError(500, "internal", "Stop failed"));
+  const refused = await kit.call("agent_message", { agent: "a1", text: "Please add jitter." }, threadId);
+  assert.ok(isRefusal(refused));
+  assert.match(textOf(refused), new RegExp(`^agent_message is refused and nothing was sent: the verifier @thread:${verifier} of i1 couldn't be confirmed stopped`));
+  assert.deepEqual([kit.delivered(agentThreadId), kit.thread(agentThreadId).status], [[], "idle"], "nothing sent");
+
+  kit.stopRequests.byThread.delete(verifier);
+  assert.equal(textOf(await kit.call("agent_message", { agent: "a1", text: "Please add jitter." }, threadId)), "Sent to a1.");
+  const turns = kit.thread(verifier).turns.length;
+  await kit.backgroundFinishes(verifier);
+  assert.deepEqual([kit.thread(verifier).turns.length, ...statusesOf(kit, agentThreadId, verifier)], [turns, "active", "idle"], "the verifier never woke beside a1");
 });
