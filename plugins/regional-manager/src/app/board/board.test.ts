@@ -340,6 +340,38 @@ test("a relation to an issue the board hasn't read yet shows its id alone, nothi
   assert.ok(document.activeElement === card && card.getAttribute("aria-expanded") === "true", "once read, it goes to i2's row");
 });
 
+test("a detail lists as its parent's only what the parent's row is blocked by, so a dependency removed since the board's read never reads as inherited", async () => {
+  // The board read each row before i4 and i3 dropped their dependency on i5; their details read after.
+  const { view } = await mount(
+    {
+      decisions: [],
+      issues: [
+        issue("i9", { kind: "research", title: "Pick a vault", headline: "Researching" }),
+        issue("i5", { title: "Audit log" }),
+        issue("i4", { title: "Retry queue", blockedBy: [id("i5")] }),
+        issue("i1", { title: "Card vault", status: "in-progress", subIssues: { done: 0, total: 1 }, blockedBy: [id("i9")], headline: null }),
+        issue("i3", { title: "Webhook", parentId: id("i1"), status: "in-progress", blockedBy: [id("i9"), id("i5")] }),
+      ],
+    },
+    undefined,
+    () => DETAIL,
+  );
+  const dependsOn = (detail: ReturnType<typeof within>) => {
+    const heading = detail.queryByRole("heading", { name: "Depends on" });
+    return heading === null ? [] : within(heading.closest("section") ?? assert.fail("no section")).getAllByRole("button").map((button) => button.getAttribute("aria-label"));
+  };
+
+  fireEvent.click(view.getByRole("button", { name: /\bi4 Build/ }));
+  const topLevel = within(view.getByRole("region", { name: "i4" }));
+  await topLevel.findByText(DETAIL.description);
+  assert.deepEqual(dependsOn(topLevel), [], "a top-level issue has no parent to inherit from");
+
+  fireEvent.click(view.getByRole("button", { name: /\bi3 Build/ }));
+  const sub = within(view.getByRole("region", { name: "i3" }));
+  await sub.findByText(DETAIL.description);
+  assert.deepEqual(dependsOn(sub), ["i9: Pick a vault, Todo, through i1"], "only what i1 depends on, not i5, which i1 never did");
+});
+
 test("an issue gone to lets go of the page once a read moves its row to another lane or off the board, with no move of the user's", async () => {
   const board = (i1: Partial<IssueRow> | null): Read => ({
     decisions: [],

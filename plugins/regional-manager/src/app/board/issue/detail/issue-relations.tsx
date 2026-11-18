@@ -27,12 +27,15 @@ export function IssueRelations({ issue, under, dependsOn, blocks, issues, goTo }
   // why an id the rows lack: the detail and the board read apart, so a detail can name an issue filed since the board's last read.
   const rowOf = (id: IssueId): IssueRow | null => issues.find((each) => each.id === id) ?? null;
   const shown = (ids: readonly IssueId[], through: string | null = null): Shown[] => ids.map((id) => ({ id, row: rowOf(id), through }));
-  // why: a parent's dependencies block its sub-issues too; the row names them with its own, so the detail lists them all.
-  const parents = issue.blockedBy.filter((id) => !dependsOn.includes(id));
+  // why: a parent's open dependencies block its sub-issues too; the row names them with its own, so the
+  // detail lists them all. why from the parent's row: only it says which are the parent's, where the
+  // row's blockers less the detail's dependencies, two reads apart, would pass off one just removed.
+  const parent = issue.parentId === null ? null : rowOf(issue.parentId);
+  const inherited = parent === null ? [] : shown(parent.blockedBy.filter((id) => !dependsOn.includes(id)), `through ${parent.id}`);
   return (
     <>
       <Relation title="Parent" related={shown(under === null ? [] : [under])} goTo={goTo} />
-      <Relation title="Depends on" related={[...shown(dependsOn), ...shown(parents, `through ${issue.parentId}`)]} goTo={goTo} />
+      <Relation title="Depends on" related={[...shown(dependsOn), ...inherited]} goTo={goTo} />
       <Relation title="Blocks" related={shown(blocks)} goTo={goTo} />
     </>
   );
