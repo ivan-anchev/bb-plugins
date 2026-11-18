@@ -1,8 +1,8 @@
-// After a state change: the sidebar reads GitHub's search, which can list a changed PR in its old
-// state for a few seconds. This re-reads the sidebar until it shows the PR in its new state, then
+// After a state change or a merge: the sidebar reads GitHub's search, which can list a changed PR
+// in its old state for a few seconds. This re-reads the sidebar until it shows the PR in its new state, then
 // has the app re-read it; it gives up after a bounded number of reads. The plugin instance owns
 // it: dispose cancels every pending read, and nothing starts after.
-import type { InboxPr, PrState, StateChange } from "../contract.ts";
+import type { InboxPr, MergeMethod, PrState, StateChange } from "../contract.ts";
 import { repoKey, type Repo } from "../github/repo.ts";
 
 // GitHub's search listed a reopened PR as open 5 s after `gh pr reopen` returned (measured on a
@@ -10,12 +10,15 @@ import { repoKey, type Repo } from "../github/repo.ts";
 const READ_EVERY_MS = 3_000;
 const MAX_READS = 6;
 
-const STATES_AFTER: Record<StateChange, readonly PrState[]> = {
+const STATES_AFTER: Record<StateChange | MergeMethod, readonly PrState[]> = {
   ready: ["OPEN"],
   draft: ["DRAFT"],
   close: ["CLOSED"],
   // A PR closed as a draft reopens as one.
   reopen: ["OPEN", "DRAFT"],
+  merge: ["MERGED"],
+  squash: ["MERGED"],
+  rebase: ["MERGED"],
 };
 
 type Deps = {
@@ -27,7 +30,7 @@ type Deps = {
 
 export type SidebarCatchUp = {
   /** Starts following one change of `number` in `repo` in the background. */
-  follow(repo: Repo, number: number, change: StateChange): void;
+  follow(repo: Repo, number: number, change: StateChange | MergeMethod): void;
   dispose(): void;
 };
 

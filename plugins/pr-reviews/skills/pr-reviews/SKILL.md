@@ -1,6 +1,6 @@
 ---
 name: pr-reviews
-description: What the PR Reviews plugin's left-rail app and its card on the new-thread screen show (a list in the main pane of your pull requests across every GitHub project, in Authored by me, Needs my review and Recently merged sections with stacked pull requests as trees, one attention dot per row, a header with chips that list one section and a Filter that hides the sections you don't watch, and headings that fold their section, a page per pull request with a state badge that changes its state on GitHub (ready for review, convert to draft, close by press and hold, reopen), Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree beside every file's diff in one scrolling list drawn like bb's own, the tree following the file you read, lockfiles and very large diffs folded behind Load diff, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (drawn as bb's composer, with Preview, a Send as chip whose menu picks Ask to ask the review thread, Comment to post a GitHub review comment or Review to add it to a pending review, and one send button; nothing posts before you send, and review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
+description: What the PR Reviews plugin's left-rail app and its card on the new-thread screen show (a list in the main pane of your pull requests across every GitHub project, in Authored by me, Needs my review and Recently merged sections with stacked pull requests as trees, one attention dot per row, a header with chips that list one section and a Filter that hides the sections you don't watch, and headings that fold their section, a page per pull request with a state badge that changes its state on GitHub (ready for review, convert to draft, close by press and hold, reopen) and a Merge button that merges an open one by press and hold (Merge, or Squash and merge or Rebase and merge from its chevron, as the repo allows), Summary, Changes and Guide tabs and a read-only side panel of reviewers, checks and labels, and a badge counting ready guides), the Summary tab's Activity (conversation comments, reviews with their threads as rows that open the Changes tab, commits and events folded into lines that open in place, and a composer that posts a conversation comment, with Quote), what the Changes tab shows (the whole diff as a file tree beside every file's diff in one scrolling list drawn like bb's own, the tree following the file you read, lockfiles and very large diffs folded behind Load diff, with path, kind and extension filters, Unified or Split, and Wrap lines), how a guide reads (the What this PR does overview, the step-by-step walkthrough with its ←/→ and J/K keys, findings under their lines with Ask about this and Comment, and the view options for tests and findings), how to select lines in any diff with the gutter's + and use the one comment box under them (drawn as bb's composer, with Preview, a Send as chip whose menu picks Ask to ask the review thread, Comment to post a GitHub review comment or Review to add it to a pending review, and one send button; nothing posts before you send, and review threads never post), how the PR's GitHub review threads show in every diff (under their lines above any finding, or at their file, outdated ones over their original lines; long threads, bot comments and resolved threads folded) with Reply, Ask about this and Quote reply in the same box, how Start review runs a hidden review thread in a new worktree that finishes with the submit_review agent tool, the Review chat side panel that shows that thread's live conversation with a composer, how a guide for an older commit reads (New commits, with Update guide asking the same thread to update it), its Review instructions setting, where its data comes from and what it posts (the GitHub CLI), and how to point a user at it.
 ---
 
 # PR Reviews
@@ -117,7 +117,8 @@ the composer.
 Clicking a row opens that PR's page. It opens on a header bar, as tall as bb's own pane headers
 and ruled off from the page the same way: the PR's state in the sidebar's badge, by name (green
 Open, grey Draft, purple Merged, red Closed), with `owner/repo #number` beside it, and at the bar's
-end **Review**, or **Finish review** while you have a pending review (see "Reviewing on GitHub" below), then icon
+end **Review**, or **Finish review** while you have a pending review (see "Reviewing on GitHub" below),
+**Merge** while the PR is open (see "Merging" below), then icon
 buttons, each named by its tooltip: **Review chat** (opens the review thread's chat beside the
 page; shown once a review has started, see "Review chat" below) and **Open on GitHub** (opens the
 PR on github.com). Under the bar sit the title and the author's GitHub avatar and login with
@@ -144,6 +145,26 @@ permission, no network, a PR your account can't see, or a PR merged or closed
 on GitHub since the page read it (Refresh to see it). When GitHub doesn't
 answer within a minute the change may still have happened, so it says to
 Refresh and check before trying again, and never retries by itself.
+
+### Merging
+
+An open PR whose repository allows merging has a **Merge** button in the header bar, with a
+chevron beside it when the repository allows more than one method. The chevron's menu lists the
+methods the repository allows, each with a line on what it does: **Merge** (a merge commit),
+**Squash and merge** and **Rebase and merge**. The one you pick names the button. It starts on
+Merge, or on the first method allowed when the repository turns merge commits off. A draft, a
+closed PR and a merged one have no Merge button.
+
+A merge can't be undone, so the button merges only after you hold it about 0.7 seconds, with the
+pointer or with Enter or Space, as a light wash fills it; a shorter press says "Keep holding", and
+its tooltip says "Hold to merge" (or "Hold to squash and merge"). While `gh` runs it reads
+"Merging…". It merges only the head the page shows: if commits were pushed since the page read
+the PR, GitHub refuses, and the button says "New commits were pushed to this pull request since
+the page loaded. Refresh to see them before you merge." A branch GitHub found conflicting can't
+merge: the button stays inert and its tooltip says so. Any other refusal, such as a required
+review or check (branch protection), shows in GitHub's words under the button until you press
+Esc or click away. Once GitHub has merged, the button reads "Merged" until the badge turns
+purple Merged; the sidebar row follows as it does for a state change.
 
 Under the header sit three tabs, **Summary**, **Changes** and **Guide**, as one segmented control:
 the selected tab is raised on a recessed track. A PR opens on Summary. The Changes tab carries the PR's lines added and removed,
@@ -427,7 +448,8 @@ comment you wrote or picked, when you send it as **Comment** from a comment
 box (the send button, or ⌘↵, Ctrl+↵ off a Mac), from any tab, and a review you
 add to and submit yourself (see "Reviewing on GitHub"). The only other change
 it makes on GitHub is a PR's state, when you choose it from the header's state
-badge (see "Changing the state"). It posts nothing else: no merge, no edit, and
+badge (see "Changing the state"), or merge it with the header's Merge button (see "Merging"). It
+posts nothing else: no edit, and
 no review or approval you didn't submit. Review threads never post. A conversation comment,
 from the Summary tab's box, goes to the PR's conversation, on no file.
 

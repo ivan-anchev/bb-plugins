@@ -71,6 +71,11 @@ export type PrState = z.infer<typeof prStateSchema>;
 const stateChangeSchema = z.enum(["ready", "draft", "close", "reopen"]);
 export type StateChange = z.infer<typeof stateChangeSchema>;
 
+/** How GitHub merges a PR: with a merge commit, squashed into one commit, or rebased onto the base. */
+const mergeMethodSchema = z.enum(["merge", "squash", "rebase"]);
+export type MergeMethod = z.infer<typeof mergeMethodSchema>;
+export const MERGE_METHODS = mergeMethodSchema.options;
+
 const prDetailSchema = prSummarySchema.extend({
   /** ISO 8601: when it was opened. */
   createdAt: z.string(),
@@ -89,6 +94,10 @@ const prDetailSchema = prSummarySchema.extend({
   /** Requested reviewers first, then the rest who reviewed. */
   reviewers: z.array(reviewerSchema),
   labels: z.array(labelSchema),
+  /** The methods the PR's repo allows, in MERGE_METHODS order. */
+  mergeMethods: z.array(mergeMethodSchema),
+  /** GitHub found the PR's branch conflicts with its base, so it can't merge until they are resolved. */
+  conflicting: z.boolean(),
 });
 export type PrDetail = z.infer<typeof prDetailSchema>;
 
@@ -304,6 +313,11 @@ export const prReviewsContract = defineRpcContract({
    * once GitHub's search lists it.
    */
   changePrState: { input: prRefSchema.extend({ change: stateChangeSchema }), output: empty },
+  /**
+   * Merges the PR on GitHub by `method`, on the reader's choice, only while its head is still
+   * `headSha`, the head the page shows. Re-reads as a state change does.
+   */
+  mergePr: { input: prRefSchema.extend({ method: mergeMethodSchema, headSha: z.string() }), output: empty },
   /**
    * Adds a review comment to the reader's pending review `reviewId` (the comments read's), or to
    * one GitHub starts for it when null. Nothing is published until the review is submitted.

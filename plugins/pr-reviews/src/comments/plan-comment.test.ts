@@ -126,7 +126,7 @@ const prAt = (commits: string[]): PrDetail => ({
   baseRefName: "main",
   state: "OPEN",
   commits,
-  additions: 1, deletions: 1, checks: [], reviewers: [], labels: [],
+  additions: 1, deletions: 1, checks: [], reviewers: [], labels: [], mergeMethods: ["merge"], conflicting: false,
 });
 
 test("a line comment on the PR's latest commit says nothing about where it goes: that is obvious", () => {

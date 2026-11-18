@@ -2,10 +2,10 @@
 // focus into it on open and back to the trigger on close; Escape and a click outside close it,
 // and Radix claims the Escape (preventDefault), so bb does not also act on it.
 import type { ReactNode } from "react";
-import { Content, Portal, Root, Trigger } from "@radix-ui/react-popover";
+import { Anchor, Content, Portal, Root, Trigger } from "@radix-ui/react-popover";
 import { PORTAL_SCOPE } from "./portal-scope.ts";
 
-export { Root as Popover, Trigger as PopoverTrigger };
+export { Anchor as PopoverAnchor, Root as Popover, Trigger as PopoverTrigger };
 
 /** `width`: its width class, for content wider than a list of options. */
 type PopoverContentProps = { label: string; width?: string; children: ReactNode };

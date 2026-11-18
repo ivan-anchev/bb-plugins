@@ -9,9 +9,9 @@ threads where they belong. It posts to GitHub only the review comments,
 replies and conversation comments you write or pick from the guide, on your
 click, on a PR you didn't write batches them into a pending review you submit
 as a comment, approval or request for changes, or submits one with no comments,
-and changes a pull request's
-state only from the state badge on its page; review threads never post to
-GitHub. A card on the new-thread screen shows the PRs waiting on your review,
+and changes or merges a pull
+request only from the state badge and the Merge button on its page; review
+threads never post to GitHub. A card on the new-thread screen shows the PRs waiting on your review,
 or your own.
 
 ## What you get
@@ -53,6 +53,11 @@ or your own.
   Ready for review, Convert to draft, Close (press and hold) or Reopen, each
   naming the state it leads to, and runs it through `gh` as you. The badge and
   the sidebar row follow without a Refresh; a refusal shows in the menu.
+- **Merge in place**: an open PR's header has a Merge button (press and hold),
+  with a chevron that switches it to Squash and merge or Rebase and merge,
+  offering only the methods the repository allows. It merges only the head the
+  page shows, so new commits pushed since make GitHub refuse; a refusal shows
+  under the button.
 - **Activity**: under the description, the PR's whole GitHub activity, oldest
   first, as GitHub's Conversation tab shows it, starting from who opened it:
   conversation comments and reviews on the page, each review's threads as rows
@@ -131,8 +136,9 @@ or your own.
 PR Reviews reads pull requests with the GitHub CLI (`gh`) on the machine that
 runs bb, so `gh` must be installed and signed in there. It writes to GitHub
 only when you send a comment box's text as Comment or Review, or submit or discard your
-review, as your `gh` account; it never approves or requests changes unless you submit a review that
-does, and never edits anything. Review threads
+review, or change or merge a PR from its page, as your `gh` account; it never approves or requests
+changes unless you submit a review that does, never merges unless you hold Merge, and never edits
+anything. Review threads
 never reach GitHub at all: before one starts, PR Reviews fetches the PR's commits
 into the project's repository with `git fetch`, and the thread reads them
 there. So Start review needs the project's default checkout on the machine

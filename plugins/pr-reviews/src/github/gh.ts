@@ -1,6 +1,6 @@
 // The only module that runs `gh`. It parses gh's JSON once into the canonical PR types, reads the
 // PR's comments and timeline, posts the comments a reader chose to, writes their pending review,
-// changes a PR's state, and maps every process failure to a refusal the app can show beside its
+// changes or merges a PR, and maps every process failure to a refusal the app can show beside its
 // data or a kept draft.
 import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 import { z } from "zod";
@@ -8,7 +8,7 @@ import type { CommentRequest } from "../comments/comment-schema.ts";
 import type { ReviewEvent } from "../comments/review-schema.ts";
 import type { ReviewThread } from "../comments/thread-schema.ts";
 import type { PrComments } from "../comments/timeline-schema.ts";
-import type { PrDetail, PrSummary, StateChange } from "../contract.ts";
+import { MERGE_METHODS, type MergeMethod, type PrDetail, type PrSummary, type StateChange } from "../contract.ts";
 import { statusCheckRollupSchema } from "./checks.ts";
 import { commentApiArgs, conversationCommentApiArgs, replyApiArgs } from "./comment-args.ts";
 import { ghPostRefusalFor, ghRefusalFor, ghStateRefusalFor } from "./gh-refusal.ts";
@@ -33,11 +33,11 @@ import {
 import { isReview, parseReviewCommentsPage, parseTimelinePage, REVIEW_COMMENTS_QUERY, TIMELINE_QUERY, toTimeline, type GhTimelineNode } from "./pr-timeline.ts";
 import type { Repo } from "./repo.ts";
 import { latestReviewsSchema, reviewRequestsSchema, toReviewers } from "./reviewers.ts";
-import { stateChangeArgs } from "./state-args.ts";
+import { mergeArgs, stateChangeArgs } from "./state-args.ts";
 
 const LIST_LIMIT = 200;
 const SUMMARY_FIELDS = ["number", "title", "author", "updatedAt", "headRefOid"];
-const DETAIL_FIELDS = [...SUMMARY_FIELDS, "createdAt", "body", "url", "headRefName", "baseRefName", "state", "isDraft", "commits", "additions", "deletions", "statusCheckRollup", "reviewRequests", "latestReviews", "labels"];
+const DETAIL_FIELDS = [...SUMMARY_FIELDS, "createdAt", "body", "url", "headRefName", "baseRefName", "state", "isDraft", "commits", "additions", "deletions", "statusCheckRollup", "reviewRequests", "latestReviews", "labels", "mergeable"];
 
 const ghSummarySchema = z.object({
   number: z.number(),
@@ -70,9 +70,14 @@ const ghDetailSchema = ghSummarySchema.extend({
   reviewRequests: reviewRequestsSchema,
   latestReviews: latestReviewsSchema,
   labels: z.array(ghLabelSchema),
+  mergeable: z.enum(["MERGEABLE", "CONFLICTING", "UNKNOWN"]),
 });
 
-const toDetail = (pr: z.infer<typeof ghDetailSchema>): PrDetail => ({
+// The repo's merge settings, from `gh repo view --json`: what each method is called there.
+const ALLOWED_FIELDS = { merge: "mergeCommitAllowed", squash: "squashMergeAllowed", rebase: "rebaseMergeAllowed" } as const satisfies Record<MergeMethod, string>;
+const ghMergeSettingsSchema = z.record(z.enum(Object.values(ALLOWED_FIELDS)), z.boolean());
+
+const toDetail = (pr: z.infer<typeof ghDetailSchema>, settings: z.infer<typeof ghMergeSettingsSchema>): PrDetail => ({
   ...toSummary(pr),
   createdAt: pr.createdAt,
   body: pr.body,
@@ -87,10 +92,13 @@ const toDetail = (pr: z.infer<typeof ghDetailSchema>): PrDetail => ({
   checks: pr.statusCheckRollup,
   reviewers: toReviewers(pr.reviewRequests, pr.latestReviews),
   labels: pr.labels,
+  mergeMethods: MERGE_METHODS.filter((method) => settings[ALLOWED_FIELDS[method]]),
+  // UNKNOWN: GitHub is still working it out, so the merge itself finds out.
+  conflicting: pr.mergeable === "CONFLICTING",
 });
 
-/** `gh pr view --json` output for DETAIL_FIELDS, as the canonical PR. */
-export const parsePrDetail = (json: unknown): PrDetail => toDetail(ghDetailSchema.parse(json));
+/** `gh pr view --json` output for DETAIL_FIELDS and its repo's `gh repo view --json` merge settings, as the canonical PR. */
+export const parsePrDetail = (pr: unknown, settings: unknown): PrDetail => toDetail(ghDetailSchema.parse(pr), ghMergeSettingsSchema.parse(settings));
 
 export async function listOpenPrs(repo: Repo): Promise<PrSummary[]> {
   const json = await runGh(["pr", "list", "-R", repo, "--state", "open", "--limit", String(LIST_LIMIT), "--json", SUMMARY_FIELDS.join(",")]);
@@ -111,8 +119,11 @@ export async function readInbox(repos: Repo[], now: number): Promise<{ found: Fo
 }
 
 export async function viewPr(repo: Repo, number: number): Promise<PrDetail> {
-  const json = await runGh(["pr", "view", String(number), "-R", repo, "--json", DETAIL_FIELDS.join(",")]);
-  return parsePrDetail(JSON.parse(json));
+  const [pr, settings] = await Promise.all([
+    runGh(["pr", "view", String(number), "-R", repo, "--json", DETAIL_FIELDS.join(",")]),
+    runGh(["repo", "view", repo, "--json", Object.values(ALLOWED_FIELDS).join(",")]),
+  ]);
+  return parsePrDetail(JSON.parse(pr), JSON.parse(settings));
 }
 
 /** A PR's diff between the two commits it was read at. */
@@ -274,6 +285,15 @@ async function runGhPost(args: string[], unsure?: string): Promise<string> {
 export async function changePrState(repo: Repo, number: number, change: StateChange): Promise<void> {
   try {
     await runHostCommand("gh", stateChangeArgs(repo, number, change));
+  } catch (error) {
+    throw ghStateRefusalFor(parseHostCommandFailure(error));
+  }
+}
+
+/** Merges the PR by `method` as the reader's account, only while its head is still `headSha`. */
+export async function mergePr(repo: Repo, number: number, method: MergeMethod, headSha: string): Promise<void> {
+  try {
+    await runHostCommand("gh", mergeArgs(repo, number, method, headSha));
   } catch (error) {
     throw ghStateRefusalFor(parseHostCommandFailure(error));
   }

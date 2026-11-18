@@ -1,0 +1,7 @@
+{
+  "code": 1,
+  "killed": false,
+  "signal": null,
+  "stdout": "",
+  "stderr": "GraphQL: Head branch was modified. Review and try the merge again. (mergePullRequest)\n"
+}

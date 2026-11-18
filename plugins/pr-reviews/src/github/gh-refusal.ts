@@ -52,12 +52,14 @@ export function ghPostRefusalFor(failure: HostCommandFailure, unsure = "The comm
 }
 
 /**
- * A failed state change. One the timeout stopped may have reached GitHub, so it says so and is never
- * retried, as a post. GitHub refuses a change the PR's state no longer allows, when the PR changed
- * on GitHub after the page read it.
+ * A failed state change or merge. One the timeout stopped may have reached GitHub, so it says so and
+ * is never retried, as a post. GitHub refuses a change the PR's state no longer allows, when the PR
+ * changed on GitHub after the page read it, and a merge once a push has moved the PR's head past the
+ * page's.
  */
 export function ghStateRefusalFor(failure: HostCommandFailure): Refusal {
   if (failure.killed) return invalid("GitHub didn't answer in time. The state may have changed: Refresh to check before trying again.");
+  if (failure.stderr.includes("Head branch was modified")) return invalid("New commits were pushed to this pull request since the page loaded. Refresh to see them before you merge.");
   if (failure.stderr.includes("because it was already merged")) return invalid("This pull request is already merged, so its state can't change. Refresh to see it.");
   // why not "closed": gh prints the same "is closed" line for a merged PR.
   if (failure.stderr.includes("Only draft pull requests can be marked")) {
