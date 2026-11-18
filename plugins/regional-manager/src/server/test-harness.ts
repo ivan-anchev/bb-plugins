@@ -256,7 +256,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   /**
    * bb's git plugin as the plugin reaches it, by environment id: the branch each has checked out
    * (absent: none, as when detached; bb checks out the branch it made a new environment on), the
-   * commit (absent: HEAD), the files changed in its working tree (absent: none),
+   * commit (absent: HEAD), the files changed in its working tree (absent: none), the default branch
+   * it names (absent: main; "" names none, as bb--git answers in a checkout with no named branch),
    * the ones outside git, the ones whose machine it can't read, and a row a newer bb--git answers
    * instead, in a shape the plugin's contract doesn't name; and the keys of every `status` call.
    * Set `holding` to keep each answer, as read when called, until the test calls its release in `held`.
@@ -265,6 +266,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     checkouts: Map<string, string>;
     heads: Map<string, string>;
     changedFiles: Map<string, string[]>;
+    defaultBranches: Map<string, string>;
     nonGit: Set<string>;
     offline: Set<string>;
     newer: Map<string, object>;
@@ -275,6 +277,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     checkouts: new Map(),
     heads: new Map(),
     changedFiles: new Map(),
+    defaultBranches: new Map(),
     nonGit: new Set(),
     offline: new Set(),
     newer: new Map(),
@@ -608,7 +611,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         checkout: branchName === undefined ? { kind: "detached", headSha } : { kind: "branch", branchName, headSha },
         // why sliced: as bb 0.49's git plugin does, it counts every changed file and lists the first 200.
         workingTree: { fileCount: changed.length, files: changed.slice(0, 200).map((path) => ({ path, status: "??", insertions: null, deletions: null })) },
-        branch: { currentBranch: branchName ?? null, defaultBranch: "main" },
+        branch: { currentBranch: branchName ?? null, defaultBranch: git.defaultBranches.get(environmentId) ?? "main" },
       },
     };
   }

@@ -287,3 +287,13 @@ test("a doorbell taken back whose answer is lost still rings again once, and the
   assert.deepEqual(doorbells(), [MEMORY_LINE]);
   assert.equal(kit.store.doorbell(coordinatorId), null);
 });
+
+test("a checkout bb's git plugin names no default branch for is still read, and catch-up plans from the default branch as origin has it", async () => {
+  const { kit, environmentId, turnEnds, doorbells, catchUp } = await working();
+  kit.git.defaultBranches.set(environmentId, "");
+  await turnEnds(["a.ts"]);
+
+  assert.deepEqual(doorbells(), [CHANGED_LINE("1 changed file")]);
+  assert.deepEqual(kit.warnings(), []);
+  assert.equal((await catchUp()).split("\n")[1], "Your checkout has 1 changed file, so your checkout is no longer a copy of the default branch: read the default branch as origin has it when you plan.");
+});

@@ -25,7 +25,8 @@ const statusRowSchema = z.union([
       checkout: checkoutRowSchema,
       workingTree: z.object({ fileCount: z.number().int().min(0), files: z.array(z.object({ path: z.string(), status: z.string() })) }),
       // why optional: only the regional manager's own read names it, in a line, and a row without it must still read.
-      branch: z.object({ defaultBranch: z.string().min(1) }).optional(),
+      // why "" is none: bb--git answers it when it can name no default branch, as in a checkout with no named branch.
+      branch: z.object({ defaultBranch: z.string().transform((name) => (name === "" ? null : name)) }).optional(),
     }),
   }),
   z.object({ outcome: z.literal("not_applicable") }),
