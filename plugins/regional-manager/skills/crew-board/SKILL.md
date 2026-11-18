@@ -937,7 +937,7 @@ Each regional manager has its own folder on the bb server:
 server log names the parent folder when the plugin loads. It starts with:
 
 - `MEMORY.md`: the index of the files.
-- `GOAL.md`: the goal typed in the composer.
+- `GOAL.md`: the goal, the first message you typed in its thread.
 - `PLAN.md`: the plan.
 - `PREFERENCES.md`: the user's standing preferences, one per line.
 - `CREW.md`: rules every agent will follow.

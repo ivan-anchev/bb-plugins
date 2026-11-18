@@ -35,7 +35,7 @@ type QueuedRow = Pick<MessageDispatchHookContext["queuedMessages"][number], "id"
 type Part = { type: string; text?: string; visibility?: string };
 
 /** The parts of bb the goal uses, as narrow as the code reads them. */
-export type GoalBb = {
+type GoalBb = {
   pluginId: string;
   log: Pick<PluginLogger, "warn">;
   experimental_hooks: { on(hook: "message.dispatch", handler: (ctx: DispatchContext) => MessageDispatchHookDecision): void };

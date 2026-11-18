@@ -9,7 +9,7 @@ import { coordinatorIdSchema } from "../../model/role.ts";
 import { openMemoryRoot } from "../memory/memory-files.ts";
 import { memoryStorage } from "../memory-storage.ts";
 import { openStore } from "../store/store.ts";
-import { PLACEHOLDER, watchGoals, type GoalBb } from "./goal.ts";
+import { PLACEHOLDER, watchGoals } from "./goal.ts";
 
 // The goal's message.dispatch hook, as bb calls it in its admission path, over the plugin's real
 // store and memory folder and a fake of bb's queue and events.
@@ -20,6 +20,7 @@ const ID = coordinatorIdSchema.parse("8f9e1c2a-0000-4000-8000-000000000001");
 const WAIT = { action: "wait", reason: "Waiting for your goal" };
 const PROCEED = { action: "proceed" };
 
+type GoalBb = Parameters<typeof watchGoals>[0];
 type Hook = Parameters<GoalBb["experimental_hooks"]["on"]>[1];
 
 /** The plugin's goal over a regional manager bound to MANAGER, still waiting for its goal, and the placeholder queued in its thread. */
