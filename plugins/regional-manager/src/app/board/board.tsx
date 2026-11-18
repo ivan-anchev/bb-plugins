@@ -1,24 +1,25 @@
 // The board of one regional manager: its verification switch, a warning while its own working
 // tree has changed files, why PR status is unavailable when it is, and its digest, then its
-// decisions and issues in lanes: Needs you, then one per status (In review, Verifying, In progress,
-// Todo, Backlog, Done, Canceled), each lane's decisions first. The Board tab in the thread and the
-// Board page in the panel both draw it, from one read; each gives it the scrolling root it sits in.
+// decisions and issues in lanes (issue/issue-board.tsx), each issue opening in place to its
+// detail. The Board tab in the thread and the Board page in the panel both draw it, from one read;
+// each gives it the scrolling root it sits in.
 import { experimental_Icon as Icon, experimental_useRpcMutation, experimental_useRpcQuery, Markdown } from "@get-bb/plugin-sdk/app";
 import { useId, useState } from "react";
-import { coordinatorContract as contract, type Board as BoardData, type IssueRow as Row } from "../../contract.ts";
-import { boardGroups, LANE_LABELS, type BoardItem, type Lane } from "../../model/board/board-groups.ts";
-import { filesText } from "../../model/inbox/own-tree.ts";
+import { coordinatorContract as contract, type Board as BoardData } from "../../contract.ts";
 import type { Decision } from "../../model/decision.ts";
+import { filesText } from "../../model/inbox/own-tree.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { useFocusKeptByKey } from "../ui/focus-hand-off.ts";
 import { ReadFailure } from "../ui/read-failure.tsx";
 import { Switch } from "../ui/switch.tsx";
 import { shortTime } from "../ui/time.ts";
+import { useAnsweredDraftsDropped } from "./answer-draft.ts";
 import { DecisionRow } from "./decision-row.tsx";
-import { IssueRow } from "./issue-row.tsx";
+import { IssueDetail } from "./issue/detail/issue-detail.tsx";
+import { IssueBoard } from "./issue/issue-board.tsx";
 
 export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
   const read = experimental_useRpcQuery({ contract, method: "board", input: { coordinatorId } });
+  useAnsweredDraftsDropped(coordinatorId, read.data?.decisions ?? NO_DECISIONS);
   // why: each heading labels its section by id, and a page may show more than one board.
   const ids = useId();
   return (
@@ -32,12 +33,21 @@ export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
           {read.data.ownEdits !== null && <OwnEdits {...read.data.ownEdits} />}
           {read.data.prUnavailable !== null && <PrUnavailable reason={read.data.prUnavailable} />}
           <Digest ids={ids} digest={read.data.digest} />
-          <Groups ids={ids} coordinatorId={coordinatorId} decisions={read.data.decisions} issues={read.data.issues} />
+          <IssueBoard
+            decisions={read.data.decisions}
+            issues={read.data.issues}
+            decisionRow={(decision, ref) => <DecisionRow ref={ref} coordinatorId={coordinatorId} decision={decision} />}
+            detailOf={(issue) => <IssueDetail coordinatorId={coordinatorId} issue={issue} />}
+          />
+          {read.data.issues.length === 0 && <p className="px-2 text-sm text-muted-foreground">No issues yet.</p>}
         </>
       )}
     </div>
   );
 }
+
+/** No decisions read yet. why a constant: the drafts are dropped again only when a read changes the list. */
+const NO_DECISIONS: readonly Decision[] = [];
 
 /**
  * The board's switch for verifying done handoffs. It shows what the user asked for while the change
@@ -135,53 +145,3 @@ function titled(content: string): { title: string; body: string } {
   const match = /^#[ \t]+(.+)\n+([\s\S]*)$/.exec(content.trimStart());
   return match === null ? { title: "Digest", body: content } : { title: match[1]?.trim() ?? "Digest", body: match[2] ?? "" };
 }
-
-type GroupsProps = { ids: string; coordinatorId: CoordinatorId; decisions: readonly Decision[]; issues: readonly Row[] };
-
-function Groups({ ids, coordinatorId, decisions, issues }: GroupsProps) {
-  const keepFocus = useFocusKeptByKey();
-  return (
-    <>
-      {boardGroups(decisions, issues).map(({ lane, rows: inLane }) => (
-        <section key={lane} aria-labelledby={`${ids}-${lane}`} className="flex flex-col gap-1">
-          <h2 id={`${ids}-${lane}`} className="flex items-center gap-2 px-2 text-xs font-medium text-muted-foreground">
-            <span aria-hidden className={`size-1.5 rounded-full ${DOT[lane]}`} />
-            {LANE_LABELS[lane]}
-            <span className="tabular-nums">{inLane.length}</span>
-          </h2>
-          <ul className="flex flex-col">
-            {inLane.map((item) => (
-              <li key={item.kind === "decision" ? item.decision.id : item.issue.id}>
-                <ItemRow item={item} coordinatorId={coordinatorId} keepFocus={keepFocus} />
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
-      {issues.length === 0 && <p className="px-2 text-sm text-muted-foreground">No issues yet. The regional manager files one for each piece of work and starts an agent on it.</p>}
-    </>
-  );
-}
-
-/** One row, keeping focus as it moves between lanes: decision and issue ids never collide (`d1`, `i1`). */
-function ItemRow({ item, coordinatorId, keepFocus }: { item: BoardItem<Row>; coordinatorId: CoordinatorId; keepFocus: ReturnType<typeof useFocusKeptByKey> }) {
-  switch (item.kind) {
-    case "decision":
-      return <DecisionRow ref={keepFocus(item.decision.id)} coordinatorId={coordinatorId} decision={item.decision} />;
-    case "issue":
-      return <IssueRow ref={keepFocus(item.issue.id)} issue={item.issue} />;
-    default:
-      return item satisfies never;
-  }
-}
-
-const DOT: Record<Lane, string> = {
-  "needs-you": "bg-warning",
-  "in-review": "bg-pr-merged",
-  verifying: "bg-attention",
-  "in-progress": "bg-success",
-  todo: "bg-muted-foreground",
-  backlog: "border border-muted-foreground",
-  done: "border border-muted-foreground",
-  canceled: "border border-muted-foreground",
-};

@@ -50,6 +50,12 @@ export const handoffFieldsSchema = z.object({
   prUrl: prUrlSchema.optional().describe("done only: the pull request you opened, if any."),
 });
 
+/**
+ * What the board shows of a handoff: when it was made, how the work ended, and the agent's report.
+ * why not what it delivered: the issue's row shows its pull request, and its verdict the commit checked.
+ */
+export const shownHandoffSchema = z.object({ id: handoffIdSchema, at: z.number(), status: handoffStatusSchema, ...reportFields });
+
 /** A handoff is current while its thread has started no later turn. `latestTurnSeq` is null when bb lists no turn. */
 export const handoffIsCurrent = (handoff: Pick<Handoff, "turnSeq">, latestTurnSeq: number | null): boolean => latestTurnSeq === null || latestTurnSeq <= handoff.turnSeq;
 

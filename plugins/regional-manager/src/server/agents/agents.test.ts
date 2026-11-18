@@ -287,11 +287,12 @@ test("the board puts a running agent's issue In progress, one waiting on an appr
   assert.equal(textOf(await kit.call("agent_stop", { agent: "a3" }, threadId)), "a3 is stopped; it no longer holds i3. crew_catch_up shows where i3 stands now.");
 
   const { issues } = await kit.rpc.board({ coordinatorId });
-  assert.deepEqual(issues.map((issue) => [issue.id, laneOf(issue), issue.agent?.id, issue.agent?.threadId, issue.branch]), [
-    ["i1", "in-progress", "a1", ids[0], `bb/${ids[0]}`],
-    ["i2", "needs-you", "a2", ids[1], `bb/${ids[1]}`],
-    ["i3", "todo", "a3", ids[2], `bb/${ids[2]}`],
+  assert.deepEqual(issues.map((issue) => [issue.id, laneOf(issue), issue.agent?.id, issue.agent?.threadId]), [
+    ["i1", "in-progress", "a1", ids[0]],
+    ["i2", "needs-you", "a2", ids[1]],
+    ["i3", "todo", "a3", ids[2]],
   ]);
+  assert.deepEqual(Object.keys(issues[0] ?? {}).sort(), ["agent", "headline", "id", "kind", "needsYou", "pr", "status", "title"], "a row sends only what the board shows");
 });
 
 test("crew_catch_up shows the updates, then the board by lane with each issue's agent, then the memory", async () => {
@@ -366,6 +367,26 @@ assert.equal(doorbells()[0], '[Regional Manager] 1 update. Call crew_catch_up to
   assert.match(caughtUp, /### i1 "Add retries" \(a1\) returned to Todo\n\nAt [^\n]+ a1 was stopped before its work reached Verifying, In review or Done, so i1 rests in Todo with no agent\./);
   assert.equal(textOf(await kit.call("agent_message", { agent: "a1", text: "More" }, threadId)), "a1 was stopped, so it takes no more messages. Start a new agent on i1 with agent_start.");
   assert.equal(textOf(await kit.call("agent_stop", { agent: "a1" }, threadId)), "a1 had already ended (stopped); nothing changed.");
+});
+
+test("an issue opened on the board links each ended agent's thread while bb has it, archived or not, and none once it is deleted", async () => {
+  const { kit, threadId, coordinatorId, start } = await filed();
+  const stopped = threadIn(textOf(await start()));
+  await kit.call("agent_stop", { agent: "a1" }, threadId);
+  const archived = threadIn(textOf(await start()));
+  await kit.call("agent_stop", { agent: "a2", archive: true }, threadId);
+  await settled();
+  const heldBy = async () => (await kit.rpc.issue({ coordinatorId, issueId: issueIdSchema.parse("i1") })).record.map(({ agent }) => agent);
+  assert.deepEqual(await heldBy(), [
+    { id: "a1", threadId: stopped, ended: "stopped" },
+    { id: "a2", threadId: archived, ended: "stopped" },
+  ]);
+
+  for (const id of [stopped, archived]) kit.thread(id).deletedAt = Date.now();
+  assert.deepEqual(await heldBy(), [
+    { id: "a1", threadId: null, ended: "stopped" },
+    { id: "a2", threadId: null, ended: "stopped" },
+  ]);
 });
 
 test("work that reached In review survives its agent's end, and a stopped agent's handoff is refused", async () => {

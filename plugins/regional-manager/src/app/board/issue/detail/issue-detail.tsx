@@ -1,0 +1,44 @@
+// An issue opened in place, read when its row opens: its description, its criteria, and its record:
+// every agent that held it, each handoff it made and the verdict on it.
+import { experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
+import { coordinatorContract as contract, type IssueDetail as Detail, type IssueRow } from "../../../../contract.ts";
+import { isVerified, type Kind } from "../../../../model/issue/kind.ts";
+import type { CoordinatorId } from "../../../../model/role.ts";
+import { ReadFailure } from "../../../ui/read-failure.tsx";
+import { IssueRecord } from "./issue-record.tsx";
+
+export function IssueDetail({ coordinatorId, issue }: { coordinatorId: CoordinatorId; issue: IssueRow }) {
+  const read = experimental_useRpcQuery({ contract, method: "issue", input: { coordinatorId, issueId: issue.id } });
+  return (
+    <>
+      {read.error !== null && <ReadFailure onRetry={() => void read.refetch()}>Could not read {issue.id}: {read.error.message}</ReadFailure>}
+      {read.data === undefined && read.error === null && <p className="rmi-description">Loading…</p>}
+      {read.data !== undefined && <Opened kind={issue.kind} detail={read.data} />}
+    </>
+  );
+}
+
+function Opened({ kind, detail: { description, doneCriteria, record } }: { kind: Kind; detail: Detail }) {
+  return (
+    <>
+      <p className="rmi-description">{description}</p>
+      {doneCriteria.length > 0 && (
+        <section className="rmi-part">
+          {/* why by kind: a verified kind's criteria are judged; any other's are questions its report answers. */}
+          <h3 className="rmi-part-title">{isVerified(kind) ? "Done when" : "Questions"}</h3>
+          <ol className="rmi-criteria">
+            {doneCriteria.map((criterion, i) => (
+              <li key={i}>{criterion}</li>
+            ))}
+          </ol>
+        </section>
+      )}
+      {record.length > 0 && (
+        <section className="rmi-part">
+          <h3 className="rmi-part-title">Record</h3>
+          <IssueRecord record={record} />
+        </section>
+      )}
+    </>
+  );
+}

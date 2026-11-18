@@ -12,7 +12,7 @@ its role.
 
 - `server.ts`, `app.tsx`: composition roots, registrations only.
 - `src/contract.ts`: the rpc contract (`coordinators`, `primaryHost`,
-  `startCoordinator`, `board`, `setVerify`, `answerDecision`, `needsYou`,
+  `startCoordinator`, `board`, `issue`, `setVerify`, `answerDecision`, `needsYou`,
   `memoryList`, `memoryRead`, `memoryWrite`;
   tags `coordinators`, `board:<regional manager id>` and `memory:<regional manager id>`).
 - `src/model/role.ts`: the role a thread holds (coordinator, agent or
@@ -63,7 +63,8 @@ its role.
   doorbells).
 - `src/app/panel/`: the nav panel, its list, and the New page around bb's
   new-thread composer. `src/app/board/`: the Board, its thread tab and its
-  panel page. `src/app/memory/`: the Memory page and its editor.
+  panel page; `issue/` its lanes and issue rows, `issue/detail/` an issue
+  opened in place. `src/app/memory/`: the Memory page and its editor.
 - `skills/regional-manager/`: the regional manager's playbook, selected only
   for it. `skills/agent-work/`: an agent's playbook, selected only for
   agents. `skills/verifying/`: a verifier's playbook. `skills/crew-board/`:

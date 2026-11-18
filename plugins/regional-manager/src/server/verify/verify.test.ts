@@ -49,6 +49,8 @@ async function withAgent(options: Parameters<typeof coordinating>[0] = {}) {
     const issue = (await kit.rpc.board({ coordinatorId })).issues[0] ?? assert.fail("no row");
     return { ...issue, lane: laneOf(issue) };
   };
+  /** The issue opened on the board. */
+  const opened = () => kit.rpc.issue({ coordinatorId, issueId: i1 });
   const latest = () => kit.store.latestHandoff(coordinatorId, a1) ?? assert.fail("no handoff");
   /** The check of the agent's latest handoff. */
   const check = () => latest().check ?? assert.fail(`the handoff is ${latest().handoff.status}`);
@@ -68,7 +70,7 @@ async function withAgent(options: Parameters<typeof coordinating>[0] = {}) {
     await settled();
     return answer;
   }
-  return { kit, threadId, coordinatorId, agentThreadId, doorbells, row, latest, check, verdict, verifier, settlement, handOff };
+  return { kit, threadId, coordinatorId, agentThreadId, doorbells, row, opened, latest, check, verdict, verifier, settlement, handOff };
 }
 
 test("a done handoff starts a hidden verifier as the agent's child, in its environment, on another provider, with no inherited choices", async () => {
@@ -398,21 +400,80 @@ test("an agent turn that starts after the verifier's model is looked up, before 
 });
 
 test("a verdict that passes every criterion is In review with ✓ and the models bb ran the verifier on", async () => {
-  const { kit, doorbells, row, verifier, handOff } = await withAgent();
+  const { kit, doorbells, row, verdict, verifier, handOff } = await withAgent();
   await handOff();
   await kit.call("issue_verdict", PASSES, verifier());
   await settled();
 
   const passed = await row();
   assert.deepEqual([passed.lane, passed.headline], ["in-review", "✓ Verified: Retries land with backoff"]);
-  const verdict = passed.placing?.verdict;
-  assert.ok(verdict?.state === "returned");
-  assert.deepEqual([verdict.model, verdict.sameModel], [{ providerId: "codex", model: "gpt-default" }, false]);
+  const returned = verdict();
+  assert.ok(returned.state === "returned");
+  assert.deepEqual([returned.model, returned.sameModel], [{ providerId: "codex", model: "gpt-default" }, false]);
   assert.deepEqual(
-    verdict.criteria.map((check) => [check.criterion, check.result]),
+    returned.criteria.map((check) => [check.criterion, check.result]),
     CRITERIA.map((criterion) => [criterion, "pass"]),
   );
   assert.match(doorbells()[0] ?? "", /handed off: done, verified$/);
+});
+
+test("an issue opened on the board reads what it is about, its criteria and each handoff with its verdict, names no model and no brief, and an issue it hasn't is refused", async () => {
+  const { kit, coordinatorId, agentThreadId, opened, verifier, handOff } = await withAgent();
+  await handOff();
+  await kit.call("issue_verdict", FAILS, verifier());
+  await settled();
+  await handOff();
+  await kit.call("issue_verdict", PASSES, verifier());
+  await settled();
+
+  const detail = await opened();
+  assert.deepEqual([detail.description, detail.doneCriteria], ["Failed webhook deliveries are lost.", CRITERIA]);
+  assert.deepEqual(
+    detail.record.map(({ agent, handoffs }) => [agent, handoffs.map(({ status, summary, verdict }) => [status, summary, verdict?.state === "returned" && verdict.criteria.map((check) => check.result)])]),
+    [
+      [
+        { id: "a1", threadId: agentThreadId, ended: null },
+        [
+          ["done", "Retries land with backoff", ["fail", "pass"]],
+          ["done", "Retries land with backoff", ["pass", "pass"]],
+        ],
+      ],
+    ],
+  );
+  const sent = JSON.stringify(detail);
+  for (const unshown of ["gpt-default", "codex", "Retry failed deliveries with backoff."]) assert.ok(!sent.includes(unshown), `the detail carries no ${unshown}`);
+
+  await assert.rejects(async () => kit.rpc.issue({ coordinatorId, issueId: issueIdSchema.parse("i9") }), { code: "not_found", message: "This regional manager has no issue i9." });
+});
+
+test("an issue opened on the board sends of each verdict only what the board shows: no checkout before it returns, no nudge, no fix round, no CI while its findings go back", async () => {
+  const { kit, coordinatorId, agentThreadId, opened, verifier } = await withAgent();
+  const shown = async () => (await opened()).record[0]?.handoffs.at(-1)?.verdict ?? assert.fail("no verdict");
+  // As if the plugin reloaded between storing the handoff and starting its verifier: it waits, queued.
+  const turnSeq = kit.thread(agentThreadId).turns.at(-1) ?? assert.fail("no turn");
+  const { headSha, ...report } = DONE;
+  const handoff = { id: handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e"), coordinatorId, issueId: i1, agentId: a1, at: Date.now(), turnSeq, ...report, status: "done" as const };
+  kit.inbox.handoff({ ...handoff, delivery: { kind: "commit", headSha, prUrl: null } }, { kind: "read", checkout: { headSha: HEAD, changedFiles: [], changedFileCount: 0 } });
+  assert.deepEqual(await shown(), { state: "queued" });
+
+  await kit.tick();
+  assert.deepEqual(await shown(), { state: "running", verifierThreadId: verifier() });
+
+  // Its findings on their way back to the agent: bb holds the send.
+  let take = () => {};
+  kit.sends.pending = new Promise((resolve) => (take = resolve));
+  const returning = kit.call("issue_verdict", FAILS, verifier());
+  await settled();
+  const sendingBack = await shown();
+  assert.deepEqual(Object.keys(sendingBack).sort(), ["checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
+  assert.deepEqual(sendingBack.state === "returned" && sendingBack.settlement, { kind: "sending-back" });
+
+  take();
+  await returning;
+  await settled();
+  const returned = await shown();
+  assert.deepEqual(Object.keys(returned).sort(), ["checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
+  assert.deepEqual(returned.state === "returned" && returned.settlement, { kind: "sent-back", ci: { kind: "none" } });
 });
 
 // QA-03: a Claude Code verifier's per-command sandbox showed a boat sandbox's home dotfiles as
@@ -459,7 +520,7 @@ test("a tree bb reads with changes fails the verdict with bb's evidence, whateve
 });
 
 test("a commit bb reads other than the claimed one fails the verdict with bb's evidence; failing again after the fix round goes to the coordinating thread", async () => {
-  const { kit, agentThreadId, row, verifier, handOff } = await withAgent();
+  const { kit, agentThreadId, row, opened, verifier, handOff } = await withAgent();
   kit.git.heads.set(kit.thread(agentThreadId).environmentId ?? assert.fail("no environment"), "f".repeat(40));
   await handOff();
   await kit.call("issue_verdict", PASSES, verifier());
@@ -471,7 +532,7 @@ test("a commit bb reads other than the claimed one fails the verdict with bb's e
   await settled();
   assert.equal(kit.sent().filter((args) => args.threadId === agentThreadId).length, 1, "only the first verdict went back");
   assert.deepEqual([(await row()).lane, (await row()).headline], ["needs-you", "✗ Not the claimed commit on a clean tree after its fix round: Retries land with backoff"]);
-  const shown = (await row()).placing?.verdict;
+  const shown = (await opened()).record[0]?.handoffs.at(-1)?.verdict;
   assert.ok(shown?.state === "returned");
   assert.deepEqual(shown.checkout, { headSha: "f".repeat(40), changedFiles: [], changedFileCount: 0 }, "the board has bb's read to show");
 });
@@ -721,8 +782,8 @@ test("with no other provider the verifier runs on another model of the agent's, 
   await alone.handOff();
   assert.deepEqual([alone.kit.thread(alone.verifier()).providerId, alone.kit.thread(alone.verifier()).execution?.model], ["claude-code", "opus"]);
   await alone.kit.call("issue_verdict", PASSES, alone.verifier());
-  const verdict = (await alone.row()).placing?.verdict;
-  assert.ok(verdict?.state === "returned");
+  const verdict = alone.verdict();
+  assert.ok(verdict.state === "returned");
   assert.equal(verdict.sameModel, true);
 });
 

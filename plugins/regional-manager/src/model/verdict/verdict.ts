@@ -31,45 +31,77 @@ const settledCiSchema = ciVerdictSchema.default({ kind: "none" });
  * `refused` is bb's answer when it refused the findings sent back, else null. Each that settled
  * it keeps `ci`, what CI said about the commit then.
  */
-const settlementSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("pending") }),
-  z.object({ kind: z.literal("waiting-for-ci") }),
-  z.object({ kind: z.literal("sending-back"), round: roundSchema, ci: settledCiSchema }),
-  z.object({ kind: z.literal("sent-back"), round: roundSchema, ci: settledCiSchema }),
-  z.object({ kind: z.literal("maybe-sent-back"), round: roundSchema, ci: settledCiSchema }),
-  z.object({ kind: z.literal("checked"), refused: z.string().nullable(), ci: settledCiSchema }),
+const pendingSchema = z.object({ kind: z.literal("pending") });
+const waitingForCiSchema = z.object({ kind: z.literal("waiting-for-ci") });
+const sendingBackSchema = z.object({ kind: z.literal("sending-back"), round: roundSchema, ci: settledCiSchema });
+const sentBackSchema = z.object({ kind: z.literal("sent-back"), round: roundSchema, ci: settledCiSchema });
+const maybeSentBackSchema = z.object({ kind: z.literal("maybe-sent-back"), round: roundSchema, ci: settledCiSchema });
+const checkedSchema = z.object({ kind: z.literal("checked"), refused: z.string().nullable(), ci: settledCiSchema });
+const settlementSchema = z.discriminatedUnion("kind", [pendingSchema, waitingForCiSchema, sendingBackSchema, sentBackSchema, maybeSentBackSchema, checkedSchema]);
+
+/**
+ * The verifier's verdict on the claimed commit `headSha`: each criterion in the issue's order, and
+ * the model bb ran it on. `sameModel`: no other model was available, so it ran on the agent's own.
+ * why a default: a verdict stored before settlements existed was settled as it was stored.
+ */
+const returnedSchema = z.object({
+  state: z.literal("returned"),
+  verifierThreadId: verifierThreadIdSchema,
+  headSha: z.string(),
+  checkout: checkoutSchema,
+  criteria: z.array(z.object({ criterion: z.string(), result: criterionResultSchema, evidence: z.string() })).min(1),
+  findings: z.array(z.string()),
+  model: modelRefSchema,
+  sameModel: z.boolean(),
+  settlement: settlementSchema.default({ kind: "checked", refused: null, ci: { kind: "none" } }),
+});
+
+// Each state up to a returned verdict keeps `checkout`, the agent's environment as bb's git plugin read it when the agent handed off.
+/** Verification is on and no verifier has started yet. */
+const queuedSchema = z.object({ state: z.literal("queued"), checkout: checkoutSchema });
+/** A verifier thread is checking; `nudged` once it went idle without a verdict and was asked again. */
+const runningSchema = z.object({ state: z.literal("running"), verifierThreadId: verifierThreadIdSchema, nudged: z.boolean(), checkout: checkoutSchema });
+/** No verdict will come: bb's git plugin couldn't read the agent's environment, or the verifier never started or stopped without one. Its thread, if it had one. */
+const couldNotRunSchema = z.object({ state: z.literal("could-not-run"), verifierThreadId: verifierThreadIdSchema.nullable(), reason: z.string() });
+/** A newer done handoff from the same agent replaced this one before its verdict. */
+const supersededSchema = z.object({ state: z.literal("superseded") });
+/** Verification was off when the agent handed off. */
+const waivedSchema = z.object({ state: z.literal("waived") });
+
+export const verdictSchema = z.discriminatedUnion("state", [queuedSchema, runningSchema, returnedSchema, couldNotRunSchema, supersededSchema, waivedSchema]);
+export type Verdict = z.infer<typeof verdictSchema>;
+
+/**
+ * What became of a returned verdict, as the board reads it: its kind and, once settled, CI. why
+ * without the fix round and bb's refusal: they are the regional manager's, and the board shows neither.
+ * why no CI while the findings are on their way back: the board shows that state as pending.
+ */
+const shownSettlementSchema = z.discriminatedUnion("kind", [
+  pendingSchema,
+  waitingForCiSchema,
+  sendingBackSchema.omit({ round: true, ci: true }),
+  sentBackSchema.omit({ round: true }),
+  maybeSentBackSchema.omit({ round: true }),
+  checkedSchema.omit({ refused: true }),
 ]);
 
-/** Each state up to a returned verdict keeps `checkout`, the agent's environment as bb's git plugin read it when the agent handed off. */
-export const verdictSchema = z.discriminatedUnion("state", [
-  /** Verification is on and no verifier has started yet. */
-  z.object({ state: z.literal("queued"), checkout: checkoutSchema }),
-  /** A verifier thread is checking; `nudged` once it went idle without a verdict and was asked again. */
-  z.object({ state: z.literal("running"), verifierThreadId: verifierThreadIdSchema, nudged: z.boolean(), checkout: checkoutSchema }),
-  /**
-   * The verifier's verdict on the claimed commit `headSha`: each criterion in the issue's order, and
-   * the model bb ran it on. `sameModel`: no other model was available, so it ran on the agent's own.
-   * why a default: a verdict stored before settlements existed was settled as it was stored.
-   */
-  z.object({
-    state: z.literal("returned"),
-    verifierThreadId: verifierThreadIdSchema,
-    headSha: z.string(),
-    checkout: checkoutSchema,
-    criteria: z.array(z.object({ criterion: z.string(), result: criterionResultSchema, evidence: z.string() })).min(1),
-    findings: z.array(z.string()),
-    model: modelRefSchema,
-    sameModel: z.boolean(),
-    settlement: settlementSchema.default({ kind: "checked", refused: null, ci: { kind: "none" } }),
-  }),
-  /** No verdict will come: bb's git plugin couldn't read the agent's environment, or the verifier never started or stopped without one. Its thread, if it had one. */
-  z.object({ state: z.literal("could-not-run"), verifierThreadId: verifierThreadIdSchema.nullable(), reason: z.string() }),
-  /** A newer done handoff from the same agent replaced this one before its verdict. */
-  z.object({ state: z.literal("superseded") }),
-  /** Verification was off when the agent handed off. */
-  z.object({ state: z.literal("waived") }),
+/**
+ * A verdict as the user is shown it: only what the board reads. why without the model: the board
+ * names no model; it stays with the plugin and the regional manager. why no checkout before a
+ * verdict returns, nor a verifier's nudge: the board shows neither.
+ */
+export const shownVerdictSchema = z.discriminatedUnion("state", [
+  queuedSchema.omit({ checkout: true }),
+  runningSchema.omit({ checkout: true, nudged: true }),
+  returnedSchema.omit({ model: true, settlement: true }).extend({ settlement: shownSettlementSchema }),
+  couldNotRunSchema,
+  supersededSchema,
+  waivedSchema,
 ]);
-export type Verdict = z.infer<typeof verdictSchema>;
+export type ShownVerdict = z.infer<typeof shownVerdictSchema>;
+
+/** The verdict as the user is shown it. why parse: zod drops every key its schema doesn't name, so nothing else reaches the board. */
+export const shownVerdict = (verdict: Verdict): ShownVerdict => shownVerdictSchema.parse(verdict);
 
 /**
  * What a verdict says about the work. `pending`: no verdict yet, or one nobody has been told of.
@@ -90,7 +122,7 @@ export function firstVerdict(verifies: boolean, read: CheckoutRead): Verdict {
   return { state: "queued", checkout: read.checkout };
 }
 
-export function outcome(verdict: Verdict): Outcome {
+export function outcome(verdict: ShownVerdict): Outcome {
   switch (verdict.state) {
     case "queued":
     case "running":
@@ -112,7 +144,8 @@ export function outcome(verdict: Verdict): Outcome {
   }
 }
 
-type Returned = Extract<Verdict, { state: "returned" }>;
+/** A returned verdict, the model it ran on aside: what pass or fail is judged on. */
+type Returned = Extract<ShownVerdict, { state: "returned" }>;
 
 /**
  * The one rule for pass or fail: the claimed commit was checked out on a clean tree, every

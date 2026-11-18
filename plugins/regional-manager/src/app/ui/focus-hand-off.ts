@@ -1,6 +1,6 @@
 // Focus that moves from a region as it unmounts to the one that replaces it, so focus never drops
 // to the page body (REVIEW.md). Copied from pr-reviews, since plugins cannot import each other.
-import { useMemo, type RefCallback } from "react";
+import { useLayoutEffect, useMemo, type RefCallback } from "react";
 
 /** `from` on the region that leaves, `to` on the element that takes its focus. */
 type FocusHandOff = { from: RefCallback<HTMLElement>; to: RefCallback<HTMLElement> };
@@ -37,33 +37,82 @@ export function useFocusHandOff(): FocusHandOff {
 export function handFocusToPage(region: HTMLElement | null): (() => void) | undefined {
   if (region === null) return;
   return () => {
-    if (region.contains(document.activeElement)) region.parentElement?.closest<HTMLElement>('[tabindex="0"]')?.focus();
+    if (region.contains(document.activeElement)) pageOf(region)?.focus();
   };
 }
 
+/** The refs that keep focus as items move between groups (useFocusKeptAcrossGroups). Each is stable per key. */
+type GroupFocus<Group> = {
+  /** On the whole item: focus anywhere in it as it leaves (its row, a link beside it, its open detail) is kept. */
+  item(key: string): RefCallback<HTMLElement>;
+  /** On the element of the item that takes the focus kept, where the item lands. */
+  target(key: string): RefCallback<HTMLElement>;
+  /** On a group's header, which takes it while the item's group is folded. */
+  header(group: Group): RefCallback<HTMLElement>;
+};
+
 /**
- * Focus kept by rows that move from one list to another, such as a board row whose group changes:
- * React removes the row from the old list and mounts a new one in the new list, so focus in the old
- * row moves to the new row with the same key, in the same commit. Each key's ref is stable.
+ * Focus kept by items that move from one group to another, some groups folded, such as a board's rows
+ * moving lanes: React removes an item from its old list and mounts it in the new one, or nowhere while
+ * the new one is folded. Once the commit is done, focus that was anywhere in the leaving item goes to
+ * its target where it landed, or to the header of the group it is in now (`groupOf`, null: in none),
+ * or, once the item is gone from every group, to the tab stop of the page it was in.
  */
-export function useFocusKeptByKey(): (key: string) => RefCallback<HTMLElement> {
-  return useMemo(() => {
-    let leaving: string | null = null;
-    const refs = new Map<string, RefCallback<HTMLElement>>();
-    const refOf = (key: string): RefCallback<HTMLElement> => (row) => {
-      if (row === null) return;
-      if (leaving === key) {
+export function useFocusKeptAcrossGroups<Group>(groupOf: (key: string) => Group | null): GroupFocus<Group> {
+  const kept = useMemo(() => {
+    let leaving: { key: string; page: HTMLElement | null } | null = null;
+    const targets = new Map<string, HTMLElement>();
+    const headers = new Map<Group, HTMLElement>();
+    return {
+      refs: {
+        item: stablePerKey((key: string): RefCallback<HTMLElement> => (item) => {
+          if (item === null) return;
+          return () => {
+            // why read the page now: the item is still in it, and nothing of it is once it's gone.
+            if (item.contains(document.activeElement)) leaving = { key, page: pageOf(item) };
+          };
+        }),
+        target: stablePerKey((key: string) => tracked(targets, key)),
+        header: stablePerKey((group: Group) => tracked(headers, group)),
+      },
+      /** Hands the focus kept to where its item landed; nothing when no item that held it left. */
+      land(groupOf: (key: string) => Group | null) {
+        if (leaving === null) return;
+        const { key, page } = leaving;
         leaving = null;
-        row.focus();
-      }
-      return () => {
-        if (row.contains(document.activeElement)) leaving = key;
-      };
-    };
-    return (key) => {
-      const ref = refs.get(key) ?? refOf(key);
-      refs.set(key, ref);
-      return ref;
+        const group = groupOf(key);
+        (targets.get(key) ?? (group === null ? undefined : headers.get(group)) ?? page)?.focus();
+      },
     };
   }, []);
+  // why a layout effect: a parent's runs after React has removed the leaving item and attached every
+  // ref of the commit, so both where the item landed and every header are known, before paint.
+  useLayoutEffect(() => kept.land(groupOf));
+  return kept.refs;
+}
+
+// ------------------------------------------------------------------ layer 2
+
+/** The tab stop of the page around `element`: the element the page scrolls by (REVIEW.md). */
+const pageOf = (element: HTMLElement): HTMLElement | null => element.parentElement?.closest<HTMLElement>('[tabindex="0"]') ?? null;
+
+/** A ref that keeps `map` pointing at the element mounted for `key`. */
+function tracked<Key>(map: Map<Key, HTMLElement>, key: Key): RefCallback<HTMLElement> {
+  return (element) => {
+    if (element === null) return;
+    map.set(key, element);
+    return () => {
+      if (map.get(key) === element) map.delete(key);
+    };
+  };
+}
+
+/** `make`, made once per key. why: a new ref callback each render would detach and attach its element each render. */
+function stablePerKey<Key>(make: (key: Key) => RefCallback<HTMLElement>): (key: Key) => RefCallback<HTMLElement> {
+  const refs = new Map<Key, RefCallback<HTMLElement>>();
+  return (key) => {
+    const ref = refs.get(key) ?? make(key);
+    refs.set(key, ref);
+    return ref;
+  };
 }

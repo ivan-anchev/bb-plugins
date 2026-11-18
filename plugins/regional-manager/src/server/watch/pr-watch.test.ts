@@ -494,12 +494,11 @@ test("a sandbox agent's environment is read by bb's git plugin only as it hands 
   assert.equal(agentReads(), 0, "nothing reads the sandbox to learn its branch");
   assert.equal(kit.github.runs.length, 3, "the watch still read GitHub every five minutes");
   assert.ok(kit.github.runs.at(-1)?.includes(`b0=${environmentBranchName}`), "by bb's record of the branch it made");
-  assert.equal((await board()).issues[0]?.branch, environmentBranchName);
+  assert.match(textOf(await kit.call("issue_read", { id: "i1" }, threadId)), new RegExp(`branch \`${environmentBranchName}\``));
 
   await kit.call("agent_handoff", BLOCKED, agentThreadId);
   assert.equal(agentReads(), 1, "one read, as it hands off");
-  assert.equal((await board()).issues[0]?.branch, "add-retries", "the board shows the branch it handed off on");
-  assert.match(textOf(await kit.call("issue_read", { id: "i1" }, threadId)), /add-retries/);
+  assert.match(textOf(await kit.call("issue_read", { id: "i1" }, threadId)), /branch `add-retries`/, "issue_read names the branch it handed off on");
   kit.clock.now += 5 * MINUTE;
   await minute();
   assert.ok(kit.github.runs.at(-1)?.includes("b0=add-retries"), "the watch reads its pull request by that branch");
