@@ -140,6 +140,11 @@
   color: var(--subtle-foreground);
   font-variant-numeric: tabular-nums;
 }
+/* A sub-issue's row away from its parent leads with the parent's id: "i4›i5", one id, the chevron
+   kept to its own mono cell so the three read as one unit. */
+.rmi-crumb {
+  margin-inline: 1px;
+}
 .rmi-kind {
   flex: 0 0 auto;
   font-size: 11px;

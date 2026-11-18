@@ -724,7 +724,7 @@ page from its row in the panel, show the same board, live:
   waits to be accepted, or nothing. The catch-up, with no such cell, leads a
   parent's line with the count ("1/3 done"). A flagged
   sub-issue is also listed flat under Needs you, its parent's id ahead of its
-  own ("i1 › i3"). A lane's count is its rows: a parent counts once, its
+  own ("i1›i3"). A lane's count is its rows: a parent counts once, its
   sub-issues by its own count. Folding a lane folds its parents with their
   sub-issues.
 

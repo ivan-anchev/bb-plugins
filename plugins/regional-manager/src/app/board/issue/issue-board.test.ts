@@ -295,7 +295,7 @@ test("a flagged sub-issue sits under its parent and flat under Needs you, naming
   const { view } = mount(SPLIT, []);
   const flat = lane(view, /^Needs you/).getByRole("button", { name: /\bi3 Build/ });
   assert.match(flat.getAttribute("aria-label") ?? "", /^i3 Build: Issue i3, sub-issue of i1, In progress,/);
-  assert.match(flat.textContent ?? "", /^i1 ›i3Build/);
+  assert.match(flat.textContent ?? "", /^i1›i3Build/, "its parent's id and its own read as one");
   assert.ok(within(flat).getByRole("img", { name: "In progress" }), "with its own status's glyph");
   const nested = lane(view, /^In progress/).getByRole("button", { name: /\bi3 Build/ });
   assert.doesNotMatch(nested.getAttribute("aria-label") ?? "", /sub-issue of/, "under its parent it needs no name of it");

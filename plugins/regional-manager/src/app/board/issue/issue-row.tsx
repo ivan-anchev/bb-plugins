@@ -43,8 +43,15 @@ export function IssueRow({ ref, issue, under, open, detailId, onToggle }: IssueR
         </span>
         <span className="rmi-words">
           <span className="rmi-line">
-            {under !== null && <span className="rmi-id">{under} ›</span>}
-            <span className="rmi-id">{issue.id}</span>
+            <span className="rmi-id">
+              {under !== null && (
+                <>
+                  {under}
+                  <span className="rmi-crumb">›</span>
+                </>
+              )}
+              {issue.id}
+            </span>
             <span className="rmi-kind">{PIPELINES[issue.kind].label}</span>
             <RowText text={issue.title} whole={open} />
           </span>
