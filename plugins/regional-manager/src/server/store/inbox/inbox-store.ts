@@ -17,17 +17,6 @@ export function insertEvent(db: Db, coordinatorId: CoordinatorId, event: InboxEv
   db().prepare("INSERT INTO events (coordinator_id, event, at) VALUES (?, ?, ?)").run(coordinatorId, JSON.stringify(event), at);
 }
 
-/**
- * Marks the regional manager's queued doorbell stale, to be taken back (see the migrations), and
- * makes every unread event unannounced again, so the doorbell rung once it is gone names them. Call
- * inside the transaction of the write that left the doorbell saying what is no longer unread.
- */
-function markDoorbellStale(db: Db, coordinatorId: CoordinatorId): void {
-  // why only with a doorbell queued: an unread event a sent doorbell announced is told; ringing it again would wake the thread twice.
-  if (db().prepare("UPDATE doorbells SET stale = 1 WHERE coordinator_id = ?").run(coordinatorId).changes === 0) return;
-  db().prepare("UPDATE events SET announced_at = NULL WHERE coordinator_id = ? AND read_at IS NULL").run(coordinatorId);
-}
-
 export function inboxStore(db: Db) {
   /** The regional manager's own checkout as last read; clean when it was never read. */
   function ownTree(coordinatorId: CoordinatorId): OwnTree {
@@ -44,8 +33,8 @@ export function inboxStore(db: Db) {
      * Saves a turn-end read of the regional manager's own checkout, and keeps one current correction:
      * when it found other files than the read before it, it retires the unread
      * `coordinator-tree-changed` event, which told of an older read, and records a new one if the
-     * checkout has changed files, deciding from the read before it in the same transaction. A queued
-     * doorbell that announced the retired event is marked stale. Returns whether it recorded one.
+     * checkout has changed files, deciding from the read before it in the same transaction. Returns
+     * whether it recorded one.
      */
     recordOwnTree(coordinatorId: CoordinatorId, read: OwnTree, at: number): boolean {
       return db().transaction(() => {
@@ -54,11 +43,8 @@ export function inboxStore(db: Db) {
           .prepare("INSERT INTO own_trees (coordinator_id, files, file_count, default_branch) VALUES (?, ?, ?, ?) ON CONFLICT (coordinator_id) DO UPDATE SET files = excluded.files, file_count = excluded.file_count, default_branch = excluded.default_branch")
           .run(coordinatorId, JSON.stringify(read.files), read.fileCount, read.defaultBranch);
         if (!changed) return false;
-        const retired = db()
-          .prepare("DELETE FROM events WHERE coordinator_id = ? AND read_at IS NULL AND json_extract(event, '$.kind') = 'coordinator-tree-changed' RETURNING announced_at AS announcedAt")
-          .all(coordinatorId)
-          .map((row) => z.object({ announcedAt: z.number().nullable() }).parse(row));
-        if (retired.some(({ announcedAt }) => announcedAt !== null)) markDoorbellStale(db, coordinatorId);
+        // A limit: a message already queued in bb for the correction retired or replaced here is not taken back; it wakes the manager once, and that catch-up shows the current state.
+        db().prepare("DELETE FROM events WHERE coordinator_id = ? AND read_at IS NULL AND json_extract(event, '$.kind') = 'coordinator-tree-changed'").run(coordinatorId);
         if (read.fileCount === 0) return false;
         insertEvent(db, coordinatorId, { kind: "coordinator-tree-changed" }, at);
         return true;
@@ -108,13 +94,13 @@ export function inboxStore(db: Db) {
       })();
     },
 
-    /** Every unread event, marked read as it is returned, in the order recorded, and the queued doorbell, which announces none of them now, marked stale, together. */
+    /** Every unread event, marked read as it is returned, in the order recorded. */
     takeUnread(coordinatorId: CoordinatorId, at: number): StoredEvent[] {
-      return db().transaction(() => {
-        const events = db().prepare("UPDATE events SET read_at = ? WHERE coordinator_id = ? AND read_at IS NULL RETURNING id, at, event").all(at, coordinatorId).map(toEvent);
-        markDoorbellStale(db, coordinatorId);
-        return events.sort((a, b) => a.id - b.id);
-      })();
+      return db()
+        .prepare("UPDATE events SET read_at = ? WHERE coordinator_id = ? AND read_at IS NULL RETURNING id, at, event")
+        .all(at, coordinatorId)
+        .map(toEvent)
+        .sort((a, b) => a.id - b.id);
     },
 
     /** The queued doorbell of a regional manager, or null when none is waiting. */
@@ -123,21 +109,15 @@ export function inboxStore(db: Db) {
       return row === undefined ? null : z.object({ id: z.string() }).parse(row).id;
     },
 
-    /** The queued doorbell of a regional manager when it is stale, to be taken back (see markDoorbellStale), or null. */
-    staleDoorbell(coordinatorId: CoordinatorId): string | null {
-      const row = db().prepare("SELECT queued_message_id AS id FROM doorbells WHERE coordinator_id = ? AND stale = 1").get(coordinatorId);
-      return row === undefined ? null : z.object({ id: z.string() }).parse(row).id;
-    },
-
-    /** Every queued doorbell, with the thread it waits in, and whether it is stale. */
-    doorbells(): { coordinatorId: CoordinatorId; threadId: string; queuedMessageId: string; stale: boolean }[] {
+    /** Every queued doorbell, with the thread it waits in. */
+    doorbells(): { coordinatorId: CoordinatorId; threadId: string; queuedMessageId: string }[] {
       return db()
         .prepare(
-          `SELECT d.coordinator_id AS coordinatorId, r.thread_id AS threadId, d.queued_message_id AS queuedMessageId, d.stale
+          `SELECT d.coordinator_id AS coordinatorId, r.thread_id AS threadId, d.queued_message_id AS queuedMessageId
              FROM doorbells d JOIN coordinators c ON c.id = d.coordinator_id JOIN roles r ON r.ticket = c.ticket`,
         )
         .all()
-        .map((row) => z.object({ coordinatorId: coordinatorIdSchema, threadId: z.string(), queuedMessageId: z.string(), stale: z.number().transform((flag) => flag === 1) }).parse(row));
+        .map((row) => z.object({ coordinatorId: coordinatorIdSchema, threadId: z.string(), queuedMessageId: z.string() }).parse(row));
     },
 
     /** Forgets the queued doorbell with this message id, and returns whose it was (null: no doorbell has it). */

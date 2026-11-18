@@ -127,11 +127,6 @@ export const MIGRATIONS: readonly string[] = [
   // why JSON: the list is read and written whole.
   `CREATE TABLE own_trees (coordinator_id TEXT PRIMARY KEY REFERENCES coordinators (id), files TEXT NOT NULL,
      file_count INTEGER NOT NULL, default_branch TEXT)`,
-  // A queued doorbell that no longer says what is unread, as once its events were all read or a
-  // newer read of the manager's checkout replaced or retired the correction it announced: the inbox
-  // takes it out of bb's queue, the tick retrying until bb confirms or its queue no longer has it,
-  // and rings again with what is unread (inbox.ts withdraw).
-  `ALTER TABLE doorbells ADD COLUMN stale INTEGER NOT NULL DEFAULT 0`,
   // Up to 0.2.0, a turn that ended with changed files warned on the board and was recorded as an
   // event of a kind no longer read; a clean tree as another. why deleted, not kept: the event schema
   // no longer parses them, so one left would fail every read of its manager's events. The doorbells

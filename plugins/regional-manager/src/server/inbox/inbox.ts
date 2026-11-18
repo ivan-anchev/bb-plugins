@@ -65,7 +65,6 @@ type InboxStore = Pick<
   | "announce"
   | "takeUnread"
   | "doorbell"
-  | "staleDoorbell"
   | "doorbells"
   | "clearDoorbell"
   | "reopenDoorbell"
@@ -136,36 +135,28 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
   }
 
   /**
-   * Takes a stale doorbell (see markDoorbellStale) out of bb's queue: it would wake the thread for
-   * what is no longer unread, or tell an older read of its checkout. It is kept, holding every
-   * other doorbell back, until bb confirms the delete; then what is unread rings again. A delete
-   * that fails leaves it to the tick, which tries again while bb still queues it and forgets it
-   * once bb no longer does. One bb sent meanwhile has reached the thread: that can't be taken back.
+   * Takes back a doorbell still waiting in bb's queue: called once every event is read, it would
+   * wake the thread for nothing. If bb sent it meanwhile, the delete fails and nothing changes.
    */
   async function withdraw(id: CoordinatorId): Promise<void> {
-    const queuedMessageId = store.staleDoorbell(id);
+    const queuedMessageId = store.doorbell(id);
     const coordinator = store.coordinator(id);
     if (disposed || queuedMessageId === null || coordinator === null) return;
     try {
       await bb.sdk.threads.queuedMessages.delete({ threadId: coordinator.threadId, queuedMessageId });
     } catch (error) {
-      bb.log.warn(`Could not take back the stale doorbell ${queuedMessageId}; the tick tries again unless bb sent it: ${messageOf(error)}`);
+      bb.log.warn(`Could not take back the queued doorbell ${queuedMessageId}; it may have been sent already: ${messageOf(error)}`);
       return;
     }
-    // why ring: what is unread was held back by the doorbell just taken back.
+    // why ring: an event recorded since the catch-up was held back by the doorbell just taken back.
     if (store.clearDoorbell(queuedMessageId) !== null) await ring(id);
-  }
-
-  /** Withdraws without waiting; anything that goes wrong is logged, and the tick tries again. */
-  function withdrawSoon(id: CoordinatorId): void {
-    withdraw(id).catch((error: unknown) => bb.log.warn(`Could not take back the doorbell of ${id}: ${messageOf(error)}`));
   }
 
   /**
    * Checks a queued doorbell against bb's queue. One bb no longer has was sent or dropped while the
    * plugin wasn't listening, so it is forgotten. One bb gave up on never reached the thread and
    * would hold every later doorbell back, so it is forgotten, what it announced is announced again,
-   * and it is taken out of bb's queue. A stale one still queued is withdrawn again.
+   * and it is taken out of bb's queue.
    */
   async function check(doorbell: Doorbell): Promise<void> {
     const queue = await queueOf(doorbell);
@@ -174,7 +165,6 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
     if (queued === undefined) store.clearDoorbell(doorbell.queuedMessageId);
     // why only exhausted: one bb still retries may yet be sent.
     else if (queued.state === "failed_exhausted") await giveUp(doorbell, queued.failureReason);
-    else if (doorbell.stale) await withdraw(doorbell.coordinatorId);
   }
 
   /** The thread's queue, or null when bb can't be read: a failed read is not proof that the doorbell is gone. */
@@ -297,14 +287,9 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
       return outcome;
     },
 
-    /**
-     * A read of the coordinating thread's own checkout as its turn ended: rings when it found other
-     * changed files than the read before, and takes back a queued doorbell that told of the read it
-     * replaced (see recordOwnTree).
-     */
+    /** A read of the coordinating thread's own checkout as its turn ended: rings when it found other changed files than the read before (see recordOwnTree). */
     ownTreeRead(id: CoordinatorId, read: OwnTree): void {
       if (store.recordOwnTree(id, read, Date.now())) recorded(id);
-      withdrawSoon(id);
     },
 
     /**
@@ -324,16 +309,15 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
     /** Every unread event, whole, marked read as it is returned. A doorbell still queued then announces nothing unread, so it is taken back. */
     takeUnread(id: CoordinatorId): StoredEvent[] {
       const events = store.takeUnread(id, Date.now());
-      withdrawSoon(id);
+      withdraw(id).catch((error: unknown) => bb.log.warn(`Could not take back the doorbell of ${id}: ${messageOf(error)}`));
       return events;
     },
 
     /**
      * The once-a-minute pass, at `now`. It records the reminders that came due, forgets a queued
      * doorbell bb no longer has, because its `message.dispatched` can be missed while the plugin
-     * reloads, and one bb gave up sending, withdraws a stale one again, then rings every
-     * coordinating thread with an event left unannounced (a reminder, a failed send, a crash after
-     * a write, a doorbell bb gave up on or took back).
+     * reloads, and one bb gave up sending, then rings every coordinating thread with an event left
+     * unannounced (a reminder, a failed send, a crash after a write, a doorbell bb gave up on).
      */
     async tick(now: number): Promise<void> {
       // why caught: reminders bb can't look up must not keep the doorbells from ringing.

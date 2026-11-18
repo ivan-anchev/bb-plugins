@@ -529,8 +529,7 @@ The message never interrupts a running turn: it waits in the thread's queue
 until the turn ends. While one waits, the next updates wait for it to be
 sent, then get a message of their own. Once `crew_catch_up` has returned
 every update, a message still waiting in the queue is taken back, so the
-thread isn't woken for updates it has read; while bb refuses to delete it,
-the tick tries again, and nothing else is sent. A send that fails is retried by a
+thread isn't woken for updates it has read. A send that fails is retried by a
 once-a-minute tick, which also forgets a waiting message bb no longer holds.
 If bb gives up sending a waiting message (its retries spent), the tick takes
 it out of the queue and sends what it announced again.
@@ -811,9 +810,7 @@ involving you:
 - **Once per set of files**: a turn that ends with the same files changed
   records nothing new and wakes nobody, after a reload too. Another set
   wakes it again, and replaces an update about the earlier set it hasn't read
-  yet; a clean tree takes such an update back. A message about it still
-  waiting in the queue is taken back with it, and what else it announced is
-  sent again; one bb has already sent can't be. When you asked it for an edit,
+  yet; a clean tree takes such an update back. When you asked it for an edit,
   that costs one hidden turn in which it leaves the files alone.
 - **Nothing is recorded** for an environment outside git, or when bb's git
   plugin can't read it (its machine is offline, or the read fails), and the
