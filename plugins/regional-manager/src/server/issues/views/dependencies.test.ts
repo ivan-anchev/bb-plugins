@@ -457,6 +457,7 @@ test("a regional manager whose reads keep being overtaken holds no other: the ti
   await busy.text("agent_start", { issue: "i1" });
   await busy.text("issue_create", { ...ISSUE, title: "Dead letters", dependsOn: ["i1"] });
   const other = (await kit.spawner.coordinator(coordinatorStart("Ship the billing export"))).threadId;
+  kit.giveGoal(other, "Ship the billing export");
   const call = async (tool: string, input: object) => textOf(await kit.call(tool, input, other));
   await call("issue_create", ISSUE);
   const builder = threadIn(await call("agent_start", { issue: "i1" }));
