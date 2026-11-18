@@ -250,6 +250,7 @@ test("a comment and a reply go into the pending review, each then re-reading the
     await call(handlers.addToReview, { ...TARGET, request, reviewId: null }),
     await call(handlers.addReplyToReview, { ...TARGET, threadId: "PRRT_1", reviewId: "PRR_1", body: "And this?" }),
     await call(handlers.submitReview, { ...TARGET, reviewId: "PRR_1", event: "REQUEST_CHANGES", body: "" }),
+    await call(handlers.submitReview, { ...TARGET, reviewId: null, event: "APPROVE", body: "" }),
     await call(handlers.discardReview, { ...TARGET, reviewId: "PRR_2" }),
   ];
 
@@ -258,12 +259,14 @@ test("a comment and a reply go into the pending review, each then re-reading the
     `invalidate ${READ_TAGS.join(",")}`,
     `reply-in-review ${JSON.stringify(["PRRT_1", "PRR_1", "And this?"])}`,
     `invalidate ${READ_TAGS.join(",")}`,
-    `submit ${JSON.stringify(["PRR_1", "REQUEST_CHANGES", ""])}`,
+    `submit ${JSON.stringify(["ivan-anchev/bb-plugins", 40, "PRR_1", "REQUEST_CHANGES", ""])}`,
+    `invalidate ${[...READ_TAGS, PR_TAG].join(",")}`,
+    `submit ${JSON.stringify(["ivan-anchev/bb-plugins", 40, null, "APPROVE", ""])}`,
     `invalidate ${[...READ_TAGS, PR_TAG].join(",")}`,
     `discard ${JSON.stringify(["PRR_2"])}`,
     `invalidate ${[...READ_TAGS, PR_TAG].join(",")}`,
   ]);
-  assert.deepEqual(results, [{}, {}, {}, {}]);
+  assert.deepEqual(results, [{}, {}, {}, {}, {}]);
 });
 
 test("a comment GitHub refuses still re-reads the PR's comments, since a review may have gone pending elsewhere; a refused submit does not", async () => {
@@ -280,6 +283,6 @@ test("a comment GitHub refuses still re-reads the PR's comments, since a review 
   assert.deepEqual(events, [
     `add-to-review ${JSON.stringify(["ivan-anchev/bb-plugins", 40, request, "PRR_1"])}`,
     `invalidate ${READ_TAGS.join(",")}`,
-    `submit ${JSON.stringify(["PRR_1", "COMMENT", "Looks good"])}`,
+    `submit ${JSON.stringify(["ivan-anchev/bb-plugins", 40, "PRR_1", "COMMENT", "Looks good"])}`,
   ]);
 });

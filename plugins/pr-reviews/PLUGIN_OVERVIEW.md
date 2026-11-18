@@ -8,7 +8,8 @@ GitHub's Conversation tab does, and every diff shows the PR's GitHub review
 threads where they belong. It posts to GitHub only the review comments,
 replies and conversation comments you write or pick from the guide, on your
 click, on a PR you didn't write batches them into a pending review you submit
-as a comment, approval or request for changes, and changes a pull request's
+as a comment, approval or request for changes, or submits one with no comments,
+and changes a pull request's
 state only from the state badge on its page; review threads never post to
 GitHub. A card on the new-thread screen shows the PRs waiting on your review,
 or your own.
@@ -107,7 +108,9 @@ or your own.
 - **Review mode**: on a PR you didn't write, sending as Review keeps the comment
   in your pending GitHub review, marked Pending, until you submit it. Finish
   review, at the top of every tab, submits it as a comment, an approval or a
-  request for changes, with an optional summary, or discards it.
+  request for changes, with an optional summary, or discards it. With no
+  pending review, Review in the same place approves, requests changes or
+  comments at once, with no line comments needed.
 - **GitHub's comments in place**: each review thread shows under its lines in
   the Changes tab and in the guide step that holds them, with each comment's
   author, avatar, time and markdown. File comments and outdated threads show

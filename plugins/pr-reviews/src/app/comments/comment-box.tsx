@@ -199,9 +199,9 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
     }
   };
   const task = selected.reason === null ? taskOf(selected.mode) : null;
-  const canSend = task !== null && !isBlank(draft) && !sending;
+  const nothingToSend = task === null || isBlank(draft);
   const send = () => {
-    if (task === null || !canSend) return;
+    if (task === null || isBlank(draft) || sending) return;
     run(selected.mode, task);
   };
 
@@ -281,7 +281,7 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
         <SendAs subject={subject.kind} actions={actions} options={options} selected={selected.mode} onPick={pick} />
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <IconButton icon="Eye" label="Preview" aria-pressed={preview} aria-controls={preview ? ids.preview : undefined} onClick={togglePreview} />
-          <SendButton label={`${label} (${SEND_KEYS})`} sending={sending} disabled={!canSend} onSend={send} />
+          <SendButton label={`${label} (${SEND_KEYS})`} sending={sending} disabled={nothingToSend} onSend={send} />
         </div>
       </div>
     </div>

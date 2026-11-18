@@ -84,20 +84,30 @@ type SendButtonProps = {
   /** What it sends as, with its keys: its name and its tooltip. */
   label: string;
   sending: boolean;
+  /** There is nothing it can send. */
   disabled: boolean;
   onSend(): void;
 };
 
 /**
  * bb's composer send button, class for class, and marked as bb marks it, so a theme that draws
- * bb's (a round one, in Zeron) draws this one too. An arrow; a spinner while the draft is going.
+ * bb's (a round one, in Zeron) draws this one too. An arrow; while the draft is going, a spinner
+ * in its place, at full strength: busy, not unavailable.
  */
 export function SendButton({ label, sending, disabled, onSend }: SendButtonProps) {
   return (
     <Tooltip content={label} placement="top-end">
       {() => (
-        <button type="button" data-promptbox-submit-action="" aria-label={sending ? "Sending…" : label} aria-disabled={disabled} onClick={onSend} className={SEND_CLASS}>
-          {sending ? <Spinner /> : <Icon name="ArrowUp" aria-hidden />}
+        <button
+          type="button"
+          data-promptbox-submit-action=""
+          aria-label={sending ? "Sending…" : label}
+          aria-disabled={disabled || sending}
+          aria-busy={sending}
+          onClick={onSend}
+          className={SEND_CLASS}
+        >
+          {sending ? <Spinner size="icon" tone="inherit" /> : <Icon name="ArrowUp" aria-hidden />}
         </button>
       )}
     </Tooltip>
@@ -106,4 +116,4 @@ export function SendButton({ label, sending, disabled, onSend }: SendButtonProps
 
 // why aria-disabled, not disabled: the button stays focusable, and still names what it would send as.
 const SEND_CLASS =
-  "inline-flex h-8 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md bg-foreground px-2 text-xs font-medium text-background transition-colors duration-150 hover:bg-foreground/90 hover:duration-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring aria-disabled:cursor-default aria-disabled:opacity-50 aria-disabled:hover:bg-foreground [&_[data-icon-root]]:pointer-events-none [&_[data-icon-root]]:size-4 [&_[data-icon-root]]:shrink-0";
+  "inline-flex h-8 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md bg-foreground px-2 text-xs font-medium text-background transition-colors duration-150 hover:bg-foreground/90 hover:duration-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring aria-disabled:cursor-default aria-disabled:not-aria-busy:opacity-50 aria-disabled:hover:bg-foreground [&_[data-icon-root]]:pointer-events-none [&_[data-icon-root]]:size-4 [&_[data-icon-root]]:shrink-0";

@@ -15,7 +15,7 @@ import { ghPostRefusalFor, ghRefusalFor, ghStateRefusalFor } from "./gh-refusal.
 import { ghLabelSchema } from "./label.ts";
 import { parseHostCommandFailure, runHostCommand } from "./host-command.ts";
 import { INBOX_QUERY, inboxVariables, parseInboxSearch, parseStackContext, stackContextQuery, type FoundPr, type GitHubPr } from "./inbox-search.ts";
-import { addReplyArgs, addThreadArgs, discardArgs, parseAddedThread, parsePrNode, parseViewerReview, prNodeArgs, submitArgs, viewerReviewArgs } from "./pending-review.ts";
+import { addReplyArgs, addReviewArgs, addThreadArgs, discardArgs, parseAddedThread, parsePrNode, parseViewerReview, prNodeArgs, submitArgs, viewerReviewArgs } from "./pending-review.ts";
 import type { PrCommits } from "./pr-commits.ts";
 import {
   allPages,
@@ -241,9 +241,19 @@ export async function addReviewReply(threadId: string, reviewId: string, body: s
   await runGhPost(addReplyArgs(threadId, reviewId, body), ADDED_UNSURE);
 }
 
-/** Submits the pending review `reviewId` as `event`, with `body` ("" for none) as its summary. */
-export async function submitReview(reviewId: string, event: ReviewEvent, body: string): Promise<void> {
-  await runGhPost(submitArgs(reviewId, event, body), "The review may have been submitted: Refresh before submitting it again.");
+const SUBMITTED_UNSURE = "The review may have been submitted: Refresh before submitting it again.";
+
+/**
+ * Submits the reader's pending review `reviewId` as `event`, with `body` ("" for none) as its
+ * summary; with none pending (null), submits a new review of the PR with no comments.
+ */
+export async function submitReview(repo: Repo, number: number, reviewId: string | null, event: ReviewEvent, body: string): Promise<void> {
+  if (reviewId !== null) {
+    await runGhPost(submitArgs(reviewId, event, body), SUBMITTED_UNSURE);
+    return;
+  }
+  const pr = parsePrNode(await graphqlRead(prNodeArgs(repo, number)));
+  await runGhPost(addReviewArgs(pr.id, event, body), SUBMITTED_UNSURE);
 }
 
 /** Deletes the pending review `reviewId` and its comments. */
