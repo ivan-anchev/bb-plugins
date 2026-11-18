@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-pr-reviews",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "type": "module",
   "private": true,
   "license": "MIT",
