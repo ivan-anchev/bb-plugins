@@ -4,7 +4,8 @@
 // the detail is drawn only while it is open, so the caller reads it only then. Decisions keep their
 // own row, the caller's. Which lanes are folded and which rows are open outlive a row moving lanes,
 // and so does focus: on the row where it lands, or on its lane's header while that lane is folded.
-// A detail goes to another issue the same way: its lane unfolds, its row opens and takes focus.
+// A detail goes to another issue the same way: its lane unfolds, its row opens and takes focus, and it
+// scrolls to the top of the page with its detail under it.
 import "./issue-board.css";
 import { useId, useState, type ReactNode, type RefCallback } from "react";
 import type { IssueRow as Row } from "../../../contract.ts";
@@ -14,6 +15,7 @@ import type { IssueId } from "../../../model/issue/issue.ts";
 import { useFocusKeptAcrossGroups } from "../../ui/focus-hand-off.ts";
 import { IssueRow } from "./issue-row.tsx";
 import { LaneHeader } from "./lane-header.tsx";
+import { revealAtTop } from "./motion/reveal.ts";
 import { NeedsYouGlyph, StatusGlyph } from "./status-glyph.tsx";
 
 type IssueBoardProps = {
@@ -25,7 +27,7 @@ type IssueBoardProps = {
   detailOf(issue: Row, under: IssueId | null, goTo: GoTo): ReactNode;
 };
 
-/** Goes to an issue on the board: unfolds its lane, opens its row and moves focus to it. */
+/** Goes to an issue on the board: unfolds its lane, opens its row, moves focus to it and scrolls it to the top. */
 export type GoTo = (id: IssueId) => void;
 
 export function IssueBoard({ decisions, issues, decisionRow, detailOf }: IssueBoardProps) {
@@ -42,7 +44,7 @@ export function IssueBoard({ decisions, issues, decisionRow, detailOf }: IssueBo
     const lane = laneOfKey(id);
     if (lane !== null) setFolded((current) => without(current, lane));
     setOpened((current) => new Set(current).add(id));
-    focus.moveTo(id);
+    focus.moveTo(id, revealAtTop);
   };
 
   /** An issue's row and its detail, opened by `rowKey`; why a key apart from its id: a flagged sub-issue has two rows, each opening on its own. */

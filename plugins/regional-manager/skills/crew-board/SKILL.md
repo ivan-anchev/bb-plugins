@@ -735,8 +735,9 @@ Needs you, away from its parent (rows nest sub-issues already, so a detail
 lists none); **Depends on** (a sub-issue's lists its parent's open
 dependencies too, "through i1") and **Blocks**, each issue there with its status's glyph, id and title, and none
 when there are none; pressing one goes
-to that issue on the board, unfolding its lane, opening its row and moving
-focus to it; **Done when** with its criteria (a research issue's
+to that issue on the board, unfolding its lane, opening its row, moving
+focus to it and scrolling it to the top (as near as the board's end
+allows), its detail under it; **Done when** with its criteria (a research issue's
 **Questions**, and nothing when it has none), and its **Record**: each
 agent that held it, how it ended, and each handoff it made, the latest one
 open. A research issue's done handoff shows its **Report** first, as the

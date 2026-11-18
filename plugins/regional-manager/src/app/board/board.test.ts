@@ -17,15 +17,34 @@ import { coordinatorIdSchema } from "../../model/role.ts";
 
 // why: the board brings its stylesheet, which bb's build bundles and node can't load.
 registerHooks({ load: (url, context, nextLoad) => (url.endsWith(".css") ? { format: "module", source: "", shortCircuit: true } : nextLoad(url, context)) });
-// why: jsdom has none of these; the rows measure their titles, and the working ring asks for Reduce motion and a canvas.
+// why: jsdom has none of these; the rows measure their titles, the working ring and going to an issue
+// ask for Reduce motion (on unless a test turns it off), and the ring for a canvas. Going to an issue
+// scrolls its row, which jsdom doesn't do: each scroll asked for is recorded in `scrolls`. jsdom lays
+// nothing out, so `resized` stands in for the browser telling every observer a size changed.
+let reduceMotion = true;
+const observing = new Set<() => void>();
+const resized = () => act(() => [...observing].forEach((changed) => changed()));
 Object.assign(globalThis, {
   ResizeObserver: class {
-    observe() {}
-    disconnect() {}
+    // why no entries: the board's observers only re-measure, reading no entry.
+    readonly #changed: () => void;
+    constructor(changed: () => void) {
+      this.#changed = changed;
+    }
+    observe() {
+      observing.add(this.#changed);
+    }
+    disconnect() {
+      observing.delete(this.#changed);
+    }
   },
-  matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }),
+  matchMedia: () => ({ get matches() { return reduceMotion; }, addEventListener() {}, removeEventListener() {} }),
 });
 HTMLCanvasElement.prototype.getContext = () => null;
+const scrolls: { label: string | null; options: ScrollIntoViewOptions | boolean | undefined }[] = [];
+Element.prototype.scrollIntoView = function (this: Element, options) {
+  scrolls.push({ label: this.getAttribute("aria-label"), options });
+};
 
 const { Board } = await import("./board.tsx");
 
@@ -258,7 +277,7 @@ test("a research issue asked no questions opens to no Questions section", async 
   assert.ok(detail.getByRole("region", { name: "Report reports/i2.md" }));
 });
 
-test("an opened issue lists what it depends on and what it blocks, each by its status, id and title; pressing one unfolds its lane, opens its row and moves focus there", async () => {
+test("an opened issue lists what it depends on and what it blocks, each by its status, id and title; pressing one unfolds its lane, opens its row, moves focus there and scrolls it to the top", async () => {
   const relations: Record<string, Pick<IssueDetail, "dependsOn" | "blocks">> = { i1: { dependsOn: [], blocks: [id("i2")] }, i2: { dependsOn: [id("i1")], blocks: [id("i3")] }, i3: { dependsOn: [id("i2")], blocks: [] } };
   const { view } = await mount(
     {
@@ -280,14 +299,28 @@ test("an opened issue lists what it depends on and what it blocks, each by its s
   assert.deepEqual(listed("Blocks"), ["i3: Vault schema, Todo"]);
   assert.equal(view.getByRole("button", { name: /^Done/ }).getAttribute("aria-expanded"), "false", "i1's lane starts folded");
 
+  scrolls.length = 0;
   fireEvent.click(detail.getByRole("button", { name: "i1: Pick a card vault, Done" }));
   assert.equal(view.getByRole("button", { name: /^Done/ }).getAttribute("aria-expanded"), "true", "its lane unfolds");
   const research = view.getByRole("button", { name: /\bi1 Research/ });
   assert.equal(research.getAttribute("aria-expanded"), "true", "its row opens");
   assert.ok(document.activeElement === research, "focus is on its row");
+  assert.deepEqual(scrolls, [{ label: research.getAttribute("aria-label"), options: { block: "start", behavior: "instant" } }], "its row goes to the top of the page, its detail under it, at once under Reduce motion");
   const opened = within(view.getByRole("region", { name: "i1" }));
   await opened.findByRole("heading", { name: "Blocks" });
   assert.equal(opened.queryByRole("heading", { name: "Depends on" }), null, "it depends on nothing");
+  resized();
+  assert.equal(scrolls.length, 2, "kept at the top as its detail draws, which the page may not have reached far enough for");
+  fireEvent.wheel(document);
+  resized();
+  assert.equal(scrolls.length, 2, "and let go once the user scrolls");
+
+  reduceMotion = false;
+  scrolls.length = 0;
+  fireEvent.click(opened.getByRole("button", { name: "i2: Card vault, Todo" }));
+  reduceMotion = true;
+  assert.deepEqual(scrolls, [{ label: view.getByRole("button", { name: /\bi2 Build/ }).getAttribute("aria-label"), options: { block: "start", behavior: "smooth" } }], "smoothly otherwise");
+  assert.ok(document.activeElement === view.getByRole("button", { name: /\bi2 Build/ }));
 });
 
 test("a detail leaves the nesting to the rows: a parent lists no sub-issues and a sub-issue under it no parent; the flat copy under Needs you names its Parent and goes there; a parent's dependency blocks its sub-issue through it", async () => {
