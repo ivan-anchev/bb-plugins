@@ -1,7 +1,8 @@
 // A regional manager's goal is the user's first message in its thread. The New page creates the
 // thread before there is one, and bb refuses a thread with no first message, so it is spawned with
 // the plugin's placeholder, which this module's message.dispatch hook holds in bb's queue. The
-// thread waits there, pending, with no environment, session or turn. The user's message then
+// thread waits there, pending, with no session or turn (bb makes a new worktree only when the goal
+// is sent, but attaches a project checkout at once). The user's message then
 // dispatches first, on the execution the placeholder's row carries, and the hook writes it to
 // GOAL.md as it lets it through. The hook holds nothing but the placeholder: the inbox rings no
 // manager still waiting for its goal (inbox.ts). After the first turn the placeholder is taken out

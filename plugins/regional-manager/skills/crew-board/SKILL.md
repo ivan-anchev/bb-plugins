@@ -29,14 +29,15 @@ and no plugin settings. Its one setting belongs to each regional manager: the
    approval holds the thread).
 6. Leave **Verify done handoffs** on to have every done handoff of build work
    checked before the thread hears of it, or turn it off.
-7. Press **Create**. The new thread opens, titled with the name, and waits:
-   no environment, no session and no turn yet. Its queue shows the plugin's
-   message, "Type this regional manager's goal below to start it.", held by
-   Regional Manager. A create with no name is refused: the name field says
-   "Give it a name." and takes the focus.
+7. Press **Create**. The new thread opens, titled with the name, and waits,
+   with no session and no turn yet. A project checkout is attached at once;
+   a new worktree, or no project's workspace, is made only when you send the
+   goal. Its queue shows the plugin's message, "Type this regional manager's
+   goal below to start it.", held by Regional Manager. A create with no name
+   is refused: the name field says "Give it a name." and takes the focus.
 8. Type the goal in the thread and send it. It is the thread's first message:
-   bb makes the environment you picked and starts the thread on what you
-   picked, and the plugin writes the message to `GOAL.md`, exactly as you
+   bb makes the new worktree, if you picked one, and starts the thread on
+   what you picked, and the plugin writes the message to `GOAL.md`, exactly as you
    typed it. Until then, the plugin sends the thread none of its own wake
    messages; its first turn reads every update anyway. After that first turn
    the plugin's held message leaves the queue.

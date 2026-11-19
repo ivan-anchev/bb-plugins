@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { existsSync } from "node:fs";
 import { BB_DEFAULT, coordinating, harness, isRefusal, ISSUE, coordinatorStart, MANAGER_REQUEST, startedAgent, textOf } from "./test-harness.ts";
 
-test("a started coordinator holds its role and is listed, its thread pending with no environment and its placeholder held, until the user's goal starts it and fills GOAL.md", async () => {
+test("a started coordinator holds its role and is listed, its thread (a new worktree) pending with no environment and its placeholder held, until the user's goal starts it and fills GOAL.md", async () => {
   const kit = harness();
   const { threadId } = await kit.spawner.coordinator(coordinatorStart("Webhooks"));
 

@@ -483,7 +483,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         background: 0,
       };
       fakeThreads.set(id, thread);
-      // As bb does, a first message the plugin's hook holds leaves the thread pending, with no environment and no turn, and its message queued as a row.
+      // As bb does, a first message the plugin's hook holds leaves the thread pending, with no turn, and its message queued as a row; a new worktree waits for
+      // the dispatch too. why no checkout attached here: bb attaches one at once, and nothing the plugin does before the goal reads it.
       if (holdsFirstMessage(id, args)) thread.status = "pending";
       else dispatchFirst(thread);
       if (behaviour.created) await emit("thread.created", { thread: { id, originPluginId: PLUGIN_ID } });
