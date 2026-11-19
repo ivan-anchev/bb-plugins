@@ -38,7 +38,7 @@ function mount() {
   const saves: Profile[] = [];
   const rpc = {
     coordinators: () => ({ coordinators: [stored] }),
-    board: () => ({ verify: true, ownEdits: null, prUnavailable: null, digest: null, decisions: [], issues: [] }),
+    board: () => ({ awaitingGoal: false, verify: true, ownEdits: null, prUnavailable: null, digest: null, decisions: [], issues: [] }),
     setProfile: (input: unknown) => {
       const { profile } = contract.setProfile.input.parse(input);
       saves.push(profile);

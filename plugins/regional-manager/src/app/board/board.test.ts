@@ -173,7 +173,7 @@ async function mount(data: Read, answer: (input: unknown) => void = () => {}, de
     rpc: {
       board: () => {
         served = current;
-        return { verify: true, ownEdits: null, prUnavailable: null, digest: null, ...current };
+        return { awaitingGoal: false, verify: true, ownEdits: null, prUnavailable: null, digest: null, ...current };
       },
       setVerify: () => ({}),
       answerDecision: (input: unknown) => {

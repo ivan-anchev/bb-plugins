@@ -9,6 +9,7 @@ import { memoryContentSchema, memoryFileSchema, memoryVersionSchema } from "../.
 import { AT_FORMS, parseAt, parseEvery, reminderIdSchema, reminderNoteSchema } from "../../model/reminder.ts";
 import type { CoordinatorId, Role } from "../../model/role.ts";
 import type { BoardReader } from "../board/board.ts";
+import type { Goals } from "../goal/goal.ts";
 import type { Inbox } from "../inbox/inbox.ts";
 import { boardText } from "../issues/issue-text.ts";
 import type { MemoryRoot } from "../memory/memory-files.ts";
@@ -30,12 +31,13 @@ type Deps = {
   store: Pick<Store, "roleOfThread" | "issue" | "issues" | "agent" | "agents" | "handoff" | "check" | "reminders" | "insertReminder" | "cancelReminder" | "decision" | "decisions" | "insertDecision">;
   inbox: Pick<Inbox, "takeUnread">;
   memory: MemoryRoot;
+  goals: Pick<Goals, "recover">;
   board: Pick<BoardReader, "issues">;
   /** Runs after a decision is asked, to show it on the regional manager's board. */
   onChange(id: CoordinatorId): void;
 };
 
-export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, onChange }: Deps): void {
+export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, goals, board, onChange }: Deps): void {
   bb.agents.registerTool({
     name: CATCH_UP,
     description:
@@ -43,6 +45,7 @@ export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, on
     presentation: { label: { pending: "Catching up", completed: "Caught up" }, icon: { glyph: "Workflow" } },
     parameters: z.object({}),
     execute: forManager(store, CATCH_UP, async (id) => {
+      await goals.recover(id);
       // why caught: the updates and the memory are still worth reading when bb's thread list can't be.
       const issues = await board.issues(id).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
       const updates = updatesText(inbox.takeUnread(id), {

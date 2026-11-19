@@ -19,7 +19,7 @@ import type { Store } from "../store/store.ts";
 
 const DIGEST = memoryFileSchema.parse("DIGEST.md");
 
-type BoardStore = FactsStore & Pick<Store, "verifies" | "lastOwnTreeEvent" | "issue" | "record">;
+type BoardStore = FactsStore & Pick<Store, "awaitsGoal" | "verifies" | "lastOwnTreeEvent" | "issue" | "record">;
 
 /** An issue's row on the board. */
 const rowOf = ({ view, agent, threadId }: IssueRead): IssueRow => ({
@@ -97,6 +97,7 @@ export function createBoard(bb: FactsBb, store: BoardStore, memory: MemoryRoot) 
       const modifiedAt = files.modifiedAt(DIGEST);
       const reads = await readIssues(bb, store, id);
       return {
+        awaitingGoal: store.awaitsGoal(id),
         verify: store.verifies(id),
         ownEdits: ownEdits(id),
         prUnavailable: prUnavailable(id, reads),

@@ -18,16 +18,34 @@ and no plugin settings. Its one setting belongs to each regional manager: the
 2. Press **New** in its title bar.
 3. Give it a **name**, an optional **description**, and pick an **icon** (see
    [Profile](#profile)).
-4. Below them, bb's own new-thread composer, seeded with your first project
-   (in the sidebar's order), a fresh worktree of its default branch on the
-   machine running bb, and **auto** permissions. Change any picker as with
-   any new thread.
-5. Leave **Verify done handoffs** on (below the composer) to have every done
-   handoff of build work checked before the thread hears of it, or turn it
-   off.
-6. Type the goal and submit. The new thread opens, titled with the name. A
-   submit with no name is refused: the name field says "Give it a name." and
-   takes the focus, and the composer keeps your goal.
+4. Below them, pick where it works: **New worktree** of a project (cut from
+   the branch **From:** names, the project's default branch unless you pick
+   another), the **Project checkout** itself, or **No project**. It starts
+   with your first project (in the sidebar's order) in a fresh worktree, so a
+   stray edit never lands in your checkout.
+5. Pick what it runs on with bb's own model picker (provider, model,
+   reasoning and service tier, starting at bb's default provider and its
+   default model) and permission picker (starting at **auto**, so no
+   approval holds the thread).
+6. Leave **Verify done handoffs** on to have every done handoff of build work
+   checked before the thread hears of it, or turn it off.
+7. Press **Create**. The new thread opens, titled with the name, and waits,
+   with no session and no turn yet. A project checkout is attached at once;
+   a new worktree, or no project's workspace, is made only when you send the
+   goal. Its queue shows the plugin's message, "Type this regional manager's
+   goal below to start it.", held by Regional Manager. A create with no name
+   is refused: the name field says "Give it a name." and takes the focus.
+8. Type the goal in the thread and send it. It is the thread's first message:
+   bb makes the new worktree, if you picked one, and starts the thread on
+   what you picked, and the plugin writes the message to `GOAL.md`, exactly as you
+   typed it. Until then, the plugin sends the thread none of its own wake
+   messages; its first turn reads every update anyway. After that first turn
+   the plugin's held message leaves the queue.
+
+If you press **Send now** on the held message, the regional manager gets it
+first and answers that it is waiting for your goal; your next message is the
+goal. If the plugin was reloading as your goal was sent, its first
+`crew_catch_up` reads the goal from the thread instead.
 
 The panel lists every regional manager bb still lists, under its project,
 newest first: its icon, its name with bb's status glyph, and its description
@@ -53,7 +71,7 @@ optional **description**, up to 500, and an **icon**, one of 24 of bb's own
 - **Managers started before profiles** have the Workflow icon and no
   description; their name is the title their thread already had.
 - The New page keeps what you typed in the profile's fields until the
-  manager starts, as the composer keeps its goal.
+  manager starts.
 
 ## Tools
 
@@ -920,7 +938,7 @@ Each regional manager has its own folder on the bb server:
 server log names the parent folder when the plugin loads. It starts with:
 
 - `MEMORY.md`: the index of the files.
-- `GOAL.md`: the goal typed in the composer.
+- `GOAL.md`: the goal, the first message you typed in its thread.
 - `PLAN.md`: the plan.
 - `PREFERENCES.md`: the user's standing preferences, one per line.
 - `CREW.md`: rules every agent will follow.

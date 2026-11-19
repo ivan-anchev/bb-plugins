@@ -127,6 +127,11 @@ export const MIGRATIONS: readonly string[] = [
   // profiles has no description and the plugin's own icon. why the literal: a statement never changes.
   `ALTER TABLE coordinators ADD COLUMN description TEXT`,
   `ALTER TABLE coordinators ADD COLUMN avatar TEXT NOT NULL DEFAULT '{"kind":"icon","icon":"Workflow"}'`,
+
+  // Whether a regional manager still waits for its goal, the user's first message in its thread
+  // (goal.ts): 1 from its start until that message is taken as its goal. One started before it
+  // was given its goal as it started.
+  `ALTER TABLE coordinators ADD COLUMN awaiting_goal INTEGER NOT NULL DEFAULT 0`,
 ];
 
 /** The trigger `name`: after each row `on` names, one more write of the regional manager `manager` names. */

@@ -47,12 +47,16 @@ its role.
   event, and the own-tree watch that reads the regional manager's working
   tree through `bb--git` when its turn ends; `spawn.ts` mints a ticket and
   spawns a regional manager, agent or verifier thread, and binds it on the
-  spawn answer and on `thread.created`; `roles.ts` is the one `configure`
+  spawn answer and on `thread.created`; `goal/` the one `message.dispatch`
+  hook, which holds a new regional manager's placeholder first message until
+  the user types its goal in the thread, writes that to `GOAL.md`, and takes
+  the placeholder out after the first turn; `roles.ts` is the one `configure`
   callback, with each role's tools, skills and rule text; `issues/` the
   issue tools, their texts and the one read of an issue's facts; `agents/`
   the agent tools, starting, messaging, stopping and ending agents, an
   agent's brief, and the thread events that end an agent or refresh the
-  board; `execution/` reads bb's provider catalog and what a thread runs on;
+  board; `execution/` reads bb's provider catalog, what a thread runs on, and
+  what the New page starts from;
   `tools/` the fleet-wide `crew_` tools, `agent_handoff`, and the catch-up
   texts; `verify/` the verify step (a verifier per done handoff, its brief,
   model and `issue_verdict`, and the one automatic fix round that sends a
@@ -66,8 +70,8 @@ its role.
   `server.ts` runs the once-a-minute tick: agents, then
   the PR watch, then the verifiers, then the inbox (due reminders, unsent
   doorbells).
-- `src/app/panel/`: the nav panel, its list, and the New page around bb's
-  new-thread composer. `src/app/profile/`: the avatar tile, and the profile's fields, shared by
+- `src/app/panel/`: the nav panel, its list, and the New page: the profile,
+  where the manager works and what it runs on (bb's own pickers), and Create. `src/app/profile/`: the avatar tile, and the profile's fields, shared by
   the New page and the board page's in-place editor, and `useProfile`, the name
   from bb's thread list joined with what the plugin keeps. `src/app/board/`: the Board, its thread tab and its
   panel page; `issue/` its lanes and issue rows, `issue/detail/` an issue

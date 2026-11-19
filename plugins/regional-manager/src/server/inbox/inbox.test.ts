@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { DISPLAY_NAME } from "../../name.ts";
-import { coordinating, settled, startedAgent, textOf } from "../test-harness.ts";
+import { coordinating, coordinatorStart, harness, settled, startedAgent, textOf } from "../test-harness.ts";
 
 const REPORT = { summary: "Retries land with backoff", did: ["Added exponential backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [] };
 const DONE = { status: "done", ...REPORT, headSha: "0123456789abcdef0123456789abcdef01234567" };
@@ -173,7 +173,7 @@ test("a doorbell bb gave up sending is taken out of its queue by the tick, and w
   assert.deepEqual(kit.queued(threadId), [], "the failed doorbell is taken out of bb's queue");
   assert.equal(kit.store.doorbell(coordinatorId), null);
   assert.deepEqual(kit.delivered(threadId), [`[${DISPLAY_NAME}] 2 updates. Call crew_catch_up to read them in full.\n- i1 "Add retries" (a1) handed off: done, unverified\n- i2 "Dead letters" (a2) handed off: blocked`]);
-  assert.match(kit.warnings().join("\n"), /bb gave up sending the doorbell qm_1 [^\n]*: The provider exited before the turn started/);
+  assert.match(kit.warnings().join("\n"), new RegExp(`bb gave up sending the doorbell ${failed} [^\\n]*: The provider exited before the turn started`));
 });
 
 test("saving a file in the Memory editor wakes the Coordinator with the file's name; its own writes don't", async () => {
@@ -204,4 +204,20 @@ test("once the plugin is disposed, nothing rings", async () => {
   await assert.rejects(kit.call("agent_handoff", DONE, agentThreads[0]), /reloaded or disabled/);
   await assert.rejects(kit.tick(), /reloaded or disabled/);
   assert.deepEqual(doorbells(), []);
+});
+
+test("a regional manager still waiting for its goal is rung by nothing, so its first turn is the goal's; once it has its goal, the tick rings it", async () => {
+  const kit = harness();
+  const { threadId } = await kit.spawner.coordinator(coordinatorStart("Webhooks"));
+  const role = kit.store.roleOfThread(threadId);
+  assert.equal(role?.kind, "coordinator");
+  await kit.rpc.setVerify({ coordinatorId: role.coordinatorId, verify: false });
+  await kit.tick();
+  assert.deepEqual(kit.sent().filter((args) => args.threadId === threadId), []);
+  assert.equal(kit.thread(threadId).status, "pending");
+
+  kit.giveGoal(threadId, "Migrate the webhook service");
+  kit.thread(threadId).status = "idle";
+  await kit.tick();
+  assert.deepEqual(kit.delivered(threadId).filter((text) => text.startsWith(`[${DISPLAY_NAME}]`)).length, 1);
 });
