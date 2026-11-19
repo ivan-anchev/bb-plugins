@@ -5,8 +5,10 @@ import { z } from "zod";
 import { handoffIdSchema, type Handoff } from "../../model/handoff.ts";
 import { issueViews } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
+import { DEFAULT_AVATAR } from "../../model/profile.ts";
 import { memoryStorage } from "../memory-storage.ts";
 import type { NewAgent } from "./issue/agents-store.ts";
+import { MIGRATIONS } from "./migrations.ts";
 import { openStore } from "./store.ts";
 import { EXECUTION, failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "./test-store.ts";
 
@@ -43,9 +45,27 @@ test("a store opened again, as after a reload, keeps what was stored", () => {
   assert.deepEqual(openStore(storage).issue(MANAGER, filed.id), filed);
 });
 
+test("a regional manager started before profiles lists with no description and the plugin's own icon once the store is opened by this release", () => {
+  const { db, storage } = memoryStorage();
+  const profiles = MIGRATIONS.findIndex((statement) => statement.includes("ADD COLUMN description"));
+  storage.migrate(db, MIGRATIONS.slice(0, profiles));
+  db.prepare("INSERT INTO roles (ticket, thread_id, role, created_at) VALUES ('ticket-1', 'thr_a', ?, 1000)").run(JSON.stringify({ kind: "coordinator", coordinatorId: MANAGER }));
+  db.prepare("INSERT INTO coordinators (id, ticket, project_id, verify, created_at) VALUES (?, 'ticket-1', 'prj_1', 1, 1000)").run(MANAGER);
+
+  assert.deepEqual(openStore(storage).coordinators(), [{ id: MANAGER, threadId: "thr_a", projectId: "prj_1", verify: true, description: null, avatar: { kind: "icon", icon: "Workflow" }, createdAt: 1_000 }]);
+});
+
+test("an avatar this release can't draw, as an icon a later one stored, reads as the plugin's own icon, and the list still reads", () => {
+  const { db, store } = freshStore();
+  db.prepare("UPDATE coordinators SET avatar = ? WHERE id = ?").run(JSON.stringify({ kind: "icon", icon: "Rocket" }), MANAGER);
+
+  assert.deepEqual(store.coordinator(MANAGER)?.avatar, DEFAULT_AVATAR);
+  assert.equal(store.coordinators().length, 2);
+});
+
 test("a ticket binds once: a second bind, to the same or another thread, changes nothing", () => {
   const store = openStore(memoryStorage().storage);
-  store.insertCoordinator({ id: MANAGER, ticket: "ticket-1", projectId: "prj_1", verify: true, createdAt: 1_000 });
+  store.insertCoordinator({ id: MANAGER, ticket: "ticket-1", projectId: "prj_1", verify: true, description: null, avatar: DEFAULT_AVATAR, createdAt: 1_000 });
   assert.deepEqual(store.bindTicket("ticket-1", "thr_a"), { kind: "coordinator", coordinatorId: MANAGER });
   assert.equal(store.bindTicket("ticket-1", "thr_a"), null);
   assert.equal(store.bindTicket("ticket-1", "thr_b"), null);
@@ -55,14 +75,14 @@ test("a ticket binds once: a second bind, to the same or another thread, changes
 
 test("a regional manager is listed once its thread is bound, and its unbound ticket configures only while unbound", () => {
   const store = openStore(memoryStorage().storage);
-  store.insertCoordinator({ id: MANAGER, ticket: "ticket-1", projectId: "prj_1", verify: true, createdAt: 1_000 });
+  store.insertCoordinator({ id: MANAGER, ticket: "ticket-1", projectId: "prj_1", verify: true, description: null, avatar: DEFAULT_AVATAR, createdAt: 1_000 });
   assert.deepEqual(store.coordinators(), []);
   assert.equal(store.coordinator(MANAGER), null);
   assert.equal(store.isCoordinator(MANAGER), true);
   assert.equal(store.roleFor("thr_a", "ticket-1")?.kind, "coordinator");
 
   store.bindTicket("ticket-1", "thr_a");
-  assert.deepEqual(store.coordinators(), [{ id: MANAGER, threadId: "thr_a", projectId: "prj_1", verify: true, createdAt: 1_000 }]);
+  assert.deepEqual(store.coordinators(), [{ id: MANAGER, threadId: "thr_a", projectId: "prj_1", verify: true, description: null, avatar: DEFAULT_AVATAR, createdAt: 1_000 }]);
   assert.equal(store.roleFor("thr_b", "ticket-1"), null);
 });
 

@@ -7,14 +7,14 @@ import plugin from "../../../server.ts";
 import { coordinatorContract } from "../../contract.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
-import { harness, isRefusal, newThreadRequest, textOf } from "../test-harness.ts";
+import { harness, isRefusal, coordinatorStart, textOf } from "../test-harness.ts";
 
 
 const PLAN = memoryFileSchema.parse("PLAN.md");
 
 async function started() {
   const kit = harness();
-  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
+  const { threadId } = await kit.spawner.coordinator(coordinatorStart("Migrate the webhook service"));
   const role = kit.store.roleOfThread(threadId);
   assert.equal(role?.kind, "coordinator");
   return { kit, threadId, coordinatorId: role.coordinatorId, dir: kit.memory.of(role.coordinatorId).dir };

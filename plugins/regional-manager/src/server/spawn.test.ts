@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { BB_DEFAULT, coordinating, harness, isRefusal, ISSUE, newThreadRequest, startedAgent, textOf } from "./test-harness.ts";
+import { BB_DEFAULT, coordinating, harness, isRefusal, ISSUE, coordinatorStart, newThreadRequest, startedAgent, textOf } from "./test-harness.ts";
 
 test("a started coordinator holds its role, is listed, and has its goal in GOAL.md", async () => {
   const kit = harness();
-  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
+  const { threadId } = await kit.spawner.coordinator(coordinatorStart("Migrate the webhook service"));
 
   const role = kit.store.roleOfThread(threadId);
   assert.equal(role?.kind, "coordinator");
@@ -16,7 +16,7 @@ test("a started coordinator holds its role, is listed, and has its goal in GOAL.
 
 test("binding twice, by the spawn answer and by thread.created, binds once", async () => {
   const kit = harness({ created: true, answer: "thread" });
-  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
+  const { threadId } = await kit.spawner.coordinator(coordinatorStart("Migrate the webhook service"));
 
   assert.equal(kit.bindings(), 1);
   assert.equal(kit.store.roleOfThread(threadId)?.kind, "coordinator");
@@ -24,7 +24,7 @@ test("binding twice, by the spawn answer and by thread.created, binds once", asy
 
 test("a ticket whose spawn answer was lost is bound by thread.created", async () => {
   const kit = harness({ created: true, answer: "lost" });
-  await assert.rejects(kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true), /socket hang up/);
+  await assert.rejects(kit.spawner.coordinator(coordinatorStart("Migrate the webhook service")), /socket hang up/);
 
   assert.equal(kit.store.roleOfThread("thr_1")?.kind, "coordinator");
   assert.deepEqual(kit.store.coordinators().map((c) => c.threadId), ["thr_1"]);
@@ -32,14 +32,14 @@ test("a ticket whose spawn answer was lost is bound by thread.created", async ()
 
 test("the spawn answer binds a thread whose thread.created never came", async () => {
   const kit = harness({ created: false, answer: "thread" });
-  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
+  const { threadId } = await kit.spawner.coordinator(coordinatorStart("Migrate the webhook service"));
 
   assert.equal(kit.store.roleOfThread(threadId)?.kind, "coordinator");
 });
 
 test("a thread another plugin made binds nothing, even carrying a live ticket", async () => {
   const kit = harness({ created: false, answer: "lost" });
-  await assert.rejects(kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true));
+  await assert.rejects(kit.spawner.coordinator(coordinatorStart("Migrate the webhook service")));
 
   await kit.threadCreated({ id: "thr_other", originPluginId: "another-plugin" }, kit.metadataOf("thr_1"));
   assert.equal(kit.store.roleOfThread("thr_other"), null);
@@ -50,8 +50,8 @@ test("a thread another plugin made binds nothing, even carrying a live ticket", 
 
 test("two coordinators get two rows and two memory folders", async () => {
   const kit = harness();
-  const first = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), true);
-  const second = await kit.spawner.coordinator(newThreadRequest("Retire the cron box"), true);
+  const first = await kit.spawner.coordinator(coordinatorStart("Migrate the webhook service"));
+  const second = await kit.spawner.coordinator(coordinatorStart("Retire the cron box"));
 
   const rows = kit.store.coordinators();
   assert.deepEqual(rows.map((c) => c.threadId), [second.threadId, first.threadId]);
@@ -65,7 +65,7 @@ test("two coordinators get two rows and two memory folders", async () => {
 
 test("a regional manager runs on the provider and model picked in bb's composer, even ones it left unmarked", async () => {
   const kit = harness();
-  const { threadId } = await kit.spawner.coordinator({ ...newThreadRequest("Migrate the webhook service"), executionInputSources: { permissionMode: "explicit" } }, true);
+  const { threadId } = await kit.spawner.coordinator({ ...coordinatorStart("Migrate the webhook service"), request: { ...newThreadRequest("Migrate the webhook service"), executionInputSources: { permissionMode: "explicit" } } });
 
   const thread = kit.thread(threadId);
   assert.deepEqual([thread.providerId, thread.execution?.model], ["claude-code", "opus"]);
@@ -100,7 +100,7 @@ test("an agent started with no execution named runs on its regional manager's se
 for (const permissionMode of ["accept-edits", "full"] as const) {
   test(`an agent of a regional manager on ${permissionMode} runs on auto, and on its regional manager's provider and model`, async () => {
     const kit = harness();
-    const { threadId } = await kit.spawner.coordinator({ ...newThreadRequest("Migrate the webhook service"), permissionMode }, true);
+    const { threadId } = await kit.spawner.coordinator({ ...coordinatorStart("Migrate the webhook service"), request: { ...newThreadRequest("Migrate the webhook service"), permissionMode } });
     assert.equal(kit.thread(threadId).execution?.permissionMode, permissionMode);
 
     const agent = kit.thread((await startedAgent(kit, threadId)).agentThreadId);

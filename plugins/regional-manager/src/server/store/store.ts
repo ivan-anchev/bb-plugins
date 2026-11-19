@@ -5,6 +5,7 @@
 import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { coordinatorSchema, type Coordinator } from "../../contract.ts";
+import { avatarSchema, DEFAULT_AVATAR, type Profile } from "../../model/profile.ts";
 import { memoryRevisionSchema, type MemoryFile, type MemoryRevision, type MemoryVersion } from "../../model/memory-file.ts";
 import type { CoordinatorId, Role } from "../../model/role.ts";
 import { inboxStore } from "./inbox/inbox-store.ts";
@@ -26,7 +27,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
   function coordinators(id: CoordinatorId | null): Coordinator[] {
     return db()
       .prepare(
-        `SELECT c.id, r.thread_id AS threadId, c.project_id AS projectId, c.verify, c.created_at AS createdAt
+        `SELECT c.id, r.thread_id AS threadId, c.project_id AS projectId, c.verify, c.description, c.avatar, c.created_at AS createdAt
            FROM coordinators c JOIN roles r ON r.ticket = c.ticket
           WHERE r.thread_id IS NOT NULL AND (? IS NULL OR c.id = ?)
           ORDER BY c.created_at DESC, c.rowid DESC`,
@@ -43,11 +44,18 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     ...prStore(db),
 
     /** The regional manager and its unbound ticket, together or not at all. */
-    insertCoordinator({ id, ticket, projectId, verify, createdAt }: { id: CoordinatorId; ticket: string; projectId: string; verify: boolean; createdAt: number }): void {
+    insertCoordinator({ id, ticket, projectId, verify, description, avatar, createdAt }: { id: CoordinatorId; ticket: string; projectId: string; verify: boolean; createdAt: number } & KeptProfile): void {
       db().transaction(() => {
         insertTicket(db, ticket, { kind: "coordinator", coordinatorId: id }, createdAt);
-        db().prepare("INSERT INTO coordinators (id, ticket, project_id, verify, created_at) VALUES (?, ?, ?, ?, ?)").run(id, ticket, projectId, Number(verify), createdAt);
+        db()
+          .prepare("INSERT INTO coordinators (id, ticket, project_id, verify, description, avatar, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+          .run(id, ticket, projectId, Number(verify), description, JSON.stringify(avatar), createdAt);
       })();
+    },
+
+    /** Replaces what the plugin keeps of the regional manager's profile. */
+    setProfile(id: CoordinatorId, { description, avatar }: KeptProfile): void {
+      db().prepare("UPDATE coordinators SET description = ?, avatar = ? WHERE id = ?").run(description, JSON.stringify(avatar), id);
     },
 
     /** Whether a regional manager with this id was ever started. */
@@ -147,6 +155,14 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
   };
 }
 
-// why: SQLite has no boolean; verify is stored as 0 or 1.
-const coordinatorRowSchema = coordinatorSchema.extend({ verify: z.number().transform((verify) => verify === 1) });
+/** What the store keeps of a profile: all of it but the name, which is the thread's title. */
+type KeptProfile = Omit<Profile, "name">;
+
+// why: SQLite has no boolean; verify is stored as 0 or 1. The avatar is stored as JSON, and one
+// this release can't draw, as an icon a later release dropped from its picker, reads as the
+// default rather than hiding every regional manager from the list.
+const coordinatorRowSchema = coordinatorSchema.extend({
+  verify: z.number().transform((verify) => verify === 1),
+  avatar: z.string().transform((json) => avatarSchema.catch(DEFAULT_AVATAR).parse(JSON.parse(json))),
+});
 const toCoordinator = (row: unknown): Coordinator => coordinatorRowSchema.parse(row);

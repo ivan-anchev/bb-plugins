@@ -4,7 +4,7 @@ import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
-import { bbHttpError, coordinating, HEAD, isRefusal, ISSUE, newThreadRequest, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
+import { bbHttpError, coordinating, HEAD, isRefusal, ISSUE, coordinatorStart, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
 
 const RETRIES = { ...ISSUE, brief: "Retry failed webhook deliveries with backoff.", doneCriteria: ["npm test passes", "a failed delivery is retried 3 times"] };
 const REPORT = { summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
@@ -216,7 +216,7 @@ test("agents are numbered in the order started, per regional manager, across iss
   for (const title of ["Add retries", "Dead letters"]) await kit.call("issue_create", { ...RETRIES, title }, threadId);
   assert.match(textOf(await kit.call("agent_start", { issue: "i2" }, threadId)), /^Started a1 on i2 /);
   assert.match(textOf(await kit.call("agent_start", { issue: "i1" }, threadId)), /^Started a2 on i1 /);
-  const other = await kit.spawner.coordinator(newThreadRequest("Retire the cron box"), true);
+  const other = await kit.spawner.coordinator(coordinatorStart("Retire the cron box"));
   assert.match(textOf(await kit.call("issue_create", RETRIES, other.threadId)), /^Filed i1 /);
   assert.match(textOf(await kit.call("agent_start", { issue: "i1" }, other.threadId)), /^Started a1 on i1 /);
 });
@@ -279,7 +279,7 @@ test("agent_message reaches the agent as a message from the regional manager's t
 test("an agent id the regional manager has none by is refused, and an agent can't be reached from another regional manager", async () => {
   const { kit, threadId, start } = await filed();
   await start();
-  const other = await kit.spawner.coordinator(newThreadRequest("Retire the cron box"), true);
+  const other = await kit.spawner.coordinator(coordinatorStart("Retire the cron box"));
 
   for (const caller of [threadId, other.threadId]) {
     const agent = caller === threadId ? "a2" : "a1";

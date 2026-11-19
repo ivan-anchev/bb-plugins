@@ -4,6 +4,7 @@ import type Database from "better-sqlite3";
 import { memoryStorage } from "../memory-storage.ts";
 import type { AgentId } from "../../model/agent.ts";
 import type { Issue, IssueId } from "../../model/issue/issue.ts";
+import { DEFAULT_AVATAR } from "../../model/profile.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
 import { openStore, type Store } from "./store.ts";
 import type { NewIssue } from "./issue/issues-store.ts";
@@ -17,7 +18,7 @@ export function freshStore() {
   const { db, storage } = memoryStorage();
   const store = openStore(storage);
   for (const [id, n] of [[MANAGER, 1], [OTHER_MANAGER, 2]] as const) {
-    store.insertCoordinator({ id, ticket: `manager-${n}`, projectId: "prj_1", verify: true, createdAt: 1_000 });
+    store.insertCoordinator({ id, ticket: `manager-${n}`, projectId: "prj_1", verify: true, description: null, avatar: DEFAULT_AVATAR, createdAt: 1_000 });
     store.bindTicket(`manager-${n}`, `thr_manager_${n}`);
   }
   return { db, storage, store };

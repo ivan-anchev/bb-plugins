@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DISPLAY_NAME } from "../../name.ts";
-import { coordinating, isRefusal, newThreadRequest, settled, textOf } from "../test-harness.ts";
+import { coordinating, isRefusal, coordinatorStart, settled, textOf } from "../test-harness.ts";
 
 const HOUR = 3_600_000;
 
@@ -74,7 +74,7 @@ test("a cancelled reminder never fires, and only its own Coordinator can cancel 
   await remind({ note: "check on i1", at: "10m", every: "1d" });
   const [first = assert.fail("no reminder")] = reminders();
 
-  const other = await kit.spawner.coordinator(newThreadRequest("Another goal"), false);
+  const other = await kit.spawner.coordinator(coordinatorStart("Another goal", false));
   const theirs = await kit.call("crew_remind", { cancel: "r1" }, other.threadId);
   assert.ok(isRefusal(theirs));
   assert.equal(textOf(theirs), "You have no reminder r1. crew_catch_up lists your reminders.");

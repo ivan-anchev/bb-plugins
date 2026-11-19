@@ -20,6 +20,7 @@ import { pluginInstance } from "./src/server/lifetime.ts";
 import { watchUnblocked } from "./src/server/issues/views/unblocked.ts";
 import { openMemoryRoot } from "./src/server/memory/memory-files.ts";
 import { memoryHandlers } from "./src/server/memory/memory-rpc.ts";
+import { profileHandlers } from "./src/server/profile/profile-rpc.ts";
 import { registerRoles } from "./src/server/roles.ts";
 import { createSpawner } from "./src/server/spawn.ts";
 import { openStore } from "./src/server/store/store.ts";
@@ -91,7 +92,8 @@ export default function plugin(host: BbPluginApi): void {
   bb.rpc.register(coordinatorContract, {
     coordinators: () => ({ coordinators: store.coordinators() }),
     primaryHost: async () => ({ hostId: (await bb.sdk.system.config()).primaryHostId }),
-    startCoordinator: ({ request, verify }) => spawner.coordinator(request, verify),
+    startCoordinator: (start) => spawner.coordinator(start),
+    ...profileHandlers({ bb, store, onChange: refreshCoordinators }),
     ...boardHandlers({ store, board, inbox }),
     ...memoryHandlers(store, memory, inbox),
   });

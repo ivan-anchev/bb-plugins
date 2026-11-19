@@ -8,8 +8,10 @@ import type { BbPluginApi, PluginAgentConfiguration, PluginAgentConfigurationCon
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { createFakePluginHost, type FakePluginHarness } from "@get-bb/plugin-sdk/testing";
 import { z } from "zod";
+import type { CoordinatorStart } from "../contract.ts";
 import type { EnvironmentProvider } from "../model/agent.ts";
 import type { HolderThread } from "../model/issue/status.ts";
+import { DEFAULT_AVATAR } from "../model/profile.ts";
 import type { CoordinatorId } from "../model/role.ts";
 import { registerAgentTools } from "./agents/agent-tools.ts";
 import { createAgents } from "./agents/agents.ts";
@@ -30,6 +32,7 @@ import { pluginInstance } from "./lifetime.ts";
 import { watchUnblocked } from "./issues/views/unblocked.ts";
 import { openMemoryRoot } from "./memory/memory-files.ts";
 import { memoryHandlers } from "./memory/memory-rpc.ts";
+import { profileHandlers } from "./profile/profile-rpc.ts";
 import { memoryStorage } from "./memory-storage.ts";
 import { registerRoles } from "./roles.ts";
 import { createSpawner } from "./spawn.ts";
@@ -60,6 +63,7 @@ type IssuesBb = Parameters<typeof createIssues>[0]["bb"];
 type InboxBb = Parameters<typeof createInbox>[0]["bb"];
 type VerifyBb = Parameters<typeof createVerify>[0]["bb"];
 type PrWatchBb = Parameters<typeof createPrWatch>[0]["bb"];
+type ProfileBb = Parameters<typeof profileHandlers>[0]["bb"];
 type SendArgs = Parameters<AgentsBb["sdk"]["threads"]["send"]>[0];
 type Delivery = Awaited<ReturnType<InboxBb["sdk"]["threads"]["send"]>>;
 type QueuedMessage = Awaited<ReturnType<InboxBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number] & Awaited<ReturnType<AgentsBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number];
@@ -103,6 +107,8 @@ type FakeThread = HolderThread & {
   environmentHostId: string | null;
   archivedAt: number | null;
   deletedAt: number | null;
+  /** Its title as bb keeps it (null: none given): spawned with one, or renamed. */
+  title: string | null;
   spawnedWith: SpawnArgs;
   turns: number[];
   /** Background commands its turns left running. As on bb 0.49 (seen live), a stop ends them, idle thread or not. */
@@ -330,6 +336,11 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     lost: null,
     byThread: new Map(),
   };
+  /**
+   * Every title a thread update asked for, in order (null: none). Set `holding` to hold each update
+   * before bb applies it, until the test calls its release in `held`.
+   */
+  const threadUpdates: { asked: (string | null)[]; holding: boolean; held: (() => void)[] } = { asked: [], holding: false, held: [] };
   /** Set `answered` to run as bb answers a thread's model lookup, as when someone acts at that moment. */
   const modelLookups: { answered: ((threadId: string) => void) | null } = { answered: null };
   let openedStore = openStore(storage);
@@ -443,6 +454,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         environmentHostId: "host_1",
         archivedAt: null,
         deletedAt: null,
+        title: args.title ?? null,
         spawnedWith: args,
         turns: [],
         background: 0,
@@ -559,7 +571,15 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       if (kinds.sandboxes.has(environmentId) && !lives) environmentRecords.destroyed.add(environmentId);
     },
     output: async () => ({ output: "Done: npm test passes." }),
-  } satisfies SpawnBb["sdk"]["threads"] & AgentsBb["sdk"]["threads"] & IssuesBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] & VerifyBb["sdk"]["threads"] & PrWatchBb["sdk"]["threads"];
+    // As bb does, a deleted thread refuses a rename; an archived one takes it.
+    async update({ threadId, title }: { threadId: string; title?: string | null }) {
+      threadUpdates.asked.push(title ?? null);
+      if (threadUpdates.holding) await new Promise<void>((release) => threadUpdates.held.push(release));
+      const thread = fakeThread(threadId);
+      if (thread.deletedAt !== null) throw bbHttpError(404, "thread_not_found", "Thread not found");
+      if (title !== undefined) thread.title = title;
+    },
+  } satisfies SpawnBb["sdk"]["threads"] & ProfileBb["sdk"]["threads"] & AgentsBb["sdk"]["threads"] & IssuesBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] & VerifyBb["sdk"]["threads"] & PrWatchBb["sdk"]["threads"];
   const agents: ToolsBb["agents"] & Parameters<typeof registerRoles>[0]["agents"] = {
     registerTool(tool) {
       tools.set(tool.name, { parameters: tool.parameters, instructions: tool.instructions ?? null, run: async (input, threadId) => tool.execute(tool.parameters.parse(input), { threadId, projectId: "prj_1", signal: new AbortController().signal }) });
@@ -682,7 +702,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard });
     watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });
-    return { spawner, inbox, verify, agents, prWatch, finalChecks, unblocked, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }) } };
+    return { spawner, inbox, verify, agents, prWatch, finalChecks, unblocked, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }), ...profileHandlers({ bb, store, onChange: refreshCoordinators }) } };
   }
   let plugin = wire();
 
@@ -761,6 +781,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     threadLists,
     /** How bb answers a stop; a test may hold it or make it fail. */
     stopRequests,
+    /** The titles bb was asked to rename threads to; a test may hold the renames. */
+    threadUpdates,
     /** The time the next tick runs at; a test may move it on. */
     clock,
     /** The schedule's once-a-minute pass, as server.ts runs it, at the clock's time. */
@@ -909,7 +931,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
 /** A harness with one coordinating thread started, verifying its agents' done handoffs unless `verify` is false; its thread and its id. */
 export async function coordinating({ verify = true, spawns, stops, storage, turnWaitMs }: { verify?: boolean; spawns?: SpawnBehaviour; stops?: StopBehaviour; storage?: Storage; turnWaitMs?: number } = {}) {
   const kit = harness(spawns, stops, storage, turnWaitMs);
-  const { threadId } = await kit.spawner.coordinator(newThreadRequest("Migrate the webhook service"), verify);
+  const { threadId } = await kit.spawner.coordinator(coordinatorStart("Migrate the webhook service", verify));
   const role = kit.store.roleOfThread(threadId);
   assert.equal(role?.kind, "coordinator");
   return { kit, threadId, coordinatorId: role.coordinatorId };
@@ -928,6 +950,11 @@ export const settled = (): Promise<void> => new Promise((resolve) => setTimeout(
 
 /** The thread a tool's answer links to. */
 export const threadIn = (text: string): string => /@thread:(\w+)/.exec(text)?.[1] ?? assert.fail(`no thread link in: ${text}`);
+
+/** What the New page submits to start a regional manager with this goal, named for it, with no description and the default icon. */
+export function coordinatorStart(goal: string, verify = true): CoordinatorStart {
+  return { request: newThreadRequest(goal), verify, profile: { name: goal, description: null, avatar: DEFAULT_AVATAR } };
+}
 
 /** What the composer submits for this goal. */
 export function newThreadRequest(goal: string): NewThreadRequest {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PluginSidebarThreadsState } from "@get-bb/plugin-sdk/app";
 import type { Coordinator } from "../../contract.ts";
+import { DEFAULT_AVATAR } from "../../model/profile.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
 import { listView } from "./coordinator-groups.ts";
 
@@ -13,6 +14,8 @@ const coordinator = (n: number, projectId: string): Coordinator => ({
   threadId: `thr_${n}`,
   projectId,
   verify: true,
+  description: null,
+  avatar: DEFAULT_AVATAR,
   createdAt: n,
 });
 

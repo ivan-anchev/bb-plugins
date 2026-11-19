@@ -12,23 +12,27 @@ import { kindSchema } from "./model/issue/kind.ts";
 import { issueStatusSchema } from "./model/issue/status.ts";
 import { memoryContentSchema, memoryFileSchema, memorySnapshotSchema, memoryVersionSchema, writeOutcomeSchema } from "./model/memory-file.ts";
 import { prSnapshotSchema } from "./model/verdict/pr.ts";
+import { avatarSchema, profileSchema } from "./model/profile.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "./model/role.ts";
 import { shownVerdictSchema } from "./model/verdict/verdict.ts";
 
 /**
  * A regional manager: its memory is keyed by `id`, its conversation is `threadId`. `verify`:
- * whether its agents' done handoffs get a verifier from now on.
+ * whether its agents' done handoffs get a verifier from now on. Its profile without its name, which
+ * is its thread's title (profile.ts).
  */
 export const coordinatorSchema = z.object({
   id: coordinatorIdSchema,
   threadId: z.string().min(1),
   projectId: z.string().min(1),
   verify: z.boolean(),
+  description: profileSchema.shape.description,
+  avatar: avatarSchema,
   createdAt: z.number().int().nonnegative(),
 });
 export type Coordinator = z.infer<typeof coordinatorSchema>;
 
-/** Every read of the list carries it; a start or a bind invalidates it. */
+/** Every read of the list carries it; a start, a bind or a profile edit invalidates it. */
 export const COORDINATORS_TAG = "coordinators";
 
 /** Every read of one regional manager's memory carries it; any write to its files invalidates it. */
@@ -124,6 +128,10 @@ const newThreadRequestSchema = z.custom<NewThreadRequest>(
 export const typedText = (request: NewThreadRequest): string =>
   request.input.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n\n");
 
+/** What starts a regional manager: the composer's request, its verification switch and its profile. */
+const coordinatorStartSchema = z.object({ request: newThreadRequestSchema, verify: z.boolean(), profile: profileSchema });
+export type CoordinatorStart = z.infer<typeof coordinatorStartSchema>;
+
 export const coordinatorContract = defineRpcContract({
   /** Every regional manager whose thread exists, newest first. */
   coordinators: {
@@ -136,10 +144,18 @@ export const coordinatorContract = defineRpcContract({
     input: z.object({}),
     output: z.object({ hostId: z.string().nullable() }),
   },
-  /** Starts a regional manager from bb's new-thread composer; the request's text is its goal. `verify`: verify its agents' done handoffs. */
+  /**
+   * Starts a regional manager from bb's new-thread composer; the request's text is its goal, and its
+   * thread is titled with the profile's name. `verify`: verify its agents' done handoffs.
+   */
   startCoordinator: {
-    input: z.object({ request: newThreadRequestSchema, verify: z.boolean() }),
+    input: coordinatorStartSchema,
     output: z.object({ threadId: z.string() }),
+  },
+  /** Replaces a regional manager's profile: retitles its thread with the name, and keeps the rest. */
+  setProfile: {
+    input: z.object({ coordinatorId: coordinatorIdSchema, profile: profileSchema }),
+    output: z.object({}),
   },
   /** A regional manager's board. why the memory tag too: the board shows DIGEST.md. */
   board: {
