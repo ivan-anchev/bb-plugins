@@ -52,8 +52,9 @@ while bb restarts, is tried again on the next minute's tick.
 The panel lists the regional managers not started yet under **Not started**,
 then every other one bb still lists under its project, newest first. A row is
 the manager's icon, its name and, below them, its description, and nothing
-else. It opens the manager's page: the composer for its goal until it starts,
-its board after. An archived or deleted thread drops its manager off the list.
+else. It opens the manager's page, with the composer for its goal, until it
+starts, and its thread after; an old link to a started manager's page opens
+its thread too. An archived or deleted thread drops its manager off the list.
 
 ## Profile
 
@@ -67,9 +68,11 @@ optional **description**, up to 500, and an **icon**, one of 24 of bb's own
   renames the thread. The thread shows the name as its title, and the
   manager's icon and name above its composer, never its description. Before
   the start the plugin keeps the name, and the thread is titled with it.
-- **Edit it** on its page in the panel: **Edit** opens the name, description
-  and icons in place, before and after the start; **Save** keeps them, and
-  **Cancel** drops the edit. Esc closes an edit only while nothing in it
+- **Edit it**: before the start, **Edit** on its page in the panel opens the
+  name, description and icons in place; after it, pressing the manager's icon
+  and name above its thread's composer opens them below that row. **Save**
+  keeps them, and **Cancel** drops the edit; both close it, and the focus
+  goes back to what opened it. Esc closes an edit only while nothing in it
   changed. An open edit, and what you typed in it, survive bb redrawing the
   panel and a reload. A save of a started one renames the thread first, so
   one bb refuses changes nothing. bb's title bar names the manager whose page
@@ -532,7 +535,7 @@ work with `agent_handoff`, and the plugin records everything it sees:
   [Pull requests and CI](#pull-requests-and-ci)): it opened, reopened, merged
   or closed, its CI passed or failed, or a review approved it or asked for
   changes. A new CI run starting is not an update.
-- **The user saved a memory file** under Memory on the manager's page. The thread's own
+- **The user saved a memory file** under Memory in the manager's Board tab. The thread's own
   writes don't count.
 - **The user turned verification on or off.**
 - **One of the thread's reminders came due** (see [Reminders](#reminders)).
@@ -857,11 +860,8 @@ take a provider's file tools away), so the plugin **detects** it instead:
 
 ## The board
 
-The **Board** tab in a regional manager's side panel, and its page in the
-panel, opened from its row once it started, show the same board, live; the
-page shows it under the manager's icon, name and description, with **Open
-thread**, which opens the manager's thread, and **Edit** (see
-[Profile](#profile)), and ends with its [memory](#read-and-edit-memory):
+The **Board** tab in a regional manager's side panel shows its board, live,
+and ends with its [memory](#read-and-edit-memory):
 
 - **Verify done handoffs**: the switch for this regional manager.
 - **Files changed in its own environment**: a warning with how many, and
@@ -919,7 +919,7 @@ agent that held it, how it ended, and each handoff it made, the latest one
 open. A research issue's done handoff shows its **Report** first, as the
 Markdown it is, beside the memory file it was saved to (such as
 `reports/i2.md`): a long report scrolls in its own box, and the file holds
-it whole under Memory on the manager's page. Nothing verifies it, so it has no verdict.
+it whole under Memory in the manager's Board tab. Nothing verifies it, so it has no verdict.
 A build issue's handoff shows the verdict on it first: how many criteria passed, a link to the verifier thread,
 and the commit checked; the plugin's own read when that commit wasn't checked
 out on a clean tree; what CI said about that commit when it failed, couldn't
@@ -962,7 +962,7 @@ The thread may add others, such as `notes/api.md`.
 When a research issue's agent hands off done, the plugin saves its report to
 `reports/<issue id>.md` in the manager's memory folder, as it stores the
 handoff. The handoff keeps the report as the agent wrote it; the file is the
-manager's copy. You can read and edit it under Memory on the manager's page, and any agent
+manager's copy. You can read and edit it under Memory in the manager's Board tab, and any agent
 reads it with `crew_memory_read`. The plugin gives it to no agent: the
 manager hands it on by naming the file in the brief of an agent that needs
 it, and an agent started without that sees none of it. The plugin never
@@ -979,8 +979,8 @@ replaced, and the handoff never fails over it.
 
 ## Read and edit memory
 
-**Memory** is the last section of a started regional manager's page in the
-panel, under its board. It lists its files (the core ones first, then the
+**Memory** is the last section of a started regional manager's Board tab,
+under its board. It lists its files (the core ones first, then the
 rest by name), each with its first line of text and when it last changed;
 a dot marks one with unsaved changes. Pressing one shows it, rendered, with
 **All files** to go back and **Edit**. Edit opens it in place, with **Save**
@@ -991,7 +991,7 @@ the thread's writes as they land. Unsaved text stays in the browser, on the
 file you had open, through a resize, a reload and another tab, until you save
 it, cancel or take the newer version. A file deleted under unsaved text stays
 listed ("Not in the folder"), with the text; saving makes it again. While you have unsaved changes, Esc
-doesn't leave the page. A regional manager not started yet has no memory.
+doesn't leave the tab. A regional manager not started yet has no memory.
 
 Neither side can silently overwrite the other. Every write names the version
 of the file it started from:

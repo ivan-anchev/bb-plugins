@@ -1,4 +1,5 @@
-// A regional manager's profile, edited in place on its page: its fields, with Save and Cancel.
+// A regional manager's profile, edited in place on its page until it starts and below its thread's
+// context row after: its fields, with Save and Cancel.
 import { experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
 import { useCallback, useRef, useState, type KeyboardEvent, type ReactNode, type RefCallback } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
@@ -13,11 +14,11 @@ type ProfileEditorProps = {
   coordinatorId: CoordinatorId;
   /** The profile as saved, which Esc goes back to while nothing was changed. */
   profile: Profile;
-  /** The fields as the user left them; the board keeps them, so an edit outlives bb redrawing the panel. */
+  /** The fields as the user left them; the browser keeps them, so an edit outlives bb redrawing the panel. */
   draft: ProfileDraft;
   onChange(next: ProfileDraft): void;
   onClose(): void;
-  /** Takes the focus Edit had as the editor opened in its place. */
+  /** Takes the focus of what opened the editor. */
   takeFocus: RefCallback<HTMLElement>;
   /** What sits at the end of the form's actions, after Save and Cancel, such as a regional manager's Delete. */
   trailing: ReactNode;

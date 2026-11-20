@@ -232,7 +232,7 @@ verifier: the kind is shown to the user on every issue.
   is In progress again until its next done handoff, which is Done again.
 - **Its report is a file in your memory.** The plugin saves it to
   `reports/<issue id>.md`, and `crew_catch_up` names the file. The user can
-  read and edit it under Memory on your page in the panel; any agent reads it with
+  read and edit it under Memory in your Board tab; any agent reads it with
   `crew_memory_read`. A later report on the same issue replaces the file only
   while it is as the plugin saved it. If someone edited it, it is kept as it
   is, and the new report goes beside it as `reports/<issue id>-2.md` (then

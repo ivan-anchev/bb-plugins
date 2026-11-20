@@ -1,4 +1,4 @@
-// The profile's fields, on the New page and in an edit on the board: the avatar beside the name and
+// The profile's fields, on the New page and in an edit of the profile: the avatar beside the name and
 // description, and the icons to picture it with below them.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { useId, type Ref } from "react";

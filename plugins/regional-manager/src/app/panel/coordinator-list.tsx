@@ -1,6 +1,7 @@
 // The panel's root page: the regional managers not started yet, then every other one under its
-// project, newest first, each by its avatar, its name and its description. A row opens its page.
-import { experimental_Icon as Icon, experimental_useRpcQuery, experimental_useSidebarThreads as useSidebarThreads } from "@get-bb/plugin-sdk/app";
+// project, newest first, each by its avatar, its name and its description. A row opens the manager's
+// thread once started, its page until then.
+import { experimental_Icon as Icon, experimental_useRpcQuery, experimental_useSidebarThreads as useSidebarThreads, useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { ReactNode, Ref } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
 import type { Avatar } from "../../model/profile.ts";
@@ -9,11 +10,10 @@ import { AvatarTile } from "../profile/avatar.tsx";
 import { ReadFailure } from "../ui/read-failure.tsx";
 import { listView } from "./coordinator-groups.ts";
 
-type Open = { onOpen(id: CoordinatorId): void };
-
-export function CoordinatorList({ ref, onOpen }: { ref: Ref<HTMLDivElement> } & Open) {
+export function CoordinatorList({ ref, onOpen }: { ref: Ref<HTMLDivElement>; onOpen(id: CoordinatorId): void }) {
   const read = experimental_useRpcQuery({ contract, method: "coordinators", input: {} });
   const live = useSidebarThreads();
+  const navigate = useBbNavigate();
   const view = listView(read, live);
 
   return (
@@ -28,14 +28,14 @@ export function CoordinatorList({ ref, onOpen }: { ref: Ref<HTMLDivElement> } & 
             {view.notStarted.length > 0 && (
               <Section id="not-started" title="Not started">
                 {view.notStarted.map(({ id, name, description, avatar }) => (
-                  <Row key={id} id={id} name={name} description={description} avatar={avatar} onOpen={onOpen} />
+                  <Row key={id} name={name} description={description} avatar={avatar} onOpen={() => onOpen(id)} />
                 ))}
               </Section>
             )}
             {view.groups.map((group) => (
               <Section key={group.project.id} id={`project-${group.project.id}`} title={group.project.name}>
                 {group.rows.map(({ coordinator, thread }) => (
-                  <Row key={coordinator.id} id={coordinator.id} name={thread.displayTitle} description={coordinator.description} avatar={coordinator.avatar} onOpen={onOpen} />
+                  <Row key={coordinator.id} name={thread.displayTitle} description={coordinator.description} avatar={coordinator.avatar} onOpen={() => navigate.toThread(thread.id)} />
                 ))}
               </Section>
             ))}
@@ -57,15 +57,15 @@ function Section({ id, title, children }: { id: string; title: string; children:
   );
 }
 
-type RowProps = { id: CoordinatorId; name: string; description: string | null; avatar: Avatar } & Open;
+type RowProps = { name: string; description: string | null; avatar: Avatar; onOpen(): void };
 
-/** A regional manager by its avatar, its name and its description below it; it opens the manager's page. */
-function Row({ id, name, description, avatar, onOpen }: RowProps) {
+/** A regional manager by its avatar, its name and its description below it. */
+function Row({ name, description, avatar, onOpen }: RowProps) {
   return (
     <li>
       <button
         type="button"
-        onClick={() => onOpen(id)}
+        onClick={onOpen}
         className="flex min-h-11 w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-state-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
         <AvatarTile avatar={avatar} size="sm" />
