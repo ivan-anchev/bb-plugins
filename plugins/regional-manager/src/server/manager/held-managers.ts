@@ -35,8 +35,8 @@ type HeldBb = {
 
 type Deps = { store: Pick<Store, "upgradeCandidates" | "goalGiven" | "unhold">; memory: MemoryRoot; onChange(): void };
 
-/** What 0.3.0 spawned every regional manager with, exactly. */
-const PLACEHOLDER = "Type this regional manager's goal below to start it.";
+/** What 0.3.0 spawned every regional manager with, exactly: the upgrade recognises it by this text alone. */
+export const PLACEHOLDER = "Type this regional manager's goal below to start it.";
 /** The name of one whose thread has no title, or that never had a thread. */
 const UNTITLED = "Regional manager";
 const GOAL_FILE = memoryFileSchema.parse("GOAL.md");

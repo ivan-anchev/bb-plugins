@@ -21,7 +21,7 @@ import { boardHandlers } from "./board/board-rpc.ts";
 import { createBoard } from "./board/board.ts";
 import type { CatalogBb } from "./execution/catalog.ts";
 import { createInbox } from "./inbox/inbox.ts";
-import { upgradeFrom030 } from "./manager/held-managers.ts";
+import { PLACEHOLDER, upgradeFrom030 } from "./manager/held-managers.ts";
 import { watchOwnTree } from "./inbox/own-tree-watch.ts";
 import { watchAgentThreads } from "./inbox/thread-watch.ts";
 import { registerIssueTools } from "./issues/issue-tools.ts";
@@ -118,9 +118,6 @@ type FakeThread = HolderThread & {
   /** Background commands its turns left running. As on bb 0.49 (seen live), a stop ends them, idle thread or not. */
   background: number;
 };
-
-/** What 0.3.0 spawned every regional manager with, held in its queue until the user sent the goal. */
-export const PLACEHOLDER_030 = "Type this regional manager's goal below to start it.";
 
 /** What bb runs a spawn on when it names no provider or model that bb counts. */
 export const BB_DEFAULT = { providerId: "codex", model: "gpt-default" };
@@ -917,7 +914,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     queued: (threadId: string) => queue.filter((entry) => entry.threadId === threadId).map((entry) => entry.id),
     /** The placeholder 0.3.0 spawned a regional manager with, held in its thread's queue by 0.3.0's hook. */
     heldPlaceholder(threadId: string): void {
-      const text = PLACEHOLDER_030;
+      const text = PLACEHOLDER;
       queue.push({ id: `qm_${++queued}`, state: "waiting", failureReason: null, initiator: "user", senderThreadId: null, originPluginId: PLUGIN_ID, content: [{ type: "text", text, mentions: [] }], threadId, text });
     },
     /** The user queues a message for the thread from bb's composer, as while it runs. */

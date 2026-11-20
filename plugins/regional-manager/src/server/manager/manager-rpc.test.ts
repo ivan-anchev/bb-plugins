@@ -8,7 +8,8 @@ import type { Profile } from "../../model/profile.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
 import { memoryStorage } from "../memory-storage.ts";
 import { heldAs030 } from "../store/test-store.ts";
-import { harness, newThreadRequest, PLACEHOLDER_030, settled } from "../test-harness.ts";
+import { harness, newThreadRequest, settled } from "../test-harness.ts";
+import { PLACEHOLDER } from "./held-managers.ts";
 
 // A regional manager's record through the RPC the panel calls, as server.ts registers it: created
 // with its profile and no thread, started by the goal sent from its page, edited before and after,
@@ -216,7 +217,7 @@ async function as030(status: "pending" | "idle", { flagged = true } = {}) {
 test("a 0.3.0 regional manager whose only user message is the placeholder, run or held, flag set or cleared, becomes one not started yet: queue emptied, thread archived without the role; its goal then starts a new thread", async () => {
   for (const [status, flagged] of [["idle", true], ["idle", false], ["pending", true]] as const) {
     const { kit, coordinatorId, threadId: held } = await as030(status, { flagged });
-    if (status === "idle") kit.turnRequested(held, PLACEHOLDER_030);
+    if (status === "idle") kit.turnRequested(held, PLACEHOLDER);
     kit.heldPlaceholder(held);
 
     await kit.upgrade030();
@@ -233,7 +234,7 @@ test("a 0.3.0 regional manager that had a real message from the user keeps its t
   for (const kept of [null, "The goal as 0.3.0 wrote it"]) {
     const { kit, coordinatorId, threadId } = await as030("idle");
     if (kept !== null) writeFileSync(goalFile(kit, coordinatorId), kept);
-    kit.turnRequested(threadId, PLACEHOLDER_030, "plugin");
+    kit.turnRequested(threadId, PLACEHOLDER, "plugin");
     kit.turnRequested(threadId, "Tidy the repo's stale branches");
     kit.turnRequested(threadId, "And its labels");
     kit.heldPlaceholder(threadId);
