@@ -76,6 +76,21 @@ const mergeMethodSchema = z.enum(["merge", "squash", "rebase"]);
 export type MergeMethod = z.infer<typeof mergeMethodSchema>;
 export const MERGE_METHODS = mergeMethodSchema.options;
 
+/**
+ * The GitHub stack (gh stack) a PR is in. GitHub merges a stacked PR only together with every open
+ * PR below it: `merges` lists them, bottom first, ending with the PR itself, and they all land on
+ * `base`, the stack's base branch, in one step.
+ */
+const prStackSchema = z.object({ number: prNumberSchema, base: z.string(), merges: z.array(prNumberSchema) });
+export type PrStack = z.infer<typeof prStackSchema>;
+
+/**
+ * What a merge GitHub took did: merged, added to the base branch's merge queue, or, for a stack
+ * merge GitHub was still running when the server stopped waiting, still running there.
+ */
+const mergeOutcomeSchema = z.enum(["merged", "queued", "running"]);
+export type MergeOutcome = z.infer<typeof mergeOutcomeSchema>;
+
 const prDetailSchema = prSummarySchema.extend({
   /** ISO 8601: when it was opened. */
   createdAt: z.string(),
@@ -98,6 +113,8 @@ const prDetailSchema = prSummarySchema.extend({
   mergeMethods: z.array(mergeMethodSchema),
   /** GitHub found the PR's branch conflicts with its base, so it can't merge until they are resolved. */
   conflicting: z.boolean(),
+  /** The GitHub stack it is in, or null. */
+  stack: prStackSchema.nullable(),
 });
 export type PrDetail = z.infer<typeof prDetailSchema>;
 
@@ -315,9 +332,10 @@ export const prReviewsContract = defineRpcContract({
   changePrState: { input: prRefSchema.extend({ change: stateChangeSchema }), output: empty },
   /**
    * Merges the PR on GitHub by `method`, on the reader's choice, only while its head is still
-   * `headSha`, the head the page shows. Re-reads as a state change does.
+   * `headSha`, the head the page shows; a stacked PR, with every open PR below it. Re-reads as a
+   * state change does.
    */
-  mergePr: { input: prRefSchema.extend({ method: mergeMethodSchema, headSha: z.string() }), output: empty },
+  mergePr: { input: prRefSchema.extend({ method: mergeMethodSchema, headSha: z.string() }), output: z.object({ outcome: mergeOutcomeSchema }) },
   /**
    * Adds a review comment to the reader's pending review `reviewId` (the comments read's), or to
    * one GitHub starts for it when null. Nothing is published until the review is submitted.

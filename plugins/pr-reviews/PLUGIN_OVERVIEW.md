@@ -57,7 +57,8 @@ or your own.
   with a chevron that switches it to Squash and merge or Rebase and merge,
   offering only the methods the repository allows. It merges only the head the
   page shows, so new commits pushed since make GitHub refuse; a refusal shows
-  under the button.
+  under the button. A PR in a GitHub stack (`gh stack`) merges, as GitHub
+  requires, together with every open PR below it, and the button counts them.
 - **Activity**: under the description, the PR's whole GitHub activity, oldest
   first, as GitHub's Conversation tab shows it, starting from who opened it:
   conversation comments and reviews on the page, each review's threads as rows

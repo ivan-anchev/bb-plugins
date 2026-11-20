@@ -1,0 +1,145 @@
+[
+  {
+    "id": 3742829,
+    "number": 193,
+    "node_id": "PRS_kwDOVjmb-s4AORxt",
+    "url": "https://api.github.com/repos/ivan-anchev/bb-plugins/stacks/193",
+    "base": {
+      "ref": "main"
+    },
+    "open": false,
+    "created_at": "2026-11-18T10:21:29Z",
+    "pull_requests": [
+      {
+        "number": 181,
+        "state": "closed",
+        "draft": false,
+        "merged_at": "2026-11-18T11:39:42Z",
+        "head": {
+          "ref": "rm-issues/01-remove-drafts",
+          "sha": "2467564e9a2ad2aeaa5e18426a1b1406ed7da966"
+        }
+      },
+      {
+        "number": 182,
+        "state": "closed",
+        "draft": false,
+        "merged_at": "2026-11-18T15:11:26Z",
+        "head": {
+          "ref": "rm-issues/02-issues-and-agents",
+          "sha": "c6f70c8951a4f3d78f72f3dbf4a14cebd986381a"
+        }
+      },
+      {
+        "number": 183,
+        "state": "closed",
+        "draft": false,
+        "merged_at": "2026-11-18T15:37:04Z",
+        "head": {
+          "ref": "rm-issues/03-board-from-activity-sidebar-rows",
+          "sha": "6b56257d43558e28cdff65553e8f2086c336de8e"
+        }
+      },
+      {
+        "number": 184,
+        "state": "closed",
+        "draft": false,
+        "merged_at": "2026-11-18T15:37:05Z",
+        "head": {
+          "ref": "rm-issues/04-research-issues",
+          "sha": "d05a6dd3f4fe4351f392a1ffb4011496fa9223a2"
+        }
+      },
+      {
+        "number": 185,
+        "state": "closed",
+        "draft": false,
+        "merged_at": "2026-11-18T15:37:07Z",
+        "head": {
+          "ref": "rm-issues/05-handover-by-continuing",
+          "sha": "17579e94aaff236286c6f6bd78ba89600984291a"
+        }
+      },
+      {
+        "number": 186,
+        "state": "closed",
+        "draft": false,
+        "merged_at": "2026-11-18T15:37:08Z",
+        "head": {
+          "ref": "rm-issues/07-dependencies",
+          "sha": "fd5f0539cfba4fcbcc214ffc6519be7b86d682e2"
+        }
+      },
+      {
+        "number": 187,
+        "state": "closed",
+        "draft": false,
+        "merged_at": "2026-11-18T15:37:09Z",
+        "head": {
+          "ref": "rm-issues/08-sub-issues",
+          "sha": "96c2e25bf0bf9e66e70896d2a94225b467a8ef33"
+        }
+      },
+      {
+        "number": 188,
+        "state": "closed",
+        "draft": false,
+        "merged_at": "2026-11-18T15:37:10Z",
+        "head": {
+          "ref": "rm-issues/06-handover-by-moving",
+          "sha": "dbe855ece9e9ec27198f46f39f93d70f568cf66b"
+        }
+      },
+      {
+        "number": 189,
+        "state": "closed",
+        "draft": false,
+        "merged_at": "2026-11-18T15:37:12Z",
+        "head": {
+          "ref": "rm-issues/07-08-on-the-board",
+          "sha": "cfc6779d5e0091f593bb55a1c524a9f5bfc67df5"
+        }
+      },
+      {
+        "number": 190,
+        "state": "closed",
+        "draft": false,
+        "merged_at": "2026-11-18T15:37:13Z",
+        "head": {
+          "ref": "rm-issues/09-final-check",
+          "sha": "40397683253933d87085a8fa6475467f39bc7896"
+        }
+      },
+      {
+        "number": 191,
+        "state": "closed",
+        "draft": false,
+        "merged_at": "2026-11-18T15:37:15Z",
+        "head": {
+          "ref": "rm-issues/10-qa-fixes",
+          "sha": "cdfefc6b6562488a58da9589d88c0e7bd5d50bbe"
+        }
+      },
+      {
+        "number": 192,
+        "state": "closed",
+        "draft": false,
+        "merged_at": "2026-11-18T15:37:16Z",
+        "head": {
+          "ref": "rm-issues/11-agent-and-verifier-one-at-a-time",
+          "sha": "ad6687e6e435ad0c991af3a23a87f4bb23183a1e"
+        }
+      },
+      {
+        "number": 195,
+        "state": "closed",
+        "draft": false,
+        "merged_at": "2026-11-18T15:37:17Z",
+        "head": {
+          "ref": "rm-issues/12-release-0.2.0",
+          "sha": "1575134e94a66fd79a1007fe105f3eebea87d5e8"
+        }
+      }
+    ]
+  }
+]
