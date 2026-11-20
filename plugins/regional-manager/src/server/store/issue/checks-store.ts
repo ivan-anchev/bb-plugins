@@ -34,7 +34,7 @@ type Returned = Extract<Verdict, { state: "returned" }>;
 export type Settlement = Extract<Returned["settlement"], { kind: "checked" | "waiting-for-ci" }> | { kind: "sent-back" } | { kind: "maybe-sent-back" };
 
 /** A check still waiting for its verifier to start or to return. */
-export type OpenCheck = Check & { verdict: Extract<Verdict, { state: VerdictFrom["state"] }> };
+type OpenCheck = Check & { verdict: Extract<Verdict, { state: VerdictFrom["state"] }> };
 
 /** Starts a queued check running in its verifier's thread, as the verifier's ticket binds; one superseded meanwhile stays so. Call inside a transaction. */
 export function startCheck(db: Db, checkId: CheckId, verifierThreadId: string): void {

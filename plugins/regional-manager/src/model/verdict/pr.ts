@@ -46,7 +46,7 @@ export type PrStatus = ({ snapshot: null } | PrFound) & { unavailable: PrUnavail
 
 /** A change in a branch's pull request worth waking its coordinating thread for. */
 export const prChangeSchema = z.enum(["opened", "reopened", "merged", "closed", "ci-passed", "ci-failed", "approved", "changes-requested"]);
-export type PrChange = z.infer<typeof prChangeSchema>;
+type PrChange = z.infer<typeof prChangeSchema>;
 
 /** Each change in words, as the doorbell and the catch-up say it. */
 export const PR_CHANGE_WORDS: Record<PrChange, string> = {

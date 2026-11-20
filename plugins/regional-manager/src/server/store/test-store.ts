@@ -1,6 +1,7 @@
 // Tests only: a fresh store with one regional manager whose thread is bound, and the steps most
 // store tests take before what they test.
 import type Database from "better-sqlite3";
+import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { memoryStorage } from "../memory-storage.ts";
 import type { AgentId } from "../../model/agent.ts";
 import type { Issue, IssueId } from "../../model/issue/issue.ts";
@@ -18,7 +19,8 @@ export function freshStore() {
   const { db, storage } = memoryStorage();
   const store = openStore(storage);
   for (const [id, n] of [[MANAGER, 1], [OTHER_MANAGER, 2]] as const) {
-    store.insertCoordinator({ id, ticket: `manager-${n}`, projectId: "prj_1", verify: true, description: null, avatar: DEFAULT_AVATAR, createdAt: 1_000 });
+    store.insertCoordinator({ id, ticket: `manager-${n}`, name: `Manager ${n}`, description: null, avatar: DEFAULT_AVATAR, createdAt: 1_000 });
+    store.startsOn(id, "prj_1");
     store.bindTicket(`manager-${n}`, `thr_manager_${n}`);
   }
   return { db, storage, store };
@@ -61,4 +63,14 @@ export function failWrites(db: Database.Database, op: "INSERT" | "UPDATE", table
   const trigger = `fail_${op}_${table}`;
   db.exec(`CREATE TRIGGER ${trigger} BEFORE ${op} ON ${table} BEGIN SELECT RAISE(ABORT, 'forced failure'); END`);
   return () => db.exec(`DROP TRIGGER ${trigger}`);
+}
+
+/** Turns verification off for the regional manager without recording the switch, as for one that never verified. */
+export function verifyOff(storage: Pick<PluginStorage, "database">, id: CoordinatorId): void {
+  storage.database().prepare("UPDATE coordinators SET verify = 0 WHERE id = ?").run(id);
+}
+
+/** Makes the regional manager one 0.3.0 created and left waiting for its goal: its thread bound, held, and no name stored. */
+export function heldAs030(storage: Pick<PluginStorage, "database">, id: CoordinatorId): void {
+  storage.database().prepare("UPDATE coordinators SET awaiting_goal = 1, name = NULL WHERE id = ?").run(id);
 }

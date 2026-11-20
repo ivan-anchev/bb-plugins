@@ -1,7 +1,8 @@
-// The Memory editor's reads and writes: the same files and the same compare-and-swap as the
+// The board's Memory reads and writes: the same files and the same compare-and-swap as the
 // Coordinator's tools, for a coordinating thread the store knows. A save wakes the thread.
 import type { PluginRpcHandlers } from "@get-bb/plugin-sdk";
 import type { coordinatorContract } from "../../contract.ts";
+import { firstLineOf } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { Inbox } from "../inbox/inbox.ts";
 import type { Store } from "../store/store.ts";
@@ -17,9 +18,17 @@ export function memoryHandlers(store: Pick<Store, "isCoordinator">, memory: Memo
   }
 
   return {
+    // why each read whole: the list shows each file's first line, and the folder holds a few small files.
     memoryList: ({ coordinatorId }) => {
       const files = of(coordinatorId);
-      return { dir: files.dir, files: files.list() };
+      return {
+        files: files.list().flatMap((file) => {
+          const text = files.read(file).text;
+          const modifiedAt = files.modifiedAt(file);
+          // why skipped: a file deleted since the folder was listed.
+          return text === null || modifiedAt === null ? [] : [{ file, firstLine: firstLineOf(text.content), modifiedAt }];
+        }),
+      };
     },
     memoryRead: ({ coordinatorId, file }) => of(coordinatorId).read(file),
     memoryWrite: ({ coordinatorId, file, content, baseVersion }) => {

@@ -132,6 +132,12 @@ export const MIGRATIONS: readonly string[] = [
   // (goal.ts): 1 from its start until that message is taken as its goal. One started before it
   // was given its goal as it started.
   `ALTER TABLE coordinators ADD COLUMN awaiting_goal INTEGER NOT NULL DEFAULT 0`,
+
+  // A regional manager's name until it starts, the title its thread is spawned with; from then on its
+  // thread's title is its name. A regional manager is created with no thread, and its project is
+  // written as it starts: until then project_id is '' (the column is NOT NULL since the first release).
+  // awaiting_goal is read no more but by the upgrade of a 0.3.0 regional manager still waiting for it (held-managers.ts).
+  `ALTER TABLE coordinators ADD COLUMN name TEXT`,
 ];
 
 /** The trigger `name`: after each row `on` names, one more write of the regional manager `manager` names. */

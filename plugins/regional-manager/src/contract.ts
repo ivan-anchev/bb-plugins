@@ -17,9 +17,9 @@ import { coordinatorIdSchema, type CoordinatorId } from "./model/role.ts";
 import { shownVerdictSchema } from "./model/verdict/verdict.ts";
 
 /**
- * A regional manager: its memory is keyed by `id`, its conversation is `threadId`. `verify`:
- * whether its agents' done handoffs get a verifier from now on. Its profile without its name, which
- * is its thread's title (profile.ts).
+ * A started regional manager: its memory is keyed by `id`, its conversation is `threadId`, which
+ * works on `projectId`. `verify`: whether its agents' done handoffs get a verifier from now on. Its
+ * profile without its name, which is its thread's title (profile.ts).
  */
 export const coordinatorSchema = z.object({
   id: coordinatorIdSchema,
@@ -32,7 +32,14 @@ export const coordinatorSchema = z.object({
 });
 export type Coordinator = z.infer<typeof coordinatorSchema>;
 
-/** Every read of the list carries it; a start, a bind or a profile edit invalidates it. */
+/**
+ * A regional manager not started yet: created on the New page with its profile and no thread, which
+ * the goal sent from its page starts, titled with `name`.
+ */
+export const notStartedSchema = coordinatorSchema.pick({ id: true, description: true, avatar: true, createdAt: true }).extend({ name: profileSchema.shape.name });
+export type NotStarted = z.infer<typeof notStartedSchema>;
+
+/** Every read of the list carries it; a create, a start, a bind, a delete or a profile edit invalidates it. */
 export const COORDINATORS_TAG = "coordinators";
 
 /** Every read of one regional manager's memory carries it; any write to its files invalidates it. */
@@ -69,14 +76,13 @@ const issueRowSchema = z.object({
 export type IssueRow = z.infer<typeof issueRowSchema>;
 
 /**
- * The board: whether the regional manager still waits for its goal in its thread, whether done handoffs are verified, how many files had changed in the coordinating
+ * The board: whether done handoffs are verified, how many files had changed in the coordinating
  * thread's own working tree when the turn that warned of them ended, and when (null: none, or it
  * was clean again since), why the latest read of an issue's pull request failed (null: none did),
  * DIGEST.md and when it last changed (null: there is none), every decision put to the user in the
  * order asked, then every issue in the order filed.
  */
 const boardSchema = z.object({
-  awaitingGoal: z.boolean(),
   verify: z.boolean(),
   ownEdits: z.object({ fileCount: z.number().int().min(1), at: z.number() }).nullable(),
   prUnavailable: z.string().nullable(),
@@ -113,57 +119,58 @@ const issueDetailSchema = z.object({
 });
 export type IssueDetail = z.infer<typeof issueDetailSchema>;
 
-/**
- * Where and on what a new regional manager runs, as the New page picks it: its project, provider,
- * model, reasoning level, service tier (left out: the provider has none), permission mode and
- * environment, which go to threads.spawn as they are. why the environment checked only for its
- * type: bb validates it at the spawn, and the plugin reads nothing in it.
- */
-const managerRequestSchema = z.object({
-  projectId: z.string().min(1),
-  providerId: z.string().min(1),
-  model: z.string().min(1),
-  reasoningLevel: z.string(),
-  serviceTier: z.string().optional(),
-  permissionMode: z.enum(["accept-edits", "auto", "full"]),
-  environment: z.custom<NewThreadRequest["environment"]>((value) => z.looseObject({ type: z.string() }).safeParse(value).success, "Expected where the thread runs, as threads.spawn takes it"),
-});
-export type ManagerRequest = z.infer<typeof managerRequestSchema>;
+// why only these checked: bb validates the request at the spawn; the plugin reads its project and its text.
+const promptPartSchema = z.union([
+  z.looseObject({ type: z.literal("text"), text: z.string() }),
+  z.looseObject({ type: z.string().refine((type) => type !== "text") }),
+]);
+const newThreadRequestSchema = z.custom<NewThreadRequest>(
+  (value) => z.looseObject({ projectId: z.string().min(1), input: z.array(promptPartSchema) }).safeParse(value).success,
+  "Expected the composer's new-thread request",
+);
 
-/** What starts a regional manager: where and on what it runs, its verification switch and its profile. Its goal comes later, in its thread. */
-const coordinatorStartSchema = z.object({ request: managerRequestSchema, verify: z.boolean(), profile: profileSchema });
-export type CoordinatorStart = z.infer<typeof coordinatorStartSchema>;
+/** The text the user typed in bb's composer: every text part, in order. */
+export const typedText = (request: NewThreadRequest): string =>
+  request.input.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n\n");
 
-/** What the New page starts from: the machine running bb (null before one has joined), and bb's default provider and its default model there (null: none bb can run). */
-const newSeedSchema = z.object({
-  hostId: z.string().nullable(),
-  execution: z.object({ providerId: z.string().min(1), model: z.string().min(1), reasoningLevel: z.string() }).nullable(),
-});
-export type NewSeed = z.infer<typeof newSeedSchema>;
+/** A memory file as the board's Memory lists it: its name, its first line of text (null: none) and when it last changed, in epoch ms. */
+const memoryEntrySchema = z.object({ file: memoryFileSchema, firstLine: z.string().nullable(), modifiedAt: z.number() });
+export type MemoryEntry = z.infer<typeof memoryEntrySchema>;
 
 export const coordinatorContract = defineRpcContract({
-  /** Every regional manager whose thread exists, newest first. */
+  /** Every regional manager whose thread exists, and every one not started yet, each newest first. */
   coordinators: {
     input: z.object({}),
-    output: z.object({ coordinators: z.array(coordinatorSchema) }),
+    output: z.object({ coordinators: z.array(coordinatorSchema), notStarted: z.array(notStartedSchema) }),
     tags: () => [COORDINATORS_TAG],
   },
-  /** What the New page starts from (newSeedSchema). */
-  newSeed: {
+  /** The machine running bb, which a new thread's worktree is made on (null before one has joined). */
+  primaryHost: {
     input: z.object({}),
-    output: newSeedSchema,
+    output: z.object({ hostId: z.string().nullable() }),
+  },
+  /** Creates a regional manager with this profile and no thread: its goal, sent from its page, starts it (startCoordinator). */
+  createCoordinator: {
+    input: z.object({ profile: profileSchema }),
+    output: z.object({ coordinatorId: coordinatorIdSchema }),
   },
   /**
-   * Starts a regional manager from the New page, titled with the profile's name, its thread waiting
-   * for its goal, which the user types there. `verify`: verify its agents' done handoffs.
+   * Starts a regional manager from bb's composer on its page: spawns its thread, titled with its
+   * name, on what the composer picked, with the request's text as its first message and its GOAL.md.
+   * Idempotent: a regional manager already started answers with its thread, and spawns nothing.
    */
   startCoordinator: {
-    input: coordinatorStartSchema,
+    input: z.object({ coordinatorId: coordinatorIdSchema, request: newThreadRequestSchema }),
     output: z.object({ threadId: z.string() }),
   },
-  /** Replaces a regional manager's profile: retitles its thread with the name, and keeps the rest. */
+  /** Replaces a regional manager's profile: retitles its thread with the name once it has one, and keeps the rest. */
   setProfile: {
     input: z.object({ coordinatorId: coordinatorIdSchema, profile: profileSchema }),
+    output: z.object({}),
+  },
+  /** Deletes a regional manager not started yet. One with a thread is refused: archiving or deleting its thread in bb removes it. */
+  deleteCoordinator: {
+    input: z.object({ coordinatorId: coordinatorIdSchema }),
     output: z.object({}),
   },
   /** A regional manager's board. why the memory tag too: the board shows DIGEST.md. */
@@ -200,10 +207,10 @@ export const coordinatorContract = defineRpcContract({
     output: z.record(z.string(), needsYouSchema),
     keyTags: (key) => [boardTag(coordinatorIdSchema.parse(key))],
   },
-  /** A regional manager's memory folder on the bb server, and the files in it. */
+  /** The files in a regional manager's memory folder on the bb server, in the folder's order. */
   memoryList: {
     input: z.object({ coordinatorId: coordinatorIdSchema }),
-    output: z.object({ dir: z.string(), files: z.array(memoryFileSchema) }),
+    output: z.object({ files: z.array(memoryEntrySchema) }),
     tags: memoryTags,
   },
   /** One memory file whole, with its version (null text: it doesn't exist), at its revision. */

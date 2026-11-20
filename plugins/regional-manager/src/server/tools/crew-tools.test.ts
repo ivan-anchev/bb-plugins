@@ -7,15 +7,14 @@ import plugin from "../../../server.ts";
 import { coordinatorContract } from "../../contract.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
-import { harness, isRefusal, coordinatorStart, textOf } from "../test-harness.ts";
+import { harness, isRefusal, textOf } from "../test-harness.ts";
 
 
 const PLAN = memoryFileSchema.parse("PLAN.md");
 
 async function started() {
   const kit = harness();
-  const { threadId } = await kit.spawner.coordinator(coordinatorStart("Migrate the webhook service"));
-  kit.giveGoal(threadId, "Migrate the webhook service");
+  const { threadId } = await kit.startManager("Migrate the webhook service");
   const role = kit.store.roleOfThread(threadId);
   assert.equal(role?.kind, "coordinator");
   return { kit, threadId, coordinatorId: role.coordinatorId, dir: kit.memory.of(role.coordinatorId).dir };
@@ -24,7 +23,7 @@ async function started() {
 /** The version a catch-up shows for a file, as the agent would read it off. */
 const versionIn = (text: string, file: string): string | undefined => new RegExp(`^## ${file.replace(".", "\\.")} \\(version (\\w+)\\)$`, "m").exec(text)?.[1];
 
-test("a file written with crew_memory_write is in the next catch-up and in the Memory editor's reads", async () => {
+test("a file written with crew_memory_write is in the next catch-up and in the board Memory's reads", async () => {
   const { kit, threadId, coordinatorId } = await started();
   const before = textOf(await kit.call("crew_catch_up", {}, threadId));
 
@@ -36,7 +35,7 @@ test("a file written with crew_memory_write is in the next catch-up and in the M
   assert.match(after, /## PLAN\.md \(version \w+\)\n\n# Plan\n\n1\. Inventory the endpoints/);
   assert.match(after, /Other memory files, read each with crew_memory_read: notes\/api\.md\./);
 
-  assert.deepEqual((await kit.rpc.memoryList({ coordinatorId })).files.slice(-2), ["DIGEST.md", "notes/api.md"]);
+  assert.deepEqual((await kit.rpc.memoryList({ coordinatorId })).files.slice(-2).map(({ file, firstLine }) => [file, firstLine]), [["DIGEST.md", "Nothing to report yet."], ["notes/api.md", "API"]]);
   assert.equal((await kit.rpc.memoryRead({ coordinatorId, file: PLAN })).text?.content, plan);
   assert.deepEqual(kit.memoryWrites().slice(-2), [coordinatorId, coordinatorId], "each write refreshes the editor");
 });

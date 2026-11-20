@@ -1,4 +1,4 @@
-// One memory file in the Memory editor. A save names the version the user started from, so it never
+// One memory file being edited in the board's Memory. A save names the version the user started from, so it never
 // silently replaces a write it didn't see: when the file moved on, the user's text stays and the
 // newer version shows beside it.
 import { experimental_Icon as Icon, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
@@ -13,17 +13,19 @@ import { editorState, fileNow, isSaved, saveOf, typed, type Draft, type EditorSt
 type MemoryEditorProps = {
   coordinatorId: CoordinatorId;
   file: MemoryFile;
-  /** The user's edit of this file; kept by the page, so switching files keeps it. */
+  /** The user's edit of this file; kept by the section, so switching files keeps it. */
   edit: FileEdit;
   onDraft(draft: Draft | null): void;
-  /** Sends a save; the page runs it, so its answer lands even if this editor has gone. */
+  /** Sends a save; the section runs it, so its answer lands even if this editor has gone. */
   onSave(save: Save): void;
+  /** Drops the edit and leaves the editor. */
+  onCancel(): void;
 };
 
 const TEXT_CLASS =
   "min-h-80 w-full flex-1 resize-none rounded-md border border-border p-3 font-mono text-base leading-6 text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-[13px] md:leading-5";
 
-export function MemoryEditor({ coordinatorId, file, edit, onDraft, onSave }: MemoryEditorProps) {
+export function MemoryEditor({ coordinatorId, file, edit, onDraft, onSave, onCancel }: MemoryEditorProps) {
   const read = experimental_useRpcQuery({ contract, method: "memoryRead", input: { coordinatorId, file } });
   const textarea = useRef<HTMLTextAreaElement>(null);
   const heading = useId();
@@ -67,16 +69,19 @@ export function MemoryEditor({ coordinatorId, file, edit, onDraft, onSave }: Mem
   return (
     <section aria-labelledby={heading} onKeyDown={onKeyDown} className="flex min-w-0 flex-1 flex-col gap-3">
       <div className="flex min-h-8 flex-wrap items-center gap-x-3 gap-y-1">
-        <h2 id={heading} className="font-mono text-sm font-medium">
+        <h3 id={heading} className="font-mono text-sm font-medium">
           {file}
-        </h2>
+        </h3>
         <p aria-live="polite" className="text-xs text-muted-foreground">
           {statusOf(view.kind, { saving: edit.saving, saved: isSaved(current, edit), exists: current.text !== null })}
         </p>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
           {/* why aria-disabled: a disabled button drops focus to the page when a save ends. */}
           <Button variant="default" size="sm" aria-disabled={view.kind === "clean"} onClick={save}>
             {view.kind === "conflict" && view.newer !== null ? "Save mine over it" : "Save"}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onCancel}>
+            Cancel
           </Button>
         </div>
       </div>

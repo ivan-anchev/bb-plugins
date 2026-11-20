@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent.ts";
-import { coordinating, isRefusal, settled, startedAgent, textOf, threadIn, type FakePr } from "../test-harness.ts";
+import { coordinating, isRefusal, settled, startedAgent, textOf, type FakePr } from "../test-harness.ts";
 
 const a1 = agentIdSchema.parse("a1");
 const HEAD = "0123456789abcdef0123456789abcdef01234567";

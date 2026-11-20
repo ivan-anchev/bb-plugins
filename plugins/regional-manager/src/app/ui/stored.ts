@@ -14,7 +14,7 @@ type Stored<T> = {
 };
 
 /** The value under `key`; null when nothing is stored, or what is can't be read as one. */
-export function readStored<T>(storage: Pick<Storage, "getItem">, key: string, schema: z.ZodType<T>): T | null {
+function readStored<T>(storage: Pick<Storage, "getItem">, key: string, schema: z.ZodType<T>): T | null {
   return parsed(storage.getItem(key), schema);
 }
 

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { DISPLAY_NAME } from "../../name.ts";
-import { coordinating, coordinatorStart, harness, settled, startedAgent, textOf } from "../test-harness.ts";
+import { coordinating, harness, settled, startedAgent, textOf } from "../test-harness.ts";
 
 const REPORT = { summary: "Retries land with backoff", did: ["Added exponential backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [] };
 const DONE = { status: "done", ...REPORT, headSha: "0123456789abcdef0123456789abcdef01234567" };
@@ -206,18 +206,14 @@ test("once the plugin is disposed, nothing rings", async () => {
   assert.deepEqual(doorbells(), []);
 });
 
-test("a regional manager still waiting for its goal is rung by nothing, so its first turn is the goal's; once it has its goal, the tick rings it", async () => {
+test("a regional manager not started yet is never woken or polled: ticks send, spawn and warn of nothing for it, even with an update waiting", async () => {
   const kit = harness();
-  const { threadId } = await kit.spawner.coordinator(coordinatorStart("Webhooks"));
-  const role = kit.store.roleOfThread(threadId);
-  assert.equal(role?.kind, "coordinator");
-  await kit.rpc.setVerify({ coordinatorId: role.coordinatorId, verify: false });
-  await kit.tick();
-  assert.deepEqual(kit.sent().filter((args) => args.threadId === threadId), []);
-  assert.equal(kit.thread(threadId).status, "pending");
+  const coordinatorId = await kit.createManager("Scout");
+  // why a memory edit: it is the one update the panel can record for a regional manager before it starts, and an update is what rings one.
+  await kit.rpc.memoryWrite({ coordinatorId, file: memoryFileSchema.parse("NOTES.md"), content: "Read the cron box first.", baseVersion: null });
 
-  kit.giveGoal(threadId, "Migrate the webhook service");
-  kit.thread(threadId).status = "idle";
-  await kit.tick();
-  assert.deepEqual(kit.delivered(threadId).filter((text) => text.startsWith(`[${DISPLAY_NAME}]`)).length, 1);
+  for (let minute = 0; minute < 3; minute++) await kit.tick();
+
+  assert.deepEqual([kit.spawned(), kit.sendAttempts(), kit.warnings()], [0, [], []]);
+  assert.deepEqual(kit.store.notStarted().map(({ id }) => id), [coordinatorId]);
 });

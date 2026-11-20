@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DISPLAY_NAME } from "../../name.ts";
-import { coordinating, isRefusal, coordinatorStart, settled, textOf } from "../test-harness.ts";
+import { coordinating, isRefusal, settled, textOf } from "../test-harness.ts";
 
 const HOUR = 3_600_000;
 
@@ -74,7 +74,7 @@ test("a cancelled reminder never fires, and only its own Coordinator can cancel 
   await remind({ note: "check on i1", at: "10m", every: "1d" });
   const [first = assert.fail("no reminder")] = reminders();
 
-  const other = await kit.spawner.coordinator(coordinatorStart("Another goal", false));
+  const other = await kit.startManager("Another goal", { verify: false });
   const theirs = await kit.call("crew_remind", { cancel: "r1" }, other.threadId);
   assert.ok(isRefusal(theirs));
   assert.equal(textOf(theirs), "You have no reminder r1. crew_catch_up lists your reminders.");
@@ -150,7 +150,7 @@ test("a tick that can't check the reminders still rings the doorbells, and check
 });
 
 test("crew_remind refuses an at or every it can't read, naming the forms it accepts, and sets nothing", async () => {
-  const { kit, threadId, remind, reminders } = await idleCoordinator();
+  const { kit, threadId, reminders } = await idleCoordinator();
   const refusal = async (input: object) => {
     const result = await kit.call("crew_remind", input, threadId);
     assert.ok(isRefusal(result), `${JSON.stringify(input)} was accepted`);

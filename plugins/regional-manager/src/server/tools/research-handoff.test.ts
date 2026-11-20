@@ -174,7 +174,7 @@ test("an issue's kind changes only until an agent has started on it, even one th
 test("the report is a memory file another agent reads with crew_memory_read, and an agent started later gets none of it unless its brief names it", async () => {
   const { kit, threadId, coordinatorId, handOff } = await researching();
   await handOff(DONE);
-  assert.ok((await kit.rpc.memoryList({ coordinatorId })).files.includes(I1_REPORT));
+  assert.ok((await kit.rpc.memoryList({ coordinatorId })).files.some(({ file }) => file === I1_REPORT));
 
   await kit.call("issue_create", { ...ISSUE, title: "Card vault schema", brief: "Store saved cards. Read reports/i1.md with crew_memory_read first." }, threadId);
   const builder = threadIn(textOf(await kit.call("agent_start", { issue: "i2" }, threadId)));

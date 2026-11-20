@@ -86,14 +86,15 @@ export function openMemoryRoot(databasePath: string, revisions: Pick<Store, "mem
           return [...CORE_FILES.filter((file) => names.includes(file)), ...others];
         },
 
-        /** Writes each core file but GOAL.md that doesn't exist yet, so seeding twice changes nothing. GOAL.md waits for the goal (seedGoal). */
-        seed(): void {
+        /**
+         * Writes each core file but GOAL.md that doesn't exist yet, and GOAL.md whole: the goal exactly
+         * as the user typed it, over one a start that failed before its thread existed wrote. Run as
+         * the regional manager starts, before anyone else writes its memory.
+         */
+        seed(goal: string): void {
           for (const [file, text] of seedFiles()) write(file, text, null);
-        },
-
-        /** Writes GOAL.md, the goal exactly as the user typed it, unless it exists, so the goal is written once, whoever gives it first. */
-        seedGoal(goal: string): void {
-          write(GOAL_FILE, goal, null);
+          const current = read(GOAL_FILE).text;
+          if (current?.content !== goal) write(GOAL_FILE, goal, current?.version ?? null);
         },
       };
     },

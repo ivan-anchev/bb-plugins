@@ -23,7 +23,7 @@ type Nested = Placed & { id: IssueId; parentId: IssueId | null };
 export const laneOf = ({ status, needsYou }: Placed): Lane => (needsYou === null ? status : "needs-you");
 
 /** The rows in each lane that has any, in the board's order; rows keep their order. */
-export function byLane<Row extends { lane: Lane }>(rows: readonly Row[]): { lane: Lane; rows: Row[] }[] {
+function byLane<Row extends { lane: Lane }>(rows: readonly Row[]): { lane: Lane; rows: Row[] }[] {
   return laneSchema.options.flatMap((lane) => {
     const inLane = rows.filter((row) => row.lane === lane);
     return inLane.length === 0 ? [] : [{ lane, rows: inLane }];

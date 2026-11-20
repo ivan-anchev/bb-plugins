@@ -63,9 +63,11 @@ test("an avatar this release can't draw, as an icon a later one stored, reads as
   assert.equal(store.coordinators().length, 2);
 });
 
+const SCOUT = { name: "Scout", description: null, avatar: DEFAULT_AVATAR };
+
 test("a ticket binds once: a second bind, to the same or another thread, changes nothing", () => {
   const store = openStore(memoryStorage().storage);
-  store.insertCoordinator({ id: MANAGER, ticket: "ticket-1", projectId: "prj_1", verify: true, description: null, avatar: DEFAULT_AVATAR, createdAt: 1_000 });
+  store.insertCoordinator({ id: MANAGER, ticket: "ticket-1", ...SCOUT, createdAt: 1_000 });
   assert.deepEqual(store.bindTicket("ticket-1", "thr_a"), { kind: "coordinator", coordinatorId: MANAGER });
   assert.equal(store.bindTicket("ticket-1", "thr_a"), null);
   assert.equal(store.bindTicket("ticket-1", "thr_b"), null);
@@ -73,15 +75,20 @@ test("a ticket binds once: a second bind, to the same or another thread, changes
   assert.equal(store.roleOfThread("thr_b"), null);
 });
 
-test("a regional manager is listed once its thread is bound, and its unbound ticket configures only while unbound", () => {
+test("a regional manager is created not started, with its name and no project; it is listed as started once its thread is bound, and its unbound ticket configures only while unbound", () => {
   const store = openStore(memoryStorage().storage);
-  store.insertCoordinator({ id: MANAGER, ticket: "ticket-1", projectId: "prj_1", verify: true, description: null, avatar: DEFAULT_AVATAR, createdAt: 1_000 });
+  store.insertCoordinator({ id: MANAGER, ticket: "ticket-1", ...SCOUT, createdAt: 1_000 });
   assert.deepEqual(store.coordinators(), []);
   assert.equal(store.coordinator(MANAGER), null);
+  assert.deepEqual(store.notStarted(), [{ id: MANAGER, ...SCOUT, createdAt: 1_000 }]);
+  assert.deepEqual(store.startOf(MANAGER), { kind: "not-started", ticket: "ticket-1", name: "Scout" });
   assert.equal(store.isCoordinator(MANAGER), true);
   assert.equal(store.roleFor("thr_a", "ticket-1")?.kind, "coordinator");
 
+  store.startsOn(MANAGER, "prj_1");
   store.bindTicket("ticket-1", "thr_a");
+  assert.deepEqual(store.notStarted(), []);
+  assert.deepEqual(store.startOf(MANAGER), { kind: "started", threadId: "thr_a" });
   assert.deepEqual(store.coordinators(), [{ id: MANAGER, threadId: "thr_a", projectId: "prj_1", verify: true, description: null, avatar: DEFAULT_AVATAR, createdAt: 1_000 }]);
   assert.equal(store.roleFor("thr_b", "ticket-1"), null);
 });
@@ -202,4 +209,23 @@ test("a handover whose insert fails writes nothing: the holder still holds, and 
   assert.equal(store.roleFor("thr_x", "agent-2"), null, "no ticket minted");
   allow();
   assert.equal(store.replaceAgent(holder, handoffId, next), "a2");
+});
+
+test("a 0.3.0 regional manager waiting for its goal is held until unheld: then it is not started, named, on a new unbound ticket, and its old thread holds no role", () => {
+  const { db, storage } = memoryStorage();
+  const held = MIGRATIONS.findIndex((statement) => statement.includes("ADD COLUMN name"));
+  storage.migrate(db, MIGRATIONS.slice(0, held));
+  db.prepare("INSERT INTO roles (ticket, thread_id, role, created_at) VALUES ('ticket-1', 'thr_a', ?, 1000)").run(JSON.stringify({ kind: "coordinator", coordinatorId: MANAGER }));
+  db.prepare("INSERT INTO coordinators (id, ticket, project_id, verify, awaiting_goal, created_at) VALUES (?, 'ticket-1', 'prj_1', 1, 1, 1000)").run(MANAGER);
+  const store = openStore(storage);
+  assert.deepEqual(store.heldManagers(), [{ id: MANAGER, threadId: "thr_a" }]);
+
+  store.unhold(MANAGER, "Webhooks", "ticket-2", 2_000);
+  store.unhold(MANAGER, "Again", "ticket-3", 3_000);
+
+  assert.deepEqual([store.heldManagers(), store.coordinators()], [[], []]);
+  assert.deepEqual(store.notStarted(), [{ id: MANAGER, name: "Webhooks", description: null, avatar: DEFAULT_AVATAR, createdAt: 1_000 }]);
+  assert.deepEqual(store.startOf(MANAGER), { kind: "not-started", ticket: "ticket-2", name: "Webhooks" });
+  assert.equal(store.roleOfThread("thr_a"), null);
+  assert.equal(store.roleFor("thr_a", "ticket-1"), null);
 });

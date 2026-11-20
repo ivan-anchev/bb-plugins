@@ -7,11 +7,11 @@ import { join } from "node:path";
 import type { BbPluginApi, PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgentToolResult, PluginStorage, PluginThreadEventPayloads } from "@get-bb/plugin-sdk";
 import { createFakePluginHost, type FakePluginHarness } from "@get-bb/plugin-sdk/testing";
 import { z } from "zod";
-import type { CoordinatorStart, ManagerRequest } from "../contract.ts";
+import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import type { EnvironmentProvider } from "../model/agent.ts";
 import type { HolderThread } from "../model/issue/status.ts";
-import { DEFAULT_AVATAR } from "../model/profile.ts";
-import type { CoordinatorId } from "../model/role.ts";
+import { DEFAULT_AVATAR, type Profile } from "../model/profile.ts";
+import { coordinatorIdSchema, type CoordinatorId } from "../model/role.ts";
 import { registerAgentTools } from "./agents/agent-tools.ts";
 import { createAgents } from "./agents/agents.ts";
 import { defaultBranchReader, placementFactsReader } from "./agents/environments.ts";
@@ -19,9 +19,9 @@ import { forwardThreadEvents } from "./agents/events/thread-events.ts";
 import type { TurnsBb } from "./agents/threads.ts";
 import { boardHandlers } from "./board/board-rpc.ts";
 import { createBoard } from "./board/board.ts";
-import { watchGoals } from "./goal/goal.ts";
 import type { CatalogBb } from "./execution/catalog.ts";
 import { createInbox } from "./inbox/inbox.ts";
+import { releaseHeldManagers } from "./manager/held-managers.ts";
 import { watchOwnTree } from "./inbox/own-tree-watch.ts";
 import { watchAgentThreads } from "./inbox/thread-watch.ts";
 import { registerIssueTools } from "./issues/issue-tools.ts";
@@ -32,8 +32,9 @@ import { pluginInstance } from "./lifetime.ts";
 import { watchUnblocked } from "./issues/views/unblocked.ts";
 import { openMemoryRoot } from "./memory/memory-files.ts";
 import { memoryHandlers } from "./memory/memory-rpc.ts";
-import { profileHandlers } from "./profile/profile-rpc.ts";
+import { managerHandlers } from "./manager/manager-rpc.ts";
 import { memoryStorage } from "./memory-storage.ts";
+import { verifyOff } from "./store/test-store.ts";
 import { registerRoles } from "./roles.ts";
 import { createSpawner } from "./spawn.ts";
 import { openStore } from "./store/store.ts";
@@ -63,14 +64,11 @@ type IssuesBb = Parameters<typeof createIssues>[0]["bb"];
 type InboxBb = Parameters<typeof createInbox>[0]["bb"];
 type VerifyBb = Parameters<typeof createVerify>[0]["bb"];
 type PrWatchBb = Parameters<typeof createPrWatch>[0]["bb"];
-type ProfileBb = Parameters<typeof profileHandlers>[0]["bb"];
+type ManagerBb = Parameters<typeof managerHandlers>[0]["bb"];
+type HeldBb = Parameters<typeof releaseHeldManagers>[0];
 type SendArgs = Parameters<AgentsBb["sdk"]["threads"]["send"]>[0];
 type Delivery = Awaited<ReturnType<InboxBb["sdk"]["threads"]["send"]>>;
-type GoalBb = Parameters<typeof watchGoals>[0];
-type QueuedMessage = Awaited<ReturnType<InboxBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number] &
-  Awaited<ReturnType<AgentsBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number] &
-  Awaited<ReturnType<GoalBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number];
-type DispatchHook = Parameters<GoalBb["experimental_hooks"]["on"]>[1];
+type QueuedMessage = Awaited<ReturnType<InboxBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number] & Awaited<ReturnType<AgentsBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number];
 
 type ThreadRef = { id: string; originPluginId: string | null };
 /** A thread as bb's events carry it: the thread as it is now, which the generic thread event reads the status of. */
@@ -440,25 +438,6 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     } else kinds.sandboxes.add(environmentId);
   }
 
-  /** Provisions a new thread's environment, unless it reuses one, and starts its first turn. */
-  function dispatchFirst(thread: FakeThread): void {
-    const reused = thread.spawnedWith.environment?.type === "reuse";
-    if (!reused && provisioning.holding) provisioning.held.push(() => provision(thread));
-    else if (!reused) provision(thread);
-    if (thread.status !== "error") startTurn(thread);
-  }
-
-  /** Whether the plugin's message.dispatch hook holds the spawn's first message; if it does, the message waits in the queue. */
-  function holdsFirstMessage(threadId: string, args: SpawnArgs): boolean {
-    if (dispatchHook === null) return false;
-    const blocks = args.input ?? [{ type: "text" as const, text: args.prompt ?? "", mentions: [] }];
-    const decision = dispatchHook({ thread: { id: threadId }, initiator: "agent", senderThreadId: null, origin: "plugin", experimental_submission: args.pluginSubmission ?? null, input: { blocks }, queuedMessages: [] });
-    if (decision.action !== "wait") return false;
-    const text = blocks.map((block) => (block.type === "text" ? block.text : "")).join("");
-    queue.push({ id: `qm_${++queued}`, state: "waiting", failureReason: null, senderThreadId: null, origin: "plugin", originPluginId: PLUGIN_ID, content: blocks, threadId, text });
-    return true;
-  }
-
   const threads = {
     async spawn(args) {
       const reused = args.environment?.type === "reuse" ? args.environment.environmentId : null;
@@ -483,10 +462,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         background: 0,
       };
       fakeThreads.set(id, thread);
-      // As bb does, a first message the plugin's hook holds leaves the thread pending, with no turn, and its message queued as a row; a new worktree waits for
-      // the dispatch too. why no checkout attached here: bb attaches one at once, and nothing the plugin does before the goal reads it.
-      if (holdsFirstMessage(id, args)) thread.status = "pending";
-      else dispatchFirst(thread);
+      if (reused === null && provisioning.holding) provisioning.held.push(() => provision(thread));
+      else if (reused === null) provision(thread);
+      if (thread.status !== "error") startTurn(thread);
       if (behaviour.created) await emit("thread.created", { thread: { id, originPluginId: PLUGIN_ID } });
       if (behaviour.answer === "lost") throw new Error("socket hang up");
       return { id };
@@ -531,7 +509,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       };
       if ((args.mode === "queue-if-active" && thread.status !== "idle") || (args.mode === "auto" && thread.hasPendingInteraction)) {
         const text = textOfInput(args);
-        const entry: (typeof queue)[number] = { id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: args.senderThreadId ?? null, origin: "plugin", originPluginId: PLUGIN_ID, content: [{ type: "text", text, mentions: [] }], threadId: args.threadId, text };
+        const entry: (typeof queue)[number] = { id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: args.senderThreadId ?? null, content: [{ type: "text", text, mentions: [] }], threadId: args.threadId, text };
         queue.push(entry);
         return answer({ delivery: "queued", queuedMessage: { id: entry.id } });
       }
@@ -560,17 +538,15 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       },
     },
     // As bb does, a deleted thread's events are gone; an archived one's stay readable.
-    // As bb does for the two types the plugin reads: the latest turn started (the plugin asks for one, newest first), or every turn requested, oldest first.
     events: {
-      list: async ({ threadId, types }: { threadId: string; types?: readonly string[] }) => {
+      list: async ({ threadId }: { threadId: string }) => {
         await turnEvents.pending;
         if (turnEvents.failure !== null) throw turnEvents.failure;
         const thread = fakeThread(threadId);
         if (thread.deletedAt !== null) throw bbHttpError(404, "thread_not_found", "Thread not found");
-        if (types?.[0] === "client/turn/requested") return (turnRequests.get(threadId) ?? []).map((data, at) => ({ seq: at + 1, data }));
         const latest = thread.turns.at(-1);
         if (turnEvents.holding) await new Promise<void>((release) => turnEvents.held.push(release));
-        return latest === undefined ? [] : [{ seq: latest, data: null }];
+        return latest === undefined ? [] : [{ seq: latest }];
       },
     },
     // As bb does, a stop that ends a running turn announces the thread idle, with the interrupted turn's last answer.
@@ -597,6 +573,11 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       if (kinds.sandboxes.has(environmentId) && !lives) environmentRecords.destroyed.add(environmentId);
     },
     output: async () => ({ output: "Done: npm test passes." }),
+    // As bb does, an archived or deleted thread is still read by id.
+    async get({ threadId }: { threadId: string }) {
+      const { title, archivedAt } = fakeThread(threadId);
+      return { title, archivedAt };
+    },
     // As bb does, a deleted thread refuses a rename; an archived one takes it.
     async update({ threadId, title }: { threadId: string; title?: string | null }) {
       threadUpdates.asked.push(title ?? null);
@@ -605,7 +586,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       if (thread.deletedAt !== null) throw bbHttpError(404, "thread_not_found", "Thread not found");
       if (title !== undefined) thread.title = title;
     },
-  } satisfies SpawnBb["sdk"]["threads"] & ProfileBb["sdk"]["threads"] & AgentsBb["sdk"]["threads"] & IssuesBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] & VerifyBb["sdk"]["threads"] & PrWatchBb["sdk"]["threads"];
+  } satisfies SpawnBb["sdk"]["threads"] & ManagerBb["sdk"]["threads"] & HeldBb["sdk"]["threads"] & AgentsBb["sdk"]["threads"] & IssuesBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] & VerifyBb["sdk"]["threads"] & PrWatchBb["sdk"]["threads"];
   const agents: ToolsBb["agents"] & Parameters<typeof registerRoles>[0]["agents"] = {
     registerTool(tool) {
       tools.set(tool.name, { parameters: tool.parameters, instructions: tool.instructions ?? null, run: async (input, threadId) => tool.execute(tool.parameters.parse(input), { threadId, projectId: "prj_1", signal: new AbortController().signal }) });
@@ -683,19 +664,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         handlersOf(event).push(handler);
       },
     },
-    // As bb does, one message.dispatch handler per plugin instance: a reload registers the new instance's.
-    experimental_hooks: {
-      on(_hook: "message.dispatch", handler: DispatchHook): void {
-        dispatchHook = handler;
-      },
-    },
     agents,
   };
-
-  let dispatchHook: DispatchHook | null = null;
-  /** Each thread's turns as bb records them requested (client/turn/requested), in order: who asked, and the message. */
-  const turnRequests = new Map<string, { initiator: string; senderThreadId: string | null; input: { type: string; text?: string }[] }[]>();
-  const requestTurn = (threadId: string, initiator: string, text: string) => turnRequests.set(threadId, [...(turnRequests.get(threadId) ?? []), { initiator, senderThreadId: null, input: [{ type: "text", text }] }]);
 
   const refreshBoard = (id: CoordinatorId) => invalidated.push(`board:${id}`);
 
@@ -731,8 +701,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const verify = createVerify({ bb, store, spawner, inbox, turns });
     const finalChecks = createFinalChecks({ bb, store, views, turns, verify, defaultBranch: defaultBranchReader(bb, store), now: () => clock.now });
     registerRoles(bb, store);
-    const goals = watchGoals(bb, { store, memory, onChange: refreshBoard });
-    registerCrewTools(bb, { store, inbox, memory, goals, board, onChange: refreshBoard });
+    registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
     registerIssueTools(bb, { store, issues });
     registerAgentTools(bb, { store, agents });
     registerHandoffTool(bb, { store, verify });
@@ -740,7 +709,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard });
     watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });
-    return { spawner, inbox, verify, agents, prWatch, finalChecks, unblocked, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }), ...profileHandlers({ bb, store, onChange: refreshCoordinators }) } };
+    return { spawner, inbox, verify, agents, prWatch, finalChecks, unblocked, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }, releaseHeld: releaseHeldManagers(bb, store, refreshCoordinators) };
   }
   let plugin = wire();
 
@@ -768,28 +737,6 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     get spawner() {
       return plugin.spawner;
     },
-    /**
-     * The user types `goal` in a pending thread, as its first message: bb runs the plugin's hook on it,
-     * and dispatches it unless the hook holds it, provisioning the thread and starting its first turn.
-     * Returns the hook's decision.
-     */
-    giveGoal(threadId: string, goal: string): ReturnType<DispatchHook> {
-      if (dispatchHook === null) throw new Error("The plugin registered no message.dispatch hook");
-      const decision = dispatchHook({ thread: { id: threadId }, initiator: "user", senderThreadId: null, origin: "app", experimental_submission: null, input: { blocks: [{ type: "text", text: goal, mentions: [] }] }, queuedMessages: [] });
-      const thread = fakeThread(threadId);
-      if (decision.action !== "proceed") return decision;
-      requestTurn(threadId, "user", goal);
-      if (thread.status === "pending") dispatchFirst(thread);
-      return decision;
-    },
-    /** bb tries the thread's held messages again, as it drains its queue when a turn ends: each through the plugin's hook, staying held while it waits. */
-    async drainHeld(threadId: string): Promise<void> {
-      if (dispatchHook === null) throw new Error("The plugin registered no message.dispatch hook");
-      for (const row of queue.filter((entry) => entry.threadId === threadId && entry.state === "waiting")) {
-        dispatchHook({ thread: { id: threadId }, initiator: "agent", senderThreadId: row.senderThreadId, origin: row.origin, experimental_submission: null, input: { blocks: row.content }, queuedMessages: [row] });
-      }
-      await settled();
-    },
     /** How bb answers the next spawns; a test may change it between them. */
     spawns: behaviour,
     /** How bb answers the next sends; a test may change it between them. */
@@ -806,6 +753,23 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     get rpc() {
       return plugin.rpc;
     },
+    /** The panel creates a regional manager named `name`, which waits, not started, for its goal; its id. */
+    async createManager(name: string): Promise<CoordinatorId> {
+      return coordinatorIdSchema.parse((await plugin.rpc.createCoordinator({ profile: profileNamed(name) })).coordinatorId);
+    },
+    /**
+     * The panel creates a regional manager named `name` and sends `goal` (its name, unless given) from
+     * bb's composer on its page, as `request` (newThreadRequest's, unless given), which starts it; with
+     * `verify` false, its done handoffs go unverified.
+     */
+    async startManager(name: string, { goal = name, verify = true, request = newThreadRequest(goal) }: { goal?: string; verify?: boolean; request?: NewThreadRequest } = {}): Promise<{ coordinatorId: CoordinatorId; threadId: string }> {
+      const coordinatorId = await this.createManager(name);
+      if (!verify) verifyOff(storage, coordinatorId);
+      const { threadId } = await plugin.rpc.startCoordinator({ coordinatorId, request });
+      return { coordinatorId, threadId };
+    },
+    /** The upgrade of every 0.3.0 regional manager still waiting for its goal, as server.ts runs it at load and on every tick. */
+    releaseHeld: () => plugin.releaseHeld(),
     /** GitHub and gh as the PR watch reaches them; a test may change them between ticks. */
     github,
     /** bb's git plugin as the PR watch and the own-tree watch reach it; a test may change it between reads. */
@@ -848,6 +812,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     /** The schedule's once-a-minute pass, as server.ts runs it, at the clock's time. */
     async tick(): Promise<void> {
       const warned = (pass: string) => (error: unknown) => fakeBb.log.warn(`Could not ${pass}; the next tick tries again: ${error instanceof Error ? error.message : String(error)}`);
+      await plugin.releaseHeld();
       await plugin.agents.reconcile().catch(warned("reconcile the agents"));
       await plugin.prWatch.tick(clock.now).catch(warned("read the issues' pull requests"));
       await plugin.finalChecks.tick().catch(warned("read which final checks are due"));
@@ -938,7 +903,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     queued: (threadId: string) => queue.filter((entry) => entry.threadId === threadId).map((entry) => entry.id),
     /** The user queues a message for the thread from bb's composer, as while it runs. */
     userQueues(threadId: string, text: string): void {
-      queue.push({ id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: null, origin: "app", originPluginId: null, content: [{ type: "text", text, mentions: [] }], threadId, text });
+      queue.push({ id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: null, content: [{ type: "text", text, mentions: [] }], threadId, text });
     },
     /** bb sends a queued message and announces it; `silently`: the announcement is missed, as during a reload. */
     async dispatch(queuedMessageId: string, { silently = false } = {}): Promise<void> {
@@ -991,10 +956,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
 /** A harness with one coordinating thread started, verifying its agents' done handoffs unless `verify` is false; its thread and its id. */
 export async function coordinating({ verify = true, spawns, stops, storage, turnWaitMs }: { verify?: boolean; spawns?: SpawnBehaviour; stops?: StopBehaviour; storage?: Storage; turnWaitMs?: number } = {}) {
   const kit = harness(spawns, stops, storage, turnWaitMs);
-  const { threadId } = await kit.spawner.coordinator(coordinatorStart("Migrate the webhook service", verify));
-  kit.giveGoal(threadId, "Migrate the webhook service");
-  // why: the plugin takes its placeholder out as bb tries it again after the first turn, so it never sits beside what a test queues.
-  await kit.drainHeld(threadId);
+  const { threadId } = await kit.startManager("Migrate the webhook service", { verify });
   const role = kit.store.roleOfThread(threadId);
   assert.equal(role?.kind, "coordinator");
   return { kit, threadId, coordinatorId: role.coordinatorId };
@@ -1014,20 +976,22 @@ export const settled = (): Promise<void> => new Promise((resolve) => setTimeout(
 /** The thread a tool's answer links to. */
 export const threadIn = (text: string): string => /@thread:(\w+)/.exec(text)?.[1] ?? assert.fail(`no thread link in: ${text}`);
 
-/** What the New page submits to start a regional manager named `name`, with no description and the default icon. */
-export function coordinatorStart(name: string, verify = true): CoordinatorStart {
-  return { request: MANAGER_REQUEST, verify, profile: { name, description: null, avatar: DEFAULT_AVATAR } };
-}
+/** What the New page creates a regional manager named `name` with: no description and the default icon. */
+export const profileNamed = (name: string): Profile => ({ name, description: null, avatar: DEFAULT_AVATAR });
 
-/** What the New page asks for by default: a fresh worktree from the default branch, on claude-code opus (high), on auto. */
-export const MANAGER_REQUEST: ManagerRequest = {
-  projectId: "prj_1",
-  providerId: "claude-code",
-  model: "opus",
-  reasoningLevel: "high",
-  permissionMode: "auto",
-  environment: { type: "host", workspace: { type: "managed-worktree", baseBranch: { kind: "default" } } },
-};
+/** What bb's composer on a regional manager's page submits for this goal: a fresh worktree from the default branch, on claude-code opus (high), on auto. */
+export function newThreadRequest(goal: string): NewThreadRequest {
+  return {
+    projectId: "prj_1",
+    providerId: "claude-code",
+    model: "opus",
+    reasoningLevel: "high",
+    permissionMode: "auto",
+    executionInputSources: { permissionMode: "explicit" },
+    environment: { type: "host", workspace: { type: "managed-worktree", baseBranch: { kind: "default" } } },
+    input: [{ type: "text", text: goal, mentions: [] }],
+  };
+}
 
 /** A tool result's text, whichever form it took. */
 export const textOf = (result: PluginAgentToolResult): string => (typeof result === "string" ? result : result.content.map((part) => (part.type === "text" ? part.text : "")).join(""));

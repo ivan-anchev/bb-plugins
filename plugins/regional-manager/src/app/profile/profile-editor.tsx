@@ -1,6 +1,6 @@
-// A regional manager's profile, edited in place on its board: its fields, with Save and Cancel.
+// A regional manager's profile, edited in place on its page: its fields, with Save and Cancel.
 import { experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
-import { useCallback, useRef, useState, type KeyboardEvent, type RefCallback } from "react";
+import { useCallback, useRef, useState, type KeyboardEvent, type ReactNode, type RefCallback } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
 import type { Profile } from "../../model/profile.ts";
 import type { CoordinatorId } from "../../model/role.ts";
@@ -19,9 +19,11 @@ type ProfileEditorProps = {
   onClose(): void;
   /** Takes the focus Edit had as the editor opened in its place. */
   takeFocus: RefCallback<HTMLElement>;
+  /** What sits at the end of the form's actions, after Save and Cancel, such as a regional manager's Delete. */
+  trailing: ReactNode;
 };
 
-export function ProfileEditor({ coordinatorId, profile, draft, onChange, onClose, takeFocus }: ProfileEditorProps) {
+export function ProfileEditor({ coordinatorId, profile, draft, onChange, onClose, takeFocus, trailing }: ProfileEditorProps) {
   // Whether a save found no name: the field says so from then on, until it has one.
   const [tried, setTried] = useState(false);
   const name = useRef<HTMLInputElement | null>(null);
@@ -75,6 +77,7 @@ export function ProfileEditor({ coordinatorId, profile, draft, onChange, onClose
         <Button variant="ghost" size="sm" onClick={onClose}>
           Cancel
         </Button>
+        <span className="ml-auto">{trailing}</span>
       </div>
     </form>
   );

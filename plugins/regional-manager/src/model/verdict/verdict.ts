@@ -19,7 +19,6 @@ export const UNCHECKABLE_RULE =
 
 /** A provider and model as bb records a thread's turns on them. */
 const modelRefSchema = z.object({ providerId: z.string().min(1), model: z.string().min(1) });
-export type ModelRef = z.infer<typeof modelRefSchema>;
 
 const verifierThreadIdSchema = z.string().min(1);
 

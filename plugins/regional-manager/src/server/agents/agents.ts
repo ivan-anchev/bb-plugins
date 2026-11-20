@@ -21,7 +21,6 @@ import {
   type AgentId,
   type Base,
   type EndedHow,
-  type Handover,
   type Placement,
   type PlacementFacts,
   type Previous,
@@ -146,7 +145,7 @@ export type StopOutcome = { kind: "stopped"; archived: boolean } | { kind: "alre
  * agent's done handoff still waiting for its verifier; or nothing, as the agent ended or has no
  * thread yet, or as its issue's other threads aren't quiet (see quietIssue).
  */
-export type MessageOutcome =
+type MessageOutcome =
   | { kind: "sent" | "queued"; dropped: boolean }
   | { kind: "unbound" }
   | { kind: "already-ended"; how: EndedHow }

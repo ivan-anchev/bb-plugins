@@ -12,7 +12,7 @@ its role.
 
 - `server.ts`, `app.tsx`: composition roots, registrations only.
 - `src/contract.ts`: the rpc contract (`coordinators`, `primaryHost`,
-  `startCoordinator`, `setProfile`, `board`, `issue`, `setVerify`, `answerDecision`, `needsYou`,
+  `createCoordinator`, `startCoordinator`, `setProfile`, `deleteCoordinator`, `board`, `issue`, `setVerify`, `answerDecision`, `needsYou`,
   `memoryList`, `memoryRead`, `memoryWrite`;
   tags `coordinators`, `board:<regional manager id>` and `memory:<regional manager id>`).
 - `src/model/role.ts`: the role a thread holds (coordinator, agent or
@@ -47,16 +47,12 @@ its role.
   event, and the own-tree watch that reads the regional manager's working
   tree through `bb--git` when its turn ends; `spawn.ts` mints a ticket and
   spawns a regional manager, agent or verifier thread, and binds it on the
-  spawn answer and on `thread.created`; `goal/` the one `message.dispatch`
-  hook, which holds a new regional manager's placeholder first message until
-  the user types its goal in the thread, writes that to `GOAL.md`, and takes
-  the placeholder out after the first turn; `roles.ts` is the one `configure`
+  spawn answer and on `thread.created`; `roles.ts` is the one `configure`
   callback, with each role's tools, skills and rule text; `issues/` the
   issue tools, their texts and the one read of an issue's facts; `agents/`
   the agent tools, starting, messaging, stopping and ending agents, an
   agent's brief, and the thread events that end an agent or refresh the
-  board; `execution/` reads bb's provider catalog, what a thread runs on, and
-  what the New page starts from;
+  board; `execution/` reads bb's provider catalog and what a thread runs on;
   `tools/` the fleet-wide `crew_` tools, `agent_handoff`, and the catch-up
   texts; `verify/` the verify step (a verifier per done handoff, its brief,
   model and `issue_verdict`, and the one automatic fix round that sends a
@@ -64,18 +60,28 @@ its role.
   through `gh`; `board/` the board's read and its rpc handlers (the
   verification switch and the answers to decisions); `memory/` the memory
   files beside `data.db` (compare-and-swap writes through a temp file and a
-  rename) and the Memory editor's rpc handlers (a save there wakes the
-  regional manager); `profile/` the profile's edit, which retitles the
-  thread before it stores the rest, one edit per regional manager at a time.
-  `server.ts` runs the once-a-minute tick: agents, then
+  rename) and the board Memory's rpc handlers (a save there wakes the
+  regional manager); `manager/` a regional manager's record as the panel
+  changes it, one operation per regional manager at a time: created with no
+  thread, started by the goal from its page (its thread spawned once, however
+  often the goal is sent), its profile edited, which retitles a started one's
+  thread before it stores the rest, and deleted while it has no thread; and
+  the upgrade that turns a 0.3.0 regional manager still waiting for its goal
+  in a held thread into one not started yet, archiving that thread.
+  `server.ts` runs the once-a-minute tick: that upgrade, agents, then
   the PR watch, then the verifiers, then the inbox (due reminders, unsent
   doorbells).
-- `src/app/panel/`: the nav panel, its list, and the New page: the profile,
-  where the manager works and what it runs on (bb's own pickers), and Create. `src/app/profile/`: the avatar tile, and the profile's fields, shared by
-  the New page and the board page's in-place editor, and `useProfile`, the name
-  from bb's thread list joined with what the plugin keeps. `src/app/board/`: the Board, its thread tab and its
-  panel page; `issue/` its lanes and issue rows, `issue/detail/` an issue
-  opened in place. `src/app/memory/`: the Memory page and its editor.
+- `src/app/panel/`: the nav panel, its list (not started first, then by
+  project), the New page (the profile and Create) and its routes, and the
+  name it puts in bb's title bar. `src/app/profile/`: the avatar tile, the
+  profile's fields, shared by the New page and the manager page's in-place
+  editor, Delete for a manager not started yet, and `useManager`, a started
+  one's name from bb's thread list joined with what the plugin keeps.
+  `src/app/board/`: the Board and its thread tab, and the manager's page in
+  the panel: its board and Memory once started, bb's composer for its goal
+  until then; `issue/` its lanes and issue rows, `issue/detail/` an issue
+  opened in place. `src/app/memory/`: the board's Memory section, its editor
+  and the drafts it keeps.
 - `skills/regional-manager/`: the regional manager's playbook, selected only
   for it. `skills/agent-work/`: an agent's playbook, selected only for
   agents. `skills/verifying/`: a verifier's playbook. `skills/crew-board/`:

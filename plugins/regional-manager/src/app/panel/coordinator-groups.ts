@@ -1,6 +1,6 @@
-// The panel's list: each regional manager bb still lists, under its project.
+// The panel's list: every regional manager not started yet, then each one bb still lists, under its project.
 import type { PluginSidebarThreadsState } from "@get-bb/plugin-sdk/app";
-import type { Coordinator } from "../../contract.ts";
+import type { Coordinator, NotStarted } from "../../contract.ts";
 
 /** A row: the regional manager as bb lists it, and the plugin's record of it. */
 type CoordinatorGroup<Project, Thread> = { project: Project; rows: { coordinator: Coordinator; thread: Thread }[] };
@@ -8,23 +8,27 @@ type CoordinatorGroup<Project, Thread> = { project: Project; rows: { coordinator
 /** What the list shows below its read errors. */
 type ListView<Project, Thread> =
   | { kind: "loading" }
-  | { kind: "listed"; groups: CoordinatorGroup<Project, Thread>[] }
+  /** The regional managers not started yet, newest first, then the started ones' groups. */
+  | { kind: "listed"; notStarted: readonly NotStarted[]; groups: CoordinatorGroup<Project, Thread>[] }
   | { kind: "empty" }
   /** A read failed and left nothing to list; its error says why. */
   | { kind: "failed" };
 
+type Read = { data: { coordinators: readonly Coordinator[]; notStarted: readonly NotStarted[] } | undefined; error: Error | null; isLoading: boolean };
+
 /**
- * The list from its two reads: the plugin's coordinators and bb's live threads. It is "empty" only when
+ * The list from its two reads: the plugin's regional managers and bb's live threads. It is "empty" only when
  * both reads succeeded, so a failed read never passes for a list with nothing in it; what a failed
  * refresh kept still shows.
  */
 export function listView<Project extends { id: string }, Thread extends { id: string; projectId: string }>(
-  read: { data: { coordinators: readonly Coordinator[] } | undefined; error: Error | null; isLoading: boolean },
+  read: Read,
   live: Pick<PluginSidebarThreadsState, "status"> & { threads: readonly Thread[]; projects: readonly Project[] },
 ): ListView<Project, Thread> {
   if (read.isLoading || live.status === "loading") return { kind: "loading" };
+  const notStarted = read.data?.notStarted ?? [];
   const groups = groupByProject(read.data?.coordinators ?? [], live.threads, live.projects);
-  if (groups.length > 0) return { kind: "listed", groups };
+  if (notStarted.length > 0 || groups.length > 0) return { kind: "listed", notStarted, groups };
   return read.error === null && live.status === "ready" ? { kind: "empty" } : { kind: "failed" };
 }
 

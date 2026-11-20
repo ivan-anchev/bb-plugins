@@ -11,6 +11,7 @@ const VARIANTS = {
   ghost: "text-muted-foreground hover:bg-state-hover hover:text-foreground",
   // why: a choice among several, quieter than the one primary action; the theme's secondary button.
   secondary: "bg-secondary text-foreground hover:bg-state-active",
+  destructive: "bg-destructive text-white hover:bg-destructive/90",
 } as const;
 
 // why `sm-wrap`: a label the user must read whole, such as an option to choose, wraps on a narrow

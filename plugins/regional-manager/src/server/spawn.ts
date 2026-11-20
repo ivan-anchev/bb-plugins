@@ -4,10 +4,10 @@
 // a spawn answer that never arrives still leaves the thread its role.
 import { randomUUID } from "node:crypto";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
-import type { Coordinator, CoordinatorStart } from "../contract.ts";
+import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
+import { typedText, type Coordinator } from "../contract.ts";
 import type { Execution } from "../model/execution.ts";
-import { PLACEHOLDER, PLACEHOLDER_MARK } from "./goal/goal.ts";
-import { coordinatorIdSchema, ticketMetadataSchema, type Role } from "../model/role.ts";
+import { ticketMetadataSchema, type CoordinatorId, type Role } from "../model/role.ts";
 import type { MemoryRoot } from "./memory/memory-files.ts";
 import type { Store } from "./store/store.ts";
 
@@ -21,7 +21,7 @@ type SpawnBb = {
   events: { on(event: "thread.created", handler: (payload: { thread: { id: string; originPluginId: string | null } }) => void | Promise<void>): void };
 };
 
-type SpawnStore = Pick<Store, "insertCoordinator" | "insertVerifierTicket" | "bindTicket">;
+type SpawnStore = Pick<Store, "startsOn" | "insertVerifierTicket" | "bindTicket">;
 
 /** What a child thread is spawned with, beyond its ticket: its regional manager, its parent thread, its title, where it runs, what it runs on and its first message. */
 type ChildRequest = {
@@ -85,26 +85,16 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
 
   return {
     /**
-     * Starts a coordinating thread as the New page picked it, titled with its profile's name, its
-     * first message the placeholder the goal hook holds until the user types the goal (goal.ts).
-     * Its row, ticket and seeded memory exist before the spawn, so its first session and first tool
-     * call find them. why no executionInputSources: bb then counts every execution field as chosen,
-     * so it runs exactly what the page showed.
+     * Starts a regional manager not started yet from bb's composer on its page, on what the composer
+     * shows, under the ticket it was created with, titled with its name; the request's text is its
+     * first message and its GOAL.md. Its project and seeded memory exist before the spawn, so its first
+     * session and first tool call find them. Returns its thread; rejects as bb's spawn does. Callers
+     * run one start of a regional manager at a time (manager-rpc.ts).
      */
-    async coordinator({ request, verify, profile: { name, ...kept } }: CoordinatorStart): Promise<{ threadId: string }> {
-      const id = coordinatorIdSchema.parse(randomUUID());
-      const ticket = randomUUID();
-      store.insertCoordinator({ id, ticket, projectId: request.projectId, verify, ...kept, createdAt: Date.now() });
-      memory.of(id).seed();
-      return {
-        threadId: await spawnWith(ticket, {
-          ...request,
-          title: name,
-          input: [{ type: "text", text: PLACEHOLDER, mentions: [] }],
-          // why: the hook knows the spawn's own attempt by it, before bb answers the spawn with the thread.
-          pluginSubmission: { pluginId: bb.pluginId, data: PLACEHOLDER_MARK },
-        }),
-      };
+    async coordinator(id: CoordinatorId, { ticket, name }: { ticket: string; name: string }, request: NewThreadRequest): Promise<string> {
+      store.startsOn(id, request.projectId);
+      memory.of(id).seed(typedText(request));
+      return spawnWith(ticket, { ...picked(request), title: name });
     },
 
     /**
@@ -129,4 +119,14 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
       return spawnChild(ticket, request, { visibility: "hidden" });
     },
   };
+}
+
+/**
+ * The request with every execution field counted as chosen, so bb runs exactly what the user saw.
+ * why without `executionInputSources`: bb counts every field of a spawn that has none. With one, bb
+ * drops each field it leaves unmarked, and bb's composer leaves a field unmarked until the user
+ * touches it; a dropped permission mode becomes the parent's.
+ */
+function picked<T extends { executionInputSources?: unknown }>({ executionInputSources: _, ...request }: T): Omit<T, "executionInputSources"> {
+  return request;
 }
