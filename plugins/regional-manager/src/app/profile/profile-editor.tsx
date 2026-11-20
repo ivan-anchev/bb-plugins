@@ -18,15 +18,13 @@ type ProfileEditorProps = {
   draft: ProfileDraft;
   onChange(next: ProfileDraft): void;
   onClose(): void;
-  /** What Esc does, when given; without it, Esc closes an edit nothing was changed in, and never one with changes. */
-  onEscape?(): void;
   /** Takes the focus of what opened the editor. */
   takeFocus: RefCallback<HTMLElement>;
   /** What sits at the end of the form's actions, after Save and Cancel, such as a regional manager's Delete. */
   trailing: ReactNode;
 };
 
-export function ProfileEditor({ coordinatorId, profile, draft, onChange, onClose, onEscape, takeFocus, trailing }: ProfileEditorProps) {
+export function ProfileEditor({ coordinatorId, profile, draft, onChange, onClose, takeFocus, trailing }: ProfileEditorProps) {
   // Whether a save found no name: the field says so from then on, until it has one.
   const [tried, setTried] = useState(false);
   const name = useRef<HTMLInputElement | null>(null);
@@ -54,9 +52,7 @@ export function ProfileEditor({ coordinatorId, profile, draft, onChange, onClose
 
   // why only when nothing changed: Esc must never throw away what the user typed; Cancel does that.
   function onKeyDown(event: KeyboardEvent) {
-    if (event.key !== "Escape") return;
-    if (onEscape !== undefined) onEscape();
-    else if (JSON.stringify(draft) === JSON.stringify(draftOf(profile))) onClose();
+    if (event.key === "Escape" && JSON.stringify(draft) === JSON.stringify(draftOf(profile))) onClose();
   }
 
   return (

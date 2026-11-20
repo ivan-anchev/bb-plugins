@@ -11,7 +11,7 @@ import { PROJECT, sidebarThread } from "../test-sidebar.ts";
 
 // The context row of a regional manager's thread names it: its icon and its name, never its
 // description. Pressing them opens its profile's editor below the row, as bb toggles a segment's
-// details; Save, Cancel and Esc close it, and the focus goes back to them.
+// details; Save and Cancel close it, and the focus goes back to them.
 
 const { managerSegment } = await import("./manager-segment.tsx");
 
@@ -82,7 +82,7 @@ test("pressing the icon and name opens the profile's editor on the name, and Sav
   await waitFor(() => assert.ok(view.container.querySelector('[data-icon="Brain"]'), "the new icon"));
 });
 
-test("Esc closes the edit, changed or not, with the focus back on the toggle, and keeps what was typed; Cancel drops it", async () => {
+test("Esc closes an edit nothing changed in, with the focus back on the toggle; Cancel drops one that has changes", async () => {
   const { view, saves } = mount("thr_1");
   const toggle = await view.findByRole("button", { name: "Webhooks, edit profile" });
   toggle.focus();
@@ -92,17 +92,10 @@ test("Esc closes the edit, changed or not, with the focus back on the toggle, an
   assert.ok(document.activeElement === toggle);
 
   fireEvent.click(toggle);
-  const name = view.getByRole("textbox", { name: "Name" });
-  fireEvent.change(name, { target: { value: "After" } });
-  fireEvent.keyDown(name, { key: "Escape" });
-  assert.equal(view.queryByRole("form", { name: "Edit profile" }), null, "a changed edit closes too");
-  assert.equal(toggle.getAttribute("aria-expanded"), "false");
-  assert.ok(document.activeElement === toggle, "the focus goes back to the toggle");
-
-  fireEvent.click(toggle);
-  const kept = view.getByRole("textbox", { name: "Name" });
-  assert.ok(kept instanceof HTMLInputElement);
-  assert.equal(kept.value, "After", "what was typed comes back");
+  const description = view.getByRole("textbox", { name: "Description" });
+  fireEvent.change(description, { target: { value: "Half typed" } });
+  fireEvent.keyDown(description, { key: "Escape" });
+  assert.ok(view.getByRole("form", { name: "Edit profile" }), "a changed edit stays open");
   view.getByRole("button", { name: "Cancel" }).focus();
   fireEvent.click(view.getByRole("button", { name: "Cancel" }));
 

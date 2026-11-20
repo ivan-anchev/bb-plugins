@@ -72,9 +72,8 @@ optional **description**, up to 500, and an **icon**, one of 24 of bb's own
   name, description and icons in place; after it, pressing the manager's icon
   and name above its thread's composer opens them below that row. **Save**
   keeps them, and **Cancel** drops the edit; both close it, and the focus
-  goes back to what opened it. Above the composer, Esc closes the edit too
-  and keeps what you typed for the next open; on the page, Esc closes an edit
-  only while nothing in it changed. An open edit, and what you typed in it, survive bb redrawing the
+  goes back to what opened it. Esc closes an edit only while nothing in it
+  changed. An open edit, and what you typed in it, survive bb redrawing the
   panel and a reload. A save of a started one renames the thread first, so
   one bb refuses changes nothing. bb's title bar names the manager whose page
   is open.
