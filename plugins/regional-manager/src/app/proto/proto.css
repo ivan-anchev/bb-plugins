@@ -1,0 +1,277 @@
+/* PROTOTYPE (i7), throwaway. The picker is emil-prototype's PICKER.md, verbatim; the rmp- rows copy
+   Activity Sidebar's (plugins/activity-sidebar/app.css) on bb's tokens, since plugins can't import
+   each other. */
+
+/* --- The picker (PICKER.md, verbatim) --------------------------------------------------------- */
+.proto-picker {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(10, 10, 10, 0.82);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  backdrop-filter: blur(12px) saturate(1.4);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+    0 8px 24px rgba(0, 0, 0, 0.24),
+    0 2px 6px rgba(0, 0, 0, 0.12);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.proto-picker-highlight {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  will-change: transform;
+}
+.proto-picker[data-ready] .proto-picker-highlight {
+  transition:
+    transform 250ms cubic-bezier(0.23, 1, 0.32, 1),
+    width 250ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .proto-picker[data-ready] .proto-picker-highlight { transition: none; }
+}
+.proto-picker-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  font: inherit;
+  cursor: pointer;
+  transition: color 150ms ease-out;
+}
+.proto-picker-item:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+.proto-picker-item:active {
+  transform: scale(0.97);
+}
+.proto-picker-item:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.4);
+  outline-offset: 2px;
+}
+.proto-picker-item[data-active] {
+  color: #fff;
+}
+.proto-picker-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: rgba(255, 255, 255, 0.12);
+}
+.proto-picker[data-position="top"] {
+  bottom: auto;
+  top: 24px;
+}
+
+/* --- Activity Sidebar's row, for the list variants (app.css .as-row and friends) --------------- */
+.rmp-list {
+  font-size: 13px;
+  line-height: 18px;
+}
+.rmp-section {
+  display: flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 500;
+  color: var(--subtle-foreground);
+}
+.rmp-rowbox {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.rmp-row {
+  all: unset;
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  height: 46px;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.rmp-row[data-compact] {
+  height: 30px;
+  align-items: center;
+}
+@media (hover: hover) {
+  .rmp-rowbox:hover .rmp-row {
+    background: var(--state-hover);
+  }
+}
+.rmp-row:active {
+  background: var(--state-active);
+}
+.rmp-row:focus-visible {
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+.rmp-slot {
+  flex: 0 0 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+}
+.rmp-mark {
+  display: flex;
+  width: 14px;
+  height: 14px;
+  color: var(--muted-foreground);
+}
+.rmp-mark [data-icon-root] {
+  width: 14px;
+  height: 14px;
+}
+.rmp-words {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.rmp-line {
+  flex: 0 0 30px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 8px;
+}
+.rmp-lead {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rmp-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--foreground);
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent);
+}
+.rmp-row[data-quiet] .rmp-title {
+  color: var(--muted-foreground);
+}
+.rmp-detail {
+  display: flex;
+  align-items: center;
+  height: 14px;
+  margin-top: -7px;
+  padding-right: 8px;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--subtle-foreground);
+  font-size: 11px;
+  line-height: 14px;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent);
+}
+.rmp-corner {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 16px;
+  height: 16px;
+}
+.rmp-hint {
+  color: var(--subtle-foreground);
+  font-size: 11px;
+  line-height: 14px;
+  white-space: nowrap;
+}
+.rmp-tile {
+  flex: 0 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--rmp-tile-bg);
+  color: var(--rmp-tile-ink);
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 600;
+}
+.rmp-tile[data-hue="violet"] { --rmp-tile-bg: #9579ee; --rmp-tile-ink: #f7f6fe; }
+.rmp-tile[data-hue="emerald"] { --rmp-tile-bg: #27ac7a; --rmp-tile-ink: #effaf4; }
+.rmp-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--subtle-foreground);
+}
+
+/* --- bb's dialog surface (Activity Sidebar's .as-dialog), on a native <dialog> ----------------- */
+.rmp-dialog {
+  width: calc(100% - 32px);
+  max-width: 440px;
+  margin: auto;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: var(--shadow-sm);
+  font-family: var(--font-sans);
+}
+.rmp-dialog::backdrop {
+  background: rgb(0 0 0 / 0.4);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .rmp-dialog[open] {
+    animation: rmp-dialog-in 180ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+}
+@keyframes rmp-dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+/* A title-sized field with no box, for the Title and Thread variants: the page is the field. why a
+   layer: Tailwind's utilities are layered, so an unlayered reset would beat their type sizes. */
+@layer components {
+  .rmp-bare {
+    all: unset;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .rmp-bare::placeholder {
+    color: var(--subtle-foreground);
+  }
+}

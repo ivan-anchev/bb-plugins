@@ -10,6 +10,9 @@ import { useFocusHandOff } from "../ui/focus-hand-off.ts";
 import { CoordinatorList } from "./coordinator-list.tsx";
 import { NewCoordinator } from "./new-coordinator.tsx";
 import { coordinatorSubPath, NEW_SUBPATH, PANEL_PATH, pageOf } from "./routes.ts";
+// PROTOTYPE (i7) mount: the create-first picker. Revert this block and delete src/app/proto/.
+import { PROTO_PREFIX, ProtoPage } from "../proto/proto-page.tsx";
+// END PROTOTYPE (i7) mount
 
 export function CoordinatorPanel({ subPath }: PluginNavPanelProps) {
   const { openList, openBoard, openMemory } = usePanelNavigation();
@@ -21,6 +24,9 @@ export function CoordinatorPanel({ subPath }: PluginNavPanelProps) {
     return focus.from(root);
   }, [focus]);
 
+  // PROTOTYPE (i7) mount
+  if (subPath.split("/")[0] === PROTO_PREFIX) return <ProtoPage subPath={subPath} />;
+  // END PROTOTYPE (i7) mount
   const page = pageOf(subPath);
   switch (page.kind) {
     case "new":
