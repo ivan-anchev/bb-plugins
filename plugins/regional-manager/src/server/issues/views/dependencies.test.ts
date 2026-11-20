@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
-import { coordinating, HEAD, isRefusal, ISSUE, coordinatorStart, settled, textOf, threadIn, type FakePr } from "../../test-harness.ts";
+import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn, type FakePr } from "../../test-harness.ts";
 
 const RESEARCH = { kind: "research", title: "Pick a card vault", description: "Which vault fits our PCI scope.", brief: "Compare Vault and KMS.", doneCriteria: [] };
 const REPORT = "## Recommendation\n\nVault: it keeps card data inside our PCI scope.";
@@ -456,8 +456,7 @@ test("a regional manager whose reads keep being overtaken holds no other: the ti
   await busy.text("issue_create", ISSUE);
   await busy.text("agent_start", { issue: "i1" });
   await busy.text("issue_create", { ...ISSUE, title: "Dead letters", dependsOn: ["i1"] });
-  const other = (await kit.spawner.coordinator(coordinatorStart("Ship the billing export"))).threadId;
-  kit.giveGoal(other, "Ship the billing export");
+  const other = (await kit.startManager("Ship the billing export")).threadId;
   const call = async (tool: string, input: object) => textOf(await kit.call(tool, input, other));
   await call("issue_create", ISSUE);
   const builder = threadIn(await call("agent_start", { issue: "i1" }));

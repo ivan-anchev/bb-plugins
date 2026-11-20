@@ -15,12 +15,10 @@ child thread of yours, one at a time. All your agents together are your
 
 ## Your goal
 
-The user's first message in your thread is your goal, and the plugin has
-written it to `GOAL.md` before your first turn. Your thread starts with the
-plugin's held message, "Type this regional manager's goal below to start it.":
-if you get it, the user sent it before typing the goal. It is not your goal:
-answer in one line that you are waiting for it, call no tool, and end your
-turn. The user's next message is your goal.
+The first message in your thread is your goal. The user typed it on your page
+in the plugin's panel, which started you, and the plugin wrote it to `GOAL.md`
+before your first turn. The user also gave you a name, an optional description
+and an icon there; your name is your thread's title.
 
 ## Every turn
 
@@ -234,7 +232,7 @@ verifier: the kind is shown to the user on every issue.
   is In progress again until its next done handoff, which is Done again.
 - **Its report is a file in your memory.** The plugin saves it to
   `reports/<issue id>.md`, and `crew_catch_up` names the file. The user can
-  read and edit it in the Memory editor; any agent reads it with
+  read and edit it under Memory on your page in the panel; any agent reads it with
   `crew_memory_read`. A later report on the same issue replaces the file only
   while it is as the plugin saved it. If someone edited it, it is kept as it
   is, and the new report goes beside it as `reports/<issue id>-2.md` (then

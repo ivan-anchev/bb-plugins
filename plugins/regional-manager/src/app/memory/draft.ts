@@ -1,7 +1,7 @@
 // What the Memory editor shows for one file: the file as last known, or the user's draft over it.
 // Only the user's edit is state; everything else follows the current read, so a write by the
 // regional manager shows at once in a file the user isn't editing. The draft and the save live apart:
-// the draft in the browser, so a remount or a reload keeps it, and the save with the page, whose
+// the draft in the browser, so a remount or a reload keeps it, and the save with the section, whose
 // write it waits for.
 import { z } from "zod";
 import { memoryFileSchema, memoryVersionSchema, type MemoryFile, type MemorySnapshot, type MemoryText, type MemoryVersion, type WriteOutcome } from "../../model/memory-file.ts";
@@ -24,7 +24,7 @@ export function withDraft(drafts: Drafts | null, file: MemoryFile, draft: Draft 
   return Object.values(next).some((kept) => kept !== undefined) ? next : null;
 }
 
-/** One file's save, kept by the Memory page, so it settles the file it was made for even after its editor has gone. */
+/** One file's save, kept by the board's Memory, so it settles the file it was made for even after its editor has gone. */
 export type SaveState = {
   /** A save is out. The editor takes no typing until it settles. */
   saving: boolean;

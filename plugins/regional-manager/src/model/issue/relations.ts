@@ -43,7 +43,7 @@ export function newlyReady(before: readonly Viewed[], after: readonly Viewed[]):
 }
 
 /** An issue unblocked: `by`, the last of its dependencies still open, closed by its work (a merge, a report), and stands `closedAs`. */
-export type Unblocking = { issueId: IssueId; by: IssueId; closedAs: ClosedStatus };
+type Unblocking = { issueId: IssueId; by: IssueId; closedAs: ClosedStatus };
 
 /**
  * The closes by work (a handoff, a merge) the regional manager knows an issue closed by, as stored

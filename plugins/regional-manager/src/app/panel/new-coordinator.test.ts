@@ -3,37 +3,37 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent } from "@testing-library/react";
-import { coordinatorContract as contract, type CoordinatorStart } from "../../contract.ts";
-import { PROJECT } from "../test-sidebar.ts";
+import { coordinatorContract as contract } from "../../contract.ts";
+import type { Profile } from "../../model/profile.ts";
+import type { CoordinatorId } from "../../model/role.ts";
 
-// The New page as bb mounts it: the profile's fields, where the regional manager works and what it
-// runs on, with bb's own pickers, and Create, which starts it through startCoordinator and opens its
-// thread. It has no prompt: the goal is typed in the thread.
+// The New page as bb mounts it: the profile's fields under its heading, and Create, which saves the
+// regional manager through createCoordinator, with no thread, and opens its page.
 
 const { NewCoordinator } = await import("./new-coordinator.tsx");
+
+const CREATED = "6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10";
 
 afterEach(() => {
   cleanup();
   localStorage.clear();
 });
 
-const PERSONAL = { ...PROJECT, id: "prj_personal", name: "Personal", isPersonal: true };
-const CRON = { ...PROJECT, id: "prj_2", name: "Cron" };
-
-/** The New page over a plugin that records every start it is asked for, and the threads bb opens. */
+/** The New page over a plugin that records every profile it is asked to create, and the pages it opens. */
 function mount() {
-  const starts: CoordinatorStart[] = [];
+  const creates: Profile[] = [];
+  const opened: CoordinatorId[] = [];
   const rpc = {
-    newSeed: () => ({ hostId: "host_1", execution: { providerId: "claude-code", model: "opus", reasoningLevel: "high" } }),
-    startCoordinator: (input: unknown) => {
-      starts.push(contract.startCoordinator.input.parse(input));
-      return { threadId: "thr_1" };
+    createCoordinator: (input: unknown) => {
+      creates.push(contract.createCoordinator.input.parse(input).profile);
+      return { coordinatorId: CREATED };
     },
   };
-  const view = renderSlot({ component: NewCoordinator }, { ref: null, onBack: () => {} }, { rpc, sidebarThreads: { status: "ready", threads: [], projects: [PERSONAL, PROJECT, CRON] } });
+  const view = renderSlot({ component: NewCoordinator }, { ref: null, onBack: () => {}, onCreated: (id: CoordinatorId) => void opened.push(id) }, { rpc });
   return {
     view,
-    starts,
+    creates,
+    opened,
     async named(name: string) {
       fireEvent.change(await view.findByRole("textbox", { name: "Name" }), { target: { value: name } });
     },
@@ -43,19 +43,19 @@ function mount() {
   };
 }
 
-test("the page has no prompt: its only text fields are the profile's", async () => {
+test("the page is the profile's fields under its heading, and Create: no prompt, no place, no pickers", async () => {
   const page = mount();
   await page.view.findByRole("button", { name: "Create" });
 
+  assert.equal(page.view.getByRole("heading", { level: 1 }).textContent, "New regional manager");
   assert.deepEqual(
     page.view.getAllByRole("textbox").map((field) => field.getAttribute("aria-label")),
-    // why the rest: the stand-ins the SDK's test app draws for bb's branch and model pickers.
-    ["Name", "Description", "From:", "Provider ID", "Model", "Reasoning level"],
+    ["Name", "Description"],
   );
-  assert.equal(page.view.queryByTestId("bb-new-thread-composer-input"), null);
+  assert.deepEqual([page.view.queryByTestId("bb-new-thread-composer"), page.view.queryByRole("combobox"), page.view.queryByRole("switch")], [null, null, null]);
 });
 
-test("a create with no name is refused: the name field says so and takes the focus, and nothing starts", async () => {
+test("a create with no name is refused: the name field says so and takes the focus, and nothing is created", async () => {
   const page = mount();
   await page.named("   ");
 
@@ -65,10 +65,10 @@ test("a create with no name is refused: the name field says so and takes the foc
   assert.equal(page.view.getByRole("alert").textContent, "Give it a name.");
   assert.equal(name.getAttribute("aria-invalid"), "true");
   assert.ok(document.activeElement === name, "the name field has the focus");
-  assert.deepEqual(page.starts, []);
+  assert.deepEqual(page.creates, []);
 });
 
-test("Create starts it in a fresh worktree of the first project, on bb's default execution and auto, sends the profile as typed, opens its thread and forgets the fields", async () => {
+test("Create sends the profile as typed, opens the new regional manager's page, starts no thread and forgets the fields", async () => {
   const page = mount();
   await page.named("  Webhooks ");
   fireEvent.change(page.view.getByRole("textbox", { name: "Description" }), { target: { value: " " } });
@@ -76,78 +76,19 @@ test("Create starts it in a fresh worktree of the first project, on bb's default
 
   await page.create();
 
-  assert.deepEqual(page.starts, [
-    {
-      request: {
-        projectId: "prj_1",
-        providerId: "claude-code",
-        model: "opus",
-        reasoningLevel: "high",
-        permissionMode: "auto",
-        environment: { type: "host", hostId: "host_1", workspace: { type: "managed-worktree", baseBranch: { kind: "default" } } },
-      },
-      verify: true,
-      profile: { name: "Webhooks", description: null, avatar: { kind: "icon", icon: "Zap" } },
-    },
-  ]);
-  assert.deepEqual(page.view.navigateCalls, [{ method: "toThread", threadId: "thr_1" }]);
+  assert.deepEqual(page.creates, [{ name: "Webhooks", description: null, avatar: { kind: "icon", icon: "Zap" } }]);
+  assert.deepEqual(page.opened, [CREATED]);
+  assert.deepEqual(page.view.navigateCalls, []);
   assert.equal(localStorage.getItem("coordinator-new-profile"), null);
 });
 
-test("what the user picks is what starts: the project, the base branch, the model, the permission mode and verification", async () => {
-  const page = mount();
-  await page.named("Cron");
-  fireEvent.change(page.view.getByRole("combobox", { name: "Project" }), { target: { value: "prj_2" } });
-  fireEvent.change(page.view.getByRole("textbox", { name: "From:" }), { target: { value: "release/2" } });
-  fireEvent.change(page.view.getByRole("textbox", { name: "Model" }), { target: { value: "sonnet" } });
-  fireEvent.change(page.view.getByRole("combobox", { name: "Service tier" }), { target: { value: "fast" } });
-  fireEvent.click(page.view.getByRole("button", { name: "Apply execution selection" }));
-  fireEvent.change(page.view.getByRole("combobox", { name: "Permission mode" }), { target: { value: "accept-edits" } });
-  fireEvent.click(page.view.getByRole("switch", { name: "Verify done handoffs" }));
-
-  await page.create();
-
-  assert.deepEqual(page.starts.map(({ request, verify }) => ({ request, verify })), [
-    {
-      request: {
-        projectId: "prj_2",
-        providerId: "claude-code",
-        model: "sonnet",
-        reasoningLevel: "high",
-        serviceTier: "fast",
-        permissionMode: "accept-edits",
-        environment: { type: "host", hostId: "host_1", workspace: { type: "managed-worktree", baseBranch: { kind: "named", name: "release/2" } } },
-      },
-      verify: false,
-    },
-  ]);
-});
-
-test("the project checkout and no project start where they say, and no project hides the project and branch", async () => {
+test("the form's submit, which Enter in a field sends, creates it", async () => {
   const page = mount();
   await page.named("Webhooks");
-  fireEvent.click(page.view.getByRole("radio", { name: "Project checkout" }));
-  assert.equal(page.view.queryByRole("textbox", { name: "From:" }), null, "a checkout is cut from no branch");
-  await page.create();
-  // why named again: a create forgets the profile's fields.
-  await page.named("Webhooks");
-  fireEvent.click(page.view.getByRole("radio", { name: "No project" }));
-  assert.equal(page.view.queryByRole("combobox", { name: "Project" }), null);
-  await page.create();
 
-  assert.deepEqual(page.starts.map(({ request }) => [request.projectId, request.environment]), [
-    ["prj_1", { type: "host", hostId: "host_1", workspace: { type: "unmanaged", path: null } }],
-    ["prj_personal", { type: "host", hostId: "host_1", workspace: { type: "personal" } }],
-  ]);
-});
+  await act(async () => fireEvent.submit(page.view.getByRole("textbox", { name: "Name" })));
 
-test("the pickers read bb's catalog on the machine running bb", async () => {
-  const page = mount();
-  const picker = await page.view.findByTestId("bb-provider-model-picker");
-  assert.deepEqual([picker.dataset.routingKind, picker.dataset.routingId], ["host", "host_1"]);
-  const modes = page.view.getByTestId("bb-permission-mode-picker");
-  assert.deepEqual([modes.dataset.routingKind, modes.dataset.routingId, modes.dataset.providerId], ["host", "host_1", "claude-code"]);
-  assert.deepEqual([page.view.getByTestId("bb-branch-picker").dataset.hostId, page.view.getByTestId("bb-branch-picker").dataset.projectId], ["host_1", "prj_1"]);
+  assert.deepEqual(page.creates.map(({ name }) => name), ["Webhooks"]);
 });
 
 test("the fields outlive the page", async () => {

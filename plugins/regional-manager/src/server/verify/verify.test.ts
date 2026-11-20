@@ -7,9 +7,8 @@ import { z } from "zod";
 import { handoffIdSchema } from "../../model/handoff.ts";
 import { agentIdSchema } from "../../model/agent.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
-import { outcome, type Verdict } from "../../model/verdict/verdict.ts";
-import { memoryStorage } from "../memory-storage.ts";
-import { bbHttpError, coordinating, HEAD, isRefusal, settled, startedAgent, textOf, threadIn, type SendFailure } from "../test-harness.ts";
+import type { Verdict } from "../../model/verdict/verdict.ts";
+import { bbHttpError, coordinating, HEAD, isRefusal, settled, startedAgent, textOf, type SendFailure } from "../test-harness.ts";
 
 const a1 = agentIdSchema.parse("a1");
 const i1 = issueIdSchema.parse("i1");

@@ -69,8 +69,7 @@ const commitDeliverySchema = z.object({ kind: z.literal("commit"), headSha: comm
 const givenReportSchema = z.object({ kind: z.literal("report"), report: reportSchema });
 /** `file`: where the plugin saved the report in its regional manager's memory as it stored the handoff (report-file.ts). */
 const reportDeliverySchema = givenReportSchema.extend({ file: memoryFileSchema });
-export const deliverySchema = z.discriminatedUnion("kind", [commitDeliverySchema, reportDeliverySchema]);
-export type Delivery = z.infer<typeof deliverySchema>;
+const deliverySchema = z.discriminatedUnion("kind", [commitDeliverySchema, reportDeliverySchema]);
 
 /**
  * What the board shows of a handoff: when it was made, how the work ended, the agent's account of it,

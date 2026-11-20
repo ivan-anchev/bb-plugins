@@ -1,6 +1,6 @@
 ---
 name: crew-board
-description: Explain the Regional Manager plugin (bb-plugin-regional-manager). Its panel starts long-lived regional managers that keep memory in markdown files, plan the work as build or research issues, start an agent (a child thread) on each, set reminders and ask the user on a board; all of one manager's agents are its crew. An agent ends with a handoff; a build issue's done one is checked by a hidden verifier unless switched off, and a first failed verdict goes back to the agent; a research issue's carries a report saved to memory. gh watches PRs and CI. The Board lists issues by status. Use when the user asks how to start, name or rename a regional manager or start an agent, what an issue's kind, status or a verdict means, how verification or CI checks work, what an agent or verifier runs on, why PR status is unavailable, why an agent got findings or an issue returned to Todo, why the thread woke or the board warns of edits, how reminders or decisions work, where memory lives, or which thread has which tools.
+description: Explain the Regional Manager plugin (bb-plugin-regional-manager). Its panel starts long-lived regional managers that keep memory in markdown files, plan the work as build or research issues, start an agent (a child thread) on each, set reminders and ask the user on a board; all of one manager's agents are its crew. An agent ends with a handoff; a build issue's done one is checked by a hidden verifier unless switched off, and a first failed verdict goes back to the agent; a research issue's carries a report saved to memory. gh watches PRs and CI. The Board lists issues by status. Use when the user asks how to create, start, rename or delete a manager or start an agent, what an issue's kind, status or a verdict means, how verification or CI checks work, what an agent or verifier runs on, why PR status is unavailable, why an agent got findings or an issue returned to Todo, why the thread woke or the board warns of edits, how reminders or decisions work, where memory lives, or which thread has which tools.
 ---
 
 # Regional managers
@@ -16,42 +16,44 @@ and no plugin settings. Its one setting belongs to each regional manager: the
 
 1. Open the plugin's panel in bb's navigation rail.
 2. Press **New** in its title bar.
-3. Give it a **name**, an optional **description**, and pick an **icon** (see
-   [Profile](#profile)).
-4. Below them, pick where it works: **New worktree** of a project (cut from
-   the branch **From:** names, the project's default branch unless you pick
-   another), the **Project checkout** itself, or **No project**. It starts
-   with your first project (in the sidebar's order) in a fresh worktree, so a
-   stray edit never lands in your checkout.
-5. Pick what it runs on with bb's own model picker (provider, model,
-   reasoning and service tier, starting at bb's default provider and its
-   default model) and permission picker (starting at **auto**, so no
-   approval holds the thread).
-6. Leave **Verify done handoffs** on to have every done handoff of build work
-   checked before the thread hears of it, or turn it off.
-7. Press **Create**. The new thread opens, titled with the name, and waits,
-   with no session and no turn yet. A project checkout is attached at once;
-   a new worktree, or no project's workspace, is made only when you send the
-   goal. Its queue shows the plugin's message, "Type this regional manager's
-   goal below to start it.", held by Regional Manager. A create with no name
-   is refused: the name field says "Give it a name." and takes the focus.
-8. Type the goal in the thread and send it. It is the thread's first message:
-   bb makes the new worktree, if you picked one, and starts the thread on
-   what you picked, and the plugin writes the message to `GOAL.md`, exactly as you
-   typed it. Until then, the plugin sends the thread none of its own wake
-   messages; its first turn reads every update anyway. After that first turn
-   the plugin's held message leaves the queue.
+3. Under **New regional manager**, give it a **name**, an optional
+   **description**, and pick an **icon** (see [Profile](#profile)).
+4. Press **Create**. It saves the regional manager, with no thread yet, and
+   opens its page. A create with no name is refused: the name field says
+   "Give it a name." and takes the focus.
+5. Its page shows its profile, then bb's own new-thread composer, asking
+   "What should <name> get done?". It starts with your first project (in the
+   sidebar's order) in a fresh worktree of the default branch, so a stray edit
+   never lands in your checkout, on **auto** permissions, so no approval holds
+   the thread. Every picker works as in any new thread: project, environment,
+   base branch, model and reasoning, permission mode, attachments.
+6. Type the goal and send it. That starts the regional manager: its thread,
+   titled with its name, on exactly what the composer shows, with the goal as
+   its first message, which the plugin also writes to `GOAL.md` exactly as
+   you typed it. The thread opens. Sending again, or twice at once, starts no
+   second thread.
 
-If you press **Send now** on the held message, the regional manager gets it
-first and answers that it is waiting for your goal; your next message is the
-goal. If the plugin was reloading as your goal was sent, its first
-`crew_catch_up` reads the goal from the thread instead.
+Until its goal is sent, a regional manager has no thread: nothing wakes or
+polls it, it has no memory files yet, and bb's sidebar doesn't list it. Its
+done handoffs are verified from the start; switch that on its board (see
+[Verification](#verification)).
 
-The panel lists every regional manager bb still lists, under its project,
-newest first: its icon, its name with bb's status glyph, and its description
-below them. A row opens its thread, its **Board** button opens its board, and
-its **Memory** button opens its memory files. An archived or deleted thread
-drops off the list.
+A regional manager that version 0.3.0 created is upgraded by its thread's
+user messages, not by whether its thread ran. If its only user message is
+0.3.0's placeholder ("Type this regional manager's goal below to start it."),
+even one sent and run, it becomes one not started yet, named as its thread
+was titled: the plugin empties that thread's queue and archives it. Send its
+goal from its page. One with a real message from you keeps its thread and
+role; if it has no `GOAL.md`, your first message there becomes it, and a
+placeholder still queued is taken out. One whose thread never came becomes
+one not started yet, named "Regional manager". An upgrade that fails, say
+while bb restarts, is tried again on the next minute's tick.
+
+The panel lists the regional managers not started yet under **Not started**,
+then every other one bb still lists under its project, newest first. A row is
+the manager's icon, its name and, below them, its description, and nothing
+else. It opens the manager's page: the composer for its goal until it starts,
+its board after. An archived or deleted thread drops its manager off the list.
 
 ## Profile
 
@@ -59,19 +61,27 @@ Each regional manager has a profile: a **name**, up to 80 characters, an
 optional **description**, up to 500, and an **icon**, one of 24 of bb's own
 (Workflow, the plugin's, unless you pick another).
 
-- **The name is the thread's title.** bb keeps it; the plugin stores only the
-  description and the icon. Renaming the thread in bb's sidebar renames the
-  manager in the panel too, and an edit of the name renames the thread.
-- **Edit it** from the **Board** page in the panel: **Edit** beside Memory
-  opens the name, description and icons in place; **Save** keeps them, and
+- **Once it starts, the name is the thread's title.** bb keeps it; the
+  plugin stores the description and the icon. Renaming the thread in bb's
+  sidebar renames the manager in the panel too, and an edit of the name
+  renames the thread. The thread shows the name as its title, and the
+  manager's icon and name above its composer, never its description. Before
+  the start the plugin keeps the name, and the thread is titled with it.
+- **Edit it** on its page in the panel: **Edit** opens the name, description
+  and icons in place, before and after the start; **Save** keeps them, and
   **Cancel** drops the edit. Esc closes an edit only while nothing in it
   changed. An open edit, and what you typed in it, survive bb redrawing the
-  panel and a reload. A save renames the thread first, so one bb refuses
-  changes nothing.
+  panel and a reload. A save of a started one renames the thread first, so
+  one bb refuses changes nothing. bb's title bar names the manager whose page
+  is open.
+- **Delete** sits in the Edit form of a regional manager not started yet,
+  since bb can't archive a thread it doesn't have. It asks "Delete it?" once,
+  in place, then removes the manager and goes back to the list. A started one
+  is removed by archiving or deleting its thread in bb.
 - **Managers started before profiles** have the Workflow icon and no
   description; their name is the title their thread already had.
-- The New page keeps what you typed in the profile's fields until the
-  manager starts.
+- The New page keeps what you typed in the profile's fields until Create
+  saves them.
 
 ## Tools
 
@@ -522,7 +532,7 @@ work with `agent_handoff`, and the plugin records everything it sees:
   [Pull requests and CI](#pull-requests-and-ci)): it opened, reopened, merged
   or closed, its CI passed or failed, or a review approved it or asked for
   changes. A new CI run starting is not an update.
-- **The user saved a memory file** in the Memory editor. The thread's own
+- **The user saved a memory file** under Memory on the manager's page. The thread's own
   writes don't count.
 - **The user turned verification on or off.**
 - **One of the thread's reminders came due** (see [Reminders](#reminders)).
@@ -645,8 +655,8 @@ a **verifier** for each one:
   already returned is kept: it goes to the manager, with no fix round, and
   one waiting for CI waits on.
 
-Turn verification off or on with the switch at the top of the board (or on
-the New page when starting). It applies to handoffs made after it: turning it
+Turn verification off or on with the switch at the top of the board. It is on
+when a regional manager is created. It applies to handoffs made after it: turning it
 back on doesn't check earlier ones. Each change tells the regional manager.
 With it off, a done handoff goes to In review as "Unverified: <summary>".
 
@@ -847,10 +857,11 @@ take a provider's file tools away), so the plugin **detects** it instead:
 
 ## The board
 
-The **Board** tab in a regional manager's side panel, and the **Board**
-page from its row in the panel, show the same board, live; the page shows it
-under the manager's icon, name and description, with **Edit** (see
-[Profile](#profile)):
+The **Board** tab in a regional manager's side panel, and its page in the
+panel, opened from its row once it started, show the same board, live; the
+page shows it under the manager's icon, name and description, with **Open
+thread**, which opens the manager's thread, and **Edit** (see
+[Profile](#profile)), and ends with its [memory](#read-and-edit-memory):
 
 - **Verify done handoffs**: the switch for this regional manager.
 - **Files changed in its own environment**: a warning with how many, and
@@ -908,7 +919,7 @@ agent that held it, how it ended, and each handoff it made, the latest one
 open. A research issue's done handoff shows its **Report** first, as the
 Markdown it is, beside the memory file it was saved to (such as
 `reports/i2.md`): a long report scrolls in its own box, and the file holds
-it whole in the Memory editor. Nothing verifies it, so it has no verdict.
+it whole under Memory on the manager's page. Nothing verifies it, so it has no verdict.
 A build issue's handoff shows the verdict on it first: how many criteria passed, a link to the verifier thread,
 and the commit checked; the plugin's own read when that commit wasn't checked
 out on a clean tree; what CI said about that commit when it failed, couldn't
@@ -935,10 +946,10 @@ this plugin doesn't know reads as idle.
 
 Each regional manager has its own folder on the bb server:
 `<bb data dir>/plugins/regional-manager/memory/<regional manager id>/`. The
-server log names the parent folder when the plugin loads. It starts with:
+server log names the parent folder when the plugin loads. It is made as the manager starts, with:
 
 - `MEMORY.md`: the index of the files.
-- `GOAL.md`: the goal, the first message you typed in its thread.
+- `GOAL.md`: the goal, the message you sent from its page to start it.
 - `PLAN.md`: the plan.
 - `PREFERENCES.md`: the user's standing preferences, one per line.
 - `CREW.md`: rules every agent will follow.
@@ -951,7 +962,7 @@ The thread may add others, such as `notes/api.md`.
 When a research issue's agent hands off done, the plugin saves its report to
 `reports/<issue id>.md` in the manager's memory folder, as it stores the
 handoff. The handoff keeps the report as the agent wrote it; the file is the
-manager's copy. You can read and edit it in the Memory editor, and any agent
+manager's copy. You can read and edit it under Memory on the manager's page, and any agent
 reads it with `crew_memory_read`. The plugin gives it to no agent: the
 manager hands it on by naming the file in the brief of an agent that needs
 it, and an agent started without that sees none of it. The plugin never
@@ -968,15 +979,19 @@ replaced, and the handoff never fails over it.
 
 ## Read and edit memory
 
-Press **Memory** on a row in the panel. Each save wakes the regional
-manager with "The user edited <file>". The page shows the folder's path on
-the bb server, the files (the core ones first, then the rest by name), and an
-editor for the file you pick. A file you haven't touched shows its latest
-text, including the thread's writes as they land. A dot marks a file with
-unsaved changes; switching files keeps them, and so do a resize, a reload and
-another tab: unsaved text stays in the browser, on the file you had picked,
-until you save it or take the newer version. **Save** (or Ctrl/Cmd+S) writes
-the file. While you have unsaved changes, Esc doesn't leave the page.
+**Memory** is the last section of a started regional manager's page in the
+panel, under its board. It lists its files (the core ones first, then the
+rest by name), each with its first line of text and when it last changed;
+a dot marks one with unsaved changes. Pressing one shows it, rendered, with
+**All files** to go back and **Edit**. Edit opens it in place, with **Save**
+(or Ctrl/Cmd+S), which writes it and closes the editor, and **Cancel**, which
+drops your changes. Each save wakes the regional manager with "The user
+edited <file>". A file you aren't editing shows its latest text, including
+the thread's writes as they land. Unsaved text stays in the browser, on the
+file you had open, through a resize, a reload and another tab, until you save
+it, cancel or take the newer version. A file deleted under unsaved text stays
+listed ("Not in the folder"), with the text; saving makes it again. While you have unsaved changes, Esc
+doesn't leave the page. A regional manager not started yet has no memory.
 
 Neither side can silently overwrite the other. Every write names the version
 of the file it started from:
@@ -991,7 +1006,7 @@ of the file it started from:
   stays.
 
 You can also edit the files in any editor on the server's disk; the thread
-and the Memory page read the new text on their next read.
+and Memory read the new text on their next read.
 
 ## What it needs
 

@@ -4,7 +4,7 @@
 // checks, pull requests and the inbox.
 import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { coordinatorSchema, type Coordinator } from "../../contract.ts";
+import { coordinatorSchema, notStartedSchema, type Coordinator, type NotStarted } from "../../contract.ts";
 import { avatarSchema, DEFAULT_AVATAR, type Profile } from "../../model/profile.ts";
 import { memoryRevisionSchema, type MemoryFile, type MemoryRevision, type MemoryVersion } from "../../model/memory-file.ts";
 import type { CoordinatorId, Role } from "../../model/role.ts";
@@ -27,7 +27,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
   function coordinators(id: CoordinatorId | null): Coordinator[] {
     return db()
       .prepare(
-        `SELECT c.id, r.thread_id AS threadId, c.project_id AS projectId, c.verify, c.description, c.avatar, c.created_at AS createdAt
+        `SELECT c.id, r.thread_id AS threadId, c.project_id AS projectId, c.description, c.avatar
            FROM coordinators c JOIN roles r ON r.ticket = c.ticket
           WHERE r.thread_id IS NOT NULL AND (? IS NULL OR c.id = ?)
           ORDER BY c.created_at DESC, c.rowid DESC`,
@@ -43,41 +43,92 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     ...checksStore(db),
     ...prStore(db),
 
-    /** The regional manager, waiting for its goal, and its unbound ticket, together or not at all. */
-    insertCoordinator({ id, ticket, projectId, verify, description, avatar, createdAt }: { id: CoordinatorId; ticket: string; projectId: string; verify: boolean; createdAt: number } & KeptProfile): void {
+    /** A regional manager not started yet, with its profile and its unbound ticket, together or not at all. */
+    insertCoordinator({ id, ticket, name, description, avatar, createdAt }: { id: CoordinatorId; ticket: string; createdAt: number } & Profile): void {
       db().transaction(() => {
         insertTicket(db, ticket, { kind: "coordinator", coordinatorId: id }, createdAt);
         db()
-          .prepare("INSERT INTO coordinators (id, ticket, project_id, verify, description, avatar, awaiting_goal, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)")
-          .run(id, ticket, projectId, Number(verify), description, JSON.stringify(avatar), createdAt);
+          .prepare("INSERT INTO coordinators (id, ticket, project_id, name, description, avatar, created_at) VALUES (?, ?, '', ?, ?, ?, ?)")
+          .run(id, ticket, name, description, JSON.stringify(avatar), createdAt);
       })();
     },
 
-    /** Whether the regional manager still waits for its goal (migrations.ts awaiting_goal). */
-    awaitsGoal(id: CoordinatorId): boolean {
-      return db().prepare("SELECT 1 FROM coordinators WHERE id = ? AND awaiting_goal = 1").get(id) !== undefined;
+    /**
+     * Where the regional manager's start stands: started, with its thread; not started, with the
+     * ticket and the name its thread is spawned with; or null: there is no such regional manager, or
+     * it is one 0.3.0 left waiting for its goal, with no name, whose upgrade hasn't run yet (held-managers.ts).
+     */
+    startOf(id: CoordinatorId): { kind: "started"; threadId: string } | { kind: "not-started"; ticket: string; name: string } | null {
+      const row = db().prepare("SELECT c.ticket, c.name, r.thread_id AS threadId FROM coordinators c JOIN roles r ON r.ticket = c.ticket WHERE c.id = ?").get(id);
+      if (row === undefined) return null;
+      const { ticket, name, threadId } = startRowSchema.parse(row);
+      if (threadId !== null) return { kind: "started", threadId };
+      return name === null ? null : { kind: "not-started", ticket, name };
     },
 
-    /** The regional manager has its goal, and waits for it no more. */
-    goalGiven(id: CoordinatorId): void {
-      db().prepare("UPDATE coordinators SET awaiting_goal = 0 WHERE id = ?").run(id);
+    /** The project a regional manager not started yet starts on, written before its thread is spawned so its row is whole once the thread binds. */
+    startsOn(id: CoordinatorId, projectId: string): void {
+      db().prepare("UPDATE coordinators SET project_id = ? WHERE id = ?").run(projectId, id);
     },
 
-    /** Replaces what the plugin keeps of the regional manager's profile. */
-    setProfile(id: CoordinatorId, { description, avatar }: KeptProfile): void {
+    /** Replaces what the plugin keeps of the regional manager's profile but its name. */
+    setProfile(id: CoordinatorId, { description, avatar }: Omit<Profile, "name">): void {
       db().prepare("UPDATE coordinators SET description = ?, avatar = ? WHERE id = ?").run(description, JSON.stringify(avatar), id);
     },
 
-    /** Whether a regional manager with this id was ever started. */
-    isCoordinator(id: CoordinatorId): boolean {
-      return db().prepare("SELECT 1 FROM coordinators WHERE id = ?").get(id) !== undefined;
+    /** Renames a regional manager not started yet; once started, its thread's title is its name. */
+    rename(id: CoordinatorId, name: string): void {
+      db().prepare("UPDATE coordinators SET name = ? WHERE id = ?").run(name, id);
     },
 
-    /** The regional manager, once its thread is bound. */
+    /** The regional manager, once its thread is bound; null before. Every wake, poll, tool and board or memory read reaches it through here or coordinators, so none reaches one with no thread. */
     coordinator: (id: CoordinatorId): Coordinator | null => coordinators(id)[0] ?? null,
 
     /** Every regional manager whose thread is bound, newest first. */
     coordinators: (): Coordinator[] => coordinators(null),
+
+    /** Every regional manager not started yet, newest first. */
+    notStarted(): NotStarted[] {
+      return db()
+        .prepare(
+          `SELECT c.id, c.name, c.description, c.avatar
+             FROM coordinators c JOIN roles r ON r.ticket = c.ticket
+            WHERE r.thread_id IS NULL AND c.name IS NOT NULL
+            ORDER BY c.created_at DESC, c.rowid DESC`,
+        )
+        .all()
+        .map((row) => notStartedRowSchema.parse(row));
+    },
+
+    /**
+     * Every regional manager the 0.3.0 upgrade looks at (held-managers.ts): each one 0.3.0 flagged as
+     * waiting for its goal, with its thread or none, and each with a thread.
+     */
+    upgradeCandidates(): { id: CoordinatorId; ticket: string; threadId: string | null; flagged: boolean }[] {
+      return db()
+        .prepare("SELECT c.id, c.ticket, r.thread_id AS threadId, c.awaiting_goal AS flagged FROM coordinators c JOIN roles r ON r.ticket = c.ticket WHERE c.awaiting_goal = 1 OR r.thread_id IS NOT NULL")
+        .all()
+        .map((row) => candidateRowSchema.parse(row));
+    },
+
+    /** A 0.3.0 regional manager whose thread had its goal: it waits for nothing, and keeps its thread and role. */
+    goalGiven(id: CoordinatorId): void {
+      db().prepare("UPDATE coordinators SET awaiting_goal = 0 WHERE id = ?").run(id);
+    },
+
+    /**
+     * Makes a 0.3.0 regional manager on `ticket` one not started yet, named `name`: that ticket gives
+     * way to the new unbound `next`, so the thread it had, if any, never holds its role again.
+     * Together or not at all; a second call, once the ticket gave way, changes nothing.
+     */
+    unhold(id: CoordinatorId, ticket: string, name: string, next: string, at: number): void {
+      db().transaction(() => {
+        if (db().prepare("SELECT 1 FROM coordinators WHERE id = ? AND ticket = ?").get(id, ticket) === undefined) return;
+        insertTicket(db, next, { kind: "coordinator", coordinatorId: id }, at);
+        db().prepare("UPDATE coordinators SET ticket = ?, name = ?, project_id = '', awaiting_goal = 0 WHERE id = ?").run(next, name, id);
+        db().prepare("DELETE FROM roles WHERE ticket = ?").run(ticket);
+      })();
+    },
 
     /**
      * Gives the ticket's role to the thread, and returns that role. Idempotent: a ticket binds once,
@@ -125,7 +176,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     },
 
     /**
-     * Removes a regional manager whose thread bb deleted, and everything it owns, together. bb
+     * Removes a regional manager whose thread bb deleted, or one not started yet the user deleted, and everything it owns, together. bb
      * deletes its agents and verifiers with it, so nothing it holds can be acted on, and a doorbell
      * to it would fail on every tick. why children first: the handle enforces foreign keys. why
      * fact_writes after the rest: deleting them counts writes there.
@@ -165,14 +216,10 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
   };
 }
 
-/** What the store keeps of a profile: all of it but the name, which is the thread's title. */
-type KeptProfile = Omit<Profile, "name">;
-
-// why: SQLite has no boolean; verify is stored as 0 or 1. The avatar is stored as JSON, and one
-// this release can't draw, as an icon a later release dropped from its picker, reads as the
-// default rather than hiding every regional manager from the list.
-const coordinatorRowSchema = coordinatorSchema.extend({
-  verify: z.number().transform((verify) => verify === 1),
-  avatar: z.string().transform((json) => avatarSchema.catch(DEFAULT_AVATAR).parse(JSON.parse(json))),
-});
-const toCoordinator = (row: unknown): Coordinator => coordinatorRowSchema.parse(row);
+// why: the avatar is stored as JSON, and one this release can't draw, as an icon a later release
+// dropped from its picker, reads as the default rather than hiding every regional manager from the list.
+const storedAvatarSchema = z.string().transform((json) => avatarSchema.catch(DEFAULT_AVATAR).parse(JSON.parse(json)));
+const toCoordinator = (row: unknown): Coordinator => coordinatorSchema.extend({ avatar: storedAvatarSchema }).parse(row);
+const notStartedRowSchema = notStartedSchema.extend({ avatar: storedAvatarSchema });
+const startRowSchema = z.object({ ticket: z.string(), name: z.string().nullable(), threadId: z.string().nullable() });
+const candidateRowSchema = z.object({ id: coordinatorSchema.shape.id, ticket: z.string(), threadId: z.string().nullable(), flagged: z.number().transform((flag) => flag === 1) });

@@ -4,10 +4,9 @@
 // a spawn answer that never arrives still leaves the thread its role.
 import { randomUUID } from "node:crypto";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
-import type { Coordinator, CoordinatorStart } from "../contract.ts";
+import { typedText, type ComposerRequest, type Coordinator } from "../contract.ts";
 import type { Execution } from "../model/execution.ts";
-import { PLACEHOLDER, PLACEHOLDER_MARK } from "./goal/goal.ts";
-import { coordinatorIdSchema, ticketMetadataSchema, type Role } from "../model/role.ts";
+import { ticketMetadataSchema, type CoordinatorId, type Role } from "../model/role.ts";
 import type { MemoryRoot } from "./memory/memory-files.ts";
 import type { Store } from "./store/store.ts";
 
@@ -17,11 +16,17 @@ type SpawnArgs = Parameters<Threads["spawn"]>[0];
 // The parts of bb spawning uses, as narrow as the code reads them.
 type SpawnBb = {
   pluginId: string;
-  sdk: { threads: { spawn(args: SpawnArgs): Promise<{ id: string }>; getPluginMetadata: Threads["getPluginMetadata"] } };
+  sdk: {
+    threads: {
+      spawn(args: SpawnArgs): Promise<{ id: string }>;
+      getPluginMetadata: Threads["getPluginMetadata"];
+      list(args: { originPluginId: string; hasParent: false; archived: false; includeHidden: true }): Promise<readonly { id: string }[]>;
+    };
+  };
   events: { on(event: "thread.created", handler: (payload: { thread: { id: string; originPluginId: string | null } }) => void | Promise<void>): void };
 };
 
-type SpawnStore = Pick<Store, "insertCoordinator" | "insertVerifierTicket" | "bindTicket">;
+type SpawnStore = Pick<Store, "startsOn" | "insertVerifierTicket" | "bindTicket" | "roleOfThread">;
 
 /** What a child thread is spawned with, beyond its ticket: its regional manager, its parent thread, its title, where it runs, what it runs on and its first message. */
 type ChildRequest = {
@@ -54,9 +59,22 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
   // before the read.
   bb.events.on("thread.created", async ({ thread }) => {
     if (thread.originPluginId !== bb.pluginId) return;
-    const metadata = ticketMetadataSchema.safeParse(await bb.sdk.threads.getPluginMetadata({ threadId: thread.id }));
-    if (metadata.success) bind(metadata.data.ticket, thread.id);
+    const ticket = ticketIn(await bb.sdk.threads.getPluginMetadata({ threadId: thread.id }));
+    if (ticket !== null) bind(ticket, thread.id);
   });
+
+  /**
+   * The regional manager's thread an earlier start of it spawned under `ticket` without binding it:
+   * bb made it, but its answer and its thread.created were both lost. null: there is none. why the
+   * plugin's top-level threads: a regional manager's is the only kind with no parent; why not archived
+   * ones: bb lists them unless asked not to, and a thread the user archived is no start to answer with.
+   */
+  async function unboundManagerThread(ticket: string): Promise<string | null> {
+    for (const { id } of await bb.sdk.threads.list({ originPluginId: bb.pluginId, hasParent: false, archived: false, includeHidden: true })) {
+      if (store.roleOfThread(id) === null && ticketIn(await bb.sdk.threads.getPluginMetadata({ threadId: id })) === ticket) return id;
+    }
+    return null;
+  }
 
   async function spawnWith(ticket: string, args: SpawnArgs): Promise<string> {
     const thread = await bb.sdk.threads.spawn({ ...args, pluginMetadata: { ticket } });
@@ -85,26 +103,22 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
 
   return {
     /**
-     * Starts a coordinating thread as the New page picked it, titled with its profile's name, its
-     * first message the placeholder the goal hook holds until the user types the goal (goal.ts).
-     * Its row, ticket and seeded memory exist before the spawn, so its first session and first tool
-     * call find them. why no executionInputSources: bb then counts every execution field as chosen,
-     * so it runs exactly what the page showed.
+     * Starts a regional manager not started yet from bb's composer on its page, on what the composer
+     * shows, under the ticket it was created with, titled with its name; the request's text is its
+     * first message and its GOAL.md. Its project and seeded memory exist before the spawn, so its first
+     * session and first tool call find them. A thread an earlier start spawned but never bound is
+     * bound and answered with instead, its GOAL.md left as that start wrote it. Returns its thread;
+     * rejects as bb's spawn does. Callers run one start of a regional manager at a time (manager-rpc.ts).
      */
-    async coordinator({ request, verify, profile: { name, ...kept } }: CoordinatorStart): Promise<{ threadId: string }> {
-      const id = coordinatorIdSchema.parse(randomUUID());
-      const ticket = randomUUID();
-      store.insertCoordinator({ id, ticket, projectId: request.projectId, verify, ...kept, createdAt: Date.now() });
-      memory.of(id).seed();
-      return {
-        threadId: await spawnWith(ticket, {
-          ...request,
-          title: name,
-          input: [{ type: "text", text: PLACEHOLDER, mentions: [] }],
-          // why: the hook knows the spawn's own attempt by it, before bb answers the spawn with the thread.
-          pluginSubmission: { pluginId: bb.pluginId, data: PLACEHOLDER_MARK },
-        }),
-      };
+    async coordinator(id: CoordinatorId, { ticket, name }: { ticket: string; name: string }, request: ComposerRequest): Promise<string> {
+      const earlier = await unboundManagerThread(ticket);
+      if (earlier !== null) {
+        bind(ticket, earlier);
+        return earlier;
+      }
+      store.startsOn(id, request.projectId);
+      memory.of(id).seed(typedText(request));
+      return spawnWith(ticket, { ...request, title: name });
     },
 
     /**
@@ -129,4 +143,10 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
       return spawnChild(ticket, request, { visibility: "hidden" });
     },
   };
+}
+
+/** The ticket a thread's metadata carries; null for none of this plugin's. */
+function ticketIn(metadata: unknown): string | null {
+  const parsed = ticketMetadataSchema.safeParse(metadata);
+  return parsed.success ? parsed.data.ticket : null;
 }

@@ -6,7 +6,7 @@ import { boardGroups, laneOf } from "../../model/board/board-groups.ts";
 import { decisionIdSchema } from "../../model/decision.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { coordinating, ISSUE, isRefusal, coordinatorStart, settled, startedAgent, textOf } from "../test-harness.ts";
+import { coordinating, ISSUE, isRefusal, settled, startedAgent, textOf } from "../test-harness.ts";
 
 const QUESTION = "Target main or release/2?";
 const d1 = decisionIdSchema.parse("d1");
@@ -85,7 +85,7 @@ test("the badge counts what each board shows under Needs you: open decisions, an
   kit.thread(asking).hasPendingInteraction = true;
   kit.thread(failing).status = "error";
   await kit.call("agent_stop", { agent: "a5" }, threadId);
-  const { threadId: otherThread } = await kit.spawner.coordinator(coordinatorStart("Ship the billing export", false));
+  const { threadId: otherThread } = await kit.startManager("Ship the billing export", { verify: false });
   const other = kit.store.roleOfThread(otherThread);
   assert.equal(other?.kind, "coordinator");
 
@@ -154,7 +154,7 @@ test("a decision is answered once: a second answer is refused, and the first sta
 
 test("only the Coordinator that asked can be answered: another's decision is refused as unknown", async () => {
   const { kit, coordinatorId } = await asked();
-  const { threadId: theirs } = await kit.spawner.coordinator(coordinatorStart("Ship the billing export", false));
+  const { threadId: theirs } = await kit.startManager("Ship the billing export", { verify: false });
   const role = kit.store.roleOfThread(theirs);
   assert.equal(role?.kind, "coordinator");
   const other = role.coordinatorId;

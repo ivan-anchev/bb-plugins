@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { join, win32 } from "node:path";
 import { test } from "node:test";
 import { memoryFileSchema, type MemoryFile } from "../../model/memory-file.ts";
-import { coordinatorIdSchema } from "../../model/role.ts";
 import { freshStore, MANAGER as ID, OTHER_MANAGER } from "../store/test-store.ts";
 import { openMemoryRoot } from "./memory-files.ts";
 
@@ -21,34 +20,29 @@ function freshMemory() {
 const versionOf = (memory: ReturnType<typeof freshMemory>, file: MemoryFile) => memory.read(file).text?.version ?? null;
 const revisionOf = (memory: ReturnType<typeof freshMemory>, file: MemoryFile) => memory.read(file).revision;
 
-test("seeding writes the core files but GOAL.md, with MEMORY.md indexing them in the plugin's words; the goal then writes GOAL.md", () => {
+test("seeding writes the core files, with MEMORY.md indexing them in the plugin's words, and GOAL.md the goal exactly as typed", () => {
   const memory = freshMemory();
-  memory.seed();
+  memory.seed("  Migrate the webhook service\n");
 
-  assert.deepEqual(readdirSync(memory.dir).sort(), ["CREW.md", "DIGEST.md", "MEMORY.md", "PLAN.md", "PREFERENCES.md"]);
+  assert.deepEqual(readdirSync(memory.dir).sort(), ["CREW.md", "DIGEST.md", "GOAL.md", "MEMORY.md", "PLAN.md", "PREFERENCES.md"]);
   assert.match(readFileSync(join(memory.dir, "MEMORY.md"), "utf8"), /^- GOAL\.md: the goal this work was started with\.$/m);
   assert.match(readFileSync(join(memory.dir, "MEMORY.md"), "utf8"), /^- CREW\.md: rules every agent follows\.$/m);
-
-  memory.seedGoal("  Migrate the webhook service\n");
-  assert.equal(readFileSync(join(memory.dir, "GOAL.md"), "utf8"), "  Migrate the webhook service\n", "the goal exactly as typed");
+  assert.equal(readFileSync(join(memory.dir, "GOAL.md"), "utf8"), "  Migrate the webhook service\n");
 });
 
-test("seeding again keeps every file as it is, and a second goal leaves the first in GOAL.md", () => {
+test("seeding again keeps every file but GOAL.md as it is, and GOAL.md takes the later goal, as after a start that failed", () => {
   const memory = freshMemory();
-  memory.seed();
-  memory.seedGoal("Migrate the webhook service");
+  memory.seed("Migrate the webhook service");
   writeFileSync(join(memory.dir, "PLAN.md"), "# Plan\n\n1. Inventory the endpoints\n");
-  memory.seed();
-  memory.seedGoal("Something else");
+  memory.seed("Retire the cron box");
 
   assert.equal(readFileSync(join(memory.dir, "PLAN.md"), "utf8"), "# Plan\n\n1. Inventory the endpoints\n");
-  assert.equal(readFileSync(join(memory.dir, "GOAL.md"), "utf8"), "Migrate the webhook service");
+  assert.equal(readFileSync(join(memory.dir, "GOAL.md"), "utf8"), "Retire the cron box");
 });
 
 test("a write naming the file's current version replaces it and gives its new version", () => {
   const memory = freshMemory();
-  memory.seed();
-  memory.seedGoal("Migrate the webhook service");
+  memory.seed("Migrate the webhook service");
 
   const outcome = memory.write(PLAN, "# Plan\n\n1. Inventory the endpoints\n", versionOf(memory, PLAN));
   assert.deepEqual(outcome, { outcome: "saved", version: versionOf(memory, PLAN), revision: revisionOf(memory, PLAN) });
@@ -57,8 +51,7 @@ test("a write naming the file's current version replaces it and gives its new ve
 
 test("a write with a stale version is refused, returns the current text, and leaves the file as it is", () => {
   const memory = freshMemory();
-  memory.seed();
-  memory.seedGoal("Migrate the webhook service");
+  memory.seed("Migrate the webhook service");
   const read = versionOf(memory, PLAN);
   memory.write(PLAN, "# Plan\n\n1. The user's step\n", read);
 
@@ -70,8 +63,7 @@ test("a write with a stale version is refused, returns the current text, and lea
 
 test("a file edited on disk makes a write from the older version stale", () => {
   const memory = freshMemory();
-  memory.seed();
-  memory.seedGoal("Migrate the webhook service");
+  memory.seed("Migrate the webhook service");
   const read = versionOf(memory, PLAN);
   writeFileSync(join(memory.dir, "PLAN.md"), "# Plan\n\nEdited in vim\n");
 
@@ -90,8 +82,7 @@ test("a write with no version creates a new file, and is refused once the file e
 
 test("a write to a file deleted since it was read is refused, saying it is gone", () => {
   const memory = freshMemory();
-  memory.seed();
-  memory.seedGoal("Migrate the webhook service");
+  memory.seed("Migrate the webhook service");
   const read = versionOf(memory, PLAN);
   fs.rmSync(join(memory.dir, "PLAN.md"));
 
@@ -108,8 +99,7 @@ test("only a write that changed a file is announced", () => {
 
 test("a write cut off between its temp file and its rename leaves the old file whole, and the temp file is never read as memory", () => {
   const memory = freshMemory();
-  memory.seed();
-  memory.seedGoal("Migrate the webhook service");
+  memory.seed("Migrate the webhook service");
   const before = memory.read(PLAN);
   const listed = memory.list();
 
@@ -125,8 +115,7 @@ test("a write cut off between its temp file and its rename leaves the old file w
 
 test("a file keeps its revision while it stays the same, and every write that changes it gives the next", () => {
   const memory = freshMemory();
-  memory.seed();
-  memory.seedGoal("Migrate the webhook service");
+  memory.seed("Migrate the webhook service");
   const first = memory.read(PLAN);
   assert.deepEqual(memory.read(PLAN), first, "reading again changes nothing");
 
@@ -140,8 +129,7 @@ test("a file keeps its revision while it stays the same, and every write that ch
 
 test("a file edited on the server's disk gets its next revision when it is next read, even back to an earlier text", () => {
   const memory = freshMemory();
-  memory.seed();
-  memory.seedGoal("Migrate the webhook service");
+  memory.seed("Migrate the webhook service");
   const a = memory.read(PLAN);
 
   writeFileSync(join(memory.dir, "PLAN.md"), "# Plan\n\nEdited in vim\n");
@@ -160,8 +148,7 @@ test("a file edited on the server's disk gets its next revision when it is next 
 
 test("an edit on disk that a write finds is the next revision, and the write's own is the one after", () => {
   const memory = freshMemory();
-  memory.seed();
-  memory.seedGoal("Migrate the webhook service");
+  memory.seed("Migrate the webhook service");
   const a = memory.read(PLAN);
   writeFileSync(join(memory.dir, "PLAN.md"), "# Plan\n\nEdited in vim\n");
 
@@ -186,8 +173,7 @@ test("each coordinator's files count their revisions apart", () => {
 
 test("the list holds the core files in their order, then the rest by name, and nothing that isn't markdown", () => {
   const memory = freshMemory();
-  memory.seed();
-  memory.seedGoal("Migrate the webhook service");
+  memory.seed("Migrate the webhook service");
   mkdirSync(join(memory.dir, "notes"));
   writeFileSync(join(memory.dir, "notes", "zones.md"), "");
   writeFileSync(join(memory.dir, "notes", "api.md"), "");

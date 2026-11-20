@@ -1,20 +1,20 @@
-// The nav panel: the list at its root, the New page at `new`, and a regional manager's board at
-// `board/<id>` and its memory at `memory/<id>`. Its title bar holds New.
-import { experimental_Icon as Icon, useBbNavigate, type PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
+// The nav panel: the list at its root, the New page at `new`, and a regional manager's page at
+// `board/<id>`. Its title bar holds New, and bb's title bar names the regional manager open.
+import { experimental_Icon as Icon, useBbNavigate, type ExperimentalPageTitle, type PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { useCallback } from "react";
 import type { CoordinatorId } from "../../model/role.ts";
 import { BoardPage } from "../board/board-page.tsx";
-import { MemoryPage } from "../memory/memory-page.tsx";
+import { useManager } from "../profile/use-manager.ts";
 import { Button } from "../ui/button.tsx";
 import { useFocusHandOff } from "../ui/focus-hand-off.ts";
 import { CoordinatorList } from "./coordinator-list.tsx";
 import { NewCoordinator } from "./new-coordinator.tsx";
-import { coordinatorSubPath, NEW_SUBPATH, PANEL_PATH, pageOf } from "./routes.ts";
+import { managerSubPath, NEW_SUBPATH, PANEL_PATH, pageOf } from "./routes.ts";
 
 export function CoordinatorPanel({ subPath }: PluginNavPanelProps) {
-  const { openList, openBoard, openMemory } = usePanelNavigation();
-  // Each page's root hands focus to the next when focus was inside it as it left, so All, a row's
-  // Memory button or anything else that unmounts with its page never drops focus (REVIEW.md).
+  const { openList, openManager } = usePanelNavigation();
+  // Each page's root hands focus to the next when focus was inside it as it left, so All, a row or
+  // anything else that unmounts with its page never drops focus (REVIEW.md).
   const focus = useFocusHandOff();
   const pageRoot = useCallback((root: HTMLElement | null) => {
     focus.to(root);
@@ -24,13 +24,11 @@ export function CoordinatorPanel({ subPath }: PluginNavPanelProps) {
   const page = pageOf(subPath);
   switch (page.kind) {
     case "new":
-      return <NewCoordinator ref={pageRoot} onBack={openList} />;
-    case "board":
-      return <BoardPage key={page.coordinatorId} ref={pageRoot} coordinatorId={page.coordinatorId} onBack={openList} onOpenMemory={() => openMemory(page.coordinatorId)} />;
-    case "memory":
-      return <MemoryPage key={page.coordinatorId} ref={pageRoot} coordinatorId={page.coordinatorId} onBack={openList} />;
+      return <NewCoordinator ref={pageRoot} onBack={openList} onCreated={openManager} />;
+    case "manager":
+      return <BoardPage key={page.coordinatorId} ref={pageRoot} coordinatorId={page.coordinatorId} onBack={openList} />;
     case "list":
-      return <CoordinatorList ref={pageRoot} onOpenBoard={openBoard} onOpenMemory={openMemory} />;
+      return <CoordinatorList ref={pageRoot} onOpen={openManager} />;
     default:
       return page satisfies never;
   }
@@ -47,12 +45,18 @@ export function NewButton({ subPath }: PluginNavPanelProps) {
   );
 }
 
+/** bb's title bar on a regional manager's page: its name, once read. */
+export function usePageTitle({ subPath }: PluginNavPanelProps): ExperimentalPageTitle | null {
+  const page = pageOf(subPath);
+  const profile = useManager(page.kind === "manager" ? page.coordinatorId : null)?.profile ?? null;
+  return profile === null ? null : { title: profile.name };
+}
+
 function usePanelNavigation() {
   const navigate = useBbNavigate();
   return {
     openNew: () => navigate.toPluginPanel(PANEL_PATH, { subPath: NEW_SUBPATH }),
     openList: () => navigate.toPluginPanel(PANEL_PATH),
-    openBoard: (id: CoordinatorId) => navigate.toPluginPanel(PANEL_PATH, { subPath: coordinatorSubPath("board", id) }),
-    openMemory: (id: CoordinatorId) => navigate.toPluginPanel(PANEL_PATH, { subPath: coordinatorSubPath("memory", id) }),
+    openManager: (id: CoordinatorId) => navigate.toPluginPanel(PANEL_PATH, { subPath: managerSubPath(id) }),
   };
 }

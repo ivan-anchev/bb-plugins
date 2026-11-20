@@ -26,7 +26,7 @@ export type QuietBb = StopBb & {
   };
 };
 
-export type QuietStore = Pick<Store, "coordinator" | "agents" | "issueThreads" | "roleOfThread" | "markNudged">;
+type QuietStore = Pick<Store, "coordinator" | "agents" | "issueThreads" | "roleOfThread" | "markNudged">;
 
 /**
  * Whom the issue's environment goes to: a new agent, which replaces the issue's holder; or one of

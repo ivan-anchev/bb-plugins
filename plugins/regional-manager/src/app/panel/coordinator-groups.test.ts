@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PluginSidebarThreadsState } from "@get-bb/plugin-sdk/app";
-import type { Coordinator } from "../../contract.ts";
+import type { Coordinator, NotStarted } from "../../contract.ts";
 import { DEFAULT_AVATAR } from "../../model/profile.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
 import { listView } from "./coordinator-groups.ts";
@@ -13,14 +13,14 @@ const coordinator = (n: number, projectId: string): Coordinator => ({
   id: coordinatorIdSchema.parse(`6f1c2a52-6b8e-4c43-9a51-1d6a3c0b7e1${n}`),
   threadId: `thr_${n}`,
   projectId,
-  verify: true,
   description: null,
   avatar: DEFAULT_AVATAR,
-  createdAt: n,
 });
 
-const read = (coordinators: Coordinator[] | undefined, error: Error | null = null) => ({
-  data: coordinators === undefined ? undefined : { coordinators },
+const notStarted = (n: number): NotStarted => ({ id: coordinatorIdSchema.parse(`9a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2${n}`), name: `Scout ${n}`, description: null, avatar: DEFAULT_AVATAR });
+
+const read = (coordinators: Coordinator[] | undefined, error: Error | null = null, waiting: NotStarted[] = []) => ({
+  data: coordinators === undefined ? undefined : { coordinators, notStarted: waiting },
   error,
   isLoading: false,
 });
@@ -39,6 +39,12 @@ test("threads group under their project, newest group first, and a thread bb no 
       ["a", ["thr_1"]],
     ],
   );
+});
+
+test("the regional managers not started yet are listed apart from the groups, with no thread to find in bb's list", () => {
+  const view = listView(read([coordinator(1, "a")], null, [notStarted(3), notStarted(2)]), live("ready"));
+  assert.deepEqual(view.kind === "listed" && [view.notStarted.map(({ name }) => name), view.groups.map((g) => g.project.id)], [["Scout 3", "Scout 2"], ["a"]]);
+  assert.equal(listView(read([], null, [notStarted(2)]), live("ready", [])).kind, "listed");
 });
 
 test("the list is empty only when both reads succeeded with nothing to list", () => {
@@ -60,4 +66,9 @@ test("a failed refresh keeps the coordinators it read before", () => {
 test("either read still loading shows neither a list nor an empty one", () => {
   assert.equal(listView({ ...read(undefined), isLoading: true }, live("ready")).kind, "loading");
   assert.equal(listView(read([]), live("loading")).kind, "loading");
+});
+
+test("the regional managers not started yet show while bb's threads are still read, and the started ones join them once read", () => {
+  const loading = listView(read([coordinator(1, "a")], null, [notStarted(2)]), live("loading", []));
+  assert.deepEqual(loading.kind === "listed" && [loading.notStarted.length, loading.groups.length], [1, 0]);
 });

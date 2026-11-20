@@ -11,7 +11,7 @@ import { insertEvent } from "../inbox/inbox-store.ts";
 import { json, nullableJson, type Db } from "../rows.ts";
 
 /** A branch's PR status, and when the watch last tried to read it. */
-export type PolledPr = PrStatus & { polledAt: number };
+type PolledPr = PrStatus & { polledAt: number };
 
 export function prStore(db: Db) {
   function prOfBranch(coordinatorId: CoordinatorId, branch: string): PolledPr | null {

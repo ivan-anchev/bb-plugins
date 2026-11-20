@@ -2,7 +2,7 @@
 // everything, whole, however long. This is where an agent's own words, a verifier's, and the user's
 // answers reach the regional manager, as a tool result, each marked as whose they are.
 import { sameModel } from "../../model/execution.ts";
-import type { Agent, AgentId } from "../../model/agent.ts";
+import type { Agent } from "../../model/agent.ts";
 import type { Decision, DecisionId } from "../../model/decision.ts";
 import type { Handoff, HandoffId } from "../../model/handoff.ts";
 import type { StoredEvent } from "../../model/inbox/inbox-event.ts";
@@ -12,7 +12,7 @@ import type { IssueId } from "../../model/issue/issue.ts";
 import { STATUS_LABELS, type Handed, type IssueView } from "../../model/issue/status.ts";
 import type { MemoryFile } from "../../model/memory-file.ts";
 import { intervalText, type Reminder } from "../../model/reminder.ts";
-import { checkedAgents, type Check, type CheckId, type FinalCheck, type HandoffCheck } from "../../model/verdict/check.ts";
+import { checkedAgents, type Check, type CheckId, type FinalCheck } from "../../model/verdict/check.ts";
 import { checkoutText, NOT_CLEAN, worktreeText } from "../../model/verdict/checkout.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
 import { allPassed, ciVerdictOf, failedCheckout, judge, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";

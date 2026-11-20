@@ -464,7 +464,7 @@ for (const [how, stop, why] of [
 }
 
 test("an accept whose read is answered just after a handover gives i1 to a2 is judged on i1 as a2 holds it: refused, and a2 works on", async () => {
-  const { kit, threadId, coordinatorId, agentThreadId, row, agent, handOff } = await handedTo({ verify: false });
+  const { kit, threadId, agentThreadId, row, agent, handOff } = await handedTo({ verify: false });
   await handOff(agentThreadId);
   assert.deepEqual(await row(), ["in-review", "Unverified: Retries land with backoff"]);
 
