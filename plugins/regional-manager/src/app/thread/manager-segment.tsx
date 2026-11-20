@@ -78,7 +78,7 @@ function Editor({ threadId, coordinatorId, profile, onClose }: EditorProps) {
 
   return (
     <div ref={regionRef} className="px-3 py-3">
-      <ProfileEditor coordinatorId={coordinatorId} profile={profile} draft={edit.value ?? draftOf(profile)} onChange={edit.store} onClose={close} takeFocus={takeFocus} trailing={null} />
+      <ProfileEditor coordinatorId={coordinatorId} profile={profile} draft={edit.value ?? draftOf(profile)} onChange={edit.store} onClose={close} takeFocus={takeFocus} />
     </div>
   );
 }

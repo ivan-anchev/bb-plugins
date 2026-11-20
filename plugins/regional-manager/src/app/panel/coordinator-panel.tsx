@@ -7,7 +7,7 @@ import { useManager } from "../profile/use-manager.ts";
 import { Button } from "../ui/button.tsx";
 import { useFocusHandOff } from "../ui/focus-hand-off.ts";
 import { CoordinatorList } from "./coordinator-list.tsx";
-import { ManagerPage } from "./manager-page.tsx";
+import { ManagerPage } from "./manager/manager-page.tsx";
 import { NewCoordinator } from "./new-coordinator.tsx";
 import { managerSubPath, NEW_SUBPATH, PANEL_PATH, pageOf } from "./routes.ts";
 

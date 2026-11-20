@@ -1,5 +1,5 @@
 // The New page: the new regional manager's profile and Create, which saves it with no thread and
-// opens its page, where the goal sent from bb's composer starts it (manager-page.tsx).
+// opens its page, where the goal sent from bb's composer starts it (manager/manager-page.tsx).
 import { experimental_Icon as Icon, experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
 import { useRef, useState, type Ref } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";

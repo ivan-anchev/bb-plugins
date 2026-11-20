@@ -73,8 +73,9 @@ optional **description**, up to 500, and an **icon**, one of 24 of bb's own
   and name above its thread's composer opens them below that row. **Save**
   keeps them, and **Cancel** drops the edit; both close it, and the focus
   goes back to what opened it. Esc closes an edit only while nothing in it
-  changed. An open edit, and what you typed in it, survive bb redrawing the
-  panel and a reload. A save of a started one renames the thread first, so
+  changed. What you typed in an edit survives bb redrawing it and a reload: on
+  the page the edit stays open, and above the composer it is there again when
+  you open the editor. A save of a started one renames the thread first, so
   one bb refuses changes nothing. bb's title bar names the manager whose page
   is open.
 - **Delete** sits in the Edit form of a regional manager not started yet,

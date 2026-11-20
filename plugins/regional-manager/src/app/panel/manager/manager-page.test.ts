@@ -1,12 +1,12 @@
-import "../test-browser.ts";
+import "../../test-browser.ts";
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
-import { COORDINATORS_TAG, coordinatorContract as contract, type Coordinator, type NotStarted } from "../../contract.ts";
-import type { Profile } from "../../model/profile.ts";
-import { coordinatorIdSchema } from "../../model/role.ts";
-import { PROJECT, sidebarThread } from "../test-sidebar.ts";
+import { COORDINATORS_TAG, coordinatorContract as contract, type Coordinator, type NotStarted } from "../../../contract.ts";
+import type { Profile } from "../../../model/profile.ts";
+import { coordinatorIdSchema } from "../../../model/role.ts";
+import { PROJECT, sidebarThread } from "../../test-sidebar.ts";
 
 // The page in the panel of a regional manager not started yet, as bb mounts it: its profile above
 // bb's composer, whose message starts it. Edit opens the profile in place and saves it whole. A
@@ -21,8 +21,12 @@ afterEach(() => {
   localStorage.clear();
 });
 
-/** The page over a plugin holding one regional manager, not started unless told, which keeps every profile it is sent, as setProfile does. */
-function mount({ started = false }: { started?: boolean } = {}) {
+/**
+ * The page over a plugin holding one regional manager, not started unless told, which keeps every
+ * profile it is sent, as setProfile does. A start binds its thread at once and replies once `replied`
+ * settles, as the server's does.
+ */
+function mount({ started = false, replied = Promise.resolve() }: { started?: boolean; replied?: Promise<void> } = {}) {
   const profileOf = { description: "Moves webhooks off cron.", avatar: { kind: "icon", icon: "Workflow" } } as const;
   const stored: Coordinator = { id: COORDINATOR, threadId: "thr_1", projectId: PROJECT.id, ...profileOf };
   let waiting: NotStarted | null = started ? null : { id: COORDINATOR, name: "Scout", ...profileOf };
@@ -37,9 +41,12 @@ function mount({ started = false }: { started?: boolean } = {}) {
       if (waiting !== null) waiting = { ...waiting, ...profile };
       return {};
     },
-    startCoordinator: (input: unknown) => {
+    startCoordinator: async (input: unknown) => {
       calls.push({ method: "startCoordinator", input: contract.startCoordinator.input.parse(input) });
-      return { threadId: "thr_9" };
+      started = true;
+      waiting = null;
+      await replied;
+      return { threadId: stored.threadId };
     },
     deleteCoordinator: (input: unknown) => {
       calls.push({ method: "deleteCoordinator", input: contract.deleteCoordinator.input.parse(input) });
@@ -146,7 +153,20 @@ test("sending the goal starts the regional manager with the composer's request, 
   assert.equal(start?.method, "startCoordinator");
   const { coordinatorId, request } = contract.startCoordinator.input.parse(start?.input);
   assert.deepEqual([coordinatorId, request.projectId, request.input], [COORDINATOR, PROJECT.id, [{ type: "text", text: "Migrate the webhook service", mentions: [] }]]);
-  assert.deepEqual(view.navigateCalls, [{ method: "toThread", threadId: "thr_9" }]);
+  assert.deepEqual(view.navigateCalls, [{ method: "toThread", threadId: "thr_1" }]);
+});
+
+test("a start the page reads before its reply opens the thread once", async () => {
+  let reply!: () => void;
+  const { view } = mount({ replied: new Promise((resolve) => (reply = resolve)) });
+  fireEvent.change(await view.findByTestId("bb-new-thread-composer-input"), { target: { value: "Migrate the webhook service" } });
+  await act(async () => fireEvent.click(view.getByTestId("bb-new-thread-composer-submit")));
+  await act(() => view.experimental_invalidateRpc([COORDINATORS_TAG]));
+  await waitFor(() => assert.deepEqual(view.navigateCalls, [{ method: "toThread", threadId: "thr_1" }]));
+
+  await act(async () => reply());
+
+  assert.deepEqual(view.navigateCalls, [{ method: "toThread", threadId: "thr_1" }]);
 });
 
 test("Delete, in the Edit form of a regional manager not started yet, asks first; Keep keeps it, and Delete removes it and goes back to the list", async () => {

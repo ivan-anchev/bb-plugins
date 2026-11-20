@@ -27,13 +27,17 @@ function ContextRow({ threadId }: { threadId: string }) {
   return createElement(Fragment, null, createElement(managerSegment.summary, props), createElement(managerSegment.details, props));
 }
 
-/** The row of a thread, over a plugin with one started regional manager, thr_1's, which keeps every profile it is sent, as setProfile does but for the title, which bb keeps. */
-function mount(threadId: string) {
+/**
+ * The row of a thread, over a plugin with one started regional manager, thr_1's, which keeps every
+ * profile it is sent, as setProfile does but for the title, which bb keeps, once `saved` settles.
+ */
+function mount(threadId: string, saved: Promise<void> = Promise.resolve()) {
   let coordinator: Coordinator = { id: coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10"), threadId: "thr_1", projectId: PROJECT.id, description: "Moves webhooks off cron.", avatar: { kind: "icon", icon: "Target" } };
   const saves: Profile[] = [];
   const rpc = {
     coordinators: () => ({ coordinators: [coordinator], notStarted: [] }),
-    setProfile: (input: unknown) => {
+    setProfile: async (input: unknown) => {
+      await saved;
       const { profile } = contract.setProfile.input.parse(input);
       saves.push(profile);
       coordinator = { ...coordinator, description: profile.description, avatar: profile.avatar };
@@ -103,6 +107,41 @@ test("Esc closes an edit nothing changed in, with the focus back on the toggle; 
   assert.equal(view.queryByRole("form", { name: "Edit profile" }), null);
   assert.ok(document.activeElement === toggle);
   assert.equal(localStorage.length, 0);
+});
+
+test("a save that lands after Cancel leaves the editor closed", async () => {
+  let land!: () => void;
+  const { view } = mount("thr_1", new Promise((resolve) => (land = resolve)));
+  const toggle = await view.findByRole("button", { name: "Webhooks, edit profile" });
+  fireEvent.click(toggle);
+  fireEvent.change(view.getByRole("textbox", { name: "Description" }), { target: { value: "Saved later" } });
+  await act(async () => fireEvent.click(view.getByRole("button", { name: "Save" })));
+  fireEvent.click(view.getByRole("button", { name: "Cancel" }));
+  assert.equal(toggle.getAttribute("aria-expanded"), "false");
+
+  await act(async () => land());
+
+  assert.equal(toggle.getAttribute("aria-expanded"), "false");
+  assert.equal(view.queryByRole("form", { name: "Edit profile" }), null);
+});
+
+test("a save that lands after the editor was closed and opened again leaves the new edit open, as typed", async () => {
+  let land!: () => void;
+  const { view } = mount("thr_1", new Promise((resolve) => (land = resolve)));
+  const toggle = await view.findByRole("button", { name: "Webhooks, edit profile" });
+  fireEvent.click(toggle);
+  fireEvent.change(view.getByRole("textbox", { name: "Description" }), { target: { value: "First" } });
+  await act(async () => fireEvent.click(view.getByRole("button", { name: "Save" })));
+  fireEvent.click(toggle);
+  fireEvent.click(toggle);
+  fireEvent.change(view.getByRole("textbox", { name: "Description" }), { target: { value: "Newer" } });
+
+  await act(async () => land());
+
+  assert.equal(toggle.getAttribute("aria-expanded"), "true");
+  const description = view.getByRole("textbox", { name: "Description" });
+  assert.ok(description instanceof HTMLTextAreaElement);
+  assert.equal(description.value, "Newer");
 });
 
 test("an edit left open outlives the row, as when bb redraws it", async () => {
