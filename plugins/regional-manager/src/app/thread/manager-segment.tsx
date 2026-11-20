@@ -1,6 +1,6 @@
 // A regional manager's own thread names it in the context row above its composer: its icon and its
-// name, and never its description. Pressing them opens its profile's editor below the row, where Save
-// and Cancel close it, and the focus goes back to them.
+// name, and never its description. Pressing them opens its profile's editor below the row, where Save,
+// Cancel and Esc close it, and the focus goes back to them.
 import { experimental_THREAD_CONTEXT_SEGMENT_GROUPS as GROUPS, type ExperimentalThreadContextSegmentProps } from "@get-bb/plugin-sdk/app";
 import { useCallback, useMemo } from "react";
 import type { Profile } from "../../model/profile.ts";
@@ -76,9 +76,11 @@ function Editor({ threadId, coordinatorId, profile, onClose }: EditorProps) {
     onClose();
   }
 
+  // why Esc keeps the edit: it closes the editor as the toggle does, and pressing the toggle again
+  // brings back what the user typed; Cancel drops it.
   return (
     <div ref={regionRef} className="px-3 py-3">
-      <ProfileEditor coordinatorId={coordinatorId} profile={profile} draft={edit.value ?? draftOf(profile)} onChange={edit.store} onClose={close} takeFocus={takeFocus} trailing={null} />
+      <ProfileEditor coordinatorId={coordinatorId} profile={profile} draft={edit.value ?? draftOf(profile)} onChange={edit.store} onClose={close} onEscape={onClose} takeFocus={takeFocus} trailing={null} />
     </div>
   );
 }
