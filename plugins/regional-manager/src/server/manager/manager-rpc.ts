@@ -14,7 +14,7 @@ type ManagerBb = { sdk: { threads: { update(args: Pick<Parameters<BbPluginApi["s
 
 type Deps = {
   bb: ManagerBb;
-  store: Pick<Store, "insertCoordinator" | "startOf" | "setProfile" | "removeCoordinator">;
+  store: Pick<Store, "insertCoordinator" | "startOf" | "setProfile" | "rename" | "removeCoordinator">;
   spawner: Pick<Spawner, "coordinator">;
   /** The list reads every record; a create, an edit or a delete makes it stale. A start's bind refreshes it (server.ts). */
   onChange(): void;
@@ -48,11 +48,12 @@ export function managerHandlers({ bb, store, spawner, onChange }: Deps): PluginR
       }),
 
     // why the title first: a refused rename then writes nothing, so a profile is never half saved.
-    setProfile: ({ coordinatorId, profile }) =>
+    setProfile: ({ coordinatorId, profile: { name, ...kept } }) =>
       inTurn(coordinatorId, async () => {
         const start = startOf(coordinatorId);
-        if (start.kind === "started") await bb.sdk.threads.update({ threadId: start.threadId, title: profile.name });
-        store.setProfile(coordinatorId, profile);
+        if (start.kind === "started") await bb.sdk.threads.update({ threadId: start.threadId, title: name });
+        else store.rename(coordinatorId, name);
+        store.setProfile(coordinatorId, kept);
         onChange();
         return {};
       }),

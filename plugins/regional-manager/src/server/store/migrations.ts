@@ -128,15 +128,17 @@ export const MIGRATIONS: readonly string[] = [
   `ALTER TABLE coordinators ADD COLUMN description TEXT`,
   `ALTER TABLE coordinators ADD COLUMN avatar TEXT NOT NULL DEFAULT '{"kind":"icon","icon":"Workflow"}'`,
 
-  // Whether a regional manager still waits for its goal, the user's first message in its thread
-  // (goal.ts): 1 from its start until that message is taken as its goal. One started before it
-  // was given its goal as it started.
+  // Whether a regional manager still waits for its goal: 0.3.0 spawned its thread with a placeholder
+  // its hook held, and wrote 1 until the user's first message there was taken as its goal. One
+  // started before it was given its goal as it started. Later releases have no hook: they read and clear the
+  // flag only as they upgrade the regional managers 0.3.0 left waiting (held-managers.ts).
   `ALTER TABLE coordinators ADD COLUMN awaiting_goal INTEGER NOT NULL DEFAULT 0`,
 
   // A regional manager's name until it starts, the title its thread is spawned with; from then on its
-  // thread's title is its name. A regional manager is created with no thread, and its project is
-  // written as it starts: until then project_id is '' (the column is NOT NULL since the first release).
-  // awaiting_goal is read no more but by the upgrade of a 0.3.0 regional manager still waiting for it (held-managers.ts).
+  // thread's title is its name, and this one is written no more. A regional manager is created with no
+  // thread, and its project is written as it starts: until then project_id is '' (the column is NOT
+  // NULL since the first release). A row with no name is one 0.3.0 left waiting for its goal, which
+  // neither list shows until its upgrade (store.ts startOf and notStarted).
   `ALTER TABLE coordinators ADD COLUMN name TEXT`,
 ];
 

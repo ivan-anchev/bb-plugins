@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { z } from "zod";
 import plugin from "../../../server.ts";
 import { COORDINATORS_TAG, coordinatorContract as contract } from "../../contract.ts";
 import type { Profile } from "../../model/profile.ts";
@@ -32,20 +33,11 @@ test("server.ts registers the record's RPC: Create spawns nothing, and the goal 
   const loaded = kit.load(plugin);
   const { coordinatorId } = contract.createCoordinator.output.parse(await loaded.callRpc("createCoordinator", { profile: PROFILE }));
   assert.equal(kit.spawned(), 0);
-  assert.deepEqual(contract.coordinators.output.parse(await loaded.callRpc("coordinators", {})).notStarted.map(({ id, name }) => [id, name]), [[coordinatorId, "Webhooks"]]);
+  assert.deepEqual(contract.coordinators.output.parse(await loaded.callRpc("coordinators", {})), { coordinators: [], notStarted: [{ id: coordinatorId, ...PROFILE }] });
 
   const { threadId } = contract.startCoordinator.output.parse(await loaded.callRpc("startCoordinator", { coordinatorId, request: newThreadRequest(GOAL) }));
   assert.equal(kit.thread(threadId).title, "Webhooks");
   assert.deepEqual(loaded.experimental_rpcInvalidations.filter((tags) => tags?.includes(COORDINATORS_TAG)).length, 2, "the create and the bind each refresh the list");
-});
-
-test("Create makes a regional manager not started yet, listed with its profile, and spawns no thread", async () => {
-  const { kit, coordinatorId, listed } = await created();
-
-  assert.equal(kit.spawned(), 0);
-  const { coordinators, notStarted } = await listed();
-  assert.deepEqual([coordinators, notStarted.map(({ id, name, description, avatar }) => ({ id, name, description, avatar }))], [[], [{ id: coordinatorId, ...PROFILE }]]);
-  assert.equal(kit.store.startOf(coordinatorId)?.kind, "not-started");
 });
 
 test("its goal starts it: one thread, titled with its name, the goal its first message and its GOAL.md, on what the composer picked; it is then listed as started", async () => {
@@ -70,18 +62,52 @@ test("a goal sent twice at once, or again once started, spawns one thread, and e
   assert.deepEqual([second, again], [first, first]);
 });
 
-test("a start bb refuses leaves the regional manager not started, and its goal sent again starts it, GOAL.md the later goal", async () => {
+test("a start bb refuses before it makes a thread leaves the regional manager not started, and its goal sent again starts it, GOAL.md the later goal", async () => {
   const { kit, coordinatorId, start } = await created();
-  kit.spawns.answer = "lost";
-  kit.spawns.created = false;
-  await assert.rejects(start("First try"), /socket hang up/);
+  kit.spawns.answer = "refused";
+  await assert.rejects(start("First try"), /Invalid environment/);
   assert.equal(kit.store.startOf(coordinatorId)?.kind, "not-started");
 
   kit.spawns.answer = "thread";
   const threadId = await start("Second try");
 
-  assert.equal(kit.store.coordinator(coordinatorId)?.threadId, threadId);
+  assert.deepEqual([kit.spawned(), kit.store.coordinator(coordinatorId)?.threadId], [1, threadId]);
   assert.equal(readFileSync(join(kit.memory.of(coordinatorId).dir, "GOAL.md"), "utf8"), "Second try");
+});
+
+test("a start whose thread bb made, but whose answer and thread.created were both lost, is answered by its goal sent again with that thread: no second thread, GOAL.md the first goal, one role", async () => {
+  const { kit, coordinatorId, start } = await created();
+  kit.spawns.answer = "lost";
+  kit.spawns.created = false;
+  await assert.rejects(start("First try"), /socket hang up/);
+  assert.equal(kit.store.roleOfThread("thr_1"), null, "nothing bound the thread");
+
+  kit.spawns.answer = "thread";
+  const threadId = await start("Second try");
+
+  assert.deepEqual([threadId, kit.spawned(), kit.store.coordinator(coordinatorId)?.threadId], ["thr_1", 1, "thr_1"]);
+  assert.deepEqual(kit.store.roleOfThread("thr_1"), { kind: "coordinator", coordinatorId });
+  assert.equal(readFileSync(join(kit.memory.of(coordinatorId).dir, "GOAL.md"), "utf8"), "First try");
+});
+
+test("a start the composer's contract doesn't allow is refused before it writes anything: no project, no memory, no thread", async () => {
+  const { kit, coordinatorId } = await created();
+  const { environment: _, ...placeless } = newThreadRequest(GOAL);
+
+  for (const request of [placeless, { ...newThreadRequest(GOAL), input: [] }, { ...newThreadRequest(GOAL), providerId: 7 }]) {
+    await assert.rejects(async () => kit.rpc.startCoordinator({ coordinatorId, request: request as never }), z.ZodError, JSON.stringify(request));
+  }
+
+  assert.deepEqual([kit.spawned(), kit.store.startOf(coordinatorId)?.kind, existsSync(kit.memory.of(coordinatorId).dir)], [0, "not-started", false]);
+});
+
+test("a start passes on only the composer's fields: one bb would take from another caller, such as visibility, never reaches the spawn", async () => {
+  const { kit, coordinatorId } = await created();
+
+  const { threadId } = await kit.rpc.startCoordinator({ coordinatorId, request: { ...newThreadRequest(GOAL), visibility: "hidden" } as never });
+
+  assert.equal("visibility" in kit.thread(threadId).spawnedWith, false);
+  assert.equal("executionInputSources" in kit.thread(threadId).spawnedWith, false);
 });
 
 test("an edit before the start renames no thread and keeps the whole profile; the start then titles the thread with the new name", async () => {
@@ -155,20 +181,28 @@ test("Delete removes a regional manager not started yet, and refuses one with a 
   await assert.rejects(async () => kit.rpc.deleteCoordinator({ coordinatorId: other }), { code: "conflict" });
 
   assert.deepEqual((await listed()).notStarted, []);
-  assert.equal(kit.store.isCoordinator(coordinatorId), false);
+  assert.equal(kit.store.startOf(coordinatorId), null);
   assert.equal(kit.store.coordinator(other)?.threadId, threadId);
 });
 
-test("a 0.3.0 regional manager still waiting for its goal becomes one not started yet, named as its thread was, its held thread archived; its goal then starts it in a new thread", async () => {
+/** A harness over its own database, holding a regional manager started as 0.3.0 left it: waiting for its goal, its thread `status`. */
+async function as030(status: "pending" | "idle") {
   const { storage } = memoryStorage();
   const kit = harness(undefined, undefined, storage);
-  const { coordinatorId, threadId: held } = await kit.startManager("Webhooks");
+  const { coordinatorId, threadId } = await kit.startManager("Webhooks");
   heldAs030(storage, coordinatorId);
-  kit.thread(held).status = "pending";
+  kit.thread(threadId).status = status;
+  return { kit, storage, coordinatorId, threadId };
+}
 
-  await kit.tick();
-  await kit.tick();
+test("a 0.3.0 regional manager whose thread is still held becomes one not started yet, named as its thread was: its placeholder leaves the queue, its thread is archived without the role, and its goal then starts it in a new thread", async () => {
+  const { kit, coordinatorId, threadId: held } = await as030("pending");
+  kit.heldPlaceholder(held);
 
+  await kit.releaseHeld();
+  await kit.releaseHeld();
+
+  assert.deepEqual(kit.queued(held), []);
   assert.notEqual(kit.thread(held).archivedAt, null);
   assert.equal(kit.store.roleOfThread(held), null, "the archived thread holds the role no more");
   assert.deepEqual(kit.store.notStarted().map(({ id, name }) => [id, name]), [[coordinatorId, "Webhooks"]]);
@@ -178,4 +212,27 @@ test("a 0.3.0 regional manager still waiting for its goal becomes one not starte
   assert.notEqual(threadId, held);
   assert.deepEqual([kit.thread(threadId).title, kit.store.coordinator(coordinatorId)?.threadId], ["Webhooks", threadId]);
   assert.equal(readFileSync(join(kit.memory.of(coordinatorId).dir, "GOAL.md"), "utf8"), GOAL);
+});
+
+test("a 0.3.0 regional manager whose thread already ran a turn keeps its thread and its role, waiting for nothing", async () => {
+  const { kit, coordinatorId, threadId } = await as030("idle");
+
+  await kit.releaseHeld();
+
+  assert.equal(kit.thread(threadId).archivedAt, null);
+  assert.equal(kit.store.coordinator(coordinatorId)?.threadId, threadId);
+  assert.deepEqual([kit.store.heldManagers(), kit.store.notStarted()], [[], []]);
+});
+
+test("a 0.3.0 regional manager whose spawn never bound a thread becomes one not started yet, so it can be started or deleted", async () => {
+  const { storage } = memoryStorage();
+  const kit = harness(undefined, undefined, storage);
+  const coordinatorId = await kit.createManager("Unbound");
+  heldAs030(storage, coordinatorId);
+  assert.equal(kit.store.startOf(coordinatorId), null, "before the upgrade it is neither started nor not started");
+
+  await kit.releaseHeld();
+
+  assert.deepEqual(kit.store.notStarted().map(({ id, name }) => [id, name]), [[coordinatorId, "Regional manager"]]);
+  assert.deepEqual(await kit.rpc.deleteCoordinator({ coordinatorId }), {});
 });

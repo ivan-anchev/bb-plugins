@@ -1,8 +1,9 @@
-// A regional manager's avatar, drawn in a tile: small in a list row, large in a page's header.
+// A regional manager's avatar, drawn in a tile: tiny in its thread, small in a list row, large in a page's header.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { Avatar } from "../../model/profile.ts";
 
 const SIZES = {
+  xs: "size-5 rounded [&_[data-icon-root]]:size-3.5",
   sm: "size-7 rounded-md [&_[data-icon-root]]:size-4",
   lg: "size-10 rounded-lg [&_[data-icon-root]]:size-5",
 } as const;

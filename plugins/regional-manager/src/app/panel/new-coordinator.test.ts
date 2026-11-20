@@ -82,7 +82,7 @@ test("Create sends the profile as typed, opens the new regional manager's page, 
   assert.equal(localStorage.getItem("coordinator-new-profile"), null);
 });
 
-test("Enter in the name creates it, as the form's submit", async () => {
+test("the form's submit, which Enter in a field sends, creates it", async () => {
   const page = mount();
   await page.named("Webhooks");
 

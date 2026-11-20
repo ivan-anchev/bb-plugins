@@ -96,8 +96,8 @@ test("the Memory editor's reads and writes refuse a coordinating thread that was
   const { kit } = await started();
   const unknown = { coordinatorId: coordinatorIdSchema.parse("00000000-0000-4000-8000-000000000000") };
 
-  assert.throws(() => kit.rpc.memoryList(unknown), /no regional manager/);
-  assert.throws(() => kit.rpc.memoryWrite({ ...unknown, file: PLAN, content: "x", baseVersion: null }), /no regional manager/);
+  assert.throws(() => kit.rpc.memoryList(unknown), /no started regional manager/);
+  assert.throws(() => kit.rpc.memoryWrite({ ...unknown, file: PLAN, content: "x", baseVersion: null }), /no started regional manager/);
 });
 
 test("a catch-up past its budget names the files it left out", async () => {

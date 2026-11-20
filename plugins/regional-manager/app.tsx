@@ -4,6 +4,7 @@ import { boardTab } from "./src/app/board/board-tab.tsx";
 import { useNeedsYouBadge } from "./src/app/needs-you-badge.ts";
 import { CoordinatorPanel, NewButton, usePageTitle } from "./src/app/panel/coordinator-panel.tsx";
 import { PANEL_ID, PANEL_PATH } from "./src/app/panel/routes.ts";
+import { managerSegment } from "./src/app/thread/manager-segment.tsx";
 import { DISPLAY_NAME } from "./src/name.ts";
 
 export default definePluginApp((app) => {
@@ -18,4 +19,5 @@ export default definePluginApp((app) => {
     experimental_usePageTitle: usePageTitle,
   });
   app.slots.experimental_tab(boardTab);
+  app.slots.experimental_threadContextSegment(managerSegment);
 });

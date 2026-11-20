@@ -65,8 +65,8 @@ export default function plugin(host: BbPluginApi): void {
   const verify = createVerify({ bb, store, spawner, inbox, turns });
   const finalChecks = createFinalChecks({ bb, store, views, turns, verify, defaultBranch: defaultBranchReader(bb, store), now: Date.now });
 
-  const releaseHeld = releaseHeldManagers(bb, store, refreshCoordinators);
-  void releaseHeld();
+  // why once, as the plugin loads, and off the tick: it is a one-time upgrade whose bb calls must not hold up the watch.
+  void releaseHeldManagers(bb, store, refreshCoordinators).catch((error: unknown) => bb.log.warn(`Could not read the regional managers 0.3.0 left waiting for their goal: ${messageOf(error)}`));
 
   registerRoles(bb, store);
   registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
@@ -80,13 +80,11 @@ export default function plugin(host: BbPluginApi): void {
   bb.background.schedule("watch", "* * * * *", async () => {
     // why each caught: a pass that can't read bb or GitHub must not keep the next from running, nor the doorbells from ringing.
     // why the agents first: they remove a regional manager bb deleted before any later pass could ring it.
-    // why a 0.3.0 regional manager's upgrade before them: one whose first try failed is tried again (held-managers.ts).
     // why the PR reads before the verifiers: a verdict waiting for CI settles on this tick's read.
     // why the final checks between them: a merge read this tick makes its parent's check this tick, and a check the verifiers' pass then finds busy is the final checks' turn's to start.
     // why nothing waits for the issues' turns the agents' and the verifiers' passes start: a call bb
     // never answers holds only its own issue, which every tick skips until it answers (issue-turns.ts).
     // why what was unblocked after both, and before the ring: a merge read this tick is announced in the same doorbell.
-    await releaseHeld();
     await agents.reconcile().catch((error: unknown) => bb.log.warn(`Could not reconcile the agents; the next tick tries again: ${messageOf(error)}`));
     await prWatch.tick(Date.now()).catch((error: unknown) => bb.log.warn(`Could not read the issues' pull requests; the next tick tries again: ${messageOf(error)}`));
     await finalChecks.tick().catch((error: unknown) => bb.log.warn(`Could not read which final checks are due; the next tick tries again: ${messageOf(error)}`));

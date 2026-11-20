@@ -65,10 +65,14 @@ its role.
   changes it, one operation per regional manager at a time: created with no
   thread, started by the goal from its page (its thread spawned once, however
   often the goal is sent), its profile edited, which retitles a started one's
-  thread before it stores the rest, and deleted while it has no thread; and
-  the upgrade that turns a 0.3.0 regional manager still waiting for its goal
-  in a held thread into one not started yet, archiving that thread.
-  `server.ts` runs the once-a-minute tick: that upgrade, agents, then
+  thread before it stores the rest, and deleted while it has no thread (a
+  start finds the thread an earlier start spawned but never bound before it
+  spawns one); and the upgrade, run once as the plugin loads, of the regional
+  managers 0.3.0 left waiting for their goal: one whose thread ran a turn
+  keeps it, one still held becomes one not started yet, its placeholder
+  taken out of the queue and its thread archived, and one with no thread
+  becomes one not started yet.
+  `server.ts` runs the once-a-minute tick: agents, then
   the PR watch, then the verifiers, then the inbox (due reminders, unsent
   doorbells).
 - `src/app/panel/`: the nav panel, its list (not started first, then by

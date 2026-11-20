@@ -41,7 +41,10 @@ done handoffs are verified from the start; switch that on its board (see
 A regional manager that version 0.3.0 created and left waiting for its goal,
 its thread pending with the plugin's held message, becomes one not started
 yet when this version loads, named as that thread was titled; the plugin
-archives that thread. Send its goal from its page.
+takes the held message out of the queue and archives that thread. Send its
+goal from its page. One whose thread already ran a turn keeps its thread and
+role as they are, and one whose thread never came becomes one not started
+yet, named "Regional manager".
 
 The panel lists the regional managers not started yet under **Not started**,
 then every other one bb still lists under its project, newest first. A row is
@@ -58,7 +61,8 @@ optional **description**, up to 500, and an **icon**, one of 24 of bb's own
 - **Once it starts, the name is the thread's title.** bb keeps it; the
   plugin stores the description and the icon. Renaming the thread in bb's
   sidebar renames the manager in the panel too, and an edit of the name
-  renames the thread. The thread shows the name only, as its title. Before
+  renames the thread. The thread shows the name as its title, and the
+  manager's icon and name above its composer, never its description. Before
   the start the plugin keeps the name, and the thread is titled with it.
 - **Edit it** on its page in the panel: **Edit** opens the name, description
   and icons in place, before and after the start; **Save** keeps them, and
@@ -982,7 +986,8 @@ drops your changes. Each save wakes the regional manager with "The user
 edited <file>". A file you aren't editing shows its latest text, including
 the thread's writes as they land. Unsaved text stays in the browser, on the
 file you had open, through a resize, a reload and another tab, until you save
-it, cancel or take the newer version. While you have unsaved changes, Esc
+it, cancel or take the newer version. A file deleted under unsaved text stays
+listed ("Not in the folder"), with the text; saving makes it again. While you have unsaved changes, Esc
 doesn't leave the page. A regional manager not started yet has no memory.
 
 Neither side can silently overwrite the other. Every write names the version

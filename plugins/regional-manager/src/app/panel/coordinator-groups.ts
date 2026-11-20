@@ -17,18 +17,20 @@ type ListView<Project, Thread> =
 type Read = { data: { coordinators: readonly Coordinator[]; notStarted: readonly NotStarted[] } | undefined; error: Error | null; isLoading: boolean };
 
 /**
- * The list from its two reads: the plugin's regional managers and bb's live threads. It is "empty" only when
- * both reads succeeded, so a failed read never passes for a list with nothing in it; what a failed
- * refresh kept still shows.
+ * The list from its two reads: the plugin's regional managers and bb's live threads. The ones not
+ * started yet need only the first; the started ones join them as bb's threads are read. It is "empty"
+ * only when both reads succeeded, so a failed read never passes for a list with nothing in it; what a
+ * failed refresh kept still shows.
  */
 export function listView<Project extends { id: string }, Thread extends { id: string; projectId: string }>(
   read: Read,
   live: Pick<PluginSidebarThreadsState, "status"> & { threads: readonly Thread[]; projects: readonly Project[] },
 ): ListView<Project, Thread> {
-  if (read.isLoading || live.status === "loading") return { kind: "loading" };
+  if (read.isLoading) return { kind: "loading" };
   const notStarted = read.data?.notStarted ?? [];
   const groups = groupByProject(read.data?.coordinators ?? [], live.threads, live.projects);
   if (notStarted.length > 0 || groups.length > 0) return { kind: "listed", notStarted, groups };
+  if (live.status === "loading") return { kind: "loading" };
   return read.error === null && live.status === "ready" ? { kind: "empty" } : { kind: "failed" };
 }
 

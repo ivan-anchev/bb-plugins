@@ -41,8 +41,8 @@ const PLAN = "# Plan\n\n1. Inventory the endpoints\n";
  */
 function mount({ started = true }: { started?: boolean } = {}) {
   const profileOf = { description: "Moves webhooks off cron.", avatar: { kind: "icon", icon: "Workflow" } } as const;
-  let stored: Coordinator = { id: COORDINATOR, threadId: "thr_1", projectId: PROJECT.id, verify: true, ...profileOf, createdAt: 1_000 };
-  let waiting: NotStarted | null = started ? null : { id: COORDINATOR, name: "Scout", ...profileOf, createdAt: 1_000 };
+  let stored: Coordinator = { id: COORDINATOR, threadId: "thr_1", projectId: PROJECT.id, ...profileOf };
+  let waiting: NotStarted | null = started ? null : { id: COORDINATOR, name: "Scout", ...profileOf };
   const saves: Profile[] = [];
   const calls: { method: string; input: unknown }[] = [];
   let plan = PLAN;

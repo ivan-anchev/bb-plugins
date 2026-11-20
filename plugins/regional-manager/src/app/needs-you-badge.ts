@@ -14,10 +14,11 @@ const UNREAD = { label: "Could not read what needs you" };
 
 export function useNeedsYouBadge(): ExperimentalBadge | null {
   // why the panel's list: the badge counts the boards it lists, and only those (an archived thread's board can't be opened).
-  const view = listView(experimental_useRpcQuery({ contract, method: "coordinators", input: {} }), useSidebarThreads());
+  const live = useSidebarThreads();
+  const view = listView(experimental_useRpcQuery({ contract, method: "coordinators", input: {} }), live);
   const keys = view.kind === "listed" ? view.groups.flatMap((group) => group.rows.map((row) => row.coordinator.id)) : [];
   const read = experimental_useRpcKeyedQuery({ contract, method: "needsYou", keys, enabled: keys.length > 0 });
-  // why a dot: a failed read never passes for nothing waiting.
-  if (view.kind === "failed" || read.error !== null) return UNREAD;
+  // why a dot: a failed read never passes for nothing waiting, even beside the regional managers not started yet, which have no board.
+  if (view.kind === "failed" || live.status === "error" || read.error !== null) return UNREAD;
   return needsYouBadge(keys.flatMap((key) => read.data?.[key] ?? []));
 }

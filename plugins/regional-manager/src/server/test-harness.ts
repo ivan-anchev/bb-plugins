@@ -8,6 +8,7 @@ import type { BbPluginApi, PluginAgentConfiguration, PluginAgentConfigurationCon
 import { createFakePluginHost, type FakePluginHarness } from "@get-bb/plugin-sdk/testing";
 import { z } from "zod";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
+import { coordinatorContract } from "../contract.ts";
 import type { EnvironmentProvider } from "../model/agent.ts";
 import type { HolderThread } from "../model/issue/status.ts";
 import { DEFAULT_AVATAR, type Profile } from "../model/profile.ts";
@@ -68,7 +69,9 @@ type ManagerBb = Parameters<typeof managerHandlers>[0]["bb"];
 type HeldBb = Parameters<typeof releaseHeldManagers>[0];
 type SendArgs = Parameters<AgentsBb["sdk"]["threads"]["send"]>[0];
 type Delivery = Awaited<ReturnType<InboxBb["sdk"]["threads"]["send"]>>;
-type QueuedMessage = Awaited<ReturnType<InboxBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number] & Awaited<ReturnType<AgentsBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number];
+type QueuedMessage = Awaited<ReturnType<InboxBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number] &
+  Awaited<ReturnType<AgentsBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number] &
+  Awaited<ReturnType<HeldBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number];
 
 type ThreadRef = { id: string; originPluginId: string | null };
 /** A thread as bb's events carry it: the thread as it is now, which the generic thread event reads the status of. */
@@ -145,9 +148,10 @@ function runsOn(args: SpawnArgs, parent: FakeThread | null): { providerId: strin
 
 /**
  * How the fake bb answers a spawn. `created` delivers `thread.created` for the new thread, as bb does
- * before its spawn answer; `answer` is that answer: the thread, or lost (the call rejects).
+ * before its spawn answer; `answer` is that answer: the thread, lost (the thread exists, and the call
+ * rejects), or refused (the call rejects before any thread exists).
  */
-type SpawnBehaviour = { created: boolean; answer: "thread" | "lost" };
+type SpawnBehaviour = { created: boolean; answer: "thread" | "lost" | "refused" };
 
 /** A provider bb can run in every environment, with its models (null: bb can't load them). */
 type FakeProvider = { id: string; available: boolean; models: { model: string; isDefault: boolean; defaultReasoningEffort: string }[] | null };
@@ -443,6 +447,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       const reused = args.environment?.type === "reuse" ? args.environment.environmentId : null;
       // As bb does, a reuse of an environment it destroyed is refused before any thread exists (a local one answers so; a sandbox's "HTTP 404: Host is unavailable").
       if (reused !== null && environmentRecords.destroyed.has(reused)) throw bbHttpError(409, "environment_unavailable", "Environment unavailable");
+      if (behaviour.answer === "refused") throw bbHttpError(400, "invalid_request", "Invalid environment");
       const id = `thr_${++spawned}`;
       metadata.set(id, args.pluginMetadata ?? {});
       const thread: FakeThread = {
@@ -474,11 +479,14 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       if (value === undefined) throw new Error(`No thread ${threadId}`);
       return value;
     },
-    // As bb does, listing by id includes archived and deleted threads. why optional: bb's SDK lists without ids too; the plugin always names them.
+    // As bb does, listing by id includes archived and deleted threads; listing the plugin's top-level threads leaves archived and deleted ones out.
     // As bb does, each row is a copy, its turns included: what the plugin read stays as read while the thread moves on.
-    list: async ({ threadIds }: { threadIds?: readonly string[] } = {}) => {
-      if (threadIds === undefined) throw new Error("The plugin lists threads by id");
+    list: async ({ threadIds, originPluginId, hasParent }: { threadIds?: readonly string[]; originPluginId?: string; hasParent?: boolean } = {}) => {
       if (threadLists.failure !== null) throw threadLists.failure;
+      if (threadIds === undefined) {
+        if (originPluginId !== PLUGIN_ID || hasParent !== false) throw new Error("The plugin lists threads by id, or its own top-level ones");
+        return [...fakeThreads.values()].filter((thread) => thread.spawnedWith.parentThreadId === undefined && thread.archivedAt === null && thread.deletedAt === null).map((thread) => ({ ...thread, turns: [...thread.turns] }));
+      }
       const listed = threadIds.flatMap((id) => {
         const thread = fakeThreads.get(id);
         return thread === undefined ? [] : [{ ...thread, turns: [...thread.turns] }];
@@ -509,7 +517,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       };
       if ((args.mode === "queue-if-active" && thread.status !== "idle") || (args.mode === "auto" && thread.hasPendingInteraction)) {
         const text = textOfInput(args);
-        const entry: (typeof queue)[number] = { id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: args.senderThreadId ?? null, content: [{ type: "text", text, mentions: [] }], threadId: args.threadId, text };
+        const entry: (typeof queue)[number] = { id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: args.senderThreadId ?? null, originPluginId: PLUGIN_ID, content: [{ type: "text", text, mentions: [] }], threadId: args.threadId, text };
         queue.push(entry);
         return answer({ delivery: "queued", queuedMessage: { id: entry.id } });
       }
@@ -575,8 +583,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     output: async () => ({ output: "Done: npm test passes." }),
     // As bb does, an archived or deleted thread is still read by id.
     async get({ threadId }: { threadId: string }) {
-      const { title, archivedAt } = fakeThread(threadId);
-      return { title, archivedAt };
+      const { title, status } = fakeThread(threadId);
+      return { title, status };
     },
     // As bb does, a deleted thread refuses a rename; an archived one takes it.
     async update({ threadId, title }: { threadId: string; title?: string | null }) {
@@ -709,7 +717,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard });
     watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });
-    return { spawner, inbox, verify, agents, prWatch, finalChecks, unblocked, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }, releaseHeld: releaseHeldManagers(bb, store, refreshCoordinators) };
+    return { spawner, inbox, verify, agents, prWatch, finalChecks, unblocked, rpc: parsingInputs({ ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }), releaseHeld: () => releaseHeldManagers(bb, store, refreshCoordinators) };
   }
   let plugin = wire();
 
@@ -768,7 +776,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       const { threadId } = await plugin.rpc.startCoordinator({ coordinatorId, request });
       return { coordinatorId, threadId };
     },
-    /** The upgrade of every 0.3.0 regional manager still waiting for its goal, as server.ts runs it at load and on every tick. */
+    /** The upgrade of every 0.3.0 regional manager still waiting for its goal, as server.ts runs it once as the plugin loads. */
     releaseHeld: () => plugin.releaseHeld(),
     /** GitHub and gh as the PR watch reaches them; a test may change them between ticks. */
     github,
@@ -812,7 +820,6 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     /** The schedule's once-a-minute pass, as server.ts runs it, at the clock's time. */
     async tick(): Promise<void> {
       const warned = (pass: string) => (error: unknown) => fakeBb.log.warn(`Could not ${pass}; the next tick tries again: ${error instanceof Error ? error.message : String(error)}`);
-      await plugin.releaseHeld();
       await plugin.agents.reconcile().catch(warned("reconcile the agents"));
       await plugin.prWatch.tick(clock.now).catch(warned("read the issues' pull requests"));
       await plugin.finalChecks.tick().catch(warned("read which final checks are due"));
@@ -901,9 +908,14 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     delivered: (threadId: string) => delivered.filter((message) => message.threadId === threadId).map((message) => message.text),
     /** The messages bb holds queued for the thread, oldest first. */
     queued: (threadId: string) => queue.filter((entry) => entry.threadId === threadId).map((entry) => entry.id),
+    /** The placeholder 0.3.0 spawned a regional manager with, held in its thread's queue by 0.3.0's hook. */
+    heldPlaceholder(threadId: string): void {
+      const text = "0.3.0's placeholder";
+      queue.push({ id: `qm_${++queued}`, state: "waiting", failureReason: null, senderThreadId: null, originPluginId: PLUGIN_ID, content: [{ type: "text", text, mentions: [] }], threadId, text });
+    },
     /** The user queues a message for the thread from bb's composer, as while it runs. */
     userQueues(threadId: string, text: string): void {
-      queue.push({ id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: null, content: [{ type: "text", text, mentions: [] }], threadId, text });
+      queue.push({ id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: null, originPluginId: null, content: [{ type: "text", text, mentions: [] }], threadId, text });
     },
     /** bb sends a queued message and announces it; `silently`: the announcement is missed, as during a reload. */
     async dispatch(queuedMessageId: string, { silently = false } = {}): Promise<void> {
@@ -1030,4 +1042,9 @@ export const issueIn = (text: string): string => /Filed (i\d+)/.exec(text)?.[1] 
 export async function startedAgent(kit: ReturnType<typeof harness>, threadId: string, fields: object = {}, start: object = {}): Promise<{ issue: string; agentThreadId: string }> {
   const issue = issueIn(textOf(await kit.call("issue_create", { ...ISSUE, ...fields }, threadId)));
   return { issue, agentThreadId: threadIn(textOf(await kit.call("agent_start", { issue, ...start }, threadId))) };
+}
+
+/** The handlers, each taking its input as bb's RPC layer hands it over: parsed by the contract, which drops what it doesn't name. */
+function parsingInputs<H extends Partial<Record<keyof typeof coordinatorContract, (input: never) => unknown>>>(handlers: H): H {
+  return Object.fromEntries(Object.entries(handlers).map(([method, handler]) => [method, (input: unknown) => (handler as (input: unknown) => unknown)(coordinatorContract[method as keyof typeof coordinatorContract].input.parse(input))])) as unknown as H;
 }

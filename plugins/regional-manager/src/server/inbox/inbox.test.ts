@@ -206,11 +206,11 @@ test("once the plugin is disposed, nothing rings", async () => {
   assert.deepEqual(doorbells(), []);
 });
 
-test("a regional manager not started yet is never woken or polled: ticks send, spawn and warn of nothing for it, even with an update waiting", async () => {
+test("a regional manager not started yet is never woken or polled: its memory takes no update, and ticks send, spawn, list and warn of nothing for it", async () => {
   const kit = harness();
   const coordinatorId = await kit.createManager("Scout");
-  // why a memory edit: it is the one update the panel can record for a regional manager before it starts, and an update is what rings one.
-  await kit.rpc.memoryWrite({ coordinatorId, file: memoryFileSchema.parse("NOTES.md"), content: "Read the cron box first.", baseVersion: null });
+  // why a memory edit: it is the one update the panel could record for a regional manager, and an update is what rings one.
+  await assert.rejects(async () => kit.rpc.memoryWrite({ coordinatorId, file: memoryFileSchema.parse("NOTES.md"), content: "Read the cron box first.", baseVersion: null }), /no started regional manager/);
 
   for (let minute = 0; minute < 3; minute++) await kit.tick();
 

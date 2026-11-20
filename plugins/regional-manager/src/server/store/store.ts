@@ -27,7 +27,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
   function coordinators(id: CoordinatorId | null): Coordinator[] {
     return db()
       .prepare(
-        `SELECT c.id, r.thread_id AS threadId, c.project_id AS projectId, c.verify, c.description, c.avatar, c.created_at AS createdAt
+        `SELECT c.id, r.thread_id AS threadId, c.project_id AS projectId, c.description, c.avatar
            FROM coordinators c JOIN roles r ON r.ticket = c.ticket
           WHERE r.thread_id IS NOT NULL AND (? IS NULL OR c.id = ?)
           ORDER BY c.created_at DESC, c.rowid DESC`,
@@ -36,17 +36,6 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
       .map(toCoordinator);
   }
 
-  function notStarted(id: CoordinatorId | null): (NotStarted & { ticket: string })[] {
-    return db()
-      .prepare(
-        `SELECT c.id, c.ticket, c.name, c.description, c.avatar, c.created_at AS createdAt
-           FROM coordinators c JOIN roles r ON r.ticket = c.ticket
-          WHERE r.thread_id IS NULL AND c.awaiting_goal = 0 AND (? IS NULL OR c.id = ?)
-          ORDER BY c.created_at DESC, c.rowid DESC`,
-      )
-      .all(id, id)
-      .map((row) => notStartedRowSchema.parse(row));
-  }
 
   return {
     ...inboxStore(db),
@@ -68,13 +57,14 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     /**
      * Where the regional manager's start stands: started, with its thread; not started, with the
      * ticket and the name its thread is spawned with; or null: there is no such regional manager, or
-     * it is a 0.3.0 one whose upgrade hasn't run yet (held-managers.ts).
+     * it is one 0.3.0 left waiting for its goal, with no name, whose upgrade hasn't run yet (held-managers.ts).
      */
     startOf(id: CoordinatorId): { kind: "started"; threadId: string } | { kind: "not-started"; ticket: string; name: string } | null {
-      const started = coordinators(id)[0];
-      if (started !== undefined) return { kind: "started", threadId: started.threadId };
-      const waiting = notStarted(id)[0];
-      return waiting === undefined ? null : { kind: "not-started", ticket: waiting.ticket, name: waiting.name };
+      const row = db().prepare("SELECT c.ticket, c.name, r.thread_id AS threadId FROM coordinators c JOIN roles r ON r.ticket = c.ticket WHERE c.id = ?").get(id);
+      if (row === undefined) return null;
+      const { ticket, name, threadId } = startRowSchema.parse(row);
+      if (threadId !== null) return { kind: "started", threadId };
+      return name === null ? null : { kind: "not-started", ticket, name };
     },
 
     /** The project a regional manager not started yet starts on, written before its thread is spawned so its row is whole once the thread binds. */
@@ -82,36 +72,51 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
       db().prepare("UPDATE coordinators SET project_id = ? WHERE id = ?").run(projectId, id);
     },
 
-    /** Replaces the regional manager's profile. Once it has a thread, the name stored is no longer read: the thread's title is its name. */
-    setProfile(id: CoordinatorId, { name, description, avatar }: Profile): void {
-      db().prepare("UPDATE coordinators SET name = ?, description = ?, avatar = ? WHERE id = ?").run(name, description, JSON.stringify(avatar), id);
+    /** Replaces what the plugin keeps of the regional manager's profile but its name. */
+    setProfile(id: CoordinatorId, { description, avatar }: Omit<Profile, "name">): void {
+      db().prepare("UPDATE coordinators SET description = ?, avatar = ? WHERE id = ?").run(description, JSON.stringify(avatar), id);
     },
 
-    /** Whether a regional manager with this id exists, started or not. */
-    isCoordinator(id: CoordinatorId): boolean {
-      return db().prepare("SELECT 1 FROM coordinators WHERE id = ?").get(id) !== undefined;
+    /** Renames a regional manager not started yet; once started, its thread's title is its name. */
+    rename(id: CoordinatorId, name: string): void {
+      db().prepare("UPDATE coordinators SET name = ? WHERE id = ?").run(name, id);
     },
 
-    /** The regional manager, once its thread is bound; null before. Every wake, poll and tool reads it through here or coordinators, so none reaches one with no thread. */
+    /** The regional manager, once its thread is bound; null before. Every wake, poll, tool and board or memory read reaches it through here or coordinators, so none reaches one with no thread. */
     coordinator: (id: CoordinatorId): Coordinator | null => coordinators(id)[0] ?? null,
 
     /** Every regional manager whose thread is bound, newest first. */
     coordinators: (): Coordinator[] => coordinators(null),
 
     /** Every regional manager not started yet, newest first. */
-    notStarted: (): NotStarted[] => notStarted(null).map(({ ticket: _, ...listed }) => listed),
-
-    /** Every 0.3.0 regional manager whose thread still holds the placeholder it was spawned with, waiting for its goal (held-managers.ts). */
-    heldManagers(): { id: CoordinatorId; threadId: string }[] {
+    notStarted(): NotStarted[] {
       return db()
-        .prepare("SELECT c.id, r.thread_id AS threadId FROM coordinators c JOIN roles r ON r.ticket = c.ticket WHERE c.awaiting_goal = 1 AND r.thread_id IS NOT NULL")
+        .prepare(
+          `SELECT c.id, c.name, c.description, c.avatar
+             FROM coordinators c JOIN roles r ON r.ticket = c.ticket
+            WHERE r.thread_id IS NULL AND c.name IS NOT NULL
+            ORDER BY c.created_at DESC, c.rowid DESC`,
+        )
+        .all()
+        .map((row) => notStartedRowSchema.parse(row));
+    },
+
+    /** Every regional manager 0.3.0 left waiting for its goal, with its thread (null: its spawn never bound one) (held-managers.ts). */
+    heldManagers(): { id: CoordinatorId; threadId: string | null }[] {
+      return db()
+        .prepare("SELECT c.id, r.thread_id AS threadId FROM coordinators c JOIN roles r ON r.ticket = c.ticket WHERE c.awaiting_goal = 1")
         .all()
         .map((row) => heldRowSchema.parse(row));
     },
 
+    /** A 0.3.0 regional manager whose thread had its goal: it waits for nothing, and keeps its thread and role. */
+    goalGiven(id: CoordinatorId): void {
+      db().prepare("UPDATE coordinators SET awaiting_goal = 0 WHERE id = ?").run(id);
+    },
+
     /**
-     * Makes a 0.3.0 regional manager waiting for its goal one not started yet, named `name`: its old
-     * thread's ticket gives way to a new unbound one, so that thread never holds its role again.
+     * Makes a 0.3.0 regional manager still waiting for its goal one not started yet, named `name`: its
+     * ticket gives way to a new unbound one, so the thread it had, if any, never holds its role again.
      * Together or not at all; a second call for one already made so changes nothing.
      */
     unhold(id: CoordinatorId, name: string, ticket: string, at: number): void {
@@ -211,13 +216,10 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
   };
 }
 
-// why: SQLite has no boolean; verify is stored as 0 or 1. The avatar is stored as JSON, and one
-// this release can't draw, as an icon a later release dropped from its picker, reads as the
-// default rather than hiding every regional manager from the list.
-const coordinatorRowSchema = coordinatorSchema.extend({
-  verify: z.number().transform((verify) => verify === 1),
-  avatar: z.string().transform((json) => avatarSchema.catch(DEFAULT_AVATAR).parse(JSON.parse(json))),
-});
-const toCoordinator = (row: unknown): Coordinator => coordinatorRowSchema.parse(row);
-const notStartedRowSchema = notStartedSchema.extend({ ticket: z.string(), avatar: coordinatorRowSchema.shape.avatar });
-const heldRowSchema = z.object({ id: coordinatorRowSchema.shape.id, threadId: z.string() });
+// why: the avatar is stored as JSON, and one this release can't draw, as an icon a later release
+// dropped from its picker, reads as the default rather than hiding every regional manager from the list.
+const storedAvatarSchema = z.string().transform((json) => avatarSchema.catch(DEFAULT_AVATAR).parse(JSON.parse(json)));
+const toCoordinator = (row: unknown): Coordinator => coordinatorSchema.extend({ avatar: storedAvatarSchema }).parse(row);
+const notStartedRowSchema = notStartedSchema.extend({ avatar: storedAvatarSchema });
+const startRowSchema = z.object({ ticket: z.string(), name: z.string().nullable(), threadId: z.string().nullable() });
+const heldRowSchema = z.object({ id: coordinatorSchema.shape.id, threadId: z.string().nullable() });

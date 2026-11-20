@@ -3,7 +3,7 @@
 import { experimental_Icon as Icon, experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
 import { useRef, useState, type Ref } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
-import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
+import type { CoordinatorId } from "../../model/role.ts";
 import { EMPTY_DRAFT, NAME_MISSING, NEW_PROFILE_KEY, profileDraftSchema, profileOf } from "../profile/profile-draft.ts";
 import { ProfileFields } from "../profile/profile-fields.tsx";
 import { Button } from "../ui/button.tsx";
@@ -32,7 +32,7 @@ export function NewCoordinator({ ref, onBack, onCreated }: NewCoordinatorProps) 
     const created = await create.mutate({ profile }).catch(() => null);
     if (created === null) return;
     stored.store(null);
-    onCreated(coordinatorIdSchema.parse(created.coordinatorId));
+    onCreated(created.coordinatorId);
   }
 
   return (

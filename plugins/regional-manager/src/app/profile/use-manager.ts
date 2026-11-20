@@ -19,3 +19,9 @@ export function useManager(coordinatorId: CoordinatorId | null): Manager | null 
   const thread = threads.find(({ id }) => id === started.threadId);
   return { kind: "started", threadId: started.threadId, profile: thread === undefined ? null : { name: thread.displayTitle, description: started.description, avatar: started.avatar } };
 }
+
+/** The started regional manager whose thread this is, from the same read as the panel's list; null for any other thread, or before the read. */
+export function useCoordinatorOfThread(threadId: string) {
+  const read = experimental_useRpcQuery({ contract, method: "coordinators", input: {} });
+  return { read, coordinator: read.data?.coordinators.find((coordinator) => coordinator.threadId === threadId) ?? null };
+}

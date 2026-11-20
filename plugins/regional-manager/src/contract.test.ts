@@ -12,10 +12,17 @@ test("a start whose text part has no text, or with no project, is refused before
   assert.equal(startInput.safeParse({ coordinatorId: COORDINATOR, request: projectless }).success, false);
 });
 
-test("a start passes on everything it does not read, unchanged", () => {
-  const request = { ...newThreadRequest("Migrate the webhook service"), sendAt: 5 };
+test("a start keeps the composer's fields, attachments and a scheduled send included, and drops every other, executionInputSources too", () => {
+  const { executionInputSources: _, ...request } = { ...newThreadRequest("Migrate the webhook service"), sendAt: 5, serviceTier: "fast" };
   request.input.push({ type: "image", url: "https://example.com/plan.png" });
-  assert.deepEqual(startInput.parse({ coordinatorId: COORDINATOR, request }), { coordinatorId: COORDINATOR, request });
+  const parsed = startInput.parse({ coordinatorId: COORDINATOR, request: { ...request, executionInputSources: {}, visibility: "hidden", lifecycleOwnerThreadId: "thr_9" } });
+  assert.deepEqual(parsed, { coordinatorId: COORDINATOR, request });
+});
+
+test("a start with no text to be its goal is refused", () => {
+  for (const input of [[], [{ type: "text", text: "  ", mentions: [] }], [{ type: "image", url: "https://example.com/plan.png" }]]) {
+    assert.equal(startInput.safeParse({ coordinatorId: COORDINATOR, request: { ...newThreadRequest(""), input } }).success, false, JSON.stringify(input));
+  }
 });
 
 test("the goal is the text typed in the composer, every text part in order, and nothing else", () => {

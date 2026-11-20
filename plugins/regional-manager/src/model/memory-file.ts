@@ -21,7 +21,7 @@ export type MemoryVersion = z.infer<typeof memoryVersionSchema>;
 export const memoryContentSchema = z.string().max(100_000, "A memory file holds at most 100,000 characters");
 
 /** A file as read: its text and the version a write must name to replace it. */
-export const memoryTextSchema = z.object({ content: z.string(), version: z.string() });
+const memoryTextSchema = z.object({ content: z.string(), version: z.string() });
 export type MemoryText = z.infer<typeof memoryTextSchema>;
 
 /**

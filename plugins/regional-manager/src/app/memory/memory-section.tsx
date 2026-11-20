@@ -1,8 +1,9 @@
 // Memory, at the bottom of a started regional manager's board: its memory files, each with its first
 // line and when it last changed. Opening one swaps the list for the file, rendered, with the way back
 // and Edit, which edits it in place (memory-editor.tsx). Each file's edit is kept, so going back, bb
-// redrawing the panel or a reload loses nothing and a save still settles, and while any draft is
-// open, Esc never leaves the page.
+// redrawing the panel or a reload loses nothing and a save still settles; a file with a draft is
+// listed even once deleted, so the draft is never hidden; and while any draft is open, Esc never
+// leaves the page.
 import { experimental_Icon as Icon, experimental_useRpcQuery, Markdown } from "@get-bb/plugin-sdk/app";
 import { useId, useState } from "react";
 import { coordinatorContract as contract, type MemoryEntry } from "../../contract.ts";
@@ -23,10 +24,11 @@ export function MemorySection({ coordinatorId }: { coordinatorId: CoordinatorId 
   const edits = useFileEdits(coordinatorId);
   const heading = useId();
   const entries = list.data?.files ?? [];
-  const drafted = new Set(entries.flatMap(({ file }) => (edits.of(file).draft === null ? [] : [file])));
+  const drafted = new Set(edits.drafted);
   useHoldEscape(drafted.size > 0);
-  // why derived: a file deleted since it was opened shows the list again.
-  const entry = entries.find(({ file }) => file === opened.value) ?? null;
+  const rows: readonly Row[] = [...entries.map((entry) => ({ file: entry.file, entry })), ...edits.drafted.filter((file) => !entries.some((entry) => entry.file === file)).map((file) => ({ file, entry: null }))];
+  // why among the rows: a file deleted since it was opened stays open while it has a draft, and shows the list again once it has none.
+  const open = rows.find(({ file }) => file === opened.value) ?? null;
 
   return (
     <section aria-labelledby={heading} className="flex flex-col gap-2 border-t border-border pt-6">
@@ -35,11 +37,11 @@ export function MemorySection({ coordinatorId }: { coordinatorId: CoordinatorId 
         {list.data !== undefined && <span className="text-xs font-normal text-muted-foreground tabular-nums">{entries.length}</span>}
       </h2>
       {list.error !== null && <ReadFailure onRetry={() => void list.refetch()}>Could not read the memory folder: {list.error.message}</ReadFailure>}
-      {list.data !== undefined && entries.length === 0 && <p className="px-2 text-sm text-muted-foreground">The memory folder has no files.</p>}
-      {entry === null ? (
-        <FileList entries={entries} drafted={drafted} onOpen={opened.store} />
+      {list.data !== undefined && rows.length === 0 && <p className="px-2 text-sm text-muted-foreground">The memory folder has no files.</p>}
+      {open === null ? (
+        <FileList rows={rows} drafted={drafted} onOpen={opened.store} />
       ) : (
-        <OpenFile key={entry.file} coordinatorId={coordinatorId} entry={entry} edits={edits} onBack={() => opened.store(null)} />
+        <OpenFile key={open.file} coordinatorId={coordinatorId} file={open.file} modifiedAt={open.entry?.modifiedAt ?? null} edits={edits} onBack={() => opened.store(null)} />
       )}
     </section>
   );
@@ -48,10 +50,13 @@ export function MemorySection({ coordinatorId }: { coordinatorId: CoordinatorId 
 /** Where a tab keeps the memory file it has open on a regional manager's board. */
 const openedKeyOf = (coordinatorId: CoordinatorId): string => `coordinator-memory-open:${coordinatorId}`;
 
-function FileList({ entries, drafted, onOpen }: { entries: readonly MemoryEntry[]; drafted: ReadonlySet<MemoryFile>; onOpen(file: MemoryFile): void }) {
+/** A file the list shows: on disk, with what it says first and when it changed (null entry: deleted since, its draft kept). */
+type Row = { file: MemoryFile; entry: MemoryEntry | null };
+
+function FileList({ rows, drafted, onOpen }: { rows: readonly Row[]; drafted: ReadonlySet<MemoryFile>; onOpen(file: MemoryFile): void }) {
   return (
     <ul className="flex flex-col">
-      {entries.map(({ file, firstLine, modifiedAt }) => (
+      {rows.map(({ file, entry }) => (
         <li key={file}>
           <button
             type="button"
@@ -66,10 +71,8 @@ function FileList({ entries, drafted, onOpen }: { entries: readonly MemoryEntry[
                 </span>
               )}
             </span>
-            <span className="min-w-0 flex-1 truncate text-muted-foreground">{firstLine}</span>
-            <time dateTime={new Date(modifiedAt).toISOString()} className="shrink-0 text-xs text-muted-foreground tabular-nums">
-              {shortTime(modifiedAt)}
-            </time>
+            <span className="min-w-0 flex-1 truncate text-muted-foreground">{entry === null ? "Not in the folder" : entry.firstLine}</span>
+            {entry !== null && <Changed at={entry.modifiedAt} />}
           </button>
         </li>
       ))}
@@ -77,10 +80,19 @@ function FileList({ entries, drafted, onOpen }: { entries: readonly MemoryEntry[
   );
 }
 
-type OpenFileProps = { coordinatorId: CoordinatorId; entry: MemoryEntry; edits: ReturnType<typeof useFileEdits>; onBack(): void };
+/** When a file last changed. */
+function Changed({ at }: { at: number }) {
+  return (
+    <time dateTime={new Date(at).toISOString()} className="shrink-0 text-xs text-muted-foreground tabular-nums">
+      {shortTime(at)}
+    </time>
+  );
+}
+
+type OpenFileProps = { coordinatorId: CoordinatorId; file: MemoryFile; modifiedAt: number | null; edits: ReturnType<typeof useFileEdits>; onBack(): void };
 
 /** One file, rendered, with the way back to every file and Edit; or, while the user edits it, its editor. */
-function OpenFile({ coordinatorId, entry: { file, modifiedAt }, edits, onBack }: OpenFileProps) {
+function OpenFile({ coordinatorId, file, modifiedAt, edits, onBack }: OpenFileProps) {
   const edit = edits.of(file);
   // why the draft counts: an edit left open, kept in the browser, opens in its editor again.
   const [editing, setEditing] = useState(edit.draft !== null);
@@ -114,7 +126,7 @@ function OpenFile({ coordinatorId, entry: { file, modifiedAt }, edits, onBack }:
   );
 }
 
-function FileReader({ coordinatorId, file, modifiedAt, onEdit }: { coordinatorId: CoordinatorId; file: MemoryFile; modifiedAt: number; onEdit(): void }) {
+function FileReader({ coordinatorId, file, modifiedAt, onEdit }: { coordinatorId: CoordinatorId; file: MemoryFile; modifiedAt: number | null; onEdit(): void }) {
   const read = experimental_useRpcQuery({ contract, method: "memoryRead", input: { coordinatorId, file } });
   const heading = useId();
   return (
@@ -123,9 +135,7 @@ function FileReader({ coordinatorId, file, modifiedAt, onEdit }: { coordinatorId
         <h3 id={heading} className="font-mono text-sm font-medium">
           {file}
         </h3>
-        <time dateTime={new Date(modifiedAt).toISOString()} className="text-xs text-muted-foreground tabular-nums">
-          {shortTime(modifiedAt)}
-        </time>
+        {modifiedAt !== null && <Changed at={modifiedAt} />}
         <div className="ml-auto">
           <Button variant="ghost" size="sm" onClick={onEdit}>
             <Icon name="Edit" aria-hidden />

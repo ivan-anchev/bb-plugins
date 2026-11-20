@@ -7,6 +7,7 @@ import { agentIdSchema, endedHowSchema } from "./model/agent.ts";
 import { needsYouSchema } from "./model/board/board-groups.ts";
 import { answerSchema, decisionIdSchema, decisionSchema } from "./model/decision.ts";
 import { shownHandoffSchema } from "./model/handoff.ts";
+import { executionSchema } from "./model/execution.ts";
 import { descriptionSchema, doneCriteriaSchema, issueIdSchema } from "./model/issue/issue.ts";
 import { kindSchema } from "./model/issue/kind.ts";
 import { issueStatusSchema } from "./model/issue/status.ts";
@@ -18,17 +19,14 @@ import { shownVerdictSchema } from "./model/verdict/verdict.ts";
 
 /**
  * A started regional manager: its memory is keyed by `id`, its conversation is `threadId`, which
- * works on `projectId`. `verify`: whether its agents' done handoffs get a verifier from now on. Its
- * profile without its name, which is its thread's title (profile.ts).
+ * works on `projectId`. Its profile without its name, which is its thread's title (profile.ts).
  */
 export const coordinatorSchema = z.object({
   id: coordinatorIdSchema,
   threadId: z.string().min(1),
   projectId: z.string().min(1),
-  verify: z.boolean(),
   description: profileSchema.shape.description,
   avatar: avatarSchema,
-  createdAt: z.number().int().nonnegative(),
 });
 export type Coordinator = z.infer<typeof coordinatorSchema>;
 
@@ -36,7 +34,7 @@ export type Coordinator = z.infer<typeof coordinatorSchema>;
  * A regional manager not started yet: created on the New page with its profile and no thread, which
  * the goal sent from its page starts, titled with `name`.
  */
-export const notStartedSchema = coordinatorSchema.pick({ id: true, description: true, avatar: true, createdAt: true }).extend({ name: profileSchema.shape.name });
+export const notStartedSchema = profileSchema.extend({ id: coordinatorIdSchema });
 export type NotStarted = z.infer<typeof notStartedSchema>;
 
 /** Every read of the list carries it; a create, a start, a bind, a delete or a profile edit invalidates it. */
@@ -119,19 +117,32 @@ const issueDetailSchema = z.object({
 });
 export type IssueDetail = z.infer<typeof issueDetailSchema>;
 
-// why only these checked: bb validates the request at the spawn; the plugin reads its project and its text.
-const promptPartSchema = z.union([
-  z.looseObject({ type: z.literal("text"), text: z.string() }),
-  z.looseObject({ type: z.string().refine((type) => type !== "text") }),
-]);
-const newThreadRequestSchema = z.custom<NewThreadRequest>(
-  (value) => z.looseObject({ projectId: z.string().min(1), input: z.array(promptPartSchema) }).safeParse(value).success,
-  "Expected the composer's new-thread request",
+type ComposedPart = NewThreadRequest["input"][number];
+// why only a part's type, and a text part's text, checked: bb validates the rest at the spawn, and the plugin reads nothing else of it.
+const composedPartSchema = z.custom<ComposedPart>(
+  (value) => z.union([z.looseObject({ type: z.literal("text"), text: z.string() }), z.looseObject({ type: z.string().refine((type) => type !== "text") })]).safeParse(value).success,
+  "Expected a part of the composer's message",
 );
 
+/**
+ * What bb's new-thread composer submits that starts a regional manager: the project, what it runs on,
+ * where (bb validates the environment at the spawn), and the message, whose text is its goal. Only
+ * these fields reach the spawn: any other is dropped, as is `executionInputSources`, so bb counts
+ * every execution field as chosen and runs exactly what the composer showed.
+ */
+const composerRequestSchema = executionSchema.extend({
+  projectId: z.string().min(1),
+  permissionMode: z.enum(["accept-edits", "auto", "full"]),
+  serviceTier: z.string().optional(),
+  sessionOptions: z.custom<NonNullable<NewThreadRequest["sessionOptions"]>>((value) => z.record(z.string(), z.unknown()).safeParse(value).success).optional(),
+  environment: z.custom<NewThreadRequest["environment"]>((value) => z.looseObject({ type: z.string() }).safeParse(value).success, "Expected where the thread runs"),
+  input: z.array(composedPartSchema).refine((parts) => parts.some((part) => part.type === "text" && part.text.trim() !== ""), "A goal needs text"),
+  sendAt: z.number().optional(),
+});
+export type ComposerRequest = z.infer<typeof composerRequestSchema>;
+
 /** The text the user typed in bb's composer: every text part, in order. */
-export const typedText = (request: NewThreadRequest): string =>
-  request.input.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n\n");
+export const typedText = ({ input }: Pick<ComposerRequest, "input">): string => input.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n\n");
 
 /** A memory file as the board's Memory lists it: its name, its first line of text (null: none) and when it last changed, in epoch ms. */
 const memoryEntrySchema = z.object({ file: memoryFileSchema, firstLine: z.string().nullable(), modifiedAt: z.number() });
@@ -160,7 +171,7 @@ export const coordinatorContract = defineRpcContract({
    * Idempotent: a regional manager already started answers with its thread, and spawns nothing.
    */
   startCoordinator: {
-    input: z.object({ coordinatorId: coordinatorIdSchema, request: newThreadRequestSchema }),
+    input: z.object({ coordinatorId: coordinatorIdSchema, request: composerRequestSchema }),
     output: z.object({ threadId: z.string() }),
   },
   /** Replaces a regional manager's profile: retitles its thread with the name once it has one, and keeps the rest. */

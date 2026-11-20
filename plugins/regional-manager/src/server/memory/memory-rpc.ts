@@ -1,5 +1,5 @@
 // The board's Memory reads and writes: the same files and the same compare-and-swap as the
-// Coordinator's tools, for a coordinating thread the store knows. A save wakes the thread.
+// Coordinator's tools, for a started regional manager. A save wakes the thread.
 import type { PluginRpcHandlers } from "@get-bb/plugin-sdk";
 import type { coordinatorContract } from "../../contract.ts";
 import { firstLineOf } from "../../model/memory-file.ts";
@@ -10,10 +10,10 @@ import type { MemoryRoot } from "./memory-files.ts";
 
 type MemoryMethods = Pick<typeof coordinatorContract, "memoryList" | "memoryRead" | "memoryWrite">;
 
-export function memoryHandlers(store: Pick<Store, "isCoordinator">, memory: MemoryRoot, inbox: Pick<Inbox, "record">): PluginRpcHandlers<MemoryMethods> {
-  // why refuse an unknown id: its memory would read as an empty folder, and a write would make one.
+export function memoryHandlers(store: Pick<Store, "coordinator">, memory: MemoryRoot, inbox: Pick<Inbox, "record">): PluginRpcHandlers<MemoryMethods> {
+  // why refuse an unknown id, or one not started: its memory would read as an empty folder, and a write would make one.
   function of(id: CoordinatorId) {
-    if (!store.isCoordinator(id)) throw new Error(`There is no regional manager ${id}.`);
+    if (store.coordinator(id) === null) throw new Error(`There is no started regional manager ${id}.`);
     return memory.of(id);
   }
 
