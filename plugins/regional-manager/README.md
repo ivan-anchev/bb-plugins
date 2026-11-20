@@ -67,11 +67,13 @@ its role.
   often the goal is sent), its profile edited, which retitles a started one's
   thread before it stores the rest, and deleted while it has no thread (a
   start finds the thread an earlier start spawned but never bound before it
-  spawns one); and the upgrade, run once as the plugin loads, of the regional
-  managers 0.3.0 left waiting for their goal: one whose thread ran a turn
-  keeps it, one still held becomes one not started yet, its placeholder
-  taken out of the queue and its thread archived, and one with no thread
-  becomes one not started yet.
+  spawns one); and the upgrade of the regional managers 0.3.0 created, run as the
+  plugin loads and again from the tick after a pass that failed, decided by
+  each thread's user messages: one with a real message keeps its thread,
+  its missing GOAL.md that first message and any queued placeholder taken
+  out; one whose only user messages are the placeholder becomes one not
+  started yet, its queue emptied and its thread archived; and one with no
+  thread becomes one not started yet.
   `server.ts` runs the once-a-minute tick: agents, then
   the PR watch, then the verifiers, then the inbox (due reminders, unsent
   doorbells).

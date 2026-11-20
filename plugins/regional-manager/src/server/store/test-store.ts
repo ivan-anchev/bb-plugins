@@ -70,7 +70,7 @@ export function verifyOff(storage: Pick<PluginStorage, "database">, id: Coordina
   storage.database().prepare("UPDATE coordinators SET verify = 0 WHERE id = ?").run(id);
 }
 
-/** Makes the regional manager one 0.3.0 created and left waiting for its goal: its thread bound, held, and no name stored. */
-export function heldAs030(storage: Pick<PluginStorage, "database">, id: CoordinatorId): void {
-  storage.database().prepare("UPDATE coordinators SET awaiting_goal = 1, name = NULL WHERE id = ?").run(id);
+/** Makes the regional manager one 0.3.0 created: no name stored, and flagged as waiting for its goal unless `flagged` is false. */
+export function heldAs030(storage: Pick<PluginStorage, "database">, id: CoordinatorId, flagged = true): void {
+  storage.database().prepare("UPDATE coordinators SET awaiting_goal = ?, name = NULL WHERE id = ?").run(Number(flagged), id);
 }

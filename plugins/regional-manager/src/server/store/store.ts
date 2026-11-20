@@ -36,7 +36,6 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
       .map(toCoordinator);
   }
 
-
   return {
     ...inboxStore(db),
     ...issuesStore(db),
@@ -101,12 +100,15 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
         .map((row) => notStartedRowSchema.parse(row));
     },
 
-    /** Every regional manager 0.3.0 left waiting for its goal, with its thread (null: its spawn never bound one) (held-managers.ts). */
-    heldManagers(): { id: CoordinatorId; threadId: string | null }[] {
+    /**
+     * Every regional manager the 0.3.0 upgrade looks at (held-managers.ts): each one 0.3.0 flagged as
+     * waiting for its goal, with its thread or none, and each with a thread.
+     */
+    upgradeCandidates(): { id: CoordinatorId; ticket: string; threadId: string | null; flagged: boolean }[] {
       return db()
-        .prepare("SELECT c.id, r.thread_id AS threadId FROM coordinators c JOIN roles r ON r.ticket = c.ticket WHERE c.awaiting_goal = 1")
+        .prepare("SELECT c.id, c.ticket, r.thread_id AS threadId, c.awaiting_goal AS flagged FROM coordinators c JOIN roles r ON r.ticket = c.ticket WHERE c.awaiting_goal = 1 OR r.thread_id IS NOT NULL")
         .all()
-        .map((row) => heldRowSchema.parse(row));
+        .map((row) => candidateRowSchema.parse(row));
     },
 
     /** A 0.3.0 regional manager whose thread had its goal: it waits for nothing, and keeps its thread and role. */
@@ -115,18 +117,16 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     },
 
     /**
-     * Makes a 0.3.0 regional manager still waiting for its goal one not started yet, named `name`: its
-     * ticket gives way to a new unbound one, so the thread it had, if any, never holds its role again.
-     * Together or not at all; a second call for one already made so changes nothing.
+     * Makes a 0.3.0 regional manager on `ticket` one not started yet, named `name`: that ticket gives
+     * way to the new unbound `next`, so the thread it had, if any, never holds its role again.
+     * Together or not at all; a second call, once the ticket gave way, changes nothing.
      */
-    unhold(id: CoordinatorId, name: string, ticket: string, at: number): void {
+    unhold(id: CoordinatorId, ticket: string, name: string, next: string, at: number): void {
       db().transaction(() => {
-        const row = db().prepare("SELECT ticket FROM coordinators WHERE id = ? AND awaiting_goal = 1").get(id);
-        if (row === undefined) return;
-        const old = z.object({ ticket: z.string() }).parse(row).ticket;
-        insertTicket(db, ticket, { kind: "coordinator", coordinatorId: id }, at);
-        db().prepare("UPDATE coordinators SET ticket = ?, name = ?, project_id = '', awaiting_goal = 0 WHERE id = ?").run(ticket, name, id);
-        db().prepare("DELETE FROM roles WHERE ticket = ?").run(old);
+        if (db().prepare("SELECT 1 FROM coordinators WHERE id = ? AND ticket = ?").get(id, ticket) === undefined) return;
+        insertTicket(db, next, { kind: "coordinator", coordinatorId: id }, at);
+        db().prepare("UPDATE coordinators SET ticket = ?, name = ?, project_id = '', awaiting_goal = 0 WHERE id = ?").run(next, name, id);
+        db().prepare("DELETE FROM roles WHERE ticket = ?").run(ticket);
       })();
     },
 
@@ -222,4 +222,4 @@ const storedAvatarSchema = z.string().transform((json) => avatarSchema.catch(DEF
 const toCoordinator = (row: unknown): Coordinator => coordinatorSchema.extend({ avatar: storedAvatarSchema }).parse(row);
 const notStartedRowSchema = notStartedSchema.extend({ avatar: storedAvatarSchema });
 const startRowSchema = z.object({ ticket: z.string(), name: z.string().nullable(), threadId: z.string().nullable() });
-const heldRowSchema = z.object({ id: coordinatorSchema.shape.id, threadId: z.string().nullable() });
+const candidateRowSchema = z.object({ id: coordinatorSchema.shape.id, ticket: z.string(), threadId: z.string().nullable(), flagged: z.number().transform((flag) => flag === 1) });

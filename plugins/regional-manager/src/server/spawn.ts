@@ -20,7 +20,7 @@ type SpawnBb = {
     threads: {
       spawn(args: SpawnArgs): Promise<{ id: string }>;
       getPluginMetadata: Threads["getPluginMetadata"];
-      list(args: { originPluginId: string; hasParent: false; includeHidden: true }): Promise<readonly { id: string }[]>;
+      list(args: { originPluginId: string; hasParent: false; archived: false; includeHidden: true }): Promise<readonly { id: string }[]>;
     };
   };
   events: { on(event: "thread.created", handler: (payload: { thread: { id: string; originPluginId: string | null } }) => void | Promise<void>): void };
@@ -66,10 +66,11 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
   /**
    * The regional manager's thread an earlier start of it spawned under `ticket` without binding it:
    * bb made it, but its answer and its thread.created were both lost. null: there is none. why the
-   * plugin's top-level threads: a regional manager's is the only kind with no parent.
+   * plugin's top-level threads: a regional manager's is the only kind with no parent; why not archived
+   * ones: bb lists them unless asked not to, and a thread the user archived is no start to answer with.
    */
   async function unboundManagerThread(ticket: string): Promise<string | null> {
-    for (const { id } of await bb.sdk.threads.list({ originPluginId: bb.pluginId, hasParent: false, includeHidden: true })) {
+    for (const { id } of await bb.sdk.threads.list({ originPluginId: bb.pluginId, hasParent: false, archived: false, includeHidden: true })) {
       if (store.roleOfThread(id) === null && ticketIn(await bb.sdk.threads.getPluginMetadata({ threadId: id })) === ticket) return id;
     }
     return null;

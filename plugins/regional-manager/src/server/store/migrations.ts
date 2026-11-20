@@ -137,8 +137,9 @@ export const MIGRATIONS: readonly string[] = [
   // A regional manager's name until it starts, the title its thread is spawned with; from then on its
   // thread's title is its name, and this one is written no more. A regional manager is created with no
   // thread, and its project is written as it starts: until then project_id is '' (the column is NOT
-  // NULL since the first release). A row with no name is one 0.3.0 left waiting for its goal, which
-  // neither list shows until its upgrade (store.ts startOf and notStarted).
+  // NULL since the first release). A started row's name is read nowhere, and null on one started before
+  // this release; a row with no name and no thread is one 0.3.0 left waiting for its goal, which no list
+  // shows until its upgrade (store.ts startOf and notStarted).
   `ALTER TABLE coordinators ADD COLUMN name TEXT`,
 ];
 

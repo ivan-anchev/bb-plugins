@@ -7,10 +7,9 @@ import { join } from "node:path";
 import type { BbPluginApi, PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgentToolResult, PluginStorage, PluginThreadEventPayloads } from "@get-bb/plugin-sdk";
 import { createFakePluginHost, type FakePluginHarness } from "@get-bb/plugin-sdk/testing";
 import { z } from "zod";
-import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
-import { coordinatorContract } from "../contract.ts";
 import type { EnvironmentProvider } from "../model/agent.ts";
 import type { HolderThread } from "../model/issue/status.ts";
+import type { ComposerRequest } from "../contract.ts";
 import { DEFAULT_AVATAR, type Profile } from "../model/profile.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../model/role.ts";
 import { registerAgentTools } from "./agents/agent-tools.ts";
@@ -22,7 +21,7 @@ import { boardHandlers } from "./board/board-rpc.ts";
 import { createBoard } from "./board/board.ts";
 import type { CatalogBb } from "./execution/catalog.ts";
 import { createInbox } from "./inbox/inbox.ts";
-import { releaseHeldManagers } from "./manager/held-managers.ts";
+import { upgradeFrom030 } from "./manager/held-managers.ts";
 import { watchOwnTree } from "./inbox/own-tree-watch.ts";
 import { watchAgentThreads } from "./inbox/thread-watch.ts";
 import { registerIssueTools } from "./issues/issue-tools.ts";
@@ -66,7 +65,7 @@ type InboxBb = Parameters<typeof createInbox>[0]["bb"];
 type VerifyBb = Parameters<typeof createVerify>[0]["bb"];
 type PrWatchBb = Parameters<typeof createPrWatch>[0]["bb"];
 type ManagerBb = Parameters<typeof managerHandlers>[0]["bb"];
-type HeldBb = Parameters<typeof releaseHeldManagers>[0];
+type HeldBb = Parameters<typeof upgradeFrom030>[0];
 type SendArgs = Parameters<AgentsBb["sdk"]["threads"]["send"]>[0];
 type Delivery = Awaited<ReturnType<InboxBb["sdk"]["threads"]["send"]>>;
 type QueuedMessage = Awaited<ReturnType<InboxBb["sdk"]["threads"]["queuedMessages"]["list"]>>[number] &
@@ -119,6 +118,9 @@ type FakeThread = HolderThread & {
   /** Background commands its turns left running. As on bb 0.49 (seen live), a stop ends them, idle thread or not. */
   background: number;
 };
+
+/** What 0.3.0 spawned every regional manager with, held in its queue until the user sent the goal. */
+export const PLACEHOLDER_030 = "Type this regional manager's goal below to start it.";
 
 /** What bb runs a spawn on when it names no provider or model that bb counts. */
 export const BB_DEFAULT = { providerId: "codex", model: "gpt-default" };
@@ -360,6 +362,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   const handlersOf = <E extends FakeEventName>(event: E): Handlers[E] => (handlers[event] ??= []);
   const fakeThreads = new Map<string, FakeThread>();
   const queue: (QueuedMessage & { threadId: string; text: string })[] = [];
+  /** Each thread's turns as bb records them requested (client/turn/requested), oldest first: who asked, and the message. */
+  const turnRequests = new Map<string, { initiator: string; senderThreadId: null; originPluginId?: string; input: { type: "text"; text: string }[] }[]>();
   /** Every message that reached a thread and started its turn: sent at once, or dispatched from the queue. */
   const delivered: { threadId: string; text: string }[] = [];
   const textOfInput = (args: SendArgs): string => args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n");
@@ -479,13 +483,14 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       if (value === undefined) throw new Error(`No thread ${threadId}`);
       return value;
     },
-    // As bb does, listing by id includes archived and deleted threads; listing the plugin's top-level threads leaves archived and deleted ones out.
+    // As bb does, listing by id includes archived and deleted threads; listing the plugin's top-level threads leaves deleted ones out, and archived ones too when `archived` is false.
     // As bb does, each row is a copy, its turns included: what the plugin read stays as read while the thread moves on.
-    list: async ({ threadIds, originPluginId, hasParent }: { threadIds?: readonly string[]; originPluginId?: string; hasParent?: boolean } = {}) => {
+    list: async ({ threadIds, originPluginId, hasParent, archived }: { threadIds?: readonly string[]; originPluginId?: string; hasParent?: boolean; archived?: boolean } = {}) => {
       if (threadLists.failure !== null) throw threadLists.failure;
       if (threadIds === undefined) {
         if (originPluginId !== PLUGIN_ID || hasParent !== false) throw new Error("The plugin lists threads by id, or its own top-level ones");
-        return [...fakeThreads.values()].filter((thread) => thread.spawnedWith.parentThreadId === undefined && thread.archivedAt === null && thread.deletedAt === null).map((thread) => ({ ...thread, turns: [...thread.turns] }));
+        const listed = [...fakeThreads.values()].filter((thread) => thread.spawnedWith.parentThreadId === undefined && thread.deletedAt === null && (archived === undefined || (thread.archivedAt !== null) === archived));
+        return listed.map((thread) => ({ ...thread, turns: [...thread.turns] }));
       }
       const listed = threadIds.flatMap((id) => {
         const thread = fakeThreads.get(id);
@@ -517,7 +522,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       };
       if ((args.mode === "queue-if-active" && thread.status !== "idle") || (args.mode === "auto" && thread.hasPendingInteraction)) {
         const text = textOfInput(args);
-        const entry: (typeof queue)[number] = { id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: args.senderThreadId ?? null, originPluginId: PLUGIN_ID, content: [{ type: "text", text, mentions: [] }], threadId: args.threadId, text };
+        const entry: (typeof queue)[number] = { id: `qm_${++queued}`, state: "queued", failureReason: null, initiator: "system", senderThreadId: args.senderThreadId ?? null, originPluginId: PLUGIN_ID, content: [{ type: "text", text, mentions: [] }], threadId: args.threadId, text };
         queue.push(entry);
         return answer({ delivery: "queued", queuedMessage: { id: entry.id } });
       }
@@ -545,16 +550,18 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         return { ok: true };
       },
     },
-    // As bb does, a deleted thread's events are gone; an archived one's stay readable.
+    // As bb does, a deleted thread's events are gone; an archived one's stay readable. As bb does for the two types the plugin reads:
+    // the latest turn started (the plugin asks for one, newest first), or every turn requested, oldest first.
     events: {
-      list: async ({ threadId }: { threadId: string }) => {
+      list: async ({ threadId, types }: { threadId: string; types?: readonly string[] }) => {
         await turnEvents.pending;
         if (turnEvents.failure !== null) throw turnEvents.failure;
         const thread = fakeThread(threadId);
         if (thread.deletedAt !== null) throw bbHttpError(404, "thread_not_found", "Thread not found");
+        if (types?.[0] === "client/turn/requested") return (turnRequests.get(threadId) ?? []).map((data, at) => ({ seq: at + 1, data }));
         const latest = thread.turns.at(-1);
         if (turnEvents.holding) await new Promise<void>((release) => turnEvents.held.push(release));
-        return latest === undefined ? [] : [{ seq: latest }];
+        return latest === undefined ? [] : [{ seq: latest, data: null }];
       },
     },
     // As bb does, a stop that ends a running turn announces the thread idle, with the interrupted turn's last answer.
@@ -717,7 +724,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard });
     watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });
-    return { spawner, inbox, verify, agents, prWatch, finalChecks, unblocked, rpc: parsingInputs({ ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }), releaseHeld: () => releaseHeldManagers(bb, store, refreshCoordinators) };
+    return { spawner, inbox, verify, agents, prWatch, finalChecks, unblocked, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }, upgrade030: upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators }) };
   }
   let plugin = wire();
 
@@ -770,14 +777,14 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
      * bb's composer on its page, as `request` (newThreadRequest's, unless given), which starts it; with
      * `verify` false, its done handoffs go unverified.
      */
-    async startManager(name: string, { goal = name, verify = true, request = newThreadRequest(goal) }: { goal?: string; verify?: boolean; request?: NewThreadRequest } = {}): Promise<{ coordinatorId: CoordinatorId; threadId: string }> {
+    async startManager(name: string, { goal = name, verify = true, request = newThreadRequest(goal) }: { goal?: string; verify?: boolean; request?: ComposerRequest } = {}): Promise<{ coordinatorId: CoordinatorId; threadId: string }> {
       const coordinatorId = await this.createManager(name);
       if (!verify) verifyOff(storage, coordinatorId);
       const { threadId } = await plugin.rpc.startCoordinator({ coordinatorId, request });
       return { coordinatorId, threadId };
     },
-    /** The upgrade of every 0.3.0 regional manager still waiting for its goal, as server.ts runs it once as the plugin loads. */
-    releaseHeld: () => plugin.releaseHeld(),
+    /** The upgrade of the regional managers 0.3.0 created, as server.ts runs it as the plugin loads and from each tick. */
+    upgrade030: () => plugin.upgrade030(),
     /** GitHub and gh as the PR watch reaches them; a test may change them between ticks. */
     github,
     /** bb's git plugin as the PR watch and the own-tree watch reach it; a test may change it between reads. */
@@ -910,12 +917,17 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     queued: (threadId: string) => queue.filter((entry) => entry.threadId === threadId).map((entry) => entry.id),
     /** The placeholder 0.3.0 spawned a regional manager with, held in its thread's queue by 0.3.0's hook. */
     heldPlaceholder(threadId: string): void {
-      const text = "0.3.0's placeholder";
-      queue.push({ id: `qm_${++queued}`, state: "waiting", failureReason: null, senderThreadId: null, originPluginId: PLUGIN_ID, content: [{ type: "text", text, mentions: [] }], threadId, text });
+      const text = PLACEHOLDER_030;
+      queue.push({ id: `qm_${++queued}`, state: "waiting", failureReason: null, initiator: "user", senderThreadId: null, originPluginId: PLUGIN_ID, content: [{ type: "text", text, mentions: [] }], threadId, text });
     },
     /** The user queues a message for the thread from bb's composer, as while it runs. */
     userQueues(threadId: string, text: string): void {
-      queue.push({ id: `qm_${++queued}`, state: "queued", failureReason: null, senderThreadId: null, originPluginId: null, content: [{ type: "text", text, mentions: [] }], threadId, text });
+      queue.push({ id: `qm_${++queued}`, state: "queued", failureReason: null, initiator: "user", senderThreadId: null, originPluginId: null, content: [{ type: "text", text, mentions: [] }], threadId, text });
+    },
+    /** bb records a turn of the thread requested with `text`: by the user, or by this plugin, as its spawn's first message. */
+    turnRequested(threadId: string, text: string, by: "user" | "plugin" = "user"): void {
+      const request = { initiator: "user", senderThreadId: null, ...(by === "plugin" ? { originPluginId: PLUGIN_ID } : {}), input: [{ type: "text" as const, text }] };
+      turnRequests.set(threadId, [...(turnRequests.get(threadId) ?? []), request]);
     },
     /** bb sends a queued message and announces it; `silently`: the announcement is missed, as during a reload. */
     async dispatch(queuedMessageId: string, { silently = false } = {}): Promise<void> {
@@ -991,15 +1003,17 @@ export const threadIn = (text: string): string => /@thread:(\w+)/.exec(text)?.[1
 /** What the New page creates a regional manager named `name` with: no description and the default icon. */
 export const profileNamed = (name: string): Profile => ({ name, description: null, avatar: DEFAULT_AVATAR });
 
-/** What bb's composer on a regional manager's page submits for this goal: a fresh worktree from the default branch, on claude-code opus (high), on auto. */
-export function newThreadRequest(goal: string): NewThreadRequest {
+/**
+ * What bb's composer on a regional manager's page submits for this goal, as bb's RPC hands it to the
+ * plugin, parsed by the contract: a fresh worktree from the default branch, on claude-code opus (high), on auto.
+ */
+export function newThreadRequest(goal: string): ComposerRequest {
   return {
     projectId: "prj_1",
     providerId: "claude-code",
     model: "opus",
     reasoningLevel: "high",
     permissionMode: "auto",
-    executionInputSources: { permissionMode: "explicit" },
     environment: { type: "host", workspace: { type: "managed-worktree", baseBranch: { kind: "default" } } },
     input: [{ type: "text", text: goal, mentions: [] }],
   };
@@ -1042,9 +1056,4 @@ export const issueIn = (text: string): string => /Filed (i\d+)/.exec(text)?.[1] 
 export async function startedAgent(kit: ReturnType<typeof harness>, threadId: string, fields: object = {}, start: object = {}): Promise<{ issue: string; agentThreadId: string }> {
   const issue = issueIn(textOf(await kit.call("issue_create", { ...ISSUE, ...fields }, threadId)));
   return { issue, agentThreadId: threadIn(textOf(await kit.call("agent_start", { issue, ...start }, threadId))) };
-}
-
-/** The handlers, each taking its input as bb's RPC layer hands it over: parsed by the contract, which drops what it doesn't name. */
-function parsingInputs<H extends Partial<Record<keyof typeof coordinatorContract, (input: never) => unknown>>>(handlers: H): H {
-  return Object.fromEntries(Object.entries(handlers).map(([method, handler]) => [method, (input: unknown) => (handler as (input: unknown) => unknown)(coordinatorContract[method as keyof typeof coordinatorContract].input.parse(input))])) as unknown as H;
 }

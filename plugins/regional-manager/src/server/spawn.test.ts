@@ -77,8 +77,7 @@ test("a regional manager is spawned titled with its name, its goal its first mes
 
   const thread = kit.thread(threadId);
   const { pluginMetadata: _, ...spawned } = thread.spawnedWith;
-  const { executionInputSources: __, ...picked } = request;
-  assert.deepEqual(spawned, { ...picked, title: "Webhooks" });
+  assert.deepEqual(spawned, { ...request, title: "Webhooks" });
   assert.deepEqual([thread.providerId, thread.execution?.model, thread.execution?.permissionMode], ["claude-code", "opus", "accept-edits"]);
   assert.notEqual(thread.providerId, BB_DEFAULT.providerId);
 });

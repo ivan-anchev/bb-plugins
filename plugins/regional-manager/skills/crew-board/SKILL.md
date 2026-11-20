@@ -38,13 +38,16 @@ polls it, it has no memory files yet, and bb's sidebar doesn't list it. Its
 done handoffs are verified from the start; switch that on its board (see
 [Verification](#verification)).
 
-A regional manager that version 0.3.0 created and left waiting for its goal,
-its thread pending with the plugin's held message, becomes one not started
-yet when this version loads, named as that thread was titled; the plugin
-takes the held message out of the queue and archives that thread. Send its
-goal from its page. One whose thread already ran a turn keeps its thread and
-role as they are, and one whose thread never came becomes one not started
-yet, named "Regional manager".
+A regional manager that version 0.3.0 created is upgraded by its thread's
+user messages, not by whether its thread ran. If its only user message is
+0.3.0's placeholder ("Type this regional manager's goal below to start it."),
+even one sent and run, it becomes one not started yet, named as its thread
+was titled: the plugin empties that thread's queue and archives it. Send its
+goal from its page. One with a real message from you keeps its thread and
+role; if it has no `GOAL.md`, your first message there becomes it, and a
+placeholder still queued is taken out. One whose thread never came becomes
+one not started yet, named "Regional manager". An upgrade that fails, say
+while bb restarts, is tried again on the next minute's tick.
 
 The panel lists the regional managers not started yet under **Not started**,
 then every other one bb still lists under its project, newest first. A row is

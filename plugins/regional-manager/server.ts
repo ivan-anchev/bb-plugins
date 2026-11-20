@@ -10,7 +10,7 @@ import { forwardThreadEvents } from "./src/server/agents/events/thread-events.ts
 import { boardHandlers } from "./src/server/board/board-rpc.ts";
 import { createBoard } from "./src/server/board/board.ts";
 import { createInbox } from "./src/server/inbox/inbox.ts";
-import { releaseHeldManagers } from "./src/server/manager/held-managers.ts";
+import { upgradeFrom030 } from "./src/server/manager/held-managers.ts";
 import { managerHandlers } from "./src/server/manager/manager-rpc.ts";
 import { watchOwnTree } from "./src/server/inbox/own-tree-watch.ts";
 import { watchAgentThreads } from "./src/server/inbox/thread-watch.ts";
@@ -65,8 +65,9 @@ export default function plugin(host: BbPluginApi): void {
   const verify = createVerify({ bb, store, spawner, inbox, turns });
   const finalChecks = createFinalChecks({ bb, store, views, turns, verify, defaultBranch: defaultBranchReader(bb, store), now: Date.now });
 
-  // why once, as the plugin loads, and off the tick: it is a one-time upgrade whose bb calls must not hold up the watch.
-  void releaseHeldManagers(bb, store, refreshCoordinators).catch((error: unknown) => bb.log.warn(`Could not read the regional managers 0.3.0 left waiting for their goal: ${messageOf(error)}`));
+  // why as the plugin loads, and from the tick unwaited for: it is a one-time upgrade, retried after a failure, whose bb calls must not hold up the watch.
+  const upgrade030 = upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators });
+  void upgrade030();
 
   registerRoles(bb, store);
   registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
@@ -85,6 +86,7 @@ export default function plugin(host: BbPluginApi): void {
     // why nothing waits for the issues' turns the agents' and the verifiers' passes start: a call bb
     // never answers holds only its own issue, which every tick skips until it answers (issue-turns.ts).
     // why what was unblocked after both, and before the ring: a merge read this tick is announced in the same doorbell.
+    void upgrade030();
     await agents.reconcile().catch((error: unknown) => bb.log.warn(`Could not reconcile the agents; the next tick tries again: ${messageOf(error)}`));
     await prWatch.tick(Date.now()).catch((error: unknown) => bb.log.warn(`Could not read the issues' pull requests; the next tick tries again: ${messageOf(error)}`));
     await finalChecks.tick().catch((error: unknown) => bb.log.warn(`Could not read which final checks are due; the next tick tries again: ${messageOf(error)}`));

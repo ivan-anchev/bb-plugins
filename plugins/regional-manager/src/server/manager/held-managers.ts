@@ -1,20 +1,23 @@
-// The upgrade of the regional managers 0.3.0 created and left waiting for their goal. 0.3.0 spawned
-// each with a placeholder that its message.dispatch hook held in bb's queue, and let only the user's
-// goal through. This release has no hook, so the plugin, once as it loads:
-// - keeps a manager whose thread ran a turn, which had its goal, as it is, its thread and role kept;
-// - makes one whose thread is still pending a manager not started yet, named as its thread is titled:
-//   it takes the placeholder out of the queue (archiving would leave it there) and archives the
-//   thread, which never holds the role again. The user sends its goal from its page;
-// - makes one whose spawn never bound a thread a manager not started yet.
-// why not release the hold: bb would send the placeholder as its first message, which no rule
-// explains any more. A manager whose upgrade fails stays as it is until the plugin loads again.
+// The upgrade of the regional managers 0.3.0 created, whose hook held a placeholder in each new
+// thread's queue until the user typed the goal. This release has no hook, so each is decided by its
+// thread's user messages, run or queued, never by its status (a placeholder sent anyway ran a turn):
+// - a real message from the user: it keeps its thread and role, a missing GOAL.md is that first
+//   message, and a placeholder still queued leaves the queue;
+// - the placeholder only: it becomes not started, named as its thread is titled; its queue is
+//   emptied (archiving would leave it) and its thread archived. Its goal is sent from its page;
+// - no thread: it becomes not started.
+// It looks at each one 0.3.0 flagged, and at each started one with no GOAL.md, as a placeholder-only
+// one whose flag was cleared is.
 import { randomUUID } from "node:crypto";
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
+import { z } from "zod";
+import { memoryFileSchema } from "../../model/memory-file.ts";
 import { NAME_MAX } from "../../model/profile.ts";
-import type { CoordinatorId } from "../../model/role.ts";
+import type { MemoryRoot } from "../memory/memory-files.ts";
 import type { Store } from "../store/store.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
+type QueuedRow = Pick<Awaited<ReturnType<Threads["queuedMessages"]["list"]>>[number], "id" | "initiator" | "senderThreadId" | "originPluginId" | "content">;
 
 /** The parts of bb the upgrade uses, down to the fields it reads. */
 type HeldBb = {
@@ -22,41 +25,83 @@ type HeldBb = {
   log: Pick<PluginLogger, "warn">;
   sdk: {
     threads: {
-      get(args: { threadId: string }): Promise<{ title: string | null; status: string }>;
+      get(args: { threadId: string }): Promise<{ title: string | null }>;
       archive(args: Pick<Parameters<Threads["archive"]>[0], "threadId">): Promise<unknown>;
-      queuedMessages: {
-        list(args: { threadId: string }): Promise<readonly { id: string; originPluginId: string | null }[]>;
-        delete(args: { threadId: string; queuedMessageId: string }): Promise<unknown>;
-      };
+      events: { list(args: { threadId: string; types: ["client/turn/requested"]; order: "asc" }): Promise<readonly { data: unknown }[]> };
+      queuedMessages: { list(args: { threadId: string }): Promise<readonly QueuedRow[]>; delete(args: { threadId: string; queuedMessageId: string }): Promise<unknown> };
     };
   };
 };
 
-/** A name for a manager whose thread bb lists with no title, or that never had one: the profile needs one. */
-const UNTITLED = "Regional manager";
+type Deps = { store: Pick<Store, "upgradeCandidates" | "goalGiven" | "unhold">; memory: MemoryRoot; onChange(): void };
 
-/** Upgrades every regional manager 0.3.0 left waiting for its goal; `onChange` after each, whose list entry moved. A manager that fails is logged, and the rest go on. */
-export async function releaseHeldManagers(bb: HeldBb, store: Pick<Store, "heldManagers" | "goalGiven" | "unhold">, onChange: () => void): Promise<void> {
-  async function release(id: CoordinatorId, threadId: string | null): Promise<void> {
-    if (threadId === null) return store.unhold(id, UNTITLED, randomUUID(), Date.now());
-    const thread = await bb.sdk.threads.get({ threadId });
-    // why pending: a held thread never ran a turn, and the hold let nothing but the user's goal start one.
-    if (thread.status !== "pending") return store.goalGiven(id);
-    // why every row of the plugin's: it sent a waiting manager nothing but its placeholder.
-    const queue = bb.sdk.threads.queuedMessages;
-    for (const row of await queue.list({ threadId })) if (row.originPluginId === bb.pluginId) await queue.delete({ threadId, queuedMessageId: row.id });
-    await bb.sdk.threads.archive({ threadId });
-    store.unhold(id, nameOf(thread.title), randomUUID(), Date.now());
+/** What 0.3.0 spawned every regional manager with, exactly. */
+const PLACEHOLDER = "Type this regional manager's goal below to start it.";
+/** The name of one whose thread has no title, or that never had a thread. */
+const UNTITLED = "Regional manager";
+const GOAL_FILE = memoryFileSchema.parse("GOAL.md");
+
+/**
+ * The upgrade, run as the plugin loads and, after a pass that failed, from the tick. One pass at a
+ * time: a call while one runs answers with it, and a call after a whole pass does nothing.
+ */
+export function upgradeFrom030(bb: HeldBb, { store, memory, onChange }: Deps): () => Promise<void> {
+  let due = true;
+  let running: Promise<void> | null = null;
+  const failed = (what: string) => (error: unknown) => {
+    due = true;
+    bb.log.warn(`Could not ${what}; the next tick tries again: ${error instanceof Error ? error.message : String(error)}`);
+  };
+
+  async function upgrade({ id, ticket, threadId, flagged }: ReturnType<Store["upgradeCandidates"]>[number]): Promise<void> {
+    if (threadId === null) return store.unhold(id, ticket, UNTITLED, randomUUID(), Date.now());
+    const { threads } = bb.sdk;
+    const [requested, queued] = await Promise.all([threads.events.list({ threadId, types: ["client/turn/requested"], order: "asc" }), threads.queuedMessages.list({ threadId })]);
+    const waiting = queued.map((row) => ({ ...row, text: textOf(row.content) }));
+    const messages = [...requested.flatMap(({ data }) => turnRequestSchema.safeParse(data).data ?? []).map((turn) => ({ ...turn, text: textOf(turn.input) })), ...waiting];
+    const goal = messages.find((message) => fromTheUser(message) && message.text !== PLACEHOLDER && message.text.trim() !== "")?.text;
+    // why the flag or the placeholder: a manager with neither, started by this release, is none of 0.3.0's.
+    if (goal === undefined && !flagged && !messages.some(({ text }) => text === PLACEHOLDER)) return;
+    for (const row of waiting) if (goal === undefined || row.text === PLACEHOLDER) await threads.queuedMessages.delete({ threadId, queuedMessageId: row.id });
+    if (goal !== undefined) {
+      // why over no file: a write expecting none leaves a GOAL.md that exists as it is.
+      memory.of(id).write(GOAL_FILE, goal, null);
+      return store.goalGiven(id);
+    }
+    const { title } = await threads.get({ threadId });
+    await threads.archive({ threadId });
+    store.unhold(id, ticket, title?.trim().slice(0, NAME_MAX).trim() || UNTITLED, randomUUID(), Date.now());
   }
 
-  for (const { id, threadId } of store.heldManagers()) {
-    try {
-      await release(id, threadId);
-      onChange();
-    } catch (error) {
-      bb.log.warn(`Could not upgrade ${id}, which 0.3.0 left waiting for its goal; it stays as it is until the plugin loads again: ${error instanceof Error ? error.message : String(error)}`);
+  async function pass(): Promise<void> {
+    for (const candidate of store.upgradeCandidates()) {
+      if (!candidate.flagged && (candidate.threadId === null || memory.of(candidate.id).modifiedAt(GOAL_FILE) !== null)) continue;
+      await upgrade(candidate).then(onChange, failed(`upgrade the regional manager ${candidate.id} 0.3.0 created`));
     }
   }
+
+  return () => {
+    if (running !== null || !due) return running ?? Promise.resolve();
+    due = false;
+    running = pass()
+      .catch(failed("read the regional managers 0.3.0 created"))
+      .finally(() => (running = null));
+    return running;
+  };
 }
 
-const nameOf = (title: string | null): string => title?.trim().slice(0, NAME_MAX).trim() || UNTITLED;
+/** Whether a person typed the message: bb counts its author a user, and no thread or plugin sent it. */
+const fromTheUser = ({ initiator, senderThreadId, originPluginId }: { initiator: string; senderThreadId: string | null; originPluginId?: string | null }): boolean =>
+  initiator === "user" && senderThreadId === null && (originPluginId ?? null) === null;
+
+/** A message's text as the manager reads it: its text parts, in order, without those only an agent sees. */
+const textOf = (parts: readonly { type: string; text?: string; visibility?: string }[]): string =>
+  parts.flatMap(({ type, text, visibility }) => (type === "text" && text !== undefined && visibility !== "agent-only" ? [text] : [])).join("\n\n");
+
+// What the upgrade reads of a client/turn/requested event; the rest is bb's.
+const turnRequestSchema = z.object({
+  initiator: z.string(),
+  senderThreadId: z.string().nullable(),
+  originPluginId: z.string().optional(),
+  input: z.array(z.object({ type: z.string(), text: z.string().optional(), visibility: z.string().optional() })),
+});

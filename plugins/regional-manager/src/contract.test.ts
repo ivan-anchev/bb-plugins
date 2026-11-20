@@ -13,9 +13,9 @@ test("a start whose text part has no text, or with no project, is refused before
 });
 
 test("a start keeps the composer's fields, attachments and a scheduled send included, and drops every other, executionInputSources too", () => {
-  const { executionInputSources: _, ...request } = { ...newThreadRequest("Migrate the webhook service"), sendAt: 5, serviceTier: "fast" };
+  const request = { ...newThreadRequest("Migrate the webhook service"), sendAt: 5, serviceTier: "fast" };
   request.input.push({ type: "image", url: "https://example.com/plan.png" });
-  const parsed = startInput.parse({ coordinatorId: COORDINATOR, request: { ...request, executionInputSources: {}, visibility: "hidden", lifecycleOwnerThreadId: "thr_9" } });
+  const parsed = startInput.parse({ coordinatorId: COORDINATOR, request: { ...request, executionInputSources: { permissionMode: "explicit" }, visibility: "hidden", lifecycleOwnerThreadId: "thr_9" } });
   assert.deepEqual(parsed, { coordinatorId: COORDINATOR, request });
 });
 
