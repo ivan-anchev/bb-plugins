@@ -7,24 +7,24 @@ import {
   experimental_useRpcQuery,
   experimental_useSidebarThreads as useSidebarThreads,
   useBbContext,
-  useBbNavigate,
   type NewThreadRequest,
 } from "@get-bb/plugin-sdk/app";
 import { useState } from "react";
-import { coordinatorContract as contract } from "../../contract.ts";
-import type { CoordinatorId } from "../../model/role.ts";
-import { ReadFailure } from "../ui/read-failure.tsx";
+import { coordinatorContract as contract } from "../../../contract.ts";
+import type { CoordinatorId } from "../../../model/role.ts";
+import { ReadFailure } from "../../ui/read-failure.tsx";
 import { composerSeed, type ComposerSeed } from "./composer-seed.ts";
 
-export function GoalComposer({ coordinatorId, name }: { coordinatorId: CoordinatorId; name: string }) {
+type GoalComposerProps = { coordinatorId: CoordinatorId; name: string; onStarted(threadId: string): void };
+
+export function GoalComposer({ coordinatorId, name, onStarted }: GoalComposerProps) {
   const { seed, host, sidebarFailed } = useComposerSeed();
-  const navigate = useBbNavigate();
   const start = experimental_useRpcMutation({ contract, method: "startCoordinator" });
 
   // The composer keeps the draft when this throws, so a failed start never loses the goal.
   async function submit(request: NewThreadRequest) {
     const { threadId } = await start.mutate({ coordinatorId, request });
-    navigate.toThread(threadId);
+    onStarted(threadId);
   }
 
   return (

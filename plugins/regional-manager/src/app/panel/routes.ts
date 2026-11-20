@@ -5,7 +5,10 @@ export const PANEL_ID = "regional-managers";
 export const PANEL_PATH = "regional-managers";
 /** The subPath of the New page. */
 export const NEW_SUBPATH = "new";
-/** The segment of a regional manager's page, at `board/<coordinator id>`: its board once started, its goal's composer until then. */
+/**
+ * The segment of a regional manager's page, at `board/<coordinator id>`: its goal's composer until it
+ * starts. why "board": 0.4.0 linked a started one's board there, and such a link now opens its thread.
+ */
 const MANAGER_SEGMENT = "board";
 
 type PanelPage = { kind: "list" } | { kind: "new" } | { kind: "manager"; coordinatorId: CoordinatorId };

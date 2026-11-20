@@ -1,6 +1,7 @@
-// A regional manager's profile, edited in place on its page: its fields, with Save and Cancel.
+// A regional manager's profile, edited in place on its page until it starts and below its thread's
+// context row after: its fields, with Save and Cancel.
 import { experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
-import { useCallback, useRef, useState, type KeyboardEvent, type ReactNode, type RefCallback } from "react";
+import { useCallback, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
 import type { Profile } from "../../model/profile.ts";
 import type { CoordinatorId } from "../../model/role.ts";
@@ -13,24 +14,25 @@ type ProfileEditorProps = {
   coordinatorId: CoordinatorId;
   /** The profile as saved, which Esc goes back to while nothing was changed. */
   profile: Profile;
-  /** The fields as the user left them; the board keeps them, so an edit outlives bb redrawing the panel. */
+  /** The fields as the user left them; the browser keeps them, so an edit outlives bb redrawing the panel. */
   draft: ProfileDraft;
   onChange(next: ProfileDraft): void;
   onClose(): void;
-  /** Takes the focus Edit had as the editor opened in its place. */
-  takeFocus: RefCallback<HTMLElement>;
+  /** Takes the focus of what opened the editor, as the name field mounts. */
+  takeFocus(name: HTMLElement | null): void;
   /** What sits at the end of the form's actions, after Save and Cancel, such as a regional manager's Delete. */
-  trailing: ReactNode;
+  trailing?: ReactNode;
 };
 
 export function ProfileEditor({ coordinatorId, profile, draft, onChange, onClose, takeFocus, trailing }: ProfileEditorProps) {
   // Whether a save found no name: the field says so from then on, until it has one.
   const [tried, setTried] = useState(false);
   const name = useRef<HTMLInputElement | null>(null);
+  // why no cleanup returned: React then detaches the ref with null, so `name` is null once this editor is gone.
   const nameRef = useCallback(
     (input: HTMLInputElement | null) => {
       name.current = input;
-      return takeFocus(input);
+      takeFocus(input);
     },
     [takeFocus],
   );
@@ -45,8 +47,15 @@ export function ProfileEditor({ coordinatorId, profile, draft, onChange, onClose
       name.current?.focus();
       return;
     }
+    // why only while the name is there: a save that lands after Cancel, or after another editor took
+    // this one's place, must close neither.
     // why the catch: the hook's error shows under the form, which stays open with the edit.
-    save.mutate({ coordinatorId, profile: edited }).then(onClose, () => {});
+    save.mutate({ coordinatorId, profile: edited }).then(
+      () => {
+        if (name.current !== null) onClose();
+      },
+      () => {},
+    );
   }
 
   // why only when nothing changed: Esc must never throw away what the user typed; Cancel does that.
@@ -77,7 +86,7 @@ export function ProfileEditor({ coordinatorId, profile, draft, onChange, onClose
         <Button variant="ghost" size="sm" onClick={onClose}>
           Cancel
         </Button>
-        <span className="ml-auto">{trailing}</span>
+        {trailing !== undefined && <span className="ml-auto">{trailing}</span>}
       </div>
     </form>
   );

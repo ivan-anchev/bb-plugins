@@ -8,7 +8,9 @@ const ID = coordinatorIdSchema.parse("6f1c2a52-6b8e-4c43-9a51-1d6a3c0b7e10");
 test("each page's subPath leads back to it", () => {
   assert.deepEqual(pageOf(""), { kind: "list" });
   assert.deepEqual(pageOf(NEW_SUBPATH), { kind: "new" });
-  assert.deepEqual(pageOf(managerSubPath(ID)), { kind: "manager", coordinatorId: ID });
+  // why literal: 0.4.0's links to a manager's page are board/<id>, and must still land on it.
+  assert.equal(managerSubPath(ID), `board/${ID}`);
+  assert.deepEqual(pageOf(`board/${ID}`), { kind: "manager", coordinatorId: ID });
 });
 
 test("a manager path whose id isn't a coordinator id, or that goes on past it, and the retired Memory page's, show the list", () => {

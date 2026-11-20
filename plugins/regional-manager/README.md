@@ -80,13 +80,15 @@ its role.
 - `src/app/panel/`: the nav panel, its list (not started first, then by
   project), the New page (the profile and Create) and its routes, and the
   name it puts in bb's title bar. `src/app/profile/`: the avatar tile, the
-  profile's fields, shared by the New page and the manager page's in-place
-  editor, Delete for a manager not started yet, and `useManager`, a started
-  one's name from bb's thread list joined with what the plugin keeps.
-  `src/app/board/`: the Board and its thread tab, and the manager's page in
-  the panel: its board and Memory once started, bb's composer for its goal
-  until then; `issue/` its lanes and issue rows, `issue/detail/` an issue
-  opened in place. `src/app/memory/`: the board's Memory section, its editor
+  profile's fields, shared by the New page and the profile's editor, Delete
+  for a manager not started yet, and `useManager`, a started one's name from
+  bb's thread list joined with what the plugin keeps. The panel's page of a
+  manager not started yet holds its profile and bb's composer for its goal;
+  a started one's opens its thread. `src/app/thread/`: the manager's icon
+  and name above its thread's composer, which open the profile's editor.
+  `src/app/board/`: the Board and its thread tab, with Memory at its bottom;
+  `issue/` its lanes and issue rows, `issue/detail/` an issue opened in
+  place. `src/app/memory/`: the board's Memory section, its editor
   and the drafts it keeps.
 - `skills/regional-manager/`: the regional manager's playbook, selected only
   for it. `skills/agent-work/`: an agent's playbook, selected only for

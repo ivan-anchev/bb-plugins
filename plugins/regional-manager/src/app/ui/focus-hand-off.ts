@@ -30,16 +30,24 @@ export function useFocusHandOff(): FocusHandOff {
 }
 
 /**
- * A ref for a region that leaves while the page around it stays, such as a failed read's notice once
- * Retry succeeds: focus in it moves to the page's tab stop, the element every page scrolls by
- * (REVIEW.md). why not `to`: the page is already there, so no element mounts to take the focus.
+ * A ref for a region that leaves while the element that takes its focus stays, such as the toggle that
+ * closed it: focus in it moves to `target`'s element. why not `to`: that element is already there, so
+ * nothing mounts to take the focus.
  */
-export function handFocusToPage(region: HTMLElement | null): (() => void) | undefined {
-  if (region === null) return;
-  return () => {
-    if (region.contains(document.activeElement)) pageOf(region)?.focus();
+export function handFocusTo(target: (region: HTMLElement) => HTMLElement | null | undefined): (region: HTMLElement | null) => (() => void) | undefined {
+  return (region) => {
+    if (region === null) return;
+    return () => {
+      if (region.contains(document.activeElement)) target(region)?.focus();
+    };
   };
 }
+
+/**
+ * A ref for a region that leaves while the page around it stays, such as a failed read's notice once
+ * Retry succeeds: focus in it moves to the page's tab stop, the element every page scrolls by (REVIEW.md).
+ */
+export const handFocusToPage = handFocusTo(pageOf);
 
 /** The refs that keep focus as items move between groups (useFocusKeptAcrossGroups). Each is stable per key. */
 type GroupFocus<Group> = {
@@ -134,7 +142,10 @@ export function useFocusKeptAcrossGroups<Group>(groupOf: (key: string) => Group 
 // ------------------------------------------------------------------ layer 2
 
 /** The tab stop of the page around `element`: the element the page scrolls by (REVIEW.md). */
-const pageOf = (element: HTMLElement): HTMLElement | null => element.parentElement?.closest<HTMLElement>('[tabindex="0"]') ?? null;
+// why a declaration: handFocusToPage, above, is made from it as the module loads.
+function pageOf(element: HTMLElement): HTMLElement | null {
+  return element.parentElement?.closest<HTMLElement>('[tabindex="0"]') ?? null;
+}
 
 /** A ref that keeps `map` pointing at the element mounted for `key`. */
 function tracked<Key>(map: Map<Key, HTMLElement>, key: Key): (element: HTMLElement | null) => (() => void) | undefined {

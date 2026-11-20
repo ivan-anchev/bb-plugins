@@ -54,8 +54,8 @@ const ISSUES: IssueRow[] = [
   issue("i7", { status: "done", headline: "Merged #39" }),
 ];
 
-/** The board in the page it scrolls in, as the Board page and the Board tab draw it: a tab stop. */
-const Page = (props: ComponentProps<typeof IssueBoard>) => createElement("div", { tabIndex: 0, "aria-label": "Board page" }, createElement(IssueBoard, props));
+/** The board in the root it scrolls in, as the Board tab draws it: a tab stop. */
+const Page = (props: ComponentProps<typeof IssueBoard>) => createElement("div", { tabIndex: 0, "aria-label": "Board tab" }, createElement(IssueBoard, props));
 
 /** The board, with a detail standing in for the one read from the plugin; every detail drawn is recorded in `read`. */
 function mount(issues: readonly IssueRow[], decisions: readonly Decision[] = [QUESTION]) {
@@ -213,7 +213,7 @@ test("a focused row whose issue is gone from the next read hands focus to the pa
   act(() => reread([issue("i2", {})]));
 
   assert.equal(view.queryByRole("button", { name: /\bi1 Build/ }), null);
-  assert.ok(document.activeElement === view.getByLabelText("Board page"), "focus is on the page's tab stop, not the body");
+  assert.ok(document.activeElement === view.getByLabelText("Board tab"), "focus is on the tab's tab stop, not the body");
 });
 
 test("focus on a row's agent link or in its open detail moves with the issue, to its row where it lands", () => {

@@ -1,13 +1,13 @@
-// The nav panel: the list at its root, the New page at `new`, and a regional manager's page at
-// `board/<id>`. Its title bar holds New, and bb's title bar names the regional manager open.
+// The nav panel: the list at its root, the New page at `new`, and the page of a regional manager not
+// started yet at `board/<id>`. Its title bar holds New, and bb's title bar names the regional manager open.
 import { experimental_Icon as Icon, useBbNavigate, type ExperimentalPageTitle, type PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { useCallback } from "react";
 import type { CoordinatorId } from "../../model/role.ts";
-import { BoardPage } from "../board/board-page.tsx";
 import { useManager } from "../profile/use-manager.ts";
 import { Button } from "../ui/button.tsx";
 import { useFocusHandOff } from "../ui/focus-hand-off.ts";
 import { CoordinatorList } from "./coordinator-list.tsx";
+import { ManagerPage } from "./manager/manager-page.tsx";
 import { NewCoordinator } from "./new-coordinator.tsx";
 import { managerSubPath, NEW_SUBPATH, PANEL_PATH, pageOf } from "./routes.ts";
 
@@ -26,7 +26,7 @@ export function CoordinatorPanel({ subPath }: PluginNavPanelProps) {
     case "new":
       return <NewCoordinator ref={pageRoot} onBack={openList} onCreated={openManager} />;
     case "manager":
-      return <BoardPage key={page.coordinatorId} ref={pageRoot} coordinatorId={page.coordinatorId} onBack={openList} />;
+      return <ManagerPage key={page.coordinatorId} ref={pageRoot} coordinatorId={page.coordinatorId} onBack={openList} />;
     case "list":
       return <CoordinatorList ref={pageRoot} onOpen={openManager} />;
     default:

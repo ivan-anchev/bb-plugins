@@ -55,7 +55,7 @@ function server() {
   return { rpc, writes, write, remove: (file: MemoryFile) => files.delete(file) };
 }
 
-/** The section, as the board page mounts it. */
+/** The section, as the Board tab mounts it. */
 function mount(rpc: ReturnType<typeof server>["rpc"], coordinatorId: CoordinatorId = COORDINATOR) {
   const view = renderSlot({ component: MemorySection }, { coordinatorId }, { experimental_rpcContract: contract, rpc });
   return {

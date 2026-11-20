@@ -1,8 +1,7 @@
 // The board of one regional manager: its verification switch, a warning while its own working
 // tree has changed files, why PR status is unavailable when it is, and its digest, then its
 // decisions and issues in lanes (issue/issue-board.tsx), each issue opening in place to its
-// detail. The Board tab in the thread and the Board page in the panel both draw it, from one read;
-// each gives it the scrolling root it sits in.
+// detail. Its thread's Board tab draws it, in the scrolling root the tab gives it (board-tab.tsx).
 import { experimental_Icon as Icon, experimental_useRpcMutation, experimental_useRpcQuery, Markdown } from "@get-bb/plugin-sdk/app";
 import { useId, useState } from "react";
 import { coordinatorContract as contract, type Board as BoardData } from "../../contract.ts";
