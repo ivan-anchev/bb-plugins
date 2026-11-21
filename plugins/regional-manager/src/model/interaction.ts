@@ -22,7 +22,7 @@ export function questionOf(payload: InteractionPayload): string {
 }
 
 /** A provider's own interaction, named `<provider>/<kind>`, titled as a plugin's is. */
-const isNamespaced = (payload: InteractionPayload): payload is Extract<InteractionPayload, { kind: `${string}/${string}` }> => payload.kind.includes("/");
+export const isNamespaced = (payload: InteractionPayload): payload is Extract<InteractionPayload, { kind: `${string}/${string}` }> => payload.kind.includes("/");
 
 function subjectOf(subject: Extract<InteractionPayload, { kind: "approval" }>["subject"]): string {
   switch (subject.kind) {

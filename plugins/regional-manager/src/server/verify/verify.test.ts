@@ -696,7 +696,11 @@ test("a verifier whose sandbox was removed before its verdict reads Couldn't ver
   assert.match(doorbells()[0] ?? "", /handed off: done, could not be verified$/);
 });
 
-const RECONNECT: InteractionPayload = { kind: "codex/mcp-elicitation", title: "Reconnect GitHub on ChatGPT", data: null };
+const RECONNECT: InteractionPayload = { kind: "provider-codex/mcp-elicitation", title: "Reconnect GitHub on ChatGPT", data: null };
+const QUESTION: InteractionPayload = {
+  kind: "user_question",
+  questions: [{ id: "q1", prompt: "Is HELLO.md the right file name?", shortLabel: "File name", multiSelect: false, options: [{ value: "yes", label: "Yes" }], allowFreeText: true, required: true }],
+};
 const PUSH: InteractionPayload = {
   kind: "approval",
   availableDecisions: ["allow_once", "deny"],
@@ -704,23 +708,25 @@ const PUSH: InteractionPayload = {
   subject: { kind: "command", command: "git push", cwd: null, itemId: "item_1", actions: [], sessionGrant: null },
 };
 
-test("a verifier's MCP sign-in or approval is declined at once, its check runs on, and its verdict names what it was declined", async () => {
+test("a verifier's MCP sign-in, question or approval is declined at once, its check runs on, and its verdict names what it was declined", async () => {
   const { kit, doorbells, opened, verdict, verifier, handOff, verdictReturned } = await withAgent();
   await handOff();
   const verifierThreadId = verifier();
-  await kit.ask(verifierThreadId, RECONNECT);
-  await settled();
-  await kit.ask(verifierThreadId, PUSH);
-  await settled();
+  for (const payload of [RECONNECT, QUESTION, PUSH]) {
+    await kit.ask(verifierThreadId, payload);
+    await settled();
+  }
 
   assert.deepEqual(
     kit.askAnswers.answered.map(({ threadId, how }) => [threadId, how]),
     [
-      [verifierThreadId, "cancel"],
+      [verifierThreadId, "decline"],
+      [verifierThreadId, "answer"],
       [verifierThreadId, "deny"],
     ],
-    "the sign-in cancelled, the approval denied, each as it was raised",
+    "the sign-in declined, the question answered, the approval denied, each as it was raised",
   );
+  assert.match(kit.askAnswers.answered[1]?.freeText ?? "", /^Nobody answers a verifier: go on without an answer/);
   assert.equal(kit.thread(verifierThreadId).hasPendingInteraction, false, "nothing holds the verifier's turn");
   assert.equal(verdict().state, "running");
   assert.deepEqual(doorbells(), [], "its manager hears of it with the verdict");
@@ -729,14 +735,15 @@ test("a verifier's MCP sign-in or approval is declined at once, its check runs o
   await settled();
   const shown = (await opened()).record[0]?.handoffs.at(-1)?.verdict;
   assert.ok(shown?.state === "returned");
-  assert.deepEqual(shown.findings.slice(0, 2), [
+  assert.deepEqual(shown.findings.slice(0, 3), [
     'The verifier asked a person "Reconnect GitHub on ChatGPT"; nobody answers a verifier, so the plugin declined it, and the verifier went on without it.',
+    'The verifier asked a person "Is HELLO.md the right file name?"; nobody answers a verifier, so the plugin declined it, and the verifier went on without it.',
     'The verifier asked a person "Asks to approve the command `git push`: It pushes the branch"; nobody answers a verifier, so the plugin declined it, and the verifier went on without it.',
   ]);
   assert.match(doorbells().at(-1) ?? "", /handed off: done, verified$/);
 });
 
-test("a verifier's ask bb won't let the plugin decline ends its check Couldn't verify, naming the ask, and wakes its manager", async () => {
+test("a verifier's ask bb won't let the plugin decline ends its check Couldn't verify, naming the ask, stops the verifier, and wakes its manager", async () => {
   const { kit, threadId, doorbells, row, verdict, verifier, handOff } = await withAgent();
   await handOff();
   const verifierThreadId = verifier();
@@ -746,6 +753,7 @@ test("a verifier's ask bb won't let the plugin decline ends its check Couldn't v
 
   const reason = 'its verifier asked a person "Reconnect GitHub on ChatGPT", and bb refused the plugin\'s decline: bb is restarting';
   assert.deepEqual(verdict(), { state: "could-not-run", verifierThreadId, reason });
+  assert.equal(kit.thread(verifierThreadId).status, "idle", "the verifier no longer holds the agent's environment");
   assert.deepEqual([(await row()).lane, (await row()).headline], ["needs-you", `Couldn't verify, as ${reason}: Retries land with backoff`]);
   await kit.tick();
   await settled();
@@ -753,7 +761,7 @@ test("a verifier's ask bb won't let the plugin decline ends its check Couldn't v
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /Couldn't verify: its verifier asked a person "Reconnect GitHub on ChatGPT"/);
 });
 
-test("a verifier silent for 30 minutes ends its check Couldn't verify with that reason and wakes its manager; 29 minutes is not enough", async () => {
+test("a verifier silent for 30 minutes ends its check Couldn't verify with that reason, is stopped, and wakes its manager; 29 minutes is not enough", async () => {
   const { kit, threadId, doorbells, row, opened, verdict, verifier, handOff } = await withAgent();
   await handOff();
   const verifierThreadId = verifier();
@@ -768,6 +776,7 @@ test("a verifier silent for 30 minutes ends its check Couldn't verify with that 
   await settled();
   const reason = "its verifier showed no activity for 30 minutes";
   assert.deepEqual(verdict(), { state: "could-not-run", verifierThreadId, reason });
+  assert.equal(kit.thread(verifierThreadId).status, "idle", "the verifier no longer holds the agent's environment");
   assert.deepEqual([(await row()).lane, (await row()).headline], ["needs-you", `Couldn't verify, as ${reason}: Retries land with backoff`]);
   assert.deepEqual((await opened()).record[0]?.handoffs.at(-1)?.verdict, { state: "could-not-run", verifierThreadId, reason }, "the opened issue has the reason and the verifier to link");
   assert.match(doorbells().at(-1) ?? "", /handed off: done, could not be verified$/);
@@ -810,7 +819,7 @@ test("while a verifier's ask is pending its row says so, the opened issue links 
 
   await kit.tick();
   await settled();
-  assert.deepEqual(kit.askAnswers.answered, [{ threadId: verifierThreadId, interactionId: "pint_missed", how: "cancel" }]);
+  assert.deepEqual(kit.askAnswers.answered, [{ threadId: verifierThreadId, interactionId: "pint_missed", how: "decline" }]);
   assert.equal(verdict().state, "running");
   assert.equal((await row()).headline, "Verifying: Retries land with backoff");
 });
