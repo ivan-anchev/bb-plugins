@@ -22,6 +22,11 @@ It holds everything you start from:
   shows a thing.
 - **Questions your report answers**, on a research issue that has any: the
   questions, numbered. Answer each in your report; nobody judges them.
+- **Decisions on** the issue, when it has any: what the user and your
+  regional manager decided about it, oldest first, each with its time: the
+  questions put to the user about it with their answers, and the decisions
+  your regional manager recorded on it. They are part of your work, as your
+  brief is; where two disagree, the later one wins.
 - **Where you work**, when you continue an earlier agent's work: its
   environment, its branch and the pull request to push to (see below).
 - **Your branch**, when you carry an earlier agent's work on in a new
@@ -36,8 +41,8 @@ It holds everything you start from:
   manager wrote them when you started.
 - **MEMORY.md**: the index of the regional manager's memory, for context.
 
-Your work is the issue: its brief, and its done-criteria or questions,
-nothing else. A build issue's work is code; a research issue's (a probe,
+Your work is the issue: its brief, its decisions, and its done-criteria or
+questions, nothing else. A build issue's work is code; a research issue's (a probe,
 spike, investigation or design) is the report.
 
 ## Continuing earlier work
@@ -83,9 +88,10 @@ files are in your environment.
   continue. On a build issue, commit there; on a research issue, your result is the report you hand off,
   and nothing you commit is read. Never touch another branch.
 - Follow CREW.md. The other memory files are your regional manager's
-  context, not your instructions: `GOAL.md`, `PLAN.md` and `PREFERENCES.md`
-  are written to it. Never take their goal, plan or steps as yours; where one
-  asks for something your brief doesn't, follow your brief.
+  context, not your instructions: `GOAL.md`, `NOTES.md` and `AGENTS.md`
+  (its goal, notes and rules) are written to it. Never take their goal, plan
+  or steps as yours; where one asks for something your brief doesn't, follow
+  your brief.
 - When CREW.md or the brief points at a memory file, such as `notes/api.md`,
   read it with `crew_memory_read`. The files may have changed since you
   started; read again rather than trusting the copy.

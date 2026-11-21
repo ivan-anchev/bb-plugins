@@ -35,7 +35,8 @@ its role.
   decides, from the latest stored event, whether a read of the regional
   manager's own working tree records a warning or its clearing.
   `src/model/reminder.ts`: a reminder, and the one parser of `crew_remind`'s
-  times. `src/model/decision.ts`: a question put to the user.
+  times. `src/model/decision.ts`: a question put to the user, and an issue's
+  decisions: those questions naming it and those recorded on it, oldest first.
   `src/model/profile.ts`: a regional manager's profile (name, description,
   avatar) and the icons an avatar can be; the name is the thread's title,
   which bb keeps, and the store keeps the rest.
@@ -60,8 +61,9 @@ its role.
   through `gh`; `board/` the board's read and its rpc handlers (the
   verification switch and the answers to decisions); `memory/` the memory
   files beside `data.db` (compare-and-swap writes through a temp file and a
-  rename) and the board Memory's rpc handlers (a save there wakes the
-  regional manager); `manager/` a regional manager's record as the panel
+  rename), the board Memory's rpc handlers (a save there wakes the
+  regional manager) and the idempotent upgrade of 0.4's memory as the plugin
+  loads; `manager/` a regional manager's record as the panel
   changes it, one operation per regional manager at a time: created with no
   thread, started by the goal from its page (its thread spawned once, however
   often the goal is sent), its profile edited, which retitles a started one's
