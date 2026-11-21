@@ -41,6 +41,8 @@ import type { Store } from "../store/store.ts";
 import { finalVerifierRequest, judgedTree, type FinalVerifierBb } from "./final-check/final-verifier.ts";
 import { findingsMessage } from "./findings.ts";
 import { refusalOf } from "./send-refusal.ts";
+import { declineAsks, type AsksBb } from "./verifier-asks.ts";
+import { stalled, STALL_MS, type ActivityBb } from "./verifier-stall.ts";
 import { verifierExecution } from "./verifier-model.ts";
 import { verifierBrief } from "./verifier-brief.ts";
 
@@ -48,7 +50,10 @@ type Threads = BbPluginApi["sdk"]["threads"];
 type ThreadRow = Awaited<ReturnType<Threads["list"]>>[number];
 
 /** A thread as the verify step lists it. */
-type ListedThread = Pick<ThreadRow, "id" | "providerId" | "environmentId" | "environmentBranchName" | "environmentHostId" | "status" | "archivedAt" | "deletedAt">;
+type ListedThread = Pick<
+  ThreadRow,
+  "id" | "providerId" | "environmentId" | "environmentBranchName" | "environmentHostId" | "status" | "hasPendingInteraction" | "createdAt" | "archivedAt" | "deletedAt"
+>;
 
 /** The parts of bb the verify step uses, down to the fields it reads. */
 type VerifyBb = CatalogBb &
@@ -56,7 +61,9 @@ type VerifyBb = CatalogBb &
   ThreadExecutionBb &
   EnvironmentsBb &
   FinalVerifierBb &
-  QuietBb & {
+  QuietBb &
+  AsksBb &
+  ActivityBb & {
     log: Pick<PluginLogger, "warn">;
     sdk: {
       threads: {
@@ -82,6 +89,7 @@ type Deps = {
     | "recordExecution"
     | "openChecks"
     | "markNudged"
+    | "recordDeclined"
     | "receiveVerdict"
     | "claimFixRound"
     | "unsettledChecks"
@@ -90,6 +98,7 @@ type Deps = {
   spawner: Pick<Spawner, "verifier">;
   inbox: Pick<Inbox, "handoff" | "giveUpCheck" | "settleCheck">;
   turns: IssueTurns;
+  now(): number;
 };
 
 /** A verifier's report: each criterion named by its text, and its findings. */
@@ -106,6 +115,7 @@ type Received = "recorded" | "not-running" | { unread: string };
 type Handing = { handoff: GivenHandoff; checkout: CheckoutRead; seen: AgentCheckout | null; execution: Execution | null };
 
 type Returned = Extract<Verdict, { state: "returned" }>;
+type Running = Extract<Verdict, { state: "running" }>;
 
 /** What settling a returned verdict does next: send its findings to the agent, wait for CI, or settle it as it is. */
 type Step = { kind: "send"; ci: CiVerdict } | Exclude<Settlement, { kind: "sent-back" }>;
@@ -131,7 +141,7 @@ const NUDGE =
 
 export type Verify = ReturnType<typeof createVerify>;
 
-export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
+export function createVerify({ bb, store, spawner, inbox, turns, now }: Deps) {
   /** The agent whose done handoff the check judges. why throw: a handoff's check is made of a bound agent's handoff, and agents are never deleted while their regional manager is kept. */
   function agentOf(check: HandoffCheck): Agent & { threadId: string } {
     const agent = store.agent(check.coordinatorId, check.subject.agentId);
@@ -229,7 +239,7 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
 
   /**
    * In its issue's turn: a running check whose verifier is gone, or idle without a verdict, is
-   * nudged once, then given up on. One whose environment bb destroyed is given up on at once, since
+   * nudged once, then given up on. One whose verifier runs is watched (see watchRunning). One whose environment bb destroyed is given up on at once, since
    * a reminder can't run there. Reads the check and its verifier as it decides. The reminder gives
    * the environment back to the verifier, so it waits while bb reports the agent whose handoff it
    * checks running, as when someone woke it, and then while the issue's other threads aren't quiet
@@ -243,7 +253,7 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
     const giveUp = (reason: string) => inbox.giveUpCheck(checkId, from, { state: "could-not-run", verifierThreadId, reason });
     const thread = (await listedThreads(bb, [verifierThreadId])).get(verifierThreadId) ?? null;
     if (thread === null) return void giveUp("its verifier thread was archived or deleted before it returned a verdict");
-    if (thread.status !== "idle" && thread.status !== "error") return;
+    if (isRunning(thread)) return watchRunning(checkId, verdict, thread, giveUp);
     const destroyed = thread.environmentId !== null && (await environmentGone(bb, thread.environmentId));
     if (destroyed) return void giveUp("its environment was removed (a sandbox removed or reaped) before its verifier returned a verdict");
     if (verdict.nudged) return void giveUp("its verifier stopped without a verdict twice, the second time after a reminder");
@@ -261,6 +271,25 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
     } catch (error) {
       bb.log.warn(`Could not remind the verifier ${thread.id} to return its verdict: ${messageOf(error)}`);
     }
+  }
+
+  /**
+   * In its issue's turn: a running verifier nobody but the plugin watches. Whatever its provider
+   * asks a person is declined at once (see declineAsks) and kept on the check for its verdict to
+   * name; an ask bb won't let the plugin decline ends the check, naming it, as does a verifier that
+   * showed no activity for STALL_MS, whatever held it.
+   */
+  async function watchRunning(checkId: CheckId, verdict: Running, thread: ListedThread, giveUp: (reason: string) => void): Promise<void> {
+    if (thread.hasPendingInteraction) {
+      const declined = await declineAsks(bb, thread.id);
+      const refused = declined.find(({ refused }) => refused !== null);
+      if (refused !== undefined) return giveUp(`its verifier asked a person "${refused.asked}", and bb refused the plugin's decline: ${refused.refused}`);
+      store.recordDeclined(checkId, thread.id, declined.map(({ asked }) => asked));
+      return;
+    }
+    if (!(await stalled(bb, thread.id, thread.createdAt, now()))) return;
+    const asked = verdict.declined.length === 0 ? "" : `, after the plugin declined what it asked a person (${verdict.declined.map((ask) => `"${ask}"`).join("; ")})`;
+    giveUp(`its verifier showed no activity for ${STALL_MS / 60_000} minutes${asked}`);
   }
 
   /**
@@ -418,7 +447,7 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
    * The commit a running check's verdict is on, and the tree it was judged in: a handoff's claimed
    * commit and the checkout read as it handed off; a final check's verifier's own worktree, read now.
    */
-  async function judgedOf({ subject, verdict, id }: Check & { verdict: Extract<Verdict, { state: "running" }> }): Promise<{ headSha: string; checkout: Checkout } | { unread: string }> {
+  async function judgedOf({ subject, verdict, id }: Check & { verdict: Running }): Promise<{ headSha: string; checkout: Checkout } | { unread: string }> {
     switch (subject.kind) {
       case "handoff":
         // why throw: a handoff's check is queued with the read made as it handed off, and keeps it running.
@@ -490,7 +519,8 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
         if (ran === null) throw new Error(`bb has no model on record for ${verifierThreadId}.`);
         const model = { providerId: ran.providerId, model: ran.model };
         const onTheirs = checkedAgents(check, store.agents(coordinatorId)).some(({ execution }) => sameModel(model, execution));
-        if (!store.receiveVerdict(checkId, { state: "returned", verifierThreadId, ...judged, ...report, model, sameModel: onTheirs })) return "not-running";
+        const findings = [...check.verdict.declined.map(declinedFinding), ...report.findings];
+        if (!store.receiveVerdict(checkId, { state: "returned", verifierThreadId, ...judged, ...report, findings, model, sameModel: onTheirs })) return "not-running";
         // why not fail the verdict: it is stored, and the tick settles it.
         await settleInTurn(checkId, "verdict-tool").catch((error: unknown) => bb.log.warn(`Could not settle the verdict of check ${checkId} yet; the next tick tries again: ${messageOf(error)}`));
         return "recorded";
@@ -527,5 +557,9 @@ export function createVerify({ bb, store, spawner, inbox, turns }: Deps) {
     },
   };
 }
+
+/** A finding of a verdict whose verifier asked a person something, as the plugin declined it. */
+const declinedFinding = (asked: string): string =>
+  `The verifier asked a person "${asked}"; nobody answers a verifier, so the plugin declined it, and the verifier went on without it.`;
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));

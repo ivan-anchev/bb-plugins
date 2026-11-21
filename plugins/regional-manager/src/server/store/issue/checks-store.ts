@@ -39,7 +39,7 @@ type OpenCheck = Check & { verdict: Extract<Verdict, { state: VerdictFrom["state
 /** Starts a queued check running in its verifier's thread, as the verifier's ticket binds; one superseded meanwhile stays so. Call inside a transaction. */
 export function startCheck(db: Db, checkId: CheckId, verifierThreadId: string): void {
   const queued = verdictOf(db, checkId);
-  if (queued?.state === "queued") writeVerdict(db, checkId, { state: "running", verifierThreadId, nudged: false, checkout: queued.checkout });
+  if (queued?.state === "queued") writeVerdict(db, checkId, { state: "running", verifierThreadId, nudged: false, declined: [], checkout: queued.checkout });
 }
 
 /** The agent's checks that passed every criterion and wait for CI on their commit, oldest first. */
@@ -268,6 +268,15 @@ export function checksStore(db: Db) {
         const current = verdictOf(db, checkId);
         if (current?.state !== "running" || current.verifierThreadId !== verifierThreadId || current.nudged === nudged) return false;
         return moveVerdict(checkId, { state: "running", verifierThreadId }, { ...current, nudged });
+      })();
+    },
+
+    /** Adds to a running check what its verifier asked a person that the plugin declined; says whether it is still that verifier's check. */
+    recordDeclined(checkId: CheckId, verifierThreadId: string, asked: readonly string[]): boolean {
+      return db().transaction(() => {
+        const current = verdictOf(db, checkId);
+        if (current?.state !== "running" || current.verifierThreadId !== verifierThreadId) return false;
+        return moveVerdict(checkId, { state: "running", verifierThreadId }, { ...current, declined: [...current.declined, ...asked] });
       })();
     },
 

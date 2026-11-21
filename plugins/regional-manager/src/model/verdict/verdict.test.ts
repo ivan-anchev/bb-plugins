@@ -24,7 +24,7 @@ type Settlement = Extract<Verdict, { state: "returned" }>["settlement"];
 test("a verdict's outcome is derived from its state, and a returned one from every criterion", () => {
   const cases: [Verdict, ReturnType<typeof outcome>][] = [
     [{ state: "queued", checkout: CLEAN }, "pending"],
-    [{ state: "running", verifierThreadId: "thr_v", nudged: true, checkout: CLEAN }, "pending"],
+    [{ state: "running", verifierThreadId: "thr_v", nudged: true, declined: [], checkout: CLEAN }, "pending"],
     [returned(["pass"]), "pass"],
     [returned(["pass", "pass", "pass"]), "pass"],
     [returned(["pass", "fail"]), "fail"],

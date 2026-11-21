@@ -214,7 +214,8 @@ test("5: a verifier that leaves a dirty tree fails the checkout rule; one idle w
   await idle.kit.idle(verifier, "Still looking.");
   await idle.tick();
   assert.equal(idle.latest().verdict.state, "could-not-run");
-  assert.deepEqual(await idle.row(), at("in-progress", "Couldn't run its final check", "Couldn't run its final check"));
+  const stopped = "Couldn't run its final check, as its verifier stopped without a verdict twice, the second time after a reminder";
+  assert.deepEqual(await idle.row(), at("in-progress", stopped, stopped));
   assert.match(idle.doorbells().join("\n"), /- i1 "Card vault" final check: could not run/);
 
   const offline = await withParent();
@@ -224,7 +225,9 @@ test("5: a verifier that leaves a dirty tree fails the checkout rule; one idle w
   assert.ok(isRefusal(refused));
   assert.match(textOf(refused), /couldn't read your worktree \(.*offline.*\)/);
   assert.equal(offline.latest().verdict.state, "could-not-run");
-  assert.deepEqual(await offline.row(), at("in-progress", "Couldn't run its final check", "Couldn't run its final check"));
+  const unread = offline.latest().verdict;
+  assert.ok(unread.state === "could-not-run");
+  assert.deepEqual(await offline.row(), at("in-progress", `Couldn't run its final check, as ${unread.reason}`, `Couldn't run its final check, as ${unread.reason}`));
 });
 
 test("6: with verification off no verifier starts, the parent waits In review unverified and is accepted; a research parent never gets a final check", async () => {

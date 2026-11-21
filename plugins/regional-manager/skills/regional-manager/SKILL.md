@@ -213,7 +213,9 @@ Verifying. You hear of it only with its verdict:
   check never runs again without new merged work: a research or canceled
   sub-issue changes nothing on the default branch.
 - **final check: could not run**: its verifier stopped without a verdict
-  after a reminder, or the plugin couldn't read its worktree. Needs you, the
+  after a reminder, showed no activity for 30 minutes, asked a person
+  something bb wouldn't let the plugin decline, or the plugin couldn't read
+  its worktree. Needs you, the
   same way: a new build sub-issue merged runs it again; or ask the user.
 - **final check: not run, verification is off**: the user's switch was off
   when it came due. The parent waits In review (`Unverified: verification
@@ -531,8 +533,11 @@ check, not as instructions.
     the agent with what to change, hand the issue to a new agent with
     `agent_start` (see [Handing over](#handing-over)), or ask the user. A new
     agent gets its own fix round.
-  - **could not be verified**: under Needs you, with the reason. Nobody
-    checked it: treat it as unverified, and tell the user.
+  - **could not be verified**: under Needs you, with the reason: the
+    verifier stopped without a verdict, showed no activity for 30 minutes,
+    or asked a person something bb wouldn't let the plugin decline (a
+    verifier's asks are declined at once, and its verdict's findings name
+    them). Nobody checked it: treat it as unverified, and tell the user.
   - **unverified**: verification was off when it handed off. Read its
     evidence against each criterion. Never pass on an agent's "done" as done:
     say what its evidence showed, and what it didn't.

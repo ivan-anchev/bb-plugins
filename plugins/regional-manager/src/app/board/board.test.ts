@@ -315,6 +315,41 @@ test("a build parent opens to its final checks, oldest first and the latest open
   assert.ok(detail.getByText("The vault client logs card numbers"));
 });
 
+test("a check whose verifier asks or stalled reads why on its row, and its opened issue gives the reason and links the verifier's thread", async () => {
+  const asking = "Verifying, its verifier asking for an answer or an approval, which the plugin declines: Retries land with backoff";
+  const stalled = "Couldn't verify, as its verifier showed no activity for 30 minutes: Retries land with backoff";
+  const reason = "its verifier showed no activity for 30 minutes";
+  const withVerdict = (verdict: ShownVerdict): IssueDetail => ({ ...DETAIL, record: DETAIL.record.map((held) => ({ ...held, handoffs: held.handoffs.map((handoff) => ({ ...handoff, verdict })) })) });
+  const verdicts: Record<string, ShownVerdict> = {
+    i1: { state: "running", verifierThreadId: "thr_asking" },
+    i2: { state: "could-not-run", verifierThreadId: "thr_stalled", reason },
+  };
+  const { view } = await mount(
+    {
+      decisions: [],
+      issues: [issue("i1", { status: "verifying", headline: asking, agent: agent("a1") }), issue("i2", { status: "in-progress", needsYou: stalled, headline: stalled, agent: agent("a2") })],
+    },
+    () => {},
+    (issueId) => withVerdict(verdicts[issueId] ?? assert.fail(`no verdict for ${issueId}`)),
+  );
+  assert.ok(view.getByRole("button", { name: new RegExp(`\\bi1 Build.*${asking}`) }));
+  assert.ok(view.getByRole("button", { name: new RegExp(`\\bi2 Build.*${stalled.replace(/[()]/g, "\\$&")}`) }));
+
+  fireEvent.click(view.getByRole("button", { name: /\bi1 Build/ }));
+  const askingDetail = within(view.getByRole("region", { name: "i1" }));
+  await askingDetail.findByText("Being verified");
+  fireEvent.click(askingDetail.getByRole("button", { name: "Open Verifier's thread" }));
+
+  fireEvent.click(view.getByRole("button", { name: /\bi2 Build/ }));
+  const stalledDetail = within(view.getByRole("region", { name: "i2" }));
+  await stalledDetail.findByText(`No verdict: ${reason}`);
+  fireEvent.click(stalledDetail.getByRole("button", { name: "Open Verifier's thread" }));
+  assert.deepEqual(view.navigateCalls, [
+    { method: "toThread", threadId: "thr_asking" },
+    { method: "toThread", threadId: "thr_stalled" },
+  ]);
+});
+
 test("a research row reads Research with no pull request, and opens to its Questions and its report as Markdown, with the file it is saved in and no verdict", async () => {
   const research = issue("i2", { kind: "research", status: "done", headline: "Handed off: Vault fits our PCI scope", agent: agent("a2") });
   const { view } = await mount({ decisions: [], issues: [research] }, undefined, () => researched(["Which one fits our PCI scope, and why?"]));
