@@ -497,7 +497,7 @@ verdict.
   its issue's verifier; each refusal offers the other change.
 - **Your choices**: tell the regional manager once, such as "build on codex
   gpt-5.4, verify on claude-code opus". Its rules keep it in
-  `AGENTS.md` and name both on every issue and agent it covers. The
+  `RULES.md` and name both on every issue and agent it covers. The
   board shows no model names; the manager's `crew_catch_up` and `issue_read`
   do.
 
@@ -506,7 +506,7 @@ verdict.
 Tell the regional manager to propose work and wait for you, and it files the
 issues in Backlog and describes them in one decision on its board (see
 [Decisions](#decisions)), starting no agent. Its rules tell it to do this
-whenever you asked it to propose and wait, or `AGENTS.md` says so. Your
+whenever you asked it to propose and wait, or `RULES.md` says so. Your
 answer wakes it, and it starts agents on the issues you agreed to, changed as
 you asked.
 
@@ -960,13 +960,13 @@ server log names the parent folder when the plugin loads. It is made as the mana
 - `GOAL.md`: the goal, the message you sent from its page to start it.
 - `NOTES.md`: the manager's plan, its reasoning and durable lessons, never
   what an issue already says.
-- `AGENTS.md`: the user's standing rules for the manager, one per line.
+- `RULES.md`: the user's standing rules for the manager, one per line.
 - `CREW.md`: rules every agent will follow.
 
 The work itself, who holds it, where it stands, what blocks it and what was
 decided, lives in the issues. The manager's summary for you is its reply in
 its thread; the board keeps no digest. A manager started before this release
-had its plan and preferences files renamed to `NOTES.md` and `AGENTS.md`, with
+had its plan and preferences files renamed to `NOTES.md` and `RULES.md`, with
 their content, and its digest file removed, as the plugin loaded; a file
 already there under the new name, and any line you added to `MEMORY.md`, were
 left as they were.

@@ -60,7 +60,7 @@ test("crew_catch_up returns the seeded memory with the goal the user typed", asy
   const { threadId } = await kit.startManager("Migrate the webhook service");
 
   const text = textOf(await kit.call("crew_catch_up", {}, threadId));
-  for (const file of ["MEMORY.md", "GOAL.md", "NOTES.md", "AGENTS.md", "CREW.md"]) assert.match(text, new RegExp(`^## ${file} \\(version \\w+\\)$`, "m"));
+  for (const file of ["MEMORY.md", "GOAL.md", "NOTES.md", "RULES.md", "CREW.md"]) assert.match(text, new RegExp(`^## ${file} \\(version \\w+\\)$`, "m"));
   assert.match(text, /## GOAL\.md \(version \w+\)\n\nMigrate the webhook service/);
 });
 

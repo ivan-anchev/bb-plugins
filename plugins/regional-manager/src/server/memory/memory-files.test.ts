@@ -24,7 +24,7 @@ test("seeding writes the core files, with MEMORY.md indexing them in the plugin'
   const memory = freshMemory();
   memory.seed("  Migrate the webhook service\n");
 
-  assert.deepEqual(readdirSync(memory.dir).sort(), ["AGENTS.md", "CREW.md", "GOAL.md", "MEMORY.md", "NOTES.md"]);
+  assert.deepEqual(readdirSync(memory.dir).sort(), ["CREW.md", "GOAL.md", "MEMORY.md", "NOTES.md", "RULES.md"]);
   assert.match(readFileSync(join(memory.dir, "MEMORY.md"), "utf8"), /^- GOAL\.md: the goal this work was started with\.$/m);
   assert.match(readFileSync(join(memory.dir, "MEMORY.md"), "utf8"), /^- CREW\.md: rules every agent follows\.$/m);
   assert.equal(readFileSync(join(memory.dir, "GOAL.md"), "utf8"), "  Migrate the webhook service\n");
@@ -179,7 +179,7 @@ test("the list holds the core files in their order, then the rest by name, and n
   writeFileSync(join(memory.dir, "notes", "api.md"), "");
   writeFileSync(join(memory.dir, "scratch.txt"), "");
 
-  assert.deepEqual(memory.list(), ["MEMORY.md", "GOAL.md", "NOTES.md", "AGENTS.md", "CREW.md", "notes/api.md", "notes/zones.md"]);
+  assert.deepEqual(memory.list(), ["MEMORY.md", "GOAL.md", "NOTES.md", "RULES.md", "CREW.md", "notes/api.md", "notes/zones.md"]);
 });
 
 test("a memory file name stays inside the folder, ends in .md, and has one spelling", () => {

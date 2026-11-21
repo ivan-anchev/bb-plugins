@@ -14,7 +14,7 @@ const { MemorySection } = await import("./memory-section.tsx");
 
 const COORDINATOR = coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10");
 const NOTES = memoryFileSchema.parse("NOTES.md");
-const PREFERENCES = memoryFileSchema.parse("AGENTS.md");
+const PREFERENCES = memoryFileSchema.parse("RULES.md");
 const MINE = "# Notes\n\nUNSAVED_PLAN_MARKER\n";
 
 afterEach(() => {

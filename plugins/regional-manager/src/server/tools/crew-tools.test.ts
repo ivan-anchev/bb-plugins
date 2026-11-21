@@ -81,24 +81,24 @@ test("crew_memory_write from a thread that is not a Coordinator is refused and w
     assert.match(textOf(result), /crew_memory_write is refused/);
   }
   assert.equal(readFileSync(join(dir, "NOTES.md"), "utf8"), plan);
-  assert.deepEqual(kit.memory.of(coordinatorId).list(), ["MEMORY.md", "GOAL.md", "NOTES.md", "AGENTS.md", "CREW.md"]);
+  assert.deepEqual(kit.memory.of(coordinatorId).list(), ["MEMORY.md", "GOAL.md", "NOTES.md", "RULES.md", "CREW.md"]);
 });
 
 test("after the upgrade from 0.4, a file it renamed or dropped is refused by name, naming what replaced it; one it left in place still reads, and none is written", async () => {
   const { kit, threadId, coordinatorId, dir } = await started();
-  // 0.4's files: PLAN.md stays, as NOTES.md is there already; PREFERENCES.md becomes AGENTS.md; DIGEST.md goes.
+  // 0.4's files: PLAN.md stays, as NOTES.md is there already; PREFERENCES.md becomes RULES.md; DIGEST.md goes.
   const leftover = "# Plan\n\n1. Inventory the endpoints\n";
-  unlinkSync(join(dir, "AGENTS.md"));
+  unlinkSync(join(dir, "RULES.md"));
   writeFileSync(join(dir, "PLAN.md"), leftover);
   writeFileSync(join(dir, "PREFERENCES.md"), "# Preferences\n\n- 2026-11-02: build on codex gpt-5.4\n");
   writeFileSync(join(dir, "DIGEST.md"), "# Digest\n\nAll quiet.\n");
   upgradeMemoryFrom040(kit.memory, [coordinatorId]);
   const files = kit.memory.of(coordinatorId).list();
-  assert.deepEqual([...files].sort(), ["AGENTS.md", "CREW.md", "GOAL.md", "MEMORY.md", "NOTES.md", "PLAN.md"]);
+  assert.deepEqual([...files].sort(), ["CREW.md", "GOAL.md", "MEMORY.md", "NOTES.md", "PLAN.md", "RULES.md"]);
 
   const write = (file: string) => kit.call("crew_memory_write", { file, content: "# Plan\n\n1. Retry\n", baseVersion: null }, threadId);
   const gone = {
-    "PREFERENCES.md": "PREFERENCES.md is now AGENTS.md: use AGENTS.md instead.",
+    "PREFERENCES.md": "PREFERENCES.md is now RULES.md: use RULES.md instead.",
     "DIGEST.md": "DIGEST.md is retired: your reply to the user is the summary.",
   };
   for (const [file, refusal] of Object.entries(gone)) {

@@ -1,7 +1,7 @@
 // The upgrade of memory as 0.4 laid it out. The work's state moved into the issues, so:
 // - PLAN.md becomes NOTES.md, the manager's plan, reasoning and lessons, which it trims of what its
 //   issues already say as it next writes it;
-// - PREFERENCES.md becomes AGENTS.md, the user's standing rules for the manager;
+// - PREFERENCES.md becomes RULES.md, the user's standing rules for the manager;
 // - DIGEST.md goes: the board no longer shows it, and the issues say what it summed up;
 // - MEMORY.md's lines that index them say so.
 // A moved file keeps every line but those 0.4 seeded it with, which become today's; a move whose new
@@ -33,10 +33,10 @@ const MOVES: readonly { from: MemoryFile; to: MemoryFile; lines: LineTable }[] =
   },
   {
     from: file("PREFERENCES.md"),
-    to: file("AGENTS.md"),
+    to: file("RULES.md"),
     lines: [
-      ["# Preferences", lineOf(SEEDS["AGENTS.md"], "# ")],
-      ["One rule per line: the date, then the user's words.", lineOf(SEEDS["AGENTS.md"], "One rule per line")],
+      ["# Preferences", lineOf(SEEDS["RULES.md"], "# ")],
+      ["One rule per line: the date, then the user's words.", lineOf(SEEDS["RULES.md"], "One rule per line")],
     ],
   },
 ];
@@ -49,7 +49,7 @@ const INDEX = file("MEMORY.md");
 const INDEX_LINES: LineTable = [
   ["The index of this memory. Each file holds one kind of thing:", lineOf(MEMORY_INDEX, "The index of this memory.")],
   ["- PLAN.md: the plan: what to delegate, in what order, and what is done.", lineOf(MEMORY_INDEX, "- NOTES.md:")],
-  ["- PREFERENCES.md: the user's standing preferences and rules.", lineOf(MEMORY_INDEX, "- AGENTS.md:")],
+  ["- PREFERENCES.md: the user's standing preferences and rules.", lineOf(MEMORY_INDEX, "- RULES.md:")],
   ["- DIGEST.md: the latest summary for the user.", null],
 ];
 

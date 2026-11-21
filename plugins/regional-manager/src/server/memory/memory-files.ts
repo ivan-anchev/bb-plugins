@@ -18,7 +18,7 @@ import type { CoordinatorId } from "../../model/role.ts";
 import type { Store } from "../store/store.ts";
 
 /** The files every memory starts with, in the order a catch-up reads them and the editor lists them. */
-export const CORE_FILES = ["MEMORY.md", "GOAL.md", "NOTES.md", "AGENTS.md", "CREW.md"].map((name) => memoryFileSchema.parse(name));
+export const CORE_FILES = ["MEMORY.md", "GOAL.md", "NOTES.md", "RULES.md", "CREW.md"].map((name) => memoryFileSchema.parse(name));
 
 export type MemoryRoot = ReturnType<typeof openMemoryRoot>;
 export type Memory = ReturnType<MemoryRoot["of"]>;
@@ -134,7 +134,7 @@ The index of this memory. Each file holds one kind of thing; the work itself, wh
 
 - GOAL.md: the goal this work was started with.
 - NOTES.md: the regional manager's plan, its reasoning and durable lessons, never what an issue already says.
-- AGENTS.md: the user's standing rules for the regional manager.
+- RULES.md: the user's standing rules for the regional manager.
 - CREW.md: rules every agent follows.
 `;
 
@@ -142,6 +142,6 @@ The index of this memory. Each file holds one kind of thing; the work itself, wh
 export const SEEDS = {
   "MEMORY.md": MEMORY_INDEX,
   "NOTES.md": "# Notes\n\nNothing yet.\n",
-  "AGENTS.md": "# Rules for the regional manager\n\nOne rule per line: the date, then the user's words.\n",
+  "RULES.md": "# Rules for the regional manager\n\nOne rule per line: the date, then the user's words.\n",
   "CREW.md": "# Crew rules\n\nNone yet.\n",
 };
