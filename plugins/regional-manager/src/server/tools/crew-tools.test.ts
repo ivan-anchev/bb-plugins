@@ -83,6 +83,23 @@ test("crew_memory_write from a thread that is not a Coordinator is refused and w
   assert.deepEqual(kit.memory.of(coordinatorId).list(), ["MEMORY.md", "GOAL.md", "NOTES.md", "AGENTS.md", "CREW.md"]);
 });
 
+test("crew_memory_read and crew_memory_write refuse a file 0.4 kept, naming what replaced it, and write nothing", async () => {
+  const { kit, threadId, coordinatorId } = await started();
+  const refusals = {
+    "PLAN.md": "PLAN.md is now NOTES.md: use NOTES.md instead.",
+    "PREFERENCES.md": "PREFERENCES.md is now AGENTS.md: use AGENTS.md instead.",
+    "DIGEST.md": "DIGEST.md is retired: your reply to the user is the summary.",
+  };
+  for (const [file, refusal] of Object.entries(refusals)) {
+    const read = await kit.call("crew_memory_read", { file }, threadId);
+    const written = await kit.call("crew_memory_write", { file, content: "# Plan\n\n1. Retry\n", baseVersion: null }, threadId);
+    assert.ok(isRefusal(read) && isRefusal(written), file);
+    assert.equal(textOf(read), refusal);
+    assert.equal(textOf(written), refusal);
+  }
+  assert.deepEqual(kit.memory.of(coordinatorId).list(), ["MEMORY.md", "GOAL.md", "NOTES.md", "AGENTS.md", "CREW.md"]);
+});
+
 test("crew_memory_write and the editor's save reject a name outside the memory folder or not markdown", async () => {
   const { kit, threadId, coordinatorId } = await started();
 

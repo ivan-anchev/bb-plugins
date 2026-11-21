@@ -124,13 +124,7 @@ function markdownUnder(dir: string): MemoryFile[] {
 const GOAL_FILE = memoryFileSchema.parse("GOAL.md");
 
 function seedFiles(): [MemoryFile, string][] {
-  const files: [string, string][] = [
-    ["MEMORY.md", MEMORY_INDEX],
-    ["NOTES.md", "# Notes\n\nNothing yet.\n"],
-    ["AGENTS.md", "# Rules for the regional manager\n\nOne rule per line: the date, then the user's words.\n"],
-    ["CREW.md", "# Crew rules\n\nNone yet.\n"],
-  ];
-  return files.map(([name, text]) => [memoryFileSchema.parse(name), text]);
+  return Object.entries(SEEDS).map(([name, text]) => [memoryFileSchema.parse(name), text]);
 }
 
 /** MEMORY.md as the plugin writes it: one line per core file but itself, saying what goes in it. */
@@ -143,3 +137,11 @@ The index of this memory. Each file holds one kind of thing; the work itself, wh
 - AGENTS.md: the user's standing rules for the regional manager.
 - CREW.md: rules every agent follows.
 `;
+
+/** Each core file but GOAL.md, as the plugin first writes it. */
+export const SEEDS = {
+  "MEMORY.md": MEMORY_INDEX,
+  "NOTES.md": "# Notes\n\nNothing yet.\n",
+  "AGENTS.md": "# Rules for the regional manager\n\nOne rule per line: the date, then the user's words.\n",
+  "CREW.md": "# Crew rules\n\nNone yet.\n",
+};

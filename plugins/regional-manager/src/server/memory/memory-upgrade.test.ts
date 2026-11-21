@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { freshStore, MANAGER, OTHER_MANAGER } from "../store/test-store.ts";
-import { MEMORY_INDEX, openMemoryRoot } from "./memory-files.ts";
+import { MEMORY_INDEX, openMemoryRoot, SEEDS } from "./memory-files.ts";
 import { upgradeMemoryFrom040 } from "./memory-upgrade.ts";
 
 /** MEMORY.md exactly as 0.4 seeded it. */
@@ -43,9 +43,37 @@ test("0.4's memory upgrades whole: PLAN.md becomes NOTES.md and PREFERENCES.md A
   const { root, folder, refreshed } = memoryOf040({ [MANAGER]: seeded040() });
   upgradeMemoryFrom040(root, [MANAGER]);
 
-  assert.deepEqual(folder(MANAGER), { "AGENTS.md": PREFERENCES, "CREW.md": CREW, "GOAL.md": "Migrate the webhook service", "MEMORY.md": MEMORY_INDEX, "NOTES.md": PLAN });
+  assert.deepEqual(folder(MANAGER), {
+    "AGENTS.md": "# Rules for the regional manager\n\n- 2026-11-02: build on codex gpt-5.4\n",
+    "CREW.md": CREW,
+    "GOAL.md": "Migrate the webhook service",
+    "MEMORY.md": MEMORY_INDEX,
+    "NOTES.md": "# Notes\n\n1. Inventory the endpoints\n2. Retire cron (i4)\n",
+  });
   assert.ok(refreshed.length > 0 && refreshed.every((id) => id === MANAGER), "each change refreshes the manager's memory");
   assert.equal(root.of(MANAGER).read(memoryFileSchema.parse("PLAN.md")).text, null);
+});
+
+test("a PLAN.md and PREFERENCES.md still as 0.4 seeded them become NOTES.md and AGENTS.md exactly as seeded today", () => {
+  const plan040 = "# Plan\n\nNo plan yet.\n";
+  const preferences040 = "# Preferences\n\nOne rule per line: the date, then the user's words.\n";
+  const { root, folder } = memoryOf040({ [MANAGER]: seeded040({ "PLAN.md": plan040, "PREFERENCES.md": preferences040 }) });
+  upgradeMemoryFrom040(root, [MANAGER]);
+
+  const files = folder(MANAGER);
+  assert.equal(files["NOTES.md"], SEEDS["NOTES.md"]);
+  assert.equal(files["AGENTS.md"], SEEDS["AGENTS.md"]);
+});
+
+test("a heading the user reworded, and every line but 0.4's own, move as they are", () => {
+  const plan = "## Plan for the migration\n\n# Plan\n\n- keep # Plan here\n";
+  const preferences = "# My rules\n\n- Always one PR per issue.\n";
+  const { root, folder } = memoryOf040({ [MANAGER]: seeded040({ "PLAN.md": plan, "PREFERENCES.md": preferences }) });
+  upgradeMemoryFrom040(root, [MANAGER]);
+
+  const files = folder(MANAGER);
+  assert.equal(files["NOTES.md"], "## Plan for the migration\n\n# Notes\n\n- keep # Plan here\n");
+  assert.equal(files["AGENTS.md"], preferences);
 });
 
 test("a line the user added to MEMORY.md, and one they reworded, stay as they are", () => {

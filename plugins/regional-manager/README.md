@@ -63,7 +63,7 @@ its role.
   files beside `data.db` (compare-and-swap writes through a temp file and a
   rename), the board Memory's rpc handlers (a save there wakes the
   regional manager) and the idempotent upgrade of 0.4's memory as the plugin
-  loads; `manager/` a regional manager's record as the panel
+  loads, whose table also tells the memory tools what replaced an old file; `manager/` a regional manager's record as the panel
   changes it, one operation per regional manager at a time: created with no
   thread, started by the goal from its page (its thread spawned once, however
   often the goal is sent), its profile edited, which retitles a started one's
