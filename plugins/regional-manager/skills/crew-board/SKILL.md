@@ -643,19 +643,20 @@ a **verifier** for each one:
   "on claude-code opus, as named on i1".
 - **Nobody answers a verifier**: anything its provider asks a person (a
   question, an approval, an MCP connector's sign-in) is declined as bb raises
-  it, or at the next tick if the plugin missed it: an approval is denied, any
-  other ask cancelled. The verifier goes on without it, and its verdict's
-  findings name each ask declined. While one is pending the row reads
+  it, or at the next tick if the plugin missed it: an approval is denied, a
+  question answered that nobody answers a verifier, a provider's own request
+  (codex's MCP sign-in) declined. The verifier goes on without it, and its
+  verdict's findings name each ask declined. While one is pending the row reads
   "Verifying, its verifier asking for an answer or an approval, which the
   plugin declines". An ask bb refuses to let the plugin decline ends the check
-  "Couldn't verify", naming the ask. The verifier's brief tells it to use the
-  `gh` CLI for GitHub, never a connector or app.
+  "Couldn't verify", naming the ask, and stops the verifier. The verifier's
+  brief tells it to use the `gh` CLI for GitHub, never a connector or app.
 - **No verdict**: a verifier that ends a turn without one is reminded once,
   when its agent is idle;
   a second time, or a verifier bb wouldn't start, whose thread was archived,
   whose environment bb removed, or that showed no activity in bb for 30
-  minutes while it ran, reads "Couldn't verify, as <the reason>" under Needs
-  you, and wakes the manager. Opening the issue shows the reason and links the
+  minutes while it ran (the plugin then stops it), reads "Couldn't verify, as
+  <the reason>" under Needs you, and wakes the manager. Opening the issue shows the reason and links the
   verifier's thread.
 - **A newer done handoff** from the same agent stops the older verifier, and
   only the newer handoff is checked and announced.

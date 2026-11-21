@@ -97,6 +97,9 @@ type Handlers = { [E in FakeEventName]: ((payload: FakeEvents[E]) => void | Prom
 /** An interaction as bb lists it, with the fields the plugin reads, and how it was settled (null: pending). */
 type FakeAsk = { id: string; status: "pending" | "resolved" | "cancelled"; payload: InteractionPayload };
 
+/** How the plugin said no to an ask: an approval denied, a question answered, a provider's request declined, a plugin's ask cancelled. */
+type AskSettled = { how: "deny"; freeText?: never } | { how: "answer"; freeText: string } | { how: "decline" | "cancel"; freeText?: never };
+
 /** The model a thread runs on and its permission mode, as bb reports them for its latest turn. */
 type FakeExecution = { model: string; reasoningLevel: string; serviceTier: string; permissionMode: string };
 
@@ -273,7 +276,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   /** The time the tick runs at; a test moves it on. */
   const clock = { now: 1_000_000 };
   /** How bb answers the plugin settling an ask: each one it took, and the error it refuses each with instead (null: takes them). */
-  const askAnswers: { answered: { threadId: string; interactionId: string; how: "deny" | "cancel" }[]; refusal: Error | null } = { answered: [], refusal: null };
+  const askAnswers: { answered: ({ threadId: string; interactionId: string } & AskSettled)[]; refusal: Error | null } = { answered: [], refusal: null };
   let asked = 0;
   /**
    * bb's git plugin as the plugin reaches it, by environment id: the branch each has checked out
@@ -404,14 +407,21 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     thread.turns.push(++sequence);
   }
 
-  /** bb settles a pending ask as the plugin answered it, unless it refuses (see askAnswers). */
-  function settleAsk(threadId: string, interactionId: string, how: "deny" | "cancel"): FakeAsk {
+  /**
+   * bb settles a pending ask as the plugin answered it, unless it refuses (see askAnswers). As bb
+   * does, it takes each kind's own answer only: a deny for an approval, an answer to each question
+   * for a question, a value for a provider's own request, and a cancel only for a plugin's ask.
+   */
+  function settleAsk(threadId: string, interactionId: string, settled: AskSettled): FakeAsk {
     const thread = fakeThread(threadId);
     const ask = thread.asks.find(({ id }) => id === interactionId);
     if (ask?.status !== "pending") throw bbHttpError(409, "interaction_not_pending", "Interaction is not pending");
+    const { kind } = ask.payload;
+    const takes = kind === "approval" ? "deny" : kind === "user_question" ? "answer" : kind === "plugin" ? "cancel" : "decline";
+    if (settled.how !== takes) throw bbHttpError(400, "invalid_request", settled.how === "cancel" ? "Plugin interaction expected" : `A ${ask.payload.kind} interaction takes no ${settled.how}`);
     if (askAnswers.refusal !== null) throw askAnswers.refusal;
-    askAnswers.answered.push({ threadId, interactionId, how });
-    ask.status = how === "deny" ? "resolved" : "cancelled";
+    askAnswers.answered.push({ threadId, interactionId, ...settled });
+    ask.status = settled.how === "cancel" ? "cancelled" : "resolved";
     thread.hasPendingInteraction = thread.asks.some(({ status }) => status === "pending");
     thread.activityAt = clock.now;
     return ask;
@@ -595,11 +605,23 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     // pending, or while bb refuses, fails. A settled ask no longer holds the thread waiting.
     interactions: {
       list: async ({ threadId }: { threadId: string }) => fakeThread(threadId).asks.map((ask) => ({ ...ask })),
-      async resolve({ threadId, interactionId, resolution }: { threadId: string; interactionId: string; resolution: object }) {
-        if (!("decision" in resolution) || resolution.decision !== "deny") throw new Error("The plugin only ever declines an ask");
-        return settleAsk(threadId, interactionId, "deny");
+      async resolve({ threadId, interactionId, resolution }: { threadId: string; interactionId: string; resolution: { decision: string } | { kind: string; answers?: Record<string, { selected: string[]; freeText?: string }> } }) {
+        if ("decision" in resolution) {
+          if (resolution.decision !== "deny") throw new Error("The plugin only ever declines an ask");
+          return settleAsk(threadId, interactionId, { how: "deny" });
+        }
+        if (resolution.kind !== "user_answer" || resolution.answers === undefined) throw new Error("The plugin only ever declines an ask");
+        const ask = fakeThread(threadId).asks.find(({ id }) => id === interactionId);
+        const questions = ask?.payload.kind === "user_question" ? ask.payload.questions.map(({ id }) => id) : [];
+        const answers = Object.entries(resolution.answers);
+        if (answers.length !== questions.length || answers.some(([id, { selected, freeText }]) => !questions.includes(id) || selected.length > 0 || freeText === undefined)) throw new Error("The plugin answers each question with free text only");
+        return settleAsk(threadId, interactionId, { how: "answer", freeText: answers.map(([, { freeText }]) => freeText ?? "").join("\n") });
       },
-      cancel: async ({ threadId, interactionId }: { threadId: string; interactionId: string }) => settleAsk(threadId, interactionId, "cancel"),
+      async respond({ threadId, interactionId, value }: { threadId: string; interactionId: string; value: unknown }) {
+        if (JSON.stringify(value) !== JSON.stringify({ action: "decline" })) throw new Error("The plugin only ever declines a provider's request");
+        return settleAsk(threadId, interactionId, { how: "decline" });
+      },
+      cancel: async ({ threadId, interactionId }: { threadId: string; interactionId: string }) => settleAsk(threadId, interactionId, { how: "cancel" }),
     },
     // As bb does, a stop that ends a running turn announces the thread idle, with the interrupted turn's last answer.
     async stop({ threadId }) {
