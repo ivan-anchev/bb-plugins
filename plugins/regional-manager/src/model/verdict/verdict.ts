@@ -81,8 +81,17 @@ const returnedSchema = z.object({
 const pendingCheckoutSchema = checkoutSchema.nullable();
 /** Verification is on and no verifier has started yet. */
 const queuedSchema = z.object({ state: z.literal("queued"), checkout: pendingCheckoutSchema });
-/** A verifier thread is checking; `nudged` once it went idle without a verdict and was asked again. */
-const runningSchema = z.object({ state: z.literal("running"), verifierThreadId: verifierThreadIdSchema, nudged: z.boolean(), checkout: pendingCheckoutSchema });
+/**
+ * A verifier thread is checking; `nudged` once it went idle without a verdict and was asked again;
+ * `declined`, what its provider asked a person that the plugin declined, as nobody answers a verifier.
+ */
+const runningSchema = z.object({
+  state: z.literal("running"),
+  verifierThreadId: verifierThreadIdSchema,
+  nudged: z.boolean(),
+  declined: z.array(z.string()).default([]),
+  checkout: pendingCheckoutSchema,
+});
 /** No verdict will come: bb's git plugin couldn't read the agent's environment, or the verifier never started or stopped without one. Its thread, if it had one. */
 const couldNotRunSchema = z.object({ state: z.literal("could-not-run"), verifierThreadId: verifierThreadIdSchema.nullable(), reason: z.string() });
 /** A newer done handoff from the same agent, or a handover, replaced this one before its verdict. */
@@ -115,7 +124,7 @@ const shownSettlementSchema = z.discriminatedUnion("kind", [
  */
 export const shownVerdictSchema = z.discriminatedUnion("state", [
   queuedSchema.omit({ checkout: true }),
-  runningSchema.omit({ checkout: true, nudged: true }),
+  runningSchema.omit({ checkout: true, nudged: true, declined: true }),
   returnedSchema.omit({ model: true, settlement: true }).extend({ settlement: shownSettlementSchema }),
   couldNotRunSchema,
   supersededSchema,

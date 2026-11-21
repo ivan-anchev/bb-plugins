@@ -2,8 +2,9 @@
 // event only says that what its regional manager's views are derived from changed, so they are read
 // again (the board, what was unblocked), and those derive everything on each read, so a missed event
 // (a reload, a reconnect) costs nothing. An archived or deleted agent thread ends its agent, and a
-// deleted regional manager is removed; an agent's or a verifier's thread going idle or failing has
-// the verify step look at its issue's checks again; the tick's reconcile catches any of those missed.
+// deleted regional manager is removed; an agent's or a verifier's thread going idle or failing, or a
+// verifier asking a person something, has the verify step look at its issue's checks again; the
+// tick's reconcile catches any of those missed.
 import type { PluginLogger, PluginThreadEventName } from "@get-bb/plugin-sdk";
 import type { IssueId } from "../../../model/issue/issue.ts";
 import type { HolderThread } from "../../../model/issue/status.ts";
@@ -143,6 +144,20 @@ export function forwardThreadEvents(bb: EventsBb, { store, agents, verify, onCha
       if (issue !== null) void verify.lookAgain(issue.coordinatorId, issue.issueId).catch(warned(`look at the checks of ${issue.issueId} again`));
     });
   }
+
+  // why a verifier's ask: nobody answers one, and it holds the verifier's turn open; the look
+  // declines it (verify.ts watchRunning). why the board before and after: it shows the verifier
+  // asking until the look declines it, and bb announces nothing when the ask is settled.
+  bb.events.on("interaction.pending", (payload) => {
+    const role = roleOf(payload);
+    if (role?.kind !== "verifier") return;
+    const { coordinatorId, issueId } = role;
+    refreshBoard(coordinatorId);
+    void verify
+      .lookAgain(coordinatorId, issueId)
+      .catch(warned(`decline what the verifier of ${issueId} asked`))
+      .finally(() => refreshBoard(coordinatorId));
+  });
 
   return { forget: (id) => void statusSeen.delete(id) };
 }

@@ -49,6 +49,8 @@ export type IssueFacts = {
   openDecision: boolean;
   /** Its latest final check (null: none was made, as for every issue but a build parent whose work was all merged). */
   finalCheck: FinalCheck | null;
+  /** The verifier of one of its running checks waits on an answer or an approval in its thread, which the plugin declines (verify.ts watchRunning). */
+  verifierAsks: boolean;
 };
 
 export type IssueView = {
@@ -115,17 +117,17 @@ const ASKED = "Waiting on your answer to its decision";
 /** How the manager's two closing acts place an issue. */
 const CLOSED = { canceled: { status: "canceled", headline: "Canceled" }, accepted: { status: "done", headline: "Accepted" } } as const;
 
-function issueView({ issue, holder, ended, pr, openDecision }: IssueFacts): Placed {
+function issueView({ issue, holder, ended, pr, openDecision, verifierAsks }: IssueFacts): Placed {
   const base = { issue, holder: holder?.agent ?? null, pr, placing: null, subIssues: null, finalCheckDue: null };
   const final = finalOf(issue, pr);
   if (final !== null) return { ...base, ...final, needsYou: null };
   const asked = openDecision ? ASKED : null;
   if (holder !== null) {
-    const placed = held(issue.kind, holder, pr);
+    const placed = held(issue.kind, holder, { pr, verifierAsks });
     return { ...base, ...placed, needsYou: placed.needsYou ?? asked, closedBy: handedOffClose(placed, holder.current) };
   }
   const left = ended?.left ?? null;
-  const after = left === null ? null : placedByLeft(issue.kind, left, pr);
+  const after = left === null ? null : placedByLeft(issue.kind, left, { pr, verifierAsks });
   if (left !== null && after !== null) return { ...base, ...after, placing: left.check, needsYou: after.needsYou ?? asked, closedBy: handedOffClose(after, left) };
   return { ...base, status: issue.rest, headline: restingHeadline(issue.rest, ended?.how ?? null), needsYou: asked, closedBy: null };
 }
@@ -145,7 +147,7 @@ const handedOffClose = ({ status }: Pick<Placing, "status">, handed: Handed | nu
  * manager put it. Its headline says only what its count doesn't (headlineText joins the two): why
  * it is flagged, where its final check stands, or the manager's close; else none.
  */
-function parentView({ issue, openDecision, finalCheck }: IssueFacts, subIssues: readonly Placed[]): Placed {
+function parentView({ issue, openDecision, finalCheck, verifierAsks }: IssueFacts, subIssues: readonly Placed[]): Placed {
   const done = subIssues.filter(({ status }) => status === "done");
   const base = { issue, holder: null, pr: null, placing: null, subIssues: { done: done.length, total: subIssues.length }, finalCheckDue: null };
   const final = finalOf(issue, null);
@@ -156,7 +158,7 @@ function parentView({ issue, openDecision, finalCheck }: IssueFacts, subIssues: 
     const builds = done.filter(({ issue: sub }) => shipsCode(sub.kind));
     const unmerged = builds.filter(({ pr }) => pr?.state !== "merged").map(({ issue: sub }) => sub.id);
     if (unmerged.length > 0) return { ...base, ...flagged(`${unmerged.join(", ")} ${unmerged.length === 1 ? "isn't" : "aren't"} merged, so ${issue.id}'s work isn't all on the default branch`), closedBy: null };
-    const placed = finalCheckPlaces(issue, finalCheck, builds.map(({ issue: sub }) => sub.id));
+    const placed = finalCheckPlaces(issue, finalCheck, builds.map(({ issue: sub }) => sub.id), verifierAsks);
     return { ...base, ...placed, needsYou: placed.needsYou ?? asked };
   }
   const started = subIssues.some(({ status }) => status !== "backlog" && status !== "todo" && status !== "canceled");
@@ -175,7 +177,7 @@ function parentView({ issue, openDecision, finalCheck }: IssueFacts, subIssues: 
  * couldn't run. why a research or canceled sub-issue since doesn't make one due: the default
  * branch holds the same work.
  */
-function finalCheckPlaces(issue: Issue, latest: FinalCheck | null, merged: IssueId[]): Placing & Pick<Placed, "placing" | "closedBy" | "finalCheckDue"> {
+function finalCheckPlaces(issue: Issue, latest: FinalCheck | null, merged: IssueId[], verifierAsks: boolean): Placing & Pick<Placed, "placing" | "closedBy" | "finalCheckDue"> {
   const open = { closedBy: null, finalCheckDue: null };
   const due = (): Placing & Pick<Placed, "placing" | "closedBy" | "finalCheckDue"> =>
     issue.doneCriteria.length === 0
@@ -187,7 +189,7 @@ function finalCheckPlaces(issue: Issue, latest: FinalCheck | null, merged: Issue
   switch (result) {
     case "pending":
     case "waiting-for-ci":
-      return { status: "verifying", headline: "Final check running", needsYou: null, ...placing, ...open };
+      return { status: "verifying", headline: `Final check running${asking(latest.verdict, verifierAsks)}`, needsYou: null, ...placing, ...open };
     // why due, never running: a superseded check judged nothing, and no newer one was made after it.
     case "superseded":
       return due();
@@ -199,7 +201,7 @@ function finalCheckPlaces(issue: Issue, latest: FinalCheck | null, merged: Issue
     case "fail":
       return { ...flagged("✗ Final check failed"), ...placing, ...open };
     case "could-not-run":
-      return { ...flagged("Couldn't run its final check"), ...placing, ...open };
+      return { ...flagged(`Couldn't run its final check${because(latest.verdict)}`), ...placing, ...open };
     default:
       return result satisfies never;
   }
@@ -255,20 +257,21 @@ function finalOf(issue: Issue, pr: PrSnapshot | null): Pick<IssueView, "status" 
  * agent asks this to decide whether the manager is told the issue returned to Todo.
  */
 export const keepsPlaceAfterEnd = (issue: Issue, left: Handed | null, pr: PrSnapshot | null): boolean =>
-  finalOf(issue, pr) !== null || (left !== null && placedByLeft(issue.kind, left, pr) !== null);
+  // why no verifier asking: it changes the headline, never the place.
+  finalOf(issue, pr) !== null || (left !== null && placedByLeft(issue.kind, left, { pr, verifierAsks: false }) !== null);
 
 /**
  * Where the handoff an ended agent left places its issue, or null when it doesn't and the issue
  * rests again. why everything but In progress: work that reached Verifying, In review or Done
  * survives its thread being stopped, archived or deleted; anything short of that returns to Todo.
  */
-export function placedByLeft(kind: Kind, left: Handed, pr: PrSnapshot | null): Placing | null {
-  const after = byHandoff(kind, left, 0, pr);
+export function placedByLeft(kind: Kind, left: Handed, around: Omit<Around, "fixRounds">): Placing | null {
+  const after = byHandoff(kind, left, { ...around, fixRounds: 0 });
   return after.status === "in-progress" ? null : after;
 }
 
 /** An issue an agent holds: its thread's state, else its current handoff, places it. */
-function held(kind: Kind, { agent, thread, current }: NonNullable<IssueFacts["holder"]>, pr: PrSnapshot | null): Placing & Pick<IssueView, "placing"> {
+function held(kind: Kind, { agent, thread, current }: NonNullable<IssueFacts["holder"]>, around: Omit<Around, "fixRounds">): Placing & Pick<IssueView, "placing"> {
   const working = (headline: string) => ({ status: "in-progress", headline, needsYou: null, placing: null }) as const;
   // why it waits on the user: agent_start binds an agent's thread or ends the agent before it answers,
   // so one still without a thread is one whose spawn the plugin stopped during and never heard the end
@@ -288,7 +291,7 @@ function held(kind: Kind, { agent, thread, current }: NonNullable<IssueFacts["ho
     case "stopping":
       return working("Stopping");
     case "idle":
-      return current === null ? working(IDLE) : { ...byHandoff(kind, current, agent.fixRounds, pr), placing: current.check };
+      return current === null ? working(IDLE) : { ...byHandoff(kind, current, { ...around, fixRounds: agent.fixRounds }), placing: current.check };
     default:
       // why not throw: bb can send a status newer than this plugin's SDK. A thread in it is not
       // known to be working, so it reads as idle until bb says otherwise.
@@ -301,20 +304,23 @@ const IDLE = "Its turn ended without a handoff";
 const UNCONFIRMED = "No thread: bb never confirmed starting one. agent_stop ends the agent at once; then agent_start again";
 
 /** A handoff: blocked and gave-up flag the issue; done walks the kind's stages. */
-function byHandoff(kind: Kind, { handoff, check }: Handed, fixRounds: number, pr: PrSnapshot | null): Placing {
+function byHandoff(kind: Kind, { handoff, check }: Handed, around: Around): Placing {
   switch (handoff.status) {
     case "blocked":
       return flagged(`Blocked: ${handoff.summary}`);
     case "gave-up":
       return flagged(`Gave up: ${handoff.summary}`);
     case "done":
-      return walk(kind, { summary: handoff.summary, check, fixRounds, pr });
+      return walk(kind, { summary: handoff.summary, check, ...around });
     default:
       return handoff satisfies never;
   }
 }
 
-type Evidence = { summary: string; check: Check | null; fixRounds: number; pr: PrSnapshot | null };
+/** What places a handoff beside the handoff itself: its agent's fix rounds, its pull request, and whether its verifier asks a person something. */
+type Around = { fixRounds: number; pr: PrSnapshot | null; verifierAsks: boolean };
+
+type Evidence = { summary: string; check: Check | null } & Around;
 
 /** The pipeline, run: a done handoff waits in the first of its kind's stages it hasn't left; past the last one it is Done. */
 function walk(kind: Kind, evidence: Evidence): Placing {
@@ -328,12 +334,12 @@ function walk(kind: Kind, evidence: Evidence): Placing {
 /** How each stage is left, defined once for every kind that passes through it. */
 const STAGES: Record<Stage, (evidence: Evidence) => Placing | "left"> = {
   // Left once the check passed, or nobody checks it. A failure stays In progress.
-  verifying({ summary, check, fixRounds, pr }) {
+  verifying({ summary, check, fixRounds, pr, verifierAsks }) {
     const { verdict } = checked(check);
     const result = outcome(verdict);
     switch (result) {
       case "pending":
-        return { status: "verifying", headline: `Verifying: ${summary}`, needsYou: null };
+        return { status: "verifying", headline: `Verifying${asking(verdict, verifierAsks)}: ${summary}`, needsYou: null };
       case "waiting-for-ci":
         return { status: "verifying", headline: `Waiting for CI${pr === null ? "" : ` on #${pr.number}`}: ${summary}`, needsYou: null };
       case "pass":
@@ -344,7 +350,7 @@ const STAGES: Record<Stage, (evidence: Evidence) => Placing | "left"> = {
         if (verdict.state === "returned" && verdict.settlement.kind === "sent-back") return { status: "in-progress", headline: `Fixing its verifier's findings: ${summary}`, needsYou: null };
         return flagged(`${failedAs(verdict)}${failureNote(verdict, fixRounds)}: ${summary}`);
       case "could-not-run":
-        return flagged(`Couldn't verify: ${summary}`);
+        return flagged(`Couldn't verify${because(verdict)}: ${summary}`);
       case "superseded":
         return { status: "in-progress", headline: `Replaced by a newer handoff: ${summary}`, needsYou: null };
       default:
@@ -372,6 +378,13 @@ function checked(check: Check | null): Check {
 }
 
 const flagged = (reason: string): Placing => ({ status: "in-progress", headline: reason, needsYou: reason });
+
+/** What a running check's headline adds while its verifier asks a person something. why no needsYou: the plugin declines it, and nobody need answer. */
+const asking = (verdict: Verdict, verifierAsks: boolean): string =>
+  verdict.state === "running" && verifierAsks ? ", its verifier asking for an answer or an approval, which the plugin declines" : "";
+
+/** Why a check that couldn't run has no verdict, as its headline gives it. */
+const because = (verdict: Verdict): string => (verdict.state === "could-not-run" ? `, as ${verdict.reason}` : "");
 
 /**
  * What a failure's headline adds about the agent's fix round: that this verdict's findings may or
