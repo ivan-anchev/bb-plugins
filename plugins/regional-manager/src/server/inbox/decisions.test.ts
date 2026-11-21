@@ -4,6 +4,7 @@ import { needsYouBadge } from "../../app/needs-you-label.ts";
 import { boardTag, coordinatorContract } from "../../contract.ts";
 import { boardGroups, laneOf } from "../../model/board/board-groups.ts";
 import { decisionIdSchema } from "../../model/decision.ts";
+import { issueIdSchema } from "../../model/issue/issue.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { coordinating, ISSUE, isRefusal, settled, startedAgent, textOf } from "../test-harness.ts";
@@ -68,7 +69,7 @@ test("an answer wakes the Coordinator with its own question, and crew_catch_up r
   assert.match(caughtUp, /## Decisions\n\nNone waiting for the user\./);
 
   const board = await boardOf(kit, coordinatorId);
-  assert.deepEqual(boardGroups(board.decisions, board.issues).map(({ lane, rows }) => [lane, rows.length]), [["done", 1]]);
+  assert.deepEqual(boardGroups(board.decisions, board.issues), [], "answered, it is on no lane");
   assert.equal(board.decisions[0]?.answer?.text, "release/2");
   assert.deepEqual(await kit.rpc.needsYou({ keys: [coordinatorId] }), { [coordinatorId]: { decisions: 0, issues: 0 } }, "the badge drops it");
 });
@@ -120,6 +121,11 @@ test("a question about an issue flags it Needs you until the user answers, and t
   await kit.rpc.answerDecision({ coordinatorId, decisionId: d1, answer: "Yes" });
   assert.deepEqual((await boardOf(kit, coordinatorId)).issues.map(laneOf), ["backlog"]);
   assert.equal(needsYouBadge(Object.values(await kit.rpc.needsYou({ keys: [coordinatorId] }))), null);
+
+  const read = textOf(await kit.call("issue_read", { id: "i1" }, threadId));
+  assert.match(read, /### Decisions\n\n[^#]*- \S+: asked the user \(d1\): Start i1 now\? They answered at \S+: Yes$/m, "answered, it stays among the issue's decisions");
+  const detail = await kit.rpc.issue({ coordinatorId, issueId: issueIdSchema.parse("i1") });
+  assert.deepEqual(detail.decisions.map((entry) => (entry.kind === "asked" ? [entry.id, entry.question, entry.answer?.text] : entry)), [["d1", "Start i1 now?", "Yes"]]);
 
   const unknown = await kit.call("crew_ask_user", { question: "Start i9?", issue: "i9" }, threadId);
   assert.ok(isRefusal(unknown));

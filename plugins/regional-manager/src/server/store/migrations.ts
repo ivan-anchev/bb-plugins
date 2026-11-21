@@ -141,6 +141,15 @@ export const MIGRATIONS: readonly string[] = [
   // this release; a row with no name and no thread is one 0.3.0 left waiting for its goal, which no list
   // shows until its upgrade (store.ts startOf and notStarted).
   `ALTER TABLE coordinators ADD COLUMN name TEXT`,
+
+  // A decision the regional manager recorded on one of its issues with issue_update: what was decided
+  // and why, and when, in the order recorded. Read with the questions put to the user naming the issue
+  // as the issue's decisions (decision.ts issueDecisions). why no write count (fact_writes): no status
+  // is viewed from it.
+  `CREATE TABLE issue_decisions (id INTEGER PRIMARY KEY AUTOINCREMENT, coordinator_id TEXT NOT NULL, issue_id TEXT NOT NULL,
+     text TEXT NOT NULL, at INTEGER NOT NULL,
+     FOREIGN KEY (coordinator_id, issue_id) REFERENCES issues (coordinator_id, id))`,
+  `CREATE INDEX issue_decisions_of_issue ON issue_decisions (coordinator_id, issue_id)`,
 ];
 
 /** The trigger `name`: after each row `on` names, one more write of the regional manager `manager` names. */

@@ -3,9 +3,9 @@ import { test } from "node:test";
 import type { MemoryRevision, MemorySnapshot, MemoryText, WriteOutcome } from "../../model/memory-file.ts";
 import { draftAfter, editorState, fileNow, isSaved, NO_SAVE, saveOf, settled, typed, type Draft, type FileEdit, type Save } from "./draft.ts";
 
-const v1 = { content: "# Plan\n\nNo plan yet.\n", version: "v1" };
-const v2 = { content: "# Plan\n\n1. Inventory the endpoints\n", version: "v2" };
-const v3 = { content: "# Plan\n\n1. Inventory the endpoints\n2. Map the zones\n", version: "v3" };
+const v1 = { content: "# Notes\n\nNothing yet.\n", version: "v1" };
+const v2 = { content: "# Notes\n\n1. Inventory the endpoints\n", version: "v2" };
+const v3 = { content: "# Notes\n\n1. Inventory the endpoints\n2. Map the zones\n", version: "v3" };
 
 /** The file as the server saw it at `revision`. */
 const at = (text: MemoryText | null, revision: MemoryRevision): MemorySnapshot => ({ text, revision });
@@ -31,9 +31,9 @@ test("with no draft the editor shows the file as read now, and follows each newe
 });
 
 test("typing starts a draft from the version read, and typing back to the file's text drops it", () => {
-  const draft = typed("# Plan\n\nMine\n", v1, null);
-  assert.deepEqual(draft, { text: "# Plan\n\nMine\n", base: "v1" });
-  assert.deepEqual(typed("# Plan\n\nMine, more\n", v1, draft), { text: "# Plan\n\nMine, more\n", base: "v1" });
+  const draft = typed("# Notes\n\nMine\n", v1, null);
+  assert.deepEqual(draft, { text: "# Notes\n\nMine\n", base: "v1" });
+  assert.deepEqual(typed("# Notes\n\nMine, more\n", v1, draft), { text: "# Notes\n\nMine, more\n", base: "v1" });
   assert.equal(typed(v1.content, v1, draft), null);
   assert.deepEqual(editorState(v1, draft), { kind: "edited", draft });
   assert.equal(saveOf(at(v1, 1), drafted(draft))?.base, "v1");
@@ -47,7 +47,7 @@ test("a draft on a file that doesn't exist yet creates it", () => {
 });
 
 test("when the file moves on under a draft, the draft is kept beside the newer version, and saving names the version shown", () => {
-  const draft = typed("# Plan\n\nMine\n", v1, null);
+  const draft = typed("# Notes\n\nMine\n", v1, null);
 
   assert.deepEqual(editorState(v2, draft), { kind: "conflict", draft, newer: v2 });
   assert.equal(saveOf(at(v2, 2), drafted(draft))?.base, "v2");
@@ -55,8 +55,8 @@ test("when the file moves on under a draft, the draft is kept beside the newer v
 });
 
 test("typing in a conflict keeps the draft's base, so the conflict stays until the user saves or takes the newer version", () => {
-  const draft = typed("# Plan\n\nMine\n", v1, null);
-  assert.deepEqual(typed("# Plan\n\nMine, merged\n", v2, draft), { text: "# Plan\n\nMine, merged\n", base: "v1" });
+  const draft = typed("# Notes\n\nMine\n", v1, null);
+  assert.deepEqual(typed("# Notes\n\nMine, merged\n", v2, draft), { text: "# Notes\n\nMine, merged\n", base: "v1" });
   assert.equal(typed(v2.content, v2, draft), null);
 });
 
@@ -68,27 +68,27 @@ test("a draft on a file that didn't exist stays in conflict once another writer 
 });
 
 test("while a save is out there is nothing more to send", () => {
-  const { edit } = sent(at(v1, 1), "# Plan\n\nMine\n");
+  const { edit } = sent(at(v1, 1), "# Notes\n\nMine\n");
   assert.equal(saveOf(at(v1, 1), edit), null);
 });
 
 test("a saved draft shows as saved even when every refresh after it fails", () => {
-  const { edit, save } = sent(at(v1, 1), "# Plan\n\nMine\n");
+  const { edit, save } = sent(at(v1, 1), "# Notes\n\nMine\n");
   const after = answered(edit, save, { outcome: "saved", version: "v9", revision: 2 });
 
   // The read is still revision 1: its refresh failed.
   const file = fileNow(at(v1, 1), after);
-  assert.deepEqual(editorState(file.text, after.draft), { kind: "clean", text: "# Plan\n\nMine\n" });
+  assert.deepEqual(editorState(file.text, after.draft), { kind: "clean", text: "# Notes\n\nMine\n" });
   assert.ok(isSaved(file, after));
   // Typing on goes on from the version saved.
-  assert.equal(saveOf(at(v1, 1), { ...after, draft: typed("# Plan\n\nMine, more\n", file.text, after.draft) })?.base, "v9");
+  assert.equal(saveOf(at(v1, 1), { ...after, draft: typed("# Notes\n\nMine, more\n", file.text, after.draft) })?.base, "v9");
   // The refresh that comes through shows the same revision, still saved.
-  assert.ok(isSaved(fileNow(at({ content: "# Plan\n\nMine\n", version: "v9" }, 2), after), after));
+  assert.ok(isSaved(fileNow(at({ content: "# Notes\n\nMine\n", version: "v9" }, 2), after), after));
 });
 
 test("a save's answer cannot drop a draft the user typed after it", () => {
-  const { edit, save } = sent(at(v1, 1), "# Plan\n\nMine\n");
-  const newer = { text: "# Plan\n\nMine, typed after\n", base: "v1" };
+  const { edit, save } = sent(at(v1, 1), "# Notes\n\nMine\n");
+  const newer = { text: "# Notes\n\nMine, typed after\n", base: "v1" };
 
   const after = answered({ ...edit, draft: newer }, save, { outcome: "saved", version: "v9", revision: 2 });
   assert.deepEqual(after.draft, newer);
@@ -96,7 +96,7 @@ test("a save's answer cannot drop a draft the user typed after it", () => {
 });
 
 test("a refused save shows the file as the write found it, with no further read", () => {
-  const { edit, save } = sent(at(v1, 1), "# Plan\n\nMine\n");
+  const { edit, save } = sent(at(v1, 1), "# Notes\n\nMine\n");
   const after = answered(edit, save, { outcome: "conflict", current: at(v2, 2) });
 
   assert.deepEqual(editorState(fileNow(at(v1, 1), after).text, after.draft), { kind: "conflict", draft: edit.draft, newer: v2 });
@@ -105,7 +105,7 @@ test("a refused save shows the file as the write found it, with no further read"
 });
 
 test("a refused save on a deleted file shows it deleted, and saving creates it again", () => {
-  const { edit, save } = sent(at(v1, 1), "# Plan\n\nMine\n");
+  const { edit, save } = sent(at(v1, 1), "# Notes\n\nMine\n");
   const after = answered(edit, save, { outcome: "conflict", current: at(null, 2) });
 
   assert.deepEqual(editorState(fileNow(at(v1, 1), after).text, after.draft), { kind: "conflict", draft: edit.draft, newer: null });
@@ -114,7 +114,7 @@ test("a refused save on a deleted file shows it deleted, and saving creates it a
 
 test("a read that moves on while a save is out doesn't hide the later file the refusal returns, whichever arrives last", () => {
   // Read A, save; the read refreshes to B during the save; the write then finds C and is refused.
-  const { edit, save } = sent(at(v1, 1), "# Plan\n\nMine\n");
+  const { edit, save } = sent(at(v1, 1), "# Notes\n\nMine\n");
   const after = answered(edit, save, { outcome: "conflict", current: at(v3, 3) });
 
   for (const read of [at(v2, 2), at(v1, 1)]) {
@@ -125,7 +125,7 @@ test("a read that moves on while a save is out doesn't hide the later file the r
 });
 
 test("a later read wins over a save's answer, even when it goes back to the text from before the save", () => {
-  const { edit, save } = sent(at(v1, 1), "# Plan\n\nMine\n");
+  const { edit, save } = sent(at(v1, 1), "# Notes\n\nMine\n");
   const saved = answered(edit, save, { outcome: "saved", version: "v9", revision: 2 });
 
   // Someone put A's text back after the save: the server saw it at revision 3.
@@ -141,7 +141,7 @@ test("a later read wins over a save's answer, even when it goes back to the text
 });
 
 test("once the read moves past a save's answer, the read wins again", () => {
-  const { edit, save } = sent(at(v1, 1), "# Plan\n\nMine\n");
+  const { edit, save } = sent(at(v1, 1), "# Notes\n\nMine\n");
   const after = answered(edit, save, { outcome: "saved", version: "v9", revision: 2 });
 
   assert.deepEqual(fileNow(at(v3, 3), after), at(v3, 3));

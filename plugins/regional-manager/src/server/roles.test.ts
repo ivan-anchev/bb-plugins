@@ -60,7 +60,7 @@ test("crew_catch_up returns the seeded memory with the goal the user typed", asy
   const { threadId } = await kit.startManager("Migrate the webhook service");
 
   const text = textOf(await kit.call("crew_catch_up", {}, threadId));
-  for (const file of ["MEMORY.md", "GOAL.md", "PLAN.md", "PREFERENCES.md", "CREW.md", "DIGEST.md"]) assert.match(text, new RegExp(`^## ${file} \\(version \\w+\\)$`, "m"));
+  for (const file of ["MEMORY.md", "GOAL.md", "NOTES.md", "RULES.md", "CREW.md"]) assert.match(text, new RegExp(`^## ${file} \\(version \\w+\\)$`, "m"));
   assert.match(text, /## GOAL\.md \(version \w+\)\n\nMigrate the webhook service/);
 });
 
@@ -108,7 +108,7 @@ test("an agent thread reads its regional manager's memory, and is refused the ma
   for (const [tool, input] of [
     ["issue_create", { kind: "build", title: "More", description: "More work." }],
     ["agent_start", { issue: "i1" }],
-    ["crew_memory_write", { file: "PLAN.md", content: "# Taken over\n", baseVersion: null }],
+    ["crew_memory_write", { file: "NOTES.md", content: "# Taken over\n", baseVersion: null }],
     ["crew_catch_up", {}],
   ] as const) {
     const result = await kit.call(tool, input, agentThreadId);
@@ -119,7 +119,7 @@ test("an agent thread reads its regional manager's memory, and is refused the ma
   assert.equal(role?.kind, "coordinator");
   assert.equal(kit.store.issues(role.coordinatorId).length, 1, "the agent filed no issue");
   assert.equal(kit.store.agents(role.coordinatorId).length, 1, "the agent started no agent");
-  assert.match(textOf(await kit.call("crew_memory_read", { file: "PLAN.md" }, threadId)), /No plan yet/);
+  assert.match(textOf(await kit.call("crew_memory_read", { file: "NOTES.md" }, threadId)), /Nothing yet/);
 });
 
 test("a verifier reads in its rules, both kinds of first message, issue_verdict's instructions and its skill that a criterion it can't check as written is unverifiable, never passed on a nearby fact", async () => {

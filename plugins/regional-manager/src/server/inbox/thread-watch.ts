@@ -56,7 +56,7 @@ export function watchAgentThreads({ bb, store, inbox }: Deps): void {
 
   bb.events.on("interaction.pending", ({ thread, interaction }) => {
     const agent = holderOf(thread);
-    // why tell the regional manager: only the user can answer an agent's question or approval, and it says so in its digest.
+    // why tell the regional manager: only the user can answer an agent's question or approval, and it says so in its reply.
     if (agent !== null) inbox.record(agent.coordinatorId, { kind: "needs-input", ...on(agent), question: questionOf(interaction) });
   });
 }

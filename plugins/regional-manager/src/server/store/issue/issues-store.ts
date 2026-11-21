@@ -3,6 +3,7 @@
 // decides and writes in one transaction. Rows are parsed into Issue here and nowhere else.
 import { z } from "zod";
 import { agentIdSchema } from "../../../model/agent.ts";
+import type { RecordedDecision } from "../../../model/decision.ts";
 import { executionSchema } from "../../../model/execution.ts";
 import { closedAsSchema, doneCriteriaSchema, issueIdSchema, restSchema, verifierProblem, type Issue, type IssueId, type Rest } from "../../../model/issue/issue.ts";
 import { kindSchema } from "../../../model/issue/kind.ts";
@@ -14,8 +15,14 @@ import { json, jsonOrNull, nullableJson, type Db } from "../rows.ts";
 /** An issue as the manager files it. */
 export type NewIssue = Pick<Issue, "kind" | "title" | "description" | "brief" | "doneCriteria" | "verifier" | "rest" | "parentId" | "dependsOn">;
 
-/** A change to an issue's plan; a field left out stays as it is. Dependencies change by what is added and removed, so two edits at once both apply. */
-export type IssueEdit = Partial<Pick<Issue, "kind" | "title" | "description" | "brief" | "doneCriteria" | "verifier" | "rest" | "closed" | "parentId">> & { dependsOn?: DependencyChange };
+/**
+ * A change to an issue's plan; a field left out stays as it is. Dependencies change by what is added
+ * and removed, so two edits at once both apply. `decision`: one more recorded among its decisions.
+ */
+export type IssueEdit = Partial<Pick<Issue, "kind" | "title" | "description" | "brief" | "doneCriteria" | "verifier" | "rest" | "closed" | "parentId">> & {
+  dependsOn?: DependencyChange;
+  decision?: Omit<RecordedDecision, "kind">;
+};
 
 /** Dependencies an edit adds and removes. */
 export type DependencyChange = { add: IssueId[]; remove: IssueId[] };
@@ -75,7 +82,7 @@ export function issuesStore(db: Db) {
         if (edit.kind !== undefined && edit.kind !== now.kind && db().prepare("SELECT 1 FROM agents WHERE coordinator_id = ? AND issue_id = ?").get(coordinatorId, id) !== undefined) {
           return { refused: `An agent has started on ${id}, so its kind stays ${now.kind}. File a new issue of the other kind instead.` };
         }
-        const { dependsOn, ...fields } = edit;
+        const { dependsOn, decision, ...fields } = edit;
         const next: Issue = { ...now, ...fields, dependsOn: dependsOn === undefined ? now.dependsOn : changedDependencies(now.dependsOn, dependsOn) };
         const problem = verifierProblem(next.kind, next.verifier !== null);
         if (problem !== null) return { refused: `${id} can't be changed so: ${problem}. Give verifier: null with the change to drop the one named.` };
@@ -85,11 +92,22 @@ export function issuesStore(db: Db) {
           .prepare("UPDATE issues SET kind = ?, title = ?, description = ?, brief = ?, done_criteria = ?, verifier = ?, rest = ?, closed_as = ?, closed_at = ?, parent_id = ? WHERE coordinator_id = ? AND id = ?")
           .run(next.kind, next.title, next.description, next.brief, JSON.stringify(next.doneCriteria), jsonOrNull(next.verifier), next.rest, next.closed?.as ?? null, next.closed?.at ?? null, next.parentId, coordinatorId, id);
         if (dependsOn !== undefined) writeDependencies(db, next, closes);
+        if (decision !== undefined) db().prepare("INSERT INTO issue_decisions (coordinator_id, issue_id, text, at) VALUES (?, ?, ?, ?)").run(coordinatorId, id, decision.text, decision.at);
         return { issue: next };
       })();
     },
+
+    /** The decisions recorded on the issue, in the order recorded. */
+    recordedDecisions(coordinatorId: CoordinatorId, id: IssueId): RecordedDecision[] {
+      return db()
+        .prepare("SELECT text, at FROM issue_decisions WHERE coordinator_id = ? AND issue_id = ? ORDER BY id")
+        .all(coordinatorId, id)
+        .map((row) => ({ kind: "recorded" as const, ...recordedRowSchema.parse(row) }));
+    },
   };
 }
+
+const recordedRowSchema = z.object({ text: z.string(), at: z.number().int() });
 
 /**
  * Why `issue` can't be a sub-issue of the parent it newly names (`was`: as stored; null: filed now):

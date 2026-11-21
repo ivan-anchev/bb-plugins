@@ -96,13 +96,13 @@ and no tool can turn verification on or off.
 | Tool | Thread | What it does |
 | --- | --- | --- |
 | `crew_catch_up` | regional manager | Returns every update since its last catch-up, whole, then the board with what blocks each issue and the issues ready to start, the questions still waiting, its reminders, and its core memory files with their versions. |
-| `crew_memory_read` | regional manager, agent, verifier | Reads one memory file, such as `PLAN.md` or `notes/api.md`, with its version. |
+| `crew_memory_read` | regional manager, agent, verifier | Reads one memory file, such as `NOTES.md` or `notes/api.md`, with its version. |
 | `crew_memory_write` | regional manager | Writes one memory file whole, naming the version it read (null to create one); a stale write returns the current text instead. |
 | `crew_remind` | regional manager | Sets a reminder (`note`, `at`, optional `every`) or cancels one (`cancel`). |
-| `crew_ask_user` | regional manager | Puts a one-line question, with up to five options, on its board, optionally naming the issue it is about. |
+| `crew_ask_user` | regional manager | Puts a one-line question, with up to five options, on its board, optionally naming the issue it is about: the question and its answer are then among that issue's decisions. |
 | `issue_create` | regional manager | Files an issue: `kind`, `title`, `description`, and optionally `brief`, `doneCriteria`, `status` (todo or backlog), `verifier`, `parent` and `dependsOn`. |
-| `issue_update` | regional manager | Changes an issue's kind (until an agent has started on it), title, description, brief, done-criteria, verifier, parent or dependencies, or rests, cancels or accepts it with `status`. |
-| `issue_read` | regional manager | Returns one issue whole: status, what blocks it, plan, its parent and sub-issues, what it depends on and blocks, verifier, its agents and what they ran on, every handoff with its verdict, and its agent's latest answer. |
+| `issue_update` | regional manager | Changes an issue's kind (until an agent has started on it), title, description, brief, done-criteria, verifier, parent or dependencies, or rests, cancels or accepts it with `status`; with `decision`, alone or with the rest, records what was decided about it and why. |
+| `issue_read` | regional manager | Returns one issue whole: status, what blocks it, plan, its parent and sub-issues, what it depends on and blocks, its decisions, verifier, its agents and what they ran on, every handoff with its verdict, and its agent's latest answer. |
 | `agent_start` | regional manager | Starts an agent on an issue, optionally naming its `execution` and `placement`; on an issue that has or had one, hands it over: continuing in the previous agent's environment, moving the work to a new one on a branch cut from its branch when a `placement` is named or that environment is gone, or starting clean with `from: "default"`. |
 | `agent_message` | regional manager | Messages one agent, marked as from the regional manager. |
 | `agent_stop` | regional manager | Stops one agent, and archives its thread with `archive: true`. |
@@ -497,7 +497,7 @@ verdict.
   its issue's verifier; each refusal offers the other change.
 - **Your choices**: tell the regional manager once, such as "build on codex
   gpt-5.4, verify on claude-code opus". Its rules keep it in
-  `PREFERENCES.md` and name both on every issue and agent it covers. The
+  `RULES.md` and name both on every issue and agent it covers. The
   board shows no model names; the manager's `crew_catch_up` and `issue_read`
   do.
 
@@ -506,7 +506,7 @@ verdict.
 Tell the regional manager to propose work and wait for you, and it files the
 issues in Backlog and describes them in one decision on its board (see
 [Decisions](#decisions)), starting no agent. Its rules tell it to do this
-whenever you asked it to propose and wait, or `PREFERENCES.md` says so. Your
+whenever you asked it to propose and wait, or `RULES.md` says so. Your
 answer wakes it, and it starts agents on the issues you agreed to, changed as
 you asked.
 
@@ -559,7 +559,7 @@ issue and its agent, such as
 `- i1 "Add retries" (a1) PR #41: CI passed`,
 `- i3 "Metrics" (a3) returned to Todo: its agent was stopped`,
 `- i4 "Card vault schema" is unblocked: i2 done`,
-`- The user edited PLAN.md`, `- Your reminder r1: check on i1`,
+`- The user edited NOTES.md`, `- Your reminder r1: check on i1`,
 `- The user answered your question d1: Target main or release/2?` or
 `- Your own environment has 2 files changed after your turn: hand the change to an agent`.
 The tree being clean again, like a fix round sent back, wakes nobody: it is
@@ -810,8 +810,10 @@ sends it and Shift+Enter breaks the line, and Esc doesn't leave the page while
 it has text. A send that fails keeps your text, with the error under it. Text
 you haven't sent stays in the browser, through a resize or a reload, until you
 send it or the decision is answered elsewhere. An issue the decision names
-also waits under Needs you until you answer. Your answer moves the decision to
-**Done**, with the answer and when you gave it, and wakes the thread; its
+also waits under Needs you until you answer. Your answer takes the decision
+off the board and wakes the thread; a decision that named an issue stays,
+with your answer and when you gave it, among that issue's **Decisions**
+(see [The board](#the-board)). The thread's
 `crew_catch_up` returns your answer, as the option you chose or in your own
 words, with its question. A decision is answered once: a second answer, as
 from another window, is refused.
@@ -843,7 +845,7 @@ take a provider's file tools away), so the plugin **detects** it instead:
   whose agent redoes the change on its own branch (always: it starts that
   agent only once you agree), and to ask you there whether to discard the
   changes in its environment; or, if you made the changes, to leave them and
-  say so in its digest. It never stashes, reverts, checks out or deletes
+  say so in its reply. It never stashes, reverts, checks out or deletes
   anything there, not even its own changes, since you may have edited the
   same files: discarding them is yours to do.
 - **Once per state**: a turn that ends with the same number of changed files
@@ -870,14 +872,14 @@ and ends with its [memory](#read-and-edit-memory):
   changed files (see [Edits it makes itself](#edits-it-makes-itself)).
 - **PR status unavailable: <why>**, only while the latest read of a pull
   request failed.
-- **Digest**: `DIGEST.md`, the regional manager's latest summary for you,
-  and when it last changed.
 - **Lanes**: Needs you, then In review, Verifying, In progress, Todo,
   Backlog, Done and Canceled, each under a bar with its glyph, how many it
   holds and a chevron. Pressing the bar folds or unfolds the lane; Backlog,
   Done and Canceled start folded, and an empty lane isn't shown. Needs you
   holds the open decisions put to you, then the issues flagged Needs you,
-  each with its own status's glyph; answered decisions sit under Done.
+  each with its own status's glyph. An answered decision is on no lane:
+  it leaves the board, and one that named an issue stays in that issue's
+  Decisions.
 - **Issues**, each row with its status's glyph, its id, kind and title, a
   one-line headline that says why it is where it is (such as "Working",
   "Verifying: <summary>", "✓ Verified: <summary>" or "Blocked: <summary>"),
@@ -915,7 +917,12 @@ when there are none; pressing one goes
 to that issue on the board, unfolding its lane, opening its row, moving
 focus to it and scrolling it to the top (as near as the board's end
 allows), its detail under it; **Done when** with its criteria (a research issue's
-**Questions**, and nothing when it has none), and its **Record**: each
+**Questions**, and nothing when it has none); its **Decisions**, oldest
+first, when it has any: each question put to you naming it, with your answer
+and when, or "Waiting for your answer", and each decision the manager
+recorded on it with `issue_update`, with when (a later one stands over an
+earlier one, and every agent started on the issue gets them in its first
+message); and its **Record**: each
 agent that held it, how it ended, and each handoff it made, the latest one
 open. A research issue's done handoff shows its **Report** first, as the
 Markdown it is, beside the memory file it was saved to (such as
@@ -951,10 +958,18 @@ server log names the parent folder when the plugin loads. It is made as the mana
 
 - `MEMORY.md`: the index of the files.
 - `GOAL.md`: the goal, the message you sent from its page to start it.
-- `PLAN.md`: the plan.
-- `PREFERENCES.md`: the user's standing preferences, one per line.
+- `NOTES.md`: the manager's plan, its reasoning and durable lessons, never
+  what an issue already says.
+- `RULES.md`: the user's standing rules for the manager, one per line.
 - `CREW.md`: rules every agent will follow.
-- `DIGEST.md`: the latest summary for the user.
+
+The work itself, who holds it, where it stands, what blocks it and what was
+decided, lives in the issues. The manager's summary for you is its reply in
+its thread; the board keeps no digest. A manager started before this release
+had its plan and preferences files renamed to `NOTES.md` and `RULES.md`, with
+their content, and its digest file removed, as the plugin loaded; a file
+already there under the new name, and any line you added to `MEMORY.md`, were
+left as they were.
 
 The thread may add others, such as `notes/api.md`.
 

@@ -8,7 +8,7 @@ import { memoryFileSchema, type MemoryFile } from "../../model/memory-file.ts";
 import { freshStore, MANAGER as ID, OTHER_MANAGER } from "../store/test-store.ts";
 import { openMemoryRoot } from "./memory-files.ts";
 
-const PLAN = memoryFileSchema.parse("PLAN.md");
+const NOTES = memoryFileSchema.parse("NOTES.md");
 
 function freshMemory() {
   const writes: string[] = [];
@@ -24,7 +24,7 @@ test("seeding writes the core files, with MEMORY.md indexing them in the plugin'
   const memory = freshMemory();
   memory.seed("  Migrate the webhook service\n");
 
-  assert.deepEqual(readdirSync(memory.dir).sort(), ["CREW.md", "DIGEST.md", "GOAL.md", "MEMORY.md", "PLAN.md", "PREFERENCES.md"]);
+  assert.deepEqual(readdirSync(memory.dir).sort(), ["CREW.md", "GOAL.md", "MEMORY.md", "NOTES.md", "RULES.md"]);
   assert.match(readFileSync(join(memory.dir, "MEMORY.md"), "utf8"), /^- GOAL\.md: the goal this work was started with\.$/m);
   assert.match(readFileSync(join(memory.dir, "MEMORY.md"), "utf8"), /^- CREW\.md: rules every agent follows\.$/m);
   assert.equal(readFileSync(join(memory.dir, "GOAL.md"), "utf8"), "  Migrate the webhook service\n");
@@ -33,10 +33,10 @@ test("seeding writes the core files, with MEMORY.md indexing them in the plugin'
 test("seeding again keeps every file but GOAL.md as it is, and GOAL.md takes the later goal, as after a start that failed", () => {
   const memory = freshMemory();
   memory.seed("Migrate the webhook service");
-  writeFileSync(join(memory.dir, "PLAN.md"), "# Plan\n\n1. Inventory the endpoints\n");
+  writeFileSync(join(memory.dir, "NOTES.md"), "# Notes\n\n1. Inventory the endpoints\n");
   memory.seed("Retire the cron box");
 
-  assert.equal(readFileSync(join(memory.dir, "PLAN.md"), "utf8"), "# Plan\n\n1. Inventory the endpoints\n");
+  assert.equal(readFileSync(join(memory.dir, "NOTES.md"), "utf8"), "# Notes\n\n1. Inventory the endpoints\n");
   assert.equal(readFileSync(join(memory.dir, "GOAL.md"), "utf8"), "Retire the cron box");
 });
 
@@ -44,31 +44,31 @@ test("a write naming the file's current version replaces it and gives its new ve
   const memory = freshMemory();
   memory.seed("Migrate the webhook service");
 
-  const outcome = memory.write(PLAN, "# Plan\n\n1. Inventory the endpoints\n", versionOf(memory, PLAN));
-  assert.deepEqual(outcome, { outcome: "saved", version: versionOf(memory, PLAN), revision: revisionOf(memory, PLAN) });
-  assert.equal(readFileSync(join(memory.dir, "PLAN.md"), "utf8"), "# Plan\n\n1. Inventory the endpoints\n");
+  const outcome = memory.write(NOTES, "# Notes\n\n1. Inventory the endpoints\n", versionOf(memory, NOTES));
+  assert.deepEqual(outcome, { outcome: "saved", version: versionOf(memory, NOTES), revision: revisionOf(memory, NOTES) });
+  assert.equal(readFileSync(join(memory.dir, "NOTES.md"), "utf8"), "# Notes\n\n1. Inventory the endpoints\n");
 });
 
 test("a write with a stale version is refused, returns the current text, and leaves the file as it is", () => {
   const memory = freshMemory();
   memory.seed("Migrate the webhook service");
-  const read = versionOf(memory, PLAN);
-  memory.write(PLAN, "# Plan\n\n1. The user's step\n", read);
+  const read = versionOf(memory, NOTES);
+  memory.write(NOTES, "# Notes\n\n1. The user's step\n", read);
 
-  const outcome = memory.write(PLAN, "# Plan\n\n1. The Coordinator's step\n", read);
-  assert.deepEqual(outcome, { outcome: "conflict", current: memory.read(PLAN) });
-  assert.equal(memory.read(PLAN).text?.content, "# Plan\n\n1. The user's step\n");
-  assert.equal(readFileSync(join(memory.dir, "PLAN.md"), "utf8"), "# Plan\n\n1. The user's step\n");
+  const outcome = memory.write(NOTES, "# Notes\n\n1. The Coordinator's step\n", read);
+  assert.deepEqual(outcome, { outcome: "conflict", current: memory.read(NOTES) });
+  assert.equal(memory.read(NOTES).text?.content, "# Notes\n\n1. The user's step\n");
+  assert.equal(readFileSync(join(memory.dir, "NOTES.md"), "utf8"), "# Notes\n\n1. The user's step\n");
 });
 
 test("a file edited on disk makes a write from the older version stale", () => {
   const memory = freshMemory();
   memory.seed("Migrate the webhook service");
-  const read = versionOf(memory, PLAN);
-  writeFileSync(join(memory.dir, "PLAN.md"), "# Plan\n\nEdited in vim\n");
+  const read = versionOf(memory, NOTES);
+  writeFileSync(join(memory.dir, "NOTES.md"), "# Notes\n\nEdited in vim\n");
 
-  assert.equal(memory.write(PLAN, "# Plan\n\nOverwrite\n", read).outcome, "conflict");
-  assert.equal(readFileSync(join(memory.dir, "PLAN.md"), "utf8"), "# Plan\n\nEdited in vim\n");
+  assert.equal(memory.write(NOTES, "# Notes\n\nOverwrite\n", read).outcome, "conflict");
+  assert.equal(readFileSync(join(memory.dir, "NOTES.md"), "utf8"), "# Notes\n\nEdited in vim\n");
 });
 
 test("a write with no version creates a new file, and is refused once the file exists", () => {
@@ -83,16 +83,16 @@ test("a write with no version creates a new file, and is refused once the file e
 test("a write to a file deleted since it was read is refused, saying it is gone", () => {
   const memory = freshMemory();
   memory.seed("Migrate the webhook service");
-  const read = versionOf(memory, PLAN);
-  fs.rmSync(join(memory.dir, "PLAN.md"));
+  const read = versionOf(memory, NOTES);
+  fs.rmSync(join(memory.dir, "NOTES.md"));
 
-  assert.deepEqual(memory.write(PLAN, "# Plan\n", read), { outcome: "conflict", current: { text: null, revision: revisionOf(memory, PLAN) } });
+  assert.deepEqual(memory.write(NOTES, "# Notes\n", read), { outcome: "conflict", current: { text: null, revision: revisionOf(memory, NOTES) } });
 });
 
 test("only a write that changed a file is announced", () => {
   const memory = freshMemory();
-  memory.write(PLAN, "# Plan\n", null);
-  memory.write(PLAN, "# Stale\n", null);
+  memory.write(NOTES, "# Notes\n", null);
+  memory.write(NOTES, "# Stale\n", null);
 
   assert.deepEqual(memory.writes, [ID]);
 });
@@ -100,61 +100,61 @@ test("only a write that changed a file is announced", () => {
 test("a write cut off between its temp file and its rename leaves the old file whole, and the temp file is never read as memory", () => {
   const memory = freshMemory();
   memory.seed("Migrate the webhook service");
-  const before = memory.read(PLAN);
+  const before = memory.read(NOTES);
   const listed = memory.list();
 
-  crashingOnRename(() => memory.write(PLAN, "# Plan\n\n1. Half of a new plan", before.text?.version ?? null));
+  crashingOnRename(() => memory.write(NOTES, "# Notes\n\n1. Half of a new plan", before.text?.version ?? null));
 
   const leftover = readdirSync(memory.dir).filter((name) => !listed.some((file) => file === name));
   assert.equal(leftover.length, 1, "the crash leaves its temp file behind");
   assert.match(readFileSync(join(memory.dir, leftover[0] ?? ""), "utf8"), /Half of a new plan/);
   assert.equal(memoryFileSchema.safeParse(leftover[0]).success, false, "no memory file name reaches the temp file");
-  assert.deepEqual(memory.read(PLAN), before);
+  assert.deepEqual(memory.read(NOTES), before);
   assert.deepEqual(memory.list(), listed);
 });
 
 test("a file keeps its revision while it stays the same, and every write that changes it gives the next", () => {
   const memory = freshMemory();
   memory.seed("Migrate the webhook service");
-  const first = memory.read(PLAN);
-  assert.deepEqual(memory.read(PLAN), first, "reading again changes nothing");
+  const first = memory.read(NOTES);
+  assert.deepEqual(memory.read(NOTES), first, "reading again changes nothing");
 
-  const saved = memory.write(PLAN, "# Plan\n\n1. Inventory the endpoints\n", first.text?.version ?? null);
-  assert.deepEqual(saved, { outcome: "saved", version: versionOf(memory, PLAN), revision: first.revision + 1 });
-  assert.equal(revisionOf(memory, PLAN), first.revision + 1, "a read after the write sees its revision");
+  const saved = memory.write(NOTES, "# Notes\n\n1. Inventory the endpoints\n", first.text?.version ?? null);
+  assert.deepEqual(saved, { outcome: "saved", version: versionOf(memory, NOTES), revision: first.revision + 1 });
+  assert.equal(revisionOf(memory, NOTES), first.revision + 1, "a read after the write sees its revision");
 
-  const refused = memory.write(PLAN, "# Plan\n\nStale\n", first.text?.version ?? null);
-  assert.deepEqual(refused, { outcome: "conflict", current: { text: memory.read(PLAN).text, revision: first.revision + 1 } }, "a refused write changes nothing");
+  const refused = memory.write(NOTES, "# Notes\n\nStale\n", first.text?.version ?? null);
+  assert.deepEqual(refused, { outcome: "conflict", current: { text: memory.read(NOTES).text, revision: first.revision + 1 } }, "a refused write changes nothing");
 });
 
 test("a file edited on the server's disk gets its next revision when it is next read, even back to an earlier text", () => {
   const memory = freshMemory();
   memory.seed("Migrate the webhook service");
-  const a = memory.read(PLAN);
+  const a = memory.read(NOTES);
 
-  writeFileSync(join(memory.dir, "PLAN.md"), "# Plan\n\nEdited in vim\n");
-  const b = memory.read(PLAN);
-  assert.equal(b.text?.content, "# Plan\n\nEdited in vim\n");
+  writeFileSync(join(memory.dir, "NOTES.md"), "# Notes\n\nEdited in vim\n");
+  const b = memory.read(NOTES);
+  assert.equal(b.text?.content, "# Notes\n\nEdited in vim\n");
   assert.equal(b.revision, a.revision + 1);
 
-  writeFileSync(join(memory.dir, "PLAN.md"), a.text?.content ?? "");
-  const back = memory.read(PLAN);
+  writeFileSync(join(memory.dir, "NOTES.md"), a.text?.content ?? "");
+  const back = memory.read(NOTES);
   assert.deepEqual(back.text, a.text, "the same text, and so the same version");
   assert.equal(back.revision, a.revision + 2, "but a later revision");
 
-  fs.rmSync(join(memory.dir, "PLAN.md"));
-  assert.deepEqual(memory.read(PLAN), { text: null, revision: a.revision + 3 }, "a deletion is a revision too");
+  fs.rmSync(join(memory.dir, "NOTES.md"));
+  assert.deepEqual(memory.read(NOTES), { text: null, revision: a.revision + 3 }, "a deletion is a revision too");
 });
 
 test("an edit on disk that a write finds is the next revision, and the write's own is the one after", () => {
   const memory = freshMemory();
   memory.seed("Migrate the webhook service");
-  const a = memory.read(PLAN);
-  writeFileSync(join(memory.dir, "PLAN.md"), "# Plan\n\nEdited in vim\n");
+  const a = memory.read(NOTES);
+  writeFileSync(join(memory.dir, "NOTES.md"), "# Notes\n\nEdited in vim\n");
 
-  const refused = memory.write(PLAN, "# Plan\n\nMine\n", a.text?.version ?? null);
-  assert.deepEqual(refused, { outcome: "conflict", current: { text: { content: "# Plan\n\nEdited in vim\n", version: versionOf(memory, PLAN) }, revision: a.revision + 1 } });
-  const saved = memory.write(PLAN, "# Plan\n\nMine\n", versionOf(memory, PLAN));
+  const refused = memory.write(NOTES, "# Notes\n\nMine\n", a.text?.version ?? null);
+  assert.deepEqual(refused, { outcome: "conflict", current: { text: { content: "# Notes\n\nEdited in vim\n", version: versionOf(memory, NOTES) }, revision: a.revision + 1 } });
+  const saved = memory.write(NOTES, "# Notes\n\nMine\n", versionOf(memory, NOTES));
   assert.equal(saved.outcome === "saved" && saved.revision, a.revision + 2);
 });
 
@@ -162,12 +162,12 @@ test("each coordinator's files count their revisions apart", () => {
   const { store } = freshStore();
   const root = openMemoryRoot(join(mkdtempSync(join(tmpdir(), "coordinator-memory-")), "data.db"), store, () => {});
   const other = OTHER_MANAGER;
-  root.of(ID).write(PLAN, "# One\n", null);
-  root.of(ID).write(PLAN, "# Two\n", root.of(ID).read(PLAN).text?.version ?? null);
-  root.of(other).write(PLAN, "# One\n", null);
+  root.of(ID).write(NOTES, "# One\n", null);
+  root.of(ID).write(NOTES, "# Two\n", root.of(ID).read(NOTES).text?.version ?? null);
+  root.of(other).write(NOTES, "# One\n", null);
 
-  assert.equal(root.of(ID).read(PLAN).revision, 3);
-  assert.equal(root.of(other).read(PLAN).revision, 2);
+  assert.equal(root.of(ID).read(NOTES).revision, 3);
+  assert.equal(root.of(other).read(NOTES).revision, 2);
   assert.equal(root.of(ID).read(memoryFileSchema.parse("GOAL.md")).revision, 1);
 });
 
@@ -179,12 +179,12 @@ test("the list holds the core files in their order, then the rest by name, and n
   writeFileSync(join(memory.dir, "notes", "api.md"), "");
   writeFileSync(join(memory.dir, "scratch.txt"), "");
 
-  assert.deepEqual(memory.list(), ["MEMORY.md", "GOAL.md", "PLAN.md", "PREFERENCES.md", "CREW.md", "DIGEST.md", "notes/api.md", "notes/zones.md"]);
+  assert.deepEqual(memory.list(), ["MEMORY.md", "GOAL.md", "NOTES.md", "RULES.md", "CREW.md", "notes/api.md", "notes/zones.md"]);
 });
 
 test("a memory file name stays inside the folder, ends in .md, and has one spelling", () => {
   for (const name of ["GOAL.md", "notes/api.md", ".hidden.md"]) assert.ok(memoryFileSchema.safeParse(name).success, name);
-  for (const name of ["../x.md", "/abs/x.md", "notes.txt", "..", "notes/../../x.md", "notes/../PLAN.md", "./PLAN.md", "notes//api.md", ".PLAN.md.1234.tmp"]) {
+  for (const name of ["../x.md", "/abs/x.md", "notes.txt", "..", "notes/../../x.md", "notes/../NOTES.md", "./NOTES.md", "notes//api.md", ".NOTES.md.1234.tmp"]) {
     assert.ok(!memoryFileSchema.safeParse(name).success, name);
   }
 });
@@ -196,7 +196,7 @@ test("a name Windows reads as a path out of the folder, or as another file, is r
     assert.ok(!memoryFileSchema.safeParse(name).success, name);
   }
   // A drive, a root or a stream: each names a file the name doesn't spell.
-  for (const name of ["C:\\x.md", "C:x.md", "\\\\server\\share\\x.md", "\\PLAN.md", "notes\\api.md", "PLAN.md:x.md"]) {
+  for (const name of ["C:\\x.md", "C:x.md", "\\\\server\\share\\x.md", "\\NOTES.md", "notes\\api.md", "NOTES.md:x.md"]) {
     assert.ok(!memoryFileSchema.safeParse(name).success, name);
   }
 });

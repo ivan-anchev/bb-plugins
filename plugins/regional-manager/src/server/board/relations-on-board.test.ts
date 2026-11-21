@@ -21,7 +21,7 @@ test("a row sends the open issues it depends on, and an opened issue what it dep
   assert.deepEqual([first.dependsOn, first.blocks], [[], ["i2", "i3"]]);
   const last = await opened("i3");
   assert.deepEqual([last.dependsOn, last.blocks], [["i1", "i2"], []]);
-  assert.deepEqual(Object.keys(last).sort(), ["blocks", "dependsOn", "description", "doneCriteria", "finalChecks", "record"], "an opened issue sends only what its detail shows");
+  assert.deepEqual(Object.keys(last).sort(), ["blocks", "decisions", "dependsOn", "description", "doneCriteria", "finalChecks", "record"], "an opened issue sends only what its detail shows");
 
   await kit.call("issue_update", { id: "i1", status: "canceled" }, threadId);
   assert.deepEqual(await blockers(), { i1: [], i2: [], i3: ["i2"] }, "a closed dependency blocks no more");

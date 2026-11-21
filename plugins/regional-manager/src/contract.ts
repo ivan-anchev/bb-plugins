@@ -5,7 +5,7 @@ import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
 import { agentIdSchema, endedHowSchema } from "./model/agent.ts";
 import { needsYouSchema } from "./model/board/board-groups.ts";
-import { answerSchema, decisionIdSchema, decisionSchema } from "./model/decision.ts";
+import { answerSchema, decisionIdSchema, decisionSchema, issueDecisionSchema } from "./model/decision.ts";
 import { shownHandoffSchema } from "./model/handoff.ts";
 import { executionSchema } from "./model/execution.ts";
 import { descriptionSchema, doneCriteriaSchema, issueIdSchema } from "./model/issue/issue.ts";
@@ -77,14 +77,14 @@ export type IssueRow = z.infer<typeof issueRowSchema>;
  * The board: whether done handoffs are verified, how many files had changed in the coordinating
  * thread's own working tree when the turn that warned of them ended, and when (null: none, or it
  * was clean again since), why the latest read of an issue's pull request failed (null: none did),
- * DIGEST.md and when it last changed (null: there is none), every decision put to the user in the
- * order asked, then every issue in the order filed.
+ * every decision put to the user in the order asked, then every issue in the order filed. The board
+ * draws only the open decisions; the answered ones are carried so the browser drops what was typed to
+ * them, and each stays among its issue's decisions in the issue's detail.
  */
 const boardSchema = z.object({
   verify: z.boolean(),
   ownEdits: z.object({ fileCount: z.number().int().min(1), at: z.number() }).nullable(),
   prUnavailable: z.string().nullable(),
-  digest: z.object({ content: z.string(), modifiedAt: z.number() }).nullable(),
   decisions: z.array(decisionSchema),
   issues: z.array(issueRowSchema),
 });
@@ -95,7 +95,8 @@ const shownFinalCheckSchema = z.object({ at: z.number(), defaultBranch: z.string
 export type ShownFinalCheck = z.infer<typeof shownFinalCheckSchema>;
 
 /**
- * An issue opened on the board: what it is about, its done-criteria, the issues it depends on and
+ * An issue opened on the board: what it is about, its done-criteria, its decisions (decision.ts
+ * issueDecisions: oldest first, the questions put to the user about it and the decisions recorded on it), the issues it depends on and
  * the issues that depend on it (each with its title and status on its own row), its record: every agent
  * that held it, oldest first, with its thread (null: none to open) and how it ended (null: it holds
  * the issue now), and each handoff it made, oldest first, with the verdict on it (null: none was
@@ -105,6 +106,7 @@ export type ShownFinalCheck = z.infer<typeof shownFinalCheckSchema>;
 const issueDetailSchema = z.object({
   description: descriptionSchema,
   doneCriteria: doneCriteriaSchema,
+  decisions: z.array(issueDecisionSchema),
   dependsOn: z.array(issueIdSchema),
   blocks: z.array(issueIdSchema),
   record: z.array(
@@ -184,11 +186,11 @@ export const coordinatorContract = defineRpcContract({
     input: z.object({ coordinatorId: coordinatorIdSchema }),
     output: z.object({}),
   },
-  /** A regional manager's board. why the memory tag too: the board shows DIGEST.md. */
+  /** A regional manager's board. */
   board: {
     input: z.object({ coordinatorId: coordinatorIdSchema }),
     output: boardSchema,
-    tags: ({ coordinatorId }) => [boardTag(coordinatorId), memoryTag(coordinatorId)],
+    tags: ({ coordinatorId }) => [boardTag(coordinatorId)],
   },
   /** One issue of a regional manager, opened on its board; it reads again whenever the board does. */
   issue: {

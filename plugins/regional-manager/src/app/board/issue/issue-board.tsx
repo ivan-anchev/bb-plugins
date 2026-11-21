@@ -1,8 +1,9 @@
 // The board's lanes (board-groups.ts): Needs you on top, then a lane per status, each under a header
 // that folds it. Backlog, Done and Canceled start folded. A parent's sub-issues sit one level in under
 // its row, in its lane, and a flagged one under Needs you as well. A row opens its detail in place under it;
-// the detail is drawn only while it is open, so the caller reads it only then. Decisions keep their
-// own row, the caller's. Which lanes are folded and which rows are open outlive a row moving lanes,
+// the detail is drawn only while it is open, so the caller reads it only then. A decision waiting for
+// the user keeps its own row, the caller's, under Needs you; answered, it leaves the board, and focus
+// in it goes to the page. Which lanes are folded and which rows are open outlive a row moving lanes,
 // and so does focus: on the row where it lands, or on its lane's header while that lane is folded.
 // A detail goes to another issue the same way: its lane unfolds, its row opens and takes focus, and it
 // scrolls to the top of the page with its detail under it.
@@ -10,7 +11,7 @@ import "./issue-board.css";
 import { useId, useState, type ReactNode, type RefCallback } from "react";
 import type { IssueRow as Row } from "../../../contract.ts";
 import { boardGroups, LANE_LABELS, type BoardItem, type Lane } from "../../../model/board/board-groups.ts";
-import type { Decision } from "../../../model/decision.ts";
+import type { Decision, OpenDecision } from "../../../model/decision.ts";
 import type { IssueId } from "../../../model/issue/issue.ts";
 import { useFocusKeptAcrossGroups } from "../../ui/focus-hand-off.ts";
 import { IssueRow } from "./issue-row.tsx";
@@ -21,8 +22,8 @@ import { NeedsYouGlyph, StatusGlyph } from "./status-glyph.tsx";
 type IssueBoardProps = {
   decisions: readonly Decision[];
   issues: readonly Row[];
-  /** A decision's row; `ref`, on the element that takes focus once it moves from Needs you to Done. */
-  decisionRow(decision: Decision, ref: RefCallback<HTMLElement>): ReactNode;
+  /** A decision's row, while it waits for the user's answer. */
+  decisionRow(decision: OpenDecision): ReactNode;
   /** An open issue's detail, under its row; `under`, the parent its row is shown away from (null: none); `goTo`, to go to another issue on the board. */
   detailOf(issue: Row, under: IssueId | null, goTo: GoTo): ReactNode;
 };
@@ -55,7 +56,7 @@ export function IssueBoard({ decisions, issues, decisionRow, detailOf }: IssueBo
   function item(entry: BoardItem<Row>): ReactNode {
     switch (entry.kind) {
       case "decision":
-        return decisionRow(entry.decision, focus.target(entry.decision.id));
+        return decisionRow(entry.decision);
       case "issue":
         return (
           <>
