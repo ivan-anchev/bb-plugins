@@ -31,12 +31,12 @@ afterEach(() => {
 
 const COORDINATOR = { id: "6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10", threadId: "thr_1", projectId: PROJECT.id, description: null, avatar: { kind: "icon", icon: "Workflow" } };
 
-/** The tab of the regional manager's thread, over a plugin whose memory holds PLAN.md. */
+/** The tab of the regional manager's thread, over a plugin whose memory holds NOTES.md. */
 function mount() {
   const rpc = {
     coordinators: () => ({ coordinators: [COORDINATOR], notStarted: [] }),
-    board: () => ({ verify: true, ownEdits: null, prUnavailable: null, digest: null, decisions: [], issues: [] }),
-    memoryList: () => ({ files: [{ file: "PLAN.md", firstLine: "1. Inventory the endpoints", modifiedAt: 1_000 }] }),
+    board: () => ({ verify: true, ownEdits: null, prUnavailable: null, decisions: [], issues: [] }),
+    memoryList: () => ({ files: [{ file: "NOTES.md", firstLine: "1. Inventory the endpoints", modifiedAt: 1_000 }] }),
   };
   return renderSlot({ component: boardTab.component }, { threadId: "thr_1", projectId: PROJECT.id, environment: null }, { experimental_rpcContract: contract, rpc });
 }
@@ -46,7 +46,7 @@ test("the tab shows the board, then Memory below it, which lists each file with 
   const board = await view.findByText("Verify done handoffs");
   const memory = await view.findByRole("region", { name: /^Memory/ });
   assert.ok(board.compareDocumentPosition(memory) & Node.DOCUMENT_POSITION_FOLLOWING, "Memory comes after the board");
-  const row = await within(memory).findByRole("button", { name: /PLAN\.md/ });
-  assert.match(row.textContent ?? "", /PLAN\.md1\. Inventory the endpoints/);
+  const row = await within(memory).findByRole("button", { name: /NOTES\.md/ });
+  assert.match(row.textContent ?? "", /NOTES\.md1\. Inventory the endpoints/);
   assert.ok(row.querySelector("time"));
 });

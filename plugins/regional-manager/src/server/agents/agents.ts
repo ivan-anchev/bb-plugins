@@ -156,7 +156,7 @@ type Deps = {
   store: FactsStore &
     Pick<
       Store,
-      "coordinator" | "coordinators" | "issue" | "agent" | "issueThreads" | "roleOfThread" | "markNudged" | "insertAgent" | "replaceAgent" | "record" | "agentTicket" | "removeCoordinator" | "supersedeOpenChecks"
+      "coordinator" | "coordinators" | "issue" | "agent" | "issueThreads" | "roleOfThread" | "markNudged" | "insertAgent" | "replaceAgent" | "record" | "agentTicket" | "removeCoordinator" | "supersedeOpenChecks" | "issueDecisions"
     >;
   spawner: Pick<Spawner, "agent">;
   inbox: Pick<Inbox, "endAgent">;
@@ -405,7 +405,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
       const prompt = agentBrief(
         agentId,
         coordinatorOf(coordinatorId).threadId,
-        { ...issue, brief },
+        { ...issue, brief, decisions: store.issueDecisions(coordinatorId, issue.id) },
         { base: spot.base, branch: carried?.branch ?? null, pr: carried?.pr ?? null, earlier: store.record(coordinatorId, issue.id) },
         { crewRules: files.read(CREW_RULES).text, index: files.read(MEMORY_INDEX).text },
       );

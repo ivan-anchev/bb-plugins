@@ -18,7 +18,7 @@ import type { CoordinatorId } from "../../model/role.ts";
 import type { Store } from "../store/store.ts";
 
 /** The files every memory starts with, in the order a catch-up reads them and the editor lists them. */
-export const CORE_FILES = ["MEMORY.md", "GOAL.md", "PLAN.md", "PREFERENCES.md", "CREW.md", "DIGEST.md"].map((name) => memoryFileSchema.parse(name));
+export const CORE_FILES = ["MEMORY.md", "GOAL.md", "NOTES.md", "AGENTS.md", "CREW.md"].map((name) => memoryFileSchema.parse(name));
 
 export type MemoryRoot = ReturnType<typeof openMemoryRoot>;
 export type Memory = ReturnType<MemoryRoot["of"]>;
@@ -125,23 +125,21 @@ const GOAL_FILE = memoryFileSchema.parse("GOAL.md");
 
 function seedFiles(): [MemoryFile, string][] {
   const files: [string, string][] = [
-    [
-      "MEMORY.md",
-      `# Memory
-
-The index of this memory. Each file holds one kind of thing:
-
-- GOAL.md: the goal this work was started with.
-- PLAN.md: the plan: what to delegate, in what order, and what is done.
-- PREFERENCES.md: the user's standing preferences and rules.
-- CREW.md: rules every agent follows.
-- DIGEST.md: the latest summary for the user.
-`,
-    ],
-    ["PLAN.md", "# Plan\n\nNo plan yet.\n"],
-    ["PREFERENCES.md", "# Preferences\n\nOne rule per line: the date, then the user's words.\n"],
+    ["MEMORY.md", MEMORY_INDEX],
+    ["NOTES.md", "# Notes\n\nNothing yet.\n"],
+    ["AGENTS.md", "# Rules for the regional manager\n\nOne rule per line: the date, then the user's words.\n"],
     ["CREW.md", "# Crew rules\n\nNone yet.\n"],
-    ["DIGEST.md", "# Digest\n\nNothing to report yet.\n"],
   ];
   return files.map(([name, text]) => [memoryFileSchema.parse(name), text]);
 }
+
+/** MEMORY.md as the plugin writes it: one line per core file but itself, saying what goes in it. */
+export const MEMORY_INDEX = `# Memory
+
+The index of this memory. Each file holds one kind of thing; the work itself, who holds it, where it stands, what blocks it and what was decided, lives in the issues:
+
+- GOAL.md: the goal this work was started with.
+- NOTES.md: the regional manager's plan, its reasoning and durable lessons, never what an issue already says.
+- AGENTS.md: the user's standing rules for the regional manager.
+- CREW.md: rules every agent follows.
+`;

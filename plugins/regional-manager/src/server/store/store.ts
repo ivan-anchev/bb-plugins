@@ -11,6 +11,8 @@ import type { CoordinatorId, Role } from "../../model/role.ts";
 import { inboxStore } from "./inbox/inbox-store.ts";
 import type { Agent, AgentId } from "../../model/agent.ts";
 import type { HandoffId } from "../../model/handoff.ts";
+import { issueDecisions, type IssueDecision } from "../../model/decision.ts";
+import type { IssueId } from "../../model/issue/issue.ts";
 import { agentsStore, bindRole, endAgent, insertAgent, insertTicket, type NewAgent } from "./issue/agents-store.ts";
 import { checksStore, startCheck, supersedeChecks } from "./issue/checks-store.ts";
 import { issuesStore } from "./issue/issues-store.ts";
@@ -36,12 +38,18 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
       .map(toCoordinator);
   }
 
+  const inbox = inboxStore(db);
+  const issues = issuesStore(db);
+
   return {
-    ...inboxStore(db),
-    ...issuesStore(db),
+    ...inbox,
+    ...issues,
     ...agentsStore(db),
     ...checksStore(db),
     ...prStore(db),
+
+    /** The issue's decisions, its one list, oldest first: the questions put to the user naming it, answered or not, and the decisions recorded on it. */
+    issueDecisions: (coordinatorId: CoordinatorId, id: IssueId): IssueDecision[] => issueDecisions(id, inbox.decisions(coordinatorId), issues.recordedDecisions(coordinatorId, id)),
 
     /** A regional manager not started yet, with its profile and its unbound ticket, together or not at all. */
     insertCoordinator({ id, ticket, name, description, avatar, createdAt }: { id: CoordinatorId; ticket: string; createdAt: number } & Profile): void {
@@ -183,7 +191,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
      */
     removeCoordinator(id: CoordinatorId): void {
       db().transaction(() => {
-        for (const table of ["events", "doorbells", "reminders", "decisions", "pr_snapshots", "checks", "handoffs", "agents", "issue_relations", "issues", "memory_revisions", "fact_writes"]) {
+        for (const table of ["events", "doorbells", "reminders", "decisions", "pr_snapshots", "checks", "handoffs", "agents", "issue_relations", "issue_decisions", "issues", "memory_revisions", "fact_writes"]) {
           db().prepare(`DELETE FROM ${table} WHERE coordinator_id = ?`).run(id);
         }
         db().prepare("DELETE FROM coordinators WHERE id = ?").run(id);

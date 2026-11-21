@@ -6,7 +6,7 @@ import { coordinating, harness, settled, startedAgent, textOf } from "../test-ha
 
 const REPORT = { summary: "Retries land with backoff", did: ["Added exponential backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [] };
 const DONE = { status: "done", ...REPORT, headSha: "0123456789abcdef0123456789abcdef01234567" };
-const PLAN = memoryFileSchema.parse("PLAN.md");
+const NOTES = memoryFileSchema.parse("NOTES.md");
 
 /**
  * A regional manager with an issue filed and an agent started on it under each of these titles, its
@@ -178,21 +178,21 @@ test("a doorbell bb gave up sending is taken out of its queue by the tick, and w
 
 test("saving a file in the Memory editor wakes the Coordinator with the file's name; its own writes don't", async () => {
   const { kit, threadId, coordinatorId, doorbells } = await withAgents();
-  const read = (await kit.rpc.memoryRead({ coordinatorId, file: PLAN })).text?.version ?? null;
-  const written = await kit.call("crew_memory_write", { file: "PLAN.md", content: "# Plan\n\n1. Its step\n", baseVersion: read }, threadId);
+  const read = (await kit.rpc.memoryRead({ coordinatorId, file: NOTES })).text?.version ?? null;
+  const written = await kit.call("crew_memory_write", { file: "NOTES.md", content: "# Notes\n\n1. Its step\n", baseVersion: read }, threadId);
   await settled();
   assert.deepEqual(doorbells(), []);
 
   const version = /now version (\w+)/.exec(textOf(written))?.[1] ?? null;
-  await kit.rpc.memoryWrite({ coordinatorId, file: PLAN, content: "# Plan\n\n1. Its step\n2. My step\n", baseVersion: version });
+  await kit.rpc.memoryWrite({ coordinatorId, file: NOTES, content: "# Notes\n\n1. Its step\n2. My step\n", baseVersion: version });
   await settled();
-  assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- The user edited PLAN.md`]);
-  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /### The user edited PLAN\.md\n\nAt [^\n]+ Its current text is in the memory below/);
+  assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- The user edited NOTES.md`]);
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /### The user edited NOTES\.md\n\nAt [^\n]+ Its current text is in the memory below/);
 });
 
 test("a refused save in the Memory editor wakes nobody", async () => {
   const { kit, coordinatorId, doorbells } = await withAgents();
-  await kit.rpc.memoryWrite({ coordinatorId, file: PLAN, content: "# Mine\n", baseVersion: "0000000000000000" });
+  await kit.rpc.memoryWrite({ coordinatorId, file: NOTES, content: "# Mine\n", baseVersion: "0000000000000000" });
   await settled();
   assert.deepEqual(doorbells(), []);
 });

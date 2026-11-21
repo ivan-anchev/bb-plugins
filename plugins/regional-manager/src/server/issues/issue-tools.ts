@@ -3,6 +3,7 @@
 // where it rests, and its two closing acts.
 import type { PluginAgentToolResult } from "@get-bb/plugin-sdk";
 import { z } from "zod";
+import { decisionTextSchema } from "../../model/decision.ts";
 import { requestedExecutionSchema } from "../../model/execution.ts";
 import { briefSchema, descriptionSchema, doneCriteriaSchema, issueIdSchema, managerStatusSchema, restSchema, titleSchema, type Issue, type IssueId } from "../../model/issue/issue.ts";
 import { kindSchema } from "../../model/issue/kind.ts";
@@ -79,7 +80,7 @@ export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
   bb.agents.registerTool({
     name: UPDATE,
     description:
-      "Change one of your issues: its kind (only before any agent has started on it), title, description, brief, done-criteria, verifier, parent or dependencies (dependsOn: add and remove), or where it stands. status: backlog or todo rests an issue no agent holds (and reopens a canceled one); canceled closes one no agent holds, and a parent only once its sub-issues are closed; done accepts one that is In review (a build parent is once its sub-issues are closed and merged while verification is off; with it on, its final check passing makes it Done; a research issue never is: its agent's done handoff makes it Done, and a research parent is Done with its last sub-issue). Every other status is the plugin's to say, from what its agents did. A build issue's verifier change applies from its next done handoff on, or a parent's from its next final check; verifier: null lets the plugin pick again, and drops the one named when the issue becomes research. A status or dependency change that makes issues ready says so: \"Now ready: i3\".",
+      "Change one of your issues: its kind (only before any agent has started on it), title, description, brief, done-criteria, verifier, parent or dependencies (dependsOn: add and remove), or where it stands. status: backlog or todo rests an issue no agent holds (and reopens a canceled one); canceled closes one no agent holds, and a parent only once its sub-issues are closed; done accepts one that is In review (a build parent is once its sub-issues are closed and merged while verification is off; with it on, its final check passing makes it Done; a research issue never is: its agent's done handoff makes it Done, and a research parent is Done with its last sub-issue). Every other status is the plugin's to say, from what its agents did. A build issue's verifier change applies from its next done handoff on, or a parent's from its next final check; verifier: null lets the plugin pick again, and drops the one named when the issue becomes research. A status or dependency change that makes issues ready says so: \"Now ready: i3\". decision records what was decided about the issue on it, with the time: the issue's decisions are where its calls live, with the user's answers to questions naming it, and issue_read and every agent you start on it see them. An update may carry a decision alone.",
     presentation: { label: { pending: "Updating an issue", completed: "Updated an issue" }, icon: { glyph: "Workflow" } },
     parameters: z.strictObject({
       id: issueIdSchema,
@@ -95,6 +96,9 @@ export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
         .strictObject({ add: DEPENDS_ON.default([]), remove: z.array(issueIdSchema).max(MAX_DEPENDENCIES).default([]).describe("Issues it no longer depends on.") })
         .optional()
         .describe("Change what it depends on: add issues to wait for, remove ones it no longer waits for."),
+      decision: decisionTextSchema
+        .optional()
+        .describe("What was decided about this issue and why, in a line or a few. It is added to the issue's decisions with the time, oldest first, and never replaces one: where a later decision changes an earlier one, say so."),
     }),
     execute: forIssue(UPDATE, async (issue, { id: _, parent, ...change }) => {
       const updated = await issues.update(issue, { ...change, ...(parent === undefined ? {} : { parentId: parent }) });
@@ -107,7 +111,7 @@ export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
   bb.agents.registerTool({
     name: READ,
     description:
-      "Read one of your issues whole: its status and why, what blocks it, its description, brief and done-criteria, its parent and sub-issues, what it depends on and what it blocks, the verifier named, each agent with what it runs on, every handoff with its verdict, and its agent's latest answer.",
+      "Read one of your issues whole: its status and why, what blocks it, its description, brief and done-criteria, its parent and sub-issues, what it depends on and what it blocks, its decisions (the user's answers to questions naming it and those you recorded), the verifier named, each agent with what it runs on, every handoff with its verdict, and its agent's latest answer.",
     presentation: { label: { pending: "Reading an issue", completed: "Read an issue" }, icon: { glyph: "FileText" } },
     parameters: z.object({ id: issueIdSchema }),
     execute: forIssue(READ, (issue) => issues.read(issue)),

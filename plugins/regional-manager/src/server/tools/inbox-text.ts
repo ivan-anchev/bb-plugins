@@ -89,7 +89,7 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
     case "failed":
       return `### ${on} failed\n\n${when} ${event.error === null ? "bb gave no error message." : `bb's error:\n\n${event.error.trim()}`} Read the issue with issue_read before deciding what to do.`;
     case "needs-input":
-      return `### ${on} is waiting on the user in its thread\n\n${when} Only the user can answer it there; tell them in your digest. It asks, in its own words:\n\n${event.question.trim()}`;
+      return `### ${on} is waiting on the user in its thread\n\n${when} Only the user can answer it there; tell them in your reply. It asks, in its own words:\n\n${event.question.trim()}`;
     case "pr":
       return `### ${on} PR #${event.pr.number}: ${event.changes.map((change) => PR_CHANGE_WORDS[change]).join(", ")}\n\n${when} ${prText(event.pr)} A done handoff's verdict that waits for CI settles on its own; you hear of it then.`;
     case "returned-to-todo":
@@ -144,7 +144,7 @@ const MAY_HAVE_REACHED_AGENT =
   "The plugin was cut off while it sent the verifier's findings to the agent as its automatic fix round (it stopped, or bb's answer never came back whole), and nothing bb keeps shows whether they arrived: they may or may not have. Read the issue with issue_read before you message the agent, so it doesn't get them twice. ";
 
 const MOVE_TO_AN_AGENT =
-  "bb's git plugin read changed files in your working tree when your turn ended, and the board warns the user of it. You never edit project files yourself, and you never touch your working tree: no stash, revert, checkout or deletion, not even of files you changed, since the user may have edited the same files. First propose, in a crew_ask_user decision, an issue whose agent redoes the change properly on its own branch, always, whatever the user's preferences: describe its title, brief and done-criteria, file it with issue_create, and start its agent only once they agree. In the same decision, ask the user whether to discard the changes in your environment: discarding them is theirs to do, never yours. If you made none of these changes, they are the user's: leave them and say so in your digest. The warning stays until a turn of yours ends with a clean tree.";
+  "bb's git plugin read changed files in your working tree when your turn ended, and the board warns the user of it. You never edit project files yourself, and you never touch your working tree: no stash, revert, checkout or deletion, not even of files you changed, since the user may have edited the same files. First propose, in a crew_ask_user decision, an issue whose agent redoes the change properly on its own branch, always, whatever the user's rules say: describe its title, brief and done-criteria, file it with issue_create, and start its agent only once they agree. In the same decision, ask the user whether to discard the changes in your environment: discarding them is theirs to do, never yours. If you made none of these changes, they are the user's: leave them and say so in your reply. The warning stays until a turn of yours ends with a clean tree.";
 
 const FAILED_IS_YOURS =
   "It failed verification and is yours to decide: message the agent with agent_message, stop it with agent_stop and start a fresh agent on the issue with agent_start, or ask the user.";

@@ -3,8 +3,7 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent } from "@testing-library/react";
-import { createElement } from "react";
-import { decisionIdSchema, type Decision } from "../../model/decision.ts";
+import { decisionIdSchema, type OpenDecision } from "../../model/decision.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
 
 // QA-02: bb redrawing the board across its breakpoint remounted an open decision and emptied the
@@ -14,9 +13,8 @@ import { coordinatorIdSchema } from "../../model/role.ts";
 const { DecisionRow } = await import("./decision-row.tsx");
 
 const COORDINATOR = coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10");
-const OPEN: Decision = { id: decisionIdSchema.parse("d2"), issueId: null, question: "Which zone first?", options: ["eu-west", "us-east"], askedAt: 1_000, answer: null };
+const OPEN: OpenDecision = { id: decisionIdSchema.parse("d2"), issueId: null, question: "Which zone first?", options: ["eu-west", "us-east"], askedAt: 1_000, answer: null };
 const TYPED = "Freeform unsent QA,\nwith a second line";
-const answered = (text: string): Decision => ({ ...OPEN, answer: { text, at: 2_000 } });
 
 afterEach(() => {
   cleanup();
@@ -24,8 +22,8 @@ afterEach(() => {
 });
 
 /** The decision's row on the board, as bb mounts it; every answer sent reaches `answers`. */
-function mount(decision: Decision, answers: unknown[] = [], coordinatorId = COORDINATOR) {
-  const props = { ref: null, coordinatorId, decision };
+function mount(decision: OpenDecision, answers: unknown[] = [], coordinatorId = COORDINATOR) {
+  const props = { coordinatorId, decision };
   const view = renderSlot({ component: DecisionRow }, props, {
     rpc: {
       answerDecision: (input: unknown) => {
@@ -42,12 +40,10 @@ function mount(decision: Decision, answers: unknown[] = [], coordinatorId = COOR
       return field;
     },
     type: (text: string) => fireEvent.change(view.getByRole("textbox"), { target: { value: text } }),
-    /** The board reads the decision again, as it does when it is answered, here or elsewhere. */
-    reread: (next: Decision) => view.rerender(createElement(DecisionRow, { ...props, decision: next })),
   };
 }
 
-test("an unsent answer is still in the field after the board remounts, and Send sends it; read back answered, the row shows the answer", async () => {
+test("an unsent answer is still in the field after the board remounts, and Send sends it", async () => {
   const answers: unknown[] = [];
   mount(OPEN).type(TYPED);
   cleanup();
@@ -56,9 +52,6 @@ test("an unsent answer is still in the field after the board remounts, and Send 
   assert.equal(row.field().value, TYPED);
   await act(async () => fireEvent.click(row.view.getByRole("button", { name: "Send" })));
   assert.deepEqual(answers, [{ coordinatorId: COORDINATOR, decisionId: "d2", answer: TYPED }]);
-  row.reread(answered(TYPED));
-
-  assert.match(row.view.container.textContent ?? "", /You answered: Freeform unsent QA,\nwith a second line/);
 });
 
 test("the answer typed is kept by regional manager and decision, and an emptied field keeps none", () => {

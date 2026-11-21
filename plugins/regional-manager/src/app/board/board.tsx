@@ -1,9 +1,8 @@
 // The board of one regional manager: its verification switch, a warning while its own working
-// tree has changed files, why PR status is unavailable when it is, and its digest, then its
-// decisions and issues in lanes (issue/issue-board.tsx), each issue opening in place to its
+// tree has changed files and why PR status is unavailable when it is, then the decisions waiting for the user and its issues in lanes (issue/issue-board.tsx), each issue opening in place to its
 // detail. Its thread's Board tab draws it, in the scrolling root the tab gives it (board-tab.tsx).
-import { experimental_Icon as Icon, experimental_useRpcMutation, experimental_useRpcQuery, Markdown } from "@get-bb/plugin-sdk/app";
-import { useId, useState } from "react";
+import { experimental_Icon as Icon, experimental_useRpcMutation, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
+import { useState } from "react";
 import { coordinatorContract as contract, type Board as BoardData } from "../../contract.ts";
 import type { Decision } from "../../model/decision.ts";
 import { filesText } from "../../model/inbox/own-tree.ts";
@@ -19,8 +18,6 @@ import { IssueBoard } from "./issue/issue-board.tsx";
 export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
   const read = experimental_useRpcQuery({ contract, method: "board", input: { coordinatorId } });
   useAnsweredDraftsDropped(coordinatorId, read.data?.decisions ?? NO_DECISIONS);
-  // why: each heading labels its section by id, and a page may show more than one board.
-  const ids = useId();
   const data = read.data;
   return (
     // why a container: the board is as narrow as a side panel in the Board tab, whatever the window's width.
@@ -32,11 +29,10 @@ export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
           <VerifySwitch coordinatorId={coordinatorId} verify={data.verify} />
           {data.ownEdits !== null && <OwnEdits {...data.ownEdits} />}
           {data.prUnavailable !== null && <PrUnavailable reason={data.prUnavailable} />}
-          <Digest ids={ids} digest={data.digest} />
           <IssueBoard
             decisions={data.decisions}
             issues={data.issues}
-            decisionRow={(decision, ref) => <DecisionRow ref={ref} coordinatorId={coordinatorId} decision={decision} />}
+            decisionRow={(decision) => <DecisionRow coordinatorId={coordinatorId} decision={decision} />}
             detailOf={(issue, under, goTo) => <IssueDetail coordinatorId={coordinatorId} issue={issue} under={under} issues={data.issues} goTo={goTo} />}
           />
           {data.issues.length === 0 && <p className="px-2 text-sm text-muted-foreground">No issues yet.</p>}
@@ -119,29 +115,4 @@ function PrUnavailable({ reason }: { reason: string }) {
       </span>
     </p>
   );
-}
-
-function Digest({ ids, digest }: { ids: string; digest: BoardData["digest"] }) {
-  const { title, body } = titled(digest?.content ?? "");
-  return (
-    <section aria-labelledby={`${ids}-digest`} className="flex flex-col gap-2 rounded-lg border border-border px-4 py-3">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 id={`${ids}-digest`} className="text-sm font-medium">
-          {title}
-        </h2>
-        {digest !== null && (
-          <time dateTime={new Date(digest.modifiedAt).toISOString()} className="shrink-0 text-xs text-muted-foreground tabular-nums">
-            Updated {shortTime(digest.modifiedAt)}
-          </time>
-        )}
-      </div>
-      {digest === null ? <p className="text-sm text-muted-foreground">There is no DIGEST.md.</p> : <Markdown content={body} className="text-sm" />}
-    </section>
-  );
-}
-
-/** The digest's own top heading, if it starts with one, as the section's title; else "Digest". */
-function titled(content: string): { title: string; body: string } {
-  const match = /^#[ \t]+(.+)\n+([\s\S]*)$/.exec(content.trimStart());
-  return match === null ? { title: "Digest", body: content } : { title: match[1]?.trim() ?? "Digest", body: match[2] ?? "" };
 }
