@@ -1,7 +1,7 @@
-// Every issue of a regional manager, viewed: one store read, one listing of its agents' threads, and
-// a turn read only for a holder that is idle with a handoff to judge. The board, crew_catch_up,
-// issue_read, issue_update and the unblocked announcement all view issues here, so a status has one
-// derivation.
+// Every issue of a regional manager, viewed: one store read, one listing of its agents' and running
+// verifiers' threads, and a turn read only for a holder that is idle with a handoff to judge. The
+// board, crew_catch_up, issue_read, issue_update and the unblocked announcement all view issues
+// here, so a status has one derivation.
 import { issueBranch, type Agent } from "../../../model/agent.ts";
 import type { Issue } from "../../../model/issue/issue.ts";
 import { issueViews, type HolderThread, type IssueFacts, type IssueView } from "../../../model/issue/status.ts";
@@ -9,13 +9,13 @@ import type { CoordinatorId } from "../../../model/role.ts";
 import type { Store } from "../../store/store.ts";
 import { ifCurrent, isLive, threadsById, type ListBb, type TurnsBb } from "../../agents/threads.ts";
 
-/** An agent's thread as the views read it. */
+/** An agent's or a running verifier's thread as the views read it. */
 type ListedThread = HolderThread & { id: string; environmentBranchName: string | null; archivedAt: number | null; deletedAt: number | null };
 
 /** The parts of bb the views read: the agents' threads and their turns. */
 export type FactsBb = ListBb<ListedThread> & TurnsBb;
 
-export type FactsStore = Pick<Store, "issues" | "agents" | "decisions" | "latestHandoff" | "handoff" | "prOfBranch" | "finalChecks">;
+export type FactsStore = Pick<Store, "issues" | "agents" | "decisions" | "latestHandoff" | "handoff" | "prOfBranch" | "finalChecks" | "openChecks">;
 
 /**
  * One issue, viewed, with its latest agent (null: none started), that agent's thread while bb runs
@@ -28,8 +28,9 @@ export type IssueRead = { view: IssueView; agent: Agent | null; threadId: string
 export async function readIssues(bb: FactsBb, store: FactsStore, coordinatorId: CoordinatorId): Promise<IssueRead[]> {
   const issues = store.issues(coordinatorId);
   const agents = store.agents(coordinatorId);
+  const verifiers = store.openChecks().flatMap(({ coordinatorId: of, issueId, verdict }) => (of === coordinatorId && verdict.state === "running" ? [{ issueId, threadId: verdict.verifierThreadId }] : []));
   // why archived ones too: an ended agent's branch still names its issue's pull request.
-  const threads = await threadsById(bb, agents.flatMap(({ threadId }) => (threadId === null ? [] : [threadId])));
+  const threads = await threadsById(bb, [...agents.flatMap(({ threadId }) => (threadId === null ? [] : [threadId])), ...verifiers.map(({ threadId }) => threadId)]);
   const threadOf = (agent: Agent): ListedThread | null => (agent.threadId === null ? null : (threads.get(agent.threadId) ?? null));
   const openDecisions = new Set(store.decisions(coordinatorId).flatMap(({ issueId, answer }) => (issueId !== null && answer === null ? [issueId] : [])));
 
@@ -45,6 +46,7 @@ export async function readIssues(bb: FactsBb, store: FactsStore, coordinatorId: 
         pr: branch === null ? null : (store.prOfBranch(coordinatorId, branch)?.snapshot ?? null),
         openDecision: openDecisions.has(issue.id),
         finalCheck: store.finalChecks(coordinatorId, issue.id).at(-1) ?? null,
+        verifierAsks: verifiers.some(({ issueId, threadId }) => issueId === issue.id && threads.get(threadId)?.hasPendingInteraction === true),
       };
       const live = latest === null ? null : threadOf(latest);
       return { facts, agent: latest, threadId: live !== null && isLive(live) ? live.id : null, branch };

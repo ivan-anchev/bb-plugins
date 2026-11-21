@@ -118,7 +118,7 @@ test("a check starts running as its verifier's ticket binds, is nudged once, un-
   const check = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), CLEAN));
   store.insertVerifierTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id }, 3_000);
   assert.deepEqual(store.bindTicket("verifier-1", "thr_verifier"), { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id });
-  assert.deepEqual(store.check(check.id)?.verdict, { state: "running", verifierThreadId: "thr_verifier", nudged: false, checkout: CLEAN.checkout });
+  assert.deepEqual(store.check(check.id)?.verdict, { state: "running", verifierThreadId: "thr_verifier", nudged: false, declined: [], checkout: CLEAN.checkout });
 
   assert.equal(store.markNudged(check.id, "thr_verifier", true), true);
   assert.equal(store.markNudged(check.id, "thr_verifier", true), false);

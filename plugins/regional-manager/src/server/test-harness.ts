@@ -94,6 +94,12 @@ type FakeEvents = {
 type FakeEventName = keyof FakeEvents;
 type Handlers = { [E in FakeEventName]: ((payload: FakeEvents[E]) => void | Promise<void>)[] };
 
+/** An interaction as bb lists it, with the fields the plugin reads, and how it was settled (null: pending). */
+type FakeAsk = { id: string; status: "pending" | "resolved" | "cancelled"; payload: InteractionPayload };
+
+/** How the plugin said no to an ask: an approval denied, a question answered, a provider's request declined, a plugin's ask cancelled. */
+type AskSettled = { how: "deny"; freeText?: never } | { how: "answer"; freeText: string } | { how: "decline" | "cancel"; freeText?: never };
+
 /** The model a thread runs on and its permission mode, as bb reports them for its latest turn. */
 type FakeExecution = { model: string; reasoningLevel: string; serviceTier: string; permissionMode: string };
 
@@ -117,6 +123,11 @@ type FakeThread = HolderThread & {
   turns: number[];
   /** Background commands its turns left running. As on bb 0.49 (seen live), a stop ends them, idle thread or not. */
   background: number;
+  /** When bb made it, and when its newest event came: its spawn, a turn starting, an ask raised or settled. */
+  createdAt: number;
+  activityAt: number;
+  /** Every interaction its provider raised, oldest first, as bb keeps them: pending until settled. */
+  asks: FakeAsk[];
 };
 
 /** What bb runs a spawn on when it names no provider or model that bb counts. */
@@ -264,6 +275,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   };
   /** The time the tick runs at; a test moves it on. */
   const clock = { now: 1_000_000 };
+  /** How bb answers the plugin settling an ask: each one it took, and the error it refuses each with instead (null: takes them). */
+  const askAnswers: { answered: ({ threadId: string; interactionId: string } & AskSettled)[]; refusal: Error | null } = { answered: [], refusal: null };
+  let asked = 0;
   /**
    * bb's git plugin as the plugin reaches it, by environment id: the branch each has checked out
    * (absent: none, as when detached; bb checks out the branch it made a new environment on), the
@@ -389,7 +403,28 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   /** A new turn starts in the thread, as when someone sends it a message. */
   function startTurn(thread: FakeThread): void {
     thread.status = "active";
+    thread.activityAt = clock.now;
     thread.turns.push(++sequence);
+  }
+
+  /**
+   * bb settles a pending ask as the plugin answered it, unless it refuses (see askAnswers). As bb
+   * does, it takes each kind's own answer only: a deny for an approval, an answer to each question
+   * for a question, a value for a provider's own request, and a cancel only for a plugin's ask.
+   */
+  function settleAsk(threadId: string, interactionId: string, settled: AskSettled): FakeAsk {
+    const thread = fakeThread(threadId);
+    const ask = thread.asks.find(({ id }) => id === interactionId);
+    if (ask?.status !== "pending") throw bbHttpError(409, "interaction_not_pending", "Interaction is not pending");
+    const { kind } = ask.payload;
+    const takes = kind === "approval" ? "deny" : kind === "user_question" ? "answer" : kind === "plugin" ? "cancel" : "decline";
+    if (settled.how !== takes) throw bbHttpError(400, "invalid_request", settled.how === "cancel" ? "Plugin interaction expected" : `A ${ask.payload.kind} interaction takes no ${settled.how}`);
+    if (askAnswers.refusal !== null) throw askAnswers.refusal;
+    askAnswers.answered.push({ threadId, interactionId, ...settled });
+    ask.status = settled.how === "cancel" ? "cancelled" : "resolved";
+    thread.hasPendingInteraction = thread.asks.some(({ status }) => status === "pending");
+    thread.activityAt = clock.now;
+    return ask;
   }
 
   async function emit<E extends FakeEventName>(event: E, payload: FakeEvents[E]): Promise<void> {
@@ -466,6 +501,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         spawnedWith: args,
         turns: [],
         background: 0,
+        createdAt: clock.now,
+        activityAt: clock.now,
+        asks: [],
       };
       fakeThreads.set(id, thread);
       if (reused === null && provisioning.holding) provisioning.held.push(() => provision(thread));
@@ -555,11 +593,35 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
         if (turnEvents.failure !== null) throw turnEvents.failure;
         const thread = fakeThread(threadId);
         if (thread.deletedAt !== null) throw bbHttpError(404, "thread_not_found", "Thread not found");
-        if (types?.[0] === "client/turn/requested") return (turnRequests.get(threadId) ?? []).map((data, at) => ({ seq: at + 1, data }));
+        if (types?.[0] === "client/turn/requested") return (turnRequests.get(threadId) ?? []).map((data, at) => ({ seq: at + 1, data, createdAt: thread.activityAt }));
+        // As bb does for a read of any type: its newest event, of which the plugin reads when it came.
+        if (types === undefined) return [{ seq: thread.turns.at(-1) ?? 0, data: null, createdAt: thread.activityAt }];
         const latest = thread.turns.at(-1);
         if (turnEvents.holding) await new Promise<void>((release) => turnEvents.held.push(release));
-        return latest === undefined ? [] : [{ seq: latest, data: null }];
+        return latest === undefined ? [] : [{ seq: latest, data: null, createdAt: thread.activityAt }];
       },
+    },
+    // As bb does, a thread's interactions are listed whatever their state, and settling one that isn't
+    // pending, or while bb refuses, fails. A settled ask no longer holds the thread waiting.
+    interactions: {
+      list: async ({ threadId }: { threadId: string }) => fakeThread(threadId).asks.map((ask) => ({ ...ask })),
+      async resolve({ threadId, interactionId, resolution }: { threadId: string; interactionId: string; resolution: { decision: string } | { kind: string; answers?: Record<string, { selected: string[]; freeText?: string }> } }) {
+        if ("decision" in resolution) {
+          if (resolution.decision !== "deny") throw new Error("The plugin only ever declines an ask");
+          return settleAsk(threadId, interactionId, { how: "deny" });
+        }
+        if (resolution.kind !== "user_answer" || resolution.answers === undefined) throw new Error("The plugin only ever declines an ask");
+        const ask = fakeThread(threadId).asks.find(({ id }) => id === interactionId);
+        const questions = ask?.payload.kind === "user_question" ? ask.payload.questions.map(({ id }) => id) : [];
+        const answers = Object.entries(resolution.answers);
+        if (answers.length !== questions.length || answers.some(([id, { selected, freeText }]) => !questions.includes(id) || selected.length > 0 || freeText === undefined)) throw new Error("The plugin answers each question with free text only");
+        return settleAsk(threadId, interactionId, { how: "answer", freeText: answers.map(([, { freeText }]) => freeText ?? "").join("\n") });
+      },
+      async respond({ threadId, interactionId, value }: { threadId: string; interactionId: string; value: unknown }) {
+        if (JSON.stringify(value) !== JSON.stringify({ action: "decline" })) throw new Error("The plugin only ever declines a provider's request");
+        return settleAsk(threadId, interactionId, { how: "decline" });
+      },
+      cancel: async ({ threadId, interactionId }: { threadId: string; interactionId: string }) => settleAsk(threadId, interactionId, { how: "cancel" }),
     },
     // As bb does, a stop that ends a running turn announces the thread idle, with the interrupted turn's last answer.
     async stop({ threadId }) {
@@ -710,7 +772,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const prWatch = createPrWatch({ bb, store, inbox, gh, now: () => clock.now });
     const agents = createAgents({ bb, store, spawner, inbox, memory, turns, prs: prWatch, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
     const issues = createIssues({ bb, store, views, onChange });
-    const verify = createVerify({ bb, store, spawner, inbox, turns });
+    const verify = createVerify({ bb, store, spawner, inbox, turns, now: () => clock.now });
     const finalChecks = createFinalChecks({ bb, store, views, turns, verify, defaultBranch: defaultBranchReader(bb, store), now: () => clock.now });
     registerRoles(bb, store);
     registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
@@ -821,6 +883,16 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     threadUpdates,
     /** The time the next tick runs at; a test may move it on. */
     clock,
+    /** How bb answers the plugin settling an ask; a test may make it refuse. */
+    askAnswers,
+    /** The thread's provider asks a person something, as bb raises it: pending in the thread, which shows it waiting, and announced. */
+    async ask(threadId: string, payload: InteractionPayload): Promise<void> {
+      const thread = fakeThread(threadId);
+      thread.asks.push({ id: `pint_${++asked}`, status: "pending", payload });
+      thread.hasPendingInteraction = true;
+      thread.activityAt = clock.now;
+      await emit("interaction.pending", { thread: ref(threadId), interaction: { payload } });
+    },
     /** The schedule's once-a-minute pass, as server.ts runs it, at the clock's time. */
     async tick(): Promise<void> {
       const warned = (pass: string) => (error: unknown) => fakeBb.log.warn(`Could not ${pass}; the next tick tries again: ${error instanceof Error ? error.message : String(error)}`);
