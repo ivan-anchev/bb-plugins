@@ -12,7 +12,7 @@ import type { BoardReader } from "../board/board.ts";
 import type { Inbox } from "../inbox/inbox.ts";
 import { boardText } from "../issues/issue-text.ts";
 import type { MemoryRoot } from "../memory/memory-files.ts";
-import { replacedFileRefusal } from "../memory/memory-upgrade.ts";
+import { replacedFileReadRefusal, replacedFileWriteRefusal } from "../memory/memory-upgrade.ts";
 import type { Store } from "../store/store.ts";
 import { openDecisionsText, remindersText, reminderText, updatesText } from "./inbox-text.ts";
 import { catchUpText, readText, writeResult } from "./memory-text.ts";
@@ -66,9 +66,9 @@ export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, on
     execute: ({ file }, { threadId }) => {
       const role = store.roleOfThread(threadId);
       if (role === null) return failed(`${MEMORY_READ} is refused: this thread is not a regional manager, nor one of its agents or verifiers, so it has no memory to read. Carry on without it.`);
-      const replaced = replacedFileRefusal(file);
-      if (replaced !== null) return failed(replaced);
       const { text } = memory.of(memoryOwner(role)).read(file);
+      const replaced = replacedFileReadRefusal(file, text !== null);
+      if (replaced !== null) return failed(replaced);
       return text === null ? failed(`There is no memory file named ${file}.`) : readText(file, text);
     },
   });
@@ -80,7 +80,7 @@ export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, on
     presentation: { label: { pending: "Writing memory", completed: "Wrote memory" }, icon: { glyph: "FileText" } },
     parameters: z.object({ file: memoryFileSchema, content: memoryContentSchema, baseVersion: memoryVersionSchema }),
     execute: forManager(store, MEMORY_WRITE, (id, { file, content, baseVersion }) => {
-      const replaced = replacedFileRefusal(file);
+      const replaced = replacedFileWriteRefusal(file);
       return replaced === null ? writeResult(file, memory.of(id).write(file, content, baseVersion)) : failed(replaced);
     }),
   });

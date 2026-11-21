@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
@@ -7,6 +7,7 @@ import plugin from "../../../server.ts";
 import { coordinatorContract } from "../../contract.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
+import { upgradeMemoryFrom040 } from "../memory/memory-upgrade.ts";
 import { harness, isRefusal, textOf } from "../test-harness.ts";
 
 
@@ -83,21 +84,40 @@ test("crew_memory_write from a thread that is not a Coordinator is refused and w
   assert.deepEqual(kit.memory.of(coordinatorId).list(), ["MEMORY.md", "GOAL.md", "NOTES.md", "AGENTS.md", "CREW.md"]);
 });
 
-test("crew_memory_read and crew_memory_write refuse a file 0.4 kept, naming what replaced it, and write nothing", async () => {
-  const { kit, threadId, coordinatorId } = await started();
-  const refusals = {
-    "PLAN.md": "PLAN.md is now NOTES.md: use NOTES.md instead.",
+test("after the upgrade from 0.4, a file it renamed or dropped is refused by name, naming what replaced it; one it left in place still reads, and none is written", async () => {
+  const { kit, threadId, coordinatorId, dir } = await started();
+  // 0.4's files: PLAN.md stays, as NOTES.md is there already; PREFERENCES.md becomes AGENTS.md; DIGEST.md goes.
+  const leftover = "# Plan\n\n1. Inventory the endpoints\n";
+  unlinkSync(join(dir, "AGENTS.md"));
+  writeFileSync(join(dir, "PLAN.md"), leftover);
+  writeFileSync(join(dir, "PREFERENCES.md"), "# Preferences\n\n- 2026-11-02: build on codex gpt-5.4\n");
+  writeFileSync(join(dir, "DIGEST.md"), "# Digest\n\nAll quiet.\n");
+  upgradeMemoryFrom040(kit.memory, [coordinatorId]);
+  const files = kit.memory.of(coordinatorId).list();
+  assert.deepEqual([...files].sort(), ["AGENTS.md", "CREW.md", "GOAL.md", "MEMORY.md", "NOTES.md", "PLAN.md"]);
+
+  const write = (file: string) => kit.call("crew_memory_write", { file, content: "# Plan\n\n1. Retry\n", baseVersion: null }, threadId);
+  const gone = {
     "PREFERENCES.md": "PREFERENCES.md is now AGENTS.md: use AGENTS.md instead.",
     "DIGEST.md": "DIGEST.md is retired: your reply to the user is the summary.",
   };
-  for (const [file, refusal] of Object.entries(refusals)) {
+  for (const [file, refusal] of Object.entries(gone)) {
     const read = await kit.call("crew_memory_read", { file }, threadId);
-    const written = await kit.call("crew_memory_write", { file, content: "# Plan\n\n1. Retry\n", baseVersion: null }, threadId);
+    const written = await write(file);
     assert.ok(isRefusal(read) && isRefusal(written), file);
     assert.equal(textOf(read), refusal);
     assert.equal(textOf(written), refusal);
   }
-  assert.deepEqual(kit.memory.of(coordinatorId).list(), ["MEMORY.md", "GOAL.md", "NOTES.md", "AGENTS.md", "CREW.md"]);
+
+  const read = await kit.call("crew_memory_read", { file: "PLAN.md" }, threadId);
+  assert.ok(!isRefusal(read));
+  assert.match(textOf(read), /1\. Inventory the endpoints/);
+  const written = await write("PLAN.md");
+  assert.ok(isRefusal(written));
+  assert.equal(textOf(written), "PLAN.md is now NOTES.md: use NOTES.md instead.");
+
+  assert.deepEqual(kit.memory.of(coordinatorId).list(), files);
+  assert.equal(readFileSync(join(dir, "PLAN.md"), "utf8"), leftover);
 });
 
 test("crew_memory_write and the editor's save reject a name outside the memory folder or not markdown", async () => {

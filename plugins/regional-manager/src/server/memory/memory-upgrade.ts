@@ -7,7 +7,8 @@
 // A moved file keeps every line but those 0.4 seeded it with, which become today's; a move whose new
 // file already exists leaves both as they are. Each step is a no-op once done, so it runs whole as
 // the plugin loads. The same table tells a memory tool what replaced a 0.4 file it is asked for, as a
-// manager whose conversation began before the upgrade still names them.
+// manager whose conversation began before the upgrade still names them: a write is always refused, a
+// read only once the file is gone.
 import { memoryFileSchema, type MemoryFile } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { MEMORY_INDEX, SEEDS, type MemoryRoot } from "./memory-files.ts";
@@ -56,11 +57,19 @@ export function upgradeMemoryFrom040(memory: MemoryRoot, ids: readonly Coordinat
   for (const id of ids) upgrade(memory.of(id));
 }
 
-/** Why a memory tool refuses `name`: a file 0.4 kept that today's memory renamed or dropped. null: it is no such file. */
-export function replacedFileRefusal(name: MemoryFile): string | null {
+/** Why crew_memory_write refuses `name`, a file 0.4 kept that today's memory renamed or dropped: always, so none comes back. null: it is no such file. */
+export function replacedFileWriteRefusal(name: MemoryFile): string | null {
   const move = MOVES.find(({ from }) => from === name);
   if (move !== undefined) return `${name} is now ${move.to}: use ${move.to} instead.`;
   return name === RETIRED.file ? `${name} is retired: ${RETIRED.instead}.` : null;
+}
+
+/**
+ * Why crew_memory_read refuses `name`, a file 0.4 kept, once it is gone. A move that found its new file
+ * there already left the old one, and the manager can still read it. null: it is on disk, or no such file.
+ */
+export function replacedFileReadRefusal(name: MemoryFile, onDisk: boolean): string | null {
+  return onDisk ? null : replacedFileWriteRefusal(name);
 }
 
 function upgrade(files: ReturnType<MemoryRoot["of"]>): void {
