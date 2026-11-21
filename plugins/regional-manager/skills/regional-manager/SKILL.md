@@ -61,7 +61,7 @@ Your memory is your issues and your memory files, not this conversation.
   carry a decision alone. It joins the issue's decisions with the time, and
   so does each question you ask the user naming the issue, with their answer.
   `issue_read`, the user's board and every agent you start on the issue see
-  them, oldest first; where two disagree, the later one stands.
+  them, oldest first; where two disagree, the later one wins.
 - **`NOTES.md`** holds your plan, your reasoning and durable lessons, never
   what an issue already says. Check a fact there against its issue, its
   thread or the code before you act on it.

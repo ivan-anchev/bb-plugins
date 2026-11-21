@@ -127,8 +127,9 @@ function seedFiles(): [MemoryFile, string][] {
   return Object.entries(SEEDS).map(([name, text]) => [memoryFileSchema.parse(name), text]);
 }
 
-/** MEMORY.md as the plugin writes it: one line per core file but itself, saying what goes in it. */
-export const MEMORY_INDEX = `# Memory
+/** Each core file but GOAL.md, as the plugin first writes it; MEMORY.md, one line per core file but itself, saying what goes in it. */
+export const SEEDS = {
+  "MEMORY.md": `# Memory
 
 The index of this memory. Each file holds one kind of thing; the work itself, who holds it, where it stands, what blocks it and what was decided, lives in the issues:
 
@@ -136,11 +137,7 @@ The index of this memory. Each file holds one kind of thing; the work itself, wh
 - NOTES.md: the regional manager's plan, its reasoning and durable lessons, never what an issue already says.
 - RULES.md: the user's standing rules for the regional manager.
 - CREW.md: rules every agent follows.
-`;
-
-/** Each core file but GOAL.md, as the plugin first writes it. */
-export const SEEDS = {
-  "MEMORY.md": MEMORY_INDEX,
+`,
   "NOTES.md": "# Notes\n\nNothing yet.\n",
   "RULES.md": "# Rules for the regional manager\n\nOne rule per line: the date, then the user's words.\n",
   "CREW.md": "# Crew rules\n\nNone yet.\n",

@@ -14,8 +14,8 @@ const { MemorySection } = await import("./memory-section.tsx");
 
 const COORDINATOR = coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10");
 const NOTES = memoryFileSchema.parse("NOTES.md");
-const PREFERENCES = memoryFileSchema.parse("RULES.md");
-const MINE = "# Notes\n\nUNSAVED_PLAN_MARKER\n";
+const RULES = memoryFileSchema.parse("RULES.md");
+const MINE = "# Notes\n\nUNSAVED_NOTES_MARKER\n";
 
 afterEach(() => {
   cleanup();
@@ -27,7 +27,7 @@ afterEach(() => {
 function server() {
   const files = new Map<MemoryFile, { content: string; version: string; revision: number }>([
     [NOTES, { content: "# Notes\n\nNothing yet.\n", version: "v1", revision: 1 }],
-    [PREFERENCES, { content: "# Preferences\n", version: "v1", revision: 1 }],
+    [RULES, { content: "# Rules for the regional manager\n", version: "v1", revision: 1 }],
   ]);
   const writes: string[] = [];
   const snapshot = (file: MemoryFile): MemorySnapshot => {
@@ -94,7 +94,7 @@ test("the list marks a file with a draft, and saving another file keeps that dra
   fireEvent.change(await section.edit(NOTES), { target: { value: MINE } });
   fireEvent.click(section.view.getByRole("button", { name: "All files" }));
   assert.ok(await section.view.findByRole("button", { name: /^NOTES\.md, unsaved changes/ }));
-  fireEvent.change(await section.edit(PREFERENCES), { target: { value: "# Preferences\n\nMine\n" } });
+  fireEvent.change(await section.edit(RULES), { target: { value: "# Rules for the regional manager\n\nMine\n" } });
   await act(async () => fireEvent.click(section.view.getByRole("button", { name: "Save" })));
   cleanup();
 

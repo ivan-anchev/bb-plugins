@@ -62,19 +62,20 @@ export function issueDecisions(issueId: IssueId, asked: readonly Decision[], rec
   return [...questions, ...recorded].sort((a, b) => a.at - b.at);
 }
 
-/** The issue's decisions as a list, one item each, oldest first, as issue_read and an agent's first message show them. */
+/** The issue's decisions as issue_read and an agent's first message show them: how to read them, then one list item each, oldest first. */
 export function decisionsText(decisions: readonly IssueDecision[]): string {
-  return decisions.map((decision) => `- ${timeOf(decision.at)}: ${indented(entryText(decision))}`).join("\n");
+  const items = decisions.map((decision) => `- ${timeOf(decision.at)}: ${indented(entryText(decision))}`);
+  return ["Oldest first; where two disagree, the later one wins.", items.join("\n")].join("\n\n");
 }
 
 function entryText(decision: IssueDecision): string {
   switch (decision.kind) {
     case "asked": {
       const { id, question, answer } = decision;
-      return `asked the user (${id}): ${question} ${answer === null ? "Not answered yet." : `They answered at ${timeOf(answer.at)}: ${answer.text.trim()}`}`;
+      return `asked the user (${id}): ${question} ${answer === null ? "Not answered yet." : `They answered at ${timeOf(answer.at)}: ${answer.text}`}`;
     }
     case "recorded":
-      return decision.text.trim();
+      return decision.text;
     default:
       return decision satisfies never;
   }

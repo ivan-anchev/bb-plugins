@@ -1,6 +1,7 @@
-// A board's lanes: the decisions put to the user and the issues, each placed by its status, or
-// under Needs you while it waits on the user, and each sub-issue under its parent. The board draws them, crew_catch_up lists them and the
-// panel's badge counts their Needs you, so the three never disagree.
+// A board's lanes: the decisions waiting for the user and the issues, each issue placed by its
+// status, or under Needs you while it waits on the user, and each sub-issue under its parent. The
+// board draws them, crew_catch_up lists them and the panel's badge counts their Needs you, so the
+// three never disagree.
 import { z } from "zod";
 import { isOpen, type Decision, type OpenDecision } from "../decision.ts";
 import type { IssueId } from "../issue/issue.ts";
@@ -31,9 +32,9 @@ function byLane<Row extends { lane: Lane }>(rows: readonly Row[]): { lane: Lane;
 }
 
 /**
- * A row on the board: a decision waiting for the user's answer; a top-level issue, with its sub-issues under it
- * (none: it has none), whatever their own lanes; or a sub-issue that waits on the user, listed flat
- * under Needs you as well as under its parent.
+ * A row on the board: a decision waiting for the user's answer; a top-level issue, with its
+ * sub-issues under it (none: it has none), whatever their own lanes; or a sub-issue that waits on
+ * the user, listed flat under Needs you as well as under its parent.
  */
 export type BoardItem<Issue> =
   | { kind: "decision"; lane: "needs-you"; decision: OpenDecision }
@@ -43,8 +44,9 @@ export type BoardItem<Issue> =
 /**
  * The board's rows in each lane that has any, in the board's order. A decision sits under Needs you
  * until the user answers it, first there, and then leaves the board: it stays among its issue's
- * decisions (issue-detail.tsx, issue_read). A top-level issue sits in its own lane, its sub-issues under it; a flagged issue sits under
- * Needs you only, never also in its status's lane, and a flagged sub-issue under its parent too.
+ * decisions (issue-detail.tsx, issue_read). A top-level issue sits in its own lane, its sub-issues
+ * under it; a flagged issue sits under Needs you only, never also in its status's lane, and a
+ * flagged sub-issue under its parent too.
  * A lane counts its rows: its sub-issues are counted by their parent.
  */
 export function boardGroups<Issue extends Nested>(decisions: readonly Decision[], issues: readonly Issue[]): { lane: Lane; rows: BoardItem<Issue>[] }[] {

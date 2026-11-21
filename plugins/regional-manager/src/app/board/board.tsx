@@ -1,5 +1,6 @@
 // The board of one regional manager: its verification switch, a warning while its own working
-// tree has changed files and why PR status is unavailable when it is, then the decisions waiting for the user and its issues in lanes (issue/issue-board.tsx), each issue opening in place to its
+// tree has changed files and why PR status is unavailable when it is, then the decisions waiting
+// for the user and its issues in lanes (issue/issue-board.tsx), each issue opening in place to its
 // detail. Its thread's Board tab draws it, in the scrolling root the tab gives it (board-tab.tsx).
 import { experimental_Icon as Icon, experimental_useRpcMutation, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { useState } from "react";

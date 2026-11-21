@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { freshStore, MANAGER, OTHER_MANAGER } from "../store/test-store.ts";
-import { MEMORY_INDEX, openMemoryRoot, SEEDS } from "./memory-files.ts";
+import { openMemoryRoot, SEEDS } from "./memory-files.ts";
 import { upgradeMemoryFrom040 } from "./memory-upgrade.ts";
 
 /** MEMORY.md exactly as 0.4 seeded it. */
@@ -46,7 +46,7 @@ test("0.4's memory upgrades whole: PLAN.md becomes NOTES.md and PREFERENCES.md R
   assert.deepEqual(folder(MANAGER), {
     "CREW.md": CREW,
     "GOAL.md": "Migrate the webhook service",
-    "MEMORY.md": MEMORY_INDEX,
+    "MEMORY.md": SEEDS["MEMORY.md"],
     "NOTES.md": "# Notes\n\n1. Inventory the endpoints\n2. Retire cron (i4)\n",
     "RULES.md": "# Rules for the regional manager\n\n- 2026-11-02: build on codex gpt-5.4\n",
   });
@@ -100,6 +100,15 @@ test("a move whose new file exists already leaves both files as they are", () =>
   assert.equal(files["PREFERENCES.md"], PREFERENCES);
   assert.equal(files["RULES.md"], "# Mine\n");
   assert.equal(files["DIGEST.md"], undefined);
+});
+
+test("a move cut short after writing the new file is finished by the next run, which removes the old one", () => {
+  const { root, folder } = memoryOf040({ [MANAGER]: seeded040({ "NOTES.md": "# Notes\n\n1. Inventory the endpoints\n2. Retire cron (i4)\n" }) });
+  upgradeMemoryFrom040(root, [MANAGER]);
+
+  const files = folder(MANAGER);
+  assert.equal(files["PLAN.md"], undefined);
+  assert.equal(files["NOTES.md"], "# Notes\n\n1. Inventory the endpoints\n2. Retire cron (i4)\n");
 });
 
 test("a second run changes nothing, and memory seeded today is never touched", () => {

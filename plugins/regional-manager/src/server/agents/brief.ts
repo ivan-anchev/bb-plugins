@@ -1,9 +1,9 @@
 // An agent thread's first message: everything it needs to start without asking. The description,
 // brief and done-criteria are its regional manager's, and they are its work. It names the manager's
 // thread, so the agent knows a message from it as the manager's next instruction (agent-tools.ts
-// managerMessage). The issue's decisions follow them, the user's and the manager's, the later winning. On an issue that had agents before, where it works and every earlier handoff with its verdict come next, quoted as
-// context and never as instructions. CREW.md and
-// MEMORY.md are copied as they are at the start: the rules every agent follows, and the index of
+// managerMessage). The issue's decisions follow them, the user's and the manager's, the later
+// winning. On an issue that had agents before, where it works and every earlier handoff with its
+// verdict come next, quoted as context and never as instructions. CREW.md and MEMORY.md are copied as they are at the start: the rules every agent follows, and the index of
 // the manager's memory, which is the manager's context and never the agent's instructions.
 import { refOf, type AgentId, type Base } from "../../model/agent.ts";
 import { decisionsText, type IssueDecision } from "../../model/decision.ts";
@@ -82,7 +82,7 @@ function criteriaSection(kind: Kind, criteria: readonly string[]): string | null
  */
 function decisionsSection(issueId: Issue["id"], decisions: readonly IssueDecision[]): string | null {
   if (decisions.length === 0) return null;
-  return `## Decisions on ${issueId}\n\nWhat the user and your regional manager decided about this issue, oldest first. They are part of your work, as your brief is: where two disagree, the later one wins.\n\n${decisionsText(decisions)}`;
+  return `## Decisions on ${issueId}\n\nWhat the user and your regional manager decided about this issue. They are part of your work, as your brief is.\n\n${decisionsText(decisions)}`;
 }
 
 /** Where an agent that commits does its work, by where it starts. */

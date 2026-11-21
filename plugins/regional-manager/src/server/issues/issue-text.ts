@@ -184,9 +184,9 @@ export function verifierText(issue: Issue): string {
 }
 
 /**
- * An issue whole: its status and why, what blocks it, its plan, its decisions, its relations, the verifier named,
- * each agent with what it runs on, every handoff of every agent with its verdict, a build parent's
- * final checks, oldest first, and its agent's latest answer (null: none).
+ * An issue whole: its status and why, what blocks it, its plan, its decisions, its relations, the
+ * verifier named, each agent with what it runs on, every handoff of every agent with its verdict, a
+ * build parent's final checks, oldest first, and its agent's latest answer (null: none).
  */
 export function issueText(
   { view, threadId, branch }: IssueRead,
@@ -210,7 +210,7 @@ export function issueText(
     `### What it is about\n\n${issue.description.trim()}`,
     `### Brief\n\n${issue.brief?.trim() ?? "None yet."}`,
     criteriaText(issue),
-    `### Decisions\n\n${decisions.length === 0 ? "None yet. Record one with issue_update's decision." : `Oldest first; where two disagree, the later one stands.\n\n${decisionsText(decisions)}`}`,
+    `### Decisions\n\n${decisions.length === 0 ? "None yet. Record one with issue_update's decision." : decisionsText(decisions)}`,
     `### Relations\n\n${relationsText(relations)}`,
     `### Verifier\n\n${verifierLine(issue)}`,
     `### Agents\n\n${agents.length === 0 ? "None started." : agents.map((agent) => agentLine(agent, threadId)).join("\n")}`,

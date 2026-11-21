@@ -5,13 +5,14 @@
 // - DIGEST.md goes: the board no longer shows it, and the issues say what it summed up;
 // - MEMORY.md's lines that index them say so.
 // A moved file keeps every line but those 0.4 seeded it with, which become today's; a move whose new
-// file already exists leaves both as they are. Each step is a no-op once done, so it runs whole as
-// the plugin loads. The same table tells a memory tool what replaced a 0.4 file it is asked for, as a
+// file already exists leaves both as they are, unless the new file is the old one moved, as a run
+// cut short between writing one and removing the other leaves them. Each step is a no-op once done,
+// so it runs whole as the plugin loads. The same table tells a memory tool what replaced a 0.4 file it is asked for, as a
 // manager whose conversation began before the upgrade still names them: a write is always refused, a
 // read only once the file is gone.
 import { memoryFileSchema, type MemoryFile } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { MEMORY_INDEX, SEEDS, type MemoryRoot } from "./memory-files.ts";
+import { SEEDS, type MemoryRoot } from "./memory-files.ts";
 
 const file = (name: string) => memoryFileSchema.parse(name);
 
@@ -47,9 +48,9 @@ const RETIRED = { file: file("DIGEST.md"), instead: "your reply to the user is t
 const INDEX = file("MEMORY.md");
 
 const INDEX_LINES: LineTable = [
-  ["The index of this memory. Each file holds one kind of thing:", lineOf(MEMORY_INDEX, "The index of this memory.")],
-  ["- PLAN.md: the plan: what to delegate, in what order, and what is done.", lineOf(MEMORY_INDEX, "- NOTES.md:")],
-  ["- PREFERENCES.md: the user's standing preferences and rules.", lineOf(MEMORY_INDEX, "- RULES.md:")],
+  ["The index of this memory. Each file holds one kind of thing:", lineOf(SEEDS["MEMORY.md"], "The index of this memory.")],
+  ["- PLAN.md: the plan: what to delegate, in what order, and what is done.", lineOf(SEEDS["MEMORY.md"], "- NOTES.md:")],
+  ["- PREFERENCES.md: the user's standing preferences and rules.", lineOf(SEEDS["MEMORY.md"], "- RULES.md:")],
   ["- DIGEST.md: the latest summary for the user.", null],
 ];
 
@@ -75,8 +76,11 @@ export function replacedFileReadRefusal(name: MemoryFile, onDisk: boolean): stri
 function upgrade(files: ReturnType<MemoryRoot["of"]>): void {
   for (const { from, to, lines } of MOVES) {
     const old = files.read(from).text;
-    if (old === null || files.read(to).text !== null) continue;
-    files.write(to, rewritten(old.content, lines), null);
+    if (old === null) continue;
+    const moved = rewritten(old.content, lines);
+    const now = files.read(to).text;
+    if (now === null) files.write(to, moved, null);
+    else if (now.content !== moved) continue;
     files.remove(from, old.version);
   }
   const digest = files.read(RETIRED.file).text;

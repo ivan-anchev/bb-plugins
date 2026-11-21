@@ -1,6 +1,6 @@
 // An issue opened in place, read when its row opens: its description, its relations, its criteria,
-// its decisions, a build parent's final checks, and its record: every agent that held it, each handoff it made and
-// the verdict on it.
+// its decisions, a build parent's final checks, and its record: every agent that held it, each
+// handoff it made and the verdict on it.
 import { experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { coordinatorContract as contract, type IssueDetail as Detail, type IssueRow } from "../../../../contract.ts";
 import { isVerified } from "../../../../model/issue/kind.ts";

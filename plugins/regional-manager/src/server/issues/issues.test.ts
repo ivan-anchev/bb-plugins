@@ -67,12 +67,12 @@ test("issue_update with only a decision records it on the issue, changing nothin
   assert.deepEqual(kit.store.issue(coordinatorId, ISSUE_ID), before, "the issue itself is unchanged");
 
   const read = textOf(await call("issue_read", { id: "i1" }));
-  assert.match(read, /### Decisions\n\nOldest first; where two disagree, the later one stands\.\n\n- \S+: Retries cap at 5: the provider rate-limits beyond that\.\n- \S+: Cap at 3 instead\.\n  The user's SLA is tighter than the provider's limit\./);
+  assert.match(read, /### Decisions\n\nOldest first; where two disagree, the later one wins\.\n\n- \S+: Retries cap at 5: the provider rate-limits beyond that\.\n- \S+: Cap at 3 instead\.\n  The user's SLA is tighter than the provider's limit\./);
   const detail = await kit.rpc.issue({ coordinatorId, issueId: ISSUE_ID });
   assert.deepEqual(detail.decisions.map((entry) => (entry.kind === "recorded" ? entry.text : entry)), [first, second]);
 
   const prompt = kit.thread(threadIn(textOf(await call("agent_start", { issue: "i1" })))).spawnedWith.prompt ?? assert.fail("spawned without a prompt");
-  assert.match(prompt, /## Decisions on i1\n\n[^\n]*the later one wins\.\n\n- \S+: Retries cap at 5: the provider rate-limits beyond that\.\n- \S+: Cap at 3 instead\.\n  The user's SLA/);
+  assert.match(prompt, /## Decisions on i1\n\n[^\n]*part of your work, as your brief is\.\n\nOldest first; where two disagree, the later one wins\.\n\n- \S+: Retries cap at 5: the provider rate-limits beyond that\.\n- \S+: Cap at 3 instead\.\n  The user's SLA/);
 });
 
 test("issue_update refuses a blank decision, and records nothing", async () => {
