@@ -82,7 +82,6 @@ function toISO(utc: number) {
   return new Date(utc).toISOString().slice(0, 10)
 }
 
-/** `2026-03-02: 0 1 4` → three days from Mar 2. */
 function daysOf(children: ReactNode): ActivityDay[] {
   const listed = listItems(children)
   const rows =
@@ -226,7 +225,6 @@ function GraphActivity({
   const quiet = set[0] ?? "·"
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Narrow frames open on the latest weeks, like GitHub.
   useLayoutEffect(() => {
     const el = scrollRef.current
     if (el) {

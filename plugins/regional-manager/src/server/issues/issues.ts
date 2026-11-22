@@ -1,7 +1,3 @@
-// What a regional manager does to its issues: file one, change its plan, its dependencies or where it
-// rests, close it, and read it whole. A status the manager writes is checked against the one derived
-// from the facts (issue-facts.ts): it may rest an issue no agent holds, cancel one, or accept one In
-// review, and nothing else; every other status is evidence.
 import type { z } from "zod";
 import type { Agent } from "../../model/agent.ts";
 import { sameModel, type Execution, type RequestedExecution } from "../../model/execution.ts";
@@ -28,13 +24,8 @@ type Deps = {
   onChange(id: CoordinatorId): void;
 };
 
-/** What issue_create files: a plan, with the verifier the manager names (left out: the plugin picks). */
 type IssueRequest = Omit<NewIssue, "verifier"> & { verifier?: RequestedExecution };
 
-/**
- * What issue_update changes; a field left out stays. `verifier: null` gives the choice back to the plugin; `parentId: null` makes it
- * top-level. `decision`: what was decided and why, recorded among its decisions as of now.
- */
 type IssueChange = Partial<Pick<Issue, "kind" | "title" | "description" | "doneCriteria" | "parentId">> & {
   brief?: string;
   decision?: string;
@@ -45,17 +36,11 @@ type IssueChange = Partial<Pick<Issue, "kind" | "title" | "description" | "doneC
 
 type Refused = { refused: string };
 
-/** Why a write judged on every issue viewed made none: changes kept coming while they were read. */
 const OVERTAKEN = "your issues kept changing while they were read, so nothing was written. Try again.";
 
 export type Issues = ReturnType<typeof createIssues>;
 
 export function createIssues({ bb, store, views: current, onChange }: Deps) {
-  /**
-   * The verifier named, resolved against bb's catalog on its primary machine. why there: where a
-   * check runs is the agent's environment, not known yet; a verifier bb can't run there when the
-   * check comes is passed over, and the verdict says so.
-   */
   async function verifierOf(requested: RequestedExecution): Promise<Execution | Refused> {
     const resolved = await resolvedExecution(bb, {}, requested);
     return "refused" in resolved ? { refused: `On bb's primary machine: ${resolved.refused}` } : resolved;
@@ -65,11 +50,6 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
 
   const viewsOf = async (coordinatorId: CoordinatorId): Promise<IssueView[]> => (await readIssues(bb, store, coordinatorId)).map(({ view }) => view);
 
-  /**
-   * The edit a status asks for, or why the issue as it stands now (`view`, current as the edit is
-   * written) can't take it. why the holder read after the view: an agent started meanwhile holds it
-   * (updateIssue checks that again). A parent's open sub-issues are the plan's to refuse (plan.ts).
-   */
   function statusEdit(issue: Issue, view: IssueView, status: NonNullable<IssueChange["status"]>): IssueEdit | Refused {
     const now = `${issue.id} is ${STATUS_LABELS[view.status]} (${headlineText(view)})`;
     if (status === "done") return view.status === "in-review" ? { closed: { as: "accepted", at: Date.now() } } : { refused: `${now}, so it can't be marked Done: only an issue In review can.` };
@@ -80,14 +60,6 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
   }
 
   return {
-    /**
-     * Files an issue, numbered after the regional manager's highest, with what blocks it as it is
-     * filed; refused when its kind has no verifier, bb can't run the one named, or the plan with it
-     * can't stand (plan.ts). why on views current as it is written (current-views.ts): a parent
-     * closed by its work, or a dependency's close, can change while bb is read, and filing a
-     * sub-issue changes its parent's status. Its dependencies are written, and its parent judged
-     * open, from what those views say, which is what the manager is told; a failed read files nothing.
-     */
     async create(coordinatorId: CoordinatorId, { verifier: requested, ...plan }: IssueRequest): Promise<{ issue: Issue; blockedBy: Related[] } | Refused> {
       const problem = verifierProblem(plan.kind, requested !== undefined);
       if (problem !== null) return { refused: `No issue filed: ${problem}. Leave verifier out.` };
@@ -103,23 +75,12 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
       return { issue: filed.issue, blockedBy: blockedBy(filed.issue, parent, (id) => viewOf(views, id).status) };
     },
 
-    /**
-     * Applies the change, or says why it can't, changing nothing: a verifier bb can't run or that is
-     * the model of the agent holding the issue, a status the issue as it stands can't take, or a
-     * plan that can't stand (plan.ts). Returns the issue, what a verifier change applies to, and the
-     * issues a status, parent or dependency change made ready (a cancel or an accept closes a
-     * dependency; a removed dependency may have been the last open one, a parent left the last
-     * blocking one).
-     */
     async update(issue: Issue, { verifier: requested, status, dependsOn, decision, ...plan }: IssueChange): Promise<{ issue: Issue; note: string | null; nowReady: IssueId[] } | Refused> {
-      // undefined: unchanged; null: the plugin picks.
       const verifier = requested === undefined || requested === null ? requested : await verifierOf(requested);
       if (verifier !== undefined && verifier !== null && "refused" in verifier) return verifier;
-      /** Writes the change judged on `before`: every issue viewed, or null when nothing changed is judged by them. */
       const write = (before: IssueView[] | null): { issue: Issue; before: IssueView[] | null } | Refused => {
         const statusChange = before === null || status === undefined ? {} : statusEdit(issue, viewOf(before, issue.id), status);
         if ("refused" in statusChange) return statusChange;
-        // why the holder read here, with no await before the write: an agent started meanwhile may run on the verifier's model.
         const holder = holderOf(issue);
         if (verifier !== undefined && verifier !== null && holder !== null && sameModel(verifier, holder.execution)) {
           return {
@@ -136,7 +97,6 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
         const updated = store.updateIssue(issue.coordinatorId, issue.id, edit, { requireUnheld: status !== undefined && status !== "done", closes: closesOf(before ?? []) });
         return "refused" in updated ? updated : { issue: updated.issue, before };
       };
-      // why views current as it is written (current-views.ts), whenever a status, parent or dependency changes: the only changes judged by them.
       const written = status === undefined && dependsOn === undefined && plan.parentId === undefined ? { acted: write(null) } : await current.whileCurrent(issue.coordinatorId, write);
       if (written === null) return { refused: `${issue.id} is unchanged: ${OVERTAKEN}` };
       if ("refused" in written.acted) return written.acted;
@@ -146,7 +106,6 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
       return { issue: updated, note: requested === undefined ? null : verifierText(updated), nowReady };
     },
 
-    /** The issue whole, as issue_read returns it, with the issues it depends on and those that depend on it, and its decisions. */
     async read(issue: Issue): Promise<string> {
       const { coordinatorId, id } = issue;
       const reads = await readIssues(bb, store, coordinatorId);
@@ -160,14 +119,12 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
   };
 }
 
-/** why throw: an id here names an issue of the same regional manager, and issues are never deleted. */
 function viewOf(views: readonly IssueView[], id: IssueId): IssueView {
   const view = views.find(({ issue }) => issue.id === id);
   if (view === undefined) throw new Error(`The issue ${id} is missing.`);
   return view;
 }
 
-/** why throw: as viewOf. */
 function readOf(reads: readonly IssueRead[], id: IssueId): IssueRead {
   const read = reads.find(({ view }) => view.issue.id === id);
   if (read === undefined) throw new Error(`The issue ${id} is missing.`);

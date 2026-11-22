@@ -39,7 +39,6 @@ const FAILS = {
   ],
 };
 
-/** A regional manager with one agent, both idle, so a doorbell starts the regional manager's turn. */
 async function withAgent(options: Parameters<typeof coordinating>[0] = {}) {
   const { kit, threadId, coordinatorId } = await coordinating(options);
   const agentThreadId = (await startedAgent(kit, threadId, { title: "Add retries", brief: "Retry failed deliveries with backoff.", doneCriteria: CRITERIA })).agentThreadId;
@@ -49,10 +48,8 @@ async function withAgent(options: Parameters<typeof coordinating>[0] = {}) {
     const issue = (await kit.rpc.board({ coordinatorId })).issues[0] ?? assert.fail("no row");
     return { ...issue, lane: laneOf(issue) };
   };
-  /** The issue opened on the board. */
   const opened = () => kit.rpc.issue({ coordinatorId, issueId: i1 });
   const latest = () => kit.store.latestHandoff(coordinatorId, a1) ?? assert.fail("no handoff");
-  /** The check of the agent's latest handoff. */
   const check = () => latest().check ?? assert.fail(`the handoff is ${latest().handoff.status}`);
   const verdict = (): Verdict => check().verdict;
   const verifier = (): string => {
@@ -63,14 +60,12 @@ async function withAgent(options: Parameters<typeof coordinating>[0] = {}) {
     const current = verdict();
     return current.state === "returned" ? current.settlement : assert.fail(`the verdict is ${current.state}`);
   };
-  /** The agent hands off as done and ends its turn. */
   async function handOff(): Promise<string> {
     const answer = textOf(await kit.call("agent_handoff", DONE, agentThreadId));
     await kit.idle(agentThreadId, "Handed off.");
     await settled();
     return answer;
   }
-  /** The running verifier returns its verdict and ends its turn; returns issue_verdict's answer. */
   async function verdictReturned(report: typeof PASSES): Promise<string> {
     const verifierThreadId = verifier();
     const answer = textOf(await kit.call("issue_verdict", report, verifierThreadId));
@@ -91,7 +86,6 @@ test("a done handoff starts a hidden verifier as the agent's child, in its envir
   assert.equal(spawnedWith.parentNotifications, "off");
   assert.deepEqual(spawnedWith.environment, { type: "reuse", environmentId: kit.thread(agentThreadId).environmentId });
   assert.equal("executionInputSources" in spawnedWith, false);
-  // why bb's record, not the request: bb drops what it doesn't count, and the agent runs on claude-code / opus.
   assert.deepEqual([providerId, execution?.model, execution?.permissionMode], ["codex", "gpt-default", "auto"]);
   assert.equal(kit.configurationFor(verifier(), {}).tools?.join(), "crew_memory_read,issue_verdict");
   assert.ok(kit.configurationFor(verifier(), {}).skills?.includes("verifying"));
@@ -150,7 +144,7 @@ test("findings sent back wake the coordinating thread neither at once nor from t
   assert.deepEqual(doorbells(), [], "none from the tick");
   assert.deepEqual(kit.store.unannounced(coordinatorId).map(({ event }) => event.kind), ["sent-back"], "it waits, unannounced");
 
-  await kit.idle(agentThreadId, "Looking at it."); // the agent's fix turn ends without a handoff
+  await kit.idle(agentThreadId, "Looking at it.");
   await settled();
   assert.deepEqual(doorbells(), [
     `[Regional Manager] 2 updates. Call crew_catch_up to read them in full.\n- WEB-1 "Add retries" (a1) handed off: done, failed verification, findings sent back to it (fix round 1)\n- WEB-1 "Add retries" (a1) ended its turn without a handoff`,
@@ -181,7 +175,7 @@ test("a verdict on a superseded or stale handoff, or of a stopped agent, sends n
 
   const stale = await withAgent();
   await stale.handOff();
-  await stale.kit.startTurn(stale.agentThreadId); // the user types to the agent before its verdict
+  await stale.kit.startTurn(stale.agentThreadId);
   await stale.kit.call("issue_verdict", FAILS, stale.verifier());
 
   const closed = await withAgent();
@@ -216,7 +210,6 @@ test("until bb has taken the findings, the row says Verifying and the coordinati
   assert.deepEqual([(await row()).lane, kit.store.agent(coordinatorId, a1)?.fixRounds], ["in-progress", 1]);
 });
 
-/** Agent threads bb refuses a message to, with its answer. */
 const REFUSED: ["archivedAt" | "deletedAt", string][] = [
   ["archivedAt", "HTTP 409: Thread is archived"],
   ["deletedAt", "HTTP 404: Thread not found"],
@@ -229,7 +222,7 @@ for (const [gone, answer] of REFUSED) {
     let take = () => {};
     kit.sends.pending = new Promise((resolve) => (take = resolve));
     await verdictReturned(FAILS);
-    kit.thread(agentThreadId)[gone] = Date.now(); // the user archives or deletes the agent's thread as the findings go
+    kit.thread(agentThreadId)[gone] = Date.now();
     take();
     kit.sends.pending = null;
     await settled();
@@ -254,8 +247,7 @@ test("a done handoff that supersedes a verdict while its findings are on their w
   kit.sends.pending = new Promise((resolve) => (take = resolve));
   await verdictReturned(FAILS);
 
-  await kit.startTurn(agentThreadId); // the user asks the agent for one more change while bb takes the findings
-  // It waits for WEB-1's turn, which the findings hold until bb takes them.
+  await kit.startTurn(agentThreadId);
   const handing = kit.call("agent_handoff", DONE, agentThreadId);
   await settled();
   assert.equal(check().id, first, "the newer handoff is stored once the findings are through");
@@ -277,10 +269,8 @@ test("a done handoff that supersedes a verdict while its findings are on their w
   assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 1);
 });
 
-/** The doorbell line of a failed verdict whose findings a crash left in doubt. */
 const MAYBE_SENT = `- WEB-1 "Add retries" (a1) handed off: done, failed verification, findings may or may not have reached it`;
 
-/** Sends that fail without proving bb refused the findings: they may or may not have reached the agent. */
 const UNPROVEN: [string, Omit<SendFailure, "threadId">][] = [
   ["bb took them, then the call timed out", { error: Object.assign(new Error("BB request timed out after 75 seconds."), { name: "BbRequestTimeoutError" }), taken: true }],
   ["the connection dropped", { error: new TypeError("fetch failed", { cause: Object.assign(new Error("other side closed"), { code: "UND_ERR_SOCKET" }) }), taken: true }],
@@ -312,13 +302,13 @@ for (const [how, failure] of UNPROVEN) {
 test("a crash before the findings leave, then an unrelated turn in the agent's thread: the tick hands the verdict to the coordinating thread, never as sent back", async () => {
   const { kit, threadId, coordinatorId, agentThreadId, doorbells, latest, settlement, handOff, verdictReturned } = await withAgent();
   await handOff();
-  kit.sends.pending = new Promise(() => {}); // the plugin dies before bb has the findings
+  kit.sends.pending = new Promise(() => {});
   await verdictReturned(FAILS);
   assert.deepEqual([kit.sent().filter((args) => args.threadId === agentThreadId).length, kit.store.agent(coordinatorId, a1)?.fixRounds], [0, 1], "the round is claimed before they leave");
 
   kit.sends.pending = null;
   kit.reload();
-  await kit.startTurn(agentThreadId); // the user asks the agent something before the tick
+  await kit.startTurn(agentThreadId);
   await kit.tick();
   await settled();
   assert.deepEqual(kit.sent().filter((args) => args.threadId === agentThreadId), [], "nothing is sent on a guess");
@@ -338,7 +328,7 @@ test("findings bb queued before a crash are not sent again by the next tick", as
   await handOff();
   const verifierThreadId = verifier();
   await kit.call("issue_verdict", FAILS, verifierThreadId);
-  kit.thread(agentThreadId).status = "starting"; // a turn someone started in a1's thread, which bb lists no event of yet, so bb queues the findings
+  kit.thread(agentThreadId).status = "starting";
   kit.sends.unanswered = true;
   await kit.idle(verifierThreadId, "Verdict returned.");
   assert.deepEqual([kit.queued(agentThreadId).length, kit.delivered(agentThreadId).length, kit.store.unannounced(coordinatorId)], [1, 0, []], "bb holds them; nobody is told yet");
@@ -392,7 +382,6 @@ test("an agent turn that starts after the verifier's model is looked up, before 
   const { kit, coordinatorId, agentThreadId, check, verifier, handOff } = await withAgent();
   await handOff();
   let answers = 0;
-  // why the first: issue_verdict looks up only the verifier's model; the agent's is the one stored as it handed off.
   kit.modelLookups.answered = () => {
     if (++answers === 1) void kit.startTurn(agentThreadId);
   };
@@ -455,18 +444,16 @@ test("an issue opened on the board reads what it is about, its criteria and each
 test("an issue opened on the board sends of each verdict only what the board shows: no checkout before it returns, no nudge, no fix round, no CI while its findings go back", async () => {
   const { kit, coordinatorId, agentThreadId, opened, verifier } = await withAgent();
   const shown = async () => (await opened()).record[0]?.handoffs.at(-1)?.verdict ?? assert.fail("no verdict");
-  // As if the plugin reloaded between storing the handoff and starting its verifier: it waits, queued.
   const turnSeq = kit.thread(agentThreadId).turns.at(-1) ?? assert.fail("no turn");
   const { headSha, ...report } = DONE;
   const handoff = { id: handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e"), coordinatorId, issueId: i1, agentId: a1, at: Date.now(), turnSeq, ...report, status: "done" as const };
   kit.inbox.handoff({ ...handoff, delivery: { kind: "commit", headSha, prUrl: null } }, { kind: "read", branch: null, checkout: { headSha: HEAD, changedFiles: [], changedFileCount: 0 } });
   assert.deepEqual(await shown(), { state: "queued" });
 
-  kit.thread(agentThreadId).status = "idle"; // its turn ended while no plugin heard it
+  kit.thread(agentThreadId).status = "idle";
   await kit.tick();
   assert.deepEqual(await shown(), { state: "running", verifierThreadId: verifier() });
 
-  // Its findings on their way back to the agent: bb holds the send.
   let take = () => {};
   kit.sends.pending = new Promise((resolve) => (take = resolve));
   const verifierThreadId = verifier();
@@ -483,8 +470,6 @@ test("an issue opened on the board sends of each verdict only what the board sho
   assert.deepEqual(returned.state === "returned" && returned.settlement, { kind: "sent-back", ci: { kind: "none" } });
 });
 
-// QA-03: a Claude Code verifier's per-command sandbox showed a boat sandbox's home dotfiles as
-// untracked, and its own "the tree is clean" check failed clean work and spent the fix round.
 test("an agent bb reads at the claimed commit on a clean tree is judged on its criteria alone, and its verifier is never asked to check the commit or the tree", async () => {
   const { kit, coordinatorId, agentThreadId, row, verifier, handOff } = await withAgent();
   await handOff();
@@ -517,7 +502,6 @@ test("a tree bb reads with changes fails the verdict with bb's evidence, whateve
   assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 1);
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /Failed verification: not the claimed commit on a clean tree\. 2 of 2 criteria passed[^\n]*bb's git plugin read the agent's environment as it handed off: the working tree had 2 changed files/);
 
-  // The fix round works as before: the agent cleans up and hands off again, and a clean pass is verified.
   kit.git.changedFiles.clear();
   await handOff();
   await kit.call("issue_verdict", PASSES, verifier());
@@ -635,7 +619,6 @@ test("the switch applies to handoffs made after it, and setting it to what it is
 
 test("a verdict whose verifier never started is started by the next tick", async () => {
   const { kit, coordinatorId, agentThreadId, verdict } = await withAgent();
-  // As if the plugin reloaded between storing the handoff and starting its verifier.
   const id = handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e");
   const turnSeq = kit.thread(agentThreadId).turns.at(-1) ?? assert.fail("no turn");
   const checkout = { headSha: HEAD, changedFiles: [], changedFileCount: 0 };
@@ -644,7 +627,7 @@ test("a verdict whose verifier never started is started by the next tick", async
   const spawned = kit.spawned();
   assert.deepEqual(verdict(), { state: "queued", checkout });
 
-  kit.thread(agentThreadId).status = "idle"; // its turn ended while no plugin heard it
+  kit.thread(agentThreadId).status = "idle";
   await kit.tick();
   assert.equal(kit.spawned(), spawned + 1);
   const started = verdict();
@@ -681,7 +664,6 @@ test("a verifier whose sandbox was removed before its verdict reads Couldn't ver
   const { kit, doorbells, row, verdict, verifier, handOff } = await withAgent();
   await handOff();
   const verifierThreadId = verifier();
-  // As bb leaves it when the machine is removed: the environment destroyed, the verifier's start failed.
   kit.environments.destroyed.add(kit.environment(verifierThreadId));
   kit.thread(verifierThreadId).status = "error";
   await kit.tick();
@@ -809,7 +791,6 @@ test("while a verifier's ask is pending its row says so, the opened issue links 
   const { kit, row, opened, verdict, verifier, handOff } = await withAgent();
   await handOff();
   const verifierThreadId = verifier();
-  // As bb leaves it when the plugin missed the event (a reload): the ask pending, nothing announced.
   const thread = kit.thread(verifierThreadId);
   thread.asks.push({ id: "pint_missed", status: "pending", payload: RECONNECT });
   thread.hasPendingInteraction = true;
@@ -859,7 +840,7 @@ test("a second done handoff supersedes the first verdict and stops its verifier,
   const first = latest();
   const firstVerifier = verifier();
 
-  await kit.startTurn(agentThreadId); // the user asks the agent for one more change
+  await kit.startTurn(agentThreadId);
   await handOff();
   assert.deepEqual(kit.store.handoff(first.handoff.id)?.check?.verdict, { state: "superseded" });
   assert.equal(kit.thread(firstVerifier).status, "idle", "stopped");
@@ -893,7 +874,7 @@ test("a verifier bb won't start leaves the row Couldn't verify, with bb's reason
 test("the verifier runs on the regional manager's model when the agent's differs", async () => {
   const { kit, threadId, verifier, handOff } = await withAgent();
   const coordinator = kit.thread(threadId).execution ?? assert.fail("no execution");
-  coordinator.model = "sonnet"; // the regional manager's latest turn ran on another model than its agent's
+  coordinator.model = "sonnet";
   await handOff();
   assert.deepEqual([kit.thread(verifier()).providerId, kit.thread(verifier()).execution?.model], ["claude-code", "sonnet"]);
 });
@@ -924,8 +905,6 @@ test("no registered tool can change whether a regional manager verifies, whoever
   const callers = [threadId, agentThreadId, verifier()];
   const inputs = [{}, { verify: false }, { coordinatorId, verify: false }, { id: "WEB-1", verify: false, enabled: false, verifier: null }];
   for (const { name, parameters } of kit.tools()) {
-    // why keys only: a value such as the result "unverifiable" is no way in. why not `verifier`: it
-    // names what checks an issue (a provider and a model, or null for the plugin's pick), never whether.
     assert.doesNotMatch(JSON.stringify(z.toJSONSchema(parameters, { io: "input" })), /"(?!verifier")[^"]*verif[^"]*":/i, `${name} takes no field about verification`);
     for (const caller of callers) for (const input of inputs) await kit.call(name, input, caller).catch(() => undefined);
   }
@@ -950,7 +929,6 @@ test("a done handoff's verifier runs on the verifier named on its issue, and the
 test("a verifier named that bb can't run in the agent's environment is passed over for today's choice, and the verdict says why", async () => {
   const { kit, threadId } = await coordinating();
   const { agentThreadId } = await startedAgent(kit, threadId, { doneCriteria: CRITERIA, verifier: { providerId: "codex", model: "gpt-default" } });
-  // bb lists codex there, but can't load its models in the agent's environment.
   kit.providers.list = kit.providers.list.map((provider) => (provider.id === "codex" ? { ...provider, models: null } : provider));
   await kit.call("agent_handoff", DONE, agentThreadId);
   await kit.idle(agentThreadId, "Handed off.");

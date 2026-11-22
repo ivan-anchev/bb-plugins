@@ -1,5 +1,3 @@
-// Where the Changes panel shows a thread the Summary tab asked for: at its file's row in the tree,
-// a row the filters hide once they are cleared, and nowhere once the file has left the diff. Pure.
 import type { DiffFile } from "../../diff/diff-schema.ts";
 import { filesByTreePathOf } from "./tree/tree-input.ts";
 

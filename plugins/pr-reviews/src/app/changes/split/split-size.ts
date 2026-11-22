@@ -1,4 +1,3 @@
-// The split view's tree size: clamped so both panes keep their minimum, and stepped by keys. Pure.
 export type SplitAxis = "row" | "column";
 
 export type TreeSizes = Record<SplitAxis, number>;

@@ -1,5 +1,3 @@
-// The rail badge: how many open PRs of the project of the PR page last opened have a guide for
-// their current head. It updates on the same invalidations as that project's PR reads.
 import type { ExperimentalBadge } from "@get-bb/plugin-sdk/app";
 import { lastOpenedProject } from "./last-opened.ts";
 import { usePullRequests, useVisits } from "./queries.ts";

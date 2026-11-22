@@ -1,7 +1,3 @@
-// What the user typed and hasn't saved or sent, kept in the browser rather than in a component.
-// bb remounts the panel when it redraws it (a resize across its mobile breakpoint does), which
-// drops every component's state; web storage outlives that, and a reload. Each value is read
-// through its schema, since the browser keeps whatever was written, by any version of the plugin.
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type { z } from "zod";
 
@@ -13,7 +9,6 @@ type Stored<T> = {
   update(change: (current: T | null) => T | null): void;
 };
 
-/** The value under `key`; null when nothing is stored, or what is can't be read as one. */
 function readStored<T>(storage: Pick<Storage, "getItem">, key: string, schema: z.ZodType<T>): T | null {
   return parsed(storage.getItem(key), schema);
 }
@@ -29,10 +24,8 @@ export function writeStored<T>(storage: Pick<Storage, "setItem" | "removeItem">,
  * one stores it, in this tab or another. `schema` must be a module constant.
  */
 export function useStored<T>(storage: Storage, key: string, schema: z.ZodType<T>): Stored<T> {
-  // why the raw string: it compares by value, so a read that finds the same value renders nothing.
   const raw = useSyncExternalStore(subscribe, () => storage.getItem(key));
   const value = useMemo(() => parsed(raw, schema), [raw, schema]);
-  // why stable: an effect that stores can name them as its dependencies.
   const store = useCallback(
     (next: T | null) => {
       writeStored(storage, key, next);
@@ -54,7 +47,6 @@ function parsed<T>(raw: string | null, schema: z.ZodType<T>): T | null {
   }
 }
 
-// why both: a write in this tab fires no storage event here, only in the other tabs.
 const listeners = new Set<() => void>();
 
 function subscribe(listener: () => void): () => void {

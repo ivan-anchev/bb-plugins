@@ -9,10 +9,6 @@ import type { Profile } from "../../model/profile.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
 import { PROJECT, sidebarThread } from "../test-sidebar.ts";
 
-// The context row of a regional manager's thread names it: its icon and its name, never its
-// description. Pressing them opens its profile's editor below the row, as bb toggles a segment's
-// details; Save and Cancel close it, and the focus goes back to them.
-
 const { managerSegment } = await import("./manager-segment.tsx");
 
 afterEach(() => {
@@ -20,17 +16,12 @@ afterEach(() => {
   localStorage.clear();
 });
 
-/** bb's context row around the segment: its summary, then its details, expanded by its toggle. */
 function ContextRow({ threadId }: { threadId: string }) {
   const [isExpanded, setExpanded] = useState(false);
   const props = { threadId, projectId: PROJECT.id, environment: null, segments: [], isExpanded, onToggle: () => setExpanded((expanded) => !expanded) };
   return createElement(Fragment, null, createElement(managerSegment.summary, props), createElement(managerSegment.details, props));
 }
 
-/**
- * The row of a thread, over a plugin with one started regional manager, thr_1's, which keeps every
- * profile it is sent, as setProfile does but for the title, which bb keeps, once `saved` settles.
- */
 function mount(threadId: string, saved: Promise<void> = Promise.resolve()) {
   let coordinator: Coordinator = { id: coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10"), threadId: "thr_1", projectId: PROJECT.id, description: "Moves webhooks off cron.", avatar: { kind: "icon", icon: "Target" } };
   const saves: Profile[] = [];
@@ -66,7 +57,6 @@ test("any other thread shows nothing", async () => {
 test("pressing the icon and name opens the profile's editor on the name, and Save sends the changed profile, closes it and gives the focus back to them", async () => {
   const { view, saves } = mount("thr_1");
   const toggle = await view.findByRole("button", { name: "Webhooks, edit profile" });
-  // why focus first: a click focuses the button in a browser, and jsdom's doesn't.
   toggle.focus();
   fireEvent.click(toggle);
   assert.equal(toggle.getAttribute("aria-expanded"), "true");

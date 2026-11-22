@@ -1,6 +1,3 @@
-// The Computer page: a side panel tab that shows the thread's boat sandbox desktop live and view only,
-// through boat's noVNC page, or one plain line saying why it can't. It reads again on its own, so it
-// follows the sandbox through starts, stops and resumes without a reload.
 import { useEffect, useState, type ReactNode } from "react";
 import { useRpc, type ExperimentalThreadActionTabProps, type ExperimentalThreadTabProps } from "@get-bb/plugin-sdk/app";
 import { boatSandboxContract as contract, type ComputerView } from "../../contract.ts";
@@ -23,7 +20,6 @@ export const computerTab = {
 
 function ComputerPage({ environment }: ExperimentalThreadActionTabProps) {
   return (
-    // why the tab stop: the page is text or an inert frame, and the keyboard must still reach it (REVIEW.md).
     <div tabIndex={0} className="flex h-full min-h-0 flex-col text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset">
       {environment === null ? <Notice>This thread has no environment, so it has no computer.</Notice> : <Computer key={environment.id} environmentId={environment.id} />}
     </div>
@@ -56,17 +52,11 @@ function ComputerState({ view }: { view: ComputerView }) {
     case "not-boat":
       return <Notice>This thread does not run on a boat sandbox.</Notice>;
     default:
-      view satisfies never; // why: a server newer than this bundle may send a state it doesn't know; show nothing
+      view satisfies never;
       return null;
   }
 }
 
-// ---------------------------------------------------------------- layer 2
-
-/**
- * `inert` keeps every click, key and focus out of the frame, on top of noVNC's own `view_only`, which
- * is enforced only in boat's page. The frame keeps the screen's 16:9, so noVNC draws no bars of its own.
- */
 function Desktop({ url }: { url: string }) {
   return (
     <div className="flex flex-col gap-2">
@@ -80,7 +70,6 @@ function Notice({ children }: { children: ReactNode }) {
   return <p className="m-auto max-w-80 px-6 text-center text-sm text-muted-foreground text-pretty">{children}</p>;
 }
 
-/** The page's reads, from this mount only (see computer-reader.ts). */
 function useComputer(environmentId: string): ComputerReading {
   const rpc = useRpc<typeof contract>();
   const [reading, setReading] = useState(NOT_READ);

@@ -1,4 +1,3 @@
-// Test rows: a valid PluginSidebarThread with the fields a test cares about overridden.
 import type { PluginSidebarProject, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 
 export function thread(id: string, overrides: Partial<PluginSidebarThread> = {}): PluginSidebarThread {

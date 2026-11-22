@@ -10,7 +10,6 @@ function sections(threads = [thread("a", { latestAttentionAt: 2 }), thread("b", 
   return buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), held: new Set(), now: 0, activeThreadId: null, filter: null }).sections;
 }
 
-/** n archived parents, the latest archived first: x0, x1, … */
 function archived(n: number): PluginSidebarThread[] {
   return Array.from({ length: n }, (_, i) => thread(`x${i}`, { isArchived: true, archivedAt: n - i }));
 }

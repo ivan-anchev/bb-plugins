@@ -1,6 +1,3 @@
-// The side panel's reviewers: a glyph for where each stands, in the check rows' icon column, then
-// avatar and name, with the stand named for screen readers after the name. A team shows a team
-// glyph, and is always awaiting review: its members review as users.
 import type { Reviewer, ReviewerStatus } from "../../contract.ts";
 import { Avatar } from "../ui/avatar.tsx";
 import { StatusGlyph, type StatusGlyphName } from "./status-glyph.tsx";
@@ -34,8 +31,6 @@ function ReviewerRow({ reviewer }: { reviewer: Reviewer }) {
   );
 }
 
-// why our own SVG: bb's icon set has one person (`UserRound`) and no group. Two people drawn the way
-// bb draws `UserRound`: 24-unit grid, 1.5 stroke, round ends; the one behind shows only its left half.
 function TeamGlyph() {
   return (
     <span aria-hidden className="grid size-5 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground ring-1 ring-border">

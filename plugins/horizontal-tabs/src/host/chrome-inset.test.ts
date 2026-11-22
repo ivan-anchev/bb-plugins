@@ -2,9 +2,6 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import { type ChromeInset, followChromeInset } from "./chrome-inset.ts";
 
-// bb's page as chrome-inset.ts reads it: the rows it pads at the window's top-left and their classes, its
-// floating controls and where they end, the strip's spacer and where it starts, and the observers watching
-// all of these.
 type FakeElement = {
   classList: string[];
   left: number;
@@ -26,7 +23,6 @@ function element(classes = ""): FakeElement {
 
 let rows: FakeElement[] = [];
 let controls: FakeElement[] = [];
-/** The strip's spacer; null until the strip renders. */
 let spacer: FakeElement | null = null;
 Object.defineProperty(globalThis, "document", {
   value: {
@@ -64,7 +60,6 @@ class FakeSizeObserver {
     this.callback = callback;
     sizeObservers.add(this);
   }
-  /** As in the browser, a new target reports its size once. */
   observe(target: FakeElement, options: { box: string }): void {
     assert.deepEqual(options, { box: "border-box" });
     this.watched.add(target);
@@ -76,7 +71,6 @@ class FakeSizeObserver {
 }
 Object.defineProperty(globalThis, "ResizeObserver", { value: FakeSizeObserver });
 
-/** bb sets `row`'s classes, as React does on a re-render. */
 function setClasses(row: FakeElement, classes: string): void {
   row.classList = classes.split(" ");
   classObservers.forEach((observer) => {
@@ -84,7 +78,6 @@ function setClasses(row: FakeElement, classes: string): void {
   });
 }
 
-/** `target` changed size, as the strip does when bb's sidebar moves it. */
 function resize(target: FakeElement): void {
   sizeObservers.forEach((observer) => {
     if (observer.watched.has(target)) observer.callback();
@@ -95,7 +88,6 @@ const TRANSITION = "transition-[padding] duration-200 ease-linear";
 const INSET = "pl-[calc(var(--bb-window-title-bar-controls-end)_+_12px)]";
 const HEADER = "flex h-(--bb-app-chrome-row-height) items-center relative z-10 gap-1";
 
-/** Follows the inset like strip-mount.ts does, recording each inset it hands over. */
 function follow() {
   const controller = new AbortController();
   const published: ChromeInset[] = [];
@@ -107,14 +99,12 @@ function follow() {
 const classes = (value: string): ChromeInset => ({ classes: value });
 const padding = (value: number): ChromeInset => ({ padding: value });
 
-/** bb Desktop's title bar: traffic lights, back, forward and the sidebar toggle, ending at `right`. */
 function titleBar(right: number): FakeElement {
   const bar = element();
   bar.right = right;
   return bar;
 }
 
-/** The strip renders its spacer, starting at `left`. */
 function renderStrip(left: number): { strip: FakeElement; spacer: FakeElement } {
   const strip = element();
   const rendered = element();
@@ -133,7 +123,6 @@ beforeEach(() => {
 });
 
 test("the inset comes from the row bb pads, not the first row on the page", () => {
-  // A thread's header first in the page, the New thread pane's at the window's top-left after it.
   rows = [element(`${HEADER} ${TRANSITION}`), element(`${HEADER} ${TRANSITION} ${INSET}`)];
   const { published } = follow();
   assert.deepEqual(published, [classes(`${TRANSITION} ${INSET}`)]);
@@ -143,8 +132,8 @@ test("a class change on the row moves the inset, keeping the transition that ani
   const header = element(`${HEADER} ${TRANSITION}`);
   rows = [header];
   const { published } = follow();
-  setClasses(header, `${HEADER} ${TRANSITION} ${INSET}`); // the sidebar closes
-  setClasses(header, `${HEADER} ${TRANSITION}`); // and opens again
+  setClasses(header, `${HEADER} ${TRANSITION} ${INSET}`);
+  setClasses(header, `${HEADER} ${TRANSITION}`);
   assert.deepEqual(published, [classes(TRANSITION), classes(`${TRANSITION} ${INSET}`), classes(TRANSITION)]);
 });
 
@@ -155,7 +144,7 @@ test("swapping the header moves the watch to the new row", () => {
   const after = element(`${HEADER} ${TRANSITION}`);
   rows = [after];
   domChanged();
-  setClasses(before, `${HEADER} ${TRANSITION}`); // the old row, gone from the page, changes nothing
+  setClasses(before, `${HEADER} ${TRANSITION}`);
   setClasses(after, `${HEADER} ${TRANSITION} ${INSET}`);
   assert.deepEqual(published, [
     classes(`${TRANSITION} ${INSET}`),
@@ -176,7 +165,7 @@ test("with no row, the inset follows the strip as bb's sidebar moves it, down to
   const { strip, spacer } = renderStrip(66);
   const { published } = follow();
   for (const left of [120, 190, 336]) {
-    spacer.left = left; // the sidebar slides open, moving and narrowing the strip
+    spacer.left = left;
     resize(strip);
   }
   assert.deepEqual(published, [padding(124), padding(70), padding(0)]);
@@ -187,9 +176,9 @@ test("with no row, the inset follows bb's controls as they grow and as bb swaps 
   controls = [bar];
   renderStrip(66);
   const { published, follow: domChanged } = follow();
-  bar.right = 200; // the traffic lights take more room
+  bar.right = 200;
   resize(bar);
-  controls = [titleBar(38)]; // bb shows another set of controls
+  controls = [titleBar(38)];
   domChanged();
   assert.deepEqual(published, [padding(124), padding(146), padding(0)]);
 });
@@ -218,7 +207,7 @@ test("stopping disconnects every watch", () => {
   rows = [header];
   const byClasses = follow();
   byClasses.stop();
-  byClasses.follow(); // a stopped follower doesn't watch again
+  byClasses.follow();
   setClasses(header, `${HEADER} ${TRANSITION} ${INSET}`);
 
   rows = [];

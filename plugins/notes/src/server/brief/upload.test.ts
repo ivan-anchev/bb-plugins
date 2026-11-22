@@ -17,7 +17,6 @@ test("a file too large to attach is named by a path that outlives its note, its 
   const media = openMediaFiles(join(mkdtempSync(join(tmpdir(), "notes-test-")), "data.db"));
   const notes = createNotes({ store, media, now: () => 1_000, onChange: () => undefined });
   const note = await notes.create({ quote: null, body: { text: "", mentions: [] }, files: [{ name: "rec.mov", mimeType: "video/quicktime", base64: Buffer.from("mov").toString("base64") }] });
-  // why the size is claimed, not written: the path is chosen by the size the note records.
   const large = { ...note.attachments[0], sizeBytes: 40 * 1024 * 1024 };
 
   const first = await uploadForBrief(refuseUploads, media, "proj_personal", large);

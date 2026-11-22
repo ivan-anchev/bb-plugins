@@ -1,6 +1,3 @@
-// A regional manager not started yet, on its page: bb's own new-thread composer, seeded with a fresh
-// worktree and auto permissions. The message sent is its goal: the server spawns its thread on what
-// the composer picked, titled with its name, and the page opens it.
 import {
   experimental_NewThreadComposer as NewThreadComposer,
   experimental_useRpcMutation,
@@ -21,7 +18,6 @@ export function GoalComposer({ coordinatorId, name, onStarted }: GoalComposerPro
   const { seed, host, sidebarFailed } = useComposerSeed();
   const start = experimental_useRpcMutation({ contract, method: "startCoordinator" });
 
-  // The composer keeps the draft when this throws, so a failed start never loses the goal.
   async function submit(request: NewThreadRequest) {
     const { threadId } = await start.mutate({ coordinatorId, request });
     onStarted(threadId);
@@ -35,7 +31,6 @@ export function GoalComposer({ coordinatorId, name, onStarted }: GoalComposerPro
         <NewThreadComposer
           defaultProjectId={seed.defaultProjectId}
           defaultEnvironment={seed.defaultEnvironment}
-          // why auto: a permission prompt on the regional manager would hold everything behind it.
           defaultPermissionMode="auto"
           placeholder={`What should ${name} get done?`}
           draftKey={`coordinator-goal:${coordinatorId}`}
@@ -52,13 +47,6 @@ export function GoalComposer({ coordinatorId, name, onStarted }: GoalComposerPro
   );
 }
 
-/**
- * The composer's seed, fixed once both reads have succeeded (see composerSeed), plus the reads, so the
- * page can say why there is none yet.
- * why it is fixed once ready: the composer re-seeds every picker when a seed changes, and unmounting
- * it drops them too, so a later read (a project added, the thread list reloading) must not undo what
- * the user picked.
- */
 function useComposerSeed() {
   const context = useBbContext();
   const sidebar = useSidebarThreads();

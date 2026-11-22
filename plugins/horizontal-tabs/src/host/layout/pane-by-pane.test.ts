@@ -4,22 +4,13 @@ import type { Nav } from "../../controller/tabs-controller.ts";
 import { single, type Layout, type LayoutNode, type Pane, type PaneContent } from "../../model/layout.ts";
 import { rebuildPaneByPane } from "./pane-by-pane.ts";
 
-/**
- * bb as the SDK drives it, flattened to one row of panes (bb's split opens right of the focused pane, at equal
- * sizes). A navigation shows on the next frame, as bb renders it, and only then reaches sessionStorage and the
- * panes on screen; the panes' own focus marker follows a frame later still. `onPage`: Settings is on screen,
- * so none of bb's panes are.
- */
 const bb: {
   panes: Pane[];
   focusedPaneId: string;
-  /** The pane bb's panes mark focused (`data-focused`). */
   markedPaneId: string;
   onPage: boolean;
   nextId: number;
-  /** Navigations bb has not rendered yet. */
   pending: (() => void)[];
-  /** Navigations and pane closes asked of bb. */
   navigations: number;
 } = { panes: [], focusedPaneId: "", markedPaneId: "", onPage: false, nextId: 1, pending: [], navigations: 0 };
 
@@ -70,11 +61,9 @@ const nav: Nav = {
   },
 };
 
-// Node has no browser globals; these stand in for the ones the rebuild reads.
 const stored = new Map<string, string>();
 const storage: Pick<Storage, "getItem"> = { getItem: (key) => stored.get(key) ?? null };
 const onScreen = () => (bb.onPage ? [] : bb.panes);
-// bb's panes on screen, each with its header's Close pane button (the one element looked up inside a pane).
 const page = {
   querySelectorAll: () =>
     onScreen().map((pane) => ({
@@ -95,7 +84,6 @@ Object.defineProperty(globalThis, "requestAnimationFrame", {
 });
 Object.defineProperty(globalThis, "cancelAnimationFrame", { value: (frame: number) => frames.delete(frame) });
 
-/** bb renders what it was asked, then the frame's callbacks run. */
 function nextFrame(): void {
   bb.markedPaneId = bb.focusedPaneId;
   bb.pending.splice(0).forEach((change) => change());
@@ -114,12 +102,10 @@ beforeEach(() => {
 const thread = (threadId: string): PaneContent => ({ kind: "thread", projectId: "proj_a", threadId });
 const pane = (threadId: string, paneId: string): Pane => ({ type: "pane", paneId, content: thread(threadId) });
 
-/** What bb shows: its panes' contents in order, and the focused one. */
 function bbShows() {
   return { panes: bb.panes.map((pane) => pane.content), focus: bb.panes[focusedIndex()].content };
 }
 
-/** T1 = [A 0.6 | [B 0.3 / C 0.7]], focus B. */
 const t1: Layout = {
   root: {
     type: "split",
@@ -138,7 +124,6 @@ test("rebuilds a split tab as its threads side by side at equal sizes, with its 
 
 test("closes the panes bb doesn't focus, though its panes still mark the pane focus just left", async () => {
   bbHolds([thread("thr_d")], 0);
-  // Ends by focusing Alpha's pane, left of Bravo's; for a frame bb's panes still mark Bravo focused.
   const ab: Layout = { root: { type: "split", dir: "row", sizes: [0.5, 0.5], children: [pane("thr_a", "ab-1"), pane("thr_b", "ab-2")] }, focusedPaneId: "ab-1" };
   await rebuildPaneByPane(ab, nav, new AbortController().signal);
   const ae: Layout = { root: { type: "split", dir: "row", sizes: [0.5, 0.5], children: [pane("thr_a", "ae-1"), pane("thr_e", "ae-2")] }, focusedPaneId: "ae-2" };

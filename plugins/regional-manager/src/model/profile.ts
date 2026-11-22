@@ -1,6 +1,3 @@
-// How the user tells regional managers apart: a name, an optional description and an avatar. The
-// name is the thread's title, which bb keeps, so renaming either renames both; the plugin keeps
-// the description and the avatar.
 import { z } from "zod";
 
 /**

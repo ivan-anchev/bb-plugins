@@ -1,6 +1,3 @@
-// A file's diff as the rows a diff draws, each with its number on every side it is on: the one
-// place that knows how a drawn line maps to the PR's hunks. Selections resolve to rows here, and
-// the row decides the side GitHub anchors to. Pure.
 import { firstLinesOf, numberedLines, type DiffFile, type DiffSide, type Hunk, type NumberedLine } from "./diff-schema.ts";
 
 /**
@@ -23,7 +20,7 @@ export function diffRowsOf(file: DiffFile, newContent: string | null): DiffRow[]
   const newLines = linesOf(newContent);
   const rows: DiffRow[] = [];
   let nextNew = 1;
-  let shift = 0; // the new side's lines minus the old side's, over the hunks so far
+  let shift = 0;
   file.hunks.forEach((hunk, index) => {
     for (const end = firstLinesOf(hunk).new; nextNew < end; nextNew++) rows.push(unchangedRow(newLines, nextNew, shift));
     rows.push(...hunkRows(hunk, index));
@@ -34,20 +31,12 @@ export function diffRowsOf(file: DiffFile, newContent: string | null): DiffRow[]
   return rows;
 }
 
-/**
- * The index of the row with `line` on `side`. An unchanged line matches by either of its
- * numbers, so a point on the old side of a context line (split view's left column) finds the same
- * row as its new side.
- */
-// why throw: the diff only reports lines it drew, and it drew exactly these rows, so a miss is a
-// bug to fail loudly on, as fileOf and hunkOf do.
 export function rowIndexOf(rows: readonly DiffRow[], side: DiffSide, line: number): number {
   const index = rows.findIndex((row) => row[side] === line);
   if (index === -1) throw new Error(`No drawn row has line ${line} on the ${side} side`);
   return index;
 }
 
-// The `\ No newline` marker is on neither side, so it is not a row.
 const hunkRows = (hunk: Hunk, index: number): DiffRow[] => numberedLines(hunk).flatMap((line) => rowsOf(line, index));
 
 function rowsOf({ text, old, new: next }: NumberedLine, hunk: number): DiffRow[] {
@@ -65,7 +54,6 @@ const unchangedRow = (newLines: readonly string[], line: number, shift: number):
   hunk: null,
 });
 
-// A final newline ends the last line; it is not an empty line after it (as in old-content.ts).
 function linesOf(content: string): string[] {
   const lines = content.split("\n");
   if (lines.at(-1) === "") lines.pop();

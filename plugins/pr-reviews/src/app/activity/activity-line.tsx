@@ -1,7 +1,3 @@
-// One line of the activity, as the fold reads it: a muted glyph in the gutter, then its sentence in
-// muted grey and " · 8d ago". A line that folds items is a button that opens them in place under
-// it, each with its clock time, and keeps focus as they open; the fold eases open and closes
-// quicker, at once under reduced motion. Names draw as the sentence does: no weight, no colour.
 import { useId, type ReactNode, type RefCallback } from "react";
 import { experimental_Icon as Icon, UrlLink } from "@get-bb/plugin-sdk/app";
 import { shortSha } from "../../contract.ts";
@@ -63,7 +59,6 @@ export function Line({ ref, line, fold, open, onToggle }: LineProps) {
   );
 }
 
-// Only the opening and the merge keep their colour.
 const GLYPH_TONES: Partial<Record<ActivityLine["kind"], string>> = { opened: "text-success", merged: "text-pr-merged" };
 
 const LINE = "grid min-h-9 grid-cols-[24px_minmax(0,1fr)] items-start gap-x-3 py-2 text-sm leading-5 text-muted-foreground";
@@ -88,7 +83,6 @@ export function FoldItems({ items }: { items: FoldItem[] }) {
   );
 }
 
-/** "8d ago", with the date and time on hover. */
 function LineTime({ at }: { at: string }) {
   return (
     <time dateTime={at} title={new Date(at).toLocaleString()}>
@@ -133,7 +127,6 @@ function WordView({ word }: { word: Word }): ReactNode {
 
 const MONO = "font-mono text-xs leading-none";
 
-// The label's own colour as a dot, as the side panel's chips show it.
 function LabelName({ label }: { label: Label }) {
   return (
     <span className="inline-flex items-baseline gap-1.5">

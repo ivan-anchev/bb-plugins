@@ -4,14 +4,13 @@ import type { Delegate, DelegateId, DelegateState, Turn } from "./delegate.ts";
 import { selectBatches } from "./roster.ts";
 import { EMPTY_VIEW, isOpen, landOn, toggleBatch, toggleRow } from "./subagents-view.ts";
 
-// Three prompts: t1's batch is settled, t2's holds a failure, t3's is the latest.
 const turns: Turn[] = [prompt("t1", 0), prompt("t2", 100), prompt("t3", 200)];
 const delegates = [
   delegate("old", 10, { status: "completed", endedAt: 20, report: null }),
   delegate("failed", 110, { status: "failed", endedAt: 120, error: null }),
   delegate("latest", 210, { status: "completed", endedAt: 220, report: null }),
 ];
-const batches = selectBatches(delegates, turns); // newest first: t3, t2, t1
+const batches = selectBatches(delegates, turns);
 const [t3, t2, t1] = batches;
 
 test("a batch follows its default until the user toggles it", () => {
@@ -46,7 +45,7 @@ test("a landing expands its row and opens its batch, even one the user closed", 
 test("toggles of batches that no longer exist are dropped on the next change", () => {
   const toggled = toggleBatch(toggleBatch(EMPTY_VIEW, t1, batches), t2, batches);
   assert.deepEqual([...toggled.toggled.keys()].toSorted(), ["t1", "t2"]);
-  const rewritten = selectBatches(delegates.slice(1), turns.slice(1)); // a rewrite dropped t1 and its subagent
+  const rewritten = selectBatches(delegates.slice(1), turns.slice(1));
   assert.deepEqual([...toggleRow(toggled, id("latest"), rewritten).toggled.keys()], ["t2"]);
   assert.deepEqual([...landOn(toggled, { delegateId: id("latest") }, rewritten).toggled.keys()].toSorted(), ["t2", "t3"]);
 });

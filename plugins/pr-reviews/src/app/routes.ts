@@ -1,5 +1,3 @@
-// The panel's subPath is its only route state: "", "<projectId>", "<projectId>/<number>".
-// bb hands the panel and the header the same percent-encoded subPath.
 export type Route =
   | { kind: "root" }
   | { kind: "project"; projectId: string }

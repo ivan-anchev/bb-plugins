@@ -10,8 +10,6 @@ const PATH = "src/shifted.ts";
 const HEAD = "b".repeat(40);
 const OLDER = "a".repeat(40);
 
-// The head removes line 5 and adds two lines after line 20: rows 4/4, 5/·, 6/5 in hunk 0 and
-// 20/19, ·/20, ·/21, 21/22 in hunk 1.
 const FILE: DiffFile = {
   path: PATH,
   previousPath: null,

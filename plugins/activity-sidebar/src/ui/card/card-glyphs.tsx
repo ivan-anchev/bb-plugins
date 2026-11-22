@@ -1,5 +1,3 @@
-// The hover card's line glyphs, Zeron's own: bb's icon set lacks most of them,
-// and the card's lines read as Zeron's only in its strokes. Drawn at 12 by app.css `.as-card-glyph`.
 import type { ReactNode } from "react";
 
 const PATHS = {
@@ -32,8 +30,6 @@ const PATHS = {
       <path d="M22 19H12m10-7H12m10-7H12" />
     </g>
   ),
-  // why: Zeron has no Subthreads heading. The prototype borrowed its side-chat glyph,
-  // which draws a pointer arrow; a trunk with two branches says "threads under this one", as the tree below it does.
   subthreads: (
     <path strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" d="M21 12h-8M21 6H8M21 18h-8M3 6v4a2 2 0 0 0 2 2h3M3 10v6a2 2 0 0 0 2 2h3" />
   ),

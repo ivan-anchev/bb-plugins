@@ -1,4 +1,3 @@
-// The minutely sweep: look at bb and boat, let planSweep decide, apply what it decided.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { BoatAccess } from "../boat/access.ts";
 import type { BoatClient } from "../boat/client.ts";
@@ -27,7 +26,6 @@ interface SweepDeps {
   ownerId: string;
 }
 
-/** One sweep's boat session and its look at bb and boat, kept to decide again just before a suspend. */
 interface SweepRun extends SweepDeps {
   client: BoatClient;
   signal: AbortSignal;
@@ -35,7 +33,6 @@ interface SweepRun extends SweepDeps {
   policy(): SweepPolicy;
 }
 
-/** Ends a sweep before the next one is due. */
 const SWEEP_PATIENCE_MS = 50_000;
 
 /**
@@ -57,7 +54,6 @@ export function createSweep(deps: SweepDeps): (signal?: AbortSignal) => Promise<
 
 async function sweep(deps: SweepDeps, signal: AbortSignal): Promise<void> {
   const configuration = await deps.access.configuration(signal);
-  // No key means nothing on boat to look after; any other problem leaves machines unwatched, so it fails loudly.
   if (configuration.status === "setup-required") return;
   if (configuration.status !== "available") throw new Error(describeProblems(configuration.problems));
   const input = await observe(deps, configuration.client, signal);
@@ -65,10 +61,6 @@ async function sweep(deps: SweepDeps, signal: AbortSignal): Promise<void> {
   await applyActions({ ...deps, client: configuration.client, signal, input, policy }, planSweep(input, policy()));
 }
 
-/**
- * One action failing never stops the rest; the next sweep plans again from scratch. Running out of
- * time stops them all, and the sweep rejects even when the action it ran out during succeeded.
- */
 async function applyActions(run: SweepRun, actions: readonly SweepAction[]): Promise<void> {
   for (const action of actions) {
     run.signal.throwIfAborted();
@@ -76,7 +68,6 @@ async function applyActions(run: SweepRun, actions: readonly SweepAction[]): Pro
       await apply(run, action);
     } catch (error) {
       run.signal.throwIfAborted();
-      // Core refuses while a launch, provisioning or checkout setup is live on the machine.
       if (hasCode(error, "machine_busy")) continue;
       run.bb.log.warn(`boat sweep: ${action.kind} failed: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -91,7 +82,6 @@ async function apply(run: SweepRun, action: SweepAction): Promise<void> {
       return idle.touch(action.hostId);
     case "suspend-idle":
       if (!(await isStillIdle(run, action.hostId))) return;
-      // The re-check's reads can outlast the time limit, and bb's suspend takes no signal: this is the last chance to stop.
       signal.throwIfAborted();
       bb.log.info(`Suspending idle boat machine ${action.hostId}.`);
       await bb.sdk.hosts.experimental_suspend({ hostId: action.hostId });
@@ -100,8 +90,6 @@ async function apply(run: SweepRun, action: SweepAction): Promise<void> {
       bb.log.info(`Renewing the auto-stop of boat sandbox ${action.sandboxId} to ${LEASE_TTL_SECONDS} s from now.`);
       return client.setTtl(action.sandboxId, LEASE_TTL_SECONDS, signal);
     case "record-stopped":
-      // Core suspends in the background. Within about a minute of a boat-side stop bb still holds the
-      // daemon's session, so core cancels after 30 s and logs it; the next sweep asks again.
       bb.log.info(`${action.why}, but bb has machine ${action.hostId} active; recording it as suspended.`);
       await bb.sdk.hosts.experimental_suspend({ hostId: action.hostId });
       return;
@@ -117,10 +105,6 @@ async function apply(run: SweepRun, action: SweepAction): Promise<void> {
   }
 }
 
-/**
- * Suspending interrupts the machine's turns, and the plan was made from a look taken before the boat
- * calls and earlier actions. A follow-up or terminal input since then must win, so look again and decide again.
- */
 async function isStillIdle(run: SweepRun, hostId: string): Promise<boolean> {
   const view = await observeHost(run, await run.bb.sdk.hosts.get({ hostId, signal: run.signal }), run.signal);
   if (view === null) return false;
@@ -128,6 +112,5 @@ async function isStillIdle(run: SweepRun, hostId: string): Promise<boolean> {
   return planSweep({ ...run.input, hosts }, run.policy()).some((action) => action.kind === "suspend-idle" && action.hostId === hostId);
 }
 
-/** bb's SDK errors carry the API's error code. */
 const hasCode = (error: unknown, code: string): boolean =>
   error instanceof Error && "code" in error && error.code === code;

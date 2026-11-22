@@ -1,4 +1,3 @@
-// Sleep's two glyphs, Zeron's moon and sun (its Solar set, prototype.html ICONS): bb's icon set has neither.
 import type { ReactNode } from "react";
 
 const GLYPHS: Record<string, ReactNode> = {

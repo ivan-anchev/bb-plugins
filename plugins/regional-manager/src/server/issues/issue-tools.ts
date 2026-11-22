@@ -1,6 +1,3 @@
-// The regional manager's issue tools: issue_create, issue_update and issue_read. An issue is the
-// unit of work; its status is derived from what its agents did, and the manager writes only its plan,
-// where it rests, and its two closing acts.
 import type { PluginAgentToolResult } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { decisionTextSchema } from "../../model/decision.ts";
@@ -26,7 +23,6 @@ const VERIFIER = requestedExecutionSchema.describe(
   "What checks this issue's done handoffs: a provider and a model bb can run, and optionally a reasoning level (left out: the model's default). Left out, the plugin picks one independent of the agent.",
 );
 
-/** The most issues one issue depends on, or one change adds or removes. */
 const MAX_DEPENDENCIES = 20;
 
 const DEPENDS_ON = z
@@ -41,7 +37,6 @@ const PARENT = issueIdSchema.describe(
 );
 
 export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
-  /** The tool runs on one of the caller's issues; an id it has none by is refused. */
   function forIssue<Input extends { id: IssueId }>(tool: string, run: (issue: Issue, input: Input) => PluginAgentToolResult | Promise<PluginAgentToolResult>) {
     return forManager<Input>(store, tool, (id: CoordinatorId, input) => {
       const issue = store.issue(id, input.id);

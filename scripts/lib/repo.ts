@@ -1,6 +1,3 @@
-// The repository model every script works from: the root config and one
-// parsed record per plugin directory. Each plugin's package.json is the single
-// source of truth; the bb manifests are generated from it (see manifests.ts).
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { z } from "zod";
@@ -27,8 +24,6 @@ const pluginPackageSchema = z.object({
   scripts: z.record(z.string(), z.string()).default({}),
   dependencies: z.record(z.string(), z.string()).default({}),
   devDependencies: z.record(z.string(), z.string()).default({}),
-  // Repo-only: `listed: false` keeps a plugin out of marketplace.json. It stays in
-  // .bb/plugins.json, so a direct `bb plugin install git:… --plugin <id>` still works.
   bbMarketplace: z.object({ listed: z.boolean() }).default({ listed: true }),
   bb: z.object({
     name: z.string().min(1),
@@ -70,7 +65,6 @@ export function loadPlugins(): Plugin[] {
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
-/** bb's rule: final package-name component minus `bb-plugin-`, slugified. */
 function pluginIdFromPackageName(packageName: string): string {
   const finalComponent = packageName.split("/").at(-1) ?? packageName;
   return finalComponent

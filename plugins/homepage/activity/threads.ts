@@ -1,5 +1,3 @@
-// Start times of the threads you started (no subagents or forks), active and
-// archived, read page by page from the server's thread list.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 
 const PAGE = 200;

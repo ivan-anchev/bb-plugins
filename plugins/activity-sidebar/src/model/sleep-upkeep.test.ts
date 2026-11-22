@@ -17,7 +17,6 @@ test("a sleeper asking for you is woken once; its rollback after a refusal sends
   const first = upkeepWrites({ threads: [asks], sleeps: sleeps({ threadId: "a", until: T }), now: T - H, activeThreadId: null }, NOTHING_TRIED);
   assert.deepEqual([first.wake, first.forget], [["a"], []]);
 
-  // The wake was refused: the record rolls back to `until` T and the thread still asks.
   const rolledBack = upkeepWrites({ threads: [asks], sleeps: sleeps({ threadId: "a", until: T }), now: T - H, activeThreadId: null }, first.tried);
   assert.deepEqual([rolledBack.wake, rolledBack.forget], [[], []]);
 });
@@ -25,7 +24,6 @@ test("a sleeper asking for you is woken once; its rollback after a refusal sends
 test("a refused early wake doesn't stop the forget: past its time, opening it forgets the sleep once", () => {
   const record = { threadId: "a", until: T };
   const woken = upkeepWrites({ threads: [asks], sleeps: sleeps(record), now: T - H, activeThreadId: null }, NOTHING_TRIED);
-  // Refused: the record is still `until` T. Answered, it waits until T; then it is opened.
   const opened = upkeepWrites({ threads: [answered], sleeps: sleeps(record), now: T + 60_000, activeThreadId: "a" }, woken.tried);
   assert.deepEqual([opened.wake, opened.forget], [[], ["a"]]);
 

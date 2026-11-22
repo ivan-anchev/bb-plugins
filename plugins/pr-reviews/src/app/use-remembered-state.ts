@@ -1,4 +1,3 @@
-// useState seeded from, and written to, a module-level map: the value outlives the component for the session.
 import { useCallback, useState } from "react";
 
 export function useRememberedState<Value>(memory: Map<string, Value>, key: string, initial: Value) {

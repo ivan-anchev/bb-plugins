@@ -1,5 +1,3 @@
-// The Summary tab's side panel: the PR's Reviewers, Checks and Labels, read only, in plain sections
-// split by hairlines. A section with nothing in it is left out; with none, so is the panel.
 import { useId, useLayoutEffect, useRef, type FocusEvent, type ReactNode, type RefObject } from "react";
 import type { PrDetail } from "../../contract.ts";
 import type { Label } from "../../github/label.ts";
@@ -8,7 +6,6 @@ import { ReviewerList } from "./reviewer-list.tsx";
 
 export const hasSidePanel = (pr: PrDetail): boolean => pr.reviewers.length > 0 || pr.checks.length > 0 || pr.labels.length > 0;
 
-// Sticky beside the description; below 600px of the Summary tab's container it drops away.
 export function SidePanel({ pr, focus }: { pr: PrDetail; focus: SidePanelFocus }) {
   return (
     <aside {...focus.panel} aria-label="Pull request details" className="sticky top-6 grid grid-cols-[minmax(0,1fr)] @max-[600px]:hidden">
@@ -38,17 +35,10 @@ export type SidePanelFocus = {
   toggle: RefObject<HTMLButtonElement | null>;
 };
 
-// A refresh can remove the control holding focus: a check moving past the first three, the Checks
-// section when no check is left, the whole panel when no section is. Focus then goes to the Checks
-// disclosure's button, or to the Summary tab's panel when there is none, never to the page.
-// Called by the panel's parent: it must outlive the panel to see it removed.
 export function useSidePanelFocus(): SidePanelFocus {
   const tab = useRef<HTMLDivElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
-  // The control last focused in the panel. Focus moving to another element forgets it; focus lost
-  // to nothing (the control removed, or the window left for a check's page) keeps it.
   const focused = useRef<Element | null>(null);
-  // why an effect: only the committed page shows whether the refresh removed the focused control.
   useLayoutEffect(function refocusWhenTheFocusedControlWasRemoved() {
     const control = focused.current;
     if (control === null || control.isConnected || document.activeElement !== document.body) return;
@@ -69,8 +59,6 @@ export function useSidePanelFocus(): SidePanelFocus {
   };
 }
 
-// Each section after the first leads with a hairline, quieter than bb's `border`: it only groups.
-// A section's status, when it has one, sits at the end of its heading's line.
 function PanelSection({ title, status, children }: { title: string; status?: ReactNode; children: ReactNode }) {
   const headingId = useId();
   return (

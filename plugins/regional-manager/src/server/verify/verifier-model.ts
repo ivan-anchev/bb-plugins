@@ -1,5 +1,3 @@
-// What a verifier runs on. Independence is the point: never a model whose work it checks while bb
-// has another there, and one of theirs only as a last resort, which its verdict then says.
 import { executionOf, sameModel, type CatalogModel, type CatalogRouting, type Execution } from "../../model/execution.ts";
 import { executionFacts, modelsOf, type CatalogBb } from "../execution/catalog.ts";
 
@@ -29,11 +27,9 @@ export async function verifierExecution(bb: CatalogBb, { named, manager, theirs,
     if (sibling !== null) return { providerId, model: sibling.model, reasoningLevel: sibling.defaultReasoningEffort };
   }
   const [own] = theirs;
-  // why throw: every check judges the work of at least one agent.
   if (own === undefined) throw new Error("A check judges nobody's work.");
   return own;
 }
 
-/** The provider's default model if it qualifies, else its first that does. */
 const pick = (models: readonly CatalogModel[], qualifies: (model: CatalogModel) => boolean): CatalogModel | null =>
   models.find((model) => model.isDefault && qualifies(model)) ?? models.find(qualifies) ?? null;

@@ -1,4 +1,3 @@
-// A read that may fail, reported as `unknown (<reason>)` and never thrown.
 import { BoatApiError } from "./boat/client.ts";
 import { messageOf } from "./problem.ts";
 
@@ -18,7 +17,6 @@ export async function settle<T>(read: Promise<T>, scope?: string, elsewhere?: st
   }
 }
 
-/** boat's typed 403s for scoped keys (docs: API keys → Scopes → Errors); any other failure in boat's or bb's words. */
 function reasonOf(error: unknown, scope: string | undefined): string {
   if (!(error instanceof BoatApiError) || error.status !== 403) return messageOf(error);
   if (error.code === "api_key_action_forbidden" && scope !== undefined) return `the API key lacks boat's ${scope} scope`;

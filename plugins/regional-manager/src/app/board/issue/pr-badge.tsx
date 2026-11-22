@@ -1,6 +1,3 @@
-// An issue's pull request, Activity Sidebar's badge (src/ui/row/pr-badge.tsx): its glyph and number
-// in its state's token on a 10% wash of it (issue-board.css `.rmi-pr`), then a dot for CI on its
-// head commit, as the plugin last read them. It links to the pull request.
 import type { ReactNode } from "react";
 import type { PrSnapshot } from "../../../model/verdict/pr.ts";
 
@@ -28,7 +25,6 @@ const GLYPH: Record<BadgeState, ReactNode> = {
   closed: <ClosedGlyph />,
 };
 
-/** Zeron's `pull-request` icon at 11. */
 function PullRequestGlyph() {
   return (
     <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -40,7 +36,6 @@ function PullRequestGlyph() {
   );
 }
 
-/** Zeron's `git-merge` icon at 11. */
 function MergedGlyph() {
   return (
     <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -52,7 +47,6 @@ function MergedGlyph() {
   );
 }
 
-/** Zeron's `pull-request-closed` icon at 11. */
 function ClosedGlyph() {
   return (
     <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -64,7 +58,6 @@ function ClosedGlyph() {
   );
 }
 
-/** Zeron's `pull-request-draft` icon at 11. */
 function DraftGlyph() {
   return (
     <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" aria-hidden>

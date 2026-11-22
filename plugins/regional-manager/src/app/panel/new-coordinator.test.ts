@@ -7,9 +7,6 @@ import { coordinatorContract as contract } from "../../contract.ts";
 import type { Profile } from "../../model/profile.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 
-// The New page as bb mounts it: the profile's fields under its heading, and Create, which saves the
-// regional manager through createCoordinator, with no thread, and opens its page.
-
 const { NewCoordinator } = await import("./new-coordinator.tsx");
 
 const CREATED = "6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10";
@@ -19,7 +16,6 @@ afterEach(() => {
   localStorage.clear();
 });
 
-/** The New page over a plugin that records every profile it is asked to create, and the pages it opens. */
 function mount() {
   const creates: Profile[] = [];
   const opened: CoordinatorId[] = [];

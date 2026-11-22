@@ -28,7 +28,6 @@ export function readFigureSource(code: string): FigureSource {
     : { ok: true, props, body: code.slice(match[0].length) };
 }
 
-/** The props mapping, or why the YAML isn't one. */
 function parseProps(yaml: string): Record<string, unknown> | string {
   let value: unknown;
   try {

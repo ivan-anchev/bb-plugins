@@ -3,7 +3,6 @@ import { test } from "node:test";
 import type { Billing } from "../boat/wire.ts";
 import { balanceOf, costAt, dollarsPerHour } from "./money.ts";
 
-// The live account's /limits on 2026-11-14: a $20 plan of 555.56 default-machine hours.
 const PLAN: Billing = { walletDollars: 0, planHoursLeft: 520.52, renewsAt: Date.parse("2026-12-08T17:35:29Z"), vmHourDollars: 0.036 };
 
 test("money left is the plan's hours left at the price past the plan, plus the wallet", () => {

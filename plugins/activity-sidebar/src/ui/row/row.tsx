@@ -1,9 +1,3 @@
-// One parent thread's row, Zeron's SessionRow: the agent's mark in a 30 slot, the project tile, the
-// title fading out, its pull request, the subagents pill and the corner (an approval asked shows as one);
-// tall, its detail on a second line.
-// Right-click (or the Menu key) opens bb's own thread menu with Sleep added; under the pointer the corner offers
-// bb's Archive, whatever the thread's state; a double-click or the menu's Rename renames it in place;
-// the menu's Sleep ▸ Custom… opens the row's own dialog.
 import {
   experimental_Icon as Icon,
   experimental_ProviderIcon as ProviderIcon,
@@ -69,10 +63,6 @@ export function Row({ row, tall, sleep, onNavigate }: { row: RowModel; tall: boo
     </>
   );
 
-  // why: the corner's button lies over the link, not in it, so pressing it never opens the thread.
-  // why: the menu opens on the present minute, so Sleep's times are counted from now (Zeron reads the clock as it opens).
-  // why: the dialog is the row's, so focus in it is the row's to the list: a row that leaves with its
-  // sleep hands focus on to its heir, and one that stays takes it back when the dialog closes.
   return (
     <>
       <ThreadActionsContextMenu
@@ -92,8 +82,6 @@ export function Row({ row, tall, sleep, onNavigate }: { row: RowModel; tall: boo
               {body(<TitleEditor threadId={t.id} title={t.displayTitle} onDone={rename.stop} />)}
             </div>
           ) : (
-            // why: tabIndex -1: the scroller is the list's one tab stop and ↑/↓ move between rows.
-            // The host routes a plain click on href in place; onNavigate closes the mobile drawer.
             <a
               ref={link}
               href={t.href}
@@ -105,7 +93,6 @@ export function Row({ row, tall, sleep, onNavigate }: { row: RowModel; tall: boo
               aria-label={spoken(row, corner, pr)}
               aria-keyshortcuts={shortcut?.ariaKeyshortcuts}
               data-sidebar-thread-shortcut-target=""
-              // why: bb's host assigns jump keys only to target anchors that also name their thread.
               data-sidebar-thread-id={t.id}
               onClick={onNavigate}
               onDoubleClick={rename.start}
@@ -126,7 +113,6 @@ export function Row({ row, tall, sleep, onNavigate }: { row: RowModel; tall: boo
           setSleepingCustom(false);
         }}
         onCloseAutoFocus={(event) => {
-          // why: the dialog has no Trigger to return to. A row that left with its sleep has no link.
           event.preventDefault();
           link.current?.focus({ preventScroll: true });
         }}
@@ -135,15 +121,8 @@ export function Row({ row, tall, sleep, onNavigate }: { row: RowModel; tall: boo
   );
 }
 
-// ------------------------------------------------------------------ layer 2
-
 type Rename = { editing: boolean; start(): void; stop(byKey: boolean): void; request(): void; onCloseAutoFocus(event: Event): void };
 
-/**
- * Renaming in the row. A double-click starts at once. The menu's Rename starts once the menu has
- * closed, keeping the menu's focus return off the field, as bb's own list does. Ended by Enter or
- * Escape, focus goes back to the row so the keyboard keeps its place; ended by leaving, it stays where it went.
- */
 function useRename(link: RefObject<HTMLAnchorElement | null>): Rename {
   const [editing, setEditing] = useState(false);
   const afterMenu = useRef(false);
@@ -174,10 +153,6 @@ function useRename(link: RefObject<HTMLAnchorElement | null>): Rename {
   };
 }
 
-/**
- * The Menu key or Shift+F10 on a focused row opens its menu under the row's start, as a right-click
- * would. bb's context menu opens only on `contextmenu`, which not every browser sends for these keys.
- */
 function openMenuFromKeyboard(e: KeyboardEvent<HTMLAnchorElement>) {
   if (e.key !== "ContextMenu" && !(e.shiftKey && e.key === "F10")) return;
   e.preventDefault();
@@ -185,7 +160,6 @@ function openMenuFromKeyboard(e: KeyboardEvent<HTMLAnchorElement>) {
   e.currentTarget.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: r.left + 24, clientY: r.bottom }));
 }
 
-/** Under the pointer, the corner's Archive (Unarchive on the shelf) in the same box. */
 function CornerAction({ action }: { action: NonNullable<RowActions["corner"]> }) {
   return (
     <button
@@ -204,9 +178,7 @@ function CornerAction({ action }: { action: NonNullable<RowActions["corner"]> })
   );
 }
 
-/** Regular's second line (Zeron's `SessionRow.second_line`): its branch behind the branch glyph, then its machine. */
 function DetailLine({ detail }: { detail: RowDetail }) {
-  // why: the glyph labels the branch, so the branch leads; the machine, said less often, fades first.
   const words = [detail.branch, detail.machine].filter((w) => w !== null);
   return (
     <span className="as-detail">
@@ -246,26 +218,20 @@ export function FadingTitle({ text }: { text: string }) {
   );
 }
 
-/** The fade at a title's end, which its last words run past to read crisp. */
 const FADE = 24;
-/** How fast a title runs under the pointer, in px a second: slow enough to read as it moves. */
 const RUN_SPEED = 45;
 
-/** How far the title runs (its overflow and the fade) and for how long, for app.css's `.as-title-text`. */
 function runStyle(over: number): CSSProperties & Record<"--as-travel" | "--as-run", string> {
   const travel = over + FADE;
   return { "--as-travel": `${travel}px`, "--as-run": `${Math.round((travel / RUN_SPEED) * 1000)}ms` };
 }
 
-/** The corner once the row knows what its thread asks: an approval shows as one. */
 function askedCorner(corner: CornerModel, ask: AskKind | null): CornerModel {
   return corner.kind === "state" ? { kind: "state", state: withAsk(corner.state, ask) } : corner;
 }
 
-/** "Fix the login flow, Working, bb-plugins, pull request 12, open, 2 running under it". */
 function spoken(row: RowModel, corner: CornerModel, pr: PullRequest | null): string {
   const bits = [row.thread.displayTitle, spokenCorner(corner), row.project.name];
-  // why: Zeron's badge label.
   if (pr !== null) bits.push(`pull request ${pr.number}, ${pr.state}`);
   if (row.runningUnder > 0) bits.push(`${row.runningUnder} running under it`);
   return bits.join(", ");

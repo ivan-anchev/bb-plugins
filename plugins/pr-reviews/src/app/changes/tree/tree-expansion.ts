@@ -1,4 +1,3 @@
-// Collapse and expand every folder of the Changes tab's tree, and read which are open (from code-explorer).
 import type { FileTree, FileTreeVisibleRow } from "@pierre/trees";
 
 type FolderState = "none" | "collapsed" | "expanded";

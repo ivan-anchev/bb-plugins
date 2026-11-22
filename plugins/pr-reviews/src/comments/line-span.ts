@@ -1,6 +1,3 @@
-// What a selection points at: a run of one drawn file's rows at one commit. Turns the two points
-// the reader picked into that run, and the run into its anchor lines, its quote and the label every
-// surface shows. Pure.
 import { rowIndexOf, type DiffRow } from "../diff/diff-rows.ts";
 import type { CodeQuote, LineRef } from "./comment-schema.ts";
 

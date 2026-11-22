@@ -1,6 +1,3 @@
-// What a thread can launch from: boat's saved snapshots and environments, read with the configured
-// key, and the defaults. Validate, create, the chip's RPC, `bb boat status` and `bb boat templates`
-// all read through here.
 import type { ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import type { BoatAccess, BoatSession, Configuration } from "../boat/access.ts";
 import type { boatSandboxContract, LaunchChoicesReply } from "../contract.ts";

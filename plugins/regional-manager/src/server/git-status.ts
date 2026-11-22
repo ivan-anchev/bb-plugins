@@ -1,23 +1,12 @@
-// An environment's git status, as bb's git plugin reads it on that environment's machine. The
-// plugin reads an agent's environment once, as the agent hands off, while it is awake anyway, and the
-// regional manager's own as each of its turns ends. why so seldom: a read at any other time could
-// wake an agent's sandbox, or keep it from idling. why not bb's record of the branch: bb records the
-// branch an environment was made on and keeps it when the agent checks out another.
 import { z } from "zod";
 import { checkoutOf, type CheckoutRead } from "../model/verdict/checkout.ts";
 
-/** The commit and branch checked out; null for each that bb's git plugin can't name (detached, unborn, unknown). */
 const checkoutRowSchema = z.union([
   z.object({ kind: z.literal("branch"), branchName: z.string().min(1), headSha: z.string().min(1).nullable() }).transform(({ branchName, headSha }) => ({ branch: branchName, headSha })),
   z.object({ kind: z.literal("detached"), headSha: z.string().min(1).nullable() }).transform(({ headSha }) => ({ branch: null, headSha })),
   z.object({ kind: z.string() }).transform(() => ({ branch: null, headSha: null })),
 ]);
 
-/**
- * The part of a `bb--git` `status` row read here (`bb plugin rpc inspect bb--git status` prints the
- * whole). why the last: a newer bb--git can answer an outcome this plugin doesn't know, or a known
- * one in a shape it can't read, and either must read as unread rather than fail.
- */
 const statusRowSchema = z.union([
   z.object({
     outcome: z.literal("available"),
@@ -54,10 +43,8 @@ export async function gitStatusOf(bb: GitStatusBb, environmentId: string, signal
   try {
     rows = await bb.sdk.plugins.callRpc({ pluginId: "bb--git", method: "status", input: { keys: [environmentId] }, outputSchema: z.record(z.string(), statusRowSchema), signal });
   } catch (error) {
-    // why caught: the git plugin may be off, or the environment's machine unreachable.
     return unread(error instanceof Error ? error.message : String(error));
   }
-  // why possibly undefined: bb's git plugin may leave a key out.
   const row: StatusRow | undefined = rows[environmentId];
   if (row === undefined) return unread("bb's git plugin returned no row for it");
   switch (row.outcome) {

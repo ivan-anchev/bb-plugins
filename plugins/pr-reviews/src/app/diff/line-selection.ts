@@ -1,6 +1,3 @@
-// The lines selected in one diff, and the one comment box under them or in one of its review
-// threads. Pure transitions; the hook in use-line-selection.ts holds the state and wires the
-// diff's gestures and the box's actions.
 import type { SelectedLineRange } from "@pierre/diffs";
 
 /** What a request did: the posted comment or reply, a sent question, or a comment or reply added to the reader's pending review. */
@@ -108,8 +105,6 @@ function openAt(box: LineBox | null, place: BoxPlace): LineBox {
 
 const unlit = (box: LineBox): LineBox => (box.kind === "lines" ? { ...box, lit: false } : box);
 
-// The ranges Pierre reports are built one way (`endSide` only when it differs from `side`), so
-// equal ranges have equal fields.
 function sameRange(a: SelectedLineRange | null, b: SelectedLineRange | null): boolean {
   if (a === null || b === null) return a === b;
   return a.start === b.start && a.end === b.end && a.side === b.side && a.endSide === b.endSide;

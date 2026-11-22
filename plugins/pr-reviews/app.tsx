@@ -18,6 +18,5 @@ export default definePluginApp((app) => {
     headerContent: RefreshButton,
   });
   app.slots.experimental_tab(reviewChatTab);
-  // why: bb draws this title as an <h2> above the section; app.css hides it, the card has its own.
   app.slots.homepageSection({ id: "pull-requests", title: "Pull requests", component: PrCard });
 });

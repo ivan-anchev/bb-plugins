@@ -21,17 +21,12 @@ const IDLE_MS = 15 * MINUTE;
 interface FakeHost {
   id: string;
   phase?: HostPhase;
-  /** null: boat no longer has it. */
   sandbox: Sandbox | null;
-  /** Visible threads on it that are starting or active. */
   busyThreads: number;
-  /** Hidden threads on it (workflow workers) that are starting or active. */
   hiddenThreads?: number;
-  /** Its sandbox id when `sandbox` is null. */
   sandboxId?: SandboxId;
 }
 
-/** An owned sandbox: running with its auto-stop `leaseMinutes` away unless `wire` says otherwise. */
 function sandbox(suffix: string, leaseMinutes = 120, wire: object = {}): Sandbox {
   const id = sandboxId.parse(`bx_${suffix}`);
   const archiveAfter = new Date(Date.now() + leaseMinutes * MINUTE).toISOString();
@@ -40,7 +35,6 @@ function sandbox(suffix: string, leaseMinutes = 120, wire: object = {}): Sandbox
   return parsed;
 }
 
-/** bb, boat and the idle clock in memory, with hooks for what happens while the sweep works. */
 function world(hosts: FakeHost[], orphans: Sandbox[] = []) {
   const lastActive = new Map<string, number>();
   const touched: string[] = [];
@@ -132,10 +126,8 @@ function world(hosts: FakeHost[], orphans: Sandbox[] = []) {
     },
     log: { info: () => {}, warn: (message: string) => void warnings.push(message) },
   };
-  /** The machine last did work `minutesAgo` minutes ago. */
   const idleFor = (hostId: string, minutesAgo: number) => lastActive.set(hostId, Date.now() - minutesAgo * MINUTE);
   const sweep = createSweep({ bb, access, idle, ownerId: OWNER });
-  /** `bb boat sandboxes --json`, through the plugin's CLI registration. */
   async function sandboxesJson() {
     const { exitCode, stdout } = await boatCli({ boat: access, machineEnvironment: unused }, { bb, idle, ownerId: OWNER }).run(["sandboxes", "--json"], {});
     assert.equal(exitCode, 0);
@@ -240,7 +232,6 @@ test("time running out during the pre-suspend re-check stops the suspend", async
   boat.idleFor("host_1", 20);
   const timeLimit = new AbortController();
   let reads = 0;
-  // The first read is the sweep's look; the second is the re-check, which has no signal to cut it short.
   boat.hooks.onRead = () => void (++reads === 2 && timeLimit.abort(new Error("out of time")));
 
   await assert.rejects(boat.sweep(timeLimit.signal), /out of time/);
@@ -278,7 +269,6 @@ test("an active machine whose sandbox was deleted outside bb is recorded as susp
 });
 
 test("a machine's sandbox missing from the owner listing is looked up, not taken for deleted", async () => {
-  // Made under an earlier owner id: the listing for this owner does not show it.
   const earlier = sandbox("abcdefgh", 120, { labels: machineLabels("owner-0", "host_1") });
   const boat = world([{ id: "host_1", sandbox: earlier, busyThreads: 1 }]);
 
@@ -304,7 +294,6 @@ test("an awake orphan older than 15 minutes is stopped, and a younger one is not
 
   await boat.sweep(signal());
 
-  // The fake boat rejects `remove`, so a delete would have failed the action with a warning.
   assert.deepEqual(boat.stopped, [old.id]);
   assert.match(boat.warnings.join("\n"), new RegExp(`Stopping boat sandbox ${old.id}: no bb machine uses it`));
 });
@@ -348,6 +337,5 @@ test("bb boat sandboxes lists healthy, boat-stopped, deleted and orphan sandboxe
     ],
   );
   assert.equal(rows[0].type, "small");
-  // Printing applies nothing.
   assert.deepEqual([boat.suspended, boat.stopped, boat.touched], [[], [], []]);
 });

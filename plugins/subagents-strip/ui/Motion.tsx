@@ -1,6 +1,3 @@
-// Status changes morph, never swap (R5): text rolls out and in with a small
-// blur, digits roll, the status dot scales across. The motion lives in
-// roster.css; these components keep the leaving copy until its animation ends.
 import { useState } from "react";
 import type { DelegateStatus } from "../delegate.ts";
 
@@ -24,7 +21,6 @@ export function RollingNumber({ value }: { value: number }) {
   const digits = String(value);
   return (
     <span className="sr-num">
-      {/* why: keyed by length, so a count gaining a digit repaints instead of rolling misaligned columns. */}
       {[...digits].map((digit, i) => <RollingDigit key={`${digits.length}:${i}`} digit={digit} dir={last.dir} />)}
     </span>
   );
@@ -43,8 +39,6 @@ export function StatusDot({ status }: { status: DelegateStatus }) {
   );
 }
 
-// ---------------------------------------------------------------- layer 2
-
 type Direction = "up" | "down";
 type Roll<T> = { key: number; value: T; dir: Direction };
 
@@ -60,18 +54,12 @@ function RollingDigit({ digit, dir }: { digit: string; dir: Direction }) {
   );
 }
 
-/**
- * The value now, plus earlier values still animating out. A change during
- * render re-keys the current value (so its entrance plays) and moves the old
- * one to `leaving`; its element calls `drop` when its exit animation ends.
- */
 function useRoll<T>(value: T, dir: Direction = "up") {
   const [roll, setRoll] = useState<{ current: Roll<T>; leaving: readonly Roll<T>[] }>({
     current: { key: 0, value, dir },
     leaving: [],
   });
   if (roll.current.value !== value) {
-    // why: the old copy leaves in the same direction the new one enters.
     setRoll({ current: { key: roll.current.key + 1, value, dir }, leaving: [...roll.leaving, { ...roll.current, dir }] });
   }
   const drop = (key: number) => setRoll((r) => ({ ...r, leaving: r.leaving.filter((l) => l.key !== key) }));

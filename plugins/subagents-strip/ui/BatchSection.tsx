@@ -1,7 +1,3 @@
-// One batch in the Subagents tab: a quiet label (caret, clock time, prompt, mini
-// census) that sticks while its rows scroll under it, over the delegates
-// launched after that prompt. A batch is a label, a delegate a row, so the two read as two
-// levels. Words come from roster.ts.
 import { useId, type Ref } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { DelegateId } from "../delegate.ts";
@@ -26,7 +22,6 @@ export function BatchSection({ batch, open, onToggle, expanded, onToggleRow, out
   const time = formatClockTime(batch.startedAt);
   return (
     <li className="sr-batch" data-open={open || undefined}>
-      {/* why: the sticky box is the label's container, so the label can tell when it is stuck (roster.css). */}
       <div className="sr-batch-h">
         <button type="button" className="sr-batch-label" aria-expanded={open} aria-controls={rowsId} title={`${time} · ${batch.prompt ?? batch.label}`} onClick={onToggle}>
           <Icon name="ChevronRight" className="sr-batch-caret" aria-hidden />
@@ -39,7 +34,6 @@ export function BatchSection({ batch, open, onToggle, expanded, onToggleRow, out
           </span>
         </button>
       </div>
-      {/* why: kept mounted while closed so it can grow and shrink; inert keeps it out of focus and the a11y tree. */}
       <div className="sr-batch-wrap">
         <div className="sr-batch-clip">
           <ol className="sr-batch-rows" id={rowsId} inert={!open}>

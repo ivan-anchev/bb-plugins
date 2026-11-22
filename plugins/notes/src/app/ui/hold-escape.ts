@@ -1,8 +1,3 @@
-// While held, Esc never leaves the page under the plugin, wherever focus is. bb's own Esc leaves the
-// page; it skips an event whose default was prevented. Adapted from pr-reviews
-// (src/app/ui/hold-escape.ts): every plugin installs standalone. The React binding is
-// use-hold-escape.ts.
-
 /**
  * Stops every Esc that reaches `target` from reaching bb, until released. An Esc something on the
  * page already took (a dialog's dismiss, a picker's close) is left alone; any other goes to `onEscape`.

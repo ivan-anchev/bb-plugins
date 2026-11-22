@@ -1,5 +1,3 @@
-// Registration only: the content scripts that own the strip's slot in bb's DOM and route sidebar clicks
-// into tabs, the overlay that owns the strip's React, and the keyboard commands that switch tabs.
 import { definePluginApp } from "@get-bb/plugin-sdk/app";
 import { registerTabCommands } from "./src/controller/commands.ts";
 import { sidebarClicks } from "./src/host/sidebar-clicks.ts";

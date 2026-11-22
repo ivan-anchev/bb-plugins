@@ -1,6 +1,3 @@
-// A research issue end to end, through the tools as the regional manager, its agents and the user's
-// Memory editor reach them: its report is its result, nothing verifies it, and the report is saved
-// as a file in the manager's memory, which the plugin gives to nobody.
 import assert from "node:assert/strict";
 import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -24,17 +21,14 @@ const DONE = { status: "done", ...FIELDS, report: REPORT };
 const I1 = issueIdSchema.parse("WEB-1");
 const I1_REPORT = memoryFileSchema.parse("reports/WEB-1.md");
 
-/** A regional manager over `storage`, with research issue WEB-1 filed (RESEARCH, with `fields` over it) and an agent started on it. */
 async function researching(fields: object = {}, storage = memoryStorage().storage) {
   const { kit, threadId, coordinatorId } = await coordinating({ storage });
   const call = (tool: string, input: object) => kit.call(tool, input, threadId);
   assert.equal(textOf(await call("issue_create", { ...RESEARCH, ...fields })), "Filed WEB-1 (research) in Todo.");
   const agentThreadId = threadIn(textOf(await call("agent_start", { issue: "WEB-1" })));
   const files = kit.memory.of(coordinatorId);
-  /** The status line issue_read gives: its kind, status and why. */
   const statusOf = async (id: string) => textOf(await call("issue_read", { id })).split("\n\n")[1] ?? "";
   const catchUp = async () => textOf(await call("crew_catch_up", {}));
-  /** The agent ends its turn, as bb announces it; its handoff, if any, is then what places the issue. */
   const handOff = async (input: object) => {
     const result = await kit.call("agent_handoff", input, agentThreadId);
     await kit.idle(agentThreadId, "Handed off.");
@@ -228,7 +222,6 @@ test("a report file someone wrote before the plugin saved any is kept, and a rep
   assert.equal(files.read(I1_REPORT).text?.content, "# My own notes on WEB-1\n");
   assert.equal(files.read(memoryFileSchema.parse("reports/WEB-1-2.md")).text?.content, `${REPORT}\n`);
 
-  // The file it would go to can't be read: a folder stands where it is.
   const { kit: other, coordinatorId: otherId, agentThreadId, files: otherFiles } = await researching();
   mkdirSync(join(otherFiles.dir, "reports", "WEB-1.md"), { recursive: true });
   await assert.rejects(other.call("agent_handoff", DONE, agentThreadId), /EISDIR/);
@@ -261,7 +254,6 @@ test("an issue opened on the board sends its questions and a research handoff's 
   assert.deepEqual([blocked?.status, blocked?.report], ["blocked", null]);
 });
 
-/** The reports/ files in the manager's memory, each with what it holds. */
 const reportFiles = (files: Awaited<ReturnType<typeof researching>>["files"]) => files.list().flatMap((file) => (file.startsWith("reports/") ? [[file, files.read(file).text?.content]] : []));
 
 test("a first report whose handoff can't be stored leaves no file, and its retry saves it to reports/WEB-1.md with its handoff and event", async () => {

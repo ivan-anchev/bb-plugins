@@ -1,8 +1,6 @@
-// Press and hold to confirm, by pointer or by Enter or Space: for an action with no dialog before it.
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 
 export const HOLD_MS = 700;
-// How long a press let go too early keeps asking to hold.
 const NUDGE_MS = 1200;
 
 /**
@@ -46,8 +44,6 @@ export function useHold(onHeld: () => void) {
     onPointerUp: letGo,
     onPointerLeave: letGo,
     onPointerCancel: letGo,
-    // why preventDefault: a menu item selects itself on Enter or Space unless the keydown's default
-    // is prevented; the hold, not the keydown, is the choice. A held key repeats its keydown.
     onKeyDown: (event: KeyboardEvent) => {
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();

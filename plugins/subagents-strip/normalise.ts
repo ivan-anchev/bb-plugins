@@ -1,8 +1,3 @@
-// The one place provider quirks live: bb's delegation rows plus background-task
-// events become canonical delegates, and the thread's turns what started them.
-// Nothing else in the plugin reads `output`, `childRef`, `toolArgs`, task
-// events, or a message's system subject. `background` is never read: Claude
-// Code agents run async whatever it says.
 import type { BackgroundTaskItem, DelegationRow, EventRow, StepRow, TaskStatus, TimelineRow, UserRow } from "./bb.ts";
 import type { Delegate, DelegateId, DelegateState, DelegateStatus, StepScope, Turn, TurnMessage } from "./delegate.ts";
 import { plural } from "./roster.ts";
@@ -14,7 +9,6 @@ type TaskSnapshot = Pick<BackgroundTaskItem, "taskStatus" | "usage" | "error"> &
 
 /** The event types a source must request to follow every task's lifecycle. */
 export const TASK_EVENT_TYPES = [
-  // why: opens a task as "running"; most agents emit no progress event at all.
   "item/started",
   "item/backgroundTask/progress",
   "item/backgroundTask/completed",
@@ -25,8 +19,6 @@ export function foldTaskEvents(ledger: TaskLedger, events: readonly EventRow[]):
   for (const event of events) {
     const task = backgroundTaskOf(event);
     if (!task?.parentToolCallId) continue;
-    // why: events arrive in seq order, so the last write is the latest state.
-    // Usage is cumulative, and starts and some progress events carry none: keep the last known.
     const usage = task.usage ?? next.get(task.parentToolCallId)?.usage;
     next.set(task.parentToolCallId, { taskStatus: task.taskStatus, usage, error: task.error, at: event.createdAt });
   }
@@ -44,7 +36,6 @@ export function normalise(rows: readonly TimelineRow[], ledger: TaskLedger, prov
  */
 export function turnsOf(rows: readonly TimelineRow[]): Turn[] {
   const turns = new Map<string, Turn>();
-  // why: bb leaves the thread's seed prompt without a turnId (live, thr_24dxq5xhph); it starts the turn after it.
   let unplaced: UserRow | null = null;
   for (const row of rows) {
     if (row.turnId === null) {
@@ -63,8 +54,6 @@ export function turnsOf(rows: readonly TimelineRow[]): Turn[] {
   return [...turns.values()];
 }
 
-// ---------------------------------------------------------------- layer 2
-
 function toDelegate(group: readonly [DelegationRow, ...DelegationRow[]], ledger: TaskLedger, providerId: string): Delegate {
   const first = group[0];
   const task = taskFor(group, ledger);
@@ -72,7 +61,7 @@ function toDelegate(group: readonly [DelegationRow, ...DelegationRow[]], ledger:
   const settled = task ? stateFromTask(task, childRows) : stateFromRow(group[group.length - 1], childRows);
   const { state, steps } = reportFromSteps(settled, childRows && childSteps(childRows));
   return {
-    id: first.callId as DelegateId, // a delegation's brand point: its first callId
+    id: first.callId as DelegateId,
     origin: { kind: "delegation" },
     providerId,
     turnId: first.turnId,
@@ -89,7 +78,6 @@ function stateFromTask(task: TaskSnapshot, childRows: readonly TimelineRow[] | n
   const status = TASK_STATUS[task.taskStatus];
   switch (status) {
     case "running": return { status };
-    // why: a row that ran as a task carries a launch receipt as `output`, never the report.
     case "completed": return { status, endedAt: task.at, report: handbackReport(childRows) };
     case "failed": return { status, endedAt: task.at, error: nonEmpty(task.error) };
     case "stopped": return { status, endedAt: task.at };
@@ -98,8 +86,6 @@ function stateFromTask(task: TaskSnapshot, childRows: readonly TimelineRow[] | n
 
 function stateFromRow(row: DelegationRow, childRows: readonly TimelineRow[] | null): DelegateState {
   const status = ROW_STATUS[row.status];
-  // why: bb stamps completedAt when it settles a row, interrupting included, and none of the 104
-  // settled rows across 65 local Claude Code threads lacks it; startedAt only satisfies the type.
   const endedAt = row.completedAt ?? row.startedAt;
   switch (status) {
     case "running": return { status };
@@ -109,12 +95,6 @@ function stateFromRow(row: DelegationRow, childRows: readonly TimelineRow[] | nu
   }
 }
 
-/**
- * A completed delegate with no handback and no output reports its last
- * assistant message, which then leaves its steps. Codex sends neither: output
- * is "" on all 6 captured rows, and each ends in its closing message.
- */
-// why: keyed on the data, not the provider: Claude Code agents hand back, so it never fires for them.
 function reportFromSteps(
   state: DelegateState,
   steps: readonly StepRow[] | null,
@@ -124,7 +104,6 @@ function reportFromSteps(
   return { state: { ...state, report: split.report }, steps: split.steps };
 }
 
-// why: paused counts as live; killed and stopped merge into one "stopped" (TaskStop sends killed, then stopped).
 const TASK_STATUS: Record<TaskStatus, DelegateStatus> = {
   pending: "running", running: "running", paused: "running",
   completed: "completed", failed: "failed", killed: "stopped", stopped: "stopped",
@@ -133,10 +112,6 @@ const ROW_STATUS: Record<DelegationRow["status"], DelegateStatus> = {
   pending: "running", completed: "completed", error: "failed", interrupted: "stopped",
 };
 
-/**
- * What a turn's message said: the user's or another agent's text, or, for a bb system message, what
- * it reports ("reviewer 05 r1 completed"), since its text opens with bb's "[bb system]" header.
- */
 function messageOf(row: UserRow): TurnMessage {
   const from = row.initiator === "user" ? "user" : "other";
   const subject = row.initiator === "system" ? row.systemMessageSubject : null;
@@ -147,7 +122,6 @@ function messageOf(row: UserRow): TurnMessage {
 type SystemSubject = NonNullable<UserRow["systemMessageSubject"]>;
 
 function systemSummary(subject: SystemSubject, kind: UserRow["systemMessageKind"]): string {
-  // why: partial, as the host can send a kind newer than this SDK; those read "reported back".
   const outcome = SYSTEM_OUTCOME[kind] ?? "reported back";
   switch (subject.kind) {
     case "thread": return `${subject.threadName} ${outcome}`;
@@ -166,16 +140,12 @@ const SYSTEM_OUTCOME: Partial<Record<UserRow["systemMessageKind"], string>> = {
 };
 const SYSTEM_HEADER = /^\[bb system\]\s*/u;
 
-// ---------------------------------------------------------------- layer 3
-
 const isUserMessage = (row: TimelineRow): row is UserRow => row.kind === "conversation" && row.role === "user";
 
-/** `never` keeps the switch exhaustive; a subject a newer host adds reads as bb's message. */
 function unhandledSubject(_subject: never): string {
   return "bb reported back";
 }
 
-/** Delegation rows at the top level and inside turn groups, never inside a delegate's own children. */
 function topLevelDelegations(rows: readonly TimelineRow[]): DelegationRow[] {
   return rows.flatMap((row) =>
     row.kind === "turn" ? topLevelDelegations(row.children ?? [])
@@ -184,7 +154,6 @@ function topLevelDelegations(rows: readonly TimelineRow[]): DelegationRow[] {
   );
 }
 
-/** One delegate per child: Codex writes a row per collab call on the same childRef; Claude's childRef is unique per row. */
 function groupByChild(rows: readonly DelegationRow[]): [DelegationRow, ...DelegationRow[]][] {
   const groups = new Map<string, [DelegationRow, ...DelegationRow[]]>();
   for (const row of rows) {
@@ -193,15 +162,13 @@ function groupByChild(rows: readonly DelegationRow[]): [DelegationRow, ...Delega
     if (group) group.push(row);
     else groups.set(key, [row]);
   }
-  return [...groups.values()]; // a Map keeps first-seen order, which is start order
+  return [...groups.values()];
 }
 
 function taskFor(group: readonly DelegationRow[], ledger: TaskLedger): TaskSnapshot | undefined {
   return group.map((row) => ledger.get(row.callId)).findLast((task) => task !== undefined);
 }
 
-// why: bb's chat compacts each delegation row's child rows apart, closed once the row settles (`rs`):
-// the row's status, not the task's, so a Claude Code agent that runs on folds closed, as bb's chat shows it.
 function scopeOf(row: DelegationRow): StepScope[] {
   return row.childRows ? [{ rows: row.childRows, closed: row.status !== "pending" }] : [];
 }
@@ -211,10 +178,8 @@ function concatChildRows(group: readonly DelegationRow[]): TimelineRow[] | null 
   return lists.length > 0 ? lists.flat() : null;
 }
 
-/** The report is the last handback's `message` argument. */
 function handbackReport(childRows: readonly TimelineRow[] | null): string | null {
   const message = childRows?.findLast(isHandback)?.toolArgs?.message;
-  // why: toolArgs is untyped provider JSON; this is its boundary.
   return typeof message === "string" ? nonEmpty(message) : null;
 }
 
@@ -222,8 +187,6 @@ function titleOf(row: DelegationRow): string {
   return agentName(nonEmpty(row.description) ?? nonEmpty(row.presentation?.title) ?? nonEmpty(row.subagentType) ?? "Subagent");
 }
 
-/** Codex names an agent by its path ("/root/counter_e"); the last segment is its name. */
-// why: only a whitespace-free absolute path matches, so a free-text description is never cut.
 function agentName(title: string): string {
   return AGENT_PATH.exec(title)?.[1] ?? title;
 }

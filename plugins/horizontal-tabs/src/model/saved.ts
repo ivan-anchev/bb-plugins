@@ -1,6 +1,3 @@
-// This window's tabs, kept across reloads the way bb keeps its split layout: sessionStorage holds the
-// window's own copy, and localStorage the last copy any window saved, which seeds a fresh window. Each
-// window then goes its own way; nothing listens for another window's saves.
 import { z } from "zod";
 import { parseJson } from "./json.ts";
 import { layoutSchema } from "./layout.ts";
@@ -15,13 +12,11 @@ export type SavedTabs = {
 
 const VERSION = 1;
 const tabSchema: z.ZodType<Tab> = z.object({ id: z.string().min(1), layout: layoutSchema });
-// why `unknown` tabs: each is parsed on its own, so a tab this plugin can't read costs only itself.
 const envelopeSchema = z.object({ version: z.literal(VERSION), tabs: z.array(z.unknown()), liveId: z.string() });
 
 /** The tabs saved under `pluginId` (experimental_usePluginId), so a renamed copy of the plugin keeps its own. */
 export function savedTabs(pluginId: string): SavedTabs {
   const key = `${pluginId}:tabs`;
-  /** What this window wrote last, so a change that leaves the tabs as they were writes nothing. */
   let written: string | null = null;
   return {
     load() {
@@ -40,9 +35,7 @@ export function savedTabs(pluginId: string): SavedTabs {
         localStorage.setItem(key, saved);
         written = saved;
       } catch (error) {
-        // why: a write that fails part way can leave this save in one copy and the last in the other, so the next save writes.
         written = null;
-        // why: a full storage must not take the strip down; the tabs still work until the window reloads.
         console.warn("[horizontal-tabs] could not save the tabs:", error);
       }
     },
@@ -59,7 +52,6 @@ function parse(stored: string | null): TabSet | null {
   return { tabs, liveId: tabs.some((tab) => tab.id === liveId) ? liveId : tabs[0].id };
 }
 
-/** The stored tabs this plugin can read, keeping only the first under each id, as a set names each tab once. */
 function readableTabs(stored: readonly unknown[]): Tab[] {
   const ids = new Set<string>();
   return stored.flatMap((tab) => {

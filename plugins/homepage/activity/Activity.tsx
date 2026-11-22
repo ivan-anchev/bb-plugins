@@ -1,5 +1,3 @@
-// The Activity card's data: reads the server's snapshot and turns it into
-// the six-month window of days and the totals caption.
 import { experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { activityContract, type Activity } from "../contract.ts";
 import { dailyTotals, gridStart, startOfDay } from "./days.ts";

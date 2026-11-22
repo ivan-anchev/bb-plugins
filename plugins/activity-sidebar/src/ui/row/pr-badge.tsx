@@ -1,13 +1,8 @@
-// A row's pull request, Zeron's badge: its glyph and number in its
-// state's ink on a 10% wash of it, legible on every row surface in light and dark (app.css `.as-pr`);
-// its state and title a tooltip.
 import type { ReactNode } from "react";
 import type { PullRequest } from "../../data/pull-request/github-pr-status.ts";
 
-/** Zeron's state names. */
 const PR_STATE_NAME: Record<PullRequest["state"], string> = { open: "Open", draft: "Draft", merged: "Merged", closed: "Closed" };
 
-/** Each state's glyph, as Zeron's PR badge picks its icon (Z:ds/badge.luau:328-333). */
 const PR_STATE_GLYPH: Record<PullRequest["state"], ReactNode> = {
   open: <PullRequestGlyph />,
   draft: <DraftGlyph />,
@@ -24,7 +19,6 @@ export function PrBadge({ pr }: { pr: PullRequest }) {
   );
 }
 
-/** Zeron's `pull-request` icon at 11. */
 function PullRequestGlyph() {
   return (
     <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
@@ -36,7 +30,6 @@ function PullRequestGlyph() {
   );
 }
 
-/** Zeron's `git-merge` icon at 11. */
 function MergedGlyph() {
   return (
     <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
@@ -48,7 +41,6 @@ function MergedGlyph() {
   );
 }
 
-/** Zeron's `pull-request-closed` icon at 11. */
 function ClosedGlyph() {
   return (
     <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
@@ -60,7 +52,6 @@ function ClosedGlyph() {
   );
 }
 
-/** Zeron's `pull-request-draft` icon at 11. */
 function DraftGlyph() {
   return (
     <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">

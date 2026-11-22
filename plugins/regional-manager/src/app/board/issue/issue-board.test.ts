@@ -9,11 +9,6 @@ import { agentIdSchema } from "../../../model/agent.ts";
 import { decisionIdSchema, type Decision, type OpenDecision } from "../../../model/decision.ts";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
 
-// The board's lanes and rows, driven as the user drives them: folding lanes, opening an issue's tab
-// from its row, and a focused row keeping its focus when its issue moves to another lane. board.test.ts
-// reads the board through the plugin's RPC, and issue-tab.test.ts the issue's tab.
-
-// why: jsdom has none of these; the rows measure their titles, and the working ring asks for Reduce motion and a canvas.
 Object.assign(globalThis, {
   ResizeObserver: class {
     observe() {}
@@ -50,10 +45,8 @@ const ISSUES: IssueRow[] = [
   issue("WEB-7", { status: "done", headline: "Merged #39" }),
 ];
 
-/** The board in the root it scrolls in, as the Board tab draws it: a tab stop. */
 const Page = (props: ComponentProps<typeof IssueBoard>) => createElement("div", { tabIndex: 0, "aria-label": "Board tab" }, createElement(IssueBoard, props));
 
-/** The board in a side panel that accepts every tab it is asked to open. */
 function mount(issues: readonly IssueRow[], decisions: readonly Decision[] = [QUESTION]) {
   const props = (rows: readonly IssueRow[], shown: readonly Decision[]) => ({
     decisions: shown,
@@ -64,7 +57,6 @@ function mount(issues: readonly IssueRow[], decisions: readonly Decision[] = [QU
   return { view, reread: (rows: readonly IssueRow[], next: readonly Decision[] = decisions) => view.rerender(createElement(Page, props(rows, next))) };
 }
 
-/** The issue tab bb is asked to open, as the side panel's `openTab` gets it: its address, the params bb keys it by, and its title. */
 const issueTab = (id: string, title: string) => ({ method: "openTab", options: { tab: { id: "issue", context: { kind: "thread" }, availability: "action" }, params: { issueId: id }, title: `${id} ${title}` } });
 
 const laneHeader = (view: ReturnType<typeof mount>["view"], name: RegExp) => view.getByRole("button", { name });
@@ -150,7 +142,6 @@ test("a row opens its issue in its own tab, titled with its id and title, and pr
   fireEvent.click(row(view, "WEB-4"));
   fireEvent.click(todo);
 
-  // why the same call twice: bb keys an action tab by its params, so opening the same params again selects the tab open for them.
   assert.deepEqual(view.experimental_panelCalls, [issueTab("WEB-5", "Issue WEB-5"), issueTab("WEB-4", "Issue WEB-4"), issueTab("WEB-5", "Issue WEB-5")]);
   assert.equal(view.queryByRole("region", { name: "WEB-5" }), null, "and draws no detail on the board");
 });
@@ -208,7 +199,6 @@ test("a row links its agent's thread and its pull request with CI, apart from op
 const I1 = issueIdSchema.parse("WEB-1");
 const STAGING = "Blocked: Needs a staging key";
 
-/** A parent In progress, WEB-1, with three sub-issues: one Done, one flagged by its agent's blocked handoff, one blocked by a dependency; and a top-level Todo. */
 const SPLIT: IssueRow[] = [
   issue("WEB-1", { title: "Card vault", status: "in-progress", subIssues: { done: 1, total: 3 }, headline: null }),
   issue("WEB-2", { parentId: I1, status: "done", headline: "Merged #12" }),
@@ -217,7 +207,6 @@ const SPLIT: IssueRow[] = [
   issue("WEB-5", { status: "todo", headline: "Not started" }),
 ];
 
-/** The ids of the issue rows in a list, top level only, each with the ids of the rows indented under it. */
 const rowsIn = (list: HTMLElement): string[][] =>
   [...list.children].map((item) => [...item.querySelectorAll<HTMLElement>(".rmi-row")].map((button) => /^WEB-\d+/.exec(button.getAttribute("aria-label") ?? "")?.[0] ?? "?"));
 

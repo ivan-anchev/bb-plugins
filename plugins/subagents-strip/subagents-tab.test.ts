@@ -1,5 +1,3 @@
-// The Subagents tab's params boundary: what the strip and Open thread write, bb persists as JSON, and the
-// tab reads back, on the real fixture's delegates.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -51,7 +49,6 @@ test("the list reads as shown only while the panel shows the list instance, not 
   assert.equal(listShown(otherPlugin), false);
 });
 
-/** A side panel that records what was opened in it. */
 function fakePanel(): ExperimentalPanelController & { opened: ExperimentalOpenTabOptions[] } {
   const opened: ExperimentalOpenTabOptions[] = [];
   return {

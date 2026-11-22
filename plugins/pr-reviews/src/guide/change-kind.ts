@@ -1,5 +1,3 @@
-// Ported from T3 Code's packages/shared/src/changedFileKind.ts (MIT, © 2026 T3 Tools Inc.),
-// plus isTestOrMock at the end.
 export const CHANGE_KINDS = ["code", "tests", "mocks", "generated", "docs"] as const;
 
 export type ChangeKind = (typeof CHANGE_KINDS)[number];
@@ -74,5 +72,4 @@ export function changeKindOf(path: string): ChangeKind {
   return "code";
 }
 
-// PR Reviews' addition: tests and mocks are what the "Show tests and mocks" switch hides.
 export const isTestOrMock = (path: string): boolean => TEST_KINDS.includes(changeKindOf(path));

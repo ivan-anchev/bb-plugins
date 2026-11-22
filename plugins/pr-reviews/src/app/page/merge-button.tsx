@@ -1,12 +1,3 @@
-// Merge: the header's split button that merges an open PR by a method its repo allows. It is a
-// toolbar action, a ghost at the icon actions' height like Review beside it, its glyph in the
-// merged colour. The button merges with a merge commit, or by the first method the repo allows
-// when it allows none; its chevron picks another. A merge can't be undone, so the button runs only
-// after a press held HOLD_MS, by pointer or by Enter or Space, as a wash fills it; a shorter press
-// asks to keep holding, in its tooltip, so the label never changes the button's width. While gh
-// runs, a spinner takes the glyph's place. A branch with conflicts can't merge: a warning takes
-// the glyph's place and the tooltip says why. GitHub's refusal shows under the button until
-// dismissed. Once GitHub has merged, the control says so until the re-read PR, now merged, drops it.
 import { useState, type RefObject } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { MergeMethod, PrDetail } from "../../contract.ts";
@@ -19,13 +10,11 @@ import { Spinner } from "../ui/spinner.tsx";
 import { Tooltip } from "../ui/tooltip.tsx";
 import { HOLD_MS, useHold } from "../ui/use-hold.ts";
 
-// GitHub's words for each method.
 const METHODS = {
   merge: { label: "Merge", description: "Adds the branch's commits to the base with a merge commit." },
   squash: { label: "Squash and merge", description: "Combines the branch's commits into one commit on the base." },
   rebase: { label: "Rebase and merge", description: "Adds the branch's commits to the base one by one, with no merge commit." },
 } as const satisfies Record<MergeMethod, { label: string; description: string }>;
-
 
 /** `focusAfter`: where focus goes once GitHub has merged, as the control is about to leave. */
 type MergeButtonProps = { target: PrTarget; pr: PrDetail; focusAfter: RefObject<HTMLElement | null> };
@@ -40,7 +29,6 @@ type MergeControlProps = {
   target: PrTarget;
   methods: [MergeMethod, ...MergeMethod[]];
   conflicting: boolean;
-  /** The head the page shows: GitHub merges only while the PR's head is still this one. */
   headSha: string;
   focusAfter: RefObject<HTMLElement | null>;
 };
@@ -52,7 +40,6 @@ function MergeControl({ target, methods, conflicting, headSha, focusAfter }: Mer
   const life = useLifetime();
   const run = () => {
     if (merge.isPending) return;
-    // The hook's error state reports a refusal; the rejection itself carries nothing more.
     merge.mutate({ ...target, method, headSha }).then(
       life.bind(() => {
         focusAfter.current?.focus();
@@ -81,7 +68,6 @@ function MergeControl({ target, methods, conflicting, headSha, focusAfter }: Mer
       }}
     >
       <PopoverAnchor asChild>
-        {/* The divider between the halves gives way to either half's hover wash. */}
         <div className="group/merge flex items-center">
           <Tooltip placement="bottom-end" content={hint} forced={hold.nudged}>
             {(describedBy) => (
@@ -124,7 +110,6 @@ function MergeControl({ target, methods, conflicting, headSha, focusAfter }: Mer
   );
 }
 
-// The button's mark: the merge glyph, a spinner while gh runs, or a warning while conflicts block it.
 function MergeGlyph({ pending, conflicting }: { pending: boolean; conflicting: boolean }) {
   if (pending) {
     return (
@@ -139,7 +124,6 @@ function MergeGlyph({ pending, conflicting }: { pending: boolean; conflicting: b
 
 type MethodMenuProps = { methods: MergeMethod[]; method: MergeMethod; onChoose(method: MergeMethod): void; disabled: boolean };
 
-// The chevron: picks the method the button merges by, from those the repo allows.
 function MethodMenu({ methods, method, onChoose, disabled }: MethodMenuProps) {
   return (
     <Menu>

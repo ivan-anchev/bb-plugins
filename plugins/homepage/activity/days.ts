@@ -1,7 +1,4 @@
-// Local-day arithmetic and bucketing for the grid: merged PRs per day, and a
-// PR count → accent level scale.
-
-export const WEEKS = 26; // six months
+export const WEEKS = 26;
 
 export type Level = 0 | 1 | 2 | 3 | 4;
 

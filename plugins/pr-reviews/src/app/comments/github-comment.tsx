@@ -1,9 +1,3 @@
-// One GitHub comment as the plugin draws it, in a review thread or on the Summary tab's activity,
-// as Zeron draws one: the author's avatar, then one line of their login, "author" for the PR's
-// author, "bot" for an app, "Pending" while it waits in the reader's pending review, an optional
-// verb (a review's "approved", a stale thread's badge), and its time, with Quote and the link to
-// GitHub on the right; under it the markdown in a borderless bubble on the recessed surface. A
-// bot's body folds to three lines.
 import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import type { GitHubComment } from "../../comments/thread-schema.ts";
 import { timeAgo } from "../relative-time.ts";
@@ -30,9 +24,6 @@ type GitHubCommentViewProps = {
   children?: ReactNode;
 };
 
-// Quote and the link to GitHub show on hover or focus, and always where there is no hover. The
-// comment is no tab stop, but can hold focus, so "N more" can hand its focus to it. A comment with
-// no body (a review that only opened threads) has nothing to quote, and no bubble.
 export function GitHubCommentView({ ref, comment, byPrAuthor, verb, onQuote, children }: GitHubCommentViewProps) {
   const { author } = comment;
   const hasBody = comment.body.trim() !== "";
@@ -65,9 +56,6 @@ export function GitHubCommentView({ ref, comment, byPrAuthor, verb, onQuote, chi
   );
 }
 
-// why a pill in the warning colour, not a muted word like "author": it is the comment's state, not
-// who wrote it, and the only mark that no one else can see it yet. The same amber marks the
-// header's count of pending comments (review-submit.tsx).
 function PendingBadge() {
   return (
     <span title="Only you can see this until you submit your review" className={`shrink-0 rounded-full px-1.5 text-[11px] leading-4 font-medium ${PENDING_TONE}`}>
@@ -93,14 +81,6 @@ export function TimeAgo({ at, className }: { at: string; className?: string }) {
 /** A comment's first line, as a row that stands for it shows it. */
 export const firstLineOf = (body: string) => body.trim().split("\n")[0];
 
-// A bot's comment, often long and generated, folds to three lines with Show more, and is never
-// hidden whole. The button shows only when the body is taller than the fold, whose last line fades
-// out, since the fold can cut through it.
-// why observers, not a layout effect: a thread under a line is a note Pierre slots into its shadow
-// root after this render, so the body has no height to measure until it is drawn; and bb's Markdown
-// can redraw the body's content without changing the fold's height.
-// It measures only the folded body: open, the body never overflows, and Show less must stay as the
-// body folds, since it keeps focus.
 function ClampedBody({ body }: { body: string }) {
   const text = useRef<HTMLDivElement>(null);
   const [overflows, setOverflows] = useState(false);
@@ -138,8 +118,6 @@ function ClampedBody({ body }: { body: string }) {
 
 const FOCUSABLE = "a[href], button, input, select, textarea, summary, [tabindex]";
 
-// While the body is folded, a link or control the fold hides, even in part, is inert: focus in it
-// would scroll the fold and leave it faded at the bottom edge. The ones in view stay as they are.
 function foldControls(field: HTMLElement, folded: boolean) {
   const edge = field.getBoundingClientRect().bottom;
   field.querySelectorAll<HTMLElement>(FOCUSABLE).forEach((control) => {

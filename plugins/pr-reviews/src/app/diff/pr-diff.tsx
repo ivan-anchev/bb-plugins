@@ -1,10 +1,3 @@
-// Every diff the plugin draws: one PR file, or one hunk of it, at the commit the page shows, in
-// bb's host-shared Pierre diff with bb's theme. Things drawn under a line, such as a guide's
-// findings, come in as notes. GitHub's review threads come placed: under their last line, or
-// above the diff at their file. A file with no text hunks (binary, a rename, an empty or mode-only
-// change) draws only its threads at its file. The lines the reader selects, from the gutter or a finding's
-// buttons, get the diff's one comment box under their last line; a thread's Reply gets it in the
-// thread.
 import { useMemo, useRef, type ReactNode } from "react";
 import type { DiffLineAnnotation, SelectedLineRange } from "@pierre/diffs";
 import { FileDiff } from "@pierre/diffs/react";
@@ -44,12 +37,9 @@ type PrDiffProps = {
 
 type LinesBox = Extract<LineBox, { kind: "lines" }>;
 
-// The box's annotation carries its lines as rows, so the box never draws without them.
 type Annotation = { kind: "note"; note: LineNote } | { kind: "thread"; placed: LineThread } | { kind: "box"; span: LineSpan; box: LinesBox };
 
 export function PrDiff(props: PrDiffProps) {
-  // Keyed by the file at its commit: another file, or a new head whose lines may be gone, starts
-  // with nothing selected, no draft and a clean boundary.
   return (
     <DiffErrorBoundary key={`${props.head.headSha}:${props.file.path}`}>
       <SelectableDiff {...props} />
@@ -65,7 +55,6 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
   const fileDiff = useMemo(() => fileDiffOf(file, newContent), [file, newContent]);
   const rows = useMemo(() => diffRowsOf(file, newContent), [file, newContent]);
   const { box } = lines;
-  // The page draws only once the PR is read; this is the same cache entry.
   const prAuthor = usePullRequest(head.projectId, head.number).data?.pr.author ?? null;
   const span = useMemo(() => (box?.kind !== "lines" ? null : spanBetween(file.path, head.headSha, rows, ...refsOf(box.at))), [file.path, head.headSha, rows, box]);
   const annotations = useMemo(
@@ -73,7 +62,6 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
     [notes, threads.lines, span, box],
   );
 
-  // Keyed by each opening: the box is drawn afresh, on its Write tab, and takes focus.
   const commentBox = (opened: LineBox, subject: BoxSubject) => (
     <CommentBox
       key={opened.opened}
@@ -98,11 +86,7 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
   );
 
   return (
-    // why a focus target: when the box unmounts with focus inside it, focus lands here rather
-    // than on the page body (REVIEW.md).
     <div ref={root} tabIndex={-1} className="outline-none">
-      {/* why `minmax(0,1fr)`: an implicit `auto` track grows to an outdated thread's widest code line,
-          so the excerpt would widen the thread, not scroll in it. */}
       {threads.file.length > 0 && (
         <div className="grid grid-cols-[minmax(0,1fr)]">
           {threads.file.map((placed) => (
@@ -115,8 +99,6 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
           className={DIFF_TEXT_CLASS}
           fileDiff={fileDiff}
           options={options}
-          // why always passed, null included: it makes the selection controlled, so the highlight is
-          // always this state.
           selectedLines={highlightOf(lines)}
           lineAnnotations={annotations}
           renderAnnotation={({ metadata }) => (
@@ -132,19 +114,12 @@ function SelectableDiff({ file, head, newContent, settings, notes, threads }: Pr
   );
 }
 
-// why: a note is slotted into the diff's rows and would inherit their code font, `white-space:
-// pre` and the code theme's colour; it reads as the page's text.
 const NOTE_BASE = "grid gap-3 font-sans whitespace-normal text-foreground";
 
-// What Pierre slots under a line spans the gutter (diff-options.ts), so each carries a background
-// of its own over it. A review thread or a finding is a band across the diff, edge to edge, as a thread at its file is:
-// the note draws the hairline above it, the band the one below.
 const BAND_NOTE_CLASS = `${NOTE_BASE} border-t border-border`;
 
-// The box sits in a band of the page's background, its padding lining it up with the code's text.
 const BOX_NOTE_CLASS = `${NOTE_BASE} border-y border-border bg-background pt-3 pr-2.5 pb-3.5 pl-[calc(var(--diffs-column-number-width,0px)+0.625rem)]`;
 
-// Pierre's sides are the diff's columns: deletions is the old side, additions the new.
 const sideOfPierre = (side: SelectedLineRange["side"]): LineRef["side"] => (side === "deletions" ? "old" : "new");
 
 const refsOf = ({ start, side, end, endSide = side }: SelectedLineRange): [LineRef, LineRef] => [
@@ -152,8 +127,6 @@ const refsOf = ({ start, side, end, endSide = side }: SelectedLineRange): [LineR
   { side: sideOfPierre(endSide), line: end },
 ];
 
-// Threads first, then notes, the box last: annotations on one line share one slot in order, so
-// GitHub's threads sit above a guide's findings, and the box under both on its last line.
 function annotationsOf(notes: readonly LineNote[], threads: readonly LineThread[], drawn: Extract<Annotation, { kind: "box" }> | null): DiffLineAnnotation<Annotation>[] {
   const noted = [
     ...threads.map((placed): DiffLineAnnotation<Annotation> => ({ side: pierreSideOf(placed.at), lineNumber: placed.at.line, metadata: { kind: "thread", placed } })),

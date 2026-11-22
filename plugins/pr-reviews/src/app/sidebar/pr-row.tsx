@@ -1,8 +1,3 @@
-// A sidebar row: one 32px line of author avatar, title, and a trailing state badge with its
-// number. The title is Activity's: muted at rest, firm on the open row and an attention
-// row, fading where it doesn't fit and running to its end under the pointer. The repo name shows on
-// hover, keyboard focus and the open row. A listed row may carry one attention dot on its avatar; a
-// stack-mate listed elsewhere is a dim, shorter row that says where it is listed. The words a screen reader needs ride along out of sight.
 import type { ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { InboxPr, StackPosition } from "../../contract.ts";
@@ -15,7 +10,6 @@ import { SECTION_TEXT } from "./section-text.ts";
 
 type RowProps = { pr: InboxPr; current: boolean; onOpen(): void };
 
-// Activity's row title: quiet at rest, firm on the open row and on one that asks to be seen.
 const TITLE = "text-[13px] leading-4.5";
 const STRONG = "font-medium text-foreground";
 
@@ -76,7 +70,6 @@ export function StackMateRow({ pr, current, onOpen }: RowProps) {
 
 type RowButtonProps = RowProps & { words: (string | null)[]; className: string; children: ReactNode };
 
-// The open row's click re-reads, as Refresh does; that is the caller's `onOpen`.
 function RowButton({ pr, current, onOpen, words, className, children }: RowButtonProps) {
   const state = STATE_TILES[pr.state].label;
   const said = words.filter((word) => word !== null);
@@ -94,7 +87,6 @@ function RowButton({ pr, current, onOpen, words, className, children }: RowButto
   );
 }
 
-// The repo's name, then the row's own marks, then the state badge.
 function Trail({ pr, children }: { pr: InboxPr; children: ReactNode }) {
   return (
     <span className="flex min-w-0 items-center gap-1.5">

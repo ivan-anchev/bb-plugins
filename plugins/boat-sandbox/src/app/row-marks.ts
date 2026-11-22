@@ -1,4 +1,3 @@
-// Which sidebar rows get the boat icon. Pure, so every case is one unit test.
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk";
 
 type RowThread = Pick<PluginSidebarThread, "id" | "parentThreadId" | "host">;

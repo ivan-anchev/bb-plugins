@@ -1,7 +1,3 @@
-// The only module that runs `gh`. It parses gh's JSON once into the canonical PR types, reads the
-// PR's comments and timeline, posts the comments a reader chose to, writes their pending review,
-// changes or merges a PR, and maps every process failure to a refusal the app can show beside its
-// data or a kept draft.
 import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import type { CommentRequest } from "../comments/comment-schema.ts";
@@ -73,7 +69,6 @@ const ghDetailSchema = ghSummarySchema.extend({
   mergeable: z.enum(["MERGEABLE", "CONFLICTING", "UNKNOWN"]),
 });
 
-// The repo's merge settings, from `gh repo view --json`: what each method is called there.
 const ALLOWED_FIELDS = { merge: "mergeCommitAllowed", squash: "squashMergeAllowed", rebase: "rebaseMergeAllowed" } as const satisfies Record<MergeMethod, string>;
 const ghMergeSettingsSchema = z.record(z.enum(Object.values(ALLOWED_FIELDS)), z.boolean());
 
@@ -84,7 +79,6 @@ const toDetail = (pr: z.infer<typeof ghDetailSchema>, settings: z.infer<typeof g
   url: pr.url,
   headRefName: pr.headRefName,
   baseRefName: pr.baseRefName,
-  // A closed PR can still be marked draft; it reads as closed, as on GitHub.
   state: pr.state === "OPEN" && pr.isDraft ? "DRAFT" : pr.state,
   commits: pr.commits.map((commit) => commit.oid),
   additions: pr.additions,
@@ -93,7 +87,6 @@ const toDetail = (pr: z.infer<typeof ghDetailSchema>, settings: z.infer<typeof g
   reviewers: toReviewers(pr.reviewRequests, pr.latestReviews),
   labels: pr.labels,
   mergeMethods: MERGE_METHODS.filter((method) => settings[ALLOWED_FIELDS[method]]),
-  // UNKNOWN: GitHub is still working it out, so the merge itself finds out.
   conflicting: pr.mergeable === "CONFLICTING",
 });
 
@@ -110,7 +103,6 @@ export async function listOpenPrs(repo: Repo): Promise<PrSummary[]> {
  * merged PRs of the repos they are in, which hold their stack-mates. Two gh calls at most.
  */
 export async function readInbox(repos: Repo[], now: number): Promise<{ found: FoundPr[]; stackMates: GitHubPr[] }> {
-  // No repo qualifier would search all of GitHub.
   if (repos.length === 0) return { found: [], stackMates: [] };
   const found = parseInboxSearch(await graphql(INBOX_QUERY, inboxVariables(repos, now)), now);
   const foundRepos = [...new Set(found.map(({ pr }) => pr.repo))];
@@ -129,9 +121,6 @@ export async function viewPr(repo: Repo, number: number): Promise<PrDetail> {
 /** A PR's diff between the two commits it was read at. */
 export type PrDiffSnapshot = PrCommits & { diff: string };
 
-// `gh pr diff` takes no commit and always serves the current head against the current base,
-// so read both before and after the diff and accept only a pair that agrees: a push to
-// either branch in between changed the diff.
 export async function snapshotPrDiff(repo: Repo, number: number): Promise<PrDiffSnapshot> {
   for (let attempt = 0; attempt < 2; attempt++) {
     const before = await commitsOf(repo, number);
@@ -142,7 +131,6 @@ export async function snapshotPrDiff(repo: Repo, number: number): Promise<PrDiff
   throw new Refusal({ code: "conflict", message: "The PR is being pushed to right now. Try again in a moment." });
 }
 
-// The contents API serves a file of up to 1 MB as base64 JSON; a larger one comes with no content.
 const ghFileSchema = z.object({ encoding: z.string(), content: z.string() });
 
 /** The text of the file at `path` in commit `sha`. Refuses a file over GitHub's 1 MB limit. */
@@ -188,7 +176,6 @@ async function timelineOf(repo: Repo, number: number): Promise<GhTimelineNode[]>
   return allPages(null, async (cursor) => parseTimelinePage(await graphql(TIMELINE_QUERY, { ...pr, cursor })));
 }
 
-// Each review's comment ids, all pages, by the review's node id.
 async function reviewCommentsOf(nodes: GhTimelineNode[]): Promise<Map<string, number[]>> {
   const reviews = await Promise.all(
     nodes.filter(isReview).map(async (review): Promise<[string, number[]]> => {
@@ -272,7 +259,6 @@ export async function discardReview(reviewId: string): Promise<void> {
   await runGhPost(discardArgs(reviewId), "The review may have been discarded: Refresh to see.");
 }
 
-// why its own mapping: a write that timed out may have reached GitHub (ghPostRefusalFor).
 async function runGhPost(args: string[], unsure?: string): Promise<string> {
   try {
     return await runHostCommand("gh", args);

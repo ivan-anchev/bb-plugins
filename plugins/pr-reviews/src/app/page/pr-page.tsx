@@ -1,5 +1,3 @@
-// navPanel component: the chosen PR's page, its header above the Summary, Changes and Guide tabs.
-// The Guide tab shows one screen per review state.
 import { useCallback, useRef, useState, type RefObject } from "react";
 import type { PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import type { ReviewThread } from "../../comments/thread-schema.ts";
@@ -23,7 +21,6 @@ import { SummaryTab } from "./summary-tab.tsx";
 export function PrPage({ subPath }: PluginNavPanelProps) {
   const route = parseRoute(subPath);
   if (route.kind !== "pr") return <Notice>Choose a pull request.</Notice>;
-  // Keyed: a different PR is a different page.
   return <PullRequestPage key={`${route.projectId}/${route.number}`} projectId={route.projectId} number={route.number} />;
 }
 
@@ -33,8 +30,6 @@ function PullRequestPage({ projectId, number }: { projectId: string; number: num
   const viewOptions = useViewOptions();
   const page = useRef<HTMLDivElement>(null);
   const title = useRef<HTMLHeadingElement>(null);
-  // Focus a leaving notice held goes to the PR's title, or to the page before the PR loads. When
-  // the whole page leaves, its ref is already detached, and focus is the next page's to place.
   const focusPage = useCallback(() => (title.current ?? page.current)?.focus(), []);
   return (
     <div ref={page} tabIndex={-1} className="flex h-full min-h-0 flex-col bg-background text-foreground outline-none">
@@ -46,12 +41,7 @@ function PullRequestPage({ projectId, number }: { projectId: string; number: num
   );
 }
 
-// Without the visit, the sidebar's new-activity dot and the rail badge's project stay as they
-// were: say so beside the page, with a way to record it again. The notice stays through a retry,
-// its Try again focusable but inert (aria-disabled), so a retry that fails keeps the reader's place.
 function VisitError({ visit, onLeaveWithFocus }: { visit: ReturnType<typeof useRecordVisit>; onLeaveWithFocus(): void }) {
-  // why a ref callback: React detaches it before it removes the notice, so its cleanup still sees
-  // whether the notice holds focus, which would otherwise drop to the page body (REVIEW.md).
   const notice = useCallback(
     (region: HTMLElement | null) => {
       if (region === null) return;
@@ -75,9 +65,6 @@ function VisitError({ visit, onLeaveWithFocus }: { visit: ReturnType<typeof useR
 
 type ReviewPageProps = { target: PrTarget; repo: Repo; pr: PrDetail; review: ReviewState; viewOptions: ViewOptionsState; title: RefObject<HTMLHeadingElement | null> };
 
-// One header and one tab bar for every review state, so their buttons keep keyboard focus while the
-// state changes. A PR opens on Summary: the page is keyed by PR, so the tab is too. A review
-// thread's row in the Summary tab's activity opens the Changes tab at that thread.
 function ReviewPage({ target, repo, pr, review, viewOptions, title }: ReviewPageProps) {
   const [tab, setTab] = useState<PrTab>("summary");
   const [reveal, setReveal] = useState<ThreadReveal | null>(null);
@@ -108,7 +95,6 @@ function ReviewPage({ target, repo, pr, review, viewOptions, title }: ReviewPage
   );
 }
 
-/** The Guide tab for a review state: its screen, its status, and the view options once there is a guide. */
 function guideTabOf(target: PrTarget, pr: PrDetail, review: ReviewState, viewOptions: ViewOptionsState, shown: boolean): TabContent {
   switch (review.kind) {
     case "none":
@@ -117,7 +103,6 @@ function guideTabOf(target: PrTarget, pr: PrDetail, review: ReviewState, viewOpt
       return { status: { kind: "writing" }, panel: <RunningScreen target={target} review={review} />, barEnd: null };
     case "no-guide":
       return { status: { kind: "none" }, panel: <NoGuideScreen target={target} review={review} />, barEnd: null };
-    // A stale guide is still worth reading: it shows under a banner offering Update guide.
     case "ready":
     case "stale": {
       const head = { ...target, headSha: review.guideHeadSha };
@@ -126,7 +111,6 @@ function guideTabOf(target: PrTarget, pr: PrDetail, review: ReviewState, viewOpt
         panel: (
           <>
             {review.kind === "stale" && <StaleBanner target={target} pr={pr} guideHeadSha={review.guideHeadSha} />}
-            {/* Keyed: a new guide is a new view. */}
             <GuideView key={review.guideHeadSha} head={head} viewOptions={viewOptions} shown={shown} />
           </>
         ),

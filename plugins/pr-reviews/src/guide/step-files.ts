@@ -1,5 +1,3 @@
-// The files one walkthrough step touches, with the lines the step's own hunks add and remove
-// and whether the PR adds, deletes or changes each. Pure; the step page lists them beside its diffs.
 import { fileOf, hunkOf, lineCountsOf, WHOLE_FILE, type DiffFile } from "../diff/diff-schema.ts";
 import type { GuideHunk, GuideStep } from "./guide-schema.ts";
 

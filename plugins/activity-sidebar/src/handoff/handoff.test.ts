@@ -7,7 +7,6 @@ import { HANDOFF_MS, nextHandoffs, nextRelease, NO_HANDOFFS, type Handoffs } fro
 const WAITING = { indicator: "background-command" } as const;
 const DONE = { indicator: "unread-success" } as const;
 
-/** The hand-offs after each update in turn, the clock moving 1s per update. */
 function run(...updates: PluginSidebarThread[][]): Handoffs {
   return updates.reduce((last, threads, i) => nextHandoffs(last, threads, i * 1_000), NO_HANDOFFS);
 }

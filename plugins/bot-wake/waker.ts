@@ -21,15 +21,12 @@ interface WakerDeps {
 
 type Payload<E extends keyof PluginThreadEventPayloads> = PluginThreadEventPayloads[E];
 
-/** A user stopped the turn: the idle state is settled, but nobody is woken. */
 interface Stopped {
   kind: "stopped";
 }
 
-/** The states of one thread already settled, whether or not they woke its bot. */
 interface SeenStates {
   interactions: Set<string>;
-  /** The newest thread version that settled as finished, stopped, or failed. */
   settledVersion: number;
 }
 
@@ -41,7 +38,6 @@ interface SeenStates {
  */
 export function createWaker(deps: WakerDeps) {
   const seen = new Map<string, SeenStates>();
-  /** Handler calls and the POSTs they started that have not settled yet. */
   const pending = new Set<Promise<void>>();
 
   return {
@@ -54,7 +50,6 @@ export function createWaker(deps: WakerDeps) {
     onThreadFailed({ thread, error }: Payload<"thread.failed">) {
       return track(wake(thread, async () => ({ kind: "failed", error })));
     },
-    /** Resolves once every handler and POST started so far has settled, delivered or logged. */
     async idle() {
       while (pending.size > 0) await Promise.allSettled([...pending]);
     },
@@ -77,10 +72,6 @@ export function createWaker(deps: WakerDeps) {
     start(target, thread, attention);
   }
 
-  /**
-   * Starts the POST without awaiting it. `deps.signal` still cancels it when the
-   * plugin unloads, and `send` never rejects, so nothing escapes unhandled.
-   */
   function start(target: Target, thread: ThreadResponse, attention: Attention) {
     void track(
       send(target, thread, attention).catch((error: unknown) => {
@@ -89,10 +80,6 @@ export function createWaker(deps: WakerDeps) {
     );
   }
 
-  /**
-   * A thread that idles on an open question or approval is waiting on that,
-   * and one a user stopped needs nothing; otherwise it finished.
-   */
   async function idleAttention(threadId: string, lastAssistantText: string | null): Promise<Attention | Stopped> {
     const interaction = await deps.pendingInteraction(threadId);
     if (interaction !== null) return { kind: "interaction", interaction };
@@ -100,7 +87,6 @@ export function createWaker(deps: WakerDeps) {
     return { kind: "finished", lastAssistantText };
   }
 
-  /** An unreadable turn ending counts as finished: a spare wake beats a lost completion. */
   async function stoppedByUser(threadId: string): Promise<boolean> {
     try {
       return await deps.lastTurnInterrupted(threadId);
@@ -110,15 +96,6 @@ export function createWaker(deps: WakerDeps) {
     }
   }
 
-  /**
-   * One POST per state, claimed before sending so overlapping or delayed
-   * repeats of a signal find it taken. An interaction is its id. A finished,
-   * stopped, or failed thread is the row version bb moved into that status: a
-   * version at or below the newest one already claimed is a repeat or a
-   * superseded state, while a later idle → active → idle carries a newer
-   * version. A stop claims its version without sending, so a late repeat of it
-   * cannot send finished once a newer turn has completed.
-   */
   function claim(thread: ThreadResponse, attention: Attention | Stopped): boolean {
     const states = seen.get(thread.id) ?? { interactions: new Set<string>(), settledVersion: -Infinity };
     seen.set(thread.id, states);
@@ -145,7 +122,6 @@ export function createWaker(deps: WakerDeps) {
   }
 }
 
-/** Only top-level threads you can see wake a bot. */
 function wakesBots(thread: ThreadResponse): boolean {
   return thread.visibility === "visible" && thread.parentThreadId === null;
 }

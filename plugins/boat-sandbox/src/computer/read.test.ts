@@ -11,10 +11,8 @@ import { computerRpcHandlers } from "./read.ts";
 const CAPTURED = JSON.parse(readFileSync(new URL("../boat/fixtures/create-a.json", import.meta.url), "utf8")).sandbox;
 const SANDBOX = sandboxId.parse("bx_a8k84ben");
 const RESOURCE: JsonValue = { sandboxId: SANDBOX, key: "thr_1", accountId: accountId.parse("sandbox_1") };
-// Shaped like the live noVNC URL of 2026-11-17, secrets replaced.
 const NOVNC = "https://box-node-1-6080.on.boat.dev/vnc.html?autoconnect=true&resize=remote&reconnect=true&path=websockify&password=pw&_token=tk";
 
-/** A sandbox boat reports in `state`, one of its wire states. */
 function sandboxIn(state: string): Sandbox {
   const sandbox = toSandbox({ ...CAPTURED, state });
   if (sandbox === null) throw new Error(`unreachable: ${state} is present`);
@@ -22,9 +20,7 @@ function sandboxIn(state: string): Sandbox {
 }
 
 interface World {
-  /** The bb host's machine provider; null for a host no plugin made, such as a laptop. */
   provider?: string | null;
-  /** What core kept for the host; null until boat has made the sandbox. */
   resource?: JsonValue | null;
   sandbox?: Sandbox | null;
   desktop?: () => Promise<VncDesktop>;

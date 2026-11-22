@@ -7,10 +7,8 @@ import { issueTurns } from "./issue-turns.ts";
 const MANAGER = coordinatorIdSchema.parse("8a3f2c1e-1b2d-4c5e-8f90-123456789abc");
 const I1 = issueIdSchema.parse("WEB-1");
 const I2 = issueIdSchema.parse("WEB-2");
-/** The plugin's instance, never disposed. */
 const LIVE = new AbortController().signal;
 
-/** A promise and the function that settles it. */
 function held(): { done: Promise<void>; release: () => void } {
   let release = (): void => {};
   const done = new Promise<void>((resolve) => (release = resolve));
@@ -79,7 +77,7 @@ test("once the plugin's instance is disposed, no turn is admitted, one already w
   const bb = held();
   const ran: string[] = [];
   const holding = turns.run(MANAGER, I1, () => bb.done);
-  await new Promise((resolve) => setImmediate(resolve)); // the first turn is admitted
+  await new Promise((resolve) => setImmediate(resolve));
   const waiting = assert.rejects(turns.run(MANAGER, I1, async () => void ran.push("waiting")), /disposed/);
   disposal.abort(new Error("disposed"));
   bb.release();

@@ -1,7 +1,3 @@
-// The trail's and the transcript's lines, tested through trailItems and transcriptItems on real
-// child rows. Every expected label is what bb's chat shows for the same rows: read off the chat live
-// where the delegate's row is still there (claude-groups, claude-panel), and otherwise from bb's own compaction (ThreadScreen bundle `as` and `Wo`,
-// lifted out of the bundle and run on the same rows, which matched on every fixture delegate).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -12,29 +8,19 @@ import { foldTaskEvents, normalise } from "./normalise.ts";
 import { isHandback, isReasoning, stepLabel, trailSteps, transcriptSteps } from "./steps.ts";
 import { trailItems, transcriptItems, type WorkItem } from "./work-groups.ts";
 
-// See normalise.test.ts, child-threads.test.ts, and steps.test.ts for how each was taken.
 const claude: { rows: TimelineRow[]; events: EventRow[] } = load("claude-thread.json");
 const codex: { final: TimelineRow[]; midrun: TimelineRow[] } = load("codex-thread.json");
 const children: { counter: { running: Read; settled: Read }; outcomes: { reused: { running: Read } } } = load("child-threads.json");
 const edited: { row: StepRow } = load("claude-file-change.json");
-// One delegation of thread thr_24dxq5xhph, "Worker: add REVIEW.md rules", as its timeline carried it
-// (includeNestedRows=true), strings cut to 200 characters: its only file change creates a file.
 const reviewWorker: { row: DelegationRow } = load("claude-groups.json");
-// Another of thr_24dxq5xhph, "Worker: issue 08 round 3 (live line)", taken the same way, ids kept whole:
-// three messages between four groups, its reasoning inside them.
 const liveLineWorker: { row: DelegationRow } = load("claude-panel.json");
 
 const delegates = normalise(claude.rows, foldTaskEvents(new Map(), claude.events), "claude-code");
-// The same delegates mid-run, as bb's chat shows a delegation whose row is still pending: open.
 const pending = normalise(delegationRows(claude.rows).map((row) => ({ ...row, status: "pending" as const, completedAt: null })), new Map(), "claude-code");
 
-// Hand-built from real rows: no capture holds a repeated read, a held approval, mixed file changes,
-// a thread tell, or a run cut short by reasoning or a user message.
 const readRow = workRow("file-read", () => true);
-// why: a completed command bb cannot read as a read, list, or search, so it counts as a command.
 const command = workRow("command", (row) => row.status === "completed" && row.activityIntents.length === 0);
 const reasoning = delegates.flatMap((d) => d.steps ?? []).find(isReasoning) ?? assert.fail("fixture premise: a reasoning step");
-// why: a child thread's steps leave out what it was told, so this comes from its rows.
 const userMessage = children.outcomes.reused.running.rows.find((row) => row.kind === "conversation" && row.role === "user") ?? assert.fail("fixture premise: a user message");
 const edit = edited.row.kind === "work" && edited.row.workKind === "file-change" ? edited.row : assert.fail("fixture premise: a file change");
 
@@ -57,7 +43,6 @@ test("a settled delegate's run between messages folds into one line, in bb's wor
 test("the trail reads as bb's chat read it live for the same delegate", () => {
   const [d] = normalise([reviewWorker.row], new Map(), "claude-code");
   const items = trailItems(d);
-  // Live, thr_24dxq5xhph's chat, its "Subagent finished Worker: add REVIEW.md rules" row expanded.
   assert.deepEqual(items.map(line), ["Explored 1 file, 1 search, 1 list, ran 2 tools, ran 4 commands, created 1 file"]);
   assert.deepEqual(stepsOf(items[0]), trailSteps(d.steps ?? []));
 });
@@ -72,7 +57,7 @@ test("the handback counts as a tool and reasoning folds in, but neither shows as
   const d = byTitle(delegates, "Prototype subagent strip variants");
   const last = trailItems(d).at(-1);
   assert.ok(last?.kind === "group" && last.label === "Ran 1 command, ran 1 tool");
-  assert.deepEqual(last.steps, [trailSteps(d.steps ?? []).at(-1)]); // the command; its reasoning and the handback fold in unseen
+  assert.deepEqual(last.steps, [trailSteps(d.steps ?? []).at(-1)]);
   const shown = delegates.flatMap((x) => trailItems(x).flatMap(stepsOf));
   assert.ok(!shown.some((row) => isReasoning(row) || isHandback(row)));
 });
@@ -87,12 +72,10 @@ test("a run of one stays a step: Codex counters say a number between commands, s
 
 test("while a delegation row is pending, only neighbours of one kind fold, and the latest is live, in the present tense", () => {
   const d = byTitle(pending, "Research t3code subagent visual language");
-  // why: its rows end in reasoning and the handback, which bb's chat shows as its latest line; cut there, the reads are latest.
   const rows = d.scopes[0].rows;
   const items = trailItems(delegation(rows.slice(0, rows.findLastIndex((row) => row.kind === "work" && !isHandback(row)) + 1), "pending"));
   assert.deepEqual(groupLines(items), ["Explored 2 files", "Ran 1 command", "Explored 1 list, 2 files, 1 search", "Ran 1 command", "Exploring 1 file, 2 searches"]);
   assert.deepEqual(items.map((item) => item.live), [...items.slice(1).map(() => false), true]);
-  // with them, bb's latest line is the handback, hidden here: no line is live, and none moves
   assert.deepEqual(trailItems(d).map((item) => [line(item), item.live]), items.map((item) => [line(item).replace("Exploring", "Explored"), false]));
 });
 
@@ -109,10 +92,6 @@ test("a running child thread's latest step is the live line; settled, its two co
   assert.deepEqual(groupLines(trailItems(childOf(children.counter.settled))), ["Ran 2 commands"]);
 });
 
-// ---------------------------------------------------------------- what decides membership: bb's source, not the delegate's lifecycle
-
-// A Claude Code background agent as it runs: bb's row reads completed from launch, so bb's chat folds
-// its work closed and shows none of it live; only its task, still started, says it runs on.
 const started = claude.events.filter((event) => event.type === "item/started" && event.data.item.type === "backgroundTask" && event.data.item.parentToolCallId === "dafb9611c6-i5");
 const runningOn = byTitle(normalise(claude.rows, foldTaskEvents(new Map(), started), "claude-code"), "Research affectui components visual language");
 const settledOn = byTitle(delegates, runningOn.title);
@@ -129,7 +108,6 @@ test("a Claude Code agent that runs on with a completed row reads its latest gro
 test("settled, the same agent reads exactly bb's chat: every line in the past tense, none live", () => {
   assert.equal(settledOn.state.status, "completed", "fixture premise: its task completed");
   const items = trailItems(settledOn);
-  // bb's words for these rows (see the first test): only the latest line's tense differs from the running agent's
   assert.deepEqual(groupLines(items), ["Explored 2 files, researched 1 web page, ran 2 commands", "Ran 3 commands, explored 1 file, 1 list, ran 1 tool (2 errors)"]);
   assert.ok(items.every((item) => !item.live));
 });
@@ -140,7 +118,6 @@ test("running or settled, the agent's lines hold the same steps: liveness only w
 
 test("a child thread's settled turn folds closed while the child runs on, even as its latest line", () => {
   const read = children.outcomes.reused.running;
-  // why: cut where its second turn's group is the latest row, the moment before that turn's answer lands.
   const at = read.rows.findLastIndex((row) => row.kind === "turn");
   const turn = read.rows[at];
   assert.ok(turn.kind === "turn" && turn.children, "fixture premise: a settled turn group");
@@ -149,8 +126,6 @@ test("a child thread's settled turn folds closed while the child runs on, even a
   assert.equal(d.state.status, "running", "fixture premise: the child runs");
   assert.deepEqual(trailItems(d).map((item) => [line(item), item.live]).slice(-1), [["Ran 1 command, explored 1 file", false]]);
 });
-
-// ---------------------------------------------------------------- which line is live: decided on bb's lines, before hiding
 
 test("a run before pending reasoning reads past tense: bb's latest line is the reasoning, hidden here", () => {
   const items = trailItems(delegation([command, { ...command, id: "c2" }, { ...reasoning, status: "pending" }], "pending"));
@@ -162,18 +137,14 @@ test("a run a user message folds closed never reads live, though the user messag
   const items = trailItems(delegation([command, { ...command, id: "c2" }, userMessage], "pending"));
   assert.deepEqual(groupLines(items), ["Ran 2 commands"]);
   assert.ok(items.every((item) => !item.live));
-  // the same run with nothing after it is bb's active bundle
   assert.deepEqual(trailItems(delegation([command, { ...command, id: "c2" }], "pending")).map((item) => [line(item), item.live]), [["Running 2 commands", true]]);
 });
-
-// ---------------------------------------------------------------- a successful `bb thread tell` is a message to bb's chat
 
 const tell = (id: string, text: string, exitCode: number | null): WorkRow => ({ ...command, id, command: text, exitCode });
 const TELL = "bb thread tell thr_24dxq5xhph 'Done: see the report.'";
 
 test("a successful bb thread tell stays its own line and splits the run, as bb shows it as a message", () => {
   const items = trailItems(delegation([readRow, command, tell("t", TELL, 0), { ...command, id: "c2" }, { ...readRow, id: "r2", path: "other.ts" }], "completed"));
-  // why: like a question, it folds the run before it as an open run: a read, then a command, each its own line.
   assert.deepEqual(items.map(line), [stepLabel(readRow), stepLabel(command), `Ran ${TELL}`, "Ran 1 command, explored 1 file"]);
 });
 
@@ -214,13 +185,9 @@ test("file changes of one action name it; a mix reads as edits; live, they read 
   assert.deepEqual(groupLines(trailItems(delegation([edit, created("b.ts")], "completed"))), ["Edited 2 files"]);
 });
 
-// ---------------------------------------------------------------- the transcript: the same lines, reasoning in them
-
 test("the transcript reads as bb's chat read it live for the same delegate, reasoning folded into its groups", () => {
   const [d] = normalise([liveLineWorker.row], new Map(), "claude-code");
   const items = transcriptItems(d);
-  // Live, thr_24dxq5xhph's chat, its "Subagent finished Worker: issue 08 round 3 (live line)" row expanded;
-  // bb draws its sixth line, the message `::browser-preview{session="7bd5a0b5-…"}`, as a live browser view.
   assert.deepEqual(items.map(line), [
     "Explored 10 files, 1 list, 1 search, ran 1 tool, ran 4 commands, edited 1 file (1 error)",
     "Now the change in work-groups.ts.",
@@ -230,7 +197,6 @@ test("the transcript reads as bb's chat read it live for the same delegate, reas
     "Opened a browser preview",
     "Ran 10 commands, explored 3 searches, 2 files, ran 1 tool (1 error)",
   ]);
-  // bb opens the first group to "Thought", "Read brief-worker-08-r3.md", "Thought", ...: every step in order, reasoning too
   assert.deepEqual(items.flatMap(stepsOf), transcriptSteps(d.steps ?? []));
   assert.ok(stepsOf(items[0]).some(isReasoning));
 });
@@ -262,11 +228,8 @@ test("pending reasoning, bb's latest line, is the transcript's live line, where 
   assert.ok(trailItems(d).every((item) => !item.live));
 });
 
-// ---------------------------------------------------------------- helpers
-
 type Read = { child: ChildThread; rows: TimelineRow[] };
 
-/** A delegation row of thread thr_24dxq5xhph carrying these child rows, settled or still pending. */
 function delegation(rows: readonly TimelineRow[], status: "completed" | "pending"): Delegate {
   const [d] = normalise([{ ...reviewWorker.row, status, childRows: [...rows] }], new Map(), "claude-code");
   return d;
@@ -280,7 +243,6 @@ function load<T>(name: string): T {
   return JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8"));
 }
 
-/** A line as bb's chat writes it: a group's words with its failures, or a step's own label. */
 function line(item: WorkItem): string {
   return item.kind === "group" ? `${item.label}${item.note ? ` (${item.note})` : ""}` : stepLabel(item.step);
 }

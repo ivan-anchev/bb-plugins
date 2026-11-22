@@ -1,4 +1,3 @@
-// Every thread's sleep, live across clients, and the writes that change one.
 import { experimental_useRpcMutation, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { useMemo } from "react";
 import { toast } from "sonner";
@@ -25,7 +24,6 @@ export function useSleeps(): Sleeps {
   const write = experimental_useRpcMutation({
     contract: activitySidebarContract,
     method: "setSleep",
-    // why: the row moves the moment Sleep or Wake is picked. Pure: the caller stamps `until`.
     optimistic: (input, cache) =>
       cache.update("sleeps", {}, (current) => ({
         sleeps: [...current.sleeps.filter((s) => s.threadId !== input.threadId), ...(input.until === null ? [] : [{ threadId: input.threadId, until: input.until }])],
@@ -35,14 +33,12 @@ export function useSleeps(): Sleeps {
   const records = read.data?.sleeps ?? NONE;
   const sleeps = useMemo(() => new Map(records.map((s) => [s.threadId, s])), [records]);
   const setSleep = (threadId: string, until: number | null) => write.mutate({ threadId, until });
-  // A write the server refused says so: never a click, or a wake, that silently undoes itself.
   const said = (title: string) => () => void toast.error(title);
   return {
     sleeps,
     status: sleepsStatus(read),
     refetch: () => void read.refetch(),
     sleep: (threadId, until) => void setSleep(threadId, until).catch(said("Couldn't put this chat to sleep")),
-    // why: the shared clock moves to the stamp, so the row reads as woken on this render, not a minute on.
     wake: (threadId) => void setSleep(threadId, syncMinute()).catch(said("Couldn't wake this chat")),
     forget: (threadId) => void setSleep(threadId, null).catch(said("Couldn't mark this chat as seen")),
   };

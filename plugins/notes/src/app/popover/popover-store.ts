@@ -1,7 +1,3 @@
-// Whether the Notes popover is open, what its form quotes, and where focus goes. Module state,
-// because its openers are not components: a message action's `run`, a command's `run`, a
-// sidebar-footer `onActivate`, and the card's "New note" link.
-// The overlay reads it with useSyncExternalStore.
 import { useSyncExternalStore } from "react";
 import type { Quote } from "../../contract.ts";
 
@@ -36,7 +32,6 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-/** Opens with `focus`, or moves focus there when already open; a quote, when given, replaces the form's. */
 function show(focus: Focus, openedBy: Opener, quote?: Capture): void {
   requests += 1;
   set(
@@ -82,6 +77,5 @@ export const notesPopover = {
 const snapshot = (): PopoverState => state;
 
 export function usePopoverState(): PopoverState {
-  // why the server snapshot: popover-store.test.ts reads this hook through a server render.
   return useSyncExternalStore(subscribe, snapshot, snapshot);
 }

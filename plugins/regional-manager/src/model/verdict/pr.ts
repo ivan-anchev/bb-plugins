@@ -1,10 +1,6 @@
-// The pull request of an agent's branch and its CI, as the plugin last read them from GitHub, and the one rule for
-// what CI says about the commit a done handoff claims. Pure: the watch writes the reading, and
-// settling a verdict, the board and the texts read it.
 import { z } from "zod";
 import { commitSchema, type HandoffId } from "../handoff.ts";
 
-/** A pull request's checks on its head commit, rolled up as GitHub's merge box rolls them. `none`: it reports no checks. */
 const ciSchema = z.enum(["none", "pending", "pass", "fail"]);
 
 /** A branch's pull request as one successful read of GitHub found it. `failedChecks`: the name of each failed check, while CI fails. */
@@ -80,15 +76,10 @@ export const ciRunning = (pr: PrSnapshot): boolean => pr.state === "open" && pr.
 
 /** What CI says about a commit: a verdict that passed every criterion is judged with it. */
 export const ciVerdictSchema = z.discriminatedUnion("kind", [
-  /** There is no pull request to check. */
   z.object({ kind: z.literal("none") }),
-  /** The pull request reported no checks at this commit, still none once GitHub had time to attach them. */
   z.object({ kind: z.literal("no-checks"), number: z.number().int() }),
-  /** CI on the pull request passed at this commit. */
   z.object({ kind: z.literal("pass"), number: z.number().int() }),
-  /** CI on the pull request failed at this commit; each failed check by name. */
   z.object({ kind: z.literal("fail"), number: z.number().int(), failedChecks: z.array(z.string()) }),
-  /** The plugin couldn't read CI for this commit, and why. */
   z.object({ kind: z.literal("not-checked"), reason: z.string() }),
 ]);
 export type CiVerdict = z.infer<typeof ciVerdictSchema>;
@@ -96,7 +87,6 @@ export type CiVerdict = z.infer<typeof ciVerdictSchema>;
 /** CI on a commit, or that it is still to come: `number` is its pull request's (null: not seen yet). */
 export type Ci = CiVerdict | { kind: "waiting"; number: number | null };
 
-// why five minutes: over 93 pushes to ivan-anchev/bb-plugins, GitHub attached checks at most 97 s (median 5 s) after a commit reached a pull request.
 const CHECKS_GRACE_MS = 5 * 60_000;
 
 /** The done handoff whose commit CI is judged on: its id, the commit it claims, and the pull request it names (null: none). */
@@ -122,12 +112,6 @@ export function ciOf({ id, headSha, prUrl }: Claim, status: PrStatus | null): Ci
   return { kind: "waiting", number: found?.snapshot.number ?? null };
 }
 
-/**
- * What CI finished as on the found snapshot's head commit; null while it may still be to come. why
- * zero checks wait until a read past the window still sees none: right after a push GitHub may not
- * have attached them yet, an unknown check state is not a pass, and time passing since a read
- * says nothing about what GitHub has now.
- */
 function finishedOnHead({ snapshot: pr, headSeenAt, readAt }: PrFound): CiVerdict | null {
   switch (pr.ci) {
     case "pass":

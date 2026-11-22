@@ -1,5 +1,3 @@
-// The window's one React owner of the strip (an experimental_appOverlay, mounted once per window with the
-// SDK's hooks). Feeds bb's changes into the controller and portals the strip into the content script's slot.
 import {
   experimental_usePluginId,
   experimental_useSidebarThreads,
@@ -25,14 +23,8 @@ export function TabsOverlay() {
   const threads = experimental_useSidebarThreads();
   const slot = useStripSlot();
 
-  // Declared first, so the saved tabs are loaded and the navigator bound before the first observe. The
-  // unbind stops tab writes and saves.
   useEffect(() => tabs.bind(nav, savedTabs(pluginId)), [nav, pluginId]);
-  // why `split` and `threadId`: `split` changes on every pane focus, layout change and divider drag, the
-  // route thread on every navigation between threads, and `screen` between a thread, bb's New thread screen
-  // and Settings. Together they are the signal that bb's layout or route changed; the tree is read from bb.
   useEffect(() => tabs.observe(screen), [split, threadId, screen]);
-  // why only once ready: a loading or failed index has no threads, which must not read as all of them gone.
   useEffect(() => {
     if (threads.status === "ready") tabs.syncThreads(threads);
   }, [threads]);
@@ -40,11 +32,6 @@ export function TabsOverlay() {
   return slot === null ? null : createPortal(<Strip />, slot);
 }
 
-/**
- * One navigator for the overlay's lifetime that routes with bb's latest one.
- * why: bb hands out a new navigator on some route changes, and rebinding the tabs to it would abort the show
- * in flight, cutting off a pane-by-pane show at its own first navigation.
- */
 function useLatestNav(): Nav {
   const nav = useBbNavigate();
   const latest = useRef(nav);

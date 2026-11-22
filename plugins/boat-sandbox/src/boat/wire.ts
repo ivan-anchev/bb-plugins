@@ -1,18 +1,3 @@
-// boat's JSON, parsed once. This is the only module that knows boat's field names;
-// every other module trusts the types these schemas produce.
-//
-// What boat API v1 responses carry:
-// - /me: `user.id` is the account id (OpenAPI: "Your account id"; it reads `sandbox_<32 hex>`),
-//   `user.login`, `user.zeroDataRetention`.
-// - /limits reads the wallet a create would bill (the key's active wallet). It carries `teamId`
-//   only when that is an organization wallet. `starts.{minute,hour,day}` are `{limit, used, remaining}`,
-//   all null when `starts.unlimited`. `canStart` / `startBlockedReason` say whether any start can run.
-// - /environments `environments[]` carries the pass toggles, `safeForThirdParties` (which overrides
-//   them), `proxyAiCredentials` and `credentialProfileId` (null: the sandbox owner's default profile).
-// - /credential-profiles `profiles[]` carries `connected` (credential ids such as
-//   `claude-subscription`, never a secret) and `owner.{id, aiProxyEnabled}`.
-// - /me `user.connectionMethods` lists every login method linked to the account; `github` is the link
-//   boat's GitHub token comes from.
 import { z } from "zod";
 
 export const sandboxId = z.string().regex(/^bx_[23456789abcdefghjkmnpqrstuvwxyz]{8}$/).brand<"SandboxId">();
@@ -27,7 +12,6 @@ export const wireMe = z
     id: user.id,
     login: user.login,
     zeroDataRetention: user.zeroDataRetention,
-    /** boat can give sandboxes a GitHub token only for an account linked to GitHub. */
     githubLinked: user.connectionMethods.includes("github"),
   }));
 
@@ -54,7 +38,6 @@ export const wireLimits = z
       z.object({ unlimited: z.literal(true) }),
       z.object({ unlimited: z.literal(false), minute: startWindow, hour: startWindow, day: startWindow }),
     ]),
-    // All three are null or absent on unlimited accounts.
     wallet: z.object({ balanceDollars: z.number() }).nullish(),
     planIncluded: z.object({ vmHoursRemaining: z.number(), periodEnd: instant.nullable() }).nullish(),
     overagePrices: z.object({ vmHourDollars: z.number() }).nullish(),
@@ -65,7 +48,6 @@ export const wireLimits = z
       : { kind: "organization" as const, teamId: limits.teamId },
     starts: limits.starts,
     startsBlockedBy: limits.canStart ? null : (limits.startBlockedReason ?? "boat gave no reason"),
-    // null on an unlimited account: no plan, wallet or price to count against.
     billing: limits.wallet && limits.planIncluded && limits.overagePrices
       ? ({
           walletDollars: limits.wallet.balanceDollars,
@@ -93,10 +75,6 @@ export const sandboxEnvironment = z.object({
   profileId: z.string().nullable(),
 });
 
-/**
- * OAS `SandboxEnvironment`. Only the flags are read: zod drops `envContents` and `secretFiles`
- * (OAS: "Treat as sensitive") right here.
- */
 const wireEnvironment = z
   .object({
     name: z.string(),
@@ -121,7 +99,6 @@ export const wireEnvironmentList = z
   .object({ environments: z.array(wireEnvironment) })
   .transform(({ environments }) => environments);
 
-/** OAS `CredentialProfile`: which AI credentials boat holds, and whether its owner proxies them. */
 const credentialProfile = z
   .object({
     id: z.string(),
@@ -151,7 +128,6 @@ export const wireError = z.object({
   error: z.object({ details: z.object({ retryable: z.boolean().optional() }).nullish() }).optional(),
 });
 
-/** `cancelled` is terminal: boat reports it once with only id, state and error, then answers 404. */
 const cancelledSandbox = z.object({ id: sandboxId, state: z.literal("cancelled") });
 
 const presentSandbox = z.object({
@@ -164,17 +140,8 @@ const presentSandbox = z.object({
   stoppedAt: instant.nullable(),
   dataExpiredAt: instant.nullable(),
   error: z.string().nullable(),
-  /** The last stop requested through the API, ever (OAS `StopOperation`); null if there never was one. */
   stop: z.object({ endedAt: instant.nullable() }).nullable(),
-  /**
-   * The account's logins (agent sign-ins, GitHub token, secrets) are on the sandbox. False for a no-env
-   * sandbox, which still reports `environment: "base"`, so this is the field to read.
-   */
   holdsCreatorLogins: z.boolean(),
-  /**
-   * The environment the sandbox runs (OAS: "what the sandbox actually holds"). Read it once the sandbox
-   * runs: a create response can say null before then.
-   */
   environment: z.string().nullable(),
 });
 
@@ -188,7 +155,6 @@ export const wireSandboxList = z.object({
   pageInfo: z.object({ nextCursor: z.string().nullable() }),
 });
 
-/** Machine time this UTC calendar month at list price (OAS `cost`, `deletedCost`), counted from `since`, the 1st; boat also sends `seconds`. */
 const monthCost = z.object({ since: instant, dollars: z.number() });
 
 /**
@@ -260,7 +226,6 @@ export const savedSnapshot = z.object({
   savedAt: z.string(),
 });
 
-/** One saved snapshot of `GET /saved-snapshots` (OAS `SavedSnapshot`). */
 const wireSavedSnapshot = z
   .object({
     name: z.string(),

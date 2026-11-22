@@ -1,6 +1,3 @@
-// The guide's first screen, under its title "What this PR does": the problem and the approach,
-// before and after when behaviour changes, the findings, what the guide leaves out (and the tests
-// and mocks the view options hide), and who wrote it.
 import { useState, type ReactNode } from "react";
 import { shortSha, type GuideRecord } from "../../contract.ts";
 import { fileOf, type DiffFile } from "../../diff/diff-schema.ts";
@@ -75,7 +72,6 @@ function BeforeAfter({ behaviour }: { behaviour: Behaviour }) {
   );
 }
 
-// The last item is where the sequence lands, so it reads in full colour.
 function Sequence({ items }: { items: string[] }) {
   return (
     <ol className="grid list-decimal gap-1.5 pl-4 text-sm leading-5 text-muted-foreground [&>li:last-child]:text-foreground">
@@ -90,9 +86,6 @@ function Sequence({ items }: { items: string[] }) {
 
 type FindingRowProps = { finding: Finding; step: number | null; onOpenStep(number: number): void };
 
-// The priority word and the title, and the step that shows the finding's hunk. A finding on a hunk
-// the guide leaves out, or on a test the view options hide, has no step to go to. The link sits
-// beside the title, never around it, so a link in the title works on its own.
 function FindingRow({ finding, step, onOpenStep }: FindingRowProps) {
   return (
     <div className="grid grid-cols-[1fr_auto] items-baseline gap-x-4 py-2">
@@ -101,7 +94,6 @@ function FindingRow({ finding, step, onOpenStep }: FindingRowProps) {
         <Prose text={finding.title} className="min-w-0" />
       </span>
       {step !== null && (
-        // The negative margins keep the row's height and line the link up with the text column's edge.
         <div className="-my-1.5 -mr-2.5">
           <Button variant="ghost" size="sm" aria-label={`Step ${step}: ${finding.title}`} onClick={() => onOpenStep(step)}>
             Step {step}
@@ -112,7 +104,6 @@ function FindingRow({ finding, step, onOpenStep }: FindingRowProps) {
   );
 }
 
-// One left-out item: what it is and why, with Show expanding its diff or its list of files.
 function HiddenRow({ item, files, head }: { item: HiddenItem; files: DiffFile[]; head: PrHeadTarget }) {
   const [open, setOpen] = useState(false);
   return (
@@ -127,8 +118,6 @@ function HiddenRow({ item, files, head }: { item: HiddenItem; files: DiffFile[];
   );
 }
 
-// Tests and mocks are never in `hidden` (the validator puts them in a step): the view options hide
-// them, and Show turns the switch on, which removes this row.
 function HiddenTestsRow({ count, onShow }: { count: number; onShow(): void }) {
   return (
     <NotInGuideRow
@@ -153,7 +142,6 @@ function NotInGuideRow({ label, action, reason }: { label: ReactNode; action: Re
   return (
     <div className="grid grid-cols-[1fr_auto] items-baseline gap-x-4 gap-y-0.5 py-2">
       {label}
-      {/* The negative margins keep the row's height and line "Show" up with the text column's edge. */}
       <div className="-my-1.5 -mr-2.5">{action}</div>
       {reason}
     </div>
@@ -162,7 +150,6 @@ function NotInGuideRow({ label, action, reason }: { label: ReactNode; action: Re
 
 const isManyFiles = (item: HiddenItem) => item.kind === "files" && item.files.length > 1;
 
-// A path, or "3 files" for an item of several files.
 function subjectOf(item: HiddenItem): string {
   if (item.kind === "hunk") return item.file;
   return isManyFiles(item) ? `${item.files.length} files` : item.files[0];

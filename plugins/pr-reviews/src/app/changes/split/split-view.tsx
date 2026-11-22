@@ -1,6 +1,3 @@
-// The Changes tab's resizable tree and viewer (ported from code-explorer's split-view): side by side
-// from a 48rem container, stacked below it, with a divider that drags and takes arrow keys, Home
-// and End. The divider shows only on hover, focus or drag: at rest the tree and the file sit together. Sizes are remembered for the session.
 import {
   useId,
   useLayoutEffect,

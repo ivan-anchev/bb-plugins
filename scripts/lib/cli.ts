@@ -1,4 +1,3 @@
-// Small process helpers shared by the scripts' entry points.
 import { execFileSync } from "node:child_process";
 import { ROOT } from "./repo.ts";
 

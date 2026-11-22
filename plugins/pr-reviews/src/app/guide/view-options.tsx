@@ -1,5 +1,3 @@
-// The reader's view options: remembered for the session, and set from the icon button at the end
-// of the PR page's tab bar, whose popover holds a switch per option.
 import { useState } from "react";
 import type { Guide } from "../../guide/guide-schema.ts";
 import { testHunkCount, type ViewOptions } from "../../guide/walkthrough.ts";
@@ -10,8 +8,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover.tsx";
 /** The options and their setter, owned by the PR page so its tab bar and its guide share them. */
 export type ViewOptionsState = { options: ViewOptions; setOptions(options: ViewOptions): void };
 
-// Remembered for the session, across PRs, and never persisted: a reload starts with tests hidden
-// and findings shown.
 let rememberedOptions: ViewOptions = { showTests: false, showFindings: true };
 
 export function useViewOptions(): ViewOptionsState {
@@ -34,7 +30,6 @@ export function GuideViewOptions({ head, viewOptions }: GuideViewOptionsProps) {
   return <ViewOptionsButton guide={guide.data.record.guide} {...viewOptions} />;
 }
 
-// A switch shows only for what the guide has, and a guide with neither tests nor findings has no button.
 function ViewOptionsButton({ guide, options, setOptions }: { guide: Guide } & ViewOptionsState) {
   const hasTests = testHunkCount(guide) > 0;
   const hasFindings = guide.findings.length > 0;
@@ -54,9 +49,6 @@ function ViewOptionsButton({ guide, options, setOptions }: { guide: Guide } & Vi
 
 type SwitchProps = { label: string; checked: boolean; onChange(checked: boolean): void };
 
-// The row is the switch's label, so its hit area is the row and its name is the label. The switch
-// itself is the track with its knob as its only child, as bb's own switch is built: themes style
-// `button[role="switch"]` as the track and its child span as the knob.
 function Switch({ label, checked, onChange }: SwitchProps) {
   return (
     <label className="flex min-h-9 cursor-pointer touch-manipulation items-center justify-between gap-2.5 rounded-md px-2 text-sm hover:bg-state-hover has-focus-visible:ring-1 has-focus-visible:ring-ring">

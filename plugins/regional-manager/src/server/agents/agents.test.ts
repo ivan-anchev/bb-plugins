@@ -9,7 +9,6 @@ import { bbHttpError, coordinating, HEAD, isRefusal, ISSUE, settled, startedAgen
 const RETRIES = { ...ISSUE, brief: "Retry failed webhook deliveries with backoff.", doneCriteria: ["npm test passes", "a failed delivery is retried 3 times"] };
 const REPORT = { summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
 
-/** A regional manager with RETRIES filed as WEB-1, its thread idle so a doorbell starts a turn. */
 async function filed(options: Parameters<typeof coordinating>[0] = {}) {
   const { kit, threadId, coordinatorId } = await coordinating(options);
   await kit.call("issue_create", RETRIES, threadId);
@@ -140,7 +139,6 @@ test("agent_start runs the agent on the execution named, and issue_read lists it
 test("an execution bb can't run where the agent would work is refused before anything starts, naming what it can run", async () => {
   const { kit, coordinatorId, start } = await filed();
   kit.providers.list = kit.providers.list.map((provider) => (provider.id === "codex" ? { ...provider, available: false } : provider));
-  // As bb lists a provider whose executable is missing: available, with models it can't load.
   kit.providers.list.push({ id: "pi", available: true, models: null });
   const where = "agent_start is refused: Nothing changed. Where the agent would run (a fresh worktree on your machine):";
   for (const [execution, refusal] of [
@@ -238,7 +236,6 @@ test("an agent whose spawn failed ends, and its issue rests in Todo with nothing
 test("an agent whose spawn the plugin never heard the end of flags its issue until agent_stop ends it, and agent_start starts the work again", async () => {
   const { kit, threadId, coordinatorId, rows, start } = await filed();
   const unconfirmed = "No thread: bb never confirmed starting one. agent_stop ends the agent at once; then agent_start again";
-  // As agent_start leaves it when the plugin stops before bb answers its spawn: inserted, never bound or ended.
   const execution = { providerId: "claude-code", model: "opus", reasoningLevel: "high" };
   kit.store.insertAgent({ coordinatorId, issueId: issueIdSchema.parse("WEB-1"), ticket: "lost-spawn", placement: { kind: "worktree" }, base: { kind: "default" }, checkout: { environmentId: null, branch: null, head: null }, execution, at: 2_000 });
 
@@ -394,7 +391,6 @@ test("agent_stop keeps the thread unless asked to archive it; either way the iss
     ["WEB-2", "todo", "Its agent was stopped"],
   ]);
 assert.equal(doorbells()[0], '[Regional Manager] 1 update. Call crew_catch_up to read it in full.\n- WEB-1 "Add retries" (a1) ended its turn without a handoff');
-  // why each agent ends its turn as well: bb announces the stopped turn idle, and can't say the stop ended it.
   const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
   assert.deepEqual(caughtUp.match(/^### .+$/gm)?.slice(0, 4), [
     '### WEB-1 "Add retries" (a1) ended its turn without a handoff',
@@ -486,9 +482,7 @@ test("an agent whose thread was archived or deleted while the plugin wasn't list
     ["WEB-1", "todo", "Its agent was archived"],
     ["WEB-2", "todo", "Its agent was deleted"],
   ]);
-  // why sorted: each issue's end runs in its own turn, side by side.
   assert.deepEqual(doorbells().flatMap((text) => text.split("\n").slice(1)).sort(), ['- WEB-1 "Add retries" (a1) returned to Todo: its agent was archived', '- WEB-2 "Dead letters" (a2) returned to Todo: its agent was deleted']);
-  // why: a start reads the queues of the issue's earlier agents that bb still has, and bb no longer has a2's.
   assert.match(textOf(await kit.call("agent_start", { issue: "WEB-2", from: "default" }, threadId)), /^Started a3 on WEB-2/);
 });
 
@@ -504,7 +498,6 @@ for (const first of ["agent", "manager", "neither"] as const) {
     const verdict = kit.store.latestHandoff(coordinatorId, agentIdSchema.parse("a1"))?.check?.verdict;
     if (verdict?.state !== "running") return assert.fail("no running verifier");
     const attempts = kit.sendAttempts().length;
-    // As bb deletes a regional manager: its thread and every child go at once, then one thread.deleted each.
     for (const id of [threadId, agentThreadId, verdict.verifierThreadId]) kit.thread(id).deletedAt = Date.now();
     const events = first === "agent" ? [agentThreadId, threadId] : first === "manager" ? [threadId, agentThreadId] : [];
     for (const id of events) await kit.emit("thread.deleted", { thread: kit.ref(id) });

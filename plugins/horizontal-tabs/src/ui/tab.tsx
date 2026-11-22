@@ -1,5 +1,3 @@
-// One tab: the project stack of its thread panes, then its focused pane's title. Click shows its layout; × (on
-// hover) and middle-click close it.
 import type { MouseEvent } from "react";
 import { tabs } from "../controller/tabs.ts";
 import type { TabsSnapshot } from "../controller/tabs-controller.ts";
@@ -35,13 +33,10 @@ export function TabItem({ tab, selected, tabStop, onClose, index }: Props) {
         title={label}
         onClick={() => tabs.activate(tab.id)}
       >
-        {/* Until the sidebar's index loads, its projects are unknown and the stack is empty. */}
         <ProjectStack projects={stackOf(tab.layout, (id) => index.projects.get(id))} />
         <span className="ht-title">{label}</span>
       </button>
       {onClose !== null && (
-        // why: a mouse affordance, out of the tab order. Its mousedown is prevented so it never takes focus,
-        // which would drop to the page body when the tab unmounts (REVIEW.md focus rule).
         <button
           type="button"
           className="ht-close"
@@ -59,7 +54,6 @@ export function TabItem({ tab, selected, tabStop, onClose, index }: Props) {
   );
 }
 
-/** A middle-button press would start the browser's autoscroll; the click that follows closes the tab. */
 function preventAutoscroll(event: MouseEvent): void {
   if (event.button === 1) event.preventDefault();
 }
@@ -68,7 +62,6 @@ function labelOf(layout: Layout, index: Index): string {
   const content = focused(layout).content;
   switch (content.kind) {
     case "thread":
-      // Until the sidebar's thread index loads.
       return index.threads.get(content.threadId)?.displayTitle ?? "Thread";
     case "new-thread":
       return "New thread";
@@ -77,7 +70,6 @@ function labelOf(layout: Layout, index: Index): string {
       return "Plugin";
     default:
       content satisfies never;
-      // why: a newer bb may store a pane kind this plugin doesn't know; name the tab neutrally.
       return "Tab";
   }
 }

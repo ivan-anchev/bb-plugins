@@ -1,6 +1,3 @@
-// The system's Reduce motion, the one place the working ring asks. Copied from Activity Sidebar
-// (src/ui/motion/reduced-motion.ts), since plugins cannot import each other.
-
 let query: MediaQueryList | null = null;
 
 function reduceQuery(): MediaQueryList {

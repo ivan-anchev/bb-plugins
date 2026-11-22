@@ -16,7 +16,6 @@ const TREE = [
 
 test("runningUnder counts own background agents and every running descendant", () => {
   const index = indexThreads(TREE, new Set());
-  // 2 background agents + kid-running + grandkid-waiting; hidden and archived kids don't count.
   assert.equal(index.runningUnder("root"), 4);
   assert.equal(index.runningUnder("kid-idle"), 1);
   assert.equal(index.runningUnder("other"), 0);

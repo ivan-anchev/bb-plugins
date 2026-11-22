@@ -1,10 +1,3 @@
-// The Subagents tab's address: one registration, two kinds of instance. With
-// no params it is the thread's list of every subagent, one per thread, so
-// opening it again focuses it. With a delegate's id it is that delegate's
-// transcript, one per delegate, which Open thread opens. bb persists the
-// params as JSON and hands them back; they are parsed here, once. A click on a
-// census part asks the list to land on one delegate; that request is a shared
-// signal, not a param, so a jump never opens a second list.
 import type { ExperimentalPanelController, ExperimentalPanelTabs, ExperimentalTabReference, JsonValue } from "@get-bb/plugin-sdk/app";
 import type { DelegateId } from "./delegate.ts";
 import { threadState, useThreadState } from "./thread-state.ts";
@@ -32,13 +25,11 @@ type TabParams = { kind: "list" } | { kind: "transcript"; delegateId: DelegateId
 export function parseTabParams(params: JsonValue | null): TabParams {
   if (typeof params !== "object" || params === null || Array.isArray(params)) return LIST;
   const { delegateId } = params;
-  // why: bb returns the params openTranscript wrote, so a non-empty string here is a delegate's id.
   return typeof delegateId === "string" && delegateId !== "" ? { kind: "transcript", delegateId: delegateId as DelegateId } : LIST;
 }
 
 /** Opens, or focuses, the thread's list; landing on `at` when given. */
 export function openSubagents(panel: ExperimentalPanelController, threadId: string, at: DelegateId | null): void {
-  // why: a plain open drops a landing the list never showed (its row was not there), so it cannot land later.
   landings.set(threadId, at && { delegateId: at });
   panel.openTab({ tab: SUBAGENTS_TAB, title: "Subagents" });
 }
@@ -61,12 +52,8 @@ export function listShown(panel: ExperimentalPanelTabs): boolean {
   return pluginId === PLUGIN_ID && tab.id === SUBAGENTS_TAB.id && parseTabParams(params).kind === "list";
 }
 
-// ---------------------------------------------------------------- layer 2
-
-// why: bb derives a plugin's id from its package name (bb-plugin-<id>), and the SDK gives an app no way to read it.
 const PLUGIN_ID = "subagents-strip";
 
 const LIST: TabParams = { kind: "list" };
 
-// why: the Subagents tab keeps its view for as many threads (ui/SubagentsTab.tsx), so a landing outlives no view.
 const landings = threadState<Landing | null>(null, KEPT_THREADS);

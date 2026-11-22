@@ -46,29 +46,6 @@ type StepsProps = {
 /** `<Step title="Install">Run the CLI.</Step>` inside `<Steps>`. */
 const Step = defineItem<StepProps>("Step")
 
-/**
- * A numbered procedure. Markdown:
- *
- * ```mdx
- * <Steps title="INSTALL">
- *
- * 1. Copy the source
- *
- *    Run the CLI.
- *
- * 2. **Register it**
- *
- *    Export it from `mdx-components.tsx`.
- *
- * 3. *Write*
- *
- *    Use it between paragraphs.
- *
- * </Steps>
- * ```
- *
- * Bold is the current step, italic is next.
- */
 function stepsOf(children: ReactNode): StepProps[] {
   const listed = listItems(children)
   if (listed.length === 0) {

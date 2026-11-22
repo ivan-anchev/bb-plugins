@@ -1,5 +1,3 @@
-// What a delegate's detail shows wherever it appears, the expanded row and
-// the transcript tab alike: the meta line, the outcome, and a step's kind icon.
 import { useState, type JSX, type ReactNode } from "react";
 import { experimental_Icon as Icon, Markdown } from "@get-bb/plugin-sdk/app";
 import type { Delegate, DelegateStatus } from "../delegate.ts";
@@ -47,11 +45,8 @@ export function StepIcon({ kind }: { kind: StepKind }) {
   return <Icon name={STEP_ICON[kind]} fallback="Circle" className="sr-sk" aria-hidden />;
 }
 
-// ---------------------------------------------------------------- layer 2
-
 type OutcomeBlockProps = { status: DelegateStatus; label: string; ranFor: number; children: ReactNode };
 
-/** A dot in the status colour, the label, and when it ended, over the body. */
 function OutcomeBlock({ status, label, ranFor, children }: OutcomeBlockProps) {
   return (
     <div className="sr-out" data-st={status}>
@@ -65,7 +60,6 @@ function OutcomeBlock({ status, label, ranFor, children }: OutcomeBlockProps) {
   );
 }
 
-/** The report as markdown, clamped; Show more appears only when the clamp hides something. */
 function ClampedReport({ markdown }: { markdown: string }) {
   const [full, setFull] = useState(false);
   return (

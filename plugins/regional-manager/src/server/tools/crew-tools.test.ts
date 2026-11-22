@@ -10,7 +10,6 @@ import { coordinatorIdSchema } from "../../model/role.ts";
 import { upgradeMemoryFrom040 } from "../memory/memory-upgrade.ts";
 import { harness, isRefusal, textOf } from "../test-harness.ts";
 
-
 const NOTES = memoryFileSchema.parse("NOTES.md");
 
 async function started() {
@@ -21,7 +20,6 @@ async function started() {
   return { kit, threadId, coordinatorId: role.coordinatorId, dir: kit.memory.of(role.coordinatorId).dir };
 }
 
-/** The version a catch-up shows for a file, as the agent would read it off. */
 const versionIn = (text: string, file: string): string | undefined => new RegExp(`^## ${file.replace(".", "\\.")} \\(version (\\w+)\\)$`, "m").exec(text)?.[1];
 
 test("a file written with crew_memory_write is in the next catch-up and in the board Memory's reads", async () => {
@@ -39,7 +37,6 @@ test("a file written with crew_memory_write is in the next catch-up and in the b
   const long = `# Log\n\n${"Delivered once. ".repeat(400)}`;
   await kit.call("crew_memory_write", { file: "notes/log.md", content: long, baseVersion: null }, threadId);
   const files = kit.memory.of(coordinatorId);
-  // why every key: the board reads each, and a preview is the file's first 2,000 characters, not all of it.
   assert.deepEqual((await kit.rpc.memoryList({ coordinatorId })).files.slice(-2), [
     { file: "notes/api.md", preview: "# API\n", modifiedAt: files.modifiedAt(memoryFileSchema.parse("notes/api.md")) },
     { file: "notes/log.md", preview: long.slice(0, 2_000), modifiedAt: files.modifiedAt(memoryFileSchema.parse("notes/log.md")) },
@@ -93,7 +90,6 @@ test("crew_memory_write from a thread that is not a Coordinator is refused and w
 
 test("after the upgrade from 0.4, each file it renamed or dropped is refused by name on read and write, naming what replaced it, and none is written", async () => {
   const { kit, threadId, coordinatorId, dir } = await started();
-  // A 0.4 memory: PLAN.md becomes NOTES.md, PREFERENCES.md becomes RULES.md, DIGEST.md goes.
   unlinkSync(join(dir, "NOTES.md"));
   unlinkSync(join(dir, "RULES.md"));
   writeFileSync(join(dir, "PLAN.md"), "# Plan\n\n1. Inventory the endpoints\n");

@@ -1,8 +1,3 @@
-// homepageSection: one of the sidebar's sections as a card under the new-thread composer, Needs my
-// review unless the reader switches it from the title's menu. The three PRs it lists first, each
-// ending in Activity's state badge, its author's avatar carrying the sidebar's attention dot, and how many
-// it lists in all; a row opens the PR's page. It reads the sidebar's own `inbox` and `visits`, so
-// the two agree.
 import { experimental_Icon as Icon, useBbNavigate } from "@get-bb/plugin-sdk/app";
 import { prsOf, SECTION_KEYS, type InboxPr, type Section, type SectionKey } from "../../contract.ts";
 import { STATE_TILES } from "../page/pr-header.tsx";
@@ -19,7 +14,6 @@ import { useRememberedState } from "../use-remembered-state.ts";
 
 const SHOWN = 3;
 
-// The section the card shows, kept for the session.
 const shownSection = new Map<string, SectionKey>();
 
 export function PrCard() {
@@ -28,7 +22,6 @@ export function PrCard() {
   const [key, setKey] = useRememberedState(shownSection, "card", "review");
   const sections = inbox.data?.sections ?? [];
   const section = sections.find((s) => s.key === key);
-  // A stack lists its stack-mates from other sections too; the card shows only the section's own PRs.
   const prs = section === undefined ? [] : prsOf(section).filter((pr) => pr.section === key);
 
   return (
@@ -55,7 +48,6 @@ export function PrCard() {
   );
 }
 
-// The card's title is the menu's trigger: the section's name and a chevron.
 function SectionSwitcher({ current, sections, onChange }: { current: SectionKey; sections: readonly Section[]; onChange(key: SectionKey): void }) {
   const countOf = (key: SectionKey) => sections.find((s) => s.key === key)?.count ?? 0;
   return (
@@ -82,7 +74,6 @@ function Row({ pr, section, visits }: { pr: InboxPr; section: SectionKey; visits
   const navigate = useBbNavigate();
   const open = () => navigate.toPluginPanel(PANEL_PATH, { subPath: routeSubPath({ kind: "pr", projectId: pr.projectId, number: pr.number }) });
   const attention = attentionOf(pr, section, visits);
-  // A merged PR's age is since it merged, as Recently merged sorts it.
   const age = timeAgo(pr.mergedAt ?? pr.updatedAt, Date.now());
   return (
     <button

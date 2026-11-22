@@ -1,6 +1,3 @@
-// The Computer glyph: Lucide's monitor (ISC). bb's icon set has no monitor, so app.tsx registers this one
-// under MONITOR_ICON for the Computer tab and its New tab row.
-
 export const MONITOR_ICON = "boat-sandbox-monitor";
 
 export function MonitorIcon({ className }: { className?: string }) {

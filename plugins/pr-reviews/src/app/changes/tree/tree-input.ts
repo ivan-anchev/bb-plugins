@@ -1,5 +1,3 @@
-// The Changes tab's file tree input (ported from code-explorer's tree-input): tree paths, git
-// status, icons and `+N −M` row decorations for @pierre/trees, from the PR's changed files. Pure.
 import {
   createFileTreeIconResolver,
   prepareFileTreeInput,
@@ -52,7 +50,6 @@ export function changesTreeOf(files: readonly DiffFile[]): ChangesTreeInput {
 
   return {
     paths: [...filesByTreePath.keys()],
-    // A PR file's status is one of the tree's git statuses.
     gitStatus: entries.map(([path, file]) => ({ path, status: file.status })),
     icons: iconsKeepingOriginalNames(entries.filter(([treePath, file]) => treePath !== file.path)),
     decorations: new Map(entries.flatMap(([path, file]) => statDecorationOf(path, file))),
@@ -61,7 +58,6 @@ export function changesTreeOf(files: readonly DiffFile[]): ChangesTreeInput {
   };
 }
 
-// The order the tree sorts its paths in, as the tree is built (tree-view.tsx): folders first.
 function inTreeOrderOf(filesByTreePath: ReadonlyMap<string, DiffFile>): TreeFile[] {
   const { paths } = prepareFileTreeInput([...filesByTreePath.keys()], { flattenEmptyDirectories: true });
   return paths.map((treePath) => ({ treePath, file: filesByTreePath.get(treePath)! }));

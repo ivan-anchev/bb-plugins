@@ -1,7 +1,3 @@
-// The animations a list has started and not yet seen end. It stops them all at once, and once the list is
-// torn down none of them reports landing to it. No DOM: it needs only an animation's `finished` and
-// `cancel`. use-layout-motion.ts keeps one per list.
-
 /** What of a Web Animation this needs: when it settles (never what it settles with), and stopping it. */
 export type Played = { readonly finished: Promise<unknown>; cancel(): void };
 

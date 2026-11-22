@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parsePrDetail } from "./gh.ts";
 
-// `gh pr view 42 --json <DETAIL_FIELDS>` for this repo, trimmed; each test swaps in the fields it covers.
 const PR_42 = {
   number: 42,
   title: "Add Summary and Guide tabs to the PR page",
@@ -44,7 +43,6 @@ const PR_42 = {
   mergeable: "UNKNOWN",
 };
 
-// `gh repo view --json mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed` for this repo.
 const REPO_SETTINGS = { mergeCommitAllowed: true, squashMergeAllowed: true, rebaseMergeAllowed: true };
 
 function review(login: string, state: string) {

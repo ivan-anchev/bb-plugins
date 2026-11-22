@@ -1,13 +1,7 @@
-// What the Memory editor shows for one file: the file as last known, or the user's draft over it.
-// Only the user's edit is state; everything else follows the current read, so a write by the
-// regional manager shows at once in a file the user isn't editing. The draft and the save live apart:
-// the draft in the browser, so a remount or a reload keeps it, and the save with the section, whose
-// write it waits for.
 import { z } from "zod";
 import { memoryFileSchema, memoryVersionSchema, type MemoryFile, type MemorySnapshot, type MemoryText, type MemoryVersion, type WriteOutcome } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 
-/** The user's unsaved text, and the version of the file they started it from. */
 const draftSchema = z.object({ text: z.string(), base: memoryVersionSchema });
 export type Draft = z.infer<typeof draftSchema>;
 
@@ -46,7 +40,6 @@ export type Save = { draft: Draft; base: MemoryVersion };
 export type EditorState =
   | { kind: "clean"; text: string }
   | { kind: "edited"; draft: Draft }
-  /** The file moved on under the draft. `newer` is the file now; null when it was deleted. */
   | { kind: "conflict"; draft: Draft; newer: MemoryText | null };
 
 export const NO_SAVE: SaveState = { saving: false, written: null, failure: null };
@@ -109,10 +102,6 @@ export function settled(save: Save, outcome: WriteOutcome): SaveState {
 export const draftAfter = (draft: Draft | null, save: Save, outcome: WriteOutcome): Draft | null =>
   outcome.outcome === "saved" && draft?.text === save.draft.text ? null : draft;
 
-/**
- * The version a save names. In a conflict it is the newer version shown beside the draft, so
- * saving replaces only what the user has seen; anything newer still refuses it.
- */
 function saveBase(state: Exclude<EditorState, { kind: "clean" }>): MemoryVersion {
   return state.kind === "conflict" ? versionOf(state.newer) : state.draft.base;
 }

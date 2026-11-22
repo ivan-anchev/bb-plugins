@@ -7,7 +7,6 @@ import { nextPosition, OVERVIEW, placeOf, previousPosition, resolvePosition, typ
 
 const step = (title: string): GuideStep => ({ title, explanation: "…", forYou: null, hunks: [{ file: "a.ts", hunk: hunkIdSchema.parse("@@ -1,1 +1,1 @@"), collapsed: null }] });
 
-// Three shown steps whose guide indexes are 0, 2 and 3: step 1 of the guide is not shown.
 const STEPS: VisibleStep[] = [
   { index: 0, step: step("One refresh in flight") },
   { index: 2, step: step("Retry once") },

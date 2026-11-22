@@ -1,6 +1,3 @@
-// An issue: one unit of the regional manager's work, outliving any agent that works on it. The
-// plugin's database holds its plan; what happens to it (agents, handoffs, checks, pull requests)
-// is stored beside it as facts, and its status is derived from both (status.ts).
 import { z } from "zod";
 import type { Execution } from "../execution.ts";
 import { ONE_LINE } from "../one-line.ts";

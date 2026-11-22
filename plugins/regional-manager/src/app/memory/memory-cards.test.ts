@@ -6,11 +6,6 @@ import { act, cleanup, fireEvent, within } from "@testing-library/react";
 import { coordinatorContract as contract } from "../../contract.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
 
-// The board's Memory as cards: each file previews the start of its text, named under it with its
-// folder, all from the one list read, opening with focus on the way back and returning it to the
-// card; and the section folds from its header, staying folded through a remount, as a reload does.
-
-/** Each card scrolled into view, by its name, with how. */
 const scrolls: { card: string; options: ScrollIntoViewOptions | boolean | undefined }[] = [];
 Element.prototype.scrollIntoView = function (this: Element, options) {
   scrolls.push({ card: this.querySelector(".rmi-memory-card-file")?.textContent ?? "", options });
@@ -27,7 +22,6 @@ afterEach(() => {
   sessionStorage.clear();
 });
 
-/** A memory folder of a root file and a report in a subfolder, counting each file the section reads one by one. */
 function server() {
   const reads: string[] = [];
   const rpc = {
@@ -103,7 +97,6 @@ test("a card that takes focus, as Tab gives it, scrolls wholly into the row and 
   assert.deepEqual(scrolls, [{ card: "i3.md", options: { block: "nearest", inline: "nearest" } }]);
 });
 
-/** Whether the section's header shows it open. */
 async function expanded(view: ReturnType<typeof mount>): Promise<string | null> {
   return (await view.findByRole("button", { name: /^Memory/ })).getAttribute("aria-expanded");
 }

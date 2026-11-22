@@ -1,13 +1,3 @@
-// The upgrade of the regional managers 0.3.0 created, whose hook held a placeholder in each new
-// thread's queue until the user typed the goal. This release has no hook, so each is decided by its
-// thread's user messages, run or queued, never by its status (a placeholder sent anyway ran a turn):
-// - a real message from the user: it keeps its thread and role, a missing GOAL.md is that first
-//   message, and a placeholder still queued leaves the queue;
-// - the placeholder only: it becomes not started, named as its thread is titled; its queue is
-//   emptied (archiving would leave it) and its thread archived. Its goal is sent from its page;
-// - no thread: it becomes not started.
-// It looks at each one 0.3.0 flagged, and at each started one with no GOAL.md, as a placeholder-only
-// one whose flag was cleared is.
 import { randomUUID } from "node:crypto";
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
 import { z } from "zod";
@@ -37,7 +27,6 @@ type Deps = { store: Pick<Store, "upgradeCandidates" | "goalGiven" | "unhold">; 
 
 /** What 0.3.0 spawned every regional manager with, exactly: the upgrade recognises it by this text alone. */
 export const PLACEHOLDER = "Type this regional manager's goal below to start it.";
-/** The name of one whose thread has no title, or that never had a thread. */
 const UNTITLED = "Regional manager";
 const GOAL_FILE = memoryFileSchema.parse("GOAL.md");
 
@@ -60,11 +49,9 @@ export function upgradeFrom030(bb: HeldBb, { store, memory, onChange }: Deps): (
     const waiting = queued.map((row) => ({ ...row, text: textOf(row.content) }));
     const messages = [...requested.flatMap(({ data }) => turnRequestSchema.safeParse(data).data ?? []).map((turn) => ({ ...turn, text: textOf(turn.input) })), ...waiting];
     const goal = messages.find((message) => fromTheUser(message) && message.text !== PLACEHOLDER && message.text.trim() !== "")?.text;
-    // why the flag or the placeholder: a manager with neither, started by this release, is none of 0.3.0's.
     if (goal === undefined && !flagged && !messages.some(({ text }) => text === PLACEHOLDER)) return;
     for (const row of waiting) if (goal === undefined || row.text === PLACEHOLDER) await threads.queuedMessages.delete({ threadId, queuedMessageId: row.id });
     if (goal !== undefined) {
-      // why over no file: a write expecting none leaves a GOAL.md that exists as it is.
       memory.of(id).write(GOAL_FILE, goal, null);
       return store.goalGiven(id);
     }
@@ -90,15 +77,12 @@ export function upgradeFrom030(bb: HeldBb, { store, memory, onChange }: Deps): (
   };
 }
 
-/** Whether a person typed the message: bb counts its author a user, and no thread or plugin sent it. */
 const fromTheUser = ({ initiator, senderThreadId, originPluginId }: { initiator: string; senderThreadId: string | null; originPluginId?: string | null }): boolean =>
   initiator === "user" && senderThreadId === null && (originPluginId ?? null) === null;
 
-/** A message's text as the manager reads it: its text parts, in order, without those only an agent sees. */
 const textOf = (parts: readonly { type: string; text?: string; visibility?: string }[]): string =>
   parts.flatMap(({ type, text, visibility }) => (type === "text" && text !== undefined && visibility !== "agent-only" ? [text] : [])).join("\n\n");
 
-// What the upgrade reads of a client/turn/requested event; the rest is bb's.
 const turnRequestSchema = z.object({
   initiator: z.string(),
   senderThreadId: z.string().nullable(),

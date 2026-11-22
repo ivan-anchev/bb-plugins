@@ -1,5 +1,3 @@
-// The Guide tab once a guide exists: the overview first, then one step at a time, with the
-// controller pinned under the scrolling page.
 import { useMemo, useRef, type ReactNode, type Ref } from "react";
 import type { GuideRecord } from "../../contract.ts";
 import type { DiffFile } from "../../diff/diff-schema.ts";
@@ -18,12 +16,9 @@ import type { ViewOptionsState } from "./view-options.tsx";
 type GuideViewProps = { head: PrHeadTarget; viewOptions: ViewOptionsState; shown: boolean };
 
 export function GuideView({ head: { projectId, number, headSha }, viewOptions, shown }: GuideViewProps) {
-  // why by value: the page builds its head afresh on every render, and a step's diffs, handed
-  // findings that hold it, would draw again each time.
   const head = useMemo(() => ({ projectId, number, headSha }), [projectId, number, headSha]);
   const guide = useGuide(head);
   const error = <ReadError read={guide} what="the guide" />;
-  // Until a guide arrives the page holds the read's state; after, a failed re-read sits above it.
   if (guide.data === undefined) {
     return (
       <GuidePage>
@@ -49,13 +44,10 @@ function LoadedGuide({ head, record, files, viewOptions, shown }: LoadedGuidePro
   useStepKeys(walkthrough, shown);
   const { place, setOptions } = walkthrough;
   const { options } = viewOptions;
-  // Memoised: a step's diffs draw these findings, and draw again for new ones.
   const findings = useMemo(() => visibleFindings(record.guide, options), [record.guide, options]);
   return (
     <>
-      {/* It stays mounted across pages, so a step move keeps focus on it. */}
       <GuidePage ref={scroll}>
-        {/* Keyed by page: each page opens fresh, with its rows folded again. */}
         {place.kind === "overview" ? (
           <article key="overview" className="grid max-w-[880px] grid-cols-[minmax(0,1fr)] content-start gap-4 px-6 pt-4 pb-10">
             <PageTitle ref={title}>{place.title}</PageTitle>
@@ -79,10 +71,6 @@ function LoadedGuide({ head, record, files, viewOptions, shown }: LoadedGuidePro
   );
 }
 
-// The Guide tab's one tab stop for its content, in place of the Guide panel's, in every state of
-// the read: the loading notice, a failed read's error, and the guide's scrolling page,
-// so the scroll keys move it and ← → step from it. A size container: the step page's columns and
-// its sticky story read its width and height.
 function GuidePage({ ref, children }: { ref?: Ref<HTMLDivElement>; children: ReactNode }) {
   return (
     <div

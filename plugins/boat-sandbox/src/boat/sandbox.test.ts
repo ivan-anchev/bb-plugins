@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { toSandbox, type SandboxPhase } from "./sandbox.ts";
 
-// Create and fork responses as boat API v1 sent them.
 const CAPTURES = ["create-a.json", "create-c.json", "fork.json"] as const;
 
 const captured = (name: string): Record<string, unknown> => {
@@ -64,14 +63,11 @@ test("a stop note says who stopped the sandbox", () => {
   const stopped = { ...wire, state: "archived", stoppedAt: "2026-11-08T21:28:07.781Z" };
   assert.equal(toSandbox(wire)?.stopNote, null);
   assert.equal(toSandbox(stopped)?.stopNote, "stopped by boat");
-  // boat's API stop record ends about 18 ms after the sandbox stops.
   assert.equal(toSandbox({ ...stopped, stop: { id: "stop_1", endedAt: "2026-11-08T21:28:07.799Z" } })?.stopNote, "stopped through the API");
   assert.equal(toSandbox({ ...wire, state: "error", error: "out of capacity" })?.stopNote, "boat: out of capacity");
 });
 
 test("boat's own stop after an earlier API stop is a stop by boat", () => {
-  // As boat reported it: bb stopped the sandbox at 21:28:07, resumed it, then its auto-stop stopped it
-  // at 21:29:05; the sandbox still carried the 21:28:07 stop record.
   const wire = {
     ...captured("create-a.json"),
     state: "archived",

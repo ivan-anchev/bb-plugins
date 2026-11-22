@@ -41,7 +41,6 @@ const returned = (verifierThreadId: string, result: "pass" | "fail"): Received =
   sameModel: false,
 });
 
-/** A done handoff's check, running in the verifier thread `thr_verifier_<n>`. */
 function runningCheck(store: Store, issueId: IssueId, agentId: AgentId, n: number): Check {
   const check = checkOf(store.insertHandoff(handoff(issueId, agentId, "done", 3_000 + n), CLEAN));
   store.insertVerifierTicket(`verifier-${n}`, { kind: "verifier", coordinatorId: MANAGER, issueId, checkId: check.id }, 3_000);
@@ -267,7 +266,6 @@ test("a verifier's ticket that binds after its check was superseded leaves the c
   assert.deepEqual(store.check(stale.id)?.verdict, { state: "superseded" });
 });
 
-/** A build parent WEB-1 with a merged sub-issue WEB-2, its criteria and verifier named. */
 function withParent() {
   const { db, store } = freshStore();
   const parent = filedIssue(store, MANAGER, newIssue({ title: "Card vault", doneCriteria: ["npm run vault-suite passes"], verifier: EXECUTION }), 2_000);

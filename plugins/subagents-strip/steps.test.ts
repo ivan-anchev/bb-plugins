@@ -4,7 +4,6 @@ import { test } from "node:test";
 import type { StepRow, TimelineRow, WorkRow } from "./bb.ts";
 import { childSteps, firstLine, isHandback, isReasoning, messageText, splitReport, stepFailed, stepKind, stepLabel, trailSteps } from "./steps.ts";
 
-// The real child rows of the fixture's delegates (see normalise.test.ts for how it was taken).
 const fixture: { rows: TimelineRow[] } = JSON.parse(readFileSync(new URL("./fixtures/claude-thread.json", import.meta.url), "utf8"));
 const steps = childSteps(fixture.rows.flatMap((row) => (row.kind === "turn" ? (row.children ?? []) : [])).flatMap(childRowsOf));
 
@@ -20,7 +19,6 @@ test("an assistant message reads as its first line; reasoning as its title", () 
   assert.equal(stepLabel(first((r) => r.kind === "system")), "Thought");
 });
 
-// A subagent's whole message in thr_24dxq5xhph (delegation daddeb4148-i3): bb's chat draws it as a live browser view.
 const PREVIEW = '::browser-preview{session="802128db-7efa-49f9-8664-c509a6160212"}';
 
 test("a message that is only the browser-preview directive reads as Opened a browser preview", () => {
@@ -38,14 +36,10 @@ test("a mixed message drops the directive line and keeps the rest; other message
   assert.equal(messageText(""), "");
 });
 
-// Live rows from the fixtures' midrun captures: a Codex child mid `sleep`, a Claude Code child blocked on
-// its question, Codex's delegations while its agents ran (see child-threads.test.ts, normalise.test.ts).
 const children: { counter: { running: { rows: TimelineRow[] } }; outcomes: { waiting: { rows: TimelineRow[] } } } = JSON.parse(
   readFileSync(new URL("./fixtures/child-threads.json", import.meta.url), "utf8"),
 );
 const midrun: { midrun: TimelineRow[] } = JSON.parse(readFileSync(new URL("./fixtures/codex-thread.json", import.meta.url), "utf8"));
-// One of this issue's own edits, as thread thr_24dxq5xhph's timeline carried it (includeNestedRows=true),
-// strings cut to 200 characters: no other fixture holds a file change.
 const edited: { row: StepRow } = JSON.parse(readFileSync(new URL("./fixtures/claude-file-change.json", import.meta.url), "utf8"));
 
 test("a running command reads as Running, a finished one as Ran", () => {
@@ -53,7 +47,6 @@ test("a running command reads as Running, a finished one as Ran", () => {
   assert.ok(running?.kind === "work" && running.status === "pending", "fixture premise: the child's command is running");
   assert.equal(stepLabel(running), "Running sleep 40 && echo one");
   assert.equal(stepLabel({ ...running, status: "completed" }), "Ran sleep 40 && echo one");
-  // why: an error or a stop has ended the step as surely as completing it; this real command exited 1.
   const failed = first((r) => r.kind === "work" && r.workKind === "command");
   assert.ok(failed.kind === "work" && failed.status === "error");
   assert.match(stepLabel(failed), /^Ran ls \/Users\/ivananchev\/\.claude\/skills\/emil-prototype\//);
@@ -61,7 +54,6 @@ test("a running command reads as Running, a finished one as Ran", () => {
 });
 
 test("a read, an edit, and a fetch read as Reading, Editing, Fetching while they run, and Read, Edited, Fetched after", () => {
-  // why: these finish within a second, so no midrun capture holds one live; each is its real row as bb sends it while pending.
   const read = first((r) => r.kind === "work" && r.workKind === "file-read");
   const fetched = first((r) => r.kind === "work" && r.workKind === "web-fetch");
   const edit = edited.row;
@@ -87,8 +79,6 @@ test("a pending question reads as Asking, a pending delegation as Starting; answ
   assert.equal(stepLabel(started), "Started Prototype subagent strip variants");
 });
 
-// Hand-built rows: no captured thread holds these kinds. Each is typed as bb's own row, so the
-// compiler checks every field against the pinned SDK; the fields common to every work row are shared.
 const pendingWork: Pick<WorkRow, "kind" | "id" | "threadId" | "turnId" | "createdAt" | "startedAt" | "sourceSeqStart" | "sourceSeqEnd" | "status"> = {
   kind: "work", id: "hand-built", threadId: "thr_hand_built", turnId: null, createdAt: 0, startedAt: 0, sourceSeqStart: 0, sourceSeqEnd: 0, status: "pending",
 };
@@ -133,13 +123,13 @@ for (const [row, live, ended] of handBuilt) {
 }
 
 test("a step status newer than the pinned SDK reads in the past tense and never throws", () => {
-  // why: JSON.parse types it as the narrowed param without a cast, as a newer bb host would send it.
+  // WARNING: deliberately off-type; JSON.parse types it as the narrowed param without a cast, as a newer bb host would send it.
   const queued: StepRow = JSON.parse('{"kind":"work","workKind":"command","command":"sleep 9","status":"queued"}');
   assert.equal(stepLabel(queued), "Ran sleep 9");
 });
 
 test("a row kind newer than the pinned SDK reads as its title, else Working, and never throws", () => {
-  // why: JSON.parse types these as the narrowed param without a cast, as a newer bb host would send them.
+  // WARNING: deliberately off-type; JSON.parse types these as the narrowed param without a cast, as a newer bb host would send them.
   const titled: StepRow = JSON.parse('{"kind":"work","workKind":"teleport","presentation":{"title":"Teleported home"}}');
   const bare: StepRow = JSON.parse('{"kind":"work","workKind":"teleport"}');
   const newKind: StepRow = JSON.parse('{"kind":"hologram","presentation":{"title":7}}');
@@ -169,11 +159,9 @@ test("a step failed when it ended in error or its command exited non-zero", () =
   const passed = first((r) => r.kind === "work" && r.workKind === "command" && r.exitCode === 0);
   assert.equal(stepFailed(exited), true);
   assert.equal(stepFailed(passed), false);
-  // why: Claude Code also marks such a row "error"; a provider that only reports the exit code still fails it.
   assert.ok(passed.kind === "work" && passed.workKind === "command");
   assert.equal(stepFailed({ ...passed, exitCode: 2 }), true);
   assert.equal(stepFailed(first((r) => r.kind === "conversation")), false);
-  // why: a failed tool call reports its status, not an exit code; built from a real tool row.
   const tool = first((r) => r.kind === "work" && r.workKind === "tool");
   assert.ok(tool.kind === "work");
   assert.equal(stepFailed({ ...tool, status: "error" }), true);
@@ -184,7 +172,6 @@ test("reasoning is the transcript's Thinking text, and only reasoning leaves the
   const thought = first(isReasoning);
   assert.ok(isReasoning(thought));
   assert.equal(thought.detail, "I'm going to read through the skill files first to see what guidance they give.");
-  // why: other operation rows (a warning here, built from the real reasoning row) are steps the trail keeps.
   const warning: StepRow = { ...thought, operationKind: "warning" };
   assert.equal(isReasoning(warning), false);
   assert.deepEqual(trailSteps([thought, warning]), [warning]);
@@ -196,7 +183,6 @@ test("firstLine skips blank lines and drops heading, list, bold, and code marks"
   assert.equal(firstLine("  \n \n"), "");
 });
 
-// A Codex counter's real child rows (see normalise.test.ts): numbers said between `sleep` commands, then a closing message.
 const codex: { final: TimelineRow[] } = JSON.parse(readFileSync(new URL("./fixtures/codex-thread.json", import.meta.url), "utf8"));
 const [counterRow] = codex.final.flatMap((row) => (row.kind === "turn" ? (row.children ?? []) : []));
 const counter = childSteps(childRowsOf(counterRow));
@@ -231,7 +217,6 @@ test("splitReport drops the browser-preview line from a mixed closing message's 
 test("splitReport with no assistant message reports nothing and keeps every step", () => {
   const [one, sleep] = counter;
   assert.ok(one.kind === "conversation" && one.role === "assistant");
-  // why: no captured delegate has a user row; this is the real "1" message as the user would have sent it.
   const said: Extract<StepRow, { kind: "conversation"; role: "user" }> = {
     ...one,
     role: "user",
@@ -252,7 +237,6 @@ function first(match: (row: StepRow) => boolean): StepRow {
   return row;
 }
 
-/** The fixture's first message, saying `text` instead. */
 function saying(text: string): StepRow {
   const message = first((r) => r.kind === "conversation");
   assert.ok(message.kind === "conversation");

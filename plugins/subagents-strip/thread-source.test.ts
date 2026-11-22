@@ -1,5 +1,3 @@
-// The live thread source, through its public surface, against a fake browser
-// SDK that serves the trimmed real captures (see normalise.test.ts and child-threads.test.ts).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, mock, test } from "node:test";
@@ -16,7 +14,6 @@ const { counter, usage }: { counter: { running: ChildRead; settled: ChildRead };
 );
 const CHILD = counter.running.child.id;
 
-// The window is visible; the source only reads `visibilityState` and listens for changes.
 Object.assign(globalThis, { document: Object.assign(new EventTarget(), { visibilityState: "visible" }) });
 
 beforeEach(() => mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1_000_000 }));
@@ -33,7 +30,6 @@ test("a page that fails mid-drain is retried from the committed cursor, so no ta
   await settle();
   assert.equal(statusOf(source, delegate), "running");
 
-  // A full first page of progress ends on the completion; the second page fails once.
   bb.events.push(...progressBefore(completed, EVENT_PAGE - 1), completed);
   bb.failEventsAfter = completed.seq;
   bb.change("events-appended");
@@ -126,7 +122,7 @@ test("a pull still awaiting events when the last subscriber leaves ends there: n
   stop();
   const readsAtStop = bb.reads;
 
-  release(); // the events land after stop(), inside the throttle window
+  release();
   await settle();
   mock.timers.tick(2_000);
   await settle();
@@ -134,8 +130,6 @@ test("a pull still awaiting events when the last subscriber leaves ends there: n
   assert.equal(bb.timelineReads, 1);
   assert.equal(idle, 1);
 });
-
-// ---------------------------------------------------------------- child threads
 
 test("a child not seen before rereads the parent rows; a settled child is read once", async () => {
   const bb = fakeBb({ events: fixture.events });
@@ -148,7 +142,6 @@ test("a child not seen before rereads the parent rows; a settled child is read o
   await settle();
   assert.equal(bb.readsOf("thr_c_unseen"), 2, "its spawning turn may be newer than the rows held");
   assert.equal(bb.readsOf(CHILD), 1);
-  // why: without nested rows bb collapses a settled turn (`children: null`), leaving the child no steps.
   assert.equal(bb.lastQuery.get(CHILD)?.includeNestedRows, "true");
   assert.equal(bb.lastQuery.get(CHILD)?.deferContent, "true", "a child's row never shows what deferred content leaves out");
 
@@ -194,7 +187,7 @@ test("a child's own change settles it; child subscriptions follow the view, and 
   await settle();
   assert.equal(statusOf(source, CHILD), "completed");
 
-  bb.children = []; // archived or hidden: it leaves the list
+  bb.children = [];
   bb.change("events-appended");
   await settle();
   assert.deepEqual(bb.watched(), ["thr_c_watch"]);
@@ -225,7 +218,7 @@ test("a child's status-only change settles it, with no events and no pull owed",
 });
 
 test("this thread's lifecycle reads leave a running child's reread deadline alone", async () => {
-  const [started] = fixture.events.filter((e) => e.seq === 2927); // a delegation starts: a lifecycle event
+  const [started] = fixture.events.filter((e) => e.seq === 2927);
   const bb = fakeBb({ events: fixture.events.filter((e) => e.seq < started.seq) });
   bb.serveChild(counter.running);
   const stop = createThreadSource(bb.sdk, "thr_c_deadline", () => {}).subscribe(() => {});
@@ -289,10 +282,6 @@ test("a failed child read commits nothing, and the next change retries it", asyn
   stop();
 });
 
-// ---------------------------------------------------------------- history before the live window
-
-// The fixture's seven turn rows as bb pages them: the live window holds the last three, the page before it
-// two, and the first page the first two plus a cut copy of the third, as bb's pages overlap at their edges.
 const LIVE = fixture.rows.slice(4);
 const PAGES = [fixture.rows.slice(2, 4), [...fixture.rows.slice(0, 2), withoutChildren(fixture.rows[2])]];
 
@@ -337,7 +326,6 @@ test("rows that slide out of the live window stay with the history; a rewrite dr
   const release = source.wantHistory();
   await settle();
 
-  // A new turn pushes the window's oldest turn out: bb now starts the window one turn later.
   bb.rows = LIVE.slice(1);
   bb.olderPages = [fixture.rows.slice(3, 5), ...PAGES];
   bb.events.push(delegationStarted());
@@ -355,8 +343,6 @@ test("rows that slide out of the live window stay with the history; a rewrite dr
 });
 
 test("a turn bb pages in two fragments keeps both: its delegates and a delegation's child rows from each page", async () => {
-  // The fixture's second turn, cut where bb cut thr_24dxq5xhph's `daeac18995-t5:turn` (26 children in the newer
-  // page, 10 in the older, 1 shared): its first delegation's child rows split across the pages, its second in the newer.
   const turn = fixture.rows[1];
   assert.ok(turn.kind === "turn" && turn.children?.length === 2, "fixture premise: a turn of two delegations");
   const [first, second] = turn.children.filter(isDelegationRow);
@@ -379,7 +365,6 @@ test("an update bb sends for an older row adds to what was read: its other desce
   await settle();
   assert.equal(delegatesOf(source).length, 8);
 
-  // The fixture's second turn gains a third delegation; bb's update carries the turn with only that child.
   const turn = fixture.rows[1];
   assert.ok(turn.kind === "turn" && turn.children, "fixture premise: a turn group");
   const [, last] = turn.children.filter(isDelegationRow);
@@ -411,13 +396,13 @@ test("the last reader leaving mid-walk aborts the read in flight: no page after 
   const bb = fakeBb({ rows: LIVE, events: fixture.events });
   bb.olderPages = PAGES;
   const source = createThreadSource(bb.sdk, "thr_h_leave", () => {});
-  const stop = source.subscribe(() => {}); // the strip, which stays
+  const stop = source.subscribe(() => {});
   await settle();
   const release = bb.holdPages();
-  const leave = source.wantHistory(); // the tab, showing
+  const leave = source.wantHistory();
   await settle();
   assert.deepEqual(bb.pageReads(), ["outline:page-0", "outline:page-1", "page-0"], "the walk is under way");
-  leave(); // the tab, hidden
+  leave();
   await settle();
   assert.deepEqual(bb.abortedPageReads(), ["page-0"], "the read in flight is aborted");
   release();
@@ -462,7 +447,7 @@ test("a reader leaving mid-walk after a rewrite dropped the history still leaves
   const leave = source.wantHistory();
   await settle();
   const release = bb.holdPages();
-  bb.change("history-rewritten"); // the reload drops the history, then walks it in full while the tab wants it
+  bb.change("history-rewritten");
   await settle();
   leave();
   await settle();
@@ -486,7 +471,7 @@ test("a reader leaving while another still wants the history leaves the walk run
   const second = source.wantHistory();
   await settle();
   first();
-  first(); // releasing twice counts once
+  first();
   release();
   await settle();
   assert.deepEqual(bb.abortedPageReads(), []);
@@ -506,8 +491,6 @@ test("a thread the live window holds whole has no history to read", async () => 
   assert.deepEqual(bb.pageReads(), []);
   stop();
 });
-
-// ---------------------------------------------------------------- fake bb
 
 const EVENT_PAGE = 100;
 
@@ -576,28 +559,21 @@ function fakeBb(init: { rows?: TimelineRow[]; events: EventRow[] }) {
   const state = {
     sdk,
     rows: init.rows ?? fixture.rows,
-    /** This thread's pages before the live window, newest first; [] when the window holds the thread. */
     olderPages: [] as TimelineRow[][],
-    /** What the live read reports as changed in older rows. */
     olderRowUpdates: undefined as TimelineRow[] | undefined,
-    /** The live window, or the older page a query's cursor names; each cursor names the page after it. */
     read(query: TimelineQuery): TimelineRead {
       const mode = query.deferContent === "true" ? "outline:" : "";
-      // why: as bb, a cursor pages only reads of its own kind ("Timeline pagination cursor is no longer available").
       if (query.beforeAnchorId !== undefined && !query.beforeAnchorId.startsWith(`${mode}page-`)) throw new Error("cursor of another kind");
       const at = query.beforeAnchorId === undefined ? -1 : Number(query.beforeAnchorId.slice(`${mode}page-`.length));
       const served = at === -1 ? state.rows : state.olderPages[at];
-      // why: bb's deferred content leaves out a delegation's child rows (live, thr_24dxq5xhph).
       const rows = mode ? served.map(withoutChildRows) : served;
       const cursor = at + 1 < state.olderPages.length ? { anchorId: `${mode}page-${at + 1}`, anchorSeq: rows[0].sourceSeqStart } : null;
       return at === -1 ? { ...page(rows, cursor), timelinePage: { olderCursor: cursor, olderRowUpdates: state.olderRowUpdates } } : page(rows, cursor);
     },
-    /** The cursors of the older-page reads that were aborted while held, in order. */
     abortedPageReads(): string[] {
       return state.aborted.flatMap((q) => (q.beforeAnchorId === undefined ? [] : [q.beforeAnchorId]));
     },
     aborted: [] as TimelineQuery[],
-    /** The cursors of the older-page reads, in order; "outline:" marks a deferred-content one. */
     pageReads(): string[] {
       return state.queries.flatMap((q) => (q.beforeAnchorId === undefined ? [] : [q.beforeAnchorId]));
     },
@@ -608,7 +584,6 @@ function fakeBb(init: { rows?: TimelineRow[]; events: EventRow[] }) {
     failTimelineOf: null as string | null,
     children: [] as ChildThread[],
     lastQuery: new Map<string, TimelineQuery>(),
-    /** Every SDK read, of any kind. */
     reads: 0,
     timelineReads: 0,
     readsOf(threadId: string): number {
@@ -618,23 +593,19 @@ function fakeBb(init: { rows?: TimelineRow[]; events: EventRow[] }) {
     eventQueriesOf(threadId: string): EventsQuery[] {
       return state.eventQueries.filter((query) => query.threadId === threadId);
     },
-    /** Lists the child as it was at this read, and serves its rows and its own events. */
     serveChild({ child, rows }: ChildRead, events: EventRow[] = []) {
       state.children = [child];
       childRows.set(child.id, rows);
       childEvents.set(child.id, events);
     },
-    /** The threads with a thread:changed subscription. */
     watched(): (string | undefined)[] {
       return [...watches].map((watch) => watch.threadId);
     },
-    /** A change to one thread, or to every watched thread. */
     change(kind: ThreadChange["changes"][number], threadId?: string) {
       for (const watch of watches) {
         if (threadId === undefined || watch.threadId === threadId) watch.callback({ entity: "thread", type: "changed", changes: [kind] });
       }
     },
-    /** Holds every older-page read until the returned release is called. */
     holdPages(): () => void {
       let release = () => {};
       heldPages = new Promise<void>((resolve) => (release = resolve));
@@ -643,7 +614,6 @@ function fakeBb(init: { rows?: TimelineRow[]; events: EventRow[] }) {
         release();
       };
     },
-    /** Holds every events read until the returned release is called. */
     holdEvents(): () => void {
       let release = () => {};
       held = new Promise<void>((resolve) => (release = resolve));
@@ -656,7 +626,6 @@ function fakeBb(init: { rows?: TimelineRow[]; events: EventRow[] }) {
   return state;
 }
 
-/** Waits for `held`, or rejects as fetch does once the query's signal aborts, recording the query. */
 function untilAborted(held: Promise<void>, query: TimelineQuery, state: { aborted: TimelineQuery[] }): Promise<void> {
   const { signal } = query;
   if (!signal) return held;
@@ -674,7 +643,6 @@ function untilAborted(held: Promise<void>, query: TimelineQuery, state: { aborte
   });
 }
 
-/** A delegation starting after every fixture event: a lifecycle event, so the pull rereads the live window. */
 function delegationStarted(): EventRow {
   const started = fixture.events.find((e) => e.seq === 2927);
   assert.ok(started, "fixture premise: a delegation's item/started event");
@@ -704,7 +672,6 @@ function turnsOf(source: ThreadSource): (string | null)[] {
   return snapshot.status === "ready" ? snapshot.turns.map((turn) => turn.id) : [];
 }
 
-/** A source's delegates once it has read the whole history from `pages`, with the live window LIVE. */
 async function historyRead(pages: TimelineRow[][]): Promise<readonly Delegate[]> {
   const bb = fakeBb({ rows: LIVE, events: fixture.events });
   bb.olderPages = pages;
@@ -726,7 +693,6 @@ function page(rows: TimelineRow[], olderCursor: OlderCursor): TimelineRead {
   return { rows, timelinePage: { olderCursor } };
 }
 
-/** The task's progress events in the seqs just before its completion: it is still running. */
 function progressBefore(completed: TaskCompleted, count: number): EventRow[] {
   return Array.from({ length: count }, (_, i) => {
     const seq = completed.seq - count + i;
@@ -752,7 +718,6 @@ function usageOf(source: ThreadSource, id: string): Usage | null | undefined {
   return delegatesOf(source).find((d) => d.id === id)?.usage;
 }
 
-/** The fixture's real token-usage event, at `seq` and carrying `totalTokens`. */
 function tokenUsage(seq: number, totalTokens: number): EventRow {
   const [event] = usage.events;
   assert.ok(event.type === "thread/tokenUsage/updated", "fixture premise: a token-usage event");
@@ -764,7 +729,6 @@ function statusOf(source: ThreadSource, id: string): DelegateStatus | undefined 
   return delegatesOf(source).find((d) => d.id === id)?.state.status;
 }
 
-/** Lets the source's pending SDK promises run to the end. */
 async function settle(): Promise<void> {
   for (let i = 0; i < 20; i++) await new Promise<void>((resolve) => setImmediate(resolve));
 }

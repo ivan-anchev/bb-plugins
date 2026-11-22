@@ -1,5 +1,3 @@
-// The Board tab, fixed in every regional manager's side panel and in no other thread's: its board,
-// with its memory at the bottom.
 import type { ExperimentalThreadTabProps } from "@get-bb/plugin-sdk/app";
 import { Fragment } from "react";
 import { MemorySection } from "../memory/memory-section.tsx";

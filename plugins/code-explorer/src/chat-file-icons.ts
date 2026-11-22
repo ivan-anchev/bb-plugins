@@ -8,7 +8,6 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const WORD_JOINER = "\u2060";
 const WATCHED_ATTRIBUTES = ["href", "data-prompt-mention-resource"];
 
-/** The colored `complete` icon set of @pierre/trees, with npm and TypeScript icons for their config files. */
 const FILE_ICONS = {
   set: "complete",
   colored: true,
@@ -64,7 +63,6 @@ function placeIcon({ host, path, placement }: IconTarget): void {
   host.insertBefore(iconElement(icon.name, icon.token, placement), hostIcon ?? host.firstChild);
 }
 
-/** The icon, then a word joiner so a line never breaks between the icon and the file name. */
 function iconElement(name: string, token: string | undefined, placement: IconTarget["placement"]): HTMLSpanElement {
   const icon = document.createElement("span");
   icon.className = ICON_CLASS;
@@ -81,7 +79,6 @@ function iconElement(name: string, token: string | undefined, placement: IconTar
   return icon;
 }
 
-/** Batches DOM changes into one pass per frame, over the parts of the page that changed. */
 function watchForChatContent(decorate: (root: Element) => void): () => void {
   const changed = new Set<Element>();
   let frame: number | null = null;
@@ -106,10 +103,6 @@ function elementsMatching(root: Element, selector: string): Element[] {
   return [...(enclosing === null ? [] : [enclosing]), ...root.querySelectorAll(selector)];
 }
 
-/**
- * Puts the icon symbols in the page once, so every icon is a `<use>`.
- * The Next.js symbol's gradient id is renamed: `a` is too generic for a page-wide id.
- */
 function injectSprite(): HTMLElement {
   const holder = document.createElement("div");
   holder.className = "ce-chat-file-icon-sprite";

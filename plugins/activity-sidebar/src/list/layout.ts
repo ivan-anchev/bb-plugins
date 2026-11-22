@@ -1,6 +1,3 @@
-// Where every item stands: its y and height, computed, not measured. Pure.
-// why: rows, titles, the gap and the padding are fixed, so the list knows where an off-screen row
-// is, which is what windowing and motion need.
 import type { ListItem } from "./items.ts";
 
 export const METRICS = { padTop: 4, padBottom: 8, gap: 2, row: 30, tallRow: 46, title: 24 } as const;
@@ -50,8 +47,6 @@ export function visibleKeys(layout: Layout, top: number, height: number, oversca
   return keys;
 }
 
-// ------------------------------------------------------------------ layer 2
-
 function naturalHeight(item: ListItem): number {
   switch (item.kind) {
     case "title":
@@ -66,7 +61,6 @@ function naturalHeight(item: ListItem): number {
   }
 }
 
-/** The index of the first entry whose bottom passes `y`. */
 function firstEndingAfter(entries: readonly LayoutEntry[], y: number): number {
   let lo = 0;
   let hi = entries.length;

@@ -1,5 +1,3 @@
-// Composition root. Owns no logic: opens the store and the memory folder, and wires each module
-// to bb, through the SDK and the store bound to this instance of the plugin (lifetime.ts).
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { boardTag, COORDINATORS_TAG, coordinatorContract, memoryTag } from "./src/contract.ts";
 import type { CoordinatorId, Role } from "./src/model/role.ts";
@@ -44,14 +42,11 @@ export default function plugin(host: BbPluginApi): void {
   upgradeMemoryFrom040(memory, store.coordinators().map(({ id }) => id));
   const refreshBoard = (id: CoordinatorId) => bb.rpc.experimental_invalidate([boardTag(id)]);
   const refreshCoordinators = () => bb.rpc.experimental_invalidate([COORDINATORS_TAG]);
-  // why one hook: whatever changes what a regional manager's views are derived from changes its board, makes a read begun before it stale, and may unblock an issue.
-  // A store write is counted by the store as it commits (current-views.ts); views.changed is for what bb moved, a message starting an agent's turn or bb saying a thread moved.
   const onChange = (id: CoordinatorId) => {
     refreshBoard(id);
     views.changed(id);
     unblocked.changed(id);
   };
-  // why one hook: deletion and the tick's reconcile both remove a regional manager through it.
   const onRemoved = (id: CoordinatorId) => {
     threadEvents.forget(id);
     refreshCoordinators();
@@ -68,10 +63,8 @@ export default function plugin(host: BbPluginApi): void {
   const verify = createVerify({ bb, store, spawner, inbox, turns, now: Date.now });
   const finalChecks = createFinalChecks({ bb, store, views, turns, verify, defaultBranch: defaultBranchReader(bb, store), now: Date.now });
 
-  // why as the plugin loads, and from the tick unwaited for: it is a one-time upgrade, retried after a failure, whose bb calls must not hold up the watch.
   const upgrade030 = upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators });
   void upgrade030();
-  // why the same: a regional manager started before issue keys reads its issues only once they are keyed, and bb may not answer for its project at once.
   const keyIssues = keyIssuesOfEarlierManagers(bb, { store, onChange });
   void keyIssues();
 
@@ -85,13 +78,6 @@ export default function plugin(host: BbPluginApi): void {
   watchAgentThreads({ bb, store, inbox });
   watchOwnTree({ bb, store, inbox });
   bb.background.schedule("watch", "* * * * *", async () => {
-    // why each caught: a pass that can't read bb or GitHub must not keep the next from running, nor the doorbells from ringing.
-    // why the agents first: they remove a regional manager bb deleted before any later pass could ring it.
-    // why the PR reads before the verifiers: a verdict waiting for CI settles on this tick's read.
-    // why the final checks between them: a merge read this tick makes its parent's check this tick, and a check the verifiers' pass then finds busy is the final checks' turn's to start.
-    // why nothing waits for the issues' turns the agents' and the verifiers' passes start: a call bb
-    // never answers holds only its own issue, which every tick skips until it answers (issue-turns.ts).
-    // why what was unblocked after both, and before the ring: a merge read this tick is announced in the same doorbell.
     void upgrade030();
     void keyIssues();
     await agents.reconcile().catch((error: unknown) => bb.log.warn(`Could not reconcile the agents; the next tick tries again: ${messageOf(error)}`));

@@ -1,5 +1,3 @@
-// The card's money: what boat's prices make of a plan, a wallet and a running sandbox. Pure, for the
-// server's reply and the app's live cost.
 import { z } from "zod";
 import type { Billing } from "../boat/wire.ts";
 
@@ -24,5 +22,4 @@ export const dollarsPerHour = (billingMultiplier: number, billing: Billing): num
 
 /** A running sandbox's month so far at `now`, from its meter read at `readAt`: it grows at its price an hour. */
 export const costAt = (boat: { monthDollars: number; dollarsPerHour: number }, readAt: number, now: number): number =>
-  // why max: the reading's clock is the bb server's, `now` the browser's, and the two can disagree.
   boat.monthDollars + (boat.dollarsPerHour * Math.max(0, now - readAt)) / HOUR_MS;

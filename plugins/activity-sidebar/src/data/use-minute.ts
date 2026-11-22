@@ -1,4 +1,3 @@
-// One minute clock for the whole list: every corner's "5m" moves on the same tick.
 import { useSyncExternalStore } from "react";
 
 const MINUTE = 60_000;
@@ -14,7 +13,6 @@ function subscribe(listener: () => void): () => void {
   }
   return () => {
     listeners.delete(listener);
-    // why: no reader, no timer; the next one restarts it with a fresh now.
     if (listeners.size === 0 && timer !== null) {
       clearInterval(timer);
       timer = null;

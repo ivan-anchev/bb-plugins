@@ -1,4 +1,3 @@
-// A profile as the user is typing it: the fields' text as typed, read as a profile only once it is one.
 import { z } from "zod";
 import { avatarSchema, DEFAULT_AVATAR, profileSchema, type Profile } from "../../model/profile.ts";
 import type { CoordinatorId } from "../../model/role.ts";

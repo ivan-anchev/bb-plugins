@@ -1,8 +1,3 @@
-// What the strip and the Subagents tab show: the strip's rows and what it
-// leaves out, the tab's batches (one per user prompt), each batch's label, the
-// census words, the elapsed span, each row's elapsed time, an expanded row's
-// meta line, and the status words the strip and the tabs share. A row's detail
-// line is detail-line.ts's.
 import { formatClockTime, formatDuration } from "./clock.ts";
 import type { Delegate, DelegateId, DelegateStatus, Turn, TurnMessage } from "./delegate.ts";
 import { firstLine, trailSteps } from "./steps.ts";
@@ -45,7 +40,6 @@ export function selectRoster(delegates: readonly Delegate[], turns: readonly Tur
   return {
     rows: batches.flatMap((batch) => batch.delegates.filter(shown)),
     latest,
-    // why: only what ended badly is worth naming; a running one is in the strip already.
     previous: { total: left.length, parts: batchCensus(left).filter((p) => p.status === "failed" || p.status === "stopped") },
   };
 }
@@ -116,9 +110,6 @@ export const plural = (n: number, word: string, words = `${word}s`): string => `
 /** A status as one capitalised word: Running, Done, Failed, Stopped. */
 export const statusWord = (status: DelegateStatus): string => STATUS_WORD[status];
 
-// ---------------------------------------------------------------- layer 2
-
-// why: what needs attention leads; done is what is left.
 const CENSUS_ORDER: readonly DelegateStatus[] = ["running", "failed", "stopped", "completed"];
 const CENSUS_WORD: Record<DelegateStatus, string> = { running: "running", completed: "done", failed: "failed", stopped: "stopped" };
 const STATUS_WORD: Record<DelegateStatus, string> = { running: "Running", completed: "Done", failed: "Failed", stopped: "Stopped" };
@@ -128,17 +119,11 @@ const endOf = (d: Delegate, now: number): number => (d.state.status === "running
 type Prompt = TurnMessage & { from: "user" };
 const isPrompt = (message: TurnMessage): message is Prompt => message.from === "user";
 
-/** Every delegate in batches, oldest batch first: the one grouping both scopes are cut from. */
 function batchesOf(delegates: readonly Delegate[], turns: readonly Turn[]): Batch[] {
   const batches = groupByPrompt(delegates, turns.flatMap((turn) => turn.messages).toSorted((a, b) => a.at - b.at));
   return batches.map((batch, i) => ({ ...batch, opensByDefault: i === batches.length - 1 || batch.delegates.some(isRunning) }));
 }
 
-/**
- * Batches in prompt order. A delegate joins the batch of the last user prompt sent at or before its
- * launch, whichever turn launched it: a prompt sent while a turn runs (queued or steered) ends the batch
- * before it, so the turn's later launches are the new prompt's.
- */
 function groupByPrompt(delegates: readonly Delegate[], messages: readonly TurnMessage[]): Omit<Batch, "opensByDefault">[] {
   const prompts = messages.filter(isPrompt);
   const members = new Map<Prompt | null, Delegate[]>();
@@ -157,10 +142,6 @@ function toBatch(prompt: Prompt, delegates: Delegate[]): Omit<Batch, "opensByDef
   return { id: prompt.id, startedAt: prompt.at, label: promptLine(prompt.text), prompt: prompt.text, delegates };
 }
 
-/**
- * Delegates launched before any user prompt, under the thread's first message when that was not the user's
- * (an agent's brief); the first prompt labels its own batch.
- */
 function beforeFirstPrompt(messages: readonly TurnMessage[], delegates: Delegate[]): Omit<Batch, "opensByDefault"> {
   const [first] = messages;
   const text = first && !isPrompt(first) ? first.text : null;
@@ -173,10 +154,6 @@ function beforeFirstPrompt(messages: readonly TurnMessage[], delegates: Delegate
   };
 }
 
-/**
- * A prompt's first line as a batch's label: without wrapping quotes, or a filler lead-in
- * ("ok,", "now, lets"), so the word that says what was asked comes first.
- */
 function promptLine(prompt: string): string {
   const line = firstLine(prompt);
   let text = line.replace(WRAPPING_QUOTES, "$1").trim();
@@ -185,10 +162,8 @@ function promptLine(prompt: string): string {
 }
 
 const WRAPPING_QUOTES = /^["'“‘`](.*)["'”’`]$/su;
-// why: kept small on purpose; each is a word people open a request with that says nothing about it.
 const FILLER = /^(?:ok(?:ay)?|now|so|alright|lets|let's|please)\b[\s,.:;!-]*/iu;
 
-/** 950 / 61.2k / 1.3M */
 function formatTokens(n: number): string {
   if (n < 1000) return String(n);
   return n < 1_000_000 ? `${(n / 1000).toFixed(1)}k` : `${(n / 1_000_000).toFixed(1)}M`;

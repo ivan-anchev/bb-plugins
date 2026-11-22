@@ -1,4 +1,3 @@
-// bb's GitHub PR Status plugin (`bb--github-pr-status`) as this list reads it, and what a row shows of it.
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 

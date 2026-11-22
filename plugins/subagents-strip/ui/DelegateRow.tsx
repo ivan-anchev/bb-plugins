@@ -1,7 +1,3 @@
-// One delegate: a two-line row (avatar with status dot, title over the detail
-// line, elapsed time) that expands in place to its meta line, outcome, and step
-// trail, with Open thread in its footer. Words come from roster.ts and steps.ts;
-// the trail's lines, steps folded as bb's chat folds them, from work-groups.ts.
 import { useId, useRef, useState, type KeyboardEvent, type Ref, type TransitionEvent } from "react";
 import { experimental_Icon as Icon, experimental_useAppPanel, useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { StepRow } from "../bb.ts";
@@ -33,18 +29,16 @@ export function DelegateRow({ delegate: d, outlined, expanded, onToggle, ref }: 
   const trigger = useRef<HTMLButtonElement>(null);
   const [bodyShown, setBodyShown] = useState(expanded);
   if (expanded && !bodyShown) setBodyShown(true);
-  /** Once grown, the list scrolls just enough to show all of the row, never the page; once shrunk shut, the body unmounts. */
   const settle = (e: TransitionEvent<HTMLLIElement>) => {
-    // why: the body's grid-rows grow is the only grid-rows transition inside a row.
     if (e.propertyName !== "grid-template-rows") return;
     if (expanded) e.currentTarget.scrollIntoView({ block: "nearest" });
     else setBodyShown(false);
   };
   const collapseOnEscape = (e: KeyboardEvent) => {
     if (!expanded || e.key !== "Escape") return;
-    e.stopPropagation(); // the row's Esc, not the thread's
+    e.stopPropagation();
     onToggle();
-    trigger.current?.focus(); // the body goes inert, so focus inside it would be lost
+    trigger.current?.focus();
   };
   return (
     <li ref={ref} className="sr-row" data-st={d.state.status} data-open={expanded || undefined} onKeyDown={collapseOnEscape} onTransitionEnd={settle}>
@@ -57,9 +51,6 @@ export function DelegateRow({ delegate: d, outlined, expanded, onToggle, ref }: 
         <span className="sr-el">{formatDuration(elapsed(d, now))}</span>
         <Icon name="ChevronRight" className="sr-row-chev" aria-hidden />
       </button>
-      {/* why: the body mounts as the row opens and unmounts once it has shrunk shut, inert meanwhile: a long
-          thread's every row with its report and trail mounted is tens of thousands of elements (live: 40k of a
-          42k-element page), which bb restyles on every update. */}
       <div className="sr-x-wrap">
         <div className="sr-x-clip">
           <div className="sr-x" id={bodyId} inert={!expanded}>
@@ -71,13 +62,9 @@ export function DelegateRow({ delegate: d, outlined, expanded, onToggle, ref }: 
   );
 }
 
-// ---------------------------------------------------------------- layer 2
-
-/** The meta line, then the outcome, then the trail; scrolls inside a capped body, the footer pinned below. */
 function RowDetail({ delegate: d }: { delegate: Delegate }) {
   return (
     <>
-      {/* why: while running, the body follows the live step at its bottom; settled, it leads with the outcome. */}
       <div className="sr-x-scroll" ref={isRunning(d) ? followTail : startAtTop}>
         <MetaLine parts={metaParts(d)} />
         <Outcome delegate={d} report="clamped" />
@@ -91,11 +78,6 @@ function RowDetail({ delegate: d }: { delegate: Delegate }) {
   );
 }
 
-/**
- * Opens where the delegate lives. A child thread is a bb thread, so it opens
- * that thread. A delegation is not (a Claude Code childRef is a tool-use id),
- * so its transcript opens in the side panel, or its tab is focused if open.
- */
 function OpenThreadButton({ delegate: d }: { delegate: Delegate }) {
   const panel = experimental_useAppPanel();
   const navigate = useBbNavigate();
@@ -108,7 +90,7 @@ function OpenThreadButton({ delegate: d }: { delegate: Delegate }) {
         navigate.toThread(d.origin.threadId);
         return;
       default:
-        return d.origin satisfies never; // why: our own type, so a new origin is a compile error here
+        return d.origin satisfies never;
     }
   };
   return (
@@ -119,7 +101,6 @@ function OpenThreadButton({ delegate: d }: { delegate: Delegate }) {
   );
 }
 
-// why: a provider that sends no child rows (ACP) leaves no transcript to open; a child thread always opens.
 function opens(d: Delegate): boolean {
   return d.origin.kind === "child-thread" || d.steps !== null;
 }
@@ -127,10 +108,6 @@ function opens(d: Delegate): boolean {
 const LINES_SHOWN = 6;
 const LOADING = "Loading its steps and report…";
 
-/**
- * The last six lines on a rail, oldest first, "Show N earlier" above them: a line is a step, or a
- * group of steps that expands to them. While the delegate runs, its latest line can be live.
- */
 function Trail({ delegate: d }: { delegate: Delegate }) {
   const [all, setAll] = useState(false);
   const items = trailItems(d);
@@ -156,7 +133,6 @@ function Trail({ delegate: d }: { delegate: Delegate }) {
   );
 }
 
-/** What a run of steps did, in bb's words; it expands in place to its steps, each on its own line. */
 function WorkGroup({ group, startedAt }: { group: Extract<WorkItem, { kind: "group" }>; startedAt: number }) {
   const [open, setOpen] = useState(false);
   const stepsId = useId();

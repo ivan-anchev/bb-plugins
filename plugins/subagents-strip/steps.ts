@@ -1,5 +1,3 @@
-// What a delegate's child rows mean as steps. A step is a bb row (StepRow),
-// never a reshaped copy; meaning is derived at the point of use.
 import type { ActivityIntent, AssistantRow, ReasoningRow, StepRow, TimelineRow, WorkRow } from "./bb.ts";
 
 /**
@@ -124,12 +122,9 @@ export function isExploration(row: WorkRow): boolean {
   return stepIntents(row).some((intent) => intent.type !== "unknown");
 }
 
-// ---------------------------------------------------------------- layer 2
-
 const BROWSER_PREVIEW = /^\s*::browser-preview\{[^}\n]*\}\s*$/u;
 const OPENED_PREVIEW = "Opened a browser preview";
 
-// why: exhaustive, so a work kind a new SDK adds fails to compile here instead of showing its raw kind.
 function workLabel(row: WorkRow): string {
   const verb = (running: string, ran: string): string => (isLive(row) ? running : ran);
   switch (row.workKind) {
@@ -153,7 +148,6 @@ function workLabel(row: WorkRow): string {
   }
 }
 
-// why: exhaustive, so a status a new SDK adds fails to compile here; at runtime it reads as finished.
 function isLive(row: WorkRow): boolean {
   switch (row.status) {
     case "pending": return true;
@@ -186,26 +180,18 @@ function workStepKind(row: WorkRow): StepKind {
   }
 }
 
-/**
- * `never` keeps the switches exhaustive at compile time. At runtime the bb host
- * can be newer than the pinned SDK, so a kind it adds reads as its title, or
- * "Working", and never takes the strip down.
- */
 function unhandled(row: never): string {
   return presentationTitle(row) ?? "Working";
 }
 
-/** As `unhandled`: a kind a newer host adds shows the generic tool icon. */
 function unhandledKind(_row: never): StepKind {
   return "tool";
 }
 
-/** As `unhandled`: a work kind a newer host adds reads, lists, and searches nothing. */
 function unhandledIntents(_row: never): readonly ActivityIntent[] {
   return [];
 }
 
-/** As `unhandled`: a status a newer host adds reads in the past tense, as every step did before tenses. */
 function unhandledStatus(_status: never): boolean {
   return false;
 }
@@ -217,7 +203,6 @@ function presentationTitle(row: unknown): string | null {
   return typeof presentation.title === "string" ? presentation.title : null;
 }
 
-// why: a blank message cannot be a report, nor one that only opened a browser preview; the one before it can.
 function isReportMessage(row: StepRow): row is AssistantRow {
   return row.kind === "conversation" && row.role === "assistant" && row.text.trim() !== "" && messageText(row.text) !== null;
 }

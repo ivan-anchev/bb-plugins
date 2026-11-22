@@ -55,7 +55,7 @@ test("after a handoff, typing into the agent moves its issue out of Verifying, a
   await kit.idle(agentThreadId, "Handed off.");
   assert.equal((await row())?.lane, "verifying");
 
-  await kit.startTurn(agentThreadId); // the user types into the agent's thread
+  await kit.startTurn(agentThreadId);
   assert.equal((await row())?.lane, "in-progress");
 
   await kit.idle(agentThreadId, "Answered the user's question.");
@@ -98,7 +98,7 @@ test("a plugin's or a provider's question is passed on by its title, and one fro
   const ask = (payload: PluginThreadEventPayloads["interaction.pending"]["interaction"]["payload"]) => kit.emit("interaction.pending", { thread: kit.ref(agentThreadId), interaction: { payload } });
   await ask({ kind: "plugin", title: "Pick a staging region", data: null });
   await ask({ kind: "codex/mcp-elicitation", title: "Sign in to the issue tracker", data: null });
-  // bb's data, as a newer bb may send it: a kind this SDK doesn't know, with fields it doesn't name.
+  // WARNING: deliberately off-type; bb's data as a newer bb may send it: a kind this SDK doesn't know, with fields it doesn't name.
   await ask(JSON.parse(`{ "kind": "survey", "questions": 3 }`));
   await settled();
 

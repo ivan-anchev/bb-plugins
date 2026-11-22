@@ -1,7 +1,3 @@
-// The card's plan: "Todo 3/9", then its steps, done a check, the one in progress the
-// working ring, pending a quiet point; folded past six to "N earlier", three steps, "N later". Either
-// button opens the whole plan (`open`, held by the card).
-// A read that failed says so above the plan it leaves in place, with Retry.
 import type { ReactNode } from "react";
 import { foldPlan, type PlanStep, type PlanView, type StepState } from "../../card/plan-fold.ts";
 import type { PlanRead } from "../../data/use-plan.ts";
@@ -12,12 +8,9 @@ type Props = { read: PlanRead; open: boolean; onUnfold(): void };
 
 export function PlanSection({ read, open, onUnfold }: Props) {
   const plan = read.todos === null ? null : foldPlan(read.todos, open);
-  // why: a failed read shows even with no plan read yet: bb's plan is unknown then, not absent.
   if (plan === null && !read.failed) return null;
   return <Plan plan={plan} failed={read.failed} onRetry={read.retry} onUnfold={onUnfold} />;
 }
-
-// ------------------------------------------------------------------ layer 2
 
 type PlanProps = { plan: PlanView | null; failed: boolean; onRetry(): void; onUnfold(): void };
 
@@ -52,7 +45,6 @@ function Plan({ plan, failed, onRetry, onUnfold }: PlanProps) {
   );
 }
 
-/** Over a plan shown, it may be out of date; with none, whether there is one is unknown. */
 function ReadFailed({ stale, onRetry }: { stale: boolean; onRetry(): void }) {
   return (
     <div className="as-card-failed" role="status">
@@ -88,7 +80,6 @@ function stepGlyph(state: StepState): ReactNode {
   }
 }
 
-/** "2 earlier" / "4 later". */
 function Fold({ count, later, onOpen }: { count: number; later: boolean; onOpen(): void }) {
   const which = later ? "later" : "earlier";
   return (

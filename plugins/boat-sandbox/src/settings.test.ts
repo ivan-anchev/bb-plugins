@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { resolveSettings, type BoatSettingsValues } from "./settings.ts";
 
-// The values bb hands the plugin on a fresh install: defaults, no secret.
 const DEFAULTS: BoatSettingsValues = { apiKey: undefined, idleMinutes: 15, defaultPreset: "default", defaultTemplate: "", defaultEnvironment: "", sidebarIcon: true };
 
 test("no key is a setup problem whose fix names the settings path", () => {
@@ -47,7 +46,6 @@ test("a Default template names a boat saved snapshot, and empty is boat's stock 
   assert.ok(named.ok && named.defaults.template === "node-tools");
   const blank = withTemplate("  ");
   assert.ok(blank.ok && blank.defaults.template === null);
-  // Only the syntax is checked here; whether boat has it is checked at each launch.
   const invalid = withTemplate("Node Tools");
   assert.ok(!invalid.ok && invalid.problem.fix.includes("unset defaultTemplate"));
 });

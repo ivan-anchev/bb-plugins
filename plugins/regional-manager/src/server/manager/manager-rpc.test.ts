@@ -11,16 +11,11 @@ import { heldAs030 } from "../store/test-store.ts";
 import { harness, newThreadRequest, settled } from "../test-harness.ts";
 import { PLACEHOLDER } from "./held-managers.ts";
 
-// A regional manager's record through the RPC the panel calls, as server.ts registers it: created
-// with its profile and no thread, started by the goal sent from its page, edited before and after,
-// and deleted while it has no thread.
-
 const PROFILE: Profile = { name: "Webhooks", description: "Moves the webhook service off the cron box.", avatar: { kind: "icon", icon: "Zap" } };
 const GOAL = "Migrate the webhook service";
 
 const goalFile = (kit: ReturnType<typeof harness>, id: CoordinatorId) => join(kit.memory.of(id).dir, "GOAL.md");
 
-/** A regional manager created through the RPC with PROFILE, as server.ts wires it. */
 async function created() {
   const kit = harness();
   const coordinatorId = coordinatorIdSchema.parse((await kit.rpc.createCoordinator({ profile: PROFILE })).coordinatorId);
@@ -203,7 +198,6 @@ test("Delete removes a regional manager not started yet, and refuses one with a 
   assert.equal(kit.store.coordinator(other)?.threadId, threadId);
 });
 
-/** A harness over its own database, holding "Janitor" as 0.3.0 left it: its thread `status`, flagged unless not `flagged`, no GOAL.md. */
 async function as030(status: "pending" | "idle", { flagged = true } = {}) {
   const { storage } = memoryStorage();
   const kit = harness(undefined, undefined, storage);

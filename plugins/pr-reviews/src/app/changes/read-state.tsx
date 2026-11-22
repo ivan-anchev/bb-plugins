@@ -1,5 +1,3 @@
-// The Changes tab's content region before the diff is read, loading or failed. Its focus passes to
-// the diff pane that replaces it (useFocusHandOff).
 import type { ReactNode, Ref } from "react";
 
 /** The tab's one tab stop for its content while there is no tree and diff yet: they bring their own. */

@@ -1,13 +1,3 @@
-// A research report's file: the regional manager's copy of what an agent handed off, kept in its
-// memory folder, where the user reads and edits it in the Memory editor and any agent reads it with
-// crew_memory_read. The handoff keeps the report as it was handed off; the file is the copy the
-// manager hands on, by naming it in a brief. The plugin gives it to nobody, and never edits MEMORY.md.
-//
-// The rule for a later report on the same issue: it replaces reports/<issue>.md only while that
-// file is gone or still exactly what the plugin last saved there. A file someone edited since, or
-// wrote before the plugin saved anything there, stays as it is, and the report goes to the first
-// free reports/<issue>-2.md, -3.md and so on; crew_catch_up names the file it went to and says why.
-// Nothing a person wrote is replaced, and the handoff never fails over it.
 import type { Handoff } from "../../model/handoff.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
 import { memoryFileSchema, type MemoryFile, type MemoryText } from "../../model/memory-file.ts";
@@ -33,7 +23,6 @@ export function storeReport<T>(files: Pick<Memory, "read" | "write" | "remove">,
   const content = fileText(report);
   const { file, before } = placeOf(files, issueId, earlier);
   try {
-    // why throw on a conflict: the plugin read the file just now, with nothing run since, so only a write outside the server can move it.
     if (files.write(file, content, before?.version ?? null).outcome === "conflict") throw new Error(`${file} changed on disk as the report was saved there. Try again.`);
     return commit(file);
   } catch (error) {
@@ -42,7 +31,6 @@ export function storeReport<T>(files: Pick<Memory, "read" | "write" | "remove">,
   }
 }
 
-/** Where the report goes, and what that file holds now: its home while it is gone or still what the plugin last saved there, else the first free -N.md beside it. */
 function placeOf(files: Pick<Memory, "read">, issueId: IssueId, earlier: readonly Handoff[]): { file: MemoryFile; before: MemoryText | null } {
   const home = reportFileOf(issueId);
   const now = files.read(home).text;
@@ -53,7 +41,6 @@ function placeOf(files: Pick<Memory, "read">, issueId: IssueId, earlier: readonl
   }
 }
 
-/** Puts `file` back as it was `before` the plugin wrote `content` there (null: there was no file), while it still holds `content`. */
 function putBack(files: Pick<Memory, "read" | "write" | "remove">, file: MemoryFile, content: string, before: MemoryText | null): void {
   const now = files.read(file).text;
   if (now === null || now.content !== content) return;
@@ -61,10 +48,8 @@ function putBack(files: Pick<Memory, "read" | "write" | "remove">, file: MemoryF
   else files.write(file, before.content, now.version);
 }
 
-/** A report as its file holds it. */
 const fileText = (report: string): string => `${report}\n`;
 
-/** What the plugin last saved to `file`, of the handoffs given; null when it saved nothing there. */
 function lastSaved(file: MemoryFile, handoffs: readonly Handoff[]): string | null {
   const saved = handoffs.flatMap((handoff) => (handoff.status === "done" && handoff.delivery.kind === "report" && handoff.delivery.file === file ? [handoff.delivery.report] : [])).at(-1);
   return saved === undefined ? null : fileText(saved);

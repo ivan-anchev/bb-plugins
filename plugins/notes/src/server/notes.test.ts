@@ -10,7 +10,6 @@ import { memoryStorage } from "./memory-storage.ts";
 import { createNotes } from "./notes.ts";
 import { openStore } from "./store.ts";
 
-/** Notes over a fresh store and a fresh media folder, counting how often open cards are told to read again. */
 function freshNotes() {
   const store = openStore(memoryStorage().storage);
   const media = openMediaFiles(join(mkdtempSync(join(tmpdir(), "notes-test-")), "data.db"));
@@ -110,7 +109,6 @@ test("the sweep removes files older than the load that no note holds, and keeps 
     [held.attachments[0].id, "stray.png", ".tmp-att_00000000-0000-4000-8000-000000000001"].map((name) => utimes(join(media.dir, name), longAgo, longAgo)),
   );
   await writeFile(join(media.dir, "att_00000000-0000-4000-8000-000000000002"), "being saved");
-  // A file written just after the load, stamped a few ms earlier by the file system's coarse clock.
   const justAfter = new Date(loadedAt - 5);
   await utimes(join(media.dir, "att_00000000-0000-4000-8000-000000000002"), justAfter, justAfter);
 

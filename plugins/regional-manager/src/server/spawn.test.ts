@@ -67,9 +67,6 @@ test("two regional managers get two rows and two memory folders", async () => {
   assert.deepEqual([goalOf(kit, second.threadId), goalOf(kit, first.threadId)], ["Retire the cron box", "Migrate the webhook service"]);
 });
 
-// bb counts a provider or model only when the request marks it chosen, or marks none at all, and
-// runs its own default otherwise; bb's composer leaves the model unmarked until the user touches it.
-
 test("a regional manager is spawned titled with its name, its goal its first message, on everything bb's composer picked, counted as chosen", async () => {
   const kit = harness();
   const request = { ...newThreadRequest("Migrate the webhook service"), serviceTier: "fast", permissionMode: "accept-edits" as const };
@@ -106,7 +103,6 @@ test("an agent started with no execution named runs on its regional manager's se
   assert.equal(named.execution?.serviceTier, "default");
 });
 
-// bb gives a child its parent's permission mode unless the spawn marks its own as chosen.
 for (const permissionMode of ["accept-edits", "full"] as const) {
   test(`an agent of a regional manager on ${permissionMode} runs on auto, and on its regional manager's provider and model`, async () => {
     const kit = harness();

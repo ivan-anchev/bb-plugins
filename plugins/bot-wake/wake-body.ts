@@ -72,7 +72,6 @@ function describeInteraction(interaction: PendingInteraction): string {
   return isExtension(payload) ? titled(payload.title) : newerInteraction(payload);
 }
 
-/** Extension kinds are namespaced `<owner>/<name>`; bb's own kinds carry no slash. */
 function isExtension(payload: InteractionPayload): payload is ExtensionPayload {
   return payload.kind.includes("/");
 }
@@ -83,7 +82,6 @@ function titled(title: string): string {
   return title.trim() || WAITING_FOR_INPUT;
 }
 
-/** A payload kind from a newer bb than this SDK: the compiler flags new kinds here, the runtime stays neutral. */
 function newerInteraction(_payload: never): string {
   return WAITING_FOR_INPUT;
 }
@@ -107,12 +105,10 @@ function describeApproval(subject: ApprovalSubject): string {
   }
 }
 
-/** A subject kind from a newer bb than this SDK: the compiler flags new kinds here, the runtime stays neutral. */
 function newerApproval(_subject: never): string {
   return "The agent is waiting for an approval.";
 }
 
-/** One line, at most two sentences and 280 characters. */
 function summarize(text: string): string {
   const line = text.replace(/\s+/g, " ").trim();
   const lead = line.split(/(?<=[.!?])\s/).slice(0, SUMMARY_MAX_SENTENCES).join(" ");

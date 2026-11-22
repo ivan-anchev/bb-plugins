@@ -1,7 +1,3 @@
-// A verifier's own tool: issue_verdict, its judgement of each done-criterion with the evidence it
-// ran. Its overall outcome is never reported: the plugin derives it (model/verdict.ts), on the
-// commit and tree the check judges (verify.ts returned). The caller's role comes from the plugin's
-// database by its thread id.
 import { z } from "zod";
 import { MAX_CRITERIA, type DoneCriteria } from "../../model/issue/issue.ts";
 import { criterionResultSchema, UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
@@ -40,7 +36,6 @@ export function registerVerdictTool(bb: ToolsBb, { store, verify }: Deps): void 
       const role = store.roleOfThread(threadId);
       if (role?.kind !== "verifier") return failed(`${VERDICT} is refused: only a verifier thread the plugin started returns a verdict, and this thread is not one. Carry on without it.`);
       const check = store.check(role.checkId);
-      // why throw: a verifier is started for a check, and checks are kept while their regional manager is.
       if (check === null) throw new Error(`The check ${role.checkId} this verifier runs is missing.`);
       if (check.verdict.state !== "running" || check.verdict.verifierThreadId !== threadId) return failed(NOT_RUNNING);
       const report = reportOf(input, check.criteria);
@@ -57,7 +52,6 @@ export function registerVerdictTool(bb: ToolsBb, { store, verify }: Deps): void 
   });
 }
 
-/** The verdict, each criterion named by its text, in the check's order; or why it can't be taken. */
 function reportOf(input: VerdictInput, doneCriteria: DoneCriteria): VerifierReport | string {
   const numbers = input.criteria.map((check) => check.criterion);
   const missing = doneCriteria.flatMap((_, i) => (numbers.includes(i + 1) ? [] : [i + 1]));
@@ -71,7 +65,6 @@ function reportOf(input: VerdictInput, doneCriteria: DoneCriteria): VerifierRepo
     findings: input.findings,
     criteria: doneCriteria.map((criterion, i) => {
       const check = byNumber.get(i + 1);
-      // why throw: missing numbers were refused above.
       if (check === undefined) throw new Error(`Criterion ${i + 1} has no result.`);
       return { criterion, result: check.result, evidence: check.evidence };
     }),

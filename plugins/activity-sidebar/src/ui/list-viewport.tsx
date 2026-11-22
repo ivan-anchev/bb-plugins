@@ -1,5 +1,3 @@
-// The scroller: lays the items out, mounts only what is on screen, and owns the list's keyboard.
-// Every item is absolutely placed at its computed y; ui/motion carries it there from where it stood.
 import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { heirOf } from "../list/focus.ts";
 import type { ListItem, NoticeKey } from "../list/items.ts";
@@ -37,9 +35,6 @@ export function ListViewport({ items, card, ...actions }: Props) {
   const focus = useStopFocus(nodes, stopKeys, scroller);
   const motion = useLayoutMotion(layout, nodes, { top, height });
 
-  // why: the focused item stays mounted when it scrolls away or while its menu is open, so focus never
-  // drops to the page, and a closing menu can hand focus back to its trigger. An item on its way across
-  // the view stays mounted until it lands, so one gliding out of view is seen going.
   const mounted = new Set([...visibleKeys(layout, top, height), ...motion.passing]);
   if (focus.key !== null) mounted.add(focus.key);
 
@@ -59,7 +54,6 @@ export function ListViewport({ items, card, ...actions }: Props) {
         }}
         onKeyDown={(e) => moveFocus(e, layout, focus, scroller)}
       >
-        {/* why: clipped to the layout's height, so what moves never changes how far the list scrolls. */}
         <div className="as-content" style={{ height: layout.height }}>
           {layout.entries
             .filter((entry) => mounted.has(entry.key))
@@ -74,14 +68,11 @@ export function ListViewport({ items, card, ...actions }: Props) {
             </Gone>
           ))}
         </div>
-        {/* why: in here, so focus leaving the card (portaled; it adds nothing here) bubbles to onBlur above, as a menu's does. */}
         {card !== null && <HoverCard scroller={scroller} entries={layout.entries} data={card} listFocus={focus} onNavigate={actions.onNavigate} />}
       </div>
     </>
   );
 }
-
-// ------------------------------------------------------------------ layer 2
 
 function renderItem(item: ListItem, actions: ItemActions): ReactNode {
   switch (item.kind) {
@@ -101,11 +92,6 @@ function renderItem(item: ListItem, actions: ItemActions): ReactNode {
   }
 }
 
-/**
- * An item at its y, registered under its key so the keyboard can focus it. React bubbles focus through
- * portals, so `onFocus` also fires for a menu the item opens. A row carries its card key, which the
- * hover card finds it by.
- */
 function Placed({ entry, nodes, onFocus, children }: { entry: LayoutEntry; nodes: Map<string, HTMLElement>; onFocus(): void; children: ReactNode }) {
   return (
     <div
@@ -124,7 +110,6 @@ function Placed({ entry, nodes, onFocus, children }: { entry: LayoutEntry; nodes
   );
 }
 
-/** A leaver as it stood, closing away: out of reach of the pointer, the keyboard and screen readers. */
 function Gone({ ghost, nodeRef, children }: { ghost: Ghost; nodeRef(node: HTMLElement | null): void; children: ReactNode }) {
   return (
     <div className="as-item as-ghost" aria-hidden inert style={{ transform: `translateY(${ghost.entry.y}px)`, height: ghost.entry.h }} ref={nodeRef}>
@@ -134,22 +119,12 @@ function Gone({ ghost, nodeRef, children }: { ghost: Ghost; nodeRef(node: HTMLEl
 }
 
 type StopFocus = {
-  /** The key of the item holding focus, or the item the keyboard is moving focus to. */
   key: string | null;
-  /** Focus entered the item under `key` (itself, a menu it portals, or its hover card), or left the list (null). */
   hold(key: string | null): void;
   moveTo(key: string): void;
-  /** Focus back onto the item holding it, from a portaled part of it that went (its hover card). */
   refocus(): void;
 };
 
-/**
- * Follows focus by key, not index, so an item keeps focus when the list reorders around it. When the
- * focused item leaves the list (its thread archived or deleted elsewhere, its section folded), focus
- * passes to its neighbour, or to the scroller once none is left. A null key means focus is outside the
- * list: nothing moves. Focus in a menu an item portals (the project filter) or in a row's hover card is
- * still that item's.
- */
 function useStopFocus(nodes: Map<string, HTMLElement>, stopKeys: readonly string[], scroller: RefObject<HTMLElement | null>): StopFocus {
   const [key, setKey] = useState<string | null>(null);
   const moving = useRef(false);
@@ -184,16 +159,10 @@ function useStopFocus(nodes: Map<string, HTMLElement>, stopKeys: readonly string
   };
 }
 
-/** A row is its link; a title, "Show more" or a notice is its first button. */
 function focusItem(nodes: Map<string, HTMLElement>, key: string) {
   nodes.get(key)?.querySelector<HTMLElement>("a, button")?.focus({ preventScroll: true });
 }
 
-/**
- * ↑/↓ move between the stops (rows, titles, "Show more", Retry), scrolling the next one into view
- * first. Enter acts: a row is a link, the rest are buttons. A key another control already handled, or
- * one pressed in a portaled menu (React bubbles it here), belongs to that control.
- */
 function moveFocus(e: KeyboardEvent<HTMLDivElement>, layout: Layout, focus: StopFocus, scroller: RefObject<HTMLDivElement | null>) {
   if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
   if (e.defaultPrevented || !(e.target instanceof Node && e.currentTarget.contains(e.target))) return;
@@ -210,17 +179,14 @@ function moveFocus(e: KeyboardEvent<HTMLDivElement>, layout: Layout, focus: Stop
   focus.moveTo(next.key);
 }
 
-/** The items ↑/↓ stop on: everything that acts when pressed. */
 function stopsOf(layout: Layout): LayoutEntry[] {
   return layout.entries.filter(({ item }) => item.kind === "row" || item.kind === "title" || item.kind === "more" || (item.kind === "notice" && item.retry));
 }
 
-/** From the scroller itself, the keyboard starts at the first stop in view. */
 function firstBelow(stops: readonly LayoutEntry[], scrollTop: number): LayoutEntry {
   return stops.find((entry) => entry.y >= scrollTop) ?? stops[stops.length - 1];
 }
 
-/** The scroller's height, kept current by a ResizeObserver. */
 function useHeight(ref: RefObject<HTMLElement | null>): number {
   const [height, setHeight] = useState(0);
   useLayoutEffect(() => {

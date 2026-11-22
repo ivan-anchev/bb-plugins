@@ -1,5 +1,3 @@
-// The canonical delegate: one record per subagent, whatever the provider and
-// wherever it lives in bb.
 import type { StepRow, TimelineRow } from "./bb.ts";
 
 export type DelegateId = string & { readonly __brand: "DelegateId" };
@@ -31,12 +29,8 @@ export type Delegate = {
  */
 export type Usage = { toolUses: number; totalTokens: number | null };
 
-// why: a union, not a flag plus an optional threadId, so a child thread always names the thread it opens.
-// `threadId` repeats `id` on purpose: `id` is opaque identity (keys, tab params), `threadId` is the bb thread.
 type DelegateOrigin =
-  /** A delegation row in this thread's timeline; its transcript is its child rows. */
   | { kind: "delegation" }
-  /** A bb thread whose parentThreadId is this thread. */
   | { kind: "child-thread"; threadId: string };
 
 /**

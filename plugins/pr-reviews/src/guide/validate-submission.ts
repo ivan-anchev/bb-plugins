@@ -1,5 +1,3 @@
-// Proves a submission covers the pinned PR diff exactly once, and turns the agent's wire format
-// into the canonical Guide. Server only; pure.
 import { hunkIdOf, numberedLines, unitIdsOf, WHOLE_FILE, type DiffFile, type HunkId } from "../diff/diff-schema.ts";
 import { pathLiteral } from "../server/visible-text.ts";
 import { isTestOrMock } from "./change-kind.ts";
@@ -18,11 +16,6 @@ export function validateSubmission(input: GuideInput, files: DiffFile[]): Valida
   const problems = ledger.problems();
   return problems.length === 0 ? { ok: true, guide } : { ok: false, message: formatProblems(problems) };
 }
-
-// ---------------------------------------------------------------------------------------
-// Steps and hidden items: every reference goes through the ledger, which records where each
-// unit was placed. An unknown reference is left out of the guide, but it is also a problem,
-// and any problem rejects the whole submission, so a partial guide never reaches storage.
 
 type InputStep = GuideInput["steps"][number];
 type InputHidden = GuideInput["hidden"][number];
@@ -43,9 +36,6 @@ function toHiddenItems(item: InputHidden, ledger: CoverageLedger): HiddenItem[] 
   return ledger.place(item.file, item.hunk, HIDDEN).map((hunk) => ({ kind: "hunk", file: item.file, hunk, reason: item.reason }));
 }
 
-// ---------------------------------------------------------------------------------------
-// The ledger: the diff's units, where each was placed, and what went wrong.
-
 type Side = Finding["side"];
 
 const HIDDEN = "hidden";
@@ -61,19 +51,16 @@ type Problem =
 type CoverageLedger = ReturnType<typeof createCoverageLedger>;
 
 function createCoverageLedger(files: DiffFile[]) {
-  // Paths match exactly: the hunk list writes each one losslessly (visible-text.ts).
   const byPath = new Map(files.map((file) => [file.path, file]));
-  const placements = new Map<string, string[]>(); // unit key -> ["step 2", "hidden", …]
+  const placements = new Map<string, string[]>();
   const found: Problem[] = [];
 
   const record = (file: string, hunk: HunkId, where: string) => {
     const key = unitKey(file, hunk);
     placements.set(key, [...(placements.get(key) ?? []), where]);
-    // Tests and mocks go in a step: the app hides them until the reader asks to see them.
     if (where === HIDDEN && isTestOrMock(file)) found.push({ kind: "hidden-test", file, hunk });
   };
 
-  // The file at `path`, or null after recording that the PR has no such file.
   const fileAt = (path: string, where: string): DiffFile | null => {
     const file = byPath.get(path);
     if (file === undefined) found.push({ kind: "unknown-file", file: path, where });
@@ -98,7 +85,6 @@ function createCoverageLedger(files: DiffFile[]) {
       if (file !== null) unitIdsOf(file).forEach((hunk) => record(path, hunk, where));
     },
 
-    // A finding must sit on a line some hunk shows on its side; it is stored with that hunk.
     locateFinding(input: InputFinding, where: string): Finding[] {
       const file = fileAt(input.file, where);
       if (file === null) return [];
@@ -127,8 +113,6 @@ function createCoverageLedger(files: DiffFile[]) {
 
 const unitKey = (file: string, hunk: HunkId) => JSON.stringify([file, hunk]);
 
-// Tolerant reading of the agent's `hunk`: the @@ marks, trailing function context and an
-// omitted count are all optional. Starts must match; counts must match when given.
 const RANGE = /^\s*(?:@@\s*)?-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?(?:\s*@@)?(?:\s.*)?$/;
 const WHOLE_FILE_REF = /^\s*whole file\s*$/i;
 
@@ -147,16 +131,12 @@ function resolveHunkRef(file: DiffFile, ref: string): HunkId | null {
   return hunk === undefined ? null : hunkIdOf(hunk);
 }
 
-// "first-last" of the line numbers each hunk shows on `side`; a hunk with none there is left out.
 function rangesOf(file: DiffFile, side: Side): string[] {
   return file.hunks.flatMap((hunk) => {
     const numbers = numberedLines(hunk).flatMap((line) => (line[side] === null ? [] : [line[side]]));
     return numbers.length === 0 ? [] : [`${numbers[0]}-${numbers[numbers.length - 1]}`];
   });
 }
-
-// ---------------------------------------------------------------------------------------
-// The message the agent reads. Paths are written as in the hunk list, so they can be copied.
 
 const MAX_LISTED = 40;
 

@@ -1,4 +1,3 @@
-// What every tool module shares: the part of bb that registers a tool, and the shape of a refusal.
 import type { PluginAgentToolContext, PluginAgentToolRegistrationBase, PluginAgentToolResult } from "@get-bb/plugin-sdk";
 import type { z } from "zod";
 import type { CoordinatorId, Role } from "../../model/role.ts";

@@ -1,6 +1,3 @@
-// Which file of the Changes tab's list the reader is on: the one whose card spans the line a little
-// under the list's top, where its sticky header sits. Pure.
-
 /**
  * `tops`: each file's offset in the list, in order, so ascending. `line`: the offset of the line the
  * reader is on. The index of the last file starting at or above it, or the first file above them all.

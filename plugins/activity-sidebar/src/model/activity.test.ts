@@ -137,7 +137,6 @@ test("the project filter narrows every section to its project", () => {
 });
 
 test("reading a thread neither moves its row nor resets its time", () => {
-  // bb bumps updatedAt (not latestAttentionAt) when a thread is read.
   const sections = build([
     thread("came-back", { latestAttentionAt: NOW - 60_000, updatedAt: NOW - 60_000 }),
     thread("just-read", { latestAttentionAt: NOW - 3 * 60_000, updatedAt: NOW }),

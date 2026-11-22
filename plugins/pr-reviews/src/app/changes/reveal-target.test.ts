@@ -7,7 +7,6 @@ import { filesByTreePathOf } from "./tree/tree-input.ts";
 
 const FILES = [diffFile("README.md"), diffFile("src/a.ts"), diffFile("src/a.ts/b.ts")];
 
-// The target as the panel resolves it, under a path query.
 const targetUnder = (pathQuery: string | null, path: string) => revealTargetOf(path, filesByTreePathOf(filterChangedFiles(FILES, pathQuery, NO_FILTERS)), FILES);
 
 test("a file the tree shows: its row", () => {

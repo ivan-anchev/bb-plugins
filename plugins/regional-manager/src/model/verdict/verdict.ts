@@ -1,7 +1,3 @@
-// A done handoff's verdict: whether the commit the agent claimed was what it left checked out, as the
-// plugin read it, whether an independent verifier thread checked the work against each
-// done-criterion, and what it found. Pass or fail is never stored: `judge` derives it, so the
-// board, the catch-up and the doorbell can't disagree.
 import { z } from "zod";
 import { checkoutProblems, checkoutSchema, type Checkout, type CheckoutRead } from "./checkout.ts";
 import { ciVerdictSchema, type Ci, type CiVerdict } from "./pr.ts";
@@ -17,28 +13,14 @@ export type CriterionResult = z.infer<typeof criterionResultSchema>;
 export const UNCHECKABLE_RULE =
   "A criterion you can't check as it is written, as when it names a step that hasn't happened yet, is unverifiable, with why as its evidence: never pass it on a nearby fact you could check.";
 
-/** A provider and model as bb records a thread's turns on them. */
 const modelRefSchema = z.object({ providerId: z.string().min(1), model: z.string().min(1) });
 
 const verifierThreadIdSchema = z.string().min(1);
 
 const roundSchema = z.number().int().min(1);
 
-/** What CI said about the commit when the verdict settled. why a default: a verdict settled before CI was watched had none judged. */
 const settledCiSchema = ciVerdictSchema.default({ kind: "none" });
 
-/**
- * What became of a returned verdict. `pending`: nobody has been told yet; a failed one's findings
- * may be owed to the agent, sent once its verifier no longer runs. `waiting-for-ci`: it
- * passed every criterion, and CI on its commit is still to come. `sending-back`: its findings are
- * on their way to the agent as fix round `round`, already counted on the agent. `sent-back`: the
- * agent has them. `maybe-sent-back`: the plugin stopped while they were on their way, or the send
- * failed in a way that doesn't show whether bb took them, so it is final and its coordinating
- * thread's, with the round still spent. `checked`: it is final, and its coordinating thread's;
- * `refused` is bb's answer when it refused the findings sent back, else null. Each that settled
- * it keeps `ci`, what CI said about the commit then. `superseded`: it waited for CI when a newer
- * handoff or a handover replaced it, so it is final with no CI judged, and nobody is told.
- */
 const pendingSchema = z.object({ kind: z.literal("pending") });
 const waitingForCiSchema = z.object({ kind: z.literal("waiting-for-ci") });
 const sendingBackSchema = z.object({ kind: z.literal("sending-back"), round: roundSchema, ci: settledCiSchema });
@@ -56,13 +38,6 @@ const settlementSchema = z.discriminatedUnion("kind", [
   supersededSettlementSchema,
 ]);
 
-/**
- * The verifier's verdict on the commit `headSha` (the agent's claim; for a final check, the one its
- * own worktree held as it returned) and `checkout`, bb's read of the tree it was judged in: each
- * criterion in the issue's order, and the model bb ran it on. `sameModel`: no other model was
- * available, so it ran on the model of an agent whose work it checks.
- * why a default: a verdict stored before settlements existed was settled as it was stored.
- */
 const returnedSchema = z.object({
   state: z.literal("returned"),
   verifierThreadId: verifierThreadIdSchema,
@@ -75,16 +50,8 @@ const returnedSchema = z.object({
   settlement: settlementSchema.default({ kind: "checked", refused: null, ci: { kind: "none" } }),
 });
 
-// Each state up to a returned verdict keeps `checkout`, the agent's environment as bb's git plugin
-// read it when the agent handed off; null for a final check, whose verifier's own worktree is read
-// when it returns.
 const pendingCheckoutSchema = checkoutSchema.nullable();
-/** Verification is on and no verifier has started yet. */
 const queuedSchema = z.object({ state: z.literal("queued"), checkout: pendingCheckoutSchema });
-/**
- * A verifier thread is checking; `nudged` once it went idle without a verdict and was asked again;
- * `declined`, what its provider asked a person that the plugin declined, as nobody answers a verifier.
- */
 const runningSchema = z.object({
   state: z.literal("running"),
   verifierThreadId: verifierThreadIdSchema,
@@ -92,21 +59,13 @@ const runningSchema = z.object({
   declined: z.array(z.string()).default([]),
   checkout: pendingCheckoutSchema,
 });
-/** No verdict will come: bb's git plugin couldn't read the agent's environment, or the verifier never started or stopped without one. Its thread, if it had one. */
 const couldNotRunSchema = z.object({ state: z.literal("could-not-run"), verifierThreadId: verifierThreadIdSchema.nullable(), reason: z.string() });
-/** A newer done handoff from the same agent, or a handover, replaced this one before its verdict. */
 const supersededSchema = z.object({ state: z.literal("superseded") });
-/** Verification was off when the agent handed off. */
 const waivedSchema = z.object({ state: z.literal("waived") });
 
 export const verdictSchema = z.discriminatedUnion("state", [queuedSchema, runningSchema, returnedSchema, couldNotRunSchema, supersededSchema, waivedSchema]);
 export type Verdict = z.infer<typeof verdictSchema>;
 
-/**
- * What became of a returned verdict, as the board reads it: its kind and, once settled, CI. why
- * without the fix round and bb's refusal: they are the regional manager's, and the board shows neither.
- * why no CI while the findings are on their way back: the board shows that state as pending.
- */
 const shownSettlementSchema = z.discriminatedUnion("kind", [
   pendingSchema,
   waitingForCiSchema,
@@ -165,7 +124,6 @@ export function outcome(verdict: ShownVerdict): Outcome {
       if (verdict.settlement.kind === "superseded") return "superseded";
       const ci = ciVerdictOf(verdict);
       if (ci !== null) return judge(verdict, ci);
-      // why pending until settled: the row says Verifying until the findings reach the agent or the verdict is final.
       return verdict.settlement.kind === "waiting-for-ci" ? "waiting-for-ci" : "pending";
     }
     case "could-not-run":

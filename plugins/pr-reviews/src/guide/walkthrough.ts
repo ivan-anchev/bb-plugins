@@ -1,4 +1,3 @@
-// What the walkthrough shows for the reader's view options. Pure; the app calls it at render.
 import { isTestOrMock } from "./change-kind.ts";
 import type { Finding, Guide, GuideHunk, GuideStep } from "./guide-schema.ts";
 

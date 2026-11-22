@@ -112,13 +112,11 @@ test("the manager's own working tree is recorded once per state", () => {
   assert.deepEqual(store.lastOwnTreeEvent(MANAGER), { at: 3_300, event: { kind: "coordinator-tree-clean" } });
 });
 
-/** WEB-1 merged as #41 when `merged`, WEB-2 canceled by the manager, WEB-3 depending on them as stored: every issue of the manager as viewed with no agent. */
 function mergedOrNot(store: ReturnType<typeof freshStore>["store"]) {
   const pr: PrSnapshot = { number: 41, url: "https://github.com/acme/webhooks/pull/41", state: "merged", draft: false, review: "none", ci: "pass", headSha: "0123456789abcdef0123456789abcdef01234567", failedChecks: [] };
   return (merged: boolean): IssueView[] => issueViews(store.issues(MANAGER).map((issue) => ({ issue, holder: null, ended: null, openDecision: false, finalCheck: null, verifierAsks: false, pr: merged && issue.id === "WEB-1" ? pr : null })));
 }
 
-/** The issues `views` says are unblocked since what is known, recorded, as "WEB-3 by WEB-1 done". */
 function recorded(store: ReturnType<typeof freshStore>["store"], views: readonly IssueView[], at: number): string[] {
   store.recordUnblocked(MANAGER, views, at);
   return store.takeUnread(MANAGER, at).flatMap(({ event }) => (event.kind === "unblocked" ? [`${event.issueId} by ${event.by} ${event.closedAs}`] : []));
@@ -131,7 +129,6 @@ test("a relation knows its dependency's close from when it is written: kept thro
   store.updateIssue(MANAGER, i2, { closed: { as: "canceled", at: 2_050 } }, { requireUnheld: false, closes: new Map() });
   const i3 = filedIssue(store, MANAGER, newIssue({ dependsOn: [i1] }), 2_100).id;
 
-  // WEB-1 merged while the manager added WEB-2: the read it was answered from already said so.
   store.updateIssue(MANAGER, i3, { dependsOn: { add: [i2], remove: [] } }, { requireUnheld: false, closes: closesOf(views(true)) });
   assert.deepEqual(recorded(store, views(true), 3_000), ["WEB-3 by WEB-1 done"], "WEB-1 kept the close it knew, open");
   assert.deepEqual(recorded(store, views(true), 3_100), []);

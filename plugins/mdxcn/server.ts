@@ -13,7 +13,6 @@ export default function plugin(bb: FiguresHost) {
   bb.agents.configure(configureThread);
 }
 
-/** Figures render in chat, so only agents whose replies a person reads are told about them. */
 function configureThread(context: PluginAgentConfigurationContext): PluginAgentConfiguration {
   return repliesReachPerson(context)
     ? { tools: [], skills: ["mdxcn"], instructions: FIGURES_INSTRUCTIONS }

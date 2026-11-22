@@ -41,7 +41,6 @@ type KeysProps = {
 
 const MODIFIERS = new Set(["⌘", "⌥", "⇧", "⌃", "⎋", "↵", "⌫", "⇥"])
 
-/** `⌘⇧P` → ⌘ ⇧ P. `Ctrl+Shift+P` → Ctrl Shift P. `g then d` → two chords. */
 function chordsOf(keys: string): string[][] {
   return keys
     .split(/\s+then\s+/i)

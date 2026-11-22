@@ -1,4 +1,3 @@
-// Which clicks on a sidebar thread row the tabs ask to take. Pure, so the rule is testable without a DOM.
 import type { SidebarGesture } from "../controller/tabs-controller.ts";
 
 type Click = Pick<MouseEvent, "type" | "button" | "shiftKey" | "altKey" | "ctrlKey" | "metaKey">;

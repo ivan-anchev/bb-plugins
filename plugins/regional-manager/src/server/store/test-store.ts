@@ -1,5 +1,3 @@
-// Tests only: a fresh store with one regional manager whose thread is bound, and the steps most
-// store tests take before what they test.
 import type Database from "better-sqlite3";
 import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { memoryStorage } from "../memory-storage.ts";

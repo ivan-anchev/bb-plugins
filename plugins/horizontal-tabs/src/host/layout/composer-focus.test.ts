@@ -3,8 +3,6 @@ import { afterEach, beforeEach, test, type TestContext } from "node:test";
 import { single, type Layout } from "../../model/layout.ts";
 import { withCaretInFocusedPane } from "./composer-focus.ts";
 
-// bb's page as composer-focus.ts reads it: its stored layout, its panes and their composers, the element with
-// focus, animation frames, and whether the pointer is coarse.
 const stored = new Map<string, string>();
 Object.defineProperty(globalThis, "sessionStorage", { value: { getItem: (key: string) => stored.get(key) ?? null } });
 let coarsePointer = false;
@@ -23,7 +21,6 @@ const page: FakePage = Object.assign(new EventTarget(), {
 });
 Object.defineProperty(globalThis, "document", { value: page });
 
-// Animation frames: callbacks run in the order they were asked for, as browsers do.
 let frameRequests = new Map<number, () => void>();
 let lastRequest = 0;
 Object.defineProperty(globalThis, "requestAnimationFrame", {
@@ -31,14 +28,12 @@ Object.defineProperty(globalThis, "requestAnimationFrame", {
 });
 Object.defineProperty(globalThis, "cancelAnimationFrame", { value: (request: number) => frameRequests.delete(request) });
 
-/** The browser renders the next animation frame. */
 function frame(): void {
   const callbacks = frameRequests;
   frameRequests = new Map();
   callbacks.forEach((callback) => callback());
 }
 
-/** `element` takes focus, as the browser reports it: one focusin, naming the element that lost focus. */
 function focusOn(element: FakeElement): void {
   if (page.activeElement === element) return;
   const relatedTarget = page.activeElement;
@@ -46,20 +41,16 @@ function focusOn(element: FakeElement): void {
   page.dispatchEvent(Object.assign(new Event("focusin"), { relatedTarget }));
 }
 
-/** An element outside bb's composers, such as a tab of the strip or a pane's button. */
 function control(): FakeElement {
   const element: FakeElement = { matches: () => false, focus: () => focusOn(element) };
   return element;
 }
 
 type Pane = {
-  /** bb mounts the pane's composer, a new element each time, and asks for the next frame to focus it in. */
   mount(): FakeElement;
-  /** bb mounts the pane's composer without focusing it, as when the sidebar's rename field has focus. */
   mountUnfocused(): FakeElement;
 };
 
-/** A pane `paneId`, its composer not mounted yet. */
 function pane(paneId: string): Pane {
   let composer: FakeElement | null = null;
   panes.push({ getAttribute: () => paneId, querySelector: (selector) => (isComposerSelector(selector) ? composer : null) });
@@ -78,14 +69,12 @@ function pane(paneId: string): Pane {
   };
 }
 
-/** bb mounts the pane's composer, which focuses itself in the next frame. */
 function mountsAndFocuses(pane: Pane): FakeElement {
   const composer = pane.mount();
   frame();
   return composer;
 }
 
-/** A show still running, until `finish`. */
 function showing(signal: AbortSignal) {
   let finish = () => {};
   const shown = withCaretInFocusedPane(() => new Promise<void>((resolve) => (finish = resolve)), signal);
@@ -107,12 +96,10 @@ beforeEach(() => {
   page.activeElement = null;
   coarsePointer = false;
   [alpha, bravo, charlie] = ["pane-1", "pane-2", "pane-3"].map(pane);
-  // Alpha | Bravo | Charlie, Bravo focused.
   bbFocuses("pane-2");
   abort = new AbortController();
 });
 
-// The owner's unbind: ends the correction, its frames and its backstop.
 afterEach(() => abort.abort());
 
 test("composers that mount together and focus themselves in the next frame all go back to the focused pane's", () => {
@@ -134,7 +121,6 @@ test("as bb's composers focus themselves in turn, each focus goes back to the fo
 test("a focus on a composer right after it mounts, before bb's, is left alone, and bb's focus elsewhere goes back to it", () => {
   showing(abort.signal);
   const [alphaComposer] = [alpha, bravo, charlie].map((pane) => pane.mount());
-  // Assistive tech, or another script, moves focus into Alpha's new composer before the next frame.
   alphaComposer.focus();
   assert.equal(page.activeElement, alphaComposer);
   frame();
@@ -155,7 +141,6 @@ test("a focus on a composer in its frame, once bb's focus there went back, is le
   showing(abort.signal);
   mountsAndFocuses(bravo);
   const alphaComposer = alpha.mount();
-  // A script focuses Alpha's composer from its own frame callback, after bb's.
   requestAnimationFrame(() => alphaComposer.focus());
   frame();
   assert.equal(page.activeElement, alphaComposer);
@@ -171,7 +156,6 @@ test("a composer on screen before the show is left alone", () => {
 
 test("while the show still adds panes, a composer in a pane added later is still corrected", () => {
   const all = panes;
-  // bb's fallback rebuilds the layout pane by pane: Bravo's first.
   panes = [all[1]];
   showing(abort.signal);
   const bravoComposer = mountsAndFocuses(bravo);
@@ -225,7 +209,6 @@ test("focus the user moves by the keyboard is left alone, and a composer mountin
   showing(abort.signal);
   const [alphaComposer, bravoComposer] = [alpha, bravo].map(mountsAndFocuses);
   assert.equal(page.activeElement, bravoComposer);
-  // bb's Focus chat pane 1 (Ctrl+Shift+1), or assistive tech, moves focus into Alpha's composer.
   page.dispatchEvent(Object.assign(new Event("keydown"), { key: "1", ctrlKey: true, shiftKey: true }));
   alphaComposer.focus();
   assert.equal(page.activeElement, alphaComposer);
@@ -255,7 +238,6 @@ test("once the user's focus leaves where they put it, a composer's focus goes to
 test("the focused pane is read at each focus, so a pane the user focuses gets it", () => {
   showing(abort.signal);
   const [alphaComposer] = [alpha, bravo].map(mountsAndFocuses);
-  // A click on Alpha's pane: bb focuses the pane, and focus leaves the composer for the page.
   bbFocuses("pane-1");
   page.activeElement = null;
   mountsAndFocuses(charlie);

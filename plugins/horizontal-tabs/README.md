@@ -15,8 +15,7 @@ shows.
 - `src/controller/`: the one owner of the tabs (`tabs-controller.ts`), this
   window's instance (`tabs.ts`), and the keyboard commands that drive it
   (`commands.ts`).
-- `src/host/`: everything that reaches into bb outside the SDK, each with a
-  `why:` comment. `layout/` reads and shows bb's layout (`host-layout.ts`):
+- `src/host/`: everything that reaches into bb outside the SDK. `layout/` reads and shows bb's layout (`host-layout.ts`):
   through bb's layout atom, found in bb's loaded chunks (`layout-atom.ts`), or,
   when it can't be found, rebuilt pane by pane through navigation and bb's
   Close pane buttons (`pane-by-pane.ts`), with bb's stored copy of its layout

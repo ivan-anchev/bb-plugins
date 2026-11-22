@@ -1,9 +1,3 @@
-// How the Summary tab's activity reads, from the PR, its timeline and its threads as last read: the
-// line it opened with, then its messages on the page and everything else as one line each. Between
-// messages, consecutive changes of one kind fold to one line: every commit, or one person's
-// force-pushes, labels, review requests and mentions. A label added then removed in the same run
-// is one line of its own. A review whose threads are all resolved, or that is only a verdict, is a
-// line too. Which lines the reader opened is theirs, kept apart (activity-timeline.tsx). Pure.
 import type { ReviewThread } from "../../comments/thread-schema.ts";
 import { timeOf, type TimelineItem } from "../../comments/timeline-schema.ts";
 import type { PrDetail } from "../../contract.ts";
@@ -113,21 +107,16 @@ export function connectorsOf(parts: readonly ActivityPart[]): ({ up: boolean; do
   return parts.map((_part, index) => (isLine(index) ? { up: isLine(index - 1), down: isLine(index + 1) } : null));
 }
 
-// GitHub records no "opened" event. A PR first marked ready opened as a draft, one first marked a
-// draft did not, and one never marked either way is still what it opened as. A closed or merged
-// PR never marked either way may have opened as a draft: its line says only that it opened.
 function openedAsDraft(state: PrDetail["state"], timeline: readonly TimelineItem[]): boolean {
   const first = timeline.find((item) => item.kind === "status" && (item.status === "ready-for-review" || item.status === "draft"));
   if (first?.kind === "status") return first.status === "ready-for-review";
   return state === "DRAFT";
 }
 
-// GitHub closes a PR as it merges it; the merge says both.
 function withoutMergeClose(timeline: readonly TimelineItem[]): TimelineItem[] {
   return timeline.filter((item, index) => !(item.kind === "status" && item.status === "closed" && timeline[index - 1]?.kind === "merged"));
 }
 
-// Each item is a message or a line of its own, or joins the run of changes since the last one.
 function partsOf(timeline: TimelineItem[], threadsById: ReadonlyMap<string, ReviewThread>): ActivityPart[] {
   const parts: ActivityPart[] = [];
   let run: RunItem[] = [];
@@ -170,10 +159,8 @@ function partsOf(timeline: TimelineItem[], threadsById: ReadonlyMap<string, Revi
 
 const isReviewLine = ({ review, threads }: ReviewWithThreads) => threads.every((thread) => thread.resolvedBy !== null) && (review.comment.body.trim() === "" || threads.length > 0);
 
-/** A run's change: an item, or a label one event added and a later one removed. */
 type RunEntry = { kind: "item"; item: RunItem } | { kind: "label-pair"; added: LabelItem; removed: LabelItem };
 
-// Consecutive entries that share a fold key fold to one line.
 function linesOf(run: RunItem[]): ActivityLine[] {
   const folds: RunEntry[][] = [];
   for (const entry of entriesOf(run)) {
@@ -185,7 +172,6 @@ function linesOf(run: RunItem[]): ActivityLine[] {
   return folds.map(lineOf);
 }
 
-// A label added and later removed in the same run, as bots and CI do, is one change: at the add.
 function entriesOf(items: RunItem[]): RunEntry[] {
   const paired = new Set<RunItem>();
   return items.flatMap((item, index): RunEntry[] => {
@@ -198,7 +184,6 @@ function entriesOf(items: RunItem[]): RunEntry[] {
   });
 }
 
-// What an entry folds with; null for an entry that is always a line of its own.
 function foldKeyOf(entry: RunEntry): string | null {
   if (entry.kind === "label-pair") return null;
   const { item } = entry;
@@ -223,7 +208,6 @@ function foldKeyOf(entry: RunEntry): string | null {
   }
 }
 
-// A fold's entries all share its first one's key, so they are all of its kind.
 function lineOf([first, ...rest]: RunEntry[]): ActivityLine {
   if (first.kind === "label-pair") return first;
   const items = [first.item, ...rest.flatMap((entry) => (entry.kind === "item" ? [entry.item] : []))];

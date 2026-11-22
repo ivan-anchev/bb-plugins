@@ -15,7 +15,6 @@ const MAIN = env("env_main", "main", false);
 const DONE = { indicator: "unread-success" } as const;
 const ASKING = { indicator: "waiting-for-input", hasPendingInteraction: true } as const;
 
-/** A subthread of `parent` in `environment`, moved at `at`. */
 function kid(id: string, parent: string, at: number, extra: Partial<PluginSidebarThread> = {}): PluginSidebarThread {
   return thread(id, { parentThreadId: parent, environment: MAIN, latestAttentionAt: at, ...extra });
 }
@@ -25,7 +24,6 @@ function tree(threads: PluginSidebarThread[]) {
   return subthreadLines(indexThreads([root, ...threads], new Set()), root);
 }
 
-/** Each line as "id" for a thread or "@branch×threads" for a place, indented one space per trunk. */
 function shape(lines: readonly TreeLine[]): string[] {
   return lines.map((l) => (l.kind === "thread" ? l.thread.id : `@${l.checkout.branch}×${l.threads}`));
 }
@@ -92,11 +90,11 @@ test("rails: each level hangs 18 further in; a trunk runs on through its earlier
   const t = tree([kid("a", "root", 9), kid("a1", "a", 1), kid("b", "root", 8), kid("wt", "root", 7, { environment: env("env_w", "feat", true) })]);
   const rail = (l: TreeLine) => [l.at, l.indent, l.last, l.through];
   assert.deepEqual(t.lines.map(rail), [
-    [6, 14, false, []], // a
-    [24, 32, true, [6]], // a1, under a; the root trunk runs on past it
-    [6, 14, false, []], // b
-    [6, 14, true, []], // @feat, the root trunk ends here
-    [24, 32, true, []], // wt, under the head
+    [6, 14, false, []],
+    [24, 32, true, [6]],
+    [6, 14, false, []],
+    [6, 14, true, []],
+    [24, 32, true, []],
   ]);
 });
 

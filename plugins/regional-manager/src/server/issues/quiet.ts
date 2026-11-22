@@ -1,10 +1,3 @@
-// Quieting an issue: what the plugin does each time it gives the environment of an issue's work to
-// one thread of it, so no other thread of the issue runs there beside it. Five places do: an agent's
-// start or handover and a manager's message to the agent (agents.ts), a verifier's start, a reminder
-// to a verifier and a failed verdict's findings sent back to the agent (verify.ts). Each calls
-// quietIssue in the issue's turn (issue-turns.ts) and acts only once it answers quiet; otherwise
-// each keeps its own outcome: a start refused, a check left queued, a reminder left for the next
-// look, findings left owed, a message refused.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { holderOf, type AgentId } from "../../model/agent.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
@@ -56,7 +49,6 @@ export type Quieted = { withdrawn: Withdrawn[]; stopped: string[] } & (
 
 export type Unquiet = Exclude<Quieted, { kind: "quiet" }>;
 
-/** One of the threads the plugin started for an issue: an agent's, or (agentId null) a verifier's. */
 type IssueThread = { threadId: string; agentId: AgentId | null };
 
 /**
@@ -72,7 +64,6 @@ type IssueThread = { threadId: string; agentId: AgentId | null };
  */
 export async function quietIssue(bb: QuietBb, store: QuietStore, coordinatorId: CoordinatorId, issueId: IssueId, to: GivenTo): Promise<Quieted> {
   const coordinator = store.coordinator(coordinatorId);
-  // why throw: every caller acts for a regional manager the store holds, and its issues are kept while it is.
   if (coordinator === null) throw new Error(`The regional manager ${coordinatorId} is missing.`);
   const threads = store.issueThreads(coordinatorId, issueId).filter(({ threadId }) => to.kind === "new-agent" || threadId !== to.threadId);
   const named = (threadId: string): string => threadName({ threadId, agentId: threads.find((thread) => thread.threadId === threadId)?.agentId ?? null });
@@ -85,27 +76,6 @@ export async function quietIssue(bb: QuietBb, store: QuietStore, coordinatorId: 
   return { kind: "quiet", ...done };
 }
 
-/**
- * Takes back the messages the plugin queued in bb for the threads (`threads`) that bb still has,
- * which bb would send once a thread's turn stops: the regional manager's to agents and the plugin's
- * reminders to verifiers, both sent from the manager's thread (`managerThreadId`), and the issue's
- * verifiers' findings to agents, as bb names their sender. Then reads each queue again, and returns
- * everything still there that bb would send (`left`), a message someone else queued included; and
- * the manager's messages it took back, with the agent each was to (`withdrawn`). A verifier's
- * reminder it finds is owed again (see oweReminder) unless the second read shows bb still has it.
- * why a person's message is left: it isn't the plugin's to delete. why the holder's (`owedTo`,
- * null: none kept) are left too: the holder keeps the issue and is owed them, the manager's next
- * instruction or a verifier's findings, which nothing else would bring again; they are its next work, so the thread taking the environment waits for them.
- * why read again, not trust a delete's answer: bb refuses one for a message it sent meanwhile and
- * fails one it never reached alike. One bb sent meanwhile reached its thread, and the stop after
- * this ends the turn it started. why a reminder is owed again before its delete, not once quieting
- * succeeds: a delete bb did, whose answer or the read after it failed, would leave its check
- * counted as reminded, and its verifier's next stop would give the check up with no reminder sent.
- * A reminder bb sent meanwhile may then come twice; a second reminder costs less than a check
- * given up. why it answers, or throws, only once every thread's work has settled: its caller
- * releases the issue's turn then, and work still running after that, a reminder marked sent
- * included, would write over what the issue's next turn did.
- */
 async function withdrawQueued(
   bb: QuietBb,
   store: QuietStore,
@@ -140,16 +110,11 @@ async function withdrawQueued(
   return { withdrawn: each.flatMap((one) => one.withdrawn), left: each.flatMap((one) => one.left) };
 }
 
-/**
- * Whether a verifier's reminder is owed again (`owed`): while its check still runs there, one taken
- * back from bb's queue before bb sent it can come again; one bb still has counts as sent.
- */
 function oweReminder(store: QuietStore, verifierThreadId: string, owed: boolean): void {
   const role = store.roleOfThread(verifierThreadId);
   if (role?.kind === "verifier") store.markNudged(role.checkId, verifierThreadId, !owed);
 }
 
-/** A queued message, in words, by its sender: the manager's message to an agent, the plugin's reminder to a verifier (`toVerifier`), a verifier's findings, a person's, or another thread's. */
 function senderText(managerThreadId: string, ours: ReadonlySet<string>, senderThreadId: string | null, toVerifier: boolean): string {
   if (senderThreadId === managerThreadId) return toVerifier ? "the plugin's reminder" : "your message";
   if (senderThreadId === null) return "a message from the user";
@@ -190,11 +155,8 @@ export function didText({ withdrawn, stopped }: Pick<Quieted, "withdrawn" | "sto
 /** The threads the messages were to, in words: `a1`, `a1 and the verifier @thread:thr_7`. */
 export const recipientsText = (messages: readonly { to: string }[]): string => [...new Set(messages.map(({ to }) => to))].join(" and ");
 
-/** A thread of an issue, in words: its agent's id, or `the verifier @thread:thr_7`. */
 const threadName = ({ threadId, agentId }: IssueThread): string => agentId ?? `the verifier @thread:${threadId}`;
 
-/** A queued message's text. */
 const textOf = (content: QueuedMessage["content"]): string => content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n");
 
-/** Whether bb sends a queued message on its own: every one but a message whose retries bb spent, which waits for the user. */
 const bbSends = ({ state }: { state: string }): boolean => state !== "failed_exhausted";

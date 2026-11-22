@@ -1,5 +1,3 @@
-// What the composer chip shows and reports to bb, for its value and the launch choices read. Pure, so
-// every state is one unit test. The rule: block submit only on a definite refusal, never on a failed read.
 import type { JsonValue, PluginMachineProviderInputsChange } from "@get-bb/plugin-sdk";
 import type { LaunchChoicesReply } from "../contract.ts";
 import { machineInputs, resolveLaunch, type Launch, type LaunchChoices, type MachineInputs } from "../launch.ts";
@@ -23,7 +21,6 @@ export interface ChipView {
 export function chipView(value: JsonValue | null, { data, error }: ChoicesQuery): ChipView {
   const parsed = parseValue(value);
   if (error !== null) return failedView(parsed, error.message, data ?? null);
-  // Every input is optional, so the value as it stands is a launch the server can resolve at submit.
   if (data === undefined) return { report: ready(parsed.json), label: "boat sandbox", problem: null, launch: null };
   return data.status === "ready" ? resolvedView(parsed.inputs, data) : blocked("boat: set up", data.message);
 }
@@ -36,10 +33,8 @@ export function pick(current: Launch | null, choices: LaunchChoices, change: Par
   return resolvedView({ ...(current ?? escapeHatch(choices)), ...change }, choices).report;
 }
 
-/** `node-tools · base · default`, or `stock image · base · small`. */
 const labelOf = ({ template, environment, preset }: Launch): string => `${template ?? "stock image"} · ${environment} · ${preset}`;
 
-// The explicit launch, not the inputs, is reported, so the thread's inputs name exactly what the chip showed.
 function resolvedView(inputs: MachineInputs, choices: LaunchChoices): ChipView {
   const resolution = resolveLaunch(inputs, choices);
   if (!resolution.ok) return blocked(resolution.name, resolution.message);
@@ -47,10 +42,6 @@ function resolvedView(inputs: MachineInputs, choices: LaunchChoices): ChipView {
   return { report: ready({ ...launch }), label: labelOf(launch), problem: null, launch };
 }
 
-/**
- * The value goes as it stands, whatever an earlier read said of it, and validate checks it again at
- * create. The label still names the launch when the retained choices resolve it.
- */
 function failedView({ inputs, json }: ParsedValue, message: string, retained: LaunchChoicesReply | null): ChipView {
   const resolution = retained?.status === "ready" ? resolveLaunch(inputs, retained) : null;
   const launch = resolution?.ok === true ? resolution.launch : null;
@@ -72,7 +63,6 @@ interface ParsedValue {
   json: JsonValue;
 }
 
-/** A value from an older draft that no longer parses counts as no choice. */
 function parseValue(value: JsonValue | null): ParsedValue {
   const parsed = machineInputs.safeParse(value ?? {});
   return parsed.success ? { inputs: parsed.data, json: value ?? {} } : { inputs: {}, json: {} };

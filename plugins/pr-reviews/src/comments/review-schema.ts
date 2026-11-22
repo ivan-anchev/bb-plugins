@@ -1,5 +1,3 @@
-// The reader's own review of a PR on GitHub: whether they wrote the PR, the pending review they are
-// writing, and how they submit it. Pure zod, shared by the server and the app.
 import { z } from "zod";
 
 /**

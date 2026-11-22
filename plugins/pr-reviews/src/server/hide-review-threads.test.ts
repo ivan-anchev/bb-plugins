@@ -15,11 +15,8 @@ const ROWS: Row[] = [
   { id: "thr_other_plugins", visibility: "visible", archived: false, originPluginId: "side-chat" },
 ];
 
-// A test that would otherwise hang when `start` ignores an abort fails instead.
 const STOPS_IN_TIME = { timeout: 1_000 };
 
-// bb's threads as `list` filters and pages them; the first `failingUpdates` updates reject, and
-// `holdReads` keeps every read waiting until its release is called.
 function harness(rows: Row[], failingUpdates = 0) {
   const threads = new Map(rows.map((row) => [row.id, { ...row }]));
   const kv = new Map<string, unknown>();
@@ -77,10 +74,8 @@ function harness(rows: Row[], failingUpdates = 0) {
   };
 }
 
-// Every fake call settles on the microtask queue, so a macrotask turn lets the hiding go as far as it can.
 const drained = () => new Promise((resolve) => setImmediate(resolve));
 
-// One plugin load: bb starts the service, the hiding runs to its end, then bb stops the service.
 async function load(service: Service): Promise<void> {
   const stop = new AbortController();
   await Promise.all([service.start(stop.signal), drained().then(() => stop.abort())]);

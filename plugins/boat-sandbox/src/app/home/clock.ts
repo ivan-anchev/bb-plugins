@@ -1,4 +1,3 @@
-// Timers for the card, both still while bb's tab is hidden.
 import { useEffect, useState } from "react";
 
 /** `Date.now()`, read again every `ms` while the page shows. */

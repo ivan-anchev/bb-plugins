@@ -1,5 +1,3 @@
-// The Changes tab's header controls (ported from code-explorer's use-changes-controls), remembered
-// for the session: the path query and the filters per PR, the diff settings for every PR.
 import { DEFAULT_DIFF_SETTINGS, type DiffSettings } from "../diff/diff-options.ts";
 import { useRememberedState } from "../use-remembered-state.ts";
 import { NO_FILTERS, type FileFilters } from "./file-filter.ts";

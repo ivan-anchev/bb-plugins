@@ -6,12 +6,6 @@ import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { parse as parseYaml } from "yaml";
 
-/*
- * Every figure example in the agent skill renders through the real fence
- * renderer: the skill is the contract agents write against, so an example
- * that throws, or falls back to bb's code block, fails here.
- */
-
 const pluginRoot = fileURLToPath(new URL("..", import.meta.url));
 const skillPath = join(pluginRoot, "skills/mdxcn/SKILL.md");
 
@@ -24,7 +18,6 @@ let renderer: Renderer;
 let workDir: string;
 
 before(async () => {
-  // Inside the plugin so the bundle's external packages resolve from its node_modules.
   workDir = await mkdtemp(join(pluginRoot, "node_modules/.mdxcn-figures-"));
   const outfile = join(workDir, "render.mjs");
   await build({
@@ -44,7 +37,6 @@ before(async () => {
 after(() => rm(workDir, { recursive: true, force: true }));
 
 test("the skill's front matter is YAML that names and describes it", async () => {
-  // bb skips a skill whose front matter doesn't parse, and configure() then fails on every thread.
   const markdown = await readFile(skillPath, "utf8");
   const frontMatter = parseYaml(/^---\n([\s\S]*?)\n---\n/.exec(markdown)?.[1] ?? "");
   assert.equal(frontMatter?.name, "mdxcn");
@@ -87,7 +79,6 @@ test("malformed front matter shows bb's code block and why", () => {
 
 type Example = { language: string; code: string };
 
-/** Fences in the skill whose language is a figure bb registers. */
 async function skillExamples(): Promise<Example[]> {
   const markdown = await readFile(skillPath, "utf8");
   const fences = /^(`{3,})([a-z0-9-]+)[^\n]*\n([\s\S]*?)^\1[ \t]*$/gm;
@@ -96,7 +87,6 @@ async function skillExamples(): Promise<Example[]> {
     .filter(({ language }) => renderer.languages.includes(language));
 }
 
-/** What mdxcn's placeholder frame draws while a figure's required props are missing. */
 const PENDING_MARK = "· · ·";
 
 const ORIGINAL = `<pre data-original="true"></pre>`;

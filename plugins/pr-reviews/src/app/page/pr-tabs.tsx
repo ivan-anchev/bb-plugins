@@ -1,8 +1,3 @@
-// The PR page's tabs under its header, Summary, Changes then Guide, a segmented control on the ARIA
-// tabs pattern: one tab stop, ← → Home End to move, and a tab is selected as it is focused. The bar
-// stays put, with no rule under it, and each panel scrolls on its own. Every panel stays mounted, hidden while another
-// is selected, so the guide keeps its step and scroll position across switches, and Changes its
-// file, scroll and folders.
 import { useId, type KeyboardEvent, type ReactNode } from "react";
 import type { LineCounts } from "../../diff/diff-schema.ts";
 import { labelStatPartsOf } from "../changes/change-stats.ts";
@@ -11,10 +6,6 @@ import { Spinner } from "../ui/spinner.tsx";
 
 export type PrTab = "summary" | "changes" | "guide";
 
-// `panelTabStop`: whether the panel itself takes the tab stop after the tab, for content that
-// brings none of its own. Changes does: its file tree and its diff, or its read's region while the
-// diff loads or after a failed read. Every Guide screen does too: its actions, or the guide's page
-// region, which the guide renders while it loads and after a failed read too.
 const TABS: { id: PrTab; label: string; panelTabStop: boolean }[] = [
   { id: "summary", label: "Summary", panelTabStop: true },
   { id: "changes", label: "Changes", panelTabStop: false },
@@ -55,18 +46,11 @@ export function PrTabs({ selected, onSelect, tabs }: PrTabsProps) {
   );
 }
 
-// A panel tab stop (the hidden panel drops out of the tab order) means Tab from the selected tab
-// lands on the panel, so a Summary with no links or overflow still has one. The panel is the scroll
-// region for content that runs long, so the keys scroll it from that stop. Content with its own
-// scroll region (the guide, pinning its controller) fills the panel and makes that region its tab
-// stop instead: the keys scroll the focused element's region, never one inside it. The ring sits
-// inside because the panel runs edge to edge.
 const PANEL_CLASS =
   "flex min-h-0 flex-1 flex-col overflow-y-auto outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset";
 
 type TabIds = { tab(id: PrTab): string; panel(id: PrTab): string };
 
-// Unique per page: a split view can show two PR pages at once.
 function useTabIds(): TabIds {
   const prefix = useId();
   return { tab: (id) => `${prefix}-tab-${id}`, panel: (id) => `${prefix}-panel-${id}` };
@@ -75,8 +59,6 @@ function useTabIds(): TabIds {
 type TabListProps = PrTabsProps & { ids: TabIds };
 
 function TabList({ selected, onSelect, tabs, ids }: TabListProps) {
-  // The tab keeps focus and selects as it goes. Handling the key here also keeps it from the
-  // guide's ← → step keys, which skip a key already handled.
   const onKeyDown = (event: KeyboardEvent) => {
     const to = tabAfterKey(event.key, selected);
     if (to === undefined) return;
@@ -106,16 +88,11 @@ function TabList({ selected, onSelect, tabs, ids }: TabListProps) {
   );
 }
 
-// One control: the tabs sit on a recessed track, the selected one raised on it with bb's active
-// state and a hairline ring, as dark surfaces show depth. A hover lifts only the text, so the raised
-// tab stays the one surface on the track. Only the selected tab takes focus, so its focus ring
-// replaces the hairline. The radii nest: the track's 8px is the tab's 6px plus its 2px inset.
 const TAB_LIST_CLASS = "flex gap-0.5 rounded-lg bg-surface-recessed p-0.5";
 
 const TAB_CLASS =
   "inline-flex h-6 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-sm font-medium text-muted-foreground transition-colors duration-150 ease-out hover:text-foreground hover:duration-0 focus-visible:outline-none aria-selected:bg-state-active aria-selected:text-foreground aria-selected:ring-1 aria-selected:ring-border-hairline aria-selected:focus-visible:ring-ring motion-reduce:transition-none";
 
-// → and ← wrap around; Home and End go to the first and the last tab. Undefined for any other key.
 function tabAfterKey(key: string, selected: PrTab): PrTab | undefined {
   const move = TAB_KEYS[key];
   if (move === undefined) return undefined;
@@ -129,9 +106,6 @@ const TAB_KEYS: Partial<Record<string, (at: number, last: number) => number>> = 
   End: (_, last) => last,
 };
 
-// The leading comma makes the tab read "Guide, ready" or "Changes, 12 additions, 3 deletions" to a
-// screen reader. The dot takes the theme's success text colour, as the header's passing checks do:
-// `success` itself is too pale on light surfaces for a graphic that carries meaning (WCAG 1.4.11 asks 3:1).
 function StatusMark({ status }: { status: TabStatus }) {
   switch (status.kind) {
     case "none":
@@ -153,8 +127,6 @@ function StatusMark({ status }: { status: TabStatus }) {
     case "lines":
       return (
         <>
-          {/* A zero is muted, not `subtle-foreground`: on the selected tab muted reads 6.33:1 dark and
-              6.28:1 light, subtle 4.36:1 dark, under AA. */}
           <span aria-hidden className="tabular-nums">
             <StatText parts={labelStatPartsOf(status)} />
           </span>

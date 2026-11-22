@@ -75,7 +75,6 @@ export function MenuRadioItem({ value, disabled = false, children }: { value: st
   );
 }
 
-// The check at a checkbox or radio item's right edge, shown while it is checked.
 function CheckIndicator() {
   return (
     <span className="absolute right-2 flex size-3.5 items-center justify-center">

@@ -109,7 +109,7 @@ test("an agent bb never confirmed a thread for flags its issue, saying what to d
 });
 
 test("a thread status newer than this plugin's SDK reads as idle, never throws", () => {
-  // why the cast: it stands in for a status a newer bb sends, which this SDK's type can't name.
+  // WARNING: deliberately off-type; it stands in for a status a newer bb sends, which this SDK's type can't name.
   const fromNewerHost = { status: "hibernating", hasPendingInteraction: false } as unknown as HolderThread;
   assert.deepEqual(view(held(fromNewerHost)), at("in-progress", "Its turn ended without a handoff"));
 });
@@ -170,7 +170,6 @@ test("an issue named by an unanswered decision Needs you, unless something more 
   assert.deepEqual(view({ openDecision: true, ...held(thread("idle"), { handoff: blocked, check: null }) }), at("in-progress", "Blocked: Needs a staging key", "Blocked: Needs a staging key"));
 });
 
-/** A parent WEB-1 of `kind` and its sub-issues WEB-2, WEB-3…, each placed by the facts given, viewed together; `own`, the parent's facts beside its issue. */
 function family(kind: Issue["kind"], subIssues: Partial<IssueFacts>[], parent: Partial<Issue> = {}, own: Partial<IssueFacts> = {}) {
   const parentFacts = facts({ ...own, issue: { ...issue, kind, ...parent } });
   const subFacts = subIssues.map((over, i) => facts({ ...over, issue: { ...issue, kind: "build", ...over.issue, id: issueIdSchema.parse(`WEB-${i + 2}`), parentId: issue.id } }));
@@ -221,7 +220,6 @@ test("once every sub-issue is closed and one is Done: a research parent is Done,
   assert.deepEqual(rolled("build", [closedAs("accepted")], { closed: { as: "accepted", at: 9_100 } }), at("done", "Accepted"), "the manager accepted it");
 });
 
-/** A final check of WEB-1 on main, judging the work of `merged`, with `verdict`. */
 const finalCheck = (merged: string[], verdict: Verdict): FinalCheck => ({
   ...checkOf(verdict),
   id: checkIdSchema.parse("7a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d"),

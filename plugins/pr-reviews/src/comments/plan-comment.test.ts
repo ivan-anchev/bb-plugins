@@ -12,7 +12,6 @@ import type { ReviewThread } from "./thread-schema.ts";
 const PATH = "src/a.ts";
 const COMMIT = "3f9c2ab0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6";
 
-// Two hunks: the first changes line 3, the second adds a line after line 20.
 const FILE: DiffFile = {
   path: PATH,
   previousPath: null,

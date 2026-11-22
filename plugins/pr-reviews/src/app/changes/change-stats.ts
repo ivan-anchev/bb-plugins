@@ -1,6 +1,3 @@
-// The Changes tab's numbers (ported from code-explorer's change-stats): a file's `+N −M`, and the
-// header's summary of the whole PR with its per-kind breakdown. Pure. A PR's diff is never cut
-// short (the server refuses one), so there is no truncated list to account for.
 import { fileLineCountsOf, type DiffFile, type LineCounts } from "../../diff/diff-schema.ts";
 import { CHANGE_KINDS, changeKindOf, type ChangeKind } from "../../guide/change-kind.ts";
 
@@ -16,8 +13,6 @@ type SummarizedChanges = { files: readonly DiffFile[]; shown: readonly DiffFile[
 
 const COUNT_FORMAT = new Intl.NumberFormat("en-US");
 
-// An added file only adds and a deleted one only removes, so each shows its one side; any other
-// file shows both, zeros included.
 export function fileStatPartsOf(file: DiffFile): StatPart[] {
   if (file.binary) return [{ text: "Binary", tone: "muted" }];
   const { added, removed } = fileLineCountsOf(file);
@@ -53,7 +48,6 @@ export function plainTextOf(parts: readonly StatPart[]): string {
   return parts.map((part) => part.text).join(" ");
 }
 
-// The line counts are always the whole PR's; a filter only changes how many files it names.
 function headlineOf({ files, shown, filtering }: SummarizedChanges, counts: LineCounts): Headline {
   const changed = hasLines(counts);
   const shownCounts = changed ? counts : null;
@@ -79,7 +73,6 @@ function totalCountsOf(files: readonly DiffFile[]): LineCounts {
 
 const hasLines = ({ added, removed }: LineCounts): boolean => added > 0 || removed > 0;
 
-// U+2212 for the minus, as everywhere else on the PR page.
 const addedPart = (count: number): StatPart => ({ text: `+${COUNT_FORMAT.format(count)}`, tone: "added" });
 const removedPart = (count: number): StatPart => ({ text: `−${COUNT_FORMAT.format(count)}`, tone: "removed" });
 

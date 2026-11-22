@@ -1,10 +1,3 @@
-// One thread's delegates, kept live from bb: task events and the child-thread
-// list are pulled cheaply on every change; timeline rows (the thread's own and
-// each child's) only when a delegate starts or settles, or on a throttle, per
-// timeline, while it runs; a child's tokens, one event, only when it is first
-// seen or its updatedAt moves. That live read is bounded to the latest segments.
-// The history before them is read on start in outline (every delegate and
-// message, ~0.1 KB a row), and in full while a reader wants it.
 import type { ChildThread, DelegationRow, EventRow, OlderCursor, ThreadChange, ThreadSdk, TimelineRead, TimelineRow } from "./bb.ts";
 import { TOKEN_USAGE_EVENT, childDelegate, childrenInView, threadRunning, totalTokensOf, type ChildRead } from "./child-threads.ts";
 import type { Delegate, DelegateId, ThreadDelegates } from "./delegate.ts";
@@ -30,24 +23,13 @@ export function createThreadSource(sdk: ThreadSdk, threadId: string, onIdle: () 
   return new LiveThreadSource(sdk, threadId, onIdle);
 }
 
-// ---------------------------------------------------------------- the source (layer 2)
-
-// why: bounds the live read, which reruns on every delegate lifecycle event and on the running throttle.
 const SEGMENT_LIMIT = "20";
-// why: a nested timeline read is up to ~2 MB on heavy threads; timers tick locally anyway.
 const RUNNING_REREAD_MS = 2_000;
-// why: the events route refuses a larger page.
 const EVENT_PAGE = 100;
 
 type Pull = "refresh" | "reload";
-/**
- * The history before the live window as read: an outline (bb's deferred content: every delegation and
- * message, without a delegation's child rows, so its steps and report wait) or the full rows.
- */
 type Older = { rows: readonly TimelineRow[]; detail: "outline" | "full" };
-/** What was last read of a child, and the child's updatedAt it was read at. */
 type VersionedRead = ChildRead & { version: number };
-/** A child in view with what was read of it: what childDelegate is built from. */
 type ReadChild = { child: ChildThread; read: VersionedRead };
 
 class LiveThreadSource implements ThreadSource {
@@ -57,30 +39,21 @@ class LiveThreadSource implements ThreadSource {
   private readonly onIdle: () => void;
   private readonly listeners = new Set<() => void>();
   private stops: Array<() => void> = [];
-  // why: one per start; stop() aborts it, which cancels the reads in flight and ends their pull.
   private lifetime = new AbortController();
   private providerId: string | null = null;
   private ledger: TaskLedger = new Map();
   private afterSeq: number | null = null;
-  /** The live window: this thread's latest segments, reread as it changes. */
   private rows: readonly TimelineRow[] = [];
-  /** Where the rows before the live window begin; null when it holds the whole thread. */
   private liveCursor: OlderCursor = null;
-  /** The history before the live window, oldest first; null before the first pull and after a rewrite. */
   private older: Older | null = null;
-  /** How many readers want the full history; while any do, `historyDemand` is theirs. */
   private historyReaders = 0;
-  // why: one per run of wanting; the last release aborts it, which cancels the walk's read in flight and ends the walk.
   private historyDemand = new AbortController();
   private children: readonly ChildThread[] = [];
   private childReads: ReadonlyMap<string, VersionedRead> = new Map();
-  // why: one thread:changed subscription per child in view, so a child settles whatever the parent hears.
   private readonly childWatches = new Map<string, () => void>();
-  // why: one periodic reread deadline per timeline (this thread's and each child's), so a read of one never postpones another.
   private readonly lastReads = new Map<string, number>();
   private trailingRead: ReturnType<typeof setTimeout> | undefined;
   private queued: Pull | null = null;
-  // why: a failed reload leaves the ledger and rows stale, so every pull reloads until one succeeds.
   private reloadOwed = false;
   private pulling = false;
   private failing = false;
@@ -123,7 +96,6 @@ class LiveThreadSource implements ThreadSource {
     };
   }
 
-  /** Leaves nothing behind: no subscription, no timer, no queued pull, and the pull in flight ends at its next read. */
   private stop(): void {
     this.lifetime.abort();
     this.stops.forEach((stop) => stop());
@@ -132,19 +104,14 @@ class LiveThreadSource implements ThreadSource {
     clearTimeout(this.trailingRead);
     this.trailingRead = undefined;
     this.queued = null;
-    this.onIdle(); // why: the next subscriber starts from a clean ledger
+    this.onIdle();
   }
 
-  /**
-   * This thread's or a child's change. A rewrite invalidates cached rows, so it reloads (and drops the child cache).
-   * A status change refreshes too: a child can settle with no event after the last pull.
-   */
   private onThreadChanged(change: ThreadChange): void {
     if (isRewrite(change)) this.request("reload");
     else if (change.changes.includes("events-appended") || change.changes.includes("status-changed")) this.request("refresh");
   }
 
-  /** Single-flight: one pull at a time, and at most one trailing pull that covers every request made meanwhile. */
   private request(pull: Pull): void {
     this.queued = this.queued === "reload" ? "reload" : pull;
     if (!this.pulling) void this.drainQueue();
@@ -159,7 +126,6 @@ class LiveThreadSource implements ThreadSource {
     this.pulling = false;
   }
 
-  /** Reads into locals, then commits cursor, ledger, rows, children, and child rows together: a failure anywhere changes nothing. */
   private async pull(requested: Pull): Promise<void> {
     const { signal } = this.lifetime;
     const reload = requested === "reload" || this.reloadOwed;
@@ -167,14 +133,9 @@ class LiveThreadSource implements ThreadSource {
       const providerId = (this.providerId ??= (await unlessStopped(signal, this.sdk.threads.get({ threadId: this.threadId, signal }))).providerId);
       const afterSeq = reload ? null : this.afterSeq;
       const events = await this.eventsAfter(afterSeq, signal);
-      // why: a child is spawned by a command in this thread's turn and its end wakes this thread, so this
-      // thread's changes cover both; its own subscription covers the rest. The list is ~1 KB per child.
-      // Not paged: given no limit, the list route returns every match (1,777 threads in one read, live),
-      // and for each parent read its length equals threads.count (thr_24dxq5xhph: 6 and 6).
       const children = await unlessStopped(signal, this.sdk.threads.list({ parentThreadId: this.threadId, archived: false, signal }));
       const heldOlder = reload ? null : this.older;
       const walk = olderWalk(heldOlder, this.historyReaders > 0);
-      // why: a history read starts from a fresh live read, so its cursor belongs to the thread as it is now.
       const live = walk || this.needsRows(reload, events, children) ? await this.readRows(signal) : null;
       const rows = live?.rows ?? this.rows;
       const liveCursor = live ? live.timelinePage.olderCursor : this.liveCursor;
@@ -200,8 +161,7 @@ class LiveThreadSource implements ThreadSource {
         outlined: older?.detail === "outline" ? outlinedOf(delegations, normalise(rows, this.ledger, providerId)) : NONE,
       });
     } catch (error) {
-      if (signal.aborted) return; // why: stopped mid-pull; nobody is listening and nothing is owed
-      // why: the one failure handler. Keep the last good snapshot; the next change retries.
+      if (signal.aborted) return;
       if (!this.failing) console.error("[subagents-strip]", error);
       this.failing = true;
       this.reloadOwed = reload;
@@ -209,7 +169,6 @@ class LiveThreadSource implements ThreadSource {
     }
   }
 
-  /** Cheap: only the task events after `afterSeq`. */
   private async eventsAfter(afterSeq: number | null, signal: AbortSignal): Promise<EventRow[]> {
     const events: EventRow[] = [];
     for (let cursor = afterSeq; ; ) {
@@ -230,10 +189,6 @@ class LiveThreadSource implements ThreadSource {
     }
   }
 
-  /**
-   * The throttle, asked only of a running timeline: while the window is visible, a reread is due
-   * 2 s after that timeline's own last read. One it skips is owed: a single trailing pull takes it.
-   */
   private rereadDue(threadId: string): boolean {
     if (document.visibilityState !== "visible") return false;
     const wait = (this.lastReads.get(threadId) ?? 0) + RUNNING_REREAD_MS - Date.now();
@@ -245,22 +200,12 @@ class LiveThreadSource implements ThreadSource {
     return false;
   }
 
-  /**
-   * Heavy: this thread's rows are reread on a reload, a delegate lifecycle event, a child not seen
-   * before (its spawning turn may be newer than the rows held), or when due while a delegation runs.
-   */
-  // why: a running child alone never rereads this thread's nested timeline (up to ~2 MB); only its own rows.
   private needsRows(reload: boolean, events: readonly EventRow[], children: readonly ChildThread[]): boolean {
     if (reload || events.some(isDelegateLifecycle)) return true;
     if (children.some((child) => !this.children.some((known) => known.id === child.id))) return true;
     return this.delegationRunning() && this.rereadDue(this.threadId);
   }
 
-  /**
-   * Each child in view, from the cache while it is current: its rows read again when it is new, its updatedAt
-   * moved (it started, settled, or was renamed), or when due while it runs; its tokens only on the first two.
-   * Reads run in parallel.
-   */
   private async readChildren(
     inView: readonly ChildThread[],
     cache: ReadonlyMap<string, VersionedRead>,
@@ -280,7 +225,6 @@ class LiveThreadSource implements ThreadSource {
     );
   }
 
-  /** Subscribes to each child in view and drops children that left it; runs after commit, so a stopped source never subscribes. */
   private watchChildren(inView: readonly ChildThread[]): void {
     const ids = new Set(inView.map((child) => child.id));
     for (const [id, unsubscribe] of this.childWatches) {
@@ -294,21 +238,15 @@ class LiveThreadSource implements ThreadSource {
     }
   }
 
-  /** Whether a delegate from this thread's own rows runs, as of the last snapshot. */
   private delegationRunning(): boolean {
     return this.snapshot.status === "ready" && this.snapshot.delegates.some((d) => d.origin.kind === "delegation" && isRunning(d));
   }
 
-  /** The one place this thread's live window is read. */
   private async readRows(signal: AbortSignal): Promise<TimelineRead> {
     this.lastReads.set(this.threadId, Date.now());
     return this.readWindow({}, signal);
   }
 
-  /**
-   * The history walk a pull makes. A full walk reads only while it is wanted: when the last reader releases
-   * it mid-walk, null, so the pull commits everything else and keeps the history it held.
-   */
   private async walkOlder(cursor: OlderCursor, detail: Older["detail"], held: Older | null, lifetime: AbortSignal): Promise<Older | null> {
     if (detail === "outline") return { rows: await this.readOlder(cursor, detail, lifetime), detail };
     const demand = this.historyDemand.signal;
@@ -316,24 +254,13 @@ class LiveThreadSource implements ThreadSource {
       return { rows: await this.readOlder(cursor, detail, AbortSignal.any([lifetime, demand])), detail };
     } catch (error) {
       if (!demand.aborted || lifetime.aborted) throw error;
-      // why: with nothing held (a first pull, or one after a rewrite), the counts need the outline, so it is read instead.
       return held ? null : this.walkOlder(cursor, "outline", held, lifetime);
     }
   }
 
-  /**
-   * Every row before the live window, oldest first, read page by page in one go: in full from the live
-   * read's `cursor`; in outline, bb's deferred content, which leaves out a delegation's child rows (live,
-   * thr_24dxq5xhph: 6 pages, 659 KB, every delegation and message; in full, 7 pages, about 12 MB).
-   * why: a cursor names the thread as it was at its read, and bb rebuilds that state to serve a stale one
-   * (live, once: over 120 s, while a live read of the same thread timed out at 30 s), so no cursor is kept
-   * for later; each walk starts from a fresh read.
-   */
   private async readOlder(cursor: OlderCursor, detail: Older["detail"], signal: AbortSignal): Promise<readonly TimelineRow[]> {
-    if (cursor === null) return []; // the live window holds the whole thread
+    if (cursor === null) return [];
     const deferContent = detail === "outline" ? { deferContent: "true" as const } : {};
-    // why: bb refuses a cursor in a read of the other kind ("Timeline pagination cursor is no longer available"),
-    // so the outline starts from its own read of the latest segments, whose rows the live window already holds.
     const start = detail === "outline" ? (await this.readWindow(deferContent, signal)).timelinePage.olderCursor : cursor;
     let rows: readonly TimelineRow[] = [];
     for (let next = start; next !== null; ) {
@@ -344,7 +271,6 @@ class LiveThreadSource implements ThreadSource {
     return rows;
   }
 
-  /** One read of this thread's timeline, nested and segment-bounded like the live one. */
   private readWindow(
     query: Pick<Parameters<ThreadSdk["threads"]["timeline"]>[0], "deferContent" | "beforeAnchorId" | "beforeAnchorSeq">,
     signal: AbortSignal,
@@ -352,12 +278,6 @@ class LiveThreadSource implements ThreadSource {
     return unlessStopped(signal, this.sdk.threads.timeline({ threadId: this.threadId, includeNestedRows: "true", segmentLimit: SEGMENT_LIMIT, ...query, signal }));
   }
 
-  /**
-   * A child's own rows, with the same segment bound. Nested, because a settled turn comes back
-   * collapsed (`children: null`) without it, which would leave a finished child no steps. Deferred,
-   * because a child's row never shows what that leaves out, such as a command's output: live, its 14
-   * children in thr_24dxq5xhph read the same status, steps, and report either way, at a tenth the size.
-   */
   private async readChildRows(threadId: string, signal: AbortSignal): Promise<readonly TimelineRow[]> {
     this.lastReads.set(threadId, Date.now());
     const timeline = await unlessStopped(
@@ -367,10 +287,6 @@ class LiveThreadSource implements ThreadSource {
     return timeline.rows;
   }
 
-  /**
-   * A child's total tokens: its latest token-usage event, one small read. bb filters by `types`
-   * (live: a read by `eventTypes` came back unfiltered, 7 usage events in a page of 100).
-   */
   private async readChildTokens(threadId: string, signal: AbortSignal): Promise<number | null> {
     const [latest] = await unlessStopped(
       signal,
@@ -385,12 +301,6 @@ class LiveThreadSource implements ThreadSource {
   }
 }
 
-// ---------------------------------------------------------------- helpers (layer 3)
-
-/**
- * Older rows, then the newer ones not among them. bb pages a turn's children, and a delegation's child rows,
- * in fragments, so a row both hold is merged: the newer copy's fields, and the children of both, recursively.
- */
 function joinRows(older: readonly TimelineRow[], newer: readonly TimelineRow[]): readonly TimelineRow[] {
   const newerById = new Map(newer.map((row) => [row.id, row]));
   const olderIds = new Set(older.map((row) => row.id));
@@ -403,14 +313,12 @@ function joinRows(older: readonly TimelineRow[], newer: readonly TimelineRow[]):
   ];
 }
 
-/** One row read twice: the newer copy, holding the children of both. */
 function mergeRow(older: TimelineRow, newer: TimelineRow): TimelineRow {
   if (older.kind === "turn" && newer.kind === "turn") return { ...newer, children: joinNested(older.children, newer.children) };
   if (isDelegationRow(older) && isDelegationRow(newer)) return { ...newer, childRows: joinNested(older.childRows, newer.childRows) };
   return newer;
 }
 
-/** Nested rows from two reads; a read that left them out (null) keeps the other's. */
 function joinNested(older: TimelineRow[] | null, newer: TimelineRow[] | null): TimelineRow[] | null {
   if (older === null) return newer;
   if (newer === null) return older;
@@ -419,28 +327,20 @@ function joinNested(older: TimelineRow[] | null, newer: TimelineRow[] | null): T
 
 const isDelegationRow = (row: TimelineRow): row is DelegationRow => row.kind === "work" && row.workKind === "delegation";
 
-/** Which history walk a pull makes: an outline when none is held, the full rows once wanted, or none. */
 function olderWalk(held: Older | null, fullWanted: boolean): Older["detail"] | null {
   if (fullWanted && held?.detail !== "full") return "full";
   return held === null ? "outline" : null;
 }
 
-/**
- * The history held across a pull: as it was when the live window was not reread; across a new live read,
- * plus the rows that slid out of the window, those that end before its new start (bb's rule; a running
- * turn's flat rows, grouped into a turn row since, end inside it), with bb's updates to older rows applied.
- */
 function keepOlder(older: Older | null, previous: readonly TimelineRow[], live: TimelineRead | null): Older | null {
   if (older === null || live === null) return older;
   const { olderCursor } = live.timelinePage;
-  if (olderCursor === null) return { rows: [], detail: older.detail }; // the live window holds the whole thread
+  if (olderCursor === null) return { rows: [], detail: older.detail };
   const start = olderCursor.anchorSeq;
   const slid = joinRows(older.rows, previous.filter((row) => row.sourceSeqEnd < start));
-  // why: an update carries only the descendants that changed, so it merges into the row held rather than replacing it.
   return { rows: joinRows(slid, live.timelinePage.olderRowUpdates ?? []), detail: older.detail };
 }
 
-/** The delegations read from the outline alone: those the live window, read in full, does not hold. */
 function outlinedOf(all: readonly Delegate[], live: readonly Delegate[]): ReadonlySet<DelegateId> {
   const read = new Set(live.map((d) => d.id));
   return new Set(all.flatMap((d) => (read.has(d.id) ? [] : [d.id])));
@@ -448,7 +348,6 @@ function outlinedOf(all: readonly Delegate[], live: readonly Delegate[]): Readon
 
 const NONE: ReadonlySet<DelegateId> = new Set();
 
-/** An SDK read whose result is refused if the source stopped while it was in flight. */
 async function unlessStopped<T>(signal: AbortSignal, read: Promise<T>): Promise<T> {
   const result = await read;
   signal.throwIfAborted();
@@ -459,7 +358,6 @@ function isRewrite(change: ThreadChange): boolean {
   return change.changes.includes("history-rewritten") || change.changes.includes("history-compacted");
 }
 
-/** A new delegate or task starts, or a task completes (its report must be read now). */
 function isDelegateLifecycle(event: EventRow): boolean {
   if (event.type === "item/backgroundTask/completed") return true;
   return event.type === "item/started" && (event.data.item.type === "delegation" || event.data.item.type === "backgroundTask");

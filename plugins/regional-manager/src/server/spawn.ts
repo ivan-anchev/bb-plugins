@@ -1,7 +1,3 @@
-// The one path that creates role threads: mint a ticket, spawn with it in the thread's metadata,
-// then bind the thread id to it. Binding happens twice, on bb's spawn answer and on the thread's
-// `thread.created` event, through the same idempotent bindTicket: whichever comes first binds, so
-// a spawn answer that never arrives still leaves the thread its role.
 import { randomUUID } from "node:crypto";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { typedText, type ComposerRequest, type Coordinator } from "../contract.ts";
@@ -14,7 +10,6 @@ import type { Store } from "./store/store.ts";
 type Threads = BbPluginApi["sdk"]["threads"];
 type SpawnArgs = Parameters<Threads["spawn"]>[0];
 
-// The parts of bb spawning uses, as narrow as the code reads them.
 type SpawnBb = {
   pluginId: string;
   sdk: {
@@ -43,9 +38,6 @@ type ChildRequest = {
 /** What a verifier is spawned for: one check of an issue. */
 export type VerifierRequest = ChildRequest & { role: Extract<Role, { kind: "verifier" }> };
 
-// why auto: an agent works unattended, and a permission prompt on every edit would hold it until
-// the user answers. The regional manager starts with auto for the same reason, and so does a
-// verifier, which runs the agent's tests.
 const CHILD_PERMISSION_MODE = "auto";
 
 export type Spawner = ReturnType<typeof createSpawner>;
@@ -56,21 +48,12 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
     if (role !== null) onBound(role);
   }
 
-  // why the handler reads the metadata itself: the event's thread carries no metadata. A thread
-  // another plugin or a client made can't hold one of this plugin's tickets, so it is skipped
-  // before the read.
   bb.events.on("thread.created", async ({ thread }) => {
     if (thread.originPluginId !== bb.pluginId) return;
     const ticket = ticketIn(await bb.sdk.threads.getPluginMetadata({ threadId: thread.id }));
     if (ticket !== null) bind(ticket, thread.id);
   });
 
-  /**
-   * The regional manager's thread an earlier start of it spawned under `ticket` without binding it:
-   * bb made it, but its answer and its thread.created were both lost. null: there is none. why the
-   * plugin's top-level threads: a regional manager's is the only kind with no parent; why not archived
-   * ones: bb lists them unless asked not to, and a thread the user archived is no start to answer with.
-   */
   async function unboundManagerThread(ticket: string): Promise<string | null> {
     for (const { id } of await bb.sdk.threads.list({ originPluginId: bb.pluginId, hasParent: false, archived: false, includeHidden: true })) {
       if (store.roleOfThread(id) === null && ticketIn(await bb.sdk.threads.getPluginMetadata({ threadId: id })) === ticket) return id;
@@ -84,16 +67,12 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
     return thread.id;
   }
 
-  /** A child of a thread of the regional manager's: the manager owns its lifecycle, and the plugin, not bb, reports on it. */
   function spawnChild(ticket: string, { coordinator, parentThreadId, title, environment, execution, prompt }: ChildRequest, settings: Pick<SpawnArgs, "visibility" | "serviceTier"> = {}): Promise<string> {
     return spawnWith(ticket, {
       projectId: coordinator.projectId,
       title,
       parentThreadId,
-      // why: archiving or deleting the regional manager takes its agents and verifiers with it.
       lifecycleOwnerThreadId: coordinator.threadId,
-      // why off: bb's own report cuts an answer at 4,000 characters, and an agent must not be woken by
-      // its verifier; the plugin owns wakes.
       parentNotifications: "off",
       ...settings,
       ...execution,
@@ -104,15 +83,6 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
   }
 
   return {
-    /**
-     * Starts a regional manager not started yet from bb's composer on its page, on what the composer
-     * shows, under the ticket it was created with, titled with its name; the request's text is its
-     * first message and its GOAL.md. Its project, the issue key taken from the project's name
-     * (issue-key.ts), and its seeded memory exist before the spawn, so its first session and first
-     * tool call find them. A thread an earlier start spawned but never bound is
-     * bound and answered with instead, its GOAL.md left as that start wrote it. Returns its thread;
-     * rejects as bb's project read or spawn does. Callers run one start of a regional manager at a time (manager-rpc.ts).
-     */
     async coordinator(id: CoordinatorId, { ticket, name }: { ticket: string; name: string }, request: ComposerRequest): Promise<string> {
       const earlier = await unboundManagerThread(ticket);
       if (earlier !== null) {
@@ -125,31 +95,18 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
       return spawnWith(ticket, { ...request, title: name });
     },
 
-    /**
-     * Spawns an agent's thread under the ticket it was inserted with, as a child of its regional
-     * manager, on the execution resolved for it, and on `serviceTier` when it inherits its manager's
-     * (null: bb's default). Returns its thread; rejects as bb's spawn does.
-     */
     agent(ticket: string, { serviceTier, ...request }: Omit<ChildRequest, "parentThreadId"> & { serviceTier: SpawnArgs["serviceTier"] | null }): Promise<string> {
       return spawnChild(ticket, { ...request, parentThreadId: request.coordinator.threadId }, serviceTier === null ? {} : { serviceTier });
     },
 
-    /**
-     * Spawns a hidden verifier for a check, as the request says: a handoff's, a child of the agent's
-     * thread in the agent's environment, so it checks the very tree the agent committed in; a final
-     * check's, a child of the regional manager's thread in a fresh worktree. Its check starts running
-     * when its ticket binds. Returns its thread.
-     */
     verifier({ role, ...request }: VerifierRequest): Promise<string> {
       const ticket = randomUUID();
       store.insertVerifierTicket(ticket, role, Date.now());
-      // why hidden: the board links it; it would only crowd the sidebar.
       return spawnChild(ticket, request, { visibility: "hidden" });
     },
   };
 }
 
-/** The ticket a thread's metadata carries; null for none of this plugin's. */
 function ticketIn(metadata: unknown): string | null {
   const parsed = ticketMetadataSchema.safeParse(metadata);
   return parsed.success ? parsed.data.ticket : null;

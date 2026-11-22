@@ -25,6 +25,5 @@ test("a failure carries the exit code and output; killed says whether the timeou
     killed: false,
   });
   assert.equal(parseHostCommandFailure(Object.assign(new Error("Command failed"), { code: null, killed: true, signal: "SIGTERM", stdout: "", stderr: "" })).killed, true);
-  // A spawn error has no output at all.
   assert.deepEqual(parseHostCommandFailure(Object.assign(new Error("spawn E2BIG"), { code: "E2BIG" })), { code: "E2BIG", stdout: "", stderr: "", killed: false });
 });

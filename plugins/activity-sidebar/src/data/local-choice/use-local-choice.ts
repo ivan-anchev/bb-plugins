@@ -1,5 +1,3 @@
-// The reader's own choices for this list (which sections are open, the project filter), kept in this
-// browser's localStorage so they outlive a reload. Choices only: nothing derived is stored.
 import { experimental_usePluginId as usePluginId } from "@get-bb/plugin-sdk/app";
 import { useState } from "react";
 
@@ -11,8 +9,6 @@ export type ChoiceStorage = Pick<Storage, "getItem" | "setItem">;
  */
 export type ParseChoice<T> = (stored: unknown) => T;
 
-// Touches `localStorage` only inside each call: a browser that denies storage throws on access, and
-// that must happen inside the read or write that catches it.
 const browserStorage: ChoiceStorage = {
   getItem: (key) => localStorage.getItem(key),
   setItem: (key, value) => localStorage.setItem(key, value),
@@ -43,9 +39,6 @@ export function writeChoice(storage: ChoiceStorage, key: string, value: unknown)
   }
 }
 
-// ------------------------------------------------------------------ layer 2
-
-// Storage the browser denies (blocked site data, a sandboxed frame) throws on access: nothing stored.
 function readStored(storage: ChoiceStorage, key: string): string | null {
   try {
     return storage.getItem(key);

@@ -195,14 +195,11 @@ test("a name Windows reads as a path out of the folder, or as another file, is r
     assert.ok(win32.relative(dir, win32.join(dir, name)).startsWith(".."), `${name} leaves the folder on Windows`);
     assert.ok(!memoryFileSchema.safeParse(name).success, name);
   }
-  // A drive, a root or a stream: each names a file the name doesn't spell.
   for (const name of ["C:\\x.md", "C:x.md", "\\\\server\\share\\x.md", "\\NOTES.md", "notes\\api.md", "NOTES.md:x.md"]) {
     assert.ok(!memoryFileSchema.safeParse(name).success, name);
   }
 });
 
-// A crash, as the write sees it: the process stops after the temp file is written, before the
-// rename runs. syncBuiltinESMExports carries the patched rename into memory-files' import.
 function crashingOnRename(write: () => unknown): void {
   const rename = fs.renameSync;
   fs.renameSync = () => {

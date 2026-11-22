@@ -1,14 +1,9 @@
-// A PR's timeline as GitHub's GraphQL API serves it: the query, limited to the item types the
-// Summary tab shows, and the parse into the canonical timeline items. gh.ts runs the queries.
-// Pure.
 import { z } from "zod";
 import type { ReviewThread } from "../comments/thread-schema.ts";
 import type { ReviewVerdict, StatusChange, TimelineItem } from "../comments/timeline-schema.ts";
 import { ghLabelSchema } from "./label.ts";
 import { COMMENT_FIELDS, connectionOf, ghCommentSchema, PAGE, PR, pullRequestOf, toComment, type Connection } from "./pr-comments.ts";
 
-// Every type GitHub's Conversation tab shows. The rest (subscriptions, mentions, deployments …)
-// never reach the parse.
 const ITEM_TYPES = [
   "ISSUE_COMMENT",
   "PULL_REQUEST_REVIEW",
@@ -69,7 +64,6 @@ export const TIMELINE_QUERY = `${PR} timelineItems(first: ${PAGE}, after: $curso
 export const REVIEW_COMMENTS_QUERY = `query($id: ID!, $cursor: String) { node(id: $id) { ... on PullRequestReview {
   comments(first: ${PAGE}, after: $cursor) { ${REVIEW_COMMENT_IDS} } } } }`;
 
-// A deleted account, as an actor or a requested reviewer, is null; GitHub shows it as "ghost".
 const loginOf = z.object({ login: z.string() }).nullable().transform((actor) => actor?.login ?? "ghost");
 const event = { id: z.string(), createdAt: z.string(), actor: loginOf };
 const commentIdSchema = z.object({ databaseId: z.number() });
@@ -98,7 +92,6 @@ const STATUS_OF: Record<z.infer<typeof ghStatusEventSchema>, StatusChange> = {
 
 const ghReviewStateSchema = z.enum(["APPROVED", "CHANGES_REQUESTED", "COMMENTED", "DISMISSED", "PENDING"]);
 
-// A PENDING review is the reader's own, not yet submitted: the parse leaves it out.
 const VERDICT_OF: Record<z.infer<typeof ghReviewStateSchema>, ReviewVerdict | null> = {
   APPROVED: "approved",
   CHANGES_REQUESTED: "changes-requested",
@@ -130,7 +123,6 @@ const ghTimelineNodeSchema = z.discriminatedUnion("__typename", [
   z.object({
     __typename: z.literal(["ReviewRequestedEvent", "ReviewRequestRemovedEvent"]),
     ...event,
-    // A team has a name, and an account a login.
     requestedReviewer: z.union([z.object({ login: z.string() }), z.object({ name: z.string() })]).nullable(),
   }),
   z.object({ __typename: z.literal("ReviewDismissedEvent"), ...event, review: z.object({ author: loginOf }).nullable() }),
@@ -176,7 +168,6 @@ export function toTimeline(nodes: GhTimelineNode[], reviewComments: ReadonlyMap<
     if (verdict === null) return [];
     const ids = new Set(reviewComments.get(node.id));
     const threadIds = threads.filter((thread) => thread.comments.some((comment) => ids.has(comment.id))).map((thread) => thread.id);
-    // A submitted review has its submission time; createdAt is when its first comment was drafted.
     const comment = toComment({ ...node, createdAt: node.submittedAt ?? node.createdAt });
     return [{ kind: "review", id: node.id, verdict, comment, threadIds }];
   });

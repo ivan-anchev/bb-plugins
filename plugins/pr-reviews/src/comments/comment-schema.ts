@@ -1,6 +1,3 @@
-// The canonical shapes of lines someone points at in a file's diff, and of the comment GitHub is
-// asked to post on them: a guide's finding, a note the app draws under a line, the lines a reader
-// selected, a review comment. Pure zod, shared by the app and the server.
 import { z } from "zod";
 import { diffSideSchema, type DiffSide } from "../diff/diff-schema.ts";
 

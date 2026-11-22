@@ -1,7 +1,3 @@
-// The regional manager's tools that are about the whole crew rather than one issue or agent:
-// catching up, its memory, its reminders and its questions to the user. Every call resolves the
-// caller's role from the plugin's database by its thread id, never from the thread's metadata, which
-// any client, plugin or the thread's own agent can write.
 import { z } from "zod";
 import { optionsSchema, questionSchema } from "../../model/decision.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
@@ -44,7 +40,6 @@ export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, on
     presentation: { label: { pending: "Catching up", completed: "Caught up" }, icon: { glyph: "Workflow" } },
     parameters: z.object({}),
     execute: forManager(store, CATCH_UP, async (id) => {
-      // why caught: the updates and the memory are still worth reading when bb's thread list can't be.
       const issues = await board.issues(id).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
       const updates = updatesText(inbox.takeUnread(id), {
         titles: new Map(store.issues(id).map((issue) => [issue.id, issue.title])),
@@ -132,7 +127,6 @@ export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, on
   });
 }
 
-/** Whose memory a role reads. why the return type: a new role kind fails to compile here until it is given one. */
 function memoryOwner(role: Role): CoordinatorId {
   switch (role.kind) {
     case "coordinator":

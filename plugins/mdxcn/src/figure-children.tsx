@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-/** Figures whose body is literal text, as mdxcn's MDX form wraps it in a code fence. */
 const LITERAL_BODIES: ReadonlySet<string> = new Set(["terminal"]);
 
 /**

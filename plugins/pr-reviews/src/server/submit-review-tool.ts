@@ -1,5 +1,3 @@
-// The `submit_review` agent tool: offered only to review threads, validated against the
-// diff the thread was prompted with, and stored by repo, PR number and head commit.
 import type { BbPluginApi, PluginAgentConfigurationContext, PluginAgents, PluginAgentToolResult } from "@get-bb/plugin-sdk";
 import { guideTag, prHeadKeySchema, repoTag, shortSha } from "../contract.ts";
 import { submitReviewInputSchema, type SubmitReviewInput } from "../guide/guide-schema.ts";
@@ -8,7 +6,6 @@ import type { Store } from "./store.ts";
 
 const TOOL = "submit_review";
 
-// The parts of bb the tool uses.
 type Bb = {
   pluginId: string;
   agents: Pick<PluginAgents, "registerTool" | "configure">;
@@ -29,25 +26,13 @@ export function registerSubmitReviewTool(bb: Bb, store: ToolStore): void {
     execute: (input, ctx) => submitReview(bb, store, input, ctx.threadId),
   });
 
-  // Synchronous, so it can only read the context: the thread's origin and metadata decide
-  // whether the tool is offered. execute checks the run table, the real authority, because
-  // the thread's own agent can write its metadata.
   bb.agents.configure((ctx) => ({ tools: isReviewThread(bb.pluginId, ctx) ? [TOOL] : [], skills: [] }));
 }
 
 function isReviewThread(pluginId: string, ctx: PluginAgentConfigurationContext): boolean {
-  // Start writes the PR head the thread reviews into its plugin metadata.
   return ctx.origin.pluginId === pluginId && prHeadKeySchema.safeParse(ctx.pluginMetadata).success;
 }
 
-// A submission names the head it was written for, and is stored only when that is the head
-// of the thread's run. A PR keeps one run, its newest review request (store.saveRun): a thread
-// has no run once its review was cancelled or a new Start replaced it, and Update moves its run
-// to the new head. So a guide written before either, even one whose diff is identical, never
-// lands on another head, nor on a head the PR has moved past.
-// The one await comes first. Cancel, Start and Update change runs while it is pending, so from
-// the run lookup to the write the tool runs synchronously, and the run it checks is the run it
-// writes for.
 async function submitReview(bb: Bb, store: ToolStore, { headSha, ...input }: SubmitReviewInput, threadId: string): Promise<PluginAgentToolResult> {
   const model = (await bb.sdk.threads.defaultExecutionOptions({ threadId }))?.model ?? null;
 
@@ -64,7 +49,6 @@ async function submitReview(bb: Bb, store: ToolStore, { headSha, ...input }: Sub
   return `Guide saved for #${run.key.number} at ${shortSha(run.key.headSha)}: ${count(steps.length, "step")}, ${count(findings.length, "finding")}. The user reads it in PR Reviews. You are done unless they ask you something.`;
 }
 
-// Never names the run's head: a turn written for an older head would only copy it.
 const notWritingFor = (headSha: string) =>
   `submit_review was rejected and nothing was saved: this thread is not writing a guide for ${JSON.stringify(headSha)} in PR Reviews. If that is not the full head commit PR Reviews named when it asked for this guide, call again with that commit. Otherwise the review was cancelled, or a newer review of this pull request replaced it: stop here, and act on any newer message from PR Reviews.`;
 
@@ -72,7 +56,6 @@ const rejected = (text: string): PluginAgentToolResult => ({ content: [{ type: "
 
 const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
-// Appended to the thread's instructions while the tool is in its set (at most 4096 characters).
 const TOOL_INSTRUCTIONS = `submit_review takes the whole guide in one call:
 - headSha: the full head commit the guide is for, exactly as PR Reviews named it when it asked for this guide.
 - overview: problem (why the PR exists), approach (how it solves it), and behaviour {before: [...], after: [...]} only when behaviour actually changes.

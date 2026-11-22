@@ -1,5 +1,3 @@
-// The window's tabs. The live tab is the one whose layout bb shows; every other tab is parked.
-// Plain JSON, so it can be saved as is. Pure reducers; the controller owns ids and bb.
 import { panes, withoutThreads, type Layout, type Pane } from "./layout.ts";
 
 export type Tab = { id: string; layout: Layout };

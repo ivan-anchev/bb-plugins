@@ -1,8 +1,3 @@
-// Plays the list's motion (list/motion-plan.ts) on the placed items with the Web Animations API. Each
-// item's wrapper owns its translateY(y); a move is added on top of it (`composite: "add"`), so a row can
-// glide in the order and slide for the room around it at once, and a move cut short by the
-// next one carries on from where it was seen. With Reduce motion nothing moves, and turning it on
-// stops what does. What is under way, and so what stays mounted, is ./flight.ts.
 import { useLayoutEffect, useRef, useState } from "react";
 import type { Layout } from "../../list/layout.ts";
 import { STILL, type Ghost, type MotionPlan, type Timing } from "../../list/motion-plan.ts";
@@ -25,8 +20,6 @@ export function useLayoutMotion(layout: Layout, nodes: ReadonlyMap<string, HTMLE
   const ghostNodes = useRef(new Map<string, HTMLElement>()).current;
   const [playing] = useState(() => new Playing());
   const [flight, setFlight] = useState(() => atRest(layout));
-  // why: React's "adjust state when a prop changes": the plan is known in the render that shows the new
-  // layout, so what is about to move, and each ghost, is mounted for the first frame of its move.
   const current = reduced ? settled(flight, layout) : flight.layout === layout ? flight : takeOff(flight, layout, view);
   if (current !== flight) setFlight(current);
 
@@ -37,8 +30,6 @@ export function useLayoutMotion(layout: Layout, nodes: ReadonlyMap<string, HTMLE
     playing.hold(running, () => setFlight((f) => landed(f, plan)));
   }, [plan, drop, nodes, ghostNodes, playing]);
 
-  // why: Reduce motion turning on stops what is already under way (the flight settled above, in the same
-  // render), and nothing the list started outlives it, nor lands on it once it is gone.
   useLayoutEffect(() => {
     if (reduced) playing.stop();
   }, [reduced, playing]);
@@ -54,9 +45,6 @@ export function useLayoutMotion(layout: Layout, nodes: ReadonlyMap<string, HTMLE
   };
 }
 
-// ------------------------------------------------------------------ layer 2
-
-/** Starts every animation the plan holds on the nodes mounted for it; an item out of view has none. */
 function play(plan: MotionPlan, nodes: ReadonlyMap<string, HTMLElement>, ghostNodes: ReadonlyMap<string, HTMLElement>): Animation[] {
   const running: Animation[] = [];
   const on = (node: HTMLElement | undefined, frames: Keyframe[], timing: Timing, options: KeyframeAnimationOptions) => {
@@ -69,7 +57,6 @@ function play(plan: MotionPlan, nodes: ReadonlyMap<string, HTMLElement>, ghostNo
   }
   for (const a of plan.arrivals) {
     const [opens, open] = a.window;
-    // why: keyframe offsets under the timing's easing: the clip's edge crosses this item when the fold's does.
     const reveal = [
       { offset: 0, clipPath: SHUT },
       { offset: opens, clipPath: SHUT },
@@ -87,11 +74,6 @@ function play(plan: MotionPlan, nodes: ReadonlyMap<string, HTMLElement>, ghostNo
   return running;
 }
 
-/**
- * The content closing up under a view scrolled to its end drops the scroll at once; the view comes down
- * with the room as it closes instead, as the prototype's shrinking fold pulls it: every item
- * starts `drop` higher, where it was seen, and settles on the leavers' closing.
- */
 function followDrop(drop: number, plan: MotionPlan, items: readonly HTMLElement[]): Animation[] {
   const closing = plan.ghosts[0]?.collapse;
   if (drop < 0.5 || closing === undefined) return [];
@@ -99,6 +81,5 @@ function followDrop(drop: number, plan: MotionPlan, items: readonly HTMLElement[
   return items.map((node) => node.animate([{ transform: `translateY(${-drop}px)` }, { transform: "translateY(0)" }], { ...timing, composite: "add", fill: "backwards" }));
 }
 
-/** Clipped to nothing from the bottom up; whole. */
 const SHUT = "inset(0 0 100% 0)";
 const OPEN = "inset(0 0 0 0)";

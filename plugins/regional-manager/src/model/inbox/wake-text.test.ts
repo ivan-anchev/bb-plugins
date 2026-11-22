@@ -26,7 +26,6 @@ const noChecks = { titles, check: () => null, decision: () => null };
 const WRITTEN = "The user approved the merge";
 const k1 = checkIdSchema.parse("5d6c1e0a-2b3f-4a5e-8c7d-9e0f1a2b3c4d");
 
-/** A check of a done handoff of a1 on WEB-1 whose every word is agent- or verifier-written, with this verdict. */
 function checkedWith(verdict: Verdict): { titles: typeof titles; check(id: CheckId): Check | null; decision(): null } {
   const check: Check = {
     id: k1,

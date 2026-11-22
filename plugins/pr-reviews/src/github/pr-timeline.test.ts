@@ -5,13 +5,10 @@ import type { TimelineItem } from "../comments/timeline-schema.ts";
 import { parseThreadsPage, toThread } from "./pr-comments.ts";
 import { isReview, parseReviewCommentsPage, parseTimelinePage, toTimeline, type GhTimelineNode } from "./pr-timeline.ts";
 
-// Real responses of TIMELINE_QUERY and THREADS_QUERY, recorded with `gh api graphql`: this repo's
-// PR #40, and withastro/astro#18616, a merged PR with every kind of activity.
 const fixture = (name: string): unknown => JSON.parse(readFileSync(new URL(`fixtures/comments/${name}.json`, import.meta.url), "utf8"));
 
 const nodesOf = (name: string) => parseTimelinePage(fixture(name)).nodes;
 const threadsOf = (name: string) => parseThreadsPage(fixture(name)).nodes.map((thread) => toThread(thread, thread.comments.nodes));
-// Each review's comment ids from its first page, as gh.ts reads them when there is no other page.
 const firstPages = (nodes: GhTimelineNode[]) => new Map(nodes.filter(isReview).map((review) => [review.id, review.comments.nodes.map((comment) => comment.databaseId)]));
 const timelineOf = (name: string, threads: string) => {
   const nodes = nodesOf(name);
@@ -117,7 +114,6 @@ test("a review's comments past its first page still name their threads", () => {
   const nodes = nodesOf("timeline-astro-18616");
   const threads = threadsOf("threads-astro-18616");
   const [first] = nodes.filter(isReview);
-  // The fifth thread's comment, as REVIEW_COMMENTS_QUERY would page it in.
   const later = parseReviewCommentsPage({ data: { node: { comments: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{ databaseId: threads[4].comments[0].id }] } } } });
   const comments = new Map([[first.id, [...first.comments.nodes, ...later.nodes].map((comment) => comment.databaseId)]]);
   const [review] = ofKind(toTimeline([first], comments, threads), "review");

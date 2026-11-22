@@ -1,7 +1,3 @@
-// The Notes panel, one component in two hosts: the homepage card and the sidebar's popover. Header
-// (icon, "Notes", count; the popover adds a close button), the scrolling list, a footer that deletes
-// ticked notes or sends them to a new thread or the one on screen, and at the bottom the popover's
-// composer. Look from prototypes/notes-tray.html, Popover, and notes-input.html, Composer.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { useRef, type ReactNode, type RefObject } from "react";
 import { useInDrafts, type useNotes } from "../use-notes.ts";
@@ -43,13 +39,11 @@ export function NotesPanel({ notes, picks, form, onClose, onNewNote, onStarted, 
   return (
     <section className="nt-panel" data-picking={picking || undefined} aria-label="Notes" onKeyDownCapture={start.onKeyDownCapture}>
       <PanelHeader ref={header} count={list?.length ?? 0} onClose={onClose} />
-      {/* A failed read keeps the last notes in `data` and says why beside them. */}
       {notes.error !== null && (
         <p className="nt-caption nt-error" role="status">
           Couldn’t read notes: {notes.error.message}
         </p>
       )}
-      {/* why a retry here: without the marks, a row can't say it waits in a draft. */}
       {drafts.error !== null && (
         <p className="nt-caption nt-error" role="status">
           Couldn’t read which notes are in a draft: {drafts.error.message}{" "}
@@ -81,8 +75,6 @@ export function NotesPanel({ notes, picks, form, onClose, onNewNote, onStarted, 
           focusAfter={header}
           start={<StartButton disabled={picks.held} newThread={start.newThread} thisThread={start.thisThread} />}
           onDelete={() => {
-            // why: the hold disables Delete, and a disabled button drops focus to the page body; it waits
-            // in the list instead, as for a start, and stays there once the deleted rows have gone.
             box.current!.focus();
             picks.submit(remove.run(picks.ids));
           }}
@@ -95,11 +87,8 @@ export function NotesPanel({ notes, picks, form, onClose, onNewNote, onStarted, 
   );
 }
 
-// ------------------------------------------------------------------ layer 2
-
 function PanelHeader({ ref, count, onClose }: { ref: RefObject<HTMLElement | null>; count: number; onClose?(): void }) {
   return (
-    // why focusable by script: the footer that leaves with the picks hands focus here.
     <header ref={ref} className="nt-head" tabIndex={-1}>
       <Icon name={NOTE_ICON} className="nt-icon" aria-hidden />
       <span>Notes</span>
@@ -125,18 +114,12 @@ function IdleFooter({ hasNotes, onNewNote }: { hasNotes: boolean; onNewNote(): v
 }
 
 type PickingFooterProps = {
-  /** Held while a delete or a start is on its way: every control waits for it. */
   picks: Picks;
   focusAfter: RefObject<HTMLElement | null>;
-  /** The split button. */
   start: ReactNode;
   onDelete(): void;
 };
 
-/**
- * Shown while notes are picked: "N selected · Clear", then Delete and the split button. With a
- * narrow host, Delete and the button wrap together under the count.
- */
 function PickingFooter({ picks, focusAfter, start, onDelete }: PickingFooterProps) {
   const footer = useRef<HTMLElement>(null);
   useHandOffFocus(footer, focusAfter);
@@ -148,7 +131,6 @@ function PickingFooter({ picks, focusAfter, start, onDelete }: PickingFooterProp
         Clear
       </button>
       <span className="nt-picks-acts">
-        {/* why no confirm step: the user chose one click; the footer's count says what goes. */}
         <button type="button" className="nt-link" disabled={picks.held} onClick={onDelete}>
           Delete
         </button>

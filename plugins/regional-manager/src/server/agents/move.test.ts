@@ -1,8 +1,3 @@
-// Issue 06's acceptance criteria, through the harness: a handover that moves the work to a new
-// environment on a branch cut from the previous agent's. Criteria 5 to 9 involve a sandbox; here the
-// fake bb stands in for it as the probes observed it: a sandbox clones its base from origin (SH2),
-// its branch reaches origin only when pushed (SH4), its last thread's archive destroys it (SH5), and
-// bb's git plugin can't read it while suspended (SH5). GitHub is the fake gh's pull requests.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { agentIdSchema } from "../../model/agent.ts";
@@ -17,16 +12,13 @@ const BLOCKED = { status: "blocked", summary: "Needs the staging key", did: ["Wr
 const WORKTREE = { kind: "worktree" };
 const SANDBOX = { kind: "provider", environmentProviderId: "boat-sandbox", machineInputs: { preset: "small" } };
 
-/** A regional manager whose agent a1 holds build issue WEB-1, started with `start` (a worktree by default), working. */
 async function holding(start: object = {}) {
   const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
   const { agentThreadId } = await startedAgent(kit, threadId, {}, start);
   const call = async (input: object = {}) => kit.call("agent_start", { issue: "WEB-1", ...input }, threadId);
   const agent = (id: typeof a1) => kit.store.agent(coordinatorId, id) ?? assert.fail(`no agent ${id}`);
   const environmentOf = (thread: string) => kit.environment(thread);
-  /** The commit checked out in the thread's environment, as `git log -1` shows it. */
   const headOf = (thread: string) => kit.git.heads.get(environmentOf(thread)) ?? HEAD;
-  /** The branch checked out in the thread's environment (a1's by default) is pushed at its head, and a pull request opened from it. */
   const pushAndOpen = (thread = agentThreadId) => {
     const branch = kit.push(thread);
     kit.github.prs.set(branch, { number: 44, state: "OPEN", isDraft: false, reviewDecision: null, head: headOf(thread), rollup: "SUCCESS", failed: [] });
@@ -72,7 +64,7 @@ test("criterion 1: the same move after a1's thread is archived, and after its wo
   const removed = await holding();
   removed.kit.commit(removed.agentThreadId, COMMITTED);
   removed.kit.thread(removed.agentThreadId).archivedAt = 5_000;
-  removed.kit.environments.destroyed.add(removed.environmentOf(removed.agentThreadId)); // bb environment cleanup: the worktree goes, its branch stays
+  removed.kit.environments.destroyed.add(removed.environmentOf(removed.agentThreadId));
   await removed.kit.tick();
   const result = textOf(await removed.call());
   assert.match(result, /^Started a2 on WEB-1 as @thread:\w+ in a new worktree, on a new branch cut from a1's `bb\/thr_2`/, "no placement named: its environment is gone, so the work moves to a new one like it");
@@ -83,10 +75,10 @@ test("criterion 1: a move cuts from the branch a1's environment has checked out,
   const { kit, agentThreadId, call, agent, headOf, pushAndOpen, environmentOf, branch } = await holding();
   const environment = environmentOf(agentThreadId);
   kit.commit(agentThreadId, COMMITTED);
-  kit.git.checkouts.set(environment, "bb/retry-jitter"); // git switch -c bb/retry-jitter
-  kit.commit(agentThreadId, LATER); // bb's record still names a1's first branch, at COMMITTED
+  kit.git.checkouts.set(environment, "bb/retry-jitter");
+  kit.commit(agentThreadId, LATER);
 
-  kit.git.checkouts.delete(environment); // git switch --detach
+  kit.git.checkouts.delete(environment);
   const spawned = kit.spawned();
   const detached = await call({ placement: WORKTREE });
   assert.ok(isRefusal(detached));
@@ -102,7 +94,6 @@ test("criterion 1: a move cuts from the branch a1's environment has checked out,
   assert.deepEqual(agent(a2).base, { kind: "cut", from: "a1", branch: "bb/retry-jitter", via: "local", head: LATER });
   assert.equal(kit.repo.local.get(branch), COMMITTED, "not cut from the branch on record");
 
-  // Through origin, the proof is asked of the branch checked out, at its head.
   kit.git.checkouts.set(environmentOf(local), "bb/retry-backoff");
   kit.commit(local, COMMITTED);
   assert.equal(pushAndOpen(local), "bb/retry-backoff");
@@ -147,7 +138,7 @@ test("criterion 2: a holder that still works is refused before it is stopped; on
   kit.stopRequests.pending = new Promise((resolve) => (answer = resolve));
   const moving = call({ placement: WORKTREE });
   await settled();
-  kit.git.changedFiles.set(kit.environment(agentThreadId), 1); // its last edit lands as it stops
+  kit.git.changedFiles.set(kit.environment(agentThreadId), 1);
   answer();
   const late = await moving;
   assert.ok(isRefusal(late));
@@ -157,7 +148,7 @@ test("criterion 2: a holder that still works is refused before it is stopped; on
 
 test("criterion 3: bb refusing the base errors a2 in provisioning; the issue isn't lost: a call without placement continues in a1's environment, and from default starts clean", async () => {
   const { kit, coordinatorId, agentThreadId, call, agent, branch } = await holding();
-  kit.repo.local.delete(branch); // someone deleted a1's local branch
+  kit.repo.local.delete(branch);
 
   const failed = threadIn(textOf(await call({ placement: WORKTREE })));
   await settled();
@@ -244,8 +235,8 @@ test("criterion 5 (sandbox, harness): a move through origin reads the pull reque
   const { kit, agentThreadId, call, agent, pushAndOpen, branch } = await holding();
   kit.commit(agentThreadId, COMMITTED);
   pushAndOpen();
-  await kit.tick(); // the watch saves the pull request at COMMITTED
-  kit.repo.origin.set(branch, HEAD); // git push --force origin HEAD~1:<branch>; a1's checkout stays at COMMITTED
+  await kit.tick();
+  kit.repo.origin.set(branch, HEAD);
   kit.github.prs.set(branch, { number: 44, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
   const [runs, spawned] = [kit.github.runs.length, kit.spawned()];
 
@@ -254,7 +245,7 @@ test("criterion 5 (sandbox, harness): a move through origin reads the pull reque
   assert.match(textOf(refused), /^agent_start is refused: Nothing changed\. a1's branch `bb\/thr_2` isn't shown on origin at its head 1111111/);
   assert.deepEqual([kit.github.runs.length, kit.spawned(), kit.thread(agentThreadId).status, agent(a1).ended], [runs + 1, spawned, "active", null]);
 
-  pushAndOpen(); // pushed again
+  pushAndOpen();
   const moved = threadIn(textOf(await call({ placement: SANDBOX })));
   assert.equal(kit.github.runs.length, runs + 2, "one read for the start's two judgments, the head unchanged between them");
   assert.equal(kit.git.heads.get(kit.environment(moved)), COMMITTED);
@@ -264,7 +255,7 @@ test("criterion 5 (sandbox, harness): a saved pull request at the head is no pro
   const { kit, agentThreadId, call, agent, pushAndOpen } = await holding();
   kit.commit(agentThreadId, COMMITTED);
   pushAndOpen();
-  await kit.tick(); // the watch saves the pull request at COMMITTED, the head a1 still has
+  await kit.tick();
   kit.github.failure = Object.assign(new Error("Command failed: gh api graphql"), { code: 1, stdout: "", stderr: "unexpected EOF" });
   const spawned = kit.spawned();
 
@@ -278,12 +269,12 @@ test("criterion 5 (sandbox, harness): a branch that moves after the proof, befor
   const { kit, agentThreadId, call, pushAndOpen, branch } = await holding();
   kit.commit(agentThreadId, COMMITTED);
   pushAndOpen();
-  kit.provisioning.holding = true; // bb answers the spawn, then cuts
+  kit.provisioning.holding = true;
 
   const result = textOf(await call({ placement: SANDBOX }));
   const next = threadIn(result);
   assert.match(result, new RegExp(`cut from a1's \`origin/${branch}\` expecting 1111111, on [^.]*\\. a2 checks that commit is on its branch before it changes anything, and hands off blocked if it isn't\\.`));
-  kit.repo.origin.set(branch, HEAD); // git push --force origin HEAD~1:<branch>, after the proof
+  kit.repo.origin.set(branch, HEAD);
   kit.provisioning.held.splice(0).forEach((provision) => provision());
 
   assert.equal(kit.git.heads.get(kit.environment(next)), HEAD, "bb cut the branch as origin had it then, without a1's commit");
@@ -293,8 +284,8 @@ test("criterion 5 (sandbox, harness): a branch that moves after the proof, befor
 
 test("criterion 6 (sandbox, harness): a branch pushed from inside a sandbox is saved by the PR watch at the pushed head within its next read", async () => {
   const { kit, coordinatorId, agentThreadId, pushAndOpen } = await holding({ placement: SANDBOX });
-  kit.commit(agentThreadId, COMMITTED); // git commit in the sandbox
-  const branch = pushAndOpen(); // git push -u origin HEAD; gh pr create --fill
+  kit.commit(agentThreadId, COMMITTED);
+  const branch = pushAndOpen();
   assert.equal(kit.repo.origin.get(branch), COMMITTED, "git ls-remote --heads origin <branch> prints the sandbox's HEAD");
   await kit.tick();
   assert.equal(kit.store.prOfBranch(coordinatorId, branch)?.snapshot?.headSha, COMMITTED);
@@ -306,7 +297,7 @@ test("criterion 7 (sandbox, harness): sandbox to worktree cuts from origin at th
   const branch = pushAndOpen();
   await kit.tick();
   kit.commit(agentThreadId, LATER);
-  pushAndOpen(); // pushed within the minute: the saved snapshot still shows the earlier head
+  pushAndOpen();
   const runs = kit.github.runs.length;
 
   const next = threadIn(textOf(await call({ placement: WORKTREE })));
@@ -320,10 +311,10 @@ test("criterion 8 (sandbox, harness): once bb destroys a1's sandbox, a start wit
   for (const pushed of [true, false]) {
     const { kit, threadId, agentThreadId, call, headOf, pushAndOpen, environmentOf } = await holding({ placement: SANDBOX });
     kit.commit(agentThreadId, COMMITTED);
-    await kit.call("agent_handoff", BLOCKED, agentThreadId); // records the head a1 left
+    await kit.call("agent_handoff", BLOCKED, agentThreadId);
     await kit.idle(agentThreadId, "Blocked.");
     if (pushed) pushAndOpen();
-    await kit.call("agent_stop", { agent: "a1", archive: true }, threadId); // its last thread: bb destroys the sandbox
+    await kit.call("agent_stop", { agent: "a1", archive: true }, threadId);
     assert.ok(kit.environments.destroyed.has(environmentOf(agentThreadId)));
 
     const result = await call();
@@ -349,10 +340,10 @@ test("criterion 8 (sandbox, harness): once bb destroys a1's sandbox, a start wit
 test("criterion 8 (harness): once bb removes a1's worktree, a move to a sandbox of its unpushed commits is refused saying they are still on its branch, and a start with no placement reaches them", async () => {
   const { kit, threadId, agentThreadId, call, headOf, environmentOf, branch } = await holding();
   kit.commit(agentThreadId, COMMITTED);
-  await kit.call("agent_handoff", BLOCKED, agentThreadId); // records the head a1 left
+  await kit.call("agent_handoff", BLOCKED, agentThreadId);
   await kit.idle(agentThreadId, "Blocked.");
   await kit.call("agent_stop", { agent: "a1", archive: true }, threadId);
-  kit.environments.destroyed.add(environmentOf(agentThreadId)); // bb environment cleanup: the worktree goes, its branch stays
+  kit.environments.destroyed.add(environmentOf(agentThreadId));
 
   const refused = await call({ placement: SANDBOX });
   assert.ok(isRefusal(refused));
@@ -369,7 +360,7 @@ test("criterion 8 (harness): once bb removes a1's worktree, a move to a sandbox 
 test("criterion 9 (sandbox, harness): a move out of a suspended sandbox is refused as unreadable, offering the continue, and wakes nothing", async () => {
   const { kit, agentThreadId, call, agent, environmentOf } = await holding({ placement: SANDBOX });
   await kit.idle(agentThreadId, "Waiting.");
-  kit.git.offline.add(environmentOf(agentThreadId)); // suspended: bb's git plugin can't read it, and the read doesn't wake it
+  kit.git.offline.add(environmentOf(agentThreadId));
   const [spawned, sends, reads] = [kit.spawned(), kit.sendAttempts().length, kit.git.calls.length];
 
   const refused = await call({ placement: WORKTREE });

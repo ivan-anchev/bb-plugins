@@ -1,4 +1,3 @@
-// When each boat machine last did work, in plugin KV under `idle/<hostId>` (Modal's key shape).
 import type { PluginKvStorage } from "@get-bb/plugin-sdk";
 
 export interface IdleClock {
@@ -9,7 +8,6 @@ export interface IdleClock {
   forget(hostId: string): Promise<void>;
 }
 
-// Every writer stores "now", so a lost race between two writers loses at most a second of idle time.
 export function createIdleClock(kv: PluginKvStorage): IdleClock {
   const key = (hostId: string) => `idle/${hostId}`;
   return {

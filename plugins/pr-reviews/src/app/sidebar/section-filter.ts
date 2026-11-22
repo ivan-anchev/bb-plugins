@@ -1,6 +1,3 @@
-// Which of the sidebar's sections the reader hides, and which they fold, each kept in this
-// browser's localStorage so the choice outlives a reload. Stored as the hidden (or folded) keys, so
-// a section added later shows, open, by default.
 import { useState } from "react";
 import { SECTION_KEYS, type SectionKey } from "../../contract.ts";
 
@@ -12,8 +9,6 @@ export const COLLAPSED_SECTIONS: SectionSet = { storageKey: "bb-plugin-pr-review
 
 type SectionStorage = Pick<Storage, "getItem" | "setItem">;
 
-// Touches `localStorage` only inside each call: a browser that denies storage throws on access,
-// and that must happen inside the read or write that catches it.
 const browserStorage: SectionStorage = {
   getItem: (key) => localStorage.getItem(key),
   setItem: (key, value) => localStorage.setItem(key, value),
@@ -51,7 +46,6 @@ export function withSection(sections: readonly SectionKey[], section: SectionKey
   return SECTION_KEYS.filter((key) => (key === section ? included : sections.includes(key)));
 }
 
-// Storage the browser denies (blocked site data, a sandboxed frame) throws on access; it reads as nothing stored.
 function readStored(storage: SectionStorage, key: string): string | null {
   try {
     return storage.getItem(key);

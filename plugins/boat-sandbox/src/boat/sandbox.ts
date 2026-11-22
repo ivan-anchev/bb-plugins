@@ -1,4 +1,3 @@
-// The one boat-side concept: a sandbox, with boat's wire states collapsed to five phases.
 import type { z } from "zod";
 import { wireSandbox, type PresentSandbox, type sandboxId } from "./wire.ts";
 
@@ -24,8 +23,6 @@ export interface Sandbox {
   environment: string | null;
 }
 
-// `idle` and `running` only describe work queued through boat's own prompt API, and a fresh
-// create settles in `idle`, never `ready`, so all three mean the machine is up.
 const PHASES: Record<PresentSandbox["state"], SandboxPhase> = {
   init: "starting",
   provisioning: "starting",
@@ -61,17 +58,11 @@ export function toSandbox(json: unknown): Sandbox | null {
   };
 }
 
-/**
- * An API stop ends the moment the sandbox stops (about 18 ms apart), and an older one at
- * least a resume and a ~14 s stop earlier, so this tells the current stop's record from an old one.
- */
 const SAME_STOP_MS = 5_000;
 
 function describeStop(wire: PresentSandbox): string | null {
   if (wire.state !== "archived" && wire.state !== "error") return null;
   if (wire.error !== null) return `boat: ${wire.error}`;
-  // A boat-initiated stop (auto-stop, wallet, maintenance) adds no stop record, but the
-  // sandbox keeps the record of the last API stop, which may be an earlier one.
   return stoppedThroughApi(wire) ? "stopped through the API" : "stopped by boat";
 }
 

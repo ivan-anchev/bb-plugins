@@ -3,8 +3,6 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { parseGitHubRepo, parsePrs, prQueryArgs } from "./pr-query.ts";
 
-// gh's answer to this exact query, run read-only against ivan-anchev/bb-plugins for three branches
-// with merged pull requests and one with none (gh 2.97.0, 2026-11-16).
 const RECORDED = readFileSync(new URL("./fixtures/bb-plugins-prs.json", import.meta.url), "utf8");
 const RECORDED_BRANCHES = ["fix-pr-reviews-sticky-gap", "release-pr-reviews-0.2.6", "pr-reviews/tooltip-popover-roles", "no-such-branch-08"];
 

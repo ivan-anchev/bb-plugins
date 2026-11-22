@@ -26,11 +26,6 @@ function toNumber(value: unknown): unknown {
   return Number.isFinite(parsed) ? parsed : value
 }
 
-/**
- * `"true"` / `"false"` only. Anything else is left alone, so a genuine string
- * prop is never clobbered — that matters for props like the activity graph's
- * `caption?: string | false`.
- */
 function toBoolean(value: unknown): unknown {
   if (value === "true") return true
   if (value === "false") return false

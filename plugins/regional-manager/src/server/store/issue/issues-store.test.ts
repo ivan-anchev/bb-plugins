@@ -19,7 +19,6 @@ test("issues are numbered WEB-1, WEB-2… within their regional manager, and rea
 test("an issue id is never reused: one filed after a gap is numbered after the highest", () => {
   const { db, store } = freshStore();
   for (const at of [2_000, 2_100, 2_200]) filedIssue(store, MANAGER, newIssue(), at);
-  // why a raw delete: the store never deletes an issue, but whatever does must not free its id.
   db.prepare("DELETE FROM issues WHERE id = 'WEB-1'").run();
   assert.equal(filedIssue(store, MANAGER, newIssue(), 2_300).id, "WEB-4");
 });
@@ -60,7 +59,6 @@ test("an issue's dependencies are stored in the order added, changed by what is 
   assert.deepEqual(store.issue(MANAGER, filed.id)?.dependsOn, [i1, i2]);
   assert.deepEqual(store.issue(MANAGER, i1)?.dependsOn, []);
 
-  // why the close known: a kept relation that moves keeps what the manager was told of it.
   rememberCloses(() => db, MANAGER, new Map([[filed.id, new Map([[i1, "merged #41"]])]]));
   const moved = store.updateIssue(MANAGER, filed.id, { dependsOn: { add: [i1], remove: [i1] } }, { requireUnheld: false, closes: new Map() });
   assert.deepEqual("issue" in moved && moved.issue.dependsOn, [i2, i1]);

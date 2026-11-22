@@ -1,8 +1,3 @@
-// The small glyphs in the activity's gutter, one per line: a commit, a force-push, a label, a
-// review, an approval, the opening, the merge. bb's icons where it has one (the opening, the merge,
-// a branch, a link); why our own SVG for the rest: bb's icon set has no commit, label, person or
-// pencil. Each is 14px, drawn in its line's glyph colour, and decorative: the line's words say
-// what happened.
 import type { ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { ReviewVerdict, StatusChange } from "../../comments/timeline-schema.ts";

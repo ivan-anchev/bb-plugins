@@ -1,4 +1,3 @@
-// What the rail badge says: the sum of every listed regional manager's Needs you, and what waits.
 import type { ExperimentalBadge } from "@get-bb/plugin-sdk/app";
 import type { NeedsYou } from "../model/board/board-groups.ts";
 

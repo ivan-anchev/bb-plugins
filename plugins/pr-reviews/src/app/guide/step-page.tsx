@@ -1,7 +1,3 @@
-// One walkthrough step in two columns. The story on the left: the step counter, the title, the
-// explanation, "For you to decide" when the agent left the reader a decision, and the files the
-// step touches. It stays in view while the diffs on the right scroll: the step's hunks in order,
-// each with its findings. Below about 900px of page width the columns stack, story first.
 import { useMemo, useRef, type Ref } from "react";
 import { fileOf, type DiffFile } from "../../diff/diff-schema.ts";
 import type { GuideStep } from "../../guide/guide-schema.ts";
@@ -28,16 +24,10 @@ type StepPageProps = {
   head: PrHeadTarget;
 };
 
-// The columns' own top padding, not the page's, so the sticky story lines up with the diffs.
-// `100cqh` is the scroll region's height (guide-view.tsx makes it a size container).
-// The story's own track is `minmax(0,1fr)`: an implicit `auto` track grows to its widest child's
-// min-content, and a file row's min-content is its whole unwrapped path.
 export function StepPage({ place, total, title, files, findings, head }: StepPageProps) {
   const step = place.step.step;
-  // why memoised: each hunk's diff is handed its findings as line annotations, and new ones make it draw again.
   const findingsByHunk = useMemo(() => step.hunks.map((entry) => findingsOn(findings, entry)), [step, findings]);
   const firstHunks = useRef(new Map<string, HTMLElement>());
-  // Each hunk's diff draws its threads from this read; a failed read shows once, above them.
   const comments = useComments({ projectId: head.projectId, number: head.number });
   return (
     <article className="grid max-w-[880px] grid-cols-[minmax(0,1fr)] gap-x-10 px-6 pb-10 @min-[900px]:max-w-[1440px] @min-[900px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
@@ -48,7 +38,6 @@ export function StepPage({ place, total, title, files, findings, head }: StepPag
         </hgroup>
         <Prose text={step.explanation} className={PROSE} />
         {step.forYou !== null && <ForYou text={step.forYou} />}
-        {/* Every listed file has a first hunk on the right, which registered itself on mount. */}
         <StepFileList files={stepFilesOf(step, files)} onJump={(path) => jumpTo(firstHunks.current.get(path)!)} />
       </div>
       <div className="grid content-start gap-4 pt-4">
@@ -70,7 +59,6 @@ export function StepPage({ place, total, title, files, findings, head }: StepPag
   );
 }
 
-// "01 / 03", as the screenshot the layout follows reads.
 function StepCounter({ number, total }: { number: number; total: number }) {
   const pad = (count: number) => String(count).padStart(2, "0");
   return (
@@ -80,7 +68,6 @@ function StepCounter({ number, total }: { number: number; total: number }) {
   );
 }
 
-// A tinted block, no border (the spec's visual rules).
 function ForYou({ text }: { text: string }) {
   return (
     <section className="grid max-w-[75ch] gap-1 rounded-lg bg-timeline-accent/10 px-3.5 py-3 text-sm leading-5">
@@ -99,7 +86,6 @@ const firstHunkRef = (firstHunks: Map<string, HTMLElement>, path: string) => (bl
   };
 };
 
-// Focus first without scrolling, then one scroll to the block: smooth, unless the reader asks for less motion.
 function jumpTo(block: HTMLElement) {
   block.focus({ preventScroll: true });
   block.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });

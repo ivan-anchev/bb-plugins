@@ -4,7 +4,6 @@ import { attachmentIdSchema, noteIdSchema, type Attachment, type Note } from "..
 import { memoryStorage } from "./memory-storage.ts";
 import { openStore } from "./store.ts";
 
-/** A store over a fresh in-memory database, and that database for what the store never reads back. */
 function freshStore() {
   const { db, storage } = memoryStorage();
   return { db, store: openStore(storage) };
@@ -69,7 +68,6 @@ test("notes list newest first", () => {
   );
 });
 
-/** As Start thread left a note before decision 28: its row kept, off the list. */
 function archiveAsBefore(db: ReturnType<typeof freshStore>["db"], id: Note["id"]): void {
   db.prepare("UPDATE notes SET archived_at = 5000 WHERE id = ?").run(id);
 }
@@ -146,7 +144,6 @@ test("a note whose attachment rows fail to insert is not saved at all", () => {
   const { store } = freshStore();
   store.insert({ ...note(1, "first"), attachments: [attachment(1, "image/png")] });
 
-  // why the same attachment id: its primary key refuses the second row, after the note's row went in.
   assert.throws(() => store.insert({ ...note(2, "second"), attachments: [attachment(1, "image/png")] }), /UNIQUE/);
   assert.deepEqual(
     store.activeNotes().map((n) => n.body.text),

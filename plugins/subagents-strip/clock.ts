@@ -1,4 +1,3 @@
-// One shared 1 s tick for every live timer in the window, and the time formats.
 import { useCallback, useSyncExternalStore } from "react";
 
 /** The current time, re-rendering once a second while `live`; frozen otherwise. */
@@ -29,8 +28,6 @@ export function formatClockTime(at: number): string {
   return `${pad(time.getHours())}:${pad(time.getMinutes())}`;
 }
 
-// ---------------------------------------------------------------- layer 2
-
 let tickNow = Date.now();
 const tickers = new Set<() => void>();
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -38,8 +35,6 @@ let timer: ReturnType<typeof setInterval> | null = null;
 function onEveryTick(onTick: () => void): () => void {
   tickers.add(onTick);
   if (!timer) {
-    // why: a timer going live must not show a stale instant; React rereads the
-    // snapshot right after subscribing, so this lands before the first tick.
     tickNow = Date.now();
     timer = setInterval(() => {
       tickNow = Date.now();

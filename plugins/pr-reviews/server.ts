@@ -1,4 +1,3 @@
-// Composition root: wires the modules and owns no logic of its own.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { prReviewsContract } from "./src/contract.ts";
 import { snapshotPrDiff } from "./src/github/gh.ts";

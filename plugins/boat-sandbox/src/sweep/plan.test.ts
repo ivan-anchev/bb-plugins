@@ -10,14 +10,12 @@ const NOW = Date.parse("2026-11-08T12:00:00Z");
 const MINUTE = 60_000;
 const IDLE_15: SweepPolicy = { now: NOW, idleMs: 15 * MINUTE };
 
-/** A sandbox whose auto-stop is `leaseMinutes` away; `wire` overrides boat's JSON. */
 function sandbox(leaseMinutes = 120, state = "idle", wire: object = {}): Sandbox {
   const parsed = toSandbox({ ...CAPTURED, state, archiveAfter: new Date(NOW + leaseMinutes * MINUTE).toISOString(), ...wire });
   if (parsed === null) throw new Error("unreachable: the fixture is present");
   return parsed;
 }
 
-/** An owned sandbox no machine references, created `minutesAgo` minutes ago. */
 function orphan(minutesAgo: number, state = "idle"): Sandbox {
   const labels = machineLabels("owner-1", "thr_gone");
   return sandbox(120, state, { id: "bx_zzzzzzzz", labels, createdAt: new Date(NOW - minutesAgo * MINUTE).toISOString() });
@@ -96,8 +94,6 @@ test("a machine core is removing or has removed is left alone", () => {
     assert.deepEqual(plan(host({ phase, lastActiveAt: NOW - 600 * MINUTE }), sandbox(10)), []);
 });
 
-// Drift: active in bb, not awake on boat.
-
 test("an active machine whose sandbox boat stopped by itself is recorded as suspended", () => {
   const stopped = sandbox(10, "archived", { stop: null });
   assert.deepEqual(plan(host({ busy: true }), stopped), [
@@ -118,8 +114,6 @@ test("an active machine whose sandbox was deleted outside bb is recorded as susp
   ]);
 });
 
-// Drift: suspended in bb.
-
 test("a suspended machine whose sandbox someone resumed is stopped again", () => {
   assert.deepEqual(plan(host({ phase: "suspended" }), sandbox()), [{ kind: "stop-again", hostId: "host_1" }]);
   assert.deepEqual(plan(host({ phase: "suspended" }), sandbox(120, "provisioning")), [{ kind: "stop-again", hostId: "host_1" }]);
@@ -135,8 +129,6 @@ test("a suspended machine whose sandbox is gone or whose disk expired is left to
   assert.deepEqual(plan(host({ phase: "suspended" }), null), []);
   assert.deepEqual(plan(host({ phase: "suspended" }), expired), []);
 });
-
-// Leaks: owned sandboxes no machine references.
 
 test("an awake orphan older than 15 minutes is stopped, never deleted", () => {
   assert.deepEqual(planAll([], [orphan(15)]), [{ kind: "stop-orphan", sandboxId: orphan(15).id }]);

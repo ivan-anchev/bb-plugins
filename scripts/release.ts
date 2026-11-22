@@ -1,8 +1,3 @@
-// npm run release -- <id>
-// Tag the current commit as `<id>/v<version>` from plugins/<id>/package.json.
-// bb resolves marketplace ranges over these tags and refuses a tag that later
-// moves, so this never retags: an existing tag on HEAD is a no-op, and an
-// existing tag elsewhere means the version needs a bump. Pushing stays manual.
 import { exitWithProblems, fail, requirePluginIdArgument, run } from "./lib/cli.ts";
 import { planManifests, staleManifestPaths } from "./lib/manifests.ts";
 import { loadPlugins } from "./lib/repo.ts";

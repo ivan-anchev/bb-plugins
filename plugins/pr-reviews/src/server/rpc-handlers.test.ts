@@ -7,28 +7,23 @@ import { commentsTag, INBOX_TAG, prReviewsContract, repoTag, VISITS_TAG, type In
 import type { FoundPr } from "../github/inbox-search.ts";
 import { repoSchema } from "../github/repo.ts";
 
-// GitHub stands in: each post records what it was asked, and its order against bb's invalidations.
 const events: string[] = [];
 const posted = (what: string) => async (...args: unknown[]) => {
   events.push(`${what} ${JSON.stringify(args)}`);
   return { url: `https://github.com/ivan-anchev/bb-plugins/pull/40#${what}` };
 };
-// A review write resolves to nothing, or fails as GitHub refused it while `refusing` is set.
 let refusing: Refusal | null = null;
 const wrote = (what: string) => async (...args: unknown[]) => {
   events.push(`${what} ${JSON.stringify(args)}`);
   if (refusing !== null) throw refusing;
 };
 const notCalled = async () => assert.fail("not part of these tests");
-// PR 41 stands for one GitHub refuses to change.
 const REFUSED_PR = 41;
 const changedState = async (...args: [string, number, string]) => {
   events.push(`state ${JSON.stringify(args)}`);
   if (args[1] === REFUSED_PR) throw new Refusal({ code: "forbidden", message: "Your GitHub account doesn't have permission to do that in this repository." });
 };
-// The PRs GitHub's search finds, as the sidebar reads them.
 let searchFinds: FoundPr[] = [];
-// The visits the store was asked to save, in the order the writes landed.
 const saved: Visit[] = [];
 mock.module("../github/gh.ts", {
   namedExports: {
@@ -52,9 +47,7 @@ const { createRpcHandlers } = await import("./rpc-handlers.ts");
 
 const PROJECT = { id: "proj_1", name: "bb-plugins", gitRemoteUrl: "https://github.com/ivan-anchev/bb-plugins.git", sources: [] };
 
-// The cleanup each set of handlers registered for when the plugin is disposed.
 const disposeHooks: (() => void | Promise<void>)[] = [];
-// `list`: bb's project list, read once per call that names a project.
 const handlersWith = (projects: (typeof PROJECT)[], list: () => Promise<(typeof PROJECT)[]> = async () => projects) =>
   createRpcHandlers({
     bb: {
@@ -77,7 +70,6 @@ const handlersWith = (projects: (typeof PROJECT)[], list: () => Promise<(typeof 
 const handlers = handlersWith([PROJECT]);
 
 const TARGET = { projectId: "proj_1", number: 40 };
-// The target PR as GitHub's search reports it.
 const pullRequest40 = {
   repo: repoSchema.parse("ivan-anchev/bb-plugins"),
   number: 40,
@@ -91,11 +83,8 @@ const pullRequest40 = {
   ciFailing: false,
   changesRequested: false,
 } as const satisfies FoundPr["pr"];
-// The tag the comments read carries for this PR: what each post must invalidate for it to show.
 const READ_TAGS = prReviewsContract.comments.tags!(TARGET, { threads: [], timeline: [], changedPaths: [], viewer: { author: false, pendingReviewId: null } });
-// The tag the PR read, which carries its reviewers' states, has for the project's repo.
 const PR_TAG = repoTag(repoSchema.parse("ivan-anchev/bb-plugins"));
-// The app calling, as the Changes tab and the guide do.
 const FROM_APP = { experimental_caller: { kind: "client" }, experimental_signal: new AbortController().signal } as const;
 const call = async <Input, Output>(handler: (input: Input, context: typeof FROM_APP) => Output | Promise<Output>, input: Input) => handler(input, FROM_APP);
 

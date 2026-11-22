@@ -1,6 +1,3 @@
-// One memory file being edited in the board's Memory. A save names the version the user started from, so it never
-// silently replaces a write it didn't see: when the file moved on, the user's text stays and the
-// newer version shows beside it.
 import { experimental_Icon as Icon, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { useCallback, useId, useRef, type KeyboardEvent, type Ref } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
@@ -29,8 +26,6 @@ export function MemoryEditor({ coordinatorId, file, edit, onDraft, onSave, onCan
   const read = experimental_useRpcQuery({ contract, method: "memoryRead", input: { coordinatorId, file } });
   const textarea = useRef<HTMLTextAreaElement>(null);
   const heading = useId();
-  // why: the conflict's own controls leave once a save starts or the user takes the newer version;
-  // focus in them moves to the user's text, which stays (REVIEW.md).
   const handsFocusToText = useCallback((region: HTMLElement | null) => {
     if (region === null) return;
     return () => {
@@ -51,7 +46,6 @@ export function MemoryEditor({ coordinatorId, file, edit, onDraft, onSave, onCan
   const lastRead = read.data;
   const current = fileNow(lastRead, edit);
   const state = editorState(current.text, edit.draft);
-  // why: while a save is out, the read may already show the version it wrote, which isn't a conflict.
   const view = edit.saving && state.kind === "conflict" ? { kind: "edited" as const, draft: state.draft } : state;
   const text = view.kind === "clean" ? view.text : view.draft.text;
 
@@ -76,7 +70,6 @@ export function MemoryEditor({ coordinatorId, file, edit, onDraft, onSave, onCan
           {statusOf(view.kind, { saving: edit.saving, saved: isSaved(current, edit), exists: current.text !== null })}
         </p>
         <div className="ml-auto flex items-center gap-2">
-          {/* why aria-disabled: a disabled button drops focus to the page when a save ends. */}
           <Button variant="default" size="sm" aria-disabled={view.kind === "clean"} onClick={save}>
             {view.kind === "conflict" && view.newer !== null ? "Save mine over it" : "Save"}
           </Button>
@@ -123,7 +116,6 @@ type ConflictNoticeProps = { ref: Ref<HTMLDivElement>; file: MemoryFile; deleted
 
 function ConflictNotice({ ref, file, deleted, onTakeNewer }: ConflictNoticeProps) {
   return (
-    // why on the page's surface: muted text, as on the button, fails contrast on bg-muted in dark themes.
     <div ref={ref} role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-border px-3 py-2 text-sm text-foreground">
       <Icon name="GitMerge" className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       <p className="min-w-0 flex-1 text-pretty">

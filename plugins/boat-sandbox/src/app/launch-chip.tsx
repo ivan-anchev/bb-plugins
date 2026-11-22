@@ -1,5 +1,3 @@
-// The composer chip for boat Sandbox: `template · environment · size`, and one menu with a group for
-// each. Shaped as bb's own Modal chip: a ghost button marked shrinkable, a ChevronDown, a grouped menu.
 import { useEffect, type ComponentProps } from "react";
 import type { PluginMachineProviderInputsProps } from "@get-bb/plugin-sdk";
 import { experimental_Icon as Icon, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
@@ -15,19 +13,15 @@ export function LaunchChip({ value, onChange }: PluginMachineProviderInputsProps
   const view = chipView(value, query);
   const choices = query.data?.status === "ready" ? query.data : null;
 
-  // Reporting to bb is a sync with the host, so it is an effect. bb ignores a report equal to the last
-  // one, and the JSON key keeps a new but equal object from reporting again.
   const report = JSON.stringify(view.report);
   useEffect(() => onChange(view.report), [report, onChange]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    // boat changes out of band, so every open reads it again.
     <Menu onOpenChange={(open) => open && void query.refetch()}>
       <MenuTrigger asChild>
         <ChipButton view={view} />
       </MenuTrigger>
       <MenuContent align="start" className="max-h-[min(var(--radix-dropdown-menu-content-available-height),calc(100dvh-0.5rem))] w-max min-w-0 max-w-[min(20rem,calc(100vw-1rem))] overflow-y-auto overscroll-contain">
-        {/* Each section above the footer ends with its own separator. */}
         {view.problem !== null && <Problem text={view.problem} />}
         {choices !== null && <LaunchGroups choices={choices} current={view.launch} onPick={(change) => onChange(pick(view.launch, choices, change))} />}
         {query.isLoading && <Loading />}
@@ -37,7 +31,6 @@ export function LaunchChip({ value, onChange }: PluginMachineProviderInputsProps
   );
 }
 
-/** The ghost button the menu opens from; radix passes its trigger props and ref through. */
 function ChipButton({ view, ...trigger }: { view: ChipView } & ComponentProps<"button">) {
   return (
     <button
@@ -75,12 +68,10 @@ function Problem({ text }: { text: string }) {
   );
 }
 
-/** boat's stock image in the template group; no saved snapshot name has a space. */
 const STOCK_IMAGE = "boat stock image";
 
 interface LaunchGroupsProps {
   choices: LaunchChoices;
-  /** null when the value is refused: nothing is checked, and every row is a way out. */
   current: Launch | null;
   onPick(change: Partial<Launch>): void;
 }
@@ -120,7 +111,6 @@ function LaunchGroups({ choices, current, onPick }: LaunchGroupsProps) {
   );
 }
 
-/** A template that is not ready shows why it is disabled; the settings' default says so. */
 function templateNote(status: LaunchChoices["templates"][number]["status"], isDefault: boolean): string | null {
   const notes = [status === "ready" ? null : status, isDefault ? "default" : null].filter((note) => note !== null);
   return notes.length === 0 ? null : notes.join(" · ");
@@ -144,7 +134,6 @@ function Footer({ query }: { query: LaunchChoicesQuery }) {
       </p>
       <MenuItem
         onSelect={(event) => {
-          // Stay open, so the fresh list shows where the user is looking.
           event.preventDefault();
           void query.refetch();
         }}

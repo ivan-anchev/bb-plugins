@@ -1,6 +1,3 @@
-// When a running verifier last did anything, for the backstop that ends a check whose verifier
-// stalled: a turn held open by something nobody answers, or a provider that stopped talking.
-
 /**
  * How long a running verifier may show no activity before its check ends as could-not-run. why 30
  * minutes: across 34 verifiers that returned a verdict, the longest silence in bb's events was 5

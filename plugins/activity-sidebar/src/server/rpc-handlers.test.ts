@@ -6,7 +6,6 @@ import type { SleepStore } from "./sleep-store.ts";
 
 const CONTEXT = { experimental_caller: { kind: "client" }, experimental_signal: new AbortController().signal } as const;
 
-// The store stands in as a map; each event records a write or an invalidation, in order.
 function harness() {
   const rows = new Map<string, number>();
   const events: string[] = [];

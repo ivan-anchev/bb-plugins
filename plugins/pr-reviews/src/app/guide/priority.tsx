@@ -1,4 +1,3 @@
-// A finding's priority as the reader sees it: a word in the theme's colour for how much it matters.
 import type { Finding } from "../../guide/guide-schema.ts";
 
 export const PRIORITIES = {

@@ -1,5 +1,3 @@
-// Where keyboard focus goes when the item holding it leaves the list. Pure.
-
 /**
  * The item that inherits focus from `gone`: the first item after it that is still listed, else the
  * nearest one before it, else null (nothing is left). `before` is the order focus last saw.

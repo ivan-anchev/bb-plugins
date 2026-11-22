@@ -1,5 +1,3 @@
-// A DiffFile for the Changes tab's tests, built from the line counts a test cares about: one hunk
-// that removes `removed` lines and adds `added`, or no hunk when both are zero.
 import type { DiffFile, LineCounts } from "../../diff/diff-schema.ts";
 
 type DiffFileFixture = Partial<Omit<DiffFile, "path" | "hunks"> & LineCounts>;

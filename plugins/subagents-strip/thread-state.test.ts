@@ -13,7 +13,7 @@ test("past `keep` threads, the least recently set one is dropped and reads the i
   const store = threadState("initial", 2);
   store.set("thr_a", "a");
   store.set("thr_b", "b");
-  store.set("thr_a", "a2"); // set again: now the newest
+  store.set("thr_a", "a2");
   store.set("thr_c", "c");
   assert.deepEqual(["thr_a", "thr_b", "thr_c"].map((id) => store.get(id)), ["a2", "initial", "c"]);
 });

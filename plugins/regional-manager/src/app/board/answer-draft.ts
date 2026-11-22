@@ -1,7 +1,3 @@
-// An answer to an open decision that the user typed and hasn't sent. The browser keeps it, by
-// regional manager and decision, so bb redrawing the board (a resize across its mobile breakpoint
-// remounts it) or a reload loses none of it, until the board reads the decision answered, by it or
-// from elsewhere.
 import { useEffect } from "react";
 import { z } from "zod";
 import { MAX_ANSWER_CHARS, type Decision, type DecisionId } from "../../model/decision.ts";
@@ -20,7 +16,6 @@ export const answerDraftSchema = z.string().min(1).max(MAX_ANSWER_CHARS);
  * failed send must keep what was typed, so only the board's read tells it landed.
  */
 export function useAnsweredDraftsDropped(coordinatorId: CoordinatorId, decisions: readonly Decision[]): void {
-  // why an effect: the drafts live in the browser's storage, outside React.
   useEffect(
     function dropAnsweredDrafts() {
       for (const { id, answer } of decisions) if (answer !== null) writeStored(localStorage, answerDraftKeyOf(coordinatorId, id), null);

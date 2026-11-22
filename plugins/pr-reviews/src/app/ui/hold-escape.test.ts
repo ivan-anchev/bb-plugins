@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdEscape } from "./hold-escape.ts";
 
-// A key pressed on the page; `defaultPrevented` after dispatch is what bb's own Esc checks.
 function press(page: EventTarget, key: string): boolean {
   const event = Object.assign(new Event("keydown", { cancelable: true }), { key });
   page.dispatchEvent(event);

@@ -1,10 +1,3 @@
-// When the hover card shows, and for which row. One machine per list, so the card hands off warm from
-// row to row and the pointer can cross other rows on its way to it. No DOM, no React: the list feeds it
-// pointer and focus facts and it says which row's card is shown. Ported from the prototype,
-// which follows Zeron.
-// Zeron's card takes no keyboard; here focus holds a card as the pointer does, so a keyboard reader can
-// keep it open and work its rows (REVIEW.md: a popup stays while hovered or while its trigger has focus).
-
 /** Resting on a row this long opens its card. */
 export const DWELL = 550;
 /** Within this long of one card going, the next opens at once. */
@@ -29,23 +22,17 @@ export type CardIntentDeps = {
   returnFocus(): void;
 };
 
-/** The card itself, where the pointer or focus may be besides a row. */
 const CARD = Symbol("card");
-/** Where the pointer, or focus, is: a row's key, the card, or neither. */
 type Spot = string | typeof CARD | null;
 
 export class CardIntent {
   private readonly deps: CardIntentDeps;
   private shown: string | null = null;
   private waiting: string | null = null;
-  /** Each holds the card while on its row or on the card; it goes once neither does. */
   private pointer: Spot = null;
   private focus: Spot = null;
-  /** When the last card went; -Infinity after a cold close, so the next waits its full rest. */
   private goneAt = -Infinity;
-  /** Where the pointer last stood in the shown card's row before it left: the safe triangle's apex. */
   private exit: Point | null = null;
-  /** A row crossed on the way to the card, taken if the pointer settles on it. */
   private passing: string | null = null;
   private dwellTimer: ReturnType<typeof setTimeout> | undefined;
   private graceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -63,7 +50,6 @@ export class CardIntent {
   /** The pointer came onto a row. */
   overRow(row: string): void {
     this.pointer = row;
-    // why: crossing another row on the way to the open card is not resting on it.
     if (this.shown !== null && this.shown !== row && this.headingToCard()) {
       clearTimeout(this.graceTimer);
       this.passing = row;
@@ -128,8 +114,6 @@ export class CardIntent {
     this.hide(true);
   }
 
-  // ---------------------------------------------------------------- layer 2
-
   private rest(row: string): void {
     clearTimeout(this.graceTimer);
     if (this.shown === row || this.waiting === row) return;
@@ -139,7 +123,6 @@ export class CardIntent {
     this.dwellTimer = setTimeout(() => this.show(row), DWELL);
   }
 
-  /** Still on its way: wait. Stopped SETTLE ms, or turned away: take what is under it. */
   private settle(): void {
     clearTimeout(this.settleTimer);
     if (this.deps.probe().onCard) {
@@ -153,7 +136,6 @@ export class CardIntent {
     this.take();
   }
 
-  /** A crossing that ends off the rows and off the card left both: the card goes as any departure does. */
   private take(): void {
     this.passing = null;
     const under = this.deps.probe();
@@ -166,7 +148,6 @@ export class CardIntent {
     return this.exit !== null && edge !== null && insideTriangle(this.exit, edge, this.deps.probe().point);
   }
 
-  /** The row whose card is shown, or is waiting out its rest. */
   private cardRow(): string | null {
     return this.shown ?? this.waiting;
   }
@@ -175,7 +156,6 @@ export class CardIntent {
     return spot === CARD ? this.shown !== null : spot !== null && spot === this.cardRow();
   }
 
-  /** The pointer or focus left the card's row or the card: once neither holds it, a rest is cut short and a card goes after the grace. */
   private vacate(): void {
     if (this.holds(this.pointer) || this.holds(this.focus)) return;
     if (this.shown === null) this.hide(false);
@@ -203,7 +183,6 @@ export class CardIntent {
     this.waiting = null;
     this.passing = null;
     this.exit = null;
-    // why: only a card that went warms the next; a rest cut short leaves the clock as it was.
     if (this.shown !== null) {
       this.shown = null;
       this.goneAt = cold ? -Infinity : Date.now();

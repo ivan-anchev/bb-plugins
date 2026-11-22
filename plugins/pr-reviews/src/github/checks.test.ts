@@ -3,7 +3,6 @@ import { test } from "node:test";
 import { summarizeChecks, type CheckOutcome as Outcome } from "../contract.ts";
 import { statusCheckRollupSchema } from "./checks.ts";
 
-// Shaped as `gh pr view --json statusCheckRollup` prints them; the extra fields are gh's.
 type Check = { name: string; item: object };
 const checkRun = (status: string, conclusion: string): Check => ({
   name: `CheckRun ${status} ${conclusion || "(no conclusion)"}`,

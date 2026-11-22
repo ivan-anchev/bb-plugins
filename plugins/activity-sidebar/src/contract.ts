@@ -1,5 +1,3 @@
-// The app <-> server contract and the records it carries: a thread's sleep, and the Archived shelf's
-// count. Shared by server.ts and the app: pure zod plus defineRpcContract.
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
@@ -19,10 +17,6 @@ export type SleepRecord = z.infer<typeof sleepRecordSchema>;
 /** Every read of the sleeps carries it; every write invalidates it. */
 export const SLEEPS_TAG = "sleeps";
 
-/**
- * How many archived parents the Archived shelf would list: in all, and per project id.
- * why: the shelf loads its rows in pages, so its folded count can't come from the rows it holds.
- */
 const archivedCountSchema = z.object({
   total: z.number().int().nonnegative(),
   byProject: z.record(z.string(), z.number().int().positive()),

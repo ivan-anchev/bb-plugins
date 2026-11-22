@@ -21,7 +21,6 @@ for (const [at, text] of cases) {
   });
 }
 
-// Days from a day to a month back; timeAgo's words either side.
 const dayCases: [at: string, text: string][] = [
   ["2026-11-06T09:00:00Z", "3h ago"],
   ["2026-11-05T12:00:00Z", "1d ago"],

@@ -7,7 +7,6 @@ import { inOneHunk, linesLabel, quoteOf, refOf, spanBetween } from "./line-span.
 const PATH = " src/odd\tname.ts ";
 const COMMIT = "3f9c2ab";
 
-// Two hunks: the first changes line 3, the second adds a line after line 20.
 const FILE: DiffFile = {
   path: PATH,
   previousPath: null,

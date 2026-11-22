@@ -8,10 +8,6 @@ import type { Profile } from "../../../model/profile.ts";
 import { coordinatorIdSchema } from "../../../model/role.ts";
 import { PROJECT, sidebarThread } from "../../test-sidebar.ts";
 
-// The page in the panel of a regional manager not started yet, as bb mounts it: its profile above
-// bb's composer, whose message starts it. Edit opens the profile in place and saves it whole. A
-// started one's page opens its thread.
-
 const { ManagerPage } = await import("./manager-page.tsx");
 
 const COORDINATOR = coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10");
@@ -21,11 +17,6 @@ afterEach(() => {
   localStorage.clear();
 });
 
-/**
- * The page over a plugin holding one regional manager, not started unless told, which keeps every
- * profile it is sent, as setProfile does. A start binds its thread at once and replies once `replied`
- * settles, as the server's does.
- */
 function mount({ started = false, replied = Promise.resolve() }: { started?: boolean; replied?: Promise<void> } = {}) {
   const profileOf = { description: "Moves webhooks off cron.", avatar: { kind: "icon", icon: "Workflow" } } as const;
   const stored: Coordinator = { id: COORDINATOR, threadId: "thr_1", projectId: PROJECT.id, ...profileOf };
@@ -73,7 +64,6 @@ test("the page's heading is the regional manager's name, with its description", 
 test("Edit opens the profile in place on the name, and Save sends the changed name, description and icon, then closes it with the focus back on Edit", async () => {
   const { view, saves } = mount();
   const edit = await view.findByRole("button", { name: "Edit" });
-  // why focus first: a click focuses the button in a browser, and jsdom's doesn't.
   edit.focus();
   fireEvent.click(edit);
   const name = view.getByRole("textbox", { name: "Name" });

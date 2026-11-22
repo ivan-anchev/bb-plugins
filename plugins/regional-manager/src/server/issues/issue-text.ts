@@ -1,6 +1,3 @@
-// What the issue and agent tools say to the regional manager. An issue is always named by its id
-// and an agent by its id, with a link to its thread, so the manager can both act on them and point
-// the user at them.
 import { boardGroups, LANE_LABELS, type BoardItem } from "../../model/board/board-groups.ts";
 import { decisionsText, type IssueDecision } from "../../model/decision.ts";
 import type { Issue, IssueId } from "../../model/issue/issue.ts";
@@ -15,7 +12,6 @@ import type { FinalCheck } from "../../model/verdict/check.ts";
 import { recipientsText, type Withdrawn } from "./quiet.ts";
 import type { IssueRead } from "./views/issue-facts.ts";
 
-/** The most of an agent's latest answer issue_read returns. */
 const OUTPUT_BUDGET_CHARS = 12_000;
 
 const threadLink = (threadId: string | null): string => (threadId === null ? "no thread" : `@thread:${threadId}`);
@@ -33,7 +29,6 @@ export function boardText(reads: readonly IssueRead[] | { error: string }): stri
   return ["## Board", ...lanes, readyLine(reads.map(({ view }) => view))].join("\n\n");
 }
 
-/** A row's lines in its lane: an issue's, each of its sub-issues indented under it. why no decision: catch-up lists them in their own section. */
 function laneLines(item: BoardItem<IssueRead>): string[] {
   switch (item.kind) {
     case "decision":
@@ -54,13 +49,11 @@ function rowLine({ view, agent, threadId, branch }: IssueRead): string {
   return `- ${issue.id} "${issue.title}" (${PIPELINES[issue.kind].label}; ${held}${under}${branch === null ? "" : `, on branch \`${branch}\``}): ${headlineText(view)}${blockedText(view.blockedBy, "; blocked by ")}`;
 }
 
-/** The issues in Todo that nothing blocks: those an agent can start on without waiting. */
 function readyLine(views: readonly IssueView[]): string {
   const ready = views.filter(isReady).map(({ issue }) => issue.id);
   return `Ready: ${ready.length === 0 ? "none" : ready.join(", ")} (in Todo, no sub-issues, and nothing they or their parent depend on is open).`;
 }
 
-/** The issues as `BBP-2 (Todo), BBP-4 (In progress)`, after `lead`; nothing when there are none. */
 const blockedText = (related: readonly Related[], lead: string): string => (related.length === 0 ? "" : `${lead}${relatedText(related)}`);
 
 const relatedText = (related: readonly Related[]): string => related.map(({ id, status }) => `${id} (${STATUS_LABELS[status]})`).join(", ");
@@ -86,7 +79,6 @@ export function startText(issueId: Issue["id"], outcome: Exclude<StartOutcome, {
         case "cut": {
           const { from, head, pr } = carried;
           const opens = pr === null ? "" : ` ${from}'s PR #${pr} stays on its branch; ${agentId} opens its own.`;
-          // why a check, and the failure: bb cuts the branch after it answers the spawn, so the ref may have moved by then, and a base it can't resolve fails the thread then (bb-facts P2a).
           const checks = head === null ? `No commit of ${from}'s is on record for ${agentId} to check its branch against.` : `${agentId} checks that commit is on its branch before it changes anything, and hands off blocked if it isn't.`;
           return `${started} ${cutText(carried)}, ${runs}. ${checks} Nothing ${from} left uncommitted comes with it; if bb can't cut that branch, its thread fails and you are woken.${opens} ${earlier} ${ends}`;
         }
@@ -104,18 +96,15 @@ export function startText(issueId: Issue["id"], outcome: Exclude<StartOutcome, {
   }
 }
 
-/** Where a joined agent works, in words: `in a1's worktree, on its branch `x`, with PR #44`. */
 function joinedText({ from, placement, branch, pr }: Extract<Carried, { kind: "joined" }>): string {
   return `in ${from}'s ${placementName(placement)}${branch === null ? "" : `, on its branch \`${branch}\``}${pr === null ? "" : `, with PR #${pr}`}`;
 }
 
-/** Where a cut agent works, in words: `in a new worktree, on a new branch cut from a1's `origin/x` expecting 4be0a17`. */
 function cutText(carried: Extract<Carried, { kind: "cut" }>): string {
   const { from, placement, head } = carried;
   return `in a new ${placementName(placement)}, on a new branch cut from ${from}'s \`${refOf(carried)}\`${head === null ? "" : ` expecting ${head.slice(0, 7)}`}`;
 }
 
-/** Where bb was to start the agent whose thread it refused, in words. */
 function whereFailed(carried: Carried): string {
   switch (carried.kind) {
     case "joined":
@@ -127,7 +116,6 @@ function whereFailed(carried: Carried): string {
   }
 }
 
-/** What to do after bb refused a new agent's thread. */
 function retryText(carried: Carried | null): string {
   if (carried === null) return "call agent_start again, or tell the user";
   const clean = `start clean with agent_start and from: "default"`;
@@ -141,14 +129,9 @@ function retryText(carried: Carried | null): string {
   }
 }
 
-/** What becomes of a replaced agent's thread: the plugin never archives it. */
 const replacedText = (replaced: string): string =>
   `${replaced}'s thread stays stopped, not archived, which keeps its environment alive until someone archives it.`;
 
-/**
- * Your messages to the issue's agents that the start took back from bb's queue, which they never
- * got, quoted, each under the agent it was to when they were to more than one ("" when none).
- */
 function withdrawnText(withdrawn: readonly Withdrawn[]): string {
   if (withdrawn.length === 0) return "";
   const one = withdrawn.length === 1;
@@ -157,7 +140,6 @@ function withdrawnText(withdrawn: readonly Withdrawn[]): string {
   return `\n\n${one ? "Your message" : `Your ${withdrawn.length} messages`} to ${to} still waited in bb's queue, so ${one ? "it was" : "they were"} taken back before anything started, and ${to} never got ${one ? "it" : "them"}:\n\n${quoted.join("\n\n")}`;
 }
 
-/** What a start on a blocked issue adds: it started anyway, with nothing of what blocks it. */
 const startedBlockedText = (issueId: IssueId, blockedBy: readonly Related[]): string =>
   blockedBy.length === 0 ? "" : ` ${issueId} is blocked by ${relatedText(blockedBy)}: its agent started anyway, and has nothing of that work but what its brief names.`;
 
@@ -220,14 +202,12 @@ export function issueText(
   ].join("\n\n");
 }
 
-/** The criteria under their heading: a verified kind's are done-criteria, any other's the questions its report answers. */
 function criteriaText({ kind, doneCriteria }: Issue): string {
   const verified = isVerified(kind);
   const numbered = doneCriteria.map((criterion, i) => `${i + 1}. ${criterion}`).join("\n");
   return `### ${verified ? "Done when" : "Questions"}\n\n${doneCriteria.length > 0 ? numbered : verified ? "No criteria yet." : "None."}`;
 }
 
-/** Its parent and sub-issues, what it depends on and what it blocks, each with its status. */
 function relationsText({ parent, subIssues, dependsOn, blocks }: Relations): string {
   return [
     `Parent: ${parent === null ? "none" : relatedText([parent])}.`,
@@ -237,13 +217,11 @@ function relationsText({ parent, subIssues, dependsOn, blocks }: Relations): str
   ].join("\n");
 }
 
-/** Who checks its done handoffs. */
 function verifierLine({ kind, verifier }: Issue): string {
   if (!isVerified(kind)) return `None: nothing verifies a ${PIPELINES[kind].label.toLowerCase()} issue.`;
   return verifier === null ? "None named: the plugin picks one independent of its agent." : `Named: ${executionText(verifier)}.`;
 }
 
-/** The text as a sentence: with a full stop, unless an agent's summary ending it already has one. */
 const sentence = (text: string): string => (/[.!?]$/.test(text) ? text : `${text}.`);
 
 function agentLine(agent: Agent, liveThreadId: string | null): string {

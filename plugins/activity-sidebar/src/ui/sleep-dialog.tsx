@@ -1,5 +1,3 @@
-// Sleep → Custom…: a day and a time of your own, from a minute ahead, opening on tomorrow at 9.
-// bb's host shims Radix, so the dialog shares its overlay layer.
 import { Close, Content, Description, Overlay, Portal, Root, Title } from "@radix-ui/react-dialog";
 import { useState, type FormEvent } from "react";
 import { useMinute } from "../data/use-minute.ts";
@@ -32,9 +30,6 @@ export function SleepDialog({ open, onOpenChange, onSleep, onCloseAutoFocus }: P
   );
 }
 
-// ------------------------------------------------------------------ layer 2
-
-/** Mounted per opening, so each one starts again on tomorrow at 9. */
 function SleepForm({ onSleep }: { onSleep(until: number): void }) {
   const now = useMinute();
   const [value, setValue] = useState(() => localInputValue(tomorrowMorning(new Date(now))));
@@ -42,7 +37,6 @@ function SleepForm({ onSleep }: { onSleep(until: number): void }) {
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    // why: checked against the present, not the list's minute, so a moment just passed is refused.
     const at = customUntil(value, Date.now());
     if (at !== null) onSleep(at);
   };
@@ -74,7 +68,6 @@ function SleepForm({ onSleep }: { onSleep(until: number): void }) {
   );
 }
 
-/** "Sat, Nov 14 at 9:00 AM": what Sleep will do (Zeron's shell.activity.sleep.until_when). */
 function untilWhen(at: number): string {
   return `${weekday(at)}, ${monthDay(at)} at ${clock(at)}`;
 }

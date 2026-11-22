@@ -1,13 +1,3 @@
-// A review thread from GitHub where a diff draws it, as Zeron draws a conversation: a band of the
-// page's background across the diff, edge to edge, with its comments in order, each an avatar and a
-// line of who and when over a borderless bubble, a timeline line joining the avatars. A thread
-// whose lines are stale says so with a warning badge on its first comment ("Outdated"). Then Reply
-// and Ask about this, which open the diff's one comment box under the thread, on the Send as mode
-// each names. A thread at its file
-// that lost its lines opens with them, drawn as the diff draws code. A long thread shows its first
-// and latest comments with "N more" between; a bot's comment is clamped to three lines; a resolved
-// thread is one row that opens it. The band draws only its bottom edge: the diff's note draws the
-// top (pr-diff.tsx).
 import { useMemo, useState, type ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { FileThread } from "../../comments/place-threads.ts";
@@ -36,10 +26,6 @@ type ReviewThreadCardProps = {
   onReply: OpenReply;
 };
 
-// How the thread folds comes from each read (foldOf); only what the reader opened is kept. Focus
-// stays in the thread as it folds and unfolds (REVIEW.md): the resolved row hands it to Collapse
-// and back, and "N more" to the first comment it hid. A thread the reader asked to see from the
-// Summary tab opens, as if they had opened it, and takes focus once drawn.
 export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: ReviewThreadCardProps) {
   const [opened, setOpened] = useState<Opened>({ thread: false, middle: false });
   const resolvedFocus = useFocusHandOff();
@@ -55,8 +41,6 @@ export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: Rev
       ref={sectionRef}
       tabIndex={-1}
       aria-label={`Review thread by ${thread.comments[0].author.login}`}
-      // why `minmax(0,1fr)`: an implicit `auto` track grows to the outdated code's widest line, so
-      // the code would widen the thread, not scroll in it.
       className={`${BAND} grid grid-cols-[minmax(0,1fr)] gap-4 pb-3 ${excerpt === null ? "pt-3" : ""} outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset`}
     >
       {excerpt !== null && (
@@ -112,31 +96,24 @@ export function ReviewThreadCard({ thread, atFile, prAuthor, box, onReply }: Rev
   );
 }
 
-// The band: the page's background, as under Zeron's conversation, with a hairline under it.
 const BAND = "min-w-0 border-b border-border bg-background text-sm leading-5";
 
-// Why a thread at its file is there, when its lines are stale: a thread on the whole file is not.
 const STALENESS = { file: null, outdated: "Outdated", elsewhere: "On another commit" } as const satisfies Record<FileThread["why"], string | null>;
 
-/** The lines a thread at its file was written on, which it opens with; null under its lines, on the file, or with none kept. */
 function excerptOf(thread: ReviewThread, atFile: FileThread | null): NumberedLine[] | null {
   if (atFile === null || atFile.why === "file" || thread.subject.kind !== "lines" || thread.subject.excerpt.length === 0) return null;
   return thread.subject.excerpt;
 }
 
-/** A warning badge, as bb's state badges draw one: the warning colour on a 10% wash of it. */
 const WarningBadge = ({ children }: { children: string }) => (
   <span className="inline-flex h-4 shrink-0 items-center rounded-sm bg-current/10 px-1 text-[11px] leading-3.5 font-medium text-warning-text">{children}</span>
 );
 
 type CommentsProps = {
   thread: ReviewThread;
-  /** Why the thread's lines are stale, said by a badge on its first comment, or null. */
   staleness: string | null;
-  /** The comments the fold shows, and how many it hides after the first. */
   shown: GitHubComment[];
   hidden: number;
-  /** From "N more" to the second comment, the first it hid. */
   focus: FocusHandOff;
   prAuthor: string | null;
   onShowAll(): void;
@@ -149,7 +126,6 @@ function Comments({ thread, staleness, shown, hidden, focus, prAuthor, onShowAll
     <ol className="grid gap-4 px-3">
       {shown.map((comment, index) => (
         <li key={comment.id} className="relative grid gap-4">
-          {/* The timeline, as Zeron draws one: avatar to avatar, a 4px gap at each end. */}
           {index < shown.length - 1 && <span aria-hidden className="absolute top-7 -bottom-3 left-3 w-px -translate-x-1/2 bg-border" />}
           <GitHubCommentView
             ref={comment === second ? focus.to : undefined}
@@ -169,8 +145,6 @@ function Comments({ thread, staleness, shown, hidden, focus, prAuthor, onShowAll
   );
 }
 
-// "Resolved · name · first line", and the count when there are replies. The whole row opens it.
-// `focus`: Collapse hands its focus to the row, and the row to Collapse.
 function ResolvedRow({ thread, focus, onOpen }: { thread: ReviewThread; focus: FocusHandOff; onOpen(): void }) {
   const [first] = thread.comments;
   const count = thread.comments.length;

@@ -1,5 +1,3 @@
-// The Guide tab while there is no guide: one screen per review state, each a
-// heading, a line of context, and its actions.
 import type { ReactNode } from "react";
 import type { experimental_PluginRpcCallError as RpcCallError } from "@get-bb/plugin-sdk/app";
 import type { ReviewState } from "../../contract.ts";

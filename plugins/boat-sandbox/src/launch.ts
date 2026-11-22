@@ -1,7 +1,3 @@
-// What a thread sandbox launches with: the machine inputs a thread may pass (`--machine-inputs`), the
-// defaults from settings, the templates and environments boat has, and the one rule that turns the
-// three into a launch. A preset is one of boat's sandbox `type` values; a template is a boat saved
-// snapshot; an environment decides the sign-ins, GitHub token and secrets the sandbox gets.
 import { z } from "zod";
 import { sandboxEnvironment, savedSnapshot, type SandboxEnvironment, type SavedSnapshot } from "./boat/wire.ts";
 import { shellQuote } from "./shell.ts";
@@ -39,7 +35,6 @@ export const machineInputs = z
 
 export type MachineInputs = z.output<typeof machineInputs>;
 
-/** Settings → boat Sandbox, parsed once. A null template is boat's stock image; a null environment is boat's default. */
 const launchDefaults = z.object({
   template: z.string().nullable(),
   environment: z.string().nullable(),

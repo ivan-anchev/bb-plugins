@@ -5,15 +5,6 @@ import { ghPostRefusalFor, ghRefusalFor, ghStateRefusalFor } from "./gh-refusal.
 import { parseHostCommandFailure, type HostCommandFailure } from "./host-command.ts";
 import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 
-// Each fixture is the rejection of a real gh run against the throwaway PR #59 of
-// ivan-anchev/bb-plugins (or a repo or PR that does not exist), or, for the state changes, against
-// a merged PR of a throwaway repo since deleted, saved field for field: exit code, killed, stdout,
-// stderr. Recorded with gh 2.97.0. draft-merged and ready-closed ran against a merged and a closed
-// public PR, and the *-eof fixtures through a proxy that drops every connection; their repo is
-// renamed octo-org/widgets.
-// graphql-submit-refused and comment-while-review-pending-422 are from PR #2 of the private sandbox
-// ivan-anchev/pr-reviews-review-mode-sandbox, with a pending review open; merge-head-moved is a
-// merge of its PR #4 by a head a push had since replaced, recorded with gh 2.97.0.
 const recorded = (name: string) => parseHostCommandFailure(JSON.parse(readFileSync(new URL(`./fixtures/gh-failures/${name}.json`, import.meta.url), "utf8")));
 
 const refusalOf = (refusalOrFailure: Refusal | HostCommandFailure) => {
@@ -69,8 +60,6 @@ test("a 422 with no response to read keeps gh's words, without its prefix and st
   assert.equal(ghRefusalFor(failure).message, "GitHub refused the comment: Validation Failed. The lines may no longer be in this commit's diff.");
 });
 
-// Not recorded: the test account owns the repo, so GitHub lets it comment on a locked PR and never
-// limits it in a test this size. These follow gh's "gh: <GitHub's message> (HTTP <status>)" shape.
 test("a locked conversation, no permission, and rate limits (shape-only fixtures)", () => {
   const failure = (stderr: string) => parseHostCommandFailure({ code: 1, stderr });
 
@@ -113,7 +102,6 @@ test("a merge after a push moved the PR's head asks to see the new commits first
   });
 });
 
-// gh prints the same "is closed" line for a merged PR as for a closed one, for ready and draft alike.
 test("marking ready or converting to draft a PR no longer open says so, whether it was closed or merged", () => {
   const notOpen = { code: "invalid", message: "This pull request is no longer open on GitHub, so it can't be marked ready or converted to draft. Refresh to see it." };
 
@@ -130,8 +118,6 @@ test("a state change the timeout stopped may have gone through: it says so; one 
   }
 });
 
-// Not recorded: every token at hand can change the throwaway repo's PRs. These follow the shape gh
-// pr prints for a GraphQL error, "GraphQL: <GitHub's message> (<mutation>)", with no HTTP status.
 test("no permission to change a PR's state (shape-only fixtures)", () => {
   const noPermission = { code: "forbidden", message: "Your GitHub account doesn't have permission to do that in this repository." };
   const failure = (stderr: string) => parseHostCommandFailure({ code: 1, stderr });

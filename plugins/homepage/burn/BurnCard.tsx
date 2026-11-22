@@ -1,5 +1,3 @@
-// The Burn card: the flame, "Burn" and a Week/Month switch on top; spend over tokens at the bottom,
-// each with its change against the period before. Or one line saying why Burn can't be read.
 import type { BurnRange, BurnTotals } from "../contract.ts";
 import { describeChange, formatMoney, formatTokens, type Change } from "./format.ts";
 
@@ -76,7 +74,6 @@ function Metric({ label, value, change }: { label: string; value: string; change
   );
 }
 
-/** The ready card's two metrics as blocks on lines of the same heights, so nothing moves when the numbers land. */
 function Skeleton() {
   return (
     <div className="bn-body" aria-hidden="true">
@@ -98,7 +95,6 @@ function Skeleton() {
   );
 }
 
-/** Burn's flame, at the size and weight of the homepage's other card icons. */
 function Flame() {
   return (
     <svg

@@ -6,7 +6,6 @@ function thread(paneId: string, threadId: string): Pane {
   return { type: "pane", paneId, content: { kind: "thread", projectId: "proj_a", threadId } };
 }
 
-/** [A 0.6 | [B 0.3 / C 0.7]], C focused: the layout-restore probe's target. */
 function target(): Layout {
   return {
     root: {
@@ -109,7 +108,6 @@ test("withPaneIdsApart leaves the layout as it is with no other layout, or no id
   assert.deepEqual(withPaneIdsApart(target(), single({ kind: "new-thread" }, "pane-q"), "t1"), target());
 });
 
-/** Every thread but `gone`. */
 const without = (...gone: string[]) => (threadId: string) => !gone.includes(threadId);
 
 test("withoutThreads collapses a split left with one child into it, which takes the split's place and size", () => {

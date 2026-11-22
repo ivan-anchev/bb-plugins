@@ -8,7 +8,6 @@ import { foldTaskEvents, normalise } from "./normalise.ts";
 import { batchCensus, census, elapsed, metaParts, selectBatches, selectRoster, span } from "./roster.ts";
 import { trailItems } from "./work-groups.ts";
 
-// Real delegates from the fixture (see normalise.test.ts for how it was taken).
 const fixture: { rows: TimelineRow[]; events: EventRow[] } = JSON.parse(
   readFileSync(new URL("./fixtures/claude-thread.json", import.meta.url), "utf8"),
 );
@@ -17,11 +16,11 @@ const real = normalise(fixture.rows, foldTaskEvents(new Map(), fixture.events), 
 test("a batch is a user prompt and every delegate launched until the next one: other turns fold into it", () => {
   const turns = [
     prompt("t1", 90, "ok, fix the build"),
-    turn("t2", 190, null), // Claude Code resuming when a background agent finishes
-    turn("t3", 250, { from: "other", text: "reviewer 05 r1 completed" }), // a bb system notice
+    turn("t2", 190, null),
+    turn("t3", 250, { from: "other", text: "reviewer 05 r1 completed" }),
     prompt("t4", 290, "ship it"),
-    prompt("t5", 300, "and the docs?"), // sent while t4 runs
-    prompt("t6", 500, "thanks"), // launches nothing: no batch
+    prompt("t5", 300, "and the docs?"),
+    prompt("t6", 500, "thanks"),
   ];
   const delegates = [
     delegate("new-b", "t4", 320, { status: "completed", endedAt: 400, report: null }),
@@ -31,7 +30,6 @@ test("a batch is a user prompt and every delegate launched until the next one: o
     delegate("new-a", "t4", 295, { status: "completed", endedAt: 400, report: "ok" }),
   ];
   const batches = oldestFirst(delegates, turns);
-  // why: new-b is t4's, but launched at 320, after the user's next prompt at 300, so it is that prompt's.
   assert.deepEqual(batches.map((b) => [b.id, b.startedAt, b.label, b.delegates.map((d) => d.id)]), [
     ["t1", 90, "fix the build", ["old-done", "resumed", "notice"]],
     ["t4", 290, "ship it", ["new-a"]],
@@ -41,7 +39,6 @@ test("a batch is a user prompt and every delegate launched until the next one: o
 });
 
 test("a batch ends at the next user prompt even for a delegate of the turn before it: a queued prompt starts its own batch", () => {
-  // The user queues "and the tests" at 200 while t1 runs; t1 launches one more subagent at 250; t2 starts at 260.
   const turns = [prompt("t1", 100, "fix the build"), prompt("t2", 200, "and the tests")];
   const batches = oldestFirst([
     delegate("first", "t1", 150, { status: "completed", endedAt: 160, report: null }),
@@ -54,7 +51,6 @@ test("a batch ends at the next user prompt even for a delegate of the turn befor
 });
 
 test("a prompt steered into a running turn starts its own batch from its own time", () => {
-  // The user steers "and the tests" into t1 at 200; bb keeps one turn, t1, with both messages.
   const t1: Turn = { ...prompt("t1", 100, "fix the build"), messages: [said("t1", 100, "user", "fix the build"), said("t1-steer", 200, "user", "and the tests")] };
   const batches = oldestFirst([
     delegate("first", "t1", 150, { status: "completed", endedAt: 160, report: null }),
@@ -224,14 +220,14 @@ test("span is wall-clock from the first start to now while any runs", () => {
 
 test("span of settled delegates runs from the first start to the last end, not the sum of runs", () => {
   const delegates = [
-    delegate("a", "t", 1_000, { status: "completed", endedAt: 4_000, report: null }), // ran 3 s
-    delegate("b", "t", 2_000, { status: "failed", endedAt: 6_000, error: null }), // ran 4 s, overlapping
+    delegate("a", "t", 1_000, { status: "completed", endedAt: 4_000, report: null }),
+    delegate("b", "t", 2_000, { status: "failed", endedAt: 6_000, error: null }),
   ];
   assert.equal(span(delegates, 99_000), 5_000);
 });
 
 test("a running row's detail is the trail's latest line in bb's compact words, never a raw command", () => {
-  const d: Delegate = { ...realById("dafb9611c6-i5"), state: { status: "running" } }; // its steps end: reasoning, command, reasoning, handback
+  const d: Delegate = { ...realById("dafb9611c6-i5"), state: { status: "running" } };
   const latest = trailItems(d).at(-1);
   assert.ok(latest?.kind === "group", "fixture premise: the latest line folds several steps");
   assert.equal(detailLine(d), latest.label);
@@ -243,7 +239,7 @@ test("a running row with no steps yet reads Starting…", () => {
 });
 
 test("a settled row's detail is its outcome: the report's or error's first line, else a fixed word", () => {
-  assert.equal(detailLine(realById("dafb9611c6-i4")), "t3code subagent visuals: findings"); // report opens "# t3code subagent visuals: findings"
+  assert.equal(detailLine(realById("dafb9611c6-i4")), "t3code subagent visuals: findings");
   assert.equal(detailLine(delegate("c", "t", 1, { status: "completed", endedAt: 2, report: null })), "Finished without a report");
   assert.equal(detailLine(delegate("f", "t", 1, { status: "failed", endedAt: 2, error: "git clone exited with 128\nfatal: TLS" })), "git clone exited with 128");
   assert.equal(detailLine(delegate("f", "t", 1, { status: "failed", endedAt: 2, error: null })), "Failed");
@@ -256,7 +252,7 @@ test("elapsed runs to now while running and to the end once settled", () => {
 });
 
 test("a settled background agent's meta line: started, ran, steps without reasoning, tool calls, tokens", () => {
-  const d = realById("dafb9611c6-i4"); // usage 83,485 tokens over 22 tool uses
+  const d = realById("dafb9611c6-i4");
   assert.ok(d.steps && d.steps.length > 11, "fixture premise: reasoning rows beside the 11 counted steps");
   const startedAt = new Date(2026, 10, 5, 13, 58).getTime();
   const settled: Delegate = { ...d, startedAt, state: { status: "completed", endedAt: startedAt + 288_000, report: null } };
@@ -279,7 +275,6 @@ test("a delegate whose provider sends no child rows shows no step count; a big o
   assert.deepEqual(metaParts(big), ["started 13:00", "ran 35s", "0 steps", "310 tool calls", "1.2M tokens"]);
 });
 
-/** The tab's batches in the order prompts were sent. */
 function oldestFirst(delegates: readonly Delegate[], turns: readonly Turn[]) {
   return selectBatches(delegates, turns).toReversed();
 }
@@ -290,12 +285,10 @@ function realById(id: string): Delegate {
   return d;
 }
 
-/** A turn the message started, sent as it began; null: the agent continued on its own. */
 function turn(id: string, startedAt: number, message: Pick<TurnMessage, "from" | "text"> | null): Turn {
   return { id, startedAt, messages: message ? [said(id, startedAt, message.from, message.text)] : [] };
 }
 
-/** A turn the user's own prompt started. */
 function prompt(id: string, startedAt: number, text: string): Turn {
   return turn(id, startedAt, { from: "user", text });
 }

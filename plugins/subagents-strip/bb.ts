@@ -1,6 +1,3 @@
-// bb's row and event types, and the SDK slice the thread source reads, named
-// once. The SDK does not export them by name, so they are derived from the
-// exported browser client and follow whatever SDK is installed.
 import type { PluginBrowserBbSdk } from "@get-bb/plugin-sdk/app";
 
 type Threads = PluginBrowserBbSdk["threads"];
@@ -8,8 +5,6 @@ type Threads = PluginBrowserBbSdk["threads"];
 /** One stored thread event. */
 export type EventRow = Awaited<ReturnType<Threads["events"]["list"]>>[number];
 
-// why: `timeline` is overloaded; ReturnType takes the last overload, the
-// full | delta union, so pick the full response by its `rows`.
 type TimelineFull = Extract<Awaited<ReturnType<Threads["timeline"]>>, { rows: unknown }>;
 
 export type TimelineRow = TimelineFull["rows"][number];
@@ -33,7 +28,6 @@ export type TurnRow = Extract<TimelineRow, { kind: "turn" }>;
 export type AssistantRow = Extract<StepRow, { kind: "conversation"; role: "assistant" }>;
 /** A message that starts a turn: the user's, another agent's, or bb's own system message. */
 export type UserRow = Extract<StepRow, { kind: "conversation"; role: "user" }>;
-// why: the operation row's operationKind is an enum, not a literal, so Extract alone cannot pick reasoning.
 export type ReasoningRow = Extract<StepRow, { systemKind: "operation" }> & { operationKind: "reasoning" };
 /** bb's "Stopped manually" row: what an interrupted turn leaves in place of a turn group. */
 export type InterruptRow = Extract<StepRow, { systemKind: "operation" }> & { operationKind: "thread-interrupted" };

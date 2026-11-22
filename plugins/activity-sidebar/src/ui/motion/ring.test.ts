@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ringDashes } from "./ring.ts";
 
-/** Eight even dashes, 21.9° each, centred on the eighths from 12 o'clock: Zeron's glyph exactly. */
 const STILL = Array.from({ length: 8 }, (_, i) => ({ from: 45 * i - 10.95, to: 45 * i + 10.95, lift: 0 }));
 
 const round = (dashes: ReturnType<typeof ringDashes>) => dashes.map((d) => ({ from: +d.from.toFixed(6), to: +d.to.toFixed(6), lift: +d.lift.toFixed(6) }));

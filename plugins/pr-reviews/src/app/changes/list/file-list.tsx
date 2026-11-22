@@ -1,7 +1,3 @@
-// The Changes tab's list (GitHub's Files changed, bb's own Changes panel): every listed file's
-// card, top to bottom in the tree's order, in one scroll region that is the list's one tab stop.
-// A diff draws as the reader nears its file (file-section.tsx). A jump scrolls a file's card to
-// the top; as the reader scrolls, the list reports the file they are on.
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefCallback, type RefObject } from "react";
 import type { PrHeadTarget } from "../../queries.ts";
 import type { DiffSettings } from "../../diff/diff-options.ts";
@@ -26,7 +22,6 @@ type FileListProps = {
 
 type Elements = { region: RefObject<HTMLDivElement | null>; cards: RefObject<HTMLDivElement | null> };
 
-// Memoised: the panel re-renders as the tree follows the reader, which changes nothing here.
 export const FileList = memo(function FileList({ ref, files, head, settings, jump, onCurrentFile }: FileListProps) {
   const [watcher] = useState(approachWatcher);
   const region = useRef<HTMLDivElement | null>(null);
@@ -57,14 +52,8 @@ export const FileList = memo(function FileList({ ref, files, head, settings, jum
   );
 });
 
-// What the reader does to scroll the list themselves, which ends a jump's hold.
 const READER_SCROLLS = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
 
-// A jump scrolls its file's card to the list's top, and holds the reader on that file until they
-// scroll themselves: a card near the list's end can't reach the top, and the diffs drawing above
-// it move the list as they draw. Returns the hold. A jump to a file the filters hide does nothing.
-// A jump waits for the list to be shown: the page keeps the tab mounted under another, where the
-// list has no size, as when it opens on the remembered file under the Summary tab.
 function useJumps({ region, cards }: Elements, files: readonly TreeFile[], jump: Jump | null): RefObject<boolean> {
   const held = useRef(false);
   const applied = useRef<Jump | null>(null);
@@ -96,12 +85,8 @@ function useJumps({ region, cards }: Elements, files: readonly TreeFile[], jump:
   return held;
 }
 
-// The line the reader is on: under a card's sticky header, once it has reached the top.
 const READING_LINE = 40;
 
-// The file the reader is on, reported as they scroll, once a frame at most, and as the listed
-// files or the list's size change, as when its tab shows, unless a jump holds it. A hidden list
-// has no size and reports nothing.
 function useCurrentFile({ region, cards }: Elements, files: readonly TreeFile[], held: RefObject<boolean>, onCurrentFile: (treePath: string) => void) {
   useEffect(() => {
     if (files.length === 0) return;
@@ -130,7 +115,6 @@ function useCurrentFile({ region, cards }: Elements, files: readonly TreeFile[],
   }, [region, cards, files, held, onCurrentFile]);
 }
 
-/** Runs `show` now if `element` has a size, or once it has one; returns what cancels the wait. */
 function whenShown(element: HTMLElement, show: () => void): (() => void) | undefined {
   if (element.clientHeight > 0) {
     show();
@@ -145,20 +129,11 @@ function whenShown(element: HTMLElement, show: () => void): (() => void) | undef
   return () => sized.disconnect();
 }
 
-/** Each file's offset in the list, in order. */
 function topsOf(region: HTMLElement, cards: HTMLElement): number[] {
   const offset = region.scrollTop - region.getBoundingClientRect().top;
   return Array.from(cards.children, (card) => card.getBoundingClientRect().top + offset);
 }
 
-// why a block, not a flex column: a diff would shrink to the pane as a flex item and scroll
-// itself, out of reach of the pane's tab stop, since the keys scroll only the focused element and
-// its ancestors. As a block each takes its full height and the pane scrolls them. The ring sits
-// inside: the pane runs to the split's edges. Its padding is bb's Changes panel's around the
-// file's card, less on the tree's side, where no divider shows.
-// why the space above the first card is a margin, outside what scrolls: a card's header sticks at
-// the pane's top edge, so it sits there from the start and is stuck at once, with no space above
-// it for the code to scroll through.
 function ListPane({ ref, children }: { ref: RefCallback<HTMLDivElement>; children: ReactNode }) {
   return (
     <div

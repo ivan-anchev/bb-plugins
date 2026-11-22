@@ -13,7 +13,6 @@ function attached(n: number, mimeType: Attachment["mimeType"]): Attachment {
   return { id: attachmentIdSchema.parse(`att_00000000-0000-4000-8000-${String(n).padStart(12, "0")}`), name: `file-${n}`, mimeType, sizeBytes: 1_000 };
 }
 
-/** Links the thread "Burn weekly", then "Spend". */
 const LINKED_TEXT = "check @Burn weekly later, see @Spend";
 const LINKS: NoteBody["mentions"] = [
   { threadId: "thr_weekly", from: 6, to: 18 },

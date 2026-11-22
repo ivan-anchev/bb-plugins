@@ -1,6 +1,3 @@
-// What bb can run where a thread will run: its providers, and a provider's models, read by bb's own
-// routing (an environment, a machine, or neither for bb's primary machine). One read per question,
-// so a refusal and a verifier's choice see the same catalog.
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
 import { executionOf, runnableText, type CatalogModel, type CatalogRouting, type Execution, type ExecutionFacts, type RequestedExecution } from "../../model/execution.ts";
 
@@ -29,7 +26,6 @@ export async function resolvedExecution(bb: CatalogBb, routing: CatalogRouting, 
   return { refused: `${resolved.refused} ${runnableText(await runnableThere(bb, routing, requested.providerId, facts))}` };
 }
 
-/** The providers bb lists as available where `routing` points and loads models of there. why the models: bb lists one whose executable is missing as available. */
 async function runnableThere(bb: CatalogBb, routing: CatalogRouting, requestedId: string, { providers, models }: ExecutionFacts): Promise<string[]> {
   const loaded = await Promise.all(
     providers.filter(({ available }) => available).map(async ({ id }) => ((id === requestedId ? models : await modelsOf(bb, routing, id)).length > 0 ? [id] : [])),

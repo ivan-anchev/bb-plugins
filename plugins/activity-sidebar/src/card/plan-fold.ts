@@ -1,6 +1,3 @@
-// The card's plan, as Zeron's todo panel has it: "Todo
-// done/total", then the steps in their order. Past six it folds to three, the step in progress and one
-// either side, with "N earlier" / "N later" opening the rest. Pure.
 import type { PluginBrowserBbSdk } from "@get-bb/plugin-sdk/app";
 
 /** bb's plan for a thread under way (its `pendingTodos`), typed as `status.get` answers it; the timeline summary the card reads answers the same. */
@@ -27,9 +24,6 @@ export function foldPlan(todos: Todos, open: boolean): PlanView | null {
   return { done, total: steps.length, earlier: from, steps: steps.slice(from, to), later: steps.length - to };
 }
 
-// ------------------------------------------------------------------ layer 2
-
-/** The step in progress, else the first pending, else (all done) the second to last, so the last three show. */
 function focusOf(steps: readonly PlanStep[]): number {
   const doing = steps.findIndex((step) => step.state === "doing");
   if (doing >= 0) return doing;
@@ -47,7 +41,6 @@ function stepState(status: Todos["items"][number]["status"]): StepState {
       return "pending";
     default:
       status satisfies never;
-      // why: a status a newer bb adds reads as not done yet rather than breaking the card.
       return "pending";
   }
 }

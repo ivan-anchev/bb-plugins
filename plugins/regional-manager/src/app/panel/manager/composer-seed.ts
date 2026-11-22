@@ -1,4 +1,3 @@
-// Where a regional manager's thread starts, in the composer on its page, unless the user picks otherwise.
 import type { NewThreadComposerProps, PluginSidebarProject, PluginSidebarThreadsState } from "@get-bb/plugin-sdk/app";
 
 export type ComposerSeed = Pick<NewThreadComposerProps, "defaultProjectId" | "defaultEnvironment">;

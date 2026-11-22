@@ -10,10 +10,8 @@ import { boatExecutor } from "./executor.ts";
 
 const SANDBOX = sandboxId.parse("bx_a8k84ben");
 const SECRET = "bbde_0123456789abcdef";
-// The shape core sends on first enrollment: a JSON bundle whose headers carry the enrollment secret.
 const ENROLLMENT = JSON.stringify({ serverUrl: "https://bb.example", headers: { "X-BB-Enrollment": SECRET } });
 
-/** A sandbox that is this machine: commands run in bash, files land on the local disk. */
 function localSandbox(options: { failWrite?: boolean } = {}) {
   const commands: CommandRequest[] = [];
   const written: string[] = [];
@@ -46,7 +44,6 @@ async function exec(executor: ReturnType<typeof localSandbox>["executor"], reque
   return { exitCode, output };
 }
 
-// Words that break naive quoting: spaces, a single quote, a newline, a variable, an empty word.
 const AWKWARD = ["a b", "it's", "multi\nline", "$HOME", ""];
 const PRINT_STDIN_AND_ARGS = ["sh", "-c", `cat; printf '<%s>' "$@"`, "bb-test", ...AWKWARD];
 

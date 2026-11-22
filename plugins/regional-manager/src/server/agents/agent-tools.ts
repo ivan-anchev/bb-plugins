@@ -1,5 +1,3 @@
-// The regional manager's agent tools: agent_start, agent_message and agent_stop. An agent is one
-// child thread holding one issue for its whole life.
 import type { PluginAgentToolResult } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { agentIdSchema, requestedPlacementSchema, startFromSchema, type Agent, type AgentId } from "../../model/agent.ts";
@@ -21,7 +19,6 @@ export const AGENT_TOOLS = [START, MESSAGE, STOP];
 type Deps = { store: Pick<Store, "roleOfThread" | "agent">; agents: Pick<Agents, "start" | "message" | "stop"> };
 
 export function registerAgentTools(bb: ToolsBb, { store, agents }: Deps): void {
-  /** The tool runs on one of the caller's agents; an id it has none by is refused. */
   function forAgent<Input extends { agent: AgentId }>(tool: string, run: (agent: Agent, input: Input) => PluginAgentToolResult | Promise<PluginAgentToolResult>) {
     return forManager<Input>(store, tool, (id, input) => {
       const agent = store.agent(id, input.agent);
@@ -106,13 +103,7 @@ export function registerAgentTools(bb: ToolsBb, { store, agents }: Deps): void {
   });
 }
 
-/**
- * The regional manager's message as its agent gets it: under bb's `[bb message from thread:…]`
- * header, which names the manager's thread its first message names, a line saying whose it is and
- * what it is, so even a model that doubts the header follows it (QA Q20).
- */
 const managerMessage = (agent: Agent, text: string): string => `Your regional manager's next instruction, on ${agent.issueId}:\n\n${text}`;
 
-/** What a message did to the check of the agent's done handoff, in a sentence that follows its delivery ("" when it had none waiting). */
 const droppedText = (agent: Agent, dropped: boolean): string =>
   dropped ? ` The check of ${agent.id}'s last done handoff was dropped before its verdict, as you asked for more work: nothing reports on that handoff, and ${agent.id}'s next done handoff is checked afresh.` : "";

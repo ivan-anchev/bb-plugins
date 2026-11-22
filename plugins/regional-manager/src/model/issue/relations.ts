@@ -1,8 +1,3 @@
-// "Depends on", the one relation between issues (seen from the other side as "blocks"), and what
-// follows from it: blocked, ready, unblocked, and a cycle refused when written. Blocked is never
-// stored: it is derived from the statuses issueViews derives (status.ts) on every read, so a
-// research issue whose report a message reopened blocks its dependents again with nothing to update.
-// Dependencies inform and never refuse: nothing here stops an agent from starting.
 import type { Issue, IssueId } from "./issue.ts";
 import type { Closure, IssueStatus, IssueView } from "./status.ts";
 
@@ -105,7 +100,6 @@ export function unblockedSince(known: KnownCloses, views: readonly Announced[]):
   };
 }
 
-/** The issue's dependencies read against the work known of them: those closed with work not known, each with all the work to know now, in order. */
 function dependenciesRead(issue: Shape, before: ReadonlyMap<IssueId, CloseKey | null>, byId: ReadonlyMap<IssueId, Announced>) {
   const closes = new Map<IssueId, CloseKey>();
   const news: Omit<Unblocking, "issueId">[] = [];
@@ -129,7 +123,6 @@ export function knownClose(closes: Closes, id: IssueId): CloseKey | null {
   return work.length === 0 ? null : keyOf(work);
 }
 
-/** The closes by work a close holds, one string each: none for the manager's act; a parent's sub-issues', for its; a build parent's, the final check that passed. */
 function workOf(closure: Closure): string[] {
   switch (closure.by) {
     case "manager":
@@ -147,12 +140,10 @@ function workOf(closure: Closure): string[] {
   }
 }
 
-/** why sorted: the same work is one key, whatever order its closes came in. */
 const keyOf = (work: readonly string[]): CloseKey => [...work].sort().join(WORK_SEPARATOR);
 
 const workIn = (key: CloseKey | null): ReadonlySet<string> => new Set(key === null ? [] : key.split(WORK_SEPARATOR));
 
-/** why a comma: no close by work's string holds one, and a key of one close reads as that close. */
 const WORK_SEPARATOR = ", ";
 
 /** The relations of `issue` among every issue of its regional manager, as viewed. */
@@ -173,7 +164,6 @@ export const dependentsOf = (issues: readonly Shape[], id: IssueId): IssueId[] =
 /** The issue's status among `statuses`. */
 export const statusIn = (statuses: ReadonlyMap<IssueId, IssueStatus>, id: IssueId): IssueStatus => named(statuses, id);
 
-/** What `byId` holds for an issue a relation names. why throw: a relation is written only between issues of one regional manager, and issues are never deleted. */
 function named<T>(byId: ReadonlyMap<IssueId, T>, id: IssueId): T {
   const value = byId.get(id);
   if (value === undefined) throw new Error(`The issue ${id} a relation names is missing.`);
@@ -209,7 +199,6 @@ export function relationProblem(issues: readonly Shape[], changed: Shape): strin
       ...subIssuesOf(id).map((to): Wait => ({ to, as: "sub-issue" })),
     ];
   };
-  // why its sub-issues too: a parent's new dependency is waited for by them, not by the parent, so a cycle it closes runs through one of them.
   for (const start of [changed.id, ...subIssuesOf(changed.id)]) {
     const cycle = pathBack(waits, start, start, new Set());
     if (cycle !== null) return `${changed.id} can't ${cycleCause(changed.id, start, cycle[0])}: that would close a cycle, ${[start, ...cycle.map(waitText)].join(" → ")}`;
@@ -217,17 +206,14 @@ export function relationProblem(issues: readonly Shape[], changed: Shape): strin
   return null;
 }
 
-/** One issue waiting for another to close: as its own dependency, as its parent's, or as a parent waits for its sub-issue. */
 type Wait = { to: IssueId; as: "dependency" | "sub-issue" } | { to: IssueId; as: "parent's dependency"; parentId: IssueId };
 
-/** What of `changed` closes the cycle that starts at `start` with `first`: one of its dependencies, or its parent. */
 function cycleCause(changed: IssueId, start: IssueId, first: Wait): string {
   if (first.as === "dependency" && start === changed) return `depend on ${first.to}`;
   if (first.as === "parent's dependency") return start === changed ? `be a sub-issue of ${first.parentId}` : `depend on ${first.to}`;
   return "be changed so";
 }
 
-/** The issue waited for, with how, when it is not by a dependency of its own. */
 function waitText(wait: Wait): string {
   switch (wait.as) {
     case "dependency":
@@ -241,7 +227,6 @@ function waitText(wait: Wait): string {
   }
 }
 
-/** A path of waits from `from` to `target`, `target` included, or null when there is none. Depth first; `seen` keeps it from walking an issue twice. */
 function pathBack(waits: (id: IssueId) => Wait[], from: IssueId, target: IssueId, seen: Set<IssueId>): [Wait, ...Wait[]] | null {
   for (const wait of waits(from)) {
     if (wait.to === target) return [wait];

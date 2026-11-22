@@ -1,6 +1,3 @@
-// What a group of steps did, in bb's chat's words (ThreadScreen bundle: `Wo`
-// assembles, `Ao` tallies, `Ro`/`zo` phrase settled/running, `Mo` approvals):
-// "Explored 3 files, ran 2 commands" once settled, "Running 2 commands" while live.
 import type { WorkRow } from "./bb.ts";
 import { plural } from "./roster.ts";
 import { isExploration, stepIntents } from "./steps.ts";
@@ -16,7 +13,6 @@ export function groupLabel(work: readonly WorkRow[], live: boolean): string {
 /** What a step counts as in a label (bb's `No`); null for a step that adds no phrase. */
 export type Concept = "exploration" | "fileChanges" | "webResearch" | "planUpdates" | CountedConcept;
 
-// why: exhaustive, so a work kind a new SDK adds fails to compile here; at runtime it adds no phrase.
 export function conceptOf(row: WorkRow): Concept | null {
   switch (row.workKind) {
     case "command": return isExploration(row) ? "exploration" : "commands";
@@ -39,9 +35,6 @@ export function conceptOf(row: WorkRow): Concept | null {
   }
 }
 
-// ---------------------------------------------------------------- layer 2
-
-/** "Explored 3 files, ran 2 commands": every phrase after the first lowercased (`Bo`). */
 function workSentence(work: readonly WorkRow[], live: boolean): string {
   const tally = tallyWork(work);
   const phrases = conceptsInOrder(work).flatMap((concept) => phraseFor(concept, tally, live) ?? []);
@@ -49,9 +42,7 @@ function workSentence(work: readonly WorkRow[], live: boolean): string {
   return phrases.map((phrase, i) => (i === 0 ? phrase : phrase.charAt(0).toLowerCase() + phrase.slice(1))).join(", ");
 }
 
-/** bb's `Mo`: every step is a command, file change, or tool held at the same approval. */
 function approvalLabel(work: readonly WorkRow[]): string | null {
-  // why: bb counts in this order (commands, file changes, tools) whatever order the steps came in.
   const counts = { command: 0, "file change": 0, tool: 0 };
   let status: ApprovalStatus | null = null;
   for (const row of work) {
@@ -71,7 +62,6 @@ function approvalLabel(work: readonly WorkRow[]): string | null {
 
 type ApprovalStatus = NonNullable<Extract<WorkRow, { workKind: "command" }>["approvalStatus"]>;
 
-/** A command, file change, or tool waiting on, or denied, approval. */
 function approvalOf(row: WorkRow): { noun: "command" | "file change" | "tool"; status: ApprovalStatus } | null {
   switch (row.workKind) {
     case "command": return row.approvalStatus && { noun: "command", status: row.approvalStatus };
@@ -96,7 +86,6 @@ function approvalOf(row: WorkRow): { noun: "command" | "file change" | "tool"; s
 
 type CountedConcept = keyof typeof COUNTED;
 
-// why: these phrases are a verb and a count of the steps: "Ran 2 commands", "Running 2 commands".
 const COUNTED = {
   commands: { running: "Running", ran: "Ran", noun: "command" },
   delegations: { running: "Running", ran: "Ran", noun: "subagent" },
@@ -127,8 +116,6 @@ function phraseFor(concept: Concept, tally: Tally, live: boolean): string | null
   }
 }
 
-// ---------------------------------------------------------------- layer 3: the tally behind the words (bb's `Ao`)
-
 type Tally = {
   counts: Record<CountedConcept, number>;
   explored: Exploration;
@@ -138,7 +125,6 @@ type Tally = {
   planUpdates: number;
 };
 
-/** Unique files, searches, and lists, in the order each kind first appeared. */
 type Exploration = { files: Set<string>; searches: number; lists: number; order: ("files" | "searches" | "lists")[] };
 
 type FileAction = "created" | "deleted" | "edited" | "renamed";
@@ -173,13 +159,12 @@ function tallyWork(work: readonly WorkRow[]): Tally {
       case "question":
       case "form":
       case "workflow": break;
-      default: row satisfies never; // why: a work kind a newer host adds counts for nothing
+      default: row satisfies never;
     }
   }
   return tally;
 }
 
-/** bb's `Oo`: a read adds its file, a list or a search adds one. */
 function explore(explored: Exploration, row: WorkRow): void {
   const see = (kind: Exploration["order"][number]) => {
     if (!explored.order.includes(kind)) explored.order.push(kind);
@@ -202,7 +187,6 @@ function explore(explored: Exploration, row: WorkRow): void {
   }
 }
 
-/** bb's `jo`: "3 files, 2 searches, 1 list". */
 function explorationList(explored: Exploration): string | null {
   const parts = explored.order.map((kind) => {
     switch (kind) {
@@ -215,7 +199,6 @@ function explorationList(explored: Exploration): string | null {
   return parts.length > 0 ? parts.join(", ") : null;
 }
 
-/** bb's `Lo`: one action names itself ("Created 2 files"); a mix reads as edits. */
 function fileChangePhrase(changed: Tally["changed"], live: boolean): string | null {
   const actions = FILE_ACTIONS.filter((action) => changed[action].size > 0);
   if (actions.length === 0) return null;
@@ -224,7 +207,6 @@ function fileChangePhrase(changed: Tally["changed"], live: boolean): string | nu
   return `${live ? "Editing" : "Edited"} ${plural(total, "file")}`;
 }
 
-/** bb's `Vo`: "Researched 2 search queries, 1 web page". */
 function researchPhrase(tally: Tally, live: boolean): string | null {
   const parts = [
     tally.webSearches > 0 ? plural(tally.webSearches, "search query", "search queries") : null,
@@ -240,7 +222,6 @@ const FILE_VERB: Record<FileAction, [running: string, ran: string]> = {
 
 type FileChange = Extract<WorkRow, { workKind: "file-change" }>["change"];
 
-/** bb's file-change action: a move is a rename unless lines changed; otherwise its kind decides. */
 function fileAction(change: FileChange): FileAction {
   if (change.movePath) return changesLines(change) ? "edited" : "renamed";
   const kind = (change.kind ?? "").toLowerCase().replaceAll(/[^a-z0-9]/gu, "");
@@ -254,11 +235,6 @@ function changesLines(change: FileChange): boolean {
   return change.diff.split("\n").some((line) => /^[+-]/.test(line) && !/^(\+\+\+|---) /.test(line));
 }
 
-/**
- * `never` keeps these switches exhaustive at compile time. At runtime the bb host can be newer
- * than the pinned SDK: a work kind it adds adds no phrase, and an approval status it adds falls
- * back to the work sentence, so the strip never goes down.
- */
 function unhandledConcept(_row: never): Concept | null {
   return null;
 }
@@ -267,12 +243,10 @@ function unhandledApproval(_status: never): string | null {
   return null;
 }
 
-/** A work kind a newer host adds is never held at an approval. */
 function unhandledHeld(_row: never): null {
   return null;
 }
 
-/** Our own union, so a new kind of exploration is a compile error before it is ever an empty part. */
 function unhandledPart(_kind: never): string {
   return "";
 }

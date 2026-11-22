@@ -1,5 +1,3 @@
-// Whether the configured key can run sandboxes: the settings first, then boat's view of the
-// key's account and wallet.
 import { PASTE_KEY_STEP, resolveSettings, type BoatSettings, type ResolvedSettings } from "../settings.ts";
 import { describeProblems, messageOf, problem, type Problem } from "../problem.ts";
 import { BoatApiError, createBoatClient, type BoatClient } from "./client.ts";
@@ -66,7 +64,6 @@ async function readFacts(client: BoatClient, signal: AbortSignal | undefined): P
   return { account, limits };
 }
 
-/** Accounts boat Sandbox refuses to run on. */
 function refusals({ account, limits }: BoatFacts): Problem[] {
   const problems: Problem[] = [];
   if (account.zeroDataRetention)

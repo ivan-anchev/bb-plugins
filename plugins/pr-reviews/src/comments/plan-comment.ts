@@ -1,8 +1,3 @@
-// What a comment on some lines becomes on GitHub, built exactly: a line comment when GitHub can
-// anchor to the lines, else a file comment that quotes them. And a reply in a review thread, and a
-// comment on the PR's conversation. The
-// comment box checks the plan as the reader writes, and Comment or Reply sends its request as is.
-// Pure.
 import { commitsSince, shortSha, type PrDetail } from "../contract.ts";
 import type { Finding } from "../guide/guide-schema.ts";
 import { GITHUB_BODY_LIMIT, type CodeQuote, type CommentRequest } from "./comment-schema.ts";
@@ -30,7 +25,6 @@ export function planComment(span: LineSpan, commitInPr: boolean, text: string): 
   if (!inOneHunk(span)) {
     return { request: { kind: "file", commit: span.commit, path: span.path, body: quoted(quote, body) }, why: whyNotOneHunk(span) };
   }
-  // why no start for one row: GitHub takes a single line as `line`/`side` alone.
   const start = span.rows.length === 1 ? null : quote.start;
   return { request: { kind: "line", commit: span.commit, path: span.path, start, end: quote.end, body }, why: null };
 }
@@ -81,19 +75,15 @@ const tooLong = (body: string) => `This comment is ${body.length.toLocaleString(
 /** A finding as a comment: its title in bold, then its body. The guide's priority stays out. */
 export const findingCommentText = (finding: Finding): string => `**${finding.title}**\n\n${finding.body}`;
 
-// GitHub anchors a line comment only inside one hunk.
 function whyNotOneHunk({ rows }: LineSpan): string {
   return rows.some((row) => row.hunk === null) ? "some of these lines are outside the PR's changes" : "these lines span more than one hunk";
 }
 
-// `path`, lines …, at abc1234:  then the rows in a diff fence, then the reader's words.
 function quoted(quote: CodeQuote, body: string): string {
   const fence = "`".repeat(Math.max(3, longestBacktickRun(quote.lines.join("\n")) + 1));
   return [`${inlineCode(quote.path)}, ${linesLabel(quote.start, quote.end)}, at ${shortSha(quote.commit)}:`, `${fence}diff`, ...quote.lines, fence, "", body].join("\n");
 }
 
-// CommonMark inline code: a delimiter longer than any backtick run inside, and padding spaces when
-// the text holds backticks or starts or ends with a space (one padding space each side is dropped).
 function inlineCode(text: string): string {
   const delimiter = "`".repeat(longestBacktickRun(text) + 1);
   const pad = /`|^ | $/.test(text) ? " " : "";

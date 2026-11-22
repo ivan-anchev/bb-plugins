@@ -1,6 +1,3 @@
-// What a thread runs on now: its provider as bb lists it, and the model and reasoning level of its
-// latest turn. One read for what an agent inherits from its regional manager (with its service
-// tier), what an agent's handoff records and what a verifier's verdict names.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { Execution } from "../../model/execution.ts";
 

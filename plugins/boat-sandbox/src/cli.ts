@@ -1,4 +1,3 @@
-// bb boat …: thin commands that read, then print.
 import { cliCommand, defineCli } from "@get-bb/plugin-sdk";
 import { readLaunchChoices, readLaunchChoicesReply } from "./catalog/read.ts";
 import { formatChoices } from "./catalog/report.ts";
@@ -7,7 +6,6 @@ import { observe, type ObserveDeps } from "./sweep/observe.ts";
 import { planSweep } from "./sweep/plan.ts";
 import { formatRows, sandboxRows } from "./sweep/report.ts";
 
-/** Bounds a command run without a caller's signal. */
 const PATIENCE_MS = 60_000;
 
 /** `machines` is what the sweep looks at, so `bb boat sandboxes` shows exactly what it would do. */
@@ -31,7 +29,6 @@ export function boatCli(deps: StatusDeps, machines: ObserveDeps) {
           const signal = ctx.signal ?? AbortSignal.timeout(PATIENCE_MS);
           const configuration = await boat.configuration(signal);
           if (options.json) {
-            // The object the composer chip receives.
             const reply = await readLaunchChoicesReply(configuration, signal);
             return { exitCode: reply.status === "ready" ? 0 : 1, stdout: `${JSON.stringify(reply, null, 2)}\n` };
           }

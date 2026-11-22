@@ -1,26 +1,3 @@
-// Child threads as delegates, on real captures (fixtures/child-threads.json):
-//   parent        thr_24dxq5xhph's top-level rows (GET /api/v1/threads/<id>/timeline?segmentLimit=20),
-//                 each delegation's child rows cut to its first and last two
-//   parentRunning thr_bz3t99e3qp (throwaway Claude Code parent, issue 06b) read the same way mid-turn,
-//                 as the source reads it (includeNestedRows=true): the running turn's rows are flat
-//   children      its two oldest children as `bb thread list --parent-thread thr_24dxq5xhph --json` lists them
-//   reviewerRows  thr_2sspz65bvd (Codex reviewer, settled), read as the source reads a child:
-//                 GET /api/v1/threads/<id>/timeline?segmentLimit=20&includeNestedRows=true
-//   counter       thr_ys49uh7mzb (Codex child of a throwaway Claude Code thread, issue 06b) running
-//                 its first `sleep`, then settled; its list row at each read
-//   outcomes      children of thr_zx2w4sat7z (throwaway Claude Code parent, issue 06c), each list row as
-//                 `bb thread show <id> --json` gave it and its rows read as the source reads a child;
-//                 parentRows is that parent's rows read the same way
-//     stopped       thr_8d4ytj895v (Codex) after `bb thread stop` mid `sleep 300`
-//     resumed       the same child after `bb thread send` "Reply with exactly: resumed." and its reply
-//     failedTurn    thr_uixigbd79i (Claude Code, `--model claude-nonexistent-06c`): the provider rejected the turn
-//     failedProvisioning thr_79zb76x32u (Codex, `--base-branch no-such-branch-06c`): no worktree, no turn
-//     waiting       thr_c7hytt7tdq (Claude Code) blocked on its own AskUserQuestion
-//     reused        thr_tfst24jjhy (Codex) settled, then running and settled again after a `bb thread send`
-//   usage         thr_x6sjw8pxue (Codex reviewer 10c r1, settled), its list row and rows read as the source reads
-//                 a child, and its events as the source reads its tokens:
-//                 GET /api/v1/threads/<id>/events?types=thread/tokenUsage/updated&order=desc&limit=1
-// Every string is cut to 200 characters except an assistant message.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -53,7 +30,6 @@ const { outcomes } = fixture;
 
 test("a child belongs to the parent turn under way when it was created", () => {
   const designer = childById("thr_hyxefjhk94");
-  // Live: this Codex child landed in the turn of the Claude delegation "Designer 06-A".
   assert.equal(childDelegate(designer, withoutUsage([]), parentRows).turnId, "da0b57f386-t1");
 });
 
@@ -62,7 +38,6 @@ test("a child spawned in a running parent turn belongs to it, though that turn h
   const command = rows.at(-1);
   assert.ok(command?.kind === "work" && command.status === "pending", "fixture premise: the turn's last command is running");
   assert.ok(!rows.some((row) => row.kind === "turn" && row.turnId === command.turnId), "fixture premise: no turn row for it");
-  // hand-built: the counter's list row, created just after that command started, as `bb thread spawn` would.
   const spawned = { ...settled.child, createdAt: command.startedAt + 100 };
   assert.equal(childDelegate(spawned, withoutUsage([]), rows).turnId, "da2752d426-t5");
 });
@@ -81,7 +56,6 @@ test("an idle child whose turn completed reports its closing message, which leav
   const closing = fixture.reviewerRows.at(-1);
   assert.ok(closing?.kind === "conversation" && closing.role === "assistant", "fixture premise: the rows end in the closing message");
   const d = childDelegate(reviewer, withoutUsage(fixture.reviewerRows), parentRows);
-  // `bb thread output thr_2sspz65bvd` prints the same text.
   assert.deepEqual(d.state, { status: "completed", endedAt: reviewer.updatedAt, report: closing.text });
   assert.match(detailLine(d), /^VERDICT: APPROVE$/);
   assert.ok(!d.steps?.some((row) => row.id === closing.id));
@@ -94,7 +68,7 @@ test("an idle child whose turn completed reports its closing message, which leav
 test("a running child is running, its detail its latest line in bb's words, and its brief is not a step", () => {
   const d = childDelegate(running.child, withoutUsage(running.rows), parentRows);
   assert.deepEqual(d.state, { status: "running" });
-  assert.equal(detailLine(d), "Running 1 command"); // the trail's live line, never the raw command
+  assert.equal(detailLine(d), "Running 1 command");
   assert.ok(!d.steps?.some((row) => row.kind === "conversation" && row.role === "user"));
   assert.ok(running.rows.some((row) => row.kind === "conversation" && row.role === "user"), "fixture premise: the brief is a row");
 });
@@ -110,7 +84,6 @@ test("a child's tokens are its latest token-usage event's total, and its tool ca
   const { child, rows, events } = fixture.usage;
   assert.deepEqual(events.map((e) => [e.seq, e.type]), [[117, "thread/tokenUsage/updated"]], "fixture premise: the latest usage event alone");
   const d = childDelegate(child, { rows, totalTokens: totalTokensOf(events[0]) }, parentRows);
-  // Live: 20 rows, the brief, 3 messages (the last its report), and 16 commands.
   assert.deepEqual(d.usage, { toolUses: 16, totalTokens: 427_050 });
   assert.deepEqual(metaParts(d).slice(1), ["ran 1m 10s", "18 steps", "16 tool calls", "427.1k tokens"]);
 });
@@ -145,7 +118,7 @@ test("a stopped child reads stopped at its stop, though bb leaves its interrupte
   const d = childDelegate(child, withoutUsage(rows), outcomes.parentRows);
   assert.deepEqual(d.state, { status: "stopped", endedAt: stop.completedAt });
   assert.equal(detailLine(d), "Stopped");
-  assert.deepEqual(metaParts(d).slice(1), ["ran 1m 08s", "4 steps", "1 tool call"]); // its `sleep 300`
+  assert.deepEqual(metaParts(d).slice(1), ["ran 1m 08s", "4 steps", "1 tool call"]);
 });
 
 test("a stopped child told something since ends the way that newer turn did, not stopped", () => {
@@ -194,7 +167,7 @@ test("a reused child stays one delegate of its spawning turn: running again, the
 });
 
 test("a thread status newer than the pinned SDK reads as running and never throws", () => {
-  // why: JSON.parse types it as the SDK's status without a cast, as a newer bb host would send it.
+  // WARNING: deliberately off-type; JSON.parse types it as the SDK's status without a cast, as a newer bb host would send it.
   const status: ChildThread["status"] = JSON.parse('"hibernating"');
   const child = { ...settled.child, status };
   assert.equal(threadRunning(child), true);
@@ -204,7 +177,6 @@ test("a thread status newer than the pinned SDK reads as running and never throw
 test("an approval on a command is an interaction on that call, not a second call", () => {
   const command = running.rows.at(-1);
   assert.ok(command?.kind === "work" && command.workKind === "command", "fixture premise: the child's one command");
-  // hand-built from the SDK's permission-grant row: bb records the grant beside the command it targets.
   const approval: TimelineRow = {
     id: `${command.threadId}:approval:1`, threadId: command.threadId, turnId: command.turnId,
     sourceSeqStart: command.sourceSeqEnd + 1, sourceSeqEnd: command.sourceSeqEnd + 1,

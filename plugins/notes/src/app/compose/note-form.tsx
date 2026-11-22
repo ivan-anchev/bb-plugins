@@ -1,7 +1,3 @@
-// The popover's composer, pinned under the list and always open: the quoted passage, if any, thumbs
-// of what is attached, a textarea where @ links a thread, and a bar of 📎, @, link chips and a round
-// send (⌘↵). It grows upward, and the @ picker opens above it. Look from prototypes/notes-input.html,
-// Composer.
 import { experimental_Icon as Icon, experimental_useRpcMutation, experimental_useSidebarThreads } from "@get-bb/plugin-sdk/app";
 import {
   useImperativeHandle,
@@ -32,7 +28,6 @@ export type NoteFormHandle = {
 };
 
 export function NoteForm({ capture, ref }: { capture: Capture | null; ref: Ref<NoteFormHandle> }) {
-  // why a key: each save starts the next note from a fresh draft, its files freed, its field focused.
   const [saved, setSaved] = useState(0);
   return (
     <NoteDraft
@@ -47,8 +42,6 @@ export function NoteForm({ capture, ref }: { capture: Capture | null; ref: Ref<N
     />
   );
 }
-
-// ------------------------------------------------------------------ layer 2
 
 type NoteDraftProps = {
   capture: Capture | null;
@@ -81,7 +74,6 @@ function NoteDraft({ capture, focusOnMount, onSaved, ref }: NoteDraftProps) {
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
-    // why: Enter that confirms an IME composition is neither a pick nor a save.
     if (event.nativeEvent.isComposing) return;
     if (picker.onKeyDown(event, pick)) return;
     if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
@@ -94,7 +86,6 @@ function NoteDraft({ capture, focusOnMount, onSaved, ref }: NoteDraftProps) {
     <div
       className="nt-form"
       data-dropping={files.dragging || undefined}
-      // why the whole form: a file dropped anywhere on it is attached.
       onDragOver={files.onDragOver}
       onDragLeave={files.onDragLeave}
       onDrop={files.onDrop}
@@ -106,7 +97,6 @@ function NoteDraft({ capture, focusOnMount, onSaved, ref }: NoteDraftProps) {
           items={files.items}
           onRemove={(item) => {
             files.remove(item);
-            // why: the × leaves the page with its thumb, and focus must not fall to the page body.
             field.current!.focus();
           }}
         />
@@ -149,7 +139,6 @@ function NoteDraft({ capture, focusOnMount, onSaved, ref }: NoteDraftProps) {
   );
 }
 
-/** The capture with its thread's title; until the sidebar's threads have loaded, the thread's id. */
 function useQuote(capture: Capture | null): Quote | null {
   const { threads } = experimental_useSidebarThreads();
   if (capture === null) return null;
@@ -157,16 +146,9 @@ function useQuote(capture: Capture | null): Quote | null {
   return { ...capture, threadTitle: thread?.displayTitle ?? capture.threadId };
 }
 
-/**
- * The textarea's text and caret. Typing and moving the caret update them; `edit` (a pick, a chip's
- * ×, the @ button) writes both, then puts focus and the caret back in the field once the new text is
- * drawn.
- */
 function useDraft(field: RefObject<HTMLTextAreaElement | null>) {
   const [value, setValue] = useState<Draft>({ text: "", caret: 0 });
   const placeCaret = useRef(false);
-  // why a layout effect: React draws a new value with the caret at the end, and the plugin runtime
-  // shares react but not react-dom, so flushSync can't place it in the handler.
   useLayoutEffect(() => {
     if (!placeCaret.current) return;
     placeCaret.current = false;
@@ -188,10 +170,6 @@ function useDraft(field: RefObject<HTMLTextAreaElement | null>) {
   };
 }
 
-/**
- * Saving reads the files, then sends the note once; success starts the next note, a failure keeps
- * the draft and says why. A quote or a file is a note on its own, so with one the text may stay empty.
- */
 function useSave(quote: Quote | null, body: NoteBody, files: DraftFiles, onSaved: () => void) {
   const create = experimental_useRpcMutation({ contract: notesContract, method: "createNote" });
   const [reading, setReading] = useState(false);
@@ -207,7 +185,6 @@ function useSave(quote: Quote | null, body: NoteBody, files: DraftFiles, onSaved
         setReading(false);
         create.mutate({ quote, body, files: encoded }).then(
           onSaved,
-          // why swallowed: the hook keeps the failure in `create.error`, which the form shows.
           () => undefined,
         );
       },

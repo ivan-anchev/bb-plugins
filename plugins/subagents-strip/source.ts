@@ -1,6 +1,3 @@
-// One live, ref-counted source of delegates per thread, shared by every
-// component in the window. It reads bb through the browser SDK with the user's
-// session; there is no plugin server.
 import { useCallback, useSyncExternalStore } from "react";
 import { useSdk } from "@get-bb/plugin-sdk/app";
 import type { ThreadSdk } from "./bb.ts";
@@ -38,8 +35,6 @@ export function useThreadDelegates(
   const snapshot = useCallback(() => sources.get(threadId)?.snapshot ?? LOADING, [threadId]);
   return useSyncExternalStore(subscribe, snapshot);
 }
-
-// ---------------------------------------------------------------- registry (layer 2)
 
 const sources = new Map<string, ThreadSource>();
 const LOADING: ThreadDelegates = { status: "loading" };

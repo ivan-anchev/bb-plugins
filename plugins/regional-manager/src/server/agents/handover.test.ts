@@ -18,7 +18,6 @@ const FAILS = {
   findings: ["The cap is applied before the jitter."],
 };
 
-/** A regional manager whose agent a1 holds a build issue WEB-1 in a worktree; every thread idle, so a message starts a turn. */
 async function handedTo(options: Parameters<typeof coordinating>[0] = {}, start: object = {}) {
   const { kit, threadId, coordinatorId } = await coordinating(options);
   const { agentThreadId } = await startedAgent(kit, threadId, { doneCriteria: CRITERIA }, start);
@@ -31,7 +30,6 @@ async function handedTo(options: Parameters<typeof coordinating>[0] = {}, start:
   };
   const agent = (id: typeof a1) => kit.store.agent(coordinatorId, id) ?? assert.fail(`no agent ${id}`);
   const firstMessage = (agentThread: string) => kit.thread(agentThread).spawnedWith.prompt ?? assert.fail("no first message");
-  /** The agent hands off and ends its turn. */
   async function handOff(agentThread: string, report: object = DONE): Promise<string> {
     const answer = textOf(await kit.call("agent_handoff", report, agentThread));
     await kit.idle(agentThread, "Handed off.");
@@ -43,7 +41,7 @@ async function handedTo(options: Parameters<typeof coordinating>[0] = {}, start:
 
 test("a handover stops the holder without archiving it, ends it as replaced, and starts the new agent in its environment, on its branch", async () => {
   const { kit, coordinatorId, agentThreadId, handover, row, agent, firstMessage, handOff } = await handedTo();
-  kit.git.changedFiles.set(kit.environment(agentThreadId), 1); // a1 leaves a file uncommitted
+  kit.git.changedFiles.set(kit.environment(agentThreadId), 1);
   await handOff(agentThreadId, BLOCKED);
   const result = textOf(await handover());
   const next = threadIn(result);
@@ -150,7 +148,7 @@ test("an environment bb removes between the decision and the spawn ends the new 
   kit.stopRequests.pending = new Promise((resolve) => (answer = resolve));
   const starting = handover();
   await settled();
-  kit.environments.destroyed.add(kit.environment(agentThreadId)); // the sandbox is reaped while a1 stops
+  kit.environments.destroyed.add(kit.environment(agentThreadId));
   answer();
 
   const result = textOf(await starting);
@@ -170,7 +168,7 @@ test("the new agent gets a fix round of its own; the replaced agent's running ve
   };
   await handOff(agentThreadId);
   const first = verifierOf();
-  await kit.call("issue_verdict", FAILS, first); // a1's fix round goes back to it
+  await kit.call("issue_verdict", FAILS, first);
   await kit.idle(first, "Verdict returned.");
   await kit.idle(agentThreadId, "Fixed.");
   await handOff(agentThreadId);
@@ -197,7 +195,7 @@ test("the new agent gets a fix round of its own; the replaced agent's running ve
 
 test("a holder idle with a background command still running is stopped by a handover, so the command's finish never wakes it beside its successor", async () => {
   const { kit, agentThreadId, handover, agent } = await handedTo();
-  kit.leavesBackground(agentThreadId); // a1's turn ended with a background sleep still running: bb reports it idle
+  kit.leavesBackground(agentThreadId);
   const turns = kit.thread(agentThreadId).turns.length;
 
   const next = threadIn(textOf(await handover()));
@@ -226,7 +224,7 @@ test("a sandbox agent is continued in its sandbox, which the spawn wakes: nothin
   const sandbox = { placement: { kind: "provider", environmentProviderId: "boat-sandbox", machineInputs: { preset: "small" } } };
   const { kit, agentThreadId, handover } = await handedTo({}, sandbox);
   const environmentId = kit.environment(agentThreadId);
-  kit.git.offline.add(environmentId); // suspended: bb's git plugin can't read it
+  kit.git.offline.add(environmentId);
   const reads = kit.git.calls.length;
 
   const result = textOf(await handover());
@@ -249,9 +247,6 @@ test("an execution named on a handover is checked where the previous agent works
   assert.match(textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId)), /### Agents\n\n- a1, replaced, on codex gpt-default \(low\)\n- a2, holds it, on claude-code opus \(high\), @thread:\w+/);
 });
 
-// One thing at a time per issue (issue-turns.ts): each case holds one operation in bb while another
-// on the same issue is asked for, and checks that the second decided on what the first left.
-
 const PASSES = {
   criteria: [
     { criterion: 1, result: "pass", evidence: "$ npm test\n# pass 13\n# fail 0" },
@@ -260,14 +255,12 @@ const PASSES = {
   findings: ["The retry log line repeats the payload."],
 };
 
-/** A promise bb's fake waits on, and the function that lets it go. */
 function hold(): { done: Promise<void>; release: () => void } {
   let release = (): void => assert.fail("never held");
   const done = new Promise<void>((resolve) => (release = resolve));
   return { done, release };
 }
 
-/** The verifier running a1's latest check. */
 function verifierOf(kit: Awaited<ReturnType<typeof handedTo>>["kit"], coordinatorId: Awaited<ReturnType<typeof handedTo>>["coordinatorId"]): string {
   const verdict = kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict;
   return verdict?.state === "running" ? verdict.verifierThreadId : assert.fail(`the verdict is ${verdict?.state}`);
@@ -359,7 +352,7 @@ test("findings bb queued for a busy a1 are taken back before the handover stops 
   await handOff(agentThreadId);
   const verifier = verifierOf(kit, coordinatorId);
   await kit.call("issue_verdict", FAILS, verifier);
-  kit.thread(agentThreadId).status = "starting"; // a turn someone started in a1's thread, which bb lists no event of yet
+  kit.thread(agentThreadId).status = "starting";
   await kit.idle(verifier, "Verdict returned.");
   assert.equal(kit.queued(agentThreadId).length, 1, "the findings wait in a1's queue");
 
@@ -373,8 +366,8 @@ test("the plugin's reminder bb queued for a verifier behind a turn someone start
   const verifier = verifierOf(kit, coordinatorId);
   let release = (): void => assert.fail("the reminder was never sent");
   kit.sends.pending = new Promise((resolve) => (release = resolve));
-  await kit.idle(verifier, "Forgot the verdict."); // the plugin reads the verifier idle; its reminder waits at bb
-  kit.startTurn(verifier); // the user messages the current verifier before the reminder arrives
+  await kit.idle(verifier, "Forgot the verdict.");
+  kit.startTurn(verifier);
   kit.sends.pending = null;
   release();
   await settled();
@@ -427,7 +420,6 @@ test("a handoff made while a handover stops its agent waits for WEB-1, then is r
   await kit.startTurn(agentThreadId);
   const handing = handover();
   await settled();
-  // a1 hands off while the handover stops it: the handoff waits for WEB-1.
   const spawned = kit.spawned();
   const handed = kit.call("agent_handoff", DONE, agentThreadId);
   await settled();
@@ -482,7 +474,6 @@ test("an accept whose read is answered just after a handover gives WEB-1 to a2 i
   assert.ok(handover !== undefined && accept !== undefined, "the handover's last read of WEB-1 and the accept's read are both held");
   kit.turnEvents.holding = false;
   handover();
-  // why one microtask: the handover writes a2 in, then awaits before it goes on; the accept's read is answered in that gap.
   await Promise.resolve();
   accept();
 
@@ -528,7 +519,6 @@ test("a verdict waiting for CI when its agent is replaced is kept whole, settled
   assert.match(read, /Passed every criterion: 2 of 2 criteria passed[\s\S]*CI: not waited for; a newer handoff or a handover replaced it first\.[\s\S]*1\. PASS: npm test passes\n   \$ npm test[\s\S]*- The retry log line repeats the payload\./);
 });
 
-/** The message's own headings: every ATX heading outside a code fence. */
 function headingsOutsideFences(markdown: string): string[] {
   let fence: string | null = null;
   return markdown.split("\n").flatMap((line) => {

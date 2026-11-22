@@ -9,10 +9,6 @@ import { decisionIdSchema, type Decision } from "../../model/decision.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
 
-// The board as bb mounts it, reading the plugin: its lanes from the board's read, and its decisions'
-// answers. An issue's own tab, which its row opens, is issue-tab.test.ts's.
-
-// why: jsdom has none of these; the rows measure their titles, and the working ring asks for Reduce motion and a canvas.
 Object.assign(globalThis, {
   ResizeObserver: class {
     observe() {}
@@ -58,11 +54,6 @@ afterEach(() => {
 
 type Read = Pick<BoardData, "decisions" | "issues">;
 
-/**
- * The board reading `data`; each lane's name and the text of each of its rows, once drawn; `reread`,
- * the board reading `next` as it does when the plugin changes it. `answer`: what the plugin does with
- * an answer sent; it stores it unless it throws.
- */
 async function mount(data: Read, answer: (input: unknown) => void = () => {}) {
   let current = data;
   let served: Read | null = null;
@@ -89,7 +80,6 @@ async function mount(data: Read, answer: (input: unknown) => void = () => {}) {
   async function reread(next: Read) {
     current = next;
     await view.experimental_invalidateRpc([`board:${COORDINATOR}`]);
-    // why wait: a read the answer's send started may still be running, and the board reads again after it.
     await waitFor(() => assert.equal(served, next));
     await act(async () => {});
   }

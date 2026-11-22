@@ -1,6 +1,3 @@
-// Today's quote: one per local day, saved so every visit that day shows the same one.
-// The first read of a new day fetches the next quote; checks that overlap share one fetch,
-// and a failed fetch keeps the last quote and tries again on the next read.
 import type { Quote } from "../contract.ts";
 
 const KEY = "daily-quote";
@@ -19,7 +16,6 @@ export interface DailyQuoteDeps {
 export function createDailyQuote(deps: DailyQuoteDeps) {
   let running: Promise<void> | null = null;
 
-  /** Fetches a new quote if the saved one is from another day. Safe to call any number of times. */
   function ensureToday(): Promise<void> {
     running ??= replaceIfStale(deps).finally(() => (running = null));
     return running;
@@ -45,7 +41,6 @@ async function replaceIfStale(deps: DailyQuoteDeps): Promise<void> {
   }
 }
 
-/** YYYY-MM-DD of the server's local day. */
 function localDay(ms: number): string {
   const d = new Date(ms);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

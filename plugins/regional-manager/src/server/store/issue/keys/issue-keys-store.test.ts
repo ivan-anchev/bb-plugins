@@ -13,13 +13,6 @@ const id = issueIdSchema.parse;
 const SHA = "a".repeat(40);
 const CLEAN: CheckoutRead = { kind: "read", branch: null, checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 } };
 
-/**
- * A store whose regional manager MANAGER holds what 0.5.0 stored, its issues numbered i1, i2, i3 and
- * no issue key: a parent i1 with a sub-issue i2, which i3 depends on; an agent on i2 whose done
- * handoff ("Retries land on i1") is checked by a verifier, a final check of i1 judging i2's merged
- * work, a question to the user and a recorded decision on i3, and the event announcing i3 unblocked
- * by i2. OTHER_MANAGER keeps its key, WEB, and its issue WEB-1.
- */
 function storedBy050() {
   const { db, store } = freshStore();
   const parent = filedIssue(store, MANAGER, newIssue(), 2_000);
@@ -39,7 +32,6 @@ function storedBy050() {
   return { db, store };
 }
 
-/** MANAGER's rows as a release before issue keys wrote them: every WEB-N it stores, as data or in text, is iN, and it has no key. */
 function asBefore(db: Database.Database): void {
   db.transaction(() => {
     db.pragma("defer_foreign_keys = ON");
@@ -53,7 +45,6 @@ function asBefore(db: Database.Database): void {
   })();
 }
 
-/** Every row of every table, to compare one state of the database with another. */
 const everything = (db: Database.Database) =>
   (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all() as { name: string }[]).map(({ name }) => [name, db.prepare(`SELECT * FROM ${name} ORDER BY rowid`).all()]);
 
@@ -107,7 +98,6 @@ test("keying again changes nothing, whatever key it names", () => {
 test("a rename that fails undoes the key and every rename before it, and keying again then succeeds", () => {
   const { db, store } = storedBy050();
   const before = everything(db);
-  // why roles: the verifier roles are renamed after the key is written and every issue column is renamed.
   const succeed = failWrites(db, "UPDATE", "roles");
   assert.throws(() => store.keyIssues(MANAGER, BBP), /forced failure/);
   assert.deepEqual(everything(db), before, "no table keeps any of it, the key included");

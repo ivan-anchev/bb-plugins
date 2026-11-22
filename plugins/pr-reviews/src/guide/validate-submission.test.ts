@@ -4,7 +4,6 @@ import { hunkIdOf, WHOLE_FILE, type DiffFile, type Hunk } from "../diff/diff-sch
 import type { GuideInput } from "./guide-schema.ts";
 import { validateSubmission } from "./validate-submission.ts";
 
-// A hunk from its lines; the counts follow from them, as git writes them.
 function hunk(oldStart: number, newStart: number, lines: string[]): Hunk {
   const oldLines = lines.filter((line) => line[0] === " " || line[0] === "-").length;
   const newLines = lines.filter((line) => line[0] === " " || line[0] === "+").length;
@@ -17,13 +16,9 @@ const repeat = (prefix: string, count: number) => Array.from({ length: count }, 
 const CLIENT = "src/auth/token-client.ts";
 const CLIENT_TEST = "src/auth/token-client.test.ts";
 
-// @@ -18,9 +18,19 @@: context 18-21, removed old 22-26, added new 22-36.
 const REFRESH = hunk(18, 18, [...repeat(" ", 4), ...repeat("-", 5), ...repeat("+", 15)]);
-// @@ -60,3 +70,4 @@: old 60-62, new 70-73.
 const RETRY = hunk(60, 70, [" a", "+b", " c", " d"]);
-// @@ -1,2 +1,3 @@
 const TEST_CASE = hunk(1, 1, [" describe", "+  it", " })"]);
-// @@ -3,1 +3,2 @@, which git prints as @@ -3 +3,2 @@.
 const NOTE = hunk(3, 3, [" ## 0.2.0", "+- Single-flight refresh."]);
 
 const FILES: DiffFile[] = [
@@ -52,7 +47,6 @@ const complete: GuideInput = {
   findings: [{ file: CLIENT, line: 29, priority: "p0", title: "Refresh error is swallowed", body: "A failed refresh leaves waiters hanging." }],
 };
 
-// Exactly one change to the complete guide.
 const withSteps = (steps: GuideInput["steps"]): GuideInput => ({ ...complete, steps });
 const withHidden = (hidden: GuideInput["hidden"]): GuideInput => ({ ...complete, hidden });
 const withFindings = (findings: GuideInput["findings"]): GuideInput => ({ ...complete, findings });

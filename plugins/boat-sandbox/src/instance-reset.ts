@@ -1,28 +1,9 @@
-// Create only, never resume: a sandbox started from a saved snapshot may carry the bb identity of the
-// machine it was saved from. That machine's daemon unit is enabled with lingering on, so it
-// starts at boot as the old host, and bb's daemon CLI refuses another host's identity in its data
-// directory, which also holds that machine's checkouts.
-//
-// cloud-init's per-instance model: a marker holds the instance id, and the per-instance work runs only
-// when the marker differs. The instance id is core's create key, so a retried create that already
-// enrolled this launch never wipes its own identity (core requires create to be idempotent by key).
-// Everything else on the disk, the user's own logins included, is left alone.
 import type { BoatClient } from "./boat/client.ts";
 import type { SandboxId } from "./boat/sandbox.ts";
 import { shellQuote } from "./shell.ts";
 
 const REMOVED = "removed ";
 
-/**
- * Stops and removes every bb daemon unit, the `bb` symlink into the old data directory, and the data
- * directory, then records the key. The command holds no secret (boat keeps command text for 90 days):
- * the key is the thread id, already in the sandbox's name and labels. The plugin's drop-in directory
- * `bb-host-daemon-.service.d` does not match `*.service`.
- *
- * Nothing is removed until systemd confirms the unit is not running: removing the identity under a live
- * old daemon would enroll this sandbox beside it. `disable` fails for a unit systemd does not know, which
- * is not running either, so the unit's state decides; a `systemctl` that cannot answer exits the script.
- */
 const resetScript = (instanceKey: string): string => `set -eu
 marker="$HOME/.local/state/bb-boat/instance-key"
 [ "$(cat "$marker" 2>/dev/null || true)" = ${shellQuote(instanceKey)} ] && exit 0

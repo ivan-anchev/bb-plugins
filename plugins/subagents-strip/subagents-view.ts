@@ -1,7 +1,3 @@
-// The Subagents tab's UI state and how a click or a landing changes it: which
-// batches the user opened or closed, the one expanded row, and the landing
-// last shown. Pure, so every change is tested; ui/SubagentsTab.tsx keeps it
-// per thread and renders it.
 import type { DelegateId } from "./delegate.ts";
 import type { Batch } from "./roster.ts";
 import type { Landing } from "./subagents-tab.ts";
@@ -37,9 +33,6 @@ export function toggleRow(view: View, id: DelegateId, batches: readonly Batch[])
   return { ...view, toggled: present(view.toggled, batches), expanded: view.expanded === id ? null : id };
 }
 
-// ---------------------------------------------------------------- layer 2
-
-/** The toggles of batches that still exist: a rewrite can drop a prompt, and its toggle with it. */
 function present(toggled: BatchToggles, batches: readonly Batch[]): BatchToggles {
   const ids = new Set(batches.map((batch) => batch.id));
   return new Map([...toggled].filter(([id]) => ids.has(id)));

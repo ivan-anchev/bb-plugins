@@ -1,5 +1,3 @@
-// The one configure callback: the plugin's database, not the thread's metadata, decides what a
-// session gets. Synchronous by contract; an indexed better-sqlite3 read is.
 import type { PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgents } from "@get-bb/plugin-sdk";
 import { ticketMetadataSchema, type Role } from "../model/role.ts";
 import { UNCHECKABLE_RULE } from "../model/verdict/verdict.ts";
@@ -11,10 +9,6 @@ import { CREW_TOOLS, MEMORY_READ } from "./tools/crew-tools.ts";
 import { HANDOFF } from "./tools/handoff-tool.ts";
 import { VERDICT } from "./verify/verdict-tool.ts";
 
-/**
- * The plugin's user guide. why every thread gets it: once a plugin configures, bb gives a thread
- * only the skills it selects, and any thread may be asked how this plugin works.
- */
 const GUIDE_SKILL = "crew-board";
 
 type RolesBb = { agents: Pick<PluginAgents, "configure"> };
@@ -26,8 +20,6 @@ export function registerRoles(bb: RolesBb, store: Pick<Store, "roleFor">): void 
   });
 }
 
-// why the metadata is only a lookup key: anyone can write it, and roleFor matches a ticket only
-// while it is unbound.
 function ticketOf(ctx: PluginAgentConfigurationContext): string | null {
   const metadata = ticketMetadataSchema.safeParse(ctx.pluginMetadata);
   return metadata.success ? metadata.data.ticket : null;
@@ -38,7 +30,6 @@ function configurationFor(role: Role): PluginAgentConfiguration {
     case "coordinator":
       return { tools: [...CREW_TOOLS, ...ISSUE_TOOLS, ...AGENT_TOOLS], skills: [GUIDE_SKILL, "regional-manager"], instructions: COORDINATOR_RULES };
     case "agent":
-      // why only these: an agent reads its regional manager's memory, read only, and hands off.
       return { tools: [MEMORY_READ, HANDOFF], skills: [GUIDE_SKILL, "agent-work"], instructions: AGENT_RULES };
     case "verifier":
       return { tools: [MEMORY_READ, VERDICT], skills: [GUIDE_SKILL, "verifying"], instructions: VERIFIER_RULES };

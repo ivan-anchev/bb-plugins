@@ -2,14 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readBurnSpend } from "./spend.ts";
 
-/** bb's error for a failed call to another plugin, as its SDK throws it (BbHttpError). */
 function httpError(status: number, message: string, code: string | null = null): Error {
   return Object.assign(new Error(`HTTP ${status}: ${message}`), { name: "BbHttpError", status, code });
 }
 
 type CallRpc = Parameters<typeof readBurnSpend>[0];
 const failing = (error: unknown): CallRpc => (async () => { throw error; }) as CallRpc;
-/** Answers like Burn: the whole reply, which the caller's schema cuts down. */
 const answering = (reply: unknown, calls: unknown[] = []): CallRpc =>
   (async (args: Parameters<CallRpc>[0]) => {
     calls.push({ pluginId: args.pluginId, method: args.method, input: args.input });

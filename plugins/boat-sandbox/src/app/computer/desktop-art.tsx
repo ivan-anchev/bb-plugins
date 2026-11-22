@@ -1,14 +1,10 @@
-// The Computer card's picture: a placeholder desktop (a browser window, a terminal in front of it, a dock)
-// on a dotted wallpaper. Every colour is a bb theme token, so it follows the user's theme.
 import { useId, type CSSProperties } from "react";
 
 const MONO: CSSProperties = { fontFamily: "var(--font-mono)", fontSize: 7.5 };
 
-/** Fills and strokes take `var()` only through `style`, not as SVG attributes. */
 const paint = (fill: string, stroke?: string): CSSProperties => ({ fill: `var(${fill})`, ...(stroke === undefined ? {} : { stroke: `var(${stroke})` }) });
 
 export function DesktopArt() {
-  // why useId: a split layout draws one card per pane, and pattern ids are page-global.
   const dots = useId();
   return (
     <svg viewBox="0 0 320 120" className="block h-auto w-full" aria-hidden>

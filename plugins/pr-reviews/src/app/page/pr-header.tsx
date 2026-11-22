@@ -1,9 +1,3 @@
-// The PR header: a pane header bar, then the masthead. The bar holds the PR's state badge, with
-// `owner/repo #number` beside it, and at its end Review, or Finish review while the reader has a
-// pending review on GitHub (review-submit.tsx), Merge while the PR is open (merge-button.tsx),
-// then icon actions (Review chat when a review thread exists, then GitHub). The badge opens a menu
-// of the state changes GitHub allows. Under the bar, the masthead is the title above the identity
-// row (author, `base ← head`). The PR's line counts are on the Changes tab.
 import { Fragment, useState, type RefObject } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { PrDetail, PrState, StateChange } from "../../contract.ts";
@@ -25,13 +19,11 @@ type PrHeaderProps = { target: PrTarget; repo: Repo; pr: PrDetail; hasReviewThre
 export function PrHeader({ target, repo, pr, hasReviewThread, title }: PrHeaderProps) {
   return (
     <>
-      {/* .pr-pane-header (app.css): bb's pane header height and seam; px-6 is the page's content edge. */}
       <div className="pr-pane-header gap-2.5 px-6">
         <StateBadge target={target} state={pr.state} />
         <span className="min-w-0 truncate text-xs text-muted-foreground">
           {repo} <span className="font-medium tabular-nums">#{pr.number}</span>
         </span>
-        {/* -mr-1.5 lines the last glyph, not its hit area, up with the bar's right edge. */}
         <div className="-mr-1.5 ml-auto flex shrink-0 items-center gap-1">
           <ReviewSubmit target={target} focusAfter={title} />
           <MergeButton target={target} pr={pr} focusAfter={title} />
@@ -56,15 +48,12 @@ export const STATE_TILES = {
   CLOSED: { label: "Closed", icon: "GitPullRequestClosed", color: "text-destructive-text" },
 } as const satisfies Record<PrState, { label: string; icon: string; color: string }>;
 
-// The changes GitHub allows from each state; a merged PR's state is final. Close comes last, apart.
 const CHANGES_FROM = {
   OPEN: ["draft", "close"],
   DRAFT: ["ready", "close"],
   CLOSED: ["reopen"],
 } as const satisfies Record<Exclude<PrState, "MERGED">, readonly StateChange[]>;
 
-// Each change's row: its words, its words while gh runs, and the state it leads to, on its badge.
-// GitHub decides what a closed draft reopens as.
 const CHANGES = {
   ready: { label: "Ready for review", doing: "Marking ready for review…", to: "OPEN" },
   draft: { label: "Convert to draft", doing: "Converting to draft…", to: "DRAFT" },
@@ -72,8 +61,6 @@ const CHANGES = {
   reopen: { label: "Reopen", doing: "Reopening…", to: "OPEN" },
 } as const satisfies Record<StateChange, { label: string; doing: string; to: PrState }>;
 
-// The sidebar's state badge at the header's size, naming the state. It stays at every width, since
-// it is the header's only mark of the state.
 function StateBadge({ target, state }: { target: PrTarget; state: PrState }) {
   if (state === "MERGED") {
     const { label } = STATE_TILES.MERGED;
@@ -89,16 +76,12 @@ function StateBadge({ target, state }: { target: PrTarget; state: PrState }) {
   return <StateMenu target={target} state={state} />;
 }
 
-// While gh runs, the chosen row says so and the menu stays open; once GitHub has the change the menu
-// closes, and the badge shows the new state when the re-read PR arrives. A refusal shows under the
-// rows until the menu closes.
 function StateMenu({ target, state }: { target: PrTarget; state: keyof typeof CHANGES_FROM }) {
   const changeState = useChangePrState();
   const [open, setOpen] = useState(false);
   const running = changeState.pendingInputs[0]?.change ?? null;
   const run = (change: StateChange) => {
     if (running !== null) return;
-    // The hook's error state reports a refusal; the rejection itself carries nothing more.
     changeState.mutate({ ...target, change }).then(() => setOpen(false), () => undefined);
   };
   const onOpenChange = (next: boolean) => {
@@ -114,7 +97,6 @@ function StateMenu({ target, state }: { target: PrTarget; state: keyof typeof CH
           aria-label={`State: ${label}. Change state`}
           className="group/state cursor-pointer rounded-md transition-[scale] duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100"
         >
-          {/* The wash deepens a step on hover and two while the menu is open. */}
           <PrStateBadge
             state={state}
             size="header"
@@ -148,13 +130,10 @@ function StateMenu({ target, state }: { target: PrTarget; state: keyof typeof CH
   );
 }
 
-// Close runs only after a press held HOLD_MS, by pointer or by Enter or Space, as a wash fills the
-// row; a shorter press asks to keep holding. Reopen undoes it, so it needs no dialog.
 function CloseItem({ running, onRun }: { running: boolean; onRun(change: StateChange): void }) {
   const hold = useHold(() => onRun("close"));
   const text = running ? CHANGES.close.doing : hold.nudged ? "Keep holding to close" : CHANGES.close.label;
   return (
-    // The hold chooses, not a click.
     <MenuItem keepOpen onSelect={() => undefined} {...hold.handlers}>
       <span
         aria-hidden
@@ -166,8 +145,6 @@ function CloseItem({ running, onRun }: { running: boolean; onRun(change: StateCh
   );
 }
 
-// The badge repeats the row's words as the state they lead to; the badge hides itself from a screen
-// reader. `relative` lifts both above the close row's hold wash.
 function ChangeRow({ change, text, running }: { change: StateChange; text: string; running: boolean }) {
   const to = CHANGES[change].to;
   return (

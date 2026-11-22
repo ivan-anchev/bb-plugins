@@ -1,5 +1,3 @@
-// Roles and agents: which thread is what to the plugin, and the agents that hold issues. An agent
-// is inserted holding its issue, and ended with what it left, in one transaction each.
 import { z } from "zod";
 import { agentIdSchema, baseSchema, endedHowSchema, placementSchema, type Agent, type AgentCheckout, type AgentId, type Base, type EndedHow, type Placement } from "../../../model/agent.ts";
 import { executionSchema, type Execution } from "../../../model/execution.ts";
@@ -43,7 +41,6 @@ export type NewAgent = { coordinatorId: CoordinatorId; issueId: IssueId; ticket:
  */
 export function insertAgent(db: Db, a: NewAgent): AgentId | null {
   if (db().prepare("SELECT 1 FROM agents WHERE coordinator_id = ? AND issue_id = ? AND ended_at IS NULL").get(a.coordinatorId, a.issueId) !== undefined) return null;
-  // why the highest, not a count: an id is never reused.
   const { last } = z.object({ last: z.number().nullable() }).parse(db().prepare("SELECT max(CAST(substr(id, 2) AS INTEGER)) AS last FROM agents WHERE coordinator_id = ?").get(a.coordinatorId));
   const id = agentIdSchema.parse(`a${(last ?? 0) + 1}`);
   insertTicket(db, a.ticket, { kind: "agent", coordinatorId: a.coordinatorId, agentId: id }, a.at);
@@ -88,14 +85,8 @@ export function agentsStore(db: Db) {
   }
 
   return {
-    /** What tools see: a thread has a role only once its ticket is bound to it. */
     roleOfThread,
 
-    /**
-     * What a session gets: the thread's bound role, else the role of the unbound ticket it carries.
-     * why the ticket: a first session can start before bb's spawn answer binds it. A ticket already
-     * bound belongs to its own thread, so a copy in another thread's metadata grants nothing.
-     */
     roleFor(threadId: string, ticket: string | null): Role | null {
       const bound = roleOfThread(threadId);
       if (bound !== null || ticket === null) return bound;
@@ -103,21 +94,14 @@ export function agentsStore(db: Db) {
       return row === undefined ? null : toRole(row);
     },
 
-    /** A verifier's unbound ticket, minted before its thread is spawned. */
     insertVerifierTicket(ticket: string, role: Extract<Role, { kind: "verifier" }>, at: number): void {
       insertTicket(db, ticket, role, at);
     },
 
-    /** Every agent of the regional manager, holding or ended, in the order started. */
     agents: (coordinatorId: CoordinatorId): Agent[] => agents(coordinatorId, null),
 
-    /** One agent of the regional manager, or null when it has none by that id. */
     agent: (coordinatorId: CoordinatorId, id: AgentId): Agent | null => agents(coordinatorId, id)[0] ?? null,
 
-    /**
-     * Every thread the plugin started for the issue and bb named, oldest first: its agents', each
-     * with its id, and its verifiers' (agentId null), whether they still hold a role in its work or not.
-     */
     issueThreads(coordinatorId: CoordinatorId, issueId: IssueId): { threadId: string; agentId: AgentId | null }[] {
       return db()
         .prepare(
@@ -130,21 +114,17 @@ export function agentsStore(db: Db) {
         .map((row) => z.object({ threadId: z.string(), agentId: agentIdSchema.nullable() }).parse(row));
     },
 
-    /** The ticket an agent's thread is spawned with. why throw: every agent is inserted with one. */
     agentTicket(coordinatorId: CoordinatorId, id: AgentId): string {
       return z.object({ ticket: z.string() }).parse(db().prepare("SELECT ticket FROM agents WHERE coordinator_id = ? AND id = ?").get(coordinatorId, id)).ticket;
     },
 
-    /** Ends the agent, once, together with what it tells its regional manager (see endAgent). Returns whether this call ended it. */
     endAgent: (agent: Pick<Agent, "coordinatorId" | "id" | "issueId">, how: EndedHow, left: HandoffId | null, placed: boolean, at: number): boolean =>
       db().transaction(() => endAgent(db, agent, how, left, placed, at))(),
 
-    /** Records where the agent's work is, as bb's git plugin read it while it handed off. */
     recordCheckout(coordinatorId: CoordinatorId, agentId: AgentId, { environmentId, branch, head }: AgentCheckout): void {
       db().prepare("UPDATE agents SET environment_id = ?, branch = ?, head = ? WHERE coordinator_id = ? AND id = ?").run(environmentId, branch, head, coordinatorId, agentId);
     },
 
-    /** Records what the agent's thread ran on, as bb read it from its latest turn while it handed off. */
     recordExecution(coordinatorId: CoordinatorId, agentId: AgentId, execution: Execution): void {
       db().prepare("UPDATE agents SET execution = ? WHERE coordinator_id = ? AND id = ?").run(JSON.stringify(execution), coordinatorId, agentId);
     },
@@ -167,7 +147,6 @@ const agentRowSchema = z.object({
   fixRounds: z.number().int(),
   startedAt: z.number(),
 });
-// why a union: how and when it ended are written together, or not at all.
 const endedColumnsSchema = z.union([
   z.object({ endedHow: z.null(), endedAt: z.null() }).transform(() => null),
   z.object({ endedHow: endedHowSchema, endedAt: z.number(), leftHandoffId: handoffIdSchema.nullable() }).transform(({ endedHow, endedAt, leftHandoffId }) => ({ how: endedHow, at: endedAt, left: leftHandoffId })),

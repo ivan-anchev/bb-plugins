@@ -1,6 +1,3 @@
-// Since when each thread has been under way, as far as this list has seen. bb's `updatedAt` holds still
-// through a turn's events but moves whenever the thread is read (checked live), so a thread you open
-// while it works would restart its "Working · for". Pure: the last map and the live threads in.
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { UNDER_WAY } from "../model/state.ts";
 import type { ThreadIndex } from "../model/thread-index.ts";

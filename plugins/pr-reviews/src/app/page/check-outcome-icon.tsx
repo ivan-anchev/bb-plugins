@@ -1,4 +1,3 @@
-// A check outcome's glyph, for the side panel's check rows.
 import type { CheckOutcome } from "../../contract.ts";
 import { StatusGlyph, type StatusGlyphName } from "./status-glyph.tsx";
 

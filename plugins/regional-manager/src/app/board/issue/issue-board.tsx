@@ -1,10 +1,3 @@
-// The board's lanes (board-groups.ts): Needs you on top, then a lane per status, each under a header
-// that folds it. Backlog, Done and Canceled start folded. A parent's sub-issues sit one level in under
-// its row, in its lane, and a flagged one under Needs you as well. A row opens its issue's own tab
-// (issue-row.tsx). A decision waiting for the user keeps its own row, the caller's, under Needs you;
-// answered, it leaves the board, and focus in it goes to the page. Which lanes are folded outlives a
-// row moving lanes, and so does focus: on the row where it lands, or on its lane's header while that
-// lane is folded.
 import "./issue-board.css";
 import { useId, useState, type ReactNode } from "react";
 import type { IssueRow as Row } from "../../../contract.ts";
@@ -24,15 +17,12 @@ type IssueBoardProps = {
 };
 
 export function IssueBoard({ decisions, issues, decisionRow }: IssueBoardProps) {
-  // why: each header labels its lane by id, and a page may show more than one board.
   const ids = useId();
   const [folded, setFolded] = useState(FOLDED_AT_FIRST);
   const groups = boardGroups(decisions, issues);
-  // why only the rows an issue lives in: a flagged sub-issue's copy under Needs you is not where it lives, its parent's lane is.
   const laneOfKey = (key: string): Lane | null => groups.find(({ rows }) => rows.some((entry) => livesIn(entry).includes(key)))?.lane ?? null;
   const focus = useFocusKeptAcrossGroups(laneOfKey);
 
-  /** An issue's row, focused by `rowKey`; why a key apart from its id: a flagged sub-issue has two rows, each taking focus on its own. */
   const issueRow = (issue: Row, rowKey: string, under: IssueId | null = null) => <IssueRow ref={focus.target(rowKey)} issue={issue} under={under} />;
 
   function item(entry: BoardItem<Row>): ReactNode {
@@ -85,15 +75,10 @@ export function IssueBoard({ decisions, issues, decisionRow }: IssueBoardProps) 
   );
 }
 
-// ------------------------------------------------------------------ layer 2
-
-/** The decision's or the issue's id. why one key space: decision and issue ids never collide (`d1`, `BBP-1`). */
 const idOf = (entry: BoardItem<Row>): string => (entry.kind === "decision" ? entry.decision.id : entry.issue.id);
 
-/** A row's own key: its id, but for a flagged sub-issue's copy under Needs you, which its issue's row under its parent already holds. */
 const rowKeyOf = (entry: BoardItem<Row>): string => (entry.kind === "flagged-sub-issue" ? `${entry.issue.id} under Needs you` : idOf(entry));
 
-/** The ids of what lives in a row: a decision, or an issue and its sub-issues; none for a flagged sub-issue's copy. */
 function livesIn(entry: BoardItem<Row>): string[] {
   switch (entry.kind) {
     case "decision":
@@ -107,15 +92,12 @@ function livesIn(entry: BoardItem<Row>): string[] {
   }
 }
 
-/** The lanes that start folded: nothing is left to do in them. */
 const FOLDED_AT_FIRST: ReadonlySet<Lane> = new Set(["backlog", "done", "canceled"]);
 
-/** The set with `key` taken out if it was in, else put in. */
 function toggled<Key>(keys: ReadonlySet<Key>, key: Key): ReadonlySet<Key> {
   const next = new Set(keys);
   if (!next.delete(key)) next.add(key);
   return next;
 }
 
-/** A lane's glyph names its status, so it stands still; Needs you has its own. */
 const laneGlyph = (lane: Lane): ReactNode => (lane === "needs-you" ? <NeedsYouGlyph /> : <StatusGlyph status={lane} still />);

@@ -1,5 +1,3 @@
-// The Archived shelf's true count: every archived parent bb holds, counted once and kept until one is
-// archived, unarchived or deleted. Pages bb's thread list; holds no rows.
 import type { BbPluginApi, PluginBbSdk } from "@get-bb/plugin-sdk";
 import { ARCHIVED_COUNT_TAG, type ArchivedCount } from "../contract.ts";
 
@@ -15,18 +13,15 @@ type Deps = { threads: ArchivedLister; rpc: Pick<BbPluginApi["rpc"], "experiment
 
 export type ArchivedCounter = ReturnType<typeof openArchivedCount>;
 
-// why: bb's list route sets no ceiling, so one page covers most stores while each response stays bounded.
 const PAGE = 500;
 
 export function openArchivedCount({ threads, rpc }: Deps) {
   let counting: Promise<ArchivedCount> | null = null;
 
   return {
-    /** The kept count, else a fresh one; every client asking at once shares the one count. */
     read(): Promise<ArchivedCount> {
       if (counting !== null) return counting;
       const run = listArchivedParents(threads).then(countShelved);
-      // why: a failed count is not kept, so the next read tries again; a newer count is left alone.
       run.catch(() => {
         if (counting === run) counting = null;
       });
@@ -34,7 +29,6 @@ export function openArchivedCount({ threads, rpc }: Deps) {
       return run;
     },
 
-    /** A thread archived, unarchived or deleted: one the shelf lists makes every client count again. */
     changed(thread: Counted): void {
       if (!onShelf(thread)) return;
       counting = null;
@@ -42,8 +36,6 @@ export function openArchivedCount({ threads, rpc }: Deps) {
     },
   };
 }
-
-// ------------------------------------------------------------------ layer 2
 
 async function listArchivedParents(threads: ArchivedLister): Promise<Counted[]> {
   const all: Counted[] = [];
@@ -61,10 +53,6 @@ function countShelved(threads: readonly Counted[]): ArchivedCount {
   return { total: shelved.length, byProject };
 }
 
-/**
- * The shelf's own rule (`isListed` in model/activity.ts): parents only, never bb's hidden helpers.
- * why: stated here, not left to the list query's defaults, so the count and the rows can't disagree.
- */
 function onShelf(t: Counted): boolean {
   return t.parentThreadId === null && t.visibility === "visible";
 }

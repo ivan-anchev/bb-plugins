@@ -1,8 +1,3 @@
-// The Changes tab's header (ported from code-explorer's changes-header, without its target picker):
-// the summary, then search, Filter, collapse or expand all and the diff settings, and the path
-// filter under them while it is open. It stays mounted while the diff loads, with a placeholder
-// summary over an empty tree. The row wraps, so the controls drop under a long summary in a narrow
-// pane rather than out of it.
 import { useRef } from "react";
 import type { FileTree as TreeModel } from "@pierre/trees";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
@@ -24,7 +19,6 @@ type ChangesHeaderProps = {
 export function ChangesHeader({ controls, summary, extensionCounts, kindCounts, model }: ChangesHeaderProps) {
   const { pathQuery } = controls;
   const search = useRef<HTMLButtonElement>(null);
-  // Escape closes the filter and hands focus back to the button that opened it, never to the page.
   const closeFilter = () => {
     pathQuery.onChange(null);
     search.current?.focus();

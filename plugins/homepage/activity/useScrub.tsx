@@ -1,9 +1,7 @@
-// The tooltip and keyboard scrubbing across the grid's cells.
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 
 const EDGE = 96;
 
-// Days run in order down each week column: up/down is a day, left/right a week.
 const STEPS: Partial<Record<string, number>> = { ArrowUp: -1, ArrowDown: 1, ArrowLeft: -7, ArrowRight: 7 };
 
 /**
@@ -24,7 +22,6 @@ export function useScrub(opts: { count: number; describe: (i: number) => string 
     const r = root.getBoundingClientRect();
     const m = mark.getBoundingClientRect();
     const x = m.left + m.width / 2 - r.left;
-    // anchor the tooltip's edge instead of its centre near the graph's sides
     const shift = x < EDGE ? "0%" : x > r.width - EDGE ? "-100%" : "-50%";
     setTip({ x, y: m.top - r.top, shift, text: opts.describe(i) });
   }

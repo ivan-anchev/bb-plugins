@@ -9,10 +9,9 @@ import { openStore } from "../store.ts";
 import { openMediaFiles } from "./media-files.ts";
 import { mediaRoute } from "./media-route.ts";
 
-const BYTES = "0123456789".repeat(100); // 1,000 bytes
+const BYTES = "0123456789".repeat(100);
 const VIDEO: Attachment = { id: attachmentIdSchema.parse("att_00000000-0000-4000-8000-000000000001"), name: "rec.mp4", mimeType: "video/mp4", sizeBytes: 1_000 };
 
-/** The route over a store holding one note with VIDEO, whose file is on disk. */
 async function route() {
   const store = openStore(memoryStorage().storage);
   const media = openMediaFiles(join(mkdtempSync(join(tmpdir(), "notes-route-")), "data.db"));
@@ -21,7 +20,6 @@ async function route() {
   return { handle: mediaRoute(store, media), media };
 }
 
-/** The part of hono's request the route reads: `?id=` and the Range header. */
 function request(id: string | undefined, range?: string) {
   return {
     req: {

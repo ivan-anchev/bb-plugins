@@ -1,6 +1,3 @@
-// Which commands read as a `bb thread tell`. Every case was also run through bb's own recognizer
-// (ThreadScreen bundle `po`, lifted out and run on the same command): where this says tell, bb
-// says tell; the forms under "read as commands here" are the documented gap, which bb reads as tells.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -9,7 +6,6 @@ import { isThreadTell } from "./thread-tell.ts";
 
 type CommandRow = Extract<WorkRow, { workKind: "command" }>;
 
-// A real completed command (see normalise.test.ts for how the fixture was taken), its text replaced.
 const claude: { rows: TimelineRow[] } = JSON.parse(readFileSync(new URL("./fixtures/claude-thread.json", import.meta.url), "utf8"));
 const base = commandRow();
 const run = (command: string, exitCode: number | null = 0): boolean => isThreadTell({ ...base, command, exitCode });

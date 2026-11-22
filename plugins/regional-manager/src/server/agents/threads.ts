@@ -1,6 +1,3 @@
-// How the plugin reads its threads from bb: by id, in pages, and a thread's latest turn. The board,
-// the agents, the verify step and the PR watch all read through here, so "listed" and "current"
-// have one meaning.
 import { handoffIsCurrent, type Handoff } from "../../model/handoff.ts";
 
 type ListArgs = { threadIds: string[]; includeHidden: true; limit: number };
@@ -13,7 +10,6 @@ export type TurnsBb = {
   sdk: { threads: { events: { list(args: { threadId: string; types: ["turn/started"]; order: "desc"; limit: string }): Promise<{ seq: number }[]> } } };
 };
 
-// bb lists at most 200 threads by id per call.
 const IDS_PER_LIST = 200;
 
 type ListableThread = { id: string; archivedAt: number | null; deletedAt: number | null };

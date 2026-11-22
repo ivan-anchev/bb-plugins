@@ -1,8 +1,3 @@
-// Ref callbacks for boxes whose content can outgrow them: an expanded row's
-// body and its clamped report. They read layout the browser owns, so they
-// observe it rather than guess it from line counts.
-// why: React's ref type allows null, though with a cleanup returned React 19 never passes it.
-
 /** Keeps `data-overflow` on the element while its content is taller than its box. */
 export function markOverflow(el: HTMLElement | null): (() => void) | undefined {
   return el ? watchOverflow(el) : undefined;
@@ -42,7 +37,6 @@ export function followTail(el: HTMLElement | null): (() => void) | undefined {
   };
   el.scrollTop = el.scrollHeight;
   el.addEventListener("scroll", onScroll, { passive: true });
-  // why: new steps change the content, not the capped box, so watch the DOM, not the size.
   const observer = new MutationObserver(onChange);
   observer.observe(el, { childList: true, subtree: true });
   return () => {
@@ -52,13 +46,9 @@ export function followTail(el: HTMLElement | null): (() => void) | undefined {
   };
 }
 
-// ---------------------------------------------------------------- layer 2
-
 function watchOverflow(el: HTMLElement): () => void {
-  // why: scrollHeight rounds to whole pixels, so content a fraction taller is not an overflow.
   const mark = () => el.toggleAttribute("data-overflow", el.scrollHeight > el.clientHeight + 1);
   mark();
-  // why: a capped box resizes as it fills up to its cap and as it drops below it, which is when the mark can flip.
   const observer = new ResizeObserver(mark);
   observer.observe(el);
   return () => observer.disconnect();
@@ -68,7 +58,6 @@ function isAtBottom(el: HTMLElement): boolean {
   return el.scrollHeight - el.scrollTop - el.clientHeight <= 1;
 }
 
-/** The deepest last element: a new one means something arrived at the end, not above it. */
 function lastElement(el: Element): Element {
   let last = el;
   while (last.lastElementChild) last = last.lastElementChild;

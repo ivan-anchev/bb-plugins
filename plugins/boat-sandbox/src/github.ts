@@ -1,6 +1,3 @@
-// Which GitHub login a thread sandbox uses, and the `bb boat status` rows that say so. The order is fixed:
-// bb's forwarded login wins on every remote machine whenever core sends one (clone included); otherwise
-// boat's GITHUB_TOKEN, which daemon-setup.ts makes work for SSH remotes too.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { Account, GithubApp, SandboxEnvironment } from "./boat/wire.ts";
 import type { Read } from "./settle.ts";
@@ -26,10 +23,8 @@ export function githubSourceOf(status: BuiltInGitStatus): Read<GithubSource> {
     case "disabled":
       return { ok: true, value: { kind: "boat", whyNotBb: "bb's automatic GH_TOKEN is off" } };
     case "not logged in":
-      // Core sends nothing when `gh auth token` fails on the bb server.
       return { ok: true, value: { kind: "boat", whyNotBb: "gh on the bb server is not logged in" } };
     default:
-      // why: host data; a newer bb can send a state the SDK pin does not list.
       return { ok: false, reason: `bb reports its GitHub login as "${String(status satisfies never)}", which this plugin does not know` };
   }
 }

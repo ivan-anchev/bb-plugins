@@ -54,5 +54,5 @@ test("asks GitHub from a week before the grid's first Monday", async () => {
   let since = "";
   const { snapshot } = harness({ readMergedPrs: async (s) => ((since = s), []) });
   await snapshot.refresh();
-  assert.equal(since, "2026-05-11"); // grid starts Mon May 18 for Fri Nov 13
+  assert.equal(since, "2026-05-11");
 });

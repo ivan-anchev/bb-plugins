@@ -1,7 +1,3 @@
-// Which briefs a window has seen leave a composer's draft. A mark clears only on that evidence:
-// this window saw the brief in the draft, then saw the draft without it. A draft that never held
-// the brief here (another window's different draft for the same key, or a fill whose mark arrived
-// first) clears nothing.
 import type { InDraft } from "../../contract.ts";
 
 /** The briefs this window has seen in one composer's draft. */

@@ -1,6 +1,3 @@
-// The Summary tab's Activity, under the description: the PR's comments, reviews, commits and events
-// from the comments read, which the Changes tab and the guide share, and the composer at its foot.
-// A failed read shows above the activity it leaves in place (REVIEW.md).
 import { useId, useMemo } from "react";
 import type { ReviewThread } from "../../comments/thread-schema.ts";
 import type { PrDetail } from "../../contract.ts";

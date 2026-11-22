@@ -1,6 +1,3 @@
-// The sidebar's pane header: the section chips, then the Filter, Activity's view button, a quiet
-// icon lit while it hides a section. The Filter opens a menu that shows and hides each section.
-// The bar is a `pr-pane-header`, bb's pane header, so it lines up with the PR pane's across the split.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { ReactNode, Ref } from "react";
 import type { Section, SectionKey } from "../../contract.ts";
@@ -26,7 +23,6 @@ export function SidebarHeader({ children, ...filter }: SidebarHeaderProps) {
   );
 }
 
-// Activity's `.as-filter`; its icon's right edge lines up with the rows' badges.
 const FILTER =
   "mr-0.75 flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-subtle-foreground hover:bg-state-hover hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none data-on:text-foreground data-[state=open]:bg-state-hover data-[state=open]:text-foreground";
 

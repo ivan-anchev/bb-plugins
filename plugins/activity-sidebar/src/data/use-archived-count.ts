@@ -1,4 +1,3 @@
-// The Archived shelf's true count for the chosen project, live across clients, and its read again.
 import { experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { activitySidebarContract } from "../contract.ts";
 import { archivedCountFor, type ArchivedCountState } from "../list/items.ts";

@@ -1,6 +1,3 @@
-// The Computer page's reads: one when the page opens, then again after each answer for as long as it
-// stays open. A reader shows only what it read itself: an answer kept from an earlier look may carry a
-// desktop URL from before a stop, so a page opened while boat can't be read shows the failure, not that.
 import type { ComputerView } from "../../contract.ts";
 
 /** What the page shows: the last view this reader read, and why the latest read failed, if it did. */
@@ -37,9 +34,6 @@ export function readComputerEvery(read: () => Promise<ComputerView>, show: (read
   };
 }
 
-// ---------------------------------------------------------------- layer 2
-
-/** How soon to read again: fast while boat is bringing the desktop up, slower once it is settled. */
 const READ_AGAIN_MS: Record<ComputerView["status"], number> = {
   starting: 3_000,
   provisioning: 3_000,
@@ -51,6 +45,5 @@ const READ_AGAIN_MS: Record<ComputerView["status"], number> = {
 const AFTER_FAILURE_MS = 10_000;
 
 function readAgainIn({ view }: ComputerReading): number {
-  // why `??`: a server newer than this bundle may send a state it doesn't know.
   return view === undefined ? AFTER_FAILURE_MS : (READ_AGAIN_MS[view.status] ?? AFTER_FAILURE_MS);
 }

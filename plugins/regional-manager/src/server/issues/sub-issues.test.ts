@@ -1,7 +1,3 @@
-// Sub-issues end to end, through the tools as the regional manager and its agents reach them: one
-// level deep, a parent with no agent whose status rolls up from its sub-issues, the kinds a parent
-// holds, a parent's dependencies blocking its sub-issues, and canceling a parent. Each test is one
-// of issue 08's acceptance criteria, at the tools.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueIdSchema } from "../../model/issue/issue.ts";
@@ -25,15 +21,12 @@ async function managing(options: Parameters<typeof coordinating>[0] = {}) {
     for (const [, issue, by, as] of caughtUp.matchAll(/^### (WEB-\d+) "[^"]*" is unblocked: (WEB-\d+) (\w+)$/gm)) announced.push(`${issue} by ${by} ${as}`);
     return caughtUp;
   };
-  /** The board section of a catch-up: the lanes and the ready line. */
   const board = async () => (await catchUp()).split("## Board\n\n")[1]?.split("\n\n## Decisions")[0] ?? assert.fail("no board");
   const statuses = async () => Object.fromEntries((await kit.rpc.board({ coordinatorId })).issues.map(({ id, status }) => [id, status]));
-  /** Starts an agent on the issue; returns its thread. */
   const started = async (issue: string) => threadIn(await text("agent_start", { issue }));
   return { kit, threadId, coordinatorId, call, text, catchUp, board, statuses, started, unblocked: async () => (await catchUp(), [...announced]) };
 }
 
-/** Lets every answer `holds` kept go, and the ones asked for meanwhile, until none is left. */
 async function releaseAll(holds: { holding: boolean; held: (() => void)[] }): Promise<void> {
   holds.holding = false;
   while (holds.held.length > 0) {
@@ -221,12 +214,6 @@ test("7: a parent is canceled only once its sub-issues are closed; every sub-iss
 
 type Manager = Awaited<ReturnType<typeof managing>>;
 
-/**
- * A manager with WEB-1 and WEB-2, an agent on WEB-2, WEB-1 changed as `first` says, then the filing of a
- * sub-issue of WEB-1 held at bb's listing while `meanwhile` writes the manager's act straight to the
- * store: no change is counted, so only the rows the write holds can say it. The filing's result,
- * and every status after.
- */
 async function filedUnderI1While(first: object, meanwhile: (store: Manager["kit"]["store"], id: Manager["coordinatorId"]) => void) {
   const { kit, coordinatorId, call, text, statuses } = await managing();
   await text("issue_create", ISSUE);
@@ -291,7 +278,6 @@ test("two plan writes whose reads both finished first are judged in turn: a sub-
   const filing = call("issue_create", { ...RESEARCH, title: "HSM", parent: "WEB-1" });
   await settled();
   assert.equal(kit.turnEvents.held.length, 2, "both writes' reads held");
-  // Both reads answer in one go: the filing's read is done before the move's caller resumes from its write.
   await releaseAll(kit.turnEvents);
 
   assert.deepEqual(await moving, { refused: false, text: "Updated WEB-3." });
@@ -310,7 +296,6 @@ test("a plan write whose reads keep being overtaken writes nothing and says to t
   const filing = call("issue_create", { ...ISSUE, title: "Replay", parent: "WEB-1" }).finally(() => {
     answered = true;
   });
-  // Every bb read answers only after the manager changed something again, as a crew at work keeps doing.
   for (let round = 0; round < 10 && !answered; round++) {
     await settled();
     await text("issue_update", { id: "WEB-2", title: `Dead letters, round ${round}` });
@@ -323,7 +308,6 @@ test("a plan write whose reads keep being overtaken writes nothing and says to t
   assert.equal(await text("issue_create", { ...ISSUE, title: "Replay", parent: "WEB-1" }), "Filed WEB-3 (build) as a sub-issue of WEB-1 in Todo.");
 });
 
-/** A research parent WEB-1 with research sub-issues WEB-2 and WEB-3, WEB-4 depending on WEB-1, and one more research sub-issue per `more`, filed WEB-5 on. */
 async function researchFamily(more = 0) {
   const manager = await managing();
   await manager.text("issue_create", RESEARCH);
@@ -331,11 +315,6 @@ async function researchFamily(more = 0) {
   await manager.text("issue_create", { ...RESEARCH, title: "KMS", parent: "WEB-1" });
   await manager.text("issue_create", { ...ISSUE, title: "Card vault schema", dependsOn: ["WEB-1"] });
   for (let n = 0; n < more; n++) await manager.text("issue_create", { ...RESEARCH, title: `Option ${n + 1}`, parent: "WEB-1" });
-  /**
-   * The agent on the thread reports, and its turn ends. why settled first: the announcement reads a
-   * few times at most while changes keep coming, then waits for the next change or tick, and an
-   * agent just started is several changes.
-   */
   const report = async (agentThreadId: string) => {
     await settled();
     await manager.kit.call("agent_handoff", RESEARCH_DONE, agentThreadId);
@@ -367,7 +346,6 @@ test("moving a canceled or a Done sub-issue out of a Done research parent wakes 
   await report(await started("WEB-2"));
   await report(await started("WEB-3"));
   assert.deepEqual(await unblocked(), []);
-  // The manager's own act is the step that closes WEB-1: its result says what became ready, and one wake may say it again.
   assert.equal(await text("issue_update", { id: "WEB-5", status: "canceled" }), "Updated WEB-5. Now ready: WEB-4.");
   await settled();
   const woken = await unblocked();

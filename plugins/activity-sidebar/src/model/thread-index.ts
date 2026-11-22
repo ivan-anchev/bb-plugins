@@ -1,4 +1,3 @@
-// Who hangs under whom, from the live array the sidebar hook already holds: no request.
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { baseState, UNDER_WAY, withWait, type ZState } from "./state.ts";
 
@@ -27,10 +26,8 @@ export function indexThreads(threads: readonly PluginSidebarThread[], held: Read
   const byId = new Map(live.map((t) => [t.id, t]));
   const children = childrenByParent(live);
 
-  // Every visible, active thread below `id`, children first.
   const below = (id: string): PluginSidebarThread[] => (children.get(id) ?? []).flatMap((k) => [k, ...below(k.id)]);
 
-  // why: bb wakes the parent when an "auto" child ends, so the parent's settled turn is not its last.
   const awaitsSubthread = (id: string): boolean =>
     (children.get(id) ?? []).some((k) => k.parentNotifications === "auto" && isUnderWay(liveState(k)));
   const liveState = (thread: PluginSidebarThread): ZState | null =>
@@ -63,7 +60,6 @@ function childrenByParent(threads: readonly PluginSidebarThread[]): Map<string, 
   return children;
 }
 
-// why: a subthread never sleeps, so its base state says whether it runs.
 function isRunning(thread: PluginSidebarThread): boolean {
   return isUnderWay(baseState(thread));
 }

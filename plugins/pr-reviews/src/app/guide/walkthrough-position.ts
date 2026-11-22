@@ -1,8 +1,5 @@
-// Where the reader is in a guide, and where ← and → take them. Pure; the hook holds the state.
 import type { VisibleStep } from "../../guide/walkthrough.ts";
 
-// why the guide index, not the position among shown steps: the view options change which steps
-// are shown, and the reader must stay on the same step when they do.
 export type Position = { kind: "overview" } | { kind: "step"; index: number };
 
 export const OVERVIEW: Position = { kind: "overview" };
@@ -48,11 +45,8 @@ export function resolvePosition(steps: VisibleStep[], position: Position): Posit
   return positionAt(steps, steps.filter((shown) => shown.index <= position.index).length - 1);
 }
 
-// The step counter already numbers the steps, and counts only the shown ones, so a number the
-// agent wrote into a title ("2. Retry once") is dropped: it repeats the counter, or contradicts it.
 const titleOf = (shown: VisibleStep) => shown.step.title.replace(/^\s*(?:step\s+)?\d+\s*[.):\-–—]\s+/i, "");
 
-// The position's place among the shown steps; -1 for the overview, or a step not shown.
 function shownAt(steps: VisibleStep[], position: Position): number {
   return position.kind === "overview" ? -1 : steps.findIndex((shown) => shown.index === position.index);
 }

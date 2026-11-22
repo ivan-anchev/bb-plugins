@@ -1,4 +1,3 @@
-// One abortable one-shot read, made again whenever its key changes and dropped when the reader goes.
 import { useEffect, useState } from "react";
 
 /**
@@ -15,11 +14,9 @@ export function useRead<T>(key: string | null, read: (signal: AbortSignal) => Pr
       (value) => {
         if (!abort.signal.aborted) setGot({ key, value });
       },
-      // why: a failed or aborted read leaves the reader on what it shows without one.
       () => {},
     );
     return () => abort.abort();
-    // why: `read` is a fresh closure every render; the key alone says when to read again.
   }, [key]);
 
   return got !== null && got.key === key ? got.value : undefined;

@@ -1,8 +1,3 @@
-// A project's tile hue, copied from activity-sidebar (src/model/project-hue.ts) so a project wears the same
-// colour in both; plugins install standalone, so it is a copy, not an import. The tile colours live in
-// spend-card.css as `.bs-tile[data-hue]`.
-
-// Zeron's order (DEFAULT_HUES), kept so a project's hue never changes.
 const HUES = ["violet", "blue", "emerald", "sky", "amber", "rose", "lime", "teal", "orange", "indigo", "pink", "cyan"] as const;
 
 type Hue = (typeof HUES)[number];

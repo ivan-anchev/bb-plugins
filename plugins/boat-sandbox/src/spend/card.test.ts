@@ -13,7 +13,6 @@ const CAPTURED = JSON.parse(readFileSync(new URL("../boat/fixtures/create-a.json
 const OWNER = "owner-1";
 const SETTINGS: BoatSettingsValues = { apiKey: "boat_abc", idleMinutes: 15, defaultPreset: "default", defaultTemplate: "", defaultEnvironment: "", sidebarIcon: true };
 const ME = { user: { id: "sandbox_1", login: "octocat", zeroDataRetention: false, connectionMethods: ["github"] } };
-// Shaped like the live account's /limits on 2026-11-14.
 const LIMITS = {
   canStart: true,
   starts: { unlimited: true },
@@ -27,7 +26,6 @@ afterEach(() => {
   mock.timers.reset();
 });
 
-/** One sandbox of `GET /sandboxes?include=cost`. */
 const metered = (id: string, state: string, type: string, billingMultiplier: number, dollars: number, labels: object) => ({
   ...CAPTURED,
   id,
@@ -38,7 +36,6 @@ const metered = (id: string, state: string, type: string, billingMultiplier: num
   cost: { since: "2026-11-01T00:00:00.000Z", seconds: 0, dollars },
 });
 
-/** boat answering /me, /limits and two pages of metered sandboxes. */
 function boatWith(pages: { sandboxes: object[]; deleted: number }[]) {
   let page = 0;
   mock.method(globalThis, "fetch", async (url: string) => {
@@ -51,10 +48,6 @@ function boatWith(pages: { sandboxes: object[]; deleted: number }[]) {
   });
 }
 
-/**
- * boat answering as `account()`, its meter reading the next of `meters` per request, in the order they
- * arrive, for the month starting `since()`.
- */
 function boatMetering(
   meters: (number | Promise<number>)[],
   { account = () => ME.user.id, since = () => "2026-11-01T00:00:00.000Z" }: { account?: () => string; since?: () => string } = {},
@@ -68,7 +61,6 @@ function boatMetering(
   });
 }
 
-/** Mid-month, so a first reading only sets the baseline. */
 const midMonth = () => mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-11-14T12:00:00Z") });
 
 const today = (reply: SpendCardReply): number | null => (reply.status === "ready" ? (reply.days.at(-1)?.dollars ?? null) : null);
@@ -78,7 +70,7 @@ const signal = () => AbortSignal.timeout(10_000);
 function memoryKv(): PluginKvStorage {
   const rows = new Map<string, unknown>();
   return {
-    get: async <T>(key: string) => rows.get(key) as T | undefined, // why: a fake of bb's untyped JSON store
+    get: async <T>(key: string) => rows.get(key) as T | undefined,
     set: async (key, value) => void rows.set(key, structuredClone(value)),
     delete: async (key) => void rows.delete(key),
     list: async () => [...rows.keys()],
@@ -142,7 +134,6 @@ test("reads that overlap record in the order they began, so one that finishes la
 
   const slow = card.sample(signal());
   const quick = card.read(signal());
-  // why the race: read side by side, the quick read lands first; one at a time, it waits for the slow one.
   await Promise.race([quick, delay(50)]);
   release(1);
   await Promise.all([slow, quick]);
@@ -194,10 +185,8 @@ test("with no key the card says why in one message, and sampling does nothing", 
   assert.equal(fetch.mock.callCount(), 0);
 });
 
-/** boat's account API reply for the live account on 2026-11-14: Nov 8–12 carry machine time. */
 const WALLET = readFileSync(new URL("../boat/fixtures/billing-wallet.json", import.meta.url), "utf8");
 
-/** boat with a meter that reads `meter()`, $1 by default, and its account API answering `wallet()`. */
 function boatWithWallet(wallet: () => Response | Promise<Response>, meter: () => number | Promise<number> = () => 1) {
   mock.method(globalThis, "fetch", async (url: string) => {
     if (url.endsWith("/me")) return Response.json(ME);
@@ -272,7 +261,6 @@ test("a backfill cancelled while it waits behind a reading writes nothing", asyn
   const call = new AbortController();
 
   const backfilled = card.backfill(call.signal);
-  // why the wait: boat answers the backfill, which then queues behind the held reading.
   await delay(50);
   call.abort();
   release(1);

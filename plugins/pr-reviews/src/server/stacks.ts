@@ -1,10 +1,7 @@
-// Stacked PRs: a PR whose base branch is another PR's head branch, in the same repo, sits on that
-// PR. Pure.
 import type { InboxPr, PrState } from "../contract.ts";
 
 type StackPr = Pick<InboxPr, "repo" | "number" | "state" | "baseRefName" | "headRefName">;
 
-// When a head branch was reused, the open PR on it is the one a PR above builds on now.
 const HEAD_OWNER_RANK = { OPEN: 0, DRAFT: 0, MERGED: 1, CLOSED: 2 } as const satisfies Record<PrState, number>;
 
 /**

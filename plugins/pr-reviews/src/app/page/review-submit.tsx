@@ -1,11 +1,3 @@
-// Review: the header's control, on every tab, for submitting the reader's review of the PR. With
-// a pending review on GitHub it is Finish review, counting the review's pending comments, and its
-// popover submits the review or discards it. With none, a reader who didn't write the PR can
-// still review it at once, with no comments; its author comments on the conversation instead. The
-// popover submits as a comment, an approval or a request for changes (only a comment on the
-// reader's own PR), with a body, optional unless GitHub needs one. A GitHub refusal shows in the
-// popover beside the body, which stays. Once GitHub has the review the control says so: until
-// the comments read no longer has it pending, or a moment for a review that never was.
 import { useCallback, useEffect, useId, useRef, useState, type RefObject } from "react";
 import { experimental_Icon as Icon, experimental_PluginRpcCallError as RpcCallError } from "@get-bb/plugin-sdk/app";
 import { GITHUB_BODY_LIMIT } from "../../comments/comment-schema.ts";
@@ -23,20 +15,14 @@ import { bodyRequired, reviewEventsFor } from "./review-events.ts";
 /** `focusAfter`: where focus goes when the control leaves while holding it, as it does once the review is in. */
 type ReviewSubmitProps = { target: PrTarget; focusAfter: RefObject<HTMLElement | null> };
 
-/** A review GitHub has taken: the pending review submitted or discarded, or a new one (null) submitted. */
 type Done = { reviewId: string | null; outcome: "submitted" | "discarded" };
 
-/** How long the word that a new review went stays, with no pending review for the read to drop. */
 const NEW_REVIEW_DONE_MS = 2500;
 
 export function ReviewSubmit({ target, focusAfter }: ReviewSubmitProps) {
   const comments = useComments(target);
   const [done, setDone] = useState<Done | null>(null);
-  // The open popover's panel, portaled outside the control, so outside `control` below.
   const panel = useRef<HTMLDivElement>(null);
-  // why a ref callback: React runs its cleanup before it removes the control, while focus is still
-  // in it, and before it detaches the panel inside it, which goes with it. The title is gone
-  // already when the whole page leaves, and focus with it.
   const handOff = useCallback(
     (control: HTMLElement | null) => {
       if (control === null) return;
@@ -56,7 +42,6 @@ export function ReviewSubmit({ target, focusAfter }: ReviewSubmitProps) {
   if (read === undefined) return null;
   const { pendingReviewId, author } = read.viewer;
   if (pendingReviewId === null && author) return null;
-  // The read still has the review GitHub took: say so until the next read drops it.
   if (done?.reviewId === pendingReviewId) {
     return (
       <p role="status" className="flex h-7 items-center gap-1.5 px-1.5 text-xs text-muted-foreground">
@@ -77,12 +62,8 @@ export function ReviewSubmit({ target, focusAfter }: ReviewSubmitProps) {
   );
 }
 
-/** `panel`: takes the open popover's panel. */
 type SubmitPopoverProps = { target: PrTarget; reviewId: string | null; author: boolean; pending: number; panel: RefObject<HTMLDivElement | null>; onDone(outcome: Done["outcome"]): void };
 
-// The body, the chosen event and a failure stay while the popover closes and opens again; a new
-// pending review, or none after a new review went, is a new popover (keyed, or drawn again). A
-// reply that lands after the control has gone changes nothing.
 function SubmitPopover({ target, reviewId, author, pending, panel, onDone }: SubmitPopoverProps) {
   const [open, setOpen] = useState(false);
   const [body, setBody] = useState("");
@@ -92,10 +73,8 @@ function SubmitPopover({ target, reviewId, author, pending, panel, onDone }: Sub
   const submit = useSubmitReview();
   const discard = useDiscardReview();
   const life = useLifetime();
-  // A body outlives the popover, which a click outside closes: Esc then must not leave the PR with it.
   useHoldEscape(!isBlank(body));
   const ids = { body: useId(), error: useId() };
-  // Focus stays on the footer's buttons as Discard review turns into its confirmation and back.
   const toConfirm = useFocusHandOff();
   const toAsk = useFocusHandOff();
   const sending = submit.isPending || discard.isPending;
@@ -153,7 +132,6 @@ function SubmitPopover({ target, reviewId, author, pending, panel, onDone }: Sub
           onKeyDown={(keyEvent) => {
             if (keyEvent.key !== "Enter" || !(keyEvent.metaKey || keyEvent.ctrlKey)) return;
             keyEvent.preventDefault();
-            // The shortcut is Submit review's, so it does nothing while the discard confirmation hides that button.
             if (!confirmingDiscard) onSubmit();
           }}
         >
@@ -193,9 +171,6 @@ function SubmitPopover({ target, reviewId, author, pending, panel, onDone }: Sub
               <span>{tooLong ? `The ${bodyName} is ${body.length.toLocaleString("en")} characters, and GitHub takes at most ${GITHUB_BODY_LIMIT.toLocaleString("en")}.` : failure}</span>
             </p>
           )}
-          {/* why Discard on the left, away from Submit: the two must never be one slip apart. Keyed:
-              each footer is its own element, so React lets go of one, focus still in it, before
-              it removes it (focus-hand-off.ts). A new review has nothing to discard. */}
           {reviewId === null ? (
             <div className="flex justify-end">{submitButton}</div>
           ) : confirmingDiscard ? (
@@ -222,13 +197,11 @@ function SubmitPopover({ target, reviewId, author, pending, panel, onDone }: Sub
   );
 }
 
-// A pending review's body sums up its comments; a new review's is the review.
 function placeholderOf(finishing: boolean, required: boolean): string {
   if (finishing) return "Leave a summary (optional)";
   return required ? "Leave a comment" : "Leave a comment (optional)";
 }
 
-// A review can be pending with no comments, as one started for a comment GitHub couldn't place.
 function discardQuestion(pending: number): string {
   if (pending === 0) return "Discard your pending review?";
   return pending === 1 ? "Discard your pending comment?" : `Discard all ${pending} pending comments?`;

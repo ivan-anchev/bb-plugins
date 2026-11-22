@@ -1,13 +1,9 @@
-// Claude Code, Codex and the AI proxy for one boat environment, for `bb boat status`. The environment's
-// toggles decide whether agent sign-ins go in; the credential profile it uses holds them. The plugin
-// only reads these: changing them is the user's call on boat.
 import type { Account, CredentialProfile, SandboxEnvironment } from "./boat/wire.ts";
 import type { Read } from "./settle.ts";
 import { shellQuote } from "./shell.ts";
 
 interface Agent {
   name: string;
-  /** The credential ids in a boat profile that sign this agent in. */
   credentials: readonly string[];
   connect: string;
 }
@@ -34,8 +30,6 @@ export const SIGN_IN_ROWS = [...AGENTS.map((agent) => agent.name), "AI proxy"] a
 export function agentLines(environment: SandboxEnvironment, account: Account, profiles: Read<CredentialProfile[]>): string[] {
   const profile = profileOf(environment, account, profiles);
   return AGENTS.flatMap((agent) => {
-    // Safe for third parties withholds the real keys, but proxyAiCredentials still passes boat's proxy
-    // placeholders (OAS `SandboxEnvironment.proxyAiCredentials`), so the agent does sign in.
     if (environment.withholdsAll && environment.proxiesAi)
       return [`${agent.name}: through boat's AI proxy (environment ${environment.name} passes placeholders)`];
     if (environment.withholdsAll || !environment.passes.agents)
@@ -60,7 +54,6 @@ export function proxyLine(environment: SandboxEnvironment, account: Account, pro
     : "AI proxy: off for your boat account";
 }
 
-/** The profile the environment uses; null names the sandbox owner's default: the key's account, which creates thread sandboxes. */
 function profileOf(environment: SandboxEnvironment, account: Account, profiles: Read<CredentialProfile[]>): Read<CredentialProfile> {
   if (!profiles.ok) return profiles;
   const profile = environment.profileId === null

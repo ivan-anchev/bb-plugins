@@ -8,17 +8,11 @@ const REPORT = { summary: "Retries land with backoff", did: ["Added exponential 
 const DONE = { status: "done", ...REPORT, headSha: "0123456789abcdef0123456789abcdef01234567" };
 const NOTES = memoryFileSchema.parse("NOTES.md");
 
-/**
- * A regional manager with an issue filed and an agent started on it under each of these titles, its
- * thread idle so a doorbell starts a turn. Verification is off, so a done handoff is announced as
- * soon as it is made (verify.test.ts covers it on).
- */
 async function withAgents(...titles: string[]) {
   const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
   const agentThreads: string[] = [];
   for (const title of titles) agentThreads.push((await startedAgent(kit, threadId, { title, brief: `Do ${title}.` })).agentThreadId);
   kit.thread(threadId).status = "idle";
-  /** The text of every doorbell sent to the regional manager, in order. */
   const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
   return { kit, threadId, coordinatorId, agentThreads, doorbells };
 }
@@ -57,7 +51,7 @@ test("two agents that hand off while the regional manager is busy reach it as on
   await settled();
   assert.equal(kit.queued(threadId).length, 1);
 
-  await kit.dispatch(kit.queued(threadId)[0] ?? ""); // the busy turn ends, and the doorbell starts the next
+  await kit.dispatch(kit.queued(threadId)[0] ?? "");
   await settled();
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /2 updates since your last catch-up/);
   await settled();
@@ -146,7 +140,7 @@ test("a doorbell whose queued message is gone is cleared by the tick, and the ne
   await kit.tick();
   assert.equal(kit.store.doorbell(coordinatorId), queued, "a doorbell still in bb's queue stays");
 
-  await kit.dispatch(queued, { silently: true }); // its message.dispatched is missed, as during a reload
+  await kit.dispatch(queued, { silently: true });
   await kit.call("agent_handoff", { ...REPORT, status: "blocked" }, agentThreads[1]);
   await settled();
   assert.equal(doorbells().length, 1, "the stale doorbell still holds the next one back");
@@ -164,7 +158,7 @@ test("a doorbell bb gave up sending is taken out of its queue by the tick, and w
   await settled();
   const [failed = ""] = kit.queued(threadId);
   kit.thread(threadId).status = "idle";
-  kit.exhaust(failed); // the busy turn ended, and bb could not start the doorbell's
+  kit.exhaust(failed);
   await kit.call("agent_handoff", { ...REPORT, status: "blocked" }, agentThreads[1]);
   await settled();
   assert.equal(doorbells().length, 1, "the failed doorbell still holds the next one back");
@@ -200,7 +194,6 @@ test("a refused save in the Memory editor wakes nobody", async () => {
 test("once the plugin is disposed, nothing rings", async () => {
   const { kit, agentThreads, doorbells } = await withAgents("Add retries");
   kit.dispose();
-  // why both refused: the disposed instance calls bb and writes its database no more (lifetime.ts).
   await assert.rejects(kit.call("agent_handoff", DONE, agentThreads[0]), /reloaded or disabled/);
   await assert.rejects(kit.tick(), /reloaded or disabled/);
   assert.deepEqual(doorbells(), []);
@@ -209,7 +202,6 @@ test("once the plugin is disposed, nothing rings", async () => {
 test("a regional manager not started yet is never woken or polled: its memory takes no update, and ticks send, spawn, list and warn of nothing for it", async () => {
   const kit = harness();
   const coordinatorId = await kit.createManager("Scout");
-  // why a memory edit: it is the one update the panel could record for a regional manager, and an update is what rings one.
   await assert.rejects(async () => kit.rpc.memoryWrite({ coordinatorId, file: memoryFileSchema.parse("NOTES.md"), content: "Read the cron box first.", baseVersion: null }), /no started regional manager/);
 
   for (let minute = 0; minute < 3; minute++) await kit.tick();

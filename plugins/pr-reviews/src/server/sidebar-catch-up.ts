@@ -1,12 +1,7 @@
-// After a state change or a merge: the sidebar reads GitHub's search, which can list a changed PR
-// in its old state for a few seconds. This re-reads the sidebar until it shows the PR in its new state, then
-// has the app re-read it; it gives up after a bounded number of reads. The plugin instance owns
-// it: dispose cancels every pending read, and nothing starts after.
 import type { InboxPr, MergeMethod, PrState, StateChange } from "../contract.ts";
 import { repoKey, type Repo } from "../github/repo.ts";
 
-// GitHub's search listed a reopened PR as open 5 s after `gh pr reopen` returned (measured on a
-// throwaway repo); six reads 3 s apart wait more than three times that.
+// WARNING: GitHub's search listed a reopened PR as open 5 s after `gh pr reopen` returned (measured on a throwaway repo); re-measure if catch-up gives up before the sidebar updates.
 const READ_EVERY_MS = 3_000;
 const MAX_READS = 6;
 
@@ -14,7 +9,6 @@ const STATES_AFTER: Record<StateChange | MergeMethod, readonly PrState[]> = {
   ready: ["OPEN"],
   draft: ["DRAFT"],
   close: ["CLOSED"],
-  // A PR closed as a draft reopens as one.
   reopen: ["OPEN", "DRAFT"],
   merge: ["MERGED"],
   squash: ["MERGED"],
@@ -42,7 +36,6 @@ export function createSidebarCatchUp({ readListed, invalidate }: Deps): SidebarC
     for (let read = 0; read < MAX_READS; read++) {
       await pause(READ_EVERY_MS, signal);
       if (signal.aborted) return;
-      // A failed read reads as not caught up yet: the next one tries again.
       const listed = await readListed().catch((): InboxPr[] => []);
       if (signal.aborted) return;
       if (listed.some(shows)) return invalidate();
@@ -57,7 +50,6 @@ export function createSidebarCatchUp({ readListed, invalidate }: Deps): SidebarC
   };
 }
 
-// Resolves after `ms`, or at once when `signal` aborts.
 function pause(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
     if (signal.aborted) return resolve();

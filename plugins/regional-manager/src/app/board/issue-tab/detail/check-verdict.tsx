@@ -1,7 +1,3 @@
-// The verdict on one handoff, or on a build parent's final check, as the user is shown it (no
-// model: the board names none): how many criteria passed, the commit checked, a checkout or CI that
-// failed it, then each criterion with its evidence. A failed or unverifiable criterion shows its
-// evidence; a passed one keeps it folded.
 import { checkoutText, worktreeText } from "../../../../model/verdict/checkout.ts";
 import { allPassed, ciVerdictOf, failedCheckout, outcome, type CriterionResult, type ShownVerdict } from "../../../../model/verdict/verdict.ts";
 import { ThreadLink } from "../../issue/thread-link.tsx";
@@ -43,7 +39,6 @@ type ReturnedVerdict = Extract<ShownVerdict, { state: "returned" }>;
 
 function Returned({ verdict, judged }: { verdict: ReturnedVerdict; judged: Judged }) {
   const passed = verdict.criteria.filter((check) => check.result === "pass").length;
-  // why: one on its way back to the agent failed its criteria, though nobody has been told yet.
   const failed = outcome(verdict) === "fail" || !allPassed(verdict);
   return (
     <div className="rmi-verdict">
@@ -79,7 +74,6 @@ function Returned({ verdict, judged }: { verdict: ReturnedVerdict; judged: Judge
   );
 }
 
-/** The checkout as bb's git plugin read it, when it wasn't the claimed commit on a clean tree (for a final check, when its verifier's worktree wasn't clean). */
 function CheckoutLine({ verdict, judged }: { verdict: ReturnedVerdict; judged: Judged }) {
   const failed = failedCheckout(verdict);
   if (failed === null) return null;
@@ -90,7 +84,6 @@ function CheckoutLine({ verdict, judged }: { verdict: ReturnedVerdict; judged: J
   );
 }
 
-/** Why CI hasn't been judged on the commit, when the board has something to say about it. */
 function UnjudgedCiLine({ verdict }: { verdict: ReturnedVerdict }) {
   switch (verdict.settlement.kind) {
     case "waiting-for-ci":
@@ -108,7 +101,6 @@ function UnjudgedCiLine({ verdict }: { verdict: ReturnedVerdict }) {
   }
 }
 
-/** What CI said about the commit, when it failed the verdict, couldn't be read, or is still to come. */
 function CiLine({ verdict }: { verdict: ReturnedVerdict }) {
   const ci = ciVerdictOf(verdict);
   if (ci === null) return <UnjudgedCiLine verdict={verdict} />;
@@ -138,7 +130,6 @@ function CiLine({ verdict }: { verdict: ReturnedVerdict }) {
 function Criterion({ number, criterion, result, evidence }: { number: number; criterion: string; result: CriterionResult; evidence: string }) {
   return (
     <li>
-      {/* why open unless passed: a failure's evidence is what the user came for; a pass's is there on demand. */}
       <details open={result !== "pass"} className="rmi-criterion">
         <summary>
           <ResultGlyph result={result} />
@@ -148,7 +139,6 @@ function Criterion({ number, criterion, result, evidence }: { number: number; cr
           </span>
           <DiscloseGlyph />
         </summary>
-        {/* why the tab stop: long output scrolls, and the keyboard scrolls only what has focus. */}
         <pre tabIndex={0} aria-label={`Evidence for criterion ${number}`} className="rmi-evidence">
           {evidence}
         </pre>

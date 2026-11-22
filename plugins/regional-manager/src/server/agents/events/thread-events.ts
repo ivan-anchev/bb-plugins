@@ -1,10 +1,3 @@
-// bb's lifecycle events about the plugin's threads. Most are hints, not state: an agent thread's
-// event only says that what its regional manager's views are derived from changed, so they are read
-// again (the board, what was unblocked), and those derive everything on each read, so a missed event
-// (a reload, a reconnect) costs nothing. An archived or deleted agent thread ends its agent, and a
-// deleted regional manager is removed; an agent's or a verifier's thread going idle or failing, or a
-// verifier asking a person something, has the verify step look at its issue's checks again; the
-// tick's reconcile catches any of those missed.
 import type { PluginLogger, PluginThreadEventName } from "@get-bb/plugin-sdk";
 import type { IssueId } from "../../../model/issue/issue.ts";
 import type { HolderThread } from "../../../model/issue/status.ts";
@@ -23,12 +16,6 @@ const AGENT_THREAD_EVENTS = [
   "interaction.pending",
 ] as const satisfies readonly PluginThreadEventName[];
 
-/**
- * bb's event carrying the thread as it is now, at most once a second per thread while it works.
- * why: an approval or a question answered moves an issue out of Needs you without any status
- * change, and bb announces nothing else for it; and a thread moves to `starting` (In progress,
- * status.ts) before bb announces `thread.active`, and this is the first that says so.
- */
 const THREAD_NOW_EVENT = "experimental_thread.events";
 
 type ThreadEvent = { thread: { id: string; originPluginId: string | null } };
@@ -61,31 +48,25 @@ type Deps = {
  * removed manager never does.
  */
 export function forwardThreadEvents(bb: EventsBb, { store, agents, verify, onChange, refreshBoard }: Deps): { forget(id: CoordinatorId): void } {
-  /** The role of a thread this plugin made; null for any other. why the origin first: a cheap filter before touching SQLite. */
   const roleOf = ({ thread }: ThreadEvent) => (thread.originPluginId === bb.pluginId ? store.roleOfThread(thread.id) : null);
 
-  /** Runs `then` with the regional manager of an agent thread; nothing for any other thread. */
   const ofAgent =
     <P extends ThreadEvent>(then: (id: CoordinatorId, payload: P) => void) =>
     (payload: P) => {
       const role = roleOf(payload);
       if (role?.kind === "agent") then(role.coordinatorId, payload);
     };
-  /** Of each regional manager's agent threads, the status each had in its last THREAD_NOW_EVENT since its last lifecycle event. */
   const statusSeen = new Map<CoordinatorId, Map<string, HolderThread["status"]>>();
   for (const event of AGENT_THREAD_EVENTS) {
     bb.events.on(
       event,
       ofAgent((id, payload) => {
-        // why forget it: the thread moved since, so its next status is news even when it reads as the one seen, as a new turn's `starting` after the last turn's.
         statusSeen.get(id)?.delete(payload.thread.id);
         onChange(id);
       }),
     );
   }
 
-  // why a status only once: the event repeats every second while the thread works, and a repeat
-  // changes Needs you at most, so it refreshes the board alone instead of reading every issue again.
   bb.events.on(
     THREAD_NOW_EVENT,
     ofAgent((id, { thread }: ThreadNowEvent) => {
@@ -96,7 +77,6 @@ export function forwardThreadEvents(bb: EventsBb, { store, agents, verify, onCha
     }),
   );
 
-  /** The agent whose thread this is, while it holds its issue. */
   function holderOf(payload: ThreadEvent) {
     const role = roleOf(payload);
     if (role?.kind !== "agent") return null;
@@ -118,7 +98,6 @@ export function forwardThreadEvents(bb: EventsBb, { store, agents, verify, onCha
     if (agent !== null) await agents.deleted(agent).catch(warned(`end ${agent.id}, whose thread was deleted`));
   });
 
-  /** The issue of an agent's or a verifier's thread; null for any other. */
   function issueOf(payload: ThreadEvent): { coordinatorId: CoordinatorId; issueId: IssueId } | null {
     const role = roleOf(payload);
     switch (role?.kind) {
@@ -136,8 +115,6 @@ export function forwardThreadEvents(bb: EventsBb, { store, agents, verify, onCha
     }
   }
 
-  // why not wait for it: the look takes the issue's turn, which the operation that stopped the
-  // thread may still hold, and bb's other handlers needn't wait on it.
   for (const event of ["thread.idle", "thread.failed"] as const) {
     bb.events.on(event, (payload) => {
       const issue = issueOf(payload);
@@ -145,9 +122,6 @@ export function forwardThreadEvents(bb: EventsBb, { store, agents, verify, onCha
     });
   }
 
-  // why a verifier's ask: nobody answers one, and it holds the verifier's turn open; the look
-  // declines it (verify.ts watchRunning). why the board before and after: it shows the verifier
-  // asking until the look declines it, and bb announces nothing when the ask is settled.
   bb.events.on("interaction.pending", (payload) => {
     const role = roleOf(payload);
     if (role?.kind !== "verifier") return;

@@ -1,7 +1,3 @@
-// bb's dropdown menu, as plugins/pr-reviews vendors it, plus the labels, separators and radio groups
-// the chip needs: labelled groups with one checked row, disabled rows dimmed. Classes follow bb's own
-// DropdownMenu, as its Modal chip renders it, except that the menu only fades under reduced motion and
-// its rows are 44px tall on touch screens.
 import type { ReactNode } from "react";
 import { Content, Item, ItemIndicator, Label, Portal, RadioGroup, RadioItem, Root, Separator, Trigger } from "@radix-ui/react-dropdown-menu";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
@@ -9,7 +5,6 @@ import { PORTAL_SCOPE } from "./portal-scope.ts";
 
 export { Root as Menu, Trigger as MenuTrigger };
 
-/** The zoom and slide as bb's menus open and close; with reduced motion the menu only fades. */
 const MOVEMENT =
   "motion-safe:data-[state=closed]:zoom-out-95 motion-safe:data-[state=open]:zoom-in-95 motion-safe:data-[side=bottom]:slide-in-from-top-2 motion-safe:data-[side=top]:slide-in-from-bottom-2";
 
@@ -37,7 +32,6 @@ export function MenuSeparator() {
   return <Separator className="-mx-1 my-1 h-px bg-muted" />;
 }
 
-/** bb's menu row, at least 44px tall for a finger on a touch screen. */
 const ITEM = "relative flex cursor-default select-none items-center justify-between gap-3 rounded-sm px-2 py-[0.3125rem] text-xs outline-none transition-none pointer-coarse:min-h-11 focus:bg-state-hover focus:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50";
 
 /** `onSelect` may call `event.preventDefault()` to keep the menu open. */

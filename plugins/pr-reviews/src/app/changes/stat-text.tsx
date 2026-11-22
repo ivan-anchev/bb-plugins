@@ -1,4 +1,3 @@
-// How a `+A −D` stat looks wherever the PR page shows one: each part in its tone's color.
 import type { StatPart } from "./change-stats.ts";
 
 export const TONE_CLASSES: Record<StatPart["tone"], string> = {
@@ -12,7 +11,6 @@ export function StatText({ parts }: { parts: readonly StatPart[] }) {
   return (
     <span className="whitespace-nowrap">
       {parts.map((part, index) => (
-        // Keyed by place: two parts can share a tone, as two muted zeros do.
         <span key={index}>
           {index === 0 ? null : " "}
           <span className={TONE_CLASSES[part.tone]}>{part.text}</span>

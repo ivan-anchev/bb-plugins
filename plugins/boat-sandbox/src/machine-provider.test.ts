@@ -16,23 +16,16 @@ const ACCOUNT = "sandbox_account_1";
 const CAPTURED = JSON.parse(readFileSync(new URL("./boat/fixtures/create-a.json", import.meta.url), "utf8")).sandbox;
 
 const NODE_TOOLS: SavedSnapshot = { name: "node-tools", status: "ready", error: null, savedFrom: "small", savedAt: "2026-11-09T10:12:00.000Z" };
-/** base (boat's default, passes everything) and customer-demos (safe for third parties, AI proxy placeholders). */
 const ENVIRONMENTS = wireEnvironmentList.parse(JSON.parse(readFileSync(new URL("./boat/fixtures/environments.json", import.meta.url), "utf8")));
 
-/** boat in memory: Idempotency-Keys and labels behave as on boat's API. */
 function fakeBoat() {
   const sandboxes = new Map<SandboxId, Sandbox>();
   const byIdempotencyKey = new Map<string, Sandbox>();
   const posts: string[] = [];
   const bodies: CreateSandboxBody[] = [];
   const calls: string[] = [];
-  /** Every command run in a sandbox; `answer` decides each one's output and exit code. */
   const commands: string[] = [];
   const shell = { answer: (_command: string) => ({ output: "", exitCode: 0 }) };
-  /**
-   * The saved snapshots and environments on the account, whether boat puts the account's logins on a new
-   * sandbox, and the environment boat attaches for the one a create names.
-   */
   const account = {
     templates: [NODE_TOOLS],
     environments: ENVIRONMENTS,
@@ -76,7 +69,6 @@ function fakeBoat() {
       const sandbox = sandboxes.get(id);
       if (sandbox !== undefined) sandboxes.set(id, { ...sandbox, phase: "stopped", stoppedAt: Date.now() });
     },
-    // Auto-stop counts from the resume, with the TTL the resume sends.
     async resume(id, ttlSeconds) {
       calls.push(`resume ${id} ttl ${ttlSeconds}`);
       const sandbox = sandboxes.get(id);
@@ -95,7 +87,6 @@ function fakeBoat() {
     },
     writeFile: async () => {},
   };
-  /** A sandbox boat stopped `minutesAgo` minutes ago. */
   const stopped = (minutesAgo: number): Sandbox => {
     const sandbox = { ...add(machineLabels(OWNER, "thr_1")), phase: "stopped" as const, stoppedAt: Date.now() - minutesAgo * 60_000 };
     sandboxes.set(sandbox.id, sandbox);
@@ -104,7 +95,6 @@ function fakeBoat() {
   return { client, sandboxes, posts, bodies, calls, commands, shell, account, add, stopped };
 }
 
-/** A start gate that counts the starts it was asked for. */
 function countingGate() {
   const gate = createStartGate();
   const counted = { starts: 0 };
@@ -135,7 +125,6 @@ function provider(client: BoatClient, account = ACCOUNT, gate: StartGate = creat
     idle: { touch: async (hostId) => void touched.push(hostId) },
     bootstrap: async ({ key }) => (bootstraps.push(key), { hostId: "host_1" }),
   });
-  /** What core gets from validate for these inputs. */
   const validate = (inputs: MachineInputs) => {
     if (declaration.validate === undefined) throw new Error("the provider declares no validate");
     return declaration.validate({ inputs });
@@ -160,7 +149,6 @@ async function create(declaration: ReturnType<typeof provider>["declaration"], k
   return { result, checkpoints, steps, logs };
 }
 
-/** Which plugin step each command a sandbox ran was. */
 const kindOf = (command: string): string =>
   command.includes("bb-boat/instance-key") ? "reset" : command.includes("/boat.conf") ? "daemon" : command;
 
@@ -250,7 +238,6 @@ test("reconcileCleanup deletes whatever boat made for the key", async () => {
   assert.deepEqual([...boat.sandboxes.keys()], [kept.id]);
 });
 
-/** Core requires suspend and resume together; a provider without them fails here. */
 function suspendResume({ declaration }: ReturnType<typeof provider>) {
   const { suspend, resume } = declaration;
   if (suspend === undefined || resume === undefined) throw new Error("the provider declares no suspend and resume");
@@ -362,7 +349,6 @@ test("resume of a running sandbox renews its lease and re-enrolls it", async () 
 
 test("resume puts the 2-hour lease back, whatever auto-stop was set on the sandbox before", async () => {
   const boat = fakeBoat();
-  // A 20-second auto-stop set by hand: boat keeps it for later resumes unless the resume sends another.
   const sandbox = { ...boat.stopped(30), archiveAfter: Date.now() + 20_000 };
   boat.sandboxes.set(sandbox.id, sandbox);
   const { resume } = suspendResume(provider(boat.client));

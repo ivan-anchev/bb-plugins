@@ -68,10 +68,6 @@ function signOf(value: string): DiffSign | undefined {
   return undefined
 }
 
-/**
- * `- config: ~~next.config.js~~ next.config.ts` → the old line, removed, and
- * the new line, added. Text before the strike stays on both.
- */
 function rewriteOf(item: ReactElement): DiffLineProps[] | null {
   let before = ""
   let struck = ""

@@ -1,6 +1,3 @@
-// The reader's pending review through GitHub's GraphQL API: the read of it, and the mutations that
-// add a comment or a reply to it, submit it and discard it, or submit a review with none pending,
-// as `gh api graphql` arguments, with the parses of their responses. gh.ts runs them. Pure.
 import { z } from "zod";
 import { githubSideOf, type CommentRequest } from "../comments/comment-schema.ts";
 import type { ReviewEvent, ViewerReview } from "../comments/review-schema.ts";
@@ -9,7 +6,6 @@ import type { Repo } from "./repo.ts";
 
 const PR_ONLY = "query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) {";
 
-// GitHub shows a reader only their own pending review, so the first PENDING one is theirs.
 const VIEWER_REVIEW_QUERY = `${PR_ONLY} viewerDidAuthor reviews(states: [PENDING], first: 1) { nodes { id } } } } }`;
 
 export const viewerReviewArgs = (repo: Repo, number: number) => graphqlArgs(VIEWER_REVIEW_QUERY, prVariables(repo, number));
@@ -19,15 +15,12 @@ export function parseViewerReview(json: unknown): ViewerReview {
   return { author: pr.viewerDidAuthor, pendingReviewId: pr.reviews.nodes[0]?.id ?? null };
 }
 
-/** The PR's node id, which the mutations name it by, and its head: the commit a new thread goes on. */
 const PR_NODE_QUERY = `${PR_ONLY} id headRefOid } } }`;
 
 export const prNodeArgs = (repo: Repo, number: number) => graphqlArgs(PR_NODE_QUERY, prVariables(repo, number));
 
 export const parsePrNode = (json: unknown) => pullRequestOf({ id: z.string(), headRefOid: z.string() }).parse(json).data.repository.pullRequest;
 
-// why no commit: GitHub puts a new thread on the PR's head. `review` null joins the reader's pending
-// review, or starts one.
 const ADD_THREAD = `mutation($pr: ID!, $review: ID, $path: String!, $body: String!, $line: Int, $side: DiffSide, $startLine: Int, $startSide: DiffSide, $subjectType: PullRequestReviewThreadSubjectType) {
   addPullRequestReviewThread(input: { pullRequestId: $pr, pullRequestReviewId: $review, path: $path, body: $body, line: $line, side: $side, startLine: $startLine, startSide: $startSide, subjectType: $subjectType }) { thread { id } } }`;
 
@@ -59,8 +52,6 @@ export function addThreadArgs(pullRequestId: string, reviewId: string | null, re
 export const parseAddedThread = (json: unknown): boolean =>
   z.object({ data: z.object({ addPullRequestReviewThread: z.object({ thread: z.object({ id: z.string() }).nullable() }) }) }).parse(json).data.addPullRequestReviewThread.thread !== null;
 
-// why a review id is required: without one, GitHub publishes the reply at once when the reader has
-// no pending review, as when it was submitted elsewhere since the page read it.
 const ADD_REPLY = `mutation($thread: ID!, $review: ID!, $body: String!) {
   addPullRequestReviewThreadReply(input: { pullRequestReviewThreadId: $thread, pullRequestReviewId: $review, body: $body }) { comment { id } } }`;
 
@@ -73,7 +64,6 @@ const SUBMIT = `mutation($review: ID!, $event: PullRequestReviewEvent!, $body: S
 /** Submits the pending review as `event`, with `body` ("" for none) as its summary. */
 export const submitArgs = (reviewId: string, event: ReviewEvent, body: string) => graphqlArgs(SUBMIT, { review: reviewId, event, body });
 
-// why one mutation: given an event, GitHub submits the review it starts at once.
 const ADD_REVIEW = `mutation($pr: ID!, $event: PullRequestReviewEvent!, $body: String) {
   addPullRequestReview(input: { pullRequestId: $pr, event: $event, body: $body }) { pullRequestReview { id } } }`;
 

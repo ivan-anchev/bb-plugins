@@ -1,11 +1,3 @@
-// The quirk step, tested through its surface (foldTaskEvents + normalise) on a
-// trimmed real capture of thread thr_gza9vveeei (Claude Code 2.1, 8 background
-// agents, one of them resumed after its handback, one with a nested agent):
-//   GET /api/v1/threads/thr_gza9vveeei/timeline?includeNestedRows=true&segmentLimit=20
-//   GET /api/v1/threads/thr_gza9vveeei/events?types=item/started,item/backgroundTask/progress,item/backgroundTask/completed
-// Trimmed to: turn rows holding only their delegation rows; each delegate's first
-// and last 8 child rows plus any nested delegation; strings cut to 200 characters
-// except the handback message; events whose item is a delegation or background task.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -61,7 +53,7 @@ test("completed delegates carry the last handback message as the report, never t
 
 test("a resumed agent whose handback is followed by more rows still reports that handback", () => {
   const row = rowById("da3b7c4ca3-i4");
-  assert.notEqual(row.childRows?.at(-1)?.kind, "work"); // a message follows the handback
+  assert.notEqual(row.childRows?.at(-1)?.kind, "work");
   const d = byId(delegates, "da3b7c4ca3-i4");
   assert.match(d.state.status === "completed" ? (d.state.report ?? "") : "", /^Research \(map mode\)/);
 });
@@ -75,8 +67,6 @@ test("usage is non-null exactly for delegates with task events", () => {
   for (const d of normalise(fixture.rows, new Map(), "claude-code")) assert.equal(d.usage, null);
 });
 
-// why: bb's chat counts a nested delegation ("ran 1 subagent") and the handback ("ran 1 tool") in
-// its work groups, so both stay steps; the strip shows the handback only as the outcome.
 test("a nested delegation is a step of its delegate, never a delegate of its own", () => {
   assert.equal(delegates.length, 8);
   assert.ok(!delegates.some((d) => d.id === "dafebd499d-i19"));
@@ -115,7 +105,7 @@ test("Codex (hand-built): several collab rows on one childRef make one delegate"
   assert.equal(rest.length, 0);
   assert.equal(d.id, "c1");
   assert.equal(d.startedAt, 1);
-  assert.equal(d.state.status, "running"); // the last row decides
+  assert.equal(d.state.status, "running");
 });
 
 test("ACP (hand-built): a row with childRows null yields steps null and its output as the report", () => {
@@ -127,18 +117,10 @@ test("ACP (hand-built): a row with childRows null yields steps null and its outp
 test("a row with no task maps by its own status", () => {
   const [failed] = normalise([handBuilt({ callId: "e1", status: "error", output: "boom" })], new Map(), "claude-code");
   assert.deepEqual(failed.state, { status: "failed", endedAt: 50, error: "boom" });
-  // hand-built: no interrupted row could be produced (see the stopped capture below); bb writes this output when it interrupts a pending call.
   const [stopped] = normalise([handBuilt({ callId: "i1", status: "interrupted", output: "Tool execution interrupted" })], new Map(), "claude-code");
   assert.deepEqual(stopped.state, { status: "stopped", endedAt: 50 });
 });
 
-// ---------------------------------------------------------------- stopped and failed, real
-
-// A second trimmed real capture, thread thr_b2fe5q9v9i (Claude Code 2.1, issue 05),
-// taken and trimmed as above, one delegate per turn:
-//   turn 1  "Count slowly to ninety": background agent; the parent thread was stopped (`bb thread stop`) 32 s in.
-//   turn 2  "Use a missing agent type": an Agent call with an unknown subagent_type, refused at launch.
-//   turn 3  "Count until killed": background agent the parent stopped with its TaskStop tool.
 const stopFailed: { rows: TimelineRow[]; events: EventRow[] } = JSON.parse(
   readFileSync(new URL("./fixtures/claude-stopped-failed.json", import.meta.url), "utf8"),
 );
@@ -146,11 +128,11 @@ const stopFailedLedger = foldTaskEvents(new Map(), stopFailed.events);
 
 test("a background agent whose parent thread is stopped reads stopped, ended and frozen at the stop", () => {
   const stop = eventAt(stopFailed.events, 42);
-  assert.equal(taskOf(stop)?.taskStatus, "stopped"); // bb closes the task when it interrupts the turn
+  assert.equal(taskOf(stop)?.taskStatus, "stopped");
   const d = byId(normalise(stopFailed.rows, stopFailedLedger, "claude-code"), "daee87293d-i1");
   assert.deepEqual(d.state, { status: "stopped", endedAt: stop.createdAt });
-  assert.equal(elapsed(d, stop.createdAt + 60_000), elapsed(d, stop.createdAt)); // the clock stops
-  assert.equal(formatDuration(elapsed(d, Date.now())), "31s"); // 31.996 s from launch to stop
+  assert.equal(elapsed(d, stop.createdAt + 60_000), elapsed(d, stop.createdAt));
+  assert.equal(formatDuration(elapsed(d, Date.now())), "31s");
 });
 
 test("a background agent stopped with TaskStop reads stopped from its killed progress on", () => {
@@ -171,11 +153,10 @@ test("an Agent call refused at launch fails with the row's error, over its real 
   const d = byId(normalise(stopFailed.rows, stopFailedLedger, "claude-code"), row.callId);
   assert.deepEqual(d.state, { status: "failed", endedAt: row.completedAt, error: row.output });
   assert.match(row.output, /^Agent type 'no-such-agent-type' not found/);
-  assert.ok(elapsed(d, Date.now()) < 1_000); // so its "0s" is the truth
+  assert.ok(elapsed(d, Date.now()) < 1_000);
 });
 
 test("a failed task (hand-built) takes its error from the task event, never the row's launch receipt", () => {
-  // why: no agent task has failed on this machine; this is the turn 1 agent's real closing event, refiled as failed.
   const stop = eventAt(stopFailed.events, 42);
   assert.ok(stop.type === "item/backgroundTask/completed");
   const stateIfFailedWith = (error: string) => {
@@ -187,14 +168,6 @@ test("a failed task (hand-built) takes its error from the task event, never the 
   assert.deepEqual(stateIfFailedWith(""), { status: "failed", endedAt: stop.createdAt, error: null });
 });
 
-// ---------------------------------------------------------------- Codex, real
-
-// A third trimmed real capture, thread thr_6thqrgar7v (Codex, native multi-agent:
-// each of 3 turns spawns two counters that count with `sleep` and then reply),
-// read as above once during turn 1 (`midrun`: both counters running, their rows
-// not yet in a turn) and once after turn 3 (`final`: 6 settled counters).
-// Trimmed to: turn rows holding only their delegation rows; every child row kept.
-// Codex sends no background-task events, so the ledger is empty.
 const codex: { final: TimelineRow[]; midrun: TimelineRow[] } = JSON.parse(
   readFileSync(new URL("./fixtures/codex-thread.json", import.meta.url), "utf8"),
 );
@@ -231,7 +204,6 @@ test("a settled Codex delegate reports its closing message, which leaves its ste
     const closing = closingMessage(row);
     assert.deepEqual(d.state, { status: "completed", endedAt: row.completedAt, report: closing.text }, d.title);
     assert.ok(!d.steps?.some((step) => step.id === closing.id), d.title);
-    // why: every counter says its last number just before its closing message, so that number is now the last step.
     assert.equal(trailSteps(d.steps ?? []).at(-1), row.childRows?.at(-2), d.title);
   }
   assert.equal(detailLine(byId(codexSettled, "da2bb99053-i60")), "counter_e said: 1, 2, 3, 4, 5, 6. Ran sleep 5 between numbers, five times total. No files edited.");
@@ -260,8 +232,6 @@ test("every delegation-row delegate carries the delegation origin and the thread
   for (const d of [...codexSettled, ...codexRunning]) assert.deepEqual([d.origin, d.providerId], [{ kind: "delegation" }, "codex"], d.title);
   assert.equal(claude.length + codexSettled.length + codexRunning.length, 19);
 });
-
-// ---------------------------------------------------------------- helpers
 
 function codexRowById(callId: string, rows: readonly TimelineRow[] = codex.final): DelegationRow {
   const row = rows.flatMap((r) => (r.kind === "turn" ? (r.children ?? []) : [r])).filter(isDelegationRow).find((r) => r.callId === callId);
@@ -324,7 +294,6 @@ function lastHandbackMessage(row: DelegationRow): unknown {
   return handback.toolArgs?.message;
 }
 
-/** A delegation row shaped like a real one, for providers with no sample on this machine. */
 function handBuilt(fields: Partial<DelegationRow> & Pick<DelegationRow, "callId" | "status" | "output">): DelegationRow {
   return {
     ...delegationRows[0],
@@ -338,13 +307,6 @@ function handBuilt(fields: Partial<DelegationRow> & Pick<DelegationRow, "callId"
   };
 }
 
-// ---------------------------------------------------------------- turns
-
-// Top-level rows of thread thr_24dxq5xhph, read with includeNestedRows=true across its older pages: the
-// thread's seed prompt, which bb leaves without a turnId, and the turn after it; a bb system message and the
-// turn it started; a turn no message started (Claude Code resuming on a task notification); and the user's
-// prompt and its turn; and a bb notice whose turn the user steered with a second message (da20200006-t1).
-// Each turn's children are cut to [], as turnsOf reads none.
 const turnRows: { rows: TimelineRow[] } = JSON.parse(readFileSync(new URL("./fixtures/claude-turns.json", import.meta.url), "utf8"));
 
 test("turnsOf reads each turn's start and every message sent into it: the user's prompts, steered ones too, what a bb notice reports, or none", () => {

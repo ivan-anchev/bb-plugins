@@ -6,14 +6,10 @@ import { addReplyArgs, addReviewArgs, addThreadArgs, discardArgs, parseAddedThre
 import { liveComments, parseThreadsPage, toThread } from "./pr-comments.ts";
 import { repoSchema } from "./repo.ts";
 
-// Real responses from the private sandbox ivan-anchev/pr-reviews-review-mode-sandbox, recorded with
-// `gh api graphql` and these builders. PR #1 is the reader's own; PR #2 is Dependabot's, where the
-// reader started a pending review with a range comment and a reply, then discarded it.
 const fixture = (name: string): unknown => JSON.parse(readFileSync(new URL(`fixtures/comments/sandbox-${name}.json`, import.meta.url), "utf8"));
 
 const PR_ID = "PR_kwDOVq1kJs8AAAABObCbKQ";
 
-// The variables after the query, as gh is given them.
 const variablesOf = (args: string[]) => args.slice(4);
 
 test("the reader's review: the author of their own PR, and a reviewer's pending review", () => {

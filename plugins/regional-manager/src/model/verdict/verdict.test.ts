@@ -4,7 +4,6 @@ import { handoffIdSchema } from "../handoff.ts";
 import { ciOf, type PrSnapshot } from "./pr.ts";
 import { judge, outcome, verdictSchema, type CriterionResult, type Verdict } from "./verdict.ts";
 
-/** The claimed commit, on a clean tree, as bb's git plugin read it. */
 const CLEAN = { headSha: "a".repeat(40), changedFiles: [], changedFileCount: 0 };
 
 const returned = (results: CriterionResult[], settlement: Settlement = { kind: "checked", refused: null, ci: { kind: "none" } }): Verdict => ({
@@ -65,9 +64,7 @@ const passed = (): Extract<Verdict, { state: "returned" }> => {
 };
 const snapshot = (fields: Partial<PrSnapshot>): PrSnapshot => ({ number: 12, url: PR_URL, state: "open", draft: false, review: "none", ci: "pending", headSha: HEAD, failedChecks: [], ...fields });
 const HANDOFF = handoffIdSchema.parse("6f1c2a54-0b8e-4c3e-9d7a-2f5e8b1c4d90");
-/** The done handoff CI is judged for: its commit is HEAD, and it names this pull request (null: none). */
 const claim = (prUrl: string | null) => ({ id: HANDOFF, headSha: HEAD, prUrl });
-/** A PR status whose latest read that found the pull request came since the handoff, a minute after a read first saw its head. */
 const seen = (fields: Partial<PrSnapshot>) => ({ snapshot: snapshot(fields), headSeenAt: 0, readAt: 60_000, handoffAtRead: HANDOFF, unavailable: null });
 
 test("a handoff that names a pull request with no snapshot yet is waiting-for-ci, not a pass", () => {

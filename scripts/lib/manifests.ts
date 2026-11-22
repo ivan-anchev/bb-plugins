@@ -1,7 +1,3 @@
-// Generates the two bb manifests from the plugins' package.json files:
-//   .bb/plugins.json  — the collection index behind `bb plugin install … --plugin <id>`
-//   marketplace.json  — the catalog behind `bb marketplace add git:…`
-// Both are derived, never hand-edited, so they cannot drift from the plugins.
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { Ajv2020 } from "ajv/dist/2020.js";
@@ -46,7 +42,6 @@ export function renderManifests(repo: RepoConfig, plugins: Plugin[]): ManifestFi
   ];
 }
 
-/** Repository conventions bb would otherwise only reject at install time. */
 function findRuleViolations(plugins: Plugin[]): string[] {
   return plugins.flatMap((plugin) => [
     ...(plugin.dir === `plugins/${plugin.id}`
@@ -56,7 +51,6 @@ function findRuleViolations(plugins: Plugin[]): string[] {
   ]);
 }
 
-// The collection schema requires at least one entry, so an empty repo has no file.
 function renderCollection(repo: RepoConfig, plugins: Plugin[]): string | null {
   if (plugins.length === 0) return null;
   return toJsonFile({
@@ -94,22 +88,16 @@ function renderMarketplace(repo: RepoConfig, plugins: Plugin[]) {
   };
 }
 
-// A named host icon passes through; a file path becomes a URL relative to
-// marketplace.json, which bb resolves from the repository root.
 function marketplaceIcon(plugin: Plugin): string | { url: string } {
   const icon = plugin.manifest.bb.branding.icon;
   if (/^[A-Za-z][A-Za-z0-9]*$/.test(icon)) return icon;
   return { url: `./${plugin.dir}/${icon.replace(/^\.\//, "")}` };
 }
 
-// Track the whole major line, so every `<id>/vX.Y.Z` release tag reaches
-// marketplace users without touching the catalog.
 function releaseRange(version: string): string {
   return `${version.split(".")[0]}.x`;
 }
 
-// bb installs git plugins with plain `npm install --omit=dev` inside the plugin
-// directory, with no workspace around it — these protocols cannot resolve there.
 function unresolvableDependencies(plugin: Plugin): string[] {
   const { dependencies, devDependencies } = plugin.manifest;
   return Object.entries({ ...dependencies, ...devDependencies })

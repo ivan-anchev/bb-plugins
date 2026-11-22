@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { markdownShortcut } from "./markdown-keys.ts";
 
 const TEXT = "keep 200 until paging lands";
-const SELECTED = { text: TEXT, start: 5, end: 8 }; // "200"
+const SELECTED = { text: TEXT, start: 5, end: 8 };
 
 test("⌘B, ⌘I, ⌘E and ⌘K wrap the selected text, which stays selected", () => {
   assert.deepEqual(markdownShortcut("b", SELECTED), { text: "keep **200** until paging lands", start: 7, end: 10 });

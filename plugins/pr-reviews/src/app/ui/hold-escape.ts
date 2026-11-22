@@ -1,6 +1,3 @@
-// While a box is open, Esc never leaves the PR page, wherever focus is: in the box, or on the page
-// after a click outside it. bb's own Esc leaves the page, and the draft with it; it skips an event
-// whose default was prevented (spike §4).
 import { useEffect } from "react";
 
 /**
@@ -15,8 +12,6 @@ export function holdEscape(target: EventTarget): () => void {
   return () => target.removeEventListener("keydown", listener);
 }
 
-// why the document, bubbling: everything on the page acts on the Esc first (the box's own keys, a
-// menu, whose Radix layer skips an Esc already prevented), and bb's, on the window, comes after.
 /** Holds Esc while the calling box is open and `held`. */
 export function useHoldEscape(held: boolean): void {
   useEffect(() => (held ? holdEscape(document) : undefined), [held]);

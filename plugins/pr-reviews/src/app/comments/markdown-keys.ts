@@ -1,10 +1,6 @@
-// The comment box's markdown shortcuts: ⌘B, ⌘I, ⌘E and ⌘K (Ctrl off a Mac) wrap the selected text
-// in bold, italic, inline code or a link. Pure: the box applies the result to its textarea.
-
 /** A textarea's text and its selection. */
 export type TextEdit = { text: string; start: number; end: number };
 
-// With nothing selected, a placeholder word is wrapped and left selected, ready to type over.
 const WRAPS: Record<string, { before: string; after: string; placeholder: string }> = {
   b: { before: "**", after: "**", placeholder: "bold" },
   i: { before: "_", after: "_", placeholder: "italic" },

@@ -1,5 +1,3 @@
-// The server's read of Burn: Burn's own `spend` rpc, cut down to the four numbers the card shows, or
-// one line saying why there are none.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { burnTotalsSchema, type BurnRange, type BurnSpend } from "../contract.ts";
 

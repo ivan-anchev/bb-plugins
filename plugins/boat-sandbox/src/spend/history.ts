@@ -1,11 +1,7 @@
-// The spend chart's days. boat meters machine time month to date only, so the plugin reads that meter
-// now and then and keeps what it grew by, per UTC day; the days before that can be backfilled from
-// boat's own daily numbers. Pure: card.ts reads and stores the history.
 import { z } from "zod";
 import type { DaySpend } from "../boat/wire.ts";
 
 const DAY_MS = 86_400_000;
-/** Days kept: the chart's 30 and a few spare. */
 const KEEP_DAYS = 35;
 
 /** One look at boat's meter: the wallet's machine-time dollars this UTC month, read at `at`. */
@@ -73,14 +69,8 @@ export function backfill(history: SpendHistory, boat: readonly DaySpend[], now: 
   return { history: { ...history, since: Date.parse(first.day), days }, filled: filled.length };
 }
 
-/** `2026-11-14`. */
 const utcDay = (at: number): string => new Date(at).toISOString().slice(0, 10);
 
-/**
- * The meter at the last point known before `reading`: the last reading of the same month, else zero,
- * where boat starts each month. A first reading ever only sets the baseline, since what the month
- * spent before it is unknown, unless it falls on the 1st, which all started from zero.
- */
 function meterBefore(last: Reading | null, reading: Reading): number {
   if (last !== null) return utcDay(last.at).slice(0, 7) === utcDay(reading.at).slice(0, 7) ? last.monthDollars : 0;
   return new Date(reading.at).getUTCDate() === 1 ? 0 : reading.monthDollars;

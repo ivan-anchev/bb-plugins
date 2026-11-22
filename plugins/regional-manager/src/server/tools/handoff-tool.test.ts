@@ -52,7 +52,6 @@ test("a handoff records where the agent's work is and what its thread runs on no
   const { kit, threadId, coordinatorId, agentThreadId } = await withAgent({ verify: false });
   const environmentId = kit.environment(agentThreadId);
   kit.git.checkouts.set(environmentId, "retries");
-  // The user switches the agent's model in bb's composer before it hands off.
   kit.thread(agentThreadId).execution = { model: "sonnet", reasoningLevel: "low", serviceTier: "default", permissionMode: "auto" };
   await kit.call("agent_handoff", DONE, agentThreadId);
 
@@ -122,7 +121,6 @@ test("with verification off, once its turn ends a done handoff is In review as U
 
 test("a handoff of 50 evidence items of 2,000 characters comes back whole from crew_catch_up and issue_read", async () => {
   const { kit, threadId, agentThreadId } = await withAgent({ verify: false });
-  // Each item is numbered at its start and ends in "$", so a missing or cut one can't match.
   const evidence = Array.from({ length: 50 }, (_, i) => `${String(i).padStart(2, "0")}${"e".repeat(1_997)}$`);
   await kit.call("agent_handoff", { ...DONE, evidence }, agentThreadId);
 

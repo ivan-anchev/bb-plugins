@@ -8,7 +8,6 @@ import { freshStore, MANAGER, OTHER_MANAGER } from "../store/test-store.ts";
 import { openMemoryRoot, SEEDS } from "./memory-files.ts";
 import { upgradeMemoryFrom040 } from "./memory-upgrade.ts";
 
-/** MEMORY.md exactly as 0.4 seeded it. */
 const INDEX_040 = `# Memory
 
 The index of this memory. Each file holds one kind of thing:
@@ -24,7 +23,6 @@ const PLAN = "# Plan\n\n1. Inventory the endpoints\n2. Retire cron (WEB-4)\n";
 const PREFERENCES = "# Preferences\n\n- 2026-11-02: build on codex gpt-5.4\n";
 const CREW = "# Crew rules\n\n- Run npm run check before handing off.\n";
 
-/** A memory root whose managers' folders hold `files`, as 0.4 left them on disk; and every manager a write refreshed. */
 function memoryOf040(byManager: Record<string, Record<string, string>>) {
   const { store } = freshStore();
   const refreshed: string[] = [];

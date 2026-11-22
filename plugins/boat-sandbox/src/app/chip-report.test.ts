@@ -31,7 +31,6 @@ const ready = (defaults: Partial<LaunchDefaults> = {}): LaunchChoicesReply => ({
 
 const LOADING: ChoicesQuery = { data: undefined, error: null };
 const loaded = (defaults: Partial<LaunchDefaults> = {}): ChoicesQuery => ({ data: ready(defaults), error: null });
-/** The last read failed; `retained` is what an earlier read loaded. */
 const failed = (message: string, retained?: LaunchChoicesReply): ChoicesQuery => ({ data: retained, error: new Error(message) });
 
 const choicesOf = ({ data }: ChoicesQuery) => {
