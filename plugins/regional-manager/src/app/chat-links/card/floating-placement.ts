@@ -1,6 +1,6 @@
 // Where an issue link's card floats (board/issue/hover-card/placement.ts says where): it follows the
-// link, on whichever side has room, as anything holding it scrolls or the window resizes, and its
-// size is measured again each time, and as its content changes. Once the link can't be seen, its card
+// link, on whichever side has room, measured again each frame while it shows, with its own size, as
+// the link moves however it moves. Once the link can't be seen, its card
 // goes: a card by nothing on screen would hold a tab stop and bb's Escape for a link the user can't
 // see. Measured before it paints.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
@@ -24,13 +24,12 @@ export function useFloatingPlacement(link: HTMLAnchorElement, lost: () => void):
   // why after every render, before paint: the card's content, and so its size, changes as the board does, and it must not paint where it doesn't fit.
   useLayoutEffect(follow);
   useEffect(() => {
-    // why capturing: a scroll doesn't bubble, and the link moves with whichever of its ancestors scrolls.
-    window.addEventListener("scroll", follow, true);
-    window.addEventListener("resize", follow);
-    return () => {
-      window.removeEventListener("scroll", follow, true);
-      window.removeEventListener("resize", follow);
-    };
+    // why every frame while the card shows, not on events: the link moves as anything holding it scrolls or the window resizes, which send events, and as bb lays out the message again around it, as a streamed reply wraps the text before it onto another line, which sends none.
+    let frame = requestAnimationFrame(function tick() {
+      follow();
+      frame = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(frame);
   }, [follow]);
   return { ref, body, placement };
 }

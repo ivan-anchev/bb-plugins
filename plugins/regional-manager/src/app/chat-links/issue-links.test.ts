@@ -477,11 +477,33 @@ test("the card follows its link as the message scrolls, on the side with room, a
     const pane = view.container.querySelector(`[data-thread="${MANAGER_THREAD}"]`) ?? assert.fail("no pane");
     Object.assign(box, { top: 60, bottom: 76 });
     act(() => void fireEvent.scroll(pane));
+    await aFrame();
     assert.deepEqual([card()?.dataset.side, card()?.style.top], ["below", "80px"], "moved with the link");
 
     Object.assign(box, { top: 700, bottom: 716 });
     act(() => void fireEvent.scroll(pane));
+    await aFrame();
     assert.deepEqual([card()?.dataset.side, card()?.style.bottom], ["above", `${768 - 700 + 4}px`], "to the side with room, by its foot, once the link nears the window's foot");
+  } finally {
+    restore();
+  }
+});
+
+test("the card follows its link as bb lays the message out again around it, with no scroll or resize, as a streamed reply wraps the text before it", async () => {
+  const box = { top: 100, bottom: 116, left: 40 };
+  const restore = laidOut(box, { height: 200, width: 320 });
+  try {
+    const { link, glyphOf, card } = mount({ panes: [MANAGER_THREAD] });
+    await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+    act(() => link(MANAGER_THREAD).focus());
+    await waitFor(() => assert.equal(card()?.style.top, "120px"));
+    // why: the page's reads all in, so nothing renders the card again but what moves it.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 200)));
+
+    // why no event: bb moving the link it kept, a line down, sends none, and the overlay renders nothing for it.
+    Object.assign(box, { top: 160, bottom: 176, left: 12 });
+    await aFrame();
+    assert.deepEqual([card()?.style.top, card()?.style.left], ["180px", "12px"], "under the link where it is now");
   } finally {
     restore();
   }
@@ -508,6 +530,7 @@ test("a focused link scrolled out of sight takes its card with it, capped or not
 
       Object.assign(box, { top: -266, bottom: -250 });
       act(() => void fireEvent.scroll(pane(MANAGER_THREAD)));
+      await aFrame();
       assert.ok(card() === null, `the card of a link past the window's top goes (${height}px)`);
       assert.ok(document.activeElement === link(MANAGER_THREAD), "focus stays with the link, not in a card gone or the page");
       assert.deepEqual(focusedWith, height > 768 ? [{ preventScroll: true }] : [], "focus in the card goes back to the link without scrolling the list back to it");
@@ -561,6 +584,7 @@ test("a card measures itself again as the window changes: widened, it stays off 
     Object.assign(box, { left: 1300 });
     Object.assign(size, { width: 320 });
     act(() => void window.dispatchEvent(new window.Event("resize")));
+    await aFrame();
     assert.equal(card()?.style.left, `${1440 - 320 - 8}px`, "placed by the width it has now");
   } finally {
     restore();
@@ -578,12 +602,16 @@ test("a capped card that no longer needs its cap gives focus in its body back to
 
     Object.assign(window, { innerHeight: 4_000 });
     act(() => void window.dispatchEvent(new window.Event("resize")));
+    await aFrame();
     assert.equal(card()?.querySelector(".rmi-card-body")?.getAttribute("tabindex"), null, "uncapped");
     assert.ok(document.activeElement === link(MANAGER_THREAD), "focus is back on the link, not in a hidden card");
   } finally {
     restore();
   }
 });
+
+/** Two frames of the page's: the card's measure, once a frame, has seen what changed before. */
+const aFrame = () => act(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 
 /** The count `count` gives once it holds still for a few turns of the event loop: a read the page started is in. */
 async function settledReads(count: () => number): Promise<number> {
@@ -647,6 +675,23 @@ test("pressing an issue link in another thread opens the manager's thread in a s
   focusThread(MANAGER_THREAD);
   assert.deepEqual(opened, ["BBP-27 Avatars"], "once opened, never again");
   assert.equal(boardReads(), reads, "the board was not read again: only the focus moved");
+});
+
+test("a split closed before bb let it open the tab takes the press's ask with it: coming back to the manager later opens nothing", async () => {
+  const { view, link, glyphOf, show, focusThread, opened } = mount({ panes: [AGENT_THREAD] }, { focused: AGENT_THREAD });
+  await waitFor(() => assert.equal(glyphOf(link(AGENT_THREAD)), "In progress"));
+  const asked = () => view.inspection.experimental_panelCalls.filter((call) => call.method === "openTab").length;
+
+  assert.equal(fireEvent.click(link(AGENT_THREAD, "BBP-27")), false);
+  show({ panes: [AGENT_THREAD, MANAGER_THREAD] });
+  await waitFor(() => assert.ok(asked() > 0, "the new pane asks, and bb declines: it isn't focused"));
+  show({ panes: [AGENT_THREAD] });
+  await settledReads(asked);
+
+  focusThread(MANAGER_THREAD);
+  show({ panes: [AGENT_THREAD, MANAGER_THREAD] });
+  await settledReads(asked);
+  assert.deepEqual(opened, [], "no tab from the press the closed split never answered");
 });
 
 test("a press with ⌘ or Ctrl, even in the manager's own pane, asks bb for the manager's thread in a split, and the pane showing it opens the tab", async () => {

@@ -31,6 +31,7 @@ export function threadOfPane(element: Element): string | null {
 
 /** A pane's row under its header, hidden: its marker, naming its thread, and the opener of the issue tab asked of that thread, while one is. */
 function PaneMarker({ threadId }: ExperimentalThreadHeaderRowProps) {
+  useShown(threadId);
   const issueId = useSyncExternalStore(subscribe, () => requested.get(threadId) ?? null);
   return (
     <span hidden data-rmi-pane={threadId}>
@@ -55,6 +56,30 @@ function notify(): void {
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   return () => void listeners.delete(listener);
+}
+
+/** How many panes show each thread now. */
+const shown = new Map<string, number>();
+
+/**
+ * Counts the pane as showing `threadId` while it is mounted. When the last pane showing a thread goes
+ * with an open still asked of it, as a split closed before bb let it open the tab, the ask goes too:
+ * the press it came from was answered by that pane or by none, and coming back to the thread later
+ * opens nothing it didn't ask for. why once the commit is done: a pane bb mounts again in the same
+ * commit counts again first, and keeps the ask.
+ */
+function useShown(threadId: string): void {
+  useEffect(() => {
+    shown.set(threadId, (shown.get(threadId) ?? 0) + 1);
+    return () => {
+      const left = (shown.get(threadId) ?? 1) - 1;
+      if (left > 0) return void shown.set(threadId, left);
+      shown.delete(threadId);
+      queueMicrotask(() => {
+        if (!shown.has(threadId) && requested.delete(threadId)) notify();
+      });
+    };
+  }, [threadId]);
 }
 
 /** Opens the issue asked of the pane's thread once the thread reads as a regional manager's, whose tabs bb shows. */
