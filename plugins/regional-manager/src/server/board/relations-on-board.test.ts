@@ -1,5 +1,3 @@
-// What the board's reads send of dependencies: each row's open blockers, its parent's among them,
-// and an opened issue's own dependencies and dependents, as the tools file and close them.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueIdSchema } from "../../model/issue/issue.ts";

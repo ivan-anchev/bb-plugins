@@ -10,7 +10,6 @@ const LIMITS = { canStart: true, starts: { unlimited: true } };
 
 afterEach(() => mock.restoreAll());
 
-/** boat answering /me and /limits with these bodies, or failing every request with `failure`. */
 function boatAnswers(answers: { me?: unknown; limits?: unknown; status?: number; failure?: Error }) {
   mock.method(globalThis, "fetch", async (url: string) => {
     if (answers.failure) throw answers.failure;
@@ -28,7 +27,6 @@ const fixes = (configuration: Configuration): string[] =>
   configuration.status === "available" ? [] : configuration.problems.map((problem) => problem.fix);
 
 interface Case {
-  /** The chip blocks submit on a refusal but not on a failed read, so the two never share a status. */
   status: Configuration["status"];
   configure(): Promise<Configuration>;
 }
@@ -55,7 +53,6 @@ for (const [name, { status, configure }] of Object.entries(CASES)) {
     assert.equal((await configure()).status, status);
   });
 
-  // bb sets needs-configuration only at load, so a fix that skips the reload leaves bb showing the problem.
   test(`${name}: its fix ends by reloading the plugin`, async () => {
     const found = fixes(await configure());
     assert.equal(found.length, 1);

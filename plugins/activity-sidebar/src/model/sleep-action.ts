@@ -1,5 +1,3 @@
-// What a row adds to bb's own thread menu: Sleep ▸ with Zeron's times and Custom…, or Wake while asleep.
-// bb's menu holds everything else, so its confirmations, Undo toast and errors are bb's.
 import { experimental_THREAD_ACTION_GROUPS as GROUPS, type PluginThreadActionsInlineItem } from "@get-bb/plugin-sdk/app";
 import type { RowModel } from "./activity.ts";
 import { sleepPresets } from "./sleep.ts";

@@ -1,9 +1,3 @@
-// The comment box once it has done its job, in the same shell so the result lands where the text
-// was: word that the comment posted, with its link (the comment itself shows in its thread), that
-// it is in the reader's pending review (where it shows as pending), or that the question went to
-// the review thread.
-// And the same word in a box still being written, for a request that went while the reader
-// changed its text.
 import { useEffect, useRef } from "react";
 import { experimental_Icon as Icon, UrlLink } from "@get-bb/plugin-sdk/app";
 import type { BoxOutcome } from "../diff/line-selection.ts";
@@ -24,8 +18,6 @@ export const BOX_SHELL = {
 /** `takeFocus`: the composer this replaces had focus, which would otherwise drop to the page body. */
 type DoneBoxProps = { outcome: BoxOutcome; takeFocus: boolean; onDone(): void };
 
-// Done takes the focus the composer had (REVIEW.md). Esc anywhere in the box is Done too: a done
-// box holds no draft, since the text that went was all of it.
 export function DoneBox({ outcome, takeFocus, onDone }: DoneBoxProps) {
   const done = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -65,8 +57,6 @@ const DONE_WORDS = {
   reviewed: "Added to your review",
 } as const satisfies Record<BoxOutcome["kind"], string>;
 
-// Where the outcome is: the comment on GitHub, or the answer in Review chat. A pending comment is
-// in its thread, marked pending, and goes to GitHub when the review is submitted.
 function DoneLink({ outcome, openReviewChat }: { outcome: BoxOutcome; openReviewChat(): void }) {
   switch (outcome.kind) {
     case "commented":

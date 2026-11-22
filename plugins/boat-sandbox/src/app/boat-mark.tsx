@@ -1,4 +1,3 @@
-// The boat mark: the plugin's environment-provider icon (boat.svg) as bb lists it, for the sidebar badge and the homepage card.
 import type { PluginEnvironmentProvider } from "@get-bb/plugin-sdk";
 import { experimental_ProviderIcon as ProviderIcon, useEnvironmentProviders } from "@get-bb/plugin-sdk/app";
 import { PROVIDER_ID } from "../contract.ts";

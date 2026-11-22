@@ -1,13 +1,8 @@
-// A review thread the reader asked to see in the Changes tab, from a row of the Summary tab's
-// activity. The Changes panel scrolls its list to the thread's file and draws its diff; the thread
-// opens if it was folded, and once drawn it scrolls into view and takes focus. A thread that is
-// asked for once.
 import { createContext, useCallback, useContext, type RefCallback } from "react";
 
 /** `asked` counts the requests, so asking for the same thread again shows it again. */
 export type ThreadReveal = { path: string; threadId: string; asked: number };
 
-/** The page's pending reveal, and what a thread calls once it is in view. */
 type RevealRequest = { reveal: ThreadReveal | null; onRevealed(): void };
 
 const RevealContext = createContext<RevealRequest>({ reveal: null, onRevealed: () => undefined });
@@ -21,8 +16,6 @@ export const ThreadRevealProvider = RevealContext.Provider;
 export function useThreadReveal(threadId: string): { asked: boolean; target: RefCallback<HTMLElement> } {
   const { reveal, onRevealed } = useContext(RevealContext);
   const asked = reveal !== null && reveal.threadId === threadId;
-  // why wait for a size: a thread under a line is a note Pierre slots into its shadow root after
-  // this render, so it has no box to scroll to until it is drawn.
   const target = useCallback<RefCallback<HTMLElement>>(
     (element) => {
       if (element === null || !asked) return;

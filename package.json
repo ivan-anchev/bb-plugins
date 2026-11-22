@@ -30,12 +30,15 @@
     "test": "node --test 'scripts/**/*.test.ts' && node scripts/each-plugin.ts test",
     "build": "node scripts/each-plugin.ts build",
     "build:standalone": "node scripts/standalone-build.ts",
-    "check": "npm run manifests:check && npm run typecheck && npm test && npm run build && npm run build:standalone"
+    "lint": "oxlint --deny-warnings",
+    "check": "npm run manifests:check && npm run lint && npm run typecheck && npm test && npm run build && npm run build:standalone"
   },
   "devDependencies": {
+    "@interfere/landmines": "^0.1.1",
     "@types/node": "^22.18.0",
     "ajv": "^8.17.1",
     "bb-app": "0.48.1",
+    "oxlint": "^1.94.0",
     "typescript": "^5.9.0",
     "zod": "^4.1.0"
   }

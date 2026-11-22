@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildActivity } from "../model/activity.ts";
-import { thread } from "../model/fixtures.ts";
-import { view } from "./fixtures.ts";
+import { thread } from "../model/thread.fixture.ts";
+import { view } from "./items.fixture.ts";
 import { listItems, type ListItem } from "./items.ts";
 import { layoutItems, METRICS, visibleKeys } from "./layout.ts";
 
@@ -10,7 +10,6 @@ const title = (key: "pinned" | "activity"): ListItem => ({ kind: "title", key: `
 const notice: ListItem = { kind: "notice", key: "n:list", text: "Loading threads…", retry: false };
 const spacer: ListItem = { kind: "spacer", key: "spacer" };
 
-/** n rows keyed s:t0 … s:t{n-1}, top to bottom. */
 function rows(n: number): ListItem[] {
   const threads = Array.from({ length: n }, (_, i) => thread(`t${i}`, { latestAttentionAt: n - i }));
   const sections = buildActivity({ threads, projects: [], sleeps: new Map(), held: new Set(), now: 0, activeThreadId: null, filter: null }).sections;
@@ -33,7 +32,6 @@ test("titles are 24, rows 30, with the gap between and the padding around", () =
 test("a spacer takes the room the rest leave, so what follows it stands at the foot", () => {
   const layout = layoutItems([title("activity"), spacer, title("pinned")], 400);
   const [, gap, foot] = layout.entries;
-  // 400 - 4 top - 8 bottom - 24 - 24 - 2 gaps of 2 = 336
   assert.equal(gap.h, 336);
   assert.equal(foot.y + foot.h + METRICS.padBottom, 400);
   assert.equal(layout.height, 400);
@@ -49,12 +47,12 @@ test("the content is never shorter than the viewport", () => {
 });
 
 test("visibleKeys finds the window at the top, the middle and the bottom", () => {
-  const layout = layoutItems(rows(1000), 320); // row i stands at y = 4 + 32i
+  const layout = layoutItems(rows(1000), 320);
   const at = (top: number) => visibleKeys(layout, top, 320, 0);
 
-  assert.deepEqual(at(0), keys(0, 10)); // 0..320 holds rows 0..9 (row 10 starts at 324)
-  assert.deepEqual(at(3_200), keys(99, 110)); // row 99 ends at 3202; row 110 starts at 3524
-  assert.deepEqual(at(layout.height - 320), keys(990, 1000)); // the last 320 of 32010: rows 990 (ends 31714) .. 999
+  assert.deepEqual(at(0), keys(0, 10));
+  assert.deepEqual(at(3_200), keys(99, 110));
+  assert.deepEqual(at(layout.height - 320), keys(990, 1000));
 });
 
 test("overscan widens the window on both sides", () => {

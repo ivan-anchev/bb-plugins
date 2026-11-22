@@ -308,7 +308,6 @@ test("a drain cancelled before it starts leaves every entry's reason as it was",
   assert.deepEqual(bb.failureReasons(), ["http 500", "http 500"]);
 });
 
-/** Lets deferred settings syncs and in-flight requests run. */
 function settle() {
   return new Promise((resolve) => setTimeout(resolve, 20));
 }
@@ -319,11 +318,9 @@ function secretFieldsOf(bb: LoadedPlugin): string[] {
 
 type LoadedPlugin = Awaited<ReturnType<typeof loadedWith>>;
 
-/** A host step a test can pause: the next call waits there until released. */
 type HeldStep = "routesRead" | "secretWrite";
 
 interface Hold {
-  /** Resolves once a call has reached the step and is waiting. */
   reached: Promise<void>;
   release(): void;
 }
@@ -331,18 +328,12 @@ interface Hold {
 type EventHandlers = { [E in AttentionEvent]?: PluginThreadEventHandler<E> };
 type Registration = { [E in AttentionEvent]: [event: E, handler: PluginThreadEventHandler<E>] }[AttentionEvent];
 
-/**
- * Loads the plugin against a fake host that keeps stored settings across
- * reloads, the way bb does: `plugins.reload` loads a new instance, then runs
- * the old one's dispose hooks and drops its settings listeners.
- */
 async function loadedWith(routes: object) {
   const stored = new Map<string, string>([["routes", JSON.stringify(routes)]]);
   const db = new Database(":memory:");
   const faults = { secretWrites: 0, reloads: 0 };
   const holds = new Map<HeldStep, () => Promise<void>>();
   const errors: string[] = [];
-  /** The thread event log, oldest first; `events.list` answers from it the way bb does. */
   const threadEvents: ThreadEventRow[] = [];
   let instance = await load();
   let loads = 1;
@@ -378,7 +369,6 @@ async function loadedWith(routes: object) {
       });
     }
 
-    /** Like bb, a write through any handle notifies every listener of this load. */
     function fakeHandle<Values>(read: () => Values, steps: { beforeRead(): Promise<void>; beforeWrite(): Promise<void> }) {
       return {
         async get() {
@@ -391,7 +381,7 @@ async function loadedWith(routes: object) {
             if (value === null || value === undefined) stored.delete(name);
             else stored.set(name, value);
           }
-          for (const notify of [...listeners]) notify();
+          for (const notify of listeners) notify();
           return read();
         },
         onChange: (listener: (next: Values, prev: Values) => void) => void listeners.push(() => listener(read(), read())),
@@ -466,7 +456,6 @@ async function loadedWith(routes: object) {
     };
   }
 
-  /** Waits at `step` when a test holds it; each hold pauses one call. */
   async function pass(step: HeldStep) {
     const wait = holds.get(step);
     holds.delete(step);
@@ -495,7 +484,6 @@ async function loadedWith(routes: object) {
     set(values: Record<string, string>) {
       for (const [name, value] of Object.entries(values)) stored.set(name, value);
     },
-    /** Saves `routes` the way the Settings page does, without waiting for the sync it starts. */
     writeRoutes: (next: object) => instance.routesHandle.experimental_set({ routes: JSON.stringify(next) }),
     async setRoutes(next: object) {
       await instance.routesHandle.experimental_set({ routes: JSON.stringify(next) });

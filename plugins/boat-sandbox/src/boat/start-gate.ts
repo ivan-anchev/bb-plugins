@@ -1,8 +1,6 @@
-// boat's start budget. boat refuses an over-limit start with `429 rate_limited` and never queues it.
 import { setTimeout as sleep } from "node:timers/promises";
 import { BoatApiError } from "./client.ts";
 
-/** The per-minute window clears within this; the hour and day windows are not worth holding a create for. */
 const SHORT_WAIT_MS = 60_000;
 
 export class StartLimitError extends Error {
@@ -32,7 +30,6 @@ export interface StartGate {
 }
 
 export function createStartGate(): StartGate {
-  // In memory only: after a restart boat answers 429 once more, which costs nothing.
   let blockedUntil = 0;
 
   async function waitForWindow(signal: AbortSignal): Promise<void> {
@@ -42,19 +39,16 @@ export function createStartGate(): StartGate {
     await sleep(waitMs, undefined, { signal });
   }
 
-  /** Runs `start` once; a start-limit 429 moves the window and fails as `StartLimitError`. */
   async function attempt<T>(start: (retry: boolean) => Promise<T>, retry: boolean): Promise<T> {
     try {
       return await start(retry);
     } catch (error) {
       if (!isStartLimit(error)) throw error;
-      // Concurrent starts may each see a 429; the latest window wins.
       blockedUntil = Math.max(blockedUntil, Date.now() + (error.retryAfterMs ?? SHORT_WAIT_MS));
       throw new StartLimitError(blockedUntil);
     }
   }
 
-  /** One attempt, then one retry once a short window clears. */
   async function attemptAndRetry<T>(start: (retry: boolean) => Promise<T>, signal: AbortSignal): Promise<T> {
     try {
       return await attempt(start, false);
@@ -74,7 +68,5 @@ export function createStartGate(): StartGate {
   };
 }
 
-// Only `rate_limited` clears by waiting: `limit_reached` (sandboxes at once), the trial compute cap
-// and 402s do not, so they surface with boat's own message.
 const isStartLimit = (error: unknown): error is BoatApiError =>
   error instanceof BoatApiError && error.status === 429 && error.code === "rate_limited";

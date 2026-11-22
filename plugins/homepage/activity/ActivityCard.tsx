@@ -1,5 +1,3 @@
-// The card: a header, six months of merged PRs as a calendar grid (one cell
-// per day, weeks as columns, newest on the right), and two captions.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { levelScale, weekday, type Day } from "./days.ts";
 import { dayFormat, monthFormat, plural } from "./format.ts";

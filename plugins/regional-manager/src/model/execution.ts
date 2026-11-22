@@ -1,7 +1,3 @@
-// What a thread the plugin starts runs on: a provider, a model and a reasoning level. The manager
-// names one as a request (an agent's on agent_start, an issue's verifier on issue_create and
-// issue_update), and it is resolved against bb's catalog where the thread will run, or refused
-// with why, as placementOf resolves a placement (agent.ts).
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
 

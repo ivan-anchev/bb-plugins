@@ -4,11 +4,6 @@ import { test } from "node:test";
 import { INBOX_QUERY, inboxVariables, parseInboxSearch, parseStackContext, stackContextQuery } from "./inbox-search.ts";
 import { repoSchema } from "./repo.ts";
 
-// Real responses, recorded with `gh api graphql` for INBOX_QUERY over this repo, ngx-zero and two
-// private repos, and for stackContextQuery over the private two; trimmed to a few PRs per search.
-// The private repos' rows are stand-ins (octo-org/atlas, Octo-Labs/beacon): their titles and
-// branch names are synthetic, and which branch builds on which, numbers, states and times are as recorded.
-// The search response's closedAt times were added later from `gh pr view --json closedAt`.
 const fixture = (name: string): unknown => JSON.parse(readFileSync(new URL(`fixtures/inbox/${name}.json`, import.meta.url), "utf8"));
 
 const ATLAS = repoSchema.parse("octo-org/atlas");
@@ -24,9 +19,7 @@ test("each search is scoped to the projects' repos, and closed or merged ones to
     mergedAuthored: "is:pr is:merged author:@me updated:>=2026-11-04 sort:updated-desc repo:octo-org/atlas repo:Octo-Labs/beacon",
     mergedReviewed: "is:pr is:merged reviewed-by:@me updated:>=2026-11-04 sort:updated-desc repo:octo-org/atlas repo:Octo-Labs/beacon",
   });
-  // The query declares exactly the variables it is given.
   for (const name of Object.keys(variables)) assert.match(INBOX_QUERY, new RegExp(`\\$${name}: String!`));
-  // GitHub refuses a query that defines a fragment it doesn't use.
   assert.doesNotMatch(stackContextQuery([ATLAS]), /FoundPr/);
 });
 
@@ -76,12 +69,10 @@ test("a found PR reads as the sidebar needs it: draft as a state, failing CI and
   assert.equal(pr(83)?.state, "DRAFT");
   assert.equal(pr(81)?.state, "CLOSED");
   assert.deepEqual([pr(82)?.state, pr(82)?.mergedAt], ["MERGED", "2026-11-11T15:05:22Z"]);
-  // #50 has no failing check, and a PR with no checks at all has a null rollup.
   assert.equal(pr(50)?.ciFailing, false);
   assert.deepEqual([pr(63)?.baseRefName, pr(64)?.baseRefName], ["main", "topic-5"]);
 });
 
-// A search response holding `nodes` under each search name given, and none under the rest.
 const searchOf = (nodes: Partial<Record<"authoredOpen" | "authoredClosed" | "mergedAuthored", object[]>>) => ({
   data: { authoredOpen: { nodes: [] }, authoredClosed: { nodes: [] }, review: { nodes: [] }, mergedAuthored: { nodes: [] }, mergedReviewed: { nodes: [] }, ...Object.fromEntries(Object.entries(nodes).map(([name, list]) => [name, { nodes: list }])) },
 });
@@ -98,12 +89,10 @@ test("changes requested, an erroring rollup and a deleted author", () => {
 });
 
 test("closed and merged PRs are kept exactly while they closed or merged in the last 7×24 hours, drafts included", () => {
-  // NOV_12 is 10:00 UTC, so the window opens at 2026-11-05T10:00:00Z.
   const closed = (number: number, closedAt: string, isDraft = false) => node({ number, state: "CLOSED", isDraft, closedAt, updatedAt: closedAt });
   const merged = (number: number, mergedAt: string) => node({ number, state: "MERGED", mergedAt, closedAt: mergedAt, updatedAt: mergedAt });
   const found = parseInboxSearch(
     searchOf({
-      // An open PR stays however old its last update.
       authoredOpen: [node({ number: 1, updatedAt: "2026-06-01T00:00:00Z" })],
       authoredClosed: [closed(2, "2026-11-05T10:00:00Z"), closed(3, "2026-11-05T09:59:59Z"), closed(57, "2026-11-09T15:35:01Z", true)],
       mergedAuthored: [merged(4, "2026-11-05T10:00:01Z"), merged(5, "2026-11-05T09:59:59Z"), merged(6, "2026-11-05T10:26:47Z")],
@@ -114,7 +103,6 @@ test("closed and merged PRs are kept exactly while they closed or merged in the 
     found.map(({ section, pr }) => `${section} #${pr.number}`),
     ["authored #1", "authored #2", "authored #57", "merged #4", "merged #6"],
   );
-  // The same merge a day later is over 7×24 hours old.
   assert.deepEqual(parseInboxSearch(searchOf({ mergedAuthored: [merged(6, "2026-11-05T10:26:47Z")] }), NOV_12 + 24 * 60 * 60 * 1000), []);
 });
 

@@ -5,8 +5,6 @@ import { allPages, graphqlArgs, parseChangedPathsPage, parseThreadsPage, prVaria
 import type { ReviewThread } from "../comments/thread-schema.ts";
 import { repoSchema } from "./repo.ts";
 
-// Real responses of THREADS_QUERY for this repo, recorded with `gh api graphql`; PR #71's trimmed
-// to its first four threads.
 const fixture = (name: string): unknown => JSON.parse(readFileSync(new URL(`fixtures/comments/${name}.json`, import.meta.url), "utf8"));
 
 const threadsOf = (name: string) => parseThreadsPage(fixture(name)).nodes.map((thread) => toThread(thread, thread.comments.nodes));
@@ -14,7 +12,6 @@ const threadsOf = (name: string) => parseThreadsPage(fixture(name)).nodes.map((t
 const HEAD_71 = "293f1268d74d8247f42a7103740395b8446f1fd9";
 const WRITTEN_71 = "055a799ce211f989381a022b963c4c46002da9a0";
 
-// A thread's subject without its excerpt, which its own tests cover.
 const anchorsOf = (thread: ReviewThread) => (thread.subject.kind === "lines" ? thread.subject.anchors : null);
 const excerptOf = (thread: ReviewThread) => (thread.subject.kind === "lines" ? thread.subject.excerpt : null);
 
@@ -103,7 +100,6 @@ test("an open thread has no resolver; a resolved one names who resolved it, ghos
 test("a deleted account's comment is ghost's, as on GitHub, and an app's is a bot's", () => {
   const [thread] = parseThreadsPage(fixture("threads-40")).nodes;
   const [comment] = thread.comments.nodes;
-  // The author GitHub gives Devin's review on PR #42.
   const bot = { __typename: "Bot", login: "devin-ai-integration" };
 
   assert.deepEqual(
@@ -138,13 +134,12 @@ test("graphql args: the query and text by -f, the PR number by -F, and no cursor
   const pr = prVariables(repoSchema.parse("ivan-anchev/bb-plugins"), 71);
 
   assert.deepEqual(graphqlArgs(THREADS_QUERY, { ...pr, cursor: null }), [
-    ...["api", "graphql", "-f", `query=${THREADS_QUERY}`],
-    ...["-f", "owner=ivan-anchev", "-f", "name=bb-plugins", "-F", "number=71"],
+    "api", "graphql", "-f", `query=${THREADS_QUERY}`,
+    "-f", "owner=ivan-anchev", "-f", "name=bb-plugins", "-F", "number=71",
   ]);
   assert.deepEqual(graphqlArgs(THREADS_QUERY, { ...pr, cursor: "Y3Vyc29y" }).slice(-2), ["-f", "cursor=Y3Vyc29y"]);
 });
 
-// withastro/astro#18616's CHANGED_PATHS_QUERY, recorded with `gh api graphql`.
 test("changed paths: each file the PR changes by its path, as GitHub names it", () => {
   const page = parseChangedPathsPage(fixture("files-astro-18616"));
   assert.equal(page.pageInfo.hasNextPage, false);

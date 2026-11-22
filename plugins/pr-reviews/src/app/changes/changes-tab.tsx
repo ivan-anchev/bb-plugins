@@ -1,6 +1,3 @@
-// The Changes tab: the PR's whole diff (base...head) as a file tree beside every file's diff,
-// with Code Explorer's header. It needs no guide. The diff is read once the tab is first shown, so
-// a PR opened on Summary never runs `gh pr diff`; after that the page's Refresh re-reads it.
 import { useState } from "react";
 import { useChanges, type PrTarget } from "../queries.ts";
 import { ReadError } from "../ui/read-error.tsx";
@@ -25,8 +22,6 @@ export function ChangesTab({ target, shown, reveal, onRevealed }: ChangesTabProp
   );
 }
 
-// True from the first render the tab is shown on, for good. Set during render, so the read starts
-// on that same render rather than an effect later.
 function useShownOnce(shown: boolean): boolean {
   const [shownOnce, setShownOnce] = useState(shown);
   if (shown && !shownOnce) setShownOnce(true);

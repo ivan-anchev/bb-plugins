@@ -1,8 +1,3 @@
-// What the hover card says: its title, up to three lines; its
-// state line; its machine, project and branch ("· worktree off main"); its pull request; while it is
-// under way, its plan; its subthread tree. No latest message. The reads only the card pays for: a
-// worktree's base branch, and the plan. The title and lines stay put; the plan and tree under them
-// scroll when the card would run past the window (app.css `.as-card-body`), from the keyboard too.
 import { useSdk, type PluginBrowserBbSdk, type PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { useState, type ReactNode } from "react";
 import { stateLine, type StateLine } from "../../card/state-line.ts";
@@ -33,7 +28,6 @@ export function CardBody({ item, data, onOpen }: Props) {
   const base = useBaseBranch(t);
   const state = row.corner.kind === "state" ? withAsk(row.corner.state, ask) : null;
   const plan = usePlan(state !== null && UNDER_WAY.has(state) ? t.id : null);
-  // why: unfolding is held here, not in the plan, so it renders this component, where the body's focus keeping looks.
   const [planOpen, setPlanOpen] = useState(false);
   const kept = useFocusKept();
   const line = stateLine(row, state, data.underWaySince.get(t.id) ?? t.updatedAt, now);
@@ -48,7 +42,6 @@ export function CardBody({ item, data, onOpen }: Props) {
           {line.lead}
           {line.note !== null && <i> · {line.note}</i>}
         </Line>
-        {/* why: an unknown machine is left unsaid, as Zeron's card leaves a device it can't name. */}
         {t.host !== null && <Line glyph={<CardGlyph name="laptop" />}>{t.host.name}</Line>}
         <Line glyph={<CardGlyph name="folder" />}>{row.project.name}</Line>
         {branch !== null && (
@@ -62,7 +55,6 @@ export function CardBody({ item, data, onOpen }: Props) {
           </Line>
         )}
       </div>
-      {/* why: the keyboard scrolls only what has focus; a plan of words alone has no button to give it. */}
       <div {...kept} className="as-card-body" tabIndex={0}>
         <PlanSection read={plan} open={planOpen} onUnfold={() => setPlanOpen(true)} />
         {tree !== null && (
@@ -76,12 +68,6 @@ export function CardBody({ item, data, onOpen }: Props) {
   );
 }
 
-// ------------------------------------------------------------------ layer 2
-
-/**
- * A line: a 12 glyph and its words, cut with "…" at the card's edge. `after` stays whole after them:
- * the branch gives way before where it runs, which is short and new.
- */
 function Line({ glyph, after = null, children }: { glyph: ReactNode; after?: ReactNode; children: ReactNode }) {
   return (
     <div className="as-card-line">
@@ -108,7 +94,6 @@ function stateGlyph(line: StateLine): ReactNode {
 
 type ThreadGetResult = Awaited<ReturnType<PluginBrowserBbSdk["threads"]["get"]>>;
 
-/** What a worktree branched off ("main"), read once per card; null for any other checkout or until read. */
 function useBaseBranch(t: PluginSidebarThread): string | null {
   const sdk = useSdk();
   const key = t.environment?.isWorktree ? t.id : null;
@@ -116,11 +101,6 @@ function useBaseBranch(t: PluginSidebarThread): string | null {
   return base ?? null;
 }
 
-/**
- * bb answers with the environment only when asked to include it. A worktree made without a base names
- * none; bb's merge base is then the branch it was cut from (checked live: null base, merge base "main").
- * Either may be a remote's ("origin/main").
- */
 function baseBranchOf(result: ThreadGetResult): string | null {
   const env = "environment" in result ? result.environment : null;
   const base = env == null ? null : (env.baseBranch ?? env.mergeBaseBranch);

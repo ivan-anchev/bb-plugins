@@ -20,14 +20,10 @@ import type { StatusDeps } from "./status.ts";
 
 const fixture = (name: string): unknown => JSON.parse(readFileSync(new URL(`./boat/fixtures/${name}`, import.meta.url), "utf8"));
 
-/** tpl-test and tpl-noenv, as boat listed them live (ids redacted). */
 const SAVED = wireSavedSnapshotList.parse(fixture("saved-snapshots.json"));
 const FAILED: SavedSnapshot = { name: "py-ml", status: "failed", error: "source sandbox was deleted", savedFrom: null, savedAt: "2026-11-09T11:02:00.000Z" };
-/** base as boat listed it live, and customer-demos: safe for third parties, with AI proxy placeholders. */
 const ENVIRONMENTS = wireEnvironmentList.parse(fixture("environments.json"));
-/** The account's default profile, as boat listed it live (owner id redacted): nothing connected, proxy off. */
 const PROFILES = wireCredentialProfileList.parse(fixture("credential-profiles.json"));
-/** boat's GitHub App installed for octocat, in OAS `ReposResponse` shape (an account without the App reads `installations: []`). */
 const GITHUB_APP = wireGithubApp.parse(fixture("repos.json"));
 
 const unused = () => Promise.reject(new Error("the command never calls this"));
@@ -40,7 +36,6 @@ interface Account {
   credentialProfiles?: BoatClient["credentialProfiles"];
   githubApp?: BoatClient["githubApp"];
   githubLinked?: boolean;
-  /** bb's forwarded GitHub login; a string is bb's `builtInGit.status`. */
   bbGithub?: BuiltInGitStatus | (() => Promise<never>);
 }
 
@@ -130,7 +125,6 @@ test("bb boat templates marks the Default environment, and says when the default
   );
 });
 
-/** boat environment names are free text: a space, an apostrophe and a `$` a shell would expand. */
 const ODD_NAME = "Bob's demos $HOME";
 const ODD: SandboxEnvironment = {
   name: ODD_NAME,
@@ -141,7 +135,6 @@ const ODD: SandboxEnvironment = {
   profileId: null,
 };
 
-/** The words sh reads from a printed command: `bb`, `boat` and the rest as sh would pass them. */
 const shellWords = (command: string): string[] =>
   execFileSync("sh", ["-c", `printf '%s\\0' ${command}`], { encoding: "utf8" }).split("\0").slice(0, -1);
 
@@ -203,7 +196,6 @@ const launchChoicesRpc = async (access: BoatAccess) =>
 
 afterEach(() => mock.restoreAll());
 
-/** The plugin's own access to a boat whose /me and /limits answer every request with `answer`. */
 function accessToBoat(answer: { status: number } | { failure: Error }): BoatAccess {
   mock.method(globalThis, "fetch", async () => {
     if ("failure" in answer) throw answer.failure;
@@ -212,7 +204,6 @@ function accessToBoat(answer: { status: number } | { failure: Error }): BoatAcce
   return createBoatAccess({ get: async () => ({ apiKey: "boat_abc", idleMinutes: 15, defaultPreset: "default", defaultTemplate: "", defaultEnvironment: "", sidebarIcon: true }) });
 }
 
-// The chip blocks submit on an `unavailable` reply and never on a thrown read.
 test("a failed read of boat's account is no refusal: the chip's RPC and bb boat templates --json both throw it", async () => {
   for (const answer of [{ failure: new TypeError("fetch failed") }, { status: 503 }]) {
     const access = accessToBoat(answer);
@@ -244,13 +235,11 @@ test("a failed list read throws from the chip's RPC and bb boat templates --json
   await assert.rejects(async () => cli(access).run(["templates", "--json"], {}), { message: "boat is down for maintenance." });
 });
 
-/** The GitHub rows while bb forwards the bb server's gh login. */
 const BB_FORWARDED = [
   "GitHub: bb's forwarded login (gh on the bb server), on every bb machine, clone included",
   "To use boat's GitHub token instead, turn off bb's automatic GH_TOKEN: `bb settings general machineGitCredentialsEnabled false`",
 ];
 
-/** The status lines after the five key facts. */
 async function statusAfterFacts(account: Account) {
   const { exitCode, stdout } = await cliWith(account).run(["status"], {});
   return { exitCode, lines: (stdout ?? "").trimEnd().split("\n").slice(5) };
@@ -336,7 +325,6 @@ test("bb boat status reads the default launch and its sign-ins as unknown when b
   });
 });
 
-/** The GitHub rows of `bb boat status`: everything after the AI proxy row. */
 async function githubRows(account: Account) {
   const { exitCode, lines } = await statusAfterFacts(account);
   return { exitCode, rows: lines.slice(lines.findIndex((line) => line.startsWith("AI proxy:")) + 1) };

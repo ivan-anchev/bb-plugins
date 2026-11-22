@@ -1,6 +1,3 @@
-// Where a file's review threads go in its diff at one commit: under the row their last line is
-// on, or at the file, said why. A thread is never dropped: one whose lines this diff doesn't
-// draw shows at its file. Pure.
 import type { DiffRow } from "../diff/diff-rows.ts";
 import { hunkIdOf, WHOLE_FILE, type DiffFile, type HunkId } from "../diff/diff-schema.ts";
 import type { LineRef } from "./comment-schema.ts";

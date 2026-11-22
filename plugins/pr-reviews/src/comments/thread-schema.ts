@@ -1,6 +1,3 @@
-// The canonical shapes of the comments GitHub already has on a PR: one comment, and the review
-// threads on its files. Parsed once from gh (github/pr-comments.ts); pure zod, shared by the
-// server and the app.
 import { z } from "zod";
 import { numberedLineSchema } from "../diff/diff-schema.ts";
 import { lineRefSchema } from "./comment-schema.ts";
@@ -21,7 +18,6 @@ export const githubCommentSchema = z.object({
 });
 export type GitHubComment = z.infer<typeof githubCommentSchema>;
 
-/** The lines a thread is on in the diff at `commit`: `end` is GitHub's line and side, `start` null for one line. */
 const lineAnchorSchema = z.object({ commit: z.string(), start: lineRefSchema.nullable(), end: lineRefSchema });
 export type LineAnchor = z.infer<typeof lineAnchorSchema>;
 

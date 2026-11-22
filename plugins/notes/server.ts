@@ -1,5 +1,3 @@
-// Composition root: the notes store, the media files beside it, the rpc the popover and the card
-// call (Start thread's brief among them), and the route their <img> and <video> read.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { NOTES_TAG, notesContract } from "./src/contract.ts";
 import { buildBrief } from "./src/server/brief/brief.ts";
@@ -20,7 +18,6 @@ export default function plugin(bb: BbPluginApi): void {
     (removed) => bb.log.info(`Media sweep removed ${removed.length} file(s) no note holds${removed.length === 0 ? "" : `: ${removed.join(", ")}`}`),
     (error: unknown) => bb.log.error(`Media sweep failed: ${String(error)}`),
   );
-  // why: a reload must not leave this sweep deleting files and reading the database under the next load.
   bb.onDispose(() => sweep);
 
   bb.rpc.register(notesContract, {

@@ -1,5 +1,3 @@
-// Typed hooks over the contract. The same method and input share one cache entry, so the
-// sidebar, the page and the Refresh button read, and refetch, the same data.
 import { useEffect, useState } from "react";
 import { experimental_useRpcMutation, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { prReviewsContract as contract, type FileAtCommit } from "../contract.ts";
@@ -44,21 +42,15 @@ export const useComments = (target: PrTarget) => experimental_useRpcQuery({ cont
  */
 export function useRecordVisit({ projectId, number }: PrTarget) {
   const visit = experimental_useRpcMutation({ contract, method: "recordVisit" });
-  // why state set while rendering: a new write clears the mutation's error as it starts, and the
-  // notice showing it must stay up, with focus on its Try again, until the retry settles.
   const [error, setError] = useState(visit.error);
   if (!visit.isPending && visit.error !== error) setError(visit.error);
-  // The hook's error state reports a failure; the rejection itself carries nothing more.
   const record = () => void visit.mutate({ projectId, number }).catch(() => undefined);
-  // `record` stays out of the deps: it is new each render, and a new one is no new visit.
   useEffect(record, [projectId, number]);
   return { retry: record, isPending: visit.isPending, error };
 }
 
 type ReviewAction = "startReview" | "cancelReview" | "nudgeReview" | "updateGuide";
 
-// One review action on one PR. The hook's error state reports a failed write beside the
-// buttons; the rejection itself carries nothing more.
 export function useReviewAction(method: ReviewAction, target: PrTarget) {
   const action = experimental_useRpcMutation({ contract, method });
   const run = () => void action.mutate(target).catch(() => undefined);

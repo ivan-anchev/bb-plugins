@@ -1,6 +1,3 @@
-// Focus in the card's body stays in the card when an update takes what it is on: a fold pressed, a fold
-// the agent's next step makes needless, a Retry that worked, a subthread gone, or the plan going and
-// leaving the body with nothing to show (app.css hides it then).
 import { useLayoutEffect, useRef, type FocusEvent, type RefObject } from "react";
 
 /**
@@ -10,10 +7,7 @@ import { useLayoutEffect, useRef, type FocusEvent, type RefObject } from "react"
  */
 export function useFocusKept(): { ref: RefObject<HTMLDivElement | null>; onFocus(e: FocusEvent): void; onBlur(e: FocusEvent): void } {
   const ref = useRef<HTMLDivElement>(null);
-  /** What has focus in the body, the body included; null while focus is elsewhere. */
   const holder = useRef<Element | null>(null);
-  // why: React hears no blur while it commits, and the browser blurs a hidden element only later, so a
-  // holder gone from the page or hidden is one an update took.
   useLayoutEffect(() => {
     const held = holder.current;
     const body = ref.current;

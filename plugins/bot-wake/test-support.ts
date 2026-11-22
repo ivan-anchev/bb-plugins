@@ -1,4 +1,3 @@
-// Shared by the tests only; server.ts never imports it, so the build leaves it out.
 import Database from "better-sqlite3";
 import { createServer, type IncomingHttpHeaders } from "node:http";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";

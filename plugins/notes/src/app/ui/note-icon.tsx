@@ -1,7 +1,3 @@
-// The notes glyph: Lucide's sticky-note (ISC), the same artwork as the plugin's branding
-// (sticky-note.svg). bb has no sticky note among its icons, so app.tsx registers this one under
-// NOTE_ICON, and every surface, host-rendered or the plugin's own, draws it by that name.
-
 export const NOTE_ICON = "notes-sticky-note";
 
 export function NoteIcon({ className }: { className?: string }) {

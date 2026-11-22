@@ -9,7 +9,6 @@ const ATLAS = repoSchema.parse("octo-org/atlas");
 
 type Pr = { repo: Repo; number: number; state: PrState; baseRefName: string; headRefName: string };
 
-// PR `number` on branch `pr-<number>`, based on `base`.
 const pr = (number: number, base: string, state: PrState = "OPEN", repo: Repo = BB): Pr => ({ repo, number, state, baseRefName: base, headRefName: `pr-${number}` });
 
 const numbers = (stacks: Pr[][]) => stacks.map((stack) => stack.map((member) => member.number));

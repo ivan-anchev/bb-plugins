@@ -1,5 +1,3 @@
-// Tests only: bb's sidebar as `experimental_useSidebarThreads` reports it, whole: a project, and an
-// idle, read thread in it titled as bb shows it.
 import type { PluginSidebarProject, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 
 export const PROJECT: PluginSidebarProject = { id: "prj_1", name: "Webhooks", isPersonal: false, href: "/projects/prj_1", settingsHref: "/projects/prj_1/settings" };

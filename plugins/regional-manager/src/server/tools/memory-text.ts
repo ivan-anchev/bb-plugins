@@ -1,12 +1,8 @@
-// What the memory tools say to an agent. Every file it is shown comes with the version a write must
-// name to replace it, so the Coordinator can write after a catch-up without reading again.
 import type { PluginAgentToolResult } from "@get-bb/plugin-sdk";
 import type { MemoryFile, MemoryText, WriteOutcome } from "../../model/memory-file.ts";
 import { CORE_FILES, type Memory } from "../memory/memory-files.ts";
 
-/** The most a catch-up returns; a file past it is named, for reading on its own. */
 const CATCH_UP_BUDGET_CHARS = 40_000;
-/** The most one file read returns. */
 const READ_BUDGET_CHARS = 60_000;
 
 /** The core files in full, in a fixed order, as much as the budget allows, then every other file by name. */

@@ -1,4 +1,3 @@
-// Words and dates as the card shows them.
 export function plural(n: number, one: string): string {
   return `${n.toLocaleString()} ${one}${n === 1 ? "" : "s"}`;
 }

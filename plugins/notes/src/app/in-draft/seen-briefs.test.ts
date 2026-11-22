@@ -5,7 +5,6 @@ import { judgeDraft, type SeenBriefs } from "./seen-briefs.ts";
 
 const waiting: InDraft = { composerKey: "draft-3", brief: "Context from 1 note:\n\nused", noteIds: [noteIdSchema.parse("note_00000000-0000-4000-8000-000000000001")] };
 
-/** Judges each draft in turn, as a window watching one composer would, and returns every brief seen gone. */
 function watch(steps: readonly { text: string; waiting: readonly InDraft[] }[]): InDraft[] {
   let seen: SeenBriefs = new Set();
   return steps.flatMap(({ text, waiting }) => {

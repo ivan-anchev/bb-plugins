@@ -1,5 +1,3 @@
-// The header's section chips: All, then one per shown section; a chip lists only its section, for
-// this session. Each is bb's ghost button, pressed while on.
 import type { Section, SectionKey } from "../../contract.ts";
 import { SECTION_TEXT } from "./section-text.ts";
 

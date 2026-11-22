@@ -1,5 +1,3 @@
-// The notes a panel has ticked for a start (New thread, Send to this thread) or Delete. Each host
-// (the card, the popover) keeps its own.
 import { useState } from "react";
 import type { Note } from "../../contract.ts";
 
@@ -15,20 +13,13 @@ export function usePicks(notes: readonly Note[]) {
   return {
     ids: notes.filter(({ id }) => picked.has(id)).map(({ id }) => id),
     has: (id: Note["id"]) => picked.has(id),
-    /** Ticks or unticks a note, unless the picks are held. */
     toggle: (id: Note["id"]) => {
       if (!held) setPicked((current) => toggled(current, id));
     },
-    /** Unticks every note, unless the picks are held. */
     clear: () => {
       if (!held) setPicked(new Set());
     },
-    /** The picks are on their way somewhere: no tick, Clear or Esc changes them until it settles. */
     held,
-    /**
-     * Holds the picks while `work` runs, so they stay what was submitted, then clears them if it went
-     * through (resolved true); a failure keeps them. `work` never rejects.
-     */
     submit: (work: Promise<boolean>) => {
       setHeld(true);
       void work.then((done) => {

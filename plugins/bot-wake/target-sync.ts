@@ -19,19 +19,14 @@ interface TargetSyncDeps {
  * fields are still declared: once undeclared, nothing can delete their files.
  */
 export function syncTargetsOnChange(bb: BotWakeHost, deps: TargetSyncDeps) {
-  // One sync at a time: onChange also fires for the sync's own unsets, and the
-  // sync re-reads routes, so writes that land while it runs are not lost.
   let syncing = false;
 
   deps.routesSetting.onChange(() => {
     if (syncing) return;
     syncing = true;
-    // Deferred so the settings write that fired onChange finishes first. An
-    // instance unloaded meanwhile finds its signal aborted and does nothing.
     setTimeout(() => {
       applyRoutesChange(bb, deps).then(
         (reloaded) => {
-          // A reload replaces this instance; otherwise the next write syncs again.
           syncing = reloaded;
         },
         (error: Error) => {
@@ -43,13 +38,6 @@ export function syncTargetsOnChange(bb: BotWakeHost, deps: TargetSyncDeps) {
   });
 }
 
-/**
- * Unsets the secrets of the declared targets the routes dropped, one at a
- * time, choosing each from a fresh read of routes so a target restored while
- * an earlier unset was pending keeps its secrets. Once none is left, reloads if
- * the routed targets differ from the declared ones. Stops before any further
- * write once the instance unloads. Returns whether it reloaded.
- */
 async function applyRoutesChange(bb: BotWakeHost, { secrets, currentTargets, signal }: TargetSyncDeps) {
   const unset: Target[] = [];
   while (!signal.aborted) {

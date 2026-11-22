@@ -1,4 +1,3 @@
-// The ways the reader can submit their review, pending or new, in the review popover. Pure.
 import type { ReviewEvent } from "../../comments/review-schema.ts";
 
 export type ReviewEventOption = { event: ReviewEvent; label: string; description: string };

@@ -1,7 +1,3 @@
-// npm run new -- <id>
-// Scaffold plugins/<id> with `bb plugin new`, adopt it into this repository's
-// conventions, and regenerate the manifests. Rerunning converges: an existing
-// directory is never re-scaffolded, only re-adopted.
 import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -20,9 +16,6 @@ syncManifests();
 runInherited("npm", ["install"], ROOT);
 printNextSteps(dir);
 
-// `bb plugin new` writes ./bb-plugin-<id> and runs npm install inside it. Stage
-// it outside the repo, then move it in without its own node_modules and
-// lockfile: the root workspace install owns those.
 function scaffoldWithBb(id: string, dir: string): void {
   const staging = mkdtempSync(join(tmpdir(), "bb-plugin-new-"));
   runInherited("bb", ["plugin", "new", id], staging);
@@ -37,7 +30,6 @@ function isScaffoldSource(path: string): boolean {
   return !["node_modules", "package-lock.json"].includes(basename(path));
 }
 
-// Fields every plugin here carries. Setting them is idempotent.
 function adoptIntoRepo(dir: string): void {
   const manifestPath = join(ROOT, dir, "package.json");
   const manifest = z

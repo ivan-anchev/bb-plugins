@@ -1,9 +1,6 @@
-// Test views: every section open unless a test says otherwise, every archived thread loaded, Archived's
-// count not read. Test layouts
-// of quiet threads, for the list's motion.
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { buildActivity, type SectionKey } from "../model/activity.ts";
-import { thread } from "../model/fixtures.ts";
+import { thread } from "../model/thread.fixture.ts";
 import { listItems, type ArchivePager, type ListView } from "./items.ts";
 import { layoutItems, type Layout } from "./layout.ts";
 

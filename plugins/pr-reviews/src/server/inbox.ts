@@ -1,5 +1,3 @@
-// The sidebar's sections: the PRs the section searches found, each in a bb project with its repo,
-// most recent first, with their stacks drawn from the found PRs and their stack-mates. Pure.
 import { SECTION_KEYS, type GitHubProject, type InboxPr, type Section, type SectionItem, type SectionKey } from "../contract.ts";
 import type { FoundPr, GitHubPr } from "../github/inbox-search.ts";
 import { repoKey } from "../github/repo.ts";
@@ -18,7 +16,6 @@ export function inboxPrs(found: FoundPr[], stackMates: GitHubPr[], projects: Git
   for (const { section, pr } of listed) {
     const key = `${pr.repo}#${pr.number}`;
     const projectId = projectOf.get(repoKey(pr.repo));
-    // A search can return a PR of a repo that moved since bb read the remote: it opens nowhere.
     if (!prs.has(key) && projectId !== undefined) prs.set(key, { ...pr, projectId, section });
   }
   return [...prs.values()];
@@ -34,7 +31,6 @@ export function buildSections(prs: InboxPr[]): Section[] {
   });
 }
 
-// A stack takes the place of its most recent PR in the section.
 function itemsOf(listed: InboxPr[], key: SectionKey, stackOf: ReadonlyMap<InboxPr, InboxPr[]>): SectionItem[] {
   const placed = new Set<InboxPr[]>();
   return listed.flatMap((pr): SectionItem[] => {
@@ -47,5 +43,4 @@ function itemsOf(listed: InboxPr[], key: SectionKey, stackOf: ReadonlyMap<InboxP
   });
 }
 
-// Merged PRs by when they merged, the rest by their last activity. GitHub's ISO times sort as text.
 const byRecency = (a: InboxPr, b: InboxPr) => (b.mergedAt ?? b.updatedAt).localeCompare(a.mergedAt ?? a.updatedAt);

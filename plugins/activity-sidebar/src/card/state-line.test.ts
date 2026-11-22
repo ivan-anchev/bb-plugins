@@ -2,16 +2,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import type { RowModel } from "../model/activity.ts";
-import { thread, WORKING } from "../model/fixtures.ts";
+import { thread, WORKING } from "../model/thread.fixture.ts";
 import { indexThreads } from "../model/thread-index.ts";
 import { stateLine } from "./state-line.ts";
 import { underWaySince } from "./under-way.ts";
 
-// why: "wakes at" reads the local clock; one zone keeps it the same on every machine.
 process.env.TZ = "America/New_York";
 
 const MINUTE = 60_000;
-/** Friday 13 November 2026, 2:00 PM in New York. */
 const NOW = new Date(2026, 10, 13, 14, 0).getTime();
 const TOMORROW_9 = new Date(2026, 10, 14, 9, 0).getTime();
 
@@ -46,7 +44,6 @@ test("in no state: how long ago it moved; archived, how long ago it was archived
 test("underWaySince keeps the first sighting while it stays under way and forgets it once it stops", () => {
   const first = since(new Map(), [thread("w", { ...WORKING, updatedAt: 100 }), thread("idle", { updatedAt: 50 })]);
   assert.deepEqual([...first], [["w", 100]]);
-  // Read while it works: updatedAt moves, the sighting holds.
   const read = since(first, [thread("w", { ...WORKING, updatedAt: 900 })]);
   assert.deepEqual([...read], [["w", 100]]);
   const stopped = since(read, [thread("w", { updatedAt: 950 })]);

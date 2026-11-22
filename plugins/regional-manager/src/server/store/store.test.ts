@@ -171,7 +171,6 @@ test("every write to what an issue's view is read from counts for its regional m
   uncounted("a memory revision", () => store.memoryRevision(MANAGER, memoryFileSchema.parse("MEMORY.md"), "v1"));
 });
 
-/** a1 holding WEB-1 with a done handoff whose check runs in `thr_verifier`, and a2 as a handover would insert it. */
 function handingOver() {
   const { db, store } = freshStore();
   const { id: issueId } = filedIssue(store, MANAGER, newIssue(), 2_000);

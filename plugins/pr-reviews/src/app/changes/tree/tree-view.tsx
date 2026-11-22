@@ -1,6 +1,3 @@
-// The Changes tab's file tree (ported from code-explorer's tree-view): a @pierre/trees model kept
-// in step with the shown files, their icons, row decorations and the selected file, with folder
-// expansion remembered for the session by `memoryKey`, and the tree element that draws it.
 import { useEffect, useRef, type RefObject } from "react";
 import type { FileTree as TreeModel, FileTreeIconConfig, GitStatusEntry } from "@pierre/trees";
 import { FileTree, useFileTree } from "@pierre/trees/react";
@@ -56,7 +53,6 @@ export function TreeView({ model, label, onSelectFile }: TreeViewProps) {
   );
 }
 
-// Every folder starts open, until the reader has opened or closed one.
 function expansionFor(memoryKey: string) {
   const remembered = rememberedExpansion.get(memoryKey);
   return remembered === undefined
@@ -79,8 +75,6 @@ function useRowPresentation(
   );
 }
 
-// An empty tree, as before the diff is read or under a filter nothing matches, has no folders to
-// remember, so it keeps the last expansion rather than forgetting it.
 function useRememberedExpansion(model: TreeModel, memoryKey: string): void {
   useEffect(
     () =>
@@ -91,8 +85,6 @@ function useRememberedExpansion(model: TreeModel, memoryKey: string): void {
   );
 }
 
-// The selected row scrolls into the tree's view, as the list's reader moves on to a file the tree
-// shows further down, without taking the tree's keyboard focus. A row in a closed folder stays put.
 function useSelectionOf(model: TreeModel, selectedPath: string | null): void {
   useEffect(() => {
     if (selectedPath !== null) model.scrollToPath(selectedPath, { focus: false, offset: "nearest" });
@@ -110,9 +102,6 @@ function useSyncedPaths(model: TreeModel, paths: readonly string[], memoryKey: s
   }, [model, paths, memoryKey]);
 }
 
-// The folders open now carry over. An empty tree has none, so it takes the remembered ones, or with
-// none remembered, `undefined` keeps the model's initial expansion: every folder open. A model built
-// with every folder open reopens them all on each reset whatever this returns (as in Code Explorer).
 function expansionAfterReset(model: TreeModel, memoryKey: string): readonly string[] | undefined {
   return model.getVisibleCount() === 0 ? rememberedExpansion.get(memoryKey) : expandedDirectoriesOf(model);
 }

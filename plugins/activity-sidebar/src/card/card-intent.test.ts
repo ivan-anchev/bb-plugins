@@ -2,14 +2,12 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { CardIntent, DWELL, GRACE, insideTriangle, SETTLE, WARM, type CardEdge, type Under } from "./card-intent.ts";
 
-// A list: rows a, b, c stacked 30 high at x 0-280 from y 0; the shown card at x 290, y 0-200.
 const CARD: CardEdge = { left: 290, top: 0, bottom: 200 };
 
 type Harness = {
   intent: CardIntent;
   under: Under;
   shown: (string | null)[];
-  /** How many times focus was handed back to the list. */
   returned: number;
   at(x: number, y: number, row: string | null, onCard?: boolean): void;
 };
@@ -33,13 +31,11 @@ function harness(): Harness {
   return h;
 }
 
-/** The pointer onto a row at (x, y). */
 function over(h: Harness, row: string, x: number, y: number) {
   h.at(x, y, row);
   h.intent.overRow(row);
 }
 
-/** The card for `row`, opened by a full rest with the pointer at (x, y). */
 function opened(row: string, x = 100, y = 15): Harness {
   const h = harness();
   over(h, row, x, y);
@@ -97,7 +93,6 @@ test("within the warm window the next row's card opens at once; after it, the ne
   assert.deepEqual(h.shown, ["a", null, "b"], "warm: at once");
 
   h.intent.leaveRow("b");
-  // why: two ticks, so the close is stamped at its own time (a mocked Date reads the tick's end inside it).
   mock.timers.tick(GRACE);
   mock.timers.tick(WARM);
   over(h, "c", 100, 75);
@@ -132,7 +127,6 @@ test("entering the card keeps it; leaving the card for its own row keeps it; lea
   assert.deepEqual(h.shown, ["a", null]);
 });
 
-// The pointer leaves row a at (100, 10), heading down-right: across b and c, through the gap, onto the card.
 test("crossing two rows diagonally into the card keeps the card on its row", () => {
   const h = opened("a", 100, 10);
   h.intent.leaveRow("a");
@@ -163,7 +157,7 @@ test("a crossed row is taken at once when the pointer turns away from the card",
   const h = opened("a", 100, 10);
   h.intent.leaveRow("a");
   over(h, "b", 150, 45);
-  h.at(120, 50, "b"); // back left, out of the triangle
+  h.at(120, 50, "b");
   h.intent.move();
   assert.deepEqual(h.shown, ["a", "b"]);
 });
@@ -181,9 +175,6 @@ test("insideTriangle: strictly inside the triangle from the exit to the card's e
   assert.equal(insideTriangle(exit, CARD, { x: 295, y: 60 }), false, "past the card's edge");
 });
 
-// Keyboard focus holds the card as the pointer does; the card goes once neither is on its row or on it.
-
-/** The card for `row`, opened by keyboard focus resting on it, the pointer away from the list. */
 function focusOpened(row: string): Harness {
   const h = harness();
   h.at(600, 400, null);
@@ -312,9 +303,6 @@ test("focus handed from the card to another row (its own row gone) lets the card
   assert.deepEqual(h.shown, ["a", null], "nor does it open the heir's");
 });
 
-// A crossing toward the card (as in the triangle tests above) that ends off the rows and off the card.
-
-/** From row a's exit at (100, 10) across row b, as the pointer heads for the card. */
 function crossB(h: Harness) {
   over(h, "a", 100, 10);
   h.intent.leaveRow("a");
@@ -326,7 +314,7 @@ function crossB(h: Harness) {
 test("a crossing that stops between the rows and the card closes the card after the grace", () => {
   const h = opened("a", 100, 10);
   crossB(h);
-  h.at(285, 100, null); // in the gap, inside the triangle
+  h.at(285, 100, null);
   h.intent.move();
   mock.timers.tick(SETTLE);
   mock.timers.tick(GRACE - 1);
@@ -338,7 +326,7 @@ test("a crossing that stops between the rows and the card closes the card after 
 test("a crossing that leaves the sidebar for the main pane closes the card after the grace; the crossed row never takes it", () => {
   const h = opened("a", 100, 10);
   crossB(h);
-  h.at(1100, 790, null); // past the card, out of the triangle: the main pane
+  h.at(1100, 790, null);
   h.intent.move();
   mock.timers.tick(GRACE - 1);
   assert.deepEqual(h.shown, ["a"]);
@@ -366,7 +354,7 @@ test("a crossing that turns away off the rows keeps the card while focus is in i
   const h = focusOpened("a");
   h.intent.focusCard();
   crossB(h);
-  h.at(60, 120, null); // back left below the list: out of the triangle and off the rows
+  h.at(60, 120, null);
   h.intent.move();
   mock.timers.tick(GRACE * 3);
   assert.deepEqual(h.shown, ["a"], "focus still holds the card");

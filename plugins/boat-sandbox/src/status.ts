@@ -1,7 +1,3 @@
-// `bb boat status`: what boat says about the configured key, then what a thread that names nothing
-// gets: the default launch, the agent sign-ins its environment passes, and the GitHub login it uses.
-// Every read after the key check is settled, so a refused one reads `unknown (<reason>)` and the
-// command goes on.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { BoatAccess, BoatFacts, BoatSession, Configuration } from "./boat/access.ts";
 import type { Limits, Wallet } from "./boat/wire.ts";
@@ -34,12 +30,10 @@ export function configurationLines(configuration: Configuration): string[] {
   return [...facts, ...problems];
 }
 
-/** What a thread that names nothing gets, checked against boat's saved snapshots and environments. */
 async function defaultLaunchLines({ machineEnvironment }: StatusDeps, session: BoatSession, signal: AbortSignal | undefined): Promise<string[]> {
   const [choices, profiles, app, github] = await Promise.all([
     settle(readLaunchChoices(session, signal), "snapshot.read and environment.read"),
     settle(session.client.credentialProfiles(signal), "account.admin", "`boat ai profiles` shows it"),
-    // No scope named: boat documents none for GET /repos, so a refusal reads in boat's words.
     settle(session.client.githubApp(signal)),
     settle(machineEnvironment()).then((read) => (read.ok ? githubSourceOf(read.value.builtInGit.status) : read)),
   ]);

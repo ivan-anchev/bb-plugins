@@ -1,4 +1,3 @@
-// `bb boat sandboxes`: the sweep's look at bb and boat, one row per sandbox, with what the next sweep would do.
 import type { Sandbox, SandboxId, SandboxPhase } from "../boat/sandbox.ts";
 import { formatTable } from "../table.ts";
 import type { HostPhase, HostView, SweepAction, SweepInput } from "./plan.ts";
@@ -86,7 +85,6 @@ function rowCells(row: SandboxRow): readonly string[] {
     row.type ?? "-",
     row.boatPhase,
     row.machine === null ? "-" : `${row.machine.hostId} (${row.machine.phase})`,
-    // To the minute, in UTC: 2026-11-08T21:30Z.
     row.archiveAfter === null ? "-" : `${row.archiveAfter.slice(0, 16)}Z`,
     row.notes.join("; "),
   ];

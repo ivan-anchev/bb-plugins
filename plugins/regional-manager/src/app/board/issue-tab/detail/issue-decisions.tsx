@@ -1,7 +1,3 @@
-// An issue's decisions, oldest first (decision.ts issueDecisions): each question its regional manager
-// put to the user about it, with the user's answer or that it waits for one, and each decision the
-// manager recorded on it, each with when. A question waiting for an answer is answered on the board,
-// under Needs you; here it is read only.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { IssueDecision } from "../../../../model/decision.ts";
 import { shortTime } from "../../../ui/time.ts";
@@ -9,7 +5,6 @@ import { shortTime } from "../../../ui/time.ts";
 export function IssueDecisions({ decisions }: { decisions: readonly IssueDecision[] }) {
   return (
     <ol className="rmi-decisions">
-      {/* why the index as key: the list only grows, at its end. */}
       {decisions.map((decision, i) => (
         <li key={i} className="rmi-decision">
           <Entry decision={decision} />

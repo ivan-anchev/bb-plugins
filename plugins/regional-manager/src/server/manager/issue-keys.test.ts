@@ -4,7 +4,6 @@ import type { CoordinatorId } from "../../model/role.ts";
 import { filedIssue, freshStore, MANAGER, newIssue } from "../store/test-store.ts";
 import { keyIssuesOfEarlierManagers } from "./issue-keys.ts";
 
-/** A store whose MANAGER was started before issue keys and has none, the bb its project is read from, and what the upgrade reported. */
 function earlierManager(projectName: () => string) {
   const { storage, store } = freshStore();
   storage.database().prepare("UPDATE coordinators SET issue_key = NULL WHERE id = ?").run(MANAGER);

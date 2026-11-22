@@ -7,7 +7,6 @@ import { parseThreadsPage, toThread } from "../../github/pr-comments.ts";
 import { isReview, parseTimelinePage, toTimeline } from "../../github/pr-timeline.ts";
 import { activityOf, connectorsOf, keyOf, timeOfLine, type ActivityPart } from "./activity-fold.ts";
 
-// withastro/astro#18616 as recorded (github/fixtures/comments), parsed as gh.ts parses it.
 const fixture = (name: string): unknown => JSON.parse(readFileSync(new URL(`../../github/fixtures/comments/${name}.json`, import.meta.url), "utf8"));
 const THREADS = parseThreadsPage(fixture("threads-astro-18616")).nodes.map((thread) => toThread(thread, thread.comments.nodes));
 const NODES = parseTimelinePage(fixture("timeline-astro-18616")).nodes;
@@ -15,7 +14,6 @@ const TIMELINE = toTimeline(NODES, new Map(NODES.filter(isReview).map((review) =
 
 const MERGED_PR: Pick<PrDetail, "author" | "createdAt" | "state"> = { author: "florian-lefebvre", createdAt: "2026-11-04T09:00:00Z", state: "MERGED" };
 
-// Each part as a short word, so the whole fold reads at a glance.
 function partWord(part: ActivityPart): string {
   switch (part.kind) {
     case "opened":
@@ -45,13 +43,11 @@ function partWord(part: ActivityPart): string {
 
 test("astro#18616: the opened line, then messages on the page and every other change one line, a kind's run folded", () => {
   assert.deepEqual(activityOf(MERGED_PR, TIMELINE, THREADS).map(partWord), [
-    // Marked ready for review later, so it opened as a draft.
     "opened draft",
     "commits ×1",
     "changeset-bot comment",
     "commits ×1",
     "±pr: astro-review",
-    // A bot's findings, their threads all resolved: a line.
     "astro-factory commented line",
     "commits ×1",
     "±pr: astro-review",
@@ -67,7 +63,6 @@ test("astro#18616: the opened line, then messages on the page and every other ch
     "renamed",
     "codspeed comment",
     "status",
-    // An open thread keeps a review on the page.
     "ematipico commented message",
     "florian-lefebvre comment",
     "ematipico comment",
@@ -76,13 +71,11 @@ test("astro#18616: the opened line, then messages on the page and every other ch
     "matthewp comment",
     "matthewp approved line",
     "florian-lefebvre comment",
-    // The close the merge caused is the merge's.
     "merged",
     "mentions ×1",
   ]);
 });
 
-// Small timelines, built as the parse builds them.
 const at = (minute: number) => `2026-11-04T10:${String(minute).padStart(2, "0")}:00Z`;
 const OPEN_PR: Pick<PrDetail, "author" | "createdAt" | "state"> = { author: "marlin", createdAt: at(0), state: "OPEN" };
 const commit = (id: string, minute: number): TimelineItem => ({ kind: "commit", id, sha: `${id}0000000`, headline: id, url: "", createdAt: at(minute) });
@@ -98,7 +91,6 @@ const comment = (id: string, minute: number): TimelineItem => ({
   comment: { id: minute, url: "", author: { login: "jun-park", bot: false }, body: "Looks good", createdAt: at(minute), pending: false },
 });
 
-// The parts after the opened line.
 const foldOf = (timeline: TimelineItem[]) => activityOf(OPEN_PR, timeline, []).slice(1).map(partWord);
 
 test("a run of commits folds to one line, as do one person's force-pushes, labels, requests and mentions", () => {
@@ -141,9 +133,7 @@ test("the opened line is the author's at the PR's creation, a draft only when th
   assert.deepEqual(openedOf("OPEN", []), { kind: "opened", author: "marlin", createdAt: at(0), draft: false });
   assert.equal(draftOf("DRAFT", []), true);
   assert.equal(draftOf("OPEN", [status("s1", "ready-for-review", 1)]), true);
-  // Marked a draft first, so it opened ready, though it is a draft now.
   assert.equal(draftOf("DRAFT", [status("s1", "draft", 1), status("s2", "ready-for-review", 2), status("s3", "draft", 3)]), false);
-  // Merged with no mark either way: it may have opened as a draft, so the line does not say.
   assert.equal(draftOf("MERGED", []), false);
 });
 

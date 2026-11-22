@@ -1,9 +1,3 @@
-// The doorbell: the short message that wakes a regional manager. It reaches the thread as a
-// user-role message, so it holds only facts the plugin derived (an issue's and an agent's id, a
-// handoff's status, a memory file's name) and text the regional manager itself wrote: the titles it
-// gave its issues, the notes of its reminders and the questions it asked the user. Anything an agent
-// or a verifier wrote, and the user's answers, are read through crew_catch_up, as a tool result,
-// never here.
 import type { AgentId } from "../agent.ts";
 import type { Decision, DecisionId } from "../decision.ts";
 import type { IssueId } from "../issue/issue.ts";
@@ -78,7 +72,6 @@ export function askedOf(decision: Decision | null): Decision {
   return decision;
 }
 
-/** A check made final, by what it judged: `BBP-1 "Add retries" (a1) handed off: done, verified`, `BBP-1 "Card vault" final check: failed`. */
 function checkedLine(check: Check, titles: ReadonlyMap<IssueId, string>): string {
   const { subject, issueId } = check;
   switch (subject.kind) {
@@ -91,7 +84,6 @@ function checkedLine(check: Check, titles: ReadonlyMap<IssueId, string>): string
   }
 }
 
-/** What a final check found, in words derived from its verdict alone. */
 function finalCheckedAs({ verdict }: Check): string {
   const result = outcome(verdict);
   switch (result) {
@@ -106,14 +98,12 @@ function finalCheckedAs({ verdict }: Check): string {
     case "pending":
     case "waiting-for-ci":
     case "superseded":
-      // why: a checked event is recorded once the verdict is final, which none of these is.
       return "not checked yet";
     default:
       return result satisfies never;
   }
 }
 
-/** What the plugin's check of a done handoff found, in words derived from its verdict alone. */
 function checkedAs({ verdict }: Check): string {
   const result = outcome(verdict);
   const ci = verdict.state === "returned" ? ciVerdictOf(verdict) : null;
@@ -132,7 +122,6 @@ function checkedAs({ verdict }: Check): string {
     case "pending":
     case "waiting-for-ci":
     case "superseded":
-      // why: a checked event is recorded once the verdict is final, which neither of these is.
       return "not checked yet";
     default:
       return result satisfies never;

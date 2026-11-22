@@ -4,7 +4,6 @@ import { coordinatorContract } from "../../contract.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import { coordinating, settled, startedAgent, textOf } from "../test-harness.ts";
 
-/** A Coordinator whose first turn is running, in its own environment. */
 async function working() {
   const started = await coordinating();
   const { kit, threadId, coordinatorId } = started;
@@ -12,16 +11,11 @@ async function working() {
   return {
     ...started,
     environmentId,
-    /** Its turn ends with `fileCount` changed files in its working tree, and every ring it started has run. */
     async turnEnds(fileCount: number): Promise<void> {
       kit.git.changedFiles.set(environmentId, fileCount);
       await kit.idle(threadId, "Done.");
       await settled();
     },
-    /**
-     * Its turn ends with `fileCount` changed files, and bb's git plugin holds its answer, read now,
-     * until `answer` is called.
-     */
     async turnEndsHeld(fileCount: number): Promise<{ answer(): Promise<void> }> {
       kit.git.holding = true;
       kit.git.changedFiles.set(environmentId, fileCount);
@@ -37,9 +31,7 @@ async function working() {
         },
       };
     },
-    /** Every doorbell that reached it, in order. */
     doorbells: () => kit.delivered(threadId).filter((text) => text.startsWith(`[${DISPLAY_NAME}]`)),
-    /** The board's warning, as the app reads it: bb parses each RPC's result with its contract. */
     warning: async () => coordinatorContract.board.output.parse(await kit.rpc.board({ coordinatorId })).ownEdits,
     catchUp: async () => textOf(await kit.call("crew_catch_up", {}, threadId)),
   };
@@ -119,7 +111,7 @@ test("a read bb's git plugin can't make, or answers in a shape the plugin can't 
   kit.git.offline.add(environmentId);
   await turnEnds(0);
   kit.git.offline.clear();
-  // why off-type: it stands in for an outcome a newer bb--git may answer.
+  // WARNING: deliberately off-type; it stands in for an outcome a newer bb--git may answer.
   kit.git.newer.set(environmentId, { outcome: "rebasing", step: 3 });
   await turnEnds(0);
 

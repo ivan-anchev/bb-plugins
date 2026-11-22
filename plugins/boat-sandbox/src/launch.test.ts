@@ -81,7 +81,6 @@ test("a thread's template and size win over the defaults, and null is boat's sto
   assert.deepEqual(resolveLaunch({}, ready), { ok: true, launch: { template: "node-tools", environment: "base", preset: "default" }, environment: BASE });
   const picked = resolveLaunch({ template: "py-ml", preset: "small" }, ready);
   assert.deepEqual(picked.ok && picked.launch, { template: "py-ml", environment: "base", preset: "small" });
-  // A stale Default template does not matter when the thread asks for the stock image.
   const stock = resolveLaunch({ template: null }, choices([], { template: "gone" }));
   assert.deepEqual(stock.ok && stock.launch, { template: null, environment: "base", preset: "default" });
 });
@@ -109,7 +108,6 @@ test("an unknown environment is refused, naming the setting only when the name c
     setting: "defaultEnvironment",
     name: "gone",
   });
-  // A thread that names an environment does not need the stale default.
   assert.ok(resolveLaunch({ environment: "qa" }, choices([], { environment: "gone" })).ok);
 });
 

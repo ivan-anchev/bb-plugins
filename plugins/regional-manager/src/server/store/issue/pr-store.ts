@@ -1,6 +1,3 @@
-// Pull requests, by branch: as the PR watch last read each one, and why its latest read failed.
-// why by branch: the pull request belongs to the branch, so every agent that works on it shares
-// one snapshot, one CI history and one "opened".
 import { z } from "zod";
 import type { AgentId } from "../../../model/agent.ts";
 import { handoffIdSchema, type HandoffId } from "../../../model/handoff.ts";
@@ -10,7 +7,6 @@ import { meaningfulChanges, prSnapshotSchema, prUnavailableSchema, type PrSnapsh
 import { insertEvent } from "../inbox/inbox-store.ts";
 import { json, nullableJson, type Db } from "../rows.ts";
 
-/** A branch's PR status, and when the watch last tried to read it. */
 type PolledPr = PrStatus & { polledAt: number };
 
 export function prStore(db: Db) {
@@ -24,7 +20,6 @@ export function prStore(db: Db) {
     return row === undefined ? null : prStatusRowSchema.parse(row);
   }
 
-  /** Records that a read of the branch's pull request was tried, and why it failed (null: it didn't). */
   function markPolled(coordinatorId: CoordinatorId, branch: string, unavailable: PrUnavailable | null, at: number): void {
     db()
       .prepare(
@@ -35,16 +30,8 @@ export function prStore(db: Db) {
   }
 
   return {
-    /** What the watch knows of the branch's pull request, or null before it first tried to read it. */
     prOfBranch,
 
-    /**
-     * Saves a successful read of the branch's pull request, begun when the latest handoff on it was
-     * `handoffAtRead`. One that found it saves its snapshot as read now, with when a read first saw
-     * its head commit and that handoff, and records a `pr` event naming `on`, the issue and the agent
-     * on the branch, when it changed meaningfully, together. One that found none (null) keeps the
-     * snapshot already saved as it was read, and vouches for nothing about it.
-     */
     savePrRead(coordinatorId: CoordinatorId, branch: string, on: { issueId: IssueId; agentId: AgentId }, pr: PrSnapshot | null, handoffAtRead: HandoffId | null, at: number): void {
       db().transaction(() => {
         const before = prOfBranch(coordinatorId, branch);
@@ -59,7 +46,6 @@ export function prStore(db: Db) {
       })();
     },
 
-    /** Records why reading the branch's pull request failed, and whether that lasts. The snapshot it had stays as it was read, and nothing is recorded for its regional manager. */
     markPrUnavailable(coordinatorId: CoordinatorId, branch: string, unavailable: PrUnavailable, at: number): void {
       markPolled(coordinatorId, branch, unavailable, at);
     },

@@ -8,17 +8,10 @@ import { createTabsController, type HostLayout, type Nav } from "./tabs-controll
 
 type Shown = Awaited<ReturnType<HostLayout["show"]>>;
 
-/**
- * bb as the test drives it: `layout` is what bb holds, and each write stays in flight until `settle`, `fail`,
- * or its signal aborts.
- */
 type FakeHost = HostLayout & {
   layout: Layout | null;
-  /** Every layout written, in order. */
   shown: Layout[];
-  /** bb finishes the write in flight, exactly unless it says otherwise. */
   settle(shown?: Shown): Promise<void>;
-  /** The write in flight fails. */
   fail(error: Error): Promise<void>;
 };
 
@@ -50,7 +43,6 @@ function fakeHost(initial: Layout | null): FakeHost {
 
 const nav: Nav = { toThread() {}, toCompose() {} };
 
-/** The window's saved tabs: `set` is what is saved, and `saves` counts the saves. */
 type FakeSaved = SavedTabs & { set: TabSet | null; saves: number };
 
 function fakeSaved(initial: TabSet | null = null): FakeSaved {
@@ -66,7 +58,6 @@ function fakeSaved(initial: TabSet | null = null): FakeSaved {
   return saved;
 }
 
-/** Lets the controller's pump run past its awaits. */
 function flush(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
@@ -105,7 +96,6 @@ function focusedThread(layout: Layout | undefined): string | null {
   return content.kind === "thread" ? content.threadId : null;
 }
 
-/** Three tabs on Alpha, Bravo and Charlie, each filled from `+` the way bb fills it; Charlie's is live. */
 async function threeTabs() {
   const { host, tabs, unbind } = controller(alpha);
   tabs.observe("thread");
@@ -190,7 +180,6 @@ test("+ opens a selected New thread tab right of the live one, and shows it", as
   assert.equal(selectedId, set.liveId);
   assert.equal(focused(host.shown[0]).content.kind, "new-thread");
   await host.settle();
-  // bb's New thread screen keeps the + tab selected though the route has no thread.
   tabs.observe("workspace");
   assert.equal(snapshotOf(tabs).selectedId, set.liveId);
 });
@@ -216,7 +205,6 @@ test("a thread created on a + tab stays that tab's when the user switches away b
   tabs.observe("workspace");
   const plus = snapshotOf(tabs).set.liveId;
   const created = thread("thr_bravo", liveLayout(tabs).focusedPaneId);
-  // bb routes to the thread it created; the click on another tab comes before the overlay observes that.
   host.layout = created;
   tabs.activate(first);
   await host.settle();
@@ -230,7 +218,6 @@ test("a switch made while a write is in flight leaves the tab being written as i
   const { host, tabs, ids } = await threeTabs();
   tabs.activate(ids[0]);
   const target = liveLayout(tabs);
-  // bb is part way through taking the write.
   host.layout = thread("thr_delta");
   tabs.activate(ids[1]);
   await host.settle();
@@ -329,7 +316,6 @@ test("from Settings or a plugin page, clicking the + tab shows its New thread sc
     tabs.openNew();
     await host.settle();
     const plusTab = liveLayout(tabs);
-    // Settings leaves bb's layout as it was; a plugin page fills the + tab's pane.
     host.layout = layout ?? plusTab;
     tabs.observe(screen);
     assert.equal(snapshotOf(tabs).selectedId, null, screen);
@@ -347,7 +333,6 @@ test("unbinding aborts the write in flight, and nothing more is written or repor
   let changes = 0;
   tabs.subscribe(() => (changes += 1));
   unbind();
-  // bb finishing the aborted write must not let the waiting switch through.
   await host.settle();
   assert.equal(host.shown.length, 1);
   assert.equal(warn.mock.callCount(), 0);
@@ -428,7 +413,6 @@ test("tells whether there is a tab to step to, and whether tab N exists", async 
   assert.equal(tabs.has(3), false);
 });
 
-/** A valid sidebar row for `threadId`, in project `projectId`. */
 function sidebarThread(threadId: string, projectId: string): PluginSidebarThread {
   return {
     id: threadId,
@@ -476,10 +460,6 @@ function threadPane(threadId: string, paneId: string): Pane {
   return { type: "pane", paneId, content: { kind: "thread", projectId: "proj_a", threadId } };
 }
 
-/**
- * Tab 1 on Alpha | Bravo (Alpha focused), on screen; tab 2 on Delta | Charlie (Delta focused). The sidebar's
- * index has every thread, Echo's in another project, unless `indexed` is false.
- */
 async function sidebarTabs(indexed = true) {
   const { host, tabs } = controller(split(threadPane("thr_alpha", "pane-1"), threadPane("thr_bravo", "pane-2")));
   tabs.observe("thread");
@@ -543,7 +523,6 @@ test("a new-tab gesture is left to bb until the sidebar's index has the thread",
   assert.equal(snapshotOf(tabs).set.tabs.length, 2);
 });
 
-/** Saved tabs on Alpha | Bravo, Delta, and Charlie, with Delta's live: what a window saved before its reload. */
 function savedBeforeReload(): TabSet {
   return {
     tabs: [

@@ -1,10 +1,8 @@
-// Burn's numbers as the card writes them, and each one's change against the period before.
 import type { BurnRange } from "../contract.ts";
 
 /** "$0", "$4.27" under ten dollars, otherwise whole dollars: "$1,800". */
 export function formatMoney(dollars: number): string {
   if (dollars === 0) return "$0";
-  // why: a few calls can cost less than a cent, and "$0.00" would read as nothing spent.
   if (dollars < 0.005) return "<$0.01";
   if (dollars < 9.995) return `$${dollars.toFixed(2)}`;
   return `$${Math.round(dollars).toLocaleString("en-US")}`;
@@ -35,7 +33,6 @@ export interface Change {
 }
 
 const PREVIOUS: Record<BurnRange, string> = { "7d": "previous 7 days", "30d": "previous 30 days" };
-/** What an empty previous period is called, as on Burn's Spend page. */
 const NONE: Record<"spend" | "tokens", string> = { spend: "No spend", tokens: "No use" };
 
 /**

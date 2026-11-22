@@ -62,7 +62,6 @@ test("an agent id is never reused: one started after a gap is numbered after the
   const [one, two, three] = [1, 2, 3].map(() => filedIssue(store, MANAGER, newIssue(), 2_000).id);
   startAgent(store, one!, "agent-1");
   startAgent(store, two!, "agent-2");
-  // why a raw delete: the store never deletes an agent, but whatever does must not free its id.
   db.prepare("DELETE FROM agents WHERE id = 'a1'").run();
   assert.equal(startAgent(store, three!, "agent-3"), "a3");
 });
@@ -71,7 +70,6 @@ test("the database itself refuses a second agent holding an issue, and takes one
   const { db, store } = freshStore();
   const { id } = filedIssue(store, MANAGER, newIssue(), 2_000);
   const first = startAgent(store, id, "agent-1");
-  // why raw SQL: insertAgent refuses before it writes, so only a write past it reaches the index.
   db.prepare("INSERT INTO roles (ticket, role, created_at) VALUES ('agent-2', '{}', 2100)").run();
   const second = db.prepare(
     `INSERT INTO agents (coordinator_id, id, issue_id, ticket, placement, base, execution, started_at)

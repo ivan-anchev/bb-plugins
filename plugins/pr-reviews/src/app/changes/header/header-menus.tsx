@@ -1,5 +1,3 @@
-// The Changes header's menus (ported from code-explorer's header-menus): Filter (kinds, extensions,
-// deleted files, reset) and diff settings (Unified or Split, Wrap lines).
 import { CHANGE_KIND_LABELS, TEST_KINDS, type ChangeKind } from "../../../guide/change-kind.ts";
 import type { DiffSettings } from "../../diff/diff-options.ts";
 import { IconButton } from "../../ui/icon-button.tsx";

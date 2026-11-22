@@ -70,7 +70,6 @@ const HEAD_D = "d".repeat(40);
 const sandbox: Placement = sandboxAgent.placement;
 const worktree: Placement = { kind: "worktree" };
 const worktreeAgent: Agent = { ...sandboxAgent, placement: worktree, checkout: { environmentId: "env_wt", branch: "bb/a3", head: HEAD_C } };
-/** bb's git plugin's read of a live environment: its head, its changed files as `git status --short` lists them, and the branch checked out (null: detached). */
 const readAt = (headSha: string, changedFiles: string[] = [], branch: string | null = "bb/a3"): CheckoutRead => ({ kind: "read", branch, checkout: { headSha, changedFiles, changedFileCount: changedFiles.length } });
 const clean = readAt(HEAD_C);
 const previous: Previous = { agent: sandboxAgent, environmentId: "env_sbx", branch: "bb/a3", now: null, pushed: null };
@@ -92,22 +91,15 @@ test("a first agent, from default, and a kind that ships no code start clean, a 
   assert.deepEqual(handoverOf("research", { from: "previous", placement: worktree }, previous), { kind: "clean" });
 });
 
-/** The handover's refusal; fails on anything else. */
 function refusal(handover: Handover | { refused: string }): string {
   if (!("refused" in handover)) assert.fail(`not refused: ${JSON.stringify(handover)}`);
   return handover.refused;
 }
 
-/** The cut a handover makes, with the environment bb would spawn it in on host_1; fails on anything else. */
 function cutOf(handover: Handover | { refused: string }) {
   if ("refused" in handover || handover.kind !== "cut") assert.fail(`not a cut: ${JSON.stringify(handover)}`);
   return { base: handover.base, environment: environmentOf(handover.placement, "host_1", refOf(handover.base)) };
 }
-
-// cutRef's rows, in its order (issue 06): a provider that takes no branch; a gone environment with no
-// branch on record; a live environment that can't be read, has no branch checked out or holds
-// uncommitted files; worktree to worktree from the local branch; else origin, once a pull request
-// shows the head pushed.
 
 test("cut 1: a removed environment with no branch on record can't be moved: refused, offering a clean start; a live one moves from the branch it has checked out", () => {
   const gone = refusal(handoverOf("build", { from: "previous", placement: null }, { ...previous, environmentId: null, branch: null }));

@@ -1,6 +1,3 @@
-// Regenerate .bb/plugins.json and marketplace.json from plugins/*/package.json.
-//   npm run manifests          write them
-//   npm run manifests:check    fail if they are invalid or out of date (CI)
 import { planManifests, staleManifestPaths, writeManifestFiles } from "./lib/manifests.ts";
 import { exitWithProblems } from "./lib/cli.ts";
 

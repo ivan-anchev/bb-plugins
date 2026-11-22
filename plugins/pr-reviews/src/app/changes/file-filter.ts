@@ -1,6 +1,3 @@
-// The Changes tab's file filters (ported from code-explorer's file-filter): a path query of
-// comma-separated globs or plain text with `!` excludes, then extensions, deleted files and kinds.
-// Pure. A renamed file matches by either path.
 import picomatch from "picomatch";
 import type { DiffFile } from "../../diff/diff-schema.ts";
 import { CHANGE_KINDS, changeKindOf, type ChangeKind } from "../../guide/change-kind.ts";

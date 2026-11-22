@@ -1,5 +1,3 @@
-// Whether a thread's environment runs on a boat sandbox: the one read the Computer card and the Computer
-// tab's New tab row share. It asks bb only, never boat, so showing them never starts boat's desktop view.
 import { useMemo } from "react";
 import { experimental_useRpcKeyedQuery, type ExperimentalThreadEnvironment } from "@get-bb/plugin-sdk/app";
 import { boatSandboxContract as contract } from "../../contract.ts";

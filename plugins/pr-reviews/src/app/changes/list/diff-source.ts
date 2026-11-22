@@ -1,6 +1,3 @@
-// What the Changes tab's list shows for a file (code-explorer's viewer-input notice rules): its
-// patch, whether its unchanged lines can expand and whether it starts folded, or a notice where a
-// diff would be empty. Pure.
 import { fileLineCountsOf, type DiffFile } from "../../../diff/diff-schema.ts";
 
 /**
@@ -16,14 +13,10 @@ export function diffSourceOf(file: DiffFile): DiffSource {
   return { kind: "patch", expandable: file.status === "modified" || file.status === "renamed", folded: foldedReasonOf(file.path, added + removed) };
 }
 
-// Display only: the path is shown as the diff wrote it.
 function unchangedContentsMessageOf(file: DiffFile): string {
   return file.previousPath === null ? "No text changes." : `Renamed from ${file.previousPath}. The contents are unchanged.`;
 }
 
-// why fold, as GitHub does: a diff draws every one of its rows at once, so a lockfile or a
-// thousand-line diff is a long frame for the whole list, and the reader rarely reads either.
-// Lockfiles are generated, so they fold at any size.
 function foldedReasonOf(path: string, changedLines: number): string | null {
   if (LOCKFILES.has(path.slice(path.lastIndexOf("/") + 1))) return "A generated lockfile. Its diff is not shown by default.";
   if (changedLines > LARGE_DIFF_LINES) return "A large diff. It is not shown by default.";

@@ -18,13 +18,11 @@ function attachment(n: number, name: string, mimeType: Attachment["mimeType"], s
   return { id: attachmentIdSchema.parse(`att_00000000-0000-4000-8000-${String(n).padStart(12, "0")}`), name, mimeType, sizeBytes };
 }
 
-/** Uploads everything, as bb would: an image as localImage, a video as localFile. */
 const uploadAll = async ({ name, mimeType, sizeBytes }: Attachment): Promise<BriefMedia> => ({
   kind: "attached",
   attachment: { type: mimeType.startsWith("image/") ? "localImage" : "localFile", path: `uploads/${name}`, name, mimeType, sizeBytes },
 });
 
-/** Every pill's range covers "@" + its label. */
 function pillTexts({ text, mentions }: Brief): string[] {
   return mentions.map(({ from, to }) => text.slice(from, to));
 }

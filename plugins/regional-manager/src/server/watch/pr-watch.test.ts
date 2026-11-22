@@ -20,12 +20,9 @@ const PASSES = {
 };
 const MINUTE = 60_000;
 
-/** The rejection of a real gh run, recorded in fixtures/gh-failures. */
 const recorded = (name: string) => Object.assign(new Error("Command failed: gh api graphql"), JSON.parse(readFileSync(new URL(`./fixtures/gh-failures/${name}.json`, import.meta.url), "utf8")));
-/** A gh run that failed with this on stderr. */
 const ghSaid = (stderr: string) => Object.assign(new Error("Command failed: gh api graphql"), { code: 1, stdout: "", stderr: `${stderr}\n` });
 
-/** A regional manager with one agent on a GitHub project, both idle; the agent's branch and what the plugin shows of it. */
 async function agentOnGitHub(placement: object = { kind: "worktree" }) {
   const { kit, threadId, coordinatorId } = await coordinating();
   const agentThreadId = (await startedAgent(kit, threadId, { title: "Add retries", brief: "Retry failed deliveries.", doneCriteria: ["npm test passes", "npm run lint is clean"] }, { placement })).agentThreadId;
@@ -39,15 +36,12 @@ async function agentOnGitHub(placement: object = { kind: "worktree" }) {
   };
   const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
   const events = () => kit.store.unannounced(coordinatorId).map(({ event }) => event.kind);
-  /** GitHub now has the agent's pull request #41 as given, on its branch as bb records it unless `onBranch` names another. */
   const pr = (fields: Partial<FakePr> = {}, onBranch = branch) => kit.github.prs.set(onBranch, { number: 41, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup: "PENDING", failed: [], ...fields });
-  /** A minute passes and the schedule runs. */
   async function minute(): Promise<void> {
     kit.clock.now += MINUTE;
     await kit.tick();
     await settled();
   }
-  /** The agent hands off as done, naming its pull request, and its verifier passes every criterion. */
   async function verified(): Promise<void> {
     await kit.call("agent_handoff", { ...DONE, prUrl: PR_URL }, agentThreadId);
     await kit.idle(agentThreadId, "Handed off.");
@@ -83,8 +77,6 @@ test("a verdict that passes while CI is pending waits under Verifying as waiting
   await minute();
   assert.equal(doorbells().length, before, "a verdict waiting for CI wakes nobody");
 
-  // why hold bb's turn reads: the verdict settles in WEB-1's turn, which the tick starts and doesn't
-  // wait for, so nothing orders it before the tick's ring. Held, it is still settling as the tick rings.
   pr({ rollup: "SUCCESS" });
   kit.turnEvents.holding = true;
   await minute();
@@ -133,10 +125,8 @@ test("a CI failure after the agent's fix round reaches the coordinating thread a
   await minute();
   assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 1, "the first failure went back to the agent");
 
-  // The agent hands off again, and CI on the commit it names has failed.
   await verified();
   assert.deepEqual(await row(), { lane: "needs-you", headline: "✗ CI failed on #41 after its fix round: Retries land with backoff", pr: "#41 open CI fail" });
-  // why the catch-up: the coordinating thread is busy with an earlier doorbell by now, so bb holds this one queued.
   const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
   assert.match(catchUp, /### WEB-1 "Add retries" \(a1\) handed off: done\n[\s\S]*Failed verification: CI failed on #41\. 2 of 2 criteria passed, checked at 0123456789abcdef0123456789abcdef01234567 by a verifier on [^.]*\. bb's git plugin read the agent's environment as it handed off: the claimed commit 0123456789abcdef0123456789abcdef01234567 checked out, on a clean working tree\. CI: failed on #41 at this commit; failed checks, as GitHub names them: test\./);
   assert.match(textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId)), /#### Verdict\n\nFailed verification: CI failed on #41\. 2 of 2 criteria passed, checked at /);
@@ -392,7 +382,7 @@ test("zero checks, then time passes with no read: the verdict waits for a read p
   const { kit, row, pr, minute, verified } = await agentOnGitHub();
   pr({ rollup: null });
   await minute();
-  kit.clock.now += 10 * MINUTE; // bb was asleep: no tick, so no read
+  kit.clock.now += 10 * MINUTE;
   pr({ rollup: "SUCCESS" });
   await verified();
   assert.deepEqual(await row(), { lane: "verifying", headline: "Waiting for CI on #41: Retries land with backoff", pr: "#41 open CI none" }, "the last read was right after the push");
@@ -663,7 +653,7 @@ test("a move's fresh read of a pull request waits for a tick's read still out, s
   pr({ head: first });
   let answer = (): void => assert.fail("gh never ran");
   kit.github.pending = new Promise((resolve) => (answer = resolve));
-  const ticking = kit.tick(); // its gh answer, as GitHub had it, holds the first head
+  const ticking = kit.tick();
   await settled();
   kit.github.pending = null;
   kit.commit(agentThreadId, second);

@@ -1,4 +1,3 @@
-// Composition root: keeps one quote per day and serves it to the homepage.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { QUOTE_TAG, quoteContract } from "./contract.ts";
 import { createDailyQuote } from "./quote/daily-quote.ts";
@@ -15,6 +14,5 @@ export default function plugin(bb: BbPluginApi): void {
 
   bb.rpc.register(quoteContract, { today: () => dailyQuote.read() });
 
-  // A homepage left open past midnight gets the new day's quote without a visit.
   bb.background.schedule("new-day", "0 0 * * *", () => dailyQuote.ensureToday());
 }

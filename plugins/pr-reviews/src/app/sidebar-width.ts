@@ -1,5 +1,3 @@
-// The PR sidebar's width in the wide layout, kept in this browser's localStorage so a drag outlives
-// a reload. Clamped to bb's own sidebar range; the default is the width the sidebar always had.
 import { useState } from "react";
 
 export const SIDEBAR_WIDTH = { min: 240, max: 480, default: 288 } as const;
@@ -10,8 +8,6 @@ const STORAGE_KEY = "bb-plugin-pr-reviews.sidebar.width.v1";
 
 type WidthStorage = Pick<Storage, "getItem" | "setItem">;
 
-// Touches `localStorage` only inside each call: a browser that denies storage throws on access,
-// and that must happen inside the read or write that catches it.
 const browserStorage: WidthStorage = {
   getItem: (key) => localStorage.getItem(key),
   setItem: (key, value) => localStorage.setItem(key, value),
@@ -65,7 +61,6 @@ export function writeSidebarWidth(storage: WidthStorage, width: number) {
   }
 }
 
-// Storage the browser denies (blocked site data, a sandboxed frame) throws on access; it reads as nothing stored.
 function readStored(storage: WidthStorage): string | null {
   try {
     return storage.getItem(STORAGE_KEY);

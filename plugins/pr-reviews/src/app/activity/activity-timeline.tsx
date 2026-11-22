@@ -1,9 +1,3 @@
-// The Summary tab's activity, oldest first, as the fold reads it (activity-fold.ts): messages on the
-// page, and every other part a line (activity-line.tsx) whose glyph a thin connector joins to the
-// lines next to it. The connector stops at each message, never running behind one. A review line
-// with threads opens to its body, if it has one, and its threads as rows, each opening the Changes
-// tab at its thread. Which lines are open is the reader's one piece of state; everything else
-// comes from the current read (REVIEW.md).
 import { useMemo, useState, type ReactNode, type Ref } from "react";
 import { quoteReplyText, type GitHubComment, type ReviewThread } from "../../comments/thread-schema.ts";
 import type { ReviewVerdict } from "../../comments/timeline-schema.ts";
@@ -26,7 +20,6 @@ type TimelineProps = {
   onShowThread(thread: ReviewThread): void;
 };
 
-/** What a part needs besides its own data: who wrote the PR, the diff's paths, what is open, and the actions. */
 type Context = Omit<TimelineProps, "parts"> & { opened: ReadonlySet<string>; onToggle(key: string): void };
 
 export function ActivityTimeline({ parts, ...actions }: TimelineProps) {
@@ -50,7 +43,6 @@ export function ActivityTimeline({ parts, ...actions }: TimelineProps) {
   );
 }
 
-// Down the gutter's middle, clear of the 14px glyph centred 18px down a line.
 const CONNECTOR = "absolute left-3 w-px -translate-x-1/2 bg-border";
 
 function toggled(set: ReadonlySet<string>, key: string): ReadonlySet<string> {
@@ -84,7 +76,6 @@ function Part({ part, context }: { part: ActivityPart; context: Context }) {
   }
 }
 
-/** A message on the page: a conversation comment, or a review with its threads under it. */
 function Message({ ref, comment, verb, context, children }: { ref?: Ref<HTMLElement>; comment: GitHubComment; verb: ReactNode; context: Context; children?: ReactNode }) {
   return (
     <div className="py-2.5">
@@ -101,10 +92,6 @@ function Message({ ref, comment, verb, context, children }: { ref?: Ref<HTMLElem
   );
 }
 
-// A review as a message or a line. Its row stays as a refresh moves it from one to the other, as
-// when a thread is resolved or reopened, and hands focus from the form that leaves, wherever in it
-// focus is (a line's fold too), to the one that comes: to the line, or to the message, which holds
-// focus but is no tab stop. Each form is keyed, so a change of form always replaces it whole.
 function ReviewRow({ review, context }: { review: Extract<ActivityPart, { kind: "review" | "review-message" }>; context: Context }) {
   const focus = useFocusHandOff();
   const key = review.review.id;
@@ -131,8 +118,6 @@ function ReviewMessage({ ref, review: { review, threads }, context }: { ref?: Re
   );
 }
 
-// A review's threads: one row each, its file and line, its first line, and whether it is resolved
-// or outdated.
 function Digest({ threads, context }: { threads: ReviewThread[]; context: Context }) {
   return (
     <ul aria-label="Review threads" className="col-start-2 mt-2 -ml-2 grid grid-cols-[minmax(0,1fr)] rounded-lg bg-card p-0.5">
@@ -145,7 +130,6 @@ function Digest({ threads, context }: { threads: ReviewThread[]; context: Contex
   );
 }
 
-// A review line, opened under its words: its body, if it has one, then its threads.
 function ReviewFold({ review: { review, threads }, context }: { review: ReviewWithThreads; context: Context }) {
   const hasBody = review.comment.body.trim() !== "";
   return (
@@ -162,11 +146,6 @@ function ReviewFold({ review: { review, threads }, context }: { review: ReviewWi
   );
 }
 
-// The whole row opens the Changes tab at the thread, unless its file has left the diff: then it is
-// text, which says so. A refresh can move a file in or out of the diff, so the row hands focus from
-// the form that leaves to the one that comes; the text holds focus without being a tab stop. A row
-// that wraps keeps its one line while its list is wide, and when narrow puts the location and state
-// on a line with the first line of the thread under them, so none of it is cut off.
 function DigestRow({ thread, wraps, context }: { thread: ReviewThread; wraps: boolean; context: Context }) {
   const focus = useFocusHandOff();
   const formRef = useMemo(() => mergeRefs(focus.from, focus.to), [focus]);
@@ -174,7 +153,6 @@ function DigestRow({ thread, wraps, context }: { thread: ReviewThread; wraps: bo
   const state = [threadStateOf(thread), inDiff ? "" : "not in this diff"].filter((words) => words !== "").join(" · ");
   const row = (
     <>
-      {/* Display only: `whitespace-pre` keeps the path's spaces as they are. */}
       <span className="font-mono text-xs whitespace-pre text-foreground">{threadLocationOf(thread)}</span>
       <span className={wraps ? `${SNIPPET} ${NARROW_SNIPPET}` : SNIPPET}>{snippetOf(thread.comments[0].body)}</span>
       {state !== "" && <span className="shrink-0">{state}</span>}
@@ -195,11 +173,9 @@ function DigestRow({ thread, wraps, context }: { thread: ReviewThread; wraps: bo
 const FOCUS_RING = "focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none";
 const DIGEST_ROW = "flex min-h-7 min-w-0 items-baseline gap-2.5 rounded-md px-2 py-1 text-xs leading-5 text-muted-foreground";
 const SNIPPET = "min-w-0 flex-1 truncate";
-// Below the width a row's location, first line and state share comfortably.
 const NARROW_ROW = "@max-[480px]:flex-wrap @max-[480px]:gap-y-0.5";
 const NARROW_SNIPPET = "@max-[480px]:order-last @max-[480px]:basis-full";
 
-// The first line as words: markdown's code ticks and bold marks read as noise in a one-line row.
 const snippetOf = (body: string) => firstLineOf(body).replace(/`|\*\*/g, "");
 
 const VERDICT_TONES = {

@@ -1,8 +1,3 @@
-// The wide layout's PR sidebar and PR pane, split by a handle drawn as bb's own pane separator: a
-// seam at rest that lights up under the pointer, while dragging and on keyboard focus. It drags,
-// takes arrow keys, Home and End, and resets on double-click; the width is remembered across reloads.
-// The width lives here, not in the panel, so a drag re-renders only the split: the sidebar and the
-// pane arrive as elements and keep their identity while it moves.
 import { useRef, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { SIDEBAR_WIDTH, sidebarWidthAfterKey, useSidebarWidth } from "./sidebar-width.ts";
 
@@ -39,7 +34,6 @@ type SidebarHandleProps = {
   onSave(width: number): void;
 };
 
-/** Where the drag started, and the width its latest move asked for. */
 type Drag = { pointer: number; startWidth: number; width: number };
 
 function SidebarHandle({ sidebarId, width, onResize, onSave }: SidebarHandleProps) {

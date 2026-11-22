@@ -1,7 +1,3 @@
-// The Changes header's summary (ported from code-explorer's summary-text): "N files, +A −D", whose
-// tooltip breaks the lines down by kind, a placeholder while the diff loads, or nothing after a
-// failed first read. The summary is the tooltip's trigger and takes a tab stop, so the breakdown
-// opens from the keyboard too.
 import type { LineCounts } from "../../../diff/diff-schema.ts";
 import { CHANGE_KIND_LABELS } from "../../../guide/change-kind.ts";
 import { Tooltip } from "../../ui/tooltip.tsx";

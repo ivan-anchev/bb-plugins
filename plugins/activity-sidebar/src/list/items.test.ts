@@ -2,15 +2,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { experimental_PluginRpcCallError, type PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { buildActivity, type SectionKey } from "../model/activity.ts";
-import { project, thread, WORKING } from "../model/fixtures.ts";
-import { LOADED, view } from "./fixtures.ts";
+import { project, thread, WORKING } from "../model/thread.fixture.ts";
+import { LOADED, view } from "./items.fixture.ts";
 import { archivedCountFor, listItems, retryNotice, sleepsStatus, type ListItem, type NoticeKey } from "./items.ts";
 
 function sections(threads = [thread("a", { latestAttentionAt: 2 }), thread("b", { latestAttentionAt: 1 })]) {
   return buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), held: new Set(), now: 0, activeThreadId: null, filter: null }).sections;
 }
 
-/** n archived parents, the latest archived first: x0, x1, … */
 function archived(n: number): PluginSidebarThread[] {
   return Array.from({ length: n }, (_, i) => thread(`x${i}`, { isArchived: true, archivedAt: n - i }));
 }

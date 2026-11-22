@@ -46,29 +46,6 @@ type StepsProps = {
 /** `<Step title="Install">Run the CLI.</Step>` inside `<Steps>`. */
 const Step = defineItem<StepProps>("Step")
 
-/**
- * A numbered procedure. Markdown:
- *
- * ```mdx
- * <Steps title="INSTALL">
- *
- * 1. Copy the source
- *
- *    Run the CLI.
- *
- * 2. **Register it**
- *
- *    Export it from `mdx-components.tsx`.
- *
- * 3. *Write*
- *
- *    Use it between paragraphs.
- *
- * </Steps>
- * ```
- *
- * Bold is the current step, italic is next.
- */
 function stepsOf(children: ReactNode): StepProps[] {
   const listed = listItems(children)
   if (listed.length === 0) {
@@ -77,16 +54,16 @@ function stepsOf(children: ReactNode): StepProps[] {
 
   return listed.map((item) => {
     const content = (item.props as { children?: ReactNode }).children
-    const paras = paragraphsOf(content)
+    const [first, ...rest] = paragraphsOf(content)
     const title =
-      paras.length > 0
-        ? textOf((paras[0]?.props as { children?: ReactNode }).children)
-        : splitDash(itemText(item)).label
+      first === undefined
+        ? splitDash(itemText(item)).label
+        : textOf((first.props as { children?: ReactNode }).children)
     const body =
-      paras.length > 1
-        ? paras.slice(1)
-        : paras.length === 0
-          ? splitDash(itemText(item)).rest || undefined
+      first === undefined
+        ? splitDash(itemText(item)).rest || undefined
+        : rest.length > 0
+          ? rest
           : undefined
     const now = hasHost(content, ["strong", "b"])
     const next = !now && hasHost(content, ["em", "i"])

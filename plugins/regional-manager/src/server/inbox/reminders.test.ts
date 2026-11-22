@@ -5,20 +5,15 @@ import { coordinating, isRefusal, settled, textOf } from "../test-harness.ts";
 
 const HOUR = 3_600_000;
 
-/** A Coordinator whose thread is idle, so a doorbell starts its turn. */
 async function idleCoordinator() {
   const started = await coordinating({ verify: false });
   started.kit.thread(started.threadId).status = "idle";
   const { kit, threadId, coordinatorId } = started;
   return {
     ...started,
-    /** Sets a reminder as the Coordinator's agent would, and returns the tool's answer. */
     remind: async (input: object) => textOf(await kit.call("crew_remind", input, threadId)),
-    /** The Coordinator's reminders, as the store holds them. */
     reminders: () => kit.store.reminders(coordinatorId),
-    /** Every doorbell that reached the Coordinator, in order. */
     doorbells: () => kit.delivered(threadId).filter((text) => text.startsWith(`[${DISPLAY_NAME}]`)),
-    /** The tick, run at this time. */
     tickAt: async (now: number) => {
       kit.clock.now = now;
       await kit.tick();
@@ -54,7 +49,6 @@ test("a repeating reminder missed for three intervals records one event, and its
   await remind({ note: "check on WEB-1", at: "1h", every: "every 1h" });
   const [{ dueAt } = assert.fail("no reminder")] = reminders();
 
-  // The server was down through the occurrences at dueAt, +1h and +2h.
   const now = dueAt + 2 * HOUR + 30 * 60_000;
   await tickAt(now);
   assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- Your reminder r1: check on WEB-1`]);
@@ -109,7 +103,6 @@ test("a reminder of an archived Coordinator records nothing while bb lists it ar
   assert.equal(reminders().length, 1, "it stays, still due");
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /## Updates\n\nNothing new since your last catch-up\./);
 
-  // Unarchived, the Coordinator gets it on the next tick.
   kit.thread(threadId).archivedAt = null;
   await tickAt(dueAt + 6 * 60_000);
   assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- Your reminder r1: check the migration`]);
@@ -178,7 +171,7 @@ test("crew_remind reads an ISO time with its offset, and durations with or witho
   const { remind, reminders } = await idleCoordinator();
   const at = new Date(Date.now() + 3 * HOUR);
   at.setUTCSeconds(0, 0);
-  const local = new Date(at.getTime() + 2 * HOUR).toISOString().slice(0, 16); // the same instant at +02:00
+  const local = new Date(at.getTime() + 2 * HOUR).toISOString().slice(0, 16);
   await remind({ note: "at a time", at: `${local}+02:00` });
   await remind({ note: "in a day", at: "in 1d", every: "36h" });
   await remind({ note: "on a leap day", at: "2028-02-29T12:00Z" });

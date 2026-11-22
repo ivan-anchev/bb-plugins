@@ -1,8 +1,3 @@
-// RPC handlers: resolve the project to its GitHub repo, read GitHub through gh with each PR's
-// review state, read the sidebar's PRs across projects, stored guides, a PR's live diff and its
-// comments, record the PR pages the reader opens, hand review actions to `reviews`, post the
-// comments a reader chose to, alone or in their pending review, which they submit or discard, and
-// change or merge a PR. A thin shell; the logic lives in the modules it calls.
 import { experimental_PluginRpcRefusal as Refusal, type BbPluginApi, type ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import { commentsTag, INBOX_TAG, prReviewsContract, prsOf, repoTag, VISITS_TAG, type GitHubProject, type MergeMethod, type StateChange, type UnreadableProject } from "../contract.ts";
 import { parsePrDiff } from "../diff/parse-pr-diff.ts";
@@ -31,12 +26,10 @@ import type { PrRef, Reviews } from "./reviews.ts";
 import { createSidebarCatchUp } from "./sidebar-catch-up.ts";
 import type { Store } from "./store.ts";
 
-// A deleted project reads as one without a remote.
 const NO_REMOTE: ProjectRepo = { kind: "none" };
 
 type Handlers = ExperimentalPluginRpcHandlersWithContext<typeof prReviewsContract>;
 
-// The parts of bb the handlers use, down to the fields they read.
 type Bb = {
   sdk: { projects: { list(): Promise<readonly ({ id: string; name: string } & Parameters<typeof projectRepo>[0])[]> } };
   rpc: Pick<BbPluginApi["rpc"], "experimental_invalidate">;
@@ -46,7 +39,6 @@ type Bb = {
 type Deps = { bb: Bb; store: Pick<Store, "guide" | "snapshotFiles" | "saveVisit" | "visits">; reader: ReviewReader; reviews: Reviews };
 
 export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handlers {
-  // One project's unreadable remote is reported beside the others, never failing the read.
   async function githubProjects(): Promise<{ projects: GitHubProject[]; unreadable: UnreadableProject[] }> {
     const projects = await bb.sdk.projects.list();
     const reads = await Promise.all(projects.map(async ({ id, name, ...project }) => ({ id, name, read: await projectRepo(project) })));
@@ -68,9 +60,6 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
   });
   bb.onDispose(sidebarCatchUp.dispose);
 
-  // The page header reads the PR under its repo's tag, and the sidebar under its own, so both
-  // show the new state. The sidebar reads GitHub's search, which can still list the old state at
-  // first: the catch-up has it read again once the search lists the new one.
   function stateChanged(repo: Repo, number: number, change: StateChange | MergeMethod): void {
     bb.rpc.experimental_invalidate([repoTag(repo), INBOX_TAG]);
     sidebarCatchUp.follow(repo, number, change);
@@ -93,9 +82,6 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
     return { projectId, repo: await repoOf(projectId), number };
   }
 
-  // The PR's comments re-read once GitHub has the comment, so it shows in place, and after a
-  // refusal too: GitHub may refuse one because of a review made pending elsewhere, which the box
-  // then offers to add to, or refuse having started a pending review for a comment it couldn't place.
   async function posted<Result>(target: { projectId: string; number: number }, post: (repo: Repo) => Promise<Result>): Promise<Result> {
     const repo = await repoOf(target.projectId);
     try {
@@ -105,9 +91,6 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
     }
   }
 
-  // The PR's comments, and the PR with its reviewers' states, re-read once GitHub has submitted or
-  // discarded the review. A refusal leaves both as they are, so Finish review stays open with
-  // GitHub's words beside the reader's summary.
   async function reviewed(target: { projectId: string; number: number }, write: (repo: Repo) => Promise<void>): Promise<Record<string, never>> {
     const repo = await repoOf(target.projectId);
     await write(repo);
@@ -120,8 +103,6 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
 
     visits: async () => ({ visits: store.visits() }),
 
-    // Timed at the opening, before the remote read: a page opened earlier, whose project's remote
-    // reads slower, still records the earlier visit.
     async recordVisit({ projectId, number }) {
       const openedAt = Date.now();
       store.saveVisit({ projectId, repo: await repoOf(projectId), number, openedAt });
@@ -186,7 +167,6 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
 
     comments: async ({ projectId, number }) => readPrComments(await repoOf(projectId), number),
 
-    // The repo is the project's, read here: the app names only the project and the PR.
     postComment: ({ request, ...target }) => posted(target, (repo) => postComment(repo, target.number, request)),
 
     replyToThread: ({ commentId, body, ...target }) => posted(target, (repo) => postReply(repo, target.number, commentId, body)),
@@ -225,8 +205,6 @@ export function createRpcHandlers({ bb, store, reader, reviews }: Deps): Handler
   };
 }
 
-// A diff the parser refuses (cut short, or a file name it can't read) is a failed read the
-// Changes tab shows, not a crash.
 function changesOf({ headSha, diff }: PrDiffSnapshot) {
   try {
     return { headSha, files: parsePrDiff(diff) };

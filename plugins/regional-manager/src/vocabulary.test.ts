@@ -1,14 +1,3 @@
-// "Crew" means all of one regional manager's agents. One delegated child thread is an agent; one
-// piece of work is an issue. Why a test and not a review note: the single-thread meaning was renamed
-// out of every file once, and a rule that lives only in review is relearned. It reads src, skills
-// and server.ts from disk, this file and files git doesn't track yet included: no file is exempt.
-//
-// It is a lexical regression guard, not a reader. It fails on named things: the retired
-// single-thread names, "crew" given one thread's things (its thread, row, id, branch or worktree, in a
-// name or in prose, or a PR given to "every crew"), and ids from before agents. The tools named crew_ it
-// checks as the plugin's entry point hands them to bb, not by spelling, so a private crew_rules is any other name.
-// It judges no other name, and bare prose that means one thread only by its sense passes:
-// "// The crew is stuck.", said of one agent, is green here. Review decides what such a sentence means.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { extname, join, relative } from "node:path";
@@ -22,10 +11,8 @@ const PLUGIN = join(import.meta.dirname, "..");
 
 const MEANING = `"crew" means all of one regional manager's agents. One delegated thread is an agent (a1, agent_start); one piece of work is an issue (WEB-1, issue_create).`;
 
-/** The tools about every agent at once: catching up, memory, reminders, asking the user. The only tools named crew_. */
 const FLEET_TOOLS = new Set(["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user"]);
 
-/** What each retired single-thread tool and skill became, keyed by the part of its old name after "crew". */
 const RETIRED_NAMES = new Map([
   ["_start", "agent_start"],
   ["_message", "agent_message"],
@@ -36,7 +23,6 @@ const RETIRED_NAMES = new Map([
   ["-work", "agent-work"],
 ]);
 
-/** One thread's things: given to "crew", in a name or in the next word of prose, they make it one thread. */
 const ONE_THREADS_THINGS = ["thread", "threads", "row", "rows", "id", "ids", "branch", "branches", "worktree", "worktrees"];
 
 test(`no retired single-thread name, no "crew" given one thread's things, and no id from before agents comes back`, () => {
@@ -49,28 +35,20 @@ test("the only tools named crew_ are the five about every agent at once", async 
   const { coordinatorId } = coordinatorContract.createCoordinator.output.parse(await loaded.callRpc("createCoordinator", { profile: profileNamed("Webhooks") }));
   const { threadId } = coordinatorContract.startCoordinator.output.parse(await loaded.callRpc("startCoordinator", { coordinatorId, request: newThreadRequest("Migrate the webhook service") }));
   const configured = await loaded.resolveAgentConfiguration(makePluginAgentConfigurationContext({ thread: { id: threadId } }));
-  // why: bb refuses a configuration naming a tool or skill it doesn't have, and gives the thread nothing.
   assert.deepEqual(loaded.logEntries.filter(({ level }) => level !== "info"), [], "bb refused the entry point's configuration");
   const offered = [...loaded.registrations.agentTools, ...configured.tools].map(({ name }) => name);
   const crewTools = new Set(offered.filter((name) => name.startsWith("crew_")));
   assert.deepEqual(crewTools, FLEET_TOOLS, `${MEANING} A tool for one agent is named agent_, one for one issue issue_.`);
 });
 
-/** A name whole with its joints: crew_remind, crew-board, CREW.md, registerCrewTools. A sentence's full stop is not a joint. */
 const NAME = /[\w-]+(?:\.[\w-]+)*/g;
-/** Where a name splits into words: _, -, . and a camelCase capital. */
 const JOINT = /[_.-]|(?<=[a-z0-9])(?=[A-Z])/;
-/** The next word in prose, after an optional 's. */
 const NEXT_WORD = /^(?:'s?)?\s+(\w+)/;
-/** An id from before agents: c and a number. */
 const OLD_ID = /\bc\d+\b/g;
-/** "Each" or "every" crew, then "with its" and one thread's things or an issue's pull request. */
 const EACH_CREW_WITH_ITS = new RegExp(`\\b(?:each|every) crew with its (?:${[...ONE_THREADS_THINGS, "PRs?", "pull requests?"].join("|")})\\b`, "gi");
-/** In code, the bare word as a name: declared, typed, or read from. */
 const NAME_BEFORE = /(?:\b(?:const|let|var|type|interface|class|function)\s+|\w\??:\s*|<)$/;
 const NAME_AFTER = /^(?:\??\.[A-Za-z_]|\[\]|<|\??:\s*\w|\s*=[^=])/;
 
-/** Every file the test reads, relative to the plugin. */
 function scannedFiles(): string[] {
   const inFolders = ["src", "skills"].flatMap((folder) =>
     readdirSync(join(PLUGIN, folder), { recursive: true, withFileTypes: true })
@@ -80,7 +58,6 @@ function scannedFiles(): string[] {
   return [...inFolders, "server.ts"];
 }
 
-/** Each misuse in the file, as "path:line  name: what to write instead". */
 function misusesIn(file: string): string[] {
   const code = [".ts", ".tsx"].includes(extname(file));
   return readFileSync(join(PLUGIN, file), "utf8")
@@ -99,11 +76,6 @@ function misusesIn(file: string): string[] {
 
 const ONE_THREAD = `"crew" given one thread's things names one thread. Write "agent" for the thread (agentId, an agent's branch) and "issue" for its work (issueId, its PR); "the crew" is all of a manager's agents.`;
 
-/**
- * What to write instead of the name, or null when it is none of the retired names: every other name
- * with "crew" in it, words that only contain the letters (unscrew), and bare prose whose
- * single-thread sense this test can't see.
- */
 function adviceFor(name: string, before: string, after: string, inCode: boolean): string | null {
   const retired = RETIRED_NAMES.get(/^crew([_-]\w+)$/.exec(name)?.[1] ?? "");
   if (retired !== undefined) return `a retired name for one thread. Write ${retired}.`;
@@ -119,7 +91,6 @@ function adviceFor(name: string, before: string, after: string, inCode: boolean)
   return null;
 }
 
-/** Whether the name at start sits in a line comment or a doc-comment line, where it is prose. */
 function isComment(line: string, start: number): boolean {
   return /^\s*(?:\/\/|\/?\*)/.test(line) || line.slice(0, start).includes("//");
 }

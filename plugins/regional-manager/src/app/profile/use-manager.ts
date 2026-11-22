@@ -1,5 +1,3 @@
-// A regional manager as the panel shows it: started, its name its thread's title as bb shows it; or
-// not started yet, its name the plugin's. Its description and avatar are the plugin's either way.
 import { experimental_useRpcQuery, experimental_useSidebarThreads as useSidebarThreads } from "@get-bb/plugin-sdk/app";
 import { coordinatorContract as contract } from "../../contract.ts";
 import type { Profile } from "../../model/profile.ts";

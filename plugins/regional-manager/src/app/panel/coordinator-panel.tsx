@@ -1,5 +1,3 @@
-// The nav panel: the list at its root, the New page at `new`, and the page of a regional manager not
-// started yet at `board/<id>`. Its title bar holds New, and bb's title bar names the regional manager open.
 import { experimental_Icon as Icon, useBbNavigate, type ExperimentalPageTitle, type PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { useCallback } from "react";
 import type { CoordinatorId } from "../../model/role.ts";
@@ -13,8 +11,6 @@ import { managerSubPath, NEW_SUBPATH, PANEL_PATH, pageOf } from "./routes.ts";
 
 export function CoordinatorPanel({ subPath }: PluginNavPanelProps) {
   const { openList, openManager } = usePanelNavigation();
-  // Each page's root hands focus to the next when focus was inside it as it left, so All, a row or
-  // anything else that unmounts with its page never drops focus (REVIEW.md).
   const focus = useFocusHandOff();
   const pageRoot = useCallback((root: HTMLElement | null) => {
     focus.to(root);

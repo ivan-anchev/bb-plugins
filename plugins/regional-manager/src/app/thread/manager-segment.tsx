@@ -1,6 +1,3 @@
-// A regional manager's own thread names it in the context row above its composer: its icon and its
-// name, and never its description. Pressing them opens its profile's editor below the row, where Save
-// and Cancel close it, and the focus goes back to them.
 import { experimental_THREAD_CONTEXT_SEGMENT_GROUPS as GROUPS, type ExperimentalThreadContextSegmentProps } from "@get-bb/plugin-sdk/app";
 import { useCallback, useMemo } from "react";
 import type { Profile } from "../../model/profile.ts";
@@ -21,8 +18,6 @@ export const managerSegment = {
   useVisible: ({ threadId }: { threadId: string }) => useCoordinatorOfThread(threadId).coordinator !== null,
 };
 
-// why by thread: bb mounts the summary and the details apart, so the editor finds here the toggle that
-// takes its focus back as it closes.
 const toggles = new Map<string, HTMLButtonElement>();
 
 function ManagerToggle({ threadId, isExpanded, onToggle }: ExperimentalThreadContextSegmentProps) {
@@ -59,10 +54,8 @@ function ManagerDetails({ threadId, isExpanded, onToggle }: ExperimentalThreadCo
 
 type EditorProps = { threadId: string; coordinatorId: CoordinatorId; profile: Profile; onClose(): void };
 
-/** The profile's editor, on the edit the browser keeps (stored.ts), or the profile as saved while there is none. */
 function Editor({ threadId, coordinatorId, profile, onClose }: EditorProps) {
   const edit = useStored(localStorage, profileEditKeyOf(coordinatorId), profileDraftSchema);
-  // The toggle stays as the editor opens and closes, so the focus moves to the name only from it, and back to it from the editor.
   const takeFocus = useCallback(
     (name: HTMLElement | null) => {
       if (name !== null && document.activeElement === toggles.get(threadId)) name.focus();
@@ -83,7 +76,6 @@ function Editor({ threadId, coordinatorId, profile, onClose }: EditorProps) {
   );
 }
 
-/** The regional manager whose thread this is, with its profile; null for any other thread, or before both reads. */
 function useManagerOfThread(threadId: string): { coordinatorId: CoordinatorId; profile: Profile } | null {
   const { coordinator } = useCoordinatorOfThread(threadId);
   const profile = useManager(coordinator?.id ?? null)?.profile ?? null;

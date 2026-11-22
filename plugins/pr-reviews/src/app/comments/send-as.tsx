@@ -1,7 +1,3 @@
-// The comment box's send row, drawn as bb's composer draws its own: Send as, a chip naming what the
-// draft goes as (Ask, Comment, Review; box-actions.ts) that opens a menu of the others, as bb's
-// model chip does; and the send button that sends it. A mode that can't send stays in the menu,
-// disabled, its reason in place of what it does. With one mode, the chip is a label, not a menu.
 import type { ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { useRememberedState } from "../use-remembered-state.ts";
@@ -12,7 +8,6 @@ import { Tooltip } from "../ui/tooltip.tsx";
 import { descriptionOf, sendLabelOf, type GitHubActions, type SendOption, type Subject } from "./box-actions.ts";
 import type { Action } from "./box-problems.ts";
 
-// The mode the reader last picked, in any box: every box after opens on it, for the session.
 const remembered = new Map<string, Action | null>();
 const PICKED = "picked";
 
@@ -67,13 +62,11 @@ export function SendAs({ subject, actions, options, selected, onPick }: SendAsPr
   );
 }
 
-// bb's model chip in its composer, class for class: a quiet ghost button, the choice and a chevron.
 const CHIP_CLASS =
   "inline-flex h-8 w-fit max-w-full min-w-0 select-none items-center justify-start gap-1 whitespace-nowrap rounded-md px-1 text-xs leading-tight font-normal text-muted-foreground [&_[data-icon-root]]:pointer-events-none [&_[data-icon-root]]:size-4 [&_[data-icon-root]]:shrink-0";
 const CHIP_BUTTON_CLASS =
   "cursor-pointer duration-150 hover:bg-state-hover hover:duration-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring data-[state=open]:bg-state-active data-[state=open]:text-foreground data-[state=open]:hover:bg-state-active";
 
-// 16px, as bb's composer and menus draw their icons.
 const ICONS = {
   ask: <Icon name="SideChat" className="size-4 shrink-0" aria-hidden />,
   comment: <Icon name="GithubLogo" className="size-4 shrink-0" aria-hidden />,
@@ -114,6 +107,5 @@ export function SendButton({ label, sending, disabled, onSend }: SendButtonProps
   );
 }
 
-// why aria-disabled, not disabled: the button stays focusable, and still names what it would send as.
 const SEND_CLASS =
   "inline-flex h-8 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md bg-foreground px-2 text-xs font-medium text-background transition-colors duration-150 hover:bg-foreground/90 hover:duration-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring aria-disabled:cursor-default aria-disabled:not-aria-busy:opacity-50 aria-disabled:hover:bg-foreground [&_[data-icon-root]]:pointer-events-none [&_[data-icon-root]]:size-4 [&_[data-icon-root]]:shrink-0";

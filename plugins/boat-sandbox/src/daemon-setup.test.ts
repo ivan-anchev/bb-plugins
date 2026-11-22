@@ -11,7 +11,6 @@ import { prepareDaemon } from "./daemon-setup.ts";
 const SANDBOX = sandboxId.parse("bx_abcdefgh");
 const DROP_IN = ".config/systemd/user/bb-host-daemon-.service.d/boat.conf";
 
-/** Runs prepareDaemon's command as boat would, in a shell, in a scratch HOME; returns that HOME. */
 async function preparedHome(): Promise<string> {
   const home = mkdtempSync(join(tmpdir(), "bb-boat-daemon-"));
   const sandbox: Pick<BoatClient, "run"> = {
@@ -24,10 +23,6 @@ async function preparedHome(): Promise<string> {
   return home;
 }
 
-/**
- * The variables systemd gives the daemon from the drop-in's `Environment=` lines. Each word is
- * `NAME=value`, bare, in double quotes or in single quotes; systemd expands no `$NAME` in them.
- */
 function environmentOf(dropIn: string): Record<string, string> {
   const words = dropIn
     .split("\n")
@@ -36,7 +31,6 @@ function environmentOf(dropIn: string): Record<string, string> {
   return Object.fromEntries(words.map((word) => [word.slice(0, word.indexOf("=")), word.slice(word.indexOf("=") + 1)]));
 }
 
-/** Runs real git with the daemon's environment from the drop-in, as a turn on the sandbox would. */
 const git = (environment: Record<string, string>, args: string[], input = "") =>
   spawnSync("git", args, {
     env: { ...environment, HOME: mkdtempSync(join(tmpdir(), "bb-boat-git-")), PATH: process.env.PATH ?? "/usr/bin:/bin", GIT_TERMINAL_PROMPT: "0" },
@@ -60,7 +54,6 @@ test("the drop-in loads boat's sign-ins and sets core's four GitHub git settings
     GIT_CONFIG_KEY_3: "url.https://github.com/.insteadOf",
     GIT_CONFIG_VALUE_3: "ssh://git@github.com/",
   });
-  // systemd would expand a `%` specifier, and no value may hold a token.
   assert.doesNotMatch(Object.values(environment).join("\n"), /%|gh[upos]_|github_pat_|GITHUB_TOKEN=/);
 });
 
@@ -73,7 +66,6 @@ test("with the drop-in's environment, git rewrites SSH GitHub remotes to HTTPS a
   const fill = git({ ...environment, GITHUB_TOKEN: "test-token" }, ["credential", "fill"], "protocol=https\nhost=github.com\n\n");
   assert.match(fill.stdout, /^username=x-access-token\npassword=test-token$/m);
 
-  // Without boat's token the helper answers nothing, so git asks no one and fails as it would with no helper.
   assert.notEqual(git(environment, ["credential", "fill"], "protocol=https\nhost=github.com\n\n").status, 0);
 });
 

@@ -4,7 +4,6 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { notesPopover, usePopoverState, type Capture } from "./popover-store.ts";
 
-/** The popover's state as a component sees it. */
 function render(): ReturnType<typeof usePopoverState> {
   let seen: ReturnType<typeof usePopoverState> | undefined;
   renderToStaticMarkup(createElement(() => ((seen = usePopoverState()), null)));
@@ -43,7 +42,6 @@ test("a capture while open replaces the quote and keeps who opened it", () => {
   assert.ok(state.open);
   assert.deepEqual([state.quote?.text, state.focus, state.openedBy], ["second", "form", "button"]);
 
-  // A user message quotes nothing: the quote already in the form stays.
   notesPopover.capture(null);
   const kept = render();
   assert.ok(kept.open && kept.quote?.text === "second");
@@ -56,7 +54,7 @@ test("a save clears only the quote it used", () => {
   const next = passage("captured while saving");
   notesPopover.capture(next);
 
-  notesPopover.clearQuote(saved); // the first save finishes
+  notesPopover.clearQuote(saved);
 
   const state = render();
   assert.ok(state.open && state.quote === next);
@@ -71,7 +69,7 @@ test("an opening stops showing once closed, and a later opening is not it", () =
   const first = render();
   assert.ok(first.open && notesPopover.isShowing(first.opening));
 
-  notesPopover.write(); // focus moves within the same opening
+  notesPopover.write();
   assert.ok(notesPopover.isShowing(first.opening));
 
   notesPopover.close();

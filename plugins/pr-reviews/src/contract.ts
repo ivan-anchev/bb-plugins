@@ -1,5 +1,3 @@
-// The app <-> server contract and the canonical types that cross it.
-// Shared by server.ts and app.tsx: pure zod, no SDK runtime beyond defineRpcContract.
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { codeQuoteSchema, commentBodySchema, commentRequestSchema, GITHUB_BODY_LIMIT } from "./comments/comment-schema.ts";
@@ -21,7 +19,6 @@ const prSummarySchema = z.object({
   number: prNumberSchema,
   title: z.string(),
   author: z.string(),
-  /** ISO 8601; the row shows it relative to now. */
   updatedAt: z.string(),
   headSha: z.string(),
 });
@@ -29,11 +26,9 @@ export type PrSummary = z.infer<typeof prSummarySchema>;
 
 const countSchema = z.number().int().nonnegative();
 
-/** What a CI check says, folded from GitHub's statuses, conclusions and states by `github/checks.ts`. */
 const checkOutcomeSchema = z.enum(["failing", "pending", "passing"]);
 export type CheckOutcome = z.infer<typeof checkOutcomeSchema>;
 
-/** One CI check: its name, outcome, and details page, null when GitHub gives it none. */
 const checkSchema = z.object({ name: z.string(), outcome: checkOutcomeSchema, url: z.string().nullable() });
 export type Check = z.infer<typeof checkSchema>;
 
@@ -52,51 +47,39 @@ export function leadingOutcome(summary: ChecksSummary): { outcome: CheckOutcome;
   return { outcome, count: summary[outcome] };
 }
 
-/** Where a reviewer stands: their latest review, or awaiting one they were asked for. */
 const reviewerStatusSchema = z.enum(["approved", "changes-requested", "commented", "awaiting"]);
 export type ReviewerStatus = z.infer<typeof reviewerStatusSchema>;
 
-// A team is only ever requested: its members review as users.
 const reviewerSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("user"), login: z.string(), status: reviewerStatusSchema }),
   z.object({ kind: z.literal("team"), name: z.string() }),
 ]);
 export type Reviewer = z.infer<typeof reviewerSchema>;
 
-/** GitHub's state of a PR, where an open draft is DRAFT. */
 const prStateSchema = z.enum(["OPEN", "DRAFT", "CLOSED", "MERGED"]);
 export type PrState = z.infer<typeof prStateSchema>;
 
-/** A change of a PR's state the page offers: mark a draft ready, convert to draft, close, reopen. */
 const stateChangeSchema = z.enum(["ready", "draft", "close", "reopen"]);
 export type StateChange = z.infer<typeof stateChangeSchema>;
 
-/** How GitHub merges a PR: with a merge commit, squashed into one commit, or rebased onto the base. */
 const mergeMethodSchema = z.enum(["merge", "squash", "rebase"]);
 export type MergeMethod = z.infer<typeof mergeMethodSchema>;
 export const MERGE_METHODS = mergeMethodSchema.options;
 
 const prDetailSchema = prSummarySchema.extend({
-  /** ISO 8601: when it was opened. */
   createdAt: z.string(),
   body: z.string(),
   url: z.string(),
   headRefName: z.string(),
   baseRefName: z.string(),
   state: prStateSchema,
-  /** Commit oids, oldest first. */
   commits: z.array(z.string()),
-  /** Lines added and deleted across the whole PR. */
   additions: countSchema,
   deletions: countSchema,
-  /** In GitHub's order. */
   checks: z.array(checkSchema),
-  /** Requested reviewers first, then the rest who reviewed. */
   reviewers: z.array(reviewerSchema),
   labels: z.array(labelSchema),
-  /** The methods the PR's repo allows, in MERGE_METHODS order. */
   mergeMethods: z.array(mergeMethodSchema),
-  /** GitHub found the PR's branch conflicts with its base, so it can't merge until they are resolved. */
   conflicting: z.boolean(),
 });
 export type PrDetail = z.infer<typeof prDetailSchema>;
@@ -110,16 +93,11 @@ export function commitsSince(pr: PrDetail, guideHeadSha: string): number | null 
   return at === -1 ? null : pr.commits.length - at - 1;
 }
 
-// A sum type on `kind`: each variant carries exactly what its screen needs.
 const reviewStateSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("none") }),
-  /** A review thread is writing the guide for `runHeadSha`; `startedAt` is epoch ms. */
   z.object({ kind: z.literal("running"), threadId: z.string(), runHeadSha: z.string(), startedAt: z.number() }),
-  /** A guide exists for the PR's current head, `guideHeadSha`. */
   z.object({ kind: z.literal("ready"), threadId: z.string(), guideHeadSha: z.string() }),
-  /** The newest guide is for `guideHeadSha`, an older head. */
   z.object({ kind: z.literal("stale"), threadId: z.string(), guideHeadSha: z.string() }),
-  /** The review thread for the current head settled without a guide; `idleSince` is epoch ms. */
   z.object({ kind: z.literal("no-guide"), threadId: z.string(), idleSince: z.number() }),
 ]);
 export type ReviewState = z.infer<typeof reviewStateSchema>;
@@ -143,7 +121,6 @@ export function guideHeadShaOf(review: ReviewState): string | null {
 /** The PR's review thread: every state but "none" has one. */
 export const reviewThreadOf = (review: ReviewState): string | null => (review.kind === "none" ? null : review.threadId);
 
-/** A guide as stored: who wrote it (`model` is null when bb did not report one), for which head, and when (epoch ms). */
 const guideRecordSchema = z.object({
   key: prHeadKeySchema,
   threadId: z.string(),
@@ -156,7 +133,6 @@ export type GuideRecord = z.infer<typeof guideRecordSchema>;
 /** A bb project whose remote is on GitHub. */
 export type GitHubProject = { id: string; name: string; repo: Repo };
 
-// A project whose remote could not be read. The sidebar leaves its PRs out and shows why.
 const unreadableProjectSchema = z.object({ id: z.string(), name: z.string(), message: z.string() });
 export type UnreadableProject = z.infer<typeof unreadableProjectSchema>;
 
@@ -170,10 +146,6 @@ export const SECTION_KEYS = ["authored", "review", "merged"] as const;
 const sectionKeySchema = z.enum(SECTION_KEYS);
 export type SectionKey = z.infer<typeof sectionKeySchema>;
 
-/**
- * A PR as the sidebar lists it, with the bb project it opens in. `section` is where it is listed,
- * or null for a stack-mate listed in no section.
- */
 const inboxPrSchema = z.object({
   projectId: z.string(),
   repo: repoSchema,
@@ -181,7 +153,6 @@ const inboxPrSchema = z.object({
   title: z.string(),
   author: z.string(),
   state: prStateSchema,
-  /** ISO 8601, like `mergedAt`, which is null until the PR merges. */
   updatedAt: z.string(),
   mergedAt: z.string().nullable(),
   baseRefName: z.string(),
@@ -192,22 +163,15 @@ const inboxPrSchema = z.object({
 });
 export type InboxPr = z.infer<typeof inboxPrSchema>;
 
-/** Where a PR sits in its stack: `index` counts from 1 at the bottom, the PR the others build on. */
 const stackPositionSchema = z.object({ index: z.number().int().positive(), size: z.number().int().positive() });
 export type StackPosition = z.infer<typeof stackPositionSchema>;
 
-/**
- * One entry of a section: a PR, with its place in a stack when it is the only one of its stack
- * in the section, or a stack with two or more of its PRs in the section, bottom first, holding
- * its PRs listed elsewhere or nowhere too.
- */
 const sectionItemSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("pr"), pr: inboxPrSchema, stack: stackPositionSchema.nullable() }),
   z.object({ kind: z.literal("stack"), members: z.array(inboxPrSchema) }),
 ]);
 export type SectionItem = z.infer<typeof sectionItemSchema>;
 
-/** A section's entries, most recent first, and how many PRs it lists. */
 const sectionSchema = z.object({ key: sectionKeySchema, count: countSchema, items: z.array(sectionItemSchema) });
 export type Section = z.infer<typeof sectionSchema>;
 
@@ -216,20 +180,16 @@ const inboxSchema = z.object({ sections: z.array(sectionSchema), unreadable: z.a
 /** Every PR a section shows, stack-mates listed elsewhere included. */
 export const prsOf = (section: Section): InboxPr[] => section.items.flatMap((item) => (item.kind === "pr" ? [item.pr] : item.members));
 
-/** When the reader last opened a PR's page, epoch ms, and the project it opened in. */
 const visitSchema = z.object({ projectId: z.string(), repo: repoSchema, number: prNumberSchema, openedAt: z.number() });
 export type Visit = z.infer<typeof visitSchema>;
 
-/** The PR's whole diff and the head it reflects: the `changes` read. */
 const prChangesSchema = z.object({ headSha: z.string(), files: z.array(diffFileSchema) });
 export type PrChanges = z.infer<typeof prChangesSchema>;
 
-/** A file of a project's repo at one commit: the `fileContent` read's input. */
 const fileAtCommitSchema = z.object({ projectId: z.string(), sha: z.string(), path: z.string() });
 export type FileAtCommit = z.infer<typeof fileAtCommitSchema>;
 
 const empty = z.object({});
-/** A comment the plugin posted: its page on GitHub. */
 const postedSchema = z.object({ url: z.string() });
 export const VISITS_TAG = "visits";
 export const INBOX_TAG = "inbox";

@@ -1,15 +1,9 @@
-// What a failed gh run tells the reader: a refusal the app shows beside its data, beside a kept
-// draft, or in the state menu. Pure; its test runs it on failures recorded from real gh runs
-// (fixtures/gh-failures).
 import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { firstLine, type HostCommandFailure } from "./host-command.ts";
 
-// gh api ends an HTTP failure's stderr with "(HTTP 422)"; gh pr commands carry no status.
 const HTTP_STATUS = /\(HTTP (\d{3})\)/;
-// "unexpected EOF": the connection dropped before GitHub answered.
 const NETWORK = /error connecting to|could not resolve host|no such host|dial tcp|connection refused|i\/o timeout|TLS handshake|unexpected EOF/i;
-// gh pr commands print GitHub's GraphQL error, which carries no HTTP status, for a missing permission.
 const NO_PERMISSION = /does not have the correct permissions|Resource not accessible by/;
 
 export function ghRefusalFor(failure: HostCommandFailure): Refusal {
@@ -27,18 +21,13 @@ export function ghRefusalFor(failure: HostCommandFailure): Refusal {
   if (status === 404 || stderr.includes("Could not resolve to a PullRequest")) {
     return new Refusal({ code: "not_found", message: "GitHub has no such pull request, or your account can't see it." });
   }
-  // why GitHub's own words: a 422 names what it refused (a line it could not resolve, a commit not
-  // in the PR), which no fixed message here can.
   if (status === 422) {
     const words = githubWordsOf(failure);
     if (PENDING_REVIEW.test(words)) return invalid("You have a pending review on this pull request, so GitHub takes comments only into it. Add this to your review instead.");
     return invalid(`GitHub refused the comment: ${words}. The lines may no longer be in this commit's diff.`);
   }
-  // A GraphQL request fails with HTTP 200 and GitHub's reasons in its response, such as a review
-  // it won't submit.
   const graphqlErrors = graphqlErrorsOf(failure.stdout);
   if (graphqlErrors !== null) return invalid(`GitHub refused it: ${graphqlErrors}`);
-  // gh pr commands mark a failure with a leading "X ".
   return invalid(firstLine(stderr)?.replace(/^X /, "") ?? "The GitHub CLI failed.");
 }
 
@@ -61,7 +50,6 @@ export function ghStateRefusalFor(failure: HostCommandFailure): Refusal {
   if (failure.killed) return invalid("GitHub didn't answer in time. The state may have changed: Refresh to check before trying again.");
   if (failure.stderr.includes("Head branch was modified")) return invalid("New commits were pushed to this pull request since the page loaded. Refresh to see them before you merge.");
   if (failure.stderr.includes("because it was already merged")) return invalid("This pull request is already merged, so its state can't change. Refresh to see it.");
-  // why not "closed": gh prints the same "is closed" line for a merged PR.
   if (failure.stderr.includes("Only draft pull requests can be marked")) {
     return invalid("This pull request is no longer open on GitHub, so it can't be marked ready or converted to draft. Refresh to see it.");
   }
@@ -70,17 +58,13 @@ export function ghStateRefusalFor(failure: HostCommandFailure): Refusal {
 
 const invalid = (message: string) => new Refusal({ code: "invalid", message });
 
-// GitHub's words when a comment is posted on its own while the reader has a pending review.
 const PENDING_REVIEW = /one pending review per pull request/;
 
-// gh prints GitHub's error response on stdout and only its top message on stderr.
 const githubErrorSchema = z.object({
   message: z.string(),
   errors: z.array(z.object({ field: z.string().optional(), message: z.string() })).default([]),
 });
 
-// "Validation Failed: pull_request_review_thread.line could not be resolved". A response gh did not
-// print as GitHub's JSON leaves stderr, without gh's "gh: " and "(HTTP 422)".
 function githubWordsOf({ stdout, stderr }: HostCommandFailure): string {
   const response = githubErrorSchema.safeParse(jsonOrNull(stdout));
   if (!response.success) return stderr.replace(/^gh: /, "").replace(HTTP_STATUS, "").trim();
@@ -98,7 +82,6 @@ function jsonOrNull(text: string): unknown {
 
 const graphqlResponseSchema = z.object({ errors: z.array(z.object({ message: z.string() })).min(1) });
 
-// "Could not approve for pull request review. Can not approve your own pull request", each error's.
 function graphqlErrorsOf(stdout: string): string | null {
   const response = graphqlResponseSchema.safeParse(jsonOrNull(stdout));
   return response.success ? response.data.errors.map((error) => error.message).join(" ") : null;

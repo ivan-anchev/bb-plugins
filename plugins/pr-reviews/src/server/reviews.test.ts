@@ -16,8 +16,6 @@ const RUN: ReviewRun = { key: { repo, number: 23, headSha: "head1" }, threadId: 
 
 const notUsedByCancel = async () => assert.fail("Cancel must not call this");
 
-// Cancel with a real running-review derivation over in-memory runs and bb thread status, with
-// GitHub unreachable, and a bb whose first `failedStops` stops reject.
 function cancelHarness(failedStops: number) {
   let runs = [RUN];
   const threads = new Map<string, ThreadFacts>([[RUN.threadId, { status: "active", updatedAt: 100 }]]);
@@ -106,9 +104,6 @@ const PR: PrDetail = {
 };
 const DIFF = "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-old\n+new\n";
 
-// Start or Update with the PR in `review`, the project's default checkout on `checkoutHost`, the
-// threads in `openThreads` still open, and every GitHub read, fetch, spawn, message and saved run
-// recorded in order.
 function actionHarness(checkoutHost: string, review: ReviewState = { kind: "none" }, openThreads: string[] = []) {
   const calls: string[] = [];
   const messages: string[] = [];
@@ -176,8 +171,6 @@ test("Start refuses a PR that already has a guide for its current commit, before
   assert.deepEqual(calls, []);
 });
 
-// ---- updating a stale guide ----
-
 const STALE: ReviewState = { kind: "stale", threadId: "thr_old", guideHeadSha: "head1" };
 
 test("Update pins the new head's diff, fetches its commits, then messages the guide's own thread and saves its run for the new head", async () => {
@@ -219,8 +212,6 @@ test("a second Update while the first is in flight joins it: one message, one ru
   assert.equal(calls.filter((call) => call.startsWith("send")).length, 1);
 });
 
-// ---- asking about a finding ----
-
 const FINDING: Finding = {
   file: "src/a.ts",
   line: 2,
@@ -241,7 +232,6 @@ const RECORD: GuideRecord = {
 
 const notUsedByAsk = async () => assert.fail("Ask must not call this");
 
-// Ask with one stored guide, recording every message bb is asked to send.
 function askHarness() {
   const sent: unknown[] = [];
   const reviews = createReviews({
@@ -286,8 +276,6 @@ test("Ask refuses a finding the guide does not have, or a head with no guide, an
   await assert.rejects(reviews.ask({ ...GUIDE_KEY, headSha: "head2" }, 0, "Why?"), { code: "not_found" });
   assert.deepEqual(sent, []);
 });
-
-// ---- asking about selected lines ----
 
 const QUOTE: CodeQuote = { path: "src/a.ts", commit: "head2", start: { side: "new", line: 1 }, end: { side: "new", line: 1 }, lines: ["+new"] };
 

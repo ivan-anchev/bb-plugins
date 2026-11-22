@@ -48,9 +48,7 @@ test("meaningfulChanges: one case per transition, a new pending run among those 
 const READ_AT = 10_000_000;
 const MINUTE = 60_000;
 const HANDOFF = handoffIdSchema.parse("6f1c2a54-0b8e-4c3e-9d7a-2f5e8b1c4d90");
-/** The done handoff CI is judged for: its commit is HEAD, and it names this pull request (null: none). */
 const claim = (prUrl: string | null) => ({ id: HANDOFF, headSha: HEAD, prUrl });
-/** A PR status whose latest read that found the pull request came since the handoff, and saw its head for `seenFor` by then (a minute, unless given). */
 const read = (snapshot: PrSnapshot | null, unavailable: PrUnavailable | null = null, seenFor = MINUTE): PrStatus =>
   snapshot === null ? { snapshot, unavailable } : { snapshot, headSeenAt: READ_AT - seenFor, readAt: READ_AT, handoffAtRead: HANDOFF, unavailable };
 const SIGNED_OUT: PrUnavailable = { kind: "persistent", reason: "gh isn't signed in" };

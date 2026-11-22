@@ -1,12 +1,5 @@
-// The plugin's own check of a done handoff, before any criterion: that the agent's environment had
-// the claimed commit checked out on a clean working tree. bb's git plugin reads it on the
-// environment's machine as the agent hands off; for a build parent's final check, the verifier's
-// own worktree as it returns, whose commit is the one judged. why not the verifier's shell: a provider can run
-// each command in a sandbox of its own, which shows files that aren't in the agent's tree (Claude
-// Code's showed a boat sandbox's home dotfiles as untracked), and so fails clean work.
 import { z } from "zod";
 
-/** How many changed files a checkout lists by path; the rest are counted. */
 const MAX_LISTED = 20;
 
 /**

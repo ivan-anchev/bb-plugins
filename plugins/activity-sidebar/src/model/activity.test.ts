@@ -3,7 +3,7 @@ import { test } from "node:test";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import type { SleepRecord } from "../contract.ts";
 import { buildActivity, sleepersAskingForYou, type ActivityInput, type SectionKey } from "./activity.ts";
-import { project, thread, WORKING } from "./fixtures.ts";
+import { project, thread, WORKING } from "./thread.fixture.ts";
 
 const NOW = 10 * 3_600_000;
 
@@ -137,7 +137,6 @@ test("the project filter narrows every section to its project", () => {
 });
 
 test("reading a thread neither moves its row nor resets its time", () => {
-  // bb bumps updatedAt (not latestAttentionAt) when a thread is read.
   const sections = build([
     thread("came-back", { latestAttentionAt: NOW - 60_000, updatedAt: NOW - 60_000 }),
     thread("just-read", { latestAttentionAt: NOW - 3 * 60_000, updatedAt: NOW }),

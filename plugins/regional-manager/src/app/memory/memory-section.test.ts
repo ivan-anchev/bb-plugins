@@ -7,9 +7,6 @@ import { coordinatorContract as contract, memoryTag } from "../../contract.ts";
 import { memoryFileSchema, memoryRevisionSchema, previewOf, type MemoryFile, type MemorySnapshot, type WriteOutcome } from "../../model/memory-file.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
 
-// The board's Memory keeps each unsaved draft in the browser, so bb redrawing the panel across its
-// breakpoint, or a reload, loses none, and a file deleted under a draft never hides it.
-
 const { MemorySection } = await import("./memory-section.tsx");
 
 const COORDINATOR = coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10");
@@ -23,7 +20,6 @@ afterEach(() => {
   sessionStorage.clear();
 });
 
-/** The memory folder on the bb server: each file's text and version, the revision each was seen at, and every write the section sent. */
 function server() {
   const files = new Map<MemoryFile, { content: string; version: string; revision: number }>([
     [NOTES, { content: "# Notes\n\nNothing yet.\n", version: "v1", revision: 1 }],
@@ -34,7 +30,6 @@ function server() {
     const stored = files.get(file);
     return stored === undefined ? { text: null, revision: memoryRevisionSchema.parse(9) } : { text: { content: stored.content, version: stored.version }, revision: memoryRevisionSchema.parse(stored.revision) };
   };
-  /** Someone else writes the file, as the regional manager does. */
   const write = (file: MemoryFile, content: string): { version: string; revision: number } => {
     const revision = (files.get(file)?.revision ?? 0) + 1;
     const version = `v${revision}`;
@@ -55,7 +50,6 @@ function server() {
   return { rpc, writes, write, remove: (file: MemoryFile) => files.delete(file) };
 }
 
-/** The section, as the Board tab mounts it. */
 function mount(rpc: ReturnType<typeof server>["rpc"], coordinatorId: CoordinatorId = COORDINATOR) {
   const view = renderSlot({ component: MemorySection }, { coordinatorId }, { experimental_rpcContract: contract, rpc });
   return {
@@ -65,7 +59,6 @@ function mount(rpc: ReturnType<typeof server>["rpc"], coordinatorId: Coordinator
       assert.ok(field instanceof HTMLTextAreaElement);
       return field;
     },
-    /** Opens the file from the list and edits it; one with a draft opens in its editor. */
     async edit(file: MemoryFile): Promise<HTMLTextAreaElement> {
       fireEvent.click(await view.findByRole("button", { name: new RegExp(`^${file}`) }));
       const edit = await view.findByRole("button", { name: /^(Edit|Save)$/ });

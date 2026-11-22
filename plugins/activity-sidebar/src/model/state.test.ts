@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
-import { thread } from "./fixtures.ts";
+import { thread } from "./thread.fixture.ts";
 import { askOf, baseState, stateOf, withAsk, withWait, type ZState } from "./state.ts";
 
 const EXPECTED: Record<PluginSidebarThread["indicator"], ZState | null> = {
@@ -33,7 +33,7 @@ test("a runtime on a machine that isn't ready is connecting", () => {
 });
 
 test("an indicator from a newer bb draws no state", () => {
-  // why: deliberately off-type — stands in for a kind this plugin's SDK doesn't know yet.
+  // WARNING: deliberately off-type; stands in for a kind this plugin's SDK doesn't know yet.
   const newer = { ...thread("t"), indicator: "teleporting" } as unknown as PluginSidebarThread;
   assert.equal(baseState(newer), null);
 });
@@ -77,7 +77,6 @@ test("a thread asks for approval when any pending interaction is one", () => {
 test("a thread asks a question when no pending interaction is an approval", () => {
   assert.equal(askOf([{ status: "pending", payload: { kind: "user_question" } }]), "question");
   assert.equal(askOf([{ status: "pending", payload: { kind: "plugin" } }]), "question");
-  // why: an approval already answered no longer asks.
   assert.equal(askOf([{ status: "resolved", payload: { kind: "approval" } }, { status: "pending", payload: { kind: "user_question" } }]), "question");
   assert.equal(askOf([]), "question");
 });

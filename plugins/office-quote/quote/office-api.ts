@@ -1,5 +1,3 @@
-// The Office API (officeapi.akashrajpurohit.com): one random quote, in our Quote shape.
-// It sits behind Cloudflare and rate-limits after a few dozen quick requests.
 import { z } from "zod";
 import type { Quote } from "../contract.ts";
 

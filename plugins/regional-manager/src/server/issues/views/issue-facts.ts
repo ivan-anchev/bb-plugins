@@ -1,7 +1,3 @@
-// Every issue of a regional manager, viewed: one store read, one listing of its agents' and running
-// verifiers' threads, and a turn read only for a holder that is idle with a handoff to judge. The
-// board, crew_catch_up, issue_read, issue_update and the unblocked announcement all view issues
-// here, so a status has one derivation.
 import { issueBranch, type Agent } from "../../../model/agent.ts";
 import type { Issue } from "../../../model/issue/issue.ts";
 import { issueViews, type HolderThread, type IssueFacts, type IssueView } from "../../../model/issue/status.ts";
@@ -29,7 +25,6 @@ export async function readIssues(bb: FactsBb, store: FactsStore, coordinatorId: 
   const issues = store.issues(coordinatorId);
   const agents = store.agents(coordinatorId);
   const verifiers = store.openChecks().flatMap(({ coordinatorId: of, issueId, verdict }) => (of === coordinatorId && verdict.state === "running" ? [{ issueId, threadId: verdict.verifierThreadId }] : []));
-  // why archived ones too: an ended agent's branch still names its issue's pull request.
   const threads = await threadsById(bb, [...agents.flatMap(({ threadId }) => (threadId === null ? [] : [threadId])), ...verifiers.map(({ threadId }) => threadId)]);
   const threadOf = (agent: Agent): ListedThread | null => (agent.threadId === null ? null : (threads.get(agent.threadId) ?? null));
   const openDecisions = new Set(store.decisions(coordinatorId).flatMap(({ issueId, answer }) => (issueId !== null && answer === null ? [issueId] : [])));
@@ -56,7 +51,6 @@ export async function readIssues(bb: FactsBb, store: FactsStore, coordinatorId: 
   return reads.map(({ agent, threadId, branch }, i) => ({ view: viewAt(views, i), agent, threadId, branch }));
 }
 
-/** The issue's holder, its thread while bb runs it, and its current handoff, read only when its thread is idle. */
 async function holderOf(bb: TurnsBb, store: FactsStore, own: readonly Agent[], threadOf: (agent: Agent) => ListedThread | null): Promise<IssueFacts["holder"]> {
   const agent = own.find(({ ended }) => ended === null);
   if (agent === undefined) return null;
@@ -66,14 +60,12 @@ async function holderOf(bb: TurnsBb, store: FactsStore, own: readonly Agent[], t
   return { agent, thread, current };
 }
 
-/** How the latest agent ended, with the handoff it left then (null: none); null while it holds the issue, or when none started. */
 function endedBy(store: FactsStore, latest: Agent | null): IssueFacts["ended"] {
   const ended = latest?.ended ?? null;
   if (ended === null) return null;
   return { how: ended.how, left: ended.left === null ? null : store.handoff(ended.left) };
 }
 
-/** why throw: issueViews returns one view per facts, in order. */
 function viewAt(views: readonly IssueView[], i: number): IssueView {
   const view = views[i];
   if (view === undefined) throw new Error(`No view for issue ${i}`);
@@ -83,7 +75,6 @@ function viewAt(views: readonly IssueView[], i: number): IssueView {
 /** One issue of the regional manager, viewed now. */
 export async function readIssue(bb: FactsBb, store: FactsStore, issue: Pick<Issue, "coordinatorId" | "id">): Promise<IssueRead> {
   const read = (await readIssues(bb, store, issue.coordinatorId)).find(({ view }) => view.issue.id === issue.id);
-  // why throw: callers read the issue from the store first, and issues are never deleted while their regional manager is kept.
   if (read === undefined) throw new Error(`The issue ${issue.id} of ${issue.coordinatorId} is missing.`);
   return read;
 }

@@ -1,7 +1,3 @@
-// An issue's own tab in its regional manager's side panel, beside the Board: one tab per issue, opened
-// from its row on the board or from its entry in another issue's tab (open-issue.ts). It reads the
-// board as the Board tab does, for the issue's row and the rows its relations name, so it changes as
-// the board does; its detail reads the issue itself.
 import "../issue/issue-board.css";
 import "./issue-tab.css";
 import { experimental_useRpcQuery, type ExperimentalThreadTabProps, type JsonValue } from "@get-bb/plugin-sdk/app";
@@ -22,7 +18,6 @@ export const issueTab = {
   icon: "CircleDot",
   layout: "flush",
   component: IssueTab,
-  // why the Board's: bb declines to open a tab where it is hidden, and an issue lives where its board does.
   useVisible: useIsManagerThread,
 } as const;
 
@@ -38,7 +33,6 @@ function IssueTab({ threadId, params }: ExperimentalThreadTabProps & { params: J
   );
 }
 
-/** The issue, from the board's read: its head and its detail, and whatever failed to read beside them. */
 function IssuePage({ coordinatorId, issueId }: { coordinatorId: CoordinatorId; issueId: IssueId }) {
   const read = experimental_useRpcQuery({ contract, method: "board", input: { coordinatorId } });
   const issues = read.data?.issues;

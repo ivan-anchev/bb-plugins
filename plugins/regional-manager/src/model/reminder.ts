@@ -1,6 +1,3 @@
-// A reminder the coordinating thread set itself with crew_remind: a note, when it is next due, and
-// how often it repeats (null: once). It is the thread's own words, so its doorbell may quote it.
-// Times are epoch milliseconds, parsed once from what the thread typed.
 import { z } from "zod";
 import { ONE_LINE } from "./one-line.ts";
 
@@ -19,9 +16,7 @@ const UNIT_MS = { m: 60_000, h: 3_600_000, d: 86_400_000 } as const;
 type Unit = keyof typeof UNIT_MS;
 const isUnit = (letter: string): letter is Unit => Object.hasOwn(UNIT_MS, letter);
 
-// why at most six digits: a million days keeps every due time, and the next after it, a valid Date.
 const DURATION = /^(\d{1,6})\s*([mhd])$/;
-// why an offset is required: the thread can't know the bb server's time zone.
 const ISO_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
 
 export const AT_FORMS = 'a whole number of minutes, hours or days from now, such as "2m", "in 2h" or "3d", or an ISO 8601 time with its offset, such as "2026-11-16T15:00:00Z" or "2026-11-16T17:00+02:00"';
@@ -46,10 +41,6 @@ export function parseEvery(every: string): Parsed {
   return duration === null ? { ok: false, error: `crew_remind can't read every "${every}". Give it as ${EVERY_FORMS}.` } : { ok: true, ms: duration };
 }
 
-/**
- * Whether the day and the time of day an ISO time names exist. why: Date.parse rolls 2027-02-29
- * over to March 1, and a mistyped date would wake the thread on another day.
- */
 function isOnTheCalendar([, year, month, day, hour, minute, second = "0"]: RegExpExecArray): boolean {
   const daysInMonth = new Date(Date.UTC(Number(year), Number(month), 0)).getUTCDate();
   return Number(month) >= 1 && Number(month) <= 12 && Number(day) >= 1 && Number(day) <= daysInMonth && Number(hour) <= 23 && Number(minute) <= 59 && Number(second) <= 59;

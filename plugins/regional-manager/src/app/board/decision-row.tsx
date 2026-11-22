@@ -1,9 +1,3 @@
-// A decision the regional manager put to the user with crew_ask_user, on an issue row's grid
-// (issue/issue-row.tsx): a question glyph in the 30 slot, its id and question where a title sits.
-// It sits under Needs you with a button for each option and a field for an answer in the user's own
-// words, which the browser keeps until the board reads it answered (see answer-draft.ts). Answered, it
-// leaves the board, and focus in it goes to the page; the question and its answer stay among its
-// issue's decisions (issue/detail/issue-decisions.tsx).
 import { experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
 import { useId, useState, type KeyboardEvent } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
@@ -15,7 +9,6 @@ import { useHoldEscape } from "../ui/hold-escape.ts";
 import { useStored } from "../ui/stored.ts";
 import { answerDraftKeyOf, answerDraftSchema } from "./answer-draft.ts";
 
-// why these sizes: an issue row's (issue-board.css `.rmi-slot`, `.rmi-line`, `.rmi-id`), so the question lines up with the titles.
 const ROW = "flex items-start rounded-lg";
 const SLOT = "flex size-[30px] shrink-0 items-center justify-center";
 const WORDS = "flex min-w-0 flex-1 flex-col pr-2 text-[13px] leading-[18px]";
@@ -30,29 +23,24 @@ type DecisionRowProps = { coordinatorId: CoordinatorId; decision: OpenDecision }
  */
 export function DecisionRow({ coordinatorId, decision }: DecisionRowProps) {
   const ids = useId();
-  // What the user typed and hasn't sent, as the browser keeps it.
   const typed = useStored(localStorage, answerDraftKeyOf(coordinatorId, decision.id), answerDraftSchema);
   const draft = typed.value ?? "";
   const save = experimental_useRpcMutation({ contract, method: "answerDecision" });
-  // The answer sent, from the click until the board reads it back answered and the row leaves.
   const [sent, setSent] = useState<string | null>(null);
   useHoldEscape(draft.trim() !== "");
 
   function send(text: string) {
     if (sent !== null || text.trim() === "") return;
     setSent(text);
-    // why the catch: the hook's error shows under the field; the rejection carries nothing more.
     save.mutate({ coordinatorId, decisionId: decision.id, answer: text }).catch(() => setSent(null));
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    // Enter sends and Shift+Enter breaks the line, as in bb's composer.
     if (event.key !== "Enter" || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey || event.nativeEvent.isComposing) return;
     event.preventDefault();
     send(draft);
   }
 
-  // why aria-disabled, not disabled: a disabled button drops focus to the page while the answer sends.
   const busy = sent !== null;
   return (
     <div role="group" aria-labelledby={`${ids}-id ${ids}-question`} className={`${ROW} pb-2`}>
@@ -77,7 +65,6 @@ export function DecisionRow({ coordinatorId, decision }: DecisionRowProps) {
             ))}
           </ul>
         )}
-        {/* why the heights: one line of the field stands as tall as Send beside it, at 14px text and at touch's 16px. */}
         <form
           className="flex items-end gap-1.5 [&_textarea]:min-h-9 max-sm:[&>button]:h-[2.375rem]"
           onSubmit={(event) => {
@@ -113,7 +100,6 @@ export function DecisionRow({ coordinatorId, decision }: DecisionRowProps) {
   );
 }
 
-/** A circle around a question mark: what a decision is, in the slot an issue's status glyph takes. */
 function QuestionGlyph() {
   return (
     <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>

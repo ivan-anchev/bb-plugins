@@ -15,7 +15,6 @@ const PROJECTS: GitHubProject[] = [
 
 type Fields = { state?: PrState; base?: string; updatedAt?: string; mergedAt?: string | null; repo?: Repo };
 
-// PR `number` on branch `pr-<number>`, by default open on main and last updated on day `number` of November.
 const gh = (number: number, { state = "OPEN", base = "main", updatedAt, mergedAt = null, repo = BB }: Fields = {}): GitHubPr => ({
   repo,
   number,
@@ -34,7 +33,6 @@ const found = (section: SectionKey, pr: GitHubPr): FoundPr => ({ section, pr });
 
 const sectionsOf = (listed: FoundPr[], stackMates: GitHubPr[] = []) => buildSections(inboxPrs(listed, stackMates, PROJECTS));
 
-// A section as text: a PR as `#n`, a lone stack member as `#n (i/size)`, a stack as `[#a #b …]`.
 const outline = (section: Section) =>
   section.items.map((item) =>
     item.kind === "stack" ? `[${item.members.map((pr) => `#${pr.number}`).join(" ")}]` : `#${item.pr.number}${item.stack === null ? "" : ` (${item.stack.index}/${item.stack.size})`}`,
@@ -75,7 +73,6 @@ test("a stack takes its most recent PR's place and lists every PR bottom first, 
       found("merged", gh(86, { state: "MERGED", mergedAt: "2026-11-09T00:00:00Z" })),
       found("review", gh(90, { base: "pr-88", updatedAt: "2026-11-12T01:00:00Z" })),
     ],
-    // A teammate's PR on top that asks nothing of the reader: in no section.
     [gh(91, { base: "pr-90" })],
   );
   assert.deepEqual(outline(sections[0]), ["#83", "[#86 #87 #88 #90 #91]", "#70"]);
@@ -83,7 +80,6 @@ test("a stack takes its most recent PR's place and lists every PR bottom first, 
   const stack = sections[0].items[1];
   assert.equal(stack.kind, "stack");
   assert.deepEqual(stack.kind === "stack" && stack.members.map((pr) => pr.section), ["merged", "authored", "authored", "review", null]);
-  // In the other sections the stack has one PR each: a plain row that knows its place.
   assert.deepEqual(outline(sections[1]), ["#90 (4/5)"]);
   assert.deepEqual(outline(sections[2]), ["#86 (1/5)"]);
 });

@@ -1,5 +1,3 @@
-// A hunk or a whole file as patch text, which the app's diff draws. Shared: the app draws each
-// hunk of a step on its own, and each file of the Changes tab whole.
 import { hunkIdOf, type DiffFile, type Hunk } from "./diff-schema.ts";
 
 /** A headerless single-hunk patch: its `@@` header and its lines. */

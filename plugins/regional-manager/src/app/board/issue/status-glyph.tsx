@@ -1,6 +1,3 @@
-// An issue status's glyph, 14 in a 16 box, in its status's token (issue-board.css `.rmi-state`):
-// Activity Sidebar's state glyphs (src/ui/state-glyph.tsx), one per status. Under-way statuses
-// draw its working ring: turning on a row, still where it only names the status (a lane's header).
 import { useRef, type ReactNode } from "react";
 import { STATUS_LABELS, type IssueStatus } from "../../../model/issue/status.ts";
 import { useRing } from "./motion/ring.ts";
@@ -30,7 +27,6 @@ export function NeedsYouGlyph() {
 function glyph(status: IssueStatus, still: boolean): ReactNode {
   switch (status) {
     case "backlog":
-      // why dots: the working ring at rest is eight dashes; a dashed circle read as it.
       return (
         <Icon>
           <circle cx="12" cy="12" r="9" strokeWidth={2.25} strokeDasharray="0.01 4.71" />
@@ -73,7 +69,6 @@ function Icon({ children }: { children: ReactNode }) {
   );
 }
 
-/** Activity Sidebar's working ring, in the box's colour. */
 function Ring({ still }: { still: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useRing(ref, SIZE, still);

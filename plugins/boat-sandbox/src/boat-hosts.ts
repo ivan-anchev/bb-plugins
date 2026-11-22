@@ -1,5 +1,3 @@
-// Which bb hosts and environments are boat machines, so the sidebar can mark the threads that run on
-// one and the thread side panel can show their Computer.
 import type { BbPluginApi, ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import { PROVIDER_ID, type boatSandboxContract } from "./contract.ts";
 

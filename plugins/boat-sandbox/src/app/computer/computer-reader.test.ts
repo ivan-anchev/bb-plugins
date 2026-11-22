@@ -7,7 +7,6 @@ import { readComputerEvery, type ComputerReading } from "./computer-reader.ts";
 const BEFORE_STOP: ComputerView = { status: "ready", url: "https://box-node-1-6080.on.boat.dev/vnc.html?_token=before" };
 const AFTER_RESUME: ComputerView = { status: "ready", url: "https://box-node-1-6080.on.boat.dev/vnc.html?_token=after" };
 
-/** Opens the page: a reader that answers with `answer()`, and every reading it showed, latest last. */
 function open(answer: () => Promise<ComputerView>) {
   const shown: ComputerReading[] = [];
   const close = readComputerEvery(answer, (reading) => shown.push(reading), () => true);

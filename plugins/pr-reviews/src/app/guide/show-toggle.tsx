@@ -1,5 +1,3 @@
-// Show/Hide for a row the guide folds away. The row's reason sits beside it, never inside, so a
-// link in the reason works on its own.
 import { Button } from "../ui/button.tsx";
 
 type ShowToggleProps = { open: boolean; subject: string; onToggle(): void };

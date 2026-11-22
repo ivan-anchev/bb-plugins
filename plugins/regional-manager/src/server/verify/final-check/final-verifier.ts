@@ -1,10 +1,3 @@
-// A final check's verifier: where it runs and on what, and the tree it judged. It is a hidden child
-// of the regional manager's thread in a fresh managed worktree of the default branch the check
-// recorded, on the manager's machine. It is asked for as `origin/<branch>`, which bb fetches and
-// starts at origin's tip even when the local branch is behind (bb-facts P2, P4), after the merges
-// that made the check due were seen. why named, never bb's default: bb resolves its default when it
-// provisions, which may be another branch than the one the check recorded and every text names. It
-// shares that worktree with nobody, and the commit judged is the one it holds when it returns.
 import type { Coordinator } from "../../../contract.ts";
 import { environmentOf } from "../../../model/agent.ts";
 import { catalogRouting, type Execution } from "../../../model/execution.ts";

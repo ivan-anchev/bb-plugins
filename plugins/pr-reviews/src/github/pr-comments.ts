@@ -1,13 +1,9 @@
-// A PR's review threads as GitHub's GraphQL API serves them: the queries, a page reader that
-// follows a connection to its end, and the parse into the canonical thread and comment types,
-// which the timeline's parse (pr-timeline.ts) shares. gh.ts runs the queries. Pure.
 import { z } from "zod";
 import type { LineRef } from "../comments/comment-schema.ts";
 import type { GitHubComment, LineAnchor, ReviewThread } from "../comments/thread-schema.ts";
 import { numberedLines, type NumberedLine } from "../diff/diff-schema.ts";
 import type { Repo } from "./repo.ts";
 
-// GitHub's largest page.
 export const PAGE = 100;
 
 export const COMMENT_FIELDS = "databaseId url body createdAt author { __typename login }";
@@ -55,7 +51,6 @@ export async function allPages<Node>(first: Connection<Node> | null, readPage: (
   return nodes;
 }
 
-// A deleted account's comments have no author; GitHub shows them as "ghost". An app's author is a Bot.
 export const ghCommentSchema = z.object({
   databaseId: z.number(),
   url: z.string(),
@@ -64,8 +59,6 @@ export const ghCommentSchema = z.object({
   author: z.object({ __typename: z.string(), login: z.string() }).nullable(),
 });
 
-// A comment in the reader's pending review is PENDING until they submit it. Its review is null
-// only for a few seconds after the review was discarded, while GitHub still serves the comment.
 const ghReviewCommentSchema = ghCommentSchema.extend({
   state: z.enum(["PENDING", "SUBMITTED"]),
   pullRequestReview: z.object({ id: z.string() }).nullable(),
@@ -113,7 +106,6 @@ export function toThread(thread: GhThread, comments: GhReviewComment[]): ReviewT
   return {
     id: thread.id,
     path: thread.path,
-    // A thread resolved by a since-deleted account has no resolver; GitHub shows "ghost".
     resolvedBy: thread.isResolved ? (thread.resolvedBy?.login ?? "ghost") : null,
     outdated: thread.isOutdated,
     subject: thread.subjectType === "FILE" ? { kind: "file" } : { kind: "lines", anchors: anchorsOf(thread, first), excerpt: excerptOf(thread, first.diffHunk) },
@@ -139,9 +131,6 @@ export const toComment = (comment: z.infer<typeof ghCommentSchema>): GitHubComme
 
 const sideOf = (side: z.infer<typeof ghSideSchema>): LineRef["side"] => (side === "LEFT" ? "old" : "new");
 
-// The thread's lines at the head (GitHub's line fields, null once outdated, on its first comment's
-// `commit`) and where it was written (the original fields, on `originalCommit`). GitHub reports a
-// one-line thread's start as its line, or as none; either way it has no start.
 function anchorsOf(thread: GhThread, first: GhReviewComment): LineAnchor[] {
   const anchor = (commit: { oid: string } | null, start: number | null, end: number | null): LineAnchor[] => {
     if (commit === null || end === null) return [];
@@ -152,13 +141,9 @@ function anchorsOf(thread: GhThread, first: GhReviewComment): LineAnchor[] {
   };
   const current = thread.isOutdated ? [] : anchor(first.commit, thread.startLine, thread.line);
   const original = anchor(first.originalCommit, thread.originalStartLine, thread.originalLine);
-  // The same commit has the same lines: the thread was written at the head.
   return current.length > 0 && original[0]?.commit === current[0].commit ? current : [...current, ...original];
 }
 
-// GitHub keeps each review comment's hunk up to the line it was written on, its last line. The
-// thread's lines are the hunk's last ones: from its start line, or, for one line, the last few
-// (as GitHub shows an outdated comment).
 const EXCERPT_CONTEXT = 4;
 const HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 

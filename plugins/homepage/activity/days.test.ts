@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { WEEKS, addDays, dailyTotals, gridStart, levelScale, weekday } from "./days.ts";
 
-const thursday = new Date(2026, 10, 12, 0, 0, 0, 0).getTime(); // Thu, Nov 12 2026
+const thursday = new Date(2026, 10, 12, 0, 0, 0, 0).getTime();
 
 test("the grid starts on a Monday and ends in today's week", () => {
   const start = gridStart(thursday);

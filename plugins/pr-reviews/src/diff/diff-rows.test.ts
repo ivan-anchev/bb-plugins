@@ -7,7 +7,6 @@ import { parsePrDiff } from "./parse-pr-diff.ts";
 
 const fixture = (name: string) => parsePrDiff(readFileSync(new URL(`fixtures/${name}`, import.meta.url), "utf8"));
 
-// A file of 30 lines where the head removes line 5 and adds two lines after line 20.
 const SHIFTED: DiffFile = {
   path: "src/shifted.ts",
   previousPath: null,

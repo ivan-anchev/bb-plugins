@@ -1,4 +1,3 @@
-// The form's 📎: picks images and videos from disk.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { useRef } from "react";
 
@@ -17,7 +16,6 @@ export function AttachButton({ onFiles }: { onFiles(files: ArrayLike<File>): voi
         hidden
         onChange={(event) => {
           onFiles(event.target.files!);
-          // why: picking the same file again must fire change again.
           event.target.value = "";
         }}
       />

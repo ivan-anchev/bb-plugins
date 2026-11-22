@@ -6,18 +6,6 @@ import { cleanup, within } from "@testing-library/react";
 import { coordinatorContract as contract } from "../../contract.ts";
 import { PROJECT } from "../test-sidebar.ts";
 
-// The Board tab of a regional manager's thread as bb mounts it: its board, and its memory below it.
-// Memory's own behavior is memory-section.test.ts's.
-
-// why: jsdom has neither; the board's rows observe their size and ask for Reduce motion.
-Object.assign(globalThis, {
-  ResizeObserver: class {
-    observe() {}
-    disconnect() {}
-  },
-  matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }),
-});
-
 const { boardTab } = await import("./board-tab.tsx");
 
 afterEach(() => {
@@ -28,7 +16,6 @@ afterEach(() => {
 
 const COORDINATOR = { id: "6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10", threadId: "thr_1", projectId: PROJECT.id, description: null, avatar: { kind: "icon", icon: "Workflow" } };
 
-/** The tab of the regional manager's thread, over a plugin whose memory holds NOTES.md. */
 function mount() {
   const rpc = {
     coordinators: () => ({ coordinators: [COORDINATOR], notStarted: [] }),

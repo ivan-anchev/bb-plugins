@@ -205,8 +205,6 @@ function GraphProse({ className, ...props }: React.ComponentProps<"div">) {
   return <div className={cn(graphProseClass, className)} {...props} />
 }
 
-/* ---- MDX children ------------------------------------------------------ */
-
 type CellProps = {
   align?: "left" | "right"
 }

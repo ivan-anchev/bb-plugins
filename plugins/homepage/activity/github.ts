@@ -1,5 +1,3 @@
-// Reads the signed-in gh user's merged PRs through GitHub search, 100 per page,
-// and words a failure as the line the card shows instead.
 import { experimental_execHostFile as execHostFile, experimental_hostToolchain as hostToolchain } from "@get-bb/plugin-sdk/process";
 import { z } from "zod";
 import type { MergedPr } from "../contract.ts";
@@ -25,8 +23,6 @@ const pagesSchema = z.array(
 export async function readMergedPrs(since: string): Promise<MergedPr[]> {
   const { stdout } = await execHostFile("gh", searchArgs(since), {
     encoding: "utf8",
-    // why: hostToolchain.environment builds the env from its argument alone, so without the
-    // spread gh loses HOME and its credentials.
     env: hostToolchain.environment({ ...process.env, GH_PROMPT_DISABLED: "1", GH_PAGER: "cat", NO_COLOR: "1" }),
     maxBuffer: 16 * 1024 * 1024,
     timeout: 120_000,

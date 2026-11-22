@@ -1,5 +1,3 @@
-// Money and days as the card writes them.
-
 /** `$0.36`; `digits` 3 for a running boat's cost, which moves a tenth of a cent at a time. */
 export const usd = (dollars: number, digits = 2): string => `$${dollars.toFixed(digits)}`;
 

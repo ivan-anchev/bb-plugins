@@ -1,5 +1,3 @@
-// Stored JSON, read for a zod schema to parse.
-
 /** The value `stored` holds, or undefined (which a schema rejects) when it is empty or malformed. */
 export function parseJson(stored: string): unknown {
   try {

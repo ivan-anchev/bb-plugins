@@ -9,8 +9,6 @@ const root = (projectId = "prj_a"): Row => ({ parentThreadId: null, visibility: 
 const child = (projectId = "prj_a"): Row => ({ parentThreadId: "thr_parent", visibility: "visible", projectId });
 const hidden = (projectId = "prj_a"): Row => ({ parentThreadId: null, visibility: "hidden", projectId });
 
-// bb's list stands in as every row it holds, sliced by page and blind to the filters, so the count's own
-// rule is what's tested; `fail` makes the next list call reject.
 function harness(rows: Row[]) {
   const calls: string[] = [];
   const invalidated: string[] = [];

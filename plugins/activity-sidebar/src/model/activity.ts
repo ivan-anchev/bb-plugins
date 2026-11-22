@@ -1,5 +1,3 @@
-// What the Activity sidebar shows, as data: every parent thread's row and the section it stands in.
-// Pure: the live threads, the sleeps and the clock in; rows and sections out.
 import type { PluginSidebarProject, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import type { SleepRecord } from "../contract.ts";
 import { hueOf, type Hue } from "./project-hue.ts";
@@ -64,7 +62,6 @@ export function buildActivity(input: ActivityInput): ActivityModel {
     .filter((t) => isListed(t) && (input.filter === null || t.projectId === input.filter))
     .map((thread) => {
       const sleep = sleepOf(thread, input.sleeps);
-      // why: an archived thread has left the work; its row says when it left, not what it last did.
       const state = thread.isArchived ? null : stateOf(index.liveState(thread), sleep, input.now);
       return { thread, sleep, state, section: sectionOf(thread, sleep, state, input.now) };
     });
@@ -113,14 +110,10 @@ export function lastMoved(t: PluginSidebarThread): number {
   return t.isArchived ? (t.archivedAt ?? t.updatedAt) : t.latestAttentionAt;
 }
 
-// ------------------------------------------------------------------ layer 2
-
-/** Parents only; bb's hidden helpers never get a row. */
 function isListed(t: PluginSidebarThread): boolean {
   return t.parentThreadId === null && !t.isHidden;
 }
 
-/** Only an active, unpinned thread sleeps: a pin holds its row in place, and Archived has left the work. */
 function sleepOf(t: PluginSidebarThread, sleeps: ReadonlyMap<string, SleepRecord>): SleepRecord | undefined {
   return t.isArchived || t.isPinned ? undefined : sleeps.get(t.id);
 }
@@ -129,11 +122,6 @@ function asksForYou(state: ZState | null): boolean {
   return state !== null && NEEDS_YOU.has(state);
 }
 
-/**
- * Archived first, then Pinned (a pin holds its row in place whatever it does), then Asleep until its
- * time unless it asks for you, then Working while under way;
- * the rest is Activity.
- */
 function sectionOf(t: PluginSidebarThread, sleep: SleepRecord | undefined, state: ZState | null, now: number): SectionKey {
   if (t.isArchived) return "archived";
   if (t.isPinned) return "pinned";
@@ -142,19 +130,12 @@ function sectionOf(t: PluginSidebarThread, sleep: SleepRecord | undefined, state
   return "activity";
 }
 
-/**
- * Higher stands nearer the top. Asleep: the soonest to wake. Archived: the latest archived. The rest:
- * when it last came back, its own last move or waking from sleep; one
- * that woke early, asking for you, woke now. bb's attention time is the move: it advances when a turn
- * ends or fails, never when the thread is read (`updatedAt` does both).
- */
 function rankOf({ thread, sleep }: { thread: PluginSidebarThread; sleep: SleepRecord | undefined }, section: SectionKey, now: number): number {
   if (section === "asleep") return -(sleep?.until ?? 0);
   if (section === "archived") return lastMoved(thread);
   return Math.max(thread.latestAttentionAt, sleep === undefined ? 0 : Math.min(sleep.until, now));
 }
 
-/** Its state's glyph; else, asleep, how soon it wakes; else when it last moved. */
 function cornerOf(t: PluginSidebarThread, state: ZState | null, asleepUntil: number | null, now: number): Corner {
   if (state !== null) return { kind: "state", state };
   if (asleepUntil !== null) return { kind: "wakes", text: wakesIn(asleepUntil, now) };
@@ -165,11 +146,6 @@ function detailOf(t: PluginSidebarThread): RowDetail {
   return { machine: t.host?.name ?? null, branch: t.environment?.branchName ?? null };
 }
 
-
-/**
- * bb's own pin order (its bundled thread list): two manual keys by key ascending; otherwise the
- * latest pin first, then the newest thread, then by id.
- */
 function byPinOrder(a: PluginSidebarThread, b: PluginSidebarThread): number {
   if (a.pinSortKey !== null && b.pinSortKey !== null) {
     const byKey = compare(a.pinSortKey, b.pinSortKey);

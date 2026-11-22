@@ -11,7 +11,6 @@ export default async function plugin(bb: BotWakeHost) {
   const lifetime = new AbortController();
   bb.onDispose(async () => {
     lifetime.abort();
-    // Let the cancelled POSTs reach the failure log before bb closes the database.
     await waker.idle();
   });
 

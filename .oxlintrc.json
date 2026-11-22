@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "extends": ["./node_modules/@interfere/landmines/configs/recommended.json"],
+  "rules": {
+    "landmines-types/no-explicit-return-types": "off",
+    "no-unused-vars": ["warn", { "ignoreRestSiblings": true, "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }]
+  },
+  "overrides": [
+    {
+      "files": [
+        "plugins/horizontal-tabs/src/host/chrome-inset.test.ts",
+        "plugins/horizontal-tabs/src/host/layout/composer-focus.test.ts",
+        "plugins/horizontal-tabs/src/host/layout/host-layout.test.ts",
+        "plugins/horizontal-tabs/src/host/layout/pane-by-pane.test.ts",
+        "plugins/regional-manager/src/server/memory/memory-files.test.ts"
+      ],
+      "rules": {
+        "landmines-testing/no-test-doubles": "off"
+      }
+    }
+  ]
+}

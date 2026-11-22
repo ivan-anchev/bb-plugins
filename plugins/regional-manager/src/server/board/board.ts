@@ -1,6 +1,3 @@
-// The board: every issue of a regional manager, viewed now, with its latest agent's thread; and one
-// issue opened on it, with its record. Read whole on every call; bb's thread events
-// only say when to read again.
 import type { Board, IssueDetail, IssueRow } from "../../contract.ts";
 import type { Agent } from "../../model/agent.ts";
 import type { HandoffReport } from "../../model/handoff.ts";
@@ -17,7 +14,6 @@ import type { Store } from "../store/store.ts";
 
 type BoardStore = FactsStore & Pick<Store, "verifies" | "lastOwnTreeEvent" | "issue" | "record" | "issueDecisions">;
 
-/** An issue's row on the board. */
 const rowOf = ({ view, agent, threadId }: IssueRead): IssueRow => ({
   id: view.issue.id,
   kind: view.issue.kind,
@@ -32,11 +28,6 @@ const rowOf = ({ view, agent, threadId }: IssueRead): IssueRow => ({
   pr: view.pr,
 });
 
-/**
- * An agent in an issue's record, with its thread while bb still has it, archived or not (`threads`:
- * the record's threads as bb lists them now). why bb's listing, not how the agent ended: a thread
- * archived or kept when its agent ended may be deleted since, and the agent's record never says so.
- */
 const heldBy = ({ id, threadId, ended }: Agent, threads: ReadonlyMap<string, { id: string; deletedAt: number | null }>): IssueDetail["record"][number]["agent"] => {
   const thread = threadId === null ? undefined : threads.get(threadId);
   return { id, threadId: thread === undefined || thread.deletedAt !== null ? null : thread.id, ended: ended?.how ?? null };
@@ -44,13 +35,11 @@ const heldBy = ({ id, threadId, ended }: Agent, threads: ReadonlyMap<string, { i
 
 type ShownHanded = IssueDetail["record"][number]["handoffs"][number];
 
-/** A handoff in an issue's record, with the report it delivered and the verdict on it as the user is shown them. */
 const shownHanded = ({ handoff, check }: Handed): ShownHanded => {
   const { id, at, status, summary, did, evidence, concerns, deviations, findings } = handoff;
   return { id, at, status, summary, did, evidence, concerns, deviations, findings, report: reportIn(handoff), verdict: check === null ? null : shownVerdict(check.verdict) };
 };
 
-/** The report a done handoff delivered, and the file it was saved to; null for any other handoff. */
 function reportIn(handoff: HandoffReport): ShownHanded["report"] {
   if (handoff.status !== "done") return null;
   const { delivery } = handoff;
@@ -65,7 +54,6 @@ function reportIn(handoff: HandoffReport): ShownHanded["report"] {
 }
 
 export function createBoard(bb: FactsBb, store: BoardStore) {
-  /** Why the latest read of an open issue's pull request failed, the first one's; null when none did. */
   function prUnavailable(id: CoordinatorId, reads: readonly IssueRead[]): string | null {
     for (const { view, branch } of reads) {
       if (view.issue.closed !== null || branch === null) continue;
@@ -75,7 +63,6 @@ export function createBoard(bb: FactsBb, store: BoardStore) {
     return null;
   }
 
-  /** The warning of changed files in the regional manager's own working tree, from the latest event about it. */
   function ownEdits(id: CoordinatorId): Board["ownEdits"] {
     const last = store.lastOwnTreeEvent(id);
     const fileCount = warnedFileCount(last?.event ?? null);
@@ -83,10 +70,8 @@ export function createBoard(bb: FactsBb, store: BoardStore) {
   }
 
   return {
-    /** Every issue of the regional manager, viewed now. */
     issues: (id: CoordinatorId): Promise<IssueRead[]> => readIssues(bb, store, id),
 
-    /** The board as the user sees it: the verification switch, the warning of its own edits, why PR status is unavailable, the decisions, then every issue's row. */
     async read(id: CoordinatorId): Promise<Board> {
       const reads = await readIssues(bb, store, id);
       return {
@@ -98,7 +83,6 @@ export function createBoard(bb: FactsBb, store: BoardStore) {
       };
     },
 
-    /** An issue in its tab: its plan for the user, its decisions, what it depends on and what depends on it, its record and a build parent's final checks, from the store, with its agents' threads as bb lists them (null: the regional manager has no such issue). */
     async detail(id: CoordinatorId, issueId: IssueId): Promise<IssueDetail | null> {
       const issue = store.issue(id, issueId);
       if (issue === null) return null;
@@ -116,7 +100,6 @@ export function createBoard(bb: FactsBb, store: BoardStore) {
       };
     },
 
-    /** What sits under Needs you on the board, from the same reads as the board's own: its decisions and its issues. */
     async needsYou(id: CoordinatorId): Promise<NeedsYou> {
       return needsYou(store.decisions(id), (await readIssues(bb, store, id)).map((read) => read.view));
     },

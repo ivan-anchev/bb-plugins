@@ -1,16 +1,11 @@
-// A spinning arc on a faint ring, for work in progress, decoration only: what is in progress is
-// said in text beside it, or in its button's name. An svg drawn in its colour, so it reads on any
-// fill, and a theme that styles a button by its lone icon (Zeron's round send) styles it the same.
 const SIZES = {
   default: "size-3.5",
   small: "size-2.5",
-  /** An icon's, where it stands in for one. */
   icon: "size-4",
 } as const;
 
 const TONES = {
   muted: "text-muted-foreground",
-  /** Its parent's ink, as on a filled button. */
   inherit: "",
 } as const;
 

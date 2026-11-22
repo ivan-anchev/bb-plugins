@@ -15,21 +15,6 @@ import type { ShownVerdict } from "../../../model/verdict/verdict.ts";
 import { PROJECT } from "../../test-sidebar.ts";
 import { shortTime } from "../../ui/time.ts";
 
-// An issue's own tab as bb mounts it in its regional manager's side panel, with the params it was
-// opened with, reading the plugin: the issue's row and the rows its relations name from the board's
-// read, its detail from the `issue` read. bb hands the same params back after a reload, so a tab
-// mounted with them is the tab that survived one.
-
-// why: jsdom has none of these; the working ring asks for Reduce motion and a canvas.
-Object.assign(globalThis, {
-  ResizeObserver: class {
-    observe() {}
-    disconnect() {}
-  },
-  matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }),
-});
-HTMLCanvasElement.prototype.getContext = () => null;
-
 const { issueTab } = await import("./issue-tab.tsx");
 
 afterEach(cleanup);
@@ -97,7 +82,6 @@ const DETAIL: IssueDetail = {
 
 const REPORT = "## Recommendation\n\nVault: it keeps card data **inside** our PCI scope.";
 
-/** A research issue asked `questions`, whose agent handed off a report. */
 const researched = (questions: string[]): IssueDetail => ({
   description: "Which vault fits our PCI scope.",
   doneCriteria: questions,
@@ -127,11 +111,6 @@ const researched = (questions: string[]): IssueDetail => ({
   decisions: [],
 });
 
-/**
- * The tab opened with `params` in the manager's thread, over a board of `issues`, each issue's
- * detail `detailOf` its id; every issue read in `opened`. `reread`, the board reading `next` as it
- * does when the plugin changes it. Its side panel accepts every tab it is asked to open.
- */
 async function mount(params: JsonValue | null, issues: readonly IssueRow[], detailOf: (issueId: string) => IssueDetail = () => DETAIL) {
   const opened: unknown[] = [];
   let current = issues;
@@ -159,7 +138,6 @@ async function mount(params: JsonValue | null, issues: readonly IssueRow[], deta
   return { view, opened, reread, tab: () => within(view.getByRole("article")) };
 }
 
-/** Opened on `issueId`, once its detail has drawn. */
 async function opened(issueId: string, issues: readonly IssueRow[], detailOf: (issueId: string) => IssueDetail = () => DETAIL) {
   const mounted = await mount({ issueId }, issues, detailOf);
   await within(await mounted.view.findByRole("article", { name: issueId })).findByText(detailOf(issueId).description);
@@ -170,7 +148,6 @@ const section = (tab: ReturnType<typeof within>, name: string) =>
   within(tab.getByRole("heading", { name }).closest("section") ?? assert.fail(`no ${name}`)).getAllByRole("button").map((button) => button.getAttribute("aria-label"));
 const headings = (tab: ReturnType<typeof within>) => tab.getAllByRole("heading", { level: 3 }).map((heading: HTMLElement) => heading.textContent);
 
-/** The issue tab bb is asked to open, as the side panel's `openTab` gets it. */
 const issueTabCall = (id: string, title: string) => ({ method: "openTab", options: { tab: { id: "issue", context: { kind: "thread" }, availability: "action" }, params: { issueId: id }, title: `${id} ${title}` } });
 
 test("the tab shows the issue's head, its title and headline whole with its status, id, kind, pull request and agent, then the detail read from the plugin: its description, Done when and record, each verdict's failures open", async () => {
@@ -296,7 +273,6 @@ test("a research issue's tab shows its Questions and its report as Markdown, wit
   assert.equal(tab().queryByText("Done when"), null);
   const report = tab().getByRole("region", { name: "Report reports/WEB-2.md" });
   assert.equal(report.tabIndex, 0, "the keyboard reaches the report to scroll it");
-  // why its source: the SDK's test kit stands in for bb's Markdown with the text it is given; bb renders it.
   assert.equal(within(report).getByTestId("bb-markdown").textContent, REPORT, "the report goes whole to bb's Markdown");
   assert.equal(tab().queryByText(/criteri(on|a) passed|Waiting for a verifier|Being verified|Not verified/), null);
   assert.equal(tab().queryByRole("button", { name: /Verifier/ }), null);
@@ -340,7 +316,6 @@ test("a relation to an issue the board hasn't read yet shows its id alone, nothi
 });
 
 test("a sub-issue's tab lists as inherited only what its parent's row is blocked by, so a dependency removed since the board's read never reads as inherited", async () => {
-  // The board read each row before WEB-4 and WEB-3 dropped their dependency on WEB-5; their details read after.
   const board = [
     issue("WEB-9", { kind: "research", title: "Pick a vault", headline: "Researching" }),
     issue("WEB-5", { title: "Audit log" }),

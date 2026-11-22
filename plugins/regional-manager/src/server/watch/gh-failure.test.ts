@@ -4,11 +4,6 @@ import { test } from "node:test";
 import { ghFailure } from "./gh-failure.ts";
 import { parseHostCommandFailure } from "./host-command.ts";
 
-// Each fixture is the rejection of a real gh run, saved field for field. not-signed-in,
-// bad-credentials-401 and network ran this watch's own query against ivan-anchev/bb-plugins with
-// gh 2.97.0: with no token and an empty config, with a token GitHub refuses, and through a proxy
-// that refuses every connection. not-installed, network-eof and timed-out are pr-reviews'
-// recordings (its fixtures/gh-failures): the same failures of the same gh, from other commands.
 const recorded = (name: string) => ghFailure(parseHostCommandFailure(JSON.parse(readFileSync(new URL(`./fixtures/gh-failures/${name}.json`, import.meta.url), "utf8"))));
 
 const failed = (stderr: string) => ghFailure({ code: 1, stdout: "", stderr: `${stderr}\n`, killed: false });
@@ -27,7 +22,6 @@ test("every recorded transport failure reads as a connection that never answered
 });
 
 test("each class of transport failure Go reports reads as a connection that never answered", () => {
-  // Go's own error texts, as gh prints them after the request it made.
   const post = 'Post "https://api.github.com/graphql": ';
   const cases: [string, string][] = [
     ["gh's own", "error connecting to api.github.com\ncheck your internet connection or https://githubstatus.com"],

@@ -1,7 +1,3 @@
-// A check: one verifier's job on an issue, and its verdict. What a check judges is its subject: an
-// agent's done handoff of a verified kind, or a build parent's final check on the default branch,
-// stored in the same JSON column. One state machine judges both; the subject says where the
-// commit and the tree are read, which commit is judged, and whether a fix round exists.
 import { z } from "zod";
 import { agentIdSchema, type Agent } from "../agent.ts";
 import type { Execution } from "../execution.ts";
@@ -13,12 +9,6 @@ import type { Verdict } from "./verdict.ts";
 export const checkIdSchema = z.uuid().brand<"checkId">();
 export type CheckId = z.infer<typeof checkIdSchema>;
 
-/**
- * A build parent's final check: its own done-criteria, on the default branch `defaultBranch`, once
- * the work of `merged`, its Done build sub-issues, was all merged there. No commit is named: its
- * verifier works in a fresh worktree that bb starts at origin's tip of the default branch, and the
- * commit judged is the one that worktree holds when the verifier returns, read then.
- */
 const finalSubjectSchema = z.object({ kind: z.literal("final"), defaultBranch: z.string().min(1), merged: z.array(issueIdSchema) });
 
 /** What a check judges: an agent's done handoff, the commit it claims and the pull request it names; or a build parent's final check. */

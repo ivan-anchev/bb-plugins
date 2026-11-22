@@ -1,5 +1,3 @@
-// Sleep's choices and how a sleeper's corner reads, ported from Zeron's
-// presets and wake times. Times are epoch ms; days and hours are the reader's local ones.
 import { clock, weekday } from "./time.ts";
 
 export type SleepPreset = { label: string; when: string; until: number };
@@ -14,7 +12,6 @@ const DAY = 24 * HOUR;
  */
 export function sleepPresets(now: Date): SleepPreset[] {
   const t = now.getTime();
-  // why: a week on from a Monday; the coming one from any other day.
   const toMonday = (8 - now.getDay()) % 7 || 7;
   const candidates: [label: string, until: number, namesDay: boolean][] = [
     ["In 1 hour", t + HOUR, false],
@@ -60,12 +57,6 @@ export function localInputValue(at: number): string {
   return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}T${two(d.getHours())}:${two(d.getMinutes())}`;
 }
 
-// ------------------------------------------------------------------ layer 2
-
-/**
- * `days` after `now` at `hour`:00 on the local wall clock. why: setting local fields, so a DST change
- * between now and then lands on the hour asked for, not an hour off.
- */
 function wallClock(now: Date, days: number, hour: number): number {
   const d = new Date(now);
   d.setDate(d.getDate() + days);
@@ -73,7 +64,6 @@ function wallClock(now: Date, days: number, hour: number): number {
   return d.getTime();
 }
 
-/** The first preset of each minute ("In 3 hours" at 6:00 PM and "This evening" read as one). */
 function oneAMinute<T extends [string, number, boolean]>(sorted: readonly T[]): T[] {
   const minutes = new Set<number>();
   return sorted.filter(([, until]) => {

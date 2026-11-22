@@ -28,7 +28,7 @@ const live = (status: PluginSidebarThreadsState["status"], threads = [thread(1, 
 
 test("threads group under their project, newest group first, and a thread bb no longer lists is left out", () => {
   const coordinators = [coordinator(4, "b"), coordinator(3, "a"), coordinator(2, "b"), coordinator(1, "a")];
-  const threads = [thread(1, "a"), thread(2, "b"), thread(4, "b")]; // thr_3 is archived
+  const threads = [thread(1, "a"), thread(2, "b"), thread(4, "b")];
 
   const view = listView(read(coordinators), { status: "ready", threads, projects: [project("a"), project("b")] });
   assert.equal(view.kind, "listed");

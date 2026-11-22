@@ -8,7 +8,6 @@ const SANDBOX = sandboxId.parse("bx_a8k84ben");
 
 afterEach(() => mock.restoreAll());
 
-/** A streamed command response cut into chunks that split NDJSON lines mid-frame. */
 function ndjson(frames: object[], chunkSize: number): Response {
   const text = frames.map((frame) => `${JSON.stringify(frame)}\n`).join("");
   const bytes = new TextEncoder().encode(text);
@@ -21,7 +20,6 @@ function ndjson(frames: object[], chunkSize: number): Response {
   return new Response(body, { status: 200 });
 }
 
-// Frames as boat sent them for a real enrollment.
 const ENROLL_FRAMES = [
   { type: "started", commandId: "cmd_d82phy5whurp" },
   { type: "stdout", data: "  ✓  Using local host-daemon port 38888\n" },
@@ -113,7 +111,6 @@ test("savedSnapshots reads every saved snapshot with no query parameters, which 
 });
 
 test("dailySpend reads machine time per day from boat's account API, ignoring the fields it doesn't use", async () => {
-  // The live account's reply on 2026-11-14.
   const fixture = readFileSync(new URL("./fixtures/billing-wallet.json", import.meta.url), "utf8");
   const urls: string[] = [];
   mock.method(globalThis, "fetch", async (url: string) => (urls.push(url), new Response(fixture, { status: 200 })));
@@ -142,7 +139,6 @@ test("dailySpend refuses a day without its date or its machine dollars", async (
 });
 
 test("the desktop view is asked of boat as a private noVNC page, and both of boat's answers are read", async () => {
-  // The two answers boat gave live on 2026-11-17, secrets replaced.
   const answers = [
     { ok: true, type: "desktop.provisioning", provisioning: true, message: "Preparing VNC desktop…" },
     { ok: true, type: "desktop.url", mode: "vnc", desktopUrl: "https://box-node-1-6080.on.boat.dev/vnc.html?autoconnect=true&password=pw&_token=tk" },
@@ -158,6 +154,5 @@ test("the desktop view is asked of boat as a private noVNC page, and both of boa
   const [url, init] = fetch.mock.calls[0]!.arguments;
   assert.equal(String(url), "https://boat.dev/api/v1/sandboxes/bx_a8k84ben/desktop?vnc=1");
   assert.equal(init?.method, "POST");
-  // why: `publicAccess` would publish the desktop to anyone holding the URL.
   assert.equal(init?.body, "{}");
 });

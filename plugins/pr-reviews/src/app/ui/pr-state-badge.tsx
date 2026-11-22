@@ -1,6 +1,3 @@
-// A PR's state badge, as Activity's sidebar draws it: the state's glyph and the badge's words in the
-// state's color on a 10% wash of it. A row's badge carries the PR's number; the header's, and a
-// state menu's, carry the state's name. Decorative: whatever holds it says the state in words.
 import type { ReactNode } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { PrState } from "../../contract.ts";

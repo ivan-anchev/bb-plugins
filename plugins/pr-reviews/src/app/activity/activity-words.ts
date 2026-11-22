@@ -1,5 +1,3 @@
-// The words of the activity: each line's sentence, the items a folded line opens to, and its review
-// threads' rows. A sentence is words, some of which the line draws apart (activity-line.tsx). Pure.
 import type { ReviewThread } from "../../comments/thread-schema.ts";
 import type { ReviewVerdict } from "../../comments/timeline-schema.ts";
 import type { Label } from "../../github/label.ts";
@@ -97,7 +95,6 @@ const countOf = (count: number, one: string) => `${count} ${one}${count === 1 ? 
 
 const withSpace = (words: Word[]): Word[] => (words.length === 0 ? [] : [" ", ...words]);
 
-// "a1b2c3d → e4f5a6b", or the side GitHub still has.
 function shasOf({ before, after }: ForcePushItem): Word[] {
   const sha = (oid: string): Word => ({ kind: "sha", sha: oid, url: null });
   if (before !== null && after !== null) return [sha(before), " → ", sha(after)];
@@ -106,7 +103,6 @@ function shasOf({ before, after }: ForcePushItem): Word[] {
   return [];
 }
 
-// "added a and b and removed c", in that order whatever order they came in.
 function labelChangesOf(items: LabelItem[]): Word[] {
   const labels = (added: boolean) => listOf(items.filter((item) => item.added === added).map((item): Word[] => [{ kind: "label", label: item.label }]));
   const added = labels(true);
@@ -148,7 +144,6 @@ const STATUS_WORDS = {
   "auto-merge-disabled": "disabled auto-merge",
 } as const satisfies Record<Extract<LoneItem, { kind: "status" }>["status"], string>;
 
-/** "a", "a and b", "a, b and c". */
 function listOf(phrases: readonly Word[][]): Word[] {
   return phrases.flatMap((phrase, index) => [...(index === 0 ? [] : [index === phrases.length - 1 ? " and " : ", "]), ...phrase]);
 }

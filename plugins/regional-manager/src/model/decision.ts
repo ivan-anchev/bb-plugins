@@ -1,8 +1,3 @@
-// A decision the coordinating thread put to the user with crew_ask_user: its question, the options
-// it offered (none: the user answers in their own words), when it asked, and the user's answer once
-// given. The question and options are the thread's own words, so its doorbell may quote the
-// question; the answer is the user's, and reaches the thread only through crew_catch_up. A question
-// naming an issue stays among that issue's decisions, with those the thread recorded on it.
 import { z } from "zod";
 import { issueIdSchema, type IssueId } from "./issue/issue.ts";
 import { ONE_LINE } from "./one-line.ts";
@@ -83,5 +78,4 @@ function entryText(decision: IssueDecision): string {
 
 const timeOf = (at: number): string => new Date(at).toISOString();
 
-/** Text whose later lines sit under its list item. */
 const indented = (text: string): string => text.replace(/\n/g, "\n  ");

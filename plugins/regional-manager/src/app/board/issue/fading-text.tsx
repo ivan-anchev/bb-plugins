@@ -1,7 +1,3 @@
-// Activity Sidebar's fading title (src/ui/row/row.tsx FadingTitle), copied since plugins cannot import
-// each other: text that doesn't fit fades out at its end, never cut to "…", measured whenever its box
-// resizes. It carries how far it runs past its box, so a row's title can run through to its end under
-// the pointer (issue-board.css `.rmi-text`).
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 
 export function FadingText({ text }: { text: string }) {
@@ -23,12 +19,9 @@ export function FadingText({ text }: { text: string }) {
   );
 }
 
-/** The fade at a title's end, which its last words run past to read crisp. */
 const FADE = 24;
-/** How fast a title runs under the pointer, in px a second: slow enough to read as it moves. */
 const RUN_SPEED = 45;
 
-/** How far the title runs (its overflow and the fade) and for how long, for `.rmi-text-run`. */
 function runStyle(over: number): CSSProperties & Record<"--rmi-travel" | "--rmi-run", string> {
   const travel = over + FADE;
   return { "--rmi-travel": `${travel}px`, "--rmi-run": `${Math.round((travel / RUN_SPEED) * 1000)}ms` };

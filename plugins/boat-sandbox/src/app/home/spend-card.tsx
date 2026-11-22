@@ -1,7 +1,3 @@
-// homepageSection: boat spend under the new-thread composer. A header with the 30-day total, the
-// daily chart, the boats running now (beside the chart on a wide card) and the money left; or one line
-// saying why there is none. Under the homepage's top row (Activity beside PR Reviews) it is at least
-// as tall as that row, so the cards read as one grid.
 import { experimental_Icon as Icon, experimental_useRpcMutation, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import { boatSandboxContract as contract, type SpendCardReply } from "../../contract.ts";
@@ -12,14 +8,11 @@ import { dayLabel, timeLabel, usd } from "./format.ts";
 import { RunningList } from "./running-list.tsx";
 import { SpendChart, type Backfill } from "./spend-chart.tsx";
 
-/** boat's meter moves by itself, so the card reads again about once a minute. */
 const REFRESH_MS = 60_000;
 const BILLING_URL = "https://boat.dev/dashboard?tab=billing";
-/** bb's ids for this card's homepage section (app.tsx), and for Activity's and PR Reviews' (homepage.css). */
 const SECTION_ID = "plugin-homepage:boat-sandbox:spend";
 const ACTIVITY_ID = "plugin-homepage:homepage:activity";
 const PR_REVIEWS_ID = "plugin-homepage:pr-reviews:pull-requests";
-/** How long "Filled N days" shows before the button offers the days boat had no number for again. */
 const FILLED_NOTICE_MS = 3_000;
 
 type Ready = Extract<SpendCardReply, { status: "ready" }>;
@@ -27,7 +20,6 @@ type Ready = Extract<SpendCardReply, { status: "ready" }>;
 export function SpendCard() {
   const query = experimental_useRpcQuery({ contract, method: "spendCard", input: {} });
   useEvery(REFRESH_MS, query.refetch);
-  // A failed refresh keeps the last good reply in `data` and sets `error` beside it.
   const reply = query.data;
   const failure = query.error?.message ?? null;
   if (reply?.status === "ready") return <ReadyCard reply={reply} failure={failure} refetch={query.refetch} />;
@@ -39,7 +31,6 @@ export function SpendCard() {
   );
 }
 
-/** `failure`: why the last refresh failed; the numbers stay, marked with when they were read, and stop ticking. */
 function ReadyCard({ reply, failure, refetch }: { reply: Ready; failure: string | null; refetch: () => Promise<void> }) {
   const backfill = useBackfill(reply.days, refetch);
   const total = reply.days.reduce((sum, day) => sum + (day.dollars ?? 0), 0);
@@ -101,11 +92,6 @@ function OwedNotice({ dollars }: { dollars: number }) {
   );
 }
 
-/** The height of the homepage's top row, Activity's section, while homepage.css lays Activity and
-    PR Reviews out beside each other above this card; null otherwise, so the card keeps its natural
-    height (without PR Reviews, bb stacks this card above Activity). why watch the sections' shared
-    parent: it resizes whenever either section appears, leaves or changes height, and the top row never
-    sizes from this card's. */
 function useTopRowHeight(card: RefObject<HTMLElement | null>): number | null {
   const [height, setHeight] = useState<number | null>(null);
   useEffect(() => {
@@ -122,13 +108,8 @@ function useTopRowHeight(card: RefObject<HTMLElement | null>): number | null {
   return height;
 }
 
-/**
- * The chart's "Backfill 30 days" while some of its days are unrecorded: fills them from boat's own daily
- * numbers, then reads the card again. A failure leaves the days as they were and says why.
- */
 function useBackfill(days: readonly SpendDay[], refetch: () => Promise<void>): Backfill | null {
   const mutation = experimental_useRpcMutation({ contract, method: "backfillSpend" });
-  // why its own phase, not the mutation's: "Backfilling…" lasts until the card has read the filled days.
   const [phase, setPhase] = useState<BackfillPhase>({ kind: "idle" });
   const [failure, setFailure] = useState<string | null>(null);
   const unrecorded = days.filter((day) => day.dollars === null).length;
@@ -169,5 +150,4 @@ function useBackfill(days: readonly SpendDay[], refetch: () => Promise<void>): B
 
 type BackfillPhase = { kind: "idle" } | { kind: "pending" } | { kind: "filled"; days: number };
 
-/** `Filled 3 days`; `Nothing to fill` when boat had no number for the days left. */
 const filledLabel = (days: number): string => (days === 0 ? "Nothing to fill" : `Filled ${days} ${days === 1 ? "day" : "days"}`);

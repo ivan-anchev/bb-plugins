@@ -1,5 +1,3 @@
-// The list's own sleep writes, decided here and sent by src/data/use-sleep-upkeep.ts: a sleeper asking
-// for you wakes for good, and opening a woken thread forgets its sleep, so its Woke glyph goes. Pure.
 import type { SleepRecord } from "../contract.ts";
 import { sleepersAskingForYou, type ActivityInput } from "./activity.ts";
 
@@ -25,9 +23,6 @@ export function upkeepWrites(input: UpkeepInput, tried: Tried): { wake: string[]
   };
 }
 
-// ------------------------------------------------------------------ layer 2
-
-/** The open thread's record once its time has come: seen, so its sleep is over. */
 function openedWoke({ sleeps, now, activeThreadId }: UpkeepInput): SleepRecord[] {
   const opened = activeThreadId === null ? undefined : sleeps.get(activeThreadId);
   return opened !== undefined && opened.until <= now ? [opened] : [];
@@ -37,7 +32,6 @@ function withKeys(keys: ReadonlySet<string>, records: readonly SleepRecord[]): R
   return records.length === 0 ? keys : new Set([...keys, ...records.map(keyOf)]);
 }
 
-/** A new sleep of the same thread has a new key, so it is written afresh. */
 function keyOf(record: SleepRecord): string {
   return `${record.threadId}@${record.until}`;
 }

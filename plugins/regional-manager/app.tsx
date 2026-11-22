@@ -1,4 +1,3 @@
-// Registrations only.
 import { definePluginApp } from "@get-bb/plugin-sdk/app";
 import { boardTab } from "./src/app/board/board-tab.tsx";
 import { issueTab } from "./src/app/board/issue-tab/issue-tab.tsx";

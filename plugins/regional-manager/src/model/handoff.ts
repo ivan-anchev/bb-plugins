@@ -1,6 +1,3 @@
-// An agent's handoff: the one structured report it ends its work with, stored whole. It is current
-// until the agent's thread starts another turn; the plugin compares turns, never clock times, because
-// bb threads carry no last-activity time.
 import { z } from "zod";
 import type { AgentId } from "./agent.ts";
 import type { IssueId } from "./issue/issue.ts";
@@ -35,7 +32,6 @@ const reportFields = {
 
 const prUrlSchema = z.url({ protocol: /^https?$/ });
 
-/** A research issue's result: the agent's report, in markdown, whole. */
 const reportSchema = z.string().trim().min(1).max(20_000);
 
 /**
@@ -60,14 +56,8 @@ export const handoffFieldsSchema = z.object({
 /** A handoff is current while its thread has started no later turn. `latestTurnSeq` is null when bb lists no turn. */
 export const handoffIsCurrent = (handoff: Pick<Handoff, "turnSeq">, latestTurnSeq: number | null): boolean => latestTurnSeq === null || latestTurnSeq <= handoff.turnSeq;
 
-/**
- * What an agent's done handoff hands over, by what its issue's kind delivers (kind.ts). why a
- * union keyed by what is delivered: a kind that delivers something else is a new variant, and a
- * check's subject (check.ts) takes a commit by type.
- */
 const commitDeliverySchema = z.object({ kind: z.literal("commit"), headSha: commitSchema, prUrl: prUrlSchema.nullable() });
 const givenReportSchema = z.object({ kind: z.literal("report"), report: reportSchema });
-/** `file`: where the plugin saved the report in its regional manager's memory as it stored the handoff (report-file.ts). */
 const reportDeliverySchema = givenReportSchema.extend({ file: memoryFileSchema });
 const deliverySchema = z.discriminatedUnion("kind", [commitDeliverySchema, reportDeliverySchema]);
 

@@ -6,10 +6,6 @@ import type { FileDiffMetadata } from "@pierre/diffs";
 import type { DiffFile } from "../../diff/diff-schema.ts";
 import { parsePrDiff } from "../../diff/parse-pr-diff.ts";
 
-// The Pierre bb 0.49 runs for plugins reads a `---` or `+++` header's name raw: matched with
-// FILENAME_HEADER_REGEX and trimmed, never unquoted. The Pierre these tests import decodes a quoted
-// name, so on its own it reads back names bb never sees. A name bb reads with its quotes is plain
-// text to Pierre, and the file's code goes uncoloured.
 function asBbReads(diff: FileDiffMetadata, patch: string): FileDiffMetadata {
   let name = diff.name;
   let prevName: string | undefined;
@@ -37,7 +33,6 @@ const { fileDiffOf } = await import("./diff-options.ts");
 
 const fixture = (name: string) => parsePrDiff(readFileSync(new URL(`../../diff/fixtures/${name}`, import.meta.url), "utf8"));
 
-// The new side of a fixture whose one hunk starts the file and runs to its end.
 const newSideOf = (file: DiffFile) =>
   file.status === "deleted" ? "" : file.hunks.flatMap((hunk) => hunk.lines.filter((line) => line[0] !== "-").map((line) => line.slice(1))).join("\n") + "\n";
 

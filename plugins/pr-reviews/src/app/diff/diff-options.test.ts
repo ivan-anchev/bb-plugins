@@ -32,7 +32,6 @@ test("a renamed file is named by its new path on both sides, so the diff reads a
   assert.deepEqual([diff.name, diff.prevName, diff.type], ["new-name.txt", undefined, "change"]);
 });
 
-// The new side of a fixture whose one hunk starts the file and runs to its end.
 const newSideOf = (file: DiffFile) =>
   file.hunks.flatMap((hunk) => hunk.lines.filter((line) => line[0] !== "-").map((line) => line.slice(1))).join("\n") + "\n";
 

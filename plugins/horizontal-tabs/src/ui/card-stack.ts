@@ -1,8 +1,5 @@
-// The cards of a tab's project stack: one per thread pane, so a tab's icon shows whose threads it holds, up
-// to three.
 import { focused, panes, type Layout } from "../model/layout.ts";
 
-/** Cards past this many add nothing visible, so more panes never widen the tab. */
 const MAX_CARDS = 3;
 
 /**

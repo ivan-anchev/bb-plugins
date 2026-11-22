@@ -1,6 +1,3 @@
-// A folding section's header, a board lane's or Memory's: a bar on the theme's recessed surface
-// holding the section's glyph, its name, how many it holds and a chevron. The whole bar folds the
-// section, as Activity Sidebar's section title does (src/ui/shelf-title.tsx).
 import "./lane-header.css";
 import type { ReactNode, Ref } from "react";
 

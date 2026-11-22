@@ -1,5 +1,3 @@
-// A build parent's final checks, oldest first, the latest open: where each stands on the default
-// branch, when it was made, and its verdict, read as a handoff's is.
 import type { ShownFinalCheck } from "../../../../contract.ts";
 import { outcome } from "../../../../model/verdict/verdict.ts";
 import { shortTime } from "../../../ui/time.ts";
@@ -28,7 +26,6 @@ export function FinalChecks({ checks }: { checks: readonly ShownFinalCheck[] }) 
   );
 }
 
-/** Where the check stands, in a word, in its tone. */
 function FinalCheckResult({ check: { verdict } }: { check: ShownFinalCheck }) {
   const result = outcome(verdict);
   switch (result) {

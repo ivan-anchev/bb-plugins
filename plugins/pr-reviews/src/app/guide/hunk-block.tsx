@@ -1,6 +1,3 @@
-// One hunk of a step in bb's file card: the file's header over the hunk's diff, with each finding
-// and review thread under its line. A collapsed hunk is only the header, with the agent's reason
-// and Show; a file with no text hunks is the header with a one-line note, over the file's threads.
 import { useMemo, useState, type ReactNode, type Ref } from "react";
 import { NO_THREADS, placeThreads, threadsOfUnit } from "../../comments/place-threads.ts";
 import type { PrComments } from "../../comments/timeline-schema.ts";
@@ -60,11 +57,6 @@ const NO_FINDINGS: VisibleFinding[] = [];
 
 type AnnotatedDiffProps = { file: DiffFile; hunk: HunkId; findings: VisibleFinding[]; head: PrHeadTarget; comments: PrComments | undefined; withFileThreads: boolean };
 
-// One diff of the hunk with each finding, then each review thread, under its line; findings on one
-// line keep their order. A guide has no file text to expand into, so the hunk's leading "N
-// unmodified lines" stays shut. Threads are placed on the whole file's rows, so one on another
-// hunk of the file belongs to that hunk's block, not to this one's file threads. The whole-file
-// unit of a file with no text hunks draws no diff, only the file's threads.
 function AnnotatedDiff({ file, hunk, findings, head, comments, withFileThreads }: AnnotatedDiffProps) {
   const drawn = useMemo(() => (hunk === WHOLE_FILE ? file : { ...file, hunks: [hunkOf(file, hunk)] }), [file, hunk]);
   const threads = useMemo(
@@ -85,15 +77,12 @@ function AnnotatedDiff({ file, hunk, findings, head, comments, withFileThreads }
   );
 }
 
-// A guide's diff has no band of the code's background above its first row and below its last.
 const FLUSH_DIFF = "[--diffs-gap-block:0px]";
 
 const ROW_NOTE = "min-w-0 text-right font-normal text-subtle-foreground";
 
 type BlockRef = { ref?: Ref<HTMLElement> };
 
-// A step's file in the shared file card, sticky at the top of the guide's page while its diff
-// scrolls under it. `ref`: the step's file list jumps to the file's first hunk.
 function OpenHunk({ path, body, ref }: { path: string; body: ReactNode } & BlockRef) {
   return (
     <FileCard ref={ref} path={path}>
@@ -107,7 +96,6 @@ function CollapsedHunk({ path, reason, body, ref }: { path: string; reason: stri
   const end = (
     <>
       <Prose text={reason} className={ROW_NOTE} />
-      {/* The negative margins keep the header's height and line "Show" up with its edge. */}
       <span className="-my-1.5 -mr-1.5 shrink-0">
         <ShowToggle open={open} subject={path} onToggle={() => setOpen(!open)} />
       </span>
@@ -128,8 +116,6 @@ function WholeFile({ file, body, ref }: { file: DiffFile; body: ReactNode } & Bl
   );
 }
 
-// What changed in a file that has no text hunks: binary content, a rename, or an empty or
-// mode-only change.
 function wholeFileNoteOf(file: DiffFile): string {
   if (file.binary) return file.previousPath === null ? "Binary file" : `Binary file, renamed from ${file.previousPath}`;
   if (file.previousPath !== null) return `Renamed from ${file.previousPath}`;

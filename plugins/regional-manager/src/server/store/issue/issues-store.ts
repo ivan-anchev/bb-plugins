@@ -1,6 +1,3 @@
-// Issues: the regional manager's plan, with each one's parent and what it depends on. A write that
-// a concurrent one could invalidate (numbering, "no agent holds it", the plan as a whole: plan.ts)
-// decides and writes in one transaction. Rows are parsed into Issue here and nowhere else.
 import { z } from "zod";
 import { agentIdSchema } from "../../../model/agent.ts";
 import type { RecordedDecision } from "../../../model/decision.ts";
@@ -39,17 +36,10 @@ export function issuesStore(db: Db) {
   }
 
   return {
-    /** Every issue of the regional manager, in the order filed. */
     issues: (coordinatorId: CoordinatorId): Issue[] => issues(coordinatorId, null),
 
-    /** One issue of the regional manager, or null when it has none by that id. */
     issue: (coordinatorId: CoordinatorId, id: IssueId): Issue | null => issues(coordinatorId, id)[0] ?? null,
 
-    /**
-     * Files an issue, numbered after the regional manager's highest, or says why the plan with it
-     * can't stand (plan.ts) or its parent can't be split now, filing nothing. `closes`: every
-     * issue's close as the read the manager is answered from says (see writeDependencies).
-     */
     insertIssue(coordinatorId: CoordinatorId, issue: NewIssue, closes: Closes, at: number): { issue: Issue } | { refused: string } {
       return db().transaction(() => {
         const filed: Issue = { id: nextIssueId(db, coordinatorId), coordinatorId, ...issue, dependsOn: unique(issue.dependsOn), closed: null, createdAt: at };
@@ -63,14 +53,6 @@ export function issuesStore(db: Db) {
       })();
     },
 
-    /**
-     * Applies the edit, or says why it can't. `requireUnheld`: refused while an agent holds the
-     * issue. `closes`: every issue's close as the read the manager is answered from says (see
-     * writeDependencies). Decided in the same transaction, so an agent starting meanwhile is seen:
-     * the kind is fixed once any agent has started on the issue, the issue as it would be must stand
-     * (verifierProblem), and so must the plan, among the issues as they are now (plan.ts), and a new
-     * parent must be one no agent holds.
-     */
     updateIssue(coordinatorId: CoordinatorId, id: IssueId, edit: IssueEdit, { requireUnheld, closes }: { requireUnheld: boolean; closes: Closes }): { issue: Issue } | { refused: string } {
       return db().transaction(() => {
         const now = issues(coordinatorId, id)[0];
@@ -96,7 +78,6 @@ export function issuesStore(db: Db) {
       })();
     },
 
-    /** The decisions recorded on the issue, in the order recorded. */
     recordedDecisions(coordinatorId: CoordinatorId, id: IssueId): RecordedDecision[] {
       return db()
         .prepare("SELECT text, at FROM issue_decisions WHERE coordinator_id = ? AND issue_id = ? ORDER BY id")
@@ -108,11 +89,6 @@ export function issuesStore(db: Db) {
 
 const recordedRowSchema = z.object({ text: z.string(), at: z.number().int() });
 
-/**
- * The id the regional manager's next issue is filed under: its issue key (migrations.ts issue_key),
- * numbered after its highest. why the highest, not a count: an id is never reused, whatever happens
- * to the issues before it. Call inside the transaction that files it.
- */
 function nextIssueId(db: Db, coordinatorId: CoordinatorId): IssueId {
   const row = db()
     .prepare("SELECT issue_key AS key, (SELECT max(CAST(substr(id, instr(id, '-') + 1) AS INTEGER)) FROM issues WHERE coordinator_id = c.id) AS last FROM coordinators c WHERE id = ?")
@@ -123,11 +99,6 @@ function nextIssueId(db: Db, coordinatorId: CoordinatorId): IssueId {
 
 const nextIdRowSchema = z.object({ key: issueKeySchema, last: z.number().nullable() });
 
-/**
- * Why `issue` can't be a sub-issue of the parent it newly names (`was`: as stored; null: filed now):
- * an agent holds the parent, and a parent has no agent (brief, open question 2). Call inside the
- * transaction that writes it, so an agent starting meanwhile is seen.
- */
 function splitProblem(db: Db, issue: Pick<Issue, "coordinatorId" | "id" | "parentId">, was: Pick<Issue, "parentId"> | null): string | null {
   if (issue.parentId === null || issue.parentId === was?.parentId) return null;
   const row = db().prepare("SELECT id FROM agents WHERE coordinator_id = ? AND issue_id = ? AND ended_at IS NULL").get(issue.coordinatorId, issue.parentId);
@@ -136,17 +107,6 @@ function splitProblem(db: Db, issue: Pick<Issue, "coordinatorId" | "id" | "paren
   return `${issue.id} can't be a sub-issue of ${issue.parentId}: ${holder} holds ${issue.parentId}, and a parent has no agent, so ${issue.parentId} can't be split now. Stop ${holder} with agent_stop first`;
 }
 
-/**
- * Writes the issue's dependencies as `dependsOn` lists them, in that order, over the relations it
- * has: a removed one's relation is deleted with the close known of it, a kept one keeps its own,
- * and an added one is written knowing its dependency's close as `closes` says, the read the manager
- * is answered from ("blocked by BBP-1"). So a dependency closed already then is no news, and any close
- * after is (relations.ts unblockedSince). why from that read, though it was made before the write:
- * a dependency that closes in between was told open, and its close is news; one reopened in between
- * and closed again is too. Either way the error falls to an announcement more, never one lost.
- * why rewrite the kept ones too: relations read back in the order written (ISSUE_COLUMNS), and an
- * edit can move a kept one, as removing and adding it again puts it last.
- */
 function writeDependencies(db: Db, { coordinatorId, id, dependsOn }: Pick<Issue, "coordinatorId" | "id" | "dependsOn">, closes: Closes): void {
   const rows = db().prepare("SELECT depends_on AS dependsOn, known_close AS close FROM issue_relations WHERE coordinator_id = ? AND issue_id = ?").all(coordinatorId, id);
   const kept = new Map(rows.map((row) => keptRowSchema.parse(row)).map(({ dependsOn: dependency, close }) => [dependency, close]));
@@ -174,12 +134,10 @@ export function rememberCloses(db: Db, coordinatorId: CoordinatorId, learned: Re
 const keptRowSchema = z.object({ dependsOn: issueIdSchema, close: z.string().nullable() });
 const knownCloseRowSchema = keptRowSchema.extend({ issueId: issueIdSchema });
 
-/** The dependencies with the change applied: the removed ones gone, the added ones after the rest. */
 const changedDependencies = (dependsOn: readonly IssueId[], { add, remove }: DependencyChange): IssueId[] => unique([...dependsOn.filter((id) => !remove.includes(id)), ...add]);
 
 const unique = (ids: readonly IssueId[]): IssueId[] => [...new Set(ids)];
 
-// why a subquery: an issue is read with its dependencies, in the order they were written.
 const ISSUE_COLUMNS = `coordinator_id AS coordinatorId, id, kind, title, description, brief, done_criteria AS doneCriteria, verifier, rest, parent_id AS parentId,
   closed_as AS closedAs, closed_at AS closedAt, created_at AS createdAt,
   (SELECT json_group_array(depends_on) FROM (SELECT depends_on FROM issue_relations r
@@ -199,7 +157,6 @@ const issueRowSchema = z.object({
   dependsOn: json(z.array(issueIdSchema)),
   createdAt: z.number(),
 });
-// why a union: how and when it was closed are written together, or not at all.
 const closedColumnsSchema = z.union([
   z.object({ closedAs: z.null(), closedAt: z.null() }).transform(() => null),
   z.object({ closedAs: closedAsSchema, closedAt: z.number() }).transform(({ closedAs, closedAt }) => ({ as: closedAs, at: closedAt })),

@@ -1,4 +1,3 @@
-// The boat icon on the metadata line of a sidebar thread row whose thread runs on a boat sandbox.
 import { useMemo } from "react";
 import type { ExperimentalThreadRowMetadataDataInput, ExperimentalThreadRowMetadataProps, PluginEnvironmentProvider } from "@get-bb/plugin-sdk";
 import { experimental_ProviderIcon as ProviderIcon, experimental_useRpcKeyedQuery, useSettings } from "@get-bb/plugin-sdk/app";

@@ -3,11 +3,9 @@ import { test } from "node:test";
 import Database from "better-sqlite3";
 import { openSleepStore } from "./sleep-store.ts";
 
-// A real SQLite, migrated as bb's helper would: each statement once.
 function store() {
   const db = new Database(":memory:");
   const s = openSleepStore({ database: () => db, migrate: (handle, statements) => statements.forEach((statement) => handle.exec(statement)) });
-  // why: the read promises no order; the list keys it by thread.
   return { set: s.set, all: () => s.all().sort((a, b) => a.threadId.localeCompare(b.threadId)) };
 }
 

@@ -7,8 +7,6 @@ import { after, test } from "node:test";
 import { oldContentOf } from "./old-content.ts";
 import { parsePrDiff } from "./parse-pr-diff.ts";
 
-// Each case diffs a real file with git, staged old against its new text in the work tree, then
-// rebuilds the old text from the new one and the diff.
 const root = mkdtempSync(join(tmpdir(), "pr-reviews-old-content-"));
 after(() => rmSync(root, { recursive: true, force: true }));
 const git = (...args: string[]) => execFileSync("git", ["-C", root, ...args], { encoding: "utf8" });

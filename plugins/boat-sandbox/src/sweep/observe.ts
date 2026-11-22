@@ -1,4 +1,3 @@
-// What the sweep and `bb boat sandboxes` look at: bb's boat machines, then this server's sandboxes on boat.
 import type { BbPluginApi, JsonValue } from "@get-bb/plugin-sdk";
 import type { BoatClient } from "../boat/client.ts";
 import type { Sandbox, SandboxId } from "../boat/sandbox.ts";
@@ -58,18 +57,10 @@ export async function observeHost({ bb, idle }: ObserveDeps, host: HostFacts, si
   };
 }
 
-/**
- * A starting or active thread is working, however quiet: a 20-minute silent tool call stays `active`.
- * `threads.listRunning` includes hidden threads (workflow workers); `threads.count` leaves them out.
- */
 async function isBusy(bb: ObserveBb, hostId: string, signal: AbortSignal): Promise<boolean> {
   return (await bb.sdk.threads.listRunning({ signal })).some((thread) => thread.hostId === hostId);
 }
 
-/**
- * Every machine sandbox carrying this server's owner label, then each machine's sandbox the listing
- * missed: one made under an earlier owner id (the plugin's storage was reset) is still the machine's.
- */
 async function observeSandboxes(
   client: BoatClient,
   ownerId: string,

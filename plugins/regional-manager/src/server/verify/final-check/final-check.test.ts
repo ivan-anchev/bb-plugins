@@ -1,6 +1,3 @@
-// The final check of a build parent end to end, through the tools as the regional manager and the
-// verifier reach them and the tick as the server runs it. Each numbered test is one of issue 09's
-// acceptance criteria; the rest are the races and changes around a check that runs.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
@@ -10,13 +7,11 @@ import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn } from 
 const i1 = issueIdSchema.parse("WEB-1");
 const PARENT = { ...ISSUE, title: "Card vault", description: "Cards are stored in a vault, never in our database.", brief: "Split into sub-issues.", doneCriteria: ["npm run vault-suite passes on the default branch"] };
 const SUB = { ...ISSUE, parent: "WEB-1" };
-/** origin's main once the sub-issues' pull requests merged; the local main stays at HEAD. */
 const MERGED = "b".repeat(40);
 const PASSES = { criteria: [{ criterion: 1, result: "pass", evidence: "$ npm run vault-suite\n# pass 21\n# fail 0" }], findings: [] };
 const FAILS = { criteria: [{ criterion: 1, result: "fail", evidence: "$ npm run vault-suite\nnot ok 4 - tokens survive a restart\n# fail 1" }], findings: ["The vault client logs card numbers"] };
 const CODEX = { providerId: "codex", model: "gpt-default" };
 
-/** A regional manager with a build parent WEB-1 and two build sub-issues WEB-2 and WEB-3, an agent at work on each (started with `start`), and the manager idle. */
 async function withParent({ verify = true, parent = {}, start = {} }: { verify?: boolean; parent?: object; start?: object } = {}) {
   const { kit, threadId, coordinatorId } = await coordinating({ verify });
   const call = async (tool: string, input: object) => {
@@ -31,12 +26,10 @@ async function withParent({ verify = true, parent = {}, start = {} }: { verify?:
   const builders = [await started("WEB-2"), await started("WEB-3")];
   kit.thread(threadId).status = "idle";
   let number = 40;
-  /** The agent's pull request merges on GitHub, and origin's main moves to `tip`. */
   const merge = (agentThreadId: string, tip = MERGED) => {
     kit.github.prs.set(kit.thread(agentThreadId).environmentBranchName ?? assert.fail("no branch"), { number: ++number, state: "MERGED", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
     kit.repo.origin.set("main", tip);
   };
-  /** The tick after GitHub changed: the PR watch reads it, the final checks' pass and the verifiers' follow. */
   const tick = async () => {
     kit.clock.now += 10 * 60_000;
     await kit.tick();
@@ -52,12 +45,10 @@ async function withParent({ verify = true, parent = {}, start = {} }: { verify?:
     return { status, headline, needsYou };
   };
   const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
-  /** Both sub-issues' pull requests merge, and a tick reads them. */
   const mergeAll = async () => {
     for (const builder of builders) merge(builder);
     await tick();
   };
-  /** The final check's verifier returns `verdict` and ends its turn. */
   const returns = async (verdict: object) => {
     const thread = verifier();
     const answer = textOf(await kit.call("issue_verdict", verdict, thread));
@@ -77,7 +68,6 @@ test("1: once every sub-issue is merged the parent's final check is due, and wit
   assert.deepEqual(await row(), at("in-progress", null), "one sub-issue still open");
 
   merge(builders[1] ?? assert.fail());
-  // bb is slow to say what the default branch is: the check is due, not made yet.
   kit.environments.holding = true;
   const ticking = tick();
   await settled();
@@ -156,7 +146,6 @@ test("4: two ticks, or a tick racing a sub-issue filed under the parent, never l
   assert.equal(twice.finalChecks().length, 1);
   assert.equal(twice.kit.store.openChecks().filter(({ issueId }) => issueId === "WEB-1").length, 1);
 
-  // The tick read the parent due, then waited on bb for the default branch while the manager filed a sub-issue.
   const filed = await withParent();
   for (const builder of filed.builders) filed.merge(builder);
   filed.kit.environments.holding = true;
@@ -170,7 +159,6 @@ test("4: two ticks, or a tick racing a sub-issue filed under the parent, never l
   assert.deepEqual(filed.finalChecks(), [], "the parent's turn read it again: no longer due");
   assert.deepEqual(await filed.row(), at("in-progress", null));
 
-  // The parent's turn was reading its views when a sub-issue was written under it.
   const inTurn = await withParent();
   for (const builder of inTurn.builders) inTurn.merge(builder);
   inTurn.kit.environments.holding = true;
@@ -292,7 +280,6 @@ test("8: the final check runs on the parent's named verifier unless an agent of 
   await alone.returns(PASSES);
   assert.match(await alone.text("crew_catch_up", {}), /by a verifier on claude-code opus, a1's own model, as no other was available\./);
 
-  // The named one is the only model there, and the agents' own: passed over, then the last resort.
   const namedAlone = await withParent({ parent: { verifier: { providerId: "claude-code", model: "opus" } } });
   namedAlone.kit.providers.list = [{ id: "claude-code", available: true, models: [{ model: "opus", isDefault: true, defaultReasoningEffort: "high" }] }];
   await namedAlone.mergeAll();
@@ -302,7 +289,6 @@ test("8: the final check runs on the parent's named verifier unless an agent of 
   assert.equal(verdict.state === "returned" && verdict.sameModel, true);
   assert.match(await namedAlone.text("crew_catch_up", {}), /by a verifier on claude-code opus, a1's own model, as no other was available; it is also the one named on WEB-1\./);
 
-  // Naming the agents' model on the parent promises it only as the first choice.
   const namedTheirs = await withParent();
   const note = await namedTheirs.text("issue_update", { id: "WEB-1", verifier: { providerId: "claude-code", model: "opus" } });
   assert.doesNotMatch(note, /are checked on/);
@@ -369,7 +355,6 @@ test("a final check that passes after the manager canceled the parent leaves it 
 
 test("a final check's verifier starts on the branch the check recorded, though bb's default branch changed before it spawned", async () => {
   const { kit, text, mergeAll, latest, verifier, returns } = await withParent();
-  // bb is slow to list the models the verifier can run on, after the check was made on main.
   kit.providers.holding = true;
   await mergeAll();
   assert.deepEqual([latest().subject.kind === "final" && latest().subject.defaultBranch, latest().verdict.state], ["main", "queued"]);
@@ -389,7 +374,6 @@ test("a sub-issue merged while a final check runs supersedes it, and stops its v
   const { kit, text, started, merge, mergeAll, finalChecks, verifier, tick } = await withParent();
   await mergeAll();
   const first = verifier();
-  // The manager filed and merged a fix before the verifier returned.
   await text("issue_create", { ...SUB, title: "Keep tokens across restarts" });
   merge(await started("WEB-4"), "c".repeat(40));
   await tick();

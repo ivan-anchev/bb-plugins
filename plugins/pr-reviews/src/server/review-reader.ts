@@ -1,6 +1,3 @@
-// Reads PRs with their review state: one guides query, one runs query and one thread-status
-// read for a whole list, then the pure derivation per PR. A PR's running review needs no
-// GitHub read at all.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { PrDetail, PrSummary, ReviewState } from "../contract.ts";
 import { viewPr } from "../github/gh.ts";
@@ -8,7 +5,6 @@ import type { Repo } from "../github/repo.ts";
 import { deriveReviewState, deriveRunningReview, type RunningReview, type ThreadFacts } from "./review-state.ts";
 import type { Store } from "./store.ts";
 
-// bb's limit on threadIds per threads.list call.
 const THREAD_IDS_PER_LIST = 200;
 
 type PrHead = Pick<PrSummary, "number" | "headSha">;
@@ -37,13 +33,10 @@ export function createReviewReader({ bb, store }: { bb: BbPluginApi; store: Stor
     return deriveRunningReview({ guides: store.guideHeadsFor(repo, [number]), runs, threads: await threadFacts(runs.map((run) => run.threadId)) });
   }
 
-  /** Whether the thread still counts as a review thread: it exists and is not archived. */
   async function threadIsOpen(threadId: string): Promise<boolean> {
     return (await threadFacts([threadId])).has(threadId);
   }
 
-  // Threads that still exist and are not archived; hidden ones too, since review threads are
-  // spawned hidden.
   async function threadFacts(threadIds: string[]): Promise<ReadonlyMap<string, ThreadFacts>> {
     const pages = await Promise.all(
       chunks([...new Set(threadIds)], THREAD_IDS_PER_LIST).map((ids) => bb.sdk.threads.list({ threadIds: ids, archived: false, includeHidden: true })),

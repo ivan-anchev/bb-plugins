@@ -50,26 +50,6 @@ type GraphBoardProps = {
   className?: string
 }
 
-/**
- * Columns of work. Markdown:
- *
- * ```mdx
- * <GraphBoard title="ROADMAP">
- *
- * ### Now
- * - **Children for every graph**
- *
- * ### Next
- * - Board — this drop
- *
- * ### Later
- * - *Figma kit*
- *
- * </GraphBoard>
- * ```
- *
- * Bold is now, italic is next. A note after an em dash sits under the item.
- */
 function columnsOf(children: ReactNode): BoardColumn[] {
   return headingSections(children).map((section) => ({
     title: section.title,

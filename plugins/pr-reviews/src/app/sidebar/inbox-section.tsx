@@ -1,5 +1,3 @@
-// One sidebar section: a sticky heading with its count, in Activity's section-title type, that folds
-// the section, then its PRs and stacks, or one quiet line when it has none.
 import { useId } from "react";
 import type { InboxPr, Section } from "../../contract.ts";
 import { attentionOf, type Visits } from "./attention.ts";
@@ -7,7 +5,6 @@ import { ListedRow } from "./pr-row.tsx";
 import { SECTION_TEXT } from "./section-text.ts";
 import { StackTree } from "./stack-tree.tsx";
 
-// Activity's section title: quiet small words, then the count, brighter under the pointer; no caret.
 const SECTION_TITLE = "text-[11px] leading-3.5 font-medium whitespace-nowrap text-subtle-foreground";
 const FOLD =
   "flex h-full w-full cursor-pointer items-center gap-2 rounded-md px-2.5 hover:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset";

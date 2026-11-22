@@ -1,5 +1,3 @@
-// A thread named on the board (an agent's, a verifier's), opening it in bb; just its name while bb
-// hasn't confirmed the thread.
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 
 export function ThreadLink({ name, threadId }: { name: string; threadId: string | null }) {

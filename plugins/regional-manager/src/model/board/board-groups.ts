@@ -1,13 +1,8 @@
-// A board's lanes: the decisions waiting for the user and the issues, each issue placed by its
-// status, or under Needs you while it waits on the user, and each sub-issue under its parent. The
-// board draws them, crew_catch_up lists them and the panel's badge counts their Needs you, so the
-// three never disagree.
 import { z } from "zod";
 import { isOpen, type Decision, type OpenDecision } from "../decision.ts";
 import type { IssueId } from "../issue/issue.ts";
 import { STATUS_LABELS, type IssueStatus } from "../issue/status.ts";
 
-/** The board's lanes, in the order it shows them. */
 const laneSchema = z.enum(["needs-you", "in-review", "verifying", "in-progress", "todo", "backlog", "done", "canceled"]);
 export type Lane = z.infer<typeof laneSchema>;
 
@@ -23,7 +18,6 @@ type Nested = Placed & { id: IssueId; parentId: IssueId | null };
 /** An issue's lane: Needs you while it waits on the user, else its status. */
 export const laneOf = ({ status, needsYou }: Placed): Lane => (needsYou === null ? status : "needs-you");
 
-/** The rows in each lane that has any, in the board's order; rows keep their order. */
 function byLane<Row extends { lane: Lane }>(rows: readonly Row[]): { lane: Lane; rows: Row[] }[] {
   return laneSchema.options.flatMap((lane) => {
     const inLane = rows.filter((row) => row.lane === lane);

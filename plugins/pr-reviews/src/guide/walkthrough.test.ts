@@ -7,7 +7,6 @@ import { findingsOn, hiddenTestHunkCount, stepNumberOfFinding, testHunkCount, vi
 const entry = (file: string): GuideHunk => ({ file, hunk: hunkIdSchema.parse("@@ -1,1 +1,1 @@"), collapsed: null });
 const step = (title: string, files: string[]): GuideStep => ({ title, explanation: "…", forYou: null, hunks: files.map(entry) });
 
-// A mixed step, a code step, and a step of tests and mocks alone.
 const MIXED = step("Refresh once", ["src/token-client.ts", "src/token-client.test.ts"]);
 const CODE = step("Retry once", ["src/fetch.ts"]);
 const TESTS = step("The tests", ["src/fetch.test.ts", "src/__mocks__/server.ts"]);

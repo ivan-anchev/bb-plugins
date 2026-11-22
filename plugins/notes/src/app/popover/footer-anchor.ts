@@ -1,6 +1,3 @@
-// Where the popover stands: beside the sidebar, its bottom level with the sidebar-footer button's.
-// bb renders that button itself and gives the plugin no ref to it, so it is found by the attribute
-// bb puts on its footer item (checked live on bb 0.49).
 declare const __BB_PLUGIN_ID__: string;
 
 /** The gap between the sidebar's edge, or the window's when the button is hidden, and the popover. */

@@ -1,15 +1,9 @@
-// Two shapes, one boundary: SubmitReviewInput is the agent's wire format (the spec's schema,
-// plus the head the guide is for); Guide is the canonical stored form, which only
-// validateSubmission produces.
 import { z } from "zod";
 import { diffSideSchema, hunkIdSchema } from "../diff/diff-schema.ts";
 
 const text = z.string().trim().min(1);
-// A file is named by its exact path, which may begin or end with spaces: never trimmed.
 const path = z.string().min(1);
 const prioritySchema = z.enum(["p0", "p1", "p2"]);
-
-// ---- wire format: the tool's parameters ----
 
 const hunkRefInputSchema = z.strictObject({
   file: path.describe("The file's path, exactly as the hunk list prints it."),
@@ -64,8 +58,6 @@ export type SubmitReviewInput = z.infer<typeof submitReviewInputSchema>;
 /** The guide as the agent wrote it, without the head it names. */
 export type GuideInput = Omit<SubmitReviewInput, "headSha">;
 
-// ---- canonical stored form ----
-
 const guideHunkSchema = z.object({ file: z.string(), hunk: hunkIdSchema, collapsed: z.string().nullable() });
 export type GuideHunk = z.infer<typeof guideHunkSchema>;
 
@@ -87,7 +79,6 @@ const findingSchema = z.object({
   file: z.string(),
   line: z.number().int().positive(),
   side: diffSideSchema,
-  /** The hunk whose range holds `line` on `side`, resolved at validation. */
   hunk: hunkIdSchema,
   priority: prioritySchema,
   title: z.string(),

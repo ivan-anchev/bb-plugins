@@ -1,4 +1,3 @@
-// A GitHub label: one of the PR's labels, or the one a label event added or removed. Pure zod.
 import { z } from "zod";
 
 /** A GitHub label; `color` is a CSS hex color, `#rrggbb`. */

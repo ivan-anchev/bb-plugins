@@ -1,6 +1,3 @@
-// The saved activity snapshot: the card reads it instantly, and a background
-// refresh replaces it. Concurrent refreshes share one run, and a failed
-// GitHub read keeps the PRs from the last good one.
 import type { Activity, MergedPr } from "../contract.ts";
 import { addDays, gridStart, startOfDay } from "./days.ts";
 
@@ -25,7 +22,6 @@ export function createSnapshot(deps: SnapshotDeps) {
     return running;
   }
 
-  /** The saved snapshot, or the first one built on demand. */
   async function read(): Promise<Activity> {
     return (await deps.kv.get<Activity>(KEY)) ?? refresh();
   }
@@ -34,7 +30,6 @@ export function createSnapshot(deps: SnapshotDeps) {
 }
 
 async function rebuild(deps: SnapshotDeps): Promise<Activity> {
-  // why: a week before the grid's first Monday, so a client in another time zone still has its whole window.
   const since = addDays(gridStart(startOfDay(deps.now())), -7);
   const saved = await deps.kv.get<Activity>(KEY);
   const [prs, threads] = await Promise.allSettled([deps.readMergedPrs(isoDate(since)), deps.readThreadStarts(since)]);

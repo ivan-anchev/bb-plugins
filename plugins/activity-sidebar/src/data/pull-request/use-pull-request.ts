@@ -1,5 +1,3 @@
-// A mounted row's pull request, from bb's GitHub PR Status plugin. The host batches the keys of every
-// row mounted in the same render into one `pullRequests` call.
 import { experimental_useRpcKeyedQuery as useRpcKeyedQuery } from "@get-bb/plugin-sdk/app";
 import { githubPrStatus, shownPullRequest, type PullRequest } from "./github-pr-status.ts";
 

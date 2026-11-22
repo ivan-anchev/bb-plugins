@@ -5,11 +5,9 @@ import { backfill, record, spendDays, type Reading, type SpendHistory } from "./
 const at = (iso: string): number => Date.parse(iso);
 const reading = (iso: string, monthDollars: number): Reading => ({ at: at(iso), monthDollars });
 
-/** The history after these readings, in order, from nothing recorded. */
 const recorded = (...readings: Reading[]): SpendHistory | null =>
   readings.reduce<SpendHistory | null>((history, next) => record(history, next), null);
 
-/** The last `count` days as `day → dollars`, today being the last reading's day. */
 function days(history: SpendHistory | null, today: string, count: number): Record<string, number | null> {
   return Object.fromEntries(spendDays(history, at(today), count).map(({ day, dollars }) => [day, dollars]));
 }
@@ -94,7 +92,6 @@ test("nothing recorded draws thirty unknown days", () => {
   assert.ok(spendDays(null, at("2026-11-14T09:00:00Z"), 30).every(({ dollars }) => dollars === null));
 });
 
-/** boat's dashboard days, oldest first: Nov 8–14 as the live account read them, Nov 13–14 bigger than recorded. */
 const BOAT = [
   { day: "2026-11-08", dollars: 0.03 },
   { day: "2026-11-09", dollars: 0.3 },
@@ -104,7 +101,6 @@ const BOAT = [
   { day: "2026-11-13", dollars: 9 },
   { day: "2026-11-14", dollars: 9 },
 ];
-/** Recording began on the 13th; the 14th is today. */
 const RECORDING = (): SpendHistory => recorded(reading("2026-11-13T09:00:00Z", 1), reading("2026-11-14T10:00:00Z", 1.25))!;
 const NOW = "2026-11-14T12:00:00Z";
 

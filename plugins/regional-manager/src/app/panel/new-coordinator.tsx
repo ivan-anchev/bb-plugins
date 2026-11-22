@@ -1,5 +1,3 @@
-// The New page: the new regional manager's profile and Create, which saves it with no thread and
-// opens its page, where the goal sent from bb's composer starts it (manager/manager-page.tsx).
 import { experimental_Icon as Icon, experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
 import { useRef, useState, type Ref } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
@@ -13,10 +11,8 @@ type NewCoordinatorProps = { ref: Ref<HTMLDivElement>; onBack(): void; onCreated
 
 export function NewCoordinator({ ref, onBack, onCreated }: NewCoordinatorProps) {
   const create = experimental_useRpcMutation({ contract, method: "createCoordinator" });
-  // why kept in the browser: what the user typed outlives bb redrawing the panel, until Create saves it.
   const stored = useStored(localStorage, NEW_PROFILE_KEY, profileDraftSchema);
   const draft = stored.value ?? EMPTY_DRAFT;
-  // Whether a create found no name: the field says so from then on, until it has one.
   const [tried, setTried] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const profile = profileOf(draft);
@@ -28,7 +24,6 @@ export function NewCoordinator({ ref, onBack, onCreated }: NewCoordinatorProps) 
       nameRef.current?.focus();
       return;
     }
-    // why caught: the page shows the refusal under Create, and keeps the fields to try again.
     const created = await create.mutate({ profile }).catch(() => null);
     if (created === null) return;
     stored.store(null);
@@ -36,7 +31,6 @@ export function NewCoordinator({ ref, onBack, onCreated }: NewCoordinatorProps) 
   }
 
   return (
-    // why the tab stop: the page scrolls, and the keyboard scrolls only what has focus (REVIEW.md).
     <div ref={ref} tabIndex={0} className="h-full min-h-0 overflow-y-auto bg-background text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset">
       <form
         aria-labelledby="new-coordinator-heading"
@@ -58,7 +52,6 @@ export function NewCoordinator({ ref, onBack, onCreated }: NewCoordinatorProps) 
         <div className="flex flex-col gap-5 px-3">
           <ProfileFields value={draft} onChange={stored.store} nameError={tried && profile === null ? NAME_MISSING : null} nameRef={nameRef} />
           <div className="flex flex-col items-start gap-2">
-            {/* why aria-disabled: a disabled button drops focus to the page while the create runs. */}
             <Button type="submit" variant="default" aria-disabled={create.isPending}>
               {create.isPending ? "Creating…" : "Create"}
             </Button>

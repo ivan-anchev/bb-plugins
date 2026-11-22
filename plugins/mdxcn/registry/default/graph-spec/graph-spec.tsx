@@ -34,7 +34,6 @@ type SpecRow = {
 }
 
 type SpecLine = SpecRow & {
-  /** Inline Markdown after the label — code and links survive. */
   rich?: ReactNode
 }
 

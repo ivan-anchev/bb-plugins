@@ -23,7 +23,6 @@ export function Switch({ checked, onChange, label, hint, pending = false }: Swit
         aria-checked={checked}
         aria-labelledby={`${ids}-label`}
         aria-describedby={`${ids}-hint`}
-        // why aria-disabled: a disabled button drops focus to the page while the change saves.
         aria-disabled={pending}
         onClick={pending ? undefined : () => onChange(!checked)}
         className={`relative mt-0.5 inline-flex h-[18px] w-8 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background aria-disabled:cursor-default aria-disabled:opacity-60 motion-reduce:transition-none ${checked ? "bg-foreground" : "bg-muted-foreground/45"}`}
@@ -34,7 +33,6 @@ export function Switch({ checked, onChange, label, hint, pending = false }: Swit
         />
       </button>
       <div className="flex min-w-0 flex-col gap-0.5">
-        {/* why a label: a click on the name toggles the switch too, a bigger target. */}
         <label id={`${ids}-label`} htmlFor={`${ids}-switch`} className="cursor-pointer text-sm font-medium select-none">
           {label}
         </label>

@@ -1,10 +1,5 @@
-// An issue's kind, and the pipeline each kind runs: the one place the model says what happens to an
-// issue after its agent hands off done. Everything that differs between kinds is read from
-// PIPELINES through the functions below, so a kind's pipeline can't drift between issues and a new
-// kind is a new row.
 import { z } from "zod";
 
-// why no CHECK in SQL: a new kind must not need a table rebuild. The store parses the column with this.
 export const kindSchema = z.enum(["build", "research"]);
 export type Kind = z.infer<typeof kindSchema>;
 
@@ -31,11 +26,7 @@ type Pipeline = {
 );
 
 export const PIPELINES: Record<Kind, Pipeline> = {
-  // Ships code: verified, then waits on the user or its pull request, then Done when it merges.
-  // why it holds research too: code work often starts from a question answered first.
   build: { label: "Build", holds: ["build", "research"], delivers: "commit", stages: ["verifying", "in-review"] },
-  // A probe, spike, investigation or design: its report is the result, nobody judges it, and its done handoff is Done.
-  // why only research under it: it closes with its last sub-issue, and code work under it would close it unmerged and unchecked.
   research: { label: "Research", holds: ["research"], delivers: "report", stages: [] },
 };
 

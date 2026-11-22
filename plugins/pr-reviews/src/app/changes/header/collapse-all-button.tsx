@@ -1,5 +1,3 @@
-// Expand or collapse every folder of the Changes tree at once (from code-explorer). Disabled while
-// the tree has no folders, as before the diff is read.
 import type { FileTree as TreeModel } from "@pierre/trees";
 import { useFileTreeSelector } from "@pierre/trees/react";
 import { IconButton } from "../../ui/icon-button.tsx";

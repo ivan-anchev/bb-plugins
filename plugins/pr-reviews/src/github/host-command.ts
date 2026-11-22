@@ -1,9 +1,6 @@
-// Runs a host CLI (gh, git) and returns its stdout; a failure rejects with Node's ExecFileException.
 import { experimental_execHostFile as execHostFile, experimental_hostToolchain as hostToolchain } from "@get-bb/plugin-sdk/process";
 import { z } from "zod";
 
-// Keeps the command from ever waiting on a prompt or a pager, and keeps its messages in English
-// so callers can classify stderr.
 const QUIET_ENV = { GH_PROMPT_DISABLED: "1", GH_PAGER: "cat", GIT_TERMINAL_PROMPT: "0", NO_COLOR: "1", LC_ALL: "C" };
 
 /**
@@ -13,8 +10,6 @@ const QUIET_ENV = { GH_PROMPT_DISABLED: "1", GH_PAGER: "cat", GIT_TERMINAL_PROMP
  */
 export const hostCommandEnvironment = () => hostToolchain.environment({ ...process.env, ...QUIET_ENV });
 
-// execHostFile resolves the command on the login-shell PATH, which a GUI-launched bb would
-// otherwise lack.
 export async function runHostCommand(command: "gh" | "git", args: string[]): Promise<string> {
   const { stdout } = await execHostFile(command, args, {
     encoding: "utf8",
@@ -25,9 +20,6 @@ export async function runHostCommand(command: "gh" | "git", args: string[]): Pro
   return stdout;
 }
 
-// Node's ExecFileException, parsed rather than cast. `code` is the exit code, or a spawn error:
-// "ENOENT" when the command is not installed, "E2BIG" when an argument is over the OS's limit.
-// `killed`: the timeout stopped it. `stdout` holds what gh read from GitHub's error response.
 const failureSchema = z.object({ code: z.unknown(), stdout: z.string().default(""), stderr: z.string().default(""), killed: z.boolean().default(false) });
 export type HostCommandFailure = z.infer<typeof failureSchema>;
 

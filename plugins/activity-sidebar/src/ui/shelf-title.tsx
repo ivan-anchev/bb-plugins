@@ -1,4 +1,3 @@
-// The words between the rows: a section's title, which folds it; Archived's "Show more"; a notice.
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import type { ReactNode } from "react";
 import type { ListItem } from "../list/items.ts";
@@ -10,7 +9,6 @@ type TitleItem = Extract<ListItem, { kind: "title" }>;
  * `action` sits after them, outside the fold button (Activity's project filter).
  */
 export function SectionTitle({ item, onToggle, action }: { item: TitleItem; onToggle(): void; action: ReactNode }) {
-  // why: tabIndex -1: the scroller is the list's one tab stop and ↑/↓ move between its items.
   return (
     <div className="as-section-title">
       <h2 className="as-heading">

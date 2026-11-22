@@ -1,4 +1,3 @@
-// Above a stale guide: how far the PR has moved past it, and Update guide.
 import { commitsSince, type PrDetail } from "../../contract.ts";
 import { useReviewAction, type PrTarget } from "../queries.ts";
 import { Button } from "../ui/button.tsx";
@@ -24,7 +23,6 @@ export function StaleBanner({ target, pr, guideHeadSha }: StaleBannerProps) {
   );
 }
 
-// A null count means a force push removed the guide's commit from the PR.
 function sinceGuide(newCommits: number | null): string {
   if (newCommits === null) return "The PR changed since this guide was written.";
   return `${newCommits} new commit${newCommits === 1 ? "" : "s"} since this guide was written.`;

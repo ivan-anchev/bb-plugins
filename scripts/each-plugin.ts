@@ -1,6 +1,3 @@
-// node scripts/each-plugin.ts <script>
-// Run an npm script in every plugin that defines it. Unlike `npm run
-// --workspaces`, this succeeds when plugins/ is still empty.
 import { spawnSync } from "node:child_process";
 import { fail } from "./lib/cli.ts";
 import { loadPlugins, ROOT } from "./lib/repo.ts";

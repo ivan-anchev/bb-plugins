@@ -6,7 +6,6 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { projectRepo } from "./project-repo.ts";
 
-// Real checkouts in a temp dir, read through real git.
 const root = mkdtempSync(join(tmpdir(), "pr-reviews-project-repo-"));
 after(() => rmSync(root, { recursive: true, force: true }));
 

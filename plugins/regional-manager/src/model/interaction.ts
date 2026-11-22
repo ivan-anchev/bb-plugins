@@ -1,5 +1,3 @@
-// What a thread's pending interaction asks a person, in a line or a few: an agent's, passed on to
-// its regional manager as waiting on the user; a verifier's, named where the plugin declined it.
 import type { PluginThreadEventPayloads } from "@get-bb/plugin-sdk";
 
 export type InteractionPayload = PluginThreadEventPayloads["interaction.pending"]["interaction"]["payload"];
@@ -15,7 +13,6 @@ export function questionOf(payload: InteractionPayload): string {
       return payload.title;
     default:
       if (isNamespaced(payload)) return payload.title;
-      // why not throw: bb can send an interaction newer than this plugin's SDK, and its fields are unknown.
       payload satisfies never;
       return "Asks the user something in its thread";
   }
@@ -37,7 +34,6 @@ function subjectOf(subject: Extract<InteractionPayload, { kind: "approval" }>["s
     case "tool_use":
       return "a tool call";
     default:
-      // why not throw: bb can send an approval newer than this plugin's SDK.
       subject satisfies never;
       return "an action";
   }

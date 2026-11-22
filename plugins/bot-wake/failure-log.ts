@@ -23,7 +23,6 @@ export interface FailureLog {
 
 type Migrate = (db: Database.Database, statements: string[]) => void;
 
-/** Append-only: never edit or reorder a shipped statement. */
 const MIGRATIONS = [
   `CREATE TABLE failures (
      id INTEGER PRIMARY KEY AUTOINCREMENT,

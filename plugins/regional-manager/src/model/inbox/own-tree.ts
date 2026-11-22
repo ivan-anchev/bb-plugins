@@ -1,7 +1,3 @@
-// The coordinating thread's own working tree. Its rules say it never edits project files, and bb
-// can't enforce that, so the plugin reads the tree when each of its turns ends and tells it, and
-// the user on its board, when files changed. This is detection, not a guarantee: a change it
-// committed, or one made and undone within a turn, leaves the tree clean.
 import type { InboxEvent } from "./inbox-event.ts";
 
 /** An event about the coordinating thread's own working tree. */

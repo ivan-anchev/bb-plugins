@@ -1,5 +1,3 @@
-// Composition root: the Sleep store, the archived counter and the events that refresh it, and the RPC
-// methods over both. Owns no logic.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { activitySidebarContract } from "./src/contract.ts";
 import { ARCHIVE_EVENTS, openArchivedCount } from "./src/server/archived-count.ts";

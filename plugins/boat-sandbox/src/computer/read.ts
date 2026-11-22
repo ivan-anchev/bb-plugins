@@ -1,5 +1,3 @@
-// What the Computer page shows: the boat sandbox behind a thread's environment and, while it runs, boat's
-// noVNC page of its desktop, view-only. Read-only toward boat: it never wakes, stops or extends a sandbox.
 import type { ExperimentalPluginRpcHandlersWithContext, JsonValue } from "@get-bb/plugin-sdk";
 import { BoatApiError, type BoatClient } from "../boat/client.ts";
 import type { SandboxId } from "../boat/sandbox.ts";
@@ -28,13 +26,10 @@ export const computerRpcHandlers = (deps: ComputerDeps): Pick<ExperimentalPlugin
   computer: ({ environmentId }, { experimental_signal: signal }) => readComputer(deps, environmentId, signal),
 });
 
-// ---------------------------------------------------------------- layer 2
-
 async function readComputer(deps: ComputerDeps, environmentId: string, signal: AbortSignal): Promise<ComputerView> {
   const hostId = await boatHostOf(deps.sdk, environmentId, signal);
   if (hostId === null) return { status: "not-boat" };
   const resource = await deps.machines.getResource(hostId);
-  // Core keeps the resource once boat has made the sandbox; until then the machine is still being made.
   if (resource === null) return STARTING;
   const configuration = await deps.access.configuration(signal);
   if (configuration.status !== "available") return { status: "unavailable", message: describeProblems(configuration.problems) };
@@ -55,11 +50,10 @@ async function viewSandbox(client: ComputerClient, id: SandboxId, signal: AbortS
     case "running":
       return viewDesktop(client, id, signal);
     default:
-      return sandbox.phase satisfies never; // why: parsed once in sandbox.ts, so a new phase is a compile error here
+      return sandbox.phase satisfies never;
   }
 }
 
-/** boat answers the sandbox's state again here, so a stop or restart since the read above still lands right. */
 async function viewDesktop(client: ComputerClient, id: SandboxId, signal: AbortSignal): Promise<ComputerView> {
   try {
     const desktop = await client.vncDesktop(id, signal);
@@ -72,10 +66,6 @@ async function viewDesktop(client: ComputerClient, id: SandboxId, signal: AbortS
   }
 }
 
-/**
- * noVNC's own options: `view_only` drops every key, pointer and clipboard event in the page (x11vnc
- * itself takes input from any client), `resize=scale` fits the screen to the frame without resizing it.
- */
 function viewOnly(desktopUrl: string): string {
   const url = new URL(desktopUrl);
   url.searchParams.set("view_only", "true");

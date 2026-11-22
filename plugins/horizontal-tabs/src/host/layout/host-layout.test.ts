@@ -8,7 +8,6 @@ import type { Nav } from "../../controller/tabs-controller.ts";
 import { single, type Layout } from "../../model/layout.ts";
 import { hostLayout } from "./host-layout.ts";
 
-// Node has no sessionStorage; the module reads only getItem, so a map stands in for bb's tab storage.
 const stored = new Map<string, string>();
 const storage: Pick<Storage, "getItem"> = { getItem: (key) => stored.get(key) ?? null };
 Object.defineProperty(globalThis, "sessionStorage", { value: storage });
@@ -38,8 +37,6 @@ test("reads no layout from a stored layout in another format", () => {
   assert.equal(hostLayout.read(), null);
 });
 
-// bb's page as show() sees it: the chunks it loaded (served from disk here, holding jotai's store getter and
-// the layout atom in the shapes layout-atom.ts looks for), its panes, and its animation frames.
 const assets = join(await mkdtemp(join(tmpdir(), "ht-bb-")), "assets");
 await mkdir(assets);
 await writeFile(
@@ -64,7 +61,6 @@ const page = {
     selector === "script[src]" ? chunks : paneIds.map((id) => ({ getAttribute: () => id })),
 };
 Object.defineProperty(globalThis, "document", { value: page });
-// A touch screen, where bb's composers don't focus themselves, so a show leaves focus alone (composer-focus.ts).
 Object.defineProperty(globalThis, "matchMedia", { value: () => ({ matches: true }) });
 const frames = new Map<number, () => void>();
 let lastFrame = 0;
@@ -79,7 +75,6 @@ function recordingNav(routes: string[]): Nav {
   return { toThread: (threadId) => routes.push(threadId), toCompose: () => routes.push("compose") };
 }
 
-/** Waits until show() asks for an animation frame, as it does while bb's panes lack the written ids. */
 async function nextFrameRequest(): Promise<void> {
   for (let tick = 0; frames.size === 0; tick += 1) {
     assert.ok(tick < 100, "show() asked for no frame");

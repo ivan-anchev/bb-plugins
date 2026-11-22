@@ -35,7 +35,6 @@ const PUBLISH: GitHubActions = { kind: "publish" };
 const BOTH: GitHubActions = { kind: "both" };
 const IN_REVIEW: GitHubActions = { kind: "review", reviewId: "PRR_1" };
 
-// Each option as `mode`, or `mode!` when it can't send.
 const shown = (options: readonly SendOption[]) => options.map(({ mode, reason }) => (reason === null ? mode : `${mode}!`));
 const reasonOf = (options: readonly SendOption[], mode: string) => options.find((option) => option.mode === mode)?.reason;
 

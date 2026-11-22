@@ -1,8 +1,3 @@
-// bb's split layout, verbatim: what a tab holds and what bb keeps in sessionStorage["bb.splitLayout"].
-// The schema copies bb 0.49's own (index chunk, the zod schema beside the "bb.splitLayout" key): strict
-// objects, row|col splits whose positive sizes match the children and sum to 1, at most 8 panes, unique
-// pane ids and a focused pane that exists. bb clamps sizes to [0.15, 0.85] only when it draws them; its
-// schema accepts smaller ones, and an 8-pane row is stored as eight 0.125s.
 import { z } from "zod";
 
 export type PaneContent =

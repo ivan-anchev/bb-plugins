@@ -1,6 +1,3 @@
-// The panel's root page: the regional managers not started yet, then every other one under its
-// project, newest first, each by its avatar, its name and its description. A row opens the manager's
-// thread once started, its page until then.
 import { experimental_Icon as Icon, experimental_useRpcQuery, experimental_useSidebarThreads as useSidebarThreads, useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { ReactNode, Ref } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
@@ -17,7 +14,6 @@ export function CoordinatorList({ ref, onOpen }: { ref: Ref<HTMLDivElement>; onO
   const view = listView(read, live);
 
   return (
-    // why the tab stop: the list scrolls, and the keyboard scrolls only what has focus (REVIEW.md).
     <div ref={ref} tabIndex={0} className="h-full min-h-0 overflow-y-auto bg-background text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6 sm:px-6">
         {read.error !== null && <ReadFailure onRetry={() => void read.refetch()}>Could not read the list: {read.error.message}</ReadFailure>}
@@ -59,7 +55,6 @@ function Section({ id, title, children }: { id: string; title: string; children:
 
 type RowProps = { name: string; description: string | null; avatar: Avatar; onOpen(): void };
 
-/** A regional manager by its avatar, its name and its description below it. */
 function Row({ name, description, avatar, onOpen }: RowProps) {
   return (
     <li>
@@ -78,7 +73,6 @@ function Row({ name, description, avatar, onOpen }: RowProps) {
   );
 }
 
-// why no button here: New sits in the panel's title bar, one primary action per screen.
 function Empty() {
   return (
     <div className="flex flex-col items-center gap-3 px-4 py-16 text-center">

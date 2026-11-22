@@ -1,4 +1,3 @@
-// The words a note shows on its row's two lines, and the thread it came from.
 import { attachmentKind, type Attachment, type Note, type NoteBody } from "../../../contract.ts";
 
 /**
@@ -21,20 +20,17 @@ export function sourceTitle(note: Note): string | null {
   return firstLinkedTitle(note.body);
 }
 
-/** A mention covers "@Title" in the text, so its title is the text after the "@". */
 function firstLinkedTitle({ text, mentions }: NoteBody): string | null {
   const [first] = mentions;
   return first === undefined ? null : text.slice(first.from + 1, first.to);
 }
 
-/** "1 screenshot", "2 recordings", or "3 attachments" when images and videos are mixed. */
 function attachmentsLabel(attachments: readonly Attachment[]): string {
   const kinds = new Set(attachments.map(({ mimeType }) => attachmentKind(mimeType)));
   const noun = kinds.size > 1 ? "attachment" : kinds.has("video") ? "recording" : "screenshot";
   return `${attachments.length} ${noun}${attachments.length === 1 ? "" : "s"}`;
 }
 
-/** A note written over several lines reads as one. */
 function oneLine(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }

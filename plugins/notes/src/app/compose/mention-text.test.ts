@@ -6,7 +6,6 @@ const BURN: PickedThread = { threadId: "thr_burn", title: "Burn" };
 const BURN_WEEKLY: PickedThread = { threadId: "thr_weekly", title: "Burn weekly" };
 const LINKS_WITH_AT: PickedThread = { threadId: "thr_links", title: "Links with @" };
 
-/** A draft with the caret at the end of its text. */
 const atEnd = (text: string) => ({ text, caret: text.length });
 
 test("the query is what follows an @ before the caret, on the same line", () => {

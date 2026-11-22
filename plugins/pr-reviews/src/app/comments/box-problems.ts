@@ -1,6 +1,3 @@
-// What the comment box's footer says stops it: the draft can't be posted as it is, or the last
-// request failed.
-
 /** Ask the review thread, post on GitHub at once, or add to the reader's pending review. */
 export type Action = "ask" | "comment" | "review";
 

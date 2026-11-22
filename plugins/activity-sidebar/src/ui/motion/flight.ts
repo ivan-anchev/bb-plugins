@@ -1,6 +1,3 @@
-// What of the list's motion is under way, as data: every plan's moves until that plan lands, and the
-// leavers still closing, so what must stay mounted for them is known in the render that needs it. Pure;
-// use-layout-motion.ts plays the plans.
 import { OVERSCAN, type Layout } from "../../list/layout.ts";
 import { planMotion, STILL, type Ghost, type Move, type MotionPlan } from "../../list/motion-plan.ts";
 
@@ -33,9 +30,6 @@ export function takeOff(flight: Flight, layout: Layout, view: View): Flight {
   const keys = new Set(layout.entries.map((e) => e.key));
   const plan = planMotion(flight.layout, layout);
   const drop = Math.max(0, view.top + view.height - layout.height);
-  // why: a ghost mounted later would have missed its closing and stand there whole; one the view can show
-  // is mounted now. The drop carries everything down by `drop` as it lands, so a ghost above the view can
-  // come into it.
   const seen = plan.ghosts.filter((g) => crosses(g.entry.y, g.entry.y + g.entry.h + drop, view));
   return {
     layout,
@@ -72,13 +66,6 @@ export function passing(flight: Flight, view: View): string[] {
     .map((e) => e.key);
 }
 
-// ------------------------------------------------------------------ layer 2
-
-/**
- * How far above (`up`, negative) and below (`down`) its place each moving item can be drawn. Every
- * segment eases from its `from` to none without overshooting (EASE and out(3) stay within 0…1), and
- * they add, whichever plan started them and however far each has run.
- */
 function reachOf(moving: readonly Move[]): Map<string, { up: number; down: number }> {
   const reach = new Map<string, { up: number; down: number }>();
   for (const { key, segments } of moving) {
@@ -92,7 +79,6 @@ function reachOf(moving: readonly Move[]): Map<string, { up: number; down: numbe
   return reach;
 }
 
-/** Whether the strip `top`…`bottom` meets the view, give or take the overscan the list mounts. */
 function crosses(top: number, bottom: number, view: View): boolean {
   return bottom > view.top - OVERSCAN && top < view.top + view.height + OVERSCAN;
 }

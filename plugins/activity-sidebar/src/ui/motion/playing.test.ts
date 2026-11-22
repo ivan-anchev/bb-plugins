@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Playing, type Played } from "./playing.ts";
 
-/** An animation that runs until told to finish, or is cancelled: as a Web Animation, `finished` then rejects. */
 function animation() {
   let finish!: () => void;
   let abort!: (e: Error) => void;
@@ -22,7 +21,6 @@ function animation() {
   return a satisfies Played;
 }
 
-/** Lets every settled `finished` reach its continuation. */
 const settle = () => new Promise((resolve) => setTimeout(resolve));
 
 test("torn down mid-play, every animation stops and none lands", async () => {

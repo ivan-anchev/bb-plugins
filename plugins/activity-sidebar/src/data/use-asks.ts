@@ -1,4 +1,3 @@
-// What a mounted row's thread asks while it waits for you: read from bb only while it waits.
 import { useSdk, type PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { askOf, type AskKind } from "../model/state.ts";
 import { useRead } from "./use-read.ts";

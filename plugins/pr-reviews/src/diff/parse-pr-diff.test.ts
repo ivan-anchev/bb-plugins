@@ -4,10 +4,8 @@ import { test } from "node:test";
 import { unitIdsOf, type DiffFile } from "./diff-schema.ts";
 import { parsePrDiff } from "./parse-pr-diff.ts";
 
-// Each fixture is real `git diff` output, except github-pr.diff, which is `gh pr diff` output.
 const parseFixture = (name: string) => parsePrDiff(readFileSync(new URL(`fixtures/${name}`, import.meta.url), "utf8"));
 
-// What the prompt and the guide read of a file: who it is and the units it must place.
 const summary = (file: DiffFile) => ({
   path: file.path,
   previousPath: file.previousPath,
@@ -75,9 +73,6 @@ test("a path keeps a leading space, a trailing space and a leading byte-order ma
   );
 });
 
-// The same change, as git writes it by default (non-ASCII bytes octal-escaped) and with
-// core.quotePath=false (written raw). Line and paragraph separators, a byte-order mark and
-// edge spaces, in modified files, edited renames and a pure rename.
 for (const fixture of ["line-separator-paths.diff", "line-separator-paths-raw.diff"]) {
   test(`modified and renamed paths with U+2028, U+2029, a byte-order mark and edge spaces stay exact (${fixture})`, () => {
     const edited = ["@@ -1,6 +1,6 @@"];

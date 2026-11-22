@@ -59,19 +59,15 @@ const Line = defineItem<DiffLineProps>("Line")
 
 function signOf(value: string): DiffSign | undefined {
   const text = value.trim()
-  if (/^\+/.test(text)) {
+  if (text.startsWith("+")) {
     return "add"
   }
-  if (/^[−\-]/.test(text)) {
+  if (/^[−-]/.test(text)) {
     return "remove"
   }
   return undefined
 }
 
-/**
- * `- config: ~~next.config.js~~ next.config.ts` → the old line, removed, and
- * the new line, added. Text before the strike stays on both.
- */
 function rewriteOf(item: ReactElement): DiffLineProps[] | null {
   let before = ""
   let struck = ""

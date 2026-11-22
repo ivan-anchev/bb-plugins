@@ -2,18 +2,15 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { buildActivity, type RowModel } from "./activity.ts";
-import { project, thread } from "./fixtures.ts";
+import { project, thread } from "./thread.fixture.ts";
 import type { SleepRecord } from "../contract.ts";
 import { sleepItem, type SleepHandlers } from "./sleep-action.ts";
 
-// why: Sleep's times read the local clock; one zone keeps them the same on every machine.
 process.env.TZ = "America/New_York";
 
-/** Thursday 12 November 2026, 2:15 PM in New York. */
 const NOW = new Date(2026, 10, 12, 14, 15).getTime();
 const HOUR = 3_600_000;
 
-/** The one row a thread makes, as the list builds it, with its sleep if any. */
 function rowOf(t: PluginSidebarThread, sleep: SleepRecord | null = null): RowModel {
   const sleeps = new Map(sleep === null ? [] : [[t.id, sleep]]);
   const sections = buildActivity({ threads: [t], projects: [project("prj_a", "bb-plugins")], sleeps, held: new Set(), now: NOW, activeThreadId: null, filter: null }).sections;

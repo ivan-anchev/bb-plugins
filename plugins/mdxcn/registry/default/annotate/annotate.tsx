@@ -44,7 +44,6 @@ type AnnotateProps = {
 
 type CodeLine = { text: string; mark?: number }
 
-/** `// (1)`, `# (2)`, `/* (3) *\/`, `<!-- (4) -->`, `{/* (5) *\/}` at line end. */
 const MARKER =
   /\s*(?:\/\/|#|--|;|%|\/\*|<!--|\{\/\*)\s*\((\d{1,2})\)\s*(?:\*\/\}|\*\/|-->)?\s*$/
 

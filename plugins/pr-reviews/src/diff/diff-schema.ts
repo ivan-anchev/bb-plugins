@@ -1,14 +1,10 @@
-// The canonical shape of a PR diff. Shared: the server builds it from `gh pr diff`, and the
-// app will render it.
 import { z } from "zod";
 
 const hunkSchema = z.object({
-  /** The numbers of the hunk's `@@ -oldStart,oldLines +newStart,newLines @@` header, as git writes them. */
   oldStart: z.number().int().nonnegative(),
   oldLines: z.number().int().nonnegative(),
   newStart: z.number().int().nonnegative(),
   newLines: z.number().int().nonnegative(),
-  /** Raw lines with their prefix: " " context, "+" added, "-" removed, "\" no-newline marker. */
   lines: z.array(z.string()),
 });
 export type Hunk = z.infer<typeof hunkSchema>;
@@ -25,8 +21,6 @@ export const diffFileSchema = z.object({
 });
 export type DiffFile = z.infer<typeof diffFileSchema>;
 
-// The name the review agent uses for one unit of a file's change. Derived from the hunk's
-// numbers, never stored beside them, so the two cannot disagree.
 export const hunkIdSchema = z.string().brand<"HunkId">();
 export type HunkId = z.infer<typeof hunkIdSchema>;
 
@@ -88,9 +82,6 @@ export function firstLinesOf(hunk: Hunk): { old: number; new: number } {
 }
 
 const firstLineOf = (start: number, count: number) => (count === 0 ? start + 1 : start);
-
-// why throw: a guide is validated against exactly these files, so a miss is a storage bug that
-// should fail loudly, not a case to render around.
 
 /** The file a guide names. */
 export function fileOf(files: DiffFile[], path: string): DiffFile {

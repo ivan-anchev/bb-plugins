@@ -33,8 +33,6 @@ test("mounted again, as StrictMode does, the owner is live again", () => {
   assert.deepEqual(calls, ["ran"]);
 });
 
-// The comment box, as pr-diff.tsx and comment-box.tsx wire it: the box is drawn afresh, with its
-// own lifetime, each time it opens, and a send's reply settles the box through that lifetime.
 test("a reply to a box that has since moved to other lines leaves the moved box and its draft alone", async () => {
   let lines: DiffLines = NO_LINES;
   const openBox = () => {
@@ -48,7 +46,6 @@ test("a reply to a box that has since moved to other lines leaves the moved box 
   const first = openBox();
   let answerFirst!: () => void;
   const firstSent = send(first, new Promise<void>((resolve) => (answerFirst = resolve)), "Question A");
-  // Other lines while the send is in flight: the box moves there, drawn afresh, with the draft.
   lines = { ...linesPicked(lines, LINES_20_22), draft: "Draft B, not sent" };
   first.end();
   const second = openBox();

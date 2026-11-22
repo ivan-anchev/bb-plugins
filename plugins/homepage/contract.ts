@@ -1,4 +1,3 @@
-// Shared by server.ts and app.tsx: one read per homepage card.
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 
@@ -8,11 +7,8 @@ const mergedPrSchema = z.object({ mergedAt: z.number(), lines: z.number() });
 export type MergedPr = z.infer<typeof mergedPrSchema>;
 
 const activitySchema = z.object({
-  /** Your merged PRs in the window; null until GitHub has been read once. */
   prs: z.array(mergedPrSchema).nullable(),
-  /** Start times of the threads you started in the window (not subagents or forks). */
   threadStarts: z.array(z.number()),
-  /** Why GitHub could not be read, when there are no PRs to show instead. */
   problem: z.string().nullable(),
 });
 export type Activity = z.infer<typeof activitySchema>;
@@ -33,7 +29,6 @@ export type BurnTotals = z.infer<typeof burnTotalsSchema>;
 
 const burnSpendSchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("ready"), ...burnTotalsSchema.shape }),
-  /** Burn is missing, off, or its reply failed; `message` says which, in a line the card shows. */
   z.object({ status: z.literal("unavailable"), message: z.string() }),
 ]);
 export type BurnSpend = z.infer<typeof burnSpendSchema>;

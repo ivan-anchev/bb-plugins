@@ -30,7 +30,6 @@ test("adopt replaces only the live tab's layout", () => {
   });
 });
 
-/** Tabs t1…tN on threads thr_1…thr_N, `live` live. */
 function tabsOf(count: number, live: string): TabSet {
   return { tabs: Array.from({ length: count }, (_, i) => ({ id: `t${i + 1}`, layout: threadLayout(`thr_${i + 1}`) })), liveId: live };
 }

@@ -6,7 +6,6 @@ import { parsePrDiff } from "./parse-pr-diff.ts";
 
 const readFixture = (name: string) => readFileSync(new URL(`fixtures/${name}`, import.meta.url), "utf8");
 
-// The fixture's text from a hunk's header to the end of the file: what the patch must reproduce.
 const textFrom = (fixture: string, header: string) => fixture.slice(fixture.indexOf(header));
 
 test("a hunk becomes its own text in the diff, from its header on", () => {

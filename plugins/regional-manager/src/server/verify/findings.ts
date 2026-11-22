@@ -1,8 +1,3 @@
-// What a verdict found, written for an agent: a checkout that wasn't the claimed commit on a clean
-// tree, as bb's git plugin read it, each done-criterion it didn't pass, with the verifier's
-// evidence, CI's failure on its pull request, and its findings. It reaches the agent as the
-// verifier's message when a failed verdict goes back for its fix round. And what an earlier agent's
-// verdict found, whole and in the past tense, for the agent that takes its issue over.
 import { checkoutText } from "../../model/verdict/checkout.ts";
 import type { CiVerdict } from "../../model/verdict/pr.ts";
 import type { Check } from "../../model/verdict/check.ts";
@@ -43,7 +38,6 @@ export function earlierVerdictText({ verdict }: Check): string {
   }
 }
 
-/** A returned verdict as it stood: its result, the checkout and CI when they failed it or CI never came, each criterion, then the findings. */
 function returnedText(verdict: Returned): string {
   const ci = ciVerdictOf(verdict);
   const passed = ci === null ? allPassed(verdict) : judge(verdict, ci) === "pass";
@@ -62,7 +56,6 @@ function returnedText(verdict: Returned): string {
 
 const PAST: Record<CriterionResult, string> = { pass: "passed", fail: "failed", unverifiable: "couldn't be checked" };
 
-/** How many done-criteria the verdict didn't pass, and whether the checkout or CI failed, in words. `ci`: null while the verdict was not settled. */
 function notPassed(verdict: Returned, ci: CiVerdict | null): string {
   const count = verdict.criteria.filter((check) => check.result !== "pass").length;
   const parts = [
@@ -73,7 +66,6 @@ function notPassed(verdict: Returned, ci: CiVerdict | null): string {
   return parts.length === 1 ? parts.join("") : `${parts.slice(0, -1).join(", ")}, and ${parts.at(-1)}`;
 }
 
-/** The checkout, when it wasn't the claimed commit on a clean tree; then each criterion that didn't pass, numbered as in the brief, with its evidence; then CI's failure; then the findings. */
 function whatFailed(verdict: Returned, ci: CiVerdict | null): string {
   const failed = failedCheckout(verdict);
   const checkout =
@@ -86,7 +78,6 @@ function whatFailed(verdict: Returned, ci: CiVerdict | null): string {
   return [...checkout, ...checks, ...failedCi, ...findings].join("\n\n") || "It found nothing to fix.";
 }
 
-/** The failed checks, by the names GitHub gives them. */
 const ciFailure = (failedChecks: readonly string[]): string =>
   failedChecks.length === 0 ? "GitHub reports CI as failed on this commit, and names no failed check." : `Failed checks on this commit: ${failedChecks.map((name) => `\`${name}\``).join(", ")}.`;
 

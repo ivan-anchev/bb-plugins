@@ -1,4 +1,3 @@
-// What every part of the store shares: the database handle, and how a JSON column is read and written.
 import type Database from "better-sqlite3";
 import { z } from "zod";
 

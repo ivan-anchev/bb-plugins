@@ -98,7 +98,6 @@ test("zero-width and bidi characters are stripped from the PR's own text", () =>
 });
 
 test("a path with hidden characters is escaped, never stripped, so each index entry decodes to its parsed file", () => {
-  // Real `git diff` output: src/a.ts, src/a<U+200B>.ts (the same name once stripped) and src/<U+202E>gnp.ts.
   const parsed = parsePrDiff(readFileSync(new URL("../diff/fixtures/hidden-path.diff", import.meta.url), "utf8"));
   const lines = factLines(reviewPrompt({ ...facts, files: parsed }, "")).slice(6);
 
@@ -129,7 +128,6 @@ test("an update ends with the new head's facts and hunk index between fresh mark
 const HUNKS_HEADING =
   "Hunks. Each file is a JSON string: its value, with every `\\uXXXX` escape decoded, is the path to pass as `file`, so in submit_review's JSON input you can copy the string as written. Pass `hunk` exactly as written:";
 
-// The lines between the markers.
 function factLines(prompt: string): string[] {
   const body = MARKERS.exec(prompt)?.[2];
   assert.ok(body !== undefined, "markers not found at the end of the prompt");

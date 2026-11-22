@@ -12,12 +12,10 @@ import { coordinating, ISSUE, isRefusal, settled, startedAgent, textOf } from ".
 const QUESTION = "Target main or release/2?";
 const d1 = decisionIdSchema.parse("d1");
 
-/** The board as the app reads it: bb parses each RPC's result with its contract. */
 async function boardOf(kit: Awaited<ReturnType<typeof coordinating>>["kit"], coordinatorId: CoordinatorId) {
   return coordinatorContract.board.output.parse(await kit.rpc.board({ coordinatorId }));
 }
 
-/** A Coordinator that asked the user QUESTION with two options, its thread idle so a doorbell starts a turn. */
 async function asked() {
   const started = await coordinating({ verify: false });
   const { kit, threadId } = started;
@@ -26,7 +24,6 @@ async function asked() {
   return {
     ...started,
     answer,
-    /** Every doorbell that reached the Coordinator, in order. */
     doorbells: () => kit.delivered(threadId).filter((text) => text.startsWith(`[${DISPLAY_NAME}]`)),
   };
 }
@@ -90,7 +87,6 @@ test("the badge counts what each board shows under Needs you: open decisions, an
   const other = kit.store.roleOfThread(otherThread);
   assert.equal(other?.kind, "coordinator");
 
-  /** The ids under Needs you, as the board draws its lanes. */
   const drawn = async (id: CoordinatorId) => {
     const board = await boardOf(kit, id);
     const lane = boardGroups(board.decisions, board.issues).find(({ lane }) => lane === "needs-you")?.rows ?? [];

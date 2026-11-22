@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
-import { thread, WORKING } from "../model/fixtures.ts";
-import { layout, quiet, SHOWN, view } from "./fixtures.ts";
+import { thread, WORKING } from "../model/thread.fixture.ts";
+import { layout, quiet, SHOWN, view } from "./items.fixture.ts";
 import { listItems } from "./items.ts";
 import { layoutItems, type Layout } from "./layout.ts";
 import { EASE, glideMs, OUT3, planMotion, STILL } from "./motion-plan.ts";
@@ -14,7 +14,7 @@ test("a glide takes 180 up to the sidebar's 256, longer by the square root of th
   assert.equal(glideMs(0), 180);
   assert.equal(glideMs(32), 180);
   assert.equal(glideMs(-256), 180);
-  assert.equal(glideMs(400), 225); // 180 × √(400 / 256)
+  assert.equal(glideMs(400), 225);
   assert.equal(Math.round(glideMs(455)), 240);
   assert.equal(glideMs(-3000), 240);
 });
@@ -92,7 +92,6 @@ test("unfolding, a section's rows open as one over 260 and fade in over 180 afte
 
   const reveal = { ms: 260, delay: 0, easing: EASE };
   const fade = { ms: 180, delay: 140, easing: EASE };
-  // three rows of 30 with gaps of 2: 94 tall; the fold's edge crosses each in turn
   assert.deepEqual(plan.arrivals, [
     { key: "s:w1", reveal, fade, window: [0, 30 / 94] },
     { key: "s:w2", reveal, fade, window: [32 / 94, 62 / 94] },

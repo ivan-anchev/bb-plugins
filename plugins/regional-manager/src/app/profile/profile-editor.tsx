@@ -1,5 +1,3 @@
-// A regional manager's profile, edited in place on its page until it starts and below its thread's
-// context row after: its fields, with Save and Cancel.
 import { experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
 import { useCallback, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
@@ -25,10 +23,8 @@ type ProfileEditorProps = {
 };
 
 export function ProfileEditor({ coordinatorId, profile, draft, onChange, onClose, takeFocus, trailing }: ProfileEditorProps) {
-  // Whether a save found no name: the field says so from then on, until it has one.
   const [tried, setTried] = useState(false);
   const name = useRef<HTMLInputElement | null>(null);
-  // why no cleanup returned: React then detaches the ref with null, so `name` is null once this editor is gone.
   const nameRef = useCallback(
     (input: HTMLInputElement | null) => {
       name.current = input;
@@ -47,9 +43,6 @@ export function ProfileEditor({ coordinatorId, profile, draft, onChange, onClose
       name.current?.focus();
       return;
     }
-    // why only while the name is there: a save that lands after Cancel, or after another editor took
-    // this one's place, must close neither.
-    // why the catch: the hook's error shows under the form, which stays open with the edit.
     save.mutate({ coordinatorId, profile: edited }).then(
       () => {
         if (name.current !== null) onClose();
@@ -58,7 +51,6 @@ export function ProfileEditor({ coordinatorId, profile, draft, onChange, onClose
     );
   }
 
-  // why only when nothing changed: Esc must never throw away what the user typed; Cancel does that.
   function onKeyDown(event: KeyboardEvent) {
     if (event.key === "Escape" && JSON.stringify(draft) === JSON.stringify(draftOf(profile))) onClose();
   }

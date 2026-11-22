@@ -1,12 +1,9 @@
-// How this bb server marks and recognises what it owns on boat: the owner id, labels, names and
-// the resource core persists for each machine.
 import { randomUUID } from "node:crypto";
 import type { JsonValue, PluginKvStorage } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import type { Labels } from "./boat/client.ts";
 import { accountId, sandboxId } from "./boat/wire.ts";
 
-// Label keys match boat's [A-Za-z0-9][A-Za-z0-9._/-]{0,62}.
 const OWNER = "bb.boat/owner";
 const ROLE = "bb.boat/role";
 const KEY = "bb.boat/key";

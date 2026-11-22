@@ -1,6 +1,3 @@
-// A panel's notes, newest first, scrolling inside a box whose height comes from its host (the
-// card's row, the popover's frame), never from how many notes there are. Its edges fade only where
-// there is more to scroll to.
 import { useLayoutEffect, type ReactNode, type RefObject } from "react";
 import type { Note } from "../../../contract.ts";
 import type { Picks } from "../use-picks.ts";
@@ -22,7 +19,6 @@ export function NoteList({ ref: box, notes, inDraft, picks, empty }: NoteListPro
   useScrollEdges(box);
   useTopOnNewFirst(box, notes?.[0]?.id);
   return (
-    // why a Tab stop: the keyboard scrolls only the focused box.
     <div ref={box} className="nt-scroll" tabIndex={0}>
       <ul className="nt-list">
         {notes?.length === 0 && <li className="nt-caption nt-empty">{empty}</li>}
@@ -41,15 +37,8 @@ export function NoteList({ ref: box, notes, inDraft, picks, empty }: NoteListPro
   );
 }
 
-// ------------------------------------------------------------------ layer 2
-
-/** How far from an edge still counts as at it, so subpixel scrolling never leaves a sliver of fade. */
 const EDGE = 2;
 
-/**
- * Marks the box `data-top` / `data-bottom` while there is more above / below; the CSS fades those
- * edges. Measured on scroll, and whenever the box or its list resizes (notes added or deleted).
- */
 function useScrollEdges(box: RefObject<HTMLDivElement | null>): void {
   useLayoutEffect(() => {
     const element = box.current!;
@@ -69,7 +58,6 @@ function useScrollEdges(box: RefObject<HTMLDivElement | null>): void {
   }, [box]);
 }
 
-/** When the top note changes, as a note just saved lands there, the list scrolls back up to show it. */
 function useTopOnNewFirst(box: RefObject<HTMLDivElement | null>, firstId: Note["id"] | undefined): void {
   useLayoutEffect(() => {
     box.current!.scrollTop = 0;

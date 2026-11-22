@@ -1,4 +1,3 @@
-// The only module that speaks HTTP to boat.dev.
 import { setTimeout as sleep } from "node:timers/promises";
 import type { Preset } from "../launch.ts";
 import { toSandbox, type Sandbox, type SandboxId } from "./sandbox.ts";
@@ -28,12 +27,9 @@ import {
 } from "./wire.ts";
 
 const BASE_URL = "https://boat.dev/api/v1";
-/** boat's account API, which its dashboard reads. Undocumented, so it can change without notice. */
 const ACCOUNT_API_URL = "https://boat.dev/api/boat";
-/** boat holds a command for up to 60 s while the sandbox starts, then answers `409 sandbox_starting`. */
 const NOT_RUN_PATIENCE_MS = 60_000;
 const NOT_RUN_RETRY_MS = 2_000;
-/** What core sees for a command a signal ended: boat reports no exit code for it. */
 const SIGNALLED_EXIT_CODE = 128;
 
 /** Every boat refusal, in one shape: a non-2xx response, or an `error` frame of a command stream. */
@@ -145,11 +141,9 @@ export function createBoatClient(apiKey: string): BoatClient {
   return {
     me: async (signal) => wireMe.parse(await json("/me", { signal })),
     limits: async (signal) => wireLimits.parse(await json("/limits", { signal })),
-    // No query parameters: boat refuses unknown ones, and this list has no paging.
     savedSnapshots: async (signal) => wireSavedSnapshotList.parse(await json("/saved-snapshots", { signal })),
     environments: async (signal) => wireEnvironmentList.parse(await json("/environments", { signal })),
     credentialProfiles: async (signal) => wireCredentialProfileList.parse(await json("/credential-profiles", { signal })),
-    // No `?sync=true`: that asks GitHub first, and status needs only the installations boat knows.
     githubApp: async (signal) => wireGithubApp.parse(await json("/repos", { signal })),
     async get(id, signal) {
       try {
@@ -170,9 +164,7 @@ export function createBoatClient(apiKey: string): BoatClient {
       for await (const page of pages(json, new URLSearchParams({ include: "cost,deletedCost" }), signal)) {
         const { sandboxes, deletedCost } = wireMeteredSandboxList.parse(page);
         meter.sandboxes.push(...sandboxes.flatMap(toMetered));
-        // Every page carries the same wallet-wide figure.
         meter.deletedDollars = deletedCost.dollars;
-        // Pages read as the month turns mix two months; the earliest start marks the meter as the old month's.
         meter.since = Math.min(meter.since, deletedCost.since);
       }
       return meter;
@@ -214,7 +206,6 @@ export function createBoatClient(apiKey: string): BoatClient {
       const body = { path, content: Buffer.from(content).toString("base64"), encoding: "base64" };
       await call(`/sandboxes/${id}/files`, { method: "PUT", body, signal });
     },
-    // An empty body: `publicAccess` would publish the desktop to anyone with the URL.
     vncDesktop: async (id, signal) =>
       wireVncDesktop.parse(await json(`/sandboxes/${id}/desktop?vnc=1`, { method: "POST", body: {}, signal })),
   };
@@ -229,7 +220,6 @@ interface RequestOptions {
   signal?: AbortSignal;
 }
 
-/** The one fetch wrapper: bearer auth, JSON in, and every non-2xx thrown as a BoatApiError. */
 async function send(apiKey: string, url: string, { method = "GET", body, headers, signal }: RequestOptions): Promise<Response> {
   const response = await fetch(url, {
     method,
@@ -246,7 +236,6 @@ async function send(apiKey: string, url: string, { method = "GET", body, headers
   return response;
 }
 
-// A gateway in front of boat can answer with HTML, so the body may not be boat's envelope.
 function toApiError(response: Response, text: string): BoatApiError {
   const envelope = wireError.safeParse(parseJson(text));
   const retryAfter = response.headers.get("retry-after");
@@ -270,7 +259,6 @@ function parseJson(text: string): unknown {
 const labelQuery = (labels: Labels): URLSearchParams =>
   new URLSearchParams(Object.entries(labels).map(([key, value]) => ["label", `${key}=${value}`]));
 
-/** Each page of `GET /sandboxes` with `query`. No state filter: boat then lists every state, stopped and failed included. */
 async function* pages(json: (path: string, options: RequestOptions) => Promise<unknown>, query: URLSearchParams, signal: AbortSignal) {
   let cursor: string | null = null;
   do {
@@ -283,7 +271,6 @@ async function* pages(json: (path: string, options: RequestOptions) => Promise<u
   } while (cursor !== null);
 }
 
-/** A cancelled sandbox is gone and carries no meter. */
 function toMetered(json: unknown): MeteredSandbox[] {
   const sandbox = toSandbox(json);
   if (sandbox === null) return [];
@@ -291,7 +278,6 @@ function toMetered(json: unknown): MeteredSandbox[] {
   return [{ sandbox, monthDollars: cost.dollars, billingMultiplier }];
 }
 
-/** Sends again while boat says the command never ran: the sandbox is still starting or restoring its disk. */
 async function retryWhileNotRun<T>(signal: AbortSignal, attempt: () => Promise<T>): Promise<T> {
   const deadline = Date.now() + NOT_RUN_PATIENCE_MS;
   for (;;) {
@@ -307,7 +293,6 @@ async function retryWhileNotRun<T>(signal: AbortSignal, attempt: () => Promise<T
 const commandNeverRan = (error: unknown): boolean =>
   error instanceof BoatApiError && (error.retryable || (error.status === 409 && error.code === "sandbox_starting"));
 
-/** Forwards every output chunk and returns the exit frame's code. */
 async function readExitCode(response: Response, onOutput: (chunk: string) => void): Promise<number> {
   for await (const line of ndjsonLines(response)) {
     const frame = wireCommandFrame.parse(JSON.parse(line));
@@ -329,7 +314,7 @@ async function readExitCode(response: Response, onOutput: (chunk: string) => voi
           frame.retryable === true,
         );
       default:
-        frame satisfies never; // why: parsed once in wire.ts, so a new frame type is a compile error here
+        frame satisfies never;
     }
   }
   throw new Error("boat's command stream ended without an exit frame.");

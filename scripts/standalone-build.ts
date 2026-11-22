@@ -1,9 +1,3 @@
-// node scripts/standalone-build.ts
-// Build every plugin the way a marketplace install does: only the files git
-// tracks for it, alone in a directory outside this workspace, then
-// `npm install --omit=dev` and `bb plugin build`. The workspace build cannot
-// catch a runtime import declared as a dev dependency, because the workspace
-// has every dev dependency installed.
 import { execFileSync, spawnSync } from "node:child_process";
 import { cpSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -29,7 +23,6 @@ function buildsStandalone(plugin: Plugin): boolean {
 }
 
 function copyTrackedFiles(pluginDir: string, target: string): void {
-  // Untrimmed: a path keeps every byte, leading spaces included.
   const listing = execFileSync("git", ["ls-files", "-z", "--", pluginDir], { cwd: ROOT, encoding: "utf8" });
   const tracked = listing.split("\0").filter(Boolean);
   for (const path of tracked) cpSync(join(ROOT, path), join(target, relative(pluginDir, path)));

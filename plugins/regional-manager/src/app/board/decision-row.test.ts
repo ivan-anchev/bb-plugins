@@ -6,10 +6,6 @@ import { act, cleanup, fireEvent } from "@testing-library/react";
 import { decisionIdSchema, type OpenDecision } from "../../model/decision.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
 
-// QA-02: bb redrawing the board across its breakpoint remounted an open decision and emptied the
-// answer typed into it. The row keeps it in the browser instead, until the board reads the decision
-// answered (board.test.ts).
-
 const { DecisionRow } = await import("./decision-row.tsx");
 
 const COORDINATOR = coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10");
@@ -21,7 +17,6 @@ afterEach(() => {
   localStorage.clear();
 });
 
-/** The decision's row on the board, as bb mounts it; every answer sent reaches `answers`. */
 function mount(decision: OpenDecision, answers: unknown[] = [], coordinatorId = COORDINATOR) {
   const props = { coordinatorId, decision };
   const view = renderSlot({ component: DecisionRow }, props, {

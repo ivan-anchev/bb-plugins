@@ -1,6 +1,3 @@
-// What crew_catch_up and issue_read say about events, handoffs, reminders and decisions:
-// everything, whole, however long. This is where an agent's own words, a verifier's, and the user's
-// answers reach the regional manager, as a tool result, each marked as whose they are.
 import { sameModel } from "../../model/execution.ts";
 import type { Agent } from "../../model/agent.ts";
 import type { Decision, DecisionId } from "../../model/decision.ts";
@@ -80,7 +77,6 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
     }
     case "sent-back": {
       const { subject } = checkedOf(lookups.check(event.checkId));
-      // why throw: only a handoff's verdict goes back to an agent.
       if (subject.kind !== "handoff") throw new Error(`The check ${event.checkId} sent back judges no handoff.`);
       return `### ${on} handed off: done, failed verification, findings sent back to it\n\n${when} The plugin sent the verifier's findings to ${event.agentId} as its automatic fix round ${event.round}. Nothing to do yet: it fixes them and hands off again, and a new verifier checks that. If that fails too, it comes to you. Its report, in its own words:\n\n${handoffText(handedOf(subject.handoffId, lookups), lookups)}`;
     }
@@ -99,7 +95,6 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
   }
 }
 
-/** A decision the user answered: what was asked and offered, then the answer, marked as theirs. */
 function answeredText({ id, question, options, answer }: Decision, when: string): string {
   if (answer === null) throw new Error(`The decision ${id} is announced as answered, but has no answer.`);
   const offered = options.length === 0 ? "You offered no options." : `You offered: ${options.map((option) => `"${option}"`).join(", ")}.`;
@@ -126,14 +121,12 @@ export function reminderText({ id, note, dueAt, everyMs }: Reminder): string {
   return `${id}, due ${new Date(dueAt).toISOString()}${everyMs === null ? "" : `, then every ${intervalText(everyMs)}`}: ${note}`;
 }
 
-/** The handoff an event or a check names. why throw: each is inserted with its handoff, in one transaction. */
 function handedOf(id: HandoffId, { handoff }: Lookups): Handed {
   const handed = handoff(id);
   if (handed === null) throw new Error(`The handoff ${id} is missing.`);
   return handed;
 }
 
-/** What became of the fix round of a failed verdict that is the coordinating thread's, when it was tried. */
 function fixRoundNote(verdict: Verdict): string {
   if (mayHaveReachedAgent(verdict)) return MAY_HAVE_REACHED_AGENT;
   const refused = verdict.state === "returned" && verdict.settlement.kind === "checked" ? verdict.settlement.refused : null;
@@ -164,12 +157,6 @@ export function finalCheckText(check: FinalCheck, lookups: Pick<Lookups, "agents
   return `Final check of ${merged.length === 0 ? "the default branch" : `the merged work of ${merged.join(", ")}`}: ${verdictText(check, lookups)}`;
 }
 
-/**
- * What the regional manager does about a final check made final, by where its parent stands now
- * (`view`, as the board in the same catch-up places it; null: bb's thread list couldn't be read).
- * why from the view, never from the check's outcome: a sub-issue filed under the parent, or the
- * manager's close, places it instead of a verdict that returned after it.
- */
 function finalNextStep({ id, issueId, verdict }: FinalCheck, view: IssueView | null): string {
   if (view === null) return `Where ${issueId} stands now couldn't be read with the board: call crew_catch_up again before you act on it.`;
   const now = `${issueId} is ${STATUS_LABELS[view.status]}${view.needsYou === null ? "" : " and Needs you"}`;
@@ -186,7 +173,6 @@ function finalNextStep({ id, issueId, verdict }: FinalCheck, view: IssueView | n
     case "pending":
     case "waiting-for-ci":
     case "superseded":
-      // why: a checked event is recorded once the verdict is final, which none of these is.
       return "";
     default:
       return result satisfies never;
@@ -210,14 +196,12 @@ export function handoffFieldsText(handoff: Handoff): string {
   return [head.join("\n"), ...lists].join("\n\n");
 }
 
-/** Where a report was saved, and that handing it on is the regional manager's. */
 function reportFileText(issueId: IssueId, file: MemoryFile): string {
   const home = reportFileOf(issueId);
   const kept = file === home ? "" : ` ${home} is not as the plugin last saved it there (someone edited or wrote it), so it is kept as it is.`;
   return `Saved in your memory as ${file}.${kept} The plugin gives it to no agent: name the file in the brief of an agent that needs it, which reads it with crew_memory_read.`;
 }
 
-/** A pull request as the plugin read it from GitHub. Check names are GitHub's, as the repository's CI names them. */
 function prText(pr: PrSnapshot): string {
   const state = pr.state === "open" && pr.draft ? "open, as a draft" : pr.state;
   const review = { approved: "approved", "changes-requested": "changes requested", none: "no approval or change request" }[pr.review];
@@ -230,7 +214,6 @@ function prText(pr: PrSnapshot): string {
   return `It is ${state} (${pr.url}), with ${review}; CI on its head ${pr.headSha.slice(0, 7)}: ${ci}.`;
 }
 
-/** What CI said about a verdict's commit, in a line (empty: the verdict is still to settle, and doesn't wait for CI). A verdict superseded while it waited never had CI judged. */
 function ciLine(verdict: Extract<Verdict, { state: "returned" }>, ci: CiVerdict | null): string {
   if (ci === null) {
     if (verdict.settlement.kind === "waiting-for-ci") return "CI: still to finish on this commit; the verdict waits for it.";
@@ -252,7 +235,6 @@ function ciLine(verdict: Extract<Verdict, { state: "returned" }>, ci: CiVerdict 
   }
 }
 
-/** What the plugin's check found. A verifier's evidence is its own words, marked as such. */
 function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
   const { verdict, subject } = check;
   switch (verdict.state) {
@@ -263,7 +245,6 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
       const ci = ciVerdictOf(verdict);
       const passed = ci === null ? allPassed(verdict) : judge(verdict, ci) === "pass";
       const label = passed ? (ci === null ? "Passed every criterion" : "Verified") : "Failed verification";
-      // why the checkout and CI first when they failed the verdict: its criteria may all have passed.
       const reasons = [...(failedCheckout(verdict) === null ? [] : [notCleanReason(check)]), ...(ci?.kind === "fail" ? [`CI failed on #${ci.number}`] : [])];
       const reason = reasons.length === 0 ? "" : ` ${reasons.join(", and ")}.`;
       const count = verdict.criteria.filter((check) => check.result === "pass").length;
@@ -272,7 +253,6 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
       const head = [
         subject.kind === "handoff" ? `${counted}, checked at ${verdict.headSha} by a verifier on ${by}.` : `${counted} on ${subject.defaultBranch} at ${verdict.headSha}, by a verifier on ${by}.`,
         subject.kind === "handoff" ? checkoutText(verdict.headSha, verdict.checkout) : worktreeText(verdict.checkout),
-        // why none for a final check: it judges the default branch, with no pull request to wait for.
         subject.kind === "handoff" ? ciLine(verdict, ci) : "",
         "Each result, with its evidence in the verifier's words:",
       ]
@@ -293,7 +273,6 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
   }
 }
 
-/** Why the tree failed a verdict, whatever its criteria say: the agent's claimed commit wasn't checked out on a clean tree; a final check's verifier's worktree wasn't clean. */
 function notCleanReason({ subject }: Check): string {
   switch (subject.kind) {
     case "handoff":
@@ -305,12 +284,6 @@ function notCleanReason({ subject }: Check): string {
   }
 }
 
-/**
- * What a verifier ran on, and why: on the verifier named on the issue, as named; else why not the
- * one named (an agent whose work it checks did that work on it, or bb can't run it where the check
- * runs); and whenever it is the model of one of those agents (`theirs`), that no other was
- * available, the one named included.
- */
 function verifiedOn(verdict: Extract<Verdict, { state: "returned" }>, { verifier: named, issueId, subject }: Check, theirs: readonly Agent[]): string {
   const ran = `${verdict.model.providerId} ${verdict.model.model}`;
   const ownerOf = (model: Pick<Agent["execution"], "providerId" | "model">) => theirs.find(({ execution }) => sameModel(execution, model))?.id ?? null;
@@ -323,7 +296,6 @@ function verifiedOn(verdict: Extract<Verdict, { state: "returned" }>, { verifier
   return `${ran}${own}, not the ${named.providerId} ${named.model} named on ${issueId}: ${why}`;
 }
 
-/** Where a check's verifier runs, as a place bb can or can't run a model: the agent's environment; for a final check, the regional manager's machine. */
 function whereChecked(subject: Check["subject"]): string {
   switch (subject.kind) {
     case "handoff":

@@ -1,5 +1,3 @@
-// One diff's selected lines and its comment box: lines picked with the diff's gestures or a
-// finding's buttons, a review thread's reply, the draft the box holds, and the box closing.
 import { useMemo, useRef, useState, type RefObject } from "react";
 import type { SelectedLineRange } from "@pierre/diffs";
 import type { LineRef } from "../../comments/comment-schema.ts";
@@ -46,12 +44,6 @@ export function useLineSelection(root: RefObject<HTMLDivElement | null>) {
       setLines((current) => openedForReply(current, threadId, quote));
     },
     settle: (outcome: BoxOutcome, sent: string) => setLines((current) => settled(current, outcome, sent)),
-    /**
-     * × or Esc in an empty box, or Done on a box that did its job: the box, its lines and its
-     * empty draft go.
-     */
-    // why move focus: the box unmounts with focus inside it, which would drop to the page body
-    // (REVIEW.md). Back to the button that opened it while the box is still that button's.
     close: () => {
       if (root.current!.contains(document.activeElement)) {
         const back = lines.box !== null && openedByButton(lines.box) && opener.current?.isConnected ? opener.current : root.current!;
@@ -62,5 +54,4 @@ export function useLineSelection(root: RefObject<HTMLDivElement | null>) {
   };
 }
 
-// A reply box is always the Reply button's; a box on lines only while a finding's button put it there.
 const openedByButton = (box: LineBox) => box.kind === "reply" || box.finding !== null;

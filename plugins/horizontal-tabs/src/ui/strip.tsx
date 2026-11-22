@@ -1,5 +1,3 @@
-// The strip: the inset that clears bb's floating chrome, a WAI-ARIA tablist of every tab, then `+`, then the
-// equal-sizes notice when it is up. The selected tab, else the live one, is the tablist's one tab stop.
 import { useLayoutEffect, useRef } from "react";
 import { tabs, useTabs } from "../controller/tabs.ts";
 import { useChromeInset } from "../host/strip-mount.ts";
@@ -10,18 +8,14 @@ export function Strip() {
   const inset = useChromeInset();
   const strip = useRef<HTMLDivElement>(null);
   const tablist = useRef<HTMLDivElement>(null);
-  /** The strip's control that had focus when a tab was closed or the notice dismissed. */
   const focusFrom = useRef<Element | null>(null);
 
-  // why: closing the tab that holds focus, or dismissing the notice from its button, unmounts the focused
-  // control, and focus would drop to the page body (REVIEW.md focus rule); it moves to the tab stop.
   useLayoutEffect(() => {
     const held = focusFrom.current;
     focusFrom.current = null;
     if (held !== null && !held.isConnected) tablist.current?.querySelector<HTMLElement>('[role="tab"][tabindex="0"]')?.focus();
   });
 
-  // why: past every tab's minimum width the tablist scrolls, and the selected tab must stay in view.
   const selected = snapshot?.selectedId;
   useLayoutEffect(() => {
     tablist.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -42,8 +36,6 @@ export function Strip() {
   };
   return (
     <div ref={strip} className="ht-strip">
-      {/* Its left padding clears bb's floating controls: bb's own classes, or a measure (src/host/chrome-inset.ts).
-          One element in both cases, so bb's padding transition runs from a measure to its classes. */}
       <span
         aria-hidden
         className={"classes" in inset ? `ht-inset ${inset.classes}` : "ht-inset"}
@@ -66,7 +58,6 @@ export function Strip() {
           <path d="M12 5v14M5 12h14" />
         </svg>
       </button>
-      {/* Mounted while empty, so assistive tech announces the notice when it appears. */}
       <div role="status" className="ht-notice">
         {notice && (
           <>

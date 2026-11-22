@@ -1,4 +1,3 @@
-// PR Reviews' settings, shown under Settings → PR Reviews.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 
 const PR_REVIEWS_SETTINGS = {

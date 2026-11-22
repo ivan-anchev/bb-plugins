@@ -1,7 +1,3 @@
-// What a regional manager does to agents: start one on an issue, message one, stop one; and how an
-// agent ends, whoever ends it (agent_stop, the user archiving or deleting its thread, the tick
-// finding its thread gone). Each action reads the plugin's database and bb, and ends by refreshing
-// the board.
 import { randomUUID } from "node:crypto";
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
 import type { Coordinator } from "../../contract.ts";
@@ -84,29 +80,18 @@ type AgentsBb = CatalogBb &
     };
   };
 
-/** What agent_start asks for: the issue, whether a handover continues the previous agent's work or starts clean, and optionally what the agent runs on and where. */
 type StartRequest = { issueId: IssueId; from: StartFrom; execution?: RequestedExecution; placement?: RequestedPlacement };
 
-/** What an agent runs on: the execution named, or (`inherited`) its regional manager's own, with the service tier its spawn carries beside it. */
 type RunsOn = { execution: Execution; inherited: Pick<Inherited, "serviceTier"> | null };
 
-/** Where a start spawns the agent: its placement, its environment, where its work starts and what it inherits there. */
 type Spot = { placement: Placement; environment: EnvironmentArgs; base: Base; checkout: AgentCheckout };
 
-/** What a start asks of its issue's agents: its kind, `from`, and the placement named, resolved (null: none named). */
 type Asked = { kind: Kind; from: StartFrom; placement: Placement | null };
 
-/** A start's proof that the branch is on origin at the head: its pull request, as GitHub has it (`agent`: the one last on the branch). */
 type Prove = (agent: Agent, branch: string, head: string) => Promise<PrRead>;
 
-/** A start decided: its issue, what it asked, where it spawns, what it runs on, and the issue's previous agent (null: none). */
 type Decided = { issueId: IssueId; asked: Asked; spot: Spot; runsOn: RunsOn; after: AgentId | null };
 
-/**
- * The issue taken over: as it was when the new agent was inserted, with the brief it starts from
- * and what blocked it then, where it spawns, the agent, its ticket, the holder it replaced (null:
- * none) and the regional manager's messages to the issue's agents it took back from bb's queue.
- */
 type Taken = { issue: Issue; brief: string; blockedBy: Related[]; spot: Spot; agentId: AgentId; ticket: string; replaced: AgentId | null; withdrawn: Withdrawn[] };
 
 /**
@@ -140,11 +125,6 @@ export type StartOutcome =
 /** What a stop did. An agent ends as stopped only once bb confirms its thread no longer runs; `why` it hasn't: the status bb still reports, or bb's error that left the stop unconfirmed. */
 export type StopOutcome = { kind: "stopped"; archived: boolean } | { kind: "already-ended"; how: EndedHow } | { kind: "still-running"; why: string };
 
-/**
- * What a message did: sent or queued by bb, `dropped` saying whether it superseded the check of the
- * agent's done handoff still waiting for its verifier; or nothing, as the agent ended or has no
- * thread yet, or as its issue's other threads aren't quiet (see quietIssue).
- */
 type MessageOutcome =
   | { kind: "sent" | "queued"; dropped: boolean }
   | { kind: "unbound" }
@@ -181,7 +161,6 @@ const NO_CHECKOUT: AgentCheckout = { environmentId: null, branch: null, head: nu
 export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, placementFacts, onChange, onRemoved }: Deps) {
   function coordinatorOf(id: CoordinatorId): Coordinator {
     const coordinator = store.coordinator(id);
-    // why throw: a tool resolves the caller's role from a bound thread, so its regional manager is bound.
     if (coordinator === null) throw new Error(`The regional manager ${id} has no thread.`);
     return coordinator;
   }
@@ -190,12 +169,6 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     return (await threadsById(bb, [threadId])).get(threadId) ?? null;
   }
 
-  /**
-   * What the agent runs on: the execution named, resolved against bb's catalog where it will run
-   * (`where`, in words); else the regional manager's own as it is now, on a handover too. why not
-   * leave it to bb: bb gives a child its parent's only while that provider is available and the
-   * parent has a turn on record. why never the previous agent's: it may be why that agent is replaced.
-   */
   async function executionFor(coordinator: Coordinator, requested: RequestedExecution | undefined, environment: EnvironmentArgs, where: string): Promise<RunsOn | { refused: string }> {
     if (requested === undefined) {
       const own = await inheritedFrom(bb, coordinator.threadId);
@@ -206,13 +179,6 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     return { execution: resolved, inherited: null };
   }
 
-  /**
-   * The issue's previous agent: the latest with a branch, its own as its handoffs recorded or as bb
-   * lists its thread's environment, else the latest with a thread. why not the latest alone: one bb
-   * never cut a branch for, as when it refused the base, would hide the work before it. With its
-   * environment while bb hasn't destroyed it: the one its handoffs recorded or it inherited, else its
-   * thread's, an archived thread's included. Reads bb, never the environment itself.
-   */
   async function previousOf(coordinatorId: CoordinatorId, issueId: IssueId): Promise<Omit<Previous, "now" | "pushed"> | null> {
     const own = store.agents(coordinatorId).filter((each): each is Agent & { threadId: string } => each.issueId === issueId && each.threadId !== null);
     const threads = await threadsById(bb, own.map(({ threadId }) => threadId));
@@ -225,13 +191,6 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     return { agent, environmentId, branch: on?.branch ?? null };
   }
 
-  /**
-   * The previous agent, and for a move what it decides on, read once: its live environment through
-   * bb's git plugin, the branch checked out there and its head together (a suspended sandbox's read
-   * fails without waking it, SH5), and, for a cut through origin, that branch's pull request at that
-   * head. A continue reads neither: the spawn wakes a sleeping sandbox, and the new agent inherits
-   * whatever is there. null: a clean start.
-   */
   async function previousFor(coordinatorId: CoordinatorId, issueId: IssueId, { kind, from, placement }: Asked, prove: Prove): Promise<Previous | null> {
     if (startsClean(kind, from)) return null;
     const found = await previousOf(coordinatorId, issueId);
@@ -245,26 +204,15 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     return { ...found, now, pushed };
   }
 
-  /**
-   * Where a start spawns, or why it can't: in the previous agent's environment for a join; in a new
-   * one of the placement named, or its previous agent's, on a branch cut from its branch for a move;
-   * else where the placement named says, a worktree on the regional manager's machine by default.
-   */
   async function spotOf(coordinatorId: CoordinatorId, issueId: IssueId, asked: Asked, prove: Prove): Promise<Spot | { refused: string }> {
     const handover = handoverOf(asked.kind, asked, await previousFor(coordinatorId, issueId, asked, prove));
     if ("refused" in handover) return handover;
     if (handover.kind === "join") return handover;
     const { placement, base, ref } = handover.kind === "cut" ? { ...handover, ref: refOf(handover.base) } : { placement: asked.placement ?? WORKTREE, base: { kind: "default" } as const, ref: null };
     const manager = await listed(coordinatorOf(coordinatorId).threadId);
-    // why its machine: a worktree agent gets its fresh worktree there, as a child of a live thread does from bb.
     return { placement, environment: environmentOf(placement, manager?.environmentHostId ?? null, ref), base, checkout: NO_CHECKOUT };
   }
 
-  /**
-   * The issue as the store has it now, with the brief its agent starts from, or why no agent can
-   * start on it (`view`: as read just now), as when it is a parent. Call with no await before the
-   * write it allows.
-   */
   function startable(coordinatorId: CoordinatorId, issueId: IssueId, view: IssueView, { execution, inherited }: RunsOn): { issue: Issue; brief: string } | { refused: string } {
     const issue = issueOf(coordinatorId, issueId);
     const final = finalText(issue, view) ?? parentText(issue, store.issues(coordinatorId));
@@ -279,24 +227,6 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     return { issue, brief: planned.brief };
   }
 
-  /**
-   * Starts an agent on the issue; a handover when the issue has or had one. It runs as its issue's
-   * turn (issue-turns.ts), so it decides on facts no other operation on the issue changes before it
-   * is done. The order keeps a sandbox alive, where nothing waits once the last live thread is
-   * archived (SH5):
-   * 1. decide where it runs and on what, from what bb has now; a refusal changes nothing. A move
-   *    reads the previous agent's environment, and its pull request when it cuts through origin;
-   * 2. quiet the issue for the new agent (see quietIssue): take back what the plugin queued for any
-   *    of its threads, the holder's included, then stop every live thread the plugin started for
-   *    the issue, idle ones too, and confirm each, never archiving one: a stopped thread keeps its
-   *    environment (SH1 (b), SH5). Anything bb doesn't confirm refuses the start, holder and
-   *    record intact;
-   * 3. a move out of a live environment reads it again, now that nothing runs there, and is refused
-   *    if what it found no longer allows the cut; then end the holder as replaced, supersede the
-   *    issue's open checks and insert the new agent, together;
-   * 4. spawn: a reuse wakes a suspended sandbox and keeps a retiring worktree (SH1). bb refusing it,
-   *    as for an environment removed since step 1, ends the new agent as spawn-failed.
-   */
   function start(coordinatorId: CoordinatorId, request: StartRequest): Promise<StartOutcome | Busy> {
     return turns.run(coordinatorId, request.issueId, async () => {
       const prove = provenOnce(coordinatorId);
@@ -308,13 +238,6 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     });
   }
 
-  /**
-   * A start's push proofs: the pull request read fresh from GitHub (readNow), and read again only
-   * when asked at another branch or head. why fresh: a saved read is what GitHub showed at an
-   * earlier minute, and the branch may have moved since, back included. why once per head: a move
-   * is judged twice, before and after the holder stops, and the second needs no new read while the
-   * head it compares is the same.
-   */
   function provenOnce(coordinatorId: CoordinatorId): Prove {
     let last: { branch: string; head: string; read: Promise<PrRead> } | null = null;
     return (agent, branch, head) => {
@@ -323,11 +246,9 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     };
   }
 
-  /** Step 1: where the agent starts and what it runs on, from what bb and the store have now; changes nothing. */
   async function decide(coordinatorId: CoordinatorId, { issueId, from, execution, placement }: StartRequest, prove: Prove): Promise<Decided | { refused: string }> {
     const filed = store.issue(coordinatorId, issueId);
     if (filed === null) return { refused: `You have no issue ${issueId}. crew_catch_up lists your issues.` };
-    // why before anything is read: a parent never has an agent, so nothing its earlier agents left, their environments or pull requests, bears on it.
     const parent = parentText(filed, store.issues(coordinatorId));
     if (parent !== null) return { refused: parent };
     const named = placement === undefined ? null : placementOf(placement, await placementFacts(coordinatorId));
@@ -343,23 +264,14 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     return { issueId: filed.id, asked, spot, runsOn, after };
   }
 
-  /**
-   * Steps 2 and 3: quiets the issue (see quietForStart), then gives it to the new agent. Refused when
-   * quieting is, when a move's cut no longer holds, and when the issue can no longer start an agent
-   * or changed hands meanwhile, saying what quieting did.
-   */
   async function takeOver(coordinatorId: CoordinatorId, decided: Decided, prove: Prove): Promise<Taken | { refused: string }> {
     const { issueId, runsOn } = decided;
     const holder = holderOf(store.agents(coordinatorId), issueId);
     const quieted = await quietForStart(coordinatorId, issueId, holder);
     if ("refused" in quieted) return quieted;
-    // why judge a move again: what the previous agent's environment held was read before its turn
-    // was stopped, and it may have committed, pushed, switched branch or left files since.
     const spot = decided.spot.base.kind === "cut" ? await spotOf(coordinatorId, issueId, decided.asked, prove) : decided.spot;
     if ("refused" in spot) return { refused: `${quieted.did}${spot.refused}` };
     const turnSeq = holder === null || holder.threadId === null ? null : await latestTurnSeq(bb, holder.threadId);
-    // why decide again here, with no await from here to the write: while the issue quieted, a merge
-    // may have made it Done, or the manager filed a sub-issue under it.
     const { view } = await readIssue(bb, store, { coordinatorId, id: issueId });
     const now = startable(coordinatorId, issueId, view, runsOn);
     if ("refused" in now) return { refused: `${quieted.did}${now.refused}` };
@@ -369,13 +281,6 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     return { ...now, blockedBy: view.blockedBy, spot, agentId, ticket: next.ticket, replaced: holder?.id ?? null, withdrawn: quieted.withdrawn };
   }
 
-  /**
-   * Quiets the issue for a new agent (see quietIssue), which replaces the holder: what the plugin
-   * queued for any of the issue's threads is taken back, and the manager's messages to agents among
-   * it are returned to be quoted. Returns those, and what it did in words (`did`), to lead a refusal
-   * that follows; else why the start is refused, with what it did. why a message left in bb's
-   * queue, as one a person queued, refuses: once sent, it wakes its thread beside the new agent.
-   */
   async function quietForStart(coordinatorId: CoordinatorId, issueId: IssueId, holder: Agent | null): Promise<{ withdrawn: Withdrawn[]; did: string } | { refused: string }> {
     const quieted = await quietIssue(bb, store, coordinatorId, issueId, { kind: "new-agent" });
     const holds = holder === null ? "" : ` and ${holder.id} still holds ${issueId}`;
@@ -393,7 +298,6 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     }
   }
 
-  /** Step 4: spawns the inserted agent's thread with its first message; one bb refuses ends as spawn-failed. */
   async function spawn(coordinatorId: CoordinatorId, { runsOn, after }: Decided, { issue, brief, blockedBy, spot, agentId, ticket, replaced, withdrawn }: Taken): Promise<StartOutcome> {
     const { execution, inherited } = runsOn;
     const carried = carriedOf(coordinatorId, spot);
@@ -411,7 +315,6 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
       );
       return started(await spawner.agent(ticket, { coordinator: coordinatorOf(coordinatorId), title: issue.title, environment: spot.environment, execution, serviceTier: inherited?.serviceTier ?? null, prompt }));
     } catch (error) {
-      // why read again: bb may have made the thread and bound it through thread.created, with only its answer lost.
       const threadId = store.agent(coordinatorId, agentId)?.threadId ?? null;
       if (threadId !== null) return started(threadId);
       inbox.endAgent({ coordinatorId, id: agentId, issueId: issue.id }, "spawn-failed", null, false);
@@ -421,13 +324,11 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     }
   }
 
-  /** The handoff the agent leaves as it ends: its latest, while its thread (`turnSeq`: its latest turn) has started none since. Read from the store, with no await before the write it goes into. */
   function leftBy(agent: Agent, turnSeq: number | null): HandoffId | null {
     const latest = store.latestHandoff(agent.coordinatorId, agent.id);
     return latest !== null && handoffIsCurrent(latest.handoff, turnSeq) ? latest.handoff.id : null;
   }
 
-  /** What a start carries over from the previous agent, with its branch's pull request's number while open as last read; null for a clean start. */
   function carriedOf(coordinatorId: CoordinatorId, { base, placement, checkout }: Spot): Carried | null {
     const openPr = (branch: string | null): number | null => {
       const pr = branch === null ? null : (store.prOfBranch(coordinatorId, branch)?.snapshot ?? null);
@@ -445,13 +346,6 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     }
   }
 
-  /**
-   * Ends the agent as `how`, in its issue's turn, with the handoff it leaves: its current one, or for
-   * a deleted thread, whose turns can't be read, its latest. Its issue returns to Todo, and its
-   * regional manager is told, unless the issue keeps its place (keepsPlaceAfterEnd): closed, merged,
-   * or placed by that handoff. why bb first and the store right after, with no await between: the
-   * manager closing the issue meanwhile is seen.
-   */
   async function end({ coordinatorId, id }: Agent, how: Extract<EndedHow, "stopped" | "archived" | "deleted">): Promise<void> {
     const agent = agentOf(coordinatorId, id);
     if (agent.ended !== null) return;
@@ -464,30 +358,22 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     onChange(coordinatorId);
   }
 
-  /**
-   * Ends an agent whose thread bb archived or deleted, unless its issue's turn is taken; then the
-   * tick's next pass does, as it does for any event missed. why not wait: bb already stopped the
-   * thread, so nothing runs meanwhile.
-   */
   async function endIfFree(agent: Agent, how: "archived" | "deleted"): Promise<void> {
     await turns.runIfFree(agent.coordinatorId, agent.issueId, () => end(agent, how));
   }
 
-  /** The agent as stored now. why throw: a tool resolved it from the store, and agents are kept while their regional manager is. */
   function agentOf(coordinatorId: CoordinatorId, id: AgentId): Agent {
     const agent = store.agent(coordinatorId, id);
     if (agent === null) throw new Error(`The agent ${id} of ${coordinatorId} is missing.`);
     return agent;
   }
 
-  /** why throw: an agent is inserted on an issue of its regional manager, and issues are never deleted. */
   function issueOf(coordinatorId: CoordinatorId, issueId: IssueId): Issue {
     const issue = store.issue(coordinatorId, issueId);
     if (issue === null) throw new Error(`The issue ${issueId} of ${coordinatorId} is missing.`);
     return issue;
   }
 
-  /** Removes a regional manager whose thread bb deleted, with everything it owns. */
   function remove(id: CoordinatorId): void {
     store.removeCoordinator(id);
     onRemoved(id);
@@ -496,17 +382,6 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
   return {
     start,
 
-    /**
-     * Sends the text as a message from the regional manager: it steers a running turn, starts one,
-     * or waits in bb's queue. In its issue's turn, to an agent that still holds it, so a handover
-     * never has it wake the agent it replaced; a handover takes back one still waiting in the queue.
-     * First it quiets the issue's other threads, its verifiers' and any ended agent's (see
-     * quietIssue), as the agent never runs beside its own verifier; while they aren't quiet, it
-     * sends nothing. Once sent, it drops the check of the agent's done handoff still waiting for its
-     * verifier: the manager asked for more work, so that handoff is no longer the agent's last word,
-     * and its next done handoff is checked afresh. A returned verdict is kept: it settles as it
-     * would after any later turn of the agent's, to the manager, with no fix round.
-     */
     message: ({ coordinatorId, id, issueId }: Agent, text: string): Promise<MessageOutcome | Busy> =>
       turns.run(coordinatorId, issueId, async () => {
         const agent = agentOf(coordinatorId, id);
@@ -520,18 +395,11 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
           mode: "auto",
           input: [{ type: "text", text, mentions: [] }],
         });
-        // why after the send: one that fails leaves the check to go on once the agent is idle again.
         const dropped = store.supersedeOpenChecks(coordinatorId, issueId);
         onChange(coordinatorId);
         return { kind: delivery, dropped };
       }),
 
-    /**
-     * Stops the agent's thread, idle or not (see stopThreads), and ends the agent once bb no longer
-     * runs it; then archives its thread when asked, which destroys a sandbox no other thread lives
-     * in. Never archives otherwise. In its issue's turn, so an agent a handover replaced meanwhile is
-     * already ended, and its thread, now its successor's environment, is never archived.
-     */
     stop: ({ coordinatorId, id, issueId }: Agent, archive: boolean): Promise<StopOutcome | Busy> =>
       turns.run(coordinatorId, issueId, async () => {
         const agent = agentOf(coordinatorId, id);
@@ -545,14 +413,8 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
         return { kind: "stopped", archived: archive && threadId !== null };
       }),
 
-    /** The user archived the agent's thread in bb. */
     archived: (agent: Agent) => endIfFree(agent, "archived"),
 
-    /**
-     * bb deleted the agent's thread. If its regional manager's thread is gone too, bb is deleting
-     * the manager, which deletes its agents with it: the manager is removed instead, whichever
-     * thread's event comes first, so nothing is told to a thread that no longer exists.
-     */
     async deleted(agent: Agent): Promise<void> {
       const manager = await listed(coordinatorOf(agent.coordinatorId).threadId);
       if (manager === null || manager.deletedAt !== null) return remove(agent.coordinatorId);
@@ -561,12 +423,6 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
 
     remove,
 
-    /**
-     * The tick's pass: removes every regional manager bb deleted, and ends every agent whose thread bb
-     * archived or deleted, for events missed while the plugin wasn't listening. why it doesn't wait
-     * for the ends: each runs in its issue's turn, if free, and a call bb never answers there must
-     * not hold up the tick's other passes.
-     */
     async reconcile(): Promise<void> {
       for (const coordinator of store.coordinators()) {
         const holders = store.agents(coordinator.id).filter((agent): agent is Agent & { threadId: string } => agent.ended === null && agent.threadId !== null);
@@ -586,16 +442,13 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
   };
 }
 
-/** Why no agent can start on the issue: the manager closed it, or a merge made it Done (`view`: as read just now); null when one can. */
 function finalText(issue: Issue, view: IssueView): string | null {
   if (issue.closed !== null) return `${issue.id} is ${issue.closed.as === "canceled" ? "canceled" : "accepted as done"}, so no agent can start on it.`;
   return view.status === "done" ? `${issue.id} is Done (${headlineText(view)}), so no agent can start on it.` : null;
 }
 
-/** Where the agent would run, in words, for a refusal of what it would run on. */
 const whereText = ({ base, placement }: Spot): string => (base.kind === "joined" ? `${base.from}'s environment` : placementText(placement));
 
-/** Why no agent can start on the issue: it is a parent; null when it isn't. */
 function parentText(issue: Issue, issues: readonly Issue[]): string | null {
   const subIssues = issues.filter(({ parentId }) => parentId === issue.id).map(({ id }) => id);
   return subIssues.length === 0 ? null : `${issue.id} has sub-issues (${subIssues.join(", ")}), and a parent has no agent of its own: start agents on them.`;

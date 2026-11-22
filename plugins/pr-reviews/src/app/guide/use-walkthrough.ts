@@ -1,5 +1,3 @@
-// The reader's view of a guide: which steps the view options show, where the reader is among
-// them, and the keys that move it.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { Guide } from "../../guide/guide-schema.ts";
 import { visibleSteps, type ViewOptions, type VisibleStep } from "../../guide/walkthrough.ts";
@@ -31,16 +29,12 @@ export type WalkthroughPage = { scroll: RefObject<HTMLElement | null>; title: Re
 export function useWalkthrough(guide: Guide, viewOptions: ViewOptionsState, page: WalkthroughPage): Walkthrough {
   const { options } = viewOptions;
   const [position, setPosition] = useState<Position>(OVERVIEW);
-  // why state set while rendering: the options arrive as a prop (the tab bar's switch sits outside
-  // the guide), and the position must follow them before the page shows the new steps.
   const [positionOptions, setPositionOptions] = useState(options);
   if (positionOptions !== options) {
     setPositionOptions(options);
     setPosition(resolvePosition(visibleSteps(guide, options), position));
   }
   const focusedBeforeChange = useRef<Element | null>(null);
-  // why an effect: only the committed page shows whether the change removed the focused element,
-  // and bb's plugin runtime shares react but not react-dom, so flushSync is not an option.
   useLayoutEffect(
     function focusTitleWhenFocusWasRemoved() {
       const focused = focusedBeforeChange.current;
@@ -50,14 +44,12 @@ export function useWalkthrough(guide: Guide, viewOptions: ViewOptionsState, page
     [position, options, page.title],
   );
   const shownIndex = stepIndexOf(position);
-  // why an effect: a move can come from the tab bar's switch, outside the walkthrough's handlers.
   useLayoutEffect(
     function scrollNewPageToTop() {
       page.scroll.current?.scrollTo({ top: 0 });
     },
     [shownIndex, page.scroll],
   );
-  // Memoised: a step page memoises what it derives from its step.
   const steps = useMemo(() => visibleSteps(guide, options), [guide, options]);
   const place = placeOf(steps, position);
   const moveTo = (to: Position) => {
@@ -67,7 +59,6 @@ export function useWalkthrough(guide: Guide, viewOptions: ViewOptionsState, page
   return {
     place,
     steps,
-    // ← on the overview, and → with no steps shown, land on the same OVERVIEW: React skips them.
     next: () => moveTo(nextPosition(steps, position)),
     previous: () => moveTo(previousPosition(steps, position)),
     goToStep: (number) => moveTo(positionAt(steps, number - 1)),
@@ -80,11 +71,6 @@ export function useWalkthrough(guide: Guide, viewOptions: ViewOptionsState, page
 
 const stepIndexOf = (position: Position) => (position.kind === "overview" ? -1 : position.index);
 
-// → and J move to the next step, ← and K to the previous one, only while the guide is `shown`.
-// Ignored while typing (inputs, textareas, selects, contenteditable, such as bb's composer in a
-// split view), with a modifier held, or when something else already handled the key (the PR
-// page's tabs).
-// why an effect: a document listener is a subscription to the DOM.
 export function useStepKeys({ next, previous }: Walkthrough, shown: boolean): void {
   useEffect(
     function moveOnStepKeys() {

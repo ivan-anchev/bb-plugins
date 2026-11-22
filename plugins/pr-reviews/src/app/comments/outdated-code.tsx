@@ -1,6 +1,3 @@
-// The lines a review thread was written on, as GitHub kept them, drawn as every diff draws code:
-// bb's Pierre in bb's code theme, unified, flush to its edges, so it reads as code and never as one
-// more comment. Read-only: its lines are on no commit the page shows.
 import { useMemo } from "react";
 import { experimental_useCodeTheme as useCodeTheme } from "@get-bb/plugin-sdk/app";
 import { FileDiff } from "@pierre/diffs/react";
@@ -17,14 +14,12 @@ export function OutdatedCode({ path, excerpt }: OutdatedCodeProps) {
     [code.name, code.mode],
   );
   return (
-    // A tab stop of its own: long lines scroll sideways, and the keys scroll only the focused element.
     <div role="region" aria-label="Code the thread was written on" tabIndex={0} className="outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset">
       <FileDiff className={`${DIFF_TEXT_CLASS} [--diffs-gap-block:0px]`} fileDiff={fileDiff} options={options} />
     </div>
   );
 }
 
-// The excerpt as a one-hunk file, numbered from its first line on each side.
 function excerptFileOf(path: string, excerpt: NumberedLine[]): DiffFile {
   return { path, previousPath: null, status: "modified", binary: false, hunks: [hunkOf(excerpt)] };
 }

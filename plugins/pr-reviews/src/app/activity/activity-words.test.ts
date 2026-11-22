@@ -7,7 +7,6 @@ import { parseThreadsPage, toThread } from "../../github/pr-comments.ts";
 import { activityOf, type ActivityLine } from "./activity-fold.ts";
 import { foldItemsOf, threadLocationOf, threadStateOf, wordsOf, type Word } from "./activity-words.ts";
 
-// A sentence as it reads, a sha short as the line draws it.
 const textOf = (words: Word[]) => words.map((word) => (typeof word === "string" ? word : word.kind === "sha" ? word.sha.slice(0, 7) : word.kind === "label" ? word.label.name : word.text)).join("");
 
 const at = (minute: number) => `2026-11-04T10:${String(minute).padStart(2, "0")}:00Z`;
@@ -17,7 +16,6 @@ const label = (id: string, actor: string, added: boolean, name: string, minute: 
 const request = (id: string, requested: boolean, reviewer: string): TimelineItem => ({ kind: "review-requested", id, actor: "marlin", createdAt: at(1), requested, reviewer });
 const mention = (id: string, minute: number): TimelineItem => ({ kind: "referenced", id, actor: "okafor-t", createdAt: at(minute), ref: `#14${minute}`, title: "Table performance", url: "" });
 
-// The lines a timeline folds to, after the opened line, as text.
 const linesOf = (timeline: TimelineItem[], draft = false) =>
   activityOf({ author: "marlin", createdAt: at(0), state: draft ? "DRAFT" : "OPEN" }, timeline, []).filter((part): part is ActivityLine => part.kind !== "comment" && part.kind !== "review-message");
 const sentencesOf = (timeline: TimelineItem[]) => linesOf(timeline).slice(1).map((line) => textOf(wordsOf(line)));
@@ -104,13 +102,11 @@ test("a line of one, labels and review requests open to nothing: their sentence 
   assert.deepEqual(lines.map(foldItemsOf), [null, null, null, null]);
 });
 
-// withastro/astro#18616's threads, as recorded (github/fixtures/comments).
 const fixture = (name: string): unknown => JSON.parse(readFileSync(new URL(`../../github/fixtures/comments/${name}.json`, import.meta.url), "utf8"));
 const threadsOf = (name: string): ReviewThread[] => parseThreadsPage(fixture(name)).nodes.map((thread) => toThread(thread, thread.comments.nodes));
 const THREADS = threadsOf("threads-astro-18616");
 
 test("a review thread's row: its file name and line at the head, else where it was written, and its state", () => {
-  // The first four are on lines and outdated; the last is on the whole file, so it has no line.
   const rows = THREADS.map((thread) => [threadLocationOf(thread), threadStateOf(thread)]);
 
   assert.deepEqual(rows, [
@@ -120,7 +116,6 @@ test("a review thread's row: its file name and line at the head, else where it w
     ["index.ts:70", "resolved · outdated"],
     ["true-parks-retire.md", ""],
   ]);
-  // This repo's PR #71: a range open at the head, on its new line 13.
   const [range] = threadsOf("threads-71");
   assert.deepEqual([threadLocationOf(range), threadStateOf(range)], ["gh.ts:13", ""]);
 });

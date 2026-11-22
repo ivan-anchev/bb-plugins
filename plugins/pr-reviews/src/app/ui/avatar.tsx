@@ -1,6 +1,3 @@
-// A GitHub user's avatar, fetched at 2x. The muted circle is the placeholder while it loads, and when
-// it fails (an unknown login or an app without a profile image is a 404) it shows the login's two
-// initials, so a failure shows no broken image and moves nothing.
 import { useState } from "react";
 import { initialsOf } from "./initials.ts";
 

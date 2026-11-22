@@ -1,5 +1,3 @@
-// `bb boat templates`: every template and environment a thread can start from, each with the exact
-// --machine-inputs, shell-quoted: environment names are free text.
 import type { SandboxEnvironment } from "../boat/wire.ts";
 import { describeLaunch, resolveLaunch, type LaunchChoices, type LaunchDefaults, type MachineInputs } from "../launch.ts";
 import { shellQuote } from "../shell.ts";
@@ -19,7 +17,6 @@ function templateTable({ templates, defaults }: LaunchChoices): string {
       template.name,
       template.status,
       template.savedFrom ?? "-",
-      // To the minute, in UTC: 2026-11-09T10:12Z.
       `${template.savedAt.slice(0, 16)}Z`,
       template.status === "ready" ? inputsOf({ template: template.name }) : "-",
       [template.name === defaults.template ? "default" : "", template.error ?? ""].filter(Boolean).join("; "),
@@ -39,11 +36,9 @@ function environmentTable({ environments, defaults }: LaunchChoices): string {
   );
 }
 
-/** The environment a thread that names none starts in. */
 const isDefault = (environment: SandboxEnvironment, defaults: LaunchDefaults): boolean =>
   defaults.environment === null ? environment.isBoatDefault : environment.name === defaults.environment;
 
-/** What boat puts on a sandbox in this environment, as `boat env set` names it. */
 function describePasses({ withholdsAll, proxiesAi, passes }: SandboxEnvironment): string {
   if (withholdsAll) return proxiesAi ? "AI proxy placeholders only (safe for third parties)" : "nothing (safe for third parties)";
   const passed = [passes.agents ? "agents" : "", passes.github ? "GitHub" : "", passes.secrets ? "secrets" : ""].filter(Boolean);
@@ -60,5 +55,4 @@ function defaultLines(choices: LaunchChoices): string[] {
   ];
 }
 
-/** One shell word, ready to paste after `--machine-inputs`. */
 const inputsOf = (inputs: MachineInputs): string => shellQuote(JSON.stringify(inputs));

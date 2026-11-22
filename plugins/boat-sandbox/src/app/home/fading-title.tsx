@@ -1,10 +1,6 @@
-// A title that doesn't fit fades at its end, never cut to "…", and runs through to its end under the
-// pointer: activity-sidebar's FadingTitle (src/ui/row/row.tsx), copied so the rows read alike.
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 
-/** The fade at a title's end, which its last words run past to read crisp. */
 const FADE = 24;
-/** How fast a title runs under the pointer, in px a second: slow enough to read as it moves. */
 const RUN_SPEED = 45;
 
 /** Measured whenever its box resizes. */
@@ -27,7 +23,6 @@ export function FadingTitle({ text }: { text: string }) {
   );
 }
 
-/** How far the title runs (its overflow and the fade) and for how long, for `.bs-title-text`. */
 function runStyle(over: number): CSSProperties & Record<"--bs-travel" | "--bs-run", string> {
   const travel = over + FADE;
   return { "--bs-travel": `${travel}px`, "--bs-run": `${Math.round((travel / RUN_SPEED) * 1000)}ms` };

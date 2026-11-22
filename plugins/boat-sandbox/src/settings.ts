@@ -1,4 +1,3 @@
-// boat Sandbox's settings, shown under Settings → boat Sandbox.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { PRESETS, snapshotName, type DefaultSetting, type LaunchDefaults } from "./launch.ts";
@@ -41,7 +40,6 @@ export const defineBoatSettings = (bb: BbPluginApi) =>
         "The boat environment new machines start in when a thread names none; it decides the sign-ins, GitHub token and secrets the sandbox gets. `bb boat templates` lists them. Empty uses boat's default environment.",
       default: "",
     },
-    // Read by the app only; the server never looks at it.
     sidebarIcon: {
       type: "boolean",
       label: "Boat icon in the sidebar",

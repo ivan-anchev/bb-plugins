@@ -1,6 +1,3 @@
-// The boats running now, as Activity sidebar's compact rows: the agent's mark in a 30 slot, the project
-// tile, the title fading out, then the boat's size and its cost this month, ticking every second. Three
-// show, most expensive first; "N more running" opens the rest. A row opens its thread.
 import {
   experimental_Icon as Icon,
   experimental_ProviderIcon as ProviderIcon,
@@ -71,7 +68,6 @@ export function RunningList({ boats, readAt, live }: { boats: readonly RunningBo
   );
 }
 
-/** A boat whose thread bb no longer lists (archived, say) keeps its row, named as `boat list` names it, but opens nothing. */
 function BoatRow({ boat, thread, project, cost }: { boat: RunningBoat; thread: Thread | null; project: Project | null; cost: number }) {
   const body = (
     <>
@@ -94,11 +90,9 @@ function BoatRow({ boat, thread, project, cost }: { boat: RunningBoat; thread: T
       </span>
     </>
   );
-  // The host routes a plain click on a thread's href in place.
   return thread === null ? <div className="bs-row">{body}</div> : <a href={thread.href} className="bs-row">{body}</a>;
 }
 
-/** The agent's artwork from bb's provider directory; bb's fallback glyph while it loads. */
 function AgentMark({ providerId }: { providerId: string }) {
   const { providers } = useProviders();
   return <ProviderIcon providerKind="agent" provider={providers.find((p) => p.id === providerId) ?? { id: providerId }} aria-hidden />;

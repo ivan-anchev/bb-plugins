@@ -5,13 +5,11 @@ import { foldPlan, type PlanView, type Todos } from "./plan-fold.ts";
 type Status = Todos["items"][number]["status"];
 const STATUS: Record<string, Status> = { c: "completed", d: "in_progress", p: "pending" };
 
-/** A plan from one letter a step: c completed, d in progress, p pending; any other letter an unknown status. */
 function plan(letters: string): Todos {
   const items = [...letters].map((letter, i) => ({ id: `t${i + 1}`, text: `Step ${i + 1}`, status: STATUS[letter] ?? (letter as Status) }));
   return { items, sourceSeq: 1, updatedAt: 0 };
 }
 
-/** The view in short: "earlier [shown ids] later", and done/total. */
 function shape(view: PlanView | null): string | null {
   if (view === null) return null;
   return `${view.done}/${view.total} ${view.earlier} [${view.steps.map((s) => s.id).join(" ")}] ${view.later}`;
@@ -60,7 +58,6 @@ test("a status bb doesn't know yet reads as pending", () => {
     ["done", "pending", "pending"],
   );
   assert.equal(view?.done, 1);
-  // It counts as pending for the fold's focus too: the first not-done step.
   assert.equal(shape(foldPlan(plan("ccxpppp"), false)), "2/7 1 [t2 t3 t4] 3");
 });
 

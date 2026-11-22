@@ -6,14 +6,10 @@ import { addReplyArgs, addReviewArgs, addThreadArgs, discardArgs, parseAddedThre
 import { liveComments, parseThreadsPage, toThread } from "./pr-comments.ts";
 import { repoSchema } from "./repo.ts";
 
-// Real responses from the private sandbox ivan-anchev/pr-reviews-review-mode-sandbox, recorded with
-// `gh api graphql` and these builders. PR #1 is the reader's own; PR #2 is Dependabot's, where the
-// reader started a pending review with a range comment and a reply, then discarded it.
 const fixture = (name: string): unknown => JSON.parse(readFileSync(new URL(`fixtures/comments/sandbox-${name}.json`, import.meta.url), "utf8"));
 
 const PR_ID = "PR_kwDOVq1kJs8AAAABObCbKQ";
 
-// The variables after the query, as gh is given them.
 const variablesOf = (args: string[]) => args.slice(4);
 
 test("the reader's review: the author of their own PR, and a reviewer's pending review", () => {
@@ -56,12 +52,12 @@ test("a range comment goes into the reader's pending review, or starts one: GitH
   const request: CommentRequest = { kind: "line", commit: "1ac7a55", path: "gamma.txt", start: { side: "new", line: 15 }, end: { side: "new", line: 16 }, body: "@team Pending range comment" };
 
   assert.deepEqual(variablesOf(addThreadArgs(PR_ID, null, request)), [
-    ...["-f", `pr=${PR_ID}`, "-f", "path=gamma.txt", "-f", "body=@team Pending range comment"],
-    ...["-F", "line=16", "-f", "side=RIGHT", "-F", "startLine=15", "-f", "startSide=RIGHT"],
+    "-f", `pr=${PR_ID}`, "-f", "path=gamma.txt", "-f", "body=@team Pending range comment",
+    "-F", "line=16", "-f", "side=RIGHT", "-F", "startLine=15", "-f", "startSide=RIGHT",
   ]);
   assert.deepEqual(variablesOf(addThreadArgs(PR_ID, "PRR_1", { ...request, start: null, end: { side: "old", line: 3 } })), [
-    ...["-f", `pr=${PR_ID}`, "-f", "review=PRR_1", "-f", "path=gamma.txt", "-f", "body=@team Pending range comment"],
-    ...["-F", "line=3", "-f", "side=LEFT"],
+    "-f", `pr=${PR_ID}`, "-f", "review=PRR_1", "-f", "path=gamma.txt", "-f", "body=@team Pending range comment",
+    "-F", "line=3", "-f", "side=LEFT",
   ]);
 });
 

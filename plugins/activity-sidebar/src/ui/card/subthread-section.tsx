@@ -1,7 +1,3 @@
-// The card's subthreads: "Subthreads 5 · 2 running", then each line a small row of the
-// sidebar's own (its agent's mark, its title fading out, its state ELSE its time) hung on 1-point
-// hairlines; a press opens that subthread. Checkouts elsewhere head their rows with their branch.
-// "Show all N" opens the parent when lines were left out.
 import type { Checkout, Rail, SubthreadTree, TreeLine } from "../../card/subthread-tree.ts";
 import { lastMoved } from "../../model/activity.ts";
 import { STATE_NAME } from "../../model/state.ts";
@@ -28,8 +24,6 @@ export function SubthreadSection({ tree, now, onOpen, onShowAll }: Props) {
         </div>
         <div>
           {tree.lines.map((line, i) => (
-            // why: a thread is on one line only; a head is said once per place under its node, so its
-            // position is its identity.
             <div key={line.kind === "thread" ? line.thread.id : `place:${i}`} className="as-mini" data-place={line.kind === "place" || undefined}>
               <Rails rail={line} />
               <span className="as-mini-pad" style={{ width: line.indent }} />
@@ -46,8 +40,6 @@ export function SubthreadSection({ tree, now, onOpen, onShowAll }: Props) {
     </>
   );
 }
-
-// ------------------------------------------------------------------ layer 2
 
 type ThreadTreeLine = Extract<TreeLine, { kind: "thread" }>;
 type PlaceTreeLine = Extract<TreeLine, { kind: "place" }>;
@@ -74,7 +66,6 @@ function ThreadLine({ line, now, onOpen }: { line: ThreadTreeLine; now: number; 
   );
 }
 
-/** A checkout's head: its branch, and "worktree · 3" (or "2 worktrees · 3") at its end. */
 function PlaceLine({ line }: { line: PlaceTreeLine }) {
   const kind = line.checkout.kind;
   return (
@@ -92,11 +83,9 @@ function PlaceLine({ line }: { line: PlaceTreeLine }) {
   );
 }
 
-const CH = 24; // a line's height
-const BEND = 4; // the elbow's radius
+const CH = 24;
+const BEND = 4;
 
-/** The line's hairlines: outer trunks running on past it, its own trunk bending into it, and on below
- * unless it is the last. */
 function Rails({ rail }: { rail: Rail }) {
   const x = rail.at + 0.5;
   const mid = CH / 2;
@@ -111,7 +100,6 @@ function Rails({ rail }: { rail: Rail }) {
   );
 }
 
-/** The checkout's branch, else what it is, as Zeron names it. */
 function placeName(c: Checkout): string {
   return c.branch ?? (c.kind === "workspace" ? "Personal workspace" : "No branch");
 }

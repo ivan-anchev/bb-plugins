@@ -7,10 +7,8 @@ import type { Closes } from "./relations.ts";
 
 const id = (n: number): IssueId => issueIdSchema.parse(`WEB-${n}`);
 type Planned = Pick<Issue, "id" | "kind" | "parentId" | "dependsOn" | "closed">;
-/** `i<n>`, open, of `kind`, under parent `parent` (null: none), depending on the issues numbered. */
 const planned = (n: number, kind: Kind, parent: number | null, ...dependsOn: number[]): Planned => ({ id: id(n), kind, parentId: parent === null ? null : id(parent), dependsOn: dependsOn.map(id), closed: null });
 const OPEN: Closes = new Map();
-/** The issues numbered as a read finds them closed by work: a report each. */
 const reported = (...ns: number[]): Closes => new Map(ns.map((n) => [id(n), { by: "merge", number: n }]));
 const canceledAs = (issue: Planned): Planned => ({ ...issue, closed: { as: "canceled", at: 9_000 } });
 

@@ -1,6 +1,3 @@
-// The sidebar's PRs as GitHub's GraphQL API serves them: one search per section, restricted to the
-// bb projects' repos, and the open and recently merged PRs of the repos those found, which hold
-// the found PRs' stack-mates. gh.ts runs the queries. Pure.
 import { z } from "zod";
 import type { InboxPr, SectionKey } from "../contract.ts";
 import { repoSchema, type Repo } from "./repo.ts";
@@ -11,12 +8,9 @@ export type GitHubPr = Omit<InboxPr, "projectId" | "section">;
 /** A PR one of the section searches found, and the section that search fills. */
 export type FoundPr = { section: SectionKey; pr: GitHubPr };
 
-// GitHub's largest page. A search past it reads its most recently updated 100.
 const FIRST = 100;
 const DAY_MS = 24 * 60 * 60 * 1000;
-// Closed and merged PRs stay listed this long after they close or merge.
 const RECENT_MS = 7 * DAY_MS;
-// How many of a repo's merged PRs to read for stack-mates: a stack's merged bottom merged recently.
 const RECENTLY_MERGED = 20;
 
 const PR_FIELDS = `fragment InboxPr on PullRequest {
@@ -28,10 +22,6 @@ const searchNameSchema = z.enum(["authoredOpen", "authoredClosed", "review", "me
 type SearchName = z.infer<typeof searchNameSchema>;
 const SEARCH_NAMES = searchNameSchema.options;
 
-/**
- * Each search, the section it fills, its qualifiers, and for a closed or merged one the time it
- * ended at, which must be in the last RECENT_MS. Definitions: decisions.md #4–#6.
- */
 const SEARCHES: Record<SearchName, { section: SectionKey; qualifiers: string; endedAt?: "closedAt" | "mergedAt" }> = {
   authoredOpen: { section: "authored", qualifiers: "is:open author:@me" },
   authoredClosed: { section: "authored", qualifiers: "is:closed is:unmerged author:@me", endedAt: "closedAt" },
@@ -75,8 +65,6 @@ export function stackContextQuery(repos: Repo[]): string {
   return `${PR_FIELDS}\nquery {\n  ${reads.join("\n  ")}\n}`;
 }
 
-// GitHub adds review decisions and rollup states over time, so both stay strings; only the ones
-// the sidebar flags are compared against.
 const ghPrSchema = z.object({
   number: z.number(),
   title: z.string(),
@@ -88,7 +76,6 @@ const ghPrSchema = z.object({
   headRefName: z.string(),
   reviewDecision: z.string().nullable(),
   repository: z.object({ nameWithOwner: repoSchema }),
-  // A deleted account's PR has no author.
   author: z.object({ login: z.string() }).nullable(),
   commits: z.object({ nodes: z.array(z.object({ commit: z.object({ statusCheckRollup: z.object({ state: z.string() }).nullable() }) })) }),
 });
@@ -99,9 +86,7 @@ const toGitHubPr = (pr: z.infer<typeof ghPrSchema>): GitHubPr => ({
   repo: pr.repository.nameWithOwner,
   number: pr.number,
   title: pr.title,
-  // GitHub shows a deleted account as "ghost".
   author: pr.author?.login ?? "ghost",
-  // A closed PR can still be marked draft; it reads as closed, as on GitHub.
   state: pr.state === "OPEN" && pr.isDraft ? "DRAFT" : pr.state,
   updatedAt: pr.updatedAt,
   mergedAt: pr.mergedAt,

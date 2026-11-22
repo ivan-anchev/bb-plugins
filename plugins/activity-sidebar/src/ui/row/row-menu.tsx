@@ -1,5 +1,3 @@
-// A row's right-click menu is bb's own thread menu, with Sleep (or Wake) added. Under the pointer, the
-// row's corner offers bb's Archive (Unarchive on the shelf).
 import {
   experimental_useThreadActions as useThreadActions,
   type PluginBoundThreadAction,
@@ -14,7 +12,6 @@ import { sleepItem } from "../../model/sleep-action.ts";
 /** What a row's Sleep and Wake do: the list owns the sleeps. */
 export type RowSleep = { sleep(threadId: string, until: number): void; wake(threadId: string): void };
 
-/** bb's Archive, which also unarchives an archived thread. */
 const ARCHIVE = "bb--core/archive";
 
 /** What bb's menu needs from the row, and the corner's action. */
@@ -34,7 +31,6 @@ export function useRowActions(row: RowModel, sleep: RowSleep, sleepCustom: () =>
   return { target, inline: item === null ? [] : [item], corner };
 }
 
-/** The fields bb's own actions read, copied from the sidebar row as bb's own list does. */
 function toActionTarget(t: PluginSidebarThread): PluginThreadActionTarget {
   return {
     id: t.id,

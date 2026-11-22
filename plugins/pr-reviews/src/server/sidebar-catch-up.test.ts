@@ -23,8 +23,6 @@ const listedAs = (state: PrState, repo = REPO): InboxPr => ({
   section: "authored",
 });
 
-// GitHub's search stands in: each read serves the next of `reads`, then the last one again.
-// `read` resolves only when the test lets it, so a read can be left in flight.
 function sidebar(t: TestContext, reads: (() => Promise<InboxPr[]>)[]) {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const seen = { reads: 0, invalidations: 0 };
@@ -32,7 +30,6 @@ function sidebar(t: TestContext, reads: (() => Promise<InboxPr[]>)[]) {
     readListed: () => reads[Math.min(seen.reads++, reads.length - 1)](),
     invalidate: () => void seen.invalidations++,
   });
-  // Lets one pause run out and the read after it settle.
   const wait = async (pauses = 1) => {
     for (let pause = 0; pause < pauses; pause++) {
       t.mock.timers.tick(READ_EVERY_MS);

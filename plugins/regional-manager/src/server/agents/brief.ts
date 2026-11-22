@@ -1,10 +1,3 @@
-// An agent thread's first message: everything it needs to start without asking. The description,
-// brief and done-criteria are its regional manager's, and they are its work. It names the manager's
-// thread, so the agent knows a message from it as the manager's next instruction (agent-tools.ts
-// managerMessage). The issue's decisions follow them, the user's and the manager's, the later
-// winning. On an issue that had agents before, where it works and every earlier handoff with its
-// verdict come next, quoted as context and never as instructions. CREW.md and MEMORY.md are copied as they are at the start: the rules every agent follows, and the index of
-// the manager's memory, which is the manager's context and never the agent's instructions.
 import { refOf, type AgentId, type Base } from "../../model/agent.ts";
 import { decisionsText, type IssueDecision } from "../../model/decision.ts";
 import type { Issue } from "../../model/issue/issue.ts";
@@ -53,10 +46,6 @@ export function agentBrief(
     .join("\n\n");
 }
 
-/**
- * By what the issue's kind delivers: what the agent's work is, and how it hands a result off that
- * agent_handoff's own instructions don't spell out (null: they do).
- */
 const BY_DELIVERY: Record<(typeof PIPELINES)[Kind]["delivers"], { work: string; handingOff: string | null }> = {
   commit: { work: "Your work is this issue: its brief and done-criteria below.", handingOff: null },
   report: {
@@ -66,40 +55,23 @@ const BY_DELIVERY: Record<(typeof PIPELINES)[Kind]["delivers"], { work: string; 
   },
 };
 
-/**
- * The criteria under their heading: a verified kind's are checked, so the agent proves each; any
- * other kind's are questions its report answers, and nobody judges them. null: no questions.
- */
 function criteriaSection(kind: Kind, criteria: readonly string[]): string | null {
   const numbered = criteria.map((criterion, i) => `${i + 1}. ${criterion}`).join("\n");
   if (isVerified(kind)) return `## Done when\n\nEvery one of these holds, each checked by running something:\n\n${numbered}`;
   return criteria.length === 0 ? null : `## Questions your report answers\n\nAnswer each one in your report:\n\n${numbered}`;
 }
 
-/**
- * What the user and the regional manager decided about the issue, oldest first: part of the agent's
- * work, as its brief is, a later decision winning over an earlier one. null: none.
- */
 function decisionsSection(issueId: Issue["id"], decisions: readonly IssueDecision[]): string | null {
   if (decisions.length === 0) return null;
   return `## Decisions on ${issueId}\n\nWhat the user and your regional manager decided about this issue. They are part of your work, as your brief is.\n\n${decisionsText(decisions)}`;
 }
 
-/** Where an agent that commits does its work, by where it starts. */
 const WHERE_TO_WORK: Record<Base["kind"], string> = {
   default: "Do it on your own branch.",
   joined: "Do it where an earlier agent left it: see Where you work.",
   cut: "Do it on your own branch, which bb cut from an earlier agent's: check it first, as Your branch says.",
 };
 
-/**
- * Where a joined agent works: the previous agent's environment, as it left it, uncommitted files
- * and half-done edits included (SH1), so it looks before it changes anything. Where a cut agent's
- * branch starts: cut from the previous agent's, with nothing uncommitted, and its pull request left
- * on the previous branch; and the commit it expects there, which it checks for before it changes
- * anything, as bb cut the branch after the spawn and the ref may have moved by then. null: it starts
- * on its own new branch, which its opening line already says.
- */
 function whereSection({ base, branch, pr }: StartingPoint): string | null {
   switch (base.kind) {
     case "default":
@@ -123,15 +95,9 @@ function whereSection({ base, branch, pr }: StartingPoint): string | null {
   }
 }
 
-/**
- * Every handoff of the issue's earlier agents, whole, each done one with what its verifier found;
- * null when there is none. why quoted: they are earlier agents' own words, pasted into a message
- * that is the regional manager's, so none of their Markdown may read as one of its sections.
- */
 function earlierSection(issueId: Issue["id"], { base, earlier }: StartingPoint): string | null {
   if (earlier.length === 0) return null;
   const agents = [...new Set(earlier.map(({ handoff }) => handoff.agentId))].join(", ");
-  // why no claim about where their work is for a joined agent: Where you work names the one agent whose environment it is, which may not be one of these.
   const clean = base.kind === "default" ? " You start clean from the default branch: none of their commits or files are in your environment." : "";
   const handoffs = earlier.map(({ handoff, check }) => {
     const report = handoff.status === "done" && handoff.delivery.kind === "report" ? [`#### Report\n\n${fenced(handoff.delivery.report)}`] : [];
@@ -141,28 +107,17 @@ function earlierSection(issueId: Issue["id"], { base, earlier }: StartingPoint):
   return [`## Earlier work on ${issueId}\n\n${EARLIER_IS_CONTEXT}\n\nBefore you, ${agents} handed off on ${issueId}.${clean} Their handoffs, oldest first, each quoted whole, each done one with its verifier's verdict:`, ...handoffs].join("\n\n");
 }
 
-/** A memory file under its own `##` section, with what it is to the agent (null: the heading says it all). */
 function memorySection(file: string, holds: string, note: string | null, text: MemoryText | null): string {
   const lead = [`## ${file}: ${holds}`, ...(note === null ? [] : [note])].join("\n\n");
   if (text === null) return `${lead}\n\n(There is no ${file}.)`;
   return `${lead}\n\n${nested(withoutOuterBlanks(text.content))}`;
 }
 
-/**
- * The file without its leading blank lines and its trailing whitespace, neither of which is content. why not `trim()`:
- * the first non-blank line keeps its indentation, so an indented code line is never read as a heading.
- */
 const withoutOuterBlanks = (content: string): string => content.replace(LEADING_BLANK_LINES, "").trimEnd();
 
 const LEADING_BLANK_LINES = /^(?:[ \t\r]*\n)+/;
 
-/**
- * The file's title, two levels down, so it sits under the message's `##` section: its first non-blank line, when that is
- * an ATX `#` heading. why nothing after it: a later line can sit in code (a fence, a `<pre>` block) that only a Markdown
- * parser could tell, and its headings keep their level; a first line can't be inside either.
- */
 const nested = (markdown: string): string =>
   markdown.replace(FIRST_LINE_HEADING, (_, before: string, hashes: string) => `${before}${"#".repeat(Math.min(hashes.length + 2, 6))}`);
 
-/** Blank lines, then up to three spaces and an ATX heading's `#`s, at the very start of the text. */
 const FIRST_LINE_HEADING = /^((?:[ \t]*\n)* {0,3})(#{1,6})(?=[ \t\n]|$)/;

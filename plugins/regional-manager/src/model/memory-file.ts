@@ -1,5 +1,3 @@
-// What a memory file is, to every side that names one: the agent tools, the RPC and the editor.
-// Pure zod, so the app parses names with the same rule the server writes by.
 import { z } from "zod";
 
 /**
@@ -20,7 +18,6 @@ export type MemoryVersion = z.infer<typeof memoryVersionSchema>;
 /** What a write may put in a file: bounded, since every catch-up reads it. */
 export const memoryContentSchema = z.string().max(100_000, "A memory file holds at most 100,000 characters");
 
-/** A file as read: its text and the version a write must name to replace it. */
 const memoryTextSchema = z.object({ content: z.string(), version: z.string() });
 export type MemoryText = z.infer<typeof memoryTextSchema>;
 
@@ -47,13 +44,10 @@ export const writeOutcomeSchema = z.discriminatedUnion("outcome", [
 ]);
 export type WriteOutcome = z.infer<typeof writeOutcomeSchema>;
 
-// why no `\` or `:`: on Windows, where bb runs too, `\` also separates segments and `:` names a
-// drive or a stream, so `..\x.md` leaves the folder and `C:x.md` is not the file it spells.
 function isMarkdownInside(name: string): boolean {
   return name.endsWith(".md") && !/[\\:]/.test(name) && name.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
 }
 
-/** How much of a file the board's Memory previews: more than its card shows, which clips it. */
 const PREVIEW_LENGTH = 2_000;
 
 /** The start of a memory file, as the board's Memory previews it on the file's card. */

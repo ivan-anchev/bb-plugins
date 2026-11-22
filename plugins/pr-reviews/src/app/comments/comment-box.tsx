@@ -1,10 +1,3 @@
-// The comment box: a diff's one box, under its selected lines or in one of its review threads, or
-// the Summary tab's composer, drawn as bb's composer is. Write in markdown, preview it, pick what it
-// goes as (send-as.tsx), then send it: ask the review thread about the lines, comment on them on
-// GitHub, reply in the thread, or comment on the PR's conversation; or add the comment or reply to
-// the reader's pending review (box-actions.ts). A diff's draft is the diff's, so it follows the box
-// from place to place. Once the box has done its job it shows the outcome in the same shell, where
-// the text was.
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { experimental_Icon as Icon, experimental_PluginRpcCallError as RpcCallError } from "@get-bb/plugin-sdk/app";
 import { reviewThreadOf, type PrDetail, type ReviewState } from "../../contract.ts";
@@ -56,13 +49,9 @@ type CommentBoxProps = {
   onClose(): void;
 };
 
-// The page draws only once the PR is read, and this is the same cache entry, so it is there.
 export function CommentBox({ onSettled, ...props }: CommentBoxProps) {
   const pull = usePullRequest(props.head.projectId, props.head.number);
-  // The composer is always there: it holds Esc only while it holds a draft.
   useHoldEscape(props.subject.kind !== "conversation" || !isBlank(props.draft));
-  // why remember it: Done takes focus only from a composer that had it, which goes as Done comes.
-  // Focus the reader has taken elsewhere meanwhile, such as into another diff's box, stays there.
   const [focusDone, setFocusDone] = useState(false);
   if (pull.data === undefined) return null;
   const { stage } = props;
@@ -74,23 +63,17 @@ export function CommentBox({ onSettled, ...props }: CommentBoxProps) {
   return <Composer {...props} sent={stage.sent} onSettled={settle} pr={pull.data.pr} review={pull.data.review} />;
 }
 
-// why ⌘ on a Mac and Ctrl elsewhere, never both: Ctrl+E and Ctrl+B move the caret in a Mac textarea.
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform);
 const hasMod = (event: KeyboardEvent) => (MAC ? event.metaKey : event.ctrlKey) && !event.altKey;
 const SEND_KEYS = MAC ? "⌘↵" : "Ctrl+↵";
 
 type ComposerProps = Omit<CommentBoxProps, "onSettled" | "stage"> & {
-  /** A request that went while the reader changed the draft, which the box still holds. */
   sent: BoxOutcome | null;
-  /** `hadFocus`: focus was in the box when the reply came. */
   onSettled(outcome: BoxOutcome, sent: string, hadFocus: boolean): void;
   pr: PrDetail;
   review: ReviewState;
 };
 
-// The draft goes as the selected mode, by the send button or ⌘↵, markdown included. A failure
-// stays beside the kept draft until the draft changes. A reply that lands after the box has moved
-// or closed changes nothing: the box is no longer the one that sent it.
 function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, onClose, pr, review }: ComposerProps) {
   const [preview, setPreview] = useState(false);
   const [sending, setSending] = useState(false);
@@ -108,10 +91,7 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
   const addToReview = useAddToReview();
   const addReplyToReview = useAddReplyToReview();
   const target = { projectId: head.projectId, number: head.number };
-  // The same cache entry as the diff's threads: the reader's review comes with them.
   const viewer = useComments(target).data?.viewer;
-  // why a latch beside `sending`: the state arrives with the next render, so a quick second click
-  // would send twice.
   const latch = useRef(false);
   const ids = { text: useId(), error: useId(), preview: useId() };
   const [picked, pick] = usePickedMode();
@@ -145,11 +125,9 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
       )
       .finally(() => (latch.current = false));
   };
-  // What sending as `mode` does, or null when there is nothing it can send.
   const taskOf = (mode: Action): (() => Promise<BoxOutcome>) | null => {
     switch (mode) {
       case "ask":
-        // A comment on the conversation is about nothing the review thread could answer.
         return subject.kind === "conversation"
           ? null
           : async () => {
@@ -169,8 +147,6 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
         return mode satisfies never;
     }
   };
-  // A box a finding's button opened, still on its line, asks about the finding, so the thread
-  // knows which; a box in a GitHub thread asks about that thread.
   const askAbout = (subject: Exclude<BoxSubject, { kind: "conversation" }>) => {
     if (subject.kind === "reply") return askThread.mutate({ ...target, thread: subject.thread, question: draft });
     if (subject.finding === null) return askLines.mutate({ ...target, quote: quoteOf(subject.span), question: draft });
@@ -205,9 +181,6 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
     run(selected.mode, task);
   };
 
-  // why on the box, not the textarea: Esc and ⌘↵ are the box's wherever in it focus is. Esc is
-  // claimed here as well as by the hold: an Esc that closes the box takes its hold with it before
-  // the event gets that far, and bb's own Esc would leave the page.
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Escape") {
       event.preventDefault();
@@ -223,7 +196,6 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
     const field = textarea.current!;
     const edit = event.target === field ? markdownShortcut(event.key, { text: draft, start: field.selectionStart, end: field.selectionEnd }) : null;
     if (edit === null) return;
-    // why stop it here: ⌘K and the like are bb's shortcuts too, and this one is the textarea's.
     event.preventDefault();
     event.stopPropagation();
     caret.select(edit.start, edit.end);
@@ -232,14 +204,12 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
 
   const togglePreview = () => {
     setPreview(!preview);
-    // Back to writing, the caret goes back to the text.
     if (preview) requestAnimationFrame(() => textarea.current!.focus());
   };
 
   return (
     <div ref={group} role="group" aria-label="Comment box" onKeyDown={onKeyDown} {...BOX_SHELL}>
       {subject.kind !== "conversation" && (
-        // Where bb's composer has its collapse button.
         <div className="absolute top-2 right-[13px] z-10">
           <IconButton icon="X" label="Discard" size="dismiss" onClick={onClose} />
         </div>
@@ -259,7 +229,6 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
         className={`${TEXT_CLASS} max-h-[330px] resize-none border-0 bg-transparent placeholder:text-subtle-foreground`}
       />
       {preview && (
-        // why its own tab stop: it is a region of text alone, and the keys reach it only so (REVIEW.md).
         <div id={ids.preview} role="region" aria-label="Preview" tabIndex={0} className={`${TEXT_CLASS} rounded-md focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset`}>
           {isBlank(draft) ? <p className="text-subtle-foreground">Nothing to preview</p> : <Prose text={draft} />}
         </div>
@@ -276,7 +245,6 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
           ))}
         </div>
       )}
-      {/* bb's composer action row: the chip at the start, the send button at the end. */}
       <div className="flex items-center gap-3 pt-1.5 pr-[13px] pb-2 pl-3">
         <SendAs subject={subject.kind} actions={actions} options={options} selected={selected.mode} onPick={pick} />
         <div className="ml-auto flex shrink-0 items-center gap-1">
@@ -288,7 +256,6 @@ function Composer({ subject, head, takeFocus, draft, sent, onDraft, onSettled, o
   );
 }
 
-/** What Comment posts: a review comment on the lines, a reply in the thread (`threadId`, its node id), or a comment on the conversation. */
 type Post =
   | { kind: "comment"; request: CommentRequest; note: string | null }
   | { kind: "reply"; request: ReplyRequest; threadId: string; note: null }
@@ -313,10 +280,6 @@ function postOf(subject: BoxSubject, pr: PrDetail, draft: string): Post | Blocke
   }
 }
 
-/**
- * What Review writes: a comment in the pending review, or in one GitHub starts (null); or a
- * reply, which joins only a pending review, since without one GitHub would publish it.
- */
 type ReviewWrite = { kind: "comment"; request: CommentRequest; reviewId: string | null } | { kind: "reply"; threadId: string; reviewId: string; body: string };
 
 function reviewWriteOf(actions: GitHubActions, post: Post | null): ReviewWrite | null {
@@ -347,24 +310,10 @@ function labelOf(subject: BoxSubject): string {
   }
 }
 
-/**
- * The text and its preview share bb's composer inset, the type of its draft (14/22), and a minimum
- * height, so switching moves nothing. The minimum is three rows: 3 × 22px of line, and 12px + 4px
- * of padding. The right inset clears the × above the text.
- */
 const TEXT_CLASS = `block w-full min-h-[82px] px-4 pt-3 pr-12 pb-1 ${READING_TYPE} text-foreground outline-none`;
 
-/**
- * The textarea's focus, height and selection. It takes focus with the caret at the end when the
- * box opens (`takeFocus`), grows with its text to its max height and then scrolls, and `select`
- * places the selection once the text a shortcut changed is drawn. `shown`: the text is shown, not
- * its preview; a hidden textarea has no height to measure.
- */
 function useTextarea(textarea: RefObject<HTMLTextAreaElement | null>, text: string, shown: boolean, takeFocus: boolean) {
   const pending = useRef<[number, number] | null>(null);
-  // why wait for a size, not autoFocus or a plain effect: the box is a note Pierre slots into its
-  // shadow root on its own render, after this one. Until then the textarea is not drawn: it can't
-  // take focus, and has no height to fit.
   useEffect(() => {
     const field = textarea.current!;
     const drawn = new ResizeObserver(() => {
@@ -389,7 +338,6 @@ function useTextarea(textarea: RefObject<HTMLTextAreaElement | null>, text: stri
   return { select: (start: number, end: number) => (pending.current = [start, end]) };
 }
 
-// Its text's height; the max height caps it, and past that it scrolls.
 function fitHeight(field: HTMLTextAreaElement) {
   field.style.height = "auto";
   field.style.height = `${field.scrollHeight}px`;

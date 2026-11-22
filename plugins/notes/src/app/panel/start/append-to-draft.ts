@@ -1,6 +1,3 @@
-// The brief goes after whatever the user already has in the composer, so a start never
-// overwrites a draft. `composer.replace` does not move mention ranges, so this is the one place the
-// brief's are shifted.
 import type { ComposerDraftReplacement, ComposerDraftSnapshot } from "@get-bb/plugin-sdk/app";
 import type { Brief } from "../../../contract.ts";
 

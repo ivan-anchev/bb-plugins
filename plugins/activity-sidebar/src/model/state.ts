@@ -1,4 +1,3 @@
-// The one Zeron state a thread shows, from bb's resolved indicator.
 import type { PluginBrowserBbSdk, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import type { SleepRecord } from "../contract.ts";
 
@@ -30,7 +29,6 @@ export function baseState(thread: PluginSidebarThread): ZState | null {
   const indicator = thread.indicator;
   switch (indicator) {
     case "waiting-for-input":
-      // why: bb's row can't tell an approval from a question; a mounted row reads which (withAsk).
       return "input";
     case "unread-error":
     case "queued-failed":
@@ -47,13 +45,11 @@ export function baseState(thread: PluginSidebarThread): ZState | null {
       return "working";
     case "background-agent":
     case "background-command":
-      // why: Zeron's "waiting": the turn is over, but background work will wake the thread.
       return "waiting";
     case "draft":
     case "none":
       return null;
     default:
-      // why: a newer bb's indicator lands here at runtime and draws nothing (REVIEW.md).
       indicator satisfies never;
       return null;
   }

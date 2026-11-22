@@ -1,8 +1,3 @@
-// The starts' shortcuts while notes are picked: ⌘↵ New thread; ⇧⌘↵ or ⌥⌘↵ Send to this thread (Ctrl
-// for ⌘ off macOS). The Notes panel handles them itself, only while focus is inside it and not in a
-// field: the note composer keeps its ⌘↵ for saving, and bb's composer never sees the panel's keys.
-// why not app.commands: a global ⌘↵ would collide with bb's composer send (decision 33).
-
 export type StartKind = "new-thread" | "this-thread";
 
 /** The hint each start shows, and the keys it announces to assistive tech. */
@@ -19,7 +14,6 @@ export function startShortcut({ key, metaKey, ctrlKey, shiftKey, altKey }: Chord
   return shiftKey || altKey ? "this-thread" : "new-thread";
 }
 
-/** Inputs that take no typing: a row's checkbox among them, where the start shortcuts must still work. */
 const NOT_TEXT = ":not([type=checkbox], [type=radio], [type=button], [type=submit], [type=reset], [type=file], [type=range], [type=color])";
 
 /** Whether the press went to a field you type in, which keeps its own ⌘↵. */

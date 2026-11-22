@@ -1,6 +1,3 @@
-// An agent: one child thread the regional manager started, holding exactly one issue for its whole
-// life. One agent is one assignment, so there is no separate assignment row. The plugin's database
-// holds it; bb holds its thread.
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
 import type { Execution } from "./execution.ts";
@@ -19,11 +16,6 @@ export type AgentId = z.infer<typeof agentIdSchema>;
 
 const worktreePlacementSchema = z.object({ kind: z.literal("worktree") });
 
-/**
- * Non-secret settings for the machine an environment provider makes, such as boat-sandbox's
- * `{"preset": "small"}`. why scalars only: bb refuses a tool whose parameters' JSON Schema is
- * recursive, as `z.json()` is, and the providers' machine inputs are flat.
- */
 const machineInputsSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]));
 type MachineInputs = z.infer<typeof machineInputsSchema>;
 
@@ -51,14 +43,8 @@ export type EnvironmentProvider = {
 /** What bb tells agent_start about where an agent can run: its environment providers, and the project's default branch (null: bb records none). */
 export type PlacementFacts = { providers: readonly EnvironmentProvider[]; defaultBranch: string | null };
 
-/** bb's environment provider of a checkout of the project, which takes the branch to check out. */
 const PROJECT_CHECKOUT = "project-checkout";
 
-/**
- * What a provider's inputs are at the spawn: none, as it takes none; its defaults (`{}`); or a new
- * branch from `baseBranch`, for a project checkout on a new machine, so the agent works on its own
- * branch from the start, as a worktree agent does.
- */
 const providerInputsSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("none") }),
   z.object({ kind: z.literal("defaults") }),
@@ -96,14 +82,12 @@ export function placementOf(requested: RequestedPlacement, { providers, defaultB
   if (provider.inputs !== null && !provider.acceptsEmptyInputs) return { refused: `${environmentProviderId} needs inputs agent_start can't give it.` };
   const machine = machineOf(provider, machineInputs);
   if (machine !== null && "refused" in machine) return machine;
-  // The branch the agent's own branch starts from; undefined: the provider makes none.
   const baseBranch = machine !== null && provider.environmentProviderId === PROJECT_CHECKOUT ? defaultBranch : undefined;
   if (baseBranch === null) return { refused: "bb records no default branch for this project, so the agent's branch can't be made from it. Use a worktree placement." };
   const inputs: ProviderInputs = provider.inputs === null ? { kind: "none" } : baseBranch === undefined ? { kind: "defaults" } : { kind: "new-branch", baseBranch };
   return { kind: "provider", environmentProviderId, inputs, machine };
 }
 
-/** The new machine a provider makes for the agent, with the inputs agent_start named; null when it makes none that takes inputs. */
 function machineOf(
   { id, machineProviderId, machineInputs: takes, machineAcceptsEmptyInputs }: EnvironmentProvider,
   inputs: MachineInputs | undefined,
@@ -134,7 +118,6 @@ export function environmentOf(placement: Placement, hostId: string | null, ref: 
   }
 }
 
-/** A provider's inputs at the spawn; a new branch is cut from `ref` when one is named. */
 function inputsOf(inputs: ProviderInputs, ref: string | null): Extract<EnvironmentArgs, { type: "provider" }>["inputs"] {
   switch (inputs.kind) {
     case "none":
@@ -287,23 +270,10 @@ export function cutPlan(previous: Omit<Previous, "pushed">, to: Placement): Cut 
   if (to.kind === "provider" && to.inputs.kind !== "new-branch") return { refused: `${to.environmentProviderId} takes no branch, so an agent there can't start from ${agent.id}'s: ${orContinue}${CLEAN}` };
   const tip = tipOf(previous);
   if ("refused" in tip) return tip;
-  // A worktree's branch is a ref of the project's repository on the regional manager's machine: a new
-  // worktree there cuts from it while its agent lives, after it is archived, and after its worktree
-  // is removed (bb-facts P1a, P1b(i), P1c).
   if (to.kind === "worktree" && agent.placement.kind === "worktree") return { kind: "cut", from: agent.id, ...tip, via: "local" };
-  // Anything else reaches the branch only through origin: a sandbox clones from it (SH2), a worktree
-  // fetches `origin/<branch>` (P2), and bb puts a sandbox's branch there only if something in the
-  // sandbox pushes it (SH4).
   return { prove: tip };
 }
 
-/**
- * Where the previous agent's work is, for a move: in a live environment, the branch checked out and
- * its head, as the one read just made shows them together; once bb destroyed it, the branch on record
- * and the head its last handoff recorded. Or why there is none to cut from. why the live branch: an
- * agent may have checked out another, and committed there. The graft: a new environment gets
- * committed work alone, so what a live one holds uncommitted would stay behind; a continue inherits it.
- */
 function tipOf({ agent, environmentId, branch, now }: Omit<Previous, "pushed">): Tip | { refused: string } {
   if (environmentId === null) {
     return branch === null ? { refused: `${agent.id} has no branch on record, so a new environment has nothing to start from: ${CLEAN}` } : { branch, head: agent.checkout.head };
@@ -321,10 +291,6 @@ function tipOf({ agent, environmentId, branch, now }: Omit<Previous, "pushed">):
   return { branch: now.branch, head: now.checkout.headSha };
 }
 
-/**
- * The cut a move makes, or why it can't (pure; cutPlan's order): through origin only once the
- * branch's pull request has the head the agent left (tipOf), which proves it pushed (SH4).
- */
 function cutRef(previous: Previous, to: Placement): Cut | { refused: string } {
   const plan = cutPlan(previous, to);
   if (!("prove" in plan)) return plan;
@@ -344,10 +310,8 @@ function cutRef(previous: Previous, to: Placement): Cut | { refused: string } {
   return { refused: `${removed}: ${keptText(agent.placement)}` };
 }
 
-/** What became of a removed environment's unpushed commits, and the start that works from there. */
 function keptText(placement: Placement): string {
   switch (placement.kind) {
-    // A worktree's branch outlives it (bb-facts P1c).
     case "worktree":
       return `its commits are still on that branch on your machine, which a new worktree reaches. Leave out placement, or name a worktree, and the new agent starts on a branch cut from it; it can push and open its pull request, and a move to a sandbox works after that. Or ${CLEAN}`;
     case "provider":
@@ -359,7 +323,6 @@ function keptText(placement: Placement): string {
 
 const CLEAN = `start clean with from: "default", which starts from the default branch with every earlier handoff and verdict in the new agent's first message.`;
 
-/** Changed files as read, in words: `2 files uncommitted (?? a.txt,  M b.ts)`. */
 function uncommittedText({ changedFiles, changedFileCount }: { changedFiles: readonly string[]; changedFileCount: number }): string {
   const more = changedFileCount - changedFiles.length;
   return `${changedFileCount === 1 ? "1 file" : `${changedFileCount} files`} uncommitted (${changedFiles.join(", ")}${more > 0 ? `, and ${more} more` : ""})`;

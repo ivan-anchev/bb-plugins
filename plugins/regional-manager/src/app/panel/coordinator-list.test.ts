@@ -7,9 +7,6 @@ import { coordinatorContract as contract } from "../../contract.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
 import { PROJECT, sidebarThread } from "../test-sidebar.ts";
 
-// The panel's list as bb mounts it: a started regional manager's row opens its thread, and the row of
-// one not started yet opens its page.
-
 const { CoordinatorList } = await import("./coordinator-list.tsx");
 
 afterEach(cleanup);

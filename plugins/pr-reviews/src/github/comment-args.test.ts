@@ -18,8 +18,8 @@ test("a range from a removed line to an added one: start_line and start_side LEF
 
   assert.deepEqual(args, [
     ...ENDPOINT,
-    ...["-f", "body=Range", "-f", `commit_id=${COMMIT}`, "-f", "path=src/a.ts"],
-    ...["-F", "start_line=3", "-f", "start_side=LEFT", "-F", "line=5", "-f", "side=RIGHT"],
+    "-f", "body=Range", "-f", `commit_id=${COMMIT}`, "-f", "path=src/a.ts",
+    "-F", "start_line=3", "-f", "start_side=LEFT", "-F", "line=5", "-f", "side=RIGHT",
   ]);
 });
 

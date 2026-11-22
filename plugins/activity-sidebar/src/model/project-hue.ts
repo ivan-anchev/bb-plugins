@@ -1,7 +1,3 @@
-// A project's tile hue: Zeron's hash of the project's key. bb's project has no repository identity, so the key is the project id, Zeron's own
-// fallback. The tile colours live in app.css as `.as-tile[data-hue]`.
-
-// Zeron's order (DEFAULT_HUES), kept so a project's hue never changes.
 const HUES = ["violet", "blue", "emerald", "sky", "amber", "rose", "lime", "teal", "orange", "indigo", "pink", "cyan"] as const;
 
 export type Hue = (typeof HUES)[number];

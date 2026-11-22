@@ -15,7 +15,6 @@ beforeEach(() => {
   receiver.state.status = 200;
 });
 
-/** A waker routing proj_1 to OPS, whose endpoint is the local receiver unless overridden. */
 function setup(
   options: {
     pending?: PendingInteraction | null;
@@ -69,7 +68,6 @@ test("a handler returns while a slow receiver has not answered; unloading then l
   receiver.state.hang = true;
   try {
     await waker.onThreadIdle({ thread: thread(), lastAssistantText: "Done." });
-    // The handler is back, and the POST is out but unanswered: nothing has failed yet.
     await until(() => receiver.requests.length === 1);
     assert.deepEqual(failures.list(), []);
 
@@ -282,7 +280,7 @@ test("a repeat of a state whose delivery failed logs no second failure", async (
 
 test("an approval of a kind newer than this SDK still sends, with a neutral summary", async () => {
   const { waker } = setup();
-  // Deliberately off-type: a newer bb can send an approval subject kind this SDK does not know.
+  // WARNING: deliberately off-type; a newer bb can send an approval subject kind this SDK does not know.
   const newer = {
     ...question("int_9", "unused"),
     payload: { kind: "approval", subject: { kind: "browser_action", url: "https://example.test" } },
@@ -317,7 +315,7 @@ test("an extension interaction is summarized by its title", async () => {
 
 test("an interaction of a kind newer than this SDK still sends, with a neutral summary", async () => {
   const { waker } = setup();
-  // Deliberately off-type: a newer bb can send an interaction payload kind this SDK does not know, with no title.
+  // WARNING: deliberately off-type; a newer bb can send an interaction payload kind this SDK does not know, with no title.
   const newer = {
     ...question("int_9", "unused"),
     payload: { kind: "browser_handoff", url: "https://example.test" },

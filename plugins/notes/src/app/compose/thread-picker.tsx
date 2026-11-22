@@ -1,5 +1,3 @@
-// The @ picker above the composer: the user's active threads whose title holds the
-// query, five at most. Focus stays in the textarea; it drives the list with ↑↓ Enter Tab.
 import { experimental_PromptMentionIcon as MentionIcon, experimental_useSidebarThreads } from "@get-bb/plugin-sdk/app";
 import { useId, useState, type KeyboardEvent } from "react";
 import type { PickedThread } from "./mention-text.ts";
@@ -13,7 +11,6 @@ type ThreadMatches = ReturnType<typeof useThreadMatches>;
 export function useThreadMatches(query: string | null) {
   const matches = useMatches(query);
   const [seen, setSeen] = useState({ query, highlighted: 0, dismissed: false });
-  // why state set while rendering: the query comes from the text, and a new one resets the picker.
   if (seen.query !== query) setSeen({ query, highlighted: 0, dismissed: false });
   const highlighted = Math.min(seen.highlighted, matches.length - 1);
   const isOpen = query !== null && !seen.dismissed;
@@ -21,7 +18,6 @@ export function useThreadMatches(query: string | null) {
   const optionId = (index: number) => `${listboxId}-${index}`;
   const highlight = (index: number) => setSeen((current) => ({ ...current, highlighted: index }));
 
-  /** Handles ↑↓ Enter Tab while there are matches; returns whether it took the key. */
   const onKeyDown = (event: KeyboardEvent, pick: (thread: PickedThread) => void): boolean => {
     if (!isOpen || matches.length === 0) return false;
     const step = STEPS[event.key];
@@ -45,7 +41,6 @@ export function useThreadMatches(query: string | null) {
     highlight,
     onKeyDown,
     dismiss: () => setSeen((current) => ({ ...current, dismissed: true })),
-    /** The textarea's half of the listbox pattern: which list it drives, and the active option. */
     fieldProps: {
       "aria-autocomplete": "list",
       "aria-controls": isOpen && matches.length > 0 ? listboxId : undefined,
@@ -57,7 +52,6 @@ export function useThreadMatches(query: string | null) {
 
 export function ThreadPicker({ picker, onPick }: { picker: ThreadMatches; onPick(thread: PickedThread): void }) {
   return (
-    // why: a click anywhere in the picker must not take focus from the textarea, where the caret is.
     <div className="nt-picker" onMouseDown={(event) => event.preventDefault()}>
       <div className="nt-picker-label">Link a thread</div>
       {picker.matches.length === 0 ? (
@@ -84,19 +78,15 @@ export function ThreadPicker({ picker, onPick }: { picker: ThreadMatches; onPick
   );
 }
 
-// ------------------------------------------------------------------ layer 2
-
 const MAX_MATCHES = 5;
 
 const STEPS: Partial<Record<string, number>> = { ArrowDown: 1, ArrowUp: -1 };
 
-/** Enter or Tab, alone: ⌘↵ still saves, ⇧↵ still breaks the line, ⇧Tab still moves focus back. */
 function isPickKey(event: KeyboardEvent): boolean {
   const alone = !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
   return alone && (event.key === "Enter" || event.key === "Tab");
 }
 
-/** Active threads only (the SDK's default): an archived thread is rarely worth linking in a note. */
 function useMatches(query: string | null): PickedThread[] {
   const { threads } = experimental_useSidebarThreads();
   if (query === null) return [];

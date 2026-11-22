@@ -1,7 +1,3 @@
-// An agent's own tool: agent_handoff, the one structured report it ends with. It is stored whole, so
-// the regional manager reads every word through crew_catch_up, and none of it reaches the doorbell.
-// The caller's role comes from the plugin's database by its thread id, never from its metadata; the
-// agent's id is its generation token, so an agent that no longer holds its issue can't write to it.
 import { randomUUID } from "node:crypto";
 import type { Agent, AgentCheckout, EndedHow } from "../../model/agent.ts";
 import { handoffFieldsSchema, handoffIdSchema, reportOf } from "../../model/handoff.ts";
@@ -26,14 +22,12 @@ type HandoffBb = ToolsBb & TurnsBb & GitStatusBb & ThreadExecutionBb & { sdk: { 
 type Deps = { store: Pick<Store, "roleOfThread" | "agent" | "issue">; verify: Pick<Verify, "handoff"> };
 
 export function registerHandoffTool(bb: HandoffBb, { store, verify }: Deps): void {
-  /** The caller's agent as stored now. why throw: an agent's role is inserted with its agent, in one transaction. */
   function agentOf(role: Extract<Role, { kind: "agent" }>): Agent {
     const agent = store.agent(role.coordinatorId, role.agentId);
     if (agent === null) throw new Error(`The agent ${role.agentId} of ${role.coordinatorId} is missing.`);
     return agent;
   }
 
-  /** The agent's environment, and bb's git plugin's read of it, once, now, while the agent is awake to hand off; null when its thread has none. */
   async function readEnvironment(threadId: string): Promise<EnvironmentRead | null> {
     const environmentId = (await listedThreads(bb, [threadId])).get(threadId)?.environmentId ?? null;
     return environmentId === null ? null : { environmentId, status: await gitStatusOf(bb, environmentId) };
@@ -51,14 +45,10 @@ export function registerHandoffTool(bb: HandoffBb, { store, verify }: Deps): voi
       if (role?.kind !== "agent") return failed(`${HANDOFF} is refused: only an agent thread of a regional manager hands off, and this thread is not one. Carry on without it.`);
       const caller = agentOf(role);
       const issue = store.issue(caller.coordinatorId, caller.issueId);
-      // why throw: an agent is inserted on an issue of its regional manager, and issues are never deleted.
       if (issue === null) throw new Error(`The issue ${caller.issueId} of ${caller.coordinatorId} is missing.`);
       if (caller.ended !== null) return endedText(issue.id, caller.ended.how);
-      // why only for a kind that ships code: the plugin reads no checkout, through bb's git plugin, of an agent whose commit is not its result.
       const reading = shipsCode(issue.kind) ? readEnvironment(threadId) : null;
-      // why at each handoff: the model that made the work is a stored fact, never read from an ended thread.
       const [turnSeq, environment, execution] = await Promise.all([latestTurnSeq(bb, threadId), reading, threadExecution(bb, threadId)]);
-      // why throw: this call runs inside a turn, so bb has its turn/started event.
       if (turnSeq === null) throw new Error("bb lists no turn for this thread, so the handoff can't be tied to one. Try again.");
       const report = reportOf(input, issue.kind);
       if ("refused" in report) return failed(`${HANDOFF} is refused and nothing was saved: ${report.refused}`);
@@ -77,18 +67,14 @@ export function registerHandoffTool(bb: HandoffBb, { store, verify }: Deps): voi
   });
 }
 
-/** The checkout of an agent whose issue ships no code: never read, and never checked. */
 const NOT_READ: CheckoutRead = { kind: "unread", reason: "its issue ships no code, so the plugin read no checkout" };
 
-/** An agent's environment and bb's git plugin's read of it. */
 type EnvironmentRead = { environmentId: string; status: GitStatus };
 
-/** Where the agent's work is, as read: a field the read can't name keeps what was recorded. */
 function checkoutSeen(agent: Agent, { environmentId, status }: EnvironmentRead): AgentCheckout {
   return status.kind === "read" ? { environmentId, branch: status.branch ?? agent.checkout.branch, head: status.headSha ?? agent.checkout.head } : { ...agent.checkout, environmentId };
 }
 
-/** The agent's checkout for the verdict, as read (null: its thread has no environment). */
 const checkoutRead = (environment: EnvironmentRead | null): CheckoutRead =>
   environment === null ? { kind: "unread", reason: "the agent's thread has no environment" } : checkoutReadOf(environment.status);
 

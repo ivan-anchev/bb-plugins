@@ -1,6 +1,3 @@
-// Opening an issue's tab: its address in the side panel and the params bb opens it with. bb stores a
-// tab's params, which bring it back after a reload, and keys the tab by them, so opening an issue
-// whose tab is open focuses that tab rather than adding a second one.
 import { experimental_useAppPanel } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
 import type { IssueRow } from "../../../contract.ts";

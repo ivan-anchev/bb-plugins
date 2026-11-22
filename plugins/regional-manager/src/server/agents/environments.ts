@@ -1,7 +1,3 @@
-// What bb says about environments, from its own records, never reaching a machine: whether one is
-// gone; the project's default branch as bb records it on the regional manager's environment, which
-// a final check is made on; and, read when agent_start names an environment provider, where a
-// regional manager's agents can run: bb's providers, and that default branch.
 import type { EnvironmentProvider, PlacementFacts } from "../../model/agent.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { Store } from "../store/store.ts";
@@ -24,7 +20,6 @@ type PlacementFactsBb = DefaultBranchBb & { sdk: { environments: { listProviders
 export function defaultBranchReader(bb: DefaultBranchBb, store: Pick<Store, "coordinator">) {
   return async (id: CoordinatorId): Promise<string | null> => {
     const coordinator = store.coordinator(id);
-    // why throw: callers ask by the id of a regional manager they read.
     if (coordinator === null) throw new Error(`No regional manager ${id}.`);
     const environmentId = (await listedThreads(bb, [coordinator.threadId])).get(coordinator.threadId)?.environmentId ?? null;
     return environmentId === null ? null : (await bb.sdk.environments.get({ environmentId })).defaultBranch;

@@ -1,6 +1,3 @@
-// Dependencies end to end, through the tools as the regional manager and its agents reach them:
-// "depends on" and "blocks", blocked derived on every read, a cycle refused when written, the ready
-// list, and the unblocked announcements. A dependency informs and never refuses, and carries nothing.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
@@ -18,7 +15,6 @@ async function managing() {
     return { refused: isRefusal(result), text: textOf(result) };
   };
   const text = async (tool: string, input: object) => (await call(tool, input)).text;
-  /** Every unblocked update a catch-up returned, in order, as "WEB-3 by WEB-1 done": a catch-up returns each event once, whether a doorbell named it or not. */
   const announced: string[] = [];
   const catchUp = async () => {
     const caughtUp = await text("crew_catch_up", {});
@@ -29,16 +25,13 @@ async function managing() {
     await catchUp();
     return [...announced];
   };
-  /** The board section of a catch-up: the rows and the ready line. */
   const board = async () => (await catchUp()).split("## Board\n\n")[1]?.split("\n\n## Decisions")[0] ?? assert.fail("no board");
   const row = async (id: string) => (await board()).split("\n").find((line) => line.startsWith(`- ${id} `)) ?? assert.fail(`no row for ${id}`);
   const readyLine = async () => (await board()).split("\n").find((line) => line.startsWith("Ready: ")) ?? assert.fail("no ready line");
   const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
-  /** The manager's turn ends, so the next doorbell reaches it at once. */
   const managerIdle = () => {
     kit.thread(threadId).status = "idle";
   };
-  /** A research issue, WEB-1, with an agent on it; the agent hands off its report and its turn ends. */
   async function research() {
     await text("issue_create", RESEARCH);
     const agentThreadId = threadIn(await text("agent_start", { issue: "WEB-1" }));
@@ -207,7 +200,6 @@ test("catch-up's ready line lists the Todo issues nothing blocks: not a blocked 
   assert.equal(await readyLine(), "Ready: WEB-1 (in Todo, no sub-issues, and nothing they or their parent depend on is open).");
 });
 
-/** Releases every bb answer held, until none is: a release can lead to another held read. */
 async function releaseAll(holds: { holding: boolean; held: (() => void)[] }): Promise<void> {
   holds.holding = false;
   while (holds.held.length > 0) {
@@ -250,7 +242,6 @@ test("a research agent's new turn while the announcement reads its turns announc
   const idled = kit.idle(agentThreadId, "Handed off.");
   await settled();
   assert.ok(kit.turnEvents.held.length > 0, "no turn read held");
-  // As when the user writes in the agent's thread: bb starts a turn, which only the thread's event says until it is active.
   await kit.starting(agentThreadId);
   await releaseAll(kit.turnEvents);
   await idled;
@@ -284,7 +275,6 @@ test("an agent thread's event that repeats its status reads no issue again, and 
   assert.equal(kit.threadLists.held.length, 1);
   await releaseAll(kit.threadLists);
 
-  // A turn whose events said only `starting` ends; the next one's `starting` is news again.
   await kit.idle(builder, "Done.");
   await settled();
   await releaseAll(kit.threadLists);
@@ -297,7 +287,6 @@ test("an agent thread's event that repeats its status reads no issue again, and 
   await releaseAll(kit.threadLists);
 });
 
-/** A research agent hands off its report, and its thread then ends `how` before its turn does; the tick runs after. */
 async function reportThenEnd(how: "deleted" | "archived" | "deleted unseen") {
   const managed = await managing();
   const { kit, text, research } = managed;
@@ -311,7 +300,6 @@ async function reportThenEnd(how: "deleted" | "archived" | "deleted unseen") {
     await kit.emit("thread.archived", { thread: kit.ref(agentThreadId) });
   } else {
     thread.deletedAt = Date.now();
-    // why no event for "deleted unseen": bb's thread.deleted was missed, as during a reload; the tick's reconcile ends the agent.
     if (how === "deleted") await kit.emit("thread.deleted", { thread: kit.ref(agentThreadId) });
   }
   await kit.tick();
@@ -337,7 +325,6 @@ test("a research agent the tick ends in its issue's turn, after the tick's own p
   await text("issue_create", { ...ISSUE, title: "Card vault schema", dependsOn: ["WEB-1"] });
   await settled();
   await kit.call("agent_handoff", RESEARCH_DONE, agentThreadId);
-  // why archived unseen, its turn read held: only the tick's reconcile ends a1, in WEB-1's turn, which the tick doesn't wait for.
   kit.thread(agentThreadId).archivedAt = Date.now();
   let release = (): void => assert.fail("never held");
   kit.turnEvents.pending = new Promise<void>((resolve) => (release = resolve));
@@ -372,7 +359,6 @@ test("merges whose announcement can't read bb are announced by a later tick, aft
   const second = threadIn(await text("agent_start", { issue: "WEB-2" }));
   await text("issue_create", { ...ISSUE, title: "Replay", dependsOn: ["WEB-1"] });
   await text("issue_create", { ...ISSUE, title: "Alerts", dependsOn: ["WEB-2"] });
-  // why a research agent whose turn ended on a handoff: reading every issue then reads its turns, which neither the PR watch nor the agents' reconcile does.
   await text("issue_create", RESEARCH);
   const researcher = threadIn(await text("agent_start", { issue: "WEB-5" }));
   await kit.call("agent_handoff", { status: "blocked", ...FIELDS, summary: "Needs a PCI contact" }, researcher);
@@ -385,7 +371,6 @@ test("merges whose announcement can't read bb are announced by a later tick, aft
   kit.turnEvents.failure = new Error("HTTP 503: bb is restarting");
   await kit.tick();
   await settled();
-  // why the store: a catch-up reads every issue, which bb can't answer now.
   assert.deepEqual(branches.map((branch) => kit.store.prOfBranch(coordinatorId, branch)?.snapshot?.state), ["merged", "merged"]);
   assert.ok(!kit.store.unannounced(coordinatorId).some(({ event }) => event.kind === "unblocked"), "announced while bb couldn't be read");
 
@@ -470,7 +455,6 @@ test("a regional manager whose reads keep being overtaken holds no other: the ti
   const ticking = kit.tick().then(() => {
     ticked = true;
   });
-  // Every bb read answers only after the busy manager changed something again, as a crew at work keeps doing.
   for (let round = 0; round < 30 && !ticked; round++) {
     await settled();
     await busy.text("issue_update", { id: "WEB-1", title: `Add retries, round ${round}` });

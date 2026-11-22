@@ -1,7 +1,3 @@
-// What the comment box can send as: which of its GitHub actions the reader has, posting at once
-// (Comment or Reply) or adding to their pending review, which GitHub publishes only when they
-// submit it; the Send as modes those make, with Ask; the one the box sends with; and the words
-// each mode puts in the box and its menu. Pure.
 import type { ViewerReview } from "../../comments/review-schema.ts";
 import type { Action } from "./box-problems.ts";
 
@@ -58,7 +54,6 @@ export function sendOptionsOf(subject: Subject, actions: GitHubActions, hasThrea
 const can = (mode: Action): SendOption => ({ mode, reason: null });
 const cant = (mode: Action, reason: string): SendOption => ({ mode, reason });
 
-/** Why Review can't take lines on an older commit. */
 const NOT_AT_HEAD = "Your review takes comments on the PR's latest commit only. Refresh, then comment from the Changes tab.";
 
 /**
@@ -79,7 +74,6 @@ export function sendLabelOf(subject: Subject, mode: Action): string {
     case "ask":
       return "Ask the agent";
     case "comment":
-      // On GitHub a comment in a thread is a reply.
       return subject === "reply" ? "Reply" : "Comment";
     case "review":
       return "Add to review";
@@ -87,7 +81,6 @@ export function sendLabelOf(subject: Subject, mode: Action): string {
       return mode satisfies never;
   }
 }
-
 
 /** What sending as `mode` does, under its name in the Send as menu. */
 export function descriptionOf(mode: Action, actions: GitHubActions): string {

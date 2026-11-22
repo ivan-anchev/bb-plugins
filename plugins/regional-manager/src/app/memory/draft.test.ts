@@ -7,16 +7,12 @@ const v1 = { content: "# Notes\n\nNothing yet.\n", version: "v1" };
 const v2 = { content: "# Notes\n\n1. Inventory the endpoints\n", version: "v2" };
 const v3 = { content: "# Notes\n\n1. Inventory the endpoints\n2. Map the zones\n", version: "v3" };
 
-/** The file as the server saw it at `revision`. */
 const at = (text: MemoryText | null, revision: MemoryRevision): MemorySnapshot => ({ text, revision });
 
-/** A file's edit with no save out: the draft alone. */
 const drafted = (draft: Draft | null): FileEdit => ({ ...NO_SAVE, draft });
 
-/** The edit once the save is answered: its save settled, and its draft as the answer leaves it. */
 const answered = (edit: FileEdit, save: Save, outcome: WriteOutcome): FileEdit => ({ ...settled(save, outcome), draft: draftAfter(edit.draft, save, outcome) });
 
-/** The user typed `text` over `read`, and pressed Save: the edit while it is out, and the save. */
 function sent(read: MemorySnapshot, text: string): { edit: FileEdit; save: Save } {
   const edit = drafted(typed(text, read.text, null));
   const save = saveOf(read, edit);
@@ -76,13 +72,10 @@ test("a saved draft shows as saved even when every refresh after it fails", () =
   const { edit, save } = sent(at(v1, 1), "# Notes\n\nMine\n");
   const after = answered(edit, save, { outcome: "saved", version: "v9", revision: 2 });
 
-  // The read is still revision 1: its refresh failed.
   const file = fileNow(at(v1, 1), after);
   assert.deepEqual(editorState(file.text, after.draft), { kind: "clean", text: "# Notes\n\nMine\n" });
   assert.ok(isSaved(file, after));
-  // Typing on goes on from the version saved.
   assert.equal(saveOf(at(v1, 1), { ...after, draft: typed("# Notes\n\nMine, more\n", file.text, after.draft) })?.base, "v9");
-  // The refresh that comes through shows the same revision, still saved.
   assert.ok(isSaved(fileNow(at({ content: "# Notes\n\nMine\n", version: "v9" }, 2), after), after));
 });
 
@@ -113,7 +106,6 @@ test("a refused save on a deleted file shows it deleted, and saving creates it a
 });
 
 test("a read that moves on while a save is out doesn't hide the later file the refusal returns, whichever arrives last", () => {
-  // Read A, save; the read refreshes to B during the save; the write then finds C and is refused.
   const { edit, save } = sent(at(v1, 1), "# Notes\n\nMine\n");
   const after = answered(edit, save, { outcome: "conflict", current: at(v3, 3) });
 
@@ -128,13 +120,10 @@ test("a later read wins over a save's answer, even when it goes back to the text
   const { edit, save } = sent(at(v1, 1), "# Notes\n\nMine\n");
   const saved = answered(edit, save, { outcome: "saved", version: "v9", revision: 2 });
 
-  // Someone put A's text back after the save: the server saw it at revision 3.
   assert.deepEqual(fileNow(at(v1, 3), saved), at(v1, 3));
   assert.deepEqual(editorState(fileNow(at(v1, 3), saved).text, saved.draft), { kind: "clean", text: v1.content });
   assert.ok(!isSaved(fileNow(at(v1, 3), saved), saved));
 
-  // A refused save is not brought back either: with the file back at the draft's base, the draft is
-  // an edit of it again, and saves over it.
   const refused = answered(edit, save, { outcome: "conflict", current: at(v2, 2) });
   assert.deepEqual(editorState(fileNow(at(v1, 3), refused).text, refused.draft), { kind: "edited", draft: edit.draft });
   assert.equal(saveOf(at(v1, 3), refused)?.base, "v1");

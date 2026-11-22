@@ -6,7 +6,6 @@ import type { TabSet } from "./tab-set.ts";
 
 const KEY = "horizontal-tabs:tabs";
 
-/** A Web Storage area in memory, as the browser gives each window. */
 function memoryStorage(): Storage {
   const items = new Map<string, string>();
   return {
@@ -40,7 +39,6 @@ function tabsOn(threadIds: string[], liveIndex: number): TabSet {
   return { tabs, liveId: tabs[liveIndex].id };
 }
 
-/** Writes an envelope by hand, as an older or newer plugin, or a person, might have left it. */
 function store(area: Storage, envelope: unknown): void {
   area.setItem(KEY, JSON.stringify(envelope));
 }
@@ -68,7 +66,7 @@ test("keeps each plugin id's tabs apart", () => {
 
 test("drops only the tabs it can't read, and makes the first tab live when the live one is dropped", () => {
   const { tabs } = tabsOn(["thr_a", "thr_b"], 0);
-  // Deliberately off-type: a pane kind from a newer bb or plugin.
+  // WARNING: deliberately off-type; a pane kind from a newer bb or plugin.
   const future = { id: "t9", layout: { root: { type: "pane", paneId: "pane-9", content: { kind: "future-kind" } }, focusedPaneId: "pane-9" } };
   store(sessionStorage, { version: 1, tabs: [tabs[0], future, tabs[1], { id: "t8" }], liveId: "t9" });
   assert.deepEqual(savedTabs("horizontal-tabs").load(), { tabs, liveId: "t1" });

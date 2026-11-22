@@ -6,7 +6,6 @@ import { blockedBy, closesOf, knownClose, relationProblem, statusIn, unblockedSi
 import type { Closure, IssueStatus } from "./status.ts";
 
 const id = (n: number): IssueId => issueIdSchema.parse(`WEB-${n}`);
-/** An issue as the relations read it: `i<n>` depending on the issues numbered. */
 const shape = (n: number, ...dependsOn: number[]) => ({ id: id(n), dependsOn: dependsOn.map(id), parentId: null });
 
 test("a dependency that closes a cycle is refused naming the whole path, however long; a diamond is no cycle", () => {
@@ -30,10 +29,8 @@ test("an issue is unblocked once by each close of a dependency its work made; ne
   type Dependency = { status: IssueStatus; closedBy: Closure | null };
   const open: Dependency = { status: "in-progress", closedBy: null };
   const merged: Dependency = { status: "done", closedBy: { by: "merge", number: 41 } };
-  /** Done by the agent's handoff number `n`. */
   const reported = (n: 1 | 2): Dependency => ({ status: "done", closedBy: { by: "handoff", handoffId: handoffIdSchema.parse(`00000000-0000-4000-8000-00000000000${n}`) } });
   const canceled: Dependency = { status: "canceled", closedBy: { by: "manager", as: "canceled" } };
-  /** WEB-1, WEB-2 and WEB-3 as `dependencies` says, and the issues depending on them: WEB-4 on WEB-1, WEB-5 on WEB-1 and WEB-3, WEB-6 on WEB-2. */
   const views = (dependencies: [Dependency, Dependency, Dependency]) => {
     const statuses = new Map(dependencies.map(({ status }, i) => [id(i + 1), status]));
     const dependent = (n: number, ...on: number[]) => {
@@ -42,7 +39,6 @@ test("an issue is unblocked once by each close of a dependency its work made; ne
     };
     return [...dependencies.map((dependency, i) => ({ issue: shape(i + 1), blockedBy: [], ...dependency })), dependent(4, 1), dependent(5, 1, 3), dependent(6, 2)];
   };
-  // The relations are written as WEB-4, WEB-5 and WEB-6 are filed, knowing what the read their filing answered from said: WEB-2 closed already.
   const filed = closesOf(views([open, reported(1), open]));
   const relations = (...on: number[]) => new Map(on.map((n): [IssueId, CloseKey | null] => [id(n), knownClose(filed, id(n))]));
   const known = new Map([
@@ -50,7 +46,6 @@ test("an issue is unblocked once by each close of a dependency its work made; ne
     [id(5), relations(1, 3)],
     [id(6), relations(2)],
   ]);
-  /** One read of every issue: what it announces, as "WEB-4 by WEB-1". */
   const read = (dependencies: [Dependency, Dependency, Dependency]): string[] => {
     const { unblocked, learned } = unblockedSince(known, views(dependencies));
     for (const [issueId, closes] of learned) for (const [dependency, close] of closes) known.get(issueId)?.set(dependency, close);
@@ -71,7 +66,6 @@ test("an issue is unblocked once by each close of a dependency its work made; ne
 test("a parent's dependency closing announces its open sub-issues nothing else blocks, once each, never the parent; the close is remembered on the parent's relation", () => {
   const sub = (n: number, ...on: number[]) => ({ ...shape(n, ...on), parentId: id(1) });
   const merged = { by: "merge", number: 41 } as const;
-  /** WEB-1 depends on WEB-9 and holds WEB-2, WEB-3 (depends on WEB-8) and WEB-4 (closed); WEB-9 and WEB-8 as given. */
   const views = (i9: Closure | null, i8: Closure | null) => {
     const statuses = new Map<IssueId, IssueStatus>([
       [id(9), i9 === null ? "in-progress" : "done"],

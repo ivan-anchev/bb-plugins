@@ -1,10 +1,3 @@
-// A hover-and-focus tooltip whose trigger is the one focus stop (adapted from code-explorer's).
-// REVIEW.md: Escape closes it wherever focus is, it stays open while the pointer is over the
-// trigger or the popup, or while the trigger has keyboard focus, and the popup sits inside the
-// hover area so there is no dead gap between them (WCAG 1.4.13). Pressing the trigger closes it
-// until the pointer comes back, so it never shows under the menu or popover the press opens.
-// `role="tooltip"` is on the bubble, not the positioning wrapper: themes style that role as the
-// bubble, and on the wrapper they would paint a second box around this one, hover gap and all.
 import { useEffect, useId, useState, type ReactNode } from "react";
 
 type Placement = "top" | "top-end" | "bottom-start" | "bottom-end";
@@ -25,7 +18,6 @@ type TooltipProps = {
   children: (describedBy: string) => ReactNode;
 };
 
-// The gap between trigger and popup is padding inside the popup, so the pointer never leaves the hover area.
 const PLACEMENTS = {
   top: "bottom-full left-1/2 -translate-x-1/2 pb-1.5",
   "top-end": "bottom-full right-0 pb-1.5",
@@ -50,7 +42,6 @@ export function Tooltip({ content, placement = "top", className = "", forced = f
       onPointerLeave={() => setHovered(false)}
       onPointerDown={() => setDismissed(true)}
       onFocus={(event) => {
-        // A click focuses the trigger too; only keyboard focus (:focus-visible) shows the tooltip.
         if (!event.target.matches(":focus-visible")) return;
         setFocused(true);
         setDismissed(false);
@@ -67,8 +58,6 @@ export function Tooltip({ content, placement = "top", className = "", forced = f
   );
 }
 
-// why an effect: Escape must close the tooltip wherever focus is, which only a document listener
-// sees. It claims the key (preventDefault) only while open, so Escape otherwise stays bb's.
 function useDismissOnEscape(open: boolean, setDismissed: (dismissed: boolean) => void): void {
   useEffect(
     function dismissOnEscape() {

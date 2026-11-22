@@ -17,7 +17,6 @@ function thread(paneId: string, projectId: string): Pane {
   return pane(paneId, { kind: "thread", projectId, threadId: `thr_${paneId}` });
 }
 
-/** The panes side by side, `focusedPaneId` focused. */
 function row(focusedPaneId: string, ...children: Pane[]): Layout {
   if (children.length === 1) return { root: children[0], focusedPaneId };
   return { root: { type: "split", dir: "row", sizes: children.map(() => 1 / children.length), children }, focusedPaneId };

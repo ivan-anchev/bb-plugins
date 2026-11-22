@@ -1,11 +1,5 @@
 import * as React from "react"
 
-/*
- * Markdown children, read as data. No "use client" here: these are pure
- * functions over React elements, so a server `mdx-components.tsx` can call
- * them too. `graph-frame.tsx` re-exports everything.
- */
-
 type WithChildren<P> = P & { children?: React.ReactNode }
 
 type GraphItemComponent<P extends object> = ((
@@ -535,7 +529,6 @@ function tableOf(children: React.ReactNode): MdTable | null {
   const head = rowCells(headRow)
   const rest = heads[0] ? bodies : bodies.slice(1)
   const last = rest.at(-1)
-  // Markdown has no <tfoot>. A last row led by **bold** or "Total" is it.
   const written =
     !foots[0] && last && rest.length > 1 && isTotal(last) ? last : undefined
   const dataRows = (written ? rest.slice(0, -1) : rest).map(

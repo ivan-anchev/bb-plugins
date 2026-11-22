@@ -8,10 +8,8 @@ import { forwardThreadEvents } from "./thread-events.ts";
 const PLUGIN_ID = "regional-manager";
 const [MANAGER, OTHER_MANAGER] = [coordinatorIdSchema.parse("00000000-0000-4000-8000-000000000001"), coordinatorIdSchema.parse("00000000-0000-4000-8000-000000000002")];
 
-// why a status on every event: bb's lifecycle events carry the thread too; the forwarder reads it only from the thread's own event.
 type Payload = { thread: { id: string; originPluginId: string | null; status: HolderThread["status"] } };
 
-/** forwardThreadEvents over a fake bb: thread `a1` is MANAGER's agent, `b1` OTHER_MANAGER's. What it calls is recorded in order. */
 function forwarded() {
   const handlers = new Map<string, ((payload: Payload) => void | Promise<void>)[]>();
   const calls: string[] = [];
@@ -48,7 +46,6 @@ test("a thread's status repeated refreshes the board alone; one after a lifecycl
   now("a1", "idle");
   assert.deepEqual(calls.splice(0), ["change manager", "change manager"]);
 
-  // why: a removed manager's idle agent threads send nothing more, so what was seen of them goes with the manager, and only its.
   forget(MANAGER);
   now("a1", "idle");
   now("b1", "idle");

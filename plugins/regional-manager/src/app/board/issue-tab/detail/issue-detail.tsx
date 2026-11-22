@@ -1,6 +1,3 @@
-// An issue's detail, read when its tab opens, under its head: its description, its relations, its
-// criteria, its decisions, a build parent's final checks, and its record: every agent that held it,
-// each handoff it made and the verdict on it.
 import { experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { coordinatorContract as contract, type IssueDetail as Detail, type IssueRow } from "../../../../contract.ts";
 import { isVerified } from "../../../../model/issue/kind.ts";
@@ -36,7 +33,6 @@ function Opened({ issue, detail: { description, doneCriteria, decisions, depends
       <IssueRelations issue={issue} dependsOn={dependsOn} blocks={blocks} issues={issues} />
       {doneCriteria.length > 0 && (
         <section className="rmi-part">
-          {/* why by kind: a verified kind's criteria are judged; any other's are questions its report answers. */}
           <h3 className="rmi-part-title">{isVerified(issue.kind) ? "Done when" : "Questions"}</h3>
           <ol className="rmi-criteria">
             {doneCriteria.map((criterion, i) => (

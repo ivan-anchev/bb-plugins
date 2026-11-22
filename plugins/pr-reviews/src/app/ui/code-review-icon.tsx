@@ -1,6 +1,3 @@
-// A code review comment: a speech bubble with `< >` inside, as GitHub's code-review octicon draws
-// it. bb has no such icon, so it is drawn here as bb's are: 16px, a ~1.4px round stroke in the text
-// colour. Decoration only: the control it sits in carries the name.
 export function CodeReviewIcon({ className }: { className: string }) {
   return (
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden className={className}>
