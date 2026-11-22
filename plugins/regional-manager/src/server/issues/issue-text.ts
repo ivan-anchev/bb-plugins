@@ -22,8 +22,9 @@ const threadLink = (threadId: string | null): string => (threadId === null ? "no
 
 /**
  * The board section of a catch-up: every issue in its lane, each sub-issue under its parent's row,
- * with its agent and what blocks it, then the ready ones; or why it couldn't be read. A flagged
- * sub-issue is also listed under Needs you, as the board shows it.
+ * with its agent, what blocks it and what it blocks, as the board's row says them, then the ready
+ * ones; or why it couldn't be read. A flagged sub-issue is also listed under Needs you, as the board
+ * shows it.
  */
 export function boardText(reads: readonly IssueRead[] | { error: string }): string {
   if ("error" in reads) return `## Board\n\nCould not read your agents' threads from bb: ${reads.error}. Call crew_catch_up again before relying on any issue's status.`;
@@ -51,7 +52,7 @@ function rowLine({ view, agent, threadId, branch }: IssueRead): string {
   const { issue } = view;
   const held = view.subIssues !== null ? "parent" : agent === null ? "no agent" : `${agent.id}${agent.ended === null ? "" : ` (${agent.ended.how})`}, ${threadLink(threadId)}`;
   const under = issue.parentId === null ? "" : `, under ${issue.parentId}`;
-  return `- ${issue.id} "${issue.title}" (${PIPELINES[issue.kind].label}; ${held}${under}${branch === null ? "" : `, on branch \`${branch}\``}): ${headlineText(view)}${blockedText(view.blockedBy, "; blocked by ")}`;
+  return `- ${issue.id} "${issue.title}" (${PIPELINES[issue.kind].label}; ${held}${under}${branch === null ? "" : `, on branch \`${branch}\``}): ${headlineText(view)}${blockedText(view.blockedBy, "; blocked by ")}${blockedText(view.blocks, "; blocks ")}`;
 }
 
 /** The issues in Todo that nothing blocks: those an agent can start on without waiting. */

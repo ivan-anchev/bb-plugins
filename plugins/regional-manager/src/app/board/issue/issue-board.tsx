@@ -1,20 +1,22 @@
 // The board's lanes (board-groups.ts): Needs you on top, then a lane per status, each under a header
-// that folds it. Backlog, Done and Canceled start folded. A parent's sub-issues sit one level in under
-// its row, in its lane, and a flagged one under Needs you as well. A row opens its issue's own tab
-// (issue-row.tsx). A decision waiting for the user keeps its own row, the caller's, under Needs you;
-// answered, it leaves the board, and focus in it goes to the page. Which lanes are folded outlives a
-// row moving lanes, and so does focus: on the row where it lands, or on its lane's header while that
-// lane is folded.
+// that folds it. Backlog, Done and Canceled start folded. A parent's sub-issues hang under its row on
+// rails (row/sub-issue-tree.tsx), in its lane, and a flagged one sits under Needs you as well, with
+// what it waits on the user for under its title. A row opens its issue's own tab (row/issue-row.tsx),
+// and resting on it, or focusing it, opens its hover card (hover-card/). A decision waiting for the
+// user keeps its own row, the caller's, under Needs you; answered, it leaves the board, and focus in
+// it goes to the page. Which lanes are folded outlives a row moving lanes, and so does focus: on the
+// row where it lands, or on its lane's header while that lane is folded.
 import "./issue-board.css";
-import { useId, useState, type ReactNode } from "react";
+import { useId, useState, type CSSProperties, type ReactNode } from "react";
 import type { IssueRow as Row } from "../../../contract.ts";
 import { boardGroups, LANE_LABELS, type BoardItem, type Lane } from "../../../model/board/board-groups.ts";
 import type { Decision, OpenDecision } from "../../../model/decision.ts";
-import type { IssueId } from "../../../model/issue/issue.ts";
 import { useFocusKeptAcrossGroups } from "../../ui/focus-hand-off.ts";
-import { IssueRow } from "./issue-row.tsx";
 import { LaneHeader } from "../../ui/lane-header/lane-header.tsx";
-import { NeedsYouGlyph, StatusGlyph } from "./status-glyph.tsx";
+import { HoverCard } from "./hover-card/hover-card.tsx";
+import { useHoverCards } from "./hover-card/use-hover-card.ts";
+import { IssueRow } from "./row/issue-row.tsx";
+import { SubIssueTree } from "./row/sub-issue-tree.tsx";
 
 type IssueBoardProps = {
   decisions: readonly Decision[];
@@ -31,44 +33,51 @@ export function IssueBoard({ decisions, issues, decisionRow }: IssueBoardProps) 
   // why only the rows an issue lives in: a flagged sub-issue's copy under Needs you is not where it lives, its parent's lane is.
   const laneOfKey = (key: string): Lane | null => groups.find(({ rows }) => rows.some((entry) => livesIn(entry).includes(key)))?.lane ?? null;
   const focus = useFocusKeptAcrossGroups(laneOfKey);
+  const cards = useHoverCards();
 
-  /** An issue's row, focused by `rowKey`; why a key apart from its id: a flagged sub-issue has two rows, each taking focus on its own. */
-  const issueRow = (issue: Row, rowKey: string, under: IssueId | null = null) => <IssueRow ref={focus.target(rowKey)} issue={issue} under={under} />;
+  /**
+   * An issue's row, focused by `rowKey`, with its hover card while it shows; `ask`, what it waits on the
+   * user for, under Needs you. why a key apart from its id: a flagged sub-issue has two rows, each
+   * taking focus, and showing its card, on its own.
+   */
+  const issueRow = (issue: Row, rowKey: string, ask: string | null, under: Row["parentId"] = null) => (
+    <IssueRow ref={focus.target(rowKey)} issue={issue} under={under} ask={ask} hover={cards.trigger(rowKey)}>
+      {cards.shown === rowKey && <HoverCard issue={issue} issues={issues} />}
+    </IssueRow>
+  );
 
   function item(entry: BoardItem<Row>): ReactNode {
     switch (entry.kind) {
       case "decision":
         return decisionRow(entry.decision);
-      case "issue":
+      case "issue": {
+        const ask = entry.lane === "needs-you" ? entry.issue.needsYou : null;
         return (
           <>
-            {issueRow(entry.issue, entry.issue.id)}
+            {issueRow(entry.issue, entry.issue.id, ask)}
             {entry.subIssues.length > 0 && (
-              <ul className="rmi-list rmi-sub-issues">
-                {entry.subIssues.map((sub) => (
-                  <li key={sub.id} ref={focus.item(sub.id)}>
-                    {issueRow(sub, sub.id)}
-                  </li>
-                ))}
-              </ul>
+              <SubIssueTree subIssues={entry.subIssues} keyOf={(sub) => sub.id} itemRef={(sub) => focus.item(sub.id)} parentAsks={ask !== null}>
+                {(sub) => issueRow(sub, sub.id, null)}
+              </SubIssueTree>
             )}
           </>
         );
+      }
       case "flagged-sub-issue":
-        return issueRow(entry.issue, rowKeyOf(entry), entry.issue.parentId);
+        return issueRow(entry.issue, rowKeyOf(entry), entry.issue.needsYou, entry.issue.parentId);
       default:
         return entry satisfies never;
     }
   }
 
   return (
-    <div className="rmi-board">
+    <div className="rmi-board" style={idColumn(issues)} {...cards.board}>
       {groups.map(({ lane, rows }) => {
         const open = !folded.has(lane);
         const headerId = `${ids}-${lane}`;
         return (
           <section key={lane} aria-labelledby={headerId} className="rmi-lane-section">
-            <LaneHeader ref={focus.header(lane)} id={headerId} listId={`${headerId}-list`} glyph={laneGlyph(lane)} name={LANE_LABELS[lane]} count={rows.length} open={open} onToggle={() => setFolded((current) => toggled(current, lane))} />
+            <LaneHeader ref={focus.header(lane)} id={headerId} listId={`${headerId}-list`} name={LANE_LABELS[lane]} count={rows.length} open={open} onToggle={() => setFolded((current) => toggled(current, lane))} />
             {open && (
               <ul id={`${headerId}-list`} className="rmi-list">
                 {rows.map((entry) => (
@@ -117,5 +126,5 @@ function toggled<Key>(keys: ReadonlySet<Key>, key: Key): ReadonlySet<Key> {
   return next;
 }
 
-/** A lane's glyph names its status, so it stands still; Needs you has its own. */
-const laneGlyph = (lane: Lane): ReactNode => (lane === "needs-you" ? <NeedsYouGlyph /> : <StatusGlyph status={lane} still />);
+/** The ids' column, as wide as the board's longest id in mono, so every row's title starts at one line (row/issue-row.css `.rmi-row-id`). */
+const idColumn = (issues: readonly Row[]): CSSProperties & Record<"--rmi-id-ch", number> => ({ "--rmi-id-ch": Math.max(0, ...issues.map(({ id }) => id.length)) });

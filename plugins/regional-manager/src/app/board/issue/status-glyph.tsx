@@ -1,6 +1,8 @@
 // An issue status's glyph, 14 in a 16 box, in its status's token (issue-board.css `.rmi-state`):
 // Activity Sidebar's state glyphs (src/ui/state-glyph.tsx), one per status. Under-way statuses
-// draw its working ring: turning on a row, still where it only names the status (a lane's header).
+// draw its working ring: turning on a row, still where it only names the status (a relation in the
+// issue's tab). In review is PR Reviews' "awaiting review" mark (src/app/page/status-glyph.tsx), a
+// ring half filled, so it never reads as Done's check.
 import { useRef, type ReactNode } from "react";
 import { STATUS_LABELS, type IssueStatus } from "../../../model/issue/status.ts";
 import { useRing } from "./motion/ring.ts";
@@ -15,10 +17,10 @@ export function StatusGlyph({ status, still = false }: { status: IssueStatus; st
   );
 }
 
-/** Needs you's mark, Activity Sidebar's "failed" glyph: it waits on the user whatever its status. */
+/** Needs you's mark, Activity Sidebar's "failed" glyph, in place of a flagged issue's status: it waits on the user whatever its status. */
 export function NeedsYouGlyph() {
   return (
-    <span className="rmi-state" data-state="needs-you" aria-hidden>
+    <span className="rmi-state" data-state="needs-you" role="img" aria-label="Needs you">
       <Icon>
         <circle cx="12" cy="12" r="10" />
         <path d="M12 8v4M12 16h.01" />
@@ -46,6 +48,12 @@ function glyph(status: IssueStatus, still: boolean): ReactNode {
     case "verifying":
       return <Ring still={still} />;
     case "in-review":
+      return (
+        <Icon>
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 6a6 6 0 0 1 0 12z" fill="currentColor" stroke="none" />
+        </Icon>
+      );
     case "done":
       return (
         <Icon>

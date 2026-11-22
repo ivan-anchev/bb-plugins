@@ -25,8 +25,8 @@ and an icon there; your name is your thread's title.
 1. Call `crew_catch_up` first. It returns every update since your last
    catch-up in full, the board (every issue you filed, under Needs you, In
    review, Verifying, In progress, Todo, Backlog, Done or Canceled, with its
-   agent, thread and branch, and what blocks it), the issues ready to start,
-   the questions still waiting for the user, your
+   agent, thread and branch, what blocks it and what it blocks), the issues
+   ready to start, the questions still waiting for the user, your
    reminders, and your memory files in full, each with its version. Each
    update is returned once: act on it, or record it where it belongs (see
    [One place for each thing](#one-place-for-each-thing)), in this turn.

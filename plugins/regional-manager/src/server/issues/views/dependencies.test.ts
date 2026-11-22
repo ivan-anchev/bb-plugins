@@ -62,7 +62,7 @@ test("an issue filed depending on another is blocked by it as filed, in issue_re
   assert.match(dependent, /### Relations\n\nParent: none\.\nSub-issues: none\.\nDepends on: WEB-1 \(Todo\)\.\nBlocks: nothing\./);
   assert.match(await text("issue_read", { id: "WEB-1" }), /### Relations\n\nParent: none\.\nSub-issues: none\.\nDepends on: nothing\.\nBlocks: WEB-2 \(Todo\)\./);
   assert.equal(await row("WEB-2"), '- WEB-2 "Add retries" (Build; no agent): Not started; blocked by WEB-1 (Todo)');
-  assert.equal(await row("WEB-1"), '- WEB-1 "Retry budget" (Build; no agent): Not started');
+  assert.equal(await row("WEB-1"), '- WEB-1 "Retry budget" (Build; no agent): Not started; blocks WEB-2 (Todo)', "catch-up says what it blocks, as the board's row does");
 });
 
 test("a dependency on no issue, on itself, or closing a cycle is refused naming it, and nothing of the change is written", async () => {

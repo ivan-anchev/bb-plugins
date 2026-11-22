@@ -43,6 +43,7 @@ const issue = (id: string, fields: Partial<IssueRow>): IssueRow => ({
   parentId: null,
   subIssues: null,
   blockedBy: [],
+  blocks: [],
   title: `Title of ${id}`,
   status: "todo",
   needsYou: null,

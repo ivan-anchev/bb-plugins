@@ -1,18 +1,22 @@
 // A folding section's header, a board lane's or Memory's: a bar on the theme's recessed surface
-// holding the section's glyph, its name, how many it holds and a chevron. The whole bar folds the
-// section, as Activity Sidebar's section title does (src/ui/shelf-title.tsx).
+// holding the section's glyph, if it has one, its name, how many it holds and a chevron. The whole
+// bar folds the section, as Activity Sidebar's section title does (src/ui/shelf-title.tsx). why a
+// board lane has no glyph: each of its rows draws its status's, and Memory's folder marks it as the
+// one section of files.
 import "./lane-header.css";
 import type { ReactNode, Ref } from "react";
 
-type LaneHeaderProps = { ref: Ref<HTMLButtonElement>; id: string; glyph: ReactNode; name: string; count: number; open: boolean; listId: string; onToggle(): void };
+type LaneHeaderProps = { ref: Ref<HTMLButtonElement>; id: string; glyph?: ReactNode; name: string; count: number; open: boolean; listId: string; onToggle(): void };
 
 export function LaneHeader({ ref, id, glyph, name, count, open, listId, onToggle }: LaneHeaderProps) {
   return (
     <h2 id={id} className="rmi-lane-heading">
       <button ref={ref} type="button" className="rmi-lane" aria-expanded={open} aria-controls={open ? listId : undefined} onClick={onToggle}>
-        <span className="rmi-lane-glyph" aria-hidden>
-          {glyph}
-        </span>
+        {glyph !== undefined && (
+          <span className="rmi-lane-glyph" aria-hidden>
+            {glyph}
+          </span>
+        )}
         <span className="rmi-lane-name">{name}</span>
         <span className="rmi-count">{count}</span>
         <svg className="rmi-chevron" width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>

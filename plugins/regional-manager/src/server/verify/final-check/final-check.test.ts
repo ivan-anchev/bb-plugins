@@ -334,7 +334,7 @@ test("an opened parent sends its final checks, each with only what its detail sh
   assert.equal(shown.defaultBranch, "main");
   assert.deepEqual(Object.keys(shown.verdict).sort(), ["checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"], "no model");
   const row = (await kit.rpc.board({ coordinatorId })).issues[0] ?? assert.fail("no row");
-  assert.deepEqual(Object.keys(row).sort(), ["agent", "blockedBy", "headline", "id", "kind", "needsYou", "parentId", "pr", "status", "subIssues", "title"]);
+  assert.deepEqual(Object.keys(row).sort(), ["agent", "blockedBy", "blocks", "headline", "id", "kind", "needsYou", "parentId", "pr", "status", "subIssues", "title"]);
   assert.deepEqual((await kit.rpc.issue({ coordinatorId, issueId: issueIdSchema.parse("WEB-2") })).finalChecks, [], "a sub-issue has none");
 });
 

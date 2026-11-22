@@ -31,6 +31,7 @@ const issue = (id: string, fields: Partial<IssueRow>): IssueRow => ({
   parentId: null,
   subIssues: null,
   blockedBy: [],
+  blocks: [],
   title: `Title of ${id}`,
   status: "todo",
   needsYou: null,
@@ -96,7 +97,7 @@ async function mount(data: Read, answer: (input: unknown) => void = () => {}) {
   return { view, lanes, reread };
 }
 
-test("Needs you leads with open decisions, then flagged issues showing their own status, then a lane per status in order; the last three start folded; empty lanes are not shown, and an answered decision is on none", async () => {
+test("Needs you leads with open decisions, then flagged issues showing Needs you's glyph and speaking their status, then a lane per status in order; the last three start folded; empty lanes are not shown, and an answered decision is on none", async () => {
   const { view, lanes } = await mount({
     decisions: [decision("d1", false), decision("d2", true)],
     issues: [
@@ -118,8 +119,9 @@ test("Needs you leads with open decisions, then flagged issues showing their own
   const needsYou = within(view.getByRole("region", { name: /^Needs you/ }));
   const [question, flagged] = needsYou.getAllByRole("listitem");
   assert.match(question?.textContent ?? "", /^d1Question d1\?/, "the lane's decisions first");
-  assert.ok(flagged !== undefined && within(flagged).getByRole("img", { name: "In progress" }), "the flagged issue shows its status");
-  assert.equal(within(view.getByRole("region", { name: /^In progress/ })).queryByRole("button", { name: /\bWEB-1 Build/ }), null, "and is not also in its status's lane");
+  assert.ok(flagged !== undefined && within(flagged).getByRole("img", { name: "Needs you" }), "the flagged issue shows Needs you's glyph");
+  assert.match(within(flagged).getByRole("button", { name: /^WEB-1:/ }).getAttribute("aria-label") ?? "", /, In progress, needs you: /, "and says its status");
+  assert.equal(within(view.getByRole("region", { name: /^In progress/ })).queryByRole("button", { name: /^WEB-1:/ }), null, "and is not also in its status's lane");
 });
 
 test("a row says why a check is waiting or stalled: its verifier asking, or no activity from it", async () => {
@@ -129,14 +131,15 @@ test("a row says why a check is waiting or stalled: its verifier asking, or no a
     decisions: [],
     issues: [issue("WEB-1", { status: "verifying", headline: asking, agent: agent("a1") }), issue("WEB-2", { status: "in-progress", needsYou: stalled, headline: stalled, agent: agent("a2") })],
   });
-  assert.ok(view.getByRole("button", { name: new RegExp(`\\bWEB-1 Build.*${asking}`) }));
-  assert.ok(view.getByRole("button", { name: new RegExp(`\\bWEB-2 Build.*${stalled.replace(/[()]/g, "\\$&")}`) }));
+  assert.ok(view.getByRole("button", { name: new RegExp(`^WEB-1:.*${asking}`) }));
+  assert.ok(view.getByRole("button", { name: new RegExp(`^WEB-2:.*${stalled.replace(/[()]/g, "\\$&")}`) }));
 });
 
-test("a research row reads Research, with no pull request", async () => {
+test("a research row names no kind, as no row does, and has no pull request", async () => {
   const { view } = await mount({ decisions: [], issues: [issue("WEB-2", { kind: "research", status: "done", headline: "Handed off: Vault fits our PCI scope", agent: agent("a2") })] });
   fireEvent.click(view.getByRole("button", { name: /^Done/ }));
-  assert.ok(view.getByRole("button", { name: /\bWEB-2 Research: Title of WEB-2/ }));
+  const row = view.getByRole("button", { name: /^WEB-2: Title of WEB-2, Done,/ });
+  assert.doesNotMatch(`${row.getAttribute("aria-label")} ${row.closest(".rmi-rowbox")?.textContent}`, /Research/);
   assert.equal(view.queryByRole("link", { name: /^Pull request/ }), null);
 });
 

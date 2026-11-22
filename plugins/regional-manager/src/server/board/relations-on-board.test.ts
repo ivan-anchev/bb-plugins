@@ -1,5 +1,6 @@
 // What the board's reads send of dependencies: each row's open blockers, its parent's among them,
-// and an opened issue's own dependencies and dependents, as the tools file and close them.
+// and the open issues it blocks; and an opened issue's own dependencies and dependents, as the tools
+// file and close them.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueIdSchema } from "../../model/issue/issue.ts";
@@ -40,4 +41,23 @@ test("a sub-issue's row sends its parent's open dependencies as its blockers; it
   const sub = await kit.rpc.issue({ coordinatorId, issueId: id("WEB-3") });
   assert.deepEqual([sub.dependsOn, sub.blocks], [[], []]);
   assert.deepEqual((await kit.rpc.issue({ coordinatorId, issueId: id("WEB-1") })).blocks, ["WEB-2"], "what it blocks through a parent is that parent");
+});
+
+test("a row sends the open issues that depend on it while it is open itself: a closed dependent isn't blocked, and a closed issue blocks nothing", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  const file = (input: object) => kit.call("issue_create", { ...ISSUE, ...input }, threadId);
+  await file({ title: "Retry budget" });
+  await file({ title: "Retry queue", dependsOn: ["WEB-1"] });
+  await file({ title: "Dead letters", dependsOn: ["WEB-1", "WEB-2"] });
+  await file({ title: "Queue schema", parent: "WEB-2" });
+  const blocking = async () => Object.fromEntries((await kit.rpc.board({ coordinatorId })).issues.map(({ id, blocks }) => [id, blocks]));
+
+  assert.deepEqual(await blocking(), { "WEB-1": ["WEB-2", "WEB-3"], "WEB-2": ["WEB-3"], "WEB-3": [], "WEB-4": [] }, "what depends on it itself; a parent's dependent is the parent");
+
+  await kit.call("issue_update", { id: "WEB-3", status: "canceled" }, threadId);
+  assert.deepEqual(await blocking(), { "WEB-1": ["WEB-2"], "WEB-2": [], "WEB-3": [], "WEB-4": [] }, "a canceled dependent waits on nothing");
+
+  await kit.call("issue_update", { id: "WEB-1", status: "canceled" }, threadId);
+  assert.deepEqual(await blocking(), { "WEB-1": [], "WEB-2": [], "WEB-3": [], "WEB-4": [] }, "a canceled issue blocks nothing, though WEB-2 still depends on it");
+  assert.deepEqual((await kit.rpc.issue({ coordinatorId, issueId: id("WEB-2") })).dependsOn, ["WEB-1"], "the dependency itself is kept");
 });

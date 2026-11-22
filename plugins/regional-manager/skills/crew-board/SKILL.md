@@ -95,7 +95,7 @@ and no tool can turn verification on or off.
 
 | Tool | Thread | What it does |
 | --- | --- | --- |
-| `crew_catch_up` | regional manager | Returns every update since its last catch-up, whole, then the board with what blocks each issue and the issues ready to start, the questions still waiting, its reminders, and its core memory files with their versions. |
+| `crew_catch_up` | regional manager | Returns every update since its last catch-up, whole, then the board with what blocks each issue and what each blocks, and the issues ready to start, the questions still waiting, its reminders, and its core memory files with their versions. |
 | `crew_memory_read` | regional manager, agent, verifier | Reads one memory file, such as `NOTES.md` or `notes/api.md`, with its version. |
 | `crew_memory_write` | regional manager | Writes one memory file whole, naming the version it read (null to create one); a stale write returns the current text instead. |
 | `crew_remind` | regional manager | Sets a reminder (`note`, `at`, optional `every`) or cancels one (`cancel`). |
@@ -891,39 +891,52 @@ and ends with its [memory](#read-and-edit-memory):
 - **PR status unavailable: <why>**, only while the latest read of a pull
   request failed.
 - **Lanes**: Needs you, then In review, Verifying, In progress, Todo,
-  Backlog, Done and Canceled, each under a bar with its glyph, how many it
-  holds and a chevron. Pressing the bar folds or unfolds the lane; Backlog,
-  Done and Canceled start folded, and an empty lane isn't shown. Needs you
-  holds the open decisions put to you, then the issues flagged Needs you,
-  each with its own status's glyph. An answered decision is on no lane:
-  it leaves the board, and one that named an issue stays in that issue's
-  Decisions.
-- **Issues**, each row with its status's glyph, its id, kind and title, a
-  one-line headline that says why it is where it is (such as "Working",
-  "Verifying: <summary>", "✓ Verified: <summary>" or "Blocked: <summary>"),
-  its agent, which opens the agent's thread, and once it has one, its pull
-  request: its number in its state's colour, with a dot for its CI, which
-  opens it on GitHub. A research issue's row reads "Research" and never has
-  a pull request. An issue a dependency blocks starts its headline line with
-  "blocked by BBP-6" (two named, the rest counted: "blocked by BBP-6, BBP-7 +2") and
-  stays in its own status's lane: blocked is not a lane, and doesn't put it
-  under Needs you. That differs from an agent's "Blocked: <summary>"
-  headline, which is the agent asking you for something, under Needs you.
-- **Sub-issues** sit indented one level under their parent's row, in the
-  parent's lane whatever their own status, each with its own glyph and
-  everything a row has. The parent, which never has an agent or a pull
-  request, shows how many of its sub-issues are Done at the right of its
-  first line ("1/3"), and its headline says only what that count doesn't:
-  why it is flagged, where its final check stands ("Final check due", "Final
-  check running", "✓ Final check passed", "✗ Final check failed"), or
-  nothing. With nothing under its title the row is that one line; a headline
-  coming or going adds or takes its second line and moves nothing else. The
-  catch-up, with no such cell, leads a parent's line with the count ("1/3
-  done"). A flagged
-  sub-issue is also listed flat under Needs you, its parent's id ahead of its
-  own ("BBP-1›BBP-3"). A lane's count is its rows: a parent counts once, its
-  sub-issues by its own count. Folding a lane folds its parents with their
-  sub-issues.
+  Backlog, Done and Canceled, each under a bar with its name, how many it
+  holds and a chevron, and no glyph: each row draws its own. Pressing the
+  bar folds or unfolds the lane; Backlog, Done and Canceled start folded,
+  and an empty lane isn't shown. Needs you holds the open decisions put to
+  you, then the issues flagged Needs you. An answered decision is on no
+  lane: it leaves the board, and one that named an issue stays in that
+  issue's Decisions.
+- **Issues**, each row one line: its status's glyph, its id in mono, in a
+  column the ids share, its title, fading out at its end, then its pills
+  and, once it has one, its pull request: its number in its state's colour,
+  with a dot for its CI, which opens it on GitHub. A flagged issue draws
+  Needs you's red glyph in place of its status's, wherever its row is; its
+  status is in the row's spoken label, its card and its tab. Under Needs
+  you a row adds a second line: what it waits on you for (such as
+  "Blocked: <summary>", the agent asking you for something). The row names
+  no kind and no agent, and its headline is in its card and its tab. Done
+  and Canceled rows read quieter.
+- **Pills**, after the title: a parent's sub-issues Done, a ring filling in
+  Done's violet with "3/7"; what blocks it, a red ⊘ with the blocker's id
+  ("⊘ BBP-6"), or how many when more than one does; and what it blocks, an
+  amber →| with how many. What it blocks counts only the open issues that
+  depend on it, and only while it is open itself: a Done or Canceled issue
+  blocks nothing. A blocked issue stays in its own status's lane: blocked
+  is not a lane, and doesn't put it under Needs you. `crew_catch_up` says
+  both too: "; blocked by BBP-6 (Todo)" and "; blocks BBP-7 (Todo)".
+- **Its card**: rest the pointer on a row for half a second, or move
+  keyboard focus to it, and its card opens under it: its title whole, up to
+  three lines; its status, and its agent; what it waits on you for, or else
+  its headline (such as "Working", "Verifying: <summary>" or "✓ Verified:
+  <summary>"); its pills spelled out ("3 of 7 done", "Blocked by BBP-6",
+  "Blocks BBP-7, BBP-19"); and its sub-issues, or what blocks it and what it
+  blocks, each with its glyph, id and title. Once one card shows, resting on
+  another row swaps it at once. It stays while the pointer is on its row or
+  on the card, or focus is on its row; Escape, wherever focus is, a press,
+  or both pointer and focus leaving close it. Touch has no card: a tap opens
+  the issue.
+- **Sub-issues** hang under their parent's row on rails, a hairline from
+  under the parent's glyph bending into each, in the parent's lane whatever
+  their own status, each one line with everything a row has. They always
+  show: the parent's count is not a fold. The parent, which never has an
+  agent or a pull request, says how many are Done in its pill. The
+  catch-up leads a parent's line with the count ("1/3 done"). A flagged
+  sub-issue is also listed flat under Needs you, its parent's id ahead of
+  its own ("BBP-1›BBP-3"). A lane's count is its rows: a parent counts
+  once, its sub-issues by its own count. Folding a lane folds its parents
+  with their sub-issues.
 
 Pressing an issue, or Enter or Space on its row, opens it in its own tab in
 the same side panel, beside the Board, titled with its id and title; pressing
