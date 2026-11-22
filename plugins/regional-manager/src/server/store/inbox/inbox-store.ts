@@ -4,7 +4,7 @@ import { z } from "zod";
 import { decisionIdSchema, type DecisionId, type Decision } from "../../../model/decision.ts";
 import { inboxEventSchema, type InboxEvent, type StoredEvent } from "../../../model/inbox/inbox-event.ts";
 import { ownTreeEventAfter, type OwnTreeEvent } from "../../../model/inbox/own-tree.ts";
-import { issueIdSchema } from "../../../model/issue/issue.ts";
+import { issueIdSchema, type IssueId } from "../../../model/issue/issue.ts";
 import { unblockedSince } from "../../../model/issue/relations.ts";
 import type { IssueView } from "../../../model/issue/status.ts";
 import { nextDue, reminderIdSchema, type Reminder, type ReminderId } from "../../../model/reminder.ts";
@@ -38,6 +38,14 @@ export function inboxStore(db: Db) {
     insertEvent: (coordinatorId: CoordinatorId, event: InboxEvent, at: number): void => insertEvent(db, coordinatorId, event, at),
 
     lastOwnTreeEvent,
+
+    /** Every event naming the issue, in the order recorded. */
+    eventsOfIssue(coordinatorId: CoordinatorId, issueId: IssueId): StoredEvent[] {
+      return db()
+        .prepare("SELECT id, at, event FROM events WHERE coordinator_id = ? AND json_extract(event, '$.issueId') = ? ORDER BY id")
+        .all(coordinatorId, issueId)
+        .map(toEvent);
+    },
 
     /**
      * Records what a read of `fileCount` changed files in the regional manager's own working tree

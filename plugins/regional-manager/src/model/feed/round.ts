@@ -4,9 +4,9 @@
 // share no field: the split is where the wire divides what folds from what opens.
 import { z } from "zod";
 import { agentIdSchema } from "../agent/agent.ts";
-import { handoffStatusSchema, shownHandoff, shownHandoffSchema, type Handoff } from "../agent/handoff.ts";
+import { handoffIdSchema, handoffStatusSchema, shownHandoff, shownHandoffSchema, type Handoff, type HandoffId } from "../agent/handoff.ts";
 import type { Handed } from "../issue/status.ts";
-import type { Check, FinalCheck } from "../verdict/check.ts";
+import { checkIdSchema, type Check, type CheckId, type FinalCheck } from "../verdict/check.ts";
 import { reviewFindingSchema, triaged, triageSchema, type Review } from "../verdict/review.ts";
 import { checkInFlight, criterionResultSchema, outcome, outcomeSchema, shownVerdict, shownVerdictSchema, type CriterionResult, type Verdict } from "../verdict/verdict.ts";
 
@@ -16,6 +16,12 @@ export const roundKeySchema = z
   .regex(/^[hf]-[0-9a-f-]{36}$/)
   .brand<"roundKey">();
 export type RoundKey = z.infer<typeof roundKeySchema>;
+
+/** What a round's key names: its handoff, or its final check. */
+export function roundTarget(key: RoundKey): { kind: "handoff"; handoffId: HandoffId } | { kind: "final"; checkId: CheckId } {
+  const id = key.slice(2);
+  return key.startsWith("h-") ? { kind: "handoff", handoffId: handoffIdSchema.parse(id) } : { kind: "final", checkId: checkIdSchema.parse(id) };
+}
 
 export const roundSchema = z.object({
   key: roundKeySchema,

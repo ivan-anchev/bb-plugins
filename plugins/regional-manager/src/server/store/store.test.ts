@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { z } from "zod";
 import { handoffIdSchema, type Handoff } from "../../model/agent/handoff.ts";
-import { issueKeyOf } from "../../model/issue/key/issue-key.ts";
+import { issueKeyOf, issueKeySchema } from "../../model/issue/key/issue-key.ts";
 import { checkIdSchema } from "../../model/verdict/check.ts";
 import { issueViews } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
@@ -364,24 +364,26 @@ test("a regional manager's stored name changes before its start only: once start
 
 test("every write to what an issue's feed reads counts for that issue as it commits, and only for it; a dependency counts for both its issues; a write rolled back counts nothing", () => {
   const { db, store } = freshStore();
+  store.startsOn(MANAGER, "prj_1", issueKeySchema.parse("BBP"));
   const issues = Array.from({ length: 19 }, (_, i) => filedIssue(store, MANAGER, newIssue({ title: `Issue ${i + 1}` }), 2_000).id);
-  const [web7, web19] = [issues[6] ?? assert.fail(), issues[18] ?? assert.fail()];
+  const [bbp7, bbp19] = [issues[6] ?? assert.fail(), issues[18] ?? assert.fail()];
+  assert.deepEqual([bbp7, bbp19], ["BBP-7", "BBP-19"]);
   /** The issues whose count `write` moved. */
   const moved = (write: () => unknown): string[] => {
     const before = store.issueWrites(MANAGER);
     write();
     return [...store.issueWrites(MANAGER)].filter(([id, writes]) => before.get(id) !== writes).map(([id]) => id);
   };
-  const agentId = startAgent(store, web19, "agent-1");
+  const agentId = startAgent(store, bbp19, "agent-1");
   const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
-  const done = (at: number): Handoff => ({ id: handoffIdSchema.parse(randomUUID()), coordinatorId: MANAGER, issueId: web19, agentId, at, turnSeq: at, ...report, status: "done", delivery: { kind: "commit", headSha: "a".repeat(40), prUrl: null } });
+  const done = (at: number): Handoff => ({ id: handoffIdSchema.parse(randomUUID()), coordinatorId: MANAGER, issueId: bbp19, agentId, at, turnSeq: at, ...report, status: "done", delivery: { kind: "commit", headSha: "a".repeat(40), prUrl: null } });
   const unheld = { requireUnheld: false, closes: new Map() };
 
-  assert.deepEqual(moved(() => store.insertHandoff(done(3_000), { kind: "unread", reason: "unused" })), [web19], "a handoff");
-  assert.deepEqual(moved(() => store.updateIssue(MANAGER, web19, { dependsOn: { add: [web7], remove: [] } }, unheld)).sort(), [web19, web7].sort(), "a dependency");
-  assert.deepEqual(moved(() => store.insertDecision(MANAGER, { question: "Which queue?", options: [], issueId: web7 }, 3_100)), [web7], "a question about it");
-  assert.deepEqual(moved(() => store.updateIssue(MANAGER, web19, { decision: { text: "SQS", at: 3_200 } }, unheld)), [web19], "a decision recorded on it");
-  assert.deepEqual(moved(() => store.insertEvent(MANAGER, { kind: "unblocked", issueId: web19, by: web7, closedAs: "done" }, 3_300)), [web19], "an inbox event naming it");
+  assert.deepEqual(moved(() => store.insertHandoff(done(3_000), { kind: "unread", reason: "unused" })), [bbp19], "a handoff");
+  assert.deepEqual(moved(() => store.updateIssue(MANAGER, bbp19, { dependsOn: { add: [bbp7], remove: [] } }, unheld)).sort(), [bbp19, bbp7].sort(), "a dependency");
+  assert.deepEqual(moved(() => store.insertDecision(MANAGER, { question: "Which queue?", options: [], issueId: bbp7 }, 3_100)), [bbp7], "a question about it");
+  assert.deepEqual(moved(() => store.updateIssue(MANAGER, bbp19, { decision: { text: "SQS", at: 3_200 } }, unheld)), [bbp19], "a decision recorded on it");
+  assert.deepEqual(moved(() => store.insertEvent(MANAGER, { kind: "unblocked", issueId: bbp19, by: bbp7, closedAs: "done" }, 3_300)), [bbp19], "an inbox event naming it");
   assert.deepEqual(moved(() => store.insertEvent(MANAGER, { kind: "verification-toggled", verify: false }, 3_400)), [], "an event naming no issue");
   assert.deepEqual(moved(() => store.insertReminder(MANAGER, { note: "Look again", dueAt: 9_000, everyMs: null })), [], "a reminder");
   assert.deepEqual(moved(() => filedIssue(store, OTHER_MANAGER, newIssue(), 3_500)), [], "another manager's issue");
@@ -389,7 +391,7 @@ test("every write to what an issue's feed reads counts for that issue as it comm
   const allow = failWrites(db, "INSERT", "checks");
   assert.deepEqual(moved(() => assert.throws(() => store.insertHandoff(done(4_000), { kind: "unread", reason: "unused" }), /forced failure/)), [], "a handoff whose check failed to write");
   allow();
-  assert.deepEqual(moved(() => store.insertHandoff(done(4_000), { kind: "unread", reason: "unused" })), [web19], "the same handoff, retried");
+  assert.deepEqual(moved(() => store.insertHandoff(done(4_000), { kind: "unread", reason: "unused" })), [bbp19], "the same handoff, retried");
 });
 
 test("a verdict and a review stored before they kept their time take their check's announcement's time as the plugin upgrades, else the check's own", () => {

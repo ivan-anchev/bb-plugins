@@ -9,6 +9,9 @@ import { defaultBranchReader, placementFactsReader } from "./src/server/agents/e
 import { forwardThreadEvents } from "./src/server/agents/events/thread-events.ts";
 import { boardHandlers } from "./src/server/board/board-rpc.ts";
 import { createBoard } from "./src/server/board/board.ts";
+import { createFeedReader } from "./src/server/feed/feed-reader.ts";
+import { feedHandlers } from "./src/server/feed/feed-rpc.ts";
+import { issueTagPublisher } from "./src/server/feed/issue-tags.ts";
 import { createInbox } from "./src/server/inbox/inbox.ts";
 import { upgradeFrom030 } from "./src/server/manager/held-managers.ts";
 import { keyIssuesOfEarlierManagers } from "./src/server/manager/issue-keys.ts";
@@ -48,18 +51,22 @@ export default function plugin(host: BbPluginApi): void {
   const refreshCoordinators = () => bb.rpc.experimental_invalidate([COORDINATORS_TAG]);
   // why one hook: whatever changes what a regional manager's views are derived from changes its board, makes a read begun before it stale, and may unblock an issue.
   // A store write is counted by the store as it commits (current-views.ts); views.changed is for what bb moved, a message starting an agent's turn or bb saying a thread moved.
+  // issueTags publishes the issues whose feed facts the store counted written since it last looked.
   const onChange = (id: CoordinatorId) => {
     refreshBoard(id);
+    issueTags.publish(id);
     views.changed(id);
     unblocked.changed(id);
   };
   // why one hook: deletion and the tick's reconcile both remove a regional manager through it.
   const onRemoved = (id: CoordinatorId) => {
     threadEvents.forget(id);
+    issueTags.forget(id);
     refreshCoordinators();
   };
   const spawner = createSpawner(bb, store, memory, (role: Role) => (role.kind === "coordinator" ? refreshCoordinators() : onChange(role.coordinatorId)));
   const board = createBoard(bb, store);
+  const issueTags = issueTagPublisher({ store, invalidate: (tags) => bb.rpc.experimental_invalidate(tags) });
   const inbox = createInbox({ bb, store, memory, onChange });
   const views = currentViews({ bb, store });
   const unblocked = watchUnblocked({ bb, store, views, inbox });
@@ -103,6 +110,8 @@ export default function plugin(host: BbPluginApi): void {
     await finalChecks.tick().catch((error: unknown) => bb.log.warn(`Could not read which final checks are due; the next tick tries again: ${messageOf(error)}`));
     await verify.reconcile().catch((error: unknown) => bb.log.warn(`Could not reconcile the verifiers; the next tick tries again: ${messageOf(error)}`));
     await unblocked.tick();
+    // why every manager: a write no onChange followed is still published within a minute.
+    for (const { id } of store.coordinators()) issueTags.publish(id);
     await inbox.tick(Date.now());
   });
 
@@ -111,6 +120,7 @@ export default function plugin(host: BbPluginApi): void {
     primaryHost: async () => ({ hostId: (await bb.sdk.system.config()).primaryHostId }),
     ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }),
     ...boardHandlers({ store, board, inbox }),
+    ...feedHandlers({ store, reader: createFeedReader(bb, store) }),
     ...memoryHandlers(store, memory, inbox),
   });
 }
