@@ -287,7 +287,7 @@ test("every shape, every colour and Shuffle is sized as a finger's tap target, 4
   // measures and hit-tests the laid-out boxes; this pins the classes that give them their size.
   assert.deepEqual(new Set(labels.map(sizing)), new Set(["size-11"]), "every label is a 44px cell, with nothing to cap it");
   assert.equal(sizing(shuffle), "min-h-11", "Shuffle is at least 44px tall, with nothing to cap it");
-  assert.deepEqual(new Set(labels.map((label) => sizing(label.querySelector(":scope > span")!))), new Set(["size-8"]), "every tile is 32px");
+  assert.deepEqual(new Set(labels.map((label) => sizing(label.querySelector<HTMLElement>(":scope > span")!))), new Set(["size-8"]), "every tile is 32px");
   const swatches = labels.slice(SHAPES.length).map((label) => label.querySelector<HTMLElement>(":scope > span > span")!);
   assert.deepEqual(new Set(swatches.map(sizing)), new Set(["size-4"]), "every colour's swatch is 16px");
   const blobs = labels.slice(0, SHAPES.length).map((label) => label.querySelector<HTMLElement>("[role=img]")!.style);
@@ -304,8 +304,8 @@ const SIZING_STYLES = ["width", "height", "min-width", "min-height", "max-width"
  * An element's sizing: its width, height and size classes, minimum and maximum ones included, then
  * any inline length that would compete with them.
  */
-function sizing(element: Element): string {
+function sizing(element: HTMLElement): string {
   const classes = [...element.classList].filter((name) => /^(min-|max-)?(size|w|h)-/.test(name));
-  const styles = element instanceof HTMLElement ? SIZING_STYLES.filter((length) => element.style.getPropertyValue(length) !== "") : [];
+  const styles = SIZING_STYLES.filter((length) => element.style.getPropertyValue(length) !== "");
   return [...classes, ...styles.map((length) => `style:${length}`)].join(" ");
 }

@@ -58,7 +58,7 @@ function Choices<Option extends string>({ legend, options, columns, chosen, onCh
     // that width, and a fieldset is never narrower than its content unless told so.
     <fieldset className="flex min-w-0 flex-col gap-1.5 self-stretch">
       <legend className="text-xs text-muted-foreground">{legend}</legend>
-      <div className="-mx-1.5 grid" style={{ gridTemplateColumns: "repeat(auto-fill, 2.75rem)", maxWidth: `${columns * 2.75}rem` }}>
+      <div className="-mx-1.5 grid" style={{ gridTemplateColumns: `repeat(auto-fill, ${CELL})`, maxWidth: `calc(${columns} * ${CELL})` }}>
         {options.map((option) => (
           <label key={option} className="group flex size-11 cursor-pointer items-center justify-center">
             <input type="radio" name={group} aria-label={nameOf(option)} checked={chosen === option} onChange={() => onChoose(option)} className="peer sr-only" />
@@ -71,6 +71,9 @@ function Choices<Option extends string>({ legend, options, columns, chosen, onCh
     </fieldset>
   );
 }
+
+/** An option's cell, its label's size-11: a grid track is one cell wide. */
+const CELL = "2.75rem";
 
 /** What a shape or a hue is called aloud: its name, capitalised. */
 const nameOf = (option: string): string => option.charAt(0).toUpperCase() + option.slice(1);
