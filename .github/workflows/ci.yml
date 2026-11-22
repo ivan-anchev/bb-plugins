@@ -21,7 +21,7 @@ jobs:
           path: ~/.bb/plugins/toolchain-*
           key: bb-toolchain-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
           restore-keys: bb-toolchain-${{ runner.os }}-
-      # manifests in sync with plugins, scripts + plugins typecheck, tests, bb plugin build
+      # manifests in sync with plugins, oxlint + landmines, scripts + plugins typecheck, tests, bb plugin build
       - run: npm run check
 
   # bb installs a git plugin with `npm install --omit=dev` inside its directory,

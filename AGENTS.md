@@ -29,8 +29,8 @@ development section first.
 
 ## Before you finish
 
-Run `npm run check` (manifests in sync, typecheck, tests, `bb plugin build`, and
-the same build from a standalone install of each plugin).
+Run `npm run check` (manifests in sync, lint, typecheck, tests, `bb plugin build`,
+and the same build from a standalone install of each plugin).
 For behavior changes, also run the plugin live: `bb plugin install
 ./plugins/<id>` once, then `bb plugin dev plugins/<id>`.
 
