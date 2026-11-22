@@ -45,6 +45,11 @@
   padding: 12px;
   border-radius: inherit;
 }
+/* A capped body is a tab stop (hover-card.tsx); the theme's ring shows where focus is. */
+.rmi-card-body:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
 .rmi-card-title {
   margin: 0;
   display: -webkit-box;

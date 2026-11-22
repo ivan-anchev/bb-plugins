@@ -918,7 +918,9 @@ and ends with its [memory](#read-and-edit-memory):
   both too: "; blocked by BBP-6 (Todo)" and "; blocks BBP-7 (Todo)".
 - **Its card**: rest the pointer on a row for half a second, or move
   keyboard focus to it, and its card opens under it, or above it when the
-  panel has no room below (a card too tall for either side scrolls inside):
+  panel has no room below (a card too tall for either side scrolls inside,
+  and Tab moves into it to scroll it from the keyboard; Escape there closes
+  it and puts focus back on its row):
   its title whole, up to
   three lines; its status, and its agent; what it waits on you for, or else
   its headline (such as "Working", "Verifying: <summary>" or "✓ Verified:

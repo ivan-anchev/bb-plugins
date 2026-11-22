@@ -183,3 +183,35 @@ test("a card that doesn't fit under its row at the panel's foot opens above it, 
     }
   }
 });
+
+test("a capped card's body is a labelled tab stop that scrolls; Escape there puts the card away and hands focus back to its row, never to the page", () => {
+  const restore = laidOut({ panel: { top: 0, bottom: 400 }, row: { top: 150, bottom: 180 }, height: 600 });
+  try {
+    const { view } = mountInPanel();
+    const parent = within(view.getByRole("region", { name: /^In progress/ })).getByRole("button", { name: /^WEB-1:/ });
+    act(() => parent.focus());
+    const body = view.getByRole("region", { name: "Details of WEB-1" });
+    assert.equal(body.getAttribute("tabindex"), "0", "the element that scrolls is the one tab stop");
+    assert.equal(body.closest("[aria-hidden]"), null, "and a screen reader reaches it");
+
+    act(() => body.focus());
+    act(() => body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+
+    assert.equal(view.container.querySelector(".rmi-card"), null, "the card is put away");
+    assert.ok(document.activeElement === parent, "focus is back on its row");
+  } finally {
+    restore();
+  }
+});
+
+test("a card that fits has no tab stop, and stays hidden from a screen reader", () => {
+  const restore = laidOut({ panel: { top: 0, bottom: 700 }, row: { top: 100, bottom: 130 }, height: 174 });
+  try {
+    const { view } = mountInPanel();
+    act(() => within(view.getByRole("region", { name: /^In review/ })).getByRole("button", { name: /^WEB-4:/ }).focus());
+    const card = view.container.querySelector(".rmi-card") ?? assert.fail("no card");
+    assert.deepEqual([card.getAttribute("aria-hidden"), card.querySelector("[tabindex]")], ["true", null]);
+  } finally {
+    restore();
+  }
+});

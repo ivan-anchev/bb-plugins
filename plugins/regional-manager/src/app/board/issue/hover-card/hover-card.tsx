@@ -3,16 +3,19 @@
 // what it waits on the user for, or else its headline, which the row leaves out; its pills spelled
 // out; and its sub-issues as a tree on the board's rails, or what blocks it and what it blocks, each
 // the other issue's glyph, id and title. It opens under its row, or above it where the panel has no
-// room below (placement.ts). Display only, and hidden from a screen reader: the row's label speaks
-// all of it, and pressing the row opens the issue's tab, which holds the rest.
+// room below (placement.ts). Display only: the row's label speaks all of it, and pressing the row
+// opens the issue's tab, which holds the rest, so the card is hidden from a screen reader, unless it
+// is capped: then its body scrolls, and is a labelled tab stop the keyboard reaches and scrolls
+// (REVIEW.md). Focus in the card goes back to its row as the card goes, however it is put away.
 import "./hover-card.css";
-import type { CSSProperties } from "react";
+import { useCallback, type CSSProperties } from "react";
 import type { IssueRow as Row } from "../../../../contract.ts";
 import type { IssueId } from "../../../../model/issue/issue.ts";
 import { STATUS_LABELS } from "../../../../model/issue/status.ts";
 import { FadingText } from "../row/fading-text.tsx";
 import { IssuePills } from "../row/pills.tsx";
 import { Rails, type RailShape } from "../row/rails.tsx";
+import { handFocusTo } from "../../../ui/focus-hand-off.ts";
 import { NeedsYouGlyph, StatusGlyph } from "../status-glyph.tsx";
 import { useCardPlacement, type Placement } from "./placement.ts";
 
@@ -24,10 +27,16 @@ type HoverCardProps = {
 
 export function HoverCard({ issue, issues }: HoverCardProps) {
   const { ref, placement } = useCardPlacement();
+  // why one callback: placement measures the card, and the card hands focus back to its row as it unmounts; a ref that changed per render would hand it back on every render.
+  const cardRef = useCallback((card: HTMLDivElement | null) => {
+    ref.current = card;
+    return focusBackToRow(card);
+  }, [ref]);
   const pick = (ids: readonly IssueId[]) => issues.filter(({ id }) => ids.includes(id));
+  const capped = placement.cap !== null;
   return (
-    <div ref={ref} className="rmi-card" data-side={placement.side} style={capStyle(placement)} aria-hidden>
-      <div className="rmi-card-body">
+    <div ref={cardRef} className="rmi-card" data-side={placement.side} style={capStyle(placement)} aria-hidden={!capped || undefined}>
+      <div className="rmi-card-body" tabIndex={capped ? 0 : undefined} role={capped ? "region" : undefined} aria-label={capped ? `Details of ${issue.id}` : undefined}>
         <p className="rmi-card-title">{issue.title}</p>
         <p className="rmi-card-when">
           {STATUS_LABELS[issue.status]}
@@ -55,6 +64,9 @@ export function HoverCard({ issue, issues }: HoverCardProps) {
 }
 
 // ------------------------------------------------------------------ layer 2
+
+/** On the card: focus in it, on its scrolling body, goes to its row's button as it unmounts, so it never drops to the page (REVIEW.md). */
+const focusBackToRow = handFocusTo((card) => card.closest(".rmi-rowbox")?.querySelector<HTMLElement>(".rmi-row"));
 
 /** The card's height cap, when its side of the row has too little room (hover-card.css `.rmi-card-body`). */
 const capStyle = ({ cap }: Placement): (CSSProperties & Record<"--rmi-card-cap", string>) | undefined => (cap === null ? undefined : { "--rmi-card-cap": `${cap}px` });
