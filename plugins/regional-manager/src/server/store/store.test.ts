@@ -6,7 +6,7 @@ import { handoffIdSchema, type Handoff } from "../../model/handoff.ts";
 import { issueKeyOf } from "../../model/issue/key/issue-key.ts";
 import { issueViews } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
-import { freeLook, seedOf, type Avatar } from "../../model/profile/avatar.ts";
+import type { Avatar } from "../../model/profile/avatar.ts";
 import type { NewProfile } from "../../model/profile/profile.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
 import { memoryStorage } from "../memory-storage.ts";
@@ -125,8 +125,9 @@ for (const [unreadable, stored] of [
   test(`managers created with an auto avatar next to one whose avatar is ${unreadable} never take the look it is drawn with`, () => {
     const { db, storage } = memoryStorage();
     const store = openStore(storage);
-    const insert = (n: number, avatar: NewProfile["avatar"]) => store.insertCoordinator({ id: coordinatorIdSchema.parse(randomUUID()), ticket: `ticket-${n}`, name: `Manager ${n}`, description: null, avatar, createdAt: 1_000 + n });
-    insert(0, AVATAR);
+    // why MANAGER for the unreadable one: the look it is drawn with is then fixed (bunny in rose). The others store blobs, whose looks don't depend on their ids.
+    const insert = (n: number, avatar: NewProfile["avatar"], id = coordinatorIdSchema.parse(randomUUID())) => store.insertCoordinator({ id, ticket: `ticket-${n}`, name: `Manager ${n}`, description: null, avatar, createdAt: 1_000 + n });
+    insert(0, AVATAR, MANAGER);
     db.prepare("UPDATE coordinators SET avatar = ?").run(stored);
 
     // why 251: with the unreadable one's, every look is then taken once, so one auto pick on its look would repeat it.
@@ -158,7 +159,8 @@ test("an avatar this release can't draw, as a kind a later one stored or text th
   const store = openStore(storage);
 
   const drawn = new Map(store.coordinators().map(({ id, avatar }) => [id, avatar]));
-  assert.deepEqual(drawn, new Map([[MANAGER, freeLook(seedOf(MANAGER), [])], [OTHER_MANAGER, freeLook(seedOf(OTHER_MANAGER), [])]]));
+  // why these: the looks MANAGER's and OTHER_MANAGER's ids seed.
+  assert.deepEqual(drawn, new Map([[MANAGER, { kind: "blob", shape: "bunny", hue: "rose", expression: "neutral" }], [OTHER_MANAGER, { kind: "blob", shape: "heart", hue: "lime", expression: "curious" }]]));
   const stored = db.prepare("SELECT avatar FROM coordinators ORDER BY created_at, rowid").all().map((row) => z.object({ avatar: z.string() }).parse(row).avatar);
   assert.deepEqual(stored, [later, "{not json"]);
 });
@@ -324,7 +326,7 @@ test("a 0.3.0 regional manager is a candidate of the upgrade until unheld: then 
 
   assert.deepEqual([store.upgradeCandidates(), store.coordinators()], [[], []]);
   // why that avatar: a 0.3.0 manager had the plugin's icon, which the store gives the first free look from its id as it opens.
-  assert.deepEqual(store.notStarted(), [{ id: MANAGER, name: "Webhooks", description: null, avatar: freeLook(seedOf(MANAGER), []) }]);
+  assert.deepEqual(store.notStarted(), [{ id: MANAGER, name: "Webhooks", description: null, avatar: { kind: "blob", shape: "bunny", hue: "rose", expression: "neutral" } }]);
   assert.deepEqual(store.startOf(MANAGER), { kind: "not-started", ticket: "ticket-2", name: "Webhooks" });
   assert.equal(store.roleOfThread("thr_a"), null);
   assert.equal(store.roleFor("thr_a", "ticket-1"), null);

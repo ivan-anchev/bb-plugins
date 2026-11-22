@@ -1,6 +1,7 @@
 // What a regional manager is pictured by: a still blob, drawn by blob-avatar, of one of its 21 shapes
 // in one of Zeron's 12 identity hues, with a friendly face. A look is chosen once and stored, never
-// derived from the name, so a rename never changes it; two managers share one only by the user's pick.
+// derived from the name, so a rename never changes it. Two managers share one only by the user's pick,
+// once all 252 are taken, or when one whose avatar can't be read is drawn with its id's look.
 import type { Expression, Shape } from "blob-avatar";
 import { z } from "zod";
 
