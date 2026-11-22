@@ -167,3 +167,13 @@ test("a round whose criteria all passed but CI failed leads its line with that r
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: ciFailed }) });
   assert.equal(rounds(tab()).head(3).textContent, "Round 3Round 3: retries land with backoffCI failed");
 });
+
+test("a final check whose own worktree was dirty says so, never that a claimed commit was missing", async () => {
+  const dirty: Entry[] = FEED.entries.map((entry) =>
+    entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null
+      ? { ...entry, round: { ...entry.round, by: { kind: "final", defaultBranch: "main" }, verdict: { ...entry.round.verdict, outcome: "fail", failedBy: "checkout" } } }
+      : entry,
+  );
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: dirty }) });
+  assert.equal(rounds(tab()).head(3).textContent, "Round 3Final check on mainNot a clean tree");
+});

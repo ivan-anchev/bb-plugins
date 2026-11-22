@@ -47,14 +47,16 @@ export default function plugin(host: BbPluginApi): void {
   const memory = openMemoryRoot(bb.storage.database().name, store, (id) => bb.rpc.experimental_invalidate([memoryTag(id)]));
   bb.log.info(`Memory files are in ${memory.dir}`);
   upgradeMemoryFrom040(memory, store.coordinators().map(({ id }) => id));
-  const refreshBoard = (id: CoordinatorId) => bb.rpc.experimental_invalidate([boardTag(id)]);
+  // why the issues' tags with the board's: whatever refreshes a board may have written to its issues, as a crew tool asking about one, and publishing reads only counts that moved.
+  const refreshBoard = (id: CoordinatorId) => {
+    bb.rpc.experimental_invalidate([boardTag(id)]);
+    issueTags.publish(id);
+  };
   const refreshCoordinators = () => bb.rpc.experimental_invalidate([COORDINATORS_TAG]);
   // why one hook: whatever changes what a regional manager's views are derived from changes its board, makes a read begun before it stale, and may unblock an issue.
   // A store write is counted by the store as it commits (current-views.ts); views.changed is for what bb moved, a message starting an agent's turn or bb saying a thread moved.
-  // issueTags publishes the issues whose feed facts the store counted written since it last looked.
   const onChange = (id: CoordinatorId) => {
     refreshBoard(id);
-    issueTags.publish(id);
     views.changed(id);
     unblocked.changed(id);
   };

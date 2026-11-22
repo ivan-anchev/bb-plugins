@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { needsYouBadge } from "../../app/needs-you-label.ts";
-import { boardTag, coordinatorContract } from "../../contract.ts";
+import { boardTag, coordinatorContract, issueTag } from "../../contract.ts";
 import { boardGroups, laneOf } from "../../model/board/board-groups.ts";
 import { decisionIdSchema } from "../../model/decision.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
@@ -179,4 +179,14 @@ test("crew_ask_user refuses more than five options, two alike or a question on t
     await assert.rejects(kit.call("crew_ask_user", input, threadId));
   }
   assert.deepEqual(kit.store.decisions(coordinatorId), []);
+});
+
+test("a question about an issue reads that issue's open tab again at once, and no other issue's", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  await kit.call("issue_create", { ...ISSUE, status: "backlog" }, threadId);
+  await kit.call("issue_create", { ...ISSUE, title: "Dead letters", status: "backlog" }, threadId);
+  const before = kit.invalidated().length;
+  await kit.call("crew_ask_user", { question: "Start WEB-1 now?", options: ["Yes", "Not yet"], issue: "WEB-1" }, threadId);
+  const tags = kit.invalidated().slice(before).filter((tag) => tag.startsWith("issue:"));
+  assert.deepEqual(tags, [issueTag(coordinatorId, issueIdSchema.parse("WEB-1"))]);
 });

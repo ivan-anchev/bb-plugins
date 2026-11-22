@@ -766,9 +766,13 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const { bb } = instance;
     // why shadowed: the modules act through the store bound to their instance; the tests read the store as it is.
     const store = instance.bind(openedStore);
-    const onChange = (id: CoordinatorId) => {
+    // why the issues' tags with the board's, as server.ts does: whatever refreshes a board may have written to its issues.
+    const refreshIssues = (id: CoordinatorId) => {
       refreshBoard(id);
       issueTags.publish(id);
+    };
+    const onChange = (id: CoordinatorId) => {
+      refreshIssues(id);
       views.changed(id);
       unblocked.changed(id);
     };
@@ -795,13 +799,13 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const verify = createVerify({ bb, store, spawner, review, inbox, turns, now: () => clock.now });
     const finalChecks = createFinalChecks({ bb, store, views, turns, verify, defaultBranch: defaultBranchReader(bb, store), now: () => clock.now });
     registerRoles(bb, store);
-    registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
+    registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshIssues });
     registerIssueTools(bb, { store, issues });
     registerAgentTools(bb, { store, agents });
     registerHandoffTool(bb, { store, verify });
     registerReviewTool(bb, { store, review });
     registerVerdictTool(bb, { store, verify });
-    const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard, refreshIssue: (id, issueId) => invalidated.push(issueTag(id, issueId)) });
+    const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard: refreshIssues, refreshIssue: (id, issueId) => invalidated.push(issueTag(id, issueId)) });
     watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });
     return { spawner, inbox, verify, agents, prWatch, finalChecks, unblocked, issueTags, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }), ...feedHandlers({ store, reader: createFeedReader(bb, store) }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }, upgrade030: upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators }) };

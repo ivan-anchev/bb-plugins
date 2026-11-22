@@ -25,7 +25,7 @@ export function Score({ round }: { round: Round }) {
               {score.passed} of {score.of}
             </>
           ) : (
-            FAILED_BY[score.by]
+            failedByText(score.by, round.by)
           )}
         </span>
       );
@@ -80,8 +80,11 @@ function HandoffStatus({ status }: { status: Extract<Round["by"], { kind: "agent
   }
 }
 
-/** What failed a round whose criteria all passed, leading its line: the reason, never "n of n". */
-const FAILED_BY = { checkout: "Not the claimed commit on a clean tree", ci: "CI failed" } as const;
+/** What failed a round whose criteria all passed, leading its line: the reason, never "n of n". why by the round: a final check claims no commit, so its checkout fails only by a dirty tree. */
+function failedByText(by: "checkout" | "ci", round: Round["by"]): string {
+  if (by === "ci") return "CI failed";
+  return round.kind === "final" ? "Not a clean tree" : "Not the claimed commit on a clean tree";
+}
 
 const PENDING = { reviewing: "Reviewing…", verifying: "Verifying…", ci: "Waiting for CI…" } as const;
 
