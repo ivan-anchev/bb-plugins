@@ -226,3 +226,33 @@ test("a missed review says it was missed in its step, with why once the round's 
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: missed }), bodies: () => ({ ...bodyOf(3), findings: [], reviewMissed: "no independent reviewer model" }) });
   assert.ok(await rounds(tab()).card(3).findByText(/^No review: no independent reviewer model/));
 });
+
+test("an open round whose review is still to come shows the reviewer at work and no verifier step yet", async () => {
+  const reviewing: Entry[] = FEED.entries.map((entry) =>
+    entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null
+      ? { ...entry, round: { ...entry.round, review: { state: "pending" }, verdict: { ...entry.round.verdict, outcome: { kind: "pending" }, results: [] }, inFlight: true } }
+      : entry,
+  );
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: reviewing }) });
+  const three = rounds(tab()).card(3);
+  assert.ok(await three.findByText("Reviewer is reviewing…"));
+  assert.equal(three.queryByText(/^Verifier/), null, "no verifier has started");
+  assert.equal(three.queryByText("Waiting for a verifier"), null);
+});
+
+test("a round that failed on its checkout leads with that reason, whole in its title though the line may cut it", async () => {
+  const dirty: Entry[] = FEED.entries.map((entry) =>
+    entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, outcome: { kind: "fail", by: "checkout" } } } } : entry,
+  );
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: dirty }) });
+  const reason = within(rounds(tab()).head(3)).getByText("Not the claimed commit on a clean tree");
+  assert.equal(reason.getAttribute("title"), "Not the claimed commit on a clean tree");
+});
+
+test("a cell of a round no longer on record says so, not that it judged nothing there", async () => {
+  const { tab } = await opened("WEB-1", WEB_1, { bodies: () => null });
+  const grid = within(tab().getByRole("heading", { name: "Done when" }).closest("section") ?? assert.fail("no Done when"));
+  fireEvent.click(within(grid.getByRole("group", { name: "Criterion 2 by round" })).getAllByRole("button")[0] ?? assert.fail("no cell"));
+  assert.ok(await grid.findByText("Round 1 is no longer on record."));
+  assert.equal(grid.queryByText(/judged no criterion here/), null);
+});

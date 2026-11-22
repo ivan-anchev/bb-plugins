@@ -116,7 +116,8 @@ function CellEvidence({ coordinatorId, issueId, round, row }: { coordinatorId: C
     <div className="rmi-grid-evidence" role="region" aria-label={`Round ${round.number}, criterion ${row + 1}`}>
       {error !== null && <ReadFailure onRetry={retry}>Could not read round {round.number}: {error.message}</ReadFailure>}
       {body === undefined && error === null && <p className="rmi-verdict-meta">Loading round {round.number}…</p>}
-      {body !== undefined && judged === null && <p className="rmi-verdict-meta">Round {round.number} judged no criterion here.</p>}
+      {body === null && <p className="rmi-verdict-meta">Round {round.number} is no longer on record.</p>}
+      {body != null && judged === null && <p className="rmi-verdict-meta">Round {round.number} judged no criterion here.</p>}
       {judged !== null && (
         <>
           <p className="rmi-verdict-meta">

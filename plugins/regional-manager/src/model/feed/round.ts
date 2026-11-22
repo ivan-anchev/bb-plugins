@@ -8,7 +8,7 @@ import { handoffBody, handoffBodySchema, handoffIdSchema, handoffStatusSchema, t
 import type { Handed } from "../issue/status.ts";
 import { checkIdSchema, type Check, type CheckId, type FinalCheck } from "../verdict/check.ts";
 import { reviewFindingSchema, reviewPending, triaged, triageSchema, type Review } from "../verdict/review.ts";
-import { checkInFlight, criterionResultSchema, failedCheckout, outcome, outcomeSchema, shownVerdict, shownVerdictSchema, type CriterionResult, type Verdict } from "../verdict/verdict.ts";
+import { checkInFlight, criterionResultSchema, failureOf, outcome, outcomeSchema, shownVerdict, shownVerdictSchema, type CriterionResult, type Verdict } from "../verdict/verdict.ts";
 
 /**
  * A round's address within its issue: `h-` and its handoff's id, or `f-` and its final check's. why
@@ -132,12 +132,13 @@ export function scoreOf({ review, verdict }: Pick<Round, "review" | "verdict">):
   if (review.state === "pending") return { kind: "pending", stage: "reviewing" };
   const { outcome, results } = verdict;
   const passed = results.filter((result) => result === "pass").length;
-  // why a failure first: a criterion that failed has failed, however the verdict settles.
+  // why its reason first: a checkout or CI that failed it is why, however many criteria passed (verdict.ts failureOf).
+  if (outcome.kind === "fail" && outcome.by !== "criteria") return { kind: "failed", by: outcome.by };
+  // why a failed criterion next: it has failed, however the verdict settles.
   if (passed < results.length) return { kind: "failed", by: "criteria", passed, of: results.length };
   switch (outcome.kind) {
-    // why its reason, not "n of n": with every criterion passed, its checkout or CI failed it.
     case "fail":
-      return outcome.by === "criteria" ? { kind: "failed", by: "criteria", passed, of: results.length } : { kind: "failed", by: outcome.by };
+      return { kind: "failed", by: "criteria", passed, of: results.length };
     case "pass":
       return { kind: "judged", passed, of: results.length };
     case "could-not-run":
@@ -207,12 +208,11 @@ function verdictOf(verdict: Verdict): Round["verdict"] {
   }
 }
 
-/** What the verdict says, and what failed it when it failed: a criterion, else its checkout, else CI (judge's order). */
+/** What the verdict says, and what failed it when it failed (verdict.ts failureOf). */
 function outcomeOf(verdict: Verdict): NonNullable<Round["verdict"]>["outcome"] {
   const result = outcome(verdict);
   if (result !== "fail") return { kind: result };
-  if (verdict.state !== "returned" || verdict.criteria.some(({ result: one }) => one !== "pass")) return { kind: "fail", by: "criteria" };
-  return { kind: "fail", by: failedCheckout(verdict) !== null ? "checkout" : "ci" };
+  return { kind: "fail", by: verdict.state === "returned" ? (failureOf(verdict) ?? "criteria") : "criteria" };
 }
 
 /**

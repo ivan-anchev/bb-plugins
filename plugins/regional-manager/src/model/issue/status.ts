@@ -10,7 +10,7 @@ import type { Check, CheckId, FinalCheck } from "../verdict/check.ts";
 import type { CiVerdict, PrSnapshot } from "../verdict/pr.ts";
 import { NOT_CLEAN } from "../verdict/checkout.ts";
 import { reviewPending } from "../verdict/review.ts";
-import { allPassed, ciVerdictOf, failedCheckout, mayHaveReachedAgent, outcome, type Verdict } from "../verdict/verdict.ts";
+import { ciVerdictOf, failureOf, mayHaveReachedAgent, outcome, type Verdict } from "../verdict/verdict.ts";
 import type { Issue, IssueId } from "./issue.ts";
 import { isVerified, PIPELINES, shipsCode, type Kind, type Stage } from "./kind.ts";
 import { blockedBy, isClosed, statusIn, type Related } from "./relations.ts";
@@ -421,7 +421,18 @@ const ciOfReturned = (verdict: Verdict): CiVerdict | null => (verdict.state === 
 
 /** How a failure reads: by the plugin's checkout read when it failed it; as CI's, when every criterion passed and CI failed on the commit. */
 function failedAs(verdict: Verdict): string {
-  if (verdict.state === "returned" && failedCheckout(verdict) !== null) return `✗ ${NOT_CLEAN}`;
-  const ci = ciOfReturned(verdict);
-  return ci?.kind === "fail" && verdict.state === "returned" && allPassed(verdict) ? `✗ CI failed on #${ci.number}` : "✗ Failed verification";
+  if (verdict.state !== "returned") return "✗ Failed verification";
+  const ci = ciVerdictOf(verdict);
+  const failure = failureOf(verdict);
+  switch (failure) {
+    case "checkout":
+      return `✗ ${NOT_CLEAN}`;
+    case "ci":
+      return ci?.kind === "fail" ? `✗ CI failed on #${ci.number}` : "✗ Failed verification";
+    case "criteria":
+    case null:
+      return "✗ Failed verification";
+    default:
+      return failure satisfies never;
+  }
 }

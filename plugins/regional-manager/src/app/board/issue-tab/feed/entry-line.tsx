@@ -2,7 +2,7 @@
 // (entry.ts actorOf), what happened, and when.
 import type { ReactNode } from "react";
 import { actorOf, type Actor, type Entry } from "../../../../model/feed/entry.ts";
-import type { PrChange } from "../../../../model/verdict/pr.ts";
+import { PR_CHANGE_WORDS } from "../../../../model/verdict/pr.ts";
 import { AgentName, When, type FeedAgents } from "./byline.tsx";
 
 /** The entries drawn as lines: everything but rounds and decisions, which are cards. */
@@ -54,7 +54,8 @@ function whatOf(entry: LineEntry, agents: FeedAgents): ReactNode {
     case "agent-ended":
       return <Ended agentId={entry.agentId} how={entry.how} agents={agents} />;
     case "pr":
-      return entry.changes.flatMap((change) => prChangeText(change, entry.number) ?? []).join(", ");
+      // why PR_CHANGE_WORDS: the manager's doorbell and catch-up name a change in the same words.
+      return `#${entry.number} ${entry.changes.flatMap((change) => PR_CHANGE_WORDS[change] ?? []).join(", ")}`;
     case "thread":
       return <ThreadSaid event={entry.event} />;
     case "unblocked":
@@ -103,31 +104,6 @@ function ThreadSaid({ event }: { event: Extract<Entry, { kind: "thread" }>["even
     default:
       // why nothing, not the object: the server may be newer than this bundle for a moment after an update.
       event satisfies never;
-      return null;
-  }
-}
-
-/** A change to the pull request #`number` in words; null for a change this bundle doesn't know, from a newer server. */
-function prChangeText(change: PrChange, number: number): string | null {
-  switch (change) {
-    case "opened":
-      return `#${number} opened`;
-    case "reopened":
-      return `#${number} reopened`;
-    case "merged":
-      return `#${number} merged`;
-    case "closed":
-      return `#${number} closed`;
-    case "ci-passed":
-      return `CI passed on #${number}`;
-    case "ci-failed":
-      return `CI failed on #${number}`;
-    case "approved":
-      return `#${number} approved`;
-    case "changes-requested":
-      return `Changes requested on #${number}`;
-    default:
-      change satisfies never;
       return null;
   }
 }

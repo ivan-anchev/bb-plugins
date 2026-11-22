@@ -48,8 +48,8 @@ export function RoundBody({ coordinatorId, issueId, round, agents }: RoundBodyPr
       <ol className="rmi-steps">
         <HandedStep round={round} agents={agents} handoff={loaded?.handoff ?? null} />
         {round.review.state !== "none" && <ReviewStep review={round.review} body={loaded} />}
-        {/* why none when waived: verification was off, so no verifier ran; the round's score says so. */}
-        {round.verdict !== null && round.verdict.outcome.kind !== "unverified" && (
+        {/* why none when waived, or while the review is to come: no verifier ran, or none has started; the round's score says so. */}
+        {round.verdict !== null && round.verdict.outcome.kind !== "unverified" && round.review.state !== "pending" && (
           <Step
             title={
               <>

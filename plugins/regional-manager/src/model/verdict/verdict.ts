@@ -218,6 +218,17 @@ export function failedCheckout(verdict: Returned): Checkout | null {
   return checkoutProblems(headSha, checkout).length > 0 ? checkout : null;
 }
 
+/**
+ * What failed a returned verdict: its checkout (not the claimed commit on a clean tree), else a
+ * criterion, else CI on its commit once settled; null when nothing did. The one order for every
+ * place that names why: the issue's headline and its round.
+ */
+export function failureOf(verdict: Returned): "checkout" | "criteria" | "ci" | null {
+  if (failedCheckout(verdict) !== null) return "checkout";
+  if (verdict.criteria.some(({ result }) => result !== "pass")) return "criteria";
+  return ciVerdictOf(verdict)?.kind === "fail" ? "ci" : null;
+}
+
 /** What CI said about a settled verdict's commit; null while it is not settled, or when it was superseded before CI was judged. */
 export function ciVerdictOf(verdict: Returned): CiVerdict | null {
   const { settlement } = verdict;

@@ -28,7 +28,7 @@ test("every entry kind draws as its own: rounds and decisions as cards, the rest
     /^Regional manager filed the issue/,
     /^Regional manager started a1/,
     /^Regional manager handed the issue on from a1/,
-    /^CI passed on #219, #219 merged/,
+    /^#219 CI passed, merged/,
     /^a2 ended its turn with no handoff\s*Merged; nothing left\./,
     /^Unblocked: WEB-7, the last of its dependencies, closed/,
   ]) assert.ok(section.getAllByRole("paragraph").some((line) => text.test(line.textContent ?? "")), `a line reads ${text}`);

@@ -233,3 +233,10 @@ test("a missed review's reason is the round's body's, read only when the round o
   assert.equal(bodyOf(missed.handoff, missed.check).reviewMissed, "no reviewer model");
   assert.equal(bodyOf(handed(handoff(2, A1, 4_000), null).handoff, null).reviewMissed, null);
 });
+
+test("a verdict failed by its checkout and a criterion names its checkout first, in its round as in the issue's headline (verdict.ts failureOf)", () => {
+  const both = returned(["fail", "pass", "pass"], 3_500, { kind: "checked", refused: null, ci: { kind: "none" } });
+  const dirty: Verdict = both.state === "returned" ? { ...both, checkout: { headSha: SHA, changedFiles: ["?? notes.md"], changedFileCount: 1 } } : assert.fail("not returned");
+  const round = roundOf(handed(handoff(1, A1, 3_000), dirty), 1, null);
+  assert.deepEqual([round.verdict?.outcome, scoreOf(round)], [{ kind: "fail", by: "checkout" }, { kind: "failed", by: "checkout" }]);
+});

@@ -26,7 +26,9 @@ export function Score({ round }: { round: Round }) {
               {score.passed} of {score.of}
             </>
           ) : (
-            failedByText(score.by, round.by)
+            <span className="rmi-score-text" title={failedByText(score.by, round.by)}>
+              {failedByText(score.by, round.by)}
+            </span>
           )}
         </span>
       );

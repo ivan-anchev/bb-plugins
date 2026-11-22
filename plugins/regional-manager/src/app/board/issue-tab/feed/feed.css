@@ -279,8 +279,9 @@
   font-weight: 500;
   color: var(--foreground);
 }
+/* why a zero basis: the summary takes what the number and the score leave, and gives way first. */
 .rmi-round-summary {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -291,14 +292,22 @@
 .rmi-round[data-open] .rmi-round-summary {
   visibility: hidden;
 }
+/* why it may shrink: a reason as long as "Not the claimed commit on a clean tree" ends in an ellipsis at
+   a 360px panel, its whole words in its title and in the open round's verifier step. */
 .rmi-score {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+.rmi-score-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .rmi-score[data-result="pass"] { color: var(--success); }
 .rmi-score[data-result="fail"],
