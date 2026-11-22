@@ -17,12 +17,11 @@ import { STATUS_LABELS } from "../../../../model/issue/status.ts";
 import { FadingText } from "../row/fading-text.tsx";
 import { IssuePills } from "../row/pills.tsx";
 import { Rails, type RailShape } from "../row/rails.tsx";
-import { handFocusTo } from "../../../ui/focus-hand-off.ts";
 import { IssueGlyph } from "../status-glyph.tsx";
 import type { CardPresence } from "./card-intent.ts";
-import { useFloatingPlacement, useRowPlacement, type FloatingPlacement, type Side } from "./placement.ts";
+import { useRowPlacement, type Side } from "./placement.ts";
 
-type HoverCardProps = {
+export type HoverCardProps = {
   issue: Row;
   /** Every issue on the board, which its sub-issues and blockers are. */
   issues: readonly Row[];
@@ -36,44 +35,10 @@ type HoverCardProps = {
 export function HoverCard(props: HoverCardProps) {
   const { ref, placement } = useRowPlacement();
   const attach = useCallback((element: HTMLDivElement | null) => void (ref.current = element), [ref]);
-  return <Card {...props} attach={attach} placement={placement} className="rmi-card" style={capStyle(placement)} trigger={rowOf} />;
-}
-
-/** An issue link's card in chat, floating, fixed in the window, by `link`. */
-export function LinkHoverCard({ link, ...props }: HoverCardProps & { link: HTMLAnchorElement }) {
-  const { ref, body, placement } = useFloatingPlacement(link, props.presence.close);
-  const attach = useCallback(
-    (element: HTMLDivElement | null) => {
-      ref.current = element;
-      if (element !== null) cardLinks.set(element, link);
-    },
-    [ref, link],
-  );
-  const trigger = useCallback(() => link, [link]);
-  return <Card {...props} attach={attach} body={body} placement={placement} className="rmi-card rmi-card-floating" style={floatingStyle(placement)} trigger={trigger} />;
-}
-
-/** The link the floating card `node` is in floats by, while it is mounted; undefined outside one: focus or the pointer in the card is on that link. */
-export function cardLinkOf(node: Node): HTMLAnchorElement | undefined {
-  const card = (node instanceof Element ? node : node.parentElement)?.closest(FLOATING_CARD);
-  return card === null || card === undefined ? undefined : cardLinks.get(card);
-}
-
-/** The scrolling body of the card floating by `link`, its one tab stop, while the card is capped; null while it isn't, or no card floats by it. */
-export function cappedBodyOf(link: HTMLAnchorElement): HTMLElement | null {
-  const card = [...document.querySelectorAll(FLOATING_CARD)].find((element) => cardLinks.get(element) === link);
-  return card?.querySelector<HTMLElement>(`.${BODY}[tabindex="0"]`) ?? null;
+  return <Card {...props} attach={attach} placement={placement} className="rmi-card" trigger={rowOf} />;
 }
 
 // ------------------------------------------------------------------ layer 2
-
-/** A link's card, floating in the window (hover-card.css). */
-const FLOATING_CARD = ".rmi-card-floating";
-/** A card's body, which scrolls when the card is capped (hover-card.css). */
-const BODY = "rmi-card-body";
-
-/** The link each mounted floating card floats by. */
-const cardLinks = new WeakMap<Element, HTMLAnchorElement>();
 
 type CardProps = HoverCardProps & {
   /** Gives the card's element to its placement, which measures it; stable. */
@@ -82,13 +47,14 @@ type CardProps = HoverCardProps & {
   body?: RefObject<HTMLDivElement | null>;
   placement: Side;
   className: string;
-  style: CSSProperties;
+  /** Where a floating card sits in the window; left out: a row's, placed by its row's box. */
+  at?: CSSProperties;
   /** What focus in the card goes back to as it goes or loses its cap, so it never drops to the page or into a hidden card (REVIEW.md): its row's button, or its link. */
   trigger(card: HTMLElement): HTMLElement | null;
 };
 
-/** The card both kinds share: Escape and its presence, focus handed back, and the issue's details. */
-function Card({ issue, issues, presence, failure, attach, body, placement, className, style, trigger }: CardProps) {
+/** The card a row's and a link's (chat-links/card) share: Escape and its presence, focus handed back, and the issue's details. */
+export function Card({ issue, issues, presence, failure, attach, body, placement, className, at, trigger }: CardProps) {
   useEscapeCloses(presence.close);
   useEffect(() => presence.mounted(), [presence]);
   const own = useRef<HTMLDivElement>(null);
@@ -97,7 +63,7 @@ function Card({ issue, issues, presence, failure, attach, body, placement, class
     (element: HTMLDivElement | null) => {
       own.current = element;
       attach(element);
-      return handFocusTo(trigger)(element);
+      return element === null ? undefined : () => handBack(element, trigger);
     },
     [attach, trigger],
   );
@@ -106,11 +72,11 @@ function Card({ issue, issues, presence, failure, attach, body, placement, class
   // why: a card that no longer needs its cap has no tab stop and is hidden from a screen reader, so focus in it goes back to its row or link (REVIEW.md).
   useLayoutEffect(() => {
     const element = own.current;
-    if (!capped && element !== null && element.contains(document.activeElement)) trigger(element)?.focus();
+    if (!capped && element !== null) handBack(element, trigger);
   }, [capped, trigger]);
   return (
-    <div ref={cardRef} className={className} data-side={placement.side} style={style} aria-hidden={!capped || undefined}>
-      <div ref={body} className={BODY} tabIndex={capped ? 0 : undefined} role={capped ? "region" : undefined} aria-label={capped ? `Details of ${issue.id}` : undefined}>
+    <div ref={cardRef} className={className} data-side={placement.side} style={{ ...at, ...capStyle(placement) }} aria-hidden={!capped || undefined}>
+      <div ref={body} className="rmi-card-body" tabIndex={capped ? 0 : undefined} role={capped ? "region" : undefined} aria-label={capped ? `Details of ${issue.id}` : undefined}>
         <p className="rmi-card-title">{issue.title}</p>
         <p className="rmi-card-when">
           {STATUS_LABELS[issue.status]}
@@ -141,6 +107,15 @@ function Card({ issue, issues, presence, failure, attach, body, placement, class
 // ------------------------------------------------------------------ layer 2
 
 /**
+ * Gives focus in the card back to its trigger. why not scrolling to it: a card goes as its link
+ * scrolls out of sight, and focus going back must not pull the message list back to the link the
+ * user scrolled away from.
+ */
+function handBack(card: HTMLElement, trigger: (card: HTMLElement) => HTMLElement | null): void {
+  if (card.contains(document.activeElement)) trigger(card)?.focus({ preventScroll: true });
+}
+
+/**
  * Escape, wherever focus is, puts the card away and holds bb's own Escape, which would leave the page,
  * only while the card is mounted, so nothing hidden ever swallows it. why the document, bubbling: what
  * has focus acts on Escape first, and bb's, on the window, after; it skips an Escape whose default was
@@ -163,9 +138,6 @@ const rowOf = (card: HTMLElement): HTMLElement | null => card.closest(".rmi-rowb
 
 /** A card's height cap when its side of its anchor has too little room (hover-card.css `.rmi-card-body`). */
 const capStyle = ({ cap }: Side): CSSProperties & Partial<Record<"--rmi-card-cap", string>> => (cap === null ? {} : { "--rmi-card-cap": `${cap}px` });
-
-/** A floating card's place in the window, and its cap. */
-const floatingStyle = (placement: FloatingPlacement): CSSProperties => ({ ...placement.at, ...capStyle(placement) });
 
 /** The parent's sub-issues, hung from its heading on the rails, as on the board; none when it has none. */
 function SubIssues({ rows }: { rows: readonly Row[] }) {

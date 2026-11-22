@@ -487,7 +487,7 @@ test("the card follows its link as the message scrolls, on the side with room, a
   }
 });
 
-test("a focused link scrolled out of sight takes its card with it, capped or not: no card off-screen keeps a tab stop or bb's Escape, and focus is on the link", async () => {
+test("a focused link scrolled out of sight takes its card with it, capped or not: no card off-screen keeps a tab stop or bb's Escape, and focus is on the link, given back without scrolling", async () => {
   for (const height of [200, 2_000]) {
     const box = { top: 100, bottom: 116, left: 40 };
     const restore = laidOut(box, { height, width: 320 });
@@ -498,11 +498,19 @@ test("a focused link scrolled out of sight takes its card with it, capped or not
       await waitFor(() => assert.ok(card() !== null));
       // why: a card taller than the window is capped, and its body is a tab stop focus can be in.
       if (height > 768) act(() => (card()?.querySelector<HTMLElement>('.rmi-card-body[tabindex="0"]') ?? assert.fail("no tab stop")).focus());
+      // why a spy: jsdom scrolls nothing, so whether focus going back would scroll the list is in how the link is focused.
+      const focusedWith: (FocusOptions | undefined)[] = [];
+      const anchor = link(MANAGER_THREAD);
+      anchor.focus = (options) => {
+        focusedWith.push(options);
+        HTMLElement.prototype.focus.call(anchor, options);
+      };
 
       Object.assign(box, { top: -266, bottom: -250 });
       act(() => void fireEvent.scroll(pane(MANAGER_THREAD)));
       assert.ok(card() === null, `the card of a link past the window's top goes (${height}px)`);
       assert.ok(document.activeElement === link(MANAGER_THREAD), "focus stays with the link, not in a card gone or the page");
+      assert.deepEqual(focusedWith, height > 768 ? [{ preventScroll: true }] : [], "focus in the card goes back to the link without scrolling the list back to it");
       const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
       act(() => link(MANAGER_THREAD).dispatchEvent(escape));
       assert.equal(escape.defaultPrevented, false, "Escape is bb's again");

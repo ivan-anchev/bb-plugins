@@ -11,7 +11,7 @@ import type { IssueLink } from "../../model/issue/link/issue-link.ts";
 import { IssueGlyph } from "../board/issue/status-glyph.tsx";
 import { useBoardIssue } from "../board/use-board-issue.ts";
 import { useDecoratedLinks } from "./decorated-links.ts";
-import { LinkCard } from "./link-card.tsx";
+import { LinkCard } from "./card/link-card.tsx";
 import { useOpenOnClick } from "./open-on-click.ts";
 
 export const issueLinks = { id: "issue-links", component: IssueLinks };

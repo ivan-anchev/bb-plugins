@@ -27,3 +27,10 @@
   display: inline-flex;
   vertical-align: -3px;
 }
+
+/* An issue link's card (card/link-hover-card.tsx), placed in the window by card/floating-placement.ts, over bb's message list and its panes, which would clip a card in them. */
+.rmi-card.rmi-card-floating {
+  position: fixed;
+  z-index: 50;
+  width: min(320px, calc(100vw - 16px));
+}

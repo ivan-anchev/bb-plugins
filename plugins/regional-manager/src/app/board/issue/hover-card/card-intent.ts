@@ -6,7 +6,7 @@
 // closes after a beat. Escape closes it wherever focus is, while the card is on screen (hover-card.tsx
 // holds it). A press puts it away, and the focus the press gives a trigger opens none. No timer
 // outlives its owner. A board row is a trigger (use-hover-card.ts), and so is an issue link in chat
-// (chat-links/link-card.tsx); `Key` names one.
+// (chat-links/card/link-card.tsx); `Key` names one.
 import { useEffect, useMemo, useState } from "react";
 
 /** What the pointer and focus tell the card. */

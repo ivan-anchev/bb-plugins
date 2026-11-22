@@ -11,7 +11,7 @@
 import { experimental_usePluginId } from "@get-bb/plugin-sdk/app";
 import { useCallback, useEffect, useState } from "react";
 import { parseIssueHref, type IssueLink } from "../../model/issue/link/issue-link.ts";
-import { cardLinkOf } from "../board/issue/hover-card/hover-card.tsx";
+import { cardLinkOf } from "./card/link-hover-card.tsx";
 
 /** An issue link on screen and the slot its glyph goes in. `key`: its own, for the portal. */
 export type DecoratedLink = { key: number; link: IssueLink; slot: HTMLElement };
