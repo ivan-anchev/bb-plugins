@@ -3,6 +3,8 @@
 // done-criterion, and what it found. Pass or fail is never stored: `judge` derives it, so the
 // board, the catch-up and the doorbell can't disagree.
 import { z } from "zod";
+import { modelRefSchema } from "../execution.ts";
+import { triageSchema } from "./review.ts";
 import { checkoutProblems, checkoutSchema, type Checkout, type CheckoutRead } from "./checkout.ts";
 import { ciVerdictSchema, type Ci, type CiVerdict } from "./pr.ts";
 
@@ -16,9 +18,6 @@ export type CriterionResult = z.infer<typeof criterionResultSchema>;
  */
 export const UNCHECKABLE_RULE =
   "A criterion you can't check as it is written, as when it names a step that hasn't happened yet, is unverifiable, with why as its evidence: never pass it on a nearby fact you could check.";
-
-/** A provider and model as bb records a thread's turns on them. */
-const modelRefSchema = z.object({ providerId: z.string().min(1), model: z.string().min(1) });
 
 const verifierThreadIdSchema = z.string().min(1);
 
@@ -70,6 +69,8 @@ const returnedSchema = z.object({
   checkout: checkoutSchema,
   criteria: z.array(z.object({ criterion: z.string(), result: criterionResultSchema, evidence: z.string() })).min(1),
   findings: z.array(z.string()),
+  /** The verifier's triage of each of the review's findings, in their order (review.ts triaged). why a default: a verdict stored before reviews existed triaged none. */
+  triage: z.array(triageSchema).default([]),
   model: modelRefSchema,
   sameModel: z.boolean(),
   settlement: settlementSchema.default({ kind: "checked", refused: null, ci: { kind: "none" } }),
@@ -118,14 +119,14 @@ const shownSettlementSchema = z.discriminatedUnion("kind", [
 ]);
 
 /**
- * A verdict as the user is shown it: only what the board reads. why without the model: the board
- * names no model; it stays with the plugin and the regional manager. why no checkout before a
+ * A verdict as the user is shown it: only what the board reads. why without the model and the
+ * triage: the board shows neither; they stay with the plugin and the regional manager. why no checkout before a
  * verdict returns, nor a verifier's nudge: the board shows neither.
  */
 export const shownVerdictSchema = z.discriminatedUnion("state", [
   queuedSchema.omit({ checkout: true }),
   runningSchema.omit({ checkout: true, nudged: true, declined: true }),
-  returnedSchema.omit({ model: true, settlement: true }).extend({ settlement: shownSettlementSchema }),
+  returnedSchema.omit({ model: true, triage: true, settlement: true }).extend({ settlement: shownSettlementSchema }),
   couldNotRunSchema,
   supersededSchema,
   waivedSchema,

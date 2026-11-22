@@ -4,7 +4,7 @@ import { executionOf, sameModel, type CatalogModel, type CatalogRouting, type Ex
 import { executionFacts, modelsOf, type CatalogBb } from "../execution/catalog.ts";
 
 /** What the choice weighs: the verifier the issue named (null: none), the regional manager's execution (null: bb has no turn of it on record), and the executions of the agents whose work it checks. */
-type VerifierChoice = { named: Execution | null; manager: Execution | null; theirs: readonly Execution[]; routing: CatalogRouting };
+export type VerifierChoice = { named: Execution | null; manager: Execution | null; theirs: readonly Execution[]; routing: CatalogRouting };
 
 /**
  * In order: the verifier the issue named, when bb lists it where the check runs and it is not one

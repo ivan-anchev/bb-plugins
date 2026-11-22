@@ -54,6 +54,7 @@ const checkOf = (verdict: Verdict): Check => ({
   criteria: issue.doneCriteria,
   verifier: null,
   subject: { kind: "handoff", agentId: agent.id, handoffId: done.id, headSha: SHA, prUrl: null },
+  review: { state: "none" },
   verdict,
 });
 const returned = (results: CriterionResult[], settlement: Extract<Verdict, { state: "returned" }>["settlement"] = { kind: "checked", refused: null, ci: { kind: "none" } }): Extract<Verdict, { state: "returned" }> => ({
@@ -65,6 +66,7 @@ const returned = (results: CriterionResult[], settlement: Extract<Verdict, { sta
   findings: [],
   model: { providerId: "claude-code", model: "sonnet" },
   sameModel: false,
+  triage: [],
   settlement,
 });
 const pr = (state: PrSnapshot["state"]): PrSnapshot => ({ number: 12, url: "https://github.com/o/r/pull/12", state, draft: false, review: "none", ci: "pass", headSha: SHA, failedChecks: [] });
@@ -226,6 +228,7 @@ const finalCheck = (merged: string[], verdict: Verdict): FinalCheck => ({
   ...checkOf(verdict),
   id: checkIdSchema.parse("7a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d"),
   subject: { kind: "final", defaultBranch: "main", merged: merged.map((id) => issueIdSchema.parse(id)) },
+  review: { state: "none" },
 });
 
 test("a build parent whose work is all merged is placed by its latest final check, which is due again only for merged work it didn't judge", () => {

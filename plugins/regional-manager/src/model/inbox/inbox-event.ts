@@ -50,7 +50,7 @@ export const inboxEventSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("needs-input"), ...onAgent, question: z.string() }),
   /** The pull request of the agent's branch changed meaningfully (see meaningfulChanges): what changed, and the pull request as read then. */
   z.object({ kind: z.literal("pr"), ...onAgent, pr: prSnapshotSchema, changes: z.array(prChangeSchema).min(1) }),
-  /** The issue's agent ended before its work reached Verifying, In review or Done, so the issue rests in Todo again. */
+  /** The issue's agent ended before its work reached Reviewing, Verifying, In review or Done, so the issue rests in Todo again. */
   z.object({ kind: z.literal("returned-to-todo"), ...onAgent, how: endedHowSchema.exclude(["spawn-failed", "replaced"]) }),
   /** The issue `by`, the last of its dependencies still open, closed without the manager closing it (a merge, a report), and stands `closedAs` (relations.ts unblockedSince). */
   z.object({ kind: z.literal("unblocked"), issueId: issueIdSchema, by: issueIdSchema, closedAs: issueStatusSchema.extract(["done", "canceled"]) }),

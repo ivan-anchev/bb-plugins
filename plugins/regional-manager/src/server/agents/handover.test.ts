@@ -283,7 +283,7 @@ test("a second start asked while the first stops a1's verifier waits, then hands
   await settled();
   const second = handover();
   await settled();
-  assert.deepEqual([kit.store.agents(coordinatorId).length, kit.spawned()], [1, 3], "the second decided nothing while the first held WEB-1");
+  assert.deepEqual([kit.store.agents(coordinatorId).length, kit.spawned()], [1, 4], "the second decided nothing while the first held WEB-1: bb spawned the manager, a1, its reviewer and its verifier");
   kit.stopRequests.pending = null;
   stops.release();
 
@@ -402,12 +402,12 @@ test("a person's message queued for a verifier refuses a handover, as one for an
   assert.deepEqual([kit.queued(verifier).length, kit.thread(verifier).status, agent(a1).ended], [1, "active", null], "the message is left alone, and nothing stopped");
 });
 
-test("a verifier whose start is held when a handover is asked starts first, and the handover stops it before a2 starts", async () => {
+test("a reviewer whose start is held when a handover is asked starts first, and the handover stops it before a2 starts", async () => {
   const { kit, coordinatorId, agentThreadId, handover } = await handedTo();
   await kit.call("agent_handoff", DONE, agentThreadId);
   kit.providers.holding = true;
   await kit.idle(agentThreadId, "Handed off.");
-  assert.ok(kit.providers.held.length > 0, "the verifier's start reads the catalog");
+  assert.ok(kit.providers.held.length > 0, "the reviewer's start reads the catalog");
   const check = kit.store.latestHandoff(coordinatorId, a1)?.check ?? assert.fail("no check");
   const starting = handover();
   await settled();
@@ -415,8 +415,8 @@ test("a verifier whose start is held when a handover is asked starts first, and 
   kit.providers.held.splice(0).forEach((release) => release());
   const next = threadIn(textOf(await starting));
 
-  const verifier = [...Array(kit.spawned()).keys()].map((i) => kit.thread(`thr_${i + 1}`)).find((thread) => thread.spawnedWith.parentThreadId === agentThreadId) ?? assert.fail("no verifier");
-  assert.deepEqual([verifier.status, verifier.archivedAt, kit.store.check(check.id)?.verdict.state], ["idle", null, "superseded"], "stopped, never archived, and its check superseded");
+  const reviewer = [...Array(kit.spawned()).keys()].map((i) => kit.thread(`thr_${i + 1}`)).find((thread) => thread.spawnedWith.parentThreadId === agentThreadId && kit.store.roleOfThread(thread.id)?.kind === "reviewer") ?? assert.fail("no reviewer");
+  assert.deepEqual([reviewer.status, reviewer.archivedAt, kit.store.check(check.id)?.verdict.state], ["idle", null, "superseded"], "stopped, never archived, and its check superseded");
   assert.equal(kit.thread(next).status, "active");
 });
 

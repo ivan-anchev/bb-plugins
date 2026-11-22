@@ -90,7 +90,7 @@ export function registerAgentTools(bb: ToolsBb, { store, agents }: Deps): void {
   bb.agents.registerTool({
     name: STOP,
     description:
-      "Stop one of your agents: its turn stops and it no longer holds its issue. Work it handed off that reached Verifying, In review or Done keeps its issue there; anything short of that returns the issue to Todo. Its thread is kept, unless archive is true.",
+      "Stop one of your agents: its turn stops and it no longer holds its issue. Work it handed off that reached Reviewing, Verifying, In review or Done keeps its issue there; anything short of that returns the issue to Todo. Its thread is kept, unless archive is true.",
     presentation: { label: { pending: "Stopping an agent", completed: "Stopped an agent" }, icon: { glyph: "Check" } },
     parameters: z.object({
       agent: agentIdSchema,

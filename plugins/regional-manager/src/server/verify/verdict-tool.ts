@@ -1,9 +1,11 @@
 // A verifier's own tool: issue_verdict, its judgement of each done-criterion with the evidence it
-// ran. Its overall outcome is never reported: the plugin derives it (model/verdict.ts), on the
+// ran, and its triage of each of the review's findings. Its overall outcome is never reported: the plugin derives it (model/verdict.ts), on the
 // commit and tree the check judges (verify.ts returned). The caller's role comes from the plugin's
 // database by its thread id.
 import { z } from "zod";
-import { MAX_CRITERIA, type DoneCriteria } from "../../model/issue/issue.ts";
+import { MAX_CRITERIA } from "../../model/issue/issue.ts";
+import type { Check } from "../../model/verdict/check.ts";
+import { triageSchema } from "../../model/verdict/review.ts";
 import { criterionResultSchema, UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 import type { Store } from "../store/store.ts";
 import { failed, refusedBusy, type ToolsBb } from "../tools/tool-kit.ts";
@@ -24,6 +26,16 @@ const verdictInputSchema = z.object({
     .max(MAX_CRITERIA)
     .describe("One entry for every done-criterion, none skipped."),
   findings: z.array(z.string().trim().min(1).max(2_000)).max(20).describe("Problems you saw that no criterion covers. [] for none."),
+  triage: z
+    .array(
+      triageSchema.extend({
+        finding: z.number().int().min(1).describe("The reviewer's finding's number in your first message."),
+        reason: z.string().trim().min(1).max(500).describe("Why, in a line: what you ran or read that shows it holds, or doesn't."),
+      }),
+    )
+    .max(50)
+    .default([])
+    .describe("One entry for every finding of the reviewer's in your first message, none skipped: confirmed, it holds and is worth fixing; rejected, it doesn't hold or isn't worth fixing. [] when it lists none."),
 });
 type VerdictInput = z.infer<typeof verdictInputSchema>;
 
@@ -43,7 +55,7 @@ export function registerVerdictTool(bb: ToolsBb, { store, verify }: Deps): void 
       // why throw: a verifier is started for a check, and checks are kept while their regional manager is.
       if (check === null) throw new Error(`The check ${role.checkId} this verifier runs is missing.`);
       if (check.verdict.state !== "running" || check.verdict.verifierThreadId !== threadId) return failed(NOT_RUNNING);
-      const report = reportOf(input, check.criteria);
+      const report = reportOf(input, check);
       if (typeof report === "string") return failed(`${VERDICT} is refused and nothing was saved: ${report}`);
       const received = await verify.returned(check.id, threadId, report);
       if (received === "not-running") return failed(NOT_RUNNING);
@@ -57,29 +69,53 @@ export function registerVerdictTool(bb: ToolsBb, { store, verify }: Deps): void 
   });
 }
 
-/** The verdict, each criterion named by its text, in the check's order; or why it can't be taken. */
-function reportOf(input: VerdictInput, doneCriteria: DoneCriteria): VerifierReport | string {
-  const numbers = input.criteria.map((check) => check.criterion);
-  const missing = doneCriteria.flatMap((_, i) => (numbers.includes(i + 1) ? [] : [i + 1]));
-  const unknown = numbers.filter((number) => number > doneCriteria.length);
-  const repeated = numbers.filter((number, i) => numbers.indexOf(number) !== i);
-  if (missing.length > 0) return `judge every done-criterion; missing ${missing.join(", ")} of 1 to ${doneCriteria.length}.`;
-  if (unknown.length > 0) return `there are only ${doneCriteria.length} done-criteria; ${unknown.join(", ")} is not one.`;
-  if (repeated.length > 0) return `judge each done-criterion once; ${repeated.join(", ")} appears more than once.`;
+/** The verdict, each criterion named by its text and each of the review's findings triaged, in the check's order; or why it can't be taken. */
+function reportOf(input: VerdictInput, { criteria, review }: Pick<Check, "criteria" | "review">): VerifierReport | string {
+  const findings = review.state === "reported" ? review.findings.length : 0;
+  const refused =
+    numbersRefusal(
+      input.criteria.map(({ criterion }) => criterion),
+      criteria.length,
+      { verb: "judge", each: "done-criterion", all: "done-criteria" },
+    ) ?? numbersRefusal(
+      input.triage.map(({ finding }) => finding),
+      findings,
+      { verb: "triage", each: "finding of the reviewer's", all: "findings of the reviewer's" },
+    );
+  if (refused !== null) return refused;
   const byNumber = new Map(input.criteria.map((check) => [check.criterion, check]));
+  const byFinding = new Map(input.triage.map((one) => [one.finding, one]));
   return {
     findings: input.findings,
-    criteria: doneCriteria.map((criterion, i) => {
+    criteria: criteria.map((criterion, i) => {
       const check = byNumber.get(i + 1);
       // why throw: missing numbers were refused above.
       if (check === undefined) throw new Error(`Criterion ${i + 1} has no result.`);
       return { criterion, result: check.result, evidence: check.evidence };
     }),
+    triage: Array.from({ length: findings }, (_, i) => {
+      const one = byFinding.get(i + 1);
+      // why throw: missing numbers were refused above.
+      if (one === undefined) throw new Error(`Finding ${i + 1} has no triage.`);
+      return { result: one.result, reason: one.reason };
+    }),
   };
+}
+
+/** Why the numbers given don't take each of `count` things once, in words (`words`); null when they do. */
+function numbersRefusal(numbers: readonly number[], count: number, words: { verb: string; each: string; all: string }): string | null {
+  const missing = Array.from({ length: count }, (_, i) => i + 1).filter((number) => !numbers.includes(number));
+  const unknown = numbers.filter((number) => number > count);
+  const repeated = numbers.filter((number, i) => numbers.indexOf(number) !== i);
+  if (missing.length > 0) return `${words.verb} every ${words.each}; missing ${missing.join(", ")} of 1 to ${count}.`;
+  if (unknown.length > 0) return count === 0 ? `there are no ${words.all} to ${words.verb}; pass [].` : `there are only ${count} ${words.all}; ${unknown.join(", ")} is not one.`;
+  if (repeated.length > 0) return `${words.verb} each ${words.each} once; ${repeated.join(", ")} appears more than once.`;
+  return null;
 }
 
 const NOT_RUNNING = `${VERDICT} is refused and nothing was saved: this check no longer waits for your verdict (a newer handoff or final check replaced it, or it already has one). Stop here.`;
 
 const VERDICT_INSTRUCTIONS = `Returning your verdict: call issue_verdict once, as your last action, then stop. The plugin judges the commit and the tree itself, through bb's git plugin (your first message says when it reads them); you judge only the criteria.
 - criteria: one entry per done-criterion, by its number in your first message: result pass, fail or unverifiable, and evidence quoting what you ran and what it printed (up to 4,000 characters). ${UNCHECKABLE_RULE}
-- findings: problems no criterion covers, up to 20. [] for none.`;
+- findings: problems no criterion covers, up to 20. [] for none.
+- triage: when your first message lists the reviewer's findings, one entry for each by its number: confirmed when it holds and is worth fixing, rejected when it doesn't hold or isn't worth fixing, with the reason in a line. Only confirmed findings reach the agent. [] when it lists none.`;

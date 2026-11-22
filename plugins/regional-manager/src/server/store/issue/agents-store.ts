@@ -5,7 +5,7 @@ import { agentIdSchema, baseSchema, endedHowSchema, placementSchema, type Agent,
 import { executionSchema, type Execution } from "../../../model/execution.ts";
 import { handoffIdSchema, type HandoffId } from "../../../model/handoff.ts";
 import { issueIdSchema, type IssueId } from "../../../model/issue/issue.ts";
-import { coordinatorIdSchema, roleSchema, type CoordinatorId, type Role } from "../../../model/role.ts";
+import { coordinatorIdSchema, roleSchema, type CheckerRole, type CoordinatorId, type Role } from "../../../model/role.ts";
 import { insertEvent } from "../inbox/inbox-store.ts";
 import { json, type Db } from "../rows.ts";
 import { restIssue } from "./issues-store.ts";
@@ -103,8 +103,8 @@ export function agentsStore(db: Db) {
       return row === undefined ? null : toRole(row);
     },
 
-    /** A verifier's unbound ticket, minted before its thread is spawned. */
-    insertVerifierTicket(ticket: string, role: Extract<Role, { kind: "verifier" }>, at: number): void {
+    /** A verifier's or a reviewer's unbound ticket, minted before its thread is spawned. */
+    insertCheckerTicket(ticket: string, role: CheckerRole, at: number): void {
       insertTicket(db, ticket, role, at);
     },
 
@@ -116,18 +116,19 @@ export function agentsStore(db: Db) {
 
     /**
      * Every thread the plugin started for the issue and bb named, oldest first: its agents', each
-     * with its id, and its verifiers' (agentId null), whether they still hold a role in its work or not.
+     * with its id, and its verifiers' and reviewers' (agentId null), each with what it is, whether
+     * they still hold a role in its work or not.
      */
-    issueThreads(coordinatorId: CoordinatorId, issueId: IssueId): { threadId: string; agentId: AgentId | null }[] {
+    issueThreads(coordinatorId: CoordinatorId, issueId: IssueId): { threadId: string; agentId: AgentId | null; kind: Role["kind"] }[] {
       return db()
         .prepare(
-          `SELECT r.thread_id AS threadId, a.id AS agentId FROM roles r LEFT JOIN agents a ON a.ticket = r.ticket
+          `SELECT r.thread_id AS threadId, a.id AS agentId, json_extract(r.role, '$.kind') AS kind FROM roles r LEFT JOIN agents a ON a.ticket = r.ticket
             WHERE r.thread_id IS NOT NULL AND json_extract(r.role, '$.coordinatorId') = ?
-              AND (a.issue_id = ? OR (json_extract(r.role, '$.kind') = 'verifier' AND json_extract(r.role, '$.issueId') = ?))
+              AND (a.issue_id = ? OR (json_extract(r.role, '$.kind') IN ('verifier', 'reviewer') AND json_extract(r.role, '$.issueId') = ?))
             ORDER BY r.rowid`,
         )
         .all(coordinatorId, issueId, issueId)
-        .map((row) => z.object({ threadId: z.string(), agentId: agentIdSchema.nullable() }).parse(row));
+        .map((row) => z.object({ threadId: z.string(), agentId: agentIdSchema.nullable(), kind: roleKindSchema }).parse(row));
     },
 
     /** The ticket an agent's thread is spawned with. why throw: every agent is inserted with one. */
@@ -150,6 +151,8 @@ export function agentsStore(db: Db) {
     },
   };
 }
+
+const roleKindSchema = z.enum(roleSchema.options.map((option) => option.shape.kind.value));
 
 const toRole = (row: unknown): Role => roleSchema.parse(JSON.parse(z.object({ role: z.string() }).parse(row).role));
 

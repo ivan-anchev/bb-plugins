@@ -16,6 +16,7 @@ const returned = (results: CriterionResult[], settlement: Settlement = { kind: "
   findings: [],
   model: { providerId: "codex", model: "gpt-default" },
   sameModel: false,
+  triage: [],
   settlement,
 });
 

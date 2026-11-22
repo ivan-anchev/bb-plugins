@@ -402,7 +402,7 @@ assert.equal(doorbells()[0], doorbellOf('WEB-1 "Add retries" (a1) ended its turn
     '### WEB-2 "Dead letters" (a2) ended its turn without a handoff',
     '### WEB-2 "Dead letters" (a2) returned to Todo',
   ]);
-  assert.match(caughtUp, /### WEB-1 "Add retries" \(a1\) returned to Todo\n\nAt [^\n]+ a1 was stopped before its work reached Verifying, In review or Done, so WEB-1 rests in Todo with no agent\./);
+  assert.match(caughtUp, /### WEB-1 "Add retries" \(a1\) returned to Todo\n\nAt [^\n]+ a1 was stopped before its work reached Reviewing, Verifying, In review or Done, so WEB-1 rests in Todo with no agent\./);
   assert.equal(textOf(await kit.call("agent_message", { agent: "a1", text: "More" }, threadId)), "a1 was stopped, so it takes no more messages. Start a new agent on WEB-1 with agent_start.");
   assert.equal(textOf(await kit.call("agent_stop", { agent: "a1" }, threadId)), "a1 had already ended (stopped); nothing changed.");
 });

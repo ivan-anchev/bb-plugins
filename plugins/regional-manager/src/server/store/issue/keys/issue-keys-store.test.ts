@@ -28,7 +28,7 @@ function storedBy050() {
   const agentId = startAgent(store, sub.id, "agent-1");
   const handoff = { id: handoffIdSchema.parse(randomUUID()), coordinatorId: MANAGER, issueId: sub.id, agentId, at: 3_000, turnSeq: 1, summary: `Retries land on ${parent.id}`, did: [], evidence: [], concerns: [], deviations: [], findings: [] };
   const check = store.insertHandoff({ ...handoff, status: "done", delivery: { kind: "commit", headSha: SHA, prUrl: null } }, CLEAN) ?? assert.fail("no check made");
-  store.insertVerifierTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: sub.id, checkId: check.id }, 3_000);
+  store.insertCheckerTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: sub.id, checkId: check.id }, 3_000);
   store.bindTicket("verifier-1", "thr_verifier_1");
   store.insertFinalCheck(MANAGER, parent.id, { defaultBranch: "main", merged: [sub.id] }, 4_000);
   store.insertDecision(MANAGER, { question: "Which queue?", options: ["SQS", "Redis"], issueId: dependent.id }, 4_000);

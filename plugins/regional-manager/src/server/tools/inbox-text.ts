@@ -15,6 +15,7 @@ import { intervalText, type Reminder } from "../../model/reminder.ts";
 import { checkedAgents, type Check, type CheckId, type FinalCheck } from "../../model/verdict/check.ts";
 import { checkoutText, NOT_CLEAN, worktreeText } from "../../model/verdict/checkout.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
+import { findingText, triaged, type Review, type Triage } from "../../model/verdict/review.ts";
 import { allPassed, ciVerdictOf, failedCheckout, judge, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
 import { reportFileOf } from "../memory/report-file.ts";
 
@@ -93,7 +94,7 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
     case "pr":
       return `### ${on} PR #${event.pr.number}: ${event.changes.map((change) => PR_CHANGE_WORDS[change]).join(", ")}\n\n${when} ${prText(event.pr)} A done handoff's verdict that waits for CI settles on its own; you hear of it then.`;
     case "returned-to-todo":
-      return `### ${on} returned to Todo\n\n${when} ${event.agentId} was ${event.how} before its work reached Verifying, In review or Done, so ${event.issueId} rests in Todo with no agent. Start one with agent_start, or plan it again with issue_update.`;
+      return `### ${on} returned to Todo\n\n${when} ${event.agentId} was ${event.how} before its work reached Reviewing, Verifying, In review or Done, so ${event.issueId} rests in Todo with no agent. Start one with agent_start, or plan it again with issue_update.`;
     default:
       return event satisfies never;
   }
@@ -280,7 +281,7 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
         .join(" ");
       const checks = verdict.criteria.map((check, i) => `${i + 1}. ${check.result.toUpperCase()}: ${check.criterion}\n   ${check.evidence.replaceAll("\n", "\n   ")}`);
       const findings = verdict.findings.length === 0 ? "Findings: none." : `Findings:\n${verdict.findings.map((finding) => `- ${finding.replaceAll("\n", "\n  ")}`).join("\n")}`;
-      return [head, ...checks, findings].join("\n\n");
+      return [head, ...checks, findings, ...reviewText(check.review, verdict)].join("\n\n");
     }
     case "could-not-run":
       return `Couldn't verify: ${verdict.reason}. Nobody has checked it against the done-criteria.`;
@@ -290,6 +291,47 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
       return "Unverified: verification was off, so nobody has checked it against the done-criteria.";
     default:
       return verdict satisfies never;
+  }
+}
+
+/**
+ * What came of a returned verdict's review: no review was had, and why; or what its reviewer found,
+ * on what model, each finding as the verifier triaged it, confirmed ones first, each with the
+ * verifier's reason, and whether the confirmed ones went to the agent. Nothing for a check with no review stage.
+ */
+function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned" }>): string[] {
+  if (review.state === "missed") return [`Review: no review was had, as ${review.reason}.`];
+  if (review.state !== "reported") return [];
+  const by = `${review.model.providerId} ${review.model.model}`;
+  if (review.findings.length === 0) return [`Review: a reviewer on ${by} found nothing.`];
+  const all = triaged(review, verdict.triage);
+  const lines = (result: Triage["result"]) => all.filter((finding) => finding.result === result).map((finding) => `- ${findingText(finding).replaceAll("\n", "\n  ")}\n  Why: ${finding.reason}`);
+  const confirmed = lines("confirmed");
+  const rejected = lines("rejected");
+  return [
+    [`Review: a reviewer on ${by} reported ${all.length} finding${all.length === 1 ? "" : "s"}; the verifier confirmed ${confirmed.length} and rejected ${rejected.length}.`, ...(confirmed.length === 0 ? [] : [confirmedSent(verdict)])].join(" "),
+    ...(confirmed.length === 0 ? [] : [`Confirmed:\n${confirmed.join("\n")}`]),
+    ...(rejected.length === 0 ? [] : [`Rejected:\n${rejected.join("\n")}`]),
+  ];
+}
+
+/** Whether a verdict's confirmed review findings reached the agent, as far as the plugin knows: only a failed verdict sent back as its fix round carries them. */
+function confirmedSent({ settlement }: Extract<Verdict, { state: "returned" }>): string {
+  switch (settlement.kind) {
+    case "sent-back":
+      return "The confirmed ones went back to the agent with the failed verdict.";
+    case "sending-back":
+      return "The confirmed ones are on their way back to the agent with the failed verdict.";
+    case "maybe-sent-back":
+      return "The confirmed ones went with the failed verdict's findings, which may or may not have reached the agent.";
+    case "pending":
+    case "waiting-for-ci":
+      return "None has gone to the agent yet.";
+    case "checked":
+    case "superseded":
+      return "None of them went to the agent.";
+    default:
+      return settlement satisfies never;
   }
 }
 

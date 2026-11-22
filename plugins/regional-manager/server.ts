@@ -24,6 +24,8 @@ import { watchUnblocked } from "./src/server/issues/views/unblocked.ts";
 import { openMemoryRoot } from "./src/server/memory/memory-files.ts";
 import { memoryHandlers } from "./src/server/memory/memory-rpc.ts";
 import { upgradeMemoryFrom040 } from "./src/server/memory/memory-upgrade.ts";
+import { createReview } from "./src/server/review/review.ts";
+import { registerReviewTool } from "./src/server/review/review-tool.ts";
 import { registerRoles } from "./src/server/roles.ts";
 import { createSpawner } from "./src/server/spawn.ts";
 import { openStore } from "./src/server/store/store.ts";
@@ -65,7 +67,8 @@ export default function plugin(host: BbPluginApi): void {
   const prWatch = createPrWatch({ bb, store, inbox, gh: runGh, now: Date.now });
   const agents = createAgents({ bb, store, spawner, inbox, memory, turns, prs: prWatch, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
   const issues = createIssues({ bb, store, views, onChange });
-  const verify = createVerify({ bb, store, spawner, inbox, turns, now: Date.now });
+  const review = createReview({ bb, store, spawner, memory, turns, now: Date.now });
+  const verify = createVerify({ bb, store, spawner, review, inbox, turns, now: Date.now });
   const finalChecks = createFinalChecks({ bb, store, views, turns, verify, defaultBranch: defaultBranchReader(bb, store), now: Date.now });
 
   // why as the plugin loads, and from the tick unwaited for: it is a one-time upgrade, retried after a failure, whose bb calls must not hold up the watch.
@@ -80,6 +83,7 @@ export default function plugin(host: BbPluginApi): void {
   registerIssueTools(bb, { store, issues });
   registerAgentTools(bb, { store, agents });
   registerHandoffTool(bb, { store, verify });
+  registerReviewTool(bb, { store, review });
   registerVerdictTool(bb, { store, verify });
   const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard });
   watchAgentThreads({ bb, store, inbox });

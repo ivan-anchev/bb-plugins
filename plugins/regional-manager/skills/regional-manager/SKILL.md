@@ -24,7 +24,7 @@ and an icon there; your name is your thread's title.
 
 1. Call `crew_catch_up` first. It returns every update since your last
    catch-up in full, the board (every issue you filed, under Needs you, In
-   review, Verifying, In progress, Todo, Backlog, Done or Canceled, with its
+   review, Verifying, Reviewing, In progress, Todo, Backlog, Done or Canceled, with its
    agent, thread and branch, what blocks it and what it blocks), the issues
    ready to start, the questions still waiting for the user, your
    reminders, and your memory files in full, each with its version. Each
@@ -289,14 +289,15 @@ verifier: the kind is shown to the user on every issue.
 ### Statuses
 
 The plugin derives an issue's status from what its agents did. You never set
-In progress, Verifying or In review.
+In progress, Reviewing, Verifying or In review.
 
 | Status | When |
 | --- | --- |
 | Backlog | No agent holds it, and you rested it here: not planned yet. |
-| Todo | No agent holds it, ready to start. Where a new issue rests, and where it returns when its agent ends before its work reached Verifying (on a research issue, Done). |
+| Todo | No agent holds it, ready to start. Where a new issue rests, and where it returns when its agent ends before its work reached Reviewing (on a research issue, Done). |
 | In progress | An agent holds it and is working, idle without a handoff, fixing its verifier's findings, or stopped by something (blocked, gave up, failed). |
-| Verifying | A build issue: its agent handed off done, and the verifier checks it, or every criterion passed and it waits for CI on the claimed commit. A build parent: its final check is due or running. |
+| Reviewing | A build issue: its agent handed off done, and an independent reviewer reviews its diff as CREW.md instructs reviewers, before its verifier starts. |
+| Verifying | A build issue: its review is in (or none could be had), and the verifier checks it, or every criterion passed and it waits for CI on the claimed commit. A build parent: its final check is due or running. |
 | In review | A build issue: its done handoff passed verification (or was made with verification off). It waits for its pull request to merge, or for you to accept it. A build parent: its work is all merged and verification was off, so it waits for you to accept it. |
 | Done | A build issue: its pull request merged, or you accepted it; final. A build parent: its final check passed, or you accepted it. A research issue: its agent handed off done; a message to that agent makes it In progress again. |
 | Canceled | You canceled it. |
@@ -362,7 +363,7 @@ in its own environment, on its own branch.
   verifier stopped, or has a message the user queued for one, it is refused
   and sends nothing, naming it: call it again shortly.
 - **Stop** one with `agent_stop`. Its thread stops, idle or not, background
-  commands included, and it no longer holds the issue. Work it handed off that reached Verifying, In review or Done keeps
+  commands included, and it no longer holds the issue. Work it handed off that reached Reviewing, Verifying, In review or Done keeps
   the issue there; anything short of that returns the issue to Todo. Add
   `archive: true` only when its work is finished or no longer wanted:
   archiving a sandbox agent's thread destroys the sandbox when no other thread
@@ -527,10 +528,20 @@ turn. So when you reply after a wake, name the issue your reply is about, as
   The update holds the report whole and the memory file it was saved to; see
   [Research](#research).
 - **handed off: done**, on a build issue: while verification is on (the
-  user's switch; you can't change it), the plugin has an independent verifier check it in the
-  agent's environment. The issue sits in Verifying, and you hear of the
+  user's switch; you can't change it), the plugin first has an independent
+  reviewer review its diff in the agent's environment, as CREW.md instructs
+  reviewers: the plugin names no review of its own, so say in CREW.md what a
+  reviewer runs. The issue sits in Reviewing. Then an independent verifier
+  checks it there, and triages each of the reviewer's findings, confirmed or
+  rejected with a reason: the issue sits in Verifying. A reviewer that can't
+  start, stalls or stops without reporting never holds the issue: the verifier
+  starts anyway, and the verdict says no review was had. You hear of the
   handoff only with the verdict: each criterion pass, fail or unverifiable,
-  with the output the verifier ran, and the model it ran on. When the issue
+  with the output the verifier ran, and the model it ran on, then the review:
+  the confirmed findings and the rejected ones, each with the verifier's
+  reason. Only confirmed ones go back to the agent with a failed verdict; a
+  confirmed finding alone doesn't fail it, so name in the done-criteria what
+  must hold. When the issue
   has a pull request, a verdict that passed every criterion also waits for CI
   on the claimed commit; CI failing fails it.
   - **verified**: In review. Report it to the user as checked, naming what
@@ -572,7 +583,7 @@ turn. So when you reply after a wake, name the issue your reply is about, as
 - **ended its turn without a handoff**: its last answer is in the update.
   Message it to finish, or read the issue with `issue_read`.
 - **returned to Todo: its agent was stopped / archived / deleted**: the agent
-  ended before its work reached Verifying, and the issue has no agent. Start
+  ended before its work reached Reviewing, and the issue has no agent. Start
   another, or plan it again.
 - **BBP-1 "…" final check: passed, failed, could not run, or not run,
   verification is off**: a build parent's final check is over; see [A build

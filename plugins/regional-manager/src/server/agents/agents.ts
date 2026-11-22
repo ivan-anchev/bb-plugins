@@ -43,7 +43,7 @@ import type { Inbox } from "../inbox/inbox.ts";
 import { readIssue, type FactsBb, type FactsStore } from "../issues/views/issue-facts.ts";
 import type { Busy, IssueTurns } from "../issues/issue-turns.ts";
 import { didText, quietIssue, recipientsText, unquietText, type QuietBb, type Unquiet, type Withdrawn } from "../issues/quiet.ts";
-import type { MemoryRoot } from "../memory/memory-files.ts";
+import { CREW_FILE, type MemoryRoot } from "../memory/memory-files.ts";
 import type { Spawner } from "../spawn.ts";
 import type { NewAgent } from "../store/issue/agents-store.ts";
 import type { Store } from "../store/store.ts";
@@ -173,7 +173,6 @@ type Deps = {
 
 export type Agents = ReturnType<typeof createAgents>;
 
-const CREW_RULES = memoryFileSchema.parse("CREW.md");
 const MEMORY_INDEX = memoryFileSchema.parse("MEMORY.md");
 const WORKTREE = { kind: "worktree" } as const;
 const NO_CHECKOUT: AgentCheckout = { environmentId: null, branch: null, head: null };
@@ -407,7 +406,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
         coordinatorOf(coordinatorId).threadId,
         { ...issue, brief, decisions: store.issueDecisions(coordinatorId, issue.id) },
         { base: spot.base, branch: carried?.branch ?? null, pr: carried?.pr ?? null, earlier: store.record(coordinatorId, issue.id) },
-        { crewRules: files.read(CREW_RULES).text, index: files.read(MEMORY_INDEX).text },
+        { crewRules: files.read(CREW_FILE).text, index: files.read(MEMORY_INDEX).text },
       );
       return started(await spawner.agent(ticket, { coordinator: coordinatorOf(coordinatorId), title: issue.title, environment: spot.environment, execution, serviceTier: inherited?.serviceTier ?? null, prompt }));
     } catch (error) {

@@ -122,6 +122,8 @@ button.rmi-thread-link {
 .rmi-state[data-state="todo"] { color: var(--muted-foreground); }
 /* why light-dark: bb's blue scale, one step per scheme so the glyph holds 3:1 on either canvas, as Activity Sidebar's working blue does. */
 .rmi-state[data-state="in-progress"] { color: light-dark(var(--color-blue-600), var(--color-blue-400)); }
+/* why cyan, by the same light-dark steps: a step past In progress's blue on the way to Verifying, apart from In review's green and Done's purple. */
+.rmi-state[data-state="reviewing"] { color: light-dark(var(--color-cyan-600), var(--color-cyan-400)); }
 .rmi-state[data-state="verifying"] { color: var(--warning-text); }
 .rmi-state[data-state="in-review"] { color: var(--success); }
 .rmi-state[data-state="done"] { color: var(--pr-merged); }

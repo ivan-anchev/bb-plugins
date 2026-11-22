@@ -151,18 +151,23 @@ the verdict, whatever the criteria say, so commit your work and remove scratch
 files before you call `agent_handoff`. It also records your branch and the
 provider and model you run on.
 
-After a `done` handoff, an independent verifier usually checks your commit in
-your environment once your turn ends, rerunning what proves each criterion:
-your regional manager hears of your handoff only with its verdict. Your thread
-is stopped each time your environment goes to the verifier, as it starts and
-if it is reminded to return its verdict, which ends any command you left
-running in the background; your handoff stands. Leave your environment as it is until you
-hear back from the verifier or your regional manager.
+After a `done` handoff, two independent threads usually take your environment
+in turn once your turn ends, each on another model than yours. First a
+reviewer reviews your diff as CREW.md instructs reviewers; your issue is
+Reviewing meanwhile. Then a verifier checks your commit, rerunning what proves
+each criterion, and confirms or rejects each of the reviewer's findings: your
+issue is Verifying. Your regional manager hears of your handoff only with the
+verdict. Your thread is stopped each time your environment changes hands, as
+the reviewer starts, as the verifier starts and if it is reminded to return
+its verdict, which ends any command you left running in the background; your
+handoff stands. Leave your environment as it is until you hear back from the
+verifier or your regional manager.
 
 If your first verdict fails, its findings come back to you, once the verifier
 has finished, as a message from the verifier thread, headed "Verifier findings": each criterion that didn't
 pass, with the verifier's evidence, what was wrong with the commit or the tree,
-the CI checks that failed, and its other findings. Fix each one, commit, check
+the CI checks that failed, its other findings, and the reviewer's findings it
+confirmed, each with its reason; the ones it rejected don't reach you. Fix each one, commit, check
 every criterion again, and call `agent_handoff` with `done` and your new
 commit. A new verifier checks it. This happens once: if that check fails too,
 your regional manager decides what happens next.

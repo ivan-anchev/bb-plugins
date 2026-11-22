@@ -20,6 +20,9 @@ import type { Store } from "../store/store.ts";
 /** The files every memory starts with, in the order a catch-up reads them and the editor lists them. */
 export const CORE_FILES = ["MEMORY.md", "GOAL.md", "NOTES.md", "RULES.md", "CREW.md"].map((name) => memoryFileSchema.parse(name));
 
+/** The rules every agent follows, which its first message carries whole, and a reviewer's too. */
+export const CREW_FILE = memoryFileSchema.parse("CREW.md");
+
 export type MemoryRoot = ReturnType<typeof openMemoryRoot>;
 export type Memory = ReturnType<MemoryRoot["of"]>;
 

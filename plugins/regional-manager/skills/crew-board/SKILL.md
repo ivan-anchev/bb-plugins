@@ -1,6 +1,6 @@
 ---
 name: crew-board
-description: Explain the Regional Manager plugin (bb-plugin-regional-manager). Its panel starts long-lived regional managers that keep memory in markdown files, plan the work as build or research issues, start an agent (a child thread) on each, set reminders and ask the user on a board; all of one manager's agents are its crew. An agent ends with a handoff; a build issue's done one is checked by a hidden verifier unless switched off, and a first failed verdict goes back to the agent; a research issue's carries a report saved to memory. gh watches PRs and CI. The Board lists issues by status. Use when the user asks how to create, start, rename or delete a manager or start an agent, what an issue's kind, status or a verdict means, how verification or CI checks work, what an agent or verifier runs on, why PR status is unavailable, why an agent got findings or an issue returned to Todo, why the thread woke or the board warns of edits, how reminders or decisions work, where memory lives, or which thread has which tools.
+description: Explain the Regional Manager plugin (bb-plugin-regional-manager). Its panel starts long-lived regional managers that keep memory in markdown files, plan the work as build or research issues, start an agent (a child thread) on each, set reminders and ask the user on a board; all of one manager's agents are its crew. An agent ends with a handoff; a build issue's done one is reviewed, then verified, unless switched off, and a first failed verdict goes back to the agent; a research issue's carries a report saved to memory. gh watches PRs and CI. The Board lists issues by status. Use when the user asks how to create, start, rename or delete a manager or start an agent, what an issue's kind, status or a verdict means, how verification or CI checks work, what an agent or verifier runs on, why PR status is unavailable, why an agent got findings or an issue returned to Todo, why the thread woke or the board warns of edits, how reminders or decisions work, where memory lives, or which thread has which tools.
 ---
 
 # Regional managers
@@ -140,9 +140,10 @@ An issue's status is derived from what its agents did, never stored:
 | Status | When |
 | --- | --- |
 | Backlog | No agent holds it, and the manager rested it here: not planned yet. |
-| Todo | No agent holds it, ready to start. A new issue rests here, and returns here when its agent ends before its work reached Verifying (on a research issue, Done). |
+| Todo | No agent holds it, ready to start. A new issue rests here, and returns here when its agent ends before its work reached Reviewing (on a research issue, Done). |
 | In progress | An agent holds it: working, starting, idle without a handoff, fixing its verifier's findings, blocked, gave up, or its last turn failed. |
-| Verifying | A build issue: its agent handed off done, and the verifier checks it, or every criterion passed and it waits for CI. |
+| Reviewing | A build issue: its agent handed off done, and an independent reviewer reviews its diff before its verifier starts (see [Review](#review)). |
+| Verifying | A build issue: its review is in, or none could be had, and the verifier checks it, or every criterion passed and it waits for CI. |
 | In review | A build issue: its done handoff passed ("✓ Verified"), or was made with verification off ("Unverified"). |
 | Done | A build issue: its pull request merged ("Merged #41"), or the manager accepted it; final. A research issue: its agent handed off done ("Handed off: <summary>"); a message to that agent makes it In progress again until its next handoff. |
 | Canceled | The manager canceled it. |
@@ -332,8 +333,8 @@ stopped. bb gives no cause for an idle, so the plugin reports both. You can
 open any agent's thread and type into it like any thread.
 
 An agent ends when it is stopped, or when you archive or delete its thread.
-Its issue keeps its place if the agent's work had reached Verifying, In
-review or Done; otherwise the issue returns to Todo and the manager is woken
+Its issue keeps its place if the agent's work had reached Reviewing,
+Verifying, In review or Done; otherwise the issue returns to Todo and the manager is woken
 with "returned to Todo". Its row then says how the agent ended ("Its agent was
 stopped", "archived" or "deleted", or "bb never started its agent's thread");
 only an issue no agent ever started reads "Not started". An agent stopped
@@ -527,7 +528,7 @@ work with `agent_handoff`, and the plugin records everything it sees:
 - **An agent waits on the user**: a question or an approval in its thread.
 - **An agent ended a turn without a handoff**, with its last answer.
 - **An issue returned to Todo**: its agent was stopped, archived or deleted
-  before its work reached Verifying.
+  before its work reached Reviewing.
 - **A build parent's final check is over**: passed, failed, could not run,
   or not run as verification is off (see [A build parent's final
   check](#a-build-parents-final-check)).
@@ -586,6 +587,46 @@ thread isn't woken for updates it has read. A send that fails is retried by a
 once-a-minute tick, which also forgets a waiting message bb no longer holds.
 If bb gives up sending a waiting message (its retries spent), the tick takes
 it out of the queue and sends what it announced again.
+
+## Review
+
+While verification is on, every `done` handoff of a build issue is reviewed
+before its verifier starts. The plugin starts a **reviewer**:
+
+- **Where and when**: a hidden thread, a child of the agent's thread, in the
+  agent's own environment, once the agent's turn that handed off has ended,
+  with the issue quieted first, as for a verifier (see
+  [Verification](#verification)). It never edits, commits or pushes.
+- **On what model**: never the agent's, and, while bb runs another there,
+  not the one the verifier is then chosen on either, so the verifier's
+  triage is independent; with no third model, the verifier's. When bb runs
+  nothing there but the agent's own model, no reviewer starts: the review is
+  missed as having no independent reviewer model.
+- **What it runs**: what CREW.md tells reviewers to run. The plugin names no
+  review of its own. Its first message is the plugin's one line ("Review
+  this diff as CREW.md instructs reviewers, and report through
+  issue_review."), the diff (the claimed commit against origin's default
+  branch, and the pull request when the agent named one), the issue's brief
+  and done-criteria, and CREW.md whole, as agents get it.
+- **What it reports**: `issue_review`, its findings, each with its file, its
+  line, a severity (must-fix, should-fix or nit) and its claim; `[]` when it
+  found nothing.
+- **The issue** is Reviewing meanwhile ("Reviewing: <summary>"), between In
+  progress and Verifying, and Verifying once its review is in.
+- **It never holds the issue**: a reviewer bb won't start, whose thread is
+  gone, that ends its turn without reporting, that shows no activity for 30
+  minutes, or that asks something bb won't let the plugin decline ends the
+  review as missed, and is stopped. Its verifier starts at once, told no
+  review was had, and the verdict says so. Anything it asks a person is
+  declined, as a verifier's is.
+- **Triage**: the verifier's first message lists the findings, numbered, as
+  claims to check; its verdict confirms or rejects each, with a reason in a
+  line. The manager's update lists the confirmed ones and the rejected ones,
+  each with its reason; a failed verdict that goes back to the agent carries
+  only the confirmed ones. A confirmed finding alone doesn't fail the
+  verdict: the done-criteria decide it.
+- A check made before reviews existed has no review: its verifier starts as
+  before.
 
 ## Verification
 
@@ -891,7 +932,7 @@ and ends with its [memory](#read-and-edit-memory):
   changed files (see [Edits it makes itself](#edits-it-makes-itself)).
 - **PR status unavailable: <why>**, only while the latest read of a pull
   request failed.
-- **Lanes**: Needs you, then In review, Verifying, In progress, Todo,
+- **Lanes**: Needs you, then In review, Verifying, Reviewing, In progress, Todo,
   Backlog, Done and Canceled, each under a bar with its name, how many it
   holds and a chevron, and no glyph: each row draws its own. Pressing the
   bar folds or unfolds the lane; Backlog, Done and Canceled start folded,

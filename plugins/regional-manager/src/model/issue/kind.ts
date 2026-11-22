@@ -9,7 +9,7 @@ export const kindSchema = z.enum(["build", "research"]);
 export type Kind = z.infer<typeof kindSchema>;
 
 /** A status a done handoff can wait in before Done. Each is left by its own evidence (status.ts STAGES). */
-export type Stage = "verifying" | "in-review";
+export type Stage = "reviewing" | "verifying" | "in-review";
 
 /**
  * A kind's pipeline. why a union of paths rather than independent flags: a verifier judges a commit
@@ -31,9 +31,9 @@ type Pipeline = {
 );
 
 export const PIPELINES: Record<Kind, Pipeline> = {
-  // Ships code: verified, then waits on the user or its pull request, then Done when it merges.
+  // Ships code: reviewed, then verified, then waits on the user or its pull request, then Done when it merges.
   // why it holds research too: code work often starts from a question answered first.
-  build: { label: "Build", holds: ["build", "research"], delivers: "commit", stages: ["verifying", "in-review"] },
+  build: { label: "Build", holds: ["build", "research"], delivers: "commit", stages: ["reviewing", "verifying", "in-review"] },
   // A probe, spike, investigation or design: its report is the result, nobody judges it, and its done handoff is Done.
   // why only research under it: it closes with its last sub-issue, and code work under it would close it unmerged and unchecked.
   research: { label: "Research", holds: ["research"], delivers: "report", stages: [] },

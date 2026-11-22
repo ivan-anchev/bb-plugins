@@ -1,14 +1,15 @@
 // Quieting an issue: what the plugin does each time it gives the environment of an issue's work to
-// one thread of it, so no other thread of the issue runs there beside it. Five places do: an agent's
-// start or handover and a manager's message to the agent (agents.ts), a verifier's start, a reminder
-// to a verifier and a failed verdict's findings sent back to the agent (verify.ts). Each calls
+// one thread of it, so no other thread of the issue runs there beside it. Six places do: an agent's
+// start or handover and a manager's message to the agent (agents.ts), a reviewer's start, a
+// verifier's start, a reminder to a verifier and a failed verdict's findings sent back to the agent
+// (verify.ts). Each calls
 // quietIssue in the issue's turn (issue-turns.ts) and acts only once it answers quiet; otherwise
 // each keeps its own outcome: a start refused, a check left queued, a reminder left for the next
 // look, findings left owed, a message refused.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { holderOf, type AgentId } from "../../model/agent.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
-import type { CoordinatorId } from "../../model/role.ts";
+import type { CoordinatorId, Role } from "../../model/role.ts";
 import { stopThreads, threadsById, type StopBb } from "../agents/threads.ts";
 import type { Store } from "../store/store.ts";
 
@@ -30,8 +31,8 @@ type QuietStore = Pick<Store, "coordinator" | "agents" | "issueThreads" | "roleO
 
 /**
  * Whom the issue's environment goes to: a new agent, which replaces the issue's holder; or one of
- * the issue's threads (`threadId`), its holder's or a verifier's, null for a verifier about to
- * start, while the holder keeps the issue.
+ * the issue's threads (`threadId`), its holder's or a verifier's, null for a reviewer or a verifier
+ * about to start, while the holder keeps the issue.
  */
 export type GivenTo = { kind: "new-agent" } | { kind: "thread"; threadId: string | null };
 
@@ -56,8 +57,8 @@ export type Quieted = { withdrawn: Withdrawn[]; stopped: string[] } & (
 
 export type Unquiet = Exclude<Quieted, { kind: "quiet" }>;
 
-/** One of the threads the plugin started for an issue: an agent's, or (agentId null) a verifier's. */
-type IssueThread = { threadId: string; agentId: AgentId | null };
+/** One of the threads the plugin started for an issue: an agent's, or (agentId null) a verifier's or a reviewer's, by its role's kind. */
+type IssueThread = { threadId: string; agentId: AgentId | null; kind: Role["kind"] };
 
 /**
  * Quiets every thread of the issue but the one given its environment (`to`), in the issue's turn:
@@ -66,7 +67,7 @@ type IssueThread = { threadId: string; agentId: AgentId | null };
  * 2. stops each, whatever status bb reports, never archiving one (see stopThreads): a thread bb
  *    reports idle can still hold a background command whose finish wakes it;
  * 3. answers quiet only once bb confirms each stopped.
- * why every thread of the issue, ended agents' and superseded verifiers' too: what bb queued for one
+ * why every thread of the issue, ended agents' and superseded reviewers' and verifiers' too: what bb queued for one
  * wakes it as surely as for the holder. why the giver's own thread too, its agent's or a verifier's:
  * that is the side giving the environment up.
  */
@@ -75,7 +76,12 @@ export async function quietIssue(bb: QuietBb, store: QuietStore, coordinatorId: 
   // why throw: every caller acts for a regional manager the store holds, and its issues are kept while it is.
   if (coordinator === null) throw new Error(`The regional manager ${coordinatorId} is missing.`);
   const threads = store.issueThreads(coordinatorId, issueId).filter(({ threadId }) => to.kind === "new-agent" || threadId !== to.threadId);
-  const named = (threadId: string): string => threadName({ threadId, agentId: threads.find((thread) => thread.threadId === threadId)?.agentId ?? null });
+  const named = (threadId: string): string => {
+    const thread = threads.find((one) => one.threadId === threadId);
+    // why throw: stopThreads answers only for the threads it was given.
+    if (thread === undefined) throw new Error(`${threadId} is not a thread of ${issueId}.`);
+    return threadName(thread);
+  };
   const owedTo = to.kind === "new-agent" ? null : (holderOf(store.agents(coordinatorId), issueId)?.threadId ?? null);
   const { withdrawn, left } = await withdrawQueued(bb, store, coordinator.threadId, threads, owedTo);
   if (left.length > 0) return { kind: "left", withdrawn, stopped: [], left };
@@ -190,8 +196,8 @@ export function didText({ withdrawn, stopped }: Pick<Quieted, "withdrawn" | "sto
 /** The threads the messages were to, in words: `a1`, `a1 and the verifier @thread:thr_7`. */
 export const recipientsText = (messages: readonly { to: string }[]): string => [...new Set(messages.map(({ to }) => to))].join(" and ");
 
-/** A thread of an issue, in words: its agent's id, or `the verifier @thread:thr_7`. */
-const threadName = ({ threadId, agentId }: IssueThread): string => agentId ?? `the verifier @thread:${threadId}`;
+/** A thread of an issue, in words: its agent's id, or `the verifier @thread:thr_7`, `the reviewer @thread:thr_6`. */
+const threadName = ({ threadId, agentId, kind }: IssueThread): string => agentId ?? `the ${kind} @thread:${threadId}`;
 
 /** A queued message's text. */
 const textOf = (content: QueuedMessage["content"]): string => content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n");

@@ -70,7 +70,7 @@ function VerifySwitch({ coordinatorId, verify }: { coordinatorId: CoordinatorId;
         label="Verify done handoffs"
         hint={
           shown
-            ? `A hidden verifier, on another model when there is one, checks each done handoff against its criteria before the regional manager hears of it.`
+            ? `A hidden reviewer reads each done handoff's diff as CREW.md says, then a hidden verifier checks it against its criteria and the review, each on another model when there is one, before the regional manager hears of it.`
             : `Done handoffs reach the regional manager unverified. Turning this on checks handoffs from then on.`
         }
       />

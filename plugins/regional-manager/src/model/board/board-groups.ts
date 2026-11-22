@@ -8,7 +8,7 @@ import type { IssueId } from "../issue/issue.ts";
 import { STATUS_LABELS, type IssueStatus } from "../issue/status.ts";
 
 /** The board's lanes, in the order it shows them. */
-const laneSchema = z.enum(["needs-you", "in-review", "verifying", "in-progress", "todo", "backlog", "done", "canceled"]);
+const laneSchema = z.enum(["needs-you", "in-review", "verifying", "reviewing", "in-progress", "todo", "backlog", "done", "canceled"]);
 export type Lane = z.infer<typeof laneSchema>;
 
 /** Each lane's name, as the board and crew_catch_up show it. */

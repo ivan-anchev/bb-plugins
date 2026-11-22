@@ -7,7 +7,7 @@ import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { typedText, type ComposerRequest, type Coordinator } from "../contract.ts";
 import type { Execution } from "../model/execution.ts";
 import { issueKeyOf } from "../model/issue/key/issue-key.ts";
-import { ticketMetadataSchema, type CoordinatorId, type Role } from "../model/role.ts";
+import { ticketMetadataSchema, type CheckerRole, type CoordinatorId, type Role } from "../model/role.ts";
 import type { MemoryRoot } from "./memory/memory-files.ts";
 import type { Store } from "./store/store.ts";
 
@@ -28,7 +28,7 @@ type SpawnBb = {
   events: { on(event: "thread.created", handler: (payload: { thread: { id: string; originPluginId: string | null } }) => void | Promise<void>): void };
 };
 
-type SpawnStore = Pick<Store, "startsOn" | "insertVerifierTicket" | "bindTicket" | "roleOfThread">;
+type SpawnStore = Pick<Store, "startsOn" | "insertCheckerTicket" | "bindTicket" | "roleOfThread">;
 
 /** What a child thread is spawned with, beyond its ticket: its regional manager, its parent thread, its title, where it runs, what it runs on and its first message. */
 type ChildRequest = {
@@ -40,12 +40,12 @@ type ChildRequest = {
   prompt: string;
 };
 
-/** What a verifier is spawned for: one check of an issue. */
-export type VerifierRequest = ChildRequest & { role: Extract<Role, { kind: "verifier" }> };
+/** What a verifier or a reviewer is spawned for: one check of an issue. */
+export type CheckerRequest = ChildRequest & { role: CheckerRole };
 
 // why auto: an agent works unattended, and a permission prompt on every edit would hold it until
-// the user answers. The regional manager starts with auto for the same reason, and so does a
-// verifier, which runs the agent's tests.
+// the user answers. The regional manager starts with auto for the same reason, and so do a
+// verifier, which runs the agent's tests, and a reviewer, which runs what CREW.md names.
 const CHILD_PERMISSION_MODE = "auto";
 
 export type Spawner = ReturnType<typeof createSpawner>;
@@ -135,14 +135,14 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
     },
 
     /**
-     * Spawns a hidden verifier for a check, as the request says: a handoff's, a child of the agent's
-     * thread in the agent's environment, so it checks the very tree the agent committed in; a final
-     * check's, a child of the regional manager's thread in a fresh worktree. Its check starts running
-     * when its ticket binds. Returns its thread.
+     * Spawns a hidden verifier or reviewer for a check, as the request says: a handoff's, a child of
+     * the agent's thread in the agent's environment, so it reads the very tree the agent committed
+     * in; a final check's verifier, a child of the regional manager's thread in a fresh worktree. Its
+     * check, or its review, starts running when its ticket binds. Returns its thread.
      */
-    verifier({ role, ...request }: VerifierRequest): Promise<string> {
+    checker({ role, ...request }: CheckerRequest): Promise<string> {
       const ticket = randomUUID();
-      store.insertVerifierTicket(ticket, role, Date.now());
+      store.insertCheckerTicket(ticket, role, Date.now());
       // why hidden: the board links it; it would only crowd the sidebar.
       return spawnChild(ticket, request, { visibility: "hidden" });
     },

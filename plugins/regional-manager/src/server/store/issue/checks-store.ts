@@ -14,13 +14,18 @@ import { coordinatorIdSchema, type CoordinatorId } from "../../../model/role.ts"
 import { checkIdSchema, checkSubjectSchema, type Check, type CheckId, type FinalCheck } from "../../../model/verdict/check.ts";
 import type { CheckoutRead } from "../../../model/verdict/checkout.ts";
 import type { CiVerdict } from "../../../model/verdict/pr.ts";
+import { firstReview, reviewSchema, type Review, type ReviewFinding } from "../../../model/verdict/review.ts";
 import { firstVerdict, isSettled, verdictSchema, type Verdict } from "../../../model/verdict/verdict.ts";
+import type { ModelRef } from "../../../model/execution.ts";
 import { insertEvent } from "../inbox/inbox-store.ts";
 import { json, jsonOrNull, nullableJson, type Db } from "../rows.ts";
 import { countFixRound } from "./agents-store.ts";
 
 /** Where a verdict must still be for a change to apply: queued, or running in this verifier thread. */
 export type VerdictFrom = { state: "queued" } | { state: "running"; verifierThreadId: string };
+
+/** Where a review must still be for a change to apply, its verdict still queued: queued, or running in this reviewer thread. */
+export type ReviewFrom = { state: "queued" } | { state: "running"; reviewerThreadId: string };
 
 type Returned = Extract<Verdict, { state: "returned" }>;
 
@@ -40,6 +45,22 @@ type OpenCheck = Check & { verdict: Extract<Verdict, { state: VerdictFrom["state
 export function startCheck(db: Db, checkId: CheckId, verifierThreadId: string): void {
   const queued = verdictOf(db, checkId);
   if (queued?.state === "queued") writeVerdict(db, checkId, { state: "running", verifierThreadId, nudged: false, declined: [], checkout: queued.checkout });
+}
+
+/** Starts a queued review running in its reviewer's thread, as the reviewer's ticket binds; one whose check was superseded meanwhile stays as it is. Call inside a transaction. */
+export function startReview(db: Db, checkId: CheckId, reviewerThreadId: string): void {
+  moveReview(db, checkId, { state: "queued" }, { state: "running", reviewerThreadId });
+}
+
+/** Replaces the review if its verdict is still queued and it is still where `from` says, and says whether it did. Call inside a transaction. */
+function moveReview(db: Db, checkId: CheckId, from: ReviewFrom, next: Review): boolean {
+  const row = db().prepare("SELECT review, verdict FROM checks WHERE id = ?").get(checkId);
+  if (row === undefined) return false;
+  const { review, verdict } = z.object({ review: json(reviewSchema), verdict: json(verdictSchema) }).parse(row);
+  const at = from.state === "queued" ? review.state === "queued" : review.state === "running" && review.reviewerThreadId === from.reviewerThreadId;
+  if (verdict.state !== "queued" || !at) return false;
+  db().prepare("UPDATE checks SET review = ? WHERE id = ?").run(JSON.stringify(next), checkId);
+  return true;
 }
 
 /** The agent's checks that passed every criterion and wait for CI on their commit, oldest first. */
@@ -116,10 +137,10 @@ export function checksStore(db: Db) {
   }
 
   /** Inserts a check made of the handoff `handoffId` (null: a final check, made of none). Call inside a transaction. */
-  function insertCheck({ id, coordinatorId, issueId, subject, criteria, verifier, verdict, at }: Check, handoffId: HandoffId | null): void {
+  function insertCheck({ id, coordinatorId, issueId, subject, criteria, verifier, review, verdict, at }: Check, handoffId: HandoffId | null): void {
     db()
-      .prepare("INSERT INTO checks (id, coordinator_id, issue_id, handoff_id, subject, criteria, verifier, verdict, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .run(id, coordinatorId, issueId, handoffId, JSON.stringify(subject), JSON.stringify(criteria), jsonOrNull(verifier), JSON.stringify(verdict), at);
+      .prepare("INSERT INTO checks (id, coordinator_id, issue_id, handoff_id, subject, criteria, verifier, review, verdict, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(id, coordinatorId, issueId, handoffId, JSON.stringify(subject), JSON.stringify(criteria), jsonOrNull(verifier), JSON.stringify(review), JSON.stringify(verdict), at);
   }
 
   function check(checkId: CheckId): Check | null {
@@ -180,6 +201,7 @@ export function checksStore(db: Db) {
         // why throw: a verified kind delivers a commit (kind.ts Pipeline), and reportOf made this delivery by its kind.
         if (stored.delivery.kind !== "commit") throw new Error(`A done handoff of ${issueId}, a ${kind} issue, delivers no commit to check.`);
         const { headSha, prUrl } = stored.delivery;
+        const verdict = firstVerdict(verifies(coordinatorId), checkout);
         const made: Check = {
           id: checkIdSchema.parse(randomUUID()),
           coordinatorId,
@@ -188,7 +210,8 @@ export function checksStore(db: Db) {
           criteria,
           verifier,
           subject: { kind: "handoff", agentId, handoffId: id, headSha, prUrl },
-          verdict: firstVerdict(verifies(coordinatorId), checkout),
+          review: firstReview(verdict),
+          verdict,
         };
         insertCheck(made, id);
         if (made.verdict.state !== "queued") insertEvent(db, coordinatorId, { kind: "checked", issueId, checkId: made.id }, at);
@@ -217,6 +240,7 @@ export function checksStore(db: Db) {
           criteria,
           verifier,
           subject: { kind: "final", ...subject },
+          review: { state: "none" },
           verdict: firstVerdict(verifies(coordinatorId), null),
         };
         insertCheck(made, null);
@@ -278,6 +302,17 @@ export function checksStore(db: Db) {
         if (current?.state !== "running" || current.verifierThreadId !== verifierThreadId) return false;
         return moveVerdict(checkId, { state: "running", verifierThreadId }, { ...current, declined: [...current.declined, ...asked] });
       })();
+    },
+
+    /** Stores a running reviewer's findings, on the model bb ran it on, if it is still the review's running reviewer and the check still waits for it; says whether it was. */
+    receiveReview(checkId: CheckId, reviewerThreadId: string, findings: readonly ReviewFinding[], model: ModelRef): boolean {
+      return db().transaction(() => moveReview(db, checkId, { state: "running", reviewerThreadId }, { state: "reported", reviewerThreadId, findings: [...findings], model }))();
+    },
+
+    /** Records that no review will be had, and why, if the review is still where `from` says and the check still waits for it; says whether it was. Its verifier starts next. */
+    missReview(checkId: CheckId, from: ReviewFrom, reason: string): boolean {
+      const reviewerThreadId = from.state === "running" ? from.reviewerThreadId : null;
+      return db().transaction(() => moveReview(db, checkId, from, { state: "missed", reviewerThreadId, reason }))();
     },
 
     /** Gives up on a waiting check and records it checked for its regional manager, together, if it is still where `from` says; returns whose it was, or null when it had moved on. */
@@ -367,7 +402,7 @@ const isAt = (verdict: Verdict, from: VerdictFrom): boolean =>
 
 const toCheckId = (row: unknown): CheckId => z.object({ id: checkIdSchema }).parse(row).id;
 
-const CHECK_COLUMNS = "id, coordinator_id AS coordinatorId, issue_id AS issueId, at, criteria, verifier, subject, verdict";
+const CHECK_COLUMNS = "id, coordinator_id AS coordinatorId, issue_id AS issueId, at, criteria, verifier, subject, review, verdict";
 const checkRowSchema = z.object({
   id: checkIdSchema,
   coordinatorId: coordinatorIdSchema,
@@ -376,6 +411,7 @@ const checkRowSchema = z.object({
   criteria: json(doneCriteriaSchema),
   verifier: nullableJson(executionSchema),
   subject: json(checkSubjectSchema),
+  review: json(reviewSchema),
   verdict: json(verdictSchema),
 });
 const toCheck = (row: unknown): Check => checkRowSchema.parse(row);

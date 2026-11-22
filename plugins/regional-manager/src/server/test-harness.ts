@@ -12,6 +12,7 @@ import type { HolderThread } from "../model/issue/status.ts";
 import type { ComposerRequest } from "../contract.ts";
 import { DEFAULT_AVATAR, type Profile } from "../model/profile.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../model/role.ts";
+import type { CheckId } from "../model/verdict/check.ts";
 import { DISPLAY_NAME } from "../name.ts";
 import { registerAgentTools } from "./agents/agent-tools.ts";
 import { createAgents } from "./agents/agents.ts";
@@ -36,6 +37,8 @@ import { memoryHandlers } from "./memory/memory-rpc.ts";
 import { managerHandlers } from "./manager/manager-rpc.ts";
 import { memoryStorage } from "./memory-storage.ts";
 import { verifyOff } from "./store/test-store.ts";
+import { createReview } from "./review/review.ts";
+import { registerReviewTool } from "./review/review-tool.ts";
 import { registerRoles } from "./roles.ts";
 import { createSpawner } from "./spawn.ts";
 import { openStore } from "./store/store.ts";
@@ -384,6 +387,12 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   const invalidated: string[] = [];
   const warnings: string[] = [];
   const disposers: (() => void)[] = [];
+  /**
+   * How a reviewer the plugin starts behaves, as a provider would run it: by default it reports no
+   * findings at once and its turn ends, so a done handoff's verifier starts as it would after a
+   * review; `reportAtOnce` false leaves each reviewer running for the test to drive.
+   */
+  const reviewers = { reportAtOnce: true };
   let spawned = 0;
   let bindings = 0;
   let sequence = 0;
@@ -764,6 +773,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const spawner = createSpawner(bb, store, memory, (role) => {
       bindings++;
       if (role.kind !== "coordinator") onChange(role.coordinatorId);
+      if (role.kind === "reviewer" && reviewers.reportAtOnce) void reportsNothing(role.checkId);
     });
     const board = createBoard(bb, store);
     const inbox = createInbox({ bb, store, memory, onChange });
@@ -773,13 +783,15 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const prWatch = createPrWatch({ bb, store, inbox, gh, now: () => clock.now });
     const agents = createAgents({ bb, store, spawner, inbox, memory, turns, prs: prWatch, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
     const issues = createIssues({ bb, store, views, onChange });
-    const verify = createVerify({ bb, store, spawner, inbox, turns, now: () => clock.now });
+    const review = createReview({ bb, store, spawner, memory, turns, now: () => clock.now });
+    const verify = createVerify({ bb, store, spawner, review, inbox, turns, now: () => clock.now });
     const finalChecks = createFinalChecks({ bb, store, views, turns, verify, defaultBranch: defaultBranchReader(bb, store), now: () => clock.now });
     registerRoles(bb, store);
     registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
     registerIssueTools(bb, { store, issues });
     registerAgentTools(bb, { store, agents });
     registerHandoffTool(bb, { store, verify });
+    registerReviewTool(bb, { store, review });
     registerVerdictTool(bb, { store, verify });
     const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard });
     watchAgentThreads({ bb, store, inbox });
@@ -787,6 +799,24 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     return { spawner, inbox, verify, agents, prWatch, finalChecks, unblocked, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }, upgrade030: upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators }) };
   }
   let plugin = wire();
+
+  /** A reviewer that reports no findings as its turn starts, then ends its turn, as reviewers.reportAtOnce says. */
+  async function reportsNothing(checkId: CheckId): Promise<void> {
+    const review = openedStore.check(checkId)?.review;
+    if (review?.state !== "running") throw new Error(`The review of ${checkId} isn't running as its reviewer binds.`);
+    const tool = tools.get("issue_review");
+    if (tool === undefined) throw new Error("No tool issue_review");
+    await tool.run({ findings: [] }, review.reviewerThreadId);
+    await idle(review.reviewerThreadId, "Reviewed.");
+  }
+
+  /** The thread's turn ends, bb announces it with its last answer, and what the plugin started on hearing it, without waiting for it, has run. */
+  async function idle(threadId: string, lastAssistantText: string | null): Promise<void> {
+    const thread = fakeThread(threadId);
+    thread.status = "idle";
+    await emit("thread.idle", { thread: { ...ref(threadId), environmentId: thread.environmentId }, lastAssistantText });
+    await settled();
+  }
 
   const ref = (threadId: string): ThreadNow => ({ id: threadId, originPluginId: PLUGIN_ID, status: fakeThread(threadId).status });
 
@@ -965,12 +995,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     /** bb sends the thread's event with the thread as it is now, as it does every second while the thread works. */
     threadNow,
     /** The thread's turn ends, bb announces it with its last answer, and what the plugin started on hearing it, without waiting for it, has run. */
-    async idle(threadId: string, lastAssistantText: string | null): Promise<void> {
-      const thread = fakeThread(threadId);
-      thread.status = "idle";
-      await emit("thread.idle", { thread: { ...ref(threadId), environmentId: thread.environmentId }, lastAssistantText });
-      await settled();
-    },
+    idle,
+    reviewers,
     /** The thread's turn left a background command running, which bb doesn't count: the thread reads idle once its turn ends. */
     leavesBackground(threadId: string): void {
       fakeThread(threadId).background += 1;
