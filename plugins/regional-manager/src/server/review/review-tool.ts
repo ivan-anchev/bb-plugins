@@ -50,4 +50,4 @@ export function registerReviewTool(bb: ToolsBb, { store, review }: Deps): void {
 
 const NOT_RUNNING = `${REVIEW} is refused and nothing was saved: this review no longer waits for your findings (a newer handoff replaced it, or it ended without them). Stop here.`;
 
-const REVIEW_INSTRUCTIONS = `Reporting your review: call ${REVIEW} once, as your last action, then stop. Each finding names its file, its line (null when it names no one line), its severity (must-fix, should-fix or nit) and its claim. [] when you found nothing. A verifier checks each finding, confirms or rejects it, and only confirmed ones reach the agent.`;
+const REVIEW_INSTRUCTIONS = `Reporting your review: call ${REVIEW} once, as your last action, then stop. Each finding names its file, its line (null when it names no one line), its severity (must-fix, should-fix or nit) and its claim. [] when you found nothing. A verifier checks each finding, confirms or rejects it, and only confirmed ones reach the agent. A turn that ends before you call it ends your review unheard, so run what you need in the foreground and don't end your turn to wait for it.`;

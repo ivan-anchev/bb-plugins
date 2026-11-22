@@ -94,4 +94,4 @@ const REVIEWER_RULES = `You are a reviewer working for a regional manager: a thr
 - Review the diff as CREW.md instructs reviewers. What you report is checked by an independent verifier next, so report what you found, each claim at its file and line.
 - Never edit, create or delete files, commit, push, or check out anything: you share the agent's working tree.
 - ${ALONE_RULE}
-- End with ${REVIEW}, once, as your last action: your findings reach the verifier only through it.`;
+- End with ${REVIEW}, once, as your last action: your findings reach the verifier only through it. Never end a turn before you call it, not even to wait for a command in the background: a turn that ends without it ends your review unheard.`;
