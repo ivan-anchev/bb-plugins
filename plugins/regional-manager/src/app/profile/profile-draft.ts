@@ -9,14 +9,15 @@ const profileDraftSchema = z.object({ name: z.string(), description: z.string(),
 export type ProfileDraft = z.infer<typeof profileDraftSchema>;
 
 /**
- * The fields as the browser keeps them. why the avatar may be null: fields kept by an earlier release
- * hold an avatar this one can't draw (one of bb's icons), and their name and description are still
- * what the user typed, so they are kept, and the avatar is filled in where they are read (withLook).
+ * The fields as the browser keeps them. The avatar is null when there is none to keep: on the New page
+ * until the user picks one, so the look the page gives keeps following the reads; and in fields an
+ * earlier release kept, whose avatar this one can't draw (one of bb's icons) while their name and
+ * description are still what the user typed. Either way it is filled in where they are read (withLook).
  */
 export const storedDraftSchema = profileDraftSchema.extend({ avatar: avatarSchema.nullable().catch(null) });
 export type StoredDraft = z.infer<typeof storedDraftSchema>;
 
-/** The kept fields, with `look` as their avatar when theirs couldn't be read. */
+/** The kept fields, with `look` as their avatar when they keep none. */
 export const withLook = (draft: StoredDraft, look: Avatar): ProfileDraft => ({ ...draft, avatar: draft.avatar ?? look });
 
 /** A new regional manager's fields: no name, no description, and the first look from `start` that none of `taken` has. */

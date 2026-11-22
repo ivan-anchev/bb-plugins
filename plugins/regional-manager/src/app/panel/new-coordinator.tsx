@@ -102,5 +102,7 @@ function shownDraft(kept: StoredDraft | null, fresh: ProfileDraft | null): Profi
  * so typing a name never fixes a look a later read shows taken.
  */
 function keptOf(next: ProfileDraft, shown: ProfileDraft, before: StoredDraft | null): StoredDraft {
-  return { ...next, avatar: next.avatar === shown.avatar ? (before?.avatar ?? null) : next.avatar };
+  // why by value: a pick always changes the look (the checked radio fires nothing, and Shuffle never returns the look it had).
+  const picked = JSON.stringify(next.avatar) !== JSON.stringify(shown.avatar);
+  return { ...next, avatar: picked ? next.avatar : (before?.avatar ?? null) };
 }
