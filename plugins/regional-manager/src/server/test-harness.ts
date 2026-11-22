@@ -1129,8 +1129,13 @@ export function newThreadRequest(goal: string): ComposerRequest {
 /** A tool result's text, whichever form it took. */
 export const textOf = (result: PluginAgentToolResult): string => (typeof result === "string" ? result : result.content.map((part) => (part.type === "text" ? part.text : "")).join(""));
 
-/** A catch-up's board with each row's issue link taken out, for a test of its lanes and relations: the links are issues.test.ts's. */
-export const withoutLinks = (board: string): string => board.replace(/; link: \[[^\]]+\]\([^)]+\)/g, "");
+/**
+ * A tool's text with its issue links read as their ids: a row's or a result's own link taken out,
+ * and a link naming another issue read as the id it shows. For a test of lanes, statuses and
+ * relations; the links themselves are issues.test.ts's.
+ */
+export const withoutLinks = (text: string): string =>
+  text.replace(/(; link:| Link:) \[[^\]]+\]\([^)]+\)/g, "").replace(/\[([A-Z]{1,3}-\d+)\]\(\/plugins\/[^)]+\)/g, "$1");
 
 export const isRefusal = (result: PluginAgentToolResult): boolean => typeof result !== "string" && result.isError === true;
 

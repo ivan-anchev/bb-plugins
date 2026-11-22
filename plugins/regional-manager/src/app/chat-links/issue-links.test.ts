@@ -40,22 +40,23 @@ function issue(raw: string, fields: Partial<IssueRow>): IssueRow {
   return { id: issueIdSchema.parse(raw), kind: "build", parentId: null, subIssues: null, blockedBy: [], blocks: [], title: `Issue ${raw}`, status: "todo", needsYou: null, headline: null, agent: null, pr: null, ...fields };
 }
 
-type Chat = { panes: readonly string[]; linkKey?: string; label?: string };
+type Chat = { panes: readonly string[]; linkKey?: string; label?: string; href?: string };
 
 /**
  * bb's window, as the overlay sees it: the overlay, and a pane per thread, each with its header row's
- * marker and one assistant message. `linkKey` and `label`: the first link's key and text, which a
- * re-render changes; `declines`: how many opens the side panel declines first. Counts the message's renders.
+ * marker and one assistant message. `linkKey`, `label` and `href`: the first link's key, text and
+ * href, which a re-render changes; `declines`: how many opens the side panel declines first;
+ * `boardFails`: the board can't be read. Counts the message's renders.
  */
-function mount(chat: Chat, { declines = 0 } = {}) {
+function mount(chat: Chat, { declines = 0, boardFails = false } = {}) {
   let issues = [issue("BBP-24", { title: "Inline issue links", status: "in-progress", headline: "Working", blocks: [issueIdSchema.parse("BBP-27")] }), issue("BBP-27", { title: "Avatars", blockedBy: [issueIdSchema.parse("BBP-24")] })];
   const renders = { count: 0 };
-  const Message = ({ linkKey = "first", label = "BBP-24" }: Omit<Chat, "panes">) => {
+  const Message = ({ linkKey = "first", label = "BBP-24", href = HREF("BBP-24") }: Omit<Chat, "panes">) => {
     renders.count++;
     return h(
       "div",
       { "data-markdown-preview": "" },
-      h("p", null, "Status check: ", h("a", { key: linkKey, href: HREF("BBP-24") }, label), " is waiting on ", h("a", { href: HREF("BBP-27") }, "BBP-27"), ". In code: ", h("code", null, `[BBP-24](${HREF("BBP-24")})`), ", and bare: BBP-24.", " Elsewhere: ", h("a", { href: "https://example.com/BBP-24" }, "a page")),
+      h("p", null, "Status check: ", h("a", { key: linkKey, href }, label), " is waiting on ", h("a", { href: HREF("BBP-27") }, "BBP-27"), ". In code: ", h("code", null, `[BBP-24](${HREF("BBP-24")})`), ", and bare: BBP-24.", " Elsewhere: ", h("a", { href: "https://example.com/BBP-24" }, "a page")),
     );
   };
   /** Shows the window as `chat` says now: a test changes it as bb would, by rendering again. */
@@ -65,7 +66,10 @@ function mount(chat: Chat, { declines = 0 } = {}) {
     shown.set = set;
     return h(Fragment, null, h(issueLinks.component, {}), ...panes.map((threadId) => h("section", { key: threadId, "data-thread": threadId }, h(paneMarker.component, { threadId, projectId: "prj_1", environment: null }), h(Message, message))));
   };
-  const board = (): Board => ({ verify: true, ownEdits: null, prUnavailable: null, decisions: [], issues });
+  const board = (): Board => {
+    if (boardFails) throw new Error("bb is restarting");
+    return { verify: true, ownEdits: null, prUnavailable: null, decisions: [], issues };
+  };
   const view = renderSlot({ component: Window }, chat, {
     pluginId: "regional-manager",
     experimental_rpcContract: contract,
@@ -130,6 +134,32 @@ test("a link bb renders again, as a new element or with its text replaced, as a 
   assert.equal(view.container.querySelectorAll(".rmi-issue-glyph").length, 2, "one glyph a link");
 });
 
+test("a link whose href bb changes in place to another address loses its glyph", async () => {
+  const { view, link, glyphOf, show } = mount({ panes: [MANAGER_THREAD] });
+  await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+  const anchor = link(MANAGER_THREAD);
+
+  show({ panes: [MANAGER_THREAD], href: "https://example.com/elsewhere" });
+  assert.equal(anchor.getAttribute("href"), "https://example.com/elsewhere", "the same element");
+  await waitFor(() => assert.equal(anchor.querySelector(".rmi-issue-glyph"), null));
+  assert.equal(view.container.querySelectorAll(".rmi-issue-glyph").length, 1, "only BBP-27's is left");
+});
+
+test("hovering another link leaves the card of the link that has focus", async () => {
+  const { link, glyphOf, card } = mount({ panes: [MANAGER_THREAD] });
+  await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+  act(() => link(MANAGER_THREAD).focus());
+  await waitFor(() => assert.equal(card()?.querySelector(".rmi-card-title")?.textContent, "Inline issue links"));
+
+  mock.timers.enable({ apis: ["setTimeout"] });
+  fireEvent.pointerOver(link(MANAGER_THREAD, "BBP-27"), { relatedTarget: document.body });
+  act(() => mock.timers.tick(1_000));
+  assert.equal(card()?.querySelector(".rmi-card-title")?.textContent, "Inline issue links", "the focused link's card stays");
+  fireEvent.pointerOut(link(MANAGER_THREAD, "BBP-27"), { relatedTarget: document.body });
+  act(() => mock.timers.tick(1_000));
+  assert.equal(card()?.querySelector(".rmi-card-title")?.textContent, "Inline issue links");
+});
+
 test("focusing an issue link shows the Board's card for the issue at once, floating outside the message; Escape closes it wherever focus is, holding bb's Escape, and focus stays on the link", async () => {
   const { link, glyphOf, card } = mount({ panes: [MANAGER_THREAD] });
   await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
@@ -190,7 +220,7 @@ test("a link's card opens under the link where the window has room, else above i
   }
 });
 
-test("the card follows its link as the message scrolls, and stays open", async () => {
+test("the card follows its link as the message scrolls, on the side with room, and stays open", async () => {
   const box = { top: 100, bottom: 116, left: 40 };
   const restore = laidOut(box, { height: 200, width: 320 });
   try {
@@ -199,9 +229,14 @@ test("the card follows its link as the message scrolls, and stays open", async (
     act(() => link(MANAGER_THREAD).focus());
     await waitFor(() => assert.equal(card()?.style.top, "120px"));
 
+    const pane = view.container.querySelector(`[data-thread="${MANAGER_THREAD}"]`) ?? assert.fail("no pane");
     Object.assign(box, { top: 60, bottom: 76 });
-    act(() => void fireEvent.scroll(view.container.querySelector(`[data-thread="${MANAGER_THREAD}"]`) ?? assert.fail("no pane")));
-    assert.equal(card()?.style.top, "80px", "moved with the link");
+    act(() => void fireEvent.scroll(pane));
+    assert.deepEqual([card()?.dataset.side, card()?.style.top], ["below", "80px"], "moved with the link");
+
+    Object.assign(box, { top: 700, bottom: 716 });
+    act(() => void fireEvent.scroll(pane));
+    assert.deepEqual([card()?.dataset.side, card()?.style.top], ["above", `${700 - 4 - 200}px`], "to the side with room, once the link nears the window's foot");
   } finally {
     restore();
   }
@@ -260,7 +295,7 @@ test("pressing an issue link in its regional manager's thread opens the issue's 
 
   assert.equal(fireEvent.click(link(MANAGER_THREAD)), false, "bb's own handling of the link is skipped");
   await waitFor(() => assert.deepEqual(view.inspection.experimental_panelCalls, [{ method: "openTab", options: { tab: { id: "issue", context: { kind: "thread" }, availability: "action" }, params: { issueId: "BBP-24" }, title: "BBP-24 Inline issue links" } }]));
-  assert.deepEqual(view.inspection.navigateCalls, [{ method: "toThread", threadId: MANAGER_THREAD, options: { split: true } }], "bb's split brings forward the pane that shows the thread, this one");
+  assert.deepEqual(view.inspection.navigateCalls, [], "it stays in this pane");
 });
 
 test("pressing an issue link in another thread opens the regional manager's thread in a split, and its pane opens the tab once it shows, asking again after bb declines; ⌘ asks for the split from the manager's thread too", async () => {
@@ -279,6 +314,36 @@ test("pressing an issue link in another thread opens the regional manager's thre
   await setStatus("BBP-27", { status: "todo" });
   assert.deepEqual(opened(), ["BBP-27 Avatars", "BBP-27 Avatars"], "once opened, never again");
 
-  assert.equal(fireEvent.click(link(MANAGER_THREAD), { metaKey: true }), false);
-  assert.deepEqual(view.inspection.navigateCalls.at(-1), { method: "toThread", threadId: MANAGER_THREAD, options: { split: true } });
+});
+
+test("a press with ⌘ or Ctrl, even in the manager's own pane, asks bb for the manager's thread in a split, and the pane showing it opens the tab", async () => {
+  const { view, link, glyphOf } = mount({ panes: [MANAGER_THREAD] });
+  await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+  for (const modifier of [{ metaKey: true }, { ctrlKey: true }]) assert.equal(fireEvent.click(link(MANAGER_THREAD), modifier), false, "bb's own handling of the link is skipped");
+  assert.deepEqual(view.inspection.navigateCalls, [
+    { method: "toThread", threadId: MANAGER_THREAD, options: { split: true } },
+    { method: "toThread", threadId: MANAGER_THREAD, options: { split: true } },
+  ]);
+  await waitFor(() => assert.deepEqual(view.inspection.experimental_panelCalls.map((call) => call.method === "openTab" && call.options.title), ["BBP-24 Inline issue links", "BBP-24 Inline issue links"], "once a press"));
+});
+
+test("while the board can't be read, a press still opens the issue's tab, by its id, where the tab shows the failure and Retry", async () => {
+  const { view, link } = mount({ panes: [MANAGER_THREAD] }, { boardFails: true });
+  // why: with no glyph to wait for, the press is made until the plugin knows the link's manager; bb's own handling (here a stand-in, as jsdom can't follow a link) has the presses before that.
+  let reachedBb = false;
+  const bbs = (event: Event) => {
+    reachedBb = true;
+    event.preventDefault();
+  };
+  document.addEventListener("click", bbs);
+  try {
+    await waitFor(() => {
+      reachedBb = false;
+      fireEvent.click(link(MANAGER_THREAD));
+      assert.equal(reachedBb, false, "caught");
+    });
+  } finally {
+    document.removeEventListener("click", bbs);
+  }
+  await waitFor(() => assert.deepEqual(view.inspection.experimental_panelCalls.map((call) => call.method === "openTab" && call.options.title), ["BBP-24"]));
 });

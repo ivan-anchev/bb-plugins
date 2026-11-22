@@ -28,7 +28,7 @@ export function IssueLanding({ ref, link, onBack }: IssueLandingProps) {
           </button>
         </Note>
       )}
-      {threadId !== null && <Note>Opening {link.issueId} in its regional manager&apos;s thread…</Note>}
+      {threadId !== null && <Note>{link.issueId} opens in its regional manager&apos;s thread.</Note>}
     </div>
   );
 }

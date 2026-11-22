@@ -1,6 +1,7 @@
 // When a hover card shows, as Activity Sidebar decides it (src/card/card-intent.ts): the pointer
 // resting on its trigger for half a second opens its card, or keyboard focus on it at once; once one
-// is open, or within a moment of one closing, another trigger's opens at once. The card stays while
+// is open, or within a moment of one closing, another trigger's opens at once, but never in place of
+// the card of the trigger that has focus (REVIEW.md). The card stays while
 // the pointer is on its trigger or on the card, or focus is on its trigger; once both have left it
 // closes after a beat. Escape closes it wherever focus is, and holds bb's own Escape, which would
 // leave the page. A press puts it away, and the focus the press gives a trigger opens none. No timer
@@ -86,6 +87,7 @@ function cardIntent<Key>(show: (key: Key | null) => void): CardIntent<Key> & { s
     enter(key) {
       hovered = key;
       if (shown === key) return cancel();
+      if (focused !== null) return;
       clearTimeout(opening);
       if (warm()) open(key);
       else opening = setTimeout(() => open(key), OPEN_DELAY);

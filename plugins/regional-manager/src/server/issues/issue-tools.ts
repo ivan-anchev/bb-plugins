@@ -10,7 +10,7 @@ import { kindSchema } from "../../model/issue/kind.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { Store } from "../store/store.ts";
 import { failed, forManager, type ToolsBb } from "../tools/tool-kit.ts";
-import { filedText } from "./issue-text.ts";
+import { filedText, updatedText } from "./issue-text.ts";
 import type { Issues } from "./issues.ts";
 
 const CREATE = "issue_create";
@@ -103,8 +103,7 @@ export function registerIssueTools(bb: ToolsBb & { pluginId: string }, { store, 
     execute: forIssue(UPDATE, async (issue, { id: _, parent, ...change }) => {
       const updated = await issues.update(issue, { ...change, ...(parent === undefined ? {} : { parentId: parent }) });
       if ("refused" in updated) return failed(updated.refused);
-      const ready = updated.nowReady.length === 0 ? null : `Now ready: ${updated.nowReady.join(", ")}.`;
-      return [`Updated ${issue.id}.`, updated.note, ready].filter((line) => line !== null).join(" ");
+      return updatedText(issue, updated, bb.pluginId);
     }),
   });
 

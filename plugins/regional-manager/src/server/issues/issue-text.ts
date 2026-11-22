@@ -1,6 +1,6 @@
 // What the issue and agent tools say to the regional manager. An issue is always named by its id
 // and an agent by its id, with a link to its thread, so the manager can both act on them and point
-// the user at them; the catch-up's rows, issue_create and issue_read also give each issue's link,
+// the user at them; the catch-up's rows, issue_create, issue_update and issue_read also give each issue's link,
 // which the manager names it to the user by (model/issue/link).
 import { boardGroups, LANE_LABELS, type BoardItem } from "../../model/board/board-groups.ts";
 import { decisionsText, type IssueDecision } from "../../model/decision.ts";
@@ -74,6 +74,12 @@ const linkOf = ({ coordinatorId, id }: Issue, pluginId: string): string => issue
 /** What issue_create says it filed, what blocks it as it is filed, and its link. */
 export const filedText = (issue: Issue, blockedBy: readonly Related[], pluginId: string): string =>
   `Filed ${issue.id} (${issue.kind})${issue.parentId === null ? "" : ` as a sub-issue of ${issue.parentId}`} in ${STATUS_LABELS[issue.rest]}${blockedText(blockedBy, ", blocked by ")}.${issue.verifier === null ? "" : ` Its done handoffs are checked on ${executionText(issue.verifier)}.`} Link: ${linkOf(issue, pluginId)}`;
+
+/** What issue_update says it did: anything its change implies, the issues it made ready, by their links, and its own link. */
+export function updatedText(issue: Issue, { note, nowReady }: { note: string | null; nowReady: readonly IssueId[] }, pluginId: string): string {
+  const ready = nowReady.length === 0 ? null : `Now ready: ${nowReady.map((id) => issueLinkMarkdown(pluginId, { coordinatorId: issue.coordinatorId, issueId: id })).join(", ")}.`;
+  return [`Updated ${issue.id}.`, note, ready, `Link: ${linkOf(issue, pluginId)}`].filter((line) => line !== null).join(" ");
+}
 
 /** What agent_start did. */
 export function startText(issueId: Issue["id"], outcome: Exclude<StartOutcome, { kind: "refused" }>): string {

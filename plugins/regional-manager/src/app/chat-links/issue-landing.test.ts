@@ -21,7 +21,7 @@ const land = (coordinators: Coordinator[]) =>
 
 test("an issue link's page opens its regional manager's thread, once", async () => {
   const view = land([COORDINATOR]);
-  await view.findByText("Opening BBP-24 in its regional manager's thread…");
+  await view.findByText("BBP-24 opens in its regional manager's thread.");
   await waitFor(() => assert.deepEqual(view.inspection.navigateCalls, [{ method: "toThread", threadId: "thr_manager" }]));
 });
 

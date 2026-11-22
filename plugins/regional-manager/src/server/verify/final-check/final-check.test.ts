@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
 import type { FinalCheck } from "../../../model/verdict/check.ts";
-import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn } from "../../test-harness.ts";
+import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn, withoutLinks } from "../../test-harness.ts";
 
 const i1 = issueIdSchema.parse("WEB-1");
 const PARENT = { ...ISSUE, title: "Card vault", description: "Cards are stored in a vault, never in our database.", brief: "Split into sub-issues.", doneCriteria: ["npm run vault-suite passes on the default branch"] };
@@ -237,7 +237,7 @@ test("6: with verification off no verifier starts, the parent waits In review un
   assert.equal(off.kit.spawned(), spawned, "no verifier");
   assert.deepEqual(await off.row(), at("in-review", "Unverified: verification was off"));
   assert.match(off.doorbells().join("\n"), /- WEB-1 "Card vault" final check: not run, verification is off/);
-  assert.equal(await off.text("issue_update", { id: "WEB-1", status: "done" }), "Updated WEB-1.");
+  assert.equal(withoutLinks(await off.text("issue_update", { id: "WEB-1", status: "done" })), "Updated WEB-1.");
   assert.deepEqual(await off.row(), at("done", "Accepted"));
 
   const { kit, threadId, coordinatorId } = await coordinating();
@@ -358,7 +358,7 @@ test("a verdict that arrives after a sub-issue was filed under the parent is kep
 test("a final check that passes after the manager canceled the parent leaves it Canceled, and catch-up says so", async () => {
   const { text, mergeAll, returns, row } = await withParent();
   await mergeAll();
-  assert.equal(await text("issue_update", { id: "WEB-1", status: "canceled" }), "Updated WEB-1.");
+  assert.equal(withoutLinks(await text("issue_update", { id: "WEB-1", status: "canceled" })), "Updated WEB-1.");
   assert.match(await returns(PASSES), /^Verdict recorded/);
   assert.equal((await row()).status, "canceled");
   const caughtUp = await text("crew_catch_up", {});

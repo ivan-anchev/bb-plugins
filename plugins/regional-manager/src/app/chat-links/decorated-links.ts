@@ -3,7 +3,8 @@
 // (model/issue/link) gets an element of the plugin's own, put first in the link, which the overlay
 // portals the issue's glyph into (issue-links.tsx). The page follows the DOM as messages come, stream
 // and go: a link that bb renders again, as a new element or with its children replaced, has lost its
-// slot and gets a new one. A link in code is no `<a>`, and a bare id is text: neither is touched.
+// slot and gets a new one, and a link whose href changes, to another issue's or to anything else,
+// loses the slot it had. A link in code is no `<a>`, and a bare id is text: neither is touched.
 // why touch bb's DOM: bb gives a plugin no renderer for a link inside a message (reports/BBP-28.md),
 // so this rests on bb's markup, `[data-markdown-preview] a[href]`, and is experimental.
 import { experimental_usePluginId } from "@get-bb/plugin-sdk/app";
@@ -20,6 +21,7 @@ export function useDecoratedLinks(): readonly DecoratedLink[] {
   useEffect(() => {
     let next = 0;
     const scan = () => {
+      removeStale(linkAt);
       const fresh = undecorated(linkAt).map(({ anchor, link }) => ({ key: next++, link, slot: decorate(anchor) }));
       setLinks((current) => {
         const kept = current.filter(({ slot }) => slot.isConnected);
@@ -63,6 +65,14 @@ function undecorated(linkAt: (target: Element) => FoundLink | null): FoundLink[]
     const found = linkAt(anchor);
     return found === null || slotOf(found.anchor)?.dataset.href === found.anchor.getAttribute("href") ? [] : [found];
   });
+}
+
+/** Takes out every slot whose link no longer has the issue href it was made for: an href changed, or taken away. */
+function removeStale(linkAt: (target: Element) => FoundLink | null): void {
+  for (const slot of document.querySelectorAll<HTMLElement>(`.${SLOT}`)) {
+    const anchor = slot.parentElement;
+    if (anchor === null || linkAt(anchor) === null || anchor.getAttribute("href") !== slot.dataset.href) slot.remove();
+  }
 }
 
 /** Puts a new slot first in the link, for the href it has now, in place of one it had for another. */

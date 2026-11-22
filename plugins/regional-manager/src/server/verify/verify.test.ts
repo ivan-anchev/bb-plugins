@@ -9,7 +9,7 @@ import { agentIdSchema } from "../../model/agent.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import type { Verdict } from "../../model/verdict/verdict.ts";
 import type { InteractionPayload } from "../../model/interaction.ts";
-import { bbHttpError, coordinating, doorbellOf, HEAD, isRefusal, settled, startedAgent, textOf, type SendFailure } from "../test-harness.ts";
+import { bbHttpError, coordinating, doorbellOf, HEAD, isRefusal, settled, startedAgent, textOf, withoutLinks, type SendFailure } from "../test-harness.ts";
 
 const a1 = agentIdSchema.parse("a1");
 const i1 = issueIdSchema.parse("WEB-1");
@@ -968,7 +968,7 @@ test("a verifier named while a check runs leaves that check as it is, and applie
   await handOff();
   const running = verifier();
   assert.equal(
-    textOf(await kit.call("issue_update", { id: "WEB-1", verifier: { providerId: "claude-code", model: "sonnet" } }, threadId)),
+    withoutLinks(textOf(await kit.call("issue_update", { id: "WEB-1", verifier: { providerId: "claude-code", model: "sonnet" } }, threadId))),
     "Updated WEB-1. claude-code sonnet (medium) is now WEB-1's first choice of verifier for its done handoffs, and its final check as a parent, from the next one on: each runs on it when bb lists it where the check runs and no agent whose work it checks ran on it. A check already running keeps its own.",
   );
   assert.equal(check().verifier, null);

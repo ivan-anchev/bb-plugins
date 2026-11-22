@@ -1089,7 +1089,7 @@ replaced, and the handoff never fails over it.
 Experimental: this rests on bb's markup and slots that may change, so it is the
 likeliest part to break with a bb update. A regional manager names an issue to
 you as a link, `[BBP-24](/plugins/regional-manager/regional-managers/issue/<id>/BBP-24)`,
-which `crew_catch_up`, `issue_create` and `issue_read` hand it ready-made; the
+which `crew_catch_up`, `issue_create`, `issue_update` and `issue_read` hand it ready-made; the
 id of the manager is in it because two managers can both have a BBP-24.
 
 - **In a message**, from the manager or anyone, the link reads as the issue's

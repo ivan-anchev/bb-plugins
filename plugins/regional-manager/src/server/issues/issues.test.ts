@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { laneOf } from "../../model/board/board-groups.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
-import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn } from "../test-harness.ts";
+import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn, withoutLinks } from "../test-harness.ts";
 
 const ISSUE_ID = issueIdSchema.parse("WEB-1");
 const REPORT = { summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
@@ -12,7 +12,8 @@ async function managing(options: Parameters<typeof coordinating>[0] = {}) {
   const call = (tool: string, input: object) => kit.call(tool, input, threadId);
   const update = async (input: object) => {
     const result = await call("issue_update", { id: "WEB-1", ...input });
-    return { refused: isRefusal(result), text: textOf(result) };
+    // why without links: the update's links are the link test's; here, what it changed.
+    return { refused: isRefusal(result), text: withoutLinks(textOf(result)) };
   };
   const statuses = async () => (await kit.rpc.board({ coordinatorId })).issues.map((issue) => [issue.id, laneOf(issue)]);
   return { kit, threadId, coordinatorId, call, update, statuses };
@@ -28,13 +29,13 @@ test("issue_create files a build issue in Todo, or in Backlog, numbered per regi
     ["WEB-2", "backlog"],
   ]);
 
-  assert.equal(textOf(await call("issue_update", { id: "WEB-2", status: "canceled" })), "Updated WEB-2.");
+  assert.equal(textOf(await call("issue_update", { id: "WEB-2", status: "canceled" })), `Updated WEB-2. Link: ${link("WEB-2")}`);
   assert.equal(textOf(await call("issue_create", ISSUE)), `Filed WEB-3 (build) in Todo. Link: ${link("WEB-3")}`);
   const other = await kit.startManager("Retire the cron box");
   assert.equal(textOf(await kit.call("issue_create", ISSUE, other.threadId)), `Filed WEB-1 (build) in Todo. Link: ${link("WEB-1", other.coordinatorId)}`, "the same id, another manager's link");
 });
 
-test("each issue's link is in the catch-up's row, issue_create and issue_read, and the rules tell the manager to name issues to the user by it, never bare or in code", async () => {
+test("each issue's link is in the catch-up's row, issue_create, issue_read and issue_update, and the rules tell the manager to name issues to the user by it, never bare or in code", async () => {
   const { kit, threadId, coordinatorId, call } = await managing();
   const link = (id: string) => `[${id}](/plugins/regional-manager/regional-managers/issue/${coordinatorId}/${id})`;
   assert.ok(textOf(await call("issue_create", ISSUE)).endsWith(` Link: ${link("WEB-1")}`));
@@ -45,8 +46,11 @@ test("each issue's link is in the catch-up's row, issue_create and issue_read, a
   assert.ok(caughtUp.includes(`\n- WEB-2 "Dead letters" (Build; no agent): Not started; blocked by WEB-1 (Todo); link: ${link("WEB-2")}\n`), caughtUp);
   assert.ok(textOf(await call("issue_read", { id: "WEB-2" })).startsWith(`## WEB-2: Dead letters\n\nBuild. Todo: Not started. Blocked by WEB-1 (Todo). Thread: no thread. Link: ${link("WEB-2")}\n`));
 
+  assert.equal(textOf(await call("issue_update", { id: "WEB-1", status: "backlog" })), `Updated WEB-1. Link: ${link("WEB-1")}`);
+  assert.equal(textOf(await call("issue_update", { id: "WEB-1", status: "canceled" })), `Updated WEB-1. Now ready: ${link("WEB-2")}. Link: ${link("WEB-1")}`, "an issue it made ready, by its link too");
+
   const rules = kit.configurationFor(threadId, {}).instructions ?? "";
-  assert.match(rules, /Name an issue to the user by its link, exactly as crew_catch_up, issue_create and issue_read give it, .*: never by its bare id, and never inside code or a code block\./);
+  assert.match(rules, /Name an issue to the user by its link, exactly as crew_catch_up, issue_create, issue_update and issue_read give it, .*: never by its bare id, and never inside code or a code block\./);
 });
 
 test("issue_create rejects a missing or unknown kind, a blank or a thirteenth criterion, or a field it doesn't take, and files nothing", async () => {

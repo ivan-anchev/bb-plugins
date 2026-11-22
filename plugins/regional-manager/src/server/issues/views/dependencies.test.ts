@@ -13,9 +13,10 @@ const RESEARCH_DONE = { status: "done", ...FIELDS, report: REPORT };
 
 async function managing() {
   const { kit, threadId, coordinatorId } = await coordinating();
+  // why without links: each issue's link is issues.test.ts's to prove; here, its lane and relations.
   const call = async (tool: string, input: object) => {
     const result = await kit.call(tool, input, threadId);
-    return { refused: isRefusal(result), text: textOf(result) };
+    return { refused: isRefusal(result), text: withoutLinks(textOf(result)) };
   };
   const text = async (tool: string, input: object) => (await call(tool, input)).text;
   /** Every unblocked update a catch-up returned, in order, as "WEB-3 by WEB-1 done": a catch-up returns each event once, whether a doorbell named it or not. */
@@ -30,8 +31,7 @@ async function managing() {
     return [...announced];
   };
   /** The board section of a catch-up: the rows and the ready line. */
-  // why without links: each row's link is issues.test.ts's to prove; here, its lane and relations.
-  const board = async () => withoutLinks((await catchUp()).split("## Board\n\n")[1]?.split("\n\n## Decisions")[0] ?? assert.fail("no board"));
+  const board = async () => (await catchUp()).split("## Board\n\n")[1]?.split("\n\n## Decisions")[0] ?? assert.fail("no board");
   const row = async (id: string) => (await board()).split("\n").find((line) => line.startsWith(`- ${id} `)) ?? assert.fail(`no row for ${id}`);
   const readyLine = async () => (await board()).split("\n").find((line) => line.startsWith("Ready: ")) ?? assert.fail("no ready line");
   const doorbells = () => kit.doorbellsSent(threadId);
@@ -50,18 +50,16 @@ async function managing() {
     };
     return { agentThreadId, report };
   }
-  /** The issue's link, as the manager is given it. */
-  const link = (id: string) => `[${id}](/plugins/regional-manager/regional-managers/issue/${coordinatorId}/${id})`;
-  return { kit, threadId, coordinatorId, link, call, text, catchUp, board, row, readyLine, doorbells, managerIdle, unblocked, research };
+  return { kit, threadId, coordinatorId, call, text, catchUp, board, row, readyLine, doorbells, managerIdle, unblocked, research };
 }
 
 test("an issue filed depending on another is blocked by it as filed, in issue_read and catch-up, and the other blocks it", async () => {
-  const { text, row, link } = await managing();
+  const { text, row } = await managing();
   await text("issue_create", { ...ISSUE, title: "Retry budget" });
-  assert.equal(await text("issue_create", { ...ISSUE, dependsOn: ["WEB-1"] }), `Filed WEB-2 (build) in Todo, blocked by WEB-1 (Todo). Link: ${link("WEB-2")}`);
+  assert.equal(await text("issue_create", { ...ISSUE, dependsOn: ["WEB-1"] }), "Filed WEB-2 (build) in Todo, blocked by WEB-1 (Todo).");
 
   const dependent = await text("issue_read", { id: "WEB-2" });
-  assert.match(dependent, /^Build\. Todo: Not started\. Blocked by WEB-1 \(Todo\)\. Thread: no thread\. Link: /m);
+  assert.match(dependent, /^Build\. Todo: Not started\. Blocked by WEB-1 \(Todo\)\. Thread: no thread\.$/m);
   assert.match(dependent, /### Relations\n\nParent: none\.\nSub-issues: none\.\nDepends on: WEB-1 \(Todo\)\.\nBlocks: nothing\./);
   assert.match(await text("issue_read", { id: "WEB-1" }), /### Relations\n\nParent: none\.\nSub-issues: none\.\nDepends on: nothing\.\nBlocks: WEB-2 \(Todo\)\./);
   assert.equal(await row("WEB-2"), '- WEB-2 "Add retries" (Build; no agent): Not started; blocked by WEB-1 (Todo)');
@@ -405,14 +403,14 @@ test("merges whose announcement can't read bb are announced by a later tick, aft
 });
 
 test("a dependency that closes after its dependent is filed is announced once, though the first read is overtaken, the next fails and the plugin reloads", async () => {
-  const { kit, text, unblocked, research, link } = await managing();
+  const { kit, text, unblocked, research } = await managing();
   const { agentThreadId } = await research();
   await kit.call("agent_handoff", RESEARCH_DONE, agentThreadId);
   kit.threadLists.holding = true;
   const filing = text("issue_create", { ...ISSUE, title: "Card vault schema", dependsOn: ["WEB-1"] });
   await settled();
   kit.threadLists.held.splice(0).forEach((release) => release());
-  assert.equal(await filing, `Filed WEB-2 (build) in Todo, blocked by WEB-1 (In progress). Link: ${link("WEB-2")}`);
+  assert.equal(await filing, "Filed WEB-2 (build) in Todo, blocked by WEB-1 (In progress).");
   await settled();
   assert.equal(kit.threadLists.held.length, 1, "the announcement's first read is not held");
 

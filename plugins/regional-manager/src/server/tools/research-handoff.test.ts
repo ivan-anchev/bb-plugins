@@ -9,7 +9,7 @@ import { issueIdSchema } from "../../model/issue/issue.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { memoryStorage } from "../memory-storage.ts";
 import { failWrites } from "../store/test-store.ts";
-import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn } from "../test-harness.ts";
+import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn, withoutLinks } from "../test-harness.ts";
 
 const RESEARCH = {
   kind: "research",
@@ -152,7 +152,7 @@ test("a research issue can't be accepted Done by the manager, and nothing can na
   assert.equal(textOf(await call("issue_create", { ...ISSUE, verifier: { providerId: "codex", model: "gpt-default" } })), `Filed WEB-2 (build) in Todo. Its done handoffs are checked on codex gpt-default (low). Link: [WEB-2](/plugins/regional-manager/regional-managers/issue/${coordinatorId}/WEB-2)`);
   const toResearch = await call("issue_update", { id: "WEB-2", kind: "research" });
   assert.equal(textOf(toResearch), "WEB-2 can't be changed so: a research issue has no verifier: nothing verifies it. Give verifier: null with the change to drop the one named.");
-  assert.equal(textOf(await call("issue_update", { id: "WEB-2", kind: "research", verifier: null })), "Updated WEB-2. WEB-2 has no verifier: nothing verifies a research issue.");
+  assert.equal(withoutLinks(textOf(await call("issue_update", { id: "WEB-2", kind: "research", verifier: null }))), "Updated WEB-2. WEB-2 has no verifier: nothing verifies a research issue.");
   assert.deepEqual(
     kit.store.issues(coordinatorId).map(({ id, kind, verifier }) => [id, kind, verifier]),
     [
