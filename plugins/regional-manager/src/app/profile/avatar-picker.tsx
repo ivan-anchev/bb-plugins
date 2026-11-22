@@ -1,20 +1,24 @@
 // How the user picks a regional manager's avatar, below its profile's fields: Shuffle, which picks a
 // look no other manager has, and the shape and the colour to pick one by hand, which may be another's.
+// Shuffle waits until the other managers' looks are read: a look it picked before could be theirs.
 import { useId, type ReactNode } from "react";
 import { freeLook, HUE_NAMES, HUES, SHAPES, type Avatar } from "../../model/profile/avatar.ts";
 import { Button } from "../ui/button.tsx";
+import { ReadFailure } from "../ui/read-failure.tsx";
 import { AvatarBlob } from "./avatar.tsx";
 import { randomStart } from "./profile-draft.ts";
 import { useTakenLooks } from "./use-manager.ts";
 
 export function AvatarPicker({ value, onChange }: { value: Avatar; onChange(next: Avatar): void }) {
-  const taken = useTakenLooks() ?? [];
+  const { looks, error, retry } = useTakenLooks();
+  // why aria-disabled: a disabled button drops focus to the page, and it is enabled again as soon as the looks are read.
   return (
     <div className="flex flex-col items-start gap-3">
-      <Button variant="secondary" size="sm" onClick={() => onChange(freeLook(randomStart(), [...taken, value]))}>
+      <Button variant="secondary" size="sm" aria-disabled={looks === null} onClick={() => looks !== null && onChange(freeLook(randomStart(), [...looks, value]))}>
         <ShuffleGlyph />
         Shuffle
       </Button>
+      {error !== null && <ReadFailure onRetry={retry}>Could not read the other regional managers' looks, so Shuffle waits: {error.message}</ReadFailure>}
       <Choices legend="Shape" options={SHAPES} chosen={value.shape} onChoose={(shape) => onChange({ ...value, shape })}>
         {(shape) => <AvatarBlob avatar={{ ...value, shape }} size="xs" />}
       </Choices>

@@ -21,12 +21,18 @@ afterEach(() => {
   localStorage.clear();
 });
 
-/** The New page over a plugin that records every profile it is asked to create, and the pages it opens. */
-function mount() {
+/**
+ * The New page over a plugin that records every profile it is asked to create, and the pages it
+ * opens, and lists one other manager, Scout, unless `read.failing`, when its list read fails.
+ */
+function mount(read = { failing: false }) {
   const creates: Profile[] = [];
   const opened: CoordinatorId[] = [];
   const rpc = {
-    coordinators: () => ({ coordinators: [], notStarted: [{ id: TAKEN, name: "Scout", description: null, avatar: CIRCLE_IN_VIOLET }] }),
+    coordinators: () => {
+      if (read.failing) throw new Error("bb is restarting");
+      return { coordinators: [], notStarted: [{ id: TAKEN, name: "Scout", description: null, avatar: CIRCLE_IN_VIOLET }] };
+    },
     createCoordinator: (input: unknown) => {
       creates.push(contract.createCoordinator.input.parse(input).profile);
       return { coordinatorId: CREATED };
@@ -121,4 +127,48 @@ test("the fields outlive the page", async () => {
   assert.ok(name instanceof HTMLInputElement);
   assert.equal(name.value, "Webhooks");
   assert.equal(again.view.getByRole("radio", { name: "Cat" }).matches(":checked"), true);
+});
+
+test("while the other managers can't be read, a new one gets no look: the page says why, and Retry gives it a free one", async (t) => {
+  // why 0: the look a new manager starts from is then the one Scout has, which it must step past.
+  t.mock.method(Math, "random", () => 0);
+  const read = { failing: true };
+  const page = mount(read);
+
+  assert.match((await page.view.findByRole("alert")).textContent ?? "", /Could not read the other regional managers, so a new one can't be given a look of its own yet: .*bb is restarting/);
+  assert.equal(page.view.queryByRole("textbox", { name: "Name" }), null);
+  await page.create();
+  assert.equal(page.creates.length, 0, "Create has nothing to create");
+
+  read.failing = false;
+  await act(async () => fireEvent.click(page.view.getByRole("button", { name: "Retry" })));
+
+  await page.named("Webhooks");
+  assert.equal(page.view.queryByRole("alert"), null);
+  await page.create();
+  const [created] = page.creates;
+  assert.ok(created);
+  assert.notDeepEqual([created.avatar.shape, created.avatar.hue], [CIRCLE_IN_VIOLET.shape, CIRCLE_IN_VIOLET.hue]);
+});
+
+test("Shuffle waits while the other managers' looks can't be read, and says why; once Retry reads them it picks a look none has", async (t) => {
+  t.mock.method(Math, "random", () => 0);
+  localStorage.setItem("coordinator-new-profile", JSON.stringify({ name: "Webhooks", description: "", avatar: CIRCLE_IN_VIOLET }));
+  const read = { failing: true };
+  const page = mount(read);
+  const shuffle = await page.view.findByRole("button", { name: "Shuffle" });
+  const chosen = () => page.view.getAllByRole("radio").filter((radio) => radio.matches(":checked")).map((radio) => radio.getAttribute("aria-label"));
+
+  assert.match((await page.view.findByRole("alert")).textContent ?? "", /Could not read the other regional managers' looks, so Shuffle waits: .*bb is restarting/);
+  assert.equal(shuffle.getAttribute("aria-disabled"), "true");
+  fireEvent.click(shuffle);
+  assert.deepEqual(chosen(), ["Circle", "Violet"], "a Shuffle that can't know the taken looks picks none");
+
+  read.failing = false;
+  await act(async () => fireEvent.click(page.view.getByRole("button", { name: "Retry" })));
+  await waitFor(() => assert.equal(shuffle.getAttribute("aria-disabled"), "false"));
+  fireEvent.click(shuffle);
+
+  assert.notDeepEqual(chosen(), ["Circle", "Violet"], "Shuffle steps past Scout's look");
+  assert.equal(page.view.queryByRole("alert"), null);
 });

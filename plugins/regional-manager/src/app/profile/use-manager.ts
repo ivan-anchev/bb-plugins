@@ -22,13 +22,17 @@ export function useManager(coordinatorId: CoordinatorId | null): Manager | null 
 }
 
 /**
- * The look of every regional manager, started or not, from the same read as the panel's list; null
- * until the read answers, and none once it failed, when no look is known to be taken.
+ * The looks every regional manager has, started or not, from the same read as the panel's list.
+ * `looks` is null until that read answers, and stays null after it failed, since no look is then
+ * known to be free; `error` is the read's failure, and `retry` reads again.
  */
-export function useTakenLooks(): Avatar[] | null {
+export function useTakenLooks(): { looks: Avatar[] | null; error: Error | null; retry(): void } {
   const read = experimental_useRpcQuery({ contract, method: "coordinators", input: {} });
-  if (read.data !== undefined) return [...read.data.coordinators, ...read.data.notStarted].map(({ avatar }) => avatar);
-  return read.error === null ? null : [];
+  return {
+    looks: read.data === undefined ? null : [...read.data.coordinators, ...read.data.notStarted].map(({ avatar }) => avatar),
+    error: read.error,
+    retry: () => void read.refetch(),
+  };
 }
 
 /** The started regional manager whose thread this is, from the same read as the panel's list; null for any other thread, or before the read. */

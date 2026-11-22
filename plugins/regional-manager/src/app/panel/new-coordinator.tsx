@@ -8,6 +8,7 @@ import { NAME_MISSING, NEW_PROFILE_KEY, newDraft, profileDraftSchema, profileOf,
 import { ProfileFields } from "../profile/profile-fields.tsx";
 import { useTakenLooks } from "../profile/use-manager.ts";
 import { Button } from "../ui/button.tsx";
+import { ReadFailure } from "../ui/read-failure.tsx";
 import { useStored } from "../ui/stored.ts";
 
 type NewCoordinatorProps = { ref: Ref<HTMLDivElement>; onBack(): void; onCreated(id: CoordinatorId): void };
@@ -20,15 +21,17 @@ export function NewCoordinator({ ref, onBack, onCreated }: NewCoordinatorProps) 
   // user types, it moves on only if another manager takes it.
   const [start] = useState(randomStart);
   const taken = useTakenLooks();
-  // why null until the managers are read: a look picked before then could be one of theirs, and typing would keep it.
-  const draft = stored.value ?? (taken === null ? null : newDraft(start, taken));
+  // why null until the managers are read, or while that read fails: a look picked before then could
+  // be one of theirs, and typing would keep it.
+  const draft = stored.value ?? (taken.looks === null ? null : newDraft(start, taken.looks));
   // Whether a create found no name: the field says so from then on, until it has one.
   const [tried, setTried] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const profile = draft === null ? null : profileOf(draft);
 
   async function submit() {
-    if (create.isPending) return;
+    // why draft null too: there are no fields to create from until the other managers are read.
+    if (create.isPending || draft === null) return;
     if (profile === null) {
       setTried(true);
       nameRef.current?.focus();
@@ -62,6 +65,9 @@ export function NewCoordinator({ ref, onBack, onCreated }: NewCoordinatorProps) 
           </h1>
         </div>
         <div className="flex flex-col gap-5 px-3">
+          {draft === null && taken.error !== null && (
+            <ReadFailure onRetry={taken.retry}>Could not read the other regional managers, so a new one can't be given a look of its own yet: {taken.error.message}</ReadFailure>
+          )}
           {draft !== null && <ProfileFields value={draft} onChange={stored.store} nameError={tried && profile === null ? NAME_MISSING : null} nameRef={nameRef} />}
           <div className="flex flex-col items-start gap-2">
             {/* why aria-disabled: a disabled button drops focus to the page while the create runs. */}
