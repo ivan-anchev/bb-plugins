@@ -95,7 +95,7 @@ const shownFinalCheckSchema = z.object({ at: z.number(), defaultBranch: z.string
 export type ShownFinalCheck = z.infer<typeof shownFinalCheckSchema>;
 
 /**
- * An issue opened on the board: what it is about, its done-criteria, its decisions (decision.ts
+ * An issue in its tab: what it is about, its done-criteria, its decisions (decision.ts
  * issueDecisions: oldest first, the questions put to the user about it and the decisions recorded on it), the issues it depends on and
  * the issues that depend on it (each with its title and status on its own row), its record: every agent
  * that held it, oldest first, with its thread (null: none to open) and how it ended (null: it holds

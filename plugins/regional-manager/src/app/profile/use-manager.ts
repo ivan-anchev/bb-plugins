@@ -25,3 +25,6 @@ export function useCoordinatorOfThread(threadId: string) {
   const read = experimental_useRpcQuery({ contract, method: "coordinators", input: {} });
   return { read, coordinator: read.data?.coordinators.find((coordinator) => coordinator.threadId === threadId) ?? null };
 }
+
+/** Whether the thread is a started regional manager's, which alone has its tabs (the Board, an issue's). */
+export const useIsManagerThread = ({ threadId }: { threadId: string }): boolean => useCoordinatorOfThread(threadId).coordinator !== null;

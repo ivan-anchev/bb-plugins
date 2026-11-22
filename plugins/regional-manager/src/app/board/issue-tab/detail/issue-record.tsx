@@ -7,7 +7,7 @@ import type { IssueDetail } from "../../../../contract.ts";
 import type { EndedHow } from "../../../../model/agent.ts";
 import type { HandoffReport } from "../../../../model/handoff.ts";
 import { shortTime } from "../../../ui/time.ts";
-import { ThreadLink } from "../thread-link.tsx";
+import { ThreadLink } from "../../issue/thread-link.tsx";
 import { CheckVerdict } from "./check-verdict.tsx";
 import { DiscloseGlyph } from "./disclose-glyph.tsx";
 

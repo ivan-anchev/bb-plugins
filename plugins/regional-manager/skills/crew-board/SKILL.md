@@ -921,16 +921,17 @@ and ends with its [memory](#read-and-edit-memory):
   sub-issues by its own count. Folding a lane folds its parents with their
   sub-issues.
 
-Pressing an issue opens it in place: its row grows to show its title and
-headline whole, which a closed row fades out at its edge, and under it come
-what it is about; its **Parent**, only on a flagged sub-issue's row under
-Needs you, away from its parent (rows nest sub-issues already, so a detail
-lists none); **Depends on** (a sub-issue's lists its parent's open
-dependencies too, "through BBP-1") and **Blocks**, each issue there with its status's glyph, id and title, and none
-when there are none; pressing one goes
-to that issue on the board, unfolding its lane, opening its row, moving
-focus to it and scrolling it to the top (as near as the board's end
-allows), its detail under it; **Done when** with its criteria (a research issue's
+Pressing an issue, or Enter or Space on its row, opens it in its own tab in
+the same side panel, beside the Board, titled with its id and title; pressing
+an issue whose tab is open focuses that tab rather than adding a second one.
+Close a tab with its close button. bb keeps the tabs across a reload, and each
+changes as the board does. The tab heads with the issue's status, id and kind,
+its pull request with CI and its agent's thread, then its title and headline
+whole, which its row fades out at its edge. Under them come what it is about;
+its **Parent** and its **Sub-issues**; **Depends on** (a sub-issue's lists its
+parent's open dependencies too, "through BBP-1") and **Blocks**, each issue there
+with its status's glyph, id and title, and none when there are none; pressing
+one opens that issue's tab the same way; **Done when** with its criteria (a research issue's
 **Questions**, and nothing when it has none); its **Decisions**, oldest
 first, when it has any: each question put to you naming it, with your answer
 and when, or "Waiting for your answer", and each decision the manager
