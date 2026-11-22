@@ -25,9 +25,9 @@ test("astro#18616: every item of the timeline, in GitHub's order, as its canonic
   assert.deepEqual(
     items.map((item) => item.kind),
     [
-      ...["commit", "comment", "commit", "labeled", "labeled", "review", "commit", "labeled", "labeled", "review", "labeled", "commit", "labeled", "labeled"],
-      ...["review", "commit", "labeled", "labeled", "review", "commit", "commit", "renamed", "comment", "status", "review", "comment", "comment", "review"],
-      ...["comment", "comment", "review", "comment", "merged", "status", "referenced"],
+      "commit", "comment", "commit", "labeled", "labeled", "review", "commit", "labeled", "labeled", "review", "labeled", "commit", "labeled", "labeled",
+      "review", "commit", "labeled", "labeled", "review", "commit", "commit", "renamed", "comment", "status", "review", "comment", "comment", "review",
+      "comment", "comment", "review", "comment", "merged", "status", "referenced",
     ],
   );
 });

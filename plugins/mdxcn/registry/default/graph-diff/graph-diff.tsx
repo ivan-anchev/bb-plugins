@@ -59,10 +59,10 @@ const Line = defineItem<DiffLineProps>("Line")
 
 function signOf(value: string): DiffSign | undefined {
   const text = value.trim()
-  if (/^\+/.test(text)) {
+  if (text.startsWith("+")) {
     return "add"
   }
-  if (/^[−\-]/.test(text)) {
+  if (/^[−-]/.test(text)) {
     return "remove"
   }
   return undefined

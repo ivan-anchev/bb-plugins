@@ -381,7 +381,7 @@ async function loadedWith(routes: object) {
             if (value === null || value === undefined) stored.delete(name);
             else stored.set(name, value);
           }
-          for (const notify of [...listeners]) notify();
+          for (const notify of listeners) notify();
           return read();
         },
         onChange: (listener: (next: Values, prev: Values) => void) => void listeners.push(() => listener(read(), read())),

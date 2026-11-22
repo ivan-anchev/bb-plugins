@@ -51,7 +51,7 @@ export function createWaker(deps: WakerDeps) {
       return track(wake(thread, async () => ({ kind: "failed", error })));
     },
     async idle() {
-      while (pending.size > 0) await Promise.allSettled([...pending]);
+      while (pending.size > 0) await Promise.allSettled(pending);
     },
   };
 

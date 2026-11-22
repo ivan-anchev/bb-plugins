@@ -2,7 +2,8 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "extends": ["./node_modules/@interfere/landmines/configs/recommended.json"],
   "rules": {
-    "landmines-types/no-explicit-return-types": "off"
+    "landmines-types/no-explicit-return-types": "off",
+    "no-unused-vars": ["warn", { "ignoreRestSiblings": true, "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }]
   },
   "overrides": [
     {

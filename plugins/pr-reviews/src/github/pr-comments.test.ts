@@ -134,8 +134,8 @@ test("graphql args: the query and text by -f, the PR number by -F, and no cursor
   const pr = prVariables(repoSchema.parse("ivan-anchev/bb-plugins"), 71);
 
   assert.deepEqual(graphqlArgs(THREADS_QUERY, { ...pr, cursor: null }), [
-    ...["api", "graphql", "-f", `query=${THREADS_QUERY}`],
-    ...["-f", "owner=ivan-anchev", "-f", "name=bb-plugins", "-F", "number=71"],
+    "api", "graphql", "-f", `query=${THREADS_QUERY}`,
+    "-f", "owner=ivan-anchev", "-f", "name=bb-plugins", "-F", "number=71",
   ]);
   assert.deepEqual(graphqlArgs(THREADS_QUERY, { ...pr, cursor: "Y3Vyc29y" }).slice(-2), ["-f", "cursor=Y3Vyc29y"]);
 });

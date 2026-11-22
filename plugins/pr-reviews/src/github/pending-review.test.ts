@@ -52,12 +52,12 @@ test("a range comment goes into the reader's pending review, or starts one: GitH
   const request: CommentRequest = { kind: "line", commit: "1ac7a55", path: "gamma.txt", start: { side: "new", line: 15 }, end: { side: "new", line: 16 }, body: "@team Pending range comment" };
 
   assert.deepEqual(variablesOf(addThreadArgs(PR_ID, null, request)), [
-    ...["-f", `pr=${PR_ID}`, "-f", "path=gamma.txt", "-f", "body=@team Pending range comment"],
-    ...["-F", "line=16", "-f", "side=RIGHT", "-F", "startLine=15", "-f", "startSide=RIGHT"],
+    "-f", `pr=${PR_ID}`, "-f", "path=gamma.txt", "-f", "body=@team Pending range comment",
+    "-F", "line=16", "-f", "side=RIGHT", "-F", "startLine=15", "-f", "startSide=RIGHT",
   ]);
   assert.deepEqual(variablesOf(addThreadArgs(PR_ID, "PRR_1", { ...request, start: null, end: { side: "old", line: 3 } })), [
-    ...["-f", `pr=${PR_ID}`, "-f", "review=PRR_1", "-f", "path=gamma.txt", "-f", "body=@team Pending range comment"],
-    ...["-F", "line=3", "-f", "side=LEFT"],
+    "-f", `pr=${PR_ID}`, "-f", "review=PRR_1", "-f", "path=gamma.txt", "-f", "body=@team Pending range comment",
+    "-F", "line=3", "-f", "side=LEFT",
   ]);
 });
 

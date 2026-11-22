@@ -30,7 +30,7 @@
     "test": "node --test 'scripts/**/*.test.ts' && node scripts/each-plugin.ts test",
     "build": "node scripts/each-plugin.ts build",
     "build:standalone": "node scripts/standalone-build.ts",
-    "lint": "oxlint",
+    "lint": "oxlint --deny-warnings",
     "check": "npm run manifests:check && npm run lint && npm run typecheck && npm test && npm run build && npm run build:standalone"
   },
   "devDependencies": {

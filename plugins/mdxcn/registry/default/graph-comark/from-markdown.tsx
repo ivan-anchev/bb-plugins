@@ -3,7 +3,6 @@
 import type { ComponentType } from "react"
 
 import { Graph, GraphBody } from "@/registry/default/graph-frame/graph-frame"
-import { graphViewport } from "@/registry/default/graph-frame/graph-motion"
 import type { GraphAdapter } from "@/registry/default/graph-comark/adapters"
 import { coerceProps } from "@/registry/default/graph-comark/coerce"
 

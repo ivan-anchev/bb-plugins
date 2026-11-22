@@ -95,7 +95,7 @@ test("a verifier's brief holds the claimed commit, the plugin's read of it, and 
   const { kit, verifier, handOff } = await withAgent();
   await handOff();
   const prompt = kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no prompt");
-  assert.match(prompt, new RegExp(`## The commit and the tree, as the plugin read them\n\nbb's git plugin read the agent's environment as it handed off: the claimed commit ${HEAD} checked out, on a clean working tree\. The plugin judges the commit and the tree itself`));
+  assert.match(prompt, new RegExp(`## The commit and the tree, as the plugin read them\n\nbb's git plugin read the agent's environment as it handed off: the claimed commit ${HEAD} checked out, on a clean working tree\\. The plugin judges the commit and the tree itself`));
   assert.match(prompt, /1\. npm test passes\n2\. npm run lint prints no errors/);
   assert.doesNotMatch(prompt, /trust me|Retries land with backoff/);
 });

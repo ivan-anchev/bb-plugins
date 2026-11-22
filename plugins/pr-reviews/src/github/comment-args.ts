@@ -4,7 +4,7 @@ import type { Repo } from "./repo.ts";
 /** POST /repos/{repo}/pulls/{number}/comments: a line or a file comment, at the commit the reader viewed. */
 export function commentApiArgs(repo: Repo, number: number, request: CommentRequest): string[] {
   const common = [
-    ...["api", "--method", "POST", `repos/${repo}/pulls/${number}/comments`],
+    "api", "--method", "POST", `repos/${repo}/pulls/${number}/comments`,
     ...text("body", request.body),
     ...text("commit_id", request.commit),
     ...text("path", request.path),

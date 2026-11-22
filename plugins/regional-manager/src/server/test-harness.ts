@@ -544,7 +544,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       return models === null ? { modelLoadError: { code: "auth_required", detail: null, providerId }, models: [] } : { modelLoadError: null, models };
     },
   } satisfies CatalogBb["sdk"]["providers"];
-  const projects = { get: async (_: { projectId: string }) => ({ name: PROJECT_NAME, gitRemoteUrl: github.remote }) };
+  const projects = { get: async () => ({ name: PROJECT_NAME, gitRemoteUrl: github.remote }) };
   const environmentRecords: { destroyed: Set<string>; defaultBranch: string | null; holding: boolean; held: (() => void)[] } = { destroyed: new Set(), defaultBranch: "main", holding: false, held: [] };
   const environments = {
     listProviders: async () => ENVIRONMENT_PROVIDERS,
