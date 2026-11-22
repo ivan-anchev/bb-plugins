@@ -87,7 +87,7 @@ export function NewCoordinator({ ref, onBack, onCreated }: NewCoordinatorProps) 
  * (Shuffle, a shape or a colour), which Create sends as chosen; until then none, so Create sends `auto`.
  */
 function keptOf(next: ProfileDraft, shown: ProfileDraft, before: StoredDraft | null): StoredDraft {
-  // why by value: a pick changes the look (the checked radio fires nothing, and Shuffle returns the look it had only when no other is free, when `auto` gets that one too).
+  // why by value: a pick changes the look (the checked radio fires nothing). A Shuffle that keeps the look, when no other is free, stays unpicked, so Create sends `auto` and the store picks the look, which may differ from the preview as it can anywhere on this page.
   const picked = JSON.stringify(next.avatar) !== JSON.stringify(shown.avatar);
   return { ...next, avatar: picked ? next.avatar : (before?.avatar ?? null) };
 }
