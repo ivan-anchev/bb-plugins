@@ -22,17 +22,15 @@ export function useManager(coordinatorId: CoordinatorId | null): Manager | null 
 }
 
 /**
- * The looks every regional manager has, started or not, from the same read as the panel's list; null
- * while they aren't known: before that read first answers, and while its last attempt failed, since
- * the list kept from before may lack a look taken since. `error` is that failure, and `retry` reads again.
+ * The looks every regional manager has, started or not, from the same read as the panel's list.
+ * `looks`: whether they are known now, null before that read first answers and while its last attempt
+ * failed, since the list kept from before may lack a look taken since. `lastRead`: the list read last,
+ * kept through a failed later read; null before the first. `error` is that failure, and `retry` reads again.
  */
-export function useTakenLooks(): { looks: Avatar[] | null; error: Error | null; retry(): void } {
+export function useTakenLooks(): { looks: Avatar[] | null; lastRead: Avatar[] | null; error: Error | null; retry(): void } {
   const read = experimental_useRpcQuery({ contract, method: "coordinators", input: {} });
-  return {
-    looks: read.data === undefined || read.error !== null ? null : [...read.data.coordinators, ...read.data.notStarted].map(({ avatar }) => avatar),
-    error: read.error,
-    retry: () => void read.refetch(),
-  };
+  const lastRead = read.data === undefined ? null : [...read.data.coordinators, ...read.data.notStarted].map(({ avatar }) => avatar);
+  return { looks: read.error === null ? lastRead : null, lastRead, error: read.error, retry: () => void read.refetch() };
 }
 
 /** The started regional manager whose thread this is, from the same read as the panel's list; null for any other thread, or before the read. */

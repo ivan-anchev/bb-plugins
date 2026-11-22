@@ -4,7 +4,7 @@ import { experimental_Icon as Icon, experimental_useRpcMutation } from "@get-bb/
 import { useRef, useState, type Ref } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { NAME_MISSING, NEW_PROFILE_KEY, newDraft, profileDraftSchema, profileOf, randomStart, type ProfileDraft } from "../profile/profile-draft.ts";
+import { NAME_MISSING, NEW_PROFILE_KEY, newDraft, profileDraftSchema, profileOf, randomStart } from "../profile/profile-draft.ts";
 import { ProfileFields } from "../profile/profile-fields.tsx";
 import { useTakenLooks } from "../profile/use-manager.ts";
 import { Button } from "../ui/button.tsx";
@@ -18,15 +18,11 @@ export function NewCoordinator({ ref, onBack, onCreated }: NewCoordinatorProps) 
   // why kept in the browser: what the user typed outlives bb redrawing the panel, until Create saves it.
   const stored = useStored(localStorage, NEW_PROFILE_KEY, profileDraftSchema);
   const taken = useTakenLooks();
-  // A new manager's fields, with the first look from `start` none of the others has, derived from
-  // every read that knows their looks, so the look moves on only once one shows it taken; none before
-  // the first, when a look picked could be theirs.
+  // A new manager's fields, with the first look from `start` none of the others has in the list read
+  // last, so the look moves on only once a read shows it taken, and a later failed read keeps the
+  // fields; none before the first read, when a look picked could be theirs.
   const [start] = useState(randomStart);
-  const fresh = taken.looks === null ? null : newDraft(start, taken.looks);
-  // why the last one kept: while a later read fails, the fields stay with the look last derived.
-  const [lastFresh, setLastFresh] = useState<ProfileDraft | null>(null);
-  if (fresh !== null && JSON.stringify(fresh) !== JSON.stringify(lastFresh)) setLastFresh(fresh);
-  const draft = stored.value ?? fresh ?? lastFresh;
+  const draft = stored.value ?? (taken.lastRead === null ? null : newDraft(start, taken.lastRead));
   // Whether a create found no name: the field says so from then on, until it has one.
   const [tried, setTried] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);

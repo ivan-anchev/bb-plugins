@@ -1107,7 +1107,7 @@ export const settled = (): Promise<void> => new Promise((resolve) => setTimeout(
 /** The thread a tool's answer links to. */
 export const threadIn = (text: string): string => /@thread:(\w+)/.exec(text)?.[1] ?? assert.fail(`no thread link in: ${text}`);
 
-/** What the New page creates a regional manager named `name` with: no description and the default icon. */
+/** What the New page creates a regional manager named `name` with: no description and a blob avatar. */
 export const profileNamed = (name: string): Profile => ({ name, description: null, avatar: AVATAR });
 
 /**
