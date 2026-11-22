@@ -6,7 +6,8 @@ import { handoffIdSchema, type Handoff } from "../../model/handoff.ts";
 import { issueKeyOf } from "../../model/issue/key/issue-key.ts";
 import { issueViews } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
-import type { Avatar } from "../../model/profile/avatar.ts";
+import { freeLook, seedOf, type Avatar } from "../../model/profile/avatar.ts";
+import type { NewProfile } from "../../model/profile/profile.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
 import { memoryStorage } from "../memory-storage.ts";
 import type { NewAgent } from "./issue/agents-store.ts";
@@ -115,6 +116,41 @@ test("a failed write gives no regional manager a look, and opening the store aga
 
   allow();
   assert.deepEqual(looksOf(openStore(storage)), expected);
+});
+
+for (const [unreadable, stored] of [
+  ["text that isn't JSON", "{not json"],
+  ["a kind a later release stored", JSON.stringify({ kind: "image", url: "https://example.com/a.png" })],
+] as const) {
+  test(`managers created with an auto avatar next to one whose avatar is ${unreadable} never take the look it is drawn with`, () => {
+    const { db, storage } = memoryStorage();
+    const store = openStore(storage);
+    const insert = (n: number, avatar: NewProfile["avatar"]) => store.insertCoordinator({ id: coordinatorIdSchema.parse(randomUUID()), ticket: `ticket-${n}`, name: `Manager ${n}`, description: null, avatar, createdAt: 1_000 + n });
+    insert(0, AVATAR);
+    db.prepare("UPDATE coordinators SET avatar = ?").run(stored);
+
+    // why 251: with the unreadable one's, every look is then taken once, so one auto pick on its look would repeat it.
+    for (let n = 1; n <= 251; n++) insert(n, { kind: "auto" });
+
+    assert.equal(new Set(store.notStarted().map(({ avatar }) => lookKey(avatar))).size, 252);
+  });
+}
+
+test("an icon manager whose id seeds the look an unreadable avatar is drawn with steps past it as the store opens", () => {
+  const { db, storage } = iconManagers([[MANAGER, "Webhooks"]]);
+  const seeded = lookKey(freeLook(seedOf(MANAGER), []));
+  let broken = coordinatorIdSchema.parse(randomUUID());
+  while (lookKey(freeLook(seedOf(broken), [])) !== seeded) broken = coordinatorIdSchema.parse(randomUUID());
+  db.prepare("INSERT INTO roles (ticket, thread_id, role, created_at) VALUES ('ticket-broken', NULL, ?, 900)").run(JSON.stringify({ kind: "coordinator", coordinatorId: broken }));
+  db.prepare("INSERT INTO coordinators (id, ticket, project_id, name, avatar, created_at) VALUES (?, 'ticket-broken', '', 'Broken', '{not json', 900)").run(broken);
+
+  const store = openStore(storage);
+
+  const drawn = store.notStarted().find(({ id }) => id === broken)?.avatar;
+  const given = store.coordinator(MANAGER)?.avatar;
+  assert.ok(drawn && given);
+  assert.equal(lookKey(drawn), seeded, "the unreadable one is drawn with the look its id seeds");
+  assert.notEqual(lookKey(given), seeded);
 });
 
 test("an avatar this release can't draw, as a kind a later one stored or text that isn't JSON, reads as the look its id seeds, stays stored, and the list still reads", () => {
