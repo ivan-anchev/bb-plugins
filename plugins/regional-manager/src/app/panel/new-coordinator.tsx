@@ -16,7 +16,8 @@ export function NewCoordinator({ ref, onBack, onCreated }: NewCoordinatorProps) 
   const create = experimental_useRpcMutation({ contract, method: "createCoordinator" });
   // why kept in the browser: what the user typed outlives bb redrawing the panel, until Create saves it.
   const stored = useStored(localStorage, NEW_PROFILE_KEY, profileDraftSchema);
-  // why a start kept for the page's life: the look it shows stays put until the user changes it.
+  // why a start kept for the page's life: the look shown doesn't change on each render; until the
+  // user types, it moves on only if another manager takes it.
   const [start] = useState(randomStart);
   const taken = useTakenLooks();
   // why null until the managers are read: a look picked before then could be one of theirs, and typing would keep it.
