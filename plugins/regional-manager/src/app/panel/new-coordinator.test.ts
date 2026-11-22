@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
-import { COORDINATORS_TAG, coordinatorContract as contract } from "../../contract.ts";
+import { COORDINATORS_TAG, coordinatorContract as contract, type NotStarted } from "../../contract.ts";
 import type { Profile } from "../../model/profile/profile.ts";
-import type { CoordinatorId } from "../../model/role.ts";
+import { avatarSchema } from "../../model/profile/avatar.ts";
+import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
 
 // The New page as bb mounts it: the profile's fields under its heading, and Create, which saves the
 // regional manager through createCoordinator, with no thread, and opens its page.
@@ -25,13 +26,13 @@ afterEach(() => {
  * The New page over a plugin that records every profile it is asked to create, and the pages it
  * opens, and lists one other manager, Scout, unless `read.failing`, when its list read fails.
  */
-function mount(read = { failing: false }) {
+function mount(read: { failing: boolean; others?: NotStarted[] } = { failing: false }) {
   const creates: Profile[] = [];
   const opened: CoordinatorId[] = [];
   const rpc = {
     coordinators: () => {
       if (read.failing) throw new Error("bb is restarting");
-      return { coordinators: [], notStarted: [{ id: TAKEN, name: "Scout", description: null, avatar: CIRCLE_IN_VIOLET }] };
+      return { coordinators: [], notStarted: [{ id: TAKEN, name: "Scout", description: null, avatar: CIRCLE_IN_VIOLET }, ...(read.others ?? [])] };
     },
     createCoordinator: (input: unknown) => {
       creates.push(contract.createCoordinator.input.parse(input).profile);
@@ -217,5 +218,25 @@ test("a later read that fails keeps a new manager's fields and the look it was g
   const [created] = page.creates;
   assert.ok(created);
   assert.deepEqual([created.avatar.shape, created.avatar.hue], given.map((label) => label?.toLowerCase()));
+  assert.notDeepEqual([created.avatar.shape, created.avatar.hue], [CIRCLE_IN_VIOLET.shape, CIRCLE_IN_VIOLET.hue]);
+});
+
+test("a new manager's look moves on when a later read shows another manager has taken it since", async () => {
+  const read: { failing: boolean; others: NotStarted[] } = { failing: false, others: [] };
+  const page = mount(read);
+  await page.view.findByRole("textbox", { name: "Name" });
+  const chosen = () => page.view.getAllByRole("radio").filter((radio) => radio.matches(":checked")).map((radio) => radio.getAttribute("aria-label"));
+  const [shape, hue] = chosen().map((label) => label?.toLowerCase());
+  const given = avatarSchema.parse({ kind: "blob", shape, hue, expression: "neutral" });
+
+  read.others = [{ id: coordinatorIdSchema.parse("1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f"), name: "Docs", description: null, avatar: given }];
+  await act(() => page.view.experimental_invalidateRpc([COORDINATORS_TAG]));
+
+  await waitFor(() => assert.notDeepEqual(chosen(), [given.shape, given.hue].map((label) => label.charAt(0).toUpperCase() + label.slice(1))));
+  await page.named("Webhooks");
+  await page.create();
+  const [created] = page.creates;
+  assert.ok(created);
+  assert.notDeepEqual([created.avatar.shape, created.avatar.hue], [given.shape, given.hue]);
   assert.notDeepEqual([created.avatar.shape, created.avatar.hue], [CIRCLE_IN_VIOLET.shape, CIRCLE_IN_VIOLET.hue]);
 });

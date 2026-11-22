@@ -18,13 +18,15 @@ export function NewCoordinator({ ref, onBack, onCreated }: NewCoordinatorProps) 
   // why kept in the browser: what the user typed outlives bb redrawing the panel, until Create saves it.
   const stored = useStored(localStorage, NEW_PROFILE_KEY, profileDraftSchema);
   const taken = useTakenLooks();
-  // A new manager's fields, with a look none of the others has, made the first time their looks are
-  // known and kept from then on, so a later failed read never takes the fields away. why set while
-  // rendering: it is derived from the read the moment it answers, as React's own pattern for state
-  // that follows a prop; before it, a look picked could be one of theirs.
-  const [fresh, setFresh] = useState<ProfileDraft | null>(null);
-  if (fresh === null && taken.looks !== null) setFresh(newDraft(randomStart(), taken.looks));
-  const draft = stored.value ?? fresh;
+  // A new manager's fields, with the first look from `start` none of the others has, derived from
+  // every read that knows their looks, so the look moves on only once one shows it taken; none before
+  // the first, when a look picked could be theirs.
+  const [start] = useState(randomStart);
+  const fresh = taken.looks === null ? null : newDraft(start, taken.looks);
+  // why the last one kept: while a later read fails, the fields stay with the look last derived.
+  const [lastFresh, setLastFresh] = useState<ProfileDraft | null>(null);
+  if (fresh !== null && JSON.stringify(fresh) !== JSON.stringify(lastFresh)) setLastFresh(fresh);
+  const draft = stored.value ?? fresh ?? lastFresh;
   // Whether a create found no name: the field says so from then on, until it has one.
   const [tried, setTried] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
