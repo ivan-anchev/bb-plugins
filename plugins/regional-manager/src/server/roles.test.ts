@@ -21,6 +21,35 @@ test("a regional manager is offered its tools, its skill and rules naming the pr
   assert.ok(configuration.instructions?.includes(`starting "[${DISPLAY_NAME}]"`), "its wake messages are headed with the product's name");
 });
 
+const WRITING_HEADING = "## How you write to the user";
+// why 32,768: bb truncates a configure result's instructions past it, cutting the rules' tail.
+const INSTRUCTIONS_CAP = 32_768;
+
+test("only a regional manager's rules say how it writes to the user, every direction of it, within bb's instructions cap", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  const { agentThreadId } = await startedAgent(kit, threadId);
+  await kit.call("agent_handoff", { status: "done", summary: "Did it", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD }, agentThreadId);
+  await kit.idle(agentThreadId, "Handed off.");
+  const verdict = kit.store.latestHandoff(coordinatorId, agentIdSchema.parse("a1"))?.check?.verdict;
+  const verifierThreadId = verdict?.state === "running" ? verdict.verifierThreadId : assert.fail("no verifier running");
+
+  const rules = kit.configurationFor(threadId, {}).instructions ?? "";
+  const section = rules.slice(rules.indexOf(WRITING_HEADING));
+  assert.ok(rules.includes(WRITING_HEADING));
+  for (const direction of [
+    /Lead with the answer: the verdict and its main caveat first/,
+    /length in proportion to the question\. A yes\/no question gets a few sentences/,
+    /Write like a senior engineer in chat: plain words and contractions, with no greetings, emojis, filler phrases or hype/,
+    /Pick the format that fits the content.*Never chop connected reasoning into bullets/,
+    /Make it short by cutting content: drop low-value material rather than writing clipped, telegraphic sentences/,
+    /Stay quiet when nothing changed for the user\. A wake for something you expected, something the user did themselves .*, or something that only confirms work already under way gets your bookkeeping .* and no reply\. Your provider ends a turn with a message, so make it a few words, such as "Noted\.", and nothing more: no recap/,
+  ]) assert.match(section, direction);
+  assert.doesNotMatch(rules, /summary for the user at the end of a turn/, "no rule asks for a summary every turn");
+  assert.ok(rules.length < INSTRUCTIONS_CAP, `${rules.length} characters`);
+
+  for (const thread of [agentThreadId, verifierThreadId]) assert.ok(!kit.configurationFor(thread, {}).instructions?.includes(WRITING_HEADING), thread);
+});
+
 test("its first session, before any bind, is configured from its unbound ticket", async () => {
   const kit = harness({ created: false, answer: "lost" });
   await assert.rejects(kit.startManager("Migrate the webhook service"));
