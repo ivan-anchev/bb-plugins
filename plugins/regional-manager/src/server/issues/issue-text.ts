@@ -53,8 +53,9 @@ function laneLines(item: BoardItem<IssueRead>, pluginId: string): string[] {
 function rowLine({ view, agent, threadId, branch }: IssueRead, pluginId: string): string {
   const { issue } = view;
   const held = view.subIssues !== null ? "parent" : agent === null ? "no agent" : `${agent.id}${agent.ended === null ? "" : ` (${agent.ended.how})`}, ${threadLink(threadId)}`;
-  const under = issue.parentId === null ? "" : `, under ${issue.parentId}`;
-  return `- ${issue.id} "${issue.title}" (${PIPELINES[issue.kind].label}; ${held}${under}${branch === null ? "" : `, on branch \`${branch}\``}): ${headlineText(view)}${blockedText(view.blockedBy, "; blocked by ", linksOf(pluginId, issue))}${blockedText(view.blocks, "; blocks ", linksOf(pluginId, issue))}; link: ${linksOf(pluginId, issue)(issue.id)}`;
+  const link = linksOf(pluginId, issue);
+  const under = issue.parentId === null ? "" : `, under ${link(issue.parentId)}`;
+  return `- ${issue.id} "${issue.title}" (${PIPELINES[issue.kind].label}; ${held}${under}${branch === null ? "" : `, on branch \`${branch}\``}): ${headlineText(view)}${blockedText(view.blockedBy, "; blocked by ", link)}${blockedText(view.blocks, "; blocks ", link)}; link: ${link(issue.id)}`;
 }
 
 /** The issues in Todo that nothing blocks: those an agent can start on without waiting. */
@@ -78,7 +79,7 @@ const byId: NameOf = (issueId) => issueId;
 
 /** What issue_create says it filed, what blocks it as it is filed, and its link. */
 export const filedText = (issue: Issue, blockedBy: readonly Related[], pluginId: string): string =>
-  `Filed ${issue.id} (${issue.kind})${issue.parentId === null ? "" : ` as a sub-issue of ${issue.parentId}`} in ${STATUS_LABELS[issue.rest]}${blockedText(blockedBy, ", blocked by ", linksOf(pluginId, issue))}.${issue.verifier === null ? "" : ` Its done handoffs are checked on ${executionText(issue.verifier)}.`} Link: ${linksOf(pluginId, issue)(issue.id)}`;
+  `Filed ${issue.id} (${issue.kind})${issue.parentId === null ? "" : ` as a sub-issue of ${linksOf(pluginId, issue)(issue.parentId)}`} in ${STATUS_LABELS[issue.rest]}${blockedText(blockedBy, ", blocked by ", linksOf(pluginId, issue))}.${issue.verifier === null ? "" : ` Its done handoffs are checked on ${executionText(issue.verifier)}.`} Link: ${linksOf(pluginId, issue)(issue.id)}`;
 
 /** What issue_update says it did: anything its change implies, the issues it made ready, by their links, and its own link. */
 export function updatedText(issue: Issue, { note, nowReady }: { note: string | null; nowReady: readonly IssueId[] }, pluginId: string): string {

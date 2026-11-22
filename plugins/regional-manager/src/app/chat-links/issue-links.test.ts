@@ -430,6 +430,21 @@ test("the pointer resting on an issue link opens its card after half a second; c
   assert.ok(card() === null);
 });
 
+test("a hovered link's card stays as the board reads again and the card renders with it", async () => {
+  const { link, glyphOf, card, setStatus } = mount({ panes: [MANAGER_THREAD] });
+  await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+  mock.timers.enable({ apis: ["setTimeout"] });
+  fireEvent.pointerOver(link(MANAGER_THREAD), { relatedTarget: document.body });
+  act(() => mock.timers.tick(500));
+  assert.ok(card() !== null);
+  mock.timers.reset();
+
+  await setStatus("BBP-24", { status: "in-review" });
+  await waitFor(() => assert.equal(card()?.querySelector(".rmi-card-when")?.textContent, "In review", "the card shows the new read"));
+  await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+  assert.ok(card() !== null, "and is still there, the pointer still on its link");
+});
+
 test("a link's card opens under the link where the window has room, else above it, and keeps off the window's right edge", async () => {
   const cases = [
     { name: "room below", link: { top: 100, bottom: 116, left: 40 }, want: { side: "below", left: "40px", top: "120px", bottom: "" } },

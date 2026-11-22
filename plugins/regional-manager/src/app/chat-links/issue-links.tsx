@@ -22,7 +22,7 @@ function IssueLinks() {
   return (
     <>
       {links.map(({ key, link, slot }) => createPortal(<LinkGlyph link={link} />, slot, String(key)))}
-      <LinkCard />
+      <LinkCard links={links} />
     </>
   );
 }

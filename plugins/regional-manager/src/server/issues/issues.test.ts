@@ -51,6 +51,10 @@ test("each issue's link, and each related issue's, is in the catch-up's row, iss
   assert.equal(textOf(await call("issue_update", { id: "WEB-1", status: "backlog" })), `Updated WEB-1. Link: ${link("WEB-1")}`);
   assert.equal(textOf(await call("issue_update", { id: "WEB-1", status: "canceled" })), `Updated WEB-1. Now ready: ${link("WEB-2")}. Link: ${link("WEB-1")}`, "an issue it made ready, by its link too");
 
+  const sub = textOf(await call("issue_create", { ...ISSUE, title: "Retry budget", parent: "WEB-2" }));
+  assert.ok(sub.startsWith(`Filed WEB-3 (build) as a sub-issue of ${link("WEB-2")} in Todo`), sub);
+  assert.ok(textOf(await call("crew_catch_up", {})).includes(`- WEB-3 "Retry budget" (Build; no agent, under ${link("WEB-2")})`), "its parent by its link");
+
   const rules = kit.configurationFor(threadId, {}).instructions ?? "";
   assert.match(rules, /Name an issue to the user by its link, exactly as crew_catch_up, issue_create, issue_update and issue_read give it, .*: never by its bare id, and never inside code or a code block\./);
 });

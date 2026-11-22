@@ -6,7 +6,7 @@
 // closes after a beat. Escape closes it wherever focus is, while the card is on screen (hover-card.tsx
 // holds it). A press puts it away, and the focus the press gives a trigger opens none. No timer
 // outlives its owner. A board row is a trigger (use-hover-card.ts), and so is an issue link in chat
-// (chat-links/link-card.ts); `Key` names one.
+// (chat-links/link-card.tsx); `Key` names one.
 import { useEffect, useMemo, useState } from "react";
 
 /** What the pointer and focus tell the card. */
@@ -17,7 +17,7 @@ export type CardIntent<Key> = {
   blur(key: Key): void;
   /** A press: the card goes, and the focus it gives a trigger in the same moment opens none. */
   press(): void;
-  /** What the card of `key` tells the intent while it is mounted (hover-card.tsx). */
+  /** What the card of `key` tells the intent while it is mounted (hover-card.tsx): the same one on every call while it is. */
   presence(key: Key): CardPresence;
 };
 
@@ -85,6 +85,34 @@ function cardIntent<Key>(show: (key: Key | null) => void): CardIntent<Key> & { s
     closing = setTimeout(close, CLOSE_DELAY);
   };
   const warm = () => onScreen !== null || performance.now() - closedAt < WARM;
+  /**
+   * Each trigger's presence while its card is mounted, so a card that renders again, as the board
+   * reads again, gets the one it has: a new one would tell the intent the card left. why kept here,
+   * not by callers: every caller would have to remember to keep it.
+   */
+  const presences = new Map<Key, CardPresence>();
+  const presenceOf = (key: Key): CardPresence => {
+    const presence: CardPresence = {
+      close,
+      mounted() {
+        presences.set(key, presence);
+        onScreen = key;
+        return () => {
+          if (presences.get(key) === presence) presences.delete(key);
+          if (onScreen === key) onScreen = null;
+          // why the pointer at once, and only for a card that left while still shown (a row that moved lanes, a link bb rendered again): its trigger is no longer under the pointer as far as anyone can tell; a card that went because another took its place leaves the pointer where it rests.
+          if (hovered === key && shown === key) hovered = null;
+          // why the rest once the commit is done: a focused row that moves lanes mounts its card again in its new lane, after this one leaves, and keeps it while it has focus.
+          queueMicrotask(() => {
+            if (stopped || shown !== key || (onScreen === key && focused === key)) return;
+            if (focused === key) focused = null;
+            close();
+          });
+        };
+      },
+    };
+    return presence;
+  };
 
   return {
     enter(key) {
@@ -119,23 +147,7 @@ function cardIntent<Key>(show: (key: Key | null) => void): CardIntent<Key> & { s
       pressed = setTimeout(() => (pressing = false));
       close();
     },
-    presence: (key) => ({
-      close,
-      mounted() {
-        onScreen = key;
-        return () => {
-          if (onScreen === key) onScreen = null;
-          // why the pointer at once, and only for a card that left while still shown (a row that moved lanes, a link bb rendered again): its trigger is no longer under the pointer as far as anyone can tell; a card that went because another took its place leaves the pointer where it rests.
-          if (hovered === key && shown === key) hovered = null;
-          // why the rest once the commit is done: a focused row that moves lanes mounts its card again in its new lane, after this one leaves, and keeps it while it has focus.
-          queueMicrotask(() => {
-            if (stopped || shown !== key || (onScreen === key && focused === key)) return;
-            if (focused === key) focused = null;
-            close();
-          });
-        };
-      },
-    }),
+    presence: (key) => presences.get(key) ?? presenceOf(key),
     /** Runs while its owner is mounted; why a start: an owner mounted again, as StrictMode does, keeps the same intent. */
     start() {
       stopped = false;

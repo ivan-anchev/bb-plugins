@@ -14,7 +14,7 @@ import { parseIssueHref, type IssueLink } from "../../model/issue/link/issue-lin
 import { cardLinkOf } from "../board/issue/hover-card/hover-card.tsx";
 
 /** An issue link on screen and the slot its glyph goes in. `key`: its own, for the portal. */
-type DecoratedLink = { key: number; link: IssueLink; slot: HTMLElement };
+export type DecoratedLink = { key: number; link: IssueLink; slot: HTMLElement };
 
 /** Every issue link on screen, each with its slot, following the DOM; the slots go as the page does. */
 export function useDecoratedLinks(): readonly DecoratedLink[] {

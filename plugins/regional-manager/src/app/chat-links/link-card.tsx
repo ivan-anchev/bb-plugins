@@ -6,21 +6,21 @@
 // stop after its link and the previous before what follows it, as a board row's card is. A press
 // anywhere but on the card puts it away; a scroll moves it with its link, and takes it away once the
 // link can't be seen (placement.ts). Escape closes it wherever focus is.
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { IssueLink } from "../../model/issue/link/issue-link.ts";
 import { useCardIntent, type CardIntent } from "../board/issue/hover-card/card-intent.ts";
 import { cappedBodyOf, cardLinkOf, LinkHoverCard } from "../board/issue/hover-card/hover-card.tsx";
 import { useBoardIssue } from "../board/use-board-issue.ts";
-import { inPlaceOf, linkOfNode, useIssueLinkAt, type FoundLink } from "./decorated-links.ts";
+import { inPlaceOf, linkOfNode, useIssueLinkAt, type DecoratedLink, type FoundLink } from "./decorated-links.ts";
 
-/** The card of the issue link the pointer rests on or focus is on; none while there is none. */
-export function LinkCard(): ReactNode {
+/** The card of the issue link the pointer rests on or focus is on, among the decorated `links`; none while there is none, or once bb took the link out. */
+export function LinkCard({ links }: { links: readonly DecoratedLink[] }): ReactNode {
   const { shown, intent } = useCardIntent<HTMLAnchorElement>();
   const linkAt = useIssueLinkAt();
   useLinkTriggers(intent, shown, linkAt);
-  const found = shown?.isConnected ? linkAt(shown) : null;
-  return found === null ? null : createPortal(<IssueCard anchor={found.anchor} link={found.link} intent={intent} />, document.body);
+  const found = shown === null ? undefined : links.find(({ slot }) => slot.parentElement === shown);
+  return shown === null || found === undefined ? null : createPortal(<IssueCard anchor={shown} link={found.link} intent={intent} />, document.body);
 }
 
 // ------------------------------------------------------------------ layer 2
@@ -84,8 +84,7 @@ const inCard = (node: EventTarget | null): boolean => node instanceof Node && ca
 /** The Board's card for the issue, from its board's read, with why a later read failed; none until a read has it, or for an issue the board has none of. */
 function IssueCard({ anchor, link, intent }: { anchor: HTMLAnchorElement; link: IssueLink; intent: CardIntent<HTMLAnchorElement> }) {
   const { read, issues, issue } = useBoardIssue(link.coordinatorId, link.issueId);
-  // why per link: the card's line to the intent says which link's card is on screen.
-  const presence = useMemo(() => intent.presence(anchor), [intent, anchor]);
+  const presence = intent.presence(anchor);
   if (issues === undefined || issue === undefined) return null;
   return <LinkHoverCard issue={issue} issues={issues} link={anchor} presence={presence} failure={read.error?.message} />;
 }
