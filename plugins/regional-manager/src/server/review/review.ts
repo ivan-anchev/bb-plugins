@@ -8,7 +8,7 @@
 // its verdict saying no review was had. The verify step calls start and follow in the issue's turn
 // (verify.ts reviewInTurn), which owns when the environment changes hands.
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
-import type { Execution } from "../../model/execution.ts";
+import { sameModel, type Execution } from "../../model/execution.ts";
 import type { HandoffCheck, CheckId } from "../../model/verdict/check.ts";
 import type { ReviewFinding } from "../../model/verdict/review.ts";
 import { handingAgent } from "../agents/handing-agent.ts";
@@ -17,7 +17,7 @@ import type { CatalogBb } from "../execution/catalog.ts";
 import { threadExecution, type ThreadExecutionBb } from "../execution/thread-execution.ts";
 import type { Busy, IssueTurns } from "../issues/issue-turns.ts";
 import { CREW_FILE, type MemoryRoot } from "../memory/memory-files.ts";
-import type { Spawner } from "../spawn.ts";
+import type { CheckerRequest, Spawner } from "../spawn.ts";
 import type { ReviewFrom } from "../store/issue/checks-store.ts";
 import type { Store } from "../store/store.ts";
 import type { AsksBb } from "../hidden/asks.ts";
@@ -65,8 +65,8 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
     for (const { why } of unstopped) bb.log.warn(`The reviewer ${from.reviewerThreadId} of check ${check.id}, whose review was missed, ${why}; nothing waits on it.`);
   }
 
-  /** Everything the reviewer of a check needs: its role, where it runs, on what, and its first message. */
-  async function requestFor(check: HandoffCheck) {
+  /** Everything the reviewer of a check needs: its role, where it runs, on what, and its first message; or why none can review it independently. */
+  async function requestFor(check: HandoffCheck): Promise<CheckerRequest | { none: string }> {
     const coordinator = store.coordinator(check.coordinatorId);
     const issue = store.issue(check.coordinatorId, check.issueId);
     // why throw: checks are kept while their issue and regional manager are, and an agent starts only on an issue with a brief.
@@ -78,6 +78,7 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
       reviewerExecution(bb, { named: check.verifier, manager: await threadExecution(bb, coordinator.threadId), theirs: [agent.execution], routing: { environmentId } }),
       bb.sdk.environments.get({ environmentId }),
     ]);
+    if (execution === null) return { none: `no independent reviewer model: bb can run none there but ${agent.id}'s own` };
     return {
       role: { kind: "reviewer", coordinatorId: coordinator.id, issueId: issue.id, checkId: check.id } as const,
       coordinator,
@@ -92,12 +93,15 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
   return {
     /**
      * In its issue's turn, once bb reports its agent idle and the issue is quiet for a reviewer:
-     * starts the check's reviewer while its review is queued. One bb won't start, or whose request
-     * can't be made, ends the review as missed, so its verifier starts instead.
+     * starts the check's reviewer while its review is queued. One bb won't start, whose request
+     * can't be made, or that could run only on the agent's own model, ends the review as missed, so
+     * its verifier starts instead.
      */
     async start(check: HandoffCheck): Promise<void> {
       try {
-        await spawner.checker(await requestFor(check));
+        const request = await requestFor(check);
+        if ("none" in request) return void (await miss(check, { state: "queued" }, request.none));
+        await spawner.checker(request);
       } catch (error) {
         // why only from queued: bb may have made the thread and bound it through thread.created, with only its answer lost.
         await miss(check, { state: "queued" }, `bb did not start a reviewer: ${messageOf(error)}`);
@@ -146,11 +150,13 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
  * What a reviewer runs on: never the model of the agent whose work it reviews, nor, while bb runs
  * another there, the one the check's verifier is chosen on now, so the verifier's triage is
  * independent of it. The same order as a verifier's, with the verifier's model kept away from as
- * the agent's is; when bb runs nothing else, the verifier's model, and the agent's only as a last resort.
+ * the agent's is; when bb runs nothing else, the verifier's model. null when bb runs nothing there
+ * but the agent's own model: a review on it would be no independent review.
  */
-async function reviewerExecution(bb: CatalogBb, choice: VerifierChoice): Promise<Execution> {
+async function reviewerExecution(bb: CatalogBb, choice: VerifierChoice): Promise<Execution | null> {
   const verifier = await verifierExecution(bb, choice);
-  return verifierExecution(bb, { ...choice, named: null, theirs: [verifier, ...choice.theirs] });
+  const reviewer = await verifierExecution(bb, { ...choice, named: null, theirs: [verifier, ...choice.theirs] });
+  return choice.theirs.some((their) => sameModel(their, reviewer)) ? null : reviewer;
 }
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));

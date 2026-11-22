@@ -142,6 +142,23 @@ test("a reviewer runs on neither the agent's model nor the one its verifier then
   assert.equal(onlyOther(alone.verifier()), "claude-code/sonnet", "the verifier on the one model that isn't the agent's, as the reviewer is");
 });
 
+test("with only the agent's own model to run, no reviewer starts: the review is missed as having no independent reviewer model, and the verifier starts, told no review was had", async () => {
+  const { kit, coordinatorId, check, review, verifier, handOff, row } = await withAgent();
+  kit.providers.list = [{ id: "claude-code", available: true, models: [{ model: "opus", isDefault: true, defaultReasoningEffort: "high" }] }];
+  const spawned = kit.spawned();
+  await handOff();
+  const reason = "no independent reviewer model: bb can run none there but a1's own";
+  assert.deepEqual(review(), { state: "missed", reviewerThreadId: null, reason });
+  assert.deepEqual(
+    kit.store.issueThreads(coordinatorId, check().issueId).map(({ kind }) => kind),
+    ["agent", "verifier"],
+    "no reviewer thread, on the agent's model or any other",
+  );
+  assert.equal(kit.spawned(), spawned + 1, "only the verifier");
+  assert.deepEqual(await row(), ["verifying", "Verifying: Retries land with backoff"]);
+  assert.match(kit.thread(verifier()).spawnedWith.prompt ?? "", new RegExp(`No review was had: ${reason}\\.`));
+});
+
 test("the verifier's brief lists the review's findings; its verdict triages each, and a failed one sends the agent only those it confirmed, with why", async () => {
   const { kit, agentThreadId, check, verifier, handOff, reported, catchUp } = await withAgent();
   await handOff();

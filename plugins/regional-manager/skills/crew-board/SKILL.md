@@ -599,7 +599,9 @@ before its verifier starts. The plugin starts a **reviewer**:
   [Verification](#verification)). It never edits, commits or pushes.
 - **On what model**: never the agent's, and, while bb runs another there,
   not the one the verifier is then chosen on either, so the verifier's
-  triage is independent; with no third model, the verifier's.
+  triage is independent; with no third model, the verifier's. When bb runs
+  nothing there but the agent's own model, no reviewer starts: the review is
+  missed as having no independent reviewer model.
 - **What it runs**: what CREW.md tells reviewers to run. The plugin names no
   review of its own. Its first message is the plugin's one line ("Review
   this diff as CREW.md instructs reviewers, and report through
