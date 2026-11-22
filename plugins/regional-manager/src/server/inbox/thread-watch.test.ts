@@ -19,7 +19,7 @@ async function withAgent() {
   const { kit, threadId, coordinatorId } = await coordinating();
   const agentThreadId = (await startedAgent(kit, threadId, { title: "Add retries", brief: "Retry deliveries." })).agentThreadId;
   kit.thread(threadId).status = "idle";
-  const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
+  const doorbells = () => kit.doorbellsSent(threadId);
   const row = async () => {
     const issue = (await kit.rpc.board({ coordinatorId })).issues[0];
     return issue === undefined ? undefined : { ...issue, lane: laneOf(issue) };

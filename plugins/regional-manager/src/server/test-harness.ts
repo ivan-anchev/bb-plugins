@@ -12,6 +12,7 @@ import type { HolderThread } from "../model/issue/status.ts";
 import type { ComposerRequest } from "../contract.ts";
 import { DEFAULT_AVATAR, type Profile } from "../model/profile.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../model/role.ts";
+import { DISPLAY_NAME } from "../name.ts";
 import { registerAgentTools } from "./agents/agent-tools.ts";
 import { createAgents } from "./agents/agents.ts";
 import { defaultBranchReader, placementFactsReader } from "./agents/environments.ts";
@@ -937,6 +938,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     spawned: () => spawned,
     /** Every message sent to a thread, in order. */
     sent: () => [...sent],
+    /** The text of every doorbell sent to the regional manager's thread, queued ones included, in order: the plugin sends it nothing else. */
+    doorbellsSent: (threadId: string) => sent.filter((args) => args.threadId === threadId).map(textOfInput),
     /** The thread of every send the plugin attempted, refused ones included, in order. */
     sendAttempts: () => [...attempted],
     /** Every RPC tag invalidated, in order. */
@@ -982,6 +985,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     },
     /** The text of every message that reached the thread and started a turn, in order. */
     delivered: (threadId: string) => delivered.filter((message) => message.threadId === threadId).map((message) => message.text),
+    /** The text of every doorbell that reached the thread and started a turn, in order. */
+    doorbellsDelivered: (threadId: string) => delivered.filter((message) => message.threadId === threadId && message.text.startsWith(`[${DISPLAY_NAME}]`)).map((message) => message.text),
     /** The messages bb holds queued for the thread, oldest first. */
     queued: (threadId: string) => queue.filter((entry) => entry.threadId === threadId).map((entry) => entry.id),
     /** The placeholder 0.3.0 spawned a regional manager with, held in its thread's queue by 0.3.0's hook. */
@@ -1061,6 +1066,13 @@ export async function coordinating({ verify = true, spawns, stops, storage, turn
  */
 export function bbHttpError(status: number, code: string, message: string): Error {
   return Object.assign(new Error(`HTTP ${status}: ${message}`), { name: "BbHttpError", status, code, body: { code, message } });
+}
+
+/** The doorbell for these update lines, one per update, as wake-text.test.ts pins its words. */
+export function doorbellOf(...lines: [string, ...string[]]): string {
+  const one = lines.length === 1;
+  const head = `[${DISPLAY_NAME}] ${one ? "1 update" : `${lines.length} updates`}. Call crew_catch_up to read ${one ? "it" : "them"} in full.`;
+  return [head, ...lines.map((line) => `- ${line}`)].join("\n");
 }
 
 /** Lets every ring started in the background finish: each one awaits only the fake bb. */

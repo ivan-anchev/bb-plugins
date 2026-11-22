@@ -98,7 +98,7 @@ test("a research done handoff is Done at once: no verifier, no git read, a commi
   assert.deepEqual(handoff.status === "done" && handoff.delivery, { kind: "report", report: REPORT, file: I1_REPORT });
   assert.equal(await statusOf("WEB-1"), `Research. Done: Handed off: Vault fits our PCI scope. Thread: @thread:${agentThreadId}, branch \`bb/${agentThreadId}\`.`);
 
-  const doorbell = kit.sent().filter((args) => args.threadId === threadId).at(-1)?.input.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("") ?? "";
+  const doorbell = kit.doorbellsSent(threadId).at(-1) ?? "";
   assert.match(doorbell, /- WEB-1 "Pick a card vault" \(a1\) handed off: done$/);
   const caughtUp = await catchUp();
   assert.ok(caughtUp.includes(`### WEB-1 "Pick a card vault" (a1) handed off: done`), caughtUp);

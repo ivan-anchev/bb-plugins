@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent.ts";
-import { coordinating, isRefusal, settled, startedAgent, textOf, type FakePr } from "../test-harness.ts";
+import { coordinating, doorbellOf, isRefusal, settled, startedAgent, textOf, type FakePr } from "../test-harness.ts";
 
 const a1 = agentIdSchema.parse("a1");
 const HEAD = "0123456789abcdef0123456789abcdef01234567";
@@ -37,7 +37,7 @@ async function agentOnGitHub(placement: object = { kind: "worktree" }) {
     const { headline, pr } = issue;
     return { lane: laneOf(issue), headline, pr: pr === null ? null : `#${pr.number} ${pr.state} CI ${pr.ci}` };
   };
-  const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
+  const doorbells = () => kit.doorbellsSent(threadId);
   const events = () => kit.store.unannounced(coordinatorId).map(({ event }) => event.kind);
   /** GitHub now has the agent's pull request #41 as given, on its branch as bb records it unless `onBranch` names another. */
   const pr = (fields: Partial<FakePr> = {}, onBranch = branch) => kit.github.prs.set(onBranch, { number: 41, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup: "PENDING", failed: [], ...fields });
@@ -89,7 +89,7 @@ test("a verdict that passes while CI is pending waits under Verifying as waiting
   kit.turnEvents.holding = true;
   await minute();
   assert.equal(kit.turnEvents.held.length, 1, "the verdict's turn read held");
-  assert.equal(doorbells().at(-1), '[Regional Manager] 1 update. Call crew_catch_up to read it in full.\n- WEB-1 "Add retries" (a1) PR #41: CI passed');
+  assert.equal(doorbells().at(-1), doorbellOf('WEB-1 "Add retries" (a1) PR #41: CI passed'));
   assert.deepEqual(events(), [], "the doorbell carried the CI result");
 
   kit.turnEvents.holding = false;
@@ -100,7 +100,7 @@ test("a verdict that passes while CI is pending waits under Verifying as waiting
   await kit.dispatch(kit.queued(threadId)[0] ?? assert.fail("no doorbell queued"));
   await minute();
   const verdicts = doorbells().filter((doorbell) => doorbell.includes("handed off: done, verified"));
-  assert.deepEqual(verdicts, ['[Regional Manager] 1 update. Call crew_catch_up to read it in full.\n- WEB-1 "Add retries" (a1) handed off: done, verified'], "announced once");
+  assert.deepEqual(verdicts, [doorbellOf('WEB-1 "Add retries" (a1) handed off: done, verified')], "announced once");
   assert.deepEqual(events(), []);
 });
 

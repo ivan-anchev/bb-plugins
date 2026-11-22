@@ -5,9 +5,8 @@ import { boardTag, coordinatorContract } from "../../contract.ts";
 import { boardGroups, laneOf } from "../../model/board/board-groups.ts";
 import { decisionIdSchema } from "../../model/decision.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
-import { DISPLAY_NAME } from "../../name.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { coordinating, ISSUE, isRefusal, settled, startedAgent, textOf } from "../test-harness.ts";
+import { coordinating, doorbellOf, isRefusal, ISSUE, settled, startedAgent, textOf } from "../test-harness.ts";
 
 const QUESTION = "Target main or release/2?";
 const d1 = decisionIdSchema.parse("d1");
@@ -27,7 +26,7 @@ async function asked() {
     ...started,
     answer,
     /** Every doorbell that reached the Coordinator, in order. */
-    doorbells: () => kit.delivered(threadId).filter((text) => text.startsWith(`[${DISPLAY_NAME}]`)),
+    doorbells: () => kit.doorbellsDelivered(threadId),
   };
 }
 
@@ -55,7 +54,7 @@ test("while a decision waits for the user, an agent's handoff still wakes the re
   await kit.call("agent_handoff", { status: "blocked", summary: "Needs a staging key", did: [], evidence: [], concerns: [], deviations: [], findings: [] }, agentThreadId);
   await settled();
 
-  assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- WEB-1 "Add retries" (a1) handed off: blocked`]);
+  assert.deepEqual(doorbells(), [doorbellOf(`WEB-1 "Add retries" (a1) handed off: blocked`)]);
 });
 
 test("an answer wakes the Coordinator with its own question, and crew_catch_up returns the question and the answer", async () => {
@@ -63,7 +62,7 @@ test("an answer wakes the Coordinator with its own question, and crew_catch_up r
   await kit.rpc.answerDecision({ coordinatorId, decisionId: d1, answer: "release/2" });
   await settled();
 
-  assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- The user answered your question d1: ${QUESTION}`]);
+  assert.deepEqual(doorbells(), [doorbellOf(`The user answered your question d1: ${QUESTION}`)]);
   const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
   assert.match(caughtUp, /### The user answered your question d1\n\nAt \S+ You asked: Target main or release\/2\? You offered: "main", "release\/2"\. They chose "release\/2"\./);
   assert.match(caughtUp, /## Decisions\n\nNone waiting for the user\./);

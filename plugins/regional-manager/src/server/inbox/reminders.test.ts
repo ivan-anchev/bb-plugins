@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DISPLAY_NAME } from "../../name.ts";
-import { coordinating, isRefusal, settled, textOf } from "../test-harness.ts";
+import { coordinating, doorbellOf, isRefusal, settled, textOf } from "../test-harness.ts";
 
 const HOUR = 3_600_000;
 
@@ -17,7 +16,7 @@ async function idleCoordinator() {
     /** The Coordinator's reminders, as the store holds them. */
     reminders: () => kit.store.reminders(coordinatorId),
     /** Every doorbell that reached the Coordinator, in order. */
-    doorbells: () => kit.delivered(threadId).filter((text) => text.startsWith(`[${DISPLAY_NAME}]`)),
+    doorbells: () => kit.doorbellsDelivered(threadId),
     /** The tick, run at this time. */
     tickAt: async (now: number) => {
       kit.clock.now = now;
@@ -37,7 +36,7 @@ test("a one-off reminder wakes the Coordinator once with its note when it comes 
   assert.deepEqual(doorbells(), [], "not due yet");
 
   await tickAt(reminder.dueAt + 30_000);
-  assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- Your reminder r1: check the migration`]);
+  assert.deepEqual(doorbells(), [doorbellOf(`Your reminder r1: check the migration`)]);
   assert.deepEqual(reminders(), []);
 
   kit.thread(threadId).status = "idle";
@@ -57,7 +56,7 @@ test("a repeating reminder missed for three intervals records one event, and its
   // The server was down through the occurrences at dueAt, +1h and +2h.
   const now = dueAt + 2 * HOUR + 30 * 60_000;
   await tickAt(now);
-  assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- Your reminder r1: check on WEB-1`]);
+  assert.deepEqual(doorbells(), [doorbellOf(`Your reminder r1: check on WEB-1`)]);
   const [next = assert.fail("the repeating reminder is gone")] = reminders();
   assert.equal(next.dueAt, dueAt + 3 * HOUR, "its next time keeps the schedule");
   assert.ok(next.dueAt > now);
@@ -112,7 +111,7 @@ test("a reminder of an archived Coordinator records nothing while bb lists it ar
   // Unarchived, the Coordinator gets it on the next tick.
   kit.thread(threadId).archivedAt = null;
   await tickAt(dueAt + 6 * 60_000);
-  assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- Your reminder r1: check the migration`]);
+  assert.deepEqual(doorbells(), [doorbellOf(`Your reminder r1: check the migration`)]);
 });
 
 test("a deleted regional manager is removed with its reminders, due or not, by the tick: none fires", async () => {
@@ -140,13 +139,13 @@ test("a tick that can't check the reminders still rings the doorbells, and check
   kit.threadLists.failure = new Error("bb is restarting");
   await tickAt(dueAt + 60_000);
   assert.match(kit.warnings().join("\n"), /Could not check the reminders; the next tick tries again: bb is restarting/);
-  assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- The user turned verification of done handoffs on`]);
+  assert.deepEqual(doorbells(), [doorbellOf(`The user turned verification of done handoffs on`)]);
   assert.equal(reminders().length, 1, "still due");
 
   kit.threadLists.failure = null;
   kit.thread(threadId).status = "idle";
   await tickAt(dueAt + 2 * 60_000);
-  assert.deepEqual(doorbells().slice(1), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- Your reminder r1: check the migration`]);
+  assert.deepEqual(doorbells().slice(1), [doorbellOf(`Your reminder r1: check the migration`)]);
 });
 
 test("crew_remind refuses an at or every it can't read, naming the forms it accepts, and sets nothing", async () => {

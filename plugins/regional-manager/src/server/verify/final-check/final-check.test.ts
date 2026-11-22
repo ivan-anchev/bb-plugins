@@ -51,7 +51,7 @@ async function withParent({ verify = true, parent = {}, start = {} }: { verify?:
     const { status, headline, needsYou } = (await kit.rpc.board({ coordinatorId })).issues.find((issue) => issue.id === id) ?? assert.fail(`no row ${id}`);
     return { status, headline, needsYou };
   };
-  const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
+  const doorbells = () => kit.doorbellsSent(threadId);
   /** Both sub-issues' pull requests merge, and a tick reads them. */
   const mergeAll = async () => {
     for (const builder of builders) merge(builder);
