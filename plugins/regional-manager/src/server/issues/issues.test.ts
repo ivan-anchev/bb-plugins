@@ -223,7 +223,7 @@ test("a verifier on the model of the agent holding the issue is refused naming t
   await call("agent_start", { issue: "WEB-1", execution: { providerId: "codex", model: "gpt-default" } });
   assert.deepEqual(await update({ verifier: { providerId: "codex", model: "gpt-default" } }), {
     refused: true,
-    text: "a1 holds WEB-1 on codex gpt-default (low), so a verifier on it couldn't check that work independently. Name another model, or stop a1 with agent_stop and start an agent on another execution.",
+    text: "a1 holds WEB-1 on codex gpt-default (high), so a verifier on it couldn't check that work independently. Name another model, or stop a1 with agent_stop and start an agent on another execution.",
   });
   assert.equal(kit.store.issue(coordinatorId, ISSUE_ID)?.verifier, null);
 });

@@ -13,16 +13,30 @@ export type Execution = z.infer<typeof executionSchema>;
 export const modelRefSchema = executionSchema.pick({ providerId: true, model: true });
 export type ModelRef = z.infer<typeof modelRefSchema>;
 
-/** What the manager names. why the reasoning level optional: left out, it is the model's default in bb's catalog. */
+/** What the manager names. why the reasoning level optional: left out, the plugin picks it (pickedReasoningLevel). */
 export const requestedExecutionSchema = z.object({
   providerId: z.string().trim().min(1).describe("The provider, as bb lists it: claude-code, codex, pi…"),
   model: z.string().trim().min(1).describe("A model of that provider, as its catalog in bb names it."),
-  reasoningLevel: z.string().optional().describe("Left out: the model's default reasoning level."),
+  reasoningLevel: z.string().optional().describe("Left out: high, or the model's highest level below high when it has no high. A level named, even low, is used as named."),
 });
 export type RequestedExecution = z.infer<typeof requestedExecutionSchema>;
 
-/** A model in a provider's catalog, down to what the plugin reads (`providers.models`). */
-export type CatalogModel = { model: string; isDefault: boolean; defaultReasoningEffort: string };
+/** A model in a provider's catalog, down to what the plugin reads (`providers.models`): the reasoning levels it lists, lowest first. */
+export type CatalogModel = { model: string; isDefault: boolean; defaultReasoningEffort: string; supportedReasoningEfforts: readonly { reasoningEffort: string }[] };
+
+/**
+ * The reasoning level the plugin runs a model on when nobody names one: high, else the highest
+ * level it lists below high, else its default. why not the default first: a Codex model's is low,
+ * and the user runs no real work on low. why medium is the only level tried below high: below
+ * it is low, and a model that lists nothing above low keeps its default.
+ */
+export function pickedReasoningLevel({ defaultReasoningEffort, supportedReasoningEfforts }: CatalogModel): string {
+  const listed = (level: string) => supportedReasoningEfforts.some(({ reasoningEffort }) => reasoningEffort === level);
+  return PICKED_LEVELS.find(listed) ?? defaultReasoningEffort;
+}
+
+/** The levels the plugin picks from, best first. */
+const PICKED_LEVELS = ["high", "medium"] as const;
 
 /**
  * What bb lists where the thread will run: its providers, and the requested provider's models
@@ -42,7 +56,7 @@ export function executionOf(requested: RequestedExecution, { providers, models }
   if (models.length === 0) return { refused: `bb can't load ${providerId}'s models there.` };
   const model = models.find(({ model }) => model === requested.model);
   if (model === undefined) return { refused: `${providerId} has no model ${requested.model} there. Its models: ${models.map(modelText).join(", ")}.` };
-  return { providerId, model: model.model, reasoningLevel: requested.reasoningLevel ?? model.defaultReasoningEffort };
+  return { providerId, model: model.model, reasoningLevel: requested.reasoningLevel ?? pickedReasoningLevel(model) };
 }
 
 /** The providers bb can run somewhere, as a refusal names them: those it lists as available and loads models of there. */

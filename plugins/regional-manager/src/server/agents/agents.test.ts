@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { z } from "zod";
 import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent/agent.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
@@ -124,17 +125,29 @@ test("agent_start is refused, starting nothing, on an issue with no brief or no 
   assert.equal(kit.spawned(), 1, "only the regional manager was spawned");
 });
 
-test("agent_start runs the agent on the execution named, and issue_read lists it on the agent", async () => {
+test("agent_start runs the agent on the execution named, even at low, and issue_read lists it on the agent; a level left out is high", async () => {
   const { kit, threadId, start } = await filed();
-  const result = textOf(await start({ execution: { providerId: "codex", model: "gpt-default", reasoningLevel: "high" } }));
-  assert.match(result, /^Started a1 on WEB-1 as @thread:\w+, on codex gpt-default \(high\)\. It works/);
+  const result = textOf(await start({ execution: { providerId: "codex", model: "gpt-default", reasoningLevel: "low" } }));
+  assert.match(result, /^Started a1 on WEB-1 as @thread:\w+, on codex gpt-default \(low\)\. It works/);
   const thread = kit.thread(threadIn(result));
-  assert.deepEqual([thread.providerId, thread.execution?.model, thread.execution?.reasoningLevel, thread.execution?.permissionMode], ["codex", "gpt-default", "high", "auto"]);
-  assert.match(textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId)), /### Agents\n\n- a1, holds it, on codex gpt-default \(high\), @thread:\w+/);
+  assert.deepEqual([thread.providerId, thread.execution?.model, thread.execution?.reasoningLevel, thread.execution?.permissionMode], ["codex", "gpt-default", "low", "auto"]);
+  assert.match(textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId)), /### Agents\n\n- a1, holds it, on codex gpt-default \(low\), @thread:\w+/);
 
   await kit.call("issue_create", RETRIES, threadId);
-  const defaulted = textOf(await kit.call("agent_start", { issue: "WEB-2", execution: { providerId: "claude-code", model: "sonnet" } }, threadId));
-  assert.match(defaulted, /on claude-code sonnet \(medium\)\./, "a reasoning level left out is the model's default in bb's catalog");
+  const defaulted = textOf(await kit.call("agent_start", { issue: "WEB-2", execution: { providerId: "codex", model: "gpt-default" } }, threadId));
+  assert.match(defaulted, /on codex gpt-default \(high\)\./, "a reasoning level left out is high, not the model's low default in bb's catalog");
+  assert.equal(kit.thread(threadIn(defaulted)).execution?.reasoningLevel, "high");
+});
+
+test("agent_start, issue_create and issue_update tell the manager a reasoning level left out is high, never the model's default", async () => {
+  const { kit } = await coordinating();
+  for (const name of ["agent_start", "issue_create", "issue_update"]) {
+    const { parameters } = kit.tools().find((tool) => tool.name === name) ?? assert.fail(`no ${name}`);
+    const schema = JSON.stringify(z.toJSONSchema(parameters, { io: "input" }));
+    assert.match(schema, /\(left out: high, or the model's highest below high when it has no high/, `${name}'s execution or verifier`);
+    assert.match(schema, /"reasoningLevel":\{"description":"Left out: high, or the model's highest level below high when it has no high\. A level named, even low, is used as named\."/, `${name}'s reasoningLevel`);
+    assert.doesNotMatch(schema, /model's default/, name);
+  }
 });
 
 test("an execution bb can't run where the agent would work is refused before anything starts, naming what it can run", async () => {
@@ -162,12 +175,12 @@ test("an agent on its issue's verifier is refused, named or inherited, offering 
   await kit.call("issue_update", { id: "WEB-1", verifier: { providerId: "codex", model: "gpt-default" } }, threadId);
   const named = await start({ execution: { providerId: "codex", model: "gpt-default" } });
   assert.ok(isRefusal(named));
-  assert.equal(textOf(named), "agent_start is refused: WEB-1's verifier is codex gpt-default (low), so an agent on it couldn't be checked by another model. Name another execution, or change WEB-1's verifier with issue_update.");
+  assert.equal(textOf(named), "agent_start is refused: WEB-1's verifier is codex gpt-default (high), so an agent on it couldn't be checked by another model. Name another execution, or change WEB-1's verifier with issue_update.");
 
   Object.assign(kit.thread(threadId), { providerId: "codex", execution: { model: "gpt-default", reasoningLevel: "low", serviceTier: "default", permissionMode: "auto" } });
   const inherited = await start();
   assert.ok(isRefusal(inherited));
-  assert.match(textOf(inherited), /^agent_start is refused: WEB-1's verifier is codex gpt-default \(low\), so an agent on your own model couldn't be checked by another model\./);
+  assert.match(textOf(inherited), /^agent_start is refused: WEB-1's verifier is codex gpt-default \(high\), so an agent on your own model couldn't be checked by another model\./);
   assert.deepEqual(kit.store.agents(coordinatorId), []);
 });
 

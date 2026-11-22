@@ -137,7 +137,7 @@ test("where an agent's work was last seen, and what it ran on, are recorded as i
 
 test("an execution resolved to a catalog's empty default reasoning level is stored and read back as bb gave it", () => {
   const { store } = freshStore();
-  const execution = executionOf({ providerId: "codex", model: "gpt-5.4" }, { providers: [{ id: "codex", available: true }], models: [{ model: "gpt-5.4", isDefault: true, defaultReasoningEffort: "" }] });
+  const execution = executionOf({ providerId: "codex", model: "gpt-5.4" }, { providers: [{ id: "codex", available: true }], models: [{ model: "gpt-5.4", isDefault: true, defaultReasoningEffort: "", supportedReasoningEfforts: [] }] });
   if ("refused" in execution) assert.fail(execution.refused);
   const issue = filedIssue(store, MANAGER, newIssue({ verifier: execution }), 2_000);
   const agentId = store.insertAgent({ coordinatorId: MANAGER, issueId: issue.id, ticket: "agent-1", placement: { kind: "worktree" }, base: { kind: "default" }, checkout: { environmentId: null, branch: null, head: null }, execution, at: 2_000 }) ?? assert.fail("the issue already had an agent");

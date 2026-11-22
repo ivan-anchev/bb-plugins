@@ -26,6 +26,7 @@ import { createFeedReader } from "./feed/feed-reader.ts";
 import { feedHandlers } from "./feed/feed-rpc.ts";
 import { issueTagPublisher } from "./feed/issue-tags.ts";
 import { createBoard } from "./board/board.ts";
+import type { CatalogModel } from "../model/execution.ts";
 import type { CatalogBb } from "./execution/catalog.ts";
 import { createInbox } from "./inbox/inbox.ts";
 import { PLACEHOLDER, upgradeFrom030 } from "./manager/held-managers.ts";
@@ -173,19 +174,22 @@ function runsOn(args: SpawnArgs, parent: FakeThread | null): { providerId: strin
 type SpawnBehaviour = { created: boolean; answer: "thread" | "lost" | "refused" };
 
 /** A provider bb can run in every environment, with its models (null: bb can't load them). */
-type FakeProvider = { id: string; available: boolean; models: { model: string; isDefault: boolean; defaultReasoningEffort: string }[] | null };
+type FakeProvider = { id: string; available: boolean; models: CatalogModel[] | null };
 
-/** The providers bb has unless a test changes them: Claude Code, as the composer picks it, and Codex. */
+/** The reasoning levels a model lists in bb's catalog, lowest first. */
+export const levels = (...efforts: string[]): CatalogModel["supportedReasoningEfforts"] => efforts.map((reasoningEffort) => ({ reasoningEffort }));
+
+/** The providers bb has unless a test changes them: Claude Code, as the composer picks it, and Codex, whose default is low, as bb lists Codex models. */
 const PROVIDERS: FakeProvider[] = [
   {
     id: "claude-code",
     available: true,
     models: [
-      { model: "opus", isDefault: true, defaultReasoningEffort: "high" },
-      { model: "sonnet", isDefault: false, defaultReasoningEffort: "medium" },
+      { model: "opus", isDefault: true, defaultReasoningEffort: "high", supportedReasoningEfforts: levels("low", "medium", "high", "max") },
+      { model: "sonnet", isDefault: false, defaultReasoningEffort: "medium", supportedReasoningEfforts: levels("low", "medium", "high") },
     ],
   },
-  { id: "codex", available: true, models: [{ model: "gpt-default", isDefault: true, defaultReasoningEffort: "low" }] },
+  { id: "codex", available: true, models: [{ model: "gpt-default", isDefault: true, defaultReasoningEffort: "low", supportedReasoningEfforts: levels("low", "medium", "high", "xhigh") }] },
 ];
 
 /** How bb fails the sends to one thread (see `sends`). */

@@ -9,7 +9,7 @@ import { agentIdSchema } from "../../model/agent/agent.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import type { Verdict } from "../../model/verdict/verdict.ts";
 import type { InteractionPayload } from "../../model/interaction.ts";
-import { bbHttpError, coordinating, doorbellOf, HEAD, isRefusal, settled, startedAgent, textOf, withoutLinks, type SendFailure } from "../test-harness.ts";
+import { bbHttpError, coordinating, doorbellOf, HEAD, isRefusal, levels, settled, startedAgent, textOf, withoutLinks, type SendFailure } from "../test-harness.ts";
 
 const a1 = agentIdSchema.parse("a1");
 const i1 = issueIdSchema.parse("WEB-1");
@@ -903,9 +903,9 @@ test("with no other provider the verifier runs on another model of the agent's, 
 
   const alone = await withAgent();
   alone.kit.providers.list = [
-    { id: "claude-code", available: true, models: [{ model: "opus", isDefault: true, defaultReasoningEffort: "high" }] },
+    { id: "claude-code", available: true, models: [{ model: "opus", isDefault: true, defaultReasoningEffort: "high", supportedReasoningEfforts: levels("low", "medium", "high", "max") }] },
     { id: "codex", available: true, models: null },
-    { id: "pi", available: false, models: [{ model: "pi-1", isDefault: true, defaultReasoningEffort: "low" }] },
+    { id: "pi", available: false, models: [{ model: "pi-1", isDefault: true, defaultReasoningEffort: "low", supportedReasoningEfforts: levels("low") }] },
   ];
   await alone.handOff();
   assert.deepEqual([alone.kit.thread(alone.verifier()).providerId, alone.kit.thread(alone.verifier()).execution?.model], ["claude-code", "opus"]);
@@ -937,7 +937,7 @@ test("a done handoff's verifier runs on the verifier named on its issue, and the
   await kit.idle(agentThreadId, "Handed off.");
   const running = kit.store.openChecks()[0]?.verdict;
   const verifier = kit.thread(running?.state === "running" ? running.verifierThreadId : assert.fail("no verifier running"));
-  assert.deepEqual([verifier.providerId, verifier.execution?.model, verifier.execution?.reasoningLevel], ["claude-code", "sonnet", "medium"]);
+  assert.deepEqual([verifier.providerId, verifier.execution?.model, verifier.execution?.reasoningLevel], ["claude-code", "sonnet", "high"]);
 
   await kit.call("issue_verdict", PASSES, verifier.id);
   await settled();
@@ -966,9 +966,9 @@ test("a verifier named while a check runs leaves that check as it is, and applie
   const running = verifier();
   assert.equal(
     withoutLinks(textOf(await kit.call("issue_update", { id: "WEB-1", verifier: { providerId: "claude-code", model: "sonnet" } }, threadId))),
-    "Updated WEB-1. claude-code sonnet (medium) is now WEB-1's first choice of verifier for its done handoffs, and its final check as a parent, from the next one on: each runs on it when bb lists it where the check runs and no agent whose work it checks ran on it. A check already running keeps its own.",
+    "Updated WEB-1. claude-code sonnet (high) is now WEB-1's first choice of verifier for its done handoffs, and its final check as a parent, from the next one on: each runs on it when bb lists it where the check runs and no agent whose work it checks ran on it. A check already running keeps its own.",
   );
   assert.equal(check().verifier, null);
   assert.equal(verifier(), running);
-  assert.deepEqual(kit.store.issue(coordinatorId, i1)?.verifier, { providerId: "claude-code", model: "sonnet", reasoningLevel: "medium" });
+  assert.deepEqual(kit.store.issue(coordinatorId, i1)?.verifier, { providerId: "claude-code", model: "sonnet", reasoningLevel: "high" });
 });
