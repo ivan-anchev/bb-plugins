@@ -139,7 +139,7 @@ export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, on
     name: END_TURN,
     description:
       "End a turn that changes nothing for the user, instead of replying: a wake you expected, one for something the user did themselves, or one that only confirms work under way. Do your bookkeeping first, then call it last, with the reason in one line, such as \"BBP-4's CI passed; its agent is still shipping it\". After it, write nothing: no text, no whitespace and no other tool call.",
-    presentation: { label: { pending: "Ending the turn", completed: "Ended the turn" }, icon: { glyph: "Square" } },
+    presentation: { label: { pending: "Ending the turn", completed: "Ended the turn" }, icon: { glyph: "CircleCheck" } },
     parameters: z.object({ reason: z.string().min(1).max(200).describe("Why nothing here needs the user, in one line.") }),
     execute: forManager(store, END_TURN, (_id, { reason }) => `${reason}\n\nYour turn is over. Write nothing more: no text, no whitespace and no other tool call.`),
   });
