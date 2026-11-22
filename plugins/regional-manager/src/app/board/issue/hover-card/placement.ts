@@ -3,8 +3,9 @@
 // on neither. A row's card sits in the row's box and keeps inside the panel the board scrolls in; a
 // link's card floats, fixed, against the window, by the link's box, so the message list it sits in
 // clips none of it, and follows the link, on whichever side has room, as anything holding it scrolls
-// or the window resizes. Measured as the card mounts, before it paints.
-import { useLayoutEffect, useRef, useState, type RefObject } from "react";
+// or the window resizes; its size is measured again each time, and as its content changes. Measured
+// before it paints.
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 /**
  * The side of its anchor the card opens on, and the most it may be tall (null: as tall as it is); a
@@ -18,17 +19,24 @@ export type Placement = { side: "below" | "above"; cap: number | null; at: { lef
 export function useCardPlacement(link: HTMLElement | null): { ref: RefObject<HTMLDivElement | null>; placement: Placement } {
   const ref = useRef<HTMLDivElement>(null);
   const [placement, setPlacement] = useState<Placement>(UNMEASURED);
-  // why a layout effect: the card's size and the room around its anchor are the browser's to measure, and the card must not paint where it doesn't fit.
+  /** Places a floating card by its link and its size as they are now; nothing for a row's card. */
+  const follow = useCallback(() => {
+    const card = ref.current;
+    // why: the ref's type only; the card is mounted as this runs.
+    if (link === null || card === null) return;
+    const next = floatingPlacement(link.getBoundingClientRect(), sizeOf(card));
+    setPlacement((current) => (samePlacement(current, next) ? current : next));
+  }, [link]);
+  // why layout effects: the card's size and the room around its anchor are the browser's to measure, and the card must not paint where it doesn't fit.
   useLayoutEffect(() => {
     const card = ref.current;
     const row = card?.parentElement ?? null;
-    // why: the ref's type only; the card is mounted, in its row's box or by its link, as this runs.
-    if (card === null || row === null) return;
-    if (link === null) return void setPlacement(rowPlacement(row, card));
-    // why the size as it mounts: uncapped, it is the card's whole height, which a later cap hides.
-    const size = { height: card.scrollHeight, width: card.offsetWidth };
-    const follow = () => setPlacement(floatingPlacement(link.getBoundingClientRect(), size));
-    follow();
+    if (link === null && card !== null && row !== null) setPlacement(rowPlacement(row, card));
+  }, [link]);
+  // why after every render: the card's content, and so its size, changes as the board does.
+  useLayoutEffect(follow);
+  useEffect(() => {
+    if (link === null) return;
     // why capturing: a scroll doesn't bubble, and the link moves with whichever of its ancestors scrolls.
     window.addEventListener("scroll", follow, true);
     window.addEventListener("resize", follow);
@@ -36,13 +44,22 @@ export function useCardPlacement(link: HTMLElement | null): { ref: RefObject<HTM
       window.removeEventListener("scroll", follow, true);
       window.removeEventListener("resize", follow);
     };
-  }, [link]);
+  }, [link, follow]);
   return { ref, placement };
 }
 
 // ------------------------------------------------------------------ layer 2
 
 const UNMEASURED: Placement = { side: "below", cap: null, at: null };
+
+/** A floating card's size now: its width, and its whole content's height, which its body scrolls when capped. */
+function sizeOf(card: HTMLElement): { height: number; width: number } {
+  // why the body's: a capped card is as tall as its cap, and only the body's scroll height is all of it.
+  const body = card.querySelector<HTMLElement>(".rmi-card-body") ?? card;
+  return { height: body.scrollHeight, width: card.offsetWidth };
+}
+
+const samePlacement = (a: Placement, b: Placement): boolean => a.side === b.side && a.cap === b.cap && JSON.stringify(a.at) === JSON.stringify(b.at);
 
 /** The gap between the card and its anchor (hover-card.css `.rmi-card`). */
 const GAP = 4;

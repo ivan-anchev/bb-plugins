@@ -134,6 +134,15 @@ test("a link bb renders again, as a new element or with its text replaced, as a 
   assert.equal(view.container.querySelectorAll(".rmi-issue-glyph").length, 2, "one glyph a link");
 });
 
+test("a slot bb takes out of a link it keeps comes back, with its glyph", async () => {
+  const { link, glyphOf } = mount({ panes: [MANAGER_THREAD] });
+  await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+  const anchor = link(MANAGER_THREAD);
+  act(() => anchor.querySelector(".rmi-issue-glyph")?.remove());
+  assert.equal(glyphOf(anchor), null);
+  await waitFor(() => assert.equal(glyphOf(anchor), "In progress"));
+});
+
 test("a link whose href bb changes in place to another address loses its glyph", async () => {
   const { view, link, glyphOf, show } = mount({ panes: [MANAGER_THREAD] });
   await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
@@ -159,7 +168,7 @@ test("when bb renders the shown link again, as a reply streams, its card goes, a
   assert.equal(escape.defaultPrevented, false);
 });
 
-test("hovering another link leaves the card of the link that has focus, while it shows", async () => {
+test("hovering another link leaves the card of the link that has focus, while it shows, and shows its own once focus goes", async () => {
   const { link, glyphOf, card } = mount({ panes: [MANAGER_THREAD] });
   await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
   act(() => link(MANAGER_THREAD).focus());
@@ -171,6 +180,14 @@ test("hovering another link leaves the card of the link that has focus, while it
   assert.equal(card()?.querySelector(".rmi-card-title")?.textContent, "Inline issue links", "the focused link's card stays");
   fireEvent.pointerOut(link(MANAGER_THREAD, "BBP-27"), { relatedTarget: document.body });
   act(() => mock.timers.tick(1_000));
+  assert.equal(card()?.querySelector(".rmi-card-title")?.textContent, "Inline issue links");
+
+  fireEvent.pointerOver(link(MANAGER_THREAD, "BBP-27"), { relatedTarget: document.body });
+  act(() => link(MANAGER_THREAD).blur());
+  assert.equal(card()?.querySelector(".rmi-card-title")?.textContent, "Avatars", "focus gone, the card of the link the pointer rests on shows");
+  fireEvent.pointerOut(link(MANAGER_THREAD, "BBP-27"), { relatedTarget: document.body });
+  act(() => mock.timers.tick(1_000));
+  act(() => link(MANAGER_THREAD).focus());
   assert.equal(card()?.querySelector(".rmi-card-title")?.textContent, "Inline issue links");
 
   act(() => void link(MANAGER_THREAD).dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
@@ -287,7 +304,46 @@ test("a capped card's body is the tab stop after its link: Tab on the link goes 
   }
 });
 
-/** Every issue link's box at `link`, and the card `card` big, in a 1024 by 768 window. why stubs: jsdom lays nothing out. */
+test("a card measures itself again as the window changes: widened, it stays off the right edge at its new width", async () => {
+  const box = { top: 100, bottom: 116, left: 250 };
+  const size = { height: 200, width: 284 };
+  const restore = laidOut(box, size);
+  try {
+    Object.assign(window, { innerWidth: 300 });
+    const { link, glyphOf, card } = mount({ panes: [MANAGER_THREAD] });
+    await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+    act(() => link(MANAGER_THREAD).focus());
+    await waitFor(() => assert.equal(card()?.style.left, "8px"));
+
+    Object.assign(window, { innerWidth: 1440 });
+    Object.assign(box, { left: 1300 });
+    Object.assign(size, { width: 320 });
+    act(() => void window.dispatchEvent(new window.Event("resize")));
+    assert.equal(card()?.style.left, `${1440 - 320 - 8}px`, "placed by the width it has now");
+  } finally {
+    restore();
+  }
+});
+
+test("a capped card that no longer needs its cap gives focus in its body back to its link", async () => {
+  const restore = laidOut({ top: 700, bottom: 716, left: 40 }, { height: 2_000, width: 320 });
+  try {
+    const { view, link, glyphOf, card } = mount({ panes: [MANAGER_THREAD] });
+    await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+    act(() => link(MANAGER_THREAD).focus());
+    const body = await view.findByRole("region", { name: "Details of BBP-24" });
+    act(() => body.focus());
+
+    Object.assign(window, { innerHeight: 4_000 });
+    act(() => void window.dispatchEvent(new window.Event("resize")));
+    assert.equal(card()?.querySelector(".rmi-card-body")?.getAttribute("tabindex"), null, "uncapped");
+    assert.ok(document.activeElement === link(MANAGER_THREAD), "focus is back on the link, not in a hidden card");
+  } finally {
+    restore();
+  }
+});
+
+/** Every issue link's box at `link`, and the card `card` big, in a 1024 by 768 window; a test changes them by changing the objects. why stubs: jsdom lays nothing out. */
 function laidOut(link: { top: number; bottom: number; left: number }, card: { height: number; width: number }): () => void {
   const boxOf = HTMLElement.prototype.getBoundingClientRect;
   const sizes = ["scrollHeight", "offsetWidth"] as const;
@@ -297,7 +353,8 @@ function laidOut(link: { top: number; bottom: number; left: number }, card: { he
     return { top, bottom, left, right: left + 60, x: left, y: top, width: 60, height: bottom - top, toJSON: () => ({}) };
   };
   const isCard = (el: HTMLElement) => el.classList.contains("rmi-card");
-  Object.defineProperty(HTMLElement.prototype, "scrollHeight", { configurable: true, get(this: HTMLElement) { return isCard(this) ? card.height : 0; } });
+  // why the body too: a capped card's body scrolls, so its scroll height is the card's whole content.
+  Object.defineProperty(HTMLElement.prototype, "scrollHeight", { configurable: true, get(this: HTMLElement) { return isCard(this) || this.classList.contains("rmi-card-body") ? card.height : 0; } });
   Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get(this: HTMLElement) { return isCard(this) ? card.width : 0; } });
   Object.assign(window, { innerWidth: 1024, innerHeight: 768 });
   return () => {
@@ -345,6 +402,27 @@ test("a press with ⌘ or Ctrl, even in the manager's own pane, asks bb for the 
     { method: "toThread", threadId: MANAGER_THREAD, options: { split: true } },
   ]);
   await waitFor(() => assert.deepEqual(view.inspection.experimental_panelCalls.map((call) => call.method === "openTab" && call.options.title), ["BBP-24 Inline issue links", "BBP-24 Inline issue links"], "once a press"));
+});
+
+test("a link to an issue its manager's board has none of still opens the issue's tab, by its id, where the tab says so", async () => {
+  const { view, link } = mount({ panes: [MANAGER_THREAD], href: HREF("BBP-999"), label: "BBP-999" });
+  // why: with no glyph to wait for, the press is made until the plugin knows the link's manager; bb's own handling (here a stand-in, as jsdom can't follow a link) has the presses before that.
+  let reachedBb = false;
+  const bbs = (event: Event) => {
+    reachedBb = true;
+    event.preventDefault();
+  };
+  document.addEventListener("click", bbs);
+  try {
+    await waitFor(() => {
+      reachedBb = false;
+      fireEvent.click(link(MANAGER_THREAD, "BBP-999"));
+      assert.equal(reachedBb, false, "caught");
+    });
+  } finally {
+    document.removeEventListener("click", bbs);
+  }
+  await waitFor(() => assert.deepEqual(view.inspection.experimental_panelCalls.map((call) => call.method === "openTab" && call.options.title), ["BBP-999"]));
 });
 
 test("while the board can't be read, a press still opens the issue's tab, by its id, where the tab shows the failure and Retry", async () => {

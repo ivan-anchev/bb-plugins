@@ -10,7 +10,7 @@
 // (REVIEW.md). Focus in the card goes back to its row, or its link, as the card goes, however it is
 // put away.
 import "./hover-card.css";
-import { useCallback, type CSSProperties } from "react";
+import { useCallback, useLayoutEffect, type CSSProperties } from "react";
 import type { IssueRow as Row } from "../../../../contract.ts";
 import type { IssueId } from "../../../../model/issue/issue.ts";
 import { STATUS_LABELS } from "../../../../model/issue/status.ts";
@@ -34,10 +34,15 @@ export function HoverCard({ issue, issues, link }: HoverCardProps) {
   // why one callback: placement measures the card, and the card hands focus back as it unmounts; a ref that changed per render would hand it back on every render.
   const cardRef = useCallback((card: HTMLDivElement | null) => {
     ref.current = card;
-    return (link === undefined ? focusBackToRow : handFocusTo(() => link))(card);
+    return handFocusTo((region) => triggerOf(region, link))(card);
   }, [ref, link]);
   const pick = (ids: readonly IssueId[]) => issues.filter(({ id }) => ids.includes(id));
   const capped = placement.cap !== null;
+  // why: a card that no longer needs its cap has no tab stop and is hidden from a screen reader, so focus in it goes back to its row or link (REVIEW.md).
+  useLayoutEffect(() => {
+    const card = ref.current;
+    if (!capped && card !== null && card.contains(document.activeElement)) triggerOf(card, link)?.focus();
+  }, [capped, ref, link]);
   return (
     <div ref={cardRef} className={link === undefined ? "rmi-card" : "rmi-card rmi-card-floating"} data-side={placement.side} style={placeStyle(placement)} aria-hidden={!capped || undefined}>
       <div className="rmi-card-body" tabIndex={capped ? 0 : undefined} role={capped ? "region" : undefined} aria-label={capped ? `Details of ${issue.id}` : undefined}>
@@ -69,8 +74,8 @@ export function HoverCard({ issue, issues, link }: HoverCardProps) {
 
 // ------------------------------------------------------------------ layer 2
 
-/** On the card: focus in it, on its scrolling body, goes to its row's button as it unmounts, so it never drops to the page (REVIEW.md). */
-const focusBackToRow = handFocusTo((card) => card.closest(".rmi-rowbox")?.querySelector<HTMLElement>(".rmi-row"));
+/** What focus in the card goes back to, as it unmounts or loses its cap, so it never drops to the page or into a hidden card (REVIEW.md): its link, or its row's button. */
+const triggerOf = (card: HTMLElement, link: HTMLElement | undefined): HTMLElement | null | undefined => link ?? card.closest(".rmi-rowbox")?.querySelector<HTMLElement>(".rmi-row");
 
 /** A floating card's place in the window, and the card's height cap when its side of its anchor has too little room (hover-card.css `.rmi-card-body`). */
 const placeStyle = ({ cap, at }: Placement): CSSProperties & Partial<Record<"--rmi-card-cap", string>> => ({

@@ -14,9 +14,6 @@ export const PANEL_PATH = "regional-managers";
 /** An issue, as a link names it. */
 export type IssueLink = { coordinatorId: CoordinatorId; issueId: IssueId };
 
-/** The issue's route in the app of the plugin `pluginId`: the panel's path, then the issue's subPath. */
-export const issueHref = (pluginId: string, { coordinatorId, issueId }: IssueLink): string => `${panelRoute(pluginId)}${ISSUE_SEGMENT}/${coordinatorId}/${issueId}`;
-
 /** The issue's link as a manager writes it to the user: its id, linked to its route. */
 export const issueLinkMarkdown = (pluginId: string, link: IssueLink): string => `[${link.issueId}](${issueHref(pluginId, link)})`;
 
@@ -39,6 +36,9 @@ export function parseIssueSubPath(subPath: string): IssueLink | null {
 
 /** The panel's subPath of an issue. */
 const ISSUE_SEGMENT = "issue";
+
+/** The issue's route in the app of the plugin `pluginId`: the panel's path, then the issue's subPath. */
+const issueHref = (pluginId: string, { coordinatorId, issueId }: IssueLink): string => `${panelRoute(pluginId)}${ISSUE_SEGMENT}/${coordinatorId}/${issueId}`;
 
 /** Every route into the panel starts so. */
 const panelRoute = (pluginId: string): string => `/plugins/${pluginId}/${PANEL_PATH}/`;

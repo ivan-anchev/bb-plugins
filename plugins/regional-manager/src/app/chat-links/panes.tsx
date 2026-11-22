@@ -4,9 +4,8 @@
 // the thread, now or once one does, opens it in its own side panel. why a row per pane: the side
 // panel a component can open a tab in is its own surface's, and the chat overlay, mounted once per
 // window, has none.
-import { experimental_useAppPanel, useBbContext, type ExperimentalOpenTabOptions, type ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
+import { experimental_useAppPanel, useBbContext, type ExperimentalThreadHeaderRowProps } from "@get-bb/plugin-sdk/app";
 import { useEffect, useSyncExternalStore } from "react";
-import type { IssueRow } from "../../contract.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { issueTabOf } from "../board/issue-tab/open-issue.ts";
@@ -65,9 +64,9 @@ function TabOpener({ threadId, issueId }: { threadId: string; issueId: IssueId }
 }
 
 /**
- * Opens the issue's tab, titled from its board row, as the Board does; an issue its board has none
- * of is let go. While the board can't be read, it opens by the issue's id, where the tab shows the
- * failure and Retry. bb declines the open while the pane isn't the one the app has focused, as a split
+ * Opens the issue's tab once the board has been read, or has failed to be: titled from its board row,
+ * as the Board does, or by the issue's id alone, where the tab says the board has no such issue, or
+ * shows the failure and Retry. bb declines the open while the pane isn't the one the app has focused, as a split
  * it just added isn't yet as it mounts (measured live, bb 0.50.1), so the open is asked again as the
  * focused thread changes, and as the board reads again.
  */
@@ -75,20 +74,13 @@ function BoardTabOpener({ threadId, coordinatorId, issueId }: { threadId: string
   const panel = experimental_useAppPanel();
   const focused = useBbContext().threadId;
   const { read, issues, issue } = useBoardIssue(coordinatorId, issueId);
-  const failed = issues === undefined && read.error !== null;
+  const settled = issues !== undefined || read.error !== null;
   useEffect(() => {
-    if (issues === undefined && !failed) return;
-    const opening = openingOf(issueId, issue, failed);
-    if (opening !== null && !panel.openTab(opening)) return;
+    if (!settled) return;
+    if (!panel.openTab(issueTabOf(issueId, issue?.title ?? null))) return;
     if (requested.get(threadId) !== issueId) return;
     requested.delete(threadId);
     notify();
-  }, [issues, issue, failed, issueId, panel, threadId, focused]);
+  }, [settled, issue, issueId, panel, threadId, focused]);
   return null;
-}
-
-/** What opens the issue's tab: titled from its board row; by its id alone while the board can't be read; nothing for an issue its board has none of. */
-function openingOf(issueId: IssueId, issue: IssueRow | undefined, failed: boolean): ExperimentalOpenTabOptions | null {
-  if (issue !== undefined) return issueTabOf(issueId, issue.title);
-  return failed ? issueTabOf(issueId, null) : null;
 }

@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import { parseIssueHref, type IssueLink } from "../../model/issue/link/issue-link.ts";
 
 /** An issue link on screen and the slot its glyph goes in. `key`: its own, for the portal. */
-export type DecoratedLink = { key: number; link: IssueLink; slot: HTMLElement };
+type DecoratedLink = { key: number; link: IssueLink; slot: HTMLElement };
 
 /** Every issue link on screen, each with its slot, following the DOM; the slots go as the page does. */
 export function useDecoratedLinks(): readonly DecoratedLink[] {
@@ -21,10 +21,11 @@ export function useDecoratedLinks(): readonly DecoratedLink[] {
   useEffect(() => {
     let next = 0;
     const slots = new Set<HTMLElement>();
+    const own = ownWrites();
     /** One pass over the page; one that finds nothing to change writes nothing, to the page or to React. */
     const scan = () => {
-      removeStale(linkAt);
-      const fresh = undecorated(linkAt).map(({ anchor, link }) => ({ key: next++, link, slot: decorate(anchor) }));
+      removeStale(linkAt, own);
+      const fresh = undecorated(linkAt).map(({ anchor, link }) => ({ key: next++, link, slot: decorate(anchor, own) }));
       const gone = [...slots].filter((slot) => !slot.isConnected);
       if (fresh.length === 0 && gone.length === 0) return;
       for (const slot of gone) slots.delete(slot);
@@ -35,7 +36,7 @@ export function useDecoratedLinks(): readonly DecoratedLink[] {
     // watches (a slot, the glyph in it), and a streamed reply changes it many times a frame.
     let frame: number | null = null;
     const schedule = (records: MutationRecord[]) => {
-      if (frame !== null || records.every(isOwnWrite)) return;
+      if (frame !== null || records.every(own.made)) return;
       frame = requestAnimationFrame(() => {
         frame = null;
         scan();
@@ -73,11 +74,20 @@ const LINKS = "[data-markdown-preview] a[href]";
 /** The glyph's slot (chat-links.css). */
 const SLOT = "rmi-issue-glyph";
 
-/** A change only the plugin made: inside a slot (its glyph), or adding or removing slots alone. */
-function isOwnWrite({ target, addedNodes, removedNodes }: MutationRecord): boolean {
-  const changed = [...addedNodes, ...removedNodes];
-  return inSlot(target) || (changed.length > 0 && changed.every(inSlot));
+/** The slots the plugin put in and took out itself, and whether a change is only that, or inside a slot (its glyph). */
+function ownWrites() {
+  const added = new WeakSet<Node>();
+  const removed = new WeakSet<Node>();
+  return {
+    added: (slot: Node) => void added.add(slot),
+    removed: (slot: Node) => void removed.add(slot),
+    // why by the nodes it wrote, not the record's shape: bb taking a slot out of a link it keeps is bb's change, which brings the slot back.
+    made: ({ target, addedNodes, removedNodes }: MutationRecord): boolean =>
+      inSlot(target) || (addedNodes.length + removedNodes.length > 0 && [...addedNodes].every((node) => added.has(node)) && [...removedNodes].every((node) => removed.has(node))),
+  };
 }
+
+type OwnWrites = ReturnType<typeof ownWrites>;
 
 function inSlot(node: Node): boolean {
   const element = node instanceof Element ? node : node.parentElement;
@@ -93,17 +103,24 @@ function undecorated(linkAt: (target: Element) => FoundLink | null): FoundLink[]
 }
 
 /** Takes out every slot whose link no longer has the issue href it was made for: an href changed, or taken away. */
-function removeStale(linkAt: (target: Element) => FoundLink | null): void {
+function removeStale(linkAt: (target: Element) => FoundLink | null, own: OwnWrites): void {
   for (const slot of document.querySelectorAll<HTMLElement>(`.${SLOT}`)) {
     const anchor = slot.parentElement;
-    if (anchor === null || linkAt(anchor) === null || anchor.getAttribute("href") !== slot.dataset.href) slot.remove();
+    if (anchor === null || linkAt(anchor) === null || anchor.getAttribute("href") !== slot.dataset.href) remove(slot, own);
   }
 }
 
+function remove(slot: HTMLElement, own: OwnWrites): void {
+  own.removed(slot);
+  slot.remove();
+}
+
 /** Puts a new slot first in the link, for the href it has now, in place of one it had for another. */
-function decorate(anchor: HTMLAnchorElement): HTMLElement {
-  slotOf(anchor)?.remove();
+function decorate(anchor: HTMLAnchorElement, own: OwnWrites): HTMLElement {
+  const old = slotOf(anchor);
+  if (old !== null) remove(old, own);
   const slot = document.createElement("span");
+  own.added(slot);
   slot.className = SLOT;
   slot.dataset.href = anchor.getAttribute("href") ?? "";
   anchor.prepend(slot);

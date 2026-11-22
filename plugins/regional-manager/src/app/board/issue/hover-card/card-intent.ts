@@ -105,6 +105,8 @@ function cardIntent<Key>(show: (key: Key | null) => void): CardIntent<Key> & { s
     },
     blur(key) {
       if (focused === key) focused = null;
+      // why: the focused trigger held its card against the one the pointer rests on, which shows now.
+      if (shown === key && hovered !== null && hovered !== key) return open(hovered);
       settle(key);
     },
     press() {
