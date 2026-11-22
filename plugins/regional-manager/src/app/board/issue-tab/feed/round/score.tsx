@@ -30,14 +30,40 @@ export function Score({ round }: { round: Round }) {
   }
 }
 
-/** A round nothing checks: how its handoff ended, when not done. */
+/** A round nothing checks: how its handoff ended, when not done; nothing for a final check, or a kind or status this bundle doesn't know. */
 function HandoffEnd({ round: { by } }: { round: Round }) {
-  if (by.kind !== "agent" || by.status === "done") return null;
-  return (
-    <span className="rmi-score" data-tone={by.status === "blocked" ? "warning" : "failed"}>
-      {by.status === "blocked" ? "Blocked" : "Gave up"}
-    </span>
-  );
+  switch (by.kind) {
+    case "final":
+      return null;
+    case "agent":
+      return <HandoffStatus status={by.status} />;
+    default:
+      // why nothing: the server may be newer than this bundle for a moment after an update.
+      by satisfies never;
+      return null;
+  }
+}
+
+function HandoffStatus({ status }: { status: Extract<Round["by"], { kind: "agent" }>["status"] }) {
+  switch (status) {
+    case "done":
+      return null;
+    case "blocked":
+      return (
+        <span className="rmi-score" data-tone="warning">
+          Blocked
+        </span>
+      );
+    case "gave-up":
+      return (
+        <span className="rmi-score" data-tone="failed">
+          Gave up
+        </span>
+      );
+    default:
+      status satisfies never;
+      return null;
+  }
 }
 
 const PENDING = { reviewing: "Reviewing…", verifying: "Verifying…", ci: "Waiting for CI…" } as const;

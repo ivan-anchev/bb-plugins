@@ -53,7 +53,7 @@ type Deps = {
   onChange(id: CoordinatorId): void;
   /** Reads the regional manager's board again. */
   refreshBoard(id: CoordinatorId): void;
-  /** Reads the issue's feed again: a thread it links was deleted, which only bb's listing says, so no write the store counts does. */
+  /** Reads the issue's feed again: an agent thread it links was deleted, which only bb's listing says, so no write the store counts does. */
   refreshIssue(id: CoordinatorId, issueId: IssueId): void;
 };
 
@@ -116,8 +116,8 @@ export function forwardThreadEvents(bb: EventsBb, { store, agents, verify, onCha
   bb.events.on("thread.deleted", async (payload) => {
     const role = roleOf(payload);
     if (role?.kind === "coordinator") return agents.remove(role.coordinatorId);
-    // why every agent's, ended or not, and every checker's: the issue's feed links each one while bb has it.
-    const issue = issueOf(payload);
+    // why every agent's, ended or not: the issue's feed links each agent's thread while bb has it. A checker's thread it links as its verdict names it, unread from bb, so its deletion changes nothing there.
+    const issue = role?.kind === "agent" ? issueOf(payload) : null;
     if (issue !== null) refreshIssue(issue.coordinatorId, issue.issueId);
     const agent = holderOf(payload);
     if (agent !== null) await agents.deleted(agent).catch(warned(`end ${agent.id}, whose thread was deleted`));

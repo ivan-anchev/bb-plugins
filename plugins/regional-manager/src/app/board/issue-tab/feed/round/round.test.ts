@@ -149,3 +149,13 @@ test("a cell shows its result by glyph, and its tooltip names it on focus and ho
   fireEvent.mouseLeave(slot);
   assert.equal(grid.queryByRole("tooltip"), null);
 });
+
+test("a round whose passing verdict was replaced while it waited for CI says it was replaced before CI, not before its verdict", async () => {
+  const replaced: Entry[] = FEED.entries.map((entry) =>
+    entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, outcome: "superseded" } } } : entry,
+  );
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: replaced }) });
+  const three = rounds(tab()).card(3);
+  assert.ok(await three.findByText(/^Replaced before CI was judged/));
+  assert.ok(three.getAllByText("Replaced", { selector: ".rmi-score" }).length > 0, "its score says replaced, not passed");
+});

@@ -3,10 +3,9 @@
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
-import { agentIdSchema, endedHowSchema } from "./model/agent/agent.ts";
+import { agentIdSchema } from "./model/agent/agent.ts";
 import { needsYouSchema } from "./model/board/board-groups.ts";
-import { answerSchema, decisionIdSchema, decisionSchema, issueDecisionSchema } from "./model/decision.ts";
-import { shownHandoffSchema } from "./model/agent/handoff.ts";
+import { answerSchema, decisionIdSchema, decisionSchema } from "./model/decision.ts";
 import { executionSchema } from "./model/agent/execution.ts";
 import { entrySchema } from "./model/feed/entry.ts";
 import { roundBodySchema, roundKeySchema, type RoundKey } from "./model/feed/round.ts";
@@ -17,7 +16,6 @@ import { memoryContentSchema, memoryFileSchema, memorySnapshotSchema, memoryVers
 import { prSnapshotSchema } from "./model/verdict/pr.ts";
 import { newProfileSchema, profileSchema } from "./model/profile/profile.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "./model/role.ts";
-import { shownVerdictSchema } from "./model/verdict/verdict.ts";
 
 /**
  * A started regional manager: its memory is keyed by `id`, its conversation is `threadId`, which

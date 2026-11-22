@@ -20,7 +20,17 @@ export function createFeedReader(bb: ListBb<{ id: string; deletedAt: number | nu
     async feed(coordinatorId: CoordinatorId, issueId: IssueId): Promise<IssueFeed | null> {
       const issue = store.issue(coordinatorId, issueId);
       if (issue === null) return null;
+      // why every store read before the await: one response from one moment of the store, so an agent started meanwhile can't bring its round without itself.
       const agents = store.agents(coordinatorId).filter((agent) => agent.issueId === issueId);
+      const entries = feedOf({
+        issue,
+        agents,
+        handed: store.record(coordinatorId, issueId),
+        finalChecks: store.finalChecks(coordinatorId, issueId),
+        decisions: store.issueDecisions(coordinatorId, issueId),
+        events: store.eventsOfIssue(coordinatorId, issueId),
+      });
+      const blocks = dependentsOf(store.issues(coordinatorId), issueId);
       // why bb's listing, not how the agent ended: a thread archived or kept when its agent ended may be deleted since, and the agent's row never says so.
       const threads = await threadsById(bb, agents.flatMap(({ threadId }) => (threadId === null ? [] : [threadId])));
       const openable = (threadId: string | null): string | null => (threadId !== null && threads.get(threadId)?.deletedAt === null ? threadId : null);
@@ -28,16 +38,9 @@ export function createFeedReader(bb: ListBb<{ id: string; deletedAt: number | nu
         description: issue.description,
         doneCriteria: issue.doneCriteria,
         dependsOn: issue.dependsOn,
-        blocks: dependentsOf(store.issues(coordinatorId), issueId),
+        blocks,
         agents: agents.map(({ id, threadId }) => ({ id, threadId: openable(threadId) })),
-        entries: feedOf({
-          issue,
-          agents,
-          handed: store.record(coordinatorId, issueId),
-          finalChecks: store.finalChecks(coordinatorId, issueId),
-          decisions: store.issueDecisions(coordinatorId, issueId),
-          events: store.eventsOfIssue(coordinatorId, issueId),
-        }),
+        entries,
       };
     },
 

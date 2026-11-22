@@ -5,7 +5,8 @@
 import { experimental_useRpcKeyedQuery, Markdown } from "@get-bb/plugin-sdk/app";
 import { useId, type ReactNode } from "react";
 import { coordinatorContract as contract, roundBodyKey } from "../../../../../contract.ts";
-import type { HandoffBody, Round, RoundBody as Body, RoundKey } from "../../../../../model/feed/round.ts";
+import type { HandoffBody } from "../../../../../model/agent/handoff.ts";
+import type { Round, RoundBody as Body, RoundKey } from "../../../../../model/feed/round.ts";
 import type { IssueId } from "../../../../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../../../../model/role.ts";
 import type { Outcome } from "../../../../../model/verdict/verdict.ts";
@@ -56,7 +57,7 @@ export function RoundBody({ coordinatorId, issueId, round, agents }: RoundBodyPr
               </>
             }
           >
-            {loaded?.verdict != null && <VerdictStep verdict={loaded.verdict} judged={round.by.kind === "agent" ? { kind: "handoff" } : { kind: "final", defaultBranch: round.by.defaultBranch }} />}
+            {loaded?.verdict != null && <VerdictStep verdict={loaded.verdict} by={round.by} />}
           </Step>
         )}
       </ol>
@@ -81,22 +82,43 @@ function Step({ title, children }: { title: ReactNode; children?: ReactNode }) {
 
 function HandedStep({ round, agents, handoff }: { round: Round; agents: FeedAgents; handoff: HandoffBody | null }) {
   const { by } = round;
-  if (by.kind === "final") return <Step title={<>Final check on {by.defaultBranch} <When at={round.at} /></>} />;
-  return (
-    <Step
-      title={
-        <>
-          <AgentName agentId={by.agentId} agents={agents} /> {HANDED[by.status]} <When at={round.at} />
-        </>
-      }
-    >
-      <p className="rmi-step-text">{by.summary}</p>
-      {handoff !== null && <Report handoff={handoff} />}
-    </Step>
-  );
+  switch (by.kind) {
+    case "final":
+      return <Step title={<>Final check on {by.defaultBranch} <When at={round.at} /></>} />;
+    case "agent":
+      return (
+        <Step
+          title={
+            <>
+              <AgentName agentId={by.agentId} agents={agents} /> {handedText(by.status)} <When at={round.at} />
+            </>
+          }
+        >
+          <p className="rmi-step-text">{by.summary}</p>
+          {handoff !== null && <Report handoff={handoff} />}
+        </Step>
+      );
+    default:
+      // why nothing: the server may be newer than this bundle for a moment after an update.
+      by satisfies never;
+      return null;
+  }
 }
 
-const HANDED: Record<Extract<Round["by"], { kind: "agent" }>["status"], string> = { done: "handed off", blocked: "handed off blocked", "gave-up": "gave up" };
+function handedText(status: Extract<Round["by"], { kind: "agent" }>["status"]): string {
+  switch (status) {
+    case "done":
+      return "handed off";
+    case "blocked":
+      return "handed off blocked";
+    case "gave-up":
+      return "gave up";
+    default:
+      // why the plain words: a status this bundle doesn't know still handed off, and claims no more.
+      status satisfies never;
+      return "handed off";
+  }
+}
 
 function ReviewStep({ review, findings }: { review: Exclude<Round["review"], { state: "none" }>; findings: Body["findings"] }) {
   switch (review.state) {
@@ -144,7 +166,7 @@ function Outcome({ round, agents }: { round: Round; agents: FeedAgents }) {
   if (verdict === null || round.inFlight) return null;
   return (
     <p className="rmi-outcome" data-result={verdict.outcome}>
-      {by.kind === "agent" && verdict.fixRound !== null ? <SentBack agent={<AgentName agentId={by.agentId} agents={agents} />} {...verdict.fixRound} /> : OUTCOME[verdict.outcome]}
+      {by.kind === "agent" && verdict.fixRound !== null ? <SentBack agent={<AgentName agentId={by.agentId} agents={agents} />} {...verdict.fixRound} /> : outcomeText(verdict)}
       {round.outcomeAt !== null && <When at={round.outcomeAt} />}
     </p>
   );
@@ -177,6 +199,11 @@ function SentBack({ agent, round, delivery }: { agent: ReactNode } & NonNullable
       delivery satisfies never;
       return null;
   }
+}
+
+/** What became of a verdict nothing went back to an agent from. why the results: one superseded after it returned waited for CI, so it was replaced before CI, not before its verdict. */
+function outcomeText({ outcome, results }: NonNullable<Round["verdict"]>): string {
+  return outcome === "superseded" && results.length > 0 ? "Replaced before CI was judged" : OUTCOME[outcome];
 }
 
 const OUTCOME: Record<Outcome, string> = {

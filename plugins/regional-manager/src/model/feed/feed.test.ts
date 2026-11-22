@@ -216,3 +216,10 @@ test("a fix round says whether its findings reached the agent: on their way, sen
     [{ round: 1, delivery: "sending" }, { round: 1, delivery: "sent" }, { round: 2, delivery: "maybe" }, null],
   );
 });
+
+test("a check superseded while its review was to come is no longer in flight: its review reads as none and its score as replaced", () => {
+  const superseded = roundOf(handed(handoff(1, A1, 3_000), { state: "superseded" }, { state: "running", reviewerThreadId: "thr_reviewer" }), 1, null);
+  assert.deepEqual([superseded.inFlight, superseded.review, scoreOf(superseded)], [false, { state: "none" }, { kind: "unjudged", outcome: "superseded" }]);
+  const reviewing = roundOf(handed(handoff(2, A1, 4_000), { state: "queued", checkout: null }, { state: "running", reviewerThreadId: "thr_reviewer" }), 2, null);
+  assert.deepEqual([reviewing.inFlight, reviewing.review, scoreOf(reviewing)], [true, { state: "pending" }, { kind: "pending", stage: "reviewing" }]);
+});

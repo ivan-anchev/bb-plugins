@@ -1,6 +1,7 @@
 // What an open round shows of its verdict, under the verifier's step (round-body.tsx): the commit
 // it checked, a checkout or CI that failed it, each failing or unverifiable criterion with its
 // evidence, and the passes folded; or, with no verdict returned, where its check stands.
+import type { Round } from "../../../../../model/feed/round.ts";
 import { checkoutText, worktreeText } from "../../../../../model/verdict/checkout.ts";
 import { ciVerdictOf, failedCheckout, type CriterionResult, type ShownVerdict } from "../../../../../model/verdict/verdict.ts";
 import { DiscloseGlyph } from "../../detail/disclose-glyph.tsx";
@@ -9,7 +10,9 @@ import { ResultGlyph } from "./result-glyph.tsx";
 /** What a verdict judged: an agent's done handoff, or a build parent's final check on its default branch. */
 type Judged = { kind: "handoff" } | { kind: "final"; defaultBranch: string };
 
-export function VerdictStep({ verdict, judged }: { verdict: ShownVerdict; judged: Judged }) {
+export function VerdictStep({ verdict, by }: { verdict: ShownVerdict; by: Round["by"] }) {
+  const judged = judgedOf(by);
+  if (judged === null) return null;
   switch (verdict.state) {
     case "queued":
       return <p className="rmi-verdict-meta">Waiting for a verifier</p>;
@@ -30,6 +33,19 @@ export function VerdictStep({ verdict, judged }: { verdict: ShownVerdict; judged
     default:
       // why nothing: the server may be newer than this bundle for a moment after an update.
       verdict satisfies never;
+      return null;
+  }
+}
+
+/** What the round's verdict judged; null for a round this bundle doesn't know, from a newer server. */
+function judgedOf(by: Round["by"]): Judged | null {
+  switch (by.kind) {
+    case "agent":
+      return { kind: "handoff" };
+    case "final":
+      return { kind: "final", defaultBranch: by.defaultBranch };
+    default:
+      by satisfies never;
       return null;
   }
 }

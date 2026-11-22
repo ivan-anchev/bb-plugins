@@ -31,4 +31,15 @@ export function RoundCard({ coordinatorId, issueId, round, agents, open, onToggl
 }
 
 /** What the round was: its handoff's summary, or a build parent's final check on its default branch. */
-const headlineOf = ({ by }: Round): string => (by.kind === "agent" ? by.summary : `Final check on ${by.defaultBranch}`);
+function headlineOf({ by }: Round): string {
+  switch (by.kind) {
+    case "agent":
+      return by.summary;
+    case "final":
+      return `Final check on ${by.defaultBranch}`;
+    default:
+      // why nothing: the server may be newer than this bundle for a moment after an update.
+      by satisfies never;
+      return "";
+  }
+}

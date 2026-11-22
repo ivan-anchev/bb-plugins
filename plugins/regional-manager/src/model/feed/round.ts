@@ -4,7 +4,7 @@
 // share no field: the split is where the wire divides what folds from what opens.
 import { z } from "zod";
 import { agentIdSchema } from "../agent/agent.ts";
-import { handoffIdSchema, handoffStatusSchema, shownHandoff, shownHandoffSchema, type Handoff, type HandoffId } from "../agent/handoff.ts";
+import { handoffBody, handoffBodySchema, handoffIdSchema, handoffStatusSchema, type Handoff, type HandoffId } from "../agent/handoff.ts";
 import type { Handed } from "../issue/status.ts";
 import { checkIdSchema, type Check, type CheckId, type FinalCheck } from "../verdict/check.ts";
 import { reviewFindingSchema, triaged, triageSchema, type Review } from "../verdict/review.ts";
@@ -63,10 +63,6 @@ export const roundSchema = z.object({
 });
 export type Round = z.infer<typeof roundSchema>;
 
-/** What a round's handoff opens to: the agent's account and a research handoff's report. why without its id, time, status and summary: the folded round carries those. */
-const handoffBodySchema = shownHandoffSchema.omit({ id: true, at: true, status: true, summary: true });
-export type HandoffBody = z.infer<typeof handoffBodySchema>;
-
 export const roundBodySchema = z.object({
   /** The handoff's account (null: a final check's round, which has none). */
   handoff: handoffBodySchema.nullable(),
@@ -107,8 +103,7 @@ export function finalRoundOf(check: FinalCheck, number: number, outcomeAt: numbe
 /** What a round opens to: its handoff (null: a final check's round), and its check's verdict and the review's findings (null, none: nothing checks it). */
 export function bodyOf(handoff: Handoff | null, check: Check | null): RoundBody {
   return {
-    // why parse: zod drops every key its schema doesn't name, as shownVerdict does.
-    handoff: handoff === null ? null : handoffBodySchema.parse(shownHandoff(handoff)),
+    handoff: handoff === null ? null : handoffBody(handoff),
     verdict: check === null ? null : shownVerdict(check.verdict),
     findings: check === null ? [] : findingsOf(check),
   };
@@ -169,9 +164,10 @@ function reviewOf({ review, verdict }: Check): Round["review"] {
   switch (review.state) {
     case "none":
       return { state: "none" };
+    // why only while its verdict is queued: a check superseded mid-review keeps that review as it was, and none will come.
     case "queued":
     case "running":
-      return { state: "pending" };
+      return verdict.state === "queued" ? { state: "pending" } : { state: "none" };
     case "missed":
       return { state: "missed", at: review.at, reason: review.reason };
     case "reported":

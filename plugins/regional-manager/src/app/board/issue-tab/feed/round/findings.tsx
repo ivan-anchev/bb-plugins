@@ -18,19 +18,31 @@ export function Findings({ findings }: { findings: readonly Finding[] }) {
               <bdi>{placeOf(finding)}</bdi>
             </span>
           </p>
-          <p className="rmi-finding-claim">
-            {finding.triage?.result === "rejected" ? <s>{finding.claim}</s> : finding.claim}
-          </p>
-          {finding.triage !== null && (
-            <p className="rmi-triage" data-triage={finding.triage.result}>
-              <b>{finding.triage.result === "confirmed" ? "Confirmed" : "Rejected"}</b> {finding.triage.reason}
-            </p>
-          )}
+          <p className="rmi-finding-claim">{isRejected(finding) ? <s>{finding.claim}</s> : finding.claim}</p>
+          {finding.triage !== null && <Triage {...finding.triage} />}
         </li>
       ))}
     </ul>
   );
 }
+
+/** The verifier's word on a finding and why; nothing for a result this bundle doesn't know, from a newer server. */
+function Triage({ result, reason }: NonNullable<Finding["triage"]>) {
+  switch (result) {
+    case "confirmed":
+    case "rejected":
+      return (
+        <p className="rmi-triage" data-triage={result}>
+          <b>{result === "confirmed" ? "Confirmed" : "Rejected"}</b> {reason}
+        </p>
+      );
+    default:
+      result satisfies never;
+      return null;
+  }
+}
+
+const isRejected = ({ triage }: Finding): boolean => triage?.result === "rejected";
 
 const placeOf = ({ file, line }: Finding): string => (line === null ? file : `${file}:${line}`);
 

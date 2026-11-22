@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { modelRefSchema } from "../agent/execution.ts";
 import type { Check } from "./check.ts";
-import { isReviewing, triageSchema } from "./review.ts";
+import { triageSchema } from "./review.ts";
 import { checkoutProblems, checkoutSchema, type Checkout, type CheckoutRead } from "./checkout.ts";
 import { ciVerdictSchema, type Ci, type CiVerdict } from "./pr.ts";
 
@@ -185,12 +185,14 @@ export function outcome(verdict: ShownVerdict): Outcome {
 }
 
 /**
- * Whether the check is in flight: its review is still to come, or its verdict is (no verifier
- * started yet, one running, or returned and nobody told), or it waits for CI. A round reads it.
+ * Whether the check is in flight: its verdict is still to come (its review first, while it is
+ * queued; then a verifier, or returned and nobody told), or it waits for CI. why by the verdict
+ * alone: a review is to come only while its verdict is queued, and a check superseded mid-review
+ * keeps that review as it was. A round reads it.
  */
-export function checkInFlight({ review, verdict }: Pick<Check, "review" | "verdict">): boolean {
+export function checkInFlight({ verdict }: Pick<Check, "verdict">): boolean {
   const result = outcome(verdict);
-  return isReviewing(review) || result === "pending" || result === "waiting-for-ci";
+  return result === "pending" || result === "waiting-for-ci";
 }
 
 /** A returned verdict, the model it ran on aside: what pass or fail is judged on. */
