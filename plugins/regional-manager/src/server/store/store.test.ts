@@ -79,18 +79,18 @@ test("regional managers pictured by an icon each get a blob look of their own as
   assert.deepEqual(renamed, looks, "the same ids under other names get the same looks");
 });
 
-test("a regional manager whose id seeds a look an earlier one has gets the next free one, in the order they were created", () => {
-  const first = openStore(iconManagers([[MANAGER, "Webhooks"]]).storage).coordinator(MANAGER)?.avatar;
-  assert.ok(first, "the look its id seeds");
-  const { db, storage } = iconManagers([[OTHER_MANAGER, "Scout"], [MANAGER, "Webhooks"]]);
-  db.prepare("UPDATE coordinators SET avatar = ? WHERE id = ?").run(JSON.stringify(first), OTHER_MANAGER);
+test("of two icon managers whose ids seed the same look, the one created first keeps it and the later one gets the next free one, whatever order their rows were written in", () => {
+  // why these ids: both seed bubble in pink (found once, written here so no test draws ids at random).
+  const older = coordinatorIdSchema.parse("570ace8b-8f43-476b-a8a0-88aadbb4dfd6");
+  const newer = coordinatorIdSchema.parse("1995df9c-c6da-42dc-ac05-5de892e7c72b");
+  // why the newer row first: rows written in the reverse of their creation, so only created_at gives the order.
+  const { db, storage } = iconManagers([[newer, "Newer"], [older, "Older"]]);
+  db.prepare("UPDATE coordinators SET created_at = 2000 WHERE id = ?").run(newer);
 
   const looks = looksOf(openStore(storage));
 
-  const later = looks.get(MANAGER);
-  assert.ok(later);
-  assert.deepEqual(looks.get(OTHER_MANAGER), first, "a manager with a blob keeps it");
-  assert.notEqual(lookKey(later), lookKey(first), "the later one steps past the look its id seeds");
+  assert.deepEqual(looks.get(older), { kind: "blob", shape: "bubble", hue: "pink", expression: "happy" });
+  assert.deepEqual(looks.get(newer), { kind: "blob", shape: "circle", hue: "cyan", expression: "curious" });
 });
 
 test("opening the store again changes no avatar: not the looks it gave, nor a look the user picked that another manager has", () => {
@@ -138,19 +138,15 @@ for (const [unreadable, stored] of [
 
 test("an icon manager whose id seeds the look an unreadable avatar is drawn with steps past it as the store opens", () => {
   const { db, storage } = iconManagers([[MANAGER, "Webhooks"]]);
-  const seeded = lookKey(freeLook(seedOf(MANAGER), []));
-  let broken = coordinatorIdSchema.parse(randomUUID());
-  while (lookKey(freeLook(seedOf(broken), [])) !== seeded) broken = coordinatorIdSchema.parse(randomUUID());
+  // why this id: it seeds bunny in rose, as MANAGER does (found once, written here so no test draws ids at random).
+  const broken = coordinatorIdSchema.parse("4be35e2d-bb20-4bfb-abdd-e1d72643984b");
   db.prepare("INSERT INTO roles (ticket, thread_id, role, created_at) VALUES ('ticket-broken', NULL, ?, 900)").run(JSON.stringify({ kind: "coordinator", coordinatorId: broken }));
   db.prepare("INSERT INTO coordinators (id, ticket, project_id, name, avatar, created_at) VALUES (?, 'ticket-broken', '', 'Broken', '{not json', 900)").run(broken);
 
   const store = openStore(storage);
 
-  const drawn = store.notStarted().find(({ id }) => id === broken)?.avatar;
-  const given = store.coordinator(MANAGER)?.avatar;
-  assert.ok(drawn && given);
-  assert.equal(lookKey(drawn), seeded, "the unreadable one is drawn with the look its id seeds");
-  assert.notEqual(lookKey(given), seeded);
+  assert.deepEqual(store.notStarted().find(({ id }) => id === broken)?.avatar, { kind: "blob", shape: "bunny", hue: "rose", expression: "neutral" }, "drawn with the look its id seeds");
+  assert.deepEqual(store.coordinator(MANAGER)?.avatar, { kind: "blob", shape: "amoeba", hue: "rose", expression: "neutral" }, "the next free one after it");
 });
 
 test("an avatar this release can't draw, as a kind a later one stored or text that isn't JSON, reads as the look its id seeds, stays stored, and the list still reads", () => {
