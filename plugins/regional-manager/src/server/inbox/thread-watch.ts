@@ -1,15 +1,15 @@
 // bb's thread events about agents, turned into inbox events. They stand in for the report to the
 // parent that agents spawn without: a turn that ended with no handoff, a failure, a question for
 // the user. Each handler skips threads another plugin made before it touches SQLite.
-import type { PluginLogger, PluginThreadEventPayloads } from "@get-bb/plugin-sdk";
+import type { PluginLogger } from "@get-bb/plugin-sdk";
 import type { Agent } from "../../model/agent.ts";
+import { questionOf, type InteractionPayload } from "../../model/interaction.ts";
 import { ifCurrent, type TurnsBb } from "../agents/threads.ts";
 import type { Store } from "../store/store.ts";
 import type { Inbox } from "./inbox.ts";
 
 type ThreadRef = { id: string; originPluginId: string | null };
-type Payload = PluginThreadEventPayloads["interaction.pending"]["interaction"]["payload"];
-type Interaction = { payload: Payload };
+type Interaction = { payload: InteractionPayload };
 
 /** The parts of bb the watch uses, down to the fields it reads. */
 type WatchBb = TurnsBb & {
@@ -57,45 +57,6 @@ export function watchAgentThreads({ bb, store, inbox }: Deps): void {
   bb.events.on("interaction.pending", ({ thread, interaction }) => {
     const agent = holderOf(thread);
     // why tell the regional manager: only the user can answer an agent's question or approval, and it says so in its reply.
-    if (agent !== null) inbox.record(agent.coordinatorId, { kind: "needs-input", ...on(agent), question: questionOf(interaction) });
+    if (agent !== null) inbox.record(agent.coordinatorId, { kind: "needs-input", ...on(agent), question: questionOf(interaction.payload) });
   });
-}
-
-/** What a pending interaction asks of the user, in a line or a few. */
-function questionOf({ payload }: Interaction): string {
-  switch (payload.kind) {
-    case "user_question":
-      return payload.questions.map((question) => question.prompt).join("\n");
-    case "approval":
-      return `Asks to approve ${subjectOf(payload.subject)}${payload.reason === null ? "" : `: ${payload.reason}`}`;
-    case "plugin":
-      return payload.title;
-    default:
-      if (isNamespaced(payload)) return payload.title;
-      // why not throw: bb can send an interaction newer than this plugin's SDK, and its fields are unknown.
-      payload satisfies never;
-      return "Asks the user something in its thread";
-  }
-}
-
-/** A provider's own interaction, named `<provider>/<kind>`, titled as a plugin's is. */
-const isNamespaced = (payload: Payload): payload is Extract<Payload, { kind: `${string}/${string}` }> => payload.kind.includes("/");
-
-function subjectOf(subject: Extract<Payload, { kind: "approval" }>["subject"]): string {
-  switch (subject.kind) {
-    case "command":
-      return `the command \`${subject.command}\``;
-    case "file_change":
-      return "a file change";
-    case "permission_grant":
-      return "a permission grant";
-    case "plan":
-      return "its plan";
-    case "tool_use":
-      return "a tool call";
-    default:
-      // why not throw: bb can send an approval newer than this plugin's SDK.
-      subject satisfies never;
-      return "an action";
-  }
 }

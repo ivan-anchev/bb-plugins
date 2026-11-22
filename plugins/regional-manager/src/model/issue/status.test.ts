@@ -70,7 +70,7 @@ const returned = (results: CriterionResult[], settlement: Extract<Verdict, { sta
 const pr = (state: PrSnapshot["state"]): PrSnapshot => ({ number: 12, url: "https://github.com/o/r/pull/12", state, draft: false, review: "none", ci: "pass", headSha: SHA, failedChecks: [] });
 
 const thread = (status: HolderThread["status"], hasPendingInteraction = false): HolderThread => ({ status, hasPendingInteraction });
-const facts = (over: Partial<IssueFacts>): IssueFacts => ({ issue, holder: null, ended: null, pr: null, openDecision: false, finalCheck: null, ...over });
+const facts = (over: Partial<IssueFacts>): IssueFacts => ({ issue, holder: null, ended: null, pr: null, openDecision: false, finalCheck: null, verifierAsks: false, ...over });
 const held = (thread: HolderThread | null, current: Handed | null = null, fixRounds = 0): Partial<IssueFacts> => ({ holder: { agent: { ...agent, fixRounds }, thread, current } });
 const view = (over: Partial<IssueFacts>) => {
   const [placed] = issueViews([facts(over)]);
@@ -122,13 +122,13 @@ test("a done handoff walks Verifying, then In review, by its check", () => {
   const summary = "Retries land with backoff";
   const cases: [Verdict, ReturnType<typeof at>][] = [
     [{ state: "queued", checkout: CLEAN }, at("verifying", `Verifying: ${summary}`)],
-    [{ state: "running", verifierThreadId: "thr_v", nudged: false, checkout: CLEAN }, at("verifying", `Verifying: ${summary}`)],
+    [{ state: "running", verifierThreadId: "thr_v", nudged: false, declined: [], checkout: CLEAN }, at("verifying", `Verifying: ${summary}`)],
     [returned(["pass"], { kind: "waiting-for-ci" }), at("verifying", `Waiting for CI: ${summary}`)],
     [returned(["pass"]), at("in-review", `✓ Verified: ${summary}`)],
     [{ state: "waived" }, at("in-review", `Unverified: ${summary}`)],
     [returned(["fail"], { kind: "sent-back", round: 1, ci: { kind: "none" } }), at("in-progress", `Fixing its verifier's findings: ${summary}`)],
     [returned(["fail"]), at("in-progress", `✗ Failed verification: ${summary}`, `✗ Failed verification: ${summary}`)],
-    [{ state: "could-not-run", verifierThreadId: null, reason: "unread" }, at("in-progress", `Couldn't verify: ${summary}`, `Couldn't verify: ${summary}`)],
+    [{ state: "could-not-run", verifierThreadId: null, reason: "unread" }, at("in-progress", `Couldn't verify, as unread: ${summary}`, `Couldn't verify, as unread: ${summary}`)],
     [{ state: "superseded" }, at("in-progress", `Replaced by a newer handoff: ${summary}`)],
   ];
   for (const [verdict, expected] of cases) assert.deepEqual(view(held(thread("idle"), { handoff: done, check: checkOf(verdict) })), expected, JSON.stringify(verdict));
@@ -153,7 +153,7 @@ test("work that reached Verifying or In review stays there once its agent ended;
   assert.deepEqual(view(stopped({ handoff: done, check: checkOf({ state: "queued", checkout: CLEAN }) })), at("verifying", "Verifying: Retries land with backoff"));
   assert.deepEqual(view({ ...stopped({ handoff: done, check: checkOf(returned(["pass"])) }), pr: pr("open") }), at("in-review", "✓ Verified: Retries land with backoff"));
   assert.deepEqual(view(stopped({ handoff: done, check: checkOf(returned(["fail"])) })), at("todo", "Its agent was stopped"));
-  assert.equal(placedByLeft("build", { handoff: blocked, check: null }, null), null);
+  assert.equal(placedByLeft("build", { handoff: blocked, check: null }, { pr: null, verifierAsks: false }), null);
 });
 
 test("an issue resting in Todo after its agent ended says how it ended; only one no agent ever started reads Not started", () => {
@@ -239,11 +239,11 @@ test("a build parent whose work is all merged is placed by its latest final chec
 
   assert.deepEqual(placed(null), { ...at2("verifying", "Final check due"), due: ["i2", "i3"], closedBy: null }, "none made yet");
   assert.deepEqual(pick(placed(finalCheck(["i2", "i3"], { state: "queued", checkout: null }))), at2("verifying", "Final check running"));
-  assert.deepEqual(pick(placed(finalCheck(["i2", "i3"], { state: "running", verifierThreadId: "thr_v", nudged: false, checkout: null }))), at2("verifying", "Final check running"));
+  assert.deepEqual(pick(placed(finalCheck(["i2", "i3"], { state: "running", verifierThreadId: "thr_v", nudged: false, declined: [], checkout: null }))), at2("verifying", "Final check running"));
   const passed = finalCheck(["i2", "i3"], returned(["pass"]));
   assert.deepEqual(placed(passed), { ...at2("done", "✓ Final check passed"), due: null, closedBy: { by: "final-check", checkId: passed.id } });
   assert.deepEqual(pick(placed(finalCheck(["i2", "i3"], returned(["fail"])))), at2("in-progress", "✗ Final check failed", "✗ Final check failed"));
-  assert.deepEqual(pick(placed(finalCheck(["i2", "i3"], { state: "could-not-run", verifierThreadId: "thr_v", reason: "its verifier stopped without a verdict twice" }))), at2("in-progress", "Couldn't run its final check", "Couldn't run its final check"));
+  assert.deepEqual(pick(placed(finalCheck(["i2", "i3"], { state: "could-not-run", verifierThreadId: "thr_v", reason: "its verifier stopped without a verdict twice" }))), at2("in-progress", "Couldn't run its final check, as its verifier stopped without a verdict twice", "Couldn't run its final check, as its verifier stopped without a verdict twice"));
   assert.deepEqual(pick(placed(finalCheck(["i2", "i3"], { state: "waived" }))), at2("in-review", "Unverified: verification was off"));
 
   const failedBefore = finalCheck(["i2", "i3"], returned(["fail"]));
@@ -264,4 +264,15 @@ test("a sub-issue is blocked by its parent's dependencies, and its own", () => {
   const [i1View, i2View] = issueViews([parent, sub, i9]);
   assert.deepEqual([i1View?.blockedBy, i2View?.blockedBy], [[{ id: "i9", status: "todo" }], [{ id: "i9", status: "todo" }]]);
   assert.deepEqual(issueViews([parent, sub, { ...i9, issue: { ...i9.issue, closed: { as: "canceled", at: 9_000 } } }])[1]?.blockedBy, []);
+});
+
+test("a running verifier asking a person reads so while it waits, on a handoff's check and a final check; a check not yet running never does", () => {
+  const summary = "Retries land with backoff";
+  const running: Verdict = { state: "running", verifierThreadId: "thr_v", nudged: false, declined: [], checkout: CLEAN };
+  const asking = ", its verifier asking for an answer or an approval, which the plugin declines";
+  assert.deepEqual(view({ ...held(thread("idle"), { handoff: done, check: checkOf(running) }), verifierAsks: true }), at("verifying", `Verifying${asking}: ${summary}`));
+  assert.deepEqual(view({ ...held(thread("idle"), { handoff: done, check: checkOf({ state: "queued", checkout: CLEAN }) }), verifierAsks: true }), at("verifying", `Verifying: ${summary}`));
+  const merged = Array.from({ length: 2 }, () => ({ pr: pr("merged") }));
+  const final = finalCheck(["i2", "i3"], { ...running, checkout: null });
+  assert.equal(family("build", merged, {}, { finalCheck: final, verifierAsks: true }).parent.headline, `Final check running${asking}`);
 });

@@ -223,12 +223,13 @@ it; else on the manager's model unless one of those agents ran on it; else on
 another available provider's default model; else on one of theirs, which the
 verdict says. Naming a verifier while a check runs applies to the next one.
 It is nudged once if it ends a turn without a verdict, as any verifier is,
-and could-not-run after that.
+and could-not-run after that; its asks are declined and a 30-minute silence
+ends it, as for any verifier.
 
 - **Passed**: the parent is Done ("✓ Final check passed"), closed by that
   check, and any issue waiting on it is unblocked, once.
 - **Failed** or **couldn't run**: the parent is In progress and Needs you
-  ("✗ Final check failed", "Couldn't run its final check"). Nothing goes back
+  ("✗ Final check failed", "Couldn't run its final check, as <the reason>"). Nothing goes back
   to any agent, and there is no fix round: the manager files the fix as a new
   sub-issue, which puts the parent In progress, and once that sub-issue is
   Done and merged a new final check starts by itself. A check never runs
@@ -366,7 +367,7 @@ branch for the project.
   until the agent hands off on another.
 - Its verifier runs in the same sandbox, on the agent's own checkout.
 - A sandbox removed before its verifier returns a verdict leaves the issue
-  under Needs you as "Couldn't verify", with the reason.
+  under Needs you as "Couldn't verify, as <the reason>".
 - `agent_stop` with `archive: true` destroys the sandbox when no other thread
   lives there, with anything the agent never pushed.
 
@@ -640,10 +641,23 @@ a **verifier** for each one:
   commit when the issue has a pull request; an unverifiable criterion is not a
   pass. The manager's catch-up says which model checked it and why, as in
   "on claude-code opus, as named on i1".
+- **Nobody answers a verifier**: anything its provider asks a person (a
+  question, an approval, an MCP connector's sign-in) is declined as bb raises
+  it, or at the next tick if the plugin missed it: an approval is denied, a
+  question answered that nobody answers a verifier, a provider's own request
+  (codex's MCP sign-in) declined. The verifier goes on without it, and its
+  verdict's findings name each ask declined. While one is pending the row reads
+  "Verifying, its verifier asking for an answer or an approval, which the
+  plugin declines". An ask bb refuses to let the plugin decline ends the check
+  "Couldn't verify", naming the ask, and stops the verifier. The verifier's
+  brief tells it to use the `gh` CLI for GitHub, never a connector or app.
 - **No verdict**: a verifier that ends a turn without one is reminded once,
   when its agent is idle;
   a second time, or a verifier bb wouldn't start, whose thread was archived,
-  or whose environment bb removed, reads "Couldn't verify" with the reason.
+  whose environment bb removed, or that showed no activity in bb for 30
+  minutes while it ran (the plugin then stops it), reads "Couldn't verify, as
+  <the reason>" under Needs you, and wakes the manager. Opening the issue shows the reason and links the
+  verifier's thread.
 - **A newer done handoff** from the same agent stops the older verifier, and
   only the newer handoff is checked and announced.
 - **A verifier that never started** (the plugin reloaded at that moment) is

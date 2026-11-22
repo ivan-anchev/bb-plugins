@@ -64,7 +64,7 @@ export default function plugin(host: BbPluginApi): void {
   const prWatch = createPrWatch({ bb, store, inbox, gh: runGh, now: Date.now });
   const agents = createAgents({ bb, store, spawner, inbox, memory, turns, prs: prWatch, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
   const issues = createIssues({ bb, store, views, onChange });
-  const verify = createVerify({ bb, store, spawner, inbox, turns });
+  const verify = createVerify({ bb, store, spawner, inbox, turns, now: Date.now });
   const finalChecks = createFinalChecks({ bb, store, views, turns, verify, defaultBranch: defaultBranchReader(bb, store), now: Date.now });
 
   // why as the plugin loads, and from the tick unwaited for: it is a one-time upgrade, retried after a failure, whose bb calls must not hold up the watch.

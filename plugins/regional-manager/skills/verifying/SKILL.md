@@ -94,3 +94,10 @@ worktree, the check ends without a verdict: stop.
 If you end a turn without it, the plugin reminds you once, with a message
 that bb shows as from your regional manager's thread. A second turn without
 it records that the work couldn't be verified.
+
+Nobody answers you. Anything you ask a person, or ask them to approve, is
+declined at once: go on without it, and leave the criterion it would have
+checked unverifiable, saying why. Your verdict's findings name each ask
+declined. For GitHub use the `gh` CLI in the shell, never a connector or app:
+its sign-in is an ask nobody answers. Showing no activity for 30 minutes ends
+the check without a verdict.
