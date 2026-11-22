@@ -162,6 +162,19 @@ test("a focused row that moves lanes keeps its card in its new lane", async () =
   assert.equal(card()?.on, "WEB-5", "and its card with it");
 });
 
+test("while the pointer rests on a row, focus on another row shows that row's card, and when focus goes the hovered row's card comes back", () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  const { row, card } = mount();
+  fireEvent.pointerEnter(row("WEB-5", /^Todo/).closest(".rmi-rowbox") ?? assert.fail("no row box"));
+  act(() => mock.timers.tick(500));
+  assert.equal(card()?.on, "WEB-5");
+
+  act(() => row("WEB-4", /^In review/).focus());
+  assert.equal(card()?.on, "WEB-4");
+  act(() => row("WEB-4", /^In review/).blur());
+  assert.equal(card()?.on, "WEB-5", "the pointer never left WEB-5");
+});
+
 test("a press puts the card away, and the focus the press gives the row opens none", () => {
   const { row, card } = mount();
   act(() => row("WEB-4", /^In review/).focus());

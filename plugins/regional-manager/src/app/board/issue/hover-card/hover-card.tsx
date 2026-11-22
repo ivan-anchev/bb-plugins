@@ -25,8 +25,12 @@ import { useCardPlacement, type Placement } from "./placement.ts";
 /** A link's card, floating in the window (hover-card.css), which chat-links/ finds focus and the pointer in. */
 export const FLOATING_CARD = ".rmi-card-floating";
 
-/** The link a floating card floats by, while it is mounted: focus in the card is focus on that link. */
-export const linkOfCard = (card: Element): HTMLElement | undefined => cardLinks.get(card);
+/** The link the floating card `node` is in floats by, while it is mounted; undefined outside one: focus or the pointer in the card is on that link. */
+export function cardLinkOf(node: Node): HTMLElement | undefined {
+  const element = node instanceof Element ? node : node.parentElement;
+  const card = element?.closest(FLOATING_CARD) ?? null;
+  return card === null ? undefined : cardLinks.get(card);
+}
 
 const cardLinks = new WeakMap<Element, HTMLElement>();
 

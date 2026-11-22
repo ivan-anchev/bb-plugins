@@ -10,7 +10,7 @@ import { useEffect, useMemo, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { IssueLink } from "../../model/issue/link/issue-link.ts";
 import { useCardIntent, type CardIntent } from "../board/issue/hover-card/card-intent.ts";
-import { FLOATING_CARD, HoverCard } from "../board/issue/hover-card/hover-card.tsx";
+import { cardLinkOf, FLOATING_CARD, HoverCard } from "../board/issue/hover-card/hover-card.tsx";
 import { useBoardIssue } from "../board/use-board-issue.ts";
 import { useIssueLinkAt, type FoundLink } from "./decorated-links.ts";
 
@@ -28,10 +28,10 @@ export function LinkCard(): ReactNode {
 /** Tells the intent what the pointer, focus, Tab and presses do on issue links and on the card of `shown`. */
 function useLinkTriggers(intent: CardIntent<HTMLAnchorElement>, shown: HTMLAnchorElement | null, linkAt: (target: EventTarget | null) => FoundLink | null): void {
   useEffect(() => {
-    /** The link a node belongs to: the link it is in, or the shown link, for a node in its card. */
-    const linkOf = (node: EventTarget | null): HTMLAnchorElement | null => linkAt(node)?.anchor ?? (shown !== null && inCard(node) ? shown : null);
-    /** Whether `node` is in the place of `link`: the link, or its card while it shows. */
-    const within = (link: HTMLAnchorElement, node: EventTarget | null) => node instanceof Node && (link.contains(node) || (link === shown && inCard(node)));
+    /** The link a node belongs to: the link it is in, or the link the card it is in floats by. */
+    const linkOf = (node: EventTarget | null): HTMLAnchorElement | null => linkAt(node)?.anchor ?? anchorOfCard(node);
+    /** Whether `node` is in the place of `link`: the link, or the card that floats by it. */
+    const within = (link: HTMLAnchorElement, node: EventTarget | null) => node instanceof Node && (link.contains(node) || cardLinkOf(node) === link);
     const crossing = (event: PointerEvent | FocusEvent, act: (link: HTMLAnchorElement) => void) => {
       const link = linkOf(event.target);
       if (link !== null && !within(link, event.relatedTarget)) act(link);
@@ -83,7 +83,13 @@ function listen<Type extends keyof DocumentEventMap>(type: Type, listener: (even
   return () => document.removeEventListener(type, listener, capture);
 }
 
-const inCard = (node: EventTarget | null): boolean => node instanceof Element && node.closest(FLOATING_CARD) !== null;
+const inCard = (node: EventTarget | null): boolean => node instanceof Node && cardLinkOf(node) !== undefined;
+
+/** The link the card `node` is in floats by; null outside a card. */
+function anchorOfCard(node: EventTarget | null): HTMLAnchorElement | null {
+  const link = node instanceof Node ? cardLinkOf(node) : undefined;
+  return link instanceof HTMLAnchorElement ? link : null;
+}
 
 /** The Board's card for the issue, from its board's read, with why a later read failed; none until a read has it, or for an issue the board has none of. */
 function IssueCard({ anchor, link, intent }: { anchor: HTMLAnchorElement; link: IssueLink; intent: CardIntent<HTMLAnchorElement> }) {

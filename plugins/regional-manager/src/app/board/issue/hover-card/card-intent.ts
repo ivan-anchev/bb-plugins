@@ -33,7 +33,10 @@ export type CardPresence = { close(): void; mounted(): () => void };
 export function useCardIntent<Key>(): { shown: Key | null; intent: CardIntent<Key> } {
   const [shown, setShown] = useState<Key | null>(null);
   const intent = useMemo(() => cardIntent<Key>(setShown), []);
-  useEffect(() => () => intent.stop(), [intent]);
+  useEffect(() => {
+    intent.start();
+    return () => intent.stop();
+  }, [intent]);
   return { shown, intent };
 }
 
@@ -47,7 +50,7 @@ const CLOSE_DELAY = 150;
 const WARM = 400;
 
 /** The timers and facts behind which card shows, told to `show` as they change. */
-function cardIntent<Key>(show: (key: Key | null) => void): CardIntent<Key> & { stop(): void } {
+function cardIntent<Key>(show: (key: Key | null) => void): CardIntent<Key> & { start(): void; stop(): void } {
   let shown: Key | null = null;
   /** The trigger whose card is mounted: only a card on screen holds focus against the pointer, or keeps the next card warm. */
   let onScreen: Key | null = null;
@@ -124,8 +127,8 @@ function cardIntent<Key>(show: (key: Key | null) => void): CardIntent<Key> & { s
         onScreen = key;
         return () => {
           if (onScreen === key) onScreen = null;
-          // why the pointer at once: a trigger whose card left without it (a row that moved lanes, a link bb rendered again) is no longer under the pointer as far as anyone can tell.
-          if (hovered === key) hovered = null;
+          // why the pointer at once, and only for a card that left while still shown (a row that moved lanes, a link bb rendered again): its trigger is no longer under the pointer as far as anyone can tell; a card that went because another took its place leaves the pointer where it rests.
+          if (hovered === key && shown === key) hovered = null;
           // why the rest once the commit is done: a focused row that moves lanes mounts its card again in its new lane, after this one leaves, and keeps it while it has focus.
           queueMicrotask(() => {
             if (stopped || shown !== key || (onScreen === key && focused === key)) return;
@@ -135,6 +138,10 @@ function cardIntent<Key>(show: (key: Key | null) => void): CardIntent<Key> & { s
         };
       },
     }),
+    /** Runs while its owner is mounted; why a start: an owner mounted again, as StrictMode does, keeps the same intent. */
+    start() {
+      stopped = false;
+    },
     stop() {
       stopped = true;
       cancel();

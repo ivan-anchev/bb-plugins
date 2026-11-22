@@ -11,7 +11,7 @@
 import { experimental_usePluginId } from "@get-bb/plugin-sdk/app";
 import { useCallback, useEffect, useState } from "react";
 import { parseIssueHref, type IssueLink } from "../../model/issue/link/issue-link.ts";
-import { FLOATING_CARD, linkOfCard } from "../board/issue/hover-card/hover-card.tsx";
+import { cardLinkOf } from "../board/issue/hover-card/hover-card.tsx";
 
 /** An issue link on screen and the slot its glyph goes in. `key`: its own, for the portal. */
 type DecoratedLink = { key: number; link: IssueLink; slot: HTMLElement };
@@ -123,12 +123,6 @@ function focusKept(linkAt: (target: EventTarget | null) => FoundLink | null) {
   };
 }
 
-/** The link the floating card `node` is in floats by; undefined outside one. */
-function cardLinkOf(node: Node): HTMLElement | undefined {
-  const element = node instanceof Element ? node : node.parentElement;
-  const card = element?.closest(FLOATING_CARD) ?? null;
-  return card === null ? undefined : linkOfCard(card);
-}
 
 /** Whether focus is on no element of the page: on its body, or on one taken out of it. */
 function focusLost(): boolean {
