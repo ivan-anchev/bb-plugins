@@ -267,6 +267,7 @@ test("Shuffle never lands on a look another manager has while one is free: with 
   await waitFor(() => assert.equal(shuffle.getAttribute("aria-disabled"), "false"));
 
   fireEvent.click(shuffle);
+  await page.create();
 
-  assert.deepEqual(page.chosen().map((label) => label?.toLowerCase()), [free.shape, free.hue]);
+  assert.deepEqual(page.creates.map(({ avatar }) => avatar), [free], "the look kept, face and all");
 });

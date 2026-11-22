@@ -64,11 +64,11 @@ export function freeLook(start: number, taken: readonly Avatar[]): Avatar {
 }
 
 /**
- * Shuffle's look: the first from `start` on that neither `taken` nor `current` has; when `current` is
- * the only free one, `current`, so Shuffle never lands on a taken look while a free one is left.
+ * Shuffle's look: the first from `start` on that neither `taken` nor `current` has; when there is none,
+ * `current` itself, face and all, so Shuffle never lands on a taken look while a free one is left.
  */
 export function shuffledLook(start: number, taken: readonly Avatar[], current: Avatar): Avatar {
-  return firstFree(start, [...taken, current]) ?? freeLook(start, taken);
+  return firstFree(start, [...taken, current]) ?? current;
 }
 
 /** A start taken from an id, the same on every run: FNV-1a over its UTF-8 bytes. */

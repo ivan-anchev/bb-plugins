@@ -15,11 +15,12 @@ test("Shuffle picks a free look other than the current one while there is one", 
   assert.equal(lookKey(look), lookKey(other));
 });
 
-test("Shuffle never lands on a taken look while a free one is left: with 251 taken and the current one free, it keeps the current one", () => {
-  const [current, ...taken] = everyLook;
-  assert.ok(current);
+test("Shuffle never lands on a taken look while a free one is left: with 251 taken and the current one free, it keeps the current one, face and all", () => {
+  const [first, ...taken] = everyLook;
+  assert.ok(first);
+  const current = { ...first, expression: "determined" } as const;
 
-  assert.equal(lookKey(shuffledLook(randomStart(), taken, current)), lookKey(current));
+  assert.deepEqual(shuffledLook(randomStart(), taken, current), current);
 });
 
 test("a free look is never one a manager has, whatever its face, and is a whole blob avatar", () => {
