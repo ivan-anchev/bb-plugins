@@ -243,8 +243,8 @@ test("a new manager's look moves on when a later read shows another manager has 
 
 test("fields an earlier release kept, with an icon this one can't draw, keep their name and description and get a look no other manager has", async (t) => {
   t.mock.method(Math, "random", () => 0);
-  // why an icon: what 0.7.0 kept in the browser before avatars were blobs.
-  localStorage.setItem("coordinator-new-profile", JSON.stringify({ name: "Half typed", description: "Moves webhooks", avatar: { kind: "icon", icon: "Zap" } }));
+  // why raw text with an icon: what 0.7.0 kept in the browser before avatars were blobs.
+  localStorage.setItem("coordinator-new-profile", '{"name":"Half typed","description":"Moves webhooks","avatar":{"kind":"icon","icon":"Zap"}}');
   const page = mount();
 
   const name = await page.view.findByRole("textbox", { name: "Name" });
