@@ -111,7 +111,9 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
     ringing.add(id);
     let delivery: "sent" | "queued";
     try {
-      const sent = await bb.sdk.threads.send({ threadId: coordinator.threadId, input: [{ type: "text", text: doorbellText(events, { titles: new Map(store.issues(id).map(({ id, title }) => [id, title])), check: store.check, decision: store.decision }), mentions: [] }], mode: "queue-if-active" });
+      const text = doorbellText(events, { titles: new Map(store.issues(id).map(({ id, title }) => [id, title])), check: store.check, decision: store.decision });
+      // why agent-only: the model reads the doorbell, but bb draws no message for it, so the user sees only the turn it starts.
+      const sent = await bb.sdk.threads.send({ threadId: coordinator.threadId, input: [{ type: "text", text, visibility: "agent-only", mentions: [] }], mode: "queue-if-active" });
       // why record a send that lands after a dispose: it happened, and announcing it again would ring twice.
       store.announce(id, events.map((event) => event.id), sent.delivery === "queued" ? sent.queuedMessage.id : null, Date.now());
       delivery = sent.delivery;

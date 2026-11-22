@@ -4,7 +4,7 @@ import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
-import { bbHttpError, coordinating, HEAD, isRefusal, ISSUE, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
+import { bbHttpError, coordinating, doorbellOf, HEAD, isRefusal, ISSUE, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
 
 const RETRIES = { ...ISSUE, brief: "Retry failed webhook deliveries with backoff.", doneCriteria: ["npm test passes", "a failed delivery is retried 3 times"] };
 const REPORT = { summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
@@ -14,7 +14,7 @@ async function filed(options: Parameters<typeof coordinating>[0] = {}) {
   const { kit, threadId, coordinatorId } = await coordinating(options);
   await kit.call("issue_create", RETRIES, threadId);
   kit.thread(threadId).status = "idle";
-  const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
+  const doorbells = () => kit.doorbellsSent(threadId);
   const rows = async () => (await kit.rpc.board({ coordinatorId })).issues.map((issue) => [issue.id, laneOf(issue), issue.headline]);
   const start = async (input: object = {}) => kit.call("agent_start", { issue: "WEB-1", ...input }, threadId);
   return { kit, threadId, coordinatorId, doorbells, rows, start };
@@ -393,7 +393,7 @@ test("agent_stop keeps the thread unless asked to archive it; either way the iss
     ["WEB-1", "todo", "Its agent was stopped"],
     ["WEB-2", "todo", "Its agent was stopped"],
   ]);
-assert.equal(doorbells()[0], '[Regional Manager] 1 update. Call crew_catch_up to read it in full.\n- WEB-1 "Add retries" (a1) ended its turn without a handoff');
+assert.equal(doorbells()[0], doorbellOf('WEB-1 "Add retries" (a1) ended its turn without a handoff'));
   // why each agent ends its turn as well: bb announces the stopped turn idle, and can't say the stop ended it.
   const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
   assert.deepEqual(caughtUp.match(/^### .+$/gm)?.slice(0, 4), [

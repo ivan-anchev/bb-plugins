@@ -1,5 +1,6 @@
-// The doorbell: the short message that wakes a regional manager. It reaches the thread as a
-// user-role message, so it holds only facts the plugin derived (an issue's and an agent's id, a
+// The doorbell: the short message that wakes a regional manager. It is sent agent-only, so bb shows
+// the user no message for it, only the turn it starts. The model still reads it as a user-role
+// message, so it holds only facts the plugin derived (an issue's and an agent's id, a
 // handoff's status, a memory file's name) and text the regional manager itself wrote: the titles it
 // gave its issues, the notes of its reminders and the questions it asked the user. Anything an agent
 // or a verifier wrote, and the user's answers, are read through crew_catch_up, as a tool result,

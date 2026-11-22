@@ -566,12 +566,16 @@ issue and its agent, such as
 The tree being clean again, like a fix round sent back, wakes nobody: it is
 listed in the next message and catch-up.
 
-The message reaches the thread as if you typed it, so it holds only facts the
-plugin derived and what the thread wrote itself (its issues' titles, its
-reminders' notes and the questions it asked you): never an agent's summary,
-answer, error or question, a verifier's evidence, nor your answer to a
-decision. Those are in `crew_catch_up`, which returns every update since the
-last catch-up, whole, once.
+The message is hidden from you: bb shows no message for it, only the turn it
+starts. Once that turn ends, it folds into bb's "Worked for" row, when
+Settings has Collapse finished turns on for the manager's provider; expand
+the row to see the manager's catch-up. The manager still reads the message
+as if you typed it, so it holds only facts the plugin derived and what the
+thread wrote itself (its issues' titles, its reminders' notes and the
+questions it asked you): never an agent's summary, answer, error or
+question, a verifier's evidence, nor your answer to a decision. Those are in
+`crew_catch_up`, which returns every update since the last catch-up, whole,
+once.
 
 The message never interrupts a running turn: it waits in the thread's queue
 until the turn ends. While one waits, the next updates wait for it to be
@@ -1059,10 +1063,11 @@ and Memory read the new text on their next read.
 ## Limits
 
 - **Wakes are not instant.** An update never interrupts a running turn: the
-  regional manager reads it when its turn ends. Reminders come due within
-  about a minute; a pull request change shows within a minute while CI runs or
-  a verdict waits for it, else within five, because pull requests are polled,
-  never pushed.
+  regional manager reads it when its turn ends. While it waits, bb's Queue
+  above the composer lists the hidden message as "(empty message)".
+  Reminders come due within about a minute; a pull request change shows
+  within a minute while CI runs or a verdict waits for it, else within five,
+  because pull requests are polled, never pushed.
 - **Edits are detected, not prevented.** They are read after a turn ends, a
   committed one isn't seen, and nothing is blocked or reverted.
 - Reminders take no cron expressions and nothing finer than a minute.

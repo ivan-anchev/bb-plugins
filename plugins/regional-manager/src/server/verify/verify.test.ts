@@ -9,7 +9,7 @@ import { agentIdSchema } from "../../model/agent.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import type { Verdict } from "../../model/verdict/verdict.ts";
 import type { InteractionPayload } from "../../model/interaction.ts";
-import { bbHttpError, coordinating, HEAD, isRefusal, settled, startedAgent, textOf, type SendFailure } from "../test-harness.ts";
+import { bbHttpError, coordinating, doorbellOf, HEAD, isRefusal, settled, startedAgent, textOf, type SendFailure } from "../test-harness.ts";
 
 const a1 = agentIdSchema.parse("a1");
 const i1 = issueIdSchema.parse("WEB-1");
@@ -44,7 +44,7 @@ async function withAgent(options: Parameters<typeof coordinating>[0] = {}) {
   const { kit, threadId, coordinatorId } = await coordinating(options);
   const agentThreadId = (await startedAgent(kit, threadId, { title: "Add retries", brief: "Retry failed deliveries with backoff.", doneCriteria: CRITERIA })).agentThreadId;
   kit.thread(threadId).status = "idle";
-  const doorbells = () => kit.sent().flatMap((args) => (args.threadId === threadId ? args.input.flatMap((part) => (part.type === "text" ? [part.text] : [])) : []));
+  const doorbells = () => kit.doorbellsSent(threadId);
   const row = async () => {
     const issue = (await kit.rpc.board({ coordinatorId })).issues[0] ?? assert.fail("no row");
     return { ...issue, lane: laneOf(issue) };
@@ -132,7 +132,7 @@ test("a first failed verdict goes back to the agent as its verifier's message, w
   await settled();
   assert.deepEqual([(await row()).lane, (await row()).headline], ["in-review", "✓ Verified: Retries land with backoff"]);
   assert.deepEqual(doorbells(), [
-    `[Regional Manager] 2 updates. Call crew_catch_up to read them in full.\n- WEB-1 "Add retries" (a1) handed off: done, failed verification, findings sent back to it (fix round 1)\n- WEB-1 "Add retries" (a1) handed off: done, verified`,
+    doorbellOf(`WEB-1 "Add retries" (a1) handed off: done, failed verification, findings sent back to it (fix round 1)`, `WEB-1 "Add retries" (a1) handed off: done, verified`),
   ]);
   const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
   assert.match(catchUp, /findings sent back to it\n\nAt [^\n]* as its automatic fix round 1\. Nothing to do yet/);
@@ -153,7 +153,7 @@ test("findings sent back wake the coordinating thread neither at once nor from t
   await kit.idle(agentThreadId, "Looking at it."); // the agent's fix turn ends without a handoff
   await settled();
   assert.deepEqual(doorbells(), [
-    `[Regional Manager] 2 updates. Call crew_catch_up to read them in full.\n- WEB-1 "Add retries" (a1) handed off: done, failed verification, findings sent back to it (fix round 1)\n- WEB-1 "Add retries" (a1) ended its turn without a handoff`,
+    doorbellOf(`WEB-1 "Add retries" (a1) handed off: done, failed verification, findings sent back to it (fix round 1)`, `WEB-1 "Add retries" (a1) ended its turn without a handoff`),
   ]);
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /2 updates since your last catch-up[\s\S]*findings sent back to it[\s\S]*ended its turn without a handoff/);
 });
@@ -237,7 +237,7 @@ for (const [gone, answer] of REFUSED) {
     assert.deepEqual(kit.sent().filter((args) => args.threadId === agentThreadId), [], "bb took nothing");
     assert.deepEqual(settlement(), { kind: "checked", refused: answer, ci: { kind: "none" } });
     assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 0, "the round is given back");
-    assert.deepEqual(doorbells(), [`[Regional Manager] 1 update. Call crew_catch_up to read it in full.\n- WEB-1 "Add retries" (a1) handed off: done, failed verification`]);
+    assert.deepEqual(doorbells(), [doorbellOf(`WEB-1 "Add retries" (a1) handed off: done, failed verification`)]);
     const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
     assert.ok(
       catchUp.includes(`bb refused the verifier's findings when the plugin sent them to the agent as its automatic fix round, so the agent never got them and the round is not spent. bb answered: ${answer}. It failed verification and is yours to decide`),
@@ -278,7 +278,7 @@ test("a done handoff that supersedes a verdict while its findings are on their w
 });
 
 /** The doorbell line of a failed verdict whose findings a crash left in doubt. */
-const MAYBE_SENT = `- WEB-1 "Add retries" (a1) handed off: done, failed verification, findings may or may not have reached it`;
+const MAYBE_SENT = `WEB-1 "Add retries" (a1) handed off: done, failed verification, findings may or may not have reached it`;
 
 /** Sends that fail without proving bb refused the findings: they may or may not have reached the agent. */
 const UNPROVEN: [string, Omit<SendFailure, "threadId">][] = [
@@ -299,7 +299,7 @@ for (const [how, failure] of UNPROVEN) {
     assert.equal(kit.delivered(agentThreadId).length, failure.taken ? 1 : 0, failure.taken ? "bb took the findings" : "bb never had them");
     assert.deepEqual(settlement(), { kind: "maybe-sent-back", round: 1, ci: { kind: "none" } });
     assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 1, "the round stays spent");
-    assert.deepEqual(doorbells(), [`[Regional Manager] 1 update. Call crew_catch_up to read it in full.\n${MAYBE_SENT}`], "the regional manager is woken");
+    assert.deepEqual(doorbells(), [doorbellOf(MAYBE_SENT)], "the regional manager is woken");
     assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /nothing bb keeps shows whether they arrived: they may or may not have\. Read the issue with issue_read before you message the agent/);
 
     await kit.tick();
@@ -324,7 +324,7 @@ test("a crash before the findings leave, then an unrelated turn in the agent's t
   assert.deepEqual(kit.sent().filter((args) => args.threadId === agentThreadId), [], "nothing is sent on a guess");
   assert.deepEqual(settlement(), { kind: "maybe-sent-back", round: 1, ci: { kind: "none" } });
   assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 1, "the claim is kept");
-  assert.deepEqual(doorbells(), [`[Regional Manager] 1 update. Call crew_catch_up to read it in full.\n${MAYBE_SENT}`], "the regional manager is woken");
+  assert.deepEqual(doorbells(), [doorbellOf(MAYBE_SENT)], "the regional manager is woken");
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /nothing bb keeps shows whether they arrived: they may or may not have\. Read the issue with issue_read before you message the agent/);
   assert.deepEqual(kit.store.takeUnread(coordinatorId, Date.now()), [], "told once");
   await kit.tick();
@@ -349,7 +349,7 @@ test("findings bb queued before a crash are not sent again by the next tick", as
   await settled();
   assert.equal(kit.sent().filter((args) => args.threadId === agentThreadId).length, 1, "not sent twice");
   assert.deepEqual(settlement(), { kind: "maybe-sent-back", round: 1, ci: { kind: "none" } });
-  assert.deepEqual(doorbells(), [`[Regional Manager] 1 update. Call crew_catch_up to read it in full.\n${MAYBE_SENT}`]);
+  assert.deepEqual(doorbells(), [doorbellOf(MAYBE_SENT)]);
 
   await kit.dispatch(kit.queued(agentThreadId)[0] ?? assert.fail("nothing queued"));
   await kit.tick();
@@ -371,7 +371,7 @@ test("findings bb delivered before a crash are not sent again by the next tick",
   assert.equal(kit.sent().filter((args) => args.threadId === agentThreadId).length, 1, "not sent twice");
   assert.deepEqual(settlement(), { kind: "maybe-sent-back", round: 1, ci: { kind: "none" } });
   assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 1);
-  assert.deepEqual(doorbells(), [`[Regional Manager] 1 update. Call crew_catch_up to read it in full.\n${MAYBE_SENT}`]);
+  assert.deepEqual(doorbells(), [doorbellOf(MAYBE_SENT)]);
 });
 
 test("a failed verdict returned after its agent's thread was deleted, before the plugin heard, goes to the regional manager at once, sending nothing", async () => {
