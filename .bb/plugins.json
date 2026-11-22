@@ -50,10 +50,6 @@
     {
       "name": "regional-manager",
       "source": "./plugins/regional-manager"
-    },
-    {
-      "name": "subagents-strip",
-      "source": "./plugins/subagents-strip"
     }
   ]
 }

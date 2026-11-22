@@ -34,7 +34,6 @@ bb plugin install git:https://github.com/ivan-anchev/bb-plugins.git@^0.1.0 --tag
 | [PR Reviews](plugins/pr-reviews) | Browse a GitHub project's open pull requests and review each change with its full diff and a step-by-step guided review. |
 | [`proactive-visuals`](plugins/proactive-visuals) | Agents answer data with an inline chart, without being asked. |
 | [Regional Manager](plugins/regional-manager) | Experimental: it may break with a bb update. A regional manager is a long-lived thread that plans a body of work as issues, keeps its memory in files, and starts an agent thread on each issue, on this machine or in a sandbox; all of its agents are its crew. An independent verifier checks every done handoff, and a board shows each issue by status, with Needs you above, its pull request and CI. |
-| [`subagents-strip`](plugins/subagents-strip) | A live strip above the composer that counts the thread's subagents and child threads and opens into one row per subagent that expands to its report and latest steps. |
 
 ## Develop
 
