@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { Execution } from "../execution.ts";
 import { ONE_LINE } from "../one-line.ts";
 import type { CoordinatorId } from "../role.ts";
-import type { IssueKey } from "./issue-key.ts";
+import type { IssueKey } from "./key/issue-key.ts";
 import { isVerified, minCriteria, PIPELINES, type Kind } from "./kind.ts";
 
 /** An issue's id within its regional manager: its issue key (issue-key.ts) and its number, `BBP-1`, `BBP-2`… never reused. */

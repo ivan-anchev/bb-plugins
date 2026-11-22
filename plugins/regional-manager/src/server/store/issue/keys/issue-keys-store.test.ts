@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import type Database from "better-sqlite3";
-import { handoffIdSchema } from "../../../model/handoff.ts";
-import { issueKeySchema } from "../../../model/issue/issue-key.ts";
-import { issueIdSchema } from "../../../model/issue/issue.ts";
-import type { CheckoutRead } from "../../../model/verdict/checkout.ts";
-import { filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "../test-store.ts";
+import { handoffIdSchema } from "../../../../model/handoff.ts";
+import { issueKeySchema } from "../../../../model/issue/key/issue-key.ts";
+import { issueIdSchema } from "../../../../model/issue/issue.ts";
+import type { CheckoutRead } from "../../../../model/verdict/checkout.ts";
+import { failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "../../test-store.ts";
 
 const BBP = issueKeySchema.parse("BBP");
 const id = issueIdSchema.parse;
@@ -102,4 +102,19 @@ test("keying again changes nothing, whatever key it names", () => {
   assert.equal(store.keyIssues(MANAGER, BBP), false);
   assert.equal(store.keyIssues(MANAGER, issueKeySchema.parse("XYZ")), false);
   assert.deepEqual(everything(db), keyed);
+});
+
+test("a rename that fails undoes the key and every rename before it, and keying again then succeeds", () => {
+  const { db, store } = storedBy050();
+  const before = everything(db);
+  // why roles: the verifier roles are renamed after the key is written and every issue column is renamed.
+  const succeed = failWrites(db, "UPDATE", "roles");
+  assert.throws(() => store.keyIssues(MANAGER, BBP), /forced failure/);
+  assert.deepEqual(everything(db), before, "no table keeps any of it, the key included");
+  assert.deepEqual(store.unkeyedManagers(), [{ id: MANAGER, projectId: "prj_1" }]);
+
+  succeed();
+  assert.equal(store.keyIssues(MANAGER, BBP), true);
+  assert.deepEqual(store.issues(MANAGER).map(({ id }) => id), ["BBP-1", "BBP-2", "BBP-3"]);
+  assert.deepEqual(store.roleOfThread("thr_verifier_1"), { kind: "verifier", coordinatorId: MANAGER, issueId: "BBP-2", checkId: store.record(MANAGER, id("BBP-2"))[0]?.check?.id });
 });

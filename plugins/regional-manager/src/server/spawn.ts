@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { typedText, type ComposerRequest, type Coordinator } from "../contract.ts";
 import type { Execution } from "../model/execution.ts";
-import { issueKeyOf } from "../model/issue/issue-key.ts";
+import { issueKeyOf } from "../model/issue/key/issue-key.ts";
 import { ticketMetadataSchema, type CoordinatorId, type Role } from "../model/role.ts";
 import type { MemoryRoot } from "./memory/memory-files.ts";
 import type { Store } from "./store/store.ts";

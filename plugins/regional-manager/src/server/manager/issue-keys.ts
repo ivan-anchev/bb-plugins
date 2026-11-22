@@ -2,7 +2,7 @@
 // name as it is now, and renames its issues after it: i4 becomes BBP-4 (issue-keys-store.ts). Until
 // then its issues read as nothing this release parses, so it runs as the plugin loads and from every
 // tick until none is left. A pass with nothing to key reads one row set and calls bb for nothing.
-import { issueKeyOf } from "../../model/issue/issue-key.ts";
+import { issueKeyOf } from "../../model/issue/key/issue-key.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { Store } from "../store/store.ts";
 

@@ -3,9 +3,9 @@
 // in one transaction. Text written before, a memory file, a handoff, a message or a reminder's note,
 // says i4 as it was written; the number lets a reader map it.
 import { z } from "zod";
-import type { IssueKey } from "../../../model/issue/issue-key.ts";
-import { coordinatorIdSchema, type CoordinatorId } from "../../../model/role.ts";
-import type { Db } from "../rows.ts";
+import type { IssueKey } from "../../../../model/issue/key/issue-key.ts";
+import { coordinatorIdSchema, type CoordinatorId } from "../../../../model/role.ts";
+import type { Db } from "../../rows.ts";
 
 export function issueKeysStore(db: Db) {
   return {

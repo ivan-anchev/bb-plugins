@@ -5,7 +5,7 @@ import { z } from "zod";
 import { agentIdSchema } from "../../../model/agent.ts";
 import type { RecordedDecision } from "../../../model/decision.ts";
 import { executionSchema } from "../../../model/execution.ts";
-import { issueKeySchema } from "../../../model/issue/issue-key.ts";
+import { issueKeySchema } from "../../../model/issue/key/issue-key.ts";
 import { closedAsSchema, doneCriteriaSchema, issueIdOf, issueIdSchema, restSchema, verifierProblem, type Issue, type IssueId, type Rest } from "../../../model/issue/issue.ts";
 import { kindSchema } from "../../../model/issue/kind.ts";
 import { planProblem } from "../../../model/issue/plan.ts";

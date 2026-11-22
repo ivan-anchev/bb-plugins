@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { z } from "zod";
 import { handoffIdSchema, type Handoff } from "../../model/handoff.ts";
-import { issueKeyOf } from "../../model/issue/issue-key.ts";
+import { issueKeyOf } from "../../model/issue/key/issue-key.ts";
 import { issueViews } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { DEFAULT_AVATAR } from "../../model/profile.ts";
