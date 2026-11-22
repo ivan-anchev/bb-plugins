@@ -7,7 +7,7 @@ import type { Profile } from "../../../model/profile/profile.ts";
 import type { CoordinatorId } from "../../../model/role.ts";
 import { AvatarBlob } from "../../profile/avatar.tsx";
 import { DeleteManager } from "../../profile/delete-manager.tsx";
-import { draftOf, profileDraftSchema, profileEditKeyOf } from "../../profile/profile-draft.ts";
+import { draftOf, profileEditKeyOf, storedDraftSchema, withLook } from "../../profile/profile-draft.ts";
 import { ProfileEditor } from "../../profile/profile-editor.tsx";
 import { useManager } from "../../profile/use-manager.ts";
 import { Button } from "../../ui/button.tsx";
@@ -27,7 +27,7 @@ export function ManagerPage({ ref, coordinatorId, onBack }: ManagerPageProps) {
     if (threadId !== null) openThread(threadId);
   }, [threadId, openThread]);
   // why kept in the browser: an open edit, and what it holds, outlive bb redrawing the panel (stored.ts).
-  const edit = useStored(localStorage, profileEditKeyOf(coordinatorId), profileDraftSchema);
+  const edit = useStored(localStorage, profileEditKeyOf(coordinatorId), storedDraftSchema);
   // Edit and the editor take each other's place, so each hands the focus it holds to the other (REVIEW.md).
   const opening = useFocusHandOff();
   const closing = useFocusHandOff();
@@ -66,7 +66,7 @@ export function ManagerPage({ ref, coordinatorId, onBack }: ManagerPageProps) {
               <ProfileEditor
                 coordinatorId={coordinatorId}
                 profile={profile}
-                draft={edit.value}
+                draft={withLook(edit.value, profile.avatar)}
                 onChange={edit.store}
                 onClose={() => edit.store(null)}
                 takeFocus={opening.to}

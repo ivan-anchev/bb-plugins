@@ -6,7 +6,7 @@ import { useCallback, useMemo } from "react";
 import type { Profile } from "../../model/profile/profile.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { AvatarBlob } from "../profile/avatar.tsx";
-import { draftOf, profileDraftSchema, profileEditKeyOf } from "../profile/profile-draft.ts";
+import { draftOf, profileEditKeyOf, storedDraftSchema, withLook } from "../profile/profile-draft.ts";
 import { ProfileEditor } from "../profile/profile-editor.tsx";
 import { useCoordinatorOfThread, useManager } from "../profile/use-manager.ts";
 import { handFocusTo } from "../ui/focus-hand-off.ts";
@@ -61,7 +61,7 @@ type EditorProps = { threadId: string; coordinatorId: CoordinatorId; profile: Pr
 
 /** The profile's editor, on the edit the browser keeps (stored.ts), or the profile as saved while there is none. */
 function Editor({ threadId, coordinatorId, profile, onClose }: EditorProps) {
-  const edit = useStored(localStorage, profileEditKeyOf(coordinatorId), profileDraftSchema);
+  const edit = useStored(localStorage, profileEditKeyOf(coordinatorId), storedDraftSchema);
   // The toggle stays as the editor opens and closes, so the focus moves to the name only from it, and back to it from the editor.
   const takeFocus = useCallback(
     (name: HTMLElement | null) => {
@@ -78,7 +78,7 @@ function Editor({ threadId, coordinatorId, profile, onClose }: EditorProps) {
 
   return (
     <div ref={regionRef} className="px-3 py-3">
-      <ProfileEditor coordinatorId={coordinatorId} profile={profile} draft={edit.value ?? draftOf(profile)} onChange={edit.store} onClose={close} takeFocus={takeFocus} />
+      <ProfileEditor coordinatorId={coordinatorId} profile={profile} draft={edit.value === null ? draftOf(profile) : withLook(edit.value, profile.avatar)} onChange={edit.store} onClose={close} takeFocus={takeFocus} />
     </div>
   );
 }

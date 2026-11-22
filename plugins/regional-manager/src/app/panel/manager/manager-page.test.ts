@@ -144,6 +144,19 @@ test("an open edit outlives the page, as when bb redraws the panel, and Cancel d
   assert.equal(localStorage.length, 0);
 });
 
+test("an open edit an earlier release kept, with an icon this one can't draw, stays open with what was typed and the manager's own look", async () => {
+  // why an icon: what 0.7.0 kept in the browser before avatars were blobs.
+  localStorage.setItem(`coordinator-profile-edit:${COORDINATOR}`, JSON.stringify({ name: "Scout v2", description: "Half typed", avatar: { kind: "icon", icon: "Brain" } }));
+  const { view, saves } = mount();
+
+  const name = await view.findByRole("textbox", { name: "Name" });
+  assert.ok(name instanceof HTMLInputElement);
+  assert.equal(name.value, "Scout v2");
+  await act(async () => fireEvent.click(view.getByRole("button", { name: "Save" })));
+
+  assert.deepEqual(saves, [{ name: "Scout v2", description: "Half typed", avatar: { kind: "blob", shape: "circle", hue: "violet", expression: "neutral" } }]);
+});
+
 test("Esc closes an edit nothing changed in, and keeps one that has changes", async () => {
   const { view } = mount();
   fireEvent.click(await view.findByRole("button", { name: "Edit" }));
