@@ -12,7 +12,7 @@ import type { Verdict } from "./verdict.ts";
 export const severitySchema = z.enum(["must-fix", "should-fix", "nit"]);
 
 /** One thing the reviewer found: where in the diff (its file, and its line, null when it names none), how much it matters, and what it claims is wrong. */
-export const reviewFindingSchema = z.object({
+const reviewFindingSchema = z.object({
   file: z.string().min(1),
   line: z.number().int().min(1).nullable(),
   severity: severitySchema,
@@ -44,7 +44,7 @@ export const triageSchema = z.object({ result: z.enum(["confirmed", "rejected"])
 export type Triage = z.infer<typeof triageSchema>;
 
 /** A finding with the verifier's triage of it. */
-export type Triaged = ReviewFinding & Triage;
+type Triaged = ReviewFinding & Triage;
 
 /** The review a check starts with: queued for a reviewer when its verdict is queued for a verifier, else none. A final check's is none: it reviews no diff. */
 export const firstReview = (verdict: Verdict): Review => (verdict.state === "queued" ? { state: "queued" } : { state: "none" });
