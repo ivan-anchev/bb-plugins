@@ -27,18 +27,23 @@ async function onI1(turnWaitMs?: number) {
   kit.thread(threadId).status = "idle";
   kit.thread(agentThreadId).status = "idle";
   const start = async () => kit.call("agent_start", { issue: "WEB-1" }, threadId);
-  /** Every verifier bb spawned for a1, oldest first. */
-  const verifiers = () => [...Array(kit.spawned()).keys()].map((i) => kit.thread(`thr_${i + 1}`)).filter((thread) => thread.spawnedWith.parentThreadId === agentThreadId);
+  /** Every thread bb spawned for a1's checks in one of `kinds`, oldest first. */
+  const childrenOf = (...kinds: string[]) =>
+    [...Array(kit.spawned()).keys()].map((i) => kit.thread(`thr_${i + 1}`)).filter((thread) => thread.spawnedWith.parentThreadId === agentThreadId && kinds.includes(kit.store.roleOfThread(thread.id)?.kind ?? ""));
+  /** Every verifier bb spawned for a1, oldest first; its reviewers, a1's children too, left out. */
+  const verifiers = () => childrenOf("verifier");
+  /** Every reviewer and verifier bb spawned for a1, oldest first. */
+  const checkers = () => childrenOf("reviewer", "verifier");
   const check = () => kit.store.latestHandoff(coordinatorId, a1)?.check ?? assert.fail("no check");
-  return { kit, threadId, coordinatorId, agentThreadId, start, verifiers, check };
+  return { kit, threadId, coordinatorId, agentThreadId, start, verifiers, checkers, check };
 }
 
-test("a newer done handoff asked while the first's verifier starts waits for WEB-1, then stops that verifier before starting its own; the handover leaves none running", async () => {
-  const { kit, coordinatorId, agentThreadId, start, verifiers } = await onI1();
+test("a newer done handoff asked while the first's reviewer starts waits for WEB-1, then stops that reviewer before starting its own; the handover leaves none running", async () => {
+  const { kit, coordinatorId, agentThreadId, start, checkers } = await onI1();
   await kit.call("agent_handoff", DONE, agentThreadId);
   kit.providers.holding = true;
   await kit.idle(agentThreadId, "Handed off.");
-  assert.ok(kit.providers.held.length > 0, "the first verifier's start reads the catalog");
+  assert.ok(kit.providers.held.length > 0, "the first reviewer's start reads the catalog");
   await kit.startTurn(agentThreadId); // the user asks a1 for one more change
   const second = kit.call("agent_handoff", DONE, agentThreadId);
   await settled();
@@ -48,9 +53,17 @@ test("a newer done handoff asked while the first's verifier starts waits for WEB
   await second;
   await kit.idle(agentThreadId, "Handed off.");
 
-  assert.deepEqual(verifiers().map(({ status }) => status), ["idle", "active"], "the first verifier stopped before the second started");
+  assert.deepEqual(
+    checkers().map((thread) => [kit.store.roleOfThread(thread.id)?.kind, thread.status]),
+    [
+      ["reviewer", "idle"],
+      ["reviewer", "idle"],
+      ["verifier", "active"],
+    ],
+    "the first reviewer stopped before the second started, and that one before its verifier",
+  );
   const next = threadIn(textOf(await start()));
-  assert.deepEqual([...verifiers().map(({ status }) => status), kit.thread(next).status], ["idle", "idle", "active"], "only a2 runs");
+  assert.deepEqual([...checkers().map(({ status }) => status), kit.thread(next).status], ["idle", "idle", "idle", "active"], "only a2 runs");
 });
 
 test("a superseded verifier bb won't stop keeps the next verifier from starting and refuses the handover, naming it; once bb stops it, both go ahead", async () => {
@@ -508,7 +521,7 @@ test("a1 that bb doesn't confirm stopped after its done handoff keeps its check 
   kit.leavesBackground(agentThreadId);
   await kit.idle(agentThreadId, "Handed off.");
   assert.deepEqual([check().verdict.state, verifiers().length], ["queued", 0], "no verifier while a1 may still wake");
-  assert.match(kit.warnings().at(-1) ?? "", /^On WEB-1: a1 couldn't be confirmed stopped: bb answered HTTP 500: Stop failed, so no verifier starts there yet; the next tick tries again\./);
+  assert.match(kit.warnings().at(-1) ?? "", /^On WEB-1: a1 couldn't be confirmed stopped: bb answered HTTP 500: Stop failed, so no reviewer starts there yet; the next tick tries again\./, "the reviewer, which takes the environment first, waits");
   assert.deepEqual(kit.store.unannounced(coordinatorId), []);
 
   kit.stopRequests.byThread.delete(agentThreadId);
@@ -769,7 +782,7 @@ test("a manager's message bb still holds for a1 keeps its verifier from starting
 
   await kit.idle(agentThreadId, "Handed off.");
   assert.deepEqual([kit.queued(agentThreadId), verifiers().length, check().verdict.state], [[message], 0, "queued"], "no verifier while a1 has its message to come");
-  assert.match(kit.warnings().at(-1) ?? "", /^On WEB-1: a1 is still to get your message from bb's queue, so no verifier starts there yet; the next tick tries again\.$/);
+  assert.match(kit.warnings().at(-1) ?? "", /^On WEB-1: a1 is still to get your message from bb's queue, so no reviewer starts there yet; the next tick tries again\.$/, "the reviewer, which takes the environment first, waits");
   await kit.dispatch(message);
   assert.match(kit.delivered(agentThreadId).at(-1) ?? "", /Please add jitter\.$/);
 });

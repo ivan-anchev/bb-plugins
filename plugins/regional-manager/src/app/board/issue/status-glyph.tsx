@@ -1,7 +1,7 @@
 // An issue status's glyph, 14 in a 16 box, in its status's token (issue-board.css `.rmi-state`), in
 // the stroke of Activity Sidebar's state glyphs (src/ui/state-glyph.tsx). The open stages fill one
-// ring clockwise from 12 o'clock as the issue moves on: Todo empty, In progress a quarter, Verifying
-// a half, In review three quarters; Done closes on its check. Backlog's ring is dotted, Canceled's
+// ring clockwise from 12 o'clock as the issue moves on: Todo empty, In progress a quarter, Reviewing
+// three eighths, Verifying a half, In review three quarters; Done closes on its check. Backlog's ring is dotted, Canceled's
 // crossed.
 import type { ReactNode } from "react";
 import { STATUS_LABELS, type IssueStatus } from "../../../model/issue/status.ts";
@@ -41,6 +41,8 @@ function glyph(status: IssueStatus): ReactNode {
       return <Stage fill={null} />;
     case "in-progress":
       return <Stage fill={QUARTER} />;
+    case "reviewing":
+      return <Stage fill={THREE_EIGHTHS} />;
     case "verifying":
       return <Stage fill={HALF} />;
     case "in-review":
@@ -74,8 +76,9 @@ function Stage({ fill }: { fill: string | null }) {
   );
 }
 
-/** The pie's slices, radius 6 about the ring's centre: to 3, 6 and 9 o'clock. */
+/** The pie's slices, radius 6 about the ring's centre: to 3, half past 4, 6 and 9 o'clock. */
 const QUARTER = "M12 12V6a6 6 0 0 1 6 6z";
+const THREE_EIGHTHS = "M12 12V6a6 6 0 0 1 4.243 10.243z";
 const HALF = "M12 6a6 6 0 0 1 0 12z";
 const THREE_QUARTERS = "M12 12V6a6 6 0 1 1-6 6z";
 

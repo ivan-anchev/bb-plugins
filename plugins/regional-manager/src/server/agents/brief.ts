@@ -142,7 +142,7 @@ function earlierSection(issueId: Issue["id"], { base, earlier }: StartingPoint):
 }
 
 /** A memory file under its own `##` section, with what it is to the agent (null: the heading says it all). */
-function memorySection(file: string, holds: string, note: string | null, text: MemoryText | null): string {
+export function memorySection(file: string, holds: string, note: string | null, text: MemoryText | null): string {
   const lead = [`## ${file}: ${holds}`, ...(note === null ? [] : [note])].join("\n\n");
   if (text === null) return `${lead}\n\n(There is no ${file}.)`;
   return `${lead}\n\n${nested(withoutOuterBlanks(text.content))}`;

@@ -118,7 +118,7 @@ export function forwardThreadEvents(bb: EventsBb, { store, agents, verify, onCha
     if (agent !== null) await agents.deleted(agent).catch(warned(`end ${agent.id}, whose thread was deleted`));
   });
 
-  /** The issue of an agent's or a verifier's thread; null for any other. */
+  /** The issue of an agent's, a verifier's or a reviewer's thread; null for any other. */
   function issueOf(payload: ThreadEvent): { coordinatorId: CoordinatorId; issueId: IssueId } | null {
     const role = roleOf(payload);
     switch (role?.kind) {
@@ -127,6 +127,7 @@ export function forwardThreadEvents(bb: EventsBb, { store, agents, verify, onCha
         return agent === null ? null : { coordinatorId: agent.coordinatorId, issueId: agent.issueId };
       }
       case "verifier":
+      case "reviewer":
         return { coordinatorId: role.coordinatorId, issueId: role.issueId };
       case "coordinator":
       case undefined:
@@ -145,17 +146,17 @@ export function forwardThreadEvents(bb: EventsBb, { store, agents, verify, onCha
     });
   }
 
-  // why a verifier's ask: nobody answers one, and it holds the verifier's turn open; the look
-  // declines it (verify.ts watchRunning). why the board before and after: it shows the verifier
+  // why a verifier's or a reviewer's ask: nobody answers one, and it holds its turn open; the look
+  // declines it (verify.ts watchRunning, review.ts follow). why the board before and after: it shows the verifier
   // asking until the look declines it, and bb announces nothing when the ask is settled.
   bb.events.on("interaction.pending", (payload) => {
     const role = roleOf(payload);
-    if (role?.kind !== "verifier") return;
-    const { coordinatorId, issueId } = role;
+    if (role?.kind !== "verifier" && role?.kind !== "reviewer") return;
+    const { coordinatorId, issueId, kind } = role;
     refreshBoard(coordinatorId);
     void verify
       .lookAgain(coordinatorId, issueId)
-      .catch(warned(`decline what the verifier of ${issueId} asked`))
+      .catch(warned(`decline what the ${kind} of ${issueId} asked`))
       .finally(() => refreshBoard(coordinatorId));
   });
 

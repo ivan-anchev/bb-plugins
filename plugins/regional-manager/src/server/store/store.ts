@@ -15,7 +15,7 @@ import { issueDecisions, type IssueDecision } from "../../model/decision.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
 import type { IssueKey } from "../../model/issue/key/issue-key.ts";
 import { agentsStore, bindRole, endAgent, insertAgent, insertTicket, type NewAgent } from "./issue/agents-store.ts";
-import { checksStore, startCheck, supersedeChecks } from "./issue/checks-store.ts";
+import { checksStore, startCheck, startReview, supersedeChecks } from "./issue/checks-store.ts";
 import { issueKeysStore } from "./issue/keys/issue-keys-store.ts";
 import { issuesStore } from "./issue/issues-store.ts";
 import { prStore } from "./issue/pr-store.ts";
@@ -147,13 +147,14 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     /**
      * Gives the ticket's role to the thread, and returns that role. Idempotent: a ticket binds once,
      * so a second call, or a call naming another thread, changes nothing and returns null. An ended
-     * agent's ticket never binds (see bindRole). A verifier's check starts running in the thread as
-     * it binds, unless it was superseded meanwhile.
+     * agent's ticket never binds (see bindRole). A verifier's check, or a reviewer's review, starts
+     * running in the thread as it binds, unless its check was superseded meanwhile.
      */
     bindTicket(ticket: string, threadId: string): Role | null {
       return db().transaction(() => {
         const role = bindRole(db, ticket, threadId);
         if (role?.kind === "verifier") startCheck(db, role.checkId, threadId);
+        if (role?.kind === "reviewer") startReview(db, role.checkId, threadId);
         return role;
       })();
     },

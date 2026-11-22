@@ -1,4 +1,4 @@
-// A check: one verifier's job on an issue, and its verdict. What a check judges is its subject: an
+// A check: one verifier's job on an issue, and its verdict; for a done handoff, the review read before it. What a check judges is its subject: an
 // agent's done handoff of a verified kind, or a build parent's final check on the default branch,
 // stored in the same JSON column. One state machine judges both; the subject says where the
 // commit and the tree are read, which commit is judged, and whether a fix round exists.
@@ -8,6 +8,7 @@ import type { Execution } from "../execution.ts";
 import { commitSchema, handoffIdSchema } from "../handoff.ts";
 import { issueIdSchema, type DoneCriteria, type IssueId } from "../issue/issue.ts";
 import type { CoordinatorId } from "../role.ts";
+import type { Review } from "./review.ts";
 import type { Verdict } from "./verdict.ts";
 
 export const checkIdSchema = z.uuid().brand<"checkId">();
@@ -38,6 +39,8 @@ export type Check = {
   /** The issue's verifier when it was made, copied as the criteria are (null: the plugin picks). */
   verifier: Execution | null;
   subject: CheckSubject;
+  /** Its review (review.ts): a handoff's diff, read before its verifier starts. */
+  review: Review;
   verdict: Verdict;
 };
 

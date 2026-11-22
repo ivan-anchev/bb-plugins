@@ -15,6 +15,7 @@ import { intervalText, type Reminder } from "../../model/reminder.ts";
 import { checkedAgents, type Check, type CheckId, type FinalCheck } from "../../model/verdict/check.ts";
 import { checkoutText, NOT_CLEAN, worktreeText } from "../../model/verdict/checkout.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
+import { findingText, triaged, type Review, type Triage } from "../../model/verdict/review.ts";
 import { allPassed, ciVerdictOf, failedCheckout, judge, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
 import { reportFileOf } from "../memory/report-file.ts";
 
@@ -280,7 +281,7 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
         .join(" ");
       const checks = verdict.criteria.map((check, i) => `${i + 1}. ${check.result.toUpperCase()}: ${check.criterion}\n   ${check.evidence.replaceAll("\n", "\n   ")}`);
       const findings = verdict.findings.length === 0 ? "Findings: none." : `Findings:\n${verdict.findings.map((finding) => `- ${finding.replaceAll("\n", "\n  ")}`).join("\n")}`;
-      return [head, ...checks, findings].join("\n\n");
+      return [head, ...checks, findings, ...reviewText(check.review, verdict)].join("\n\n");
     }
     case "could-not-run":
       return `Couldn't verify: ${verdict.reason}. Nobody has checked it against the done-criteria.`;
@@ -291,6 +292,27 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
     default:
       return verdict satisfies never;
   }
+}
+
+/**
+ * What came of a returned verdict's review: no review was had, and why; or what its reviewer found,
+ * on what model, each finding as the verifier triaged it, confirmed ones first, each with the
+ * verifier's reason. Only confirmed ones went to the agent. Nothing for a check with no review stage.
+ */
+function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned" }>): string[] {
+  if (review.state === "missed") return [`Review: no review was had, as ${review.reason}.`];
+  if (review.state !== "reported") return [];
+  const by = `${review.model.providerId} ${review.model.model}`;
+  if (review.findings.length === 0) return [`Review: a reviewer on ${by} found nothing.`];
+  const all = triaged(review, verdict.triage);
+  const lines = (result: Triage["result"]) => all.filter((finding) => finding.result === result).map((finding) => `- ${findingText(finding).replaceAll("\n", "\n  ")}\n  Why: ${finding.reason}`);
+  const confirmed = lines("confirmed");
+  const rejected = lines("rejected");
+  return [
+    `Review: a reviewer on ${by} reported ${all.length} finding${all.length === 1 ? "" : "s"}; the verifier confirmed ${confirmed.length} and rejected ${rejected.length}. Only confirmed ones go to the agent.`,
+    ...(confirmed.length === 0 ? [] : [`Confirmed:\n${confirmed.join("\n")}`]),
+    ...(rejected.length === 0 ? [] : [`Rejected:\n${rejected.join("\n")}`]),
+  ];
 }
 
 /** Why the tree failed a verdict, whatever its criteria say: the agent's claimed commit wasn't checked out on a clean tree; a final check's verifier's worktree wasn't clean. */

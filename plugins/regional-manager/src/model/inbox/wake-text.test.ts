@@ -36,6 +36,7 @@ function checkedWith(verdict: Verdict): { titles: typeof titles; check(id: Check
     criteria: [WRITTEN],
     verifier: null,
     subject: { kind: "handoff", agentId: a1, handoffId: handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e"), headSha: "0123456789abcdef0123456789abcdef01234567", prUrl: null },
+    review: { state: "none" },
     verdict,
   };
   return { titles, check: (id) => (id === k1 ? check : null), decision: () => null };
@@ -50,6 +51,7 @@ const returned = (results: ("pass" | "fail" | "unverifiable")[]): Verdict => ({
   findings: [WRITTEN],
   model: { providerId: "codex", model: "gpt-default" },
   sameModel: false,
+  triage: [],
   settlement: { kind: "checked", refused: null, ci: { kind: "none" } },
 });
 

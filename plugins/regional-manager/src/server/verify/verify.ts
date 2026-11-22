@@ -1,6 +1,7 @@
 // The verify step: the plugin, not the regional manager, starts a verifier for every check of a done
 // handoff, and for a build parent's final check (final-check/), while verification is on, and the
-// handoff reaches the regional manager only with its verdict. A returned verdict is stored first, then settled: one that passed every criterion waits
+// handoff reaches the regional manager only with its verdict. A done handoff's verifier starts once
+// its review is in, or was missed (review/): the reviewer takes the environment first, the same way. A returned verdict is stored first, then settled: one that passed every criterion waits
 // while CI on its commit is still to come, an agent's first failed verdict goes back to the agent,
 // as the verifier's message, with no turn of the regional manager, and any other goes to the
 // regional manager. The handoff tool, the verifier's issue_verdict, the tick and an issue's thread
@@ -25,6 +26,7 @@ import type { Coordinator } from "../../contract.ts";
 import type { Issue, IssueId } from "../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { checkedAgents, type Check, type CheckId, type HandoffCheck } from "../../model/verdict/check.ts";
+import { isReviewing } from "../../model/verdict/review.ts";
 import type { Checkout, CheckoutRead } from "../../model/verdict/checkout.ts";
 import { ciOf, type CiVerdict } from "../../model/verdict/pr.ts";
 import { isSettled, judge, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
@@ -35,10 +37,11 @@ import { threadExecution, type ThreadExecutionBb } from "../execution/thread-exe
 import type { Inbox } from "../inbox/inbox.ts";
 import type { Busy, IssueTurns } from "../issues/issue-turns.ts";
 import { quietIssue, unquietText, type GivenTo, type QuietBb } from "../issues/quiet.ts";
-import type { Spawner, VerifierRequest } from "../spawn.ts";
+import type { Review } from "../review/review.ts";
+import type { Spawner, CheckerRequest } from "../spawn.ts";
 import type { Settlement } from "../store/issue/checks-store.ts";
 import type { Store } from "../store/store.ts";
-import { finalVerifierRequest, judgedTree, type FinalVerifierBb } from "./final-check/final-verifier.ts";
+import { finalCheckerRequest, judgedTree, type FinalVerifierBb } from "./final-check/final-verifier.ts";
 import { findingsMessage } from "./findings.ts";
 import { refusalOf } from "./send-refusal.ts";
 import { declineAsks, type AsksBb } from "./verifier-asks.ts";
@@ -95,14 +98,15 @@ type Deps = {
     | "unsettledChecks"
     | "prOfBranch"
   >;
-  spawner: Pick<Spawner, "verifier">;
+  spawner: Pick<Spawner, "checker">;
+  review: Pick<Review, "start" | "follow">;
   inbox: Pick<Inbox, "handoff" | "giveUpCheck" | "settleCheck">;
   turns: IssueTurns;
   now(): number;
 };
 
-/** A verifier's report: each criterion named by its text, and its findings. */
-export type VerifierReport = Pick<Extract<Verdict, { state: "returned" }>, "findings"> & { criteria: { criterion: string; result: CriterionResult; evidence: string }[] };
+/** A verifier's report: each criterion named by its text, its findings, and its triage of the review's findings. */
+export type VerifierReport = Pick<Extract<Verdict, { state: "returned" }>, "findings" | "triage"> & { criteria: { criterion: string; result: CriterionResult; evidence: string }[] };
 
 /** What became of a verifier's report: stored; refused, as its check no longer waits for it; or, for a final check, why its worktree couldn't be read, which ended the check as could-not-run. */
 type Received = "recorded" | "not-running" | { unread: string };
@@ -141,7 +145,7 @@ const NUDGE =
 
 export type Verify = ReturnType<typeof createVerify>;
 
-export function createVerify({ bb, store, spawner, inbox, turns, now }: Deps) {
+export function createVerify({ bb, store, spawner, review, inbox, turns, now }: Deps) {
   /** The agent whose done handoff the check judges. why throw: a handoff's check is made of a bound agent's handoff, and agents are never deleted while their regional manager is kept. */
   function agentOf(check: HandoffCheck): Agent & { threadId: string } {
     const agent = store.agent(check.coordinatorId, check.subject.agentId);
@@ -163,10 +167,11 @@ export function createVerify({ bb, store, spawner, inbox, turns, now }: Deps) {
     return check;
   }
 
-  /** Everything a verifier for this check needs, by what it judges; null while none starts now: its verdict is no longer queued, or its agent still runs (see handoffRequest). */
-  async function requestFor(checkId: CheckId): Promise<VerifierRequest | null> {
+  /** Everything a verifier for this check needs, by what it judges; null while none starts now: its verdict is no longer queued, its review is still to come, or its agent still runs (see handoffRequest). */
+  async function requestFor(checkId: CheckId): Promise<CheckerRequest | null> {
     const check = store.check(checkId);
-    if (check?.verdict.state !== "queued") return null;
+    // why not while its review is to come: the reviewer has the environment first (reviewInTurn).
+    if (check?.verdict.state !== "queued" || isReviewing(check.review)) return null;
     const coordinator = store.coordinator(check.coordinatorId);
     const issue = store.issue(check.coordinatorId, check.issueId);
     // why throw: checks are kept while their issue and regional manager are.
@@ -177,7 +182,7 @@ export function createVerify({ bb, store, spawner, inbox, turns, now }: Deps) {
         return handoffRequest({ ...check, subject }, coordinator, issue, check.verdict.checkout);
       case "final": {
         const theirs = checkedAgents(check, store.agents(check.coordinatorId)).map(({ execution }) => execution);
-        return finalVerifierRequest(bb, { check: { ...check, subject }, coordinator, issue, theirs });
+        return finalCheckerRequest(bb, { check: { ...check, subject }, coordinator, issue, theirs });
       }
       default:
         return subject satisfies never;
@@ -189,7 +194,7 @@ export function createVerify({ bb, store, spawner, inbox, turns, now }: Deps) {
    * read as it handed off; null while bb reports the agent's thread running, as it does through the
    * turn that handed off, so the verifier never runs beside it there.
    */
-  async function handoffRequest(check: HandoffCheck, coordinator: Coordinator, issue: Issue, checkout: Checkout | null): Promise<VerifierRequest | null> {
+  async function handoffRequest(check: HandoffCheck, coordinator: Coordinator, issue: Issue, checkout: Checkout | null): Promise<CheckerRequest | null> {
     const agent = agentOf(check);
     // why throw: a check is made of a bound agent's handoff, on an issue that had a brief for it to start, and queued with the read made as it handed off.
     if (issue.brief === null || checkout === null) throw new Error(`The check ${check.id} of ${issue.id} has no brief or no checkout to verify.`);
@@ -230,7 +235,7 @@ export function createVerify({ bb, store, spawner, inbox, turns, now }: Deps) {
     try {
       const request = await requestFor(id);
       if (request === null) return;
-      await spawner.verifier(request);
+      await spawner.checker(request);
     } catch (error) {
       // why only from queued: bb may have made the thread and bound it through thread.created, with only its answer lost.
       inbox.giveUpCheck(id, { state: "queued" }, { state: "could-not-run", verifierThreadId: null, reason: `bb did not start a verifier: ${messageOf(error)}` });
@@ -409,7 +414,7 @@ export function createVerify({ bb, store, spawner, inbox, turns, now }: Deps) {
     if (now.step.kind !== "send") return inbox.settleCheck(check.id, now.step);
     store.claimFixRound(check.id, now.step.ci);
     // why settle whatever happened meanwhile: the claim, not the verdict's old state, says the findings are owed.
-    inbox.settleCheck(check.id, await sendBack(now.unsettled.agent, now.unsettled.verdict, now.step.ci));
+    inbox.settleCheck(check.id, await sendBack(now.unsettled.agent, now.unsettled.check, now.unsettled.verdict, now.step.ci));
   }
 
   /** The next step for a handoff's verdict while it is unsettled (see stepOf), on bb's and the store's facts read now; null once it is settled. */
@@ -433,13 +438,13 @@ export function createVerify({ bb, store, spawner, inbox, turns, now }: Deps) {
    * Refused, as only some of bb's answers prove: checked, with bb's answer. Any other failure may
    * come after bb took them, so they may or may not have reached the agent.
    */
-  async function sendBack(agent: Agent & { threadId: string }, verdict: Returned, ci: CiVerdict): Promise<Settlement> {
+  async function sendBack(agent: Agent & { threadId: string }, { review }: HandoffCheck, verdict: Returned, ci: CiVerdict): Promise<Settlement> {
     try {
       await bb.sdk.threads.send({
         threadId: agent.threadId,
         senderThreadId: verdict.verifierThreadId,
         mode: "queue-if-active",
-        input: [{ type: "text", text: findingsMessage(verdict, ci), mentions: [] }],
+        input: [{ type: "text", text: findingsMessage(review, verdict, ci), mentions: [] }],
       });
       return { kind: "sent-back" };
     } catch (error) {
@@ -468,9 +473,24 @@ export function createVerify({ bb, store, spawner, inbox, turns, now }: Deps) {
     }
   }
 
-  /** In its issue's turn: what a look again does for a check, by where its verdict is now. */
+  /**
+   * In its issue's turn: a queued handoff's check whose review is still to come. Its running
+   * reviewer is followed (review.ts follow); a queued one starts as a verifier does, once bb reports
+   * the agent idle and the issue is quiet for it. Once the review is in or was missed, the verifier
+   * starts in the same turn, so a review that couldn't be had never holds the check.
+   */
+  async function reviewInTurn(check: HandoffCheck): Promise<void> {
+    if (check.review.state === "running") await review.follow(check);
+    else if (!(await agentRuns(check)) && (await quietFor(check, { kind: "thread", threadId: null }, "no reviewer starts there yet"))) await review.start(check);
+    const now = checkOf(check.id);
+    if (now.verdict.state === "queued" && !isReviewing(now.review)) await startInTurn(now);
+  }
+
+  /** In its issue's turn: what a look again does for a check, by where its verdict, and before it its review, is now. */
   async function tend(checkId: CheckId): Promise<void> {
     const check = checkOf(checkId);
+    const { subject } = check;
+    if (check.verdict.state === "queued" && isReviewing(check.review) && subject.kind === "handoff") return reviewInTurn({ ...check, subject });
     if (check.verdict.state === "queued") return startInTurn(check);
     if (check.verdict.state === "running") return followInTurn(checkId);
     return settleInTurn(checkId, "look");

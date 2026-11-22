@@ -45,6 +45,7 @@ const checkedWith = (verdict: Verdict, verifier: Execution | null = null): Hande
     criteria: ["npm test passes"],
     verifier,
     subject: { kind: "handoff", agentId, handoffId: handoff.id, headSha: SHA, prUrl: null },
+    review: { state: "none" },
     verdict,
   },
 });
@@ -59,6 +60,7 @@ const returned = (results: CriterionResult[], ranOn: Pick<Execution, "providerId
   checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 },
   criteria: results.map((result) => ({ criterion: "npm test passes", result, evidence: "ran npm test" })),
   findings: [],
+  triage: [],
   model: { providerId: ranOn.providerId, model: ranOn.model },
   sameModel,
   settlement: { kind: "checked", refused: null, ci: { kind: "none" } },

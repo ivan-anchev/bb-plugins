@@ -156,6 +156,11 @@ export const MIGRATIONS: readonly string[] = [
   // release numbered its issues i1, i2… and has none until the plugin keys them (issue-keys.ts), which
   // writes it with its issues renamed, in one transaction.
   `ALTER TABLE coordinators ADD COLUMN issue_key TEXT`,
+
+  // A done handoff's review (review.ts), read before its verifier starts: where it stands, and what
+  // its reviewer found, as JSON read and written whole. A check made before reviews existed has no
+  // review stage, so its verifier starts as before. why the literal: a statement never changes.
+  `ALTER TABLE checks ADD COLUMN review TEXT NOT NULL DEFAULT '{"state":"none"}'`,
 ];
 
 /** The trigger `name`: after each row `on` names, one more write of the regional manager `manager` names. */

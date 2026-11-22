@@ -9,6 +9,8 @@ import { ISSUE_TOOLS } from "./issues/issue-tools.ts";
 import type { Store } from "./store/store.ts";
 import { CREW_TOOLS, MEMORY_READ } from "./tools/crew-tools.ts";
 import { HANDOFF } from "./tools/handoff-tool.ts";
+import { REVIEW } from "./review/review-tool.ts";
+import { ALONE_RULE } from "./verify/verifier-brief.ts";
 import { VERDICT } from "./verify/verdict-tool.ts";
 
 /**
@@ -42,6 +44,9 @@ function configurationFor(role: Role): PluginAgentConfiguration {
       return { tools: [MEMORY_READ, HANDOFF], skills: [GUIDE_SKILL, "agent-work"], instructions: AGENT_RULES };
     case "verifier":
       return { tools: [MEMORY_READ, VERDICT], skills: [GUIDE_SKILL, "verifying"], instructions: VERIFIER_RULES };
+    case "reviewer":
+      // why no review skill of the plugin's: what a reviewer runs is CREW.md's, in its first message.
+      return { tools: [MEMORY_READ, REVIEW], skills: [GUIDE_SKILL], instructions: REVIEWER_RULES };
   }
 }
 
@@ -84,3 +89,9 @@ const VERIFIER_RULES = `You are a verifier working for a regional manager: a thr
 - Never edit, create or delete files, commit, push, or check out anything: you share the agent's working tree, or the plugin judges your worktree as you leave it.
 - End with issue_verdict, once, as your last action: your verdict reaches the regional manager only through it.
 - The verifying skill is your playbook.`;
+
+const REVIEWER_RULES = `You are a reviewer working for a regional manager: a thread that runs a body of work for the user. Your first message names a diff an agent handed off as done, in the agent's own environment, with the issue's brief, its done-criteria and the rules every agent follows (CREW.md).
+- Review the diff as CREW.md instructs reviewers. What you report is checked by an independent verifier next, so report what you found, each claim at its file and line.
+- Never edit, create or delete files, commit, push, or check out anything: you share the agent's working tree.
+- ${ALONE_RULE}
+- End with ${REVIEW}, once, as your last action: your findings reach the verifier only through it.`;

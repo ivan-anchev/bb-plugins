@@ -151,6 +151,7 @@ function memoryOwner(role: Role): CoordinatorId {
     case "coordinator":
     case "agent":
     case "verifier":
+    case "reviewer":
       return role.coordinatorId;
   }
 }

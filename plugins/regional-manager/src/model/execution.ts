@@ -9,6 +9,10 @@ import { z } from "zod";
 export const executionSchema = z.object({ providerId: z.string().min(1), model: z.string().min(1), reasoningLevel: z.string() });
 export type Execution = z.infer<typeof executionSchema>;
 
+/** A provider and model as bb records a thread's turns on them: what a verifier or a reviewer ran on. */
+export const modelRefSchema = executionSchema.pick({ providerId: true, model: true });
+export type ModelRef = z.infer<typeof modelRefSchema>;
+
 /** What the manager names. why the reasoning level optional: left out, it is the model's default in bb's catalog. */
 export const requestedExecutionSchema = z.object({
   providerId: z.string().trim().min(1).describe("The provider, as bb lists it: claude-code, codex, pi…"),

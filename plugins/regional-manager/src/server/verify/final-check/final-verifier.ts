@@ -15,7 +15,7 @@ import { listedThreads, type ListBb } from "../../agents/threads.ts";
 import type { CatalogBb } from "../../execution/catalog.ts";
 import { threadExecution, type ThreadExecutionBb } from "../../execution/thread-execution.ts";
 import { checkoutReadOf, gitStatusOf, type GitStatusBb } from "../../git-status.ts";
-import type { VerifierRequest } from "../../spawn.ts";
+import type { CheckerRequest } from "../../spawn.ts";
 import { finalCheckBrief } from "../verifier-brief.ts";
 import { verifierExecution } from "../verifier-model.ts";
 
@@ -29,7 +29,7 @@ export type FinalVerifierBb = ListBb<ListedThread> & CatalogBb & ThreadExecution
  * lists it on the manager's machine and no agent whose work it checks (`theirs`) ran on it, else
  * as verifierExecution picks.
  */
-export async function finalVerifierRequest(bb: FinalVerifierBb, { check, coordinator, issue, theirs }: { check: FinalCheck; coordinator: Coordinator; issue: Issue; theirs: Execution[] }): Promise<VerifierRequest> {
+export async function finalCheckerRequest(bb: FinalVerifierBb, { check, coordinator, issue, theirs }: { check: FinalCheck; coordinator: Coordinator; issue: Issue; theirs: Execution[] }): Promise<CheckerRequest> {
   const manager = (await listedThreads<ListedThread>(bb, [coordinator.threadId])).get(coordinator.threadId);
   if (manager === undefined) throw new Error("the regional manager's thread was archived or deleted");
   const environment = environmentOf({ kind: "worktree" }, manager.environmentHostId, `origin/${check.subject.defaultBranch}`);

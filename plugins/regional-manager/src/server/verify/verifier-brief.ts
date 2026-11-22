@@ -1,11 +1,13 @@
 // A verifier thread's first message: what to check and where, the checkout as the plugin read it
-// or will read it, and each done-criterion, numbered as issue_verdict takes them. Only the regional
+// or will read it, each done-criterion, and a handoff's review findings to triage, each numbered as
+// issue_verdict takes them. Only the regional
 // manager's words, commit ids and bb's read are in it, never an agent's report, so the verifier
 // checks the work rather than an agent's account of it.
 import type { AgentId } from "../../model/agent.ts";
 import type { Issue } from "../../model/issue/issue.ts";
 import type { FinalCheck, HandoffCheck } from "../../model/verdict/check.ts";
 import { checkoutProblems, checkoutText, type Checkout } from "../../model/verdict/checkout.ts";
+import { findingText, type Review } from "../../model/verdict/review.ts";
 import { UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 
 /**
@@ -13,17 +15,18 @@ import { UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
  * gh CLI: a connector or app (codex's GitHub one) can stop to ask a person to sign in, and bb gives
  * a plugin no way to start a thread without them.
  */
-const ALONE_RULE =
+export const ALONE_RULE =
   "Nobody answers you: anything you ask a person, or ask them to approve, is declined at once. For GitHub use the `gh` CLI in the shell, never a connector or app.";
 
 /** A handoff's verifier's: the commit the agent claims, in the agent's own environment. */
-export function verifierBrief(issue: Pick<Issue, "id" | "title"> & { brief: string }, check: Pick<HandoffCheck, "criteria" | "subject">, checkout: Checkout): string {
+export function verifierBrief(issue: Pick<Issue, "id" | "title"> & { brief: string }, check: Pick<HandoffCheck, "criteria" | "subject" | "review">, checkout: Checkout): string {
   const { agentId, headSha } = check.subject;
   return [
     `# Verify ${issue.id}: ${issue.title}`,
     `Agent ${agentId} says its work on ${issue.id} is done at commit ${headSha}, in this environment. Check every done-criterion yourself, then call issue_verdict once. Follow the verifying skill.`,
     `## The commit and the tree, as the plugin read them\n\n${checkoutText(headSha, checkout)} ${checkoutNote(agentId, headSha, checkout)}`,
     criteriaPart(check.criteria),
+    ...reviewPart(check.review),
     `## The issue's brief, for context\n\n${issue.brief.trim()}`,
     `## Rules\n\nRun whatever proves or disproves each criterion, and quote what it printed. ${UNCHECKABLE_RULE} ${ALONE_RULE} Never edit, commit, push or check out anything: you share ${agentId}'s working tree.`,
   ].join("\n\n");
@@ -44,6 +47,30 @@ export function finalCheckBrief(issue: Pick<Issue, "id" | "title" | "description
     `## ${issue.id}, for context\n\n${issue.description.trim()}`,
     `## Rules\n\nRun whatever proves or disproves each criterion, and quote what it printed. ${UNCHECKABLE_RULE} ${ALONE_RULE} Never edit, commit, push or check out anything: judge the worktree as it is.`,
   ].join("\n\n");
+}
+
+/**
+ * What the handoff's reviewer found, numbered as issue_verdict's triage takes them, or that none was
+ * had and why; nothing for a check with no review stage. why throw while it is still to come: no
+ * verifier starts before its review is in (verify.ts requestFor).
+ */
+function reviewPart(review: Review): string[] {
+  switch (review.state) {
+    case "none":
+      return [];
+    case "queued":
+    case "running":
+      throw new Error("A verifier starts before its check's review is in.");
+    case "missed":
+      return [`## The review\n\nNo review was had: ${review.reason}. There is nothing to triage: pass triage as [].`];
+    case "reported":
+      if (review.findings.length === 0) return ["## The review\n\nAn independent reviewer read the diff before you and found nothing. There is nothing to triage: pass triage as []."];
+      return [
+        `## The reviewer's findings\n\nAn independent reviewer read the diff before you and claims these. They are claims, not facts: check each one yourself here, and triage every one in issue_verdict by its number. Confirmed: it holds, and is worth fixing. Rejected: it doesn't hold, or isn't worth fixing. Give each its reason in a line. Only confirmed findings reach the agent.\n\n${review.findings.map((finding, i) => `${i + 1}. ${findingText(finding).replaceAll("\n", "\n   ")}`).join("\n")}`,
+      ];
+    default:
+      return review satisfies never;
+  }
 }
 
 const criteriaPart = (criteria: readonly string[]): string => `## Done-criteria\n\n${criteria.map((criterion, i) => `${i + 1}. ${criterion}`).join("\n")}`;

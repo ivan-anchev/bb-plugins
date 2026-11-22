@@ -39,12 +39,13 @@ const returned = (verifierThreadId: string, result: "pass" | "fail"): Received =
   findings: [],
   model: { providerId: "claude-code", model: "sonnet" },
   sameModel: false,
+  triage: [],
 });
 
 /** A done handoff's check, running in the verifier thread `thr_verifier_<n>`. */
 function runningCheck(store: Store, issueId: IssueId, agentId: AgentId, n: number): Check {
   const check = checkOf(store.insertHandoff(handoff(issueId, agentId, "done", 3_000 + n), CLEAN));
-  store.insertVerifierTicket(`verifier-${n}`, { kind: "verifier", coordinatorId: MANAGER, issueId, checkId: check.id }, 3_000);
+  store.insertCheckerTicket(`verifier-${n}`, { kind: "verifier", coordinatorId: MANAGER, issueId, checkId: check.id }, 3_000);
   store.bindTicket(`verifier-${n}`, `thr_verifier_${n}`);
   return check;
 }
@@ -68,6 +69,7 @@ test("a done handoff makes a queued check that copies its issue's criteria and v
     criteria: ["npm test passes", "npm run lint passes"],
     verifier: EXECUTION,
     subject: { kind: "handoff", agentId, handoffId: done.id, headSha: SHA, prUrl: null },
+    review: { state: "queued" },
     verdict: { state: "queued", checkout: CLEAN.checkout },
   });
   assert.deepEqual(store.handoff(done.id), { handoff: done, check });
@@ -103,7 +105,7 @@ test("a newer done handoff supersedes the issue's checks still waiting", () => {
   const { store, issue, agentId } = withAgent();
   const queued = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done", 3_000), CLEAN));
   const running = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done", 3_100), CLEAN));
-  store.insertVerifierTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: running.id }, 3_100);
+  store.insertCheckerTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: running.id }, 3_100);
   store.bindTicket("verifier-1", "thr_verifier");
 
   const newest = store.insertHandoff(handoff(issue.id, agentId, "done", 3_200), CLEAN);
@@ -116,7 +118,7 @@ test("a newer done handoff supersedes the issue's checks still waiting", () => {
 test("a check starts running as its verifier's ticket binds, is nudged once, un-nudged once, and is given up only from where it is", () => {
   const { store, issue, agentId } = withAgent();
   const check = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), CLEAN));
-  store.insertVerifierTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id }, 3_000);
+  store.insertCheckerTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id }, 3_000);
   assert.deepEqual(store.bindTicket("verifier-1", "thr_verifier"), { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id });
   assert.deepEqual(store.check(check.id)?.verdict, { state: "running", verifierThreadId: "thr_verifier", nudged: false, declined: [], checkout: CLEAN.checkout });
 
@@ -136,7 +138,7 @@ test("a check starts running as its verifier's ticket binds, is nudged once, un-
 test("a fix round claimed before its findings are sent survives a reload, and settles once, with the event that says it was sent back", () => {
   const { storage, store, issue, agentId } = withAgent();
   const check = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), CLEAN));
-  store.insertVerifierTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id }, 3_000);
+  store.insertCheckerTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id }, 3_000);
   store.bindTicket("verifier-1", "thr_verifier");
   const failed: Received = {
     state: "returned",
@@ -147,6 +149,7 @@ test("a fix round claimed before its findings are sent survives a reload, and se
     findings: [],
     model: { providerId: "claude-code", model: "sonnet" },
     sameModel: false,
+    triage: [],
   };
   assert.equal(store.receiveVerdict(check.id, { ...failed, verifierThreadId: "thr_other" }), false, "only its running verifier's verdict is taken");
   assert.equal(store.receiveVerdict(check.id, failed), true);
@@ -196,7 +199,7 @@ test("a done handoff that fails partway leaves no handoff, no check, the checks 
 test("a verifier's ticket whose check fails to start stays unbound", () => {
   const { db, store, issue, agentId } = withAgent();
   const check = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), CLEAN));
-  store.insertVerifierTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id }, 3_000);
+  store.insertCheckerTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id }, 3_000);
   failWrites(db, "UPDATE", "checks");
   assert.throws(() => store.bindTicket("verifier-1", "thr_verifier_1"), /forced failure/);
   assert.equal(store.roleOfThread("thr_verifier_1"), null);
@@ -261,7 +264,7 @@ test("a verdict, a give-up or a CI result that arrives after its check settled o
 test("a verifier's ticket that binds after its check was superseded leaves the check superseded", () => {
   const { store, issue, agentId } = withAgent();
   const stale = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done", 3_000), CLEAN));
-  store.insertVerifierTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: stale.id }, 3_000);
+  store.insertCheckerTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: stale.id }, 3_000);
   store.insertHandoff(handoff(issue.id, agentId, "done", 3_100), CLEAN);
   store.bindTicket("verifier-1", "thr_verifier_1");
   assert.deepEqual(store.check(stale.id)?.verdict, { state: "superseded" });
@@ -287,7 +290,7 @@ test("a final check copies its parent's criteria and verifier, supersedes the on
   );
   assert.deepEqual(events(store), [], "nobody is told until it has a verdict");
 
-  store.insertVerifierTicket("final-1", { kind: "verifier", coordinatorId: MANAGER, issueId: parent.id, checkId: first.id }, 4_100);
+  store.insertCheckerTicket("final-1", { kind: "verifier", coordinatorId: MANAGER, issueId: parent.id, checkId: first.id }, 4_100);
   const queued = writes();
   store.bindTicket("final-1", "thr_final_1");
   assert.ok(writes() > queued, "started");

@@ -9,12 +9,13 @@ import type { Handoff, HandoffId } from "../handoff.ts";
 import type { Check, CheckId, FinalCheck } from "../verdict/check.ts";
 import type { CiVerdict, PrSnapshot } from "../verdict/pr.ts";
 import { NOT_CLEAN } from "../verdict/checkout.ts";
+import { isReviewing } from "../verdict/review.ts";
 import { allPassed, ciVerdictOf, failedCheckout, mayHaveReachedAgent, outcome, type Verdict } from "../verdict/verdict.ts";
 import type { Issue, IssueId } from "./issue.ts";
 import { isVerified, PIPELINES, shipsCode, type Kind, type Stage } from "./kind.ts";
 import { blockedBy, isClosed, statusIn, type Related } from "./relations.ts";
 
-export const issueStatusSchema = z.enum(["backlog", "todo", "in-progress", "verifying", "in-review", "done", "canceled"]);
+export const issueStatusSchema = z.enum(["backlog", "todo", "in-progress", "reviewing", "verifying", "in-review", "done", "canceled"]);
 export type IssueStatus = z.infer<typeof issueStatusSchema>;
 
 /** Each status's name, as the board and crew_catch_up show it. */
@@ -22,6 +23,7 @@ export const STATUS_LABELS: Record<IssueStatus, string> = {
   backlog: "Backlog",
   todo: "Todo",
   "in-progress": "In progress",
+  reviewing: "Reviewing",
   verifying: "Verifying",
   "in-review": "In review",
   done: "Done",
@@ -270,8 +272,8 @@ export const keepsPlaceAfterEnd = (issue: Issue, left: Handed | null, pr: PrSnap
 
 /**
  * Where the handoff an ended agent left places its issue, or null when it doesn't and the issue
- * rests again. why everything but In progress: work that reached Verifying, In review or Done
- * survives its thread being stopped, archived or deleted; anything short of that returns to Todo.
+ * rests again. why everything but In progress: work that reached Reviewing, Verifying, In review or
+ * Done survives its thread being stopped, archived or deleted; anything short of that returns to Todo.
  */
 export function placedByLeft(kind: Kind, left: Handed, around: Omit<Around, "fixRounds">): Placing | null {
   const after = byHandoff(kind, left, { ...around, fixRounds: 0 });
@@ -341,6 +343,11 @@ function walk(kind: Kind, evidence: Evidence): Placing {
 
 /** How each stage is left, defined once for every kind that passes through it. */
 const STAGES: Record<Stage, (evidence: Evidence) => Placing | "left"> = {
+  // Left once its review reported or none could be had, or its verdict moved on without one; at once for a check with no review stage.
+  reviewing({ summary, check }) {
+    const { verdict, review } = checked(check);
+    return verdict.state === "queued" && isReviewing(review) ? { status: "reviewing", headline: `Reviewing: ${summary}`, needsYou: null } : "left";
+  },
   // Left once the check passed, or nobody checks it. A failure stays In progress.
   verifying({ summary, check, fixRounds, pr, verifierAsks }) {
     const { verdict } = checked(check);

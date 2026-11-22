@@ -424,10 +424,10 @@ test("a verdict that passes every criterion is In review with ✓ and the models
 });
 
 test("an issue opened on the board reads what it is about, its criteria and each handoff with its verdict, names no model and no brief, and an issue it hasn't is refused", async () => {
-  const { kit, coordinatorId, agentThreadId, opened, verifier, handOff } = await withAgent();
+  const { kit, coordinatorId, agentThreadId, opened, verifier, handOff, verdictReturned } = await withAgent();
   await handOff();
-  await kit.call("issue_verdict", FAILS, verifier());
-  await settled();
+  // why its turn ends: the findings go back to a1 before its next handoff, as they do once a verifier stops.
+  await verdictReturned(FAILS);
   await handOff();
   await kit.call("issue_verdict", PASSES, verifier());
   await settled();
@@ -646,12 +646,12 @@ test("a verdict whose verifier never started is started by the next tick", async
 
   kit.thread(agentThreadId).status = "idle"; // its turn ended while no plugin heard it
   await kit.tick();
-  assert.equal(kit.spawned(), spawned + 1);
+  assert.equal(kit.spawned(), spawned + 2, "its reviewer, then its verifier");
   const started = verdict();
   assert.equal(started.state, "running");
   assert.equal(kit.thread(started.state === "running" ? started.verifierThreadId : "").spawnedWith.parentThreadId, agentThreadId);
   await kit.tick();
-  assert.equal(kit.spawned(), spawned + 1, "a running verifier is not started again");
+  assert.equal(kit.spawned(), spawned + 2, "a running verifier is not started again");
 });
 
 test("a verifier that goes idle without a verdict is nudged once, then the row reads Couldn't verify under Needs you", async () => {
