@@ -1,6 +1,6 @@
 ---
 name: verifying
-description: The playbook of a verifier thread, a hidden thread the Regional Manager plugin starts to check work independently, either one done handoff on an issue in the agent's environment, or a build parent's final check in a fresh worktree of the default branch. Use in every turn of a verifier thread, to run what proves or disproves each done-criterion, quote what it printed, leave the commit and the tree to the plugin's own read, never change the tree, and end with one issue_verdict call.
+description: The playbook of a verifier thread, a hidden thread the Regional Manager plugin starts to check work independently, either one done handoff on an issue in the agent's environment, or a build parent's final check in a fresh worktree of the default branch. Use in every turn of a verifier thread, to run what proves or disproves each done-criterion, quote what it printed, triage each finding of the reviewer that read a done handoff's diff before you, leave the commit and the tree to the plugin's own read, never change the tree, and end with one issue_verdict call.
 ---
 
 # Verifying
@@ -25,6 +25,10 @@ For a done handoff:
   on the environment's machine, when the agent handed off.
 - The issue's brief, for context. It is the regional manager's words, not
   the agent's: you get none of the agent's own report, on purpose.
+- What an independent reviewer found in the diff before you, numbered: each
+  finding's file and line, its severity (must-fix, should-fix or nit) and its
+  claim. Or that it found nothing, or that no review was had, and why. An
+  issue whose check began before reviews existed has no review section.
 
 For a final check:
 
@@ -57,6 +61,16 @@ For a final check:
    A criterion you can't check as it is written, as when it names a step
    that hasn't happened yet, is unverifiable, with why as its evidence: never
    pass it on a nearby fact you could check.
+4. **Each of the reviewer's findings.** They are claims, not facts. Read the
+   code at the place each names, and run what shows whether it holds. Then
+   triage it:
+   - **confirmed**: it holds, and is worth fixing.
+   - **rejected**: it doesn't hold, or isn't worth fixing.
+
+   Give each its reason in a line: what you ran or read that decides it. A
+   finding never decides a criterion for you, and a confirmed one alone
+   doesn't fail the verdict: when it breaks a criterion, fail that criterion
+   on your own evidence.
 
 ## Never
 
@@ -74,18 +88,25 @@ Call `issue_verdict` once, as your last action, then stop:
   `evidence`, the command you ran and the lines it printed that decide it
   (for a fail, the failing lines), up to 4,000 characters.
 - **findings**: problems no criterion covers, up to 20; `[]` for none.
+- **triage**: one entry per finding of the reviewer's, by its number:
+  `result` confirmed or rejected, and `reason`, in a line. `[]` when your
+  first message lists none.
 
 If it is an agent's first failed verdict on a done handoff, the plugin sends
-the agent each criterion that didn't pass, with your evidence, and your
-findings, as a message from your thread, for it to fix, once your turn ends
+the agent each criterion that didn't pass, with your evidence, your findings
+and the reviewer's findings you confirmed, with your reasons, as a message from
+your thread (never one you rejected), for it to fix, once your turn ends
 and your thread is stopped, which ends any command you left running in the
 background: the agent never works beside you. A final check's
 verdict goes to the regional manager only, which files the fix as new work.
 Either way, write evidence and findings someone can act on: the failing
 command and its failing lines, not a summary.
 
+Its regional manager reads every finding of the reviewer's with your triage
+and reason, rejected ones included.
+
 It is refused, and nothing is saved, when you skip, repeat or invent a
-criterion. Fix the call and make it again. If it is refused because an
+criterion, or a finding of the reviewer's. Fix the call and make it again. If it is refused because an
 earlier operation on the issue hasn't finished, call it again in a minute. If
 it says the check no longer waits for your verdict, a newer handoff or final
 check replaced it: stop. On a final check, if the plugin couldn't read your

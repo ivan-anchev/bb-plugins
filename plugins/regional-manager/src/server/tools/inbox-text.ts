@@ -94,7 +94,7 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
     case "pr":
       return `### ${on} PR #${event.pr.number}: ${event.changes.map((change) => PR_CHANGE_WORDS[change]).join(", ")}\n\n${when} ${prText(event.pr)} A done handoff's verdict that waits for CI settles on its own; you hear of it then.`;
     case "returned-to-todo":
-      return `### ${on} returned to Todo\n\n${when} ${event.agentId} was ${event.how} before its work reached Verifying, In review or Done, so ${event.issueId} rests in Todo with no agent. Start one with agent_start, or plan it again with issue_update.`;
+      return `### ${on} returned to Todo\n\n${when} ${event.agentId} was ${event.how} before its work reached Reviewing, Verifying, In review or Done, so ${event.issueId} rests in Todo with no agent. Start one with agent_start, or plan it again with issue_update.`;
     default:
       return event satisfies never;
   }
