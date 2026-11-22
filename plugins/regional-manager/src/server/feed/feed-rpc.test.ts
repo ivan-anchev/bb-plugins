@@ -101,8 +101,8 @@ test("an issue's feed sends exactly what its tab reads: its plan's text and rela
     created: ["at", "kind"],
     "agent-started": ["agentId", "at", "kind"],
     "agent-ended": ["agentId", "at", "how", "kind"],
-    round: ["at", "kind", "round"],
-    decision: ["at", "decision", "kind"],
+    round: ["kind", "round"],
+    decision: ["decision", "kind"],
     pr: ["at", "changes", "kind", "number"],
     thread: ["agentId", "at", "event", "kind"],
     unblocked: ["at", "by", "kind"],
@@ -117,7 +117,7 @@ test("an issue's feed sends exactly what its tab reads: its plan's text and rela
     {
       by: { kind: "agent", agentId: "a1", status: "done", summary: "Retries land" },
       review: { state: "reported", at: 3_200, findings: 1, confirmed: 1 },
-      verdict: { outcome: "fail", results: ["fail"], fixRound: 1 },
+      verdict: { outcome: "fail", results: ["fail"], fixRound: { round: 1, delivery: "sent" } },
       outcomeAt: 3_600,
       inFlight: false,
     },
@@ -134,9 +134,11 @@ test("an opened round's body sends its handoff, its verdict and the findings wit
   const key = roundBodyKey(MANAGER, issueId, roundKeySchema.parse(`h-${handoff.id}`));
   const gone = roundBodyKey(OTHER_MANAGER, elsewhere.issueId, roundKeySchema.parse(`h-${elsewhere.id}`));
   const otherIssue = roundBodyKey(MANAGER, elsewhere.issueId, roundKeySchema.parse(`h-${handoff.id}`));
-  const bodies = await handlers.roundBodies({ keys: [key, gone, otherIssue, "not a key"] });
-  assert.deepStrictEqual(keysOf(bodies), [gone, key, otherIssue, "not a key"].sort());
-  assert.deepStrictEqual([bodies[gone], bodies[otherIssue], bodies["not a key"]], [null, null, null]);
+  // why this one: it passes a shape-only check (h- and 36 of [0-9a-f-]) but is no handoff id.
+  const notAnId = `${MANAGER}/${issueId}/h-${"-".repeat(36)}`;
+  const bodies = await handlers.roundBodies({ keys: [key, gone, otherIssue, "not a key", notAnId] });
+  assert.deepStrictEqual(keysOf(bodies), [gone, key, otherIssue, "not a key", notAnId].sort());
+  assert.deepStrictEqual([bodies[gone], bodies[otherIssue], bodies["not a key"], bodies[notAnId]], [null, null, null, null]);
   const body = bodies[key] ?? assert.fail("no body");
   assert.deepStrictEqual(keysOf(body), ["findings", "handoff", "verdict"]);
   assert.deepStrictEqual(keysOf(body.handoff ?? assert.fail()), ["concerns", "deviations", "did", "evidence", "findings", "report"], "no id, time, status or summary: the folded round has them");

@@ -9,7 +9,7 @@ import { createFakePluginHost, type FakePluginHarness } from "@get-bb/plugin-sdk
 import { z } from "zod";
 import type { EnvironmentProvider } from "../model/agent/agent.ts";
 import type { HolderThread } from "../model/issue/status.ts";
-import { roundBodyKey, type ComposerRequest } from "../contract.ts";
+import { issueTag, roundBodyKey, type ComposerRequest } from "../contract.ts";
 import type { Profile } from "../model/profile/profile.ts";
 import { roundKeySchema } from "../model/feed/round.ts";
 import type { IssueId } from "../model/issue/issue.ts";
@@ -801,7 +801,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     registerHandoffTool(bb, { store, verify });
     registerReviewTool(bb, { store, review });
     registerVerdictTool(bb, { store, verify });
-    const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard });
+    const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard, refreshIssue: (id, issueId) => invalidated.push(issueTag(id, issueId)) });
     watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });
     return { spawner, inbox, verify, agents, prWatch, finalChecks, unblocked, issueTags, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }), ...feedHandlers({ store, reader: createFeedReader(bb, store) }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }, upgrade030: upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators }) };

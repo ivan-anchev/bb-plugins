@@ -53,6 +53,8 @@ type Deps = {
   onChange(id: CoordinatorId): void;
   /** Reads the regional manager's board again. */
   refreshBoard(id: CoordinatorId): void;
+  /** Reads the issue's feed again: a thread it links was deleted, which only bb's listing says, so no write the store counts does. */
+  refreshIssue(id: CoordinatorId, issueId: IssueId): void;
 };
 
 /**
@@ -60,7 +62,7 @@ type Deps = {
  * forget: the status last seen of each is kept until its thread moves, which an idle thread of a
  * removed manager never does.
  */
-export function forwardThreadEvents(bb: EventsBb, { store, agents, verify, onChange, refreshBoard }: Deps): { forget(id: CoordinatorId): void } {
+export function forwardThreadEvents(bb: EventsBb, { store, agents, verify, onChange, refreshBoard, refreshIssue }: Deps): { forget(id: CoordinatorId): void } {
   /** The role of a thread this plugin made; null for any other. why the origin first: a cheap filter before touching SQLite. */
   const roleOf = ({ thread }: ThreadEvent) => (thread.originPluginId === bb.pluginId ? store.roleOfThread(thread.id) : null);
 
@@ -114,6 +116,9 @@ export function forwardThreadEvents(bb: EventsBb, { store, agents, verify, onCha
   bb.events.on("thread.deleted", async (payload) => {
     const role = roleOf(payload);
     if (role?.kind === "coordinator") return agents.remove(role.coordinatorId);
+    // why every agent's, ended or not, and every checker's: the issue's feed links each one while bb has it.
+    const issue = issueOf(payload);
+    if (issue !== null) refreshIssue(issue.coordinatorId, issue.issueId);
     const agent = holderOf(payload);
     if (agent !== null) await agents.deleted(agent).catch(warned(`end ${agent.id}, whose thread was deleted`));
   });

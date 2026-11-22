@@ -56,7 +56,7 @@ test("the filter shows All, only Rounds, or only the Discussion, each pressed as
   assert.deepEqual([pressed(), kinds()], [["Rounds"], ["round", "round", "round"]]);
   fireEvent.click(filter("Discussion"));
   assert.deepEqual([pressed(), kinds()], [["Discussion"], ["decision", "decision", "decision"]]);
-  const decided: Entry = { kind: "decision", at: 7_000, decision: { kind: "recorded", text: "Ship it Monday.", at: 7_000 } };
+  const decided: Entry = { kind: "decision", decision: { kind: "recorded", text: "Ship it Monday.", at: 7_000 } };
   await refeed("WEB-1", () => ({ ...FEED, entries: [...FEED.entries, decided] }));
   await waitFor(() => assert.deepEqual([pressed(), kinds()], [["Discussion"], ["decision", "decision", "decision", "decision"]], "a read keeps the reader's filter"));
   fireEvent.click(filter("All"));

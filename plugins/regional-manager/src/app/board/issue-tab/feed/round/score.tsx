@@ -1,5 +1,5 @@
 // What a round says of its check in a word or two (round.ts scoreOf): ✓ 6 of 6, ✗ 3 of 6,
-// Reviewing…, Verifying…, or why it has none; a blocked or abandoned handoff's round says so.
+// Reviewing…, Verifying…, Waiting for CI…, or why it has none; a blocked or abandoned handoff's round says so.
 import { scoreOf, type Round } from "../../../../../model/feed/round.ts";
 import { ResultGlyph } from "./result-glyph.tsx";
 
@@ -16,7 +16,7 @@ export function Score({ round }: { round: Round }) {
         </span>
       );
     case "pending":
-      return <span className="rmi-score">{score.stage === "reviewing" ? "Reviewing…" : "Verifying…"}</span>;
+      return <span className="rmi-score">{PENDING[score.stage]}</span>;
     case "unjudged":
       return (
         <span className="rmi-score" data-tone={score.outcome === "could-not-run" ? "warning" : undefined}>
@@ -39,5 +39,7 @@ function HandoffEnd({ round: { by } }: { round: Round }) {
     </span>
   );
 }
+
+const PENDING = { reviewing: "Reviewing…", verifying: "Verifying…", ci: "Waiting for CI…" } as const;
 
 const UNJUDGED = { "could-not-run": "Couldn't verify", superseded: "Replaced", unverified: "Not verified" } as const;

@@ -57,7 +57,7 @@ const [A1, A2] = [agentIdSchema.parse("a1"), agentIdSchema.parse("a2")];
 const handoffId = (n: number) => handoffIdSchema.parse(`00000000-0000-4000-8000-${String(n).padStart(12, "0")}`);
 export const roundKey = (n: number) => roundKeySchema.parse(`h-${handoffId(n)}`);
 
-/** Round `number` by `agentId`, its verdict's results, the fix round it went back as (null: none). */
+/** Round `number` by `agentId`, its verdict's results, the fix round its findings reached the agent as (null: none went back). */
 function round(number: number, agentId: typeof A1, at: number, results: CriterionResult[], fixRound: number | null): Round {
   const failed = results.some((result) => result !== "pass");
   return {
@@ -66,13 +66,13 @@ function round(number: number, agentId: typeof A1, at: number, results: Criterio
     at,
     by: { kind: "agent", agentId, status: "done", summary: `Round ${number}: retries land with backoff` },
     review: { state: "reported", at: at + 100, findings: 2, confirmed: 1 },
-    verdict: { outcome: failed ? "fail" : "pass", results, fixRound },
+    verdict: { outcome: failed ? "fail" : "pass", results, fixRound: fixRound === null ? null : { round: fixRound, delivery: "sent" } },
     outcomeAt: at + 600,
     inFlight: false,
   };
 }
 
-const roundEntry = (made: Round): Entry => ({ kind: "round", at: made.at, round: made });
+const roundEntry = (made: Round): Entry => ({ kind: "round", round: made });
 
 /** BBP-19 in short: a1 failed twice and was replaced, a2 passed; a question answered, one open; #219 merged. */
 export const FEED: IssueFeed = {
@@ -85,16 +85,16 @@ export const FEED: IssueFeed = {
     { kind: "created", at: 1_000 },
     { kind: "agent-started", at: 2_000, agentId: A1 },
     roundEntry(round(1, A1, 3_000, ["pass", "fail", "fail"], 1)),
-    { kind: "decision", at: 3_700, decision: { kind: "asked", id: decisionIdSchema.parse("d1"), question: "Keep the row's facts?", options: ["Keep", "Hide"], at: 3_700, answer: { text: "Keep", at: 3_800 } } },
+    { kind: "decision", decision: { kind: "asked", id: decisionIdSchema.parse("d1"), question: "Keep the row's facts?", options: ["Keep", "Hide"], at: 3_700, answer: { text: "Keep", at: 3_800 } } },
     roundEntry(round(2, A1, 4_000, ["pass", "pass", "fail"], null)),
-    { kind: "decision", at: 4_700, decision: { kind: "recorded", text: "a1 loops: hand the issue to a fresh agent.", at: 4_700 } },
+    { kind: "decision", decision: { kind: "recorded", text: "a1 loops: hand the issue to a fresh agent.", at: 4_700 } },
     { kind: "agent-ended", at: 4_800, agentId: A1, how: "replaced" },
     { kind: "agent-started", at: 4_800, agentId: A2 },
     roundEntry(round(3, A2, 5_000, ["pass", "pass", "pass"], null)),
     { kind: "pr", at: 6_000, number: 219, changes: ["ci-passed", "merged"] },
     { kind: "thread", at: 6_100, agentId: A2, event: { kind: "reported-back", lastAnswer: "Merged; nothing left." } },
     { kind: "unblocked", at: 6_200, by: id("WEB-7") },
-    { kind: "decision", at: 6_300, decision: { kind: "asked", id: decisionIdSchema.parse("d2"), question: "Ship #219 to everyone now?", options: ["Ship now", "Wait a day"], at: 6_300, answer: null } },
+    { kind: "decision", decision: { kind: "asked", id: decisionIdSchema.parse("d2"), question: "Ship #219 to everyone now?", options: ["Ship now", "Wait a day"], at: 6_300, answer: null } },
   ],
 };
 

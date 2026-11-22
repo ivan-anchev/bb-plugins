@@ -83,27 +83,35 @@
   display: inline-flex;
   gap: 1px;
 }
-/* A cell: a small swatch in a target large enough to press. */
+/* A cell: its result's glyph in a target large enough to press, and its tooltip above it. */
+.rmi-grid-cell-slot {
+  position: relative;
+  display: inline-flex;
+}
 .rmi-grid-cell {
   all: unset;
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
+  width: 18px;
   height: 18px;
-  border-radius: 3px;
+  border-radius: 4px;
+  color: var(--muted-foreground);
   cursor: pointer;
 }
-.rmi-grid-swatch {
-  width: 8px;
+.rmi-grid-cell .rmi-result-glyph {
+  flex: 0 0 12px;
+  width: 12px;
   height: 12px;
-  border-radius: 2px;
-  background: var(--muted);
+  margin-top: 0;
 }
-.rmi-grid-cell[data-result="pass"] .rmi-grid-swatch { background: var(--success); }
-.rmi-grid-cell[data-result="fail"] .rmi-grid-swatch { background: var(--destructive-text); }
-.rmi-grid-cell[data-result="unverifiable"] .rmi-grid-swatch { background: var(--warning-text); }
+.rmi-grid-none {
+  width: 6px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: var(--subtle-foreground);
+}
 .rmi-grid-cell[aria-expanded="true"] {
   background: var(--state-active);
 }
@@ -111,6 +119,23 @@
   .rmi-grid-cell:hover {
     background: var(--state-hover);
   }
+}
+/* why touching the cell: the pointer moves onto the tooltip with no gap, and stays on the slot. */
+.rmi-grid-tip {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  z-index: 2;
+  width: max-content;
+  max-width: 220px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--popover);
+  box-shadow: 0 0 0 1px var(--border);
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--foreground);
+  white-space: normal;
 }
 .rmi-grid-evidence {
   display: flex;

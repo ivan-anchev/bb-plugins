@@ -10,10 +10,14 @@ import { checkIdSchema, type Check, type CheckId, type FinalCheck } from "../ver
 import { reviewFindingSchema, triaged, triageSchema, type Review } from "../verdict/review.ts";
 import { checkInFlight, criterionResultSchema, outcome, outcomeSchema, shownVerdict, shownVerdictSchema, type CriterionResult, type Verdict } from "../verdict/verdict.ts";
 
-/** A round's address within its issue: `h-` and its handoff's id, or `f-` and its final check's. */
+/**
+ * A round's address within its issue: `h-` and its handoff's id, or `f-` and its final check's. why
+ * the id checked as the uuid it is: roundTarget parses it so, and a key that would fail there must
+ * fail here, at the boundary, where one bad key of a batch reads null alone.
+ */
 export const roundKeySchema = z
   .string()
-  .regex(/^[hf]-[0-9a-f-]{36}$/)
+  .refine((key) => /^[hf]-/.test(key) && z.uuid().safeParse(key.slice(2)).success, "A round key is h- or f- and an id")
   .brand<"roundKey">();
 export type RoundKey = z.infer<typeof roundKeySchema>;
 
@@ -41,10 +45,17 @@ export const roundSchema = z.object({
   ]),
   /**
    * Its verdict (null: nothing checks this round, as a blocked or research handoff): what it says,
-   * each criterion's result in the check's order ([] until it returned), the fix round it went back
-   * to its agent as (null: none). When it returned is the body's (the verifier's step shows only open).
+   * each criterion's result in the check's order ([] until it returned), and the fix round its
+   * findings went back to its agent as (null: none): on their way, reached it, or may have (the
+   * plugin can't tell, so the verdict is its manager's). When it returned is the body's.
    */
-  verdict: z.object({ outcome: outcomeSchema, results: z.array(criterionResultSchema), fixRound: z.number().int().nullable() }).nullable(),
+  verdict: z
+    .object({
+      outcome: outcomeSchema,
+      results: z.array(criterionResultSchema),
+      fixRound: z.object({ round: z.number().int(), delivery: z.enum(["sending", "sent", "maybe"]) }).nullable(),
+    })
+    .nullable(),
   /** When its verdict was sent back or made final, from the inbox event that said so (null: not yet). */
   outcomeAt: z.number().nullable(),
   /** Its check is in flight: its review, its verdict or CI is still to come. */
@@ -104,13 +115,14 @@ export function bodyOf(handoff: Handoff | null, check: Check | null): RoundBody 
 }
 
 /**
- * What a folded round says of its check: its criteria passed of how many, and whether it failed (by
- * a criterion, or by its checkout or CI once settled); the stage it is at while its review or
- * verdict is to come; or why it has no verdict. null: nothing checks it.
+ * What a folded round says of its check: its criteria passed of how many and whether it failed (a
+ * criterion failed, or its checkout or CI did once settled), or passed, settled; the stage it is at
+ * while its review, its verdict's settling or CI is to come; or why it has no verdict. null:
+ * nothing checks it.
  */
-export type Score =
+type Score =
   | { kind: "judged"; passed: number; of: number; failed: boolean }
-  | { kind: "pending"; stage: "reviewing" | "verifying" }
+  | { kind: "pending"; stage: "reviewing" | "verifying" | "ci" }
   | { kind: "unjudged"; outcome: "could-not-run" | "superseded" | "unverified" }
   | null;
 
@@ -118,21 +130,21 @@ export function scoreOf({ review, verdict }: Pick<Round, "review" | "verdict">):
   if (verdict === null) return null;
   if (review.state === "pending") return { kind: "pending", stage: "reviewing" };
   const { outcome, results } = verdict;
-  if (results.length > 0) {
-    const passed = results.filter((result) => result === "pass").length;
-    return { kind: "judged", passed, of: results.length, failed: outcome === "fail" || passed < results.length };
-  }
+  const passed = results.filter((result) => result === "pass").length;
+  // why a failure first: a criterion that failed has failed, however the verdict settles.
+  if (outcome === "fail" || passed < results.length) return { kind: "judged", passed, of: results.length, failed: true };
   switch (outcome) {
+    case "pass":
+      return { kind: "judged", passed, of: results.length, failed: false };
     case "could-not-run":
     case "superseded":
     case "unverified":
       return { kind: "unjudged", outcome };
-    // why verifying: with no results, none of these has returned yet.
+    // why not a pass yet: every criterion passed, but nobody has been told, or CI is still to come.
     case "pending":
-    case "waiting-for-ci":
-    case "pass":
-    case "fail":
       return { kind: "pending", stage: "verifying" };
+    case "waiting-for-ci":
+      return { kind: "pending", stage: "ci" };
     default:
       // why no score: the server may be newer than this bundle for a moment after an update.
       outcome satisfies never;
@@ -190,13 +202,15 @@ function verdictOf(verdict: Verdict): Round["verdict"] {
   }
 }
 
-/** The fix round a returned verdict's findings went back to its agent as; null when they didn't. */
-function fixRoundOf({ settlement }: Extract<Verdict, { state: "returned" }>): number | null {
+/** The fix round a returned verdict's findings went back to its agent as, and whether they reached it; null when they went to nobody. */
+function fixRoundOf({ settlement }: Extract<Verdict, { state: "returned" }>): NonNullable<Round["verdict"]>["fixRound"] {
   switch (settlement.kind) {
     case "sending-back":
+      return { round: settlement.round, delivery: "sending" };
     case "sent-back":
+      return { round: settlement.round, delivery: "sent" };
     case "maybe-sent-back":
-      return settlement.round;
+      return { round: settlement.round, delivery: "maybe" };
     case "pending":
     case "waiting-for-ci":
     case "checked":

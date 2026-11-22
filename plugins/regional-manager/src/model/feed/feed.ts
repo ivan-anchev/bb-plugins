@@ -6,11 +6,11 @@ import type { InboxEvent, StoredEvent } from "../inbox/inbox-event.ts";
 import type { Issue } from "../issue/issue.ts";
 import type { Handed } from "../issue/status.ts";
 import type { FinalCheck } from "../verdict/check.ts";
-import type { Entry } from "./entry.ts";
+import { timeOf, type Entry } from "./entry.ts";
 import { finalRoundOf, roundOf, type Round } from "./round.ts";
 
 /** Everything one issue's feed is made of, each list as its table holds it, oldest first. */
-export type FeedFacts = {
+type FeedFacts = {
   issue: Pick<Issue, "createdAt">;
   agents: readonly Pick<Agent, "id" | "startedAt" | "ended">[];
   handed: readonly Handed[];
@@ -22,13 +22,14 @@ export type FeedFacts = {
 
 /** The issue's feed, oldest first; two moments at one millisecond keep the order listed here. */
 export function feedOf(facts: FeedFacts): Entry[] {
-  return sortByTime([
+  const entries: Entry[] = [
     { kind: "created", at: facts.issue.createdAt },
     ...facts.agents.flatMap(agentEntries),
-    ...roundsOf(facts).map((round): Entry => ({ kind: "round", at: round.at, round })),
-    ...facts.decisions.map((decision): Entry => ({ kind: "decision", at: decision.at, decision })),
+    ...roundsOf(facts).map((round): Entry => ({ kind: "round", round })),
+    ...facts.decisions.map((decision): Entry => ({ kind: "decision", decision })),
     ...facts.events.flatMap(({ at, event }) => eventEntries(at, event)),
-  ]);
+  ];
+  return sortByTime(entries.map((entry) => ({ at: timeOf(entry), entry }))).map(({ entry }) => entry);
 }
 
 /** Rounds numbered in the order they began: every handoff, and a build parent's final checks. */

@@ -77,7 +77,7 @@ const deliverySchema = z.discriminatedUnion("kind", [commitDeliverySchema, repor
  * why not a commit: the issue's row shows its pull request, and its verdict the commit checked.
  */
 export const shownHandoffSchema = z.object({ id: handoffIdSchema, at: z.number(), status: handoffStatusSchema, ...reportFields, report: reportDeliverySchema.omit({ kind: true }).nullable() });
-export type ShownHandoff = z.infer<typeof shownHandoffSchema>;
+type ShownHandoff = z.infer<typeof shownHandoffSchema>;
 
 /** A handoff as the board shows it, with the report it delivered. */
 export const shownHandoff = (handoff: Handoff): ShownHandoff => {

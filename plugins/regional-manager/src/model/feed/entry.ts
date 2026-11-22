@@ -13,9 +13,10 @@ export const entrySchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("created"), at }),
   z.object({ kind: z.literal("agent-started"), at, agentId: agentIdSchema }),
   z.object({ kind: z.literal("agent-ended"), at, agentId: agentIdSchema, how: endedHowSchema }),
-  z.object({ kind: z.literal("round"), at, round: roundSchema }),
-  /** A question put to the user about the issue, at when it was asked, or a decision the manager recorded on it. */
-  z.object({ kind: z.literal("decision"), at, decision: issueDecisionSchema }),
+  /** A round, at when it began (its own `at`). */
+  z.object({ kind: z.literal("round"), round: roundSchema }),
+  /** A question put to the user about the issue, at when it was asked, or a decision the manager recorded on it (its own `at`). */
+  z.object({ kind: z.literal("decision"), decision: issueDecisionSchema }),
   /** The issue's pull request changed: what changed, on which number. */
   z.object({ kind: z.literal("pr"), at, number: z.number().int(), changes: z.array(prChangeSchema) }),
   /** The agent's thread said something the plugin told its manager of: it ended a turn with no handoff, failed, or waits on a person. */
@@ -33,6 +34,25 @@ export const entrySchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("unblocked"), at, by: issueIdSchema }),
 ]);
 export type Entry = z.infer<typeof entrySchema>;
+
+/** When the moment an entry tells happened. why not a field of every entry: a round and a decision carry their own. */
+export function timeOf(entry: Entry): number {
+  switch (entry.kind) {
+    case "round":
+      return entry.round.at;
+    case "decision":
+      return entry.decision.at;
+    case "created":
+    case "agent-started":
+    case "agent-ended":
+    case "pr":
+    case "thread":
+    case "unblocked":
+      return entry.at;
+    default:
+      return entry satisfies never;
+  }
+}
 
 /** Who an entry is by, as the feed names them: someone it names, or something no one did by hand. */
 export type Actor = { kind: "manager" } | { kind: "agent"; agentId: AgentId } | { kind: "verifier" } | { kind: "github" } | { kind: "bb" } | { kind: "plugin" };

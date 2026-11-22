@@ -1010,8 +1010,10 @@ which reads again only when something of that issue changes, never for
 another issue's write.
 
 **Done when** is a grid: a row per criterion, its number and words, then a
-cell per round that has a verdict, green for passed, red for failed, amber for
-couldn't check, lined up by the criterion's place. The head counts the rounds
+cell per round that has a verdict, a green check for passed, a red cross for
+failed, an amber warning sign for couldn't check, lined up by the criterion's
+place. Resting the pointer on a cell, or moving keyboard focus to it, shows a
+tooltip naming it ("Round 2: failed"); Escape closes it. The head counts the rounds
 and the latest's score ("3 rounds · latest 6 of 6", or "no verdict yet").
 Pressing a cell, or Enter or Space on it, opens the row to that round's
 evidence for the criterion, with the words that round judged; pressing it
@@ -1024,11 +1026,13 @@ rounds, Discussion only the decisions and questions. The choice holds while
 the tab is open. A **round** is one attempt: an agent's handoff and its
 check, or a build parent's final check. Folded, it is one line: "Round 2",
 what was handed off ("Final check on main" for a parent's) and its score: "✓ 6
-of 6", "✗ 3 of 6", "Reviewing…", "Verifying…", "Couldn't verify",
-"Replaced", "Not verified", or "Blocked" or "Gave up" for a handoff nothing
-checks. The latest round is open; any other opens when you press it, and
-stays as you left it while the tab is open, also when a new round arrives,
-which opens as the new latest. Open, a round shows its steps on a rail: who
+of 6", "✗ 3 of 6", "Reviewing…", "Verifying…", "Waiting for CI…",
+"Couldn't verify", "Replaced", "Not verified", or "Blocked" or "Gave up" for a
+handoff nothing checks. A round whose criteria all passed shows ✓ only once
+its verdict is settled. The latest round is open; any other opens when you
+press it, and stays as you left it while the tab is open, also when a new
+round arrives, which opens as the new latest; a round you are reading in,
+having pressed or focused something inside it, stays open too. Open, a round shows its steps on a rail: who
 handed off and when, its summary, and its **Report** folded ("Report · 3 did
 · 2 evidence"), with a research handoff's report as Markdown beside the
 memory file it was saved to (such as `reports/BBP-2.md`), in its own box that
@@ -1042,8 +1046,9 @@ checked or is still to come; each failing or unverifiable criterion with its
 evidence, and the passes folded ("4 passed"); and the verifier's own
 findings. It warns when the check had to run on the agent's own model, but
 names no provider or model. Last comes what became of it: "Sent back to a2
-as fix round 1", "Not sent back: the regional manager decides", "Passed" and
-the like, with when. A round's body is read only while it is open; one that
+as fix round 1", "Maybe sent back to a2 as fix round 1: the regional manager
+decides" when the plugin can't tell whether they reached it, "Not sent back:
+the regional manager decides", "Passed" and the like, with when. A round's body is read only while it is open; one that
 fails to read says so beside its steps, with Retry.
 
 Between the rounds sit the **decisions**, full size: each question the

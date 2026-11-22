@@ -1,7 +1,7 @@
 // Composition root. Owns no logic: opens the store and the memory folder, and wires each module
 // to bb, through the SDK and the store bound to this instance of the plugin (lifetime.ts).
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
-import { boardTag, COORDINATORS_TAG, coordinatorContract, memoryTag } from "./src/contract.ts";
+import { boardTag, COORDINATORS_TAG, coordinatorContract, issueTag, memoryTag } from "./src/contract.ts";
 import type { CoordinatorId, Role } from "./src/model/role.ts";
 import { registerAgentTools } from "./src/server/agents/agent-tools.ts";
 import { createAgents } from "./src/server/agents/agents.ts";
@@ -92,7 +92,7 @@ export default function plugin(host: BbPluginApi): void {
   registerHandoffTool(bb, { store, verify });
   registerReviewTool(bb, { store, review });
   registerVerdictTool(bb, { store, verify });
-  const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard });
+  const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard, refreshIssue: (id, issueId) => bb.rpc.experimental_invalidate([issueTag(id, issueId)]) });
   watchAgentThreads({ bb, store, inbox });
   watchOwnTree({ bb, store, inbox });
   bb.background.schedule("watch", "* * * * *", async () => {

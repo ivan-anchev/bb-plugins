@@ -142,19 +142,41 @@ function reviewedText({ findings, confirmed }: Extract<Round["review"], { state:
 function Outcome({ round, agents }: { round: Round; agents: FeedAgents }) {
   const { verdict, by } = round;
   if (verdict === null || round.inFlight) return null;
-  const sentTo = by.kind === "agent" && verdict.fixRound !== null ? by.agentId : null;
   return (
     <p className="rmi-outcome" data-result={verdict.outcome}>
-      {sentTo !== null ? (
-        <>
-          Sent back to <AgentName agentId={sentTo} agents={agents} /> as fix round {verdict.fixRound}
-        </>
-      ) : (
-        OUTCOME[verdict.outcome]
-      )}
+      {by.kind === "agent" && verdict.fixRound !== null ? <SentBack agent={<AgentName agentId={by.agentId} agents={agents} />} {...verdict.fixRound} /> : OUTCOME[verdict.outcome]}
       {round.outcomeAt !== null && <When at={round.outcomeAt} />}
     </p>
   );
+}
+
+/** Where a failed verdict's findings went: to its agent as a fix round, or maybe, when the plugin can't tell whether they reached it. */
+function SentBack({ agent, round, delivery }: { agent: ReactNode } & NonNullable<NonNullable<Round["verdict"]>["fixRound"]>) {
+  switch (delivery) {
+    case "sent":
+      return (
+        <>
+          Sent back to {agent} as fix round {round}
+        </>
+      );
+    // why the manager's: the plugin stopped mid-send, or bb's answer didn't say, so nothing shows whether the agent has them.
+    case "maybe":
+      return (
+        <>
+          Maybe sent back to {agent} as fix round {round}: the regional manager decides
+        </>
+      );
+    case "sending":
+      return (
+        <>
+          Sending back to {agent} as fix round {round}
+        </>
+      );
+    default:
+      // why nothing: the server may be newer than this bundle for a moment after an update.
+      delivery satisfies never;
+      return null;
+  }
 }
 
 const OUTCOME: Record<Outcome, string> = {
