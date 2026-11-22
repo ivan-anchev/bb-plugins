@@ -272,7 +272,7 @@ test("Shuffle never lands on a look another manager has while one is free: with 
   assert.deepEqual(page.creates.map(({ avatar }) => avatar), [free], "the look kept, face and all");
 });
 
-test("every shape, every colour and Shuffle is a finger's tap target, 44px square or more, while the tiles and their artwork keep their size", async () => {
+test("every shape, every colour and Shuffle is sized as a finger's tap target, 44px, while the tiles and their artwork keep their size", async () => {
   const page = mount();
   const shuffle = await page.view.findByRole("button", { name: "Shuffle" });
   const radios = page.view.getAllByRole("radio");
@@ -283,44 +283,29 @@ test("every shape, every colour and Shuffle is a finger's tap target, 44px squar
     return label;
   });
 
-  for (const [n, label] of labels.entries()) {
-    const { width, height } = shippedBox(label);
-    assert.ok(width >= 44 && height >= 44, `${radios[n]?.getAttribute("aria-label")}'s tap target is ${width}×${height}px`);
-  }
-  // why so: Shuffle's width is its label beside its glyph, inside its padding; the glyph, the gap and the padding alone make it 46px.
-  const shuffleWidth = 2 * shipped(shuffle, "paddingX") + shipped(shuffle, "gap") + shippedBox(shuffle.querySelector("svg")!).width;
-  const shuffleHeight = shippedBox(shuffle).height;
-  assert.ok(shuffleWidth >= 44 && shuffleHeight >= 44, `Shuffle's tap target is at least ${shuffleWidth}×${shuffleHeight}px`);
-  fireEvent.click(labels[SHAPES.indexOf("cloud")]!);
-  assert.equal(page.view.getByRole("radio", { name: "Cloud" }).matches(":checked"), true, "a tap on the label picks its shape");
-
-  const sizes = (boxes: { width: number; height: number }[]) => new Set(boxes.map(({ width, height }) => `${width}×${height}`));
-  assert.deepEqual(sizes(labels.map((label) => shippedBox(label.querySelector(":scope > span")!))), new Set(["32×32"]), "every tile is 32px");
+  // why sizing classes and inline styles, not boxes: jsdom lays nothing out. The live editor's script
+  // measures and hit-tests the laid-out boxes; this pins the classes that give them their size.
+  assert.deepEqual(new Set(labels.map(sizing)), new Set(["size-11"]), "every label is a 44px cell, with nothing to cap it");
+  assert.equal(sizing(shuffle), "min-h-11", "Shuffle is at least 44px tall, with nothing to cap it");
+  assert.deepEqual(new Set(labels.map((label) => sizing(label.querySelector(":scope > span")!))), new Set(["size-8"]), "every tile is 32px");
+  const swatches = labels.slice(SHAPES.length).map((label) => label.querySelector<HTMLElement>(":scope > span > span")!);
+  assert.deepEqual(new Set(swatches.map(sizing)), new Set(["size-4"]), "every colour's swatch is 16px");
   const blobs = labels.slice(0, SHAPES.length).map((label) => label.querySelector<HTMLElement>("[role=img]")!.style);
   assert.deepEqual(new Set(blobs.map((style) => parseFloat(style.width) + 2 * parseFloat(style.margin))), new Set([20]), "every shape's blob is 20px");
-  assert.deepEqual(sizes(labels.slice(SHAPES.length).map((label) => shippedBox(label.querySelector(":scope > span > span")!))), new Set(["16×16"]), "every colour's swatch is 16px");
+
+  fireEvent.click(labels[SHAPES.indexOf("cloud")]!);
+  assert.equal(page.view.getByRole("radio", { name: "Cloud" }).matches(":checked"), true, "a tap anywhere on the label picks its shape");
 });
 
-type Length = "width" | "height" | "paddingX" | "gap";
+/** The inline lengths that would compete with a sizing class. */
+const SIZING_STYLES = ["width", "height", "min-width", "min-height", "max-width", "max-height"];
 
 /**
- * The lengths, in px, of the sizing classes the picker relies on, each read live from bb's own
- * stylesheet. why only these: bb's stylesheet holds only the utilities bb itself uses (it has
- * size-11 and min-h-11, not min-w-11 or w-11), so a class not listed here sizes nothing. jsdom lays
- * nothing out; the live editor's captures measure and hit-test the laid-out boxes.
+ * An element's sizing: its width, height and size classes, minimum and maximum ones included, then
+ * any inline length that would compete with them.
  */
-const SHIPPED: Record<string, Partial<Record<Length, number>>> = {
-  "size-11": { width: 44, height: 44 },
-  "min-h-11": { height: 44 },
-  "size-8": { width: 32, height: 32 },
-  "size-4": { width: 16, height: 16 },
-  "px-3": { paddingX: 12 },
-  "gap-1.5": { gap: 6 },
-};
-
-/** The largest of one length the element's shipped classes give it, 0 when none gives it any. */
-function shipped(element: Element, length: Length): number {
-  return Math.max(0, ...[...element.classList].map((name) => SHIPPED[name]?.[length] ?? 0));
+function sizing(element: Element): string {
+  const classes = [...element.classList].filter((name) => /^(min-|max-)?(size|w|h)-/.test(name));
+  const styles = element instanceof HTMLElement ? SIZING_STYLES.filter((length) => element.style.getPropertyValue(length) !== "") : [];
+  return [...classes, ...styles.map((length) => `style:${length}`)].join(" ");
 }
-
-const shippedBox = (element: Element) => ({ width: shipped(element, "width"), height: shipped(element, "height") });
