@@ -41,9 +41,9 @@ function historyAfter(entries: readonly string[], calls: ReturnType<typeof land>
   }, [...entries]);
 }
 
-test("a link whose regional manager is gone says so, and leads to the list", async () => {
+test("a link whose regional manager this bb server doesn't have says so, without claiming why it can't know, and leads to the list", async () => {
   const view = land([]);
-  await view.findByText(/BBP-24's regional manager was deleted\./);
+  await view.findByText(/BBP-24's regional manager isn't on this bb server: it was deleted, or the link is from another\./);
   (await view.findByRole("button", { name: "See every regional manager" })).click();
   assert.deepEqual(view.inspection.navigateCalls, [{ method: "toPluginPanel", path: "regional-managers" }]);
 });

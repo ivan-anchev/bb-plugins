@@ -22,7 +22,7 @@ export function IssueLanding({ ref, link, onBack }: IssueLandingProps) {
       {read.data === undefined && read.error === null && <Note>Opening {link.issueId}…</Note>}
       {read.data !== undefined && manager?.kind !== "started" && (
         <Note>
-          {manager === null ? `${link.issueId}'s regional manager was deleted.` : `${link.issueId}'s regional manager hasn't started yet.`}{" "}
+          {manager === null ? `${link.issueId}'s regional manager isn't on this bb server: it was deleted, or the link is from another.` : `${link.issueId}'s regional manager hasn't started yet.`}{" "}
           <button type="button" className="underline underline-offset-2" onClick={onBack}>
             See every regional manager
           </button>

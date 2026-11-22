@@ -33,7 +33,7 @@ export function boardText(reads: readonly IssueRead[] | { error: string }, plugi
   if (reads.length === 0) return "## Board\n\nNo issues yet. File one with issue_create.";
   const placed = reads.map((read) => ({ ...read, id: read.view.issue.id, parentId: read.view.issue.parentId, status: read.view.status, needsYou: read.view.needsYou }));
   const lanes = boardGroups([], placed).map(({ lane, rows }) => [`### ${LANE_LABELS[lane]} (${rows.length})`, ...rows.flatMap((item) => laneLines(item, pluginId))].join("\n"));
-  return ["## Board", ...lanes, readyLine(reads.map(({ view }) => view))].join("\n\n");
+  return ["## Board", ...lanes, readyLine(reads.map(({ view }) => view), pluginId)].join("\n\n");
 }
 
 /** A row's lines in its lane: an issue's, each of its sub-issues indented under it. why no decision: catch-up lists them in their own section. */
@@ -58,9 +58,9 @@ function rowLine({ view, agent, threadId, branch }: IssueRead, pluginId: string)
   return `- ${issue.id} "${issue.title}" (${PIPELINES[issue.kind].label}; ${held}${under}${branch === null ? "" : `, on branch \`${branch}\``}): ${headlineText(view)}${blockedText(view.blockedBy, "; blocked by ", link)}${blockedText(view.blocks, "; blocks ", link)}; link: ${link(issue.id)}`;
 }
 
-/** The issues in Todo that nothing blocks: those an agent can start on without waiting. */
-function readyLine(views: readonly IssueView[]): string {
-  const ready = views.filter(isReady).map(({ issue }) => issue.id);
+/** The issues in Todo that nothing blocks, by their links: those an agent can start on without waiting. */
+function readyLine(views: readonly IssueView[], pluginId: string): string {
+  const ready = views.filter(isReady).map(({ issue }) => linksOf(pluginId, issue)(issue.id));
   return `Ready: ${ready.length === 0 ? "none" : ready.join(", ")} (in Todo, no sub-issues, and nothing they or their parent depend on is open).`;
 }
 

@@ -1090,7 +1090,7 @@ Experimental: this rests on bb's markup and slots that may change, so it is the
 likeliest part to break with a bb update. A regional manager names an issue to
 you as a link, `[BBP-24](/plugins/regional-manager/regional-managers/issue/<id>/BBP-24)`,
 which `crew_catch_up`, `issue_create`, `issue_update` and `issue_read` hand it ready-made,
-for each issue they name, related issues included; the
+for each issue on the board, each ready one and each issue one relates to; the
 id of the manager is in it because two managers can both have a BBP-24.
 
 - **In a message**, from the manager or anyone, the link reads as the issue's
@@ -1112,7 +1112,8 @@ id of the manager is in it because two managers can both have a BBP-24.
   tab open. ⌘ or Ctrl asks for the split from the manager's thread too.
 - **Elsewhere**: a link followed where the plugin's overlay doesn't run lands
   on the plugin's panel, which opens the manager's thread with the issue's
-  tab, or says the manager is gone; Back from the thread goes to the panel's
+  tab, or says this bb server has no such manager (deleted, or the link is
+  from another); Back from the thread goes to the panel's
   list, not to that page again. With the plugin disabled or removed, the
   link reads as a plain "BBP-24" and bb's plugin-unavailable page answers it;
   exported text and the CLI show the Markdown as written.

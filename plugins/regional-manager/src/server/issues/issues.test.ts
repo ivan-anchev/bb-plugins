@@ -44,6 +44,7 @@ test("each issue's link, and each related issue's, is in the catch-up's row, iss
   const caughtUp = textOf(await call("crew_catch_up", {}));
   assert.ok(caughtUp.includes(`\n- WEB-1 "Add retries" (Build; no agent): Not started; blocks ${link("WEB-2")} (Todo); link: ${link("WEB-1")}\n`), caughtUp);
   assert.ok(caughtUp.includes(`\n- WEB-2 "Dead letters" (Build; no agent): Not started; blocked by ${link("WEB-1")} (Todo); link: ${link("WEB-2")}\n`), caughtUp);
+  assert.ok(caughtUp.includes(`\nReady: ${link("WEB-1")} (in Todo,`), "the ready issues by their links");
   const read = textOf(await call("issue_read", { id: "WEB-2" }));
   assert.ok(read.startsWith(`## WEB-2: Dead letters\n\nBuild. Todo: Not started. Blocked by ${link("WEB-1")} (Todo). Thread: no thread. Link: ${link("WEB-2")}\n`), read);
   assert.ok(read.includes(`\nDepends on: ${link("WEB-1")} (Todo).\nBlocks: nothing.\n`), read);
