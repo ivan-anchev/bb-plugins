@@ -2,6 +2,7 @@
 // names one as a request (an agent's on agent_start, an issue's verifier on issue_create and
 // issue_update), and it is resolved against bb's catalog where the thread will run, or refused
 // with why, as placementOf resolves a placement (agent.ts).
+import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
 
@@ -17,12 +18,20 @@ export type ModelRef = z.infer<typeof modelRefSchema>;
 export const requestedExecutionSchema = z.object({
   providerId: z.string().trim().min(1).describe("The provider, as bb lists it: claude-code, codex, pi…"),
   model: z.string().trim().min(1).describe("A model of that provider, as its catalog in bb names it."),
-  reasoningLevel: z.string().optional().describe("Left out: high; medium on a model that lists no high; the model's default on one that lists neither. A level named, even low, is used as named."),
+  reasoningLevel: z
+    .string()
+    .optional()
+    .describe("Left out: high; medium on a model that lists no high; the model's default on one that lists neither. A level named, even low, is used as named: name low only for a test or throwaway work."),
 });
 export type RequestedExecution = z.infer<typeof requestedExecutionSchema>;
 
-/** A model in a provider's catalog, down to what the plugin reads (`providers.models`): the reasoning levels it lists, lowest first. */
-export type CatalogModel = { model: string; isDefault: boolean; defaultReasoningEffort: string; supportedReasoningEfforts: readonly { reasoningEffort: string }[] };
+/** A model as bb's `providers.models` gives it. */
+type SdkCatalogModel = Awaited<ReturnType<BbPluginApi["sdk"]["providers"]["models"]>>["models"][number];
+
+/** A model in a provider's catalog, down to what the plugin reads: the reasoning levels it lists among them, lowest first. */
+export type CatalogModel = Pick<SdkCatalogModel, "model" | "isDefault" | "defaultReasoningEffort"> & {
+  supportedReasoningEfforts: readonly Pick<SdkCatalogModel["supportedReasoningEfforts"][number], "reasoningEffort">[];
+};
 
 /**
  * The reasoning level the plugin runs a model on when nobody names one: high, else the highest

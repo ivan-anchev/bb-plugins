@@ -23,7 +23,7 @@ export const ISSUE_TOOLS = [CREATE, UPDATE, READ];
 type Deps = { store: Pick<Store, "roleOfThread" | "issue">; issues: Pick<Issues, "create" | "update" | "read"> };
 
 const VERIFIER = requestedExecutionSchema.describe(
-  "What checks this issue's done handoffs: a provider and a model bb can run, and optionally a reasoning level (left out: high; medium on a model that lists no high; else the model's default). Left out, the plugin picks one independent of the agent.",
+  "What checks this issue's done handoffs: a provider and a model bb can run, and optionally a reasoning level. Left out, the plugin picks one independent of the agent.",
 );
 
 /** The most issues one issue depends on, or one change adds or removes. */

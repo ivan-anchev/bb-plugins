@@ -139,14 +139,22 @@ test("agent_start runs the agent on the execution named, even at low, and issue_
   assert.equal(kit.thread(threadIn(defaulted)).execution?.reasoningLevel, "high");
 });
 
-test("agent_start, issue_create and issue_update tell the manager a reasoning level left out is high, the model's default only when it lists neither high nor medium", async () => {
+test("agent_start, issue_create and issue_update tell the manager, on the reasoning level alone, that one left out is high, the model's default only when it lists neither high nor medium", async () => {
   const { kit } = await coordinating();
-  for (const name of ["agent_start", "issue_create", "issue_update"]) {
+  // why parsed: the JSON schema is what the manager reads; issue_update's verifier is nullable, so it sits in an anyOf.
+  const executionField = z.looseObject({ description: z.string(), properties: z.looseObject({ reasoningLevel: z.looseObject({ description: z.string() }) }) });
+  const nullableField = z.looseObject({ anyOf: z.tuple([executionField, z.looseObject({ type: z.literal("null") })]) });
+  for (const [name, field] of [["agent_start", "execution"], ["issue_create", "verifier"], ["issue_update", "verifier"]] as const) {
     const { parameters } = kit.tools().find((tool) => tool.name === name) ?? assert.fail(`no ${name}`);
-    const schema = JSON.stringify(z.toJSONSchema(parameters, { io: "input" }));
-    assert.match(schema, /\(left out: high; medium on a model that lists no high; else the model's default/, `${name}'s execution or verifier`);
-    assert.match(schema, /"reasoningLevel":\{"description":"Left out: high; medium on a model that lists no high; the model's default on one that lists neither\. A level named, even low, is used as named\."/, `${name}'s reasoningLevel`);
-    assert.doesNotMatch(schema, /left out: the model's default/i, name);
+    const property = z.looseObject({ properties: z.record(z.string(), z.unknown()) }).parse(z.toJSONSchema(parameters, { io: "input" })).properties[field];
+    const nullable = nullableField.safeParse(property);
+    const { description, properties } = nullable.success ? nullable.data.anyOf[0] : executionField.parse(property);
+    assert.equal(
+      properties.reasoningLevel.description,
+      "Left out: high; medium on a model that lists no high; the model's default on one that lists neither. A level named, even low, is used as named: name low only for a test or throwaway work.",
+      `${name}'s ${field}.reasoningLevel`,
+    );
+    assert.doesNotMatch(description, /\bhigh\b|\bmedium\b|\blow\b|default/, `${name}'s ${field} leaves the level's policy to its reasoningLevel`);
   }
 });
 
