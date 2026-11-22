@@ -1,5 +1,6 @@
 // How the user picks a regional manager's avatar, below its profile's fields: Shuffle, which picks a
-// look no other manager has, and the shape and the colour to pick one by hand, which may be another's.
+// look no other manager has while one is free, and the shape and the colour to pick one by hand,
+// which may be another's.
 // Shuffle waits while the other managers' looks aren't known (useTakenLooks): a look it picked then
 // could be theirs.
 import { useId, useMemo, useRef, type ReactNode } from "react";

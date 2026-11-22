@@ -166,7 +166,7 @@ export const coordinatorContract = defineRpcContract({
   },
   /**
    * Creates a regional manager with this profile and no thread: its goal, sent from its page, starts
-   * it (startCoordinator). An `auto` avatar is picked as it is saved, a look no other manager has.
+   * it (startCoordinator). An `auto` avatar is picked as it is saved, a look no other manager has while one is free.
    */
   createCoordinator: {
     input: z.object({ profile: newProfileSchema }),

@@ -327,7 +327,8 @@ test("a 0.3.0 regional manager is a candidate of the upgrade until unheld: then 
   store.unhold(MANAGER, "ticket-1", "Again", "ticket-3", 3_000);
 
   assert.deepEqual([store.upgradeCandidates(), store.coordinators()], [[], []]);
-  assert.deepEqual(store.notStarted().map(({ id, name, description }) => ({ id, name, description })), [{ id: MANAGER, name: "Webhooks", description: null }]);
+  // why that avatar: a 0.3.0 manager had the plugin's icon, which the store gives the first free look from its id as it opens.
+  assert.deepEqual(store.notStarted(), [{ id: MANAGER, name: "Webhooks", description: null, avatar: freeLook(seedOf(MANAGER), []) }]);
   assert.deepEqual(store.startOf(MANAGER), { kind: "not-started", ticket: "ticket-2", name: "Webhooks" });
   assert.equal(store.roleOfThread("thr_a"), null);
   assert.equal(store.roleFor("thr_a", "ticket-1"), null);
