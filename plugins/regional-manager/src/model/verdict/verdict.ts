@@ -144,7 +144,8 @@ export const shownVerdict = (verdict: Verdict): ShownVerdict => shownVerdictSche
  * `waiting-for-ci`: it passed every criterion, and waits for CI on its commit. `unverified`: nobody
  * checks it.
  */
-type Outcome = "pending" | "waiting-for-ci" | "pass" | "fail" | "could-not-run" | "superseded" | "unverified";
+export const outcomeSchema = z.enum(["pending", "waiting-for-ci", "pass", "fail", "could-not-run", "superseded", "unverified"]);
+export type Outcome = z.infer<typeof outcomeSchema>;
 
 /**
  * The verdict a check starts with: waived while verification is off, else queued for a verifier. A

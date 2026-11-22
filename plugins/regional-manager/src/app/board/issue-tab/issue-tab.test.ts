@@ -222,9 +222,9 @@ test("a tab whose params name no issue asks for one from the Board, and one whos
 
 test("the tab lists its decisions oldest first: each question put to the user with their answer or still waiting, and each the regional manager recorded", async () => {
   const decisions: IssueDetail["decisions"] = [
-    { kind: "asked", id: decisionIdSchema.parse("d3"), question: "Ship behind a flag?", at: 1_000, answer: { text: "Yes, off by default", at: 1_500 } },
+    { kind: "asked", id: decisionIdSchema.parse("d3"), question: "Ship behind a flag?", options: [], at: 1_000, answer: { text: "Yes, off by default", at: 1_500 } },
     { kind: "recorded", text: "Retries cap at 5: the user's answer to d3 keeps the flag off.", at: 2_000 },
-    { kind: "asked", id: decisionIdSchema.parse("d4"), question: "Backfill old deliveries?", at: 3_000, answer: null },
+    { kind: "asked", id: decisionIdSchema.parse("d4"), question: "Backfill old deliveries?", options: [], at: 3_000, answer: null },
   ];
   const { tab } = await opened("WEB-1", [issue("WEB-1", {})], () => ({ ...DETAIL, decisions }));
   const part = within(tab().getByRole("heading", { name: "Decisions" }).closest("section") ?? assert.fail("a Decisions part"));

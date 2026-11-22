@@ -12,7 +12,7 @@ import type { Verdict } from "./verdict.ts";
 export const severitySchema = z.enum(["must-fix", "should-fix", "nit"]);
 
 /** One thing the reviewer found: where in the diff (its file, and its line, null when it names none), how much it matters, and what it claims is wrong. */
-const reviewFindingSchema = z.object({
+export const reviewFindingSchema = z.object({
   file: z.string().min(1),
   line: z.number().int().min(1).nullable(),
   severity: severitySchema,
