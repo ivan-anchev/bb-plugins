@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { afterEach, test } from "node:test";
 import { cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { roundBodyKey } from "../../../../../contract.ts";
@@ -198,4 +199,30 @@ test("a round nothing verified, as with verification off, shows no verifier step
   assert.equal(three.queryByRole("button", { name: /Verifier/ }), null);
   assert.equal(three.queryByText(/^Verifier$/), null, "no verifier ran");
   assert.equal(tab().getByRole("article", { name: "Round 3" }).querySelector(".rmi-outcome"), null, "no outcome line");
+});
+
+test("a long history keeps the criterion's words: its cells wrap, six to a line, rather than widen the row", async () => {
+  const third = FEED.entries.find((entry) => entry.kind === "round" && entry.round.number === 3);
+  const many: Entry[] = Array.from({ length: 16 }, (_, i) =>
+    third?.kind === "round" ? { ...third, round: { ...third.round, key: roundKey(10 + i), number: 4 + i, at: 9_000 + i } } : assert.fail("no round 3"),
+  );
+  // why the stylesheet by hand: the tests load no CSS, and jsdom computes styles but lays nothing out; the live capture shows the layout.
+  const style = document.createElement("style");
+  style.textContent = readFileSync(new URL("../feed.css", import.meta.url), "utf8");
+  document.head.append(style);
+  try {
+    const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [...FEED.entries, ...many] }) });
+    const cells = tab().getByRole("group", { name: "Criterion 1 by round" });
+    assert.equal(within(cells).getAllByRole("button").length, 19);
+    const { flexWrap, maxWidth } = getComputedStyle(cells);
+    assert.deepEqual([flexWrap, maxWidth], ["wrap", "113px"], "six 18px cells and their 1px gaps");
+  } finally {
+    style.remove();
+  }
+});
+
+test("a missed review says it was missed in its step, with why once the round's body is read", async () => {
+  const missed: Entry[] = FEED.entries.map((entry) => (entry.kind === "round" && entry.round.number === 3 ? { ...entry, round: { ...entry.round, review: { state: "missed", at: 5_100 } } } : entry));
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: missed }), bodies: () => ({ ...bodyOf(3), findings: [], reviewMissed: "no independent reviewer model" }) });
+  assert.ok(await rounds(tab()).card(3).findByText(/^No review: no independent reviewer model/));
 });

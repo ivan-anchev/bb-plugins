@@ -47,7 +47,7 @@ export function RoundBody({ coordinatorId, issueId, round, agents }: RoundBodyPr
       {body === null && <p className="rmi-verdict-meta">This round is no longer on record.</p>}
       <ol className="rmi-steps">
         <HandedStep round={round} agents={agents} handoff={loaded?.handoff ?? null} />
-        {round.review.state !== "none" && <ReviewStep review={round.review} findings={loaded?.findings ?? []} />}
+        {round.review.state !== "none" && <ReviewStep review={round.review} body={loaded} />}
         {/* why none when waived: verification was off, so no verifier ran; the round's score says so. */}
         {round.verdict !== null && round.verdict.outcome.kind !== "unverified" && (
           <Step
@@ -121,7 +121,8 @@ function handedText(status: Extract<Round["by"], { kind: "agent" }>["status"]): 
   }
 }
 
-function ReviewStep({ review, findings }: { review: Exclude<Round["review"], { state: "none" }>; findings: Body["findings"] }) {
+/** The review's step: its lines from the round, its findings, or why none was had, from the body once read. */
+function ReviewStep({ review, body }: { review: Exclude<Round["review"], { state: "none" }>; body: Body | null }) {
   switch (review.state) {
     case "pending":
       return <Step title="Reviewer is reviewing…" />;
@@ -130,7 +131,7 @@ function ReviewStep({ review, findings }: { review: Exclude<Round["review"], { s
         <Step
           title={
             <>
-              No review: {review.reason} <When at={review.at} />
+              No review{body?.reviewMissed != null && `: ${body.reviewMissed}`} <When at={review.at} />
             </>
           }
         />
@@ -144,7 +145,7 @@ function ReviewStep({ review, findings }: { review: Exclude<Round["review"], { s
             </>
           }
         >
-          {findings.length > 0 && <Findings findings={findings} />}
+          {body !== null && body.findings.length > 0 && <Findings findings={body.findings} />}
         </Step>
       );
     default:

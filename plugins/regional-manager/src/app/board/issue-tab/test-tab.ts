@@ -123,6 +123,7 @@ export function bodyOf(n: number): RoundBody {
       { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "The backoff has no cap.", triage: { result: "confirmed", reason: "Seen: it grows without bound." } },
       { file: "src/retry.css", line: null, severity: "nit", claim: "The padding differs from the row's.", triage: { result: "rejected", reason: "It matches the row." } },
     ],
+    reviewMissed: null,
   };
 }
 

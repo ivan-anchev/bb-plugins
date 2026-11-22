@@ -36,11 +36,11 @@ export const roundSchema = z.object({
     z.object({ kind: z.literal("agent"), agentId: agentIdSchema, status: handoffStatusSchema, summary: z.string() }),
     z.object({ kind: z.literal("final"), defaultBranch: z.string() }),
   ]),
-  /** Its review: none (no review stage), still to come, missed and why, or reported with how many findings and, once the verdict triaged them, how many it confirmed. */
+  /** Its review: none (no review stage), still to come, missed (why is the body's), or reported with how many findings and, once the verdict triaged them, how many it confirmed. */
   review: z.discriminatedUnion("state", [
     z.object({ state: z.literal("none") }),
     z.object({ state: z.literal("pending") }),
-    z.object({ state: z.literal("missed"), at: z.number(), reason: z.string() }),
+    z.object({ state: z.literal("missed"), at: z.number() }),
     z.object({ state: z.literal("reported"), at: z.number(), findings: z.number().int(), confirmed: z.number().int().nullable() }),
   ]),
   /**
@@ -71,6 +71,8 @@ export const roundBodySchema = z.object({
   verdict: shownVerdictSchema.nullable(),
   /** The reviewer's findings, each with the verifier's triage once its verdict returned (null triage before). */
   findings: z.array(reviewFindingSchema.extend({ triage: triageSchema.nullable() })),
+  /** Why no review was had (null: one was, or none was asked for). */
+  reviewMissed: z.string().nullable(),
 });
 export type RoundBody = z.infer<typeof roundBodySchema>;
 
@@ -108,6 +110,7 @@ export function bodyOf(handoff: Handoff | null, check: Check | null): RoundBody 
     handoff: handoff === null ? null : handoffBody(handoff),
     verdict: check === null ? null : shownVerdict(check.verdict),
     findings: check === null ? [] : findingsOf(check),
+    reviewMissed: check?.review.state === "missed" ? check.review.reason : null,
   };
 }
 
@@ -175,7 +178,7 @@ function reviewOf({ review, verdict }: Check): Round["review"] {
     case "running":
       return reviewPending({ review, verdict }) ? { state: "pending" } : { state: "none" };
     case "missed":
-      return { state: "missed", at: review.at, reason: review.reason };
+      return { state: "missed", at: review.at };
     case "reported":
       return { state: "reported", at: review.at, findings: review.findings.length, confirmed: confirmedOf(review, verdict) };
     default:

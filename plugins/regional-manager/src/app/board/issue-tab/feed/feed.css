@@ -79,9 +79,14 @@
   color: var(--muted-foreground);
   text-wrap: pretty;
 }
+/* The cells: six to a line, wrapping, so a long history never squeezes the criterion's words. why six:
+   at a 360px panel it leaves the words more than half the row; every row has as many cells, so a
+   round keeps its place on each. */
 .rmi-grid-cells {
   display: inline-flex;
+  flex-wrap: wrap;
   gap: 1px;
+  max-width: calc(6 * 18px + 5 * 1px);
 }
 /* A cell: its result's glyph in a target large enough to press, and its tooltip above it. */
 .rmi-grid-cell-slot {

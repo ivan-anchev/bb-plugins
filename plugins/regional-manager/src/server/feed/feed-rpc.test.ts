@@ -140,7 +140,8 @@ test("an opened round's body sends its handoff, its verdict and the findings wit
   assert.deepStrictEqual(keysOf(bodies), [gone, key, otherIssue, "not a key", notAnId].sort());
   assert.deepStrictEqual([bodies[gone], bodies[otherIssue], bodies["not a key"], bodies[notAnId]], [null, null, null, null]);
   const body = bodies[key] ?? assert.fail("no body");
-  assert.deepStrictEqual(keysOf(body), ["findings", "handoff", "verdict"]);
+  assert.deepStrictEqual(keysOf(body), ["findings", "handoff", "reviewMissed", "verdict"]);
+  assert.equal(body.reviewMissed, null, "a review was had");
   assert.deepStrictEqual(keysOf(body.handoff ?? assert.fail()), ["concerns", "deviations", "did", "evidence", "findings", "report"], "no id, time, status or summary: the folded round has them");
   assert.deepStrictEqual(keysOf(body.verdict ?? assert.fail()), ["at", "checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
   assert.deepStrictEqual(body.findings, [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", triage: { result: "confirmed", reason: "No cap in retry.ts." } }]);

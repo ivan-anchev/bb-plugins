@@ -34,16 +34,21 @@ export function DecisionCard({ coordinatorId, decision }: { coordinatorId: Coord
 /**
  * A question put to the user: open, a button per option that answers it; answered, its options with
  * the one chosen marked, and the answer. One component for both, so the card stays as the answer
- * lands, and focus on the option pressed, which unmounts then, moves to the card.
+ * lands, and focus on an option, which unmounts then, moves to the card, whoever answered: this
+ * card, the Board, or another window.
  */
 function Question({ coordinatorId, decision }: { coordinatorId: CoordinatorId; decision: Asked }) {
   const { sent, send, error } = useAnswer(coordinatorId, decision.id);
   const card = useRef<HTMLElement>(null);
+  // Whether focus is on one of the options. why a ref: the answer that unmounts them fires no blur.
+  const onOption = useRef(false);
   const answered = decision.answer !== null;
   // why an effect: focus is the browser's, and the option it was on is gone only once this commit lands.
   useLayoutEffect(() => {
-    if (answered && sent !== null && document.activeElement === document.body) card.current?.focus();
-  }, [answered, sent]);
+    if (!answered || !onOption.current) return;
+    onOption.current = false;
+    if (document.activeElement === null || document.activeElement === document.body) card.current?.focus();
+  }, [answered]);
   return (
     <article ref={card} tabIndex={-1} className="rmi-decision" aria-label={`Question ${decision.id}`}>
       <p className="rmi-decision-head">
@@ -51,7 +56,11 @@ function Question({ coordinatorId, decision }: { coordinatorId: CoordinatorId; d
         <span className="rmi-decision-id">{decision.id}</span>
       </p>
       <p className="rmi-decision-text">{decision.question}</p>
-      {decision.answer === null ? <Options decision={decision} sent={sent} send={send} /> : <Answer decision={decision} answer={decision.answer} />}
+      {decision.answer === null ? (
+        <Options decision={decision} sent={sent} send={send} onFocusChange={(focused) => (onOption.current = focused)} />
+      ) : (
+        <Answer decision={decision} answer={decision.answer} />
+      )}
       {sent !== null && !answered && (
         <p role="status" className="rmi-verdict-meta">
           Sending your answer…
@@ -67,10 +76,17 @@ function Question({ coordinatorId, decision }: { coordinatorId: CoordinatorId; d
 }
 
 /** Waiting for the user: each option answers it; one with no options is answered in words, on the Board. */
-function Options({ decision, sent, send }: { decision: Asked; sent: string | null; send(text: string): void }) {
+type OptionsProps = { decision: Asked; sent: string | null; send(text: string): void; onFocusChange(focused: boolean): void };
+
+function Options({ decision, sent, send, onFocusChange }: OptionsProps) {
   if (decision.options.length === 0) return <p className="rmi-verdict-meta">Answer it in your own words under Needs you on the Board.</p>;
   return (
-    <ul aria-label="Options" className="rmi-options">
+    <ul
+      aria-label="Options"
+      className="rmi-options"
+      onFocus={() => onFocusChange(true)}
+      onBlur={(event) => onFocusChange(event.currentTarget.contains(event.relatedTarget))}
+    >
       {decision.options.map((option) => (
         <li key={option} className="max-w-full">
           {/* why aria-disabled, not disabled: a disabled button drops focus to the page while the answer sends. */}

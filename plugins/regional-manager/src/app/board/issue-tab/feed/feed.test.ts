@@ -100,3 +100,18 @@ test("an agent that waited on a person reads as a moment past, not as waiting no
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [...FEED.entries, asked] }) });
   assert.ok(activity(tab()).texts().some((text) => /^a2 asked a person: Approve the push\?/.test(text ?? "")));
 });
+
+test("a question answered elsewhere, on the Board or in another window, while focus is on one of its options moves focus to its card, never the page", async () => {
+  const { tab, answers, refeed } = await opened("WEB-1", WEB_1);
+  const card = () => activity(tab()).section.getByRole("article", { name: "Question d2" });
+  const option = within(card()).getByRole("button", { name: "Wait a day" });
+  option.focus();
+  fireEvent.focus(option);
+  const elsewhere: Entry[] = FEED.entries.map((entry) =>
+    entry.kind === "decision" && entry.decision.kind === "asked" && entry.decision.id === "d2" ? { ...entry, decision: { ...entry.decision, answer: { text: "Ship now", at: 7_000 } } } : entry,
+  );
+  await refeed("WEB-1", () => ({ ...FEED, entries: elsewhere }));
+  await waitFor(() => assert.match(card().textContent ?? "", /You answered/));
+  assert.deepEqual(answers, [], "this card sent nothing");
+  assert.equal(document.activeElement, card());
+});
