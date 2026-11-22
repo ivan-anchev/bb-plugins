@@ -47,15 +47,18 @@ type ChoicesProps<Option extends string> = { legend: string; options: readonly O
  * them, as in any radio group.
  * why each option a 44px cell around its 32px tile: a finger's tap target, with the tiles and the
  * artwork in them kept at their size; the cells' 6px edge, taken back by the grid's margin and the
- * legend's, keeps the tiles where they stood. why `columns`: the 21 shapes in three rows of seven
- * and the 12 colours in two of six share one grid, instead of wrapping raggedly at the editor's width.
+ * legend's, keeps the tiles where they stood. why `columns`, the most a row holds: the 21 shapes in
+ * three rows of seven and the 12 colours in two of six share one grid on a wide editor; a narrower
+ * one fits fewer whole cells to a row, never a cell cut off at its edge.
  */
 function Choices<Option extends string>({ legend, options, columns, chosen, onChoose, children }: ChoicesProps<Option>) {
   const group = useId();
   return (
-    <fieldset className="flex flex-col gap-1.5">
+    // why self-stretch and min-w-0: the grid wraps to the editor's width only once the fieldset takes
+    // that width, and a fieldset is never narrower than its content unless told so.
+    <fieldset className="flex min-w-0 flex-col gap-1.5 self-stretch">
       <legend className="text-xs text-muted-foreground">{legend}</legend>
-      <div className="-mx-1.5 grid" style={{ gridTemplateColumns: `repeat(${columns}, 2.75rem)` }}>
+      <div className="-mx-1.5 grid" style={{ gridTemplateColumns: "repeat(auto-fill, 2.75rem)", maxWidth: `${columns * 2.75}rem` }}>
         {options.map((option) => (
           <label key={option} className="group flex size-11 cursor-pointer items-center justify-center">
             <input type="radio" name={group} aria-label={nameOf(option)} checked={chosen === option} onChange={() => onChoose(option)} className="peer sr-only" />

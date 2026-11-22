@@ -284,36 +284,43 @@ test("every shape, every colour and Shuffle is a finger's tap target, 44px squar
   });
 
   for (const [n, label] of labels.entries()) {
-    const { width, height } = tailwindBox(label);
+    const { width, height } = shippedBox(label);
     assert.ok(width >= 44 && height >= 44, `${radios[n]?.getAttribute("aria-label")}'s tap target is ${width}×${height}px`);
   }
-  // why so: Shuffle's width is its label beside its glyph, inside its padding; the glyph and the padding alone make it 46px.
-  const shuffleWidth = 2 * tailwindPx(shuffle, ["px"]) + tailwindPx(shuffle, ["gap"]) + tailwindBox(shuffle.querySelector("svg")!).width;
-  const shuffleHeight = tailwindBox(shuffle).height;
+  // why so: Shuffle's width is its label beside its glyph, inside its padding; the glyph, the gap and the padding alone make it 46px.
+  const shuffleWidth = 2 * shipped(shuffle, "paddingX") + shipped(shuffle, "gap") + shippedBox(shuffle.querySelector("svg")!).width;
+  const shuffleHeight = shippedBox(shuffle).height;
   assert.ok(shuffleWidth >= 44 && shuffleHeight >= 44, `Shuffle's tap target is at least ${shuffleWidth}×${shuffleHeight}px`);
   fireEvent.click(labels[SHAPES.indexOf("cloud")]!);
   assert.equal(page.view.getByRole("radio", { name: "Cloud" }).matches(":checked"), true, "a tap on the label picks its shape");
 
   const sizes = (boxes: { width: number; height: number }[]) => new Set(boxes.map(({ width, height }) => `${width}×${height}`));
-  assert.deepEqual(sizes(labels.map((label) => tailwindBox(label.querySelector(":scope > span")!))), new Set(["32×32"]), "every tile is 32px");
+  assert.deepEqual(sizes(labels.map((label) => shippedBox(label.querySelector(":scope > span")!))), new Set(["32×32"]), "every tile is 32px");
   const blobs = labels.slice(0, SHAPES.length).map((label) => label.querySelector<HTMLElement>("[role=img]")!.style);
   assert.deepEqual(new Set(blobs.map((style) => parseFloat(style.width) + 2 * parseFloat(style.margin))), new Set([20]), "every shape's blob is 20px");
-  assert.deepEqual(sizes(labels.slice(SHAPES.length).map((label) => tailwindBox(label.querySelector(":scope > span > span")!))), new Set(["16×16"]), "every colour's swatch is 16px");
+  assert.deepEqual(sizes(labels.slice(SHAPES.length).map((label) => shippedBox(label.querySelector(":scope > span > span")!))), new Set(["16×16"]), "every colour's swatch is 16px");
 });
 
+type Length = "width" | "height" | "paddingX" | "gap";
+
 /**
- * The box an element's Tailwind sizing classes give it in bb's stylesheet, in px: the larger of its
- * fixed and its minimum size. why classes: jsdom lays nothing out; the live editor's captures measure
- * the laid-out boxes.
+ * The lengths, in px, of the sizing classes the picker relies on, each read live from bb's own
+ * stylesheet. why only these: bb's stylesheet holds only the utilities bb itself uses (it has
+ * size-11 and min-h-11, not min-w-11 or w-11), so a class not listed here sizes nothing. jsdom lays
+ * nothing out; the live editor's captures measure and hit-test the laid-out boxes.
  */
-function tailwindBox(element: Element): { width: number; height: number } {
-  return { width: tailwindPx(element, ["size", "w", "min-w"]), height: tailwindPx(element, ["size", "h", "min-h"]) };
+const SHIPPED: Record<string, Partial<Record<Length, number>>> = {
+  "size-11": { width: 44, height: 44 },
+  "min-h-11": { height: 44 },
+  "size-8": { width: 32, height: 32 },
+  "size-4": { width: 16, height: 16 },
+  "px-3": { paddingX: 12 },
+  "gap-1.5": { gap: 6 },
+};
+
+/** The largest of one length the element's shipped classes give it, 0 when none gives it any. */
+function shipped(element: Element, length: Length): number {
+  return Math.max(0, ...[...element.classList].map((name) => SHIPPED[name]?.[length] ?? 0));
 }
 
-/** The largest length, in px, an element's Tailwind classes with these prefixes set: one spacing step is 4px. */
-function tailwindPx(element: Element, prefixes: string[]): number {
-  return Math.max(0, ...[...element.classList].flatMap((name) => {
-    const [, prefix, steps] = /^([a-z-]+)-(\d+(?:\.\d+)?)$/.exec(name) ?? [];
-    return prefix !== undefined && prefixes.includes(prefix) ? [Number(steps) * 4] : [];
-  }));
-}
+const shippedBox = (element: Element) => ({ width: shipped(element, "width"), height: shipped(element, "height") });
