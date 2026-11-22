@@ -43,7 +43,10 @@ export type Avatar = z.infer<typeof avatarSchema>;
 const LOOKS = SHAPES.length * HUE_NAMES.length;
 
 /** How many starts `freeLook` tells apart: every look with every face. */
-export const STARTS = LOOKS * EXPRESSIONS.length;
+const STARTS = LOOKS * EXPRESSIONS.length;
+
+/** A start for a new or shuffled look: any of the looks, with any face. */
+export const randomStart = (): number => Math.floor(Math.random() * STARTS);
 
 /**
  * The first look from `start` on that none of `taken` has, its face picked by `start` too; once all

@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { avatarSchema, freeLook, HUE_NAMES, SHAPES, STARTS, type Avatar } from "./avatar.ts";
+import { avatarSchema, freeLook, HUE_NAMES, randomStart, SHAPES, type Avatar } from "./avatar.ts";
 
 const lookKey = ({ shape, hue }: Avatar) => `${shape}/${hue}`;
-const randomStart = () => Math.floor(Math.random() * STARTS);
 
 test("new regional managers, each given a free look from a random start, all look different until the 21 shapes in 12 hues run out", () => {
   const taken: Avatar[] = [];

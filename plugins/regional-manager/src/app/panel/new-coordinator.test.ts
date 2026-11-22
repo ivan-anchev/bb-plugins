@@ -50,6 +50,8 @@ function mount(read: { failing: boolean; others?: NotStarted[] } = { failing: fa
     async create() {
       await act(async () => fireEvent.click(view.getByRole("button", { name: "Create" })));
     },
+    /** The names of the radios checked: the look's shape and colour. */
+    chosen: () => view.getAllByRole("radio").filter((radio) => radio.matches(":checked")).map((radio) => radio.getAttribute("aria-label")),
   };
 }
 
@@ -161,12 +163,11 @@ test("Shuffle waits while the other managers' looks can't be read, and says why;
   const read = { failing: true };
   const page = mount(read);
   const shuffle = await page.view.findByRole("button", { name: "Shuffle" });
-  const chosen = () => page.view.getAllByRole("radio").filter((radio) => radio.matches(":checked")).map((radio) => radio.getAttribute("aria-label"));
 
   assert.match((await page.view.findByRole("alert")).textContent ?? "", /Could not read the other regional managers' looks, so Shuffle waits: .*bb is restarting/);
   assert.equal(shuffle.getAttribute("aria-disabled"), "true");
   fireEvent.click(shuffle);
-  assert.deepEqual(chosen(), ["Circle", "Violet"], "a Shuffle that can't know the taken looks picks none");
+  assert.deepEqual(page.chosen(), ["Circle", "Violet"], "a Shuffle that can't know the taken looks picks none");
 
   read.failing = false;
   const retry = page.view.getByRole("button", { name: "Retry" });
@@ -177,7 +178,7 @@ test("Shuffle waits while the other managers' looks can't be read, and says why;
   assert.ok(document.activeElement === shuffle, "the focus Retry had is on Shuffle");
   fireEvent.click(shuffle);
 
-  assert.notDeepEqual(chosen(), ["Circle", "Violet"], "Shuffle steps past Scout's look");
+  assert.notDeepEqual(page.chosen(), ["Circle", "Violet"], "Shuffle steps past Scout's look");
   assert.equal(page.view.queryByRole("alert"), null);
 });
 
@@ -204,15 +205,14 @@ test("a later read that fails keeps a new manager's fields and the look it was g
   const read = { failing: false };
   const page = mount(read);
   await page.view.findByRole("textbox", { name: "Name" });
-  const chosen = () => page.view.getAllByRole("radio").filter((radio) => radio.matches(":checked")).map((radio) => radio.getAttribute("aria-label"));
-  const given = chosen();
+  const given = page.chosen();
 
   read.failing = true;
   await act(() => page.view.experimental_invalidateRpc([COORDINATORS_TAG]));
 
   assert.match((await page.view.findByRole("alert")).textContent ?? "", /so Shuffle waits: .*bb is restarting/);
   assert.equal(page.view.getByRole("button", { name: "Shuffle" }).getAttribute("aria-disabled"), "true");
-  assert.deepEqual(chosen(), given, "the look stays the one given while the looks were known");
+  assert.deepEqual(page.chosen(), given, "the look stays the one given while the looks were known");
   await page.named("Webhooks");
   await page.create();
   const [created] = page.creates;
@@ -225,14 +225,13 @@ test("a new manager's look moves on when a later read shows another manager has 
   const read: { failing: boolean; others: NotStarted[] } = { failing: false, others: [] };
   const page = mount(read);
   await page.view.findByRole("textbox", { name: "Name" });
-  const chosen = () => page.view.getAllByRole("radio").filter((radio) => radio.matches(":checked")).map((radio) => radio.getAttribute("aria-label"));
-  const [shape, hue] = chosen().map((label) => label?.toLowerCase());
+  const [shape, hue] = page.chosen().map((label) => label?.toLowerCase());
   const given = avatarSchema.parse({ kind: "blob", shape, hue, expression: "neutral" });
 
   read.others = [{ id: coordinatorIdSchema.parse("1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f"), name: "Docs", description: null, avatar: given }];
   await act(() => page.view.experimental_invalidateRpc([COORDINATORS_TAG]));
 
-  await waitFor(() => assert.notDeepEqual(chosen(), [given.shape, given.hue].map((label) => label.charAt(0).toUpperCase() + label.slice(1))));
+  await waitFor(() => assert.notDeepEqual(page.chosen().map((label) => label?.toLowerCase()), [given.shape, given.hue]));
   await page.named("Webhooks");
   await page.create();
   const [created] = page.creates;
@@ -262,16 +261,15 @@ test("a look the page gave a new manager moves on when a later read shows it tak
   const read: { failing: boolean; others: NotStarted[] } = { failing: false, others: [] };
   const page = mount(read);
   await page.named("Webhooks");
-  const chosen = () => page.view.getAllByRole("radio").filter((radio) => radio.matches(":checked")).map((radio) => radio.getAttribute("aria-label")?.toLowerCase());
-  const [shape, hue] = chosen();
+  const [shape, hue] = page.chosen().map((label) => label?.toLowerCase());
   const given = avatarSchema.parse({ kind: "blob", shape, hue, expression: "neutral" });
 
   read.others = [{ id: coordinatorIdSchema.parse("1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f"), name: "Docs", description: null, avatar: given }];
   await act(() => page.view.experimental_invalidateRpc([COORDINATORS_TAG]));
-  await waitFor(() => assert.notDeepEqual(chosen(), [given.shape, given.hue]));
+  await waitFor(() => assert.notDeepEqual(page.chosen().map((label) => label?.toLowerCase()), [given.shape, given.hue]));
 
   fireEvent.click(page.view.getByRole("radio", { name: "Bunny" }));
-  read.others = [...read.others, { id: coordinatorIdSchema.parse("2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a"), name: "Ops", description: null, avatar: avatarSchema.parse({ kind: "blob", shape: "bunny", hue: chosen()[1], expression: "neutral" }) }];
+  read.others = [...read.others, { id: coordinatorIdSchema.parse("2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a"), name: "Ops", description: null, avatar: avatarSchema.parse({ kind: "blob", shape: "bunny", hue: page.chosen().map((label) => label?.toLowerCase())[1], expression: "neutral" }) }];
   await act(() => page.view.experimental_invalidateRpc([COORDINATORS_TAG]));
   assert.equal(page.view.getByRole("radio", { name: "Bunny" }).matches(":checked"), true, "a look the user picked may be another's");
 

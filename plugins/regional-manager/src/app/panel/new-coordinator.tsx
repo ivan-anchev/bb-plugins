@@ -4,7 +4,8 @@ import { experimental_Icon as Icon, experimental_useRpcMutation } from "@get-bb/
 import { useRef, useState, type Ref } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { NAME_MISSING, NEW_PROFILE_KEY, newDraft, profileOf, randomStart, storedDraftSchema, withLook, type ProfileDraft, type StoredDraft } from "../profile/profile-draft.ts";
+import { randomStart } from "../../model/profile/avatar.ts";
+import { NAME_MISSING, NEW_PROFILE_KEY, newDraft, profileOf, storedDraftSchema, withLook, type ProfileDraft, type StoredDraft } from "../profile/profile-draft.ts";
 import { ProfileFields } from "../profile/profile-fields.tsx";
 import { useTakenLooks } from "../profile/use-manager.ts";
 import { Button } from "../ui/button.tsx";

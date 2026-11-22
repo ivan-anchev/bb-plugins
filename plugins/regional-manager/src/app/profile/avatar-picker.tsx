@@ -3,12 +3,11 @@
 // Shuffle waits while the other managers' looks aren't known (useTakenLooks): a look it picked then
 // could be theirs.
 import { useId, useMemo, useRef, type ReactNode } from "react";
-import { freeLook, HUE_NAMES, HUES, SHAPES, type Avatar } from "../../model/profile/avatar.ts";
+import { freeLook, HUE_NAMES, HUES, randomStart, SHAPES, type Avatar } from "../../model/profile/avatar.ts";
 import { Button } from "../ui/button.tsx";
 import { handFocusTo } from "../ui/focus-hand-off.ts";
 import { ReadFailure } from "../ui/read-failure.tsx";
 import { AvatarBlob } from "./avatar.tsx";
-import { randomStart } from "./profile-draft.ts";
 import { useTakenLooks } from "./use-manager.ts";
 
 export function AvatarPicker({ value, onChange }: { value: Avatar; onChange(next: Avatar): void }) {
