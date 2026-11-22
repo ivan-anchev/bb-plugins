@@ -135,6 +135,21 @@ test("a focused row that leaves the board takes its card's hold with it: hoverin
   assert.equal(card()?.on, "WEB-5");
 });
 
+test("a hovered row that moves lanes leaves its card behind for good: blurring another row opens none for it", () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  const { view, row, card } = mount();
+  fireEvent.pointerEnter(row("WEB-5", /^Todo/).closest(".rmi-rowbox") ?? assert.fail("no row box"));
+  act(() => mock.timers.tick(500));
+  assert.equal(card()?.on, "WEB-5");
+
+  const moved = ISSUES.map((issue) => (issue.id === "WEB-5" ? { ...issue, status: "in-progress" as const } : issue));
+  view.lifecycle.rerender(createElement(IssueBoard, { decisions: [], issues: moved, decisionRow: () => null }));
+  act(() => row("WEB-4", /^In review/).focus());
+  act(() => row("WEB-4", /^In review/).blur());
+  act(() => mock.timers.tick(5_000));
+  assert.equal(card(), null, "no card for a row the pointer left as it moved");
+});
+
 test("a press puts the card away, and the focus the press gives the row opens none", () => {
   const { row, card } = mount();
   act(() => row("WEB-4", /^In review/).focus());

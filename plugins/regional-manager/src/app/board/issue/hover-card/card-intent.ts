@@ -124,7 +124,9 @@ function cardIntent<Key>(show: (key: Key | null) => void): CardIntent<Key> & { s
         return () => {
           if (onScreen === key) onScreen = null;
           if (shown !== key) return;
+          // why the pointer too: a trigger whose card left without it (a row that moved lanes, a link bb rendered again) is no longer under the pointer as far as anyone can tell.
           if (focused === key) focused = null;
+          if (hovered === key) hovered = null;
           close();
         };
       },

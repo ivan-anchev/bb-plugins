@@ -25,6 +25,11 @@ import { useCardPlacement, type Placement } from "./placement.ts";
 /** A link's card, floating in the window (hover-card.css), which chat-links/ finds focus and the pointer in. */
 export const FLOATING_CARD = ".rmi-card-floating";
 
+/** The link a floating card floats by, while it is mounted: focus in the card is focus on that link. */
+export const linkOfCard = (card: Element): HTMLElement | undefined => cardLinks.get(card);
+
+const cardLinks = new WeakMap<Element, HTMLElement>();
+
 type HoverCardProps = {
   issue: Row;
   /** Every issue on the board, which its sub-issues and blockers are. */
@@ -44,6 +49,7 @@ export function HoverCard({ issue, issues, link, presence, failure }: HoverCardP
   // why one callback: placement measures the card, and the card hands focus back as it unmounts; a ref that changed per render would hand it back on every render.
   const cardRef = useCallback((card: HTMLDivElement | null) => {
     ref.current = card;
+    if (card !== null && link !== undefined) cardLinks.set(card, link);
     return handFocusTo((region) => triggerOf(region, link))(card);
   }, [ref, link]);
   const pick = (ids: readonly IssueId[]) => issues.filter(({ id }) => ids.includes(id));

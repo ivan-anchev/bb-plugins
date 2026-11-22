@@ -11,7 +11,7 @@
 import { experimental_usePluginId } from "@get-bb/plugin-sdk/app";
 import { useCallback, useEffect, useState } from "react";
 import { parseIssueHref, type IssueLink } from "../../model/issue/link/issue-link.ts";
-import { FLOATING_CARD } from "../board/issue/hover-card/hover-card.tsx";
+import { FLOATING_CARD, linkOfCard } from "../board/issue/hover-card/hover-card.tsx";
 
 /** An issue link on screen and the slot its glyph goes in. `key`: its own, for the portal. */
 type DecoratedLink = { key: number; link: IssueLink; slot: HTMLElement };
@@ -90,17 +90,18 @@ const SLOT = "rmi-issue-glyph";
  */
 function focusKept(linkAt: (target: EventTarget | null) => FoundLink | null) {
   let kept: { anchor: HTMLAnchorElement; href: string; message: Element; index: number; composer: HTMLElement | null } | null = null;
-  /** Whether `node` is in the place of the kept link: the link, or its card. */
-  const withKept = (node: EventTarget | null) => node instanceof Node && kept !== null && (kept.anchor.contains(node) || inCard(node));
+  /** Whether `node` is in the place of the kept link: the link, or the card that floats by it. */
+  const withKept = (node: EventTarget | null) => node instanceof Node && kept !== null && (kept.anchor.contains(node) || cardLinkOf(node) === kept.anchor);
   const onFocusIn = (event: FocusEvent) => {
-    // why the card is the link's: focus in its scrolling body is still focus on the link, for when bb renders the link again.
     if (withKept(event.target)) return;
-    const found = linkAt(event.target);
-    kept = found === null ? null : keep(found.anchor);
+    // why the card's link: focus in a card's scrolling body, however it got there, is focus on the link it floats by, for when bb renders that link again.
+    const anchor = event.target instanceof Node ? (cardLinkOf(event.target) ?? linkAt(event.target)?.anchor ?? null) : null;
+    kept = anchor instanceof HTMLAnchorElement ? keep(anchor) : null;
   };
   const onFocusOut = (event: FocusEvent) => {
-    // why only from what is still in the page: bb taking the link out is the case `restore` is for; the user moving focus away is not.
-    if (event.target instanceof Node && event.target.isConnected && withKept(event.target) && !withKept(event.relatedTarget)) kept = null;
+    // why only when focus moved within the page: bb taking the link out is the case `restore` is for, and so is the user switching windows, which leaves the link focused; the user moving focus elsewhere is not.
+    const moved = document.activeElement !== event.target;
+    if (moved && event.target instanceof Node && event.target.isConnected && withKept(event.target) && !withKept(event.relatedTarget)) kept = null;
   };
   document.addEventListener("focusin", onFocusIn);
   document.addEventListener("focusout", onFocusOut);
@@ -119,9 +120,11 @@ function focusKept(linkAt: (target: EventTarget | null) => FoundLink | null) {
   };
 }
 
-function inCard(node: Node): boolean {
+/** The link the floating card `node` is in floats by; undefined outside one. */
+function cardLinkOf(node: Node): HTMLElement | undefined {
   const element = node instanceof Element ? node : node.parentElement;
-  return element !== null && element.closest(FLOATING_CARD) !== null;
+  const card = element?.closest(FLOATING_CARD) ?? null;
+  return card === null ? undefined : linkOfCard(card);
 }
 
 /** Whether focus is on no element of the page: on its body, or on one taken out of it. */

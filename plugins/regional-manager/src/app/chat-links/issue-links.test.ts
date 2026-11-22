@@ -218,6 +218,43 @@ test("focus in a link's capped card stays with the link when bb renders it again
   }
 });
 
+test("a link that keeps focus while the window loses it, as when the user switches apps, still hands focus to the link that replaces it", async () => {
+  const { link, glyphOf, show } = mount({ panes: [MANAGER_THREAD] });
+  await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+  const first = link(MANAGER_THREAD);
+  act(() => first.focus());
+  // why by hand: the window's blur fires focusout with no relatedTarget and leaves the link focused, which jsdom can't do itself.
+  act(() => void first.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: null })));
+  assert.ok(document.activeElement === first);
+
+  show({ panes: [MANAGER_THREAD], linkKey: "streamed" });
+  await waitFor(() => assert.ok(document.activeElement === link(MANAGER_THREAD) && link(MANAGER_THREAD) !== first, "on the link that replaced it"));
+});
+
+test("focus put straight into a link's card, with another link focused before, stays with the card's link when bb renders it again", async () => {
+  const restore = laidOut({ top: 700, bottom: 716, left: 40 }, { height: 2_000, width: 320 });
+  try {
+    const { view, link, glyphOf, card, show } = mount({ panes: [MANAGER_THREAD] });
+    await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+    act(() => link(MANAGER_THREAD, "BBP-27").focus());
+    act(() => void link(MANAGER_THREAD, "BBP-27").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    await waitFor(() => assert.ok(card() === null));
+
+    mock.timers.enable({ apis: ["setTimeout"] });
+    const first = link(MANAGER_THREAD);
+    fireEvent.pointerOver(first, { relatedTarget: document.body });
+    act(() => mock.timers.tick(500));
+    mock.timers.reset();
+    const body = await view.findByRole("region", { name: "Details of BBP-24" });
+    act(() => body.focus());
+
+    show({ panes: [MANAGER_THREAD], linkKey: "streamed" });
+    await waitFor(() => assert.ok(document.activeElement === link(MANAGER_THREAD) && link(MANAGER_THREAD) !== first, "on the link that replaced BBP-24's, not BBP-27, not the page"));
+  } finally {
+    restore();
+  }
+});
+
 test("a link the user moved focus away from doesn't take it back when bb renders it again", async () => {
   const { link, glyphOf, card, show } = mount({ panes: [MANAGER_THREAD] });
   await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
