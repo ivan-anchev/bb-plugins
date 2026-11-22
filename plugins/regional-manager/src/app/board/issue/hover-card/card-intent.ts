@@ -18,7 +18,16 @@ export type CardIntent<Key> = {
   /** A press: the card goes, and the focus it gives a trigger in the same moment opens none. */
   press(): void;
   close(): void;
+  /** What the card of `key` tells the intent while it is mounted (hover-card.tsx). */
+  presence(key: Key): CardPresence;
 };
+
+/**
+ * A mounted card's line to its intent: Escape puts it away, and it is on screen from `mounted()` until
+ * the function that returns is called. A card that leaves the screen while its trigger still counts
+ * as shown, as when bb renders its link again or its row goes, puts the intent's state away with it.
+ */
+export type CardPresence = { close(): void; mounted(): () => void };
 
 /** The trigger whose card shows (null: none), and the intent to tell what the pointer and focus do. */
 export function useCardIntent<Key>(): { shown: Key | null; intent: CardIntent<Key> } {
@@ -40,6 +49,8 @@ const WARM = 400;
 /** The timers and facts behind which card shows, told to `show` as they change. */
 function cardIntent<Key>(show: (key: Key | null) => void): CardIntent<Key> & { stop(): void } {
   let shown: Key | null = null;
+  /** The trigger whose card is mounted: only a card on screen holds focus against the pointer, or keeps the next card warm. */
+  let onScreen: Key | null = null;
   let hovered: Key | null = null;
   let focused: Key | null = null;
   let closedAt = -Infinity;
@@ -70,14 +81,14 @@ function cardIntent<Key>(show: (key: Key | null) => void): CardIntent<Key> & { s
     clearTimeout(closing);
     closing = setTimeout(close, CLOSE_DELAY);
   };
-  const warm = () => shown !== null || performance.now() - closedAt < WARM;
+  const warm = () => onScreen !== null || performance.now() - closedAt < WARM;
 
   return {
     enter(key) {
       hovered = key;
       if (shown === key) return cancel();
-      // why only while the focused trigger's card shows: once Escape put it away, the pointer opens cards again.
-      if (focused !== null && shown === focused) return;
+      // why only while the focused trigger's card is on screen: once Escape put it away, or it renders nothing, the pointer opens cards again.
+      if (focused !== null && onScreen === focused) return;
       clearTimeout(opening);
       if (warm()) open(key);
       else opening = setTimeout(() => open(key), OPEN_DELAY);
@@ -106,6 +117,18 @@ function cardIntent<Key>(show: (key: Key | null) => void): CardIntent<Key> & { s
       close();
     },
     close,
+    presence: (key) => ({
+      close,
+      mounted() {
+        onScreen = key;
+        return () => {
+          if (onScreen === key) onScreen = null;
+          if (shown !== key) return;
+          if (focused === key) focused = null;
+          close();
+        };
+      },
+    }),
     stop() {
       cancel();
       clearTimeout(pressed);

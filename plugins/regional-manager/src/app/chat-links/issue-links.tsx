@@ -29,10 +29,14 @@ function IssueLinks() {
 
 // ------------------------------------------------------------------ layer 2
 
-/** The issue's glyph and a space before its id, as its board reads now; none until the read has it, or for an issue its board has none of. */
+/**
+ * The issue's glyph and a space before its id, as its board reads now; none until the read has it,
+ * for an issue its board has none of, or while the board can't be read, when a glyph would show a
+ * status the plugin can't vouch for (its card says why).
+ */
 function LinkGlyph({ link }: { link: IssueLink }) {
-  const { issue } = useBoardIssue(link.coordinatorId, link.issueId);
-  return issue === undefined ? null : (
+  const { read, issue } = useBoardIssue(link.coordinatorId, link.issueId);
+  return issue === undefined || read.error !== null ? null : (
     <>
       <IssueGlyph issue={issue} />{" "}
     </>

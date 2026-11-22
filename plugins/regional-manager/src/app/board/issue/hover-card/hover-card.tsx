@@ -19,7 +19,11 @@ import { IssuePills } from "../row/pills.tsx";
 import { Rails, type RailShape } from "../row/rails.tsx";
 import { handFocusTo } from "../../../ui/focus-hand-off.ts";
 import { IssueGlyph } from "../status-glyph.tsx";
+import type { CardPresence } from "./card-intent.ts";
 import { useCardPlacement, type Placement } from "./placement.ts";
+
+/** A link's card, floating in the window (hover-card.css), which chat-links/ finds focus and the pointer in. */
+export const FLOATING_CARD = ".rmi-card-floating";
 
 type HoverCardProps = {
   issue: Row;
@@ -27,14 +31,15 @@ type HoverCardProps = {
   issues: readonly Row[];
   /** The link in chat the card floats by, fixed; left out: the card sits in its board row's box. */
   link?: HTMLElement;
-  /** Puts the card away: on Escape, wherever focus is, while the card is on screen. */
-  onClose(): void;
+  /** Its line to the intent that shows it: Escape puts it away, wherever focus is, and it is on screen while mounted. */
+  presence: CardPresence;
   /** Why the latest read of the board failed while the card shows what an earlier one read; left out: it didn't. */
   failure?: string;
 };
 
-export function HoverCard({ issue, issues, link, onClose, failure }: HoverCardProps) {
-  useEscapeCloses(onClose);
+export function HoverCard({ issue, issues, link, presence, failure }: HoverCardProps) {
+  useEscapeCloses(presence.close);
+  useEffect(() => presence.mounted(), [presence]);
   const { ref, placement } = useCardPlacement(link ?? null);
   // why one callback: placement measures the card, and the card hands focus back as it unmounts; a ref that changed per render would hand it back on every render.
   const cardRef = useCallback((card: HTMLDivElement | null) => {

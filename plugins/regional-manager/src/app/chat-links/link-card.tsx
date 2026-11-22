@@ -6,11 +6,11 @@
 // stop after its link and the previous before what follows it, as a board row's card is. A press
 // anywhere but on the card puts it away; a scroll moves it with its link (placement.ts). Escape
 // closes it wherever focus is.
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { IssueLink } from "../../model/issue/link/issue-link.ts";
 import { useCardIntent, type CardIntent } from "../board/issue/hover-card/card-intent.ts";
-import { HoverCard } from "../board/issue/hover-card/hover-card.tsx";
+import { FLOATING_CARD, HoverCard } from "../board/issue/hover-card/hover-card.tsx";
 import { useBoardIssue } from "../board/use-board-issue.ts";
 import { useIssueLinkAt, type FoundLink } from "./decorated-links.ts";
 
@@ -20,18 +20,10 @@ export function LinkCard(): ReactNode {
   const linkAt = useIssueLinkAt();
   useLinkTriggers(intent, shown, linkAt);
   const found = shown?.isConnected ? linkAt(shown) : null;
-  const gone = shown !== null && found === null;
-  // why: bb renders a link again as a new element as a reply streams; the card goes with the old one, and so must the intent's hold on it.
-  useEffect(() => {
-    if (gone) intent.close();
-  }, [gone, intent]);
-  return found === null ? null : createPortal(<IssueCard anchor={found.anchor} link={found.link} onClose={intent.close} />, document.body);
+  return found === null ? null : createPortal(<IssueCard anchor={found.anchor} link={found.link} intent={intent} />, document.body);
 }
 
 // ------------------------------------------------------------------ layer 2
-
-/** The floating card (hover-card.css `.rmi-card-floating`). */
-const CARD = ".rmi-card-floating";
 
 /** Tells the intent what the pointer, focus, Tab and presses do on issue links and on the card of `shown`. */
 function useLinkTriggers(intent: CardIntent<HTMLAnchorElement>, shown: HTMLAnchorElement | null, linkAt: (target: EventTarget | null) => FoundLink | null): void {
@@ -73,7 +65,7 @@ function useLinkTriggers(intent: CardIntent<HTMLAnchorElement>, shown: HTMLAncho
  * reach it before the card closes.
  */
 function tabThroughCard(event: KeyboardEvent, link: HTMLAnchorElement): void {
-  const body = document.querySelector<HTMLElement>(`${CARD} .rmi-card-body[tabindex="0"]`);
+  const body = document.querySelector<HTMLElement>(`${FLOATING_CARD} .rmi-card-body[tabindex="0"]`);
   if (body === null) return;
   if (event.target === link && !event.shiftKey) {
     event.preventDefault();
@@ -91,11 +83,13 @@ function listen<Type extends keyof DocumentEventMap>(type: Type, listener: (even
   return () => document.removeEventListener(type, listener, capture);
 }
 
-const inCard = (node: EventTarget | null): boolean => node instanceof Element && node.closest(CARD) !== null;
+const inCard = (node: EventTarget | null): boolean => node instanceof Element && node.closest(FLOATING_CARD) !== null;
 
 /** The Board's card for the issue, from its board's read, with why a later read failed; none until a read has it, or for an issue the board has none of. */
-function IssueCard({ anchor, link, onClose }: { anchor: HTMLAnchorElement; link: IssueLink; onClose(): void }) {
+function IssueCard({ anchor, link, intent }: { anchor: HTMLAnchorElement; link: IssueLink; intent: CardIntent<HTMLAnchorElement> }) {
   const { read, issues, issue } = useBoardIssue(link.coordinatorId, link.issueId);
+  // why per link: the card's line to the intent says which link's card is on screen.
+  const presence = useMemo(() => intent.presence(anchor), [intent, anchor]);
   if (issues === undefined || issue === undefined) return null;
-  return <HoverCard issue={issue} issues={issues} link={anchor} onClose={onClose} failure={read.error?.message} />;
+  return <HoverCard issue={issue} issues={issues} link={anchor} presence={presence} failure={read.error?.message} />;
 }

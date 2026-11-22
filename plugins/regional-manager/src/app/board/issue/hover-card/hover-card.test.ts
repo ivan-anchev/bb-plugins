@@ -119,6 +119,22 @@ test("the pointer resting on a row opens its card after half a second, the next 
   assert.equal(card(), null);
 });
 
+test("a focused row that leaves the board takes its card's hold with it: hovering another row opens that row's card", () => {
+  const { view, row, card } = mount();
+  act(() => row("WEB-4", /^In review/).focus());
+  assert.equal(card()?.on, "WEB-4");
+
+  const without = ISSUES.filter(({ id: issueId }) => issueId !== "WEB-4").map((row) => (row.id === "WEB-5" ? { ...row, blockedBy: [] } : row));
+  view.lifecycle.rerender(createElement(IssueBoard, { decisions: [], issues: without, decisionRow: () => null }));
+  assert.equal(card(), null, "its card went with it");
+
+  mock.timers.enable({ apis: ["setTimeout"] });
+  const box = row("WEB-5", /^Todo/).closest(".rmi-rowbox") ?? assert.fail("no row box");
+  fireEvent.pointerEnter(box);
+  act(() => mock.timers.tick(1_000));
+  assert.equal(card()?.on, "WEB-5");
+});
+
 test("a press puts the card away, and the focus the press gives the row opens none", () => {
   const { row, card } = mount();
   act(() => row("WEB-4", /^In review/).focus());

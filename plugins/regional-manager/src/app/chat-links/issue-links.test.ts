@@ -201,6 +201,38 @@ test("when bb renders the focused link again, as a reply streams, focus moves to
   await waitFor(() => assert.equal(card()?.querySelector(".rmi-card-title")?.textContent, "Inline issue links"));
 });
 
+test("focus in a link's capped card stays with the link when bb renders it again: it moves to the link that replaced it, not the page", async () => {
+  const restore = laidOut({ top: 700, bottom: 716, left: 40 }, { height: 2_000, width: 320 });
+  try {
+    const { view, link, glyphOf, show } = mount({ panes: [MANAGER_THREAD] });
+    await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+    const first = link(MANAGER_THREAD);
+    act(() => first.focus());
+    act(() => view.getByRole("region", { name: "Details of BBP-24" }).focus());
+
+    show({ panes: [MANAGER_THREAD], linkKey: "streamed" });
+    assert.ok(link(MANAGER_THREAD) !== first);
+    await waitFor(() => assert.ok(document.activeElement === link(MANAGER_THREAD), "on the link that replaced it"));
+  } finally {
+    restore();
+  }
+});
+
+test("a link the user moved focus away from doesn't take it back when bb renders it again", async () => {
+  const { link, glyphOf, card, show } = mount({ panes: [MANAGER_THREAD] });
+  await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+  act(() => link(MANAGER_THREAD).focus());
+  await waitFor(() => assert.ok(card() !== null));
+  act(() => link(MANAGER_THREAD).blur());
+  await waitFor(() => assert.ok(card() === null));
+
+  show({ panes: [MANAGER_THREAD], linkKey: "streamed" });
+  await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.ok(document.activeElement === document.body, "focus stays where the user left it");
+  assert.ok(card() === null);
+});
+
 test("when the shown link stops being an issue link, its card goes, and Escape is bb's again", async () => {
   const { link, glyphOf, card, show } = mount({ panes: [MANAGER_THREAD] });
   await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
@@ -231,6 +263,26 @@ test("a focused link whose card shows nothing, as its issue isn't on the board o
     assert.equal(escape.defaultPrevented, false, name);
     cleanup();
   }
+});
+
+test("a focused link whose card shows nothing holds no card against the pointer: hovering another link opens that link's card", async () => {
+  const { link, glyphOf, card } = mount({ panes: [MANAGER_THREAD], href: HREF("BBP-999"), label: "BBP-999" });
+  await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD, "BBP-27")), "Todo"));
+  await waitFor(() => assert.ok(link(MANAGER_THREAD, "BBP-999").querySelector(".rmi-issue-glyph") !== null));
+  act(() => link(MANAGER_THREAD, "BBP-999").focus());
+  assert.ok(card() === null);
+
+  mock.timers.enable({ apis: ["setTimeout"] });
+  fireEvent.pointerOver(link(MANAGER_THREAD, "BBP-27"), { relatedTarget: document.body });
+  act(() => mock.timers.tick(1_000));
+  assert.equal(card()?.querySelector(".rmi-card-title")?.textContent, "Avatars");
+});
+
+test("while the board can't be read, a link draws no glyph, which would show a status no longer vouched for", async () => {
+  const { link, glyphOf, failBoard } = mount({ panes: [MANAGER_THREAD] });
+  await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+  await failBoard();
+  await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), null));
 });
 
 test("a refresh of the board that fails while a card shows keeps its details and says it couldn't refresh", async () => {

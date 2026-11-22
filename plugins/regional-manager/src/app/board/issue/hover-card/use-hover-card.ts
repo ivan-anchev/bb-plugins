@@ -1,8 +1,8 @@
 // Which row's hover card shows on the board (card-intent.ts says when): the card sits in its row's
 // box, joined to it with no gap (hover-card.css), so the pointer on the card is on its row. A press
 // on the board puts it away. A touch has no hover: its tap opens the issue.
-import type { FocusEvent, HTMLAttributes, PointerEvent } from "react";
-import { useCardIntent } from "./card-intent.ts";
+import { useMemo, type FocusEvent, type HTMLAttributes, type PointerEvent } from "react";
+import { useCardIntent, type CardPresence } from "./card-intent.ts";
 
 type HoverCards = {
   /** The key of the row whose card shows; null: none. */
@@ -11,15 +11,22 @@ type HoverCards = {
   trigger(key: string): HTMLAttributes<HTMLDivElement>;
   /** On the board: a press puts the card away. */
   board: HTMLAttributes<HTMLDivElement>;
-  /** Puts the card away, as Escape does (hover-card.tsx). */
-  close(): void;
+  /** The card of a row's line to the intent (hover-card.tsx); one per key, so a card keeps it. */
+  presence(key: string): CardPresence;
 };
 
 export function useHoverCards(): HoverCards {
   const { shown, intent } = useCardIntent<string>();
+  const presences = useMemo(() => new Map<string, CardPresence>(), []);
   return {
     shown,
-    close: intent.close,
+    presence: (key) => {
+      const known = presences.get(key);
+      if (known !== undefined) return known;
+      const made = intent.presence(key);
+      presences.set(key, made);
+      return made;
+    },
     trigger: (key) => ({
       onPointerEnter: (event: PointerEvent) => {
         if (event.pointerType !== "touch") intent.enter(key);

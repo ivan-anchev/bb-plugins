@@ -11,6 +11,7 @@
 import { experimental_usePluginId } from "@get-bb/plugin-sdk/app";
 import { useCallback, useEffect, useState } from "react";
 import { parseIssueHref, type IssueLink } from "../../model/issue/link/issue-link.ts";
+import { FLOATING_CARD } from "../board/issue/hover-card/hover-card.tsx";
 
 /** An issue link on screen and the slot its glyph goes in. `key`: its own, for the portal. */
 type DecoratedLink = { key: number; link: IssueLink; slot: HTMLElement };
@@ -89,11 +90,20 @@ const SLOT = "rmi-issue-glyph";
  */
 function focusKept(linkAt: (target: EventTarget | null) => FoundLink | null) {
   let kept: { anchor: HTMLAnchorElement; href: string; message: Element; index: number; composer: HTMLElement | null } | null = null;
-  const onFocus = (event: FocusEvent) => {
+  /** Whether `node` is in the place of the kept link: the link, or its card. */
+  const withKept = (node: EventTarget | null) => node instanceof Node && kept !== null && (kept.anchor.contains(node) || inCard(node));
+  const onFocusIn = (event: FocusEvent) => {
+    // why the card is the link's: focus in its scrolling body is still focus on the link, for when bb renders the link again.
+    if (withKept(event.target)) return;
     const found = linkAt(event.target);
     kept = found === null ? null : keep(found.anchor);
   };
-  document.addEventListener("focusin", onFocus);
+  const onFocusOut = (event: FocusEvent) => {
+    // why only from what is still in the page: bb taking the link out is the case `restore` is for; the user moving focus away is not.
+    if (event.target instanceof Node && event.target.isConnected && withKept(event.target) && !withKept(event.relatedTarget)) kept = null;
+  };
+  document.addEventListener("focusin", onFocusIn);
+  document.addEventListener("focusout", onFocusOut);
   return {
     /** Gives the focus the kept link lost to the page, as bb took it out, to what replaces it. */
     restore() {
@@ -102,8 +112,16 @@ function focusKept(linkAt: (target: EventTarget | null) => FoundLink | null) {
       const target = links[kept.index] ?? links.at(-1) ?? kept.composer;
       if (target?.isConnected) target.focus();
     },
-    stop: () => document.removeEventListener("focusin", onFocus),
+    stop() {
+      document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("focusout", onFocusOut);
+    },
   };
+}
+
+function inCard(node: Node): boolean {
+  const element = node instanceof Element ? node : node.parentElement;
+  return element !== null && element.closest(FLOATING_CARD) !== null;
 }
 
 /** Whether focus is on no element of the page: on its body, or on one taken out of it. */
