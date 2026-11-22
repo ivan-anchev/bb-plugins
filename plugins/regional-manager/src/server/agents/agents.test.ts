@@ -139,14 +139,14 @@ test("agent_start runs the agent on the execution named, even at low, and issue_
   assert.equal(kit.thread(threadIn(defaulted)).execution?.reasoningLevel, "high");
 });
 
-test("agent_start, issue_create and issue_update tell the manager a reasoning level left out is high, never the model's default", async () => {
+test("agent_start, issue_create and issue_update tell the manager a reasoning level left out is high, the model's default only when it lists neither high nor medium", async () => {
   const { kit } = await coordinating();
   for (const name of ["agent_start", "issue_create", "issue_update"]) {
     const { parameters } = kit.tools().find((tool) => tool.name === name) ?? assert.fail(`no ${name}`);
     const schema = JSON.stringify(z.toJSONSchema(parameters, { io: "input" }));
-    assert.match(schema, /\(left out: high, or the model's highest below high when it has no high/, `${name}'s execution or verifier`);
-    assert.match(schema, /"reasoningLevel":\{"description":"Left out: high, or the model's highest level below high when it has no high\. A level named, even low, is used as named\."/, `${name}'s reasoningLevel`);
-    assert.doesNotMatch(schema, /model's default/, name);
+    assert.match(schema, /\(left out: high; medium on a model that lists no high; else the model's default/, `${name}'s execution or verifier`);
+    assert.match(schema, /"reasoningLevel":\{"description":"Left out: high; medium on a model that lists no high; the model's default on one that lists neither\. A level named, even low, is used as named\."/, `${name}'s reasoningLevel`);
+    assert.doesNotMatch(schema, /left out: the model's default/i, name);
   }
 });
 

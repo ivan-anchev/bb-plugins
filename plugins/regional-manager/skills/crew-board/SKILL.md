@@ -487,8 +487,8 @@ verdict.
 
 - **An agent** runs on the provider, model and reasoning level the manager
   names with `agent_start`'s `execution` (`providerId`, `model`, and
-  optionally `reasoningLevel`, else high, or the model's highest level below
-  high in bb's catalog when it lists no high).
+  optionally `reasoningLevel`, else high; medium on a model bb's catalog
+  lists no high for; the model's default on one that lists neither).
   Named nothing, it runs on the regional manager's own provider, model,
   reasoning level and service tier as they are when it starts, never on bb's
   default: if bb has no model on record for the manager yet, the start is
@@ -501,9 +501,9 @@ verdict.
   regional manager's model, if the agent runs on another; else the default
   model of another provider bb can run there; else another model of the
   agent's provider; else the agent's own, which the verdict then says. A
-  model the plugin picks, for a verifier or a reviewer, runs at high, or its
-  highest level below high when it lists no high, never at its catalog
-  default (low for Codex models). The manager's own model keeps its level.
+  model the plugin picks, for a verifier or a reviewer, runs at the level
+  one named with no reasoning level does (above), so a Codex model runs at
+  high, not at its catalog default of low. The manager's own model keeps its level.
   `verifier: null` gives the choice back to the plugin. A change applies from
   the issue's next done handoff; a check already running keeps its own.
 - **Refusals**: an unknown provider, one bb lists as unavailable there, or a

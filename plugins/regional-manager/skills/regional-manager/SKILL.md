@@ -493,8 +493,8 @@ opus".
 - Apply them by naming `execution` on every `agent_start` they cover, and
   `verifier` on every build issue they cover (`issue_create`, or `issue_update`
   before its agent hands off done). Each is `{ providerId, model }`, with an
-  optional `reasoningLevel` (left out: high, or the model's highest level
-  below high when it has no high). Name `low` only for tests and throwaway
+  optional `reasoningLevel` (left out: high; medium on a model that lists no
+  high; the model's default on one that lists neither). Name `low` only for tests and throwaway
   work.
 - With no such preference, leave both out. The agent then runs on your own
   provider, model and reasoning level as they are when it starts, and the

@@ -17,7 +17,7 @@ export type ModelRef = z.infer<typeof modelRefSchema>;
 export const requestedExecutionSchema = z.object({
   providerId: z.string().trim().min(1).describe("The provider, as bb lists it: claude-code, codex, pi…"),
   model: z.string().trim().min(1).describe("A model of that provider, as its catalog in bb names it."),
-  reasoningLevel: z.string().optional().describe("Left out: high, or the model's highest level below high when it has no high. A level named, even low, is used as named."),
+  reasoningLevel: z.string().optional().describe("Left out: high; medium on a model that lists no high; the model's default on one that lists neither. A level named, even low, is used as named."),
 });
 export type RequestedExecution = z.infer<typeof requestedExecutionSchema>;
 
@@ -26,7 +26,7 @@ export type CatalogModel = { model: string; isDefault: boolean; defaultReasoning
 
 /**
  * The reasoning level the plugin runs a model on when nobody names one: high, else the highest
- * level it lists below high, else its default. why not the default first: a Codex model's is low,
+ * level it lists below high (medium), else its default. why not the default first: a Codex model's is low,
  * and the user runs no real work on low. why medium is the only level tried below high: below
  * it is low, and a model that lists nothing above low keeps its default.
  */
