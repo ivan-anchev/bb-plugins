@@ -15,15 +15,6 @@ import type { ShownVerdict } from "../../../model/verdict/verdict.ts";
 import { PROJECT } from "../../test-sidebar.ts";
 import { shortTime } from "../../ui/time.ts";
 
-Object.assign(globalThis, {
-  ResizeObserver: class {
-    observe() {}
-    disconnect() {}
-  },
-  matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }),
-});
-HTMLCanvasElement.prototype.getContext = () => null;
-
 const { issueTab } = await import("./issue-tab.tsx");
 
 afterEach(cleanup);

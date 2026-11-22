@@ -9,15 +9,6 @@ import { decisionIdSchema, type Decision } from "../../model/decision.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
 
-Object.assign(globalThis, {
-  ResizeObserver: class {
-    observe() {}
-    disconnect() {}
-  },
-  matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }),
-});
-HTMLCanvasElement.prototype.getContext = () => null;
-
 const { Board } = await import("./board.tsx");
 
 const COORDINATOR = coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10");

@@ -25,8 +25,13 @@ function ContextRow({ threadId }: { threadId: string }) {
 function mount(threadId: string, saved: Promise<void> = Promise.resolve()) {
   let coordinator: Coordinator = { id: coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10"), threadId: "thr_1", projectId: PROJECT.id, description: "Moves webhooks off cron.", avatar: { kind: "icon", icon: "Target" } };
   const saves: Profile[] = [];
+  let answered!: () => void;
+  const coordinatorsRead = new Promise<void>((resolve) => (answered = resolve));
   const rpc = {
-    coordinators: () => ({ coordinators: [coordinator], notStarted: [] }),
+    coordinators: () => {
+      answered();
+      return { coordinators: [coordinator], notStarted: [] };
+    },
     setProfile: async (input: unknown) => {
       await saved;
       const { profile } = contract.setProfile.input.parse(input);
@@ -36,7 +41,7 @@ function mount(threadId: string, saved: Promise<void> = Promise.resolve()) {
     },
   };
   const view = renderSlot({ component: ContextRow }, { threadId }, { experimental_rpcContract: contract, rpc, sidebarThreads: { status: "ready", threads: [sidebarThread("thr_1", "Webhooks")], projects: [PROJECT] } });
-  return { view, saves };
+  return { view, saves, coordinatorsRead };
 }
 
 test("a regional manager's thread shows its icon and its name, and not its description", async () => {
@@ -48,9 +53,9 @@ test("a regional manager's thread shows its icon and its name, and not its descr
 });
 
 test("any other thread shows nothing", async () => {
-  const { view } = mount("thr_other");
+  const { view, coordinatorsRead } = mount("thr_other");
 
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await act(() => coordinatorsRead);
   assert.equal(view.container.textContent, "");
 });
 

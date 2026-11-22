@@ -6,14 +6,6 @@ import { cleanup, within } from "@testing-library/react";
 import { coordinatorContract as contract } from "../../contract.ts";
 import { PROJECT } from "../test-sidebar.ts";
 
-Object.assign(globalThis, {
-  ResizeObserver: class {
-    observe() {}
-    disconnect() {}
-  },
-  matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }),
-});
-
 const { boardTab } = await import("./board-tab.tsx");
 
 afterEach(() => {

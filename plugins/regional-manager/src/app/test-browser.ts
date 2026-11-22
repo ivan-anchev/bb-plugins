@@ -10,8 +10,16 @@ for (const name of Object.getOwnPropertyNames(window)) {
   if (name in globalThis) continue;
   Object.defineProperty(globalThis, name, { configurable: true, get: () => window[name as keyof typeof window] });
 }
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+Object.assign(globalThis, {
+  IS_REACT_ACT_ENVIRONMENT: true,
+  ResizeObserver: class {
+    observe() {}
+    disconnect() {}
+  },
+  matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }),
+});
 window.Element.prototype.scrollIntoView = () => {};
+window.HTMLCanvasElement.prototype.getContext = () => null;
 
 registerHooks({
   load(url, context, nextLoad) {

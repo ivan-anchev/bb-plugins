@@ -9,15 +9,6 @@ import { agentIdSchema } from "../../../model/agent.ts";
 import { decisionIdSchema, type Decision, type OpenDecision } from "../../../model/decision.ts";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
 
-Object.assign(globalThis, {
-  ResizeObserver: class {
-    observe() {}
-    disconnect() {}
-  },
-  matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }),
-});
-HTMLCanvasElement.prototype.getContext = () => null;
-
 const { IssueBoard } = await import("./issue-board.tsx");
 
 afterEach(cleanup);

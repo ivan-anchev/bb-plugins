@@ -1,3 +1,4 @@
+import "./test-dom.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, mock, test } from "node:test";
@@ -13,8 +14,6 @@ const { counter, usage }: { counter: { running: ChildRead; settled: ChildRead };
   readFileSync(new URL("./fixtures/child-threads.json", import.meta.url), "utf8"),
 );
 const CHILD = counter.running.child.id;
-
-Object.assign(globalThis, { document: Object.assign(new EventTarget(), { visibilityState: "visible" }) });
 
 beforeEach(() => mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1_000_000 }));
 afterEach(() => mock.timers.reset());

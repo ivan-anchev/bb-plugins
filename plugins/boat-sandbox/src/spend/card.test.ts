@@ -252,7 +252,15 @@ test("any other failure of boat's daily spend says it is unavailable, and the ch
 test("a backfill cancelled while it waits behind a reading writes nothing", async () => {
   midMonth();
   let meter: Promise<number> = Promise.resolve(1);
-  boatWithWallet(() => new Response(WALLET), () => meter);
+  let walletAsked!: () => void;
+  const asked = new Promise<void>((resolve) => (walletAsked = resolve));
+  boatWithWallet(
+    () => {
+      walletAsked();
+      return new Response(WALLET);
+    },
+    () => meter,
+  );
   const card = cardWith();
   await card.sample(signal());
   let release!: (dollars: number) => void;
@@ -261,7 +269,8 @@ test("a backfill cancelled while it waits behind a reading writes nothing", asyn
   const call = new AbortController();
 
   const backfilled = card.backfill(call.signal);
-  await delay(50);
+  await asked;
+  await new Promise(setImmediate);
   call.abort();
   release(1);
 
