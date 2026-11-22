@@ -20,19 +20,33 @@ export function useDecoratedLinks(): readonly DecoratedLink[] {
   const linkAt = useIssueLinkAt();
   useEffect(() => {
     let next = 0;
+    const slots = new Set<HTMLElement>();
+    /** One pass over the page; one that finds nothing to change writes nothing, to the page or to React. */
     const scan = () => {
       removeStale(linkAt);
       const fresh = undecorated(linkAt).map(({ anchor, link }) => ({ key: next++, link, slot: decorate(anchor) }));
-      setLinks((current) => {
-        const kept = current.filter(({ slot }) => slot.isConnected);
-        return fresh.length === 0 && kept.length === current.length ? current : [...kept, ...fresh];
+      const gone = [...slots].filter((slot) => !slot.isConnected);
+      if (fresh.length === 0 && gone.length === 0) return;
+      for (const slot of gone) slots.delete(slot);
+      for (const { slot } of fresh) slots.add(slot);
+      setLinks((current) => [...current.filter(({ slot }) => slot.isConnected), ...fresh]);
+    };
+    // why at most one pass a frame, and none for the plugin's own writes: a pass writes to the page it
+    // watches (a slot, the glyph in it), and a streamed reply changes it many times a frame.
+    let frame: number | null = null;
+    const schedule = (records: MutationRecord[]) => {
+      if (frame !== null || records.every(isOwnWrite)) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        scan();
       });
     };
     scan();
-    const observer = new MutationObserver(scan);
+    const observer = new MutationObserver(schedule);
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["href"] });
     return () => {
       observer.disconnect();
+      if (frame !== null) cancelAnimationFrame(frame);
       for (const slot of document.querySelectorAll(`.${SLOT}`)) slot.remove();
     };
   }, [linkAt]);
@@ -58,6 +72,17 @@ export function useIssueLinkAt(): (target: EventTarget | null) => FoundLink | nu
 const LINKS = "[data-markdown-preview] a[href]";
 /** The glyph's slot (chat-links.css). */
 const SLOT = "rmi-issue-glyph";
+
+/** A change only the plugin made: inside a slot (its glyph), or adding or removing slots alone. */
+function isOwnWrite({ target, addedNodes, removedNodes }: MutationRecord): boolean {
+  const changed = [...addedNodes, ...removedNodes];
+  return inSlot(target) || (changed.length > 0 && changed.every(inSlot));
+}
+
+function inSlot(node: Node): boolean {
+  const element = node instanceof Element ? node : node.parentElement;
+  return element !== null && element.closest(`.${SLOT}`) !== null;
+}
 
 /** The issue links with no slot for the href they have now. */
 function undecorated(linkAt: (target: Element) => FoundLink | null): FoundLink[] {
