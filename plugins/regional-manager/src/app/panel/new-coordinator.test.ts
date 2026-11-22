@@ -257,7 +257,9 @@ test("fields an earlier release kept, with an icon this one can't draw, keep the
   assert.notDeepEqual([created.avatar.shape, created.avatar.hue], [CIRCLE_IN_VIOLET.shape, CIRCLE_IN_VIOLET.hue]);
 });
 
-test("a look the page gave a new manager moves on when a later read shows it taken, even after the name was typed; a look the user picked stays", async () => {
+test("a look the page gave a new manager moves on when a later read shows it taken, even after the name was typed; a look the user picked stays", async (t) => {
+  // why 0: the page then gives pebble in violet, the first look after Scout's, so the look picked below (a bunny) is never the one given.
+  t.mock.method(Math, "random", () => 0);
   const read: { failing: boolean; others: NotStarted[] } = { failing: false, others: [] };
   const page = mount(read);
   await page.named("Webhooks");
@@ -269,13 +271,13 @@ test("a look the page gave a new manager moves on when a later read shows it tak
   await waitFor(() => assert.notDeepEqual(page.chosen().map((label) => label?.toLowerCase()), [given.shape, given.hue]));
 
   fireEvent.click(page.view.getByRole("radio", { name: "Bunny" }));
-  read.others = [...read.others, { id: coordinatorIdSchema.parse("2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a"), name: "Ops", description: null, avatar: avatarSchema.parse({ kind: "blob", shape: "bunny", hue: page.chosen().map((label) => label?.toLowerCase())[1], expression: "neutral" }) }];
+  const picked = page.chosen().map((label) => label?.toLowerCase());
+  read.others = [...read.others, { id: coordinatorIdSchema.parse("2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a"), name: "Ops", description: null, avatar: avatarSchema.parse({ kind: "blob", shape: picked[0], hue: picked[1], expression: "neutral" }) }];
   await act(() => page.view.experimental_invalidateRpc([COORDINATORS_TAG]));
-  assert.equal(page.view.getByRole("radio", { name: "Bunny" }).matches(":checked"), true, "a look the user picked may be another's");
+  assert.deepEqual(page.chosen().map((label) => label?.toLowerCase()), picked, "a look the user picked stays, though another manager has it");
 
   await page.create();
   const [created] = page.creates;
   assert.ok(created);
-  assert.equal(created.name, "Webhooks");
-  assert.notDeepEqual([created.avatar.shape, created.avatar.hue], [given.shape, given.hue]);
+  assert.deepEqual([created.name, created.avatar.shape, created.avatar.hue], ["Webhooks", ...picked]);
 });
