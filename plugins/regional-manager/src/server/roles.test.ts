@@ -8,7 +8,7 @@ import { DISPLAY_NAME } from "../name.ts";
 import { coordinating, harness, HEAD, isRefusal, startedAgent, textOf } from "./test-harness.ts";
 import { finalCheckBrief } from "./verify/verifier-brief.ts";
 
-const COORDINATOR_TOOLS = ["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "issue_create", "issue_update", "issue_read", "agent_start", "agent_message", "agent_stop"];
+const COORDINATOR_TOOLS = ["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "crew_end_turn", "issue_create", "issue_update", "issue_read", "agent_start", "agent_message", "agent_stop"];
 
 test("a regional manager is offered its tools, its skill and rules naming the product", async () => {
   const kit = harness();
@@ -42,12 +42,24 @@ test("only a regional manager's rules say how it writes to the user, every direc
     /Write like a senior engineer in chat: plain words and contractions, with no greetings, emojis, filler phrases or hype/,
     /Pick the format that fits the content.*Never chop connected reasoning into bullets/,
     /Make it short by cutting content: drop low-value material rather than writing clipped, telegraphic sentences/,
-    /Stay quiet when nothing changed for the user\. A wake for something you expected, something the user did themselves .*, or something that only confirms work already under way gets your bookkeeping .* and no reply\. Your provider ends a turn with a message, so make it a few words, such as "Noted\.", and nothing more: no recap/,
+    /Stay quiet when nothing changed for the user\. A wake for something you expected, something the user did themselves .*, or something that only confirms work already under way gets your bookkeeping .* and no reply\. End such a turn by calling crew_end_turn with a one-line reason, and write nothing/,
   ]) assert.match(section, direction);
   assert.doesNotMatch(rules, /summary for the user at the end of a turn/, "no rule asks for a summary every turn");
   assert.ok(rules.length < INSTRUCTIONS_CAP, `${rules.length} characters`);
 
   for (const thread of [agentThreadId, verifierThreadId]) assert.ok(!kit.configurationFor(thread, {}).instructions?.includes(WRITING_HEADING), thread);
+});
+
+test("the rules and both skills end a wake that changes nothing for the user with crew_end_turn and no words, never a token reply", async () => {
+  const kit = harness();
+  const { threadId } = await kit.startManager("Migrate the webhook service");
+  const skill = (name: string) => readFileSync(join(import.meta.dirname, "..", "..", "skills", name, "SKILL.md"), "utf8").replace(/\s+/g, " ");
+
+  const copies = { rules: kit.configurationFor(threadId, {}).instructions ?? "", "regional-manager": skill("regional-manager"), "crew-board": skill("crew-board") };
+  for (const [copy, text] of Object.entries(copies)) {
+    assert.match(text, /crew_end_turn`? (with|and) a one-line reason, and (the manager )?writes? nothing/, copy);
+    assert.doesNotMatch(text, /Noted\.|a few words/, copy);
+  }
 });
 
 test("its first session, before any bind, is configured from its unbound ticket", async () => {

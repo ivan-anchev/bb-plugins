@@ -100,6 +100,7 @@ and no tool can turn verification on or off.
 | `crew_memory_write` | regional manager | Writes one memory file whole, naming the version it read (null to create one); a stale write returns the current text instead. |
 | `crew_remind` | regional manager | Sets a reminder (`note`, `at`, optional `every`) or cancels one (`cancel`). |
 | `crew_ask_user` | regional manager | Puts a one-line question, with up to five options, on its board, optionally naming the issue it is about: the question and its answer are then among that issue's decisions. |
+| `crew_end_turn` | regional manager | Ends a turn that changes nothing for you, with a one-line `reason` and no reply; its result repeats the reason. It doesn't stop the thread. |
 | `issue_create` | regional manager | Files an issue: `kind`, `title`, `description`, and optionally `brief`, `doneCriteria`, `status` (todo or backlog), `verifier`, `parent` and `dependsOn`. |
 | `issue_update` | regional manager | Changes an issue's kind (until an agent has started on it), title, description, brief, done-criteria, verifier, parent or dependencies, or rests, cancels or accepts it with `status`; with `decision`, alone or with the rest, records what was decided about it and why. |
 | `issue_read` | regional manager | Returns one issue whole: status, what blocks it, plan, its parent and sub-issues, what it depends on and blocks, its decisions, verifier, its agents and what they ran on, every handoff with its verdict, and its agent's latest answer. |
@@ -985,12 +986,12 @@ server log names the parent folder when the plugin loads. It is made as the mana
 The work itself, who holds it, where it stands, what blocks it and what was
 decided, lives in the issues. The manager tells you what you need to know or
 decide in its replies; a turn that changed nothing for you, such as one woken
-by a merge on work an agent is shipping, ends in a few words, such as "Noted.",
-never a recap. The board keeps no digest. A manager started before this release
-had its plan and preferences files renamed to `NOTES.md` and `RULES.md`, with
-their content, and its digest file removed, as the plugin loaded; a file
-already there under the new name, and any line you added to `MEMORY.md`, were
-left as they were.
+by a merge on work an agent is shipping, ends with `crew_end_turn` and a
+one-line reason, and the manager writes nothing, not even a word. The board
+keeps no digest. A manager started before this release had its plan and
+preferences files renamed to `NOTES.md` and `RULES.md`, with their content,
+and its digest file removed, as the plugin loaded; a file already there under
+the new name, and any line you added to `MEMORY.md`, were left as they were.
 
 The thread may add others, such as `notes/api.md`.
 
