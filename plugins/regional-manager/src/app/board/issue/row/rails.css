@@ -1,0 +1,14 @@
+/* The rails that hang a sub-issue from its parent (rails.tsx): the theme's own hairline, laid over
+   the line's left edge, never in the pointer's way. Every class carries the `rmi-` prefix. */
+.rmi-rails {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.rmi-rails path {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 1;
+}

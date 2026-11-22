@@ -157,3 +157,10 @@ test("a draft is kept by regional manager, and what the browser holds that isn't
     cleanup();
   }
 });
+
+test("Memory's header keeps its folder glyph, the one section header that has one: the board's lanes have none", async () => {
+  const { rpc } = server();
+  const { view } = mount(rpc);
+  const header = await view.findByRole("button", { name: /^Memory/ });
+  assert.ok(header.querySelector(".rmi-lane-glyph") !== null, "its folder, ahead of its name");
+});

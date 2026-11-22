@@ -9,19 +9,18 @@ import { agentIdSchema } from "../../../model/agent.ts";
 import { decisionIdSchema, type Decision, type OpenDecision } from "../../../model/decision.ts";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
 
-// The board's lanes and rows, driven as the user drives them: folding lanes, opening an issue's tab
-// from its row, and a focused row keeping its focus when its issue moves to another lane. board.test.ts
-// reads the board through the plugin's RPC, and issue-tab.test.ts the issue's tab.
+// The board's lanes and rows, driven as the user drives them: what a row shows, folding lanes,
+// opening an issue's tab from its row, sub-issues on their rails, and a focused row keeping its focus
+// when its issue moves to another lane. board.test.ts reads the board through the plugin's RPC,
+// hover-card/hover-card.test.ts opens a row's card, and issue-tab.test.ts the issue's tab.
 
-// why: jsdom has none of these; the rows measure their titles, and the working ring asks for Reduce motion and a canvas.
+// why: jsdom has none; the rows measure their titles.
 Object.assign(globalThis, {
   ResizeObserver: class {
     observe() {}
     disconnect() {}
   },
-  matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }),
 });
-HTMLCanvasElement.prototype.getContext = () => null;
 
 const { IssueBoard } = await import("./issue-board.tsx");
 
@@ -30,7 +29,7 @@ afterEach(cleanup);
 const SHA = "3f2a9c1d8e7b6a5f4e3d2c1b0a9f8e7d6c5b4a39";
 
 function issue(id: string, fields: Partial<IssueRow>): IssueRow {
-  return { id: issueIdSchema.parse(id), kind: "build", parentId: null, subIssues: null, blockedBy: [], title: `Issue ${id}`, status: "todo", needsYou: null, headline: "Planned", agent: null, pr: null, ...fields };
+  return { id: issueIdSchema.parse(id), kind: "build", parentId: null, subIssues: null, blockedBy: [], blocks: [], title: `Issue ${id}`, status: "todo", needsYou: null, headline: "Planned", agent: null, pr: null, ...fields };
 }
 
 const QUESTION: OpenDecision = { id: decisionIdSchema.parse("d1"), issueId: null, question: "Which license should the repo use?", options: ["MIT", "Apache-2.0"], askedAt: 1_000, answer: null };
@@ -67,58 +66,102 @@ function mount(issues: readonly IssueRow[], decisions: readonly Decision[] = [QU
 /** The issue tab bb is asked to open, as the side panel's `openTab` gets it: its address, the params bb keys it by, and its title. */
 const issueTab = (id: string, title: string) => ({ method: "openTab", options: { tab: { id: "issue", context: { kind: "thread" }, availability: "action" }, params: { issueId: id }, title: `${id} ${title}` } });
 
-const laneHeader = (view: ReturnType<typeof mount>["view"], name: RegExp) => view.getByRole("button", { name });
-const row = (view: ReturnType<typeof mount>["view"], id: string) => view.getByRole("button", { name: new RegExp(`\\b${id} Build`) });
-const lane = (view: ReturnType<typeof mount>["view"], name: RegExp) => within(view.getByRole("region", { name }));
+type View = ReturnType<typeof mount>["view"];
+const laneHeader = (view: View, name: RegExp) => view.getByRole("button", { name });
+const row = (view: View, id: string) => view.getByRole("button", { name: new RegExp(`^${id}:`) });
+const lane = (view: View, name: RegExp) => within(view.getByRole("region", { name }));
+/** A row's box: its button, its pills and its pull request. */
+const boxOf = (button: HTMLElement): HTMLElement => button.closest<HTMLElement>(".rmi-rowbox") ?? assert.fail("no row box");
+/** What a row shows, part by part: its glyph's name, id, title, pills, pull request and ask (null: none). */
+function shown(button: HTMLElement) {
+  const box = boxOf(button);
+  const text = (selector: string) => box.querySelector(selector)?.textContent ?? null;
+  return {
+    glyph: box.querySelector(".rmi-slot [role=img]")?.getAttribute("aria-label") ?? null,
+    id: text(".rmi-row-id"),
+    title: text(".rmi-row > .rmi-text"),
+    pills: [...box.querySelectorAll(".rmi-pill")].map((pill) => `${pill.getAttribute("data-tone")} ${pill.textContent}`),
+    pr: text(".rmi-pr"),
+    ask: text(".rmi-ask"),
+  };
+}
 
-test("Needs you leads with the open decision, then the flagged issue showing its own status; the lanes follow in order, the last three folded", () => {
+test("Needs you leads with the open decision, then the flagged issue with Needs you's glyph and its ask under its title; the lanes follow in order, the last three folded, and no lane header has a glyph", () => {
   const { view } = mount(ISSUES);
 
-  const headers = view.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
-  assert.deepEqual(headers, ["Needs you2", "In review1", "Verifying1", "In progress1", "Todo1", "Backlog1", "Done1"]);
+  const headers = view.getAllByRole("heading", { level: 2 });
+  assert.deepEqual(headers.map((heading) => heading.textContent), ["Needs you2", "In review1", "Verifying1", "In progress1", "Todo1", "Backlog1", "Done1"]);
+  assert.deepEqual(headers.map((heading) => heading.querySelector(".rmi-lane-glyph")), headers.map(() => null), "each row draws its glyph; the lane's header none");
 
   const needsYou = lane(view, /^Needs you/);
   const [question, flagged] = needsYou.getAllByRole("listitem");
   assert.equal(question?.textContent, QUESTION.question);
-  assert.ok(flagged !== undefined && within(flagged).getByRole("img", { name: "In progress" }));
-  assert.equal(lane(view, /^In progress/).queryByRole("button", { name: /\bWEB-1 Build/ }), null, "a flagged issue waits under Needs you, not in its status's lane too");
+  assert.deepEqual(shown(within(flagged ?? assert.fail("no flagged row")).getByRole("button", { name: /^WEB-1:/ })), {
+    glyph: "Needs you",
+    id: "WEB-1",
+    title: "Issue WEB-1",
+    pills: [],
+    pr: null,
+    ask: "Failed after its fix round",
+  });
+  assert.equal(lane(view, /^In progress/).queryByRole("button", { name: /^WEB-1:/ }), null, "a flagged issue waits under Needs you, not in its status's lane too");
 
   for (const name of [/^Backlog/, /^Done/]) assert.equal(laneHeader(view, name).getAttribute("aria-expanded"), "false");
-  assert.equal(view.queryByRole("button", { name: /\bWEB-6 Build/ }), null);
-  assert.equal(view.queryByRole("button", { name: /\bWEB-7 Build/ }), null);
+  assert.equal(view.queryByRole("button", { name: /^WEB-6:/ }), null);
+  assert.equal(view.queryByRole("button", { name: /^WEB-7:/ }), null);
 });
 
-test("a decision sits under Needs you until the user answers it, then on no lane, and focus on it goes to the page", () => {
-  const todo = [issue("WEB-5", { status: "todo" })];
-  const { view, reread } = mount(todo, [QUESTION]);
-  const question = lane(view, /^Needs you/).getByText(QUESTION.question);
-  question.focus();
+test("a row is one line: its status's glyph, its id apart from its title, its title, and its pull request; no kind, no agent, no headline, which its label says", () => {
+  const { view } = mount(ISSUES);
+  const reviewed = row(view, "WEB-2");
 
-  reread(todo, [{ ...QUESTION, answer: { text: "MIT", at: 2_000 } }]);
-
-  assert.deepEqual(view.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent), ["Todo1"], "no Needs you, and no Done for it");
-  assert.equal(view.queryByText(QUESTION.question), null);
-  assert.equal(document.activeElement, view.getByLabelText("Board tab"), "focus goes to the page, not the body");
+  assert.deepEqual(shown(reviewed), { glyph: "In review", id: "WEB-2", title: "Issue WEB-2", pills: [], pr: "41", ask: null });
+  assert.equal(boxOf(reviewed).textContent, "WEB-2Issue WEB-2" + "41", "nothing else on it: no Build, no a2, no headline");
+  assert.equal(view.queryByRole("button", { name: /thread/ }), null, "no agent's thread to open from the board");
+  assert.equal(reviewed.getAttribute("aria-label"), "WEB-2: Issue WEB-2, In review, ✓ Verified: added the hello note");
+  assert.equal(view.container.querySelector<HTMLElement>(".rmi-board")?.style.getPropertyValue("--rmi-id-ch"), "5", "the ids' column is as wide as the longest id, WEB-n");
 });
 
-test("a row says what blocks it ahead of its headline, naming two and counting the rest, in its status's lane; an agent's blocked handoff stays its own headline under Needs you", () => {
+test("the open stages fill one ring clockwise from 12 o'clock, Todo empty, In progress a quarter, Verifying a half, In review three quarters; Done keeps its check", () => {
+  const { view } = mount(ISSUES);
+  fireEvent.click(laneHeader(view, /^Done/));
+  /** The ring's pie: its path, or null for an empty ring. */
+  const pie = (id: string) => {
+    const svg = boxOf(row(view, id)).querySelector(".rmi-slot svg") ?? assert.fail(`no glyph on ${id}`);
+    return { ring: svg.querySelector("circle")?.getAttribute("r"), fill: svg.querySelector("path[fill=currentColor]")?.getAttribute("d") ?? null };
+  };
+  assert.deepEqual(
+    [pie("WEB-5"), pie("WEB-4"), pie("WEB-3"), pie("WEB-2")],
+    [
+      { ring: "10", fill: null },
+      { ring: "10", fill: "M12 12V6a6 6 0 0 1 6 6z" },
+      { ring: "10", fill: "M12 6a6 6 0 0 1 0 12z" },
+      { ring: "10", fill: "M12 12V6a6 6 0 1 1-6 6z" },
+    ],
+  );
+  const done = boxOf(row(view, "WEB-7")).querySelector(".rmi-slot svg")?.innerHTML ?? "";
+  assert.match(done, /d="m9 12 2 2 4-4"/, "Done is the check in a circle");
+  assert.equal(boxOf(row(view, "WEB-2")).querySelector(".rmi-slot svg path[d='m9 12 2 2 4-4']"), null, "In review draws no check");
+});
+
+test("a row's pills: what blocks it, by its id when one does and by count when more do; how many it blocks; never a word on its title's line", () => {
   const blocked = (ids: string[]) => ids.map((each) => issueIdSchema.parse(each));
   const { view } = mount([
     issue("WEB-1", { status: "in-progress", needsYou: "Blocked: Needs a staging key", headline: "Blocked: Needs a staging key", agent: { id: agentIdSchema.parse("a1"), threadId: "thr_one" } }),
     issue("WEB-5", { headline: "Not started", blockedBy: blocked(["WEB-6"]) }),
     issue("WEB-8", { headline: "Not started", blockedBy: blocked(["WEB-6", "WEB-7", "WEB-9"]) }),
-    issue("WEB-6", { headline: "Not started" }),
+    issue("WEB-6", { headline: "Not started", blocks: blocked(["WEB-5", "WEB-8"]) }),
   ]);
-  const todo = lane(view, /^Todo/);
-  assert.match(todo.getByRole("button", { name: /\bWEB-5 Build/ }).textContent ?? "", /blocked by WEB-6Not started$/);
-  assert.match(todo.getByRole("button", { name: /\bWEB-8 Build/ }).textContent ?? "", /blocked by WEB-6, WEB-7 \+1Not started$/, "two named, the rest counted, on its one line");
-  assert.match(row(view, "WEB-8").getAttribute("aria-label") ?? "", /, Todo, blocked by WEB-6, WEB-7, and WEB-9, Not started$/, "every blocker is spoken");
-  assert.doesNotMatch(row(view, "WEB-6").textContent ?? "", /blocked/i, "nothing blocks it, so nothing says so");
+  assert.deepEqual(shown(row(view, "WEB-5")).pills, ["blocked WEB-6"]);
+  assert.deepEqual(shown(row(view, "WEB-8")).pills, ["blocked 3"]);
+  assert.deepEqual(shown(row(view, "WEB-6")).pills, ["blocking 2"]);
+  assert.equal(row(view, "WEB-8").getAttribute("aria-label"), "WEB-8: Issue WEB-8, Todo, blocked by WEB-6, WEB-7, and WEB-9, Not started", "every blocker is spoken");
+  assert.equal(row(view, "WEB-6").getAttribute("aria-label"), "WEB-6: Issue WEB-6, Todo, blocks WEB-5 and WEB-8, Not started");
 
-  const flagged = lane(view, /^Needs you/).getByRole("button", { name: /\bWEB-1 Build/ });
-  assert.match(flagged.textContent ?? "", /Blocked: Needs a staging key$/);
-  assert.doesNotMatch(flagged.textContent ?? "", /blocked by/);
-  assert.equal(lane(view, /^Needs you/).queryByRole("button", { name: /\bi(5|8) Build/ }), null, "a dependency doesn't put an issue under Needs you");
+  const flagged = lane(view, /^Needs you/).getByRole("button", { name: /^WEB-1:/ });
+  assert.deepEqual([shown(flagged).pills, shown(flagged).ask], [[], "Blocked: Needs a staging key"], "an agent's blocked handoff is its ask, not a pill");
+  assert.equal(flagged.getAttribute("aria-label"), "WEB-1: Issue WEB-1, In progress, needs you: Blocked: Needs a staging key", "said once");
+  assert.equal(lane(view, /^Needs you/).queryByRole("button", { name: /^WEB-(5|8):/ }), null, "a dependency doesn't put an issue under Needs you");
 });
 
 test("a lane's header unfolds and folds its rows, and focus stays on the header", () => {
@@ -134,10 +177,10 @@ test("a lane's header unfolds and folds its rows, and focus stays on the header"
   const inReview = laneHeader(view, /^In review/);
   fireEvent.click(inReview);
   assert.equal(inReview.getAttribute("aria-expanded"), "false");
-  assert.equal(view.queryByRole("button", { name: /\bWEB-2 Build/ }), null);
+  assert.equal(view.queryByRole("button", { name: /^WEB-2:/ }), null);
 
   fireEvent.click(done);
-  assert.equal(view.queryByRole("button", { name: /\bWEB-7 Build/ }), null);
+  assert.equal(view.queryByRole("button", { name: /^WEB-7:/ }), null);
   assert.ok(document.activeElement === done, "focus stays on the header");
 });
 
@@ -154,13 +197,22 @@ test("a row opens its issue in its own tab, titled with its id and title, and pr
   assert.deepEqual(view.experimental_panelCalls, [issueTab("WEB-5", "Issue WEB-5"), issueTab("WEB-4", "Issue WEB-4"), issueTab("WEB-5", "Issue WEB-5")]);
   assert.equal(view.queryByRole("region", { name: "WEB-5" }), null, "and draws no detail on the board");
 });
+
+test("a row's pull request links it, apart from opening the issue", () => {
+  const { view } = mount(ISSUES);
+  const pr = view.getByRole("link", { name: "Pull request 41, open, CI passing" });
+  assert.equal(pr.getAttribute("href"), "https://github.com/acme/notes/pull/41");
+  fireEvent.click(pr);
+  assert.deepEqual(view.experimental_panelCalls, [], "and opens no tab");
+});
+
 test("a focused row whose issue moves to another lane keeps focus there", () => {
   const { view, reread } = mount(ISSUES);
   row(view, "WEB-4").focus();
 
   act(() => reread(ISSUES.map((each) => (each.id === "WEB-4" ? { ...each, status: "verifying", headline: "Verifying: added it" } : each))));
 
-  assert.ok(document.activeElement === lane(view, /^Verifying/).getByRole("button", { name: /\bWEB-4 Build/ }), "focus moved with the row");
+  assert.ok(document.activeElement === lane(view, /^Verifying/).getByRole("button", { name: /^WEB-4:/ }), "focus moved with the row");
 });
 const moved = (id: string, fields: Partial<IssueRow>) => ISSUES.map((each) => (each.id === id ? { ...each, ...fields } : each));
 
@@ -181,47 +233,34 @@ test("a focused row whose issue is gone from the next read hands focus to the pa
 
   act(() => reread([issue("WEB-2", {})]));
 
-  assert.equal(view.queryByRole("button", { name: /\bWEB-1 Build/ }), null);
+  assert.equal(view.queryByRole("button", { name: /^WEB-1:/ }), null);
   assert.ok(document.activeElement === view.getByLabelText("Board tab"), "focus is on the tab's tab stop, not the body");
 });
 
-test("focus on a row's agent link moves with the issue, to its row where it lands", () => {
+test("focus on a row's pull request moves with the issue, to its row where it lands", () => {
   const { view, reread } = mount(ISSUES);
-  view.getByRole("button", { name: "Open a2's thread" }).focus();
+  view.getByRole("link", { name: /^Pull request 41/ }).focus();
   act(() => reread(moved("WEB-2", { status: "verifying", headline: "Waiting for CI on #41" })));
-  assert.ok(document.activeElement === lane(view, /^Verifying/).getByRole("button", { name: /\bWEB-2 Build/ }));
-});
-test("a row links its agent's thread and its pull request with CI, apart from opening it", () => {
-  const { view } = mount(ISSUES);
-
-  const pr = view.getByRole("link", { name: "Pull request 41, open, CI passing" });
-  assert.equal(pr.getAttribute("href"), "https://github.com/acme/notes/pull/41");
-
-  fireEvent.click(view.getByRole("button", { name: "Open a2's thread" }));
-  assert.deepEqual(
-    view.navigateCalls.map((call) => call.method === "toThread" && call.threadId),
-    ["thr_two"],
-  );
-  assert.deepEqual(view.experimental_panelCalls, [], "and opens no tab");
+  assert.ok(document.activeElement === lane(view, /^Verifying/).getByRole("button", { name: /^WEB-2:/ }));
 });
 
 const I1 = issueIdSchema.parse("WEB-1");
 const STAGING = "Blocked: Needs a staging key";
 
-/** A parent In progress, WEB-1, with three sub-issues: one Done, one flagged by its agent's blocked handoff, one blocked by a dependency; and a top-level Todo. */
+/** A parent In progress, WEB-1, with three sub-issues: one Done, one flagged by its agent's blocked handoff, one blocked by a dependency; and a top-level Todo that blocks it. */
 const SPLIT: IssueRow[] = [
   issue("WEB-1", { title: "Card vault", status: "in-progress", subIssues: { done: 1, total: 3 }, headline: null }),
   issue("WEB-2", { parentId: I1, status: "done", headline: "Merged #12" }),
   issue("WEB-3", { parentId: I1, status: "in-progress", needsYou: STAGING, headline: STAGING, agent: { id: agentIdSchema.parse("a3"), threadId: "thr_three" } }),
   issue("WEB-4", { parentId: I1, status: "todo", headline: "Not started", blockedBy: [issueIdSchema.parse("WEB-5")] }),
-  issue("WEB-5", { status: "todo", headline: "Not started" }),
+  issue("WEB-5", { status: "todo", headline: "Not started", blocks: [issueIdSchema.parse("WEB-4")] }),
 ];
 
-/** The ids of the issue rows in a list, top level only, each with the ids of the rows indented under it. */
+/** The ids of the issue rows in a list, top level only, each with the ids of the rows hung under it. */
 const rowsIn = (list: HTMLElement): string[][] =>
   [...list.children].map((item) => [...item.querySelectorAll<HTMLElement>(".rmi-row")].map((button) => /^WEB-\d+/.exec(button.getAttribute("aria-label") ?? "")?.[0] ?? "?"));
 
-test("a parent's sub-issues sit indented under it in its lane, each with its own glyph, the parent counting them where an agent would be; a lane counts its top-level rows", () => {
+test("a parent's sub-issues hang under it in its lane on elbow rails, each with its own glyph, the parent counting them Done in a pill with no fold; a lane counts its top-level rows", () => {
   const { view } = mount(SPLIT, []);
   const headers = view.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
   assert.deepEqual(headers, ["Needs you1", "In progress1", "Todo1"], "the parent counts once in its lane, its sub-issues by its own count");
@@ -229,48 +268,47 @@ test("a parent's sub-issues sit indented under it in its lane, each with its own
   const working = view.getByRole("region", { name: /^In progress/ });
   assert.deepEqual(rowsIn(within(working).getAllByRole("list")[0] ?? assert.fail("no list")), [["WEB-1", "WEB-2", "WEB-3", "WEB-4"]], "all three under the parent, whatever their own status");
   const subs = within(working).getAllByRole("list")[1] ?? assert.fail("no sub-issue list");
+  const items = within(subs).getAllByRole("listitem");
   assert.deepEqual(
-    within(subs).getAllByRole("button", { name: /^WEB-\d Build/ }).map((button) => within(button).getByRole("img").getAttribute("aria-label")),
-    ["Done", "In progress", "Todo"],
+    items.map((item) => shown(within(item).getByRole("button"))),
+    [
+      { glyph: "Done", id: "WEB-2", title: "Issue WEB-2", pills: [], pr: null, ask: null },
+      { glyph: "Needs you", id: "WEB-3", title: "Issue WEB-3", pills: [], pr: null, ask: null },
+      { glyph: "Todo", id: "WEB-4", title: "Issue WEB-4", pills: ["blocked WEB-5"], pr: null, ask: null },
+    ],
+    "one line each: a flagged one asks under Needs you, not here",
   );
-  assert.match(within(subs).getByRole("button", { name: /\bWEB-4 Build/ }).textContent ?? "", /blocked by WEB-5/);
+  // why the path: the trunk comes down from the parent's glyph (above the tree's top) into the first, bends into each, and stops at the last.
+  const rails = items.map((item) => item.querySelector(".rmi-rails path")?.getAttribute("d") ?? assert.fail("no rails"));
+  assert.match(rails[0] ?? "", /^M14\.5 -8V11A4 4 0 0 0 18\.5 15H26M14\.5 11V30$/, "the first reaches up to the parent's glyph and runs on");
+  assert.match(rails[1] ?? "", /^M14\.5 0V11A4 4 0 0 0 18\.5 15H26M14\.5 11V30$/);
+  assert.match(rails[2] ?? "", /^M14\.5 0V11A4 4 0 0 0 18\.5 15H26$/, "the last bends in and stops");
+
   const parent = row(view, "WEB-1");
-  assert.equal(parent.closest(".rmi-rowbox")?.querySelector(".rmi-count-cell")?.textContent, "1/3");
-  assert.match(parent.getAttribute("aria-label") ?? "", /, In progress, 1 of 3 sub-issues done$/);
-  assert.equal(lane(view, /^Todo/).queryByRole("button", { name: /\bWEB-4 Build/ }), null, "a Todo sub-issue sits in its parent's lane, not Todo");
+  assert.deepEqual(shown(parent), { glyph: "In progress", id: "WEB-1", title: "Card vault", pills: ["count 1/3"], pr: null, ask: null });
+  assert.equal(boxOf(parent).querySelector("[aria-expanded]"), null, "the count is no fold: sub-issues always show");
+  assert.equal(parent.getAttribute("aria-label"), "WEB-1: Card vault, In progress, 1 of 3 sub-issues done");
+  assert.deepEqual(shown(row(view, "WEB-5")).pills, ["blocking 1"]);
+  assert.equal(lane(view, /^Todo/).queryByRole("button", { name: /^WEB-4:/ }), null, "a Todo sub-issue sits in its parent's lane, not Todo");
 });
 
-test("a parent says its count once, on its first line at the right, headline or not; with none the row is that one line", () => {
+test("a flagged parent asks under its title under Needs you, its sub-issues hanging from its glyph past that line", () => {
   const unmerged = "WEB-2 isn't merged, so WEB-1's work isn't all on the default branch";
-  const { view, reread } = mount(SPLIT, []);
-  const counted = () => {
-    const box = row(view, "WEB-1").closest(".rmi-rowbox") ?? assert.fail("no row box");
-    return {
-      words: row(view, "WEB-1").textContent,
-      count: box.querySelector(".rmi-count-cell")?.textContent,
-      oneLine: box.hasAttribute("data-one-line"),
-      secondLine: box.querySelector(".rmi-headline") !== null,
-      label: row(view, "WEB-1").getAttribute("aria-label"),
-    };
-  };
-  assert.deepEqual(counted(), { words: "WEB-1BuildCard vault", count: "1/3", oneLine: true, secondLine: false, label: "WEB-1 Build: Card vault, In progress, 1 of 3 sub-issues done" });
-
-  act(() => reread(SPLIT.map((each) => (each.id === "WEB-1" ? { ...each, needsYou: unmerged, headline: unmerged } : each))));
-  assert.deepEqual(
-    counted(),
-    { words: `WEB-1BuildCard vault${unmerged}`, count: "1/3", oneLine: false, secondLine: true, label: `WEB-1 Build: Card vault, In progress, 1 of 3 sub-issues done, ${unmerged}` },
-  );
+  const { view } = mount(SPLIT.map((each) => (each.id === "WEB-1" ? { ...each, needsYou: unmerged, headline: unmerged } : each)), []);
+  const parent = lane(view, /^Needs you/).getByRole("button", { name: /^WEB-1:/ });
+  assert.deepEqual(shown(parent), { glyph: "Needs you", id: "WEB-1", title: "Card vault", pills: ["count 1/3"], pr: null, ask: unmerged });
+  const first = boxOf(parent).parentElement?.querySelector(".rmi-sub-issues .rmi-rails path")?.getAttribute("d");
+  assert.match(first ?? "", /^M14\.5 -26V/, "the first rail reaches up past the ask line to the glyph");
 });
 
-test("a flagged sub-issue sits under its parent and flat under Needs you, each naming its parent to a screen reader and the flat one ahead of its id; both open its one tab", () => {
+test("a flagged sub-issue hangs under its parent and sits flat under Needs you with its ask, each naming its parent to a screen reader and the flat one ahead of its id; both open its one tab", () => {
   const { view } = mount(SPLIT, []);
-  const flat = lane(view, /^Needs you/).getByRole("button", { name: /\bWEB-3 Build/ });
-  assert.match(flat.getAttribute("aria-label") ?? "", /^WEB-3 Build: Issue WEB-3, sub-issue of WEB-1, In progress,/);
-  assert.match(flat.textContent ?? "", /^WEB-1›WEB-3Build/, "its parent's id and its own read as one");
-  assert.ok(within(flat).getByRole("img", { name: "In progress" }), "with its own status's glyph");
-  const nested = lane(view, /^In progress/).getByRole("button", { name: /\bWEB-3 Build/ });
-  assert.match(nested.getAttribute("aria-label") ?? "", /^WEB-3 Build: Issue WEB-3, sub-issue of WEB-1, In progress,/, "under its parent too, for a reader who reaches it straight");
-  assert.equal(nested.textContent?.includes("›"), false, "where it shows no breadcrumb");
+  const flat = lane(view, /^Needs you/).getByRole("button", { name: /^WEB-3:/ });
+  assert.equal(flat.getAttribute("aria-label"), `WEB-3: Issue WEB-3, sub-issue of WEB-1, In progress, needs you: ${STAGING}`);
+  assert.deepEqual(shown(flat), { glyph: "Needs you", id: "WEB-1›WEB-3", title: "Issue WEB-3", pills: [], pr: null, ask: STAGING }, "its parent's id and its own read as one");
+  const nested = lane(view, /^In progress/).getByRole("button", { name: /^WEB-3:/ });
+  assert.match(nested.getAttribute("aria-label") ?? "", /^WEB-3: Issue WEB-3, sub-issue of WEB-1, In progress,/, "under its parent too, for a reader who reaches it straight");
+  assert.equal(shown(nested).id, "WEB-3", "where it shows no breadcrumb");
 
   fireEvent.click(flat);
   fireEvent.click(nested);
@@ -280,13 +318,13 @@ test("a flagged sub-issue sits under its parent and flat under Needs you, each n
 test("folding a parent's lane folds its sub-issues with it", () => {
   const { view } = mount(SPLIT, []);
   fireEvent.click(laneHeader(view, /^In progress/));
-  assert.deepEqual(["WEB-1", "WEB-2", "WEB-4"].map((id) => view.queryByRole("button", { name: new RegExp(`\\b${id} Build`) })), [null, null, null]);
-  assert.ok(lane(view, /^Needs you/).getByRole("button", { name: /\bWEB-3 Build/ }), "the flagged copy stays under Needs you");
+  assert.deepEqual(["WEB-1", "WEB-2", "WEB-4"].map((id) => view.queryByRole("button", { name: new RegExp(`^${id}:`) })), [null, null, null]);
+  assert.ok(lane(view, /^Needs you/).getByRole("button", { name: /^WEB-3:/ }), "the flagged copy stays under Needs you");
 });
 
 test("focus on a sub-issue's row stays on it as it changes status under its parent, moves lanes with its parent, and leaves its parent for a lane of its own", () => {
   const { view, reread } = mount(SPLIT, []);
-  const under = (id: string, name: RegExp) => lane(view, name).getByRole("button", { name: new RegExp(`\\b${id} Build`) });
+  const under = (id: string, name: RegExp) => lane(view, name).getByRole("button", { name: new RegExp(`^${id}:`) });
   under("WEB-4", /^In progress/).focus();
 
   act(() => reread(SPLIT.map((each) => (each.id === "WEB-4" ? { ...each, status: "in-progress", headline: "Working", blockedBy: [] } : each))));
@@ -302,8 +340,7 @@ test("focus on a sub-issue's row stays on it as it changes status under its pare
 
 test("focus on a flagged sub-issue's row under Needs you moves to its row under its parent once its flag clears", () => {
   const { view, reread } = mount(SPLIT, []);
-  lane(view, /^Needs you/).getByRole("button", { name: /\bWEB-3 Build/ }).focus();
+  lane(view, /^Needs you/).getByRole("button", { name: /^WEB-3:/ }).focus();
   act(() => reread(SPLIT.map((each) => (each.id === "WEB-3" ? { ...each, needsYou: null, headline: "Working" } : each))));
-  assert.ok(document.activeElement === lane(view, /^In progress/).getByRole("button", { name: /\bWEB-3 Build/ }));
+  assert.ok(document.activeElement === lane(view, /^In progress/).getByRole("button", { name: /^WEB-3:/ }));
 });
-

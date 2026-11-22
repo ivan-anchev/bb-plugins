@@ -1,4 +1,4 @@
-/* A folding section's header (lane-header.tsx): a bar on the recessed surface, its glyph, name,
+/* A folding section's header (lane-header.tsx): a bar on the recessed surface, its glyph if any, name,
    count and chevron, the board's round-6 bar. Every colour is a bb theme token, and every class
    carries the `rmi-` prefix, since bb does not scope a plugin's stylesheet. */
 .rmi-lane-heading {

@@ -24,6 +24,7 @@ const rowOf = ({ view, agent, threadId }: IssueRead): IssueRow => ({
   parentId: view.issue.parentId,
   subIssues: view.subIssues,
   blockedBy: view.blockedBy.map(({ id }) => id),
+  blocks: view.blocks.map(({ id }) => id),
   title: view.issue.title,
   status: view.status,
   needsYou: view.needsYou,

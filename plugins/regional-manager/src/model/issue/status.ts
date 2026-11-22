@@ -66,6 +66,8 @@ export type IssueView = {
   pr: PrSnapshot | null;
   /** The open issues it or its parent depends on, each with its status; none once it is closed itself. Derived from the other views, never stored. */
   blockedBy: Related[];
+  /** The open issues that depend on it, each with its status; none once it is closed itself, since a closed issue blocks nothing. Derived as blockedBy is. */
+  blocks: Related[];
   /** A parent's sub-issues: how many are Done, of how many; null for an issue with none. */
   subIssues: { done: number; total: number } | null;
   /** What closed it (null: it is open). */
@@ -88,14 +90,15 @@ export type Closure =
   | { by: "final-check"; checkId: CheckId };
 
 /** A view before its dependencies are read: where its own facts, or its sub-issues, place it. */
-type Placed = Omit<IssueView, "blockedBy">;
+type Placed = Omit<IssueView, "blockedBy" | "blocks">;
 
 type Placing = Pick<IssueView, "status" | "headline" | "needsYou">;
 
 /**
  * Every issue of one regional manager, viewed: each leaf placed by its own facts, then each parent
- * by its sub-issues so placed, then every issue blocked by the statuses so placed. why from the same
- * views: what blocks an issue can never disagree with the status shown for its dependency.
+ * by its sub-issues so placed, then every issue blocked by, and blocking, by the statuses so placed.
+ * why from the same views: what blocks an issue can never disagree with the status shown for its
+ * dependency, nor what it blocks with its dependents'.
  */
 export function issueViews(all: readonly IssueFacts[]): IssueView[] {
   const leaves = all.map(issueView);
@@ -107,10 +110,15 @@ export function issueViews(all: readonly IssueFacts[]): IssueView[] {
   const statuses = new Map(placed.map(({ issue, status }) => [issue.id, status]));
   const issues = new Map(all.map(({ issue }) => [issue.id, issue]));
   return placed.map((view) => {
+    if (isClosed(view.status)) return { ...view, blockedBy: [], blocks: [] };
     const parent = view.issue.parentId === null ? null : (issues.get(view.issue.parentId) ?? null);
-    return { ...view, blockedBy: isClosed(view.status) ? [] : blockedBy(view.issue, parent, (id) => statusIn(statuses, id)) };
+    return { ...view, blockedBy: blockedBy(view.issue, parent, (id) => statusIn(statuses, id)), blocks: openDependents(placed, view.issue.id) };
   });
 }
+
+/** The open issues that depend on `id` themselves, in the order filed. why not through a parent: a parent's dependent is the parent, as issue_read's relations name it. */
+const openDependents = (placed: readonly Placed[], id: IssueId): Related[] =>
+  placed.filter(({ issue, status }) => issue.dependsOn.includes(id) && !isClosed(status)).map(({ issue, status }) => ({ id: issue.id, status }));
 
 const ASKED = "Waiting on your answer to its decision";
 

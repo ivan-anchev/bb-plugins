@@ -414,28 +414,29 @@ test("a research parent's last two sub-issues closing together wake its dependen
   assert.deepEqual(await unblocked(), ["WEB-4 by WEB-1 done"]);
 });
 
-test("the board's rows carry each issue's parent and a parent's count of Done sub-issues, and nothing else new", async () => {
+test("the board's rows carry each issue's parent and a parent's count of Done sub-issues, and what it blocks, and nothing else new", async () => {
   const { kit, coordinatorId, text, started } = await managing();
   await text("issue_create", RESEARCH);
   await text("issue_create", { ...RESEARCH, title: "Vault", parent: "WEB-1" });
   const rows = async () => (await kit.rpc.board({ coordinatorId })).issues;
   const unstarted = { needsYou: null, agent: null, pr: null };
   assert.deepEqual(await rows(), [
-    { id: "WEB-1", kind: "research", parentId: null, subIssues: { done: 0, total: 1 }, blockedBy: [], title: "Pick a card vault", status: "todo", headline: null, ...unstarted },
-    { id: "WEB-2", kind: "research", parentId: "WEB-1", subIssues: null, blockedBy: [], title: "Vault", status: "todo", headline: "Not started", ...unstarted },
+    { id: "WEB-1", kind: "research", parentId: null, subIssues: { done: 0, total: 1 }, blockedBy: [], blocks: [], title: "Pick a card vault", status: "todo", headline: null, ...unstarted },
+    { id: "WEB-2", kind: "research", parentId: "WEB-1", subIssues: null, blockedBy: [], blocks: [], title: "Vault", status: "todo", headline: "Not started", ...unstarted },
   ]);
 
   const researcher = await started("WEB-2");
   await kit.call("agent_handoff", RESEARCH_DONE, researcher);
   await kit.idle(researcher, "Handed off.");
   assert.deepEqual(await rows(), [
-    { id: "WEB-1", kind: "research", parentId: null, subIssues: { done: 1, total: 1 }, blockedBy: [], title: "Pick a card vault", status: "done", headline: null, ...unstarted },
+    { id: "WEB-1", kind: "research", parentId: null, subIssues: { done: 1, total: 1 }, blockedBy: [], blocks: [], title: "Pick a card vault", status: "done", headline: null, ...unstarted },
     {
       id: "WEB-2",
       kind: "research",
       parentId: "WEB-1",
       subIssues: null,
       blockedBy: [],
+      blocks: [],
       title: "Vault",
       status: "done",
       needsYou: null,

@@ -1,0 +1,131 @@
+/* A row's hover card (hover-card.tsx), Activity Sidebar's card by its row: the theme's popover
+   surface, ringed by its border with the menu's shadow. It sits in the row's box, so the pointer
+   crossing onto it never leaves the row, and its edge reaches over the 4 between them. Under its row,
+   or above it where the panel has no room below (placement.ts); its body scrolls when it is capped.
+   Every colour is a bb theme token, and every class carries the `rmi-` prefix. */
+.rmi-card {
+  position: absolute;
+  z-index: 1;
+  top: calc(100% + 4px);
+  left: 30px;
+  width: min(320px, calc(100% - 38px));
+  border-radius: 10px;
+  background: var(--popover);
+  box-shadow: 0 0 0 1px var(--border), var(--z-menu-shadow);
+  color: var(--popover-foreground);
+  font-size: 12px;
+  line-height: 16px;
+  text-align: left;
+  cursor: default;
+  transition: opacity 150ms ease-out, transform 150ms ease-out;
+}
+@starting-style {
+  .rmi-card {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+}
+.rmi-card::before {
+  content: "";
+  position: absolute;
+  inset: -4px 0 100%;
+}
+.rmi-card[data-side="above"] {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+.rmi-card[data-side="above"]::before {
+  inset: 100% 0 -4px;
+}
+/* why the body scrolls, not the card: the card's edge reaches past its box to the row, which a scrolling box would clip. */
+.rmi-card-body {
+  max-height: var(--rmi-card-cap, none);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px;
+  border-radius: inherit;
+}
+/* A capped body is a tab stop (hover-card.tsx); the theme's ring shows where focus is. */
+.rmi-card-body:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+.rmi-card-title {
+  margin: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  text-wrap: pretty;
+}
+.rmi-card-when {
+  margin: 2px 0 0;
+  color: var(--muted-foreground);
+}
+.rmi-card-headline {
+  margin: 8px 0 0;
+  color: var(--foreground);
+  text-wrap: pretty;
+}
+.rmi-card-ask {
+  margin-top: 8px;
+}
+.rmi-card-ask .rmi-card-headline {
+  margin: 2px 0 0;
+}
+.rmi-card-asks {
+  margin: 0;
+  color: var(--destructive-text);
+  font-weight: 500;
+}
+.rmi-card-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+.rmi-card-section {
+  margin-top: 10px;
+}
+.rmi-card-section-title {
+  margin: 0 0 2px;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--muted-foreground);
+}
+/* A parent's sub-issues hang from the heading on the board's rails, each set in by 16. */
+.rmi-card-tree {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rmi-card-tree > li {
+  position: relative;
+  padding-left: 16px;
+}
+.rmi-card-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 22px;
+}
+.rmi-card-id {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.rmi-card-line .rmi-text {
+  color: var(--foreground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rmi-card {
+    transition: none;
+  }
+}

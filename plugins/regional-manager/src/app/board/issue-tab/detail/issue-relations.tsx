@@ -55,7 +55,7 @@ function Relation({ title, related }: { title: string; related: readonly Shown[]
               </span>
             ) : (
               <button type="button" className="rmi-related" aria-label={[`${id}: ${row.title}`, STATUS_LABELS[row.status], ...(through === null ? [] : [through])].join(", ")} onClick={() => open(row)}>
-                <StatusGlyph status={row.status} still />
+                <StatusGlyph status={row.status} />
                 <span className="rmi-id">{id}</span>
                 <span className="rmi-related-title">{row.title}</span>
                 {through !== null && <span className="rmi-related-through">{through}</span>}

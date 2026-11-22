@@ -15,12 +15,12 @@ import { useHoldEscape } from "../ui/hold-escape.ts";
 import { useStored } from "../ui/stored.ts";
 import { answerDraftKeyOf, answerDraftSchema } from "./answer-draft.ts";
 
-// why these sizes: an issue row's (issue-board.css `.rmi-slot`, `.rmi-line`, `.rmi-id`), so the question lines up with the titles.
+// why these sizes: an issue row's (issue/row/issue-row.css `.rmi-slot`, `.rmi-row`, `.rmi-row-id`), so the question lines up with the titles.
 const ROW = "flex items-start rounded-lg";
 const SLOT = "flex size-[30px] shrink-0 items-center justify-center";
 const WORDS = "flex min-w-0 flex-1 flex-col pr-2 text-[13px] leading-[18px]";
 const QUESTION = "py-1.5 text-pretty [overflow-wrap:anywhere]";
-const ID = "mr-1.5 font-mono text-[11px] text-subtle-foreground tabular-nums";
+const ID = "mr-2 font-mono text-[12px] text-muted-foreground tabular-nums";
 
 type DecisionRowProps = { coordinatorId: CoordinatorId; decision: OpenDecision };
 
