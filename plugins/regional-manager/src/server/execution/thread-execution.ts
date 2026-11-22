@@ -2,7 +2,7 @@
 // latest turn. One read for what an agent inherits from its regional manager (with its service
 // tier), what an agent's handoff records and what a verifier's verdict names.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
-import type { Execution } from "../../model/execution.ts";
+import type { Execution } from "../../model/agent/execution.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
 type ExecutionOptions = NonNullable<Awaited<ReturnType<Threads["defaultExecutionOptions"]>>>;

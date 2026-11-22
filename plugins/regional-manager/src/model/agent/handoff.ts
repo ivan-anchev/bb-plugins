@@ -3,10 +3,10 @@
 // bb threads carry no last-activity time.
 import { z } from "zod";
 import type { AgentId } from "./agent.ts";
-import type { IssueId } from "./issue/issue.ts";
-import { PIPELINES, type Kind } from "./issue/kind.ts";
-import { memoryFileSchema } from "./memory-file.ts";
-import type { CoordinatorId } from "./role.ts";
+import type { IssueId } from "../issue/issue.ts";
+import { PIPELINES, type Kind } from "../issue/kind.ts";
+import { memoryFileSchema } from "../memory-file.ts";
+import type { CoordinatorId } from "../role.ts";
 
 export const handoffIdSchema = z.uuid().brand<"handoffId">();
 export type HandoffId = z.infer<typeof handoffIdSchema>;
@@ -77,6 +77,27 @@ const deliverySchema = z.discriminatedUnion("kind", [commitDeliverySchema, repor
  * why not a commit: the issue's row shows its pull request, and its verdict the commit checked.
  */
 export const shownHandoffSchema = z.object({ id: handoffIdSchema, at: z.number(), status: handoffStatusSchema, ...reportFields, report: reportDeliverySchema.omit({ kind: true }).nullable() });
+export type ShownHandoff = z.infer<typeof shownHandoffSchema>;
+
+/** A handoff as the board shows it, with the report it delivered. */
+export const shownHandoff = (handoff: Handoff): ShownHandoff => {
+  const { id, at, status, summary, did, evidence, concerns, deviations, findings } = handoff;
+  return { id, at, status, summary, did, evidence, concerns, deviations, findings, report: reportIn(handoff) };
+};
+
+/** The report a done handoff delivered, and the file it was saved to; null for any other handoff. */
+function reportIn(handoff: HandoffReport): ShownHandoff["report"] {
+  if (handoff.status !== "done") return null;
+  const { delivery } = handoff;
+  switch (delivery.kind) {
+    case "commit":
+      return null;
+    case "report":
+      return { report: delivery.report, file: delivery.file };
+    default:
+      return delivery satisfies never;
+  }
+}
 
 /** A handoff as an agent wrote it, stored whole. */
 export const handoffReportSchema = z.discriminatedUnion("status", [

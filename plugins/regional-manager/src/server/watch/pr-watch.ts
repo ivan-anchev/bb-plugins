@@ -7,7 +7,7 @@
 // verify step's pass, after it in the same tick, settles the verdicts that wait for CI. A failed
 // read keeps what was saved and says why on the board. A handover that moves work through origin
 // also reads one branch at once (readNow), saved the same way.
-import { issueBranch, type Agent } from "../../model/agent.ts";
+import { issueBranch, type Agent } from "../../model/agent/agent.ts";
 import type { Issue } from "../../model/issue/issue.ts";
 import { shipsCode } from "../../model/issue/kind.ts";
 import type { CoordinatorId } from "../../model/role.ts";

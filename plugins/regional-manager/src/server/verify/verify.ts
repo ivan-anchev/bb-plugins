@@ -19,9 +19,9 @@
 // (lookAgain), and the tick looks again for anything missed. A final check's verifier has a worktree of its own and
 // checks no agent's handoff, so nothing waits for it.
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
-import { branchOf, type Agent, type AgentCheckout, type EndedHow } from "../../model/agent.ts";
-import { sameModel, type Execution } from "../../model/execution.ts";
-import { handoffIsCurrent, type GivenHandoff, type Handoff } from "../../model/handoff.ts";
+import { branchOf, type Agent, type AgentCheckout, type EndedHow } from "../../model/agent/agent.ts";
+import { sameModel, type Execution } from "../../model/agent/execution.ts";
+import { handoffIsCurrent, type GivenHandoff, type Handoff } from "../../model/agent/handoff.ts";
 import type { Coordinator } from "../../contract.ts";
 import type { Issue, IssueId } from "../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../model/role.ts";

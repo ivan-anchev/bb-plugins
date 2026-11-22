@@ -2,7 +2,7 @@
 // what CI says about the commit a done handoff claims. Pure: the watch writes the reading, and
 // settling a verdict, the board and the texts read it.
 import { z } from "zod";
-import { commitSchema, type HandoffId } from "../handoff.ts";
+import { commitSchema, type HandoffId } from "../agent/handoff.ts";
 
 /** A pull request's checks on its head commit, rolled up as GitHub's merge box rolls them. `none`: it reports no checks. */
 const ciSchema = z.enum(["none", "pending", "pass", "fail"]);

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { handoffIdSchema } from "../handoff.ts";
+import { handoffIdSchema } from "../agent/handoff.ts";
 import { ciOf, type PrSnapshot } from "./pr.ts";
 import { judge, outcome, verdictSchema, type CriterionResult, type Verdict } from "./verdict.ts";
 

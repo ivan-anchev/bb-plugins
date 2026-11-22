@@ -7,7 +7,7 @@ import { join } from "node:path";
 import type { BbPluginApi, PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgentToolResult, PluginStorage, PluginThreadEventPayloads } from "@get-bb/plugin-sdk";
 import { createFakePluginHost, type FakePluginHarness } from "@get-bb/plugin-sdk/testing";
 import { z } from "zod";
-import type { EnvironmentProvider } from "../model/agent.ts";
+import type { EnvironmentProvider } from "../model/agent/agent.ts";
 import type { HolderThread } from "../model/issue/status.ts";
 import type { ComposerRequest } from "../contract.ts";
 import type { Profile } from "../model/profile/profile.ts";

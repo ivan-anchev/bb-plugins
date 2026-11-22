@@ -6,8 +6,8 @@
 // provisions, which may be another branch than the one the check recorded and every text names. It
 // shares that worktree with nobody, and the commit judged is the one it holds when it returns.
 import type { Coordinator } from "../../../contract.ts";
-import { environmentOf } from "../../../model/agent.ts";
-import { catalogRouting, type Execution } from "../../../model/execution.ts";
+import { environmentOf } from "../../../model/agent/agent.ts";
+import { catalogRouting, type Execution } from "../../../model/agent/execution.ts";
 import type { Issue } from "../../../model/issue/issue.ts";
 import type { FinalCheck } from "../../../model/verdict/check.ts";
 import type { CheckoutRead } from "../../../model/verdict/checkout.ts";

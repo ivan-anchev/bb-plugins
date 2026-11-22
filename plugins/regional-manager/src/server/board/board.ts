@@ -2,13 +2,12 @@
 // issue opened on it, with its record. Read whole on every call; bb's thread events
 // only say when to read again.
 import type { Board, IssueDetail, IssueRow } from "../../contract.ts";
-import type { Agent } from "../../model/agent.ts";
-import type { HandoffReport } from "../../model/handoff.ts";
+import type { Agent } from "../../model/agent/agent.ts";
+import { shownHandoff } from "../../model/agent/handoff.ts";
 import { needsYou, type NeedsYou } from "../../model/board/board-groups.ts";
 import { warnedFileCount } from "../../model/inbox/own-tree.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
 import { dependentsOf } from "../../model/issue/relations.ts";
-import type { Handed } from "../../model/issue/status.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { shownVerdict } from "../../model/verdict/verdict.ts";
 import { threadsById } from "../agents/threads.ts";
@@ -42,28 +41,6 @@ const heldBy = ({ id, threadId, ended }: Agent, threads: ReadonlyMap<string, { i
   const thread = threadId === null ? undefined : threads.get(threadId);
   return { id, threadId: thread === undefined || thread.deletedAt !== null ? null : thread.id, ended: ended?.how ?? null };
 };
-
-type ShownHanded = IssueDetail["record"][number]["handoffs"][number];
-
-/** A handoff in an issue's record, with the report it delivered and the verdict on it as the user is shown them. */
-const shownHanded = ({ handoff, check }: Handed): ShownHanded => {
-  const { id, at, status, summary, did, evidence, concerns, deviations, findings } = handoff;
-  return { id, at, status, summary, did, evidence, concerns, deviations, findings, report: reportIn(handoff), verdict: check === null ? null : shownVerdict(check.verdict) };
-};
-
-/** The report a done handoff delivered, and the file it was saved to; null for any other handoff. */
-function reportIn(handoff: HandoffReport): ShownHanded["report"] {
-  if (handoff.status !== "done") return null;
-  const { delivery } = handoff;
-  switch (delivery.kind) {
-    case "commit":
-      return null;
-    case "report":
-      return { report: delivery.report, file: delivery.file };
-    default:
-      return delivery satisfies never;
-  }
-}
 
 export function createBoard(bb: FactsBb, store: BoardStore) {
   /** Why the latest read of an open issue's pull request failed, the first one's; null when none did. */
@@ -112,7 +89,7 @@ export function createBoard(bb: FactsBb, store: BoardStore) {
         decisions: store.issueDecisions(id, issueId),
         dependsOn: issue.dependsOn,
         blocks: dependentsOf(store.issues(id), issueId),
-        record: agents.map((agent) => ({ agent: heldBy(agent, threads), handoffs: record.filter(({ handoff }) => handoff.agentId === agent.id).map(shownHanded) })),
+        record: agents.map((agent) => ({ agent: heldBy(agent, threads), handoffs: record.filter(({ handoff }) => handoff.agentId === agent.id).map(({ handoff, check }) => ({ ...shownHandoff(handoff), verdict: check === null ? null : shownVerdict(check.verdict) })) })),
         finalChecks: store.finalChecks(id, issueId).map(({ at, subject, verdict }) => ({ at, defaultBranch: subject.defaultBranch, verdict: shownVerdict(verdict) })),
       };
     },

@@ -1,10 +1,10 @@
 // What crew_catch_up and issue_read say about events, handoffs, reminders and decisions:
 // everything, whole, however long. This is where an agent's own words, a verifier's, and the user's
 // answers reach the regional manager, as a tool result, each marked as whose they are.
-import { sameModel } from "../../model/execution.ts";
-import type { Agent } from "../../model/agent.ts";
+import { sameModel } from "../../model/agent/execution.ts";
+import type { Agent } from "../../model/agent/agent.ts";
 import type { Decision, DecisionId } from "../../model/decision.ts";
-import type { Handoff, HandoffId } from "../../model/handoff.ts";
+import type { Handoff, HandoffId } from "../../model/agent/handoff.ts";
 import type { StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { filesText } from "../../model/inbox/own-tree.ts";
 import { askedOf, checkedOf, issueName, titled } from "../../model/inbox/wake-text.ts";

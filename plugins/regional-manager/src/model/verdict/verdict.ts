@@ -3,7 +3,7 @@
 // done-criterion, and what it found. Pass or fail is never stored: `judge` derives it, so the
 // board, the catch-up and the doorbell can't disagree.
 import { z } from "zod";
-import { modelRefSchema } from "../execution.ts";
+import { modelRefSchema } from "../agent/execution.ts";
 import { triageSchema } from "./review.ts";
 import { checkoutProblems, checkoutSchema, type Checkout, type CheckoutRead } from "./checkout.ts";
 import { ciVerdictSchema, type Ci, type CiVerdict } from "./pr.ts";

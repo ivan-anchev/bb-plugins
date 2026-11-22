@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { executionOf } from "../../../model/execution.ts";
-import { handoffIdSchema } from "../../../model/handoff.ts";
+import { executionOf } from "../../../model/agent/execution.ts";
+import { handoffIdSchema } from "../../../model/agent/handoff.ts";
 import { EXECUTION, failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "../test-store.ts";
 
 test("agents are numbered a1, a2… within their regional manager, across issues, and an agent's start puts its issue in Todo", () => {

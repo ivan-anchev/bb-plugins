@@ -5,7 +5,7 @@
 // bb's git plugin can't read it while suspended (SH5). GitHub is the fake gh's pull requests.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { agentIdSchema } from "../../model/agent.ts";
+import { agentIdSchema } from "../../model/agent/agent.ts";
 import { laneOf } from "../../model/board/board-groups.ts";
 import { coordinating, HEAD, isRefusal, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
 

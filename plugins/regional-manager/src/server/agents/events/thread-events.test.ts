@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { agentIdSchema } from "../../../model/agent.ts";
+import { agentIdSchema } from "../../../model/agent/agent.ts";
 import type { HolderThread } from "../../../model/issue/status.ts";
 import { coordinatorIdSchema, type CoordinatorId, type Role } from "../../../model/role.ts";
 import { forwardThreadEvents } from "./thread-events.ts";

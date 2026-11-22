@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { agentIdSchema, branchOf, cutPlan, environmentOf, handoverOf, placementOf, refOf, type Agent, type EnvironmentProvider, type Handover, type Placement, type Previous } from "./agent.ts";
-import { issueIdSchema } from "./issue/issue.ts";
-import { coordinatorIdSchema } from "./role.ts";
-import type { CheckoutRead } from "./verdict/checkout.ts";
-import type { PrSnapshot } from "./verdict/pr.ts";
+import { issueIdSchema } from "../issue/issue.ts";
+import { coordinatorIdSchema } from "../role.ts";
+import type { CheckoutRead } from "../verdict/checkout.ts";
+import type { PrSnapshot } from "../verdict/pr.ts";
 
 const boat: EnvironmentProvider = {
   id: "boat-sandbox",

@@ -1,6 +1,6 @@
 // What a verifier runs on. Independence is the point: never a model whose work it checks while bb
 // has another there, and one of theirs only as a last resort, which its verdict then says.
-import { executionOf, sameModel, type CatalogModel, type CatalogRouting, type Execution } from "../../model/execution.ts";
+import { executionOf, sameModel, type CatalogModel, type CatalogRouting, type Execution } from "../../model/agent/execution.ts";
 import { executionFacts, modelsOf, type CatalogBb } from "../execution/catalog.ts";
 
 /** What the choice weighs: the verifier the issue named (null: none), the regional manager's execution (null: bb has no turn of it on record), and the executions of the agents whose work it checks. */

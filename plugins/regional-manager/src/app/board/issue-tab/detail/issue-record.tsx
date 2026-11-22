@@ -4,8 +4,8 @@
 import { Markdown } from "@get-bb/plugin-sdk/app";
 import { useId } from "react";
 import type { IssueDetail } from "../../../../contract.ts";
-import type { EndedHow } from "../../../../model/agent.ts";
-import type { HandoffReport } from "../../../../model/handoff.ts";
+import type { EndedHow } from "../../../../model/agent/agent.ts";
+import type { HandoffReport } from "../../../../model/agent/handoff.ts";
 import { shortTime } from "../../../ui/time.ts";
 import { ThreadLink } from "../../issue/thread-link.tsx";
 import { CheckVerdict } from "./check-verdict.tsx";

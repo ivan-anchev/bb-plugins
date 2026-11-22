@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import type Database from "better-sqlite3";
-import { handoffIdSchema } from "../../../../model/handoff.ts";
+import { handoffIdSchema } from "../../../../model/agent/handoff.ts";
 import { issueKeySchema } from "../../../../model/issue/key/issue-key.ts";
 import { issueIdSchema } from "../../../../model/issue/issue.ts";
 import type { CheckoutRead } from "../../../../model/verdict/checkout.ts";

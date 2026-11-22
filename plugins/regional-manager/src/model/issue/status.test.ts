@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { agentIdSchema, type Agent } from "../agent.ts";
-import { handoffIdSchema, type Handoff } from "../handoff.ts";
+import { agentIdSchema, type Agent } from "../agent/agent.ts";
+import { handoffIdSchema, type Handoff } from "../agent/handoff.ts";
 import { coordinatorIdSchema } from "../role.ts";
 import { checkIdSchema, type Check, type FinalCheck } from "../verdict/check.ts";
 import type { PrSnapshot } from "../verdict/pr.ts";

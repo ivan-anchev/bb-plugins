@@ -3,9 +3,9 @@
 // whole of it waits for crew_catch_up. Ringing derives everything from the database, so ringing
 // again (on every tick, after a reload) sends only what no doorbell has announced yet.
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
-import type { Agent, AgentId, EndedHow } from "../../model/agent.ts";
+import type { Agent, AgentId, EndedHow } from "../../model/agent/agent.ts";
 import type { DecisionId } from "../../model/decision.ts";
-import type { GivenHandoff, Handoff, HandoffId } from "../../model/handoff.ts";
+import type { GivenHandoff, Handoff, HandoffId } from "../../model/agent/handoff.ts";
 import { wakes, type InboxEvent, type StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { doorbellText } from "../../model/inbox/wake-text.ts";
 import type { IssueId } from "../../model/issue/issue.ts";

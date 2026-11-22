@@ -1,9 +1,9 @@
 // Roles and agents: which thread is what to the plugin, and the agents that hold issues. An agent
 // is inserted holding its issue, and ended with what it left, in one transaction each.
 import { z } from "zod";
-import { agentIdSchema, baseSchema, endedHowSchema, placementSchema, type Agent, type AgentCheckout, type AgentId, type Base, type EndedHow, type Placement } from "../../../model/agent.ts";
-import { executionSchema, type Execution } from "../../../model/execution.ts";
-import { handoffIdSchema, type HandoffId } from "../../../model/handoff.ts";
+import { agentIdSchema, baseSchema, endedHowSchema, placementSchema, type Agent, type AgentCheckout, type AgentId, type Base, type EndedHow, type Placement } from "../../../model/agent/agent.ts";
+import { executionSchema, type Execution } from "../../../model/agent/execution.ts";
+import { handoffIdSchema, type HandoffId } from "../../../model/agent/handoff.ts";
 import { issueIdSchema, type IssueId } from "../../../model/issue/issue.ts";
 import { coordinatorIdSchema, roleSchema, type CheckerRole, type CoordinatorId, type Role } from "../../../model/role.ts";
 import { insertEvent } from "../inbox/inbox-store.ts";

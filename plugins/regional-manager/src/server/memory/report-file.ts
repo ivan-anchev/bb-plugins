@@ -8,7 +8,7 @@
 // wrote before the plugin saved anything there, stays as it is, and the report goes to the first
 // free reports/<issue>-2.md, -3.md and so on; crew_catch_up names the file it went to and says why.
 // Nothing a person wrote is replaced, and the handoff never fails over it.
-import type { Handoff } from "../../model/handoff.ts";
+import type { Handoff } from "../../model/agent/handoff.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
 import { memoryFileSchema, type MemoryFile, type MemoryText } from "../../model/memory-file.ts";
 import type { Memory } from "./memory-files.ts";

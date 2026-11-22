@@ -8,7 +8,7 @@
 // its verdict saying no review was had. The verify step calls start and follow in the issue's turn
 // (verify.ts reviewInTurn), which owns when the environment changes hands.
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
-import { sameModel, type Execution } from "../../model/execution.ts";
+import { sameModel, type Execution } from "../../model/agent/execution.ts";
 import type { HandoffCheck, CheckId } from "../../model/verdict/check.ts";
 import type { ReviewFinding } from "../../model/verdict/review.ts";
 import { handingAgent } from "../agents/handing-agent.ts";

@@ -4,8 +4,8 @@
 // kind's stages (walk); everything that reads an IssueStatus never sees a kind.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import type { Agent, EndedHow } from "../agent.ts";
-import type { Handoff, HandoffId } from "../handoff.ts";
+import type { Agent, EndedHow } from "../agent/agent.ts";
+import type { Handoff, HandoffId } from "../agent/handoff.ts";
 import type { Check, CheckId, FinalCheck } from "../verdict/check.ts";
 import type { CiVerdict, PrSnapshot } from "../verdict/pr.ts";
 import { NOT_CLEAN } from "../verdict/checkout.ts";

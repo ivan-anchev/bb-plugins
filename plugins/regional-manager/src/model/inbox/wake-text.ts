@@ -5,7 +5,7 @@
 // gave its issues, the notes of its reminders and the questions it asked the user. Anything an agent
 // or a verifier wrote, and the user's answers, are read through crew_catch_up, as a tool result,
 // never here.
-import type { AgentId } from "../agent.ts";
+import type { AgentId } from "../agent/agent.ts";
 import type { Decision, DecisionId } from "../decision.ts";
 import type { IssueId } from "../issue/issue.ts";
 import type { Check, CheckId } from "../verdict/check.ts";

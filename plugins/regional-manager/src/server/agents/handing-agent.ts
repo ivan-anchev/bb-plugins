@@ -1,6 +1,6 @@
 // The agent whose done handoff a check judges, with its thread: whose environment the check's
 // reviewer and verifier take, and whose model they keep away from.
-import type { Agent } from "../../model/agent.ts";
+import type { Agent } from "../../model/agent/agent.ts";
 import type { HandoffCheck } from "../../model/verdict/check.ts";
 import type { Store } from "../store/store.ts";
 

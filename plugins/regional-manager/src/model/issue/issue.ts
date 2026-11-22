@@ -2,7 +2,7 @@
 // plugin's database holds its plan; what happens to it (agents, handoffs, checks, pull requests)
 // is stored beside it as facts, and its status is derived from both (status.ts).
 import { z } from "zod";
-import type { Execution } from "../execution.ts";
+import type { Execution } from "../agent/execution.ts";
 import { ONE_LINE } from "../one-line.ts";
 import type { CoordinatorId } from "../role.ts";
 import type { IssueKey } from "./key/issue-key.ts";

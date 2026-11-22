@@ -9,7 +9,7 @@ import { isVerified, PIPELINES } from "../../model/issue/kind.ts";
 import { issueLinkMarkdown } from "../../model/issue/link/issue-link.ts";
 import { isReady, type Related, type Relations } from "../../model/issue/relations.ts";
 import { headlineText, STATUS_LABELS, type Handed, type IssueView } from "../../model/issue/status.ts";
-import { placementName, refOf, type Agent } from "../../model/agent.ts";
+import { placementName, refOf, type Agent } from "../../model/agent/agent.ts";
 import { executionText, type Carried, type StartOutcome, type StopOutcome } from "../agents/agents.ts";
 import { finalCheckText, handoffText, type Lookups } from "../tools/inbox-text.ts";
 import { fenced } from "../verify/findings.ts";

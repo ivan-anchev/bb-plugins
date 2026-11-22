@@ -3,11 +3,11 @@
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
-import { agentIdSchema, endedHowSchema } from "./model/agent.ts";
+import { agentIdSchema, endedHowSchema } from "./model/agent/agent.ts";
 import { needsYouSchema } from "./model/board/board-groups.ts";
 import { answerSchema, decisionIdSchema, decisionSchema, issueDecisionSchema } from "./model/decision.ts";
-import { shownHandoffSchema } from "./model/handoff.ts";
-import { executionSchema } from "./model/execution.ts";
+import { shownHandoffSchema } from "./model/agent/handoff.ts";
+import { executionSchema } from "./model/agent/execution.ts";
 import { descriptionSchema, doneCriteriaSchema, issueIdSchema } from "./model/issue/issue.ts";
 import { kindSchema } from "./model/issue/kind.ts";
 import { issueStatusSchema } from "./model/issue/status.ts";

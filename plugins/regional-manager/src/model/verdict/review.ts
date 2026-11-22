@@ -5,7 +5,7 @@
 // what the reviewer runs is CREW.md's. A review is stored on its check, beside the verdict; while
 // the verdict is queued and the review is to come, the issue is Reviewing.
 import { z } from "zod";
-import { modelRefSchema } from "../execution.ts";
+import { modelRefSchema } from "../agent/execution.ts";
 import type { Verdict } from "./verdict.ts";
 
 /** How much a finding matters, by the reviewer's judgement: must-fix, should-fix, or a nit. */

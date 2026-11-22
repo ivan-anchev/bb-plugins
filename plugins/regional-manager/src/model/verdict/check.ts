@@ -3,9 +3,9 @@
 // stored in the same JSON column. One state machine judges both; the subject says where the
 // commit and the tree are read, which commit is judged, and whether a fix round exists.
 import { z } from "zod";
-import { agentIdSchema, type Agent } from "../agent.ts";
-import type { Execution } from "../execution.ts";
-import { commitSchema, handoffIdSchema } from "../handoff.ts";
+import { agentIdSchema, type Agent } from "../agent/agent.ts";
+import type { Execution } from "../agent/execution.ts";
+import { commitSchema, handoffIdSchema } from "../agent/handoff.ts";
 import { issueIdSchema, type DoneCriteria, type IssueId } from "../issue/issue.ts";
 import type { CoordinatorId } from "../role.ts";
 import type { Review } from "./review.ts";

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { laneOf } from "../../model/board/board-groups.ts";
-import { agentIdSchema } from "../../model/agent.ts";
+import { agentIdSchema } from "../../model/agent/agent.ts";
 import { coordinating, doorbellOf, isRefusal, settled, startedAgent, textOf, withoutLinks, type FakePr } from "../test-harness.ts";
 
 const a1 = agentIdSchema.parse("a1");

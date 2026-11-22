@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { agentIdSchema } from "../agent.ts";
+import { agentIdSchema } from "../agent/agent.ts";
 import { decisionIdSchema, type Decision } from "../decision.ts";
-import { handoffIdSchema } from "../handoff.ts";
+import { handoffIdSchema } from "../agent/handoff.ts";
 import { issueIdSchema } from "../issue/issue.ts";
 import { memoryFileSchema } from "../memory-file.ts";
 import { coordinatorIdSchema } from "../role.ts";

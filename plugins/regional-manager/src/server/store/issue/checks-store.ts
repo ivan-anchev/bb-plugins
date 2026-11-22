@@ -4,9 +4,9 @@
 // newer handoff or final check can't overwrite one another.
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { agentIdSchema, type AgentId } from "../../../model/agent.ts";
-import { executionSchema } from "../../../model/execution.ts";
-import { handoffIdSchema, handoffReportSchema, type HandoffId, type Handoff } from "../../../model/handoff.ts";
+import { agentIdSchema, type AgentId } from "../../../model/agent/agent.ts";
+import { executionSchema } from "../../../model/agent/execution.ts";
+import { handoffIdSchema, handoffReportSchema, type HandoffId, type Handoff } from "../../../model/agent/handoff.ts";
 import { doneCriteriaSchema, issueIdSchema, type IssueId } from "../../../model/issue/issue.ts";
 import { isVerified, kindSchema } from "../../../model/issue/kind.ts";
 import type { Handed } from "../../../model/issue/status.ts";
@@ -16,7 +16,7 @@ import type { CheckoutRead } from "../../../model/verdict/checkout.ts";
 import type { CiVerdict } from "../../../model/verdict/pr.ts";
 import { firstReview, reviewSchema, type Review, type ReviewFinding } from "../../../model/verdict/review.ts";
 import { firstVerdict, isSettled, verdictSchema, type Verdict } from "../../../model/verdict/verdict.ts";
-import type { ModelRef } from "../../../model/execution.ts";
+import type { ModelRef } from "../../../model/agent/execution.ts";
 import { insertEvent } from "../inbox/inbox-store.ts";
 import { json, jsonOrNull, nullableJson, type Db } from "../rows.ts";
 import { countFixRound } from "./agents-store.ts";

@@ -1,7 +1,7 @@
 // How the plugin reads its threads from bb: by id, in pages, and a thread's latest turn. The board,
 // the agents, the verify step and the PR watch all read through here, so "listed" and "current"
 // have one meaning.
-import { handoffIsCurrent, type Handoff } from "../../model/handoff.ts";
+import { handoffIsCurrent, type Handoff } from "../../model/agent/handoff.ts";
 
 type ListArgs = { threadIds: string[]; includeHidden: true; limit: number };
 

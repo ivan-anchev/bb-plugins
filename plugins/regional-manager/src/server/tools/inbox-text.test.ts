@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { agentIdSchema, type Agent } from "../../model/agent.ts";
-import type { Execution } from "../../model/execution.ts";
-import { handoffIdSchema, type Handoff } from "../../model/handoff.ts";
+import { agentIdSchema, type Agent } from "../../model/agent/agent.ts";
+import type { Execution } from "../../model/agent/execution.ts";
+import { handoffIdSchema, type Handoff } from "../../model/agent/handoff.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import type { Handed } from "../../model/issue/status.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";

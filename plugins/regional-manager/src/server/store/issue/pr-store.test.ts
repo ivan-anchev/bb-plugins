@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { agentIdSchema } from "../../../model/agent.ts";
+import { agentIdSchema } from "../../../model/agent/agent.ts";
 import type { PrSnapshot } from "../../../model/verdict/pr.ts";
 import { failWrites, filedIssue, freshStore, MANAGER, newIssue, startAgent } from "../test-store.ts";
 

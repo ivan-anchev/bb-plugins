@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
-import type { AgentId } from "../../../model/agent.ts";
-import { handoffIdSchema, type Handoff } from "../../../model/handoff.ts";
+import type { AgentId } from "../../../model/agent/agent.ts";
+import { handoffIdSchema, type Handoff } from "../../../model/agent/handoff.ts";
 import type { IssueId } from "../../../model/issue/issue.ts";
 import type { Check } from "../../../model/verdict/check.ts";
 import type { CheckoutRead } from "../../../model/verdict/checkout.ts";
