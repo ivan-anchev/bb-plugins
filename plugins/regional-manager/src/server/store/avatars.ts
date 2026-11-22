@@ -1,7 +1,7 @@
 // Each regional manager's avatar as stored: a look chosen once (avatar.ts), as JSON in the avatar
 // column. Managers pictured by one of bb's icons before blobs get theirs as the store opens.
 import { z } from "zod";
-import { avatarSchema, freeLook, seedOf, type Avatar } from "../../model/profile/avatar.ts";
+import { avatarSchema, freeLook, randomStart, seedOf, type Avatar, type AvatarChoice } from "../../model/profile/avatar.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { Db } from "./rows.ts";
 
@@ -22,6 +22,17 @@ export function pictureIconManagers(db: Db): void {
       taken.push(look);
     }
   })();
+}
+
+/**
+ * The look a new regional manager is saved with: the one chosen, as given; for `auto`, the first from
+ * a random start that no manager stored now has. Call it inside the insert's transaction, so two
+ * creates never both take the look that was free when they began.
+ */
+export function lookFor(db: Db, choice: AvatarChoice): Avatar {
+  if (choice.kind === "blob") return choice;
+  const stored = db().prepare("SELECT avatar FROM coordinators").all().map((row) => storedAvatarSchema.parse(row).avatar);
+  return freeLook(randomStart(), stored.flatMap((json) => blobOf(json) ?? []));
 }
 
 /**
@@ -49,3 +60,4 @@ function decoded(json: string): unknown {
 const iconSchema = z.object({ kind: z.literal("icon") });
 
 const pictureRowSchema = z.object({ id: z.string(), avatar: z.string() });
+const storedAvatarSchema = z.object({ avatar: z.string() });

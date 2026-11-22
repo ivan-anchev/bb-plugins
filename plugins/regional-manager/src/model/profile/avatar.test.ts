@@ -1,18 +1,25 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { avatarSchema, freeLook, HUE_NAMES, randomStart, SHAPES, type Avatar } from "./avatar.ts";
+import { avatarSchema, freeLook, HUE_NAMES, randomStart, SHAPES, shuffledLook, type Avatar } from "./avatar.ts";
 
 const lookKey = ({ shape, hue }: Avatar) => `${shape}/${hue}`;
 
-test("new regional managers, each given a free look from a random start, all look different until the 21 shapes in 12 hues run out", () => {
-  const taken: Avatar[] = [];
-  for (let n = 0; n < 252; n++) taken.push(freeLook(randomStart(), taken));
+const everyLook = HUE_NAMES.flatMap((hue) => SHAPES.map((shape) => avatarSchema.parse({ kind: "blob", shape, hue, expression: "neutral" })));
 
-  assert.equal(new Set(taken.map(lookKey)).size, 252);
-  assert.deepEqual(new Set(taken.map(({ shape }) => shape)), new Set(SHAPES));
-  assert.deepEqual(new Set(taken.map(({ hue }) => hue)), new Set(HUE_NAMES));
-  const once = freeLook(randomStart(), taken);
-  assert.ok(taken.some((look) => lookKey(look) === lookKey(once)), "the 253rd shares a look, as none is left");
+test("Shuffle picks a free look other than the current one while there is one", () => {
+  const [current, other, ...taken] = everyLook;
+  assert.ok(current && other);
+
+  const look = shuffledLook(randomStart(), taken, current);
+
+  assert.equal(lookKey(look), lookKey(other));
+});
+
+test("Shuffle never lands on a taken look while a free one is left: with 251 taken and the current one free, it keeps the current one", () => {
+  const [current, ...taken] = everyLook;
+  assert.ok(current);
+
+  assert.equal(lookKey(shuffledLook(randomStart(), taken, current)), lookKey(current));
 });
 
 test("a free look is never one a manager has, whatever its face, and is a whole blob avatar", () => {

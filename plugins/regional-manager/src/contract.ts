@@ -13,7 +13,7 @@ import { kindSchema } from "./model/issue/kind.ts";
 import { issueStatusSchema } from "./model/issue/status.ts";
 import { memoryContentSchema, memoryFileSchema, memorySnapshotSchema, memoryVersionSchema, writeOutcomeSchema } from "./model/memory-file.ts";
 import { prSnapshotSchema } from "./model/verdict/pr.ts";
-import { profileSchema } from "./model/profile/profile.ts";
+import { newProfileSchema, profileSchema } from "./model/profile/profile.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "./model/role.ts";
 import { shownVerdictSchema } from "./model/verdict/verdict.ts";
 
@@ -164,9 +164,12 @@ export const coordinatorContract = defineRpcContract({
     input: z.object({}),
     output: z.object({ hostId: z.string().nullable() }),
   },
-  /** Creates a regional manager with this profile and no thread: its goal, sent from its page, starts it (startCoordinator). */
+  /**
+   * Creates a regional manager with this profile and no thread: its goal, sent from its page, starts
+   * it (startCoordinator). An `auto` avatar is picked as it is saved, a look no other manager has.
+   */
   createCoordinator: {
-    input: z.object({ profile: profileSchema }),
+    input: z.object({ profile: newProfileSchema }),
     output: z.object({ coordinatorId: coordinatorIdSchema }),
   },
   /**

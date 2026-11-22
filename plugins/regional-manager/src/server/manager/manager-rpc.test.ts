@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import plugin from "../../../server.ts";
 import { COORDINATORS_TAG, coordinatorContract as contract } from "../../contract.ts";
+import type { Avatar } from "../../model/profile/avatar.ts";
 import type { Profile } from "../../model/profile/profile.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
 import { memoryStorage } from "../memory-storage.ts";
@@ -126,6 +127,27 @@ test("a start passes on only the composer's fields: one bb would take from anoth
 
   assert.equal("visibility" in kit.thread(threadId).spawnedWith, false);
   assert.equal("executionInputSources" in kit.thread(threadId).spawnedWith, false);
+});
+
+test("managers created with an auto avatar are each saved with a look no other has, until all 252 are taken; the 253rd shares one", async () => {
+  const kit = harness();
+  const lookOf = ({ avatar }: { avatar: Avatar }) => `${avatar.shape}/${avatar.hue}`;
+  for (let n = 0; n < 252; n++) await kit.rpc.createCoordinator({ profile: { ...PROFILE, name: `Manager ${n}`, avatar: { kind: "auto" } } });
+
+  assert.equal(new Set(kit.store.notStarted().map(lookOf)).size, 252);
+  await kit.rpc.createCoordinator({ profile: { ...PROFILE, name: "One more", avatar: { kind: "auto" } } });
+  assert.equal(new Set(kit.store.notStarted().map(lookOf)).size, 252, "the 253rd repeats a look");
+});
+
+test("two creates sent from the same view of the managers, both auto, are saved with different looks; a chosen look is saved as given, even one another has", async () => {
+  const kit = harness();
+  const created = await Promise.all([1, 2].map((n) => kit.rpc.createCoordinator({ profile: { ...PROFILE, name: `Manager ${n}`, avatar: { kind: "auto" } } })));
+  const [first, second] = created.map(({ coordinatorId }) => kit.store.notStarted().find(({ id }) => id === coordinatorId)?.avatar);
+  assert.ok(first && second);
+  assert.notDeepEqual([first.shape, first.hue], [second.shape, second.hue]);
+
+  const { coordinatorId } = await kit.rpc.createCoordinator({ profile: { ...PROFILE, name: "Copy", avatar: first } });
+  assert.deepEqual(kit.store.notStarted().find(({ id }) => id === coordinatorId)?.avatar, first);
 });
 
 test("an edit before the start renames no thread and keeps the whole profile; the start then titles the thread with the new name", async () => {

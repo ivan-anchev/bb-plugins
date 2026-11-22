@@ -62,9 +62,10 @@ its thread too. An archived or deleted thread drops its manager off the list.
 Each regional manager has a profile: a **name**, up to 80 characters, an
 optional **description**, up to 500, and an **avatar**: a still blob, one of
 21 shapes in one of Zeron's 12 identity colours, with a friendly face. A new
-manager starts with a look no other manager has; **Shuffle** picks another
-such look, and the **Shape** and **Colour** pickers choose one by hand, even
-one another manager has.
+manager starts with a look no other manager has, picked as Create saves it,
+so it can differ from the preview New shows; **Shuffle** picks another such
+look, and the **Shape** and **Colour** pickers choose one by hand, even one
+another manager has.
 
 - **Once it starts, the name is the thread's title.** bb keeps it; the
   plugin stores the description and the avatar. Renaming the thread in bb's

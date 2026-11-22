@@ -2,7 +2,7 @@
 // name is the thread's title, which bb keeps, so renaming either renames both; the plugin keeps
 // the description and the avatar (avatar.ts).
 import { z } from "zod";
-import { avatarSchema } from "./avatar.ts";
+import { avatarChoiceSchema, avatarSchema } from "./avatar.ts";
 
 export const NAME_MAX = 80;
 export const DESCRIPTION_MAX = 500;
@@ -14,3 +14,7 @@ export const profileSchema = z.object({
   avatar: avatarSchema,
 });
 export type Profile = z.infer<typeof profileSchema>;
+
+/** A new regional manager's profile, as Create sends it: its avatar a chosen look, or `auto` (avatar.ts). */
+export const newProfileSchema = profileSchema.extend({ avatar: avatarChoiceSchema });
+export type NewProfile = z.infer<typeof newProfileSchema>;

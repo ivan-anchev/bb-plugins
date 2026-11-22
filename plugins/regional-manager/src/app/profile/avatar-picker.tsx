@@ -3,7 +3,7 @@
 // Shuffle waits while the other managers' looks aren't known (useTakenLooks): a look it picked then
 // could be theirs.
 import { useId, useMemo, useRef, type ReactNode } from "react";
-import { freeLook, HUE_NAMES, HUES, randomStart, SHAPES, type Avatar } from "../../model/profile/avatar.ts";
+import { HUE_NAMES, HUES, randomStart, SHAPES, shuffledLook, type Avatar } from "../../model/profile/avatar.ts";
 import { Button } from "../ui/button.tsx";
 import { handFocusTo } from "../ui/focus-hand-off.ts";
 import { ReadFailure } from "../ui/read-failure.tsx";
@@ -19,7 +19,7 @@ export function AvatarPicker({ value, onChange }: { value: Avatar; onChange(next
   // why aria-disabled: a disabled button drops focus to the page, and it is enabled again as soon as the looks are read.
   return (
     <div className="flex flex-col items-start gap-3">
-      <Button ref={shuffle} variant="secondary" size="sm" aria-disabled={looks === null} onClick={() => looks !== null && onChange(freeLook(randomStart(), [...looks, value]))}>
+      <Button ref={shuffle} variant="secondary" size="sm" aria-disabled={looks === null} onClick={() => looks !== null && onChange(shuffledLook(randomStart(), looks, value))}>
         <ShuffleGlyph />
         Shuffle
       </Button>

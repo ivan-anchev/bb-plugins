@@ -4,8 +4,8 @@ import { afterEach, test } from "node:test";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { COORDINATORS_TAG, coordinatorContract as contract, type NotStarted } from "../../contract.ts";
-import type { Profile } from "../../model/profile/profile.ts";
-import { avatarSchema } from "../../model/profile/avatar.ts";
+import type { NewProfile } from "../../model/profile/profile.ts";
+import { avatarSchema, HUE_NAMES, SHAPES } from "../../model/profile/avatar.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
 
 // The New page as bb mounts it: the profile's fields under its heading, and Create, which saves the
@@ -27,7 +27,7 @@ afterEach(() => {
  * opens, and lists one other manager, Scout, unless `read.failing`, when its list read fails.
  */
 function mount(read: { failing: boolean; others?: NotStarted[] } = { failing: false }) {
-  const creates: Profile[] = [];
+  const creates: NewProfile[] = [];
   const opened: CoordinatorId[] = [];
   const rpc = {
     coordinators: () => {
@@ -80,18 +80,16 @@ test("a create with no name is refused: the name field says so and takes the foc
   assert.deepEqual(page.creates, []);
 });
 
-test("a new regional manager's look is one no other manager has", async (t) => {
-  // why 0: the look a new manager starts from is then the one Scout has, which it must step past.
+test("a new manager's look the user didn't pick is a preview, which steps past the looks read, and Create asks the store to pick it", async (t) => {
+  // why 0: the preview then starts from the look Scout has, which it must step past.
   t.mock.method(Math, "random", () => 0);
   const page = mount();
   await page.named("Webhooks");
-  await waitFor(() => assert.equal(page.view.getByRole("radio", { name: "Circle" }).matches(":checked"), false));
+  await waitFor(() => assert.notDeepEqual(page.chosen(), ["Circle", "Violet"]));
 
   await page.create();
 
-  const [created] = page.creates;
-  assert.ok(created);
-  assert.notDeepEqual([created.avatar.shape, created.avatar.hue], [CIRCLE_IN_VIOLET.shape, CIRCLE_IN_VIOLET.hue]);
+  assert.deepEqual(page.creates, [{ name: "Webhooks", description: null, avatar: { kind: "auto" } }]);
 });
 
 test("Create sends the profile as typed, opens the new regional manager's page, starts no thread and forgets the fields", async (t) => {
@@ -132,29 +130,15 @@ test("the fields outlive the page", async () => {
   assert.equal(again.view.getByRole("radio", { name: "Cat" }).matches(":checked"), true);
 });
 
-test("while the other managers can't be read, a new one gets no look: the page says why, and Retry gives it a free one", async (t) => {
-  // why 0: the look a new manager starts from is then the one Scout has, which it must step past.
-  t.mock.method(Math, "random", () => 0);
-  const read = { failing: true };
-  const page = mount(read);
+test("while the other managers can't be read, a new one can still be created, its look picked by the store, and Shuffle waits and says why", async () => {
+  const page = mount({ failing: true });
 
-  assert.match((await page.view.findByRole("alert")).textContent ?? "", /Could not read the other regional managers, so a new one can't be given a look of its own yet: .*bb is restarting/);
-  assert.equal(page.view.queryByRole("textbox", { name: "Name" }), null);
-  const create = page.view.getByRole("button", { name: "Create" });
-  assert.equal(create.getAttribute("aria-disabled"), "true");
-  await page.create();
-  assert.equal(page.creates.length, 0, "Create has nothing to create");
-
-  read.failing = false;
-  await act(async () => fireEvent.click(page.view.getByRole("button", { name: "Retry" })));
-
+  assert.match((await page.view.findByRole("alert")).textContent ?? "", /so Shuffle waits: .*bb is restarting/);
+  assert.equal(page.view.getByRole("button", { name: "Shuffle" }).getAttribute("aria-disabled"), "true");
   await page.named("Webhooks");
-  assert.equal(create.getAttribute("aria-disabled"), "false");
-  assert.equal(page.view.queryByRole("alert"), null);
   await page.create();
-  const [created] = page.creates;
-  assert.ok(created);
-  assert.notDeepEqual([created.avatar.shape, created.avatar.hue], [CIRCLE_IN_VIOLET.shape, CIRCLE_IN_VIOLET.hue]);
+
+  assert.deepEqual(page.creates, [{ name: "Webhooks", description: null, avatar: { kind: "auto" } }]);
 });
 
 test("Shuffle waits while the other managers' looks can't be read, and says why; once Retry reads them, the focus Retry had moves to Shuffle, which picks a look none has", async (t) => {
@@ -201,7 +185,7 @@ test("a later read of the managers that fails keeps their last list, but Shuffle
   assert.equal(name.value, "Webhooks", "the fields stay");
 });
 
-test("a later read that fails keeps a new manager's fields and the look it was given while the looks were known, and Shuffle waits", async () => {
+test("a later read that fails keeps a new manager's fields and its preview, and Shuffle waits", async () => {
   const read = { failing: false };
   const page = mount(read);
   await page.view.findByRole("textbox", { name: "Name" });
@@ -212,16 +196,13 @@ test("a later read that fails keeps a new manager's fields and the look it was g
 
   assert.match((await page.view.findByRole("alert")).textContent ?? "", /so Shuffle waits: .*bb is restarting/);
   assert.equal(page.view.getByRole("button", { name: "Shuffle" }).getAttribute("aria-disabled"), "true");
-  assert.deepEqual(page.chosen(), given, "the look stays the one given while the looks were known");
+  assert.deepEqual(page.chosen(), given, "the preview stays the one from the last list read");
   await page.named("Webhooks");
   await page.create();
-  const [created] = page.creates;
-  assert.ok(created);
-  assert.deepEqual([created.avatar.shape, created.avatar.hue], given.map((label) => label?.toLowerCase()));
-  assert.notDeepEqual([created.avatar.shape, created.avatar.hue], [CIRCLE_IN_VIOLET.shape, CIRCLE_IN_VIOLET.hue]);
+  assert.deepEqual(page.creates.map(({ avatar }) => avatar), [{ kind: "auto" }]);
 });
 
-test("a new manager's look moves on when a later read shows another manager has taken it since", async () => {
+test("a new manager's preview moves on when a later read shows another manager has taken it since", async () => {
   const read: { failing: boolean; others: NotStarted[] } = { failing: false, others: [] };
   const page = mount(read);
   await page.view.findByRole("textbox", { name: "Name" });
@@ -234,14 +215,10 @@ test("a new manager's look moves on when a later read shows another manager has 
   await waitFor(() => assert.notDeepEqual(page.chosen().map((label) => label?.toLowerCase()), [given.shape, given.hue]));
   await page.named("Webhooks");
   await page.create();
-  const [created] = page.creates;
-  assert.ok(created);
-  assert.notDeepEqual([created.avatar.shape, created.avatar.hue], [given.shape, given.hue]);
-  assert.notDeepEqual([created.avatar.shape, created.avatar.hue], [CIRCLE_IN_VIOLET.shape, CIRCLE_IN_VIOLET.hue]);
+  assert.deepEqual(page.creates.map(({ avatar }) => avatar), [{ kind: "auto" }]);
 });
 
-test("fields an earlier release kept, with an icon this one can't draw, keep their name and description and get a look no other manager has", async (t) => {
-  t.mock.method(Math, "random", () => 0);
+test("fields an earlier release kept, with an icon this one can't draw, keep their name and description, and Create asks the store to pick the look", async () => {
   // why raw text with an icon: what 0.7.0 kept in the browser before avatars were blobs.
   localStorage.setItem("coordinator-new-profile", '{"name":"Half typed","description":"Moves webhooks","avatar":{"kind":"icon","icon":"Zap"}}');
   const page = mount();
@@ -251,13 +228,10 @@ test("fields an earlier release kept, with an icon this one can't draw, keep the
   assert.equal(name.value, "Half typed");
   await page.create();
 
-  const [created] = page.creates;
-  assert.ok(created);
-  assert.deepEqual([created.name, created.description, created.avatar.kind], ["Half typed", "Moves webhooks", "blob"]);
-  assert.notDeepEqual([created.avatar.shape, created.avatar.hue], [CIRCLE_IN_VIOLET.shape, CIRCLE_IN_VIOLET.hue]);
+  assert.deepEqual(page.creates, [{ name: "Half typed", description: "Moves webhooks", avatar: { kind: "auto" } }]);
 });
 
-test("a look the page gave a new manager moves on when a later read shows it taken, even after the name was typed; a look the user picked stays", async (t) => {
+test("a new manager's preview moves on when a later read shows it taken, even after the name was typed; a look the user picked stays and Create sends it", async (t) => {
   // why 0: the page then gives pebble in violet, the first look after Scout's, so the look picked below (a bunny) is never the one given.
   t.mock.method(Math, "random", () => 0);
   const read: { failing: boolean; others: NotStarted[] } = { failing: false, others: [] };
@@ -277,7 +251,22 @@ test("a look the page gave a new manager moves on when a later read shows it tak
   assert.deepEqual(page.chosen().map((label) => label?.toLowerCase()), picked, "a look the user picked stays, though another manager has it");
 
   await page.create();
-  const [created] = page.creates;
-  assert.ok(created);
-  assert.deepEqual([created.name, created.avatar.shape, created.avatar.hue], ["Webhooks", ...picked]);
+  assert.deepEqual(page.creates.map(({ name, avatar }) => [name, avatar.kind === "blob" ? [avatar.shape, avatar.hue] : avatar.kind]), [["Webhooks", picked]]);
+});
+
+test("Shuffle never lands on a look another manager has while one is free: with 251 taken and its own the one free, it keeps it", async (t) => {
+  t.mock.method(Math, "random", () => 0);
+  const looks = HUE_NAMES.flatMap((hue) => SHAPES.map((shape) => avatarSchema.parse({ kind: "blob", shape, hue, expression: "neutral" })));
+  const [free] = looks.slice(-1);
+  assert.ok(free);
+  // why 250 more: with Scout's circle in violet, every look but the last is taken.
+  const others = looks.slice(1, -1).map((avatar, n) => ({ id: coordinatorIdSchema.parse(`00000000-0000-4000-8000-${String(n).padStart(12, "0")}`), name: `Manager ${n}`, description: null, avatar }));
+  localStorage.setItem("coordinator-new-profile", JSON.stringify({ name: "Webhooks", description: "", avatar: free }));
+  const page = mount({ failing: false, others });
+  const shuffle = await page.view.findByRole("button", { name: "Shuffle" });
+  await waitFor(() => assert.equal(shuffle.getAttribute("aria-disabled"), "false"));
+
+  fireEvent.click(shuffle);
+
+  assert.deepEqual(page.chosen().map((label) => label?.toLowerCase()), [free.shape, free.hue]);
 });

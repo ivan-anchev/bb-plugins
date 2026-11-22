@@ -39,6 +39,13 @@ const EXPRESSIONS = ["neutral", "happy", "content", "curious", "attentive", "det
 export const avatarSchema = z.object({ kind: z.literal("blob"), shape: z.enum(SHAPES), hue: z.enum(HUE_NAMES), expression: z.enum(EXPRESSIONS) });
 export type Avatar = z.infer<typeof avatarSchema>;
 
+/**
+ * What a new regional manager is created with: a look the user chose (a shape, a colour or Shuffle),
+ * saved as given, or `auto`, for the store to pick a free one as it saves it (avatars.ts lookFor).
+ */
+export const avatarChoiceSchema = z.discriminatedUnion("kind", [z.object({ kind: z.literal("auto") }), avatarSchema]);
+export type AvatarChoice = z.infer<typeof avatarChoiceSchema>;
+
 /** How many looks tell managers apart: a shape in a hue. The face barely reads at 20 px, so it never counts. */
 const LOOKS = SHAPES.length * HUE_NAMES.length;
 
@@ -53,13 +60,15 @@ export const randomStart = (): number => Math.floor(Math.random() * STARTS);
  * 252 are taken, the one at `start`. `start` is any whole number ≥ 0: a random one, or an id's seed.
  */
 export function freeLook(start: number, taken: readonly Avatar[]): Avatar {
-  const used = new Set(taken.map(lookKey));
-  const expression = EXPRESSIONS[Math.floor(start / LOOKS) % EXPRESSIONS.length];
-  for (let step = 0; step < LOOKS; step++) {
-    const look = lookAt((start + step) % LOOKS, expression);
-    if (!used.has(lookKey(look))) return look;
-  }
-  return lookAt(start % LOOKS, expression);
+  return firstFree(start, taken) ?? lookAt(start % LOOKS, expressionAt(start));
+}
+
+/**
+ * Shuffle's look: the first from `start` on that neither `taken` nor `current` has; when `current` is
+ * the only free one, `current`, so Shuffle never lands on a taken look while a free one is left.
+ */
+export function shuffledLook(start: number, taken: readonly Avatar[], current: Avatar): Avatar {
+  return firstFree(start, [...taken, current]) ?? freeLook(start, taken);
 }
 
 /** A start taken from an id, the same on every run: FNV-1a over its UTF-8 bytes. */
@@ -68,6 +77,18 @@ export function seedOf(id: string): number {
   for (const byte of new TextEncoder().encode(id)) hash = Math.imul(hash ^ byte, 0x01000193) >>> 0;
   return hash;
 }
+
+/** The first look from `start` on that none of `taken` has, its face picked by `start`; null once all are taken. */
+function firstFree(start: number, taken: readonly Avatar[]): Avatar | null {
+  const used = new Set(taken.map(lookKey));
+  for (let step = 0; step < LOOKS; step++) {
+    const look = lookAt((start + step) % LOOKS, expressionAt(start));
+    if (!used.has(lookKey(look))) return look;
+  }
+  return null;
+}
+
+const expressionAt = (start: number): Avatar["expression"] => EXPRESSIONS[Math.floor(start / LOOKS) % EXPRESSIONS.length];
 
 const lookAt = (slot: number, expression: Avatar["expression"]): Avatar => ({ kind: "blob", shape: SHAPES[slot % SHAPES.length], hue: HUE_NAMES[Math.floor(slot / SHAPES.length)], expression });
 
