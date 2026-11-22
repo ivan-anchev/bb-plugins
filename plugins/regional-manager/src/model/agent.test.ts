@@ -55,7 +55,7 @@ test("an agent's branch is the one read at its handoff, else the one bb made its
 const sandboxAgent: Agent = {
   id: agentIdSchema.parse("a3"),
   coordinatorId: coordinatorIdSchema.parse("6f1c2a52-6b8e-4c43-9a51-1d6a3c0b7e10"),
-  issueId: issueIdSchema.parse("i5"),
+  issueId: issueIdSchema.parse("WEB-5"),
   placement: { kind: "provider", environmentProviderId: "boat-sandbox", inputs: { kind: "new-branch", baseBranch: "main" }, machine: { machineProviderId: "boat", inputs: { preset: "small" } } },
   base: { kind: "default" },
   execution: { providerId: "codex", model: "gpt-5.4", reasoningLevel: "high" },

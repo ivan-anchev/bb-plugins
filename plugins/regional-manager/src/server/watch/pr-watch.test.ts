@@ -68,9 +68,9 @@ test("an agent that opens a pull request shows #n on its row within a tick, and 
   kit.clock.now += 5 * MINUTE;
   await minute();
   assert.equal((await row()).pr, "#41 open CI pending");
-  assert.match(doorbells().at(-1) ?? assert.fail("no doorbell"), /- i1 "Add retries" \(a1\) PR #41: opened$/);
+  assert.match(doorbells().at(-1) ?? assert.fail("no doorbell"), /- WEB-1 "Add retries" \(a1\) PR #41: opened$/);
   const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
-  assert.match(catchUp, /### i1 "Add retries" \(a1\) PR #41: opened\n\nAt [^\n]* It is open \(https:\/\/github\.com\/acme\/webhooks\/pull\/41\), with no approval or change request; CI on its head 0123456: still running\./);
+  assert.match(catchUp, /### WEB-1 "Add retries" \(a1\) PR #41: opened\n\nAt [^\n]* It is open \(https:\/\/github\.com\/acme\/webhooks\/pull\/41\), with no approval or change request; CI on its head 0123456: still running\./);
 });
 
 test("a verdict that passes while CI is pending waits under Verifying as waiting for CI, then goes to In review the tick CI passes", async () => {
@@ -83,13 +83,13 @@ test("a verdict that passes while CI is pending waits under Verifying as waiting
   await minute();
   assert.equal(doorbells().length, before, "a verdict waiting for CI wakes nobody");
 
-  // why hold bb's turn reads: the verdict settles in i1's turn, which the tick starts and doesn't
+  // why hold bb's turn reads: the verdict settles in WEB-1's turn, which the tick starts and doesn't
   // wait for, so nothing orders it before the tick's ring. Held, it is still settling as the tick rings.
   pr({ rollup: "SUCCESS" });
   kit.turnEvents.holding = true;
   await minute();
   assert.equal(kit.turnEvents.held.length, 1, "the verdict's turn read held");
-  assert.equal(doorbells().at(-1), '[Regional Manager] 1 update. Call crew_catch_up to read it in full.\n- i1 "Add retries" (a1) PR #41: CI passed');
+  assert.equal(doorbells().at(-1), '[Regional Manager] 1 update. Call crew_catch_up to read it in full.\n- WEB-1 "Add retries" (a1) PR #41: CI passed');
   assert.deepEqual(events(), [], "the doorbell carried the CI result");
 
   kit.turnEvents.holding = false;
@@ -100,7 +100,7 @@ test("a verdict that passes while CI is pending waits under Verifying as waiting
   await kit.dispatch(kit.queued(threadId)[0] ?? assert.fail("no doorbell queued"));
   await minute();
   const verdicts = doorbells().filter((doorbell) => doorbell.includes("handed off: done, verified"));
-  assert.deepEqual(verdicts, ['[Regional Manager] 1 update. Call crew_catch_up to read it in full.\n- i1 "Add retries" (a1) handed off: done, verified'], "announced once");
+  assert.deepEqual(verdicts, ['[Regional Manager] 1 update. Call crew_catch_up to read it in full.\n- WEB-1 "Add retries" (a1) handed off: done, verified'], "announced once");
   assert.deepEqual(events(), []);
 });
 
@@ -138,8 +138,8 @@ test("a CI failure after the agent's fix round reaches the coordinating thread a
   assert.deepEqual(await row(), { lane: "needs-you", headline: "✗ CI failed on #41 after its fix round: Retries land with backoff", pr: "#41 open CI fail" });
   // why the catch-up: the coordinating thread is busy with an earlier doorbell by now, so bb holds this one queued.
   const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
-  assert.match(catchUp, /### i1 "Add retries" \(a1\) handed off: done\n[\s\S]*Failed verification: CI failed on #41\. 2 of 2 criteria passed, checked at 0123456789abcdef0123456789abcdef01234567 by a verifier on [^.]*\. bb's git plugin read the agent's environment as it handed off: the claimed commit 0123456789abcdef0123456789abcdef01234567 checked out, on a clean working tree\. CI: failed on #41 at this commit; failed checks, as GitHub names them: test\./);
-  assert.match(textOf(await kit.call("issue_read", { id: "i1" }, threadId)), /#### Verdict\n\nFailed verification: CI failed on #41\. 2 of 2 criteria passed, checked at /);
+  assert.match(catchUp, /### WEB-1 "Add retries" \(a1\) handed off: done\n[\s\S]*Failed verification: CI failed on #41\. 2 of 2 criteria passed, checked at 0123456789abcdef0123456789abcdef01234567 by a verifier on [^.]*\. bb's git plugin read the agent's environment as it handed off: the claimed commit 0123456789abcdef0123456789abcdef01234567 checked out, on a clean working tree\. CI: failed on #41 at this commit; failed checks, as GitHub names them: test\./);
+  assert.match(textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId)), /#### Verdict\n\nFailed verification: CI failed on #41\. 2 of 2 criteria passed, checked at /);
 });
 
 test("a snapshot of another commit does not settle the verdict, even with CI green", async () => {
@@ -205,7 +205,7 @@ test("a merged pull request moves the row to Done, and the coordinating thread h
   kit.clock.now += 5 * MINUTE;
   await minute();
   assert.deepEqual(await row(), { lane: "done", headline: "Merged #41", pr: "#41 merged CI pass" });
-  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /### i1 "Add retries" \(a1\) PR #41: merged\n\nAt [^\n]* It is merged \(https:\/\/github\.com\/acme\/webhooks\/pull\/41\)/);
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /### WEB-1 "Add retries" \(a1\) PR #41: merged\n\nAt [^\n]* It is merged \(https:\/\/github\.com\/acme\/webhooks\/pull\/41\)/);
 });
 
 test("a repository is read every tick while CI runs or a verdict waits for it, else every five minutes, and never once its issues close", async () => {
@@ -231,7 +231,7 @@ test("a repository is read every tick while CI runs or a verdict waits for it, e
   assert.equal(runs(), 6, "a verdict waiting for CI: every tick");
 
   await kit.call("agent_stop", { agent: "a1" }, threadId);
-  assert.equal(textOf(await kit.call("issue_update", { id: "i1", status: "canceled" }, threadId)), "Updated i1.");
+  assert.equal(textOf(await kit.call("issue_update", { id: "WEB-1", status: "canceled" }, threadId)), "Updated WEB-1.");
   for (let i = 0; i < 10; i++) await minute();
   assert.equal(runs(), 6, "a closed issue is never read");
 });
@@ -283,7 +283,7 @@ test("a verdict on a commit still with no CI checks five minutes after it was fi
   assert.equal((await row()).lane, "verifying", "four minutes after the commit was first seen: still waiting");
   await minute();
   assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified, no CI checks: Retries land with backoff", pr: "#41 open CI none" });
-  assert.match(doorbells().at(-1) ?? assert.fail("no doorbell"), /- i1 "Add retries" \(a1\) handed off: done, verified, no CI checks$/);
+  assert.match(doorbells().at(-1) ?? assert.fail("no doorbell"), /- WEB-1 "Add retries" \(a1\) handed off: done, verified, no CI checks$/);
   const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
   assert.match(catchUp, /CI: no checks; GitHub reported none on #41 at this commit, after the wait for them\./);
   assert.doesNotMatch(catchUp, /CI: passed/);
@@ -484,7 +484,7 @@ test("a verdict whose settle fails leaves every read of the batch saved, and set
   kit.turnEvents.failure = new Error("bb is restarting");
   kit.clock.now += MINUTE;
   await kit.tick();
-  assert.match(kit.warnings().join("\n"), /Could not reconcile the verifiers of i1; the next tick tries again: bb is restarting/, "settling i1's verdict, after the reads, fails");
+  assert.match(kit.warnings().join("\n"), /Could not reconcile the verifiers of WEB-1; the next tick tries again: bb is restarting/, "settling WEB-1's verdict, after the reads, fails");
   assert.equal(kit.github.runs.length, 2, "one read of both branches this tick");
   assert.equal(kit.store.prOfBranch(coordinatorId, branch)?.snapshot?.ci, "pass");
   assert.equal(kit.store.prOfBranch(coordinatorId, secondBranch)?.snapshot?.ci, "pass", "the read after the failing verdict's agent is saved too");
@@ -504,18 +504,18 @@ test("a sandbox agent's environment is read by bb's git plugin only as it hands 
   for (let tick = 0; tick < 3; tick++) {
     await board();
     await kit.rpc.needsYou({ keys: [coordinatorId] });
-    await kit.call("issue_read", { id: "i1" }, threadId);
+    await kit.call("issue_read", { id: "WEB-1" }, threadId);
     kit.clock.now += 5 * MINUTE;
     await minute();
   }
   assert.equal(agentReads(), 0, "nothing reads the sandbox to learn its branch");
   assert.equal(kit.github.runs.length, 3, "the watch still read GitHub every five minutes");
   assert.ok(kit.github.runs.at(-1)?.includes(`b0=${environmentBranchName}`), "by bb's record of the branch it made");
-  assert.match(textOf(await kit.call("issue_read", { id: "i1" }, threadId)), new RegExp(`branch \`${environmentBranchName}\``));
+  assert.match(textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId)), new RegExp(`branch \`${environmentBranchName}\``));
 
   await kit.call("agent_handoff", BLOCKED, agentThreadId);
   assert.equal(agentReads(), 1, "one read, as it hands off");
-  assert.match(textOf(await kit.call("issue_read", { id: "i1" }, threadId)), /branch `add-retries`/, "issue_read names the branch it handed off on");
+  assert.match(textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId)), /branch `add-retries`/, "issue_read names the branch it handed off on");
   kit.clock.now += 5 * MINUTE;
   await minute();
   assert.ok(kit.github.runs.at(-1)?.includes("b0=add-retries"), "the watch reads its pull request by that branch");
@@ -594,9 +594,9 @@ test("an issue Done by its merge stays Done when its agent is stopped, its manag
   assert.ok(!doorbells().some((text) => text.includes("returned to Todo")), "nothing returned to Todo");
   assert.ok(!kit.store.unannounced(coordinatorId).some(({ event }) => event.kind === "returned-to-todo"));
 
-  const restarted = await kit.call("agent_start", { issue: "i1" }, threadId);
+  const restarted = await kit.call("agent_start", { issue: "WEB-1" }, threadId);
   assert.ok(isRefusal(restarted));
-  assert.equal(textOf(restarted), "agent_start is refused: i1 is Done (Merged #41), so no agent can start on it.");
+  assert.equal(textOf(restarted), "agent_start is refused: WEB-1 is Done (Merged #41), so no agent can start on it.");
   assert.equal(kit.store.agents(coordinatorId).length, 1);
   assert.equal((await row()).lane, "done");
 });
@@ -628,7 +628,7 @@ test("after a newer agent's spawn fails, the issue's pull request is still read 
   await minute();
   await kit.call("agent_stop", { agent: "a1" }, threadId);
   Object.assign(kit.spawns, { created: false, answer: "lost" });
-  assert.match(textOf(await kit.call("agent_start", { issue: "i1" }, threadId)), /^bb did not start a2/);
+  assert.match(textOf(await kit.call("agent_start", { issue: "WEB-1" }, threadId)), /^bb did not start a2/);
   assert.deepEqual(await row(), { lane: "todo", headline: "bb never started its agent's thread", pr: "#41 open CI pending" });
 
   pr({ state: "MERGED" });
@@ -650,7 +650,7 @@ test("a research issue's branch is never read from GitHub, so even a merged pull
   await settled();
   assert.deepEqual(kit.github.runs, []);
   assert.deepEqual(kit.store.unannounced(coordinatorId), []);
-  assert.match(textOf(await kit.call("issue_read", { id: "i1" }, threadId)), /\n\nResearch\. In progress: Working\./);
+  assert.match(textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId)), /\n\nResearch\. In progress: Working\./);
   const row = (await kit.rpc.board({ coordinatorId })).issues[0] ?? assert.fail("no row");
   assert.deepEqual([row.kind, row.pr], ["research", null]);
 });
@@ -670,7 +670,7 @@ test("a move's fresh read of a pull request waits for a tick's read still out, s
   kit.push(agentThreadId);
   pr({ head: second });
 
-  const moving = kit.call("agent_start", { issue: "i1", placement: { kind: "worktree" } }, threadId);
+  const moving = kit.call("agent_start", { issue: "WEB-1", placement: { kind: "worktree" } }, threadId);
   await settled();
   answer();
   await ticking;

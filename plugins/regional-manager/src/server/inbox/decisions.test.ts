@@ -55,7 +55,7 @@ test("while a decision waits for the user, an agent's handoff still wakes the re
   await kit.call("agent_handoff", { status: "blocked", summary: "Needs a staging key", did: [], evidence: [], concerns: [], deviations: [], findings: [] }, agentThreadId);
   await settled();
 
-  assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- i1 "Add retries" (a1) handed off: blocked`]);
+  assert.deepEqual(doorbells(), [`[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- WEB-1 "Add retries" (a1) handed off: blocked`]);
 });
 
 test("an answer wakes the Coordinator with its own question, and crew_catch_up returns the question and the answer", async () => {
@@ -96,7 +96,7 @@ test("the badge counts what each board shows under Needs you: open decisions, an
     const lane = boardGroups(board.decisions, board.issues).find(({ lane }) => lane === "needs-you")?.rows ?? [];
     return lane.map((item) => (item.kind === "decision" ? item.decision.id : item.issue.id));
   };
-  assert.deepEqual(await drawn(coordinatorId), ["d1", "i1", "i2", "i3"]);
+  assert.deepEqual(await drawn(coordinatorId), ["d1", "WEB-1", "WEB-2", "WEB-3"]);
   assert.deepEqual(await drawn(other.coordinatorId), []);
 
   const counts = await kit.rpc.needsYou({ keys: [coordinatorId, other.coordinatorId] });
@@ -104,32 +104,32 @@ test("the badge counts what each board shows under Needs you: open decisions, an
   assert.deepEqual(needsYouBadge(Object.values(counts)), { count: 4, tone: "critical", label: "4 need you: 1 decision, 3 issues" });
 
   await kit.rpc.answerDecision({ coordinatorId, decisionId: d1, answer: "main" });
-  assert.deepEqual(await drawn(coordinatorId), ["i1", "i2", "i3"]);
+  assert.deepEqual(await drawn(coordinatorId), ["WEB-1", "WEB-2", "WEB-3"]);
   assert.deepEqual(needsYouBadge(Object.values(await kit.rpc.needsYou({ keys: [coordinatorId, other.coordinatorId] }))), { count: 3, tone: "critical", label: "3 need you: 3 issues" });
 });
 
 test("a question about an issue flags it Needs you until the user answers, and the badge counts the decision and the issue", async () => {
   const { kit, threadId, coordinatorId } = await coordinating();
   await kit.call("issue_create", { ...ISSUE, status: "backlog" }, threadId);
-  assert.match(textOf(await kit.call("crew_ask_user", { question: "Start i1 now?", options: ["Yes", "Not yet"], issue: "i1" }, threadId)), /^Asked the user d1/);
+  assert.match(textOf(await kit.call("crew_ask_user", { question: "Start WEB-1 now?", options: ["Yes", "Not yet"], issue: "WEB-1" }, threadId)), /^Asked the user d1/);
 
   const board = await boardOf(kit, coordinatorId);
-  assert.deepEqual(board.issues.map((issue) => [issue.id, laneOf(issue), issue.headline]), [["i1", "needs-you", "Not planned"]]);
-  assert.deepEqual(board.decisions.map(({ id, issueId }) => [id, issueId]), [["d1", "i1"]]);
+  assert.deepEqual(board.issues.map((issue) => [issue.id, laneOf(issue), issue.headline]), [["WEB-1", "needs-you", "Not planned"]]);
+  assert.deepEqual(board.decisions.map(({ id, issueId }) => [id, issueId]), [["d1", "WEB-1"]]);
   assert.deepEqual(needsYouBadge(Object.values(await kit.rpc.needsYou({ keys: [coordinatorId] }))), { count: 2, tone: "critical", label: "2 need you: 1 decision, 1 issue" });
 
   await kit.rpc.answerDecision({ coordinatorId, decisionId: d1, answer: "Yes" });
   assert.deepEqual((await boardOf(kit, coordinatorId)).issues.map(laneOf), ["backlog"]);
   assert.equal(needsYouBadge(Object.values(await kit.rpc.needsYou({ keys: [coordinatorId] }))), null);
 
-  const read = textOf(await kit.call("issue_read", { id: "i1" }, threadId));
-  assert.match(read, /### Decisions\n\n[^#]*- \S+: asked the user \(d1\): Start i1 now\? They answered at \S+: Yes$/m, "answered, it stays among the issue's decisions");
-  const detail = await kit.rpc.issue({ coordinatorId, issueId: issueIdSchema.parse("i1") });
-  assert.deepEqual(detail.decisions.map((entry) => (entry.kind === "asked" ? [entry.id, entry.question, entry.answer?.text] : entry)), [["d1", "Start i1 now?", "Yes"]]);
+  const read = textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId));
+  assert.match(read, /### Decisions\n\n[^#]*- \S+: asked the user \(d1\): Start WEB-1 now\? They answered at \S+: Yes$/m, "answered, it stays among the issue's decisions");
+  const detail = await kit.rpc.issue({ coordinatorId, issueId: issueIdSchema.parse("WEB-1") });
+  assert.deepEqual(detail.decisions.map((entry) => (entry.kind === "asked" ? [entry.id, entry.question, entry.answer?.text] : entry)), [["d1", "Start WEB-1 now?", "Yes"]]);
 
-  const unknown = await kit.call("crew_ask_user", { question: "Start i9?", issue: "i9" }, threadId);
+  const unknown = await kit.call("crew_ask_user", { question: "Start WEB-9?", issue: "WEB-9" }, threadId);
   assert.ok(isRefusal(unknown));
-  assert.equal(textOf(unknown), "You have no issue i9. crew_catch_up lists your issues.");
+  assert.equal(textOf(unknown), "You have no issue WEB-9. crew_catch_up lists your issues.");
 });
 
 test("the badge names one waiting decision in the singular, and shows nothing when nothing waits", () => {

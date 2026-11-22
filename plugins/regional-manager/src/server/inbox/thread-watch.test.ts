@@ -32,9 +32,9 @@ test("an agent that goes idle without a handoff is announced, its last answer on
   await kit.idle(agentThreadId, "I stopped halfway: the staging key is missing.");
   await settled();
 
-  assert.deepEqual(doorbells().map((text) => text.split("\n")[1]), [`- i1 "Add retries" (a1) ended its turn without a handoff`]);
+  assert.deepEqual(doorbells().map((text) => text.split("\n")[1]), [`- WEB-1 "Add retries" (a1) ended its turn without a handoff`]);
   assert.doesNotMatch(doorbells().join("\n"), /staging key/);
-  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /### i1 "Add retries" \(a1\) ended its turn without a handoff\n\nAt [^\n]+ Its last answer, in its own words:\n\nI stopped halfway: the staging key is missing\./);
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /### WEB-1 "Add retries" \(a1\) ended its turn without a handoff\n\nAt [^\n]+ Its last answer, in its own words:\n\nI stopped halfway: the staging key is missing\./);
   assert.deepEqual([(await row())?.lane, (await row())?.headline], ["in-progress", "Its turn ended without a handoff"]);
 });
 
@@ -61,7 +61,7 @@ test("after a handoff, typing into the agent moves its issue out of Verifying, a
   await kit.idle(agentThreadId, "Answered the user's question.");
   await settled();
   assert.deepEqual([(await row())?.lane, (await row())?.headline], ["in-progress", "Its turn ended without a handoff"]);
-  assert.match(doorbells().at(-1) ?? "", /i1 "Add retries" \(a1\) ended its turn without a handoff/);
+  assert.match(doorbells().at(-1) ?? "", /WEB-1 "Add retries" \(a1\) ended its turn without a handoff/);
 });
 
 test("a failed agent is announced, with bb's error in crew_catch_up", async () => {
@@ -70,8 +70,8 @@ test("a failed agent is announced, with bb's error in crew_catch_up", async () =
   await kit.emit("thread.failed", { thread: kit.ref(agentThreadId), error: "Provider rate limit reached" });
   await settled();
 
-  assert.match(doorbells()[0] ?? "", /\n- i1 "Add retries" \(a1\) failed$/);
-  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /### i1 "Add retries" \(a1\) failed\n\nAt [^\n]+ bb's error:\n\nProvider rate limit reached Read the issue with issue_read/);
+  assert.match(doorbells()[0] ?? "", /\n- WEB-1 "Add retries" \(a1\) failed$/);
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /### WEB-1 "Add retries" \(a1\) failed\n\nAt [^\n]+ bb's error:\n\nProvider rate limit reached Read the issue with issue_read/);
 });
 
 test("an agent's approval prompt is announced as waiting on the user, with what it asks in crew_catch_up", async () => {
@@ -89,7 +89,7 @@ test("an agent's approval prompt is announced as waiting on the user, with what 
   });
   await settled();
 
-  assert.match(doorbells()[0] ?? "", /i1 "Add retries" \(a1\) is waiting on the user in its thread$/);
+  assert.match(doorbells()[0] ?? "", /WEB-1 "Add retries" \(a1\) is waiting on the user in its thread$/);
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /It asks, in its own words:\n\nAsks to approve the command `rm -rf \.cache`: It deletes the build cache/);
 });
 
@@ -115,7 +115,7 @@ test("an archived agent thread ends its agent: its issue returns to Todo, and it
 
   assert.equal(kit.store.agents(coordinatorId)[0]?.ended?.how, "archived");
   assert.deepEqual([(await row())?.lane, (await row())?.headline, (await row())?.agent?.threadId], ["todo", "Its agent was archived", null]);
-  assert.deepEqual(doorbells().map((text) => text.split("\n")[1]), [`- i1 "Add retries" (a1) returned to Todo: its agent was archived`]);
+  assert.deepEqual(doorbells().map((text) => text.split("\n")[1]), [`- WEB-1 "Add retries" (a1) returned to Todo: its agent was archived`]);
 });
 
 test("events about other threads, another plugin's or an ended agent's, are ignored", async () => {

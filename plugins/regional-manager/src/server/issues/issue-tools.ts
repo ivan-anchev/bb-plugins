@@ -33,7 +33,7 @@ const DEPENDS_ON = z
   .array(issueIdSchema)
   .max(MAX_DEPENDENCIES)
   .describe(
-    "Issues that must be Done or Canceled before this one is ready, such as [\"i2\"]. It informs and never refuses: an agent can still start on it, and nothing of those issues reaches its agent but what its brief names. A dependency that would close a cycle is refused.",
+    "Issues that must be Done or Canceled before this one is ready, such as [\"BBP-2\"]. It informs and never refuses: an agent can still start on it, and nothing of those issues reaches its agent but what its brief names. A dependency that would close a cycle is refused.",
   );
 
 const PARENT = issueIdSchema.describe(
@@ -52,7 +52,7 @@ export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
   bb.agents.registerTool({
     name: CREATE,
     description:
-      "File an issue: one piece of the work, done by an agent you start on it with agent_start. It is numbered i1, i2… and rests in Todo, or in Backlog when you are proposing it and waiting for the user. kind decides what its agent hands off and how it is checked: build is code on a branch, verified by an independent verifier; research is a report (a probe, spike, investigation or design) that nothing verifies, Done as its agent hands it off. A brief, and a build issue's doneCriteria, may wait until you start its agent. To split work, file sub-issues under it with parent.",
+      "File an issue: one piece of the work, done by an agent you start on it with agent_start. Its id is your project's key and its number, as BBP-1, BBP-2…, and it rests in Todo, or in Backlog when you are proposing it and waiting for the user. kind decides what its agent hands off and how it is checked: build is code on a branch, verified by an independent verifier; research is a report (a probe, spike, investigation or design) that nothing verifies, Done as its agent hands it off. A brief, and a build issue's doneCriteria, may wait until you start its agent. To split work, file sub-issues under it with parent.",
     presentation: { label: { pending: "Filing an issue", completed: "Filed an issue" }, icon: { glyph: "Workflow" } },
     parameters: z.strictObject({
       kind: kindSchema.describe(
@@ -80,7 +80,7 @@ export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
   bb.agents.registerTool({
     name: UPDATE,
     description:
-      "Change one of your issues: its kind (only before any agent has started on it), title, description, brief, done-criteria, verifier, parent or dependencies (dependsOn: add and remove), or where it stands. status: backlog or todo rests an issue no agent holds (and reopens a canceled one); canceled closes one no agent holds, and a parent only once its sub-issues are closed; done accepts one that is In review (a build parent is once its sub-issues are closed and merged while verification is off; with it on, its final check passing makes it Done; a research issue never is: its agent's done handoff makes it Done, and a research parent is Done with its last sub-issue). Every other status is the plugin's to say, from what its agents did. A build issue's verifier change applies from its next done handoff on, or a parent's from its next final check; verifier: null lets the plugin pick again, and drops the one named when the issue becomes research. A status or dependency change that makes issues ready says so: \"Now ready: i3\". decision records what was decided about the issue on it, with the time: the issue's decisions are where its calls live, with the user's answers to questions naming it, and issue_read and every agent you start on it see them. An update may carry a decision alone.",
+      "Change one of your issues: its kind (only before any agent has started on it), title, description, brief, done-criteria, verifier, parent or dependencies (dependsOn: add and remove), or where it stands. status: backlog or todo rests an issue no agent holds (and reopens a canceled one); canceled closes one no agent holds, and a parent only once its sub-issues are closed; done accepts one that is In review (a build parent is once its sub-issues are closed and merged while verification is off; with it on, its final check passing makes it Done; a research issue never is: its agent's done handoff makes it Done, and a research parent is Done with its last sub-issue). Every other status is the plugin's to say, from what its agents did. A build issue's verifier change applies from its next done handoff on, or a parent's from its next final check; verifier: null lets the plugin pick again, and drops the one named when the issue becomes research. A status or dependency change that makes issues ready says so: \"Now ready: BBP-3\". decision records what was decided about the issue on it, with the time: the issue's decisions are where its calls live, with the user's answers to questions naming it, and issue_read and every agent you start on it see them. An update may carry a decision alone.",
     presentation: { label: { pending: "Updating an issue", completed: "Updated an issue" }, icon: { glyph: "Workflow" } },
     parameters: z.strictObject({
       id: issueIdSchema,

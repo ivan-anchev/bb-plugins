@@ -60,7 +60,7 @@ function readyLine(views: readonly IssueView[]): string {
   return `Ready: ${ready.length === 0 ? "none" : ready.join(", ")} (in Todo, no sub-issues, and nothing they or their parent depend on is open).`;
 }
 
-/** The issues as `i2 (Todo), i4 (In progress)`, after `lead`; nothing when there are none. */
+/** The issues as `BBP-2 (Todo), BBP-4 (In progress)`, after `lead`; nothing when there are none. */
 const blockedText = (related: readonly Related[], lead: string): string => (related.length === 0 ? "" : `${lead}${relatedText(related)}`);
 
 const relatedText = (related: readonly Related[]): string => related.map(({ id, status }) => `${id} (${STATUS_LABELS[status]})`).join(", ");

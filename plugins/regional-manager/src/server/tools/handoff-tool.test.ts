@@ -38,7 +38,7 @@ test("a handoff is stored whole, trimmed, with its turn and a waived verdict, an
   const { headSha: _, ...report } = DONE;
   assert.deepEqual(stored, {
     coordinatorId,
-    issueId: "i1",
+    issueId: "WEB-1",
     agentId: a1,
     turnSeq: kit.thread(agentThreadId).turns.at(-1),
     ...report,
@@ -59,7 +59,7 @@ test("a handoff records where the agent's work is and what its thread runs on no
   const agent = kit.store.agent(coordinatorId, a1) ?? assert.fail("no agent");
   assert.deepEqual(agent.checkout, { environmentId, branch: "retries", head: HEAD });
   assert.deepEqual(agent.execution, { providerId: "claude-code", model: "sonnet", reasoningLevel: "low" });
-  assert.match(textOf(await kit.call("issue_read", { id: "i1" }, threadId)), /- a1, holds it, on claude-code sonnet \(low\)/);
+  assert.match(textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId)), /- a1, holds it, on claude-code sonnet \(low\)/);
 });
 
 test("an agent's latest handoff is its newest, never another agent's, and an earlier one still reads by its id", async () => {
@@ -114,9 +114,9 @@ test("with verification off, once its turn ends a done handoff is In review as U
   }
 
   assert.deepEqual((await kit.rpc.board({ coordinatorId })).issues.map((issue) => [issue.id, laneOf(issue), issue.headline]), [
-    ["i1", "in-review", "Unverified: Retries land with backoff"],
-    ["i2", "needs-you", "Blocked: Needs a staging key"],
-    ["i3", "needs-you", "Gave up: The queue API rejects batches"],
+    ["WEB-1", "in-review", "Unverified: Retries land with backoff"],
+    ["WEB-2", "needs-you", "Blocked: Needs a staging key"],
+    ["WEB-3", "needs-you", "Gave up: The queue API rejects batches"],
   ]);
 });
 
@@ -126,7 +126,7 @@ test("a handoff of 50 evidence items of 2,000 characters comes back whole from c
   const evidence = Array.from({ length: 50 }, (_, i) => `${String(i).padStart(2, "0")}${"e".repeat(1_997)}$`);
   await kit.call("agent_handoff", { ...DONE, evidence }, agentThreadId);
 
-  for (const text of [textOf(await kit.call("crew_catch_up", {}, threadId)), textOf(await kit.call("issue_read", { id: "i1" }, threadId))]) {
+  for (const text of [textOf(await kit.call("crew_catch_up", {}, threadId)), textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId))]) {
     for (const item of evidence) assert.ok(text.includes(`- ${item}`), `item ${item.slice(0, 2)} is missing or cut`);
     assert.match(text, /Status: done\nSummary: Retries land with backoff\nCommit: 0123456789abcdef0123456789abcdef01234567\nPull request: none/);
     assert.match(text, /#### Verdict\n\nUnverified: verification was off, so nobody has checked it against the done-criteria\./);
@@ -137,11 +137,11 @@ test("issue_read places the issue by its agent's thread once it has had a turn s
   const { kit, threadId, agentThreadId } = await withAgent({ verify: false });
   await kit.call("agent_handoff", DONE, agentThreadId);
   await kit.idle(agentThreadId, "Handed off.");
-  assert.match(textOf(await kit.call("issue_read", { id: "i1" }, threadId)), /^## i1: Add retries\n\nBuild\. In review: Unverified: Retries land with backoff\./);
+  assert.match(textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId)), /^## WEB-1: Add retries\n\nBuild\. In review: Unverified: Retries land with backoff\./);
 
   await kit.startTurn(agentThreadId);
-  const text = textOf(await kit.call("issue_read", { id: "i1" }, threadId));
-  assert.match(text, /^## i1: Add retries\n\nBuild\. In progress: Working\./);
+  const text = textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId));
+  assert.match(text, /^## WEB-1: Add retries\n\nBuild\. In progress: Working\./);
   assert.match(text, /### Its record\n\n#### a1's handoff\n\nStatus: done/);
 });
 
@@ -149,7 +149,7 @@ test("issue_read ends its status line with one full stop when the agent's summar
   const { kit, threadId, agentThreadId } = await withAgent({ verify: false });
   await kit.call("agent_handoff", { ...DONE, summary: "Added notes/p1.md with exactly one line: p1." }, agentThreadId);
   await kit.idle(agentThreadId, "Handed off.");
-  assert.match(textOf(await kit.call("issue_read", { id: "i1" }, threadId)), /^## i1: Add retries\n\nBuild\. In review: Unverified: Added notes\/p1\.md with exactly one line: p1\. Thread: /);
+  assert.match(textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId)), /^## WEB-1: Add retries\n\nBuild\. In review: Unverified: Added notes\/p1\.md with exactly one line: p1\. Thread: /);
 });
 
 test("a handoff still reading the agent's checkout when the agent is stopped is refused, and stores, checks and starts nothing", async () => {
@@ -168,7 +168,7 @@ test("a handoff still reading the agent's checkout when the agent is stopped is 
   await settled();
 
   assert.ok(isRefusal(result));
-  assert.equal(textOf(result), "agent_handoff is refused: you no longer hold i1 (you were stopped), so nothing reads a handoff from you. Stop here.");
+  assert.equal(textOf(result), "agent_handoff is refused: you no longer hold WEB-1 (you were stopped), so nothing reads a handoff from you. Stop here.");
   const after = kit.store.agent(coordinatorId, a1) ?? assert.fail("no agent");
   assert.equal(kit.store.latestHandoff(coordinatorId, a1), null);
   assert.deepEqual([after.checkout, after.execution, after.ended?.left], [before.checkout, before.execution, null]);

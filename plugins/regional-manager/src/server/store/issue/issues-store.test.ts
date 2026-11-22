@@ -4,24 +4,24 @@ import { issueIdSchema } from "../../../model/issue/issue.ts";
 import { knownCloses, rememberCloses } from "./issues-store.ts";
 import { EXECUTION, failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "../test-store.ts";
 
-test("issues are numbered i1, i2… within their regional manager, and read back as filed", () => {
+test("issues are numbered WEB-1, WEB-2… within their regional manager, and read back as filed", () => {
   const { store } = freshStore();
   const first = filedIssue(store, MANAGER, newIssue(), 2_000);
   const second = filedIssue(store, MANAGER, newIssue({ title: "Log retries", brief: null, doneCriteria: [], verifier: EXECUTION, rest: "backlog" }), 2_100);
   const elsewhere = filedIssue(store, OTHER_MANAGER, newIssue(), 2_200);
 
-  assert.deepEqual([first.id, second.id, elsewhere.id], ["i1", "i2", "i1"]);
+  assert.deepEqual([first.id, second.id, elsewhere.id], ["WEB-1", "WEB-2", "WEB-1"]);
   assert.deepEqual(store.issues(MANAGER), [first, second]);
-  assert.deepEqual(store.issue(MANAGER, second.id), { ...newIssue({ title: "Log retries", brief: null, doneCriteria: [], verifier: EXECUTION, rest: "backlog" }), id: "i2", coordinatorId: MANAGER, closed: null, createdAt: 2_100 });
-  assert.equal(store.issue(MANAGER, issueIdSchema.parse("i3")), null);
+  assert.deepEqual(store.issue(MANAGER, second.id), { ...newIssue({ title: "Log retries", brief: null, doneCriteria: [], verifier: EXECUTION, rest: "backlog" }), id: "WEB-2", coordinatorId: MANAGER, closed: null, createdAt: 2_100 });
+  assert.equal(store.issue(MANAGER, issueIdSchema.parse("WEB-3")), null);
 });
 
 test("an issue id is never reused: one filed after a gap is numbered after the highest", () => {
   const { db, store } = freshStore();
   for (const at of [2_000, 2_100, 2_200]) filedIssue(store, MANAGER, newIssue(), at);
   // why a raw delete: the store never deletes an issue, but whatever does must not free its id.
-  db.prepare("DELETE FROM issues WHERE id = 'i1'").run();
-  assert.equal(filedIssue(store, MANAGER, newIssue(), 2_300).id, "i4");
+  db.prepare("DELETE FROM issues WHERE id = 'WEB-1'").run();
+  assert.equal(filedIssue(store, MANAGER, newIssue(), 2_300).id, "WEB-4");
 });
 
 test("an edit changes only the fields it names; an issue the manager doesn't have is refused", () => {
@@ -32,7 +32,7 @@ test("an edit changes only the fields it names; an issue the manager doesn't hav
   assert.deepEqual(store.issue(MANAGER, filed.id), { ...filed, brief: "Retry with jitter.", verifier: EXECUTION });
 
   assert.deepEqual(store.updateIssue(MANAGER, filed.id, { verifier: null, closed: { as: "canceled", at: 3_000 } }, { requireUnheld: false, closes: new Map() }), { issue: { ...filed, brief: "Retry with jitter.", closed: { as: "canceled", at: 3_000 } } });
-  assert.deepEqual(store.updateIssue(MANAGER, issueIdSchema.parse("i9"), { title: "Nope" }, { requireUnheld: false, closes: new Map() }), { refused: "You have no issue i9." });
+  assert.deepEqual(store.updateIssue(MANAGER, issueIdSchema.parse("WEB-9"), { title: "Nope" }, { requireUnheld: false, closes: new Map() }), { refused: "You have no issue WEB-9." });
 });
 
 test("an edit that needs the issue unheld is refused while an agent holds it, and applies once the agent ended", () => {
@@ -40,7 +40,7 @@ test("an edit that needs the issue unheld is refused while an agent holds it, an
   const filed = filedIssue(store, MANAGER, newIssue(), 2_000);
   const agentId = startAgent(store, filed.id, "agent-1");
 
-  assert.deepEqual(store.updateIssue(MANAGER, filed.id, { rest: "backlog" }, { requireUnheld: true, closes: new Map() }), { refused: "An agent holds i1. Stop it with agent_stop first." });
+  assert.deepEqual(store.updateIssue(MANAGER, filed.id, { rest: "backlog" }, { requireUnheld: true, closes: new Map() }), { refused: "An agent holds WEB-1. Stop it with agent_stop first." });
   assert.equal(store.issue(MANAGER, filed.id)?.rest, "todo");
   store.updateIssue(MANAGER, filed.id, { title: "Retries, with jitter" }, { requireUnheld: false, closes: new Map() });
   assert.equal(store.issue(MANAGER, filed.id)?.title, "Retries, with jitter", "an edit that may happen while held does");
@@ -74,9 +74,9 @@ test("a dependency on no issue files nothing, and one that closes a cycle change
   const i2 = filedIssue(store, MANAGER, newIssue({ dependsOn: [i1.id] }), 2_100);
   const before = store.issues(MANAGER);
 
-  assert.deepEqual(store.insertIssue(MANAGER, newIssue({ dependsOn: [issueIdSchema.parse("i7")] }), new Map(), 2_300), { refused: "i3 can't depend on i7: there is no issue i7." });
+  assert.deepEqual(store.insertIssue(MANAGER, newIssue({ dependsOn: [issueIdSchema.parse("WEB-7")] }), new Map(), 2_300), { refused: "WEB-3 can't depend on WEB-7: there is no issue WEB-7." });
   assert.deepEqual(store.updateIssue(MANAGER, i1.id, { title: "Retry budget", dependsOn: { add: [i2.id], remove: [] } }, { requireUnheld: false, closes: new Map() }), {
-    refused: "i1 can't depend on i2: that would close a cycle, i1 → i2 → i1.",
+    refused: "WEB-1 can't depend on WEB-2: that would close a cycle, WEB-1 → WEB-2 → WEB-1.",
   });
   assert.deepEqual(store.issues(MANAGER), before);
 });
@@ -92,5 +92,5 @@ test("a dependency that fails to be written takes the issue's filing, or the res
   assert.deepEqual(store.issues(MANAGER), [i1, i2, i3]);
 
   allow();
-  assert.equal(filedIssue(store, MANAGER, newIssue({ dependsOn: [i1.id] }), 2_200).id, "i4");
+  assert.equal(filedIssue(store, MANAGER, newIssue({ dependsOn: [i1.id] }), 2_200).id, "WEB-4");
 });

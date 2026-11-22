@@ -17,11 +17,11 @@ const BLOCKED = { status: "blocked", summary: "Needs the staging key", did: ["Wr
 const WORKTREE = { kind: "worktree" };
 const SANDBOX = { kind: "provider", environmentProviderId: "boat-sandbox", machineInputs: { preset: "small" } };
 
-/** A regional manager whose agent a1 holds build issue i1, started with `start` (a worktree by default), working. */
+/** A regional manager whose agent a1 holds build issue WEB-1, started with `start` (a worktree by default), working. */
 async function holding(start: object = {}) {
   const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
   const { agentThreadId } = await startedAgent(kit, threadId, {}, start);
-  const call = async (input: object = {}) => kit.call("agent_start", { issue: "i1", ...input }, threadId);
+  const call = async (input: object = {}) => kit.call("agent_start", { issue: "WEB-1", ...input }, threadId);
   const agent = (id: typeof a1) => kit.store.agent(coordinatorId, id) ?? assert.fail(`no agent ${id}`);
   const environmentOf = (thread: string) => kit.environment(thread);
   /** The commit checked out in the thread's environment, as `git log -1` shows it. */
@@ -46,7 +46,7 @@ test("criterion 1: worktree to worktree: a1's committed work moves to a fresh wo
 
   const result = textOf(await call({ placement: WORKTREE }));
   const next = threadIn(result);
-  assert.match(result, new RegExp(`^Stopped a1 and started a2 on i1 as @thread:${next} in a new worktree, on a new branch cut from a1's \`${branch}\` expecting 1111111, on claude-code opus \\(high\\), your own provider, model and reasoning level\\. a2 checks that commit is on its branch before it changes anything, and hands off blocked if it isn't\\. Nothing a1 left uncommitted comes with it; if bb can't cut that branch, its thread fails and you are woken\\. Its first message`));
+  assert.match(result, new RegExp(`^Stopped a1 and started a2 on WEB-1 as @thread:${next} in a new worktree, on a new branch cut from a1's \`${branch}\` expecting 1111111, on claude-code opus \\(high\\), your own provider, model and reasoning level\\. a2 checks that commit is on its branch before it changes anything, and hands off blocked if it isn't\\. Nothing a1 left uncommitted comes with it; if bb can't cut that branch, its thread fails and you are woken\\. Its first message`));
   assert.deepEqual([kit.thread(agentThreadId).status, kit.thread(agentThreadId).archivedAt, agent(a1).ended?.how], ["idle", null, "replaced"], "a1 stopped, never archived");
   assert.deepEqual(kit.thread(next).spawnedWith.environment, { type: "host", hostId: "host_1", workspace: { type: "managed-worktree", baseBranch: { kind: "named", name: branch } } });
   assert.equal(headOf(next), COMMITTED, "git log -1 in a2's worktree is a1's tip");
@@ -75,7 +75,7 @@ test("criterion 1: the same move after a1's thread is archived, and after its wo
   removed.kit.environments.destroyed.add(removed.environmentOf(removed.agentThreadId)); // bb environment cleanup: the worktree goes, its branch stays
   await removed.kit.tick();
   const result = textOf(await removed.call());
-  assert.match(result, /^Started a2 on i1 as @thread:\w+ in a new worktree, on a new branch cut from a1's `bb\/thr_2`/, "no placement named: its environment is gone, so the work moves to a new one like it");
+  assert.match(result, /^Started a2 on WEB-1 as @thread:\w+ in a new worktree, on a new branch cut from a1's `bb\/thr_2`/, "no placement named: its environment is gone, so the work moves to a new one like it");
   assert.equal(removed.headOf(threadIn(result)), COMMITTED);
 });
 
@@ -152,7 +152,7 @@ test("criterion 2: a holder that still works is refused before it is stopped; on
   const late = await moving;
   assert.ok(isRefusal(late));
   assert.match(textOf(late), /^agent_start is refused: Stopped a1, but nothing else changed: a1 left 1 file uncommitted \(\?\? scratch-1\.txt\) in its environment/);
-  assert.deepEqual([kit.thread(agentThreadId).status, agent(a1).ended, kit.store.agents(agent(a1).coordinatorId).length], ["idle", null, 1], "a1 still holds i1, and nothing started");
+  assert.deepEqual([kit.thread(agentThreadId).status, agent(a1).ended, kit.store.agents(agent(a1).coordinatorId).length], ["idle", null, 1], "a1 still holds WEB-1, and nothing started");
 });
 
 test("criterion 3: bb refusing the base errors a2 in provisioning; the issue isn't lost: a call without placement continues in a1's environment, and from default starts clean", async () => {
@@ -168,7 +168,7 @@ test("criterion 3: bb refusing the base errors a2 in provisioning; the issue isn
   assert.ok(kit.github.runs.at(-1)?.some((arg) => arg.includes(branch)), "the PR watch still reads a1's branch: the failed cut hides nothing");
 
   const back = textOf(await call());
-  assert.match(back, /^Stopped a2 and started a3 on i1 as @thread:\w+ in a1's worktree, on its branch `bb\/thr_2`/, "previous is a1, the latest with a branch");
+  assert.match(back, /^Stopped a2 and started a3 on WEB-1 as @thread:\w+ in a1's worktree, on its branch `bb\/thr_2`/, "previous is a1, the latest with a branch");
   assert.deepEqual(kit.thread(threadIn(back)).spawnedWith.environment, { type: "reuse", environmentId: kit.thread(agentThreadId).environmentId });
   assert.equal(agent(a2).ended?.how, "replaced");
 
@@ -182,7 +182,7 @@ test("criterion 4: a research issue's move starts clean: no cut, no read of its 
   await kit.idle(agentThreadId, "Still reading.");
   const [reads, runs] = [kit.git.calls.length, kit.github.runs.length];
 
-  const result = textOf(await kit.call("agent_start", { issue: "i1", placement: WORKTREE }, threadId));
+  const result = textOf(await kit.call("agent_start", { issue: "WEB-1", placement: WORKTREE }, threadId));
   assert.match(result, /It starts clean, in its own environment from the default branch\./);
   assert.deepEqual(kit.thread(threadIn(result)).spawnedWith.environment, { type: "host", hostId: "host_1", workspace: { type: "managed-worktree", baseBranch: { kind: "default" } } });
   assert.deepEqual([kit.git.calls.length, kit.github.runs.length], [reads, runs]);
@@ -191,24 +191,24 @@ test("criterion 4: a research issue's move starts clean: no cut, no read of its 
 test("a move of a blocked issue says what blocks it, as every start does", async () => {
   const { kit, threadId, agentThreadId, call } = await holding();
   await kit.call("issue_create", { kind: "build", title: "Retry budget", description: "How many retries we can afford." }, threadId);
-  await kit.call("issue_update", { id: "i1", dependsOn: { add: ["i2"] } }, threadId);
+  await kit.call("issue_update", { id: "WEB-1", dependsOn: { add: ["WEB-2"] } }, threadId);
   kit.commit(agentThreadId, COMMITTED);
 
   const moved = textOf(await call({ placement: WORKTREE }));
-  assert.match(moved, /^Stopped a1 and started a2 on i1 as @thread:\w+ in a new worktree, on a new branch cut from a1's /);
-  assert.match(moved, / i1 is blocked by i2 \(Todo\): its agent started anyway, and has nothing of that work but what its brief names\.$/);
+  assert.match(moved, /^Stopped a1 and started a2 on WEB-1 as @thread:\w+ in a new worktree, on a new branch cut from a1's /);
+  assert.match(moved, / WEB-1 is blocked by WEB-2 \(Todo\): its agent started anyway, and has nothing of that work but what its brief names\.$/);
 });
 
 test("an issue split into sub-issues since its agent stopped is refused as a parent before a move reads anything: not its agent's sandbox, nor its pull request", async () => {
   const { kit, threadId, agentThreadId, call, pushAndOpen } = await holding({ placement: SANDBOX });
   kit.commit(agentThreadId, COMMITTED);
   pushAndOpen();
-  assert.match(textOf(await kit.call("agent_stop", { agent: "a1" }, threadId)), /^a1 is stopped; it no longer holds i1\./);
-  await kit.call("issue_create", { kind: "build", title: "Dead letters", description: "Keep what can't be delivered.", parent: "i1" }, threadId);
+  assert.match(textOf(await kit.call("agent_stop", { agent: "a1" }, threadId)), /^a1 is stopped; it no longer holds WEB-1\./);
+  await kit.call("issue_create", { kind: "build", title: "Dead letters", description: "Keep what can't be delivered.", parent: "WEB-1" }, threadId);
   const [reads, runs] = [kit.git.calls.length, kit.github.runs.length];
 
   const refused = await call({ placement: WORKTREE });
-  assert.deepEqual([isRefusal(refused), textOf(refused)], [true, "agent_start is refused: i1 has sub-issues (i2), and a parent has no agent of its own: start agents on them."]);
+  assert.deepEqual([isRefusal(refused), textOf(refused)], [true, "agent_start is refused: WEB-1 has sub-issues (WEB-2), and a parent has no agent of its own: start agents on them."]);
   assert.deepEqual([kit.git.calls.length, kit.github.runs.length], [reads, runs], "no git read, no gh read");
 });
 

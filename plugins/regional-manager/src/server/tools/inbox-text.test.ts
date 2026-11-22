@@ -12,7 +12,7 @@ import { handoffText } from "./inbox-text.ts";
 
 const SHA = "0123456789abcdef0123456789abcdef01234567";
 const coordinatorId = coordinatorIdSchema.parse("6f1c2a52-6b8e-4c43-9a51-1d6a3c0b7e10");
-const issueId = issueIdSchema.parse("i1");
+const issueId = issueIdSchema.parse("WEB-1");
 const agentId = agentIdSchema.parse("a1");
 const CODEX: Execution = { providerId: "codex", model: "gpt-5.4", reasoningLevel: "medium" };
 const OPUS: Execution = { providerId: "claude-code", model: "claude-opus-5-5", reasoningLevel: "high" };
@@ -91,9 +91,9 @@ test("a verdict the plugin's checkout read or CI failed leads with that, before 
 
 test("a verdict says what its verifier ran on: as named on the issue, why not the one named, or that it was the agent's own", () => {
   const by = (handed: Handed, agentRan: Execution) => /by a verifier on (.*?)\. bb's git plugin/.exec(handoffText(handed, agentOn(agentRan)))?.[1];
-  assert.equal(by(checkedWith(returned(["pass"], OPUS), OPUS), CODEX), "claude-code claude-opus-5-5, as named on i1");
-  assert.equal(by(checkedWith(returned(["pass"], { providerId: "claude-code", model: "sonnet" }), CODEX), CODEX), "claude-code sonnet, not the codex gpt-5.4 named on i1: a1 did the work on it");
-  assert.equal(by(checkedWith(returned(["pass"], { providerId: "codex", model: "gpt-default" }), OPUS), CODEX), "codex gpt-default, not the claude-code claude-opus-5-5 named on i1: bb can't run it in a1's environment");
+  assert.equal(by(checkedWith(returned(["pass"], OPUS), OPUS), CODEX), "claude-code claude-opus-5-5, as named on WEB-1");
+  assert.equal(by(checkedWith(returned(["pass"], { providerId: "claude-code", model: "sonnet" }), CODEX), CODEX), "claude-code sonnet, not the codex gpt-5.4 named on WEB-1: a1 did the work on it");
+  assert.equal(by(checkedWith(returned(["pass"], { providerId: "codex", model: "gpt-default" }), OPUS), CODEX), "codex gpt-default, not the claude-code claude-opus-5-5 named on WEB-1: bb can't run it in a1's environment");
   assert.equal(by(checkedWith(returned(["pass"], CODEX, true)), CODEX), "codex gpt-5.4, a1's own model, as no other was available");
   assert.equal(by(checkedWith(returned(["pass"])), CODEX), "codex gpt-default");
 });

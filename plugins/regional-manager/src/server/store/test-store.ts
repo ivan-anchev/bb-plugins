@@ -5,6 +5,7 @@ import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { memoryStorage } from "../memory-storage.ts";
 import type { AgentId } from "../../model/agent.ts";
 import type { Issue, IssueId } from "../../model/issue/issue.ts";
+import { issueKeySchema } from "../../model/issue/key/issue-key.ts";
 import { DEFAULT_AVATAR } from "../../model/profile.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
 import { openStore, type Store } from "./store.ts";
@@ -20,7 +21,7 @@ export function freshStore() {
   const store = openStore(storage);
   for (const [id, n] of [[MANAGER, 1], [OTHER_MANAGER, 2]] as const) {
     store.insertCoordinator({ id, ticket: `manager-${n}`, name: `Manager ${n}`, description: null, avatar: DEFAULT_AVATAR, createdAt: 1_000 });
-    store.startsOn(id, "prj_1");
+    store.startsOn(id, "prj_1", issueKeySchema.parse("WEB"));
     store.bindTicket(`manager-${n}`, `thr_manager_${n}`);
   }
   return { db, storage, store };

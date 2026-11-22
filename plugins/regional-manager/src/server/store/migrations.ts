@@ -18,10 +18,10 @@ export const MIGRATIONS: readonly string[] = [
   `CREATE TABLE memory_revisions (coordinator_id TEXT NOT NULL REFERENCES coordinators (id), file TEXT NOT NULL, version TEXT,
      revision INTEGER NOT NULL, PRIMARY KEY (coordinator_id, file))`,
 
-  // An issue, numbered i1, i2… per regional manager. why kind without a CHECK: a new kind is a
-  // value of kindSchema, not a table rebuild. why JSON: the criteria and the verifier are read and
-  // written whole; a null verifier lets the plugin pick. rest is where it sits while no agent's
-  // work places it; closed_as is how the manager closed it.
+  // An issue, numbered per regional manager after its issue key: BBP-1, BBP-2… (issue_key below).
+  // why kind without a CHECK: a new kind is a value of kindSchema, not a table rebuild. why JSON: the
+  // criteria and the verifier are read and written whole; a null verifier lets the plugin pick. rest
+  // is where it sits while no agent's work places it; closed_as is how the manager closed it.
   `CREATE TABLE issues (coordinator_id TEXT NOT NULL REFERENCES coordinators (id), id TEXT NOT NULL,
      kind TEXT NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL, brief TEXT,
      done_criteria TEXT NOT NULL, verifier TEXT, parent_id TEXT,
@@ -150,6 +150,12 @@ export const MIGRATIONS: readonly string[] = [
      text TEXT NOT NULL, at INTEGER NOT NULL,
      FOREIGN KEY (coordinator_id, issue_id) REFERENCES issues (coordinator_id, id))`,
   `CREATE INDEX issue_decisions_of_issue ON issue_decisions (coordinator_id, issue_id)`,
+
+  // A regional manager's issue key (issue-key.ts), taken from its project's name as it starts: every
+  // issue id of its opens with it, as BBP in BBP-4. Null until it starts. One started before this
+  // release numbered its issues i1, i2… and has none until the plugin keys them (issue-keys.ts), which
+  // writes it with its issues renamed, in one transaction.
+  `ALTER TABLE coordinators ADD COLUMN issue_key TEXT`,
 ];
 
 /** The trigger `name`: after each row `on` names, one more write of the regional manager `manager` names. */

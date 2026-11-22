@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { typedText, type ComposerRequest, type Coordinator } from "../contract.ts";
 import type { Execution } from "../model/execution.ts";
+import { issueKeyOf } from "../model/issue/key/issue-key.ts";
 import { ticketMetadataSchema, type CoordinatorId, type Role } from "../model/role.ts";
 import type { MemoryRoot } from "./memory/memory-files.ts";
 import type { Store } from "./store/store.ts";
@@ -22,6 +23,7 @@ type SpawnBb = {
       getPluginMetadata: Threads["getPluginMetadata"];
       list(args: { originPluginId: string; hasParent: false; archived: false; includeHidden: true }): Promise<readonly { id: string }[]>;
     };
+    projects: { get(args: { projectId: string }): Promise<{ name: string }> };
   };
   events: { on(event: "thread.created", handler: (payload: { thread: { id: string; originPluginId: string | null } }) => void | Promise<void>): void };
 };
@@ -105,10 +107,11 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
     /**
      * Starts a regional manager not started yet from bb's composer on its page, on what the composer
      * shows, under the ticket it was created with, titled with its name; the request's text is its
-     * first message and its GOAL.md. Its project and seeded memory exist before the spawn, so its first
-     * session and first tool call find them. A thread an earlier start spawned but never bound is
+     * first message and its GOAL.md. Its project, the issue key taken from the project's name
+     * (issue-key.ts), and its seeded memory exist before the spawn, so its first session and first
+     * tool call find them. A thread an earlier start spawned but never bound is
      * bound and answered with instead, its GOAL.md left as that start wrote it. Returns its thread;
-     * rejects as bb's spawn does. Callers run one start of a regional manager at a time (manager-rpc.ts).
+     * rejects as bb's project read or spawn does. Callers run one start of a regional manager at a time (manager-rpc.ts).
      */
     async coordinator(id: CoordinatorId, { ticket, name }: { ticket: string; name: string }, request: ComposerRequest): Promise<string> {
       const earlier = await unboundManagerThread(ticket);
@@ -116,7 +119,8 @@ export function createSpawner(bb: SpawnBb, store: SpawnStore, memory: MemoryRoot
         bind(ticket, earlier);
         return earlier;
       }
-      store.startsOn(id, request.projectId);
+      const project = await bb.sdk.projects.get({ projectId: request.projectId });
+      store.startsOn(id, request.projectId, issueKeyOf(project.name));
       memory.of(id).seed(typedText(request));
       return spawnWith(ticket, { ...request, title: name });
     },

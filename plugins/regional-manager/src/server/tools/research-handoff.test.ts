@@ -21,15 +21,15 @@ const RESEARCH = {
 const FIELDS = { summary: "Vault fits our PCI scope", did: ["Read both vendors' PCI guides"], evidence: [], concerns: [], deviations: [], findings: [] };
 const REPORT = "## Recommendation\n\nVault: it keeps card data inside our PCI scope.\n\n## Cost\n\nAbout $400 a month.";
 const DONE = { status: "done", ...FIELDS, report: REPORT };
-const I1 = issueIdSchema.parse("i1");
-const I1_REPORT = memoryFileSchema.parse("reports/i1.md");
+const I1 = issueIdSchema.parse("WEB-1");
+const I1_REPORT = memoryFileSchema.parse("reports/WEB-1.md");
 
-/** A regional manager over `storage`, with research issue i1 filed (RESEARCH, with `fields` over it) and an agent started on it. */
+/** A regional manager over `storage`, with research issue WEB-1 filed (RESEARCH, with `fields` over it) and an agent started on it. */
 async function researching(fields: object = {}, storage = memoryStorage().storage) {
   const { kit, threadId, coordinatorId } = await coordinating({ storage });
   const call = (tool: string, input: object) => kit.call(tool, input, threadId);
-  assert.equal(textOf(await call("issue_create", { ...RESEARCH, ...fields })), "Filed i1 (research) in Todo.");
-  const agentThreadId = threadIn(textOf(await call("agent_start", { issue: "i1" })));
+  assert.equal(textOf(await call("issue_create", { ...RESEARCH, ...fields })), "Filed WEB-1 (research) in Todo.");
+  const agentThreadId = threadIn(textOf(await call("agent_start", { issue: "WEB-1" })));
   const files = kit.memory.of(coordinatorId);
   /** The status line issue_read gives: its kind, status and why. */
   const statusOf = async (id: string) => textOf(await call("issue_read", { id })).split("\n\n")[1] ?? "";
@@ -58,7 +58,7 @@ test("a research agent's first message lists its questions under \"Questions you
   assert.doesNotMatch(prompt, /## Done when/);
 
   await kit.call("issue_create", ISSUE, threadId);
-  const build = threadIn(textOf(await kit.call("agent_start", { issue: "i2" }, threadId)));
+  const build = threadIn(textOf(await kit.call("agent_start", { issue: "WEB-2" }, threadId)));
   const buildPrompt = kit.thread(build).spawnedWith.prompt ?? assert.fail("spawned without a prompt");
   assert.match(buildPrompt, /## Done when\n\nEvery one of these holds, each checked by running something:\n\n1\. npm test passes/);
   assert.doesNotMatch(buildPrompt, /## Questions|## Handing off|report/);
@@ -88,7 +88,7 @@ test("a research done handoff is Done at once: no verifier, no git read, a commi
   const { kit, threadId, coordinatorId, agentThreadId, files, statusOf, catchUp, handOff } = await researching();
   const spawned = kit.spawned();
   const result = await handOff({ ...DONE, headSha: HEAD, prUrl: "https://github.com/acme/webhooks/pull/7" });
-  assert.equal(textOf(result), "Handed off. Your regional manager has your report, and i1 is Done: nothing verifies a research issue. Stop here.");
+  assert.equal(textOf(result), "Handed off. Your regional manager has your report, and WEB-1 is Done: nothing verifies a research issue. Stop here.");
   await settled();
 
   assert.equal(kit.spawned(), spawned, "a verifier thread was spawned");
@@ -96,13 +96,13 @@ test("a research done handoff is Done at once: no verifier, no git read, a commi
   const { handoff, check } = kit.store.record(coordinatorId, I1)[0] ?? assert.fail("no handoff stored");
   assert.equal(check, null);
   assert.deepEqual(handoff.status === "done" && handoff.delivery, { kind: "report", report: REPORT, file: I1_REPORT });
-  assert.equal(await statusOf("i1"), `Research. Done: Handed off: Vault fits our PCI scope. Thread: @thread:${agentThreadId}, branch \`bb/${agentThreadId}\`.`);
+  assert.equal(await statusOf("WEB-1"), `Research. Done: Handed off: Vault fits our PCI scope. Thread: @thread:${agentThreadId}, branch \`bb/${agentThreadId}\`.`);
 
   const doorbell = kit.sent().filter((args) => args.threadId === threadId).at(-1)?.input.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("") ?? "";
-  assert.match(doorbell, /- i1 "Pick a card vault" \(a1\) handed off: done$/);
+  assert.match(doorbell, /- WEB-1 "Pick a card vault" \(a1\) handed off: done$/);
   const caughtUp = await catchUp();
-  assert.ok(caughtUp.includes(`### i1 "Pick a card vault" (a1) handed off: done`), caughtUp);
-  assert.ok(caughtUp.includes(`#### Report\n\nSaved in your memory as reports/i1.md. The plugin gives it to no agent: name the file in the brief of an agent that needs it, which reads it with crew_memory_read.\n\n${REPORT}`), caughtUp);
+  assert.ok(caughtUp.includes(`### WEB-1 "Pick a card vault" (a1) handed off: done`), caughtUp);
+  assert.ok(caughtUp.includes(`#### Report\n\nSaved in your memory as reports/WEB-1.md. The plugin gives it to no agent: name the file in the brief of an agent that needs it, which reads it with crew_memory_read.\n\n${REPORT}`), caughtUp);
   assert.doesNotMatch(caughtUp, /Commit:|Pull request:/);
   assert.equal(files.read(I1_REPORT).text?.content, `${REPORT}\n`);
 });
@@ -114,11 +114,11 @@ test("a research done handoff without a report is refused and saves nothing; so 
   assert.equal(textOf(refused), "agent_handoff is refused and nothing was saved: A done handoff of a research issue needs report: your report, in markdown. It names no commit.");
 
   await kit.call("issue_create", ISSUE, threadId);
-  const build = threadIn(textOf(await kit.call("agent_start", { issue: "i2" }, threadId)));
+  const build = threadIn(textOf(await kit.call("agent_start", { issue: "WEB-2" }, threadId)));
   const commitless = await kit.call("agent_handoff", { status: "done", ...FIELDS }, build);
   assert.equal(textOf(commitless), "agent_handoff is refused and nothing was saved: A done handoff needs headSha: the output of `git rev-parse HEAD` after your last commit.");
 
-  assert.deepEqual([...kit.store.record(coordinatorId, I1), ...kit.store.record(coordinatorId, issueIdSchema.parse("i2"))], []);
+  assert.deepEqual([...kit.store.record(coordinatorId, I1), ...kit.store.record(coordinatorId, issueIdSchema.parse("WEB-2"))], []);
   assert.deepEqual(kit.store.unannounced(coordinatorId), []);
   assert.ok(!files.list().some((file) => file.startsWith("reports/")));
 });
@@ -126,48 +126,48 @@ test("a research done handoff without a report is refused and saves nothing; so 
 test("a message to the research agent puts the issue In progress, its next done handoff Done again, and archiving its thread then leaves it Done", async () => {
   const { kit, agentThreadId, call, statusOf, handOff } = await researching();
   await handOff(DONE);
-  assert.match(await statusOf("i1"), /^Research\. Done: /);
+  assert.match(await statusOf("WEB-1"), /^Research\. Done: /);
 
   assert.equal(textOf(await call("agent_message", { agent: "a1", text: "Add what KMS would cost." })), "Sent to a1.");
-  assert.match(await statusOf("i1"), /^Research\. In progress: Working\./);
+  assert.match(await statusOf("WEB-1"), /^Research\. In progress: Working\./);
   await handOff({ ...DONE, summary: "Vault fits; KMS costs more" });
-  assert.match(await statusOf("i1"), /^Research\. Done: Handed off: Vault fits; KMS costs more\./);
+  assert.match(await statusOf("WEB-1"), /^Research\. Done: Handed off: Vault fits; KMS costs more\./);
 
   kit.thread(agentThreadId).archivedAt = Date.now();
   await kit.tick();
-  assert.match(await statusOf("i1"), /^Research\. Done: Handed off: Vault fits; KMS costs more\./);
+  assert.match(await statusOf("WEB-1"), /^Research\. Done: Handed off: Vault fits; KMS costs more\./);
 });
 
 test("a research issue can't be accepted Done by the manager, and nothing can name a verifier on one", async () => {
   const { coordinatorId, call, kit } = await researching();
-  const accept = await call("issue_update", { id: "i1", status: "done" });
+  const accept = await call("issue_update", { id: "WEB-1", status: "done" });
   assert.ok(isRefusal(accept));
-  assert.match(textOf(accept), /^i1 is In progress \([^)]*\), so it can't be marked Done: only an issue In review can\.$/);
+  assert.match(textOf(accept), /^WEB-1 is In progress \([^)]*\), so it can't be marked Done: only an issue In review can\.$/);
 
   const verified = await call("issue_create", { ...RESEARCH, verifier: { providerId: "codex", model: "gpt-default" } });
   assert.equal(textOf(verified), "No issue filed: a research issue has no verifier: nothing verifies it. Leave verifier out.");
-  const named = await call("issue_update", { id: "i1", verifier: { providerId: "codex", model: "gpt-default" } });
-  assert.equal(textOf(named), "i1 can't be changed so: a research issue has no verifier: nothing verifies it. Give verifier: null with the change to drop the one named.");
+  const named = await call("issue_update", { id: "WEB-1", verifier: { providerId: "codex", model: "gpt-default" } });
+  assert.equal(textOf(named), "WEB-1 can't be changed so: a research issue has no verifier: nothing verifies it. Give verifier: null with the change to drop the one named.");
 
-  assert.equal(textOf(await call("issue_create", { ...ISSUE, verifier: { providerId: "codex", model: "gpt-default" } })), "Filed i2 (build) in Todo. Its done handoffs are checked on codex gpt-default (low).");
-  const toResearch = await call("issue_update", { id: "i2", kind: "research" });
-  assert.equal(textOf(toResearch), "i2 can't be changed so: a research issue has no verifier: nothing verifies it. Give verifier: null with the change to drop the one named.");
-  assert.equal(textOf(await call("issue_update", { id: "i2", kind: "research", verifier: null })), "Updated i2. i2 has no verifier: nothing verifies a research issue.");
+  assert.equal(textOf(await call("issue_create", { ...ISSUE, verifier: { providerId: "codex", model: "gpt-default" } })), "Filed WEB-2 (build) in Todo. Its done handoffs are checked on codex gpt-default (low).");
+  const toResearch = await call("issue_update", { id: "WEB-2", kind: "research" });
+  assert.equal(textOf(toResearch), "WEB-2 can't be changed so: a research issue has no verifier: nothing verifies it. Give verifier: null with the change to drop the one named.");
+  assert.equal(textOf(await call("issue_update", { id: "WEB-2", kind: "research", verifier: null })), "Updated WEB-2. WEB-2 has no verifier: nothing verifies a research issue.");
   assert.deepEqual(
     kit.store.issues(coordinatorId).map(({ id, kind, verifier }) => [id, kind, verifier]),
     [
-      ["i1", "research", null],
-      ["i2", "research", null],
+      ["WEB-1", "research", null],
+      ["WEB-2", "research", null],
     ],
   );
 });
 
 test("an issue's kind changes only until an agent has started on it, even one that has since stopped", async () => {
   const { coordinatorId, call, kit } = await researching();
-  const held = await call("issue_update", { id: "i1", kind: "build" });
-  assert.equal(textOf(held), "An agent has started on i1, so its kind stays research. File a new issue of the other kind instead.");
+  const held = await call("issue_update", { id: "WEB-1", kind: "build" });
+  assert.equal(textOf(held), "An agent has started on WEB-1, so its kind stays research. File a new issue of the other kind instead.");
   await call("agent_stop", { agent: "a1" });
-  assert.equal(textOf(await call("issue_update", { id: "i1", kind: "build" })), "An agent has started on i1, so its kind stays research. File a new issue of the other kind instead.");
+  assert.equal(textOf(await call("issue_update", { id: "WEB-1", kind: "build" })), "An agent has started on WEB-1, so its kind stays research. File a new issue of the other kind instead.");
   assert.equal(kit.store.issue(coordinatorId, I1)?.kind, "research");
 });
 
@@ -176,14 +176,14 @@ test("the report is a memory file another agent reads with crew_memory_read, and
   await handOff(DONE);
   assert.ok((await kit.rpc.memoryList({ coordinatorId })).files.some(({ file }) => file === I1_REPORT));
 
-  await kit.call("issue_create", { ...ISSUE, title: "Card vault schema", brief: "Store saved cards. Read reports/i1.md with crew_memory_read first." }, threadId);
-  const builder = threadIn(textOf(await kit.call("agent_start", { issue: "i2" }, threadId)));
+  await kit.call("issue_create", { ...ISSUE, title: "Card vault schema", brief: "Store saved cards. Read reports/WEB-1.md with crew_memory_read first." }, threadId);
+  const builder = threadIn(textOf(await kit.call("agent_start", { issue: "WEB-2" }, threadId)));
   await kit.call("issue_create", { ...ISSUE, title: "Dead letters" }, threadId);
-  const other = threadIn(textOf(await kit.call("agent_start", { issue: "i3" }, threadId)));
+  const other = threadIn(textOf(await kit.call("agent_start", { issue: "WEB-3" }, threadId)));
 
-  assert.ok(textOf(await kit.call("crew_memory_read", { file: "reports/i1.md" }, builder)).includes(REPORT));
+  assert.ok(textOf(await kit.call("crew_memory_read", { file: "reports/WEB-1.md" }, builder)).includes(REPORT));
   for (const agent of [builder, other]) assert.ok(!(kit.thread(agent).spawnedWith.prompt ?? "").includes("inside our PCI scope"), "the report reached an agent's first message");
-  assert.match(kit.thread(builder).spawnedWith.prompt ?? "", /Read reports\/i1\.md with crew_memory_read first\./);
+  assert.match(kit.thread(builder).spawnedWith.prompt ?? "", /Read reports\/WEB-1\.md with crew_memory_read first\./);
 });
 
 test("a later report replaces the file the plugin saved, and one deleted since is saved again", async () => {
@@ -214,23 +214,23 @@ test("a report file edited in the Memory editor is kept: a later report goes bes
   for (const [n, report] of [[2, "## Recommendation\n\nVault, still."], [3, "## Recommendation\n\nVault, finally."]] as const) {
     await call("agent_message", { agent: "a1", text: "Look again." });
     const result = await handOff({ ...DONE, report });
-    assert.match(textOf(result), /^Handed off\. Your regional manager has your report, and i1 is Done/);
-    assert.equal(files.read(memoryFileSchema.parse(`reports/i1-${n}.md`)).text?.content, `${report}\n`);
-    assert.ok((await catchUp()).includes(`#### Report\n\nSaved in your memory as reports/i1-${n}.md. reports/i1.md is not as the plugin last saved it there (someone edited or wrote it), so it is kept as it is.`));
+    assert.match(textOf(result), /^Handed off\. Your regional manager has your report, and WEB-1 is Done/);
+    assert.equal(files.read(memoryFileSchema.parse(`reports/WEB-1-${n}.md`)).text?.content, `${report}\n`);
+    assert.ok((await catchUp()).includes(`#### Report\n\nSaved in your memory as reports/WEB-1-${n}.md. reports/WEB-1.md is not as the plugin last saved it there (someone edited or wrote it), so it is kept as it is.`));
   }
   assert.equal(files.read(I1_REPORT).text?.content, edited);
 });
 
 test("a report file someone wrote before the plugin saved any is kept, and a report that can't be saved stores nothing", async () => {
   const { kit, coordinatorId, files, handOff } = await researching();
-  assert.equal(files.write(I1_REPORT, "# My own notes on i1\n", null).outcome, "saved");
+  assert.equal(files.write(I1_REPORT, "# My own notes on WEB-1\n", null).outcome, "saved");
   await handOff(DONE);
-  assert.equal(files.read(I1_REPORT).text?.content, "# My own notes on i1\n");
-  assert.equal(files.read(memoryFileSchema.parse("reports/i1-2.md")).text?.content, `${REPORT}\n`);
+  assert.equal(files.read(I1_REPORT).text?.content, "# My own notes on WEB-1\n");
+  assert.equal(files.read(memoryFileSchema.parse("reports/WEB-1-2.md")).text?.content, `${REPORT}\n`);
 
   // The file it would go to can't be read: a folder stands where it is.
   const { kit: other, coordinatorId: otherId, agentThreadId, files: otherFiles } = await researching();
-  mkdirSync(join(otherFiles.dir, "reports", "i1.md"), { recursive: true });
+  mkdirSync(join(otherFiles.dir, "reports", "WEB-1.md"), { recursive: true });
   await assert.rejects(other.call("agent_handoff", DONE, agentThreadId), /EISDIR/);
   assert.deepEqual(other.store.record(otherId, I1), []);
   assert.deepEqual(other.store.unannounced(otherId), []);
@@ -240,10 +240,10 @@ test("a report file someone wrote before the plugin saved any is kept, and a rep
 test("issue_read shows a research issue's questions, that nothing verifies it, and its report in the record", async () => {
   const { call, handOff } = await researching();
   await handOff(DONE);
-  const read = textOf(await call("issue_read", { id: "i1" }));
+  const read = textOf(await call("issue_read", { id: "WEB-1" }));
   assert.ok(read.includes("### Questions\n\n1. Which one fits our PCI scope, and why?\n2. What does it cost a month at our volume?"), read);
   assert.ok(read.includes("### Verifier\n\nNone: nothing verifies a research issue."), read);
-  assert.ok(read.includes(`#### Report\n\nSaved in your memory as reports/i1.md.`) && read.includes(REPORT), read);
+  assert.ok(read.includes(`#### Report\n\nSaved in your memory as reports/WEB-1.md.`) && read.includes(REPORT), read);
   assert.doesNotMatch(read, /### Done when/);
 });
 
@@ -264,7 +264,7 @@ test("an issue opened on the board sends its questions and a research handoff's 
 /** The reports/ files in the manager's memory, each with what it holds. */
 const reportFiles = (files: Awaited<ReturnType<typeof researching>>["files"]) => files.list().flatMap((file) => (file.startsWith("reports/") ? [[file, files.read(file).text?.content]] : []));
 
-test("a first report whose handoff can't be stored leaves no file, and its retry saves it to reports/i1.md with its handoff and event", async () => {
+test("a first report whose handoff can't be stored leaves no file, and its retry saves it to reports/WEB-1.md with its handoff and event", async () => {
   const { db, storage } = memoryStorage();
   const { kit, coordinatorId, agentThreadId, files, catchUp } = await researching({}, storage);
   const allow = failWrites(db, "INSERT", "events");
@@ -274,18 +274,18 @@ test("a first report whose handoff can't be stored leaves no file, and its retry
   assert.doesNotMatch(await catchUp(), /handed off/);
 
   allow();
-  assert.match(textOf(await kit.call("agent_handoff", DONE, agentThreadId)), /^Handed off\. Your regional manager has your report, and i1 is Done/);
+  assert.match(textOf(await kit.call("agent_handoff", DONE, agentThreadId)), /^Handed off\. Your regional manager has your report, and WEB-1 is Done/);
   assert.deepEqual(reportFiles(files), [[I1_REPORT, `${REPORT}\n`]]);
   assert.deepEqual(
     kit.store.record(coordinatorId, I1).map(({ handoff }) => handoff.status === "done" && handoff.delivery),
     [{ kind: "report", report: REPORT, file: I1_REPORT }],
   );
   const caughtUp = await catchUp();
-  assert.equal(caughtUp.split(`### i1 "Pick a card vault" (a1) handed off: done`).length, 2, caughtUp);
-  assert.ok(caughtUp.includes(`#### Report\n\nSaved in your memory as reports/i1.md. The plugin gives`), caughtUp);
+  assert.equal(caughtUp.split(`### WEB-1 "Pick a card vault" (a1) handed off: done`).length, 2, caughtUp);
+  assert.ok(caughtUp.includes(`#### Report\n\nSaved in your memory as reports/WEB-1.md. The plugin gives`), caughtUp);
 });
 
-test("a later report whose handoff can't be stored puts the earlier one back, and its retry replaces it in reports/i1.md, not beside it", async () => {
+test("a later report whose handoff can't be stored puts the earlier one back, and its retry replaces it in reports/WEB-1.md, not beside it", async () => {
   const { db, storage } = memoryStorage();
   const { kit, coordinatorId, agentThreadId, call, files, catchUp, handOff } = await researching({}, storage);
   await handOff(DONE);
@@ -313,8 +313,8 @@ test("a later report whose handoff can't be stored puts the earlier one back, an
     ],
   );
   const caughtUp = await catchUp();
-  assert.equal(caughtUp.split(`### i1 "Pick a card vault" (a1) handed off: done`).length, 2, caughtUp);
-  assert.ok(caughtUp.includes(`#### Report\n\nSaved in your memory as reports/i1.md. The plugin gives`), caughtUp);
+  assert.equal(caughtUp.split(`### WEB-1 "Pick a card vault" (a1) handed off: done`).length, 2, caughtUp);
+  assert.ok(caughtUp.includes(`#### Report\n\nSaved in your memory as reports/WEB-1.md. The plugin gives`), caughtUp);
   assert.doesNotMatch(caughtUp, /not as the plugin last saved it/);
 });
 
@@ -326,5 +326,5 @@ test("a report whose handoff is stored keeps its file when the doorbell after it
   assert.ok(kit.sendAttempts().includes(threadId), "no doorbell was tried");
   assert.deepEqual(reportFiles(files), [[I1_REPORT, `${REPORT}\n`]]);
   assert.equal(kit.store.record(coordinatorId, I1).length, 1);
-  assert.match(await statusOf("i1"), /^Research\. Done: /);
+  assert.match(await statusOf("WEB-1"), /^Research\. Done: /);
 });
