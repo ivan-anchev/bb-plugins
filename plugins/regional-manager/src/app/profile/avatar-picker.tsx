@@ -1,7 +1,7 @@
 // How the user picks a regional manager's avatar, below its profile's fields: Shuffle, which picks a
 // look no other manager has, and the shape and the colour to pick one by hand, which may be another's.
-// Shuffle waits while the other managers' looks aren't known: before the first read, and after any
-// read failed, since the list kept from before may lack a look taken since. A look it picked then could be theirs.
+// Shuffle waits while the other managers' looks aren't known (useTakenLooks): a look it picked then
+// could be theirs.
 import { useId, useMemo, useRef, type ReactNode } from "react";
 import { freeLook, HUE_NAMES, HUES, SHAPES, type Avatar } from "../../model/profile/avatar.ts";
 import { Button } from "../ui/button.tsx";
@@ -13,7 +13,6 @@ import { useTakenLooks } from "./use-manager.ts";
 
 export function AvatarPicker({ value, onChange }: { value: Avatar; onChange(next: Avatar): void }) {
   const { looks, error, retry } = useTakenLooks();
-  const known = error === null ? looks : null;
   const shuffle = useRef<HTMLButtonElement>(null);
   // why: a Retry that succeeds removes the notice it sits in; its focus goes to Shuffle, which that read
   // enabled. React detaches this parent's ref before the notice's own, which would send it to the page.
@@ -21,7 +20,7 @@ export function AvatarPicker({ value, onChange }: { value: Avatar; onChange(next
   // why aria-disabled: a disabled button drops focus to the page, and it is enabled again as soon as the looks are read.
   return (
     <div className="flex flex-col items-start gap-3">
-      <Button ref={shuffle} variant="secondary" size="sm" aria-disabled={known === null} onClick={() => known !== null && onChange(freeLook(randomStart(), [...known, value]))}>
+      <Button ref={shuffle} variant="secondary" size="sm" aria-disabled={looks === null} onClick={() => looks !== null && onChange(freeLook(randomStart(), [...looks, value]))}>
         <ShuffleGlyph />
         Shuffle
       </Button>

@@ -198,3 +198,24 @@ test("a later read of the managers that fails keeps their last list, but Shuffle
   assert.ok(name instanceof HTMLInputElement);
   assert.equal(name.value, "Webhooks", "the fields stay");
 });
+
+test("a later read that fails keeps a new manager's fields and the look it was given while the looks were known, and Shuffle waits", async () => {
+  const read = { failing: false };
+  const page = mount(read);
+  await page.view.findByRole("textbox", { name: "Name" });
+  const chosen = () => page.view.getAllByRole("radio").filter((radio) => radio.matches(":checked")).map((radio) => radio.getAttribute("aria-label"));
+  const given = chosen();
+
+  read.failing = true;
+  await act(() => page.view.experimental_invalidateRpc([COORDINATORS_TAG]));
+
+  assert.match((await page.view.findByRole("alert")).textContent ?? "", /so Shuffle waits: .*bb is restarting/);
+  assert.equal(page.view.getByRole("button", { name: "Shuffle" }).getAttribute("aria-disabled"), "true");
+  assert.deepEqual(chosen(), given, "the look stays the one given while the looks were known");
+  await page.named("Webhooks");
+  await page.create();
+  const [created] = page.creates;
+  assert.ok(created);
+  assert.deepEqual([created.avatar.shape, created.avatar.hue], given.map((label) => label?.toLowerCase()));
+  assert.notDeepEqual([created.avatar.shape, created.avatar.hue], [CIRCLE_IN_VIOLET.shape, CIRCLE_IN_VIOLET.hue]);
+});
