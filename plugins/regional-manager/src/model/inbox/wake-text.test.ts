@@ -61,7 +61,7 @@ test("a doorbell names how many updates there are, then one line of plugin facts
       { kind: "failed", issueId: i1, agentId: a1, error: "Anything" },
       { kind: "needs-input", issueId: i2, agentId: a2, question: "Anything" },
       { kind: "returned-to-todo", issueId: i2, agentId: a2, how: "archived" },
-      { kind: "memory-edited", file: memoryFileSchema.parse("PLAN.md") },
+      { kind: "memory-edited", file: memoryFileSchema.parse("NOTES.md") },
     ]),
     noChecks,
   );
@@ -74,7 +74,7 @@ test("a doorbell names how many updates there are, then one line of plugin facts
       `- i1 "Add retries" (a1) failed`,
       `- i2 "Dead letters" (a2) is waiting on the user in its thread`,
       `- i2 "Dead letters" (a2) returned to Todo: its agent was archived`,
-      `- The user edited PLAN.md`,
+      `- The user edited NOTES.md`,
     ].join("\n"),
   );
 });

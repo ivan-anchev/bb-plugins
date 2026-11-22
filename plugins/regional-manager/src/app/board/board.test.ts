@@ -119,6 +119,7 @@ const DETAIL: IssueDetail = {
     },
   ],
   finalChecks: [],
+  decisions: [],
 };
 
 const REPORT = "## Recommendation\n\nVault: it keeps card data **inside** our PCI scope.";
@@ -150,6 +151,7 @@ const researched = (questions: string[]): IssueDetail => ({
     },
   ],
   finalChecks: [],
+  decisions: [],
 });
 
 afterEach(() => {
@@ -173,7 +175,7 @@ async function mount(data: Read, answer: (input: unknown) => void = () => {}, de
     rpc: {
       board: () => {
         served = current;
-        return { verify: true, ownEdits: null, prUnavailable: null, digest: null, ...current };
+        return { verify: true, ownEdits: null, prUnavailable: null, ...current };
       },
       setVerify: () => ({}),
       answerDecision: (input: unknown) => {
@@ -190,7 +192,7 @@ async function mount(data: Read, answer: (input: unknown) => void = () => {}, de
   const lanes = () =>
     view.queryAllByRole("region").flatMap((section) => {
       const heading = within(section).queryByRole("heading", { level: 2 })?.textContent ?? "";
-      return heading === "" || heading === "Digest" ? [] : [[heading, within(section).queryAllByRole("listitem").length] as const];
+      return heading === "" ? [] : [[heading, within(section).queryAllByRole("listitem").length] as const];
     });
   async function reread(next: Read) {
     current = next;
@@ -202,7 +204,7 @@ async function mount(data: Read, answer: (input: unknown) => void = () => {}, de
   return { view, opened, lanes, reread };
 }
 
-test("Needs you leads with open decisions, then flagged issues showing their own status, then a lane per status in order; the last three start folded; empty lanes are not shown", async () => {
+test("Needs you leads with open decisions, then flagged issues showing their own status, then a lane per status in order; the last three start folded; empty lanes are not shown, and an answered decision is on none", async () => {
   const { view, lanes } = await mount({
     decisions: [decision("d1", false), decision("d2", true)],
     issues: [
@@ -218,9 +220,9 @@ test("Needs you leads with open decisions, then flagged issues showing their own
     ["In review1", 1],
     ["In progress1", 1],
     ["Todo1", 1],
-    ["Done1", 0],
     ["Canceled1", 0],
   ]);
+  assert.equal(view.queryByText("Question d2?"), null, "the answered decision left the board");
   const needsYou = within(view.getByRole("region", { name: /^Needs you/ }));
   const [question, flagged] = needsYou.getAllByRole("listitem");
   assert.match(question?.textContent ?? "", /^d1Question d1\?/, "the lane's decisions first");
@@ -247,10 +249,28 @@ test("a row opens in place to the issue read from the plugin, and only then: its
   assert.equal(detail.getByLabelText("Evidence for criterion 2").closest("details")?.open, true);
   assert.equal(detail.getByLabelText("Evidence for criterion 1").closest("details")?.open, false);
   assert.ok(detail.getByText(/on the agent's own model/));
-  assert.equal(detail.queryByRole("heading", { name: /^(Depends on|Blocks)$/ }), null, "no relations, no section for them");
+  assert.equal(detail.queryByRole("heading", { name: /^(Depends on|Blocks|Decisions)$/ }), null, "no relations or decisions, no section for them");
 
   fireEvent.click(row);
   assert.equal(view.queryByRole("region", { name: "i1" }), null);
+});
+
+test("an opened issue lists its decisions oldest first: each question put to the user with their answer or still waiting, and each the regional manager recorded", async () => {
+  const decisions: IssueDetail["decisions"] = [
+    { kind: "asked", id: decisionIdSchema.parse("d3"), question: "Ship behind a flag?", at: 1_000, answer: { text: "Yes, off by default", at: 1_500 } },
+    { kind: "recorded", text: "Retries cap at 5: the user's answer to d3 keeps the flag off.", at: 2_000 },
+    { kind: "asked", id: decisionIdSchema.parse("d4"), question: "Backfill old deliveries?", at: 3_000, answer: null },
+  ];
+  const { view } = await mount({ decisions: [], issues: [issue("i1", {})] }, () => {}, () => ({ ...DETAIL, decisions }));
+  fireEvent.click(view.getByRole("button", { name: /\bi1 Build/ }));
+  const detail = within(view.getByRole("region", { name: "i1" }));
+  const part = within((await detail.findByRole("heading", { name: "Decisions" })).closest("section") ?? assert.fail("a Decisions part"));
+
+  const entries = part.getAllByRole("listitem").map((item) => item.textContent ?? "");
+  assert.equal(entries.length, 3);
+  assert.match(entries[0] ?? "", /^d3Ship behind a flag\?You answered: Yes, off by default/);
+  assert.match(entries[1] ?? "", /^Retries cap at 5: .*Recorded by the regional manager/);
+  assert.match(entries[2] ?? "", /^d4Backfill old deliveries\?Waiting for your answer/);
 });
 
 test("a build parent opens to its final checks, oldest first and the latest open, each on its default branch with the verdict's criteria, evidence, findings and verifier", async () => {
@@ -504,7 +524,7 @@ test("a board with no issues says so", async () => {
 const DRAFT_KEY = `coordinator-decision-answer:${COORDINATOR}:d1`;
 const type = (view: Awaited<ReturnType<typeof mount>>["view"], text: string) => fireEvent.change(view.getByRole("textbox", { name: "Your answer" }), { target: { value: text } });
 
-test("an answer sent and read back answered while Done is folded leaves nothing in the browser", async () => {
+test("an answer sent and read back answered leaves the board, and nothing in the browser", async () => {
   const sent: unknown[] = [];
   const { view, reread } = await mount({ decisions: [decision("d1", false)], issues: [] }, (input) => sent.push(input));
   type(view, "A typed answer");
@@ -515,11 +535,11 @@ test("an answer sent and read back answered while Done is folded leaves nothing 
   assert.equal(localStorage.getItem(DRAFT_KEY), JSON.stringify("A typed answer"), "kept until the board reads it answered");
   await reread({ decisions: [{ ...decision("d1", false), answer: { text: "A typed answer", at: 2_000 } }], issues: [] });
 
-  assert.equal(view.getByRole("button", { name: /^Done/ }).getAttribute("aria-expanded"), "false", "Done is folded");
+  assert.equal(view.queryByText("Question d1?"), null, "the answered decision left the board");
   assert.equal(localStorage.length, 0);
 });
 
-test("a decision answered elsewhere drops the answer typed here while Done is folded, and one left from before is dropped on the next read", async () => {
+test("a decision answered elsewhere drops the answer typed here, and one left from before is dropped on the next read", async () => {
   const { view, reread } = await mount({ decisions: [decision("d1", false)], issues: [] });
   type(view, "Not sent");
   await reread({ decisions: [decision("d1", true)], issues: [] });
@@ -541,21 +561,4 @@ test("a send the plugin refuses keeps the answer typed, in the field and in the 
   assert.equal(localStorage.getItem(DRAFT_KEY), JSON.stringify("Kept"));
   const field = view.getByRole("textbox", { name: "Your answer" });
   assert.ok(field instanceof HTMLTextAreaElement && field.value === "Kept");
-});
-
-test("an answer sent from the answer's own field hands focus to Done's header while Done is folded, and to the answered row while it is open", async () => {
-  for (const unfold of [false, true]) {
-    const { view, reread } = await mount({ decisions: [decision("d1", false)], issues: [issue("i1", { status: "done", headline: "Merged #9" })] });
-    if (unfold) fireEvent.click(view.getByRole("button", { name: /^Done/ }));
-    type(view, "Yes");
-    const send = view.getByRole("button", { name: "Send" });
-    send.focus();
-    await act(async () => fireEvent.click(send));
-    await reread({ decisions: [decision("d1", true)], issues: [issue("i1", { status: "done", headline: "Merged #9" })] });
-
-    const done = view.getByRole("button", { name: /^Done/ });
-    const landed = unfold ? done.closest("section")?.querySelector("li [tabindex='-1']") : done;
-    assert.ok(landed !== null && landed !== undefined && document.activeElement === landed, unfold ? "on the answered row" : "on Done's header");
-    cleanup();
-  }
 });

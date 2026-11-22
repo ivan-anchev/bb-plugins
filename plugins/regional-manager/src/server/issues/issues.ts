@@ -22,7 +22,7 @@ type IssuesBb = FactsBb & CatalogBb & { sdk: { threads: { output(args: { threadI
 
 type Deps = {
   bb: IssuesBb;
-  store: FactsStore & Pick<Store, "issue" | "insertIssue" | "updateIssue" | "record" | "check" | "agent" | "finalChecks">;
+  store: FactsStore & Pick<Store, "issue" | "insertIssue" | "updateIssue" | "record" | "check" | "agent" | "finalChecks" | "issueDecisions">;
   views: Pick<CurrentViews, "whileCurrent">;
   /** Runs after anything that changes a regional manager's board. */
   onChange(id: CoordinatorId): void;
@@ -31,9 +31,13 @@ type Deps = {
 /** What issue_create files: a plan, with the verifier the manager names (left out: the plugin picks). */
 type IssueRequest = Omit<NewIssue, "verifier"> & { verifier?: RequestedExecution };
 
-/** What issue_update changes; a field left out stays. `verifier: null` gives the choice back to the plugin; `parentId: null` makes it top-level. */
+/**
+ * What issue_update changes; a field left out stays. `verifier: null` gives the choice back to the plugin; `parentId: null` makes it
+ * top-level. `decision`: what was decided and why, recorded among its decisions as of now.
+ */
 type IssueChange = Partial<Pick<Issue, "kind" | "title" | "description" | "doneCriteria" | "parentId">> & {
   brief?: string;
+  decision?: string;
   verifier?: RequestedExecution | null;
   status?: z.infer<typeof managerStatusSchema>;
   dependsOn?: DependencyChange;
@@ -107,7 +111,7 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
      * dependency; a removed dependency may have been the last open one, a parent left the last
      * blocking one).
      */
-    async update(issue: Issue, { verifier: requested, status, dependsOn, ...plan }: IssueChange): Promise<{ issue: Issue; note: string | null; nowReady: IssueId[] } | Refused> {
+    async update(issue: Issue, { verifier: requested, status, dependsOn, decision, ...plan }: IssueChange): Promise<{ issue: Issue; note: string | null; nowReady: IssueId[] } | Refused> {
       // undefined: unchanged; null: the plugin picks.
       const verifier = requested === undefined || requested === null ? requested : await verifierOf(requested);
       if (verifier !== undefined && verifier !== null && "refused" in verifier) return verifier;
@@ -122,7 +126,13 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
             refused: `${holder.id} holds ${issue.id} on ${executionText(holder.execution)}, so a verifier on it couldn't check that work independently. Name another model, or stop ${holder.id} with agent_stop and start an agent on another execution.`,
           };
         }
-        const edit: IssueEdit = { ...plan, ...statusChange, ...(dependsOn === undefined ? {} : { dependsOn }), ...(verifier === undefined ? {} : { verifier }) };
+        const edit: IssueEdit = {
+          ...plan,
+          ...statusChange,
+          ...(dependsOn === undefined ? {} : { dependsOn }),
+          ...(verifier === undefined ? {} : { verifier }),
+          ...(decision === undefined ? {} : { decision: { text: decision, at: Date.now() } }),
+        };
         const updated = store.updateIssue(issue.coordinatorId, issue.id, edit, { requireUnheld: status !== undefined && status !== "done", closes: closesOf(before ?? []) });
         return "refused" in updated ? updated : { issue: updated.issue, before };
       };
@@ -136,7 +146,7 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
       return { issue: updated, note: requested === undefined ? null : verifierText(updated), nowReady };
     },
 
-    /** The issue whole, as issue_read returns it, with the issues it depends on and those that depend on it. */
+    /** The issue whole, as issue_read returns it, with the issues it depends on and those that depend on it, and its decisions. */
     async read(issue: Issue): Promise<string> {
       const { coordinatorId, id } = issue;
       const reads = await readIssues(bb, store, coordinatorId);
@@ -145,7 +155,7 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
       const output = read.threadId === null ? null : (await bb.sdk.threads.output({ threadId: read.threadId })).output;
       const views = reads.map(({ view }) => view);
       const record = { handed: store.record(coordinatorId, id), finalChecks: store.finalChecks(coordinatorId, id) };
-      return issueText(read, relationsOf(views, read.view.issue), agents, record, output, { agents: () => store.agents(coordinatorId) });
+      return issueText(read, relationsOf(views, read.view.issue), agents, record, store.issueDecisions(coordinatorId, id), output, { agents: () => store.agents(coordinatorId) });
     },
   };
 }

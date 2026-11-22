@@ -8,7 +8,7 @@ import { act, cleanup, fireEvent, within } from "@testing-library/react";
 import { createElement, type ComponentProps } from "react";
 import type { IssueRow } from "../../../contract.ts";
 import { agentIdSchema } from "../../../model/agent.ts";
-import { decisionIdSchema, type Decision } from "../../../model/decision.ts";
+import { decisionIdSchema, type Decision, type OpenDecision } from "../../../model/decision.ts";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
 
 // The board's lanes and in-place detail, driven as the user drives them: folding lanes, opening rows,
@@ -37,7 +37,7 @@ function issue(id: string, fields: Partial<IssueRow>): IssueRow {
   return { id: issueIdSchema.parse(id), kind: "build", parentId: null, subIssues: null, blockedBy: [], title: `Issue ${id}`, status: "todo", needsYou: null, headline: "Planned", agent: null, pr: null, ...fields };
 }
 
-const QUESTION: Decision = { id: decisionIdSchema.parse("d1"), issueId: null, question: "Which license should the repo use?", options: ["MIT", "Apache-2.0"], askedAt: 1_000, answer: null };
+const QUESTION: OpenDecision = { id: decisionIdSchema.parse("d1"), issueId: null, question: "Which license should the repo use?", options: ["MIT", "Apache-2.0"], askedAt: 1_000, answer: null };
 
 const ISSUES: IssueRow[] = [
   issue("i1", { status: "in-progress", needsYou: "Failed after its fix round", headline: "✗ Failed after its fix round", agent: { id: agentIdSchema.parse("a1"), threadId: "thr_one" } }),
@@ -60,17 +60,17 @@ const Page = (props: ComponentProps<typeof IssueBoard>) => createElement("div", 
 /** The board, with a detail standing in for the one read from the plugin; every detail drawn is recorded in `read`. */
 function mount(issues: readonly IssueRow[], decisions: readonly Decision[] = [QUESTION]) {
   const read: string[] = [];
-  const props = (rows: readonly IssueRow[]) => ({
-    decisions,
+  const props = (rows: readonly IssueRow[], shown: readonly Decision[]) => ({
+    decisions: shown,
     issues: rows,
-    decisionRow: (decision: Decision, ref: (el: HTMLElement | null) => void) => createElement("p", { ref, tabIndex: -1 }, decision.question),
+    decisionRow: (decision: OpenDecision) => createElement("p", { tabIndex: -1 }, decision.question),
     detailOf: (shown: IssueRow) => {
       read.push(shown.id);
       return createElement("button", { type: "button" }, `Detail of ${shown.id}`);
     },
   });
-  const view = renderSlot({ component: Page }, props(issues));
-  return { view, read, reread: (rows: readonly IssueRow[]) => view.rerender(createElement(Page, props(rows))) };
+  const view = renderSlot({ component: Page }, props(issues, decisions));
+  return { view, read, reread: (rows: readonly IssueRow[], next: readonly Decision[] = decisions) => view.rerender(createElement(Page, props(rows, next))) };
 }
 
 const laneHeader = (view: ReturnType<typeof mount>["view"], name: RegExp) => view.getByRole("button", { name });
@@ -92,6 +92,19 @@ test("Needs you leads with the open decision, then the flagged issue showing its
   for (const name of [/^Backlog/, /^Done/]) assert.equal(laneHeader(view, name).getAttribute("aria-expanded"), "false");
   assert.equal(view.queryByRole("button", { name: /\bi6 Build/ }), null);
   assert.equal(view.queryByRole("button", { name: /\bi7 Build/ }), null);
+});
+
+test("a decision sits under Needs you until the user answers it, then on no lane, and focus on it goes to the page", () => {
+  const todo = [issue("i5", { status: "todo" })];
+  const { view, reread } = mount(todo, [QUESTION]);
+  const question = lane(view, /^Needs you/).getByText(QUESTION.question);
+  question.focus();
+
+  reread(todo, [{ ...QUESTION, answer: { text: "MIT", at: 2_000 } }]);
+
+  assert.deepEqual(view.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent), ["Todo1"], "no Needs you, and no Done for it");
+  assert.equal(view.queryByText(QUESTION.question), null);
+  assert.equal(document.activeElement, view.getByLabelText("Board tab"), "focus goes to the page, not the body");
 });
 
 test("a row says what blocks it ahead of its headline, naming two and counting the rest, in its status's lane; an agent's blocked handoff stays its own headline under Needs you", () => {

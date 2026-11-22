@@ -431,6 +431,44 @@ button.rmi-thread-link {
   color: var(--subtle-foreground);
   font-variant-numeric: tabular-nums;
 }
+/* An issue's decisions: each its words, then a quiet line of who and when, or the user's answer. */
+.rmi-decisions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+.rmi-decision {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rmi-decision-text {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--foreground);
+  white-space: pre-wrap;
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+.rmi-decision-meta,
+.rmi-decision-answer {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+}
+.rmi-decision-answer {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.rmi-decision time {
+  color: var(--subtle-foreground);
+  font-variant-numeric: tabular-nums;
+}
 /* A relation: each other issue a small row, its glyph, id and title, going to it when pressed; one the board hasn't read yet, its id alone. */
 .rmi-related-list {
   display: flex;

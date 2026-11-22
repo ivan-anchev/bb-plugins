@@ -702,7 +702,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       bindings++;
       if (role.kind !== "coordinator") onChange(role.coordinatorId);
     });
-    const board = createBoard(bb, store, memory);
+    const board = createBoard(bb, store);
     const inbox = createInbox({ bb, store, memory, onChange });
     const views = currentViews({ bb, store });
     const unblocked = watchUnblocked({ bb, store, views, inbox });

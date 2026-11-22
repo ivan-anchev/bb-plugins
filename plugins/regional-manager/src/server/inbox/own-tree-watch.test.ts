@@ -56,7 +56,7 @@ test("a turn that ends with changed files in the Coordinator's own environment w
   const text = await catchUp();
   assert.match(text, /### Your own environment has 2 files changed\n\nAt [^\n]+ bb's git plugin read changed files in your working tree when your turn ended/);
   assert.match(text, /you never touch your working tree: no stash, revert, checkout or deletion/);
-  assert.match(text, /First propose, in a crew_ask_user decision, an issue whose agent redoes the change properly on its own branch, always, whatever the user's preferences: .* In the same decision, ask the user whether to discard the changes in your environment: discarding them is theirs to do, never yours\./);
+  assert.match(text, /First propose, in a crew_ask_user decision, an issue whose agent redoes the change properly on its own branch, always, whatever the user's rules say: .* In the same decision, ask the user whether to discard the changes in your environment: discarding them is theirs to do, never yours\./);
   assert.doesNotMatch(text, /git stash/);
 });
 

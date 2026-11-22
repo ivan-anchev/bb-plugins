@@ -2,6 +2,7 @@
 // and an agent by its id, with a link to its thread, so the manager can both act on them and point
 // the user at them.
 import { boardGroups, LANE_LABELS, type BoardItem } from "../../model/board/board-groups.ts";
+import { decisionsText, type IssueDecision } from "../../model/decision.ts";
 import type { Issue, IssueId } from "../../model/issue/issue.ts";
 import { isVerified, PIPELINES } from "../../model/issue/kind.ts";
 import { isReady, type Related, type Relations } from "../../model/issue/relations.ts";
@@ -183,15 +184,16 @@ export function verifierText(issue: Issue): string {
 }
 
 /**
- * An issue whole: its status and why, what blocks it, its plan, its relations, the verifier named,
- * each agent with what it runs on, every handoff of every agent with its verdict, a build parent's
- * final checks, oldest first, and its agent's latest answer (null: none).
+ * An issue whole: its status and why, what blocks it, its plan, its decisions, its relations, the
+ * verifier named, each agent with what it runs on, every handoff of every agent with its verdict, a
+ * build parent's final checks, oldest first, and its agent's latest answer (null: none).
  */
 export function issueText(
   { view, threadId, branch }: IssueRead,
   relations: Relations,
   agents: readonly Agent[],
   record: { handed: readonly Handed[]; finalChecks: readonly FinalCheck[] },
+  decisions: readonly IssueDecision[],
   output: string | null,
   lookups: Pick<Lookups, "agents">,
 ): string {
@@ -208,6 +210,7 @@ export function issueText(
     `### What it is about\n\n${issue.description.trim()}`,
     `### Brief\n\n${issue.brief?.trim() ?? "None yet."}`,
     criteriaText(issue),
+    `### Decisions\n\n${decisions.length === 0 ? "None yet. Record one with issue_update's decision." : decisionsText(decisions)}`,
     `### Relations\n\n${relationsText(relations)}`,
     `### Verifier\n\n${verifierLine(issue)}`,
     `### Agents\n\n${agents.length === 0 ? "None started." : agents.map((agent) => agentLine(agent, threadId)).join("\n")}`,

@@ -22,6 +22,7 @@ import { pluginInstance } from "./src/server/lifetime.ts";
 import { watchUnblocked } from "./src/server/issues/views/unblocked.ts";
 import { openMemoryRoot } from "./src/server/memory/memory-files.ts";
 import { memoryHandlers } from "./src/server/memory/memory-rpc.ts";
+import { upgradeMemoryFrom040 } from "./src/server/memory/memory-upgrade.ts";
 import { registerRoles } from "./src/server/roles.ts";
 import { createSpawner } from "./src/server/spawn.ts";
 import { openStore } from "./src/server/store/store.ts";
@@ -39,6 +40,7 @@ export default function plugin(host: BbPluginApi): void {
   const store = instance.bind(openStore(bb.storage));
   const memory = openMemoryRoot(bb.storage.database().name, store, (id) => bb.rpc.experimental_invalidate([memoryTag(id)]));
   bb.log.info(`Memory files are in ${memory.dir}`);
+  upgradeMemoryFrom040(memory, store.coordinators().map(({ id }) => id));
   const refreshBoard = (id: CoordinatorId) => bb.rpc.experimental_invalidate([boardTag(id)]);
   const refreshCoordinators = () => bb.rpc.experimental_invalidate([COORDINATORS_TAG]);
   // why one hook: whatever changes what a regional manager's views are derived from changes its board, makes a read begun before it stale, and may unblock an issue.
@@ -54,7 +56,7 @@ export default function plugin(host: BbPluginApi): void {
     refreshCoordinators();
   };
   const spawner = createSpawner(bb, store, memory, (role: Role) => (role.kind === "coordinator" ? refreshCoordinators() : onChange(role.coordinatorId)));
-  const board = createBoard(bb, store, memory);
+  const board = createBoard(bb, store);
   const inbox = createInbox({ bb, store, memory, onChange });
   const views = currentViews({ bb, store });
   const unblocked = watchUnblocked({ bb, store, views, inbox });

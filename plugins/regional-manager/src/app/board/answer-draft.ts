@@ -16,8 +16,8 @@ export const answerDraftSchema = z.string().min(1).max(MAX_ANSWER_CHARS);
 
 /**
  * Drops what the browser keeps for each decision the board reads answered: an answered decision takes
- * no answer again. why here, not in the decision's row: the answered row is drawn only while Done is
- * unfolded, and a failed send must keep what was typed, so only the board's read tells it landed.
+ * no answer again. why here, not in the decision's row: answered, the row leaves the board, and a
+ * failed send must keep what was typed, so only the board's read tells it landed.
  */
 export function useAnsweredDraftsDropped(coordinatorId: CoordinatorId, decisions: readonly Decision[]): void {
   // why an effect: the drafts live in the browser's storage, outside React.

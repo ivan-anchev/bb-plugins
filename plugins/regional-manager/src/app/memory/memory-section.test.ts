@@ -13,9 +13,9 @@ import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
 const { MemorySection } = await import("./memory-section.tsx");
 
 const COORDINATOR = coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10");
-const PLAN = memoryFileSchema.parse("PLAN.md");
-const PREFERENCES = memoryFileSchema.parse("PREFERENCES.md");
-const MINE = "# Plan\n\nUNSAVED_PLAN_MARKER\n";
+const NOTES = memoryFileSchema.parse("NOTES.md");
+const RULES = memoryFileSchema.parse("RULES.md");
+const MINE = "# Notes\n\nUNSAVED_NOTES_MARKER\n";
 
 afterEach(() => {
   cleanup();
@@ -26,8 +26,8 @@ afterEach(() => {
 /** The memory folder on the bb server: each file's text and version, the revision each was seen at, and every write the section sent. */
 function server() {
   const files = new Map<MemoryFile, { content: string; version: string; revision: number }>([
-    [PLAN, { content: "# Plan\n\nNo plan yet.\n", version: "v1", revision: 1 }],
-    [PREFERENCES, { content: "# Preferences\n", version: "v1", revision: 1 }],
+    [NOTES, { content: "# Notes\n\nNothing yet.\n", version: "v1", revision: 1 }],
+    [RULES, { content: "# Rules for the regional manager\n", version: "v1", revision: 1 }],
   ]);
   const writes: string[] = [];
   const snapshot = (file: MemoryFile): MemorySnapshot => {
@@ -77,41 +77,41 @@ function mount(rpc: ReturnType<typeof server>["rpc"], coordinatorId: Coordinator
 
 test("an unsaved draft is still in its editor after the section remounts, and once saved the browser keeps none", async () => {
   const { rpc, writes } = server();
-  fireEvent.change(await mount(rpc).edit(PLAN), { target: { value: MINE } });
+  fireEvent.change(await mount(rpc).edit(NOTES), { target: { value: MINE } });
   cleanup();
 
   const section = mount(rpc);
-  assert.equal((await section.editor(PLAN)).value, MINE);
+  assert.equal((await section.editor(NOTES)).value, MINE);
   await act(async () => fireEvent.click(section.view.getByRole("button", { name: "Save" })));
 
-  assert.deepEqual(writes, [`PLAN.md: ${MINE}`]);
+  assert.deepEqual(writes, [`NOTES.md: ${MINE}`]);
   assert.equal(localStorage.length, 0);
 });
 
 test("the list marks a file with a draft, and saving another file keeps that draft", async () => {
   const { rpc } = server();
   const section = mount(rpc);
-  fireEvent.change(await section.edit(PLAN), { target: { value: MINE } });
+  fireEvent.change(await section.edit(NOTES), { target: { value: MINE } });
   fireEvent.click(section.view.getByRole("button", { name: "All files" }));
-  assert.ok(await section.view.findByRole("button", { name: /^PLAN\.md, unsaved changes/ }));
-  fireEvent.change(await section.edit(PREFERENCES), { target: { value: "# Preferences\n\nMine\n" } });
+  assert.ok(await section.view.findByRole("button", { name: /^NOTES\.md, unsaved changes/ }));
+  fireEvent.change(await section.edit(RULES), { target: { value: "# Rules for the regional manager\n\nMine\n" } });
   await act(async () => fireEvent.click(section.view.getByRole("button", { name: "Save" })));
   cleanup();
 
   const again = mount(rpc);
   fireEvent.click(await again.view.findByRole("button", { name: "All files" }));
-  assert.equal((await again.edit(PLAN)).value, MINE);
+  assert.equal((await again.edit(NOTES)).value, MINE);
 });
 
 test("a draft found after a remount over a file that moved on shows beside the newer version, and taking the newer one keeps none", async () => {
   const { rpc, write } = server();
-  fireEvent.change(await mount(rpc).edit(PLAN), { target: { value: MINE } });
+  fireEvent.change(await mount(rpc).edit(NOTES), { target: { value: MINE } });
   cleanup();
-  write(PLAN, "# Plan\n\n1. Inventory the endpoints\n");
+  write(NOTES, "# Notes\n\n1. Inventory the endpoints\n");
 
   const section = mount(rpc);
   assert.equal((await section.editor("Your text")).value, MINE);
-  assert.equal((await section.editor("Newer version")).value, "# Plan\n\n1. Inventory the endpoints\n");
+  assert.equal((await section.editor("Newer version")).value, "# Notes\n\n1. Inventory the endpoints\n");
   fireEvent.click(section.view.getByRole("button", { name: "Use the newer version" }));
   assert.equal(localStorage.length, 0);
 });
@@ -119,41 +119,41 @@ test("a draft found after a remount over a file that moved on shows beside the n
 test("a file deleted under a draft keeps it: the editor stays open, the list still names the file, and saving makes it again", async () => {
   const { rpc, remove, writes } = server();
   const section = mount(rpc);
-  fireEvent.change(await section.edit(PLAN), { target: { value: MINE } });
+  fireEvent.change(await section.edit(NOTES), { target: { value: MINE } });
 
-  remove(PLAN);
+  remove(NOTES);
   await act(() => section.view.experimental_invalidateRpc([memoryTag(COORDINATOR)]));
 
   assert.equal((await section.editor("Your text")).value, MINE);
-  assert.match(await section.view.findByRole("alert").then((alert) => alert.textContent ?? ""), /PLAN\.md was deleted since you started editing/);
+  assert.match(await section.view.findByRole("alert").then((alert) => alert.textContent ?? ""), /NOTES\.md was deleted since you started editing/);
   await act(async () => fireEvent.click(section.view.getByRole("button", { name: "Save" })));
-  assert.deepEqual(writes, [`PLAN.md: ${MINE}`]);
+  assert.deepEqual(writes, [`NOTES.md: ${MINE}`]);
 });
 
 test("a deleted file's draft is listed after a remount, where it can be reopened", async () => {
   const { rpc, remove } = server();
-  fireEvent.change(await mount(rpc).edit(PLAN), { target: { value: MINE } });
+  fireEvent.change(await mount(rpc).edit(NOTES), { target: { value: MINE } });
   cleanup();
-  remove(PLAN);
+  remove(NOTES);
   sessionStorage.clear();
 
   const section = mount(rpc);
-  fireEvent.click(await section.view.findByRole("button", { name: /^PLAN\.md, unsaved changes\s*Not in the folder/ }));
+  fireEvent.click(await section.view.findByRole("button", { name: /^NOTES\.md, unsaved changes\s*Not in the folder/ }));
   assert.equal((await section.editor("Your text")).value, MINE);
 });
 
 test("a draft is kept by regional manager, and what the browser holds that isn't drafts reads as none", async () => {
   const { rpc } = server();
-  fireEvent.change(await mount(rpc).edit(PLAN), { target: { value: MINE } });
+  fireEvent.change(await mount(rpc).edit(NOTES), { target: { value: MINE } });
   cleanup();
   sessionStorage.clear();
-  assert.equal((await mount(rpc, coordinatorIdSchema.parse("0d3b8f5e-1c2a-4e6f-8a9b-7c5d3e1f2a40")).edit(PLAN)).value, "# Plan\n\nNo plan yet.\n", "another regional manager's memory has none");
+  assert.equal((await mount(rpc, coordinatorIdSchema.parse("0d3b8f5e-1c2a-4e6f-8a9b-7c5d3e1f2a40")).edit(NOTES)).value, "# Notes\n\nNothing yet.\n", "another regional manager's memory has none");
   cleanup();
 
-  for (const stored of ["{not json", JSON.stringify({ "PLAN.md": { text: 1 } }), JSON.stringify({ "../outside.md": { text: "x", base: null } })]) {
+  for (const stored of ["{not json", JSON.stringify({ "NOTES.md": { text: 1 } }), JSON.stringify({ "../outside.md": { text: "x", base: null } })]) {
     localStorage.setItem(`coordinator-memory-drafts:${COORDINATOR}`, stored);
     sessionStorage.clear();
-    assert.equal((await mount(rpc).edit(PLAN)).value, "# Plan\n\nNo plan yet.\n", stored);
+    assert.equal((await mount(rpc).edit(NOTES)).value, "# Notes\n\nNothing yet.\n", stored);
     cleanup();
   }
 });

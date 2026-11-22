@@ -9,7 +9,7 @@ import { z } from "zod";
  */
 export const memoryFileSchema = z
   .string()
-  .refine(isMarkdownInside, "A memory file is a .md path inside the memory folder, such as PLAN.md or notes/api.md")
+  .refine(isMarkdownInside, "A memory file is a .md path inside the memory folder, such as NOTES.md or notes/api.md")
   .brand<"MemoryFile">();
 export type MemoryFile = z.infer<typeof memoryFileSchema>;
 

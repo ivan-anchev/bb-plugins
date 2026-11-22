@@ -1,6 +1,6 @@
 // An issue opened in place, read when its row opens: its description, its relations, its criteria,
-// a build parent's final checks, and its record: every agent that held it, each handoff it made and
-// the verdict on it.
+// its decisions, a build parent's final checks, and its record: every agent that held it, each
+// handoff it made and the verdict on it.
 import { experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { coordinatorContract as contract, type IssueDetail as Detail, type IssueRow } from "../../../../contract.ts";
 import { isVerified } from "../../../../model/issue/kind.ts";
@@ -9,6 +9,7 @@ import type { CoordinatorId } from "../../../../model/role.ts";
 import { ReadFailure } from "../../../ui/read-failure.tsx";
 import type { GoTo } from "../issue-board.tsx";
 import { FinalChecks } from "./final-checks.tsx";
+import { IssueDecisions } from "./issue-decisions.tsx";
 import { IssueRecord } from "./issue-record.tsx";
 import { IssueRelations } from "./issue-relations.tsx";
 
@@ -33,7 +34,7 @@ export function IssueDetail({ coordinatorId, issue, under, issues, goTo }: Issue
   );
 }
 
-function Opened({ issue, under, detail: { description, doneCriteria, dependsOn, blocks, record, finalChecks }, issues, goTo }: Omit<IssueDetailProps, "coordinatorId"> & { detail: Detail }) {
+function Opened({ issue, under, detail: { description, doneCriteria, decisions, dependsOn, blocks, record, finalChecks }, issues, goTo }: Omit<IssueDetailProps, "coordinatorId"> & { detail: Detail }) {
   return (
     <>
       <p className="rmi-description">{description}</p>
@@ -47,6 +48,12 @@ function Opened({ issue, under, detail: { description, doneCriteria, dependsOn, 
               <li key={i}>{criterion}</li>
             ))}
           </ol>
+        </section>
+      )}
+      {decisions.length > 0 && (
+        <section className="rmi-part">
+          <h3 className="rmi-part-title">Decisions</h3>
+          <IssueDecisions decisions={decisions} />
         </section>
       )}
       {finalChecks.length > 0 && (

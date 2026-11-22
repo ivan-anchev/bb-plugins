@@ -54,6 +54,34 @@ test("issue_update changes the plan it names, and only a status the manager may 
   assert.equal(textOf(unknown), "You have no issue i9. crew_catch_up lists your issues.");
 });
 
+test("issue_update with only a decision records it on the issue, changing nothing else; issue_read, the board's detail and the next agent started on it show it, the latest last", async () => {
+  const { kit, coordinatorId, call, update } = await managing();
+  await call("issue_create", ISSUE);
+  assert.match(textOf(await call("issue_read", { id: "i1" })), /### Decisions\n\nNone yet\./);
+  const before = kit.store.issue(coordinatorId, ISSUE_ID);
+
+  const first = "Retries cap at 5: the provider rate-limits beyond that.";
+  const second = "Cap at 3 instead.\nThe user's SLA is tighter than the provider's limit.";
+  assert.deepEqual(await update({ decision: first }), { refused: false, text: "Updated i1." });
+  assert.deepEqual(await update({ decision: second }), { refused: false, text: "Updated i1." });
+  assert.deepEqual(kit.store.issue(coordinatorId, ISSUE_ID), before, "the issue itself is unchanged");
+
+  const read = textOf(await call("issue_read", { id: "i1" }));
+  assert.match(read, /### Decisions\n\nOldest first; where two disagree, the later one wins\.\n\n- \S+: Retries cap at 5: the provider rate-limits beyond that\.\n- \S+: Cap at 3 instead\.\n  The user's SLA is tighter than the provider's limit\./);
+  const detail = await kit.rpc.issue({ coordinatorId, issueId: ISSUE_ID });
+  assert.deepEqual(detail.decisions.map((entry) => (entry.kind === "recorded" ? entry.text : entry)), [first, second]);
+
+  const prompt = kit.thread(threadIn(textOf(await call("agent_start", { issue: "i1" })))).spawnedWith.prompt ?? assert.fail("spawned without a prompt");
+  assert.match(prompt, /## Decisions on i1\n\n[^\n]*part of your work, as your brief is\.\n\nOldest first; where two disagree, the later one wins\.\n\n- \S+: Retries cap at 5: the provider rate-limits beyond that\.\n- \S+: Cap at 3 instead\.\n  The user's SLA/);
+});
+
+test("issue_update refuses a blank decision, and records nothing", async () => {
+  const { coordinatorId, call, kit } = await managing();
+  await call("issue_create", ISSUE);
+  await assert.rejects(call("issue_update", { id: "i1", decision: "  " }));
+  assert.deepEqual((await kit.rpc.issue({ coordinatorId, issueId: ISSUE_ID })).decisions, []);
+});
+
 test("while an agent holds an issue it can't be canceled or rested, and Done is accepted only from In review", async () => {
   const { kit, call, update, statuses } = await managing({ verify: false });
   await call("issue_create", ISSUE);
