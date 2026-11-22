@@ -123,8 +123,9 @@ test("a question about an issue flags it Needs you until the user answers, and t
 
   const read = textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId));
   assert.match(read, /### Decisions\n\n[^#]*- \S+: asked the user \(d1\): Start WEB-1 now\? They answered at \S+: Yes$/m, "answered, it stays among the issue's decisions");
-  const detail = await kit.rpc.issue({ coordinatorId, issueId: issueIdSchema.parse("WEB-1") });
-  assert.deepEqual(detail.decisions.map((entry) => (entry.kind === "asked" ? [entry.id, entry.question, entry.answer?.text] : entry)), [["d1", "Start WEB-1 now?", "Yes"]]);
+  const feed = await kit.rpc.issueFeed({ coordinatorId, issueId: issueIdSchema.parse("WEB-1") });
+  const asked = feed.entries.flatMap((entry) => (entry.kind === "decision" && entry.decision.kind === "asked" ? [entry.decision] : []));
+  assert.deepEqual(asked.map(({ id, question, answer }) => [id, question, answer?.text]), [["d1", "Start WEB-1 now?", "Yes"]], "and in its feed");
 
   const unknown = await kit.call("crew_ask_user", { question: "Start WEB-9?", issue: "WEB-9" }, threadId);
   assert.ok(isRefusal(unknown));

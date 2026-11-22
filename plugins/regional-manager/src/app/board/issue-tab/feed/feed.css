@@ -1,0 +1,583 @@
+/* An issue's feed in its tab: the criteria × rounds grid, the Activity head with its filter, round
+   cards, decision cards and quiet lines. Every colour is a bb theme token, never a literal; every
+   class carries the `rmi-` prefix, since bb does not scope a plugin's stylesheet. Result text uses
+   the theme's text tokens (--destructive-text, --warning-text), which read on the page and on --card. */
+
+/* --- A section's head: its title, a quiet count, and controls at its end ---------------------- */
+.rmi-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+.rmi-section-sub {
+  font-size: 11px;
+  color: var(--subtle-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.rmi-filter {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.rmi-filter button {
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 150ms ease-out, color 150ms ease-out;
+}
+.rmi-filter button[aria-pressed="true"] {
+  background: var(--muted);
+  color: var(--foreground);
+}
+@media (hover: hover) {
+  .rmi-filter button:hover {
+    background: var(--state-hover);
+    color: var(--foreground);
+  }
+}
+.rmi-filter button:focus-visible,
+.rmi-grid-cell:focus-visible,
+.rmi-round-head:focus-visible,
+.rmi-passes > summary:focus-visible,
+.rmi-report-fold > summary:focus-visible,
+.rmi-criterion > summary:focus-visible,
+.rmi-evidence:focus-visible,
+.rmi-report:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+
+/* --- The grid: a row per criterion, its number, words and a cell per judged round --------------- */
+.rmi-grid {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  list-style: none;
+}
+.rmi-grid-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  column-gap: 6px;
+  align-items: start;
+  padding: 3px 0;
+}
+.rmi-grid-number {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--subtle-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.rmi-grid-text {
+  color: var(--muted-foreground);
+  text-wrap: pretty;
+}
+.rmi-grid-cells {
+  display: inline-flex;
+  gap: 1px;
+}
+/* A cell: a small swatch in a target large enough to press. */
+.rmi-grid-cell {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 18px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.rmi-grid-swatch {
+  width: 8px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--muted);
+}
+.rmi-grid-cell[data-result="pass"] .rmi-grid-swatch { background: var(--success); }
+.rmi-grid-cell[data-result="fail"] .rmi-grid-swatch { background: var(--destructive-text); }
+.rmi-grid-cell[data-result="unverifiable"] .rmi-grid-swatch { background: var(--warning-text); }
+.rmi-grid-cell[aria-expanded="true"] {
+  background: var(--state-active);
+}
+@media (hover: hover) {
+  .rmi-grid-cell:hover {
+    background: var(--state-hover);
+  }
+}
+.rmi-grid-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0 6px 24px;
+}
+.rmi-grid-evidence [data-result="fail"] { color: var(--destructive-text); }
+.rmi-grid-evidence [data-result="unverifiable"] { color: var(--warning-text); }
+
+/* --- Activity: entries in time order ------------------------------------------------------------ */
+.rmi-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0;
+  list-style: none;
+}
+.rmi-when {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--subtle-foreground);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.rmi-actor {
+  font-weight: 500;
+  color: var(--foreground);
+}
+/* A quiet line: a machine event. */
+.rmi-line {
+  padding: 4px 0;
+  color: var(--muted-foreground);
+  text-wrap: pretty;
+}
+.rmi-line-quote {
+  margin-top: 2px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+  white-space: pre-wrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* --- Cards: a round, a decision ---------------------------------------------------------------- */
+.rmi-round,
+.rmi-decision {
+  margin: 4px 0;
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--border);
+}
+.rmi-decision {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 10px;
+}
+.rmi-decision-head {
+  color: var(--muted-foreground);
+}
+.rmi-decision-id {
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--subtle-foreground);
+}
+.rmi-decision-text {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--foreground);
+  white-space: pre-wrap;
+  text-wrap: pretty;
+}
+.rmi-decision-reply {
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.rmi-decision-error {
+  font-size: 12px;
+  color: var(--destructive-text);
+}
+.rmi-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0;
+  list-style: none;
+}
+.rmi-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.rmi-option[data-chosen] {
+  background: var(--state-active);
+  color: var(--foreground);
+}
+
+/* A round: its head a button, one line, its number, its summary and its score. */
+.rmi-round-head {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .rmi-round-head:hover {
+    background: var(--state-hover);
+  }
+}
+.rmi-round-head > .rmi-disclose {
+  align-self: center;
+  margin-top: 0;
+}
+.rmi-round-head[aria-expanded="true"] > .rmi-disclose {
+  transform: rotate(90deg);
+}
+.rmi-round-name {
+  flex: 0 0 auto;
+  font-weight: 500;
+  color: var(--foreground);
+}
+.rmi-round-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+}
+/* Open, the summary is the first step's: the head keeps its number and score. */
+.rmi-round[data-open] .rmi-round-summary {
+  visibility: hidden;
+}
+.rmi-score {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.rmi-score[data-result="pass"] { color: var(--success); }
+.rmi-score[data-result="fail"],
+.rmi-score[data-tone="failed"] { color: var(--destructive-text); }
+.rmi-score[data-tone="warning"] { color: var(--warning-text); }
+.rmi-score .rmi-result-glyph {
+  margin-top: 0;
+}
+
+/* An open round: its steps on the Board's hairline rail, then its outcome. */
+.rmi-round-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 10px 10px;
+}
+.rmi-steps {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  list-style: none;
+}
+.rmi-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0 8px 16px;
+}
+/* The rail: a dot at each step, a hairline trunk down to the next, in the Board's rail colour. */
+.rmi-step::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 9px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--subtle-foreground);
+}
+.rmi-step::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 18px;
+  bottom: -5px;
+  width: 1px;
+  background: var(--border);
+}
+.rmi-step:last-child::after {
+  display: none;
+}
+.rmi-step-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 4px;
+  color: var(--muted-foreground);
+}
+.rmi-step-text {
+  color: var(--foreground);
+  text-wrap: pretty;
+}
+.rmi-outcome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+}
+
+/* A fold inside a step: the handoff's report, a verdict's passes. */
+.rmi-report-fold > summary,
+.rmi-passes > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 2px 6px;
+  margin: 0 -6px;
+  border-radius: 6px;
+  list-style: none;
+  cursor: pointer;
+  color: var(--muted-foreground);
+}
+.rmi-report-fold > summary::-webkit-details-marker,
+.rmi-passes > summary::-webkit-details-marker,
+.rmi-criterion > summary::-webkit-details-marker {
+  display: none;
+}
+.rmi-report-fold > summary > .rmi-disclose,
+.rmi-passes > summary > .rmi-disclose {
+  align-self: center;
+  margin-top: 0;
+}
+@media (hover: hover) {
+  .rmi-report-fold > summary:hover,
+  .rmi-passes > summary:hover,
+  .rmi-criterion > summary:hover {
+    background: var(--state-hover);
+    color: var(--foreground);
+  }
+}
+.rmi-report-parts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 0 2px;
+}
+.rmi-reported {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rmi-reported h4 {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+/* why list-style: Tailwind's preflight, which bb's build adds, takes every list's markers away. */
+.rmi-reported ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 16px;
+  list-style: disc;
+  color: var(--foreground);
+}
+.rmi-reported ul ::marker {
+  color: var(--subtle-foreground);
+}
+.rmi-reported ul[data-code] {
+  padding-left: 0;
+  list-style: none;
+  gap: 4px;
+}
+.rmi-reported ul[data-code] > li,
+.rmi-evidence {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--surface-recessed);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--foreground);
+  white-space: pre-wrap;
+}
+.rmi-evidence {
+  max-height: 224px;
+  margin: 2px 0 2px 20px;
+  overflow: auto;
+}
+.rmi-grid-evidence .rmi-evidence {
+  margin-left: 0;
+}
+
+/* A research handoff's report: its file beside its title, then the report in a box that scrolls. */
+.rmi-report-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.rmi-report-file {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.rmi-report {
+  max-height: 360px;
+  overflow: auto;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--surface-recessed);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--foreground);
+}
+/* why over bb's Markdown: it sizes a chat message (14px, 16px headings), louder than the issue's own title. */
+.rmi-report [data-markdown-preview] {
+  font-size: inherit;
+  line-height: inherit;
+}
+.rmi-report [data-markdown-preview] h1,
+.rmi-report [data-markdown-preview] h2,
+.rmi-report [data-markdown-preview] h3 {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* The reviewer's findings: severity, place, claim, then the verifier's triage. */
+.rmi-findings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+.rmi-finding {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rmi-finding-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+/* why no chip behind it: on --muted, --destructive-text drops below 4.5:1 in the light theme. */
+.rmi-severity {
+  flex: none;
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.rmi-severity[data-severity="must-fix"] { color: var(--destructive-text); }
+.rmi-severity[data-severity="should-fix"] { color: var(--warning-text); }
+.rmi-finding-place {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted-foreground);
+  direction: rtl;
+  text-align: left;
+}
+.rmi-finding-claim {
+  color: var(--foreground);
+  text-wrap: pretty;
+}
+.rmi-finding[data-triage="rejected"] .rmi-finding-claim {
+  color: var(--muted-foreground);
+}
+.rmi-finding-claim s {
+  text-decoration-color: var(--subtle-foreground);
+}
+.rmi-triage {
+  color: var(--muted-foreground);
+}
+.rmi-triage b {
+  font-weight: 500;
+}
+.rmi-triage[data-triage="confirmed"] b { color: var(--destructive-text); }
+.rmi-triage[data-triage="rejected"] b { color: var(--foreground); }
+
+/* The verdict on a round. */
+.rmi-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rmi-verdict-meta {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--muted-foreground);
+}
+.rmi-verdict-meta code {
+  font-family: var(--font-mono);
+}
+.rmi-detail [data-tone="warning"] { color: var(--warning-text); }
+.rmi-verdict-meta[data-tone="failed"] { color: var(--destructive-text); }
+.rmi-criteria-checked {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0;
+  list-style: none;
+}
+.rmi-criterion-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 2px 0;
+}
+.rmi-criterion > summary {
+  padding: 2px 6px;
+  margin: 0 -6px;
+  border-radius: 6px;
+  list-style: none;
+  cursor: pointer;
+}
+.rmi-criterion-number {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--subtle-foreground);
+}
+.rmi-criterion-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--foreground);
+}
+.rmi-result {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.rmi-result[data-result="fail"] { color: var(--destructive-text); }
+.rmi-result[data-result="unverifiable"] { color: var(--warning-text); }
+.rmi-result-glyph {
+  flex: 0 0 14px;
+  margin-top: 1.5px;
+}
+.rmi-result-glyph[data-result="pass"] { color: var(--success); }
+.rmi-result-glyph[data-result="fail"] { color: var(--destructive-text); }
+.rmi-result-glyph[data-result="unverifiable"] { color: var(--warning-text); }

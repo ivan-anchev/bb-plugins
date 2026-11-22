@@ -34,7 +34,8 @@ export const roundSchema = z.object({
   ]),
   /** Its review: none (no review stage), still to come, missed and why, or reported with how many findings and, once the verdict triaged them, how many it confirmed. */
   review: z.discriminatedUnion("state", [
-    z.object({ state: z.enum(["none", "pending"]) }),
+    z.object({ state: z.literal("none") }),
+    z.object({ state: z.literal("pending") }),
     z.object({ state: z.literal("missed"), at: z.number(), reason: z.string() }),
     z.object({ state: z.literal("reported"), at: z.number(), findings: z.number().int(), confirmed: z.number().int().nullable() }),
   ]),

@@ -9,8 +9,10 @@ import { createFakePluginHost, type FakePluginHarness } from "@get-bb/plugin-sdk
 import { z } from "zod";
 import type { EnvironmentProvider } from "../model/agent/agent.ts";
 import type { HolderThread } from "../model/issue/status.ts";
-import type { ComposerRequest } from "../contract.ts";
+import { roundBodyKey, type ComposerRequest } from "../contract.ts";
 import type { Profile } from "../model/profile/profile.ts";
+import { roundKeySchema } from "../model/feed/round.ts";
+import type { IssueId } from "../model/issue/issue.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../model/role.ts";
 import type { CheckId } from "../model/verdict/check.ts";
 import { DISPLAY_NAME } from "../name.ts";
@@ -979,6 +981,14 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     doorbellsSent: (threadId: string) => sent.filter((args) => args.threadId === threadId).map(textOfInput),
     /** The thread of every send the plugin attempted, refused ones included, in order. */
     sendAttempts: () => [...attempted],
+    /** An issue as its tab reads it: its feed, and each of its rounds with the body opening it reads. */
+    async opened(coordinatorId: CoordinatorId, issueId: IssueId) {
+      const feed = await plugin.rpc.issueFeed({ coordinatorId, issueId });
+      const rounds = feed.entries.flatMap((entry) => (entry.kind === "round" ? [entry.round] : []));
+      const keys = rounds.map(({ key }) => roundBodyKey(coordinatorId, issueId, roundKeySchema.parse(key)));
+      const bodies = await plugin.rpc.roundBodies({ keys });
+      return { feed, rounds: rounds.map((round, i) => ({ round, body: bodies[keys[i] ?? ""] ?? assert.fail(`no body of round ${round.number}`) })) };
+    },
     /** Every RPC tag invalidated, in order. */
     invalidated: () => [...invalidated],
     /** Every warning the plugin logged, in order. */

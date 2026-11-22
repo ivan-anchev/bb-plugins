@@ -1,20 +1,13 @@
-// The board: every issue of a regional manager, viewed now, with its latest agent's thread; and one
-// issue opened on it, with its record. Read whole on every call; bb's thread events
-// only say when to read again.
-import type { Board, IssueDetail, IssueRow } from "../../contract.ts";
-import type { Agent } from "../../model/agent/agent.ts";
-import { shownHandoff } from "../../model/agent/handoff.ts";
+// The board: every issue of a regional manager, viewed now, with its latest agent's thread. Read
+// whole on every call; bb's thread events only say when to read again.
+import type { Board, IssueRow } from "../../contract.ts";
 import { needsYou, type NeedsYou } from "../../model/board/board-groups.ts";
 import { warnedFileCount } from "../../model/inbox/own-tree.ts";
-import type { IssueId } from "../../model/issue/issue.ts";
-import { dependentsOf } from "../../model/issue/relations.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { shownVerdict } from "../../model/verdict/verdict.ts";
-import { threadsById } from "../agents/threads.ts";
 import { readIssues, type FactsBb, type FactsStore, type IssueRead } from "../issues/views/issue-facts.ts";
 import type { Store } from "../store/store.ts";
 
-type BoardStore = FactsStore & Pick<Store, "verifies" | "lastOwnTreeEvent" | "issue" | "record" | "issueDecisions">;
+type BoardStore = FactsStore & Pick<Store, "verifies" | "lastOwnTreeEvent">;
 
 /** An issue's row on the board. */
 const rowOf = ({ view, agent, threadId }: IssueRead): IssueRow => ({
@@ -31,16 +24,6 @@ const rowOf = ({ view, agent, threadId }: IssueRead): IssueRow => ({
   agent: agent === null ? null : { id: agent.id, threadId },
   pr: view.pr,
 });
-
-/**
- * An agent in an issue's record, with its thread while bb still has it, archived or not (`threads`:
- * the record's threads as bb lists them now). why bb's listing, not how the agent ended: a thread
- * archived or kept when its agent ended may be deleted since, and the agent's record never says so.
- */
-const heldBy = ({ id, threadId, ended }: Agent, threads: ReadonlyMap<string, { id: string; deletedAt: number | null }>): IssueDetail["record"][number]["agent"] => {
-  const thread = threadId === null ? undefined : threads.get(threadId);
-  return { id, threadId: thread === undefined || thread.deletedAt !== null ? null : thread.id, ended: ended?.how ?? null };
-};
 
 export function createBoard(bb: FactsBb, store: BoardStore) {
   /** Why the latest read of an open issue's pull request failed, the first one's; null when none did. */
@@ -73,24 +56,6 @@ export function createBoard(bb: FactsBb, store: BoardStore) {
         prUnavailable: prUnavailable(id, reads),
         decisions: store.decisions(id),
         issues: reads.map(rowOf),
-      };
-    },
-
-    /** An issue in its tab: its plan for the user, its decisions, what it depends on and what depends on it, its record and a build parent's final checks, from the store, with its agents' threads as bb lists them (null: the regional manager has no such issue). */
-    async detail(id: CoordinatorId, issueId: IssueId): Promise<IssueDetail | null> {
-      const issue = store.issue(id, issueId);
-      if (issue === null) return null;
-      const record = store.record(id, issueId);
-      const agents = store.agents(id).filter((agent) => agent.issueId === issueId);
-      const threads = await threadsById(bb, agents.flatMap(({ threadId }) => (threadId === null ? [] : [threadId])));
-      return {
-        description: issue.description,
-        doneCriteria: issue.doneCriteria,
-        decisions: store.issueDecisions(id, issueId),
-        dependsOn: issue.dependsOn,
-        blocks: dependentsOf(store.issues(id), issueId),
-        record: agents.map((agent) => ({ agent: heldBy(agent, threads), handoffs: record.filter(({ handoff }) => handoff.agentId === agent.id).map(({ handoff, check }) => ({ ...shownHandoff(handoff), verdict: check === null ? null : shownVerdict(check.verdict) })) })),
-        finalChecks: store.finalChecks(id, issueId).map(({ at, subject, verdict }) => ({ at, defaultBranch: subject.defaultBranch, verdict: shownVerdict(verdict) })),
       };
     },
 

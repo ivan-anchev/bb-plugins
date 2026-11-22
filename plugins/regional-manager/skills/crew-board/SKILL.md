@@ -251,7 +251,7 @@ ends it, as for any verifier.
   In review, "Unverified: verification was off", for the manager to accept.
   A check already running when verification is switched off still finishes.
 - A verdict that returns after a sub-issue was filed under the parent, or the
-  parent was closed, is kept in its record and places it no more; the
+  parent was closed, is kept, as a round in its tab, and places it no more; the
   manager's catch-up says where the parent stands now, from the same view the
   board shows.
 - A build parent with no done-criteria when its check comes due Needs you
@@ -263,8 +263,8 @@ The manager is woken with `BBP-1 "Card vault" final check: failed` (or passed,
 could not run, not run, verification is off), which quotes nothing;
 `crew_catch_up` and `issue_read` print the verdict whole, with the default
 branch and commit it judged and which model it ran on ("as named on BBP-1", or
-"a3's own model, as no other was available"). Each final check stays in the
-parent's record. After its verdict, the verifier's thread and its worktree
+"a3's own model, as no other was available"). Each final check stays a round
+in the parent's tab. After its verdict, the verifier's thread and its worktree
 are left as they are, for the user to open from the verdict; they go when the
 regional manager is archived, as its children.
 
@@ -882,8 +882,8 @@ you haven't sent stays in the browser, through a resize or a reload, until you
 send it or the decision is answered elsewhere. An issue the decision names
 also waits under Needs you until you answer. Your answer takes the decision
 off the board and wakes the thread; a decision that named an issue stays,
-with your answer and when you gave it, among that issue's **Decisions**
-(see [The board](#the-board)). The thread's
+with your answer and when you gave it, in that issue's **Activity**, where an
+open one's options answer it too (see [The board](#the-board)). The thread's
 `crew_catch_up` returns your answer, as the option you chose or in your own
 words, with its question. A decision is answered once: a second answer, as
 from another window, is refused.
@@ -949,7 +949,7 @@ and ends with its [memory](#read-and-edit-memory):
   and an empty lane isn't shown. Needs you holds the open decisions put to
   you, then the issues flagged Needs you. An answered decision is on no
   lane: it leaves the board, and one that named an issue stays in that
-  issue's Decisions.
+  issue's Activity.
 - **Issues**, each row one line: its status's glyph, its id in mono, in a
   column the ids share, its title, fading out at its end, then its pills
   and, once it has one, its pull request: its number in its state's colour,
@@ -998,41 +998,67 @@ and ends with its [memory](#read-and-edit-memory):
 Pressing an issue, or Enter or Space on its row, opens it in its own tab in
 the same side panel, beside the Board, titled with its id and title; pressing
 an issue whose tab is open focuses that tab rather than adding a second one.
-Close a tab with its close button. bb keeps the tabs across a reload, and each
-changes as the board does. The tab heads with the issue's status, id and kind,
-its pull request with CI and its agent's thread, then its title and headline
-whole, which its row fades out at its edge. Under them come what it is about;
+Close a tab with its close button. bb keeps the tabs across a reload. The tab
+heads with the issue's status, id and kind, its pull request with CI and its
+agent's thread, then its title and headline whole, which its row fades out at
+its edge, and changes as the board does. Under them come what it is about;
 its **Parent** and its **Sub-issues**; **Depends on** (a sub-issue's lists its
 parent's open dependencies too, "through BBP-1") and **Blocks**, each issue there
 with its status's glyph, id and title, and none when there are none; pressing
-one opens that issue's tab the same way; **Done when** with its criteria (a research issue's
-**Questions**, and nothing when it has none); its **Decisions**, oldest
-first, when it has any: each question put to you naming it, with your answer
-and when, or "Waiting for your answer", and each decision the manager
-recorded on it with `issue_update`, with when (a later one stands over an
-earlier one, and every agent started on the issue gets them in its first
-message); and its **Record**: each
-agent that held it, how it ended, and each handoff it made, the latest one
-open. A research issue's done handoff shows its **Report** first, as the
-Markdown it is, beside the memory file it was saved to (such as
-`reports/BBP-2.md`): a long report scrolls in its own box, and the file holds
-it whole under Memory in the manager's Board tab. Nothing verifies it, so it has no verdict.
-A build issue's handoff shows the verdict on it first: how many criteria passed, a link to the verifier thread,
-and the commit checked; the plugin's own read when that commit wasn't checked
-out on a clean tree; what CI said about that commit when it failed, couldn't
-be checked or is still to come; then each criterion with Pass, Fail or
-Unverifiable. A failed or unverifiable criterion shows its evidence; a passed
-one folds it away until you open it. The verifier's findings follow. It warns
-when the check had to run on the agent's own model, but names no provider or
-model. A verdict still to come says so, with the verifier's thread while it
-checks, and one that couldn't be had says why. Then what the agent reported:
-what it did, its evidence, concerns, deviations and findings. A build
-parent's detail lists its **Final checks** above its record, oldest first,
-the latest open, each as "Passed", "Failed", "Running", "Couldn't run",
-"Replaced" or "Not run" on its default branch, with its time; opened, it is
-read as a handoff's verdict is, its commit as "On main at 4be0a17" and a
-dirty worktree as "Not a clean tree". Pressing the
-issue again closes it. The brief is the agent's, so the board doesn't show it.
+one opens that issue's tab the same way. The rest is the issue's own read,
+which reads again only when something of that issue changes, never for
+another issue's write.
+
+**Done when** is a grid: a row per criterion, its number and words, then a
+cell per round that has a verdict, green for passed, red for failed, amber for
+couldn't check, lined up by the criterion's place. The head counts the rounds
+and the latest's score ("3 rounds · latest 6 of 6", or "no verdict yet").
+Pressing a cell, or Enter or Space on it, opens the row to that round's
+evidence for the criterion, with the words that round judged; pressing it
+again closes it. A research issue lists its **Questions** with no cells, and
+nothing when it has none.
+
+**Activity** lists every moment of the issue in the order it happened, with
+**All**, **Rounds** and **Discussion** to choose what shows: Rounds only the
+rounds, Discussion only the decisions and questions. The choice holds while
+the tab is open. A **round** is one attempt: an agent's handoff and its
+check, or a build parent's final check. Folded, it is one line: "Round 2",
+what was handed off ("Final check on main" for a parent's) and its score: "✓ 6
+of 6", "✗ 3 of 6", "Reviewing…", "Verifying…", "Couldn't verify",
+"Replaced", "Not verified", or "Blocked" or "Gave up" for a handoff nothing
+checks. The latest round is open; any other opens when you press it, and
+stays as you left it while the tab is open, also when a new round arrives,
+which opens as the new latest. Open, a round shows its steps on a rail: who
+handed off and when, its summary, and its **Report** folded ("Report · 3 did
+· 2 evidence"), with a research handoff's report as Markdown beside the
+memory file it was saved to (such as `reports/BBP-2.md`), in its own box that
+scrolls; then the reviewer: "Reviewer found 4 issues, 2 confirmed", each
+finding with its severity, its place and its claim, and the verifier's
+**Confirmed** or **Rejected** with why (a rejected claim is struck through),
+or "No review" and why; then the verifier, with a link to its thread, its
+score and when: the commit checked; the plugin's own read when that commit
+wasn't checked out on a clean tree; what CI said when it failed, couldn't be
+checked or is still to come; each failing or unverifiable criterion with its
+evidence, and the passes folded ("4 passed"); and the verifier's own
+findings. It warns when the check had to run on the agent's own model, but
+names no provider or model. Last comes what became of it: "Sent back to a2
+as fix round 1", "Not sent back: the regional manager decides", "Passed" and
+the like, with when. A round's body is read only while it is open; one that
+fails to read says so beside its steps, with Retry.
+
+Between the rounds sit the **decisions**, full size: each question the
+manager put to you about the issue, with its options and your answer and
+when, the option you chose marked; one still open has a button per option
+that answers it, as on the Board (one with no options is answered on the
+Board, in your words); and each decision the manager recorded on it with
+`issue_update`, with when (a later one stands over an earlier one, and every
+agent started on the issue gets them in its first message). Everything else
+is a quiet line: the manager filed the issue, started an agent or handed the
+issue on from one, an agent's thread was archived or deleted, its pull request
+opened, passed or failed CI or merged, an agent ended its turn with no
+handoff (with its last answer), failed, or waits on you, and the issue was
+unblocked. An agent named anywhere opens its thread while bb has it. The brief
+is the agent's, so the tab doesn't show it.
 
 A handoff places its issue until the agent's thread starts another turn: type
 into an agent that handed off and its issue moves back to In progress. Rows

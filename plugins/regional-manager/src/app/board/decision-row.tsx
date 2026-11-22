@@ -3,10 +3,8 @@
 // It sits under Needs you with a button for each option and a field for an answer in the user's own
 // words, which the browser keeps until the board reads it answered (see answer-draft.ts). Answered, it
 // leaves the board, and focus in it goes to the page; the question and its answer stay among its
-// issue's decisions (issue/detail/issue-decisions.tsx).
-import { experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
-import { useId, useState, type KeyboardEvent } from "react";
-import { coordinatorContract as contract } from "../../contract.ts";
+// issue's feed (issue-tab/feed/decision-card.tsx).
+import { useId, type KeyboardEvent } from "react";
 import { MAX_ANSWER_CHARS, type OpenDecision } from "../../model/decision.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { Button } from "../ui/button.tsx";
@@ -14,6 +12,7 @@ import { GrowingTextarea } from "../ui/growing-textarea.tsx";
 import { useHoldEscape } from "../ui/hold-escape.ts";
 import { useStored } from "../ui/stored.ts";
 import { answerDraftKeyOf, answerDraftSchema } from "./answer-draft.ts";
+import { useAnswer } from "./use-answer.ts";
 
 // why these sizes: an issue row's (issue/row/issue-row.css `.rmi-slot`, `.rmi-row`, `.rmi-row-id`), so the question lines up with the titles.
 const ROW = "flex items-start rounded-lg";
@@ -33,17 +32,9 @@ export function DecisionRow({ coordinatorId, decision }: DecisionRowProps) {
   // What the user typed and hasn't sent, as the browser keeps it.
   const typed = useStored(localStorage, answerDraftKeyOf(coordinatorId, decision.id), answerDraftSchema);
   const draft = typed.value ?? "";
-  const save = experimental_useRpcMutation({ contract, method: "answerDecision" });
   // The answer sent, from the click until the board reads it back answered and the row leaves.
-  const [sent, setSent] = useState<string | null>(null);
+  const { sent, send, error } = useAnswer(coordinatorId, decision.id);
   useHoldEscape(draft.trim() !== "");
-
-  function send(text: string) {
-    if (sent !== null || text.trim() === "") return;
-    setSent(text);
-    // why the catch: the hook's error shows under the field; the rejection carries nothing more.
-    save.mutate({ coordinatorId, decisionId: decision.id, answer: text }).catch(() => setSent(null));
-  }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     // Enter sends and Shift+Enter breaks the line, as in bb's composer.
@@ -103,9 +94,9 @@ export function DecisionRow({ coordinatorId, decision }: DecisionRowProps) {
             Sending your answer…
           </p>
         )}
-        {save.error !== null && !busy && (
+        {error !== null && (
           <p role="alert" className="text-xs text-destructive-text">
-            Could not send your answer: {save.error.message}
+            Could not send your answer: {error.message}
           </p>
         )}
       </div>
