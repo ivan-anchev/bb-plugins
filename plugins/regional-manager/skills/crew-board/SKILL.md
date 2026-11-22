@@ -979,8 +979,10 @@ server log names the parent folder when the plugin loads. It is made as the mana
 - `CREW.md`: rules every agent will follow.
 
 The work itself, who holds it, where it stands, what blocks it and what was
-decided, lives in the issues. The manager's summary for you is its reply in
-its thread; the board keeps no digest. A manager started before this release
+decided, lives in the issues. The manager tells you what you need to know or
+decide in its replies; a turn that changed nothing for you, such as one woken
+by a merge on work an agent is shipping, ends in a few words, such as "Noted.",
+never a recap. The board keeps no digest. A manager started before this release
 had its plan and preferences files renamed to `NOTES.md` and `RULES.md`, with
 their content, and its digest file removed, as the plugin loaded; a file
 already there under the new name, and any line you added to `MEMORY.md`, were

@@ -35,8 +35,11 @@ and an icon there; your name is your thread's title.
    rather than trusting what you remember.
 3. Answer the user, or act.
 4. Write what changed: a decision on its issue, the plan in `NOTES.md`, a
-   new rule in `RULES.md`. Your summary for the user is your reply. Then
-   stop.
+   new rule in `RULES.md`. Then reply, as "How you write to the user" in
+   your rules says, and stop. A wake you expected, one for something the
+   user did themselves, or one that only confirms work under way (a merge or
+   passing CI on work an agent is shipping) gets no reply: end the turn with
+   a few words, such as "Noted.", never a recap.
 
 ## Your memory
 
@@ -67,8 +70,8 @@ Your memory is your issues and your memory files, not this conversation.
   thread or the code before you act on it.
 - **`RULES.md`** holds the user's standing rules for you; **`CREW.md`** the
   rules every agent follows.
-- Detailed outputs stay in reports and handoffs. Your summary for the user at
-  the end of a turn is your reply: the board keeps no digest.
+- Detailed outputs stay in reports and handoffs. The board keeps no digest:
+  what the user hears from you is your reply.
 
 ## Writing memory
 
