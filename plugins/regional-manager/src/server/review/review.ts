@@ -20,9 +20,9 @@ import { CREW_FILE, type MemoryRoot } from "../memory/memory-files.ts";
 import type { Spawner } from "../spawn.ts";
 import type { ReviewFrom } from "../store/issue/checks-store.ts";
 import type { Store } from "../store/store.ts";
-import type { AsksBb } from "../verify/verifier-asks.ts";
+import type { AsksBb } from "../hidden/asks.ts";
 import { verifierExecution, type VerifierChoice } from "../verify/verifier-model.ts";
-import { watchHidden, type ActivityBb } from "../verify/hidden-watch.ts";
+import { watchHidden, type ActivityBb } from "../hidden/watch.ts";
 import { reviewerBrief } from "./reviewer-brief.ts";
 
 type ThreadRow = Awaited<ReturnType<BbPluginApi["sdk"]["threads"]["list"]>>[number];

@@ -45,8 +45,8 @@ import type { Store } from "../store/store.ts";
 import { finalCheckerRequest, judgedTree, type FinalVerifierBb } from "./final-check/final-verifier.ts";
 import { findingsMessage } from "./findings.ts";
 import { refusalOf } from "./send-refusal.ts";
-import type { AsksBb } from "./verifier-asks.ts";
-import { watchHidden, type ActivityBb } from "./hidden-watch.ts";
+import type { AsksBb } from "../hidden/asks.ts";
+import { watchHidden, type ActivityBb } from "../hidden/watch.ts";
 import { verifierExecution } from "./verifier-model.ts";
 import { verifierBrief } from "./verifier-brief.ts";
 

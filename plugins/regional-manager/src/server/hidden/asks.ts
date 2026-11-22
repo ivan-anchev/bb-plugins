@@ -1,8 +1,8 @@
-// What a verifier's provider asks a person, settled at once. Nobody answers a verifier: it is
-// hidden, and its regional manager hears of it only through its verdict. An ask left pending holds
+// What a verifier's or a reviewer's provider asks a person, settled at once. Nobody answers either:
+// each is hidden, and its regional manager hears of it only through its verdict. An ask left pending holds
 // its turn active, so the check would wait for a verdict that never comes (seen live: a codex
 // verifier's GitHub connector asking to reconnect, thr_e7hmzb5wjd). Each is declined so the
-// verifier goes on without it and says in its verdict what it couldn't check.
+// thread goes on without it and says in its verdict or findings what it couldn't check.
 import type { CheckerRole } from "../../model/role.ts";
 import { isNamespaced, questionOf, type InteractionPayload } from "../../model/interaction.ts";
 
