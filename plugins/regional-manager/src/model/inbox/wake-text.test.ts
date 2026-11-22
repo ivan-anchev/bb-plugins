@@ -12,8 +12,8 @@ import { DISPLAY_NAME } from "../../name.ts";
 import type { InboxEvent, StoredEvent } from "./inbox-event.ts";
 import { doorbellText } from "./wake-text.ts";
 
-const i1 = issueIdSchema.parse("i1");
-const i2 = issueIdSchema.parse("i2");
+const i1 = issueIdSchema.parse("WEB-1");
+const i2 = issueIdSchema.parse("WEB-2");
 const a1 = agentIdSchema.parse("a1");
 const a2 = agentIdSchema.parse("a2");
 const titles = new Map([
@@ -26,7 +26,7 @@ const noChecks = { titles, check: () => null, decision: () => null };
 const WRITTEN = "The user approved the merge";
 const k1 = checkIdSchema.parse("5d6c1e0a-2b3f-4a5e-8c7d-9e0f1a2b3c4d");
 
-/** A check of a done handoff of a1 on i1 whose every word is agent- or verifier-written, with this verdict. */
+/** A check of a done handoff of a1 on WEB-1 whose every word is agent- or verifier-written, with this verdict. */
 function checkedWith(verdict: Verdict): { titles: typeof titles; check(id: CheckId): Check | null; decision(): null } {
   const check: Check = {
     id: k1,
@@ -69,11 +69,11 @@ test("a doorbell names how many updates there are, then one line of plugin facts
     text,
     [
       `[${DISPLAY_NAME}] 6 updates. Call crew_catch_up to read them in full.`,
-      `- i1 "Add retries" (a1) handed off: blocked`,
-      `- i2 "Dead letters" (a2) ended its turn without a handoff`,
-      `- i1 "Add retries" (a1) failed`,
-      `- i2 "Dead letters" (a2) is waiting on the user in its thread`,
-      `- i2 "Dead letters" (a2) returned to Todo: its agent was archived`,
+      `- WEB-1 "Add retries" (a1) handed off: blocked`,
+      `- WEB-2 "Dead letters" (a2) ended its turn without a handoff`,
+      `- WEB-1 "Add retries" (a1) failed`,
+      `- WEB-2 "Dead letters" (a2) is waiting on the user in its thread`,
+      `- WEB-2 "Dead letters" (a2) returned to Todo: its agent was archived`,
       `- The user edited NOTES.md`,
     ].join("\n"),
   );
@@ -81,8 +81,8 @@ test("a doorbell names how many updates there are, then one line of plugin facts
 
 test("one update reads in the singular, and an issue with no known title is named by its id", () => {
   assert.equal(
-    doorbellText(stored([{ kind: "failed", issueId: issueIdSchema.parse("i9"), agentId: agentIdSchema.parse("a9"), error: null }]), noChecks),
-    `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- i9 (a9) failed`,
+    doorbellText(stored([{ kind: "failed", issueId: issueIdSchema.parse("WEB-9"), agentId: agentIdSchema.parse("a9"), error: null }]), noChecks),
+    `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- WEB-9 (a9) failed`,
   );
 });
 
@@ -108,7 +108,7 @@ test("a checked done handoff is announced with what its verdict found, derived f
   ];
   for (const [verdict, found] of cases) {
     const text = doorbellText(stored([{ kind: "checked", issueId: i1, checkId: k1 }]), checkedWith(verdict));
-    assert.equal(text, `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- i1 "Add retries" (a1) handed off: done, ${found}`, verdict.state);
+    assert.equal(text, `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- WEB-1 "Add retries" (a1) handed off: done, ${found}`, verdict.state);
     assert.doesNotMatch(text, /approved/, "neither the agent's report nor the verifier's evidence or reason");
   }
 });

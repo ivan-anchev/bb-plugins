@@ -91,7 +91,7 @@ export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, on
       "Set yourself a reminder instead of waiting or polling: when it comes due, the plugin wakes you with its note. Give note and at, and every to repeat it; or give only cancel to cancel one. Due reminders are checked once a minute. A repeating one that was missed several times (the server was down) wakes you once, then keeps its times. crew_catch_up lists your reminders with their ids.",
     presentation: { label: { pending: "Updating reminders", completed: "Updated reminders" }, icon: { glyph: "Clock" } },
     parameters: z.object({
-      note: reminderNoteSchema.optional().describe("What to do when it comes due, in one line, such as \"check on i1\". It wakes you as written. Required unless you give cancel."),
+      note: reminderNoteSchema.optional().describe("What to do when it comes due, in one line, such as \"check on BBP-1\". It wakes you as written. Required unless you give cancel."),
       at: z.string().optional().describe(`When it first comes due: ${AT_FORMS}. Required unless you give cancel.`),
       every: z.string().optional().describe('How often it comes due again after that, such as "30m", "2h" or "every 1d". Leave it out for a one-off.'),
       cancel: reminderIdSchema.optional().describe("The id of one of your reminders to cancel, such as r3. Give nothing else with it."),
@@ -121,7 +121,7 @@ export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, on
     parameters: z.object({
       question: questionSchema.describe("What the user decides, in one line, such as \"Target main or release/2?\"."),
       options: optionsSchema.default([]).describe("Up to five answers to pick from, each a few words, such as [\"main\", \"release/2\"]. Leave it out when only their own words will do."),
-      issue: issueIdSchema.optional().describe("The issue the question is about, such as i4: it flags the issue Needs you until the user answers, and the question and its answer are recorded among its decisions."),
+      issue: issueIdSchema.optional().describe("The issue the question is about, such as BBP-4: it flags the issue Needs you until the user answers, and the question and its answer are recorded among its decisions."),
     }),
     execute: forManager(store, ASK_USER, (id, { question, options, issue }) => {
       if (issue !== undefined && store.issue(id, issue) === null) return failed(`You have no issue ${issue}. crew_catch_up lists your issues.`);

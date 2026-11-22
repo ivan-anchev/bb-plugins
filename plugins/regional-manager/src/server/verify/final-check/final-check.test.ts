@@ -7,16 +7,16 @@ import { issueIdSchema } from "../../../model/issue/issue.ts";
 import type { FinalCheck } from "../../../model/verdict/check.ts";
 import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn } from "../../test-harness.ts";
 
-const i1 = issueIdSchema.parse("i1");
+const i1 = issueIdSchema.parse("WEB-1");
 const PARENT = { ...ISSUE, title: "Card vault", description: "Cards are stored in a vault, never in our database.", brief: "Split into sub-issues.", doneCriteria: ["npm run vault-suite passes on the default branch"] };
-const SUB = { ...ISSUE, parent: "i1" };
+const SUB = { ...ISSUE, parent: "WEB-1" };
 /** origin's main once the sub-issues' pull requests merged; the local main stays at HEAD. */
 const MERGED = "b".repeat(40);
 const PASSES = { criteria: [{ criterion: 1, result: "pass", evidence: "$ npm run vault-suite\n# pass 21\n# fail 0" }], findings: [] };
 const FAILS = { criteria: [{ criterion: 1, result: "fail", evidence: "$ npm run vault-suite\nnot ok 4 - tokens survive a restart\n# fail 1" }], findings: ["The vault client logs card numbers"] };
 const CODEX = { providerId: "codex", model: "gpt-default" };
 
-/** A regional manager with a build parent i1 and two build sub-issues i2 and i3, an agent at work on each (started with `start`), and the manager idle. */
+/** A regional manager with a build parent WEB-1 and two build sub-issues WEB-2 and WEB-3, an agent at work on each (started with `start`), and the manager idle. */
 async function withParent({ verify = true, parent = {}, start = {} }: { verify?: boolean; parent?: object; start?: object } = {}) {
   const { kit, threadId, coordinatorId } = await coordinating({ verify });
   const call = async (tool: string, input: object) => {
@@ -28,7 +28,7 @@ async function withParent({ verify = true, parent = {}, start = {} }: { verify?:
   await text("issue_create", { ...PARENT, ...parent });
   await text("issue_create", { ...SUB, title: "Vault schema" });
   await text("issue_create", { ...SUB, title: "Vault client" });
-  const builders = [await started("i2"), await started("i3")];
+  const builders = [await started("WEB-2"), await started("WEB-3")];
   kit.thread(threadId).status = "idle";
   let number = 40;
   /** The agent's pull request merges on GitHub, and origin's main moves to `tip`. */
@@ -47,7 +47,7 @@ async function withParent({ verify = true, parent = {}, start = {} }: { verify?:
     const { verdict } = latest();
     return verdict.state === "running" ? verdict.verifierThreadId : assert.fail(`the final check is ${verdict.state}`);
   };
-  const row = async (id = "i1") => {
+  const row = async (id = "WEB-1") => {
     const { status, headline, needsYou } = (await kit.rpc.board({ coordinatorId })).issues.find((issue) => issue.id === id) ?? assert.fail(`no row ${id}`);
     return { status, headline, needsYou };
   };
@@ -94,23 +94,23 @@ test("1: once every sub-issue is merged the parent's final check is due, and wit
   );
   assert.equal(kit.git.heads.get(kit.environment(thread.id)), MERGED, "origin's tip, though the local main is behind");
   assert.equal(kit.repo.local.get("main"), HEAD);
-  assert.deepEqual([latest().criteria, latest().subject], [PARENT.doneCriteria, { kind: "final", defaultBranch: "main", merged: ["i2", "i3"] }]);
-  assert.match(thread.spawnedWith.prompt ?? assert.fail("no brief"), /^# Final check of i1: Card vault\n\nEvery sub-issue of i1 is closed, and the work of i2, i3 is merged on main\./);
+  assert.deepEqual([latest().criteria, latest().subject], [PARENT.doneCriteria, { kind: "final", defaultBranch: "main", merged: ["WEB-2", "WEB-3"] }]);
+  assert.match(thread.spawnedWith.prompt ?? assert.fail("no brief"), /^# Final check of WEB-1: Card vault\n\nEvery sub-issue of WEB-1 is closed, and the work of WEB-2, WEB-3 is merged on main\./);
 });
 
 test("2: a final check that passes every criterion makes the parent Done, wakes the manager, and wakes it once about the issue its close unblocked", async () => {
   const { kit, text, mergeAll, returns, row, doorbells, tick } = await withParent();
-  await text("issue_create", { ...ISSUE, title: "Charge saved cards", dependsOn: ["i1"] });
+  await text("issue_create", { ...ISSUE, title: "Charge saved cards", dependsOn: ["WEB-1"] });
   await mergeAll();
   assert.match(await returns(PASSES), /^Verdict recorded: 1 of 1 criteria passed\./);
   assert.deepEqual(await row(), at("done", "✓ Final check passed"));
   await tick();
   await tick();
-  assert.match(doorbells().join("\n"), /- i1 "Card vault" final check: passed/);
+  assert.match(doorbells().join("\n"), /- WEB-1 "Card vault" final check: passed/);
   const caughtUp = await text("crew_catch_up", {});
-  assert.match(caughtUp, /### i1 "Card vault" final check\n\nAt [^\n]+ Final check of the merged work of i2, i3: Verified: 1 of 1 criteria passed on main at b{40}, by a verifier on codex gpt-default\. bb's git plugin read the verifier's worktree as it returned its verdict: commit b{40}, on a clean working tree\. Each result/);
-  assert.match(caughtUp, /i1 is Done\./);
-  assert.equal(caughtUp.match(/### i4 "Charge saved cards" is unblocked: i1 done/g)?.length, 1);
+  assert.match(caughtUp, /### WEB-1 "Card vault" final check\n\nAt [^\n]+ Final check of the merged work of WEB-2, WEB-3: Verified: 1 of 1 criteria passed on main at b{40}, by a verifier on codex gpt-default\. bb's git plugin read the verifier's worktree as it returned its verdict: commit b{40}, on a clean working tree\. Each result/);
+  assert.match(caughtUp, /WEB-1 is Done\./);
+  assert.equal(caughtUp.match(/### WEB-4 "Charge saved cards" is unblocked: WEB-1 done/g)?.length, 1);
   await tick();
   assert.doesNotMatch(await text("crew_catch_up", {}), /is unblocked/, "once");
   assert.equal(kit.store.openChecks().length, 0);
@@ -124,7 +124,7 @@ test("3: a failed final check flags the parent, wakes the manager with a line th
   await tick();
   assert.deepEqual(await row(), at("in-progress", "✗ Final check failed", "✗ Final check failed"));
   const line = doorbells().join("\n");
-  assert.match(line, /- i1 "Card vault" final check: failed\n?/);
+  assert.match(line, /- WEB-1 "Card vault" final check: failed\n?/);
   assert.doesNotMatch(line, /vault-suite|card numbers|tokens survive/, "no word of the verifier's");
   assert.deepEqual(
     kit.sent().slice(sentBefore).filter(({ threadId }) => builders.includes(threadId)),
@@ -132,18 +132,18 @@ test("3: a failed final check flags the parent, wakes the manager with a line th
     "no message to any agent",
   );
   const caughtUp = await text("crew_catch_up", {});
-  assert.match(caughtUp, /Final check of the merged work of i2, i3: Failed verification: 0 of 1 criteria passed on main at b{40}, by a verifier on codex gpt-default\./);
+  assert.match(caughtUp, /Final check of the merged work of WEB-2, WEB-3: Failed verification: 0 of 1 criteria passed on main at b{40}, by a verifier on codex gpt-default\./);
   assert.match(caughtUp, /not ok 4 - tokens survive a restart/);
-  assert.match(caughtUp, /File the fix as a new sub-issue of i1 \(issue_create with parent "i1"\)/);
+  assert.match(caughtUp, /File the fix as a new sub-issue of WEB-1 \(issue_create with parent "WEB-1"\)/);
 
   await text("issue_create", { ...SUB, title: "Keep tokens across restarts" });
   assert.deepEqual(await row(), at("in-progress", null));
-  const fixer = await started("i4");
+  const fixer = await started("WEB-4");
   merge(fixer, "c".repeat(40));
   await tick();
   assert.equal(finalChecks().length, 2, "the failed one stays in the record");
   assert.equal(finalChecks()[0]?.verdict.state, "returned");
-  assert.deepEqual(latest().subject.merged, ["i2", "i3", "i4"]);
+  assert.deepEqual(latest().subject.merged, ["WEB-2", "WEB-3", "WEB-4"]);
   assert.equal(latest().verdict.state, "running");
   assert.deepEqual(await row(), at("verifying", "Final check running"));
 });
@@ -154,7 +154,7 @@ test("4: two ticks, or a tick racing a sub-issue filed under the parent, never l
   await twice.tick();
   await twice.tick();
   assert.equal(twice.finalChecks().length, 1);
-  assert.equal(twice.kit.store.openChecks().filter(({ issueId }) => issueId === "i1").length, 1);
+  assert.equal(twice.kit.store.openChecks().filter(({ issueId }) => issueId === "WEB-1").length, 1);
 
   // The tick read the parent due, then waited on bb for the default branch while the manager filed a sub-issue.
   const filed = await withParent();
@@ -216,7 +216,7 @@ test("5: a verifier that leaves a dirty tree fails the checkout rule; one idle w
   assert.equal(idle.latest().verdict.state, "could-not-run");
   const stopped = "Couldn't run its final check, as its verifier stopped without a verdict twice, the second time after a reminder";
   assert.deepEqual(await idle.row(), at("in-progress", stopped, stopped));
-  assert.match(idle.doorbells().join("\n"), /- i1 "Card vault" final check: could not run/);
+  assert.match(idle.doorbells().join("\n"), /- WEB-1 "Card vault" final check: could not run/);
 
   const offline = await withParent();
   await offline.mergeAll();
@@ -236,15 +236,15 @@ test("6: with verification off no verifier starts, the parent waits In review un
   await off.mergeAll();
   assert.equal(off.kit.spawned(), spawned, "no verifier");
   assert.deepEqual(await off.row(), at("in-review", "Unverified: verification was off"));
-  assert.match(off.doorbells().join("\n"), /- i1 "Card vault" final check: not run, verification is off/);
-  assert.equal(await off.text("issue_update", { id: "i1", status: "done" }), "Updated i1.");
+  assert.match(off.doorbells().join("\n"), /- WEB-1 "Card vault" final check: not run, verification is off/);
+  assert.equal(await off.text("issue_update", { id: "WEB-1", status: "done" }), "Updated WEB-1.");
   assert.deepEqual(await off.row(), at("done", "Accepted"));
 
   const { kit, threadId, coordinatorId } = await coordinating();
   const research = { kind: "research", title: "Pick a vault", description: "Which vault fits.", brief: "Compare them.", doneCriteria: [] };
   await kit.call("issue_create", research, threadId);
-  await kit.call("issue_create", { ...research, title: "Vault", parent: "i1" }, threadId);
-  const researcher = threadIn(textOf(await kit.call("agent_start", { issue: "i2" }, threadId)));
+  await kit.call("issue_create", { ...research, title: "Vault", parent: "WEB-1" }, threadId);
+  const researcher = threadIn(textOf(await kit.call("agent_start", { issue: "WEB-2" }, threadId)));
   await kit.call("agent_handoff", { status: "done", summary: "Vault", did: [], evidence: [], concerns: [], deviations: [], findings: [], report: "Vault." }, researcher);
   await kit.idle(researcher, "Handed off.");
   kit.clock.now += 10 * 60_000;
@@ -256,11 +256,11 @@ test("6: with verification off no verifier starts, the parent waits In review un
 test("7: a build parent with no done-criteria when its check is due Needs you, and none starts until criteria are written", async () => {
   const { text, mergeAll, row, finalChecks, tick } = await withParent({ parent: { doneCriteria: [] } });
   await mergeAll();
-  const none = "i1 has no done-criteria for its final check";
+  const none = "WEB-1 has no done-criteria for its final check";
   assert.deepEqual(await row(), at("in-progress", none, none));
   await tick();
   assert.deepEqual(finalChecks(), []);
-  await text("issue_update", { id: "i1", doneCriteria: ["npm run vault-suite passes on the default branch"] });
+  await text("issue_update", { id: "WEB-1", doneCriteria: ["npm run vault-suite passes on the default branch"] });
   assert.deepEqual(await row(), at("verifying", "Final check due"));
   await tick();
   assert.deepEqual(await row(), at("verifying", "Final check running"));
@@ -273,13 +273,13 @@ test("8: the final check runs on the parent's named verifier unless an agent of 
   await named.mergeAll();
   assert.deepEqual(runsOn(named.kit, named.verifier()), ["claude-code", "sonnet"]);
   await named.returns(PASSES);
-  assert.match(await named.text("crew_catch_up", {}), /by a verifier on claude-code sonnet, as named on i1\./);
+  assert.match(await named.text("crew_catch_up", {}), /by a verifier on claude-code sonnet, as named on WEB-1\./);
 
   const theirs = await withParent({ parent: { verifier: CODEX }, start: { execution: CODEX } });
   await theirs.mergeAll();
   assert.deepEqual(runsOn(theirs.kit, theirs.verifier()), ["claude-code", "opus"], "the manager's, as the named one made the merged work");
   await theirs.returns(PASSES);
-  assert.match(await theirs.text("crew_catch_up", {}), /by a verifier on claude-code opus, not the codex gpt-default named on i1: a1 did the work on it\./);
+  assert.match(await theirs.text("crew_catch_up", {}), /by a verifier on claude-code opus, not the codex gpt-default named on WEB-1: a1 did the work on it\./);
 
   const managers = await withParent();
   await managers.mergeAll();
@@ -300,25 +300,25 @@ test("8: the final check runs on the parent's named verifier unless an agent of 
   await namedAlone.returns(PASSES);
   const { verdict } = namedAlone.latest();
   assert.equal(verdict.state === "returned" && verdict.sameModel, true);
-  assert.match(await namedAlone.text("crew_catch_up", {}), /by a verifier on claude-code opus, a1's own model, as no other was available; it is also the one named on i1\./);
+  assert.match(await namedAlone.text("crew_catch_up", {}), /by a verifier on claude-code opus, a1's own model, as no other was available; it is also the one named on WEB-1\./);
 
   // Naming the agents' model on the parent promises it only as the first choice.
   const namedTheirs = await withParent();
-  const note = await namedTheirs.text("issue_update", { id: "i1", verifier: { providerId: "claude-code", model: "opus" } });
+  const note = await namedTheirs.text("issue_update", { id: "WEB-1", verifier: { providerId: "claude-code", model: "opus" } });
   assert.doesNotMatch(note, /are checked on/);
-  assert.match(note, /claude-code opus \(high\) is now i1's first choice of verifier for its done handoffs, and its final check as a parent, from the next one on: each runs on it when bb lists it where the check runs and no agent whose work it checks ran on it\./);
+  assert.match(note, /claude-code opus \(high\) is now WEB-1's first choice of verifier for its done handoffs, and its final check as a parent, from the next one on: each runs on it when bb lists it where the check runs and no agent whose work it checks ran on it\./);
   await namedTheirs.mergeAll();
   assert.deepEqual(runsOn(namedTheirs.kit, namedTheirs.verifier()), ["codex", "gpt-default"]);
 
   const renamed = await withParent();
   await renamed.mergeAll();
   const running = renamed.verifier();
-  assert.match(await renamed.text("issue_update", { id: "i1", verifier: { providerId: "claude-code", model: "sonnet" } }), /A check already running keeps its own\./);
+  assert.match(await renamed.text("issue_update", { id: "WEB-1", verifier: { providerId: "claude-code", model: "sonnet" } }), /A check already running keeps its own\./);
   assert.equal(renamed.latest().verifier, null);
   assert.equal(renamed.verifier(), running);
   await renamed.returns(FAILS);
   await renamed.text("issue_create", { ...SUB, title: "Keep tokens across restarts" });
-  renamed.merge(await renamed.started("i4"), "c".repeat(40));
+  renamed.merge(await renamed.started("WEB-4"), "c".repeat(40));
   await renamed.tick();
   assert.deepEqual(runsOn(renamed.kit, renamed.verifier()), ["claude-code", "sonnet"]);
 });
@@ -335,7 +335,7 @@ test("an opened parent sends its final checks, each with only what its detail sh
   assert.deepEqual(Object.keys(shown.verdict).sort(), ["checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"], "no model");
   const row = (await kit.rpc.board({ coordinatorId })).issues[0] ?? assert.fail("no row");
   assert.deepEqual(Object.keys(row).sort(), ["agent", "blockedBy", "headline", "id", "kind", "needsYou", "parentId", "pr", "status", "subIssues", "title"]);
-  assert.deepEqual((await kit.rpc.issue({ coordinatorId, issueId: issueIdSchema.parse("i2") })).finalChecks, [], "a sub-issue has none");
+  assert.deepEqual((await kit.rpc.issue({ coordinatorId, issueId: issueIdSchema.parse("WEB-2") })).finalChecks, [], "a sub-issue has none");
 });
 
 test("a verdict that arrives after a sub-issue was filed under the parent is kept, and closes nothing while that sub-issue is open; its merge makes the next check", async () => {
@@ -346,25 +346,25 @@ test("a verdict that arrives after a sub-issue was filed under the parent is kep
   assert.deepEqual(await row(), at("in-progress", null));
   const caughtUp = await text("crew_catch_up", {});
   assert.match(caughtUp, /Verified: 1 of 1 criteria passed on main/);
-  assert.doesNotMatch(caughtUp, /i1 is Done/);
-  assert.match(caughtUp, /\n\ni1 is In progress\. This final check no longer places it: the board below says where it stands\./);
-  merge(await started("i4"), "c".repeat(40));
+  assert.doesNotMatch(caughtUp, /WEB-1 is Done/);
+  assert.match(caughtUp, /\n\nWEB-1 is In progress\. This final check no longer places it: the board below says where it stands\./);
+  merge(await started("WEB-4"), "c".repeat(40));
   await tick();
   assert.equal(finalChecks().length, 2);
-  assert.deepEqual(latest().subject.merged, ["i2", "i3", "i4"]);
+  assert.deepEqual(latest().subject.merged, ["WEB-2", "WEB-3", "WEB-4"]);
   assert.deepEqual(await row(), at("verifying", "Final check running"));
 });
 
 test("a final check that passes after the manager canceled the parent leaves it Canceled, and catch-up says so", async () => {
   const { text, mergeAll, returns, row } = await withParent();
   await mergeAll();
-  assert.equal(await text("issue_update", { id: "i1", status: "canceled" }), "Updated i1.");
+  assert.equal(await text("issue_update", { id: "WEB-1", status: "canceled" }), "Updated WEB-1.");
   assert.match(await returns(PASSES), /^Verdict recorded/);
   assert.equal((await row()).status, "canceled");
   const caughtUp = await text("crew_catch_up", {});
   assert.match(caughtUp, /Verified: 1 of 1 criteria passed on main/);
-  assert.doesNotMatch(caughtUp, /i1 is Done/);
-  assert.match(caughtUp, /\n\ni1 is Canceled\. This final check no longer places it: the board below says where it stands\./);
+  assert.doesNotMatch(caughtUp, /WEB-1 is Done/);
+  assert.match(caughtUp, /\n\nWEB-1 is Canceled\. This final check no longer places it: the board below says where it stands\./);
 });
 
 test("a final check's verifier starts on the branch the check recorded, though bb's default branch changed before it spawned", async () => {
@@ -391,7 +391,7 @@ test("a sub-issue merged while a final check runs supersedes it, and stops its v
   const first = verifier();
   // The manager filed and merged a fix before the verifier returned.
   await text("issue_create", { ...SUB, title: "Keep tokens across restarts" });
-  merge(await started("i4"), "c".repeat(40));
+  merge(await started("WEB-4"), "c".repeat(40));
   await tick();
   assert.deepEqual(finalChecks().map(({ verdict }) => verdict.state), ["superseded", "running"]);
   assert.equal(kit.thread(first).status, "idle", "stopped");
@@ -411,18 +411,18 @@ test("a final check superseded by an agent started on the parent while it had no
   const { call, mergeAll, row, finalChecks, latest, tick } = await withParent();
   await mergeAll();
   const steps: [string, object][] = [
-    ["issue_update", { id: "i2", parent: null }],
-    ["issue_update", { id: "i3", parent: null }],
-    ["agent_start", { issue: "i1" }],
+    ["issue_update", { id: "WEB-2", parent: null }],
+    ["issue_update", { id: "WEB-3", parent: null }],
+    ["agent_start", { issue: "WEB-1" }],
     ["agent_stop", { agent: "a3" }],
-    ["issue_update", { id: "i2", parent: "i1" }],
-    ["issue_update", { id: "i3", parent: "i1" }],
+    ["issue_update", { id: "WEB-2", parent: "WEB-1" }],
+    ["issue_update", { id: "WEB-3", parent: "WEB-1" }],
   ];
   for (const [tool, input] of steps) assert.equal((await call(tool, input)).refused, false, `${tool} ${JSON.stringify(input)}`);
   assert.equal(latest().verdict.state, "superseded");
   assert.deepEqual(await row(), at("verifying", "Final check due"));
   await tick();
   assert.deepEqual(finalChecks().map(({ verdict }) => verdict.state), ["superseded", "running"]);
-  assert.deepEqual(latest().subject.merged, ["i2", "i3"]);
+  assert.deepEqual(latest().subject.merged, ["WEB-2", "WEB-3"]);
   assert.deepEqual(await row(), at("verifying", "Final check running"));
 });

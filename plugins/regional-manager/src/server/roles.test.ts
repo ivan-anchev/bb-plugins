@@ -107,7 +107,7 @@ test("an agent thread reads its regional manager's memory, and is refused the ma
 
   for (const [tool, input] of [
     ["issue_create", { kind: "build", title: "More", description: "More work." }],
-    ["agent_start", { issue: "i1" }],
+    ["agent_start", { issue: "WEB-1" }],
     ["crew_memory_write", { file: "NOTES.md", content: "# Taken over\n", baseVersion: null }],
     ["crew_catch_up", {}],
   ] as const) {
@@ -130,7 +130,7 @@ test("a verifier reads in its rules, both kinds of first message, issue_verdict'
   await kit.idle(agentThreadId, "Handed off.");
   const verdict = kit.store.latestHandoff(coordinatorId, agentIdSchema.parse("a1"))?.check?.verdict;
   const verifier = verdict?.state === "running" ? verdict.verifierThreadId : assert.fail("no verifier running");
-  const finalCheck = finalCheckBrief({ id: issueIdSchema.parse("i1"), title: "Recovery", description: "Recover a lost sandbox." }, { criteria: [criterion], subject: { kind: "final", defaultBranch: "main", merged: [issueIdSchema.parse("i2")] } });
+  const finalCheck = finalCheckBrief({ id: issueIdSchema.parse("WEB-1"), title: "Recovery", description: "Recover a lost sandbox." }, { criteria: [criterion], subject: { kind: "final", defaultBranch: "main", merged: [issueIdSchema.parse("WEB-2")] } });
   const skill = readFileSync(join(import.meta.dirname, "..", "..", "skills", "verifying", "SKILL.md"), "utf8").replace(/\s+/g, " ");
 
   const rule = "A criterion you can't check as it is written, as when it names a step that hasn't happened yet, is unverifiable, with why as its evidence: never pass it on a nearby fact you could check.";

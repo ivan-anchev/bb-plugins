@@ -125,7 +125,7 @@ function IssueItem({ issue, under, open, onToggle, rowRef, detail }: IssueItemPr
 
 // ------------------------------------------------------------------ layer 2
 
-/** The decision's or the issue's id. why one key space: decision and issue ids never collide (`d1`, `i1`). */
+/** The decision's or the issue's id. why one key space: decision and issue ids never collide (`d1`, `BBP-1`). */
 const idOf = (entry: BoardItem<Row>): string => (entry.kind === "decision" ? entry.decision.id : entry.issue.id);
 
 /** A row's own key: its id, but for a flagged sub-issue's copy under Needs you, which its issue's row under its parent already holds. */

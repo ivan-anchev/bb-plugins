@@ -184,7 +184,7 @@ function named<T>(byId: ReadonlyMap<IssueId, T>, id: IssueId): T {
  * Why `changed`'s dependencies and parent, as a write would leave them, can't stand among the
  * regional manager's `issues` as stored, or null when they can: a dependency on no issue, on
  * itself, between a parent and its sub-issue, or one that closes a cycle, named as its path
- * ("i3 → i5 → i3"). `changed` is one of `issues` or a new one. why a parent and its sub-issues in
+ * ("BBP-3 → BBP-5 → BBP-3"). `changed` is one of `issues` or a new one. why a parent and its sub-issues in
  * the cycle: a sub-issue waits for its parent's dependencies, and a parent closes only with its
  * sub-issues, so either can close one as surely as a dependency.
  */

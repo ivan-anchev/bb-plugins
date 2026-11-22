@@ -5,11 +5,15 @@ import { z } from "zod";
 import type { Execution } from "../execution.ts";
 import { ONE_LINE } from "../one-line.ts";
 import type { CoordinatorId } from "../role.ts";
+import type { IssueKey } from "./issue-key.ts";
 import { isVerified, minCriteria, PIPELINES, type Kind } from "./kind.ts";
 
-/** An issue's id within its regional manager: `i1`, `i2`… never reused. */
-export const issueIdSchema = z.string().regex(/^i[1-9][0-9]*$/, "An issue id is i1, i2 and so on").brand<"issueId">();
+/** An issue's id within its regional manager: its issue key (issue-key.ts) and its number, `BBP-1`, `BBP-2`… never reused. */
+export const issueIdSchema = z.string().regex(/^[A-Z]{1,3}-[1-9][0-9]*$/, "An issue id is the project's key and a number, such as BBP-4").brand<"issueId">();
 export type IssueId = z.infer<typeof issueIdSchema>;
+
+/** The id of the regional manager's issue numbered `number`, whose key is `key`. */
+export const issueIdOf = (key: IssueKey, number: number): IssueId => issueIdSchema.parse(`${key}-${number}`);
 
 export const titleSchema = z.string().trim().min(1).max(80).regex(ONE_LINE, "A title is one line");
 

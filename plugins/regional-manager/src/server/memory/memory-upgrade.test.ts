@@ -20,7 +20,7 @@ The index of this memory. Each file holds one kind of thing:
 - DIGEST.md: the latest summary for the user.
 `;
 
-const PLAN = "# Plan\n\n1. Inventory the endpoints\n2. Retire cron (i4)\n";
+const PLAN = "# Plan\n\n1. Inventory the endpoints\n2. Retire cron (WEB-4)\n";
 const PREFERENCES = "# Preferences\n\n- 2026-11-02: build on codex gpt-5.4\n";
 const CREW = "# Crew rules\n\n- Run npm run check before handing off.\n";
 
@@ -47,7 +47,7 @@ test("0.4's memory upgrades whole: PLAN.md becomes NOTES.md and PREFERENCES.md R
     "CREW.md": CREW,
     "GOAL.md": "Migrate the webhook service",
     "MEMORY.md": SEEDS["MEMORY.md"],
-    "NOTES.md": "# Notes\n\n1. Inventory the endpoints\n2. Retire cron (i4)\n",
+    "NOTES.md": "# Notes\n\n1. Inventory the endpoints\n2. Retire cron (WEB-4)\n",
     "RULES.md": "# Rules for the regional manager\n\n- 2026-11-02: build on codex gpt-5.4\n",
   });
   assert.ok(refreshed.length > 0 && refreshed.every((id) => id === MANAGER), "each change refreshes the manager's memory");
@@ -103,12 +103,12 @@ test("a move whose new file exists already leaves both files as they are", () =>
 });
 
 test("a move cut short after writing the new file is finished by the next run, which removes the old one", () => {
-  const { root, folder } = memoryOf040({ [MANAGER]: seeded040({ "NOTES.md": "# Notes\n\n1. Inventory the endpoints\n2. Retire cron (i4)\n" }) });
+  const { root, folder } = memoryOf040({ [MANAGER]: seeded040({ "NOTES.md": "# Notes\n\n1. Inventory the endpoints\n2. Retire cron (WEB-4)\n" }) });
   upgradeMemoryFrom040(root, [MANAGER]);
 
   const files = folder(MANAGER);
   assert.equal(files["PLAN.md"], undefined);
-  assert.equal(files["NOTES.md"], "# Notes\n\n1. Inventory the endpoints\n2. Retire cron (i4)\n");
+  assert.equal(files["NOTES.md"], "# Notes\n\n1. Inventory the endpoints\n2. Retire cron (WEB-4)\n");
 });
 
 test("a second run changes nothing, and memory seeded today is never touched", () => {

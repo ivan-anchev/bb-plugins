@@ -119,7 +119,7 @@ rejected.
 ## Issues
 
 An issue is one piece of the work, filed with `issue_create` and numbered
-`i1`, `i2`… within its regional manager (an id is never reused). It has a
+`BBP-1`, `BBP-2`… within its regional manager (an id is never reused). It has a
 kind, a title, a description for you, and before an agent can start, a brief
 and its done-criteria. The kind is one of two, and can change only until an
 agent has started on the issue:
@@ -185,7 +185,7 @@ A parent's status rolls up from its sub-issues, derived like any other:
   is Done. A build parent gets its final check once every Done build
   sub-issue's pull request merged (see [A build parent's final
   check](#a-build-parents-final-check)). A build sub-issue the manager
-  accepted unmerged flags the parent Needs you ("i3 isn't merged, so i1's
+  accepted unmerged flags the parent Needs you ("BBP-3 isn't merged, so BBP-1's
   work isn't all on the default branch"); the plugin keeps reading that pull
   request, and its merge clears the flag.
 
@@ -243,14 +243,14 @@ ends it, as for any verifier.
   manager's catch-up says where the parent stands now, from the same view the
   board shows.
 - A build parent with no done-criteria when its check comes due Needs you
-  ("i1 has no done-criteria for its final check"), and none starts until
+  ("BBP-1 has no done-criteria for its final check"), and none starts until
   criteria are written. With no default branch on record in bb, none starts
   and the parent stays "Final check due". A research parent never has one.
 
-The manager is woken with `i1 "Card vault" final check: failed` (or passed,
+The manager is woken with `BBP-1 "Card vault" final check: failed` (or passed,
 could not run, not run, verification is off), which quotes nothing;
 `crew_catch_up` and `issue_read` print the verdict whole, with the default
-branch and commit it judged and which model it ran on ("as named on i1", or
+branch and commit it judged and which model it ran on ("as named on BBP-1", or
 "a3's own model, as no other was available"). Each final check stays in the
 parent's record. After its verdict, the verifier's thread and its worktree
 are left as they are, for the user to open from the verdict; they go when the
@@ -265,7 +265,7 @@ from the same statuses the board shows, never stored, so it can't go stale. A
 research dependency closes with its report and reopens when its agent is
 messaged, and its dependents are blocked again until the next report. A
 dependency on an issue the manager doesn't have, on the issue itself, or that
-would close a cycle is refused, naming the cycle (`i1 → i3 → i2 → i1`); a
+would close a cycle is refused, naming the cycle (`BBP-1 → BBP-3 → BBP-2 → BBP-1`); a
 cycle through a parent counts, since a sub-issue waits for its parent's
 dependencies and a parent for its sub-issues.
 
@@ -548,19 +548,19 @@ work with `agent_handoff`, and the plugin records everything it sees:
 
 A build issue's `done` handoff is announced only together with its verdict
 (see [Verification](#verification)); everything else at once, a research
-issue's done handoff included, as `- i2 "Pick a card vault" (a2) handed off:
+issue's done handoff included, as `- BBP-2 "Pick a card vault" (a2) handed off:
 done`. `crew_catch_up` then prints its report whole with the file it was
 saved to.
 
 Each one wakes the regional manager with one short message: the plugin's
 name in brackets, how many updates there are, and one line each, naming the
 issue and its agent, such as
-`- i1 "Add retries" (a1) handed off: done, failed verification`,
-`- i2 "Dead letters" (a2) handed off: blocked`,
-`- i1 "Add retries" (a1) PR #41: CI passed`,
-`- i3 "Metrics" (a3) returned to Todo: its agent was stopped`,
-`- i4 "Card vault schema" is unblocked: i2 done`,
-`- The user edited NOTES.md`, `- Your reminder r1: check on i1`,
+`- BBP-1 "Add retries" (a1) handed off: done, failed verification`,
+`- BBP-2 "Dead letters" (a2) handed off: blocked`,
+`- BBP-1 "Add retries" (a1) PR #41: CI passed`,
+`- BBP-3 "Metrics" (a3) returned to Todo: its agent was stopped`,
+`- BBP-4 "Card vault schema" is unblocked: BBP-2 done`,
+`- The user edited NOTES.md`, `- Your reminder r1: check on BBP-1`,
 `- The user answered your question d1: Target main or release/2?` or
 `- Your own environment has 2 files changed after your turn: hand the change to an agent`.
 The tree being clean again, like a fix round sent back, wakes nobody: it is
@@ -640,7 +640,7 @@ a **verifier** for each one:
   tree were as claimed, every criterion passed, and CI didn't fail on the
   commit when the issue has a pull request; an unverifiable criterion is not a
   pass. The manager's catch-up says which model checked it and why, as in
-  "on claude-code opus, as named on i1".
+  "on claude-code opus, as named on BBP-1".
 - **Nobody answers a verifier**: anything its provider asks a person (a
   question, an approval, an MCP connector's sign-in) is declined as bb raises
   it, or at the next tick if the plugin missed it: an approval is denied, a
@@ -702,7 +702,7 @@ regional manager:
   and the tick tries again. A reload in between loses
   nothing: the tick sends findings still owed.
 - The regional manager has nothing to do, so this alone doesn't wake it. It
-  is listed, as in `- i1 "Add retries" (a1) handed off: done, failed
+  is listed, as in `- BBP-1 "Add retries" (a1) handed off: done, failed
   verification, findings sent back to it (fix round 1)`, in its next wake and
   catch-up.
 - An agent gets **one** such round, counted on the agent before the findings
@@ -787,7 +787,7 @@ Rather than wait or poll, a regional manager sets itself a reminder with
 `crew_remind`:
 
 - **Set one** with a `note` (one line, up to 500 characters, such as "check
-  on i1") and `at`, when it first comes due: `"2m"`, `"in 2h"` or `"3d"` from
+  on BBP-1") and `at`, when it first comes due: `"2m"`, `"in 2h"` or `"3d"` from
   now (whole minutes, hours or days), or an ISO 8601 time with its offset,
   such as `"2026-11-16T17:00+02:00"` (the thread can't know the server's time
   zone, so a time without one is refused). Add `every`, such as `"30m"`,
@@ -796,7 +796,7 @@ Rather than wait or poll, a regional manager sets itself a reminder with
   with the forms it accepts, and nothing is set. It returns the reminder's
   id: `r1`, `r2`… An id is never reused.
 - **When it comes due**, the once-a-minute tick wakes the thread with its
-  note, as in `- Your reminder r1: check on i1`, within about a minute. A
+  note, as in `- Your reminder r1: check on BBP-1`, within about a minute. A
   one-off is then gone. A repeating one moves to its next time after now, so
   one missed several times while bb was down wakes the thread once, and keeps
   its schedule.
@@ -901,7 +901,7 @@ and ends with its [memory](#read-and-edit-memory):
   request: its number in its state's colour, with a dot for its CI, which
   opens it on GitHub. A research issue's row reads "Research" and never has
   a pull request. An issue a dependency blocks starts its headline line with
-  "blocked by i6" (two named, the rest counted: "blocked by i6, i7 +2") and
+  "blocked by BBP-6" (two named, the rest counted: "blocked by BBP-6, BBP-7 +2") and
   stays in its own status's lane: blocked is not a lane, and doesn't put it
   under Needs you. That differs from an agent's "Blocked: <summary>"
   headline, which is the agent asking you for something, under Needs you.
@@ -917,7 +917,7 @@ and ends with its [memory](#read-and-edit-memory):
   catch-up, with no such cell, leads a parent's line with the count ("1/3
   done"). A flagged
   sub-issue is also listed flat under Needs you, its parent's id ahead of its
-  own ("i1›i3"). A lane's count is its rows: a parent counts once, its
+  own ("BBP-1›BBP-3"). A lane's count is its rows: a parent counts once, its
   sub-issues by its own count. Folding a lane folds its parents with their
   sub-issues.
 
@@ -926,7 +926,7 @@ headline whole, which a closed row fades out at its edge, and under it come
 what it is about; its **Parent**, only on a flagged sub-issue's row under
 Needs you, away from its parent (rows nest sub-issues already, so a detail
 lists none); **Depends on** (a sub-issue's lists its parent's open
-dependencies too, "through i1") and **Blocks**, each issue there with its status's glyph, id and title, and none
+dependencies too, "through BBP-1") and **Blocks**, each issue there with its status's glyph, id and title, and none
 when there are none; pressing one goes
 to that issue on the board, unfolding its lane, opening its row, moving
 focus to it and scrolling it to the top (as near as the board's end
@@ -940,7 +940,7 @@ message); and its **Record**: each
 agent that held it, how it ended, and each handoff it made, the latest one
 open. A research issue's done handoff shows its **Report** first, as the
 Markdown it is, beside the memory file it was saved to (such as
-`reports/i2.md`): a long report scrolls in its own box, and the file holds
+`reports/BBP-2.md`): a long report scrolls in its own box, and the file holds
 it whole under Memory in the manager's Board tab. Nothing verifies it, so it has no verdict.
 A build issue's handoff shows the verdict on it first: how many criteria passed, a link to the verifier thread,
 and the commit checked; the plugin's own read when that commit wasn't checked

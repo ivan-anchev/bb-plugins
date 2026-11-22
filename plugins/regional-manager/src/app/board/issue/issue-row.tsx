@@ -90,8 +90,8 @@ export function IssueRow({ ref, issue, under, open, detailId, onToggle }: IssueR
 const RowText = ({ text, whole }: { text: string; whole: boolean }) => (whole ? <span className="rmi-whole">{text}</span> : <FadingText text={text} />);
 
 /**
- * What blocks the issue, ahead of its headline: "blocked by i6", the first two named and the rest
- * counted ("blocked by i6, i7 +2") so it keeps to its line; its detail lists them all. why lower case,
+ * What blocks the issue, ahead of its headline: "blocked by BBP-6", the first two named and the rest
+ * counted ("blocked by BBP-6, BBP-7 +2") so it keeps to its line; its detail lists them all. why lower case,
  * its ids set as the row's own: it is a fact about the plan, unlike an agent's "Blocked: …"
  * headline, the agent's words asking the user for something.
  */
@@ -113,9 +113,9 @@ const NAMED_BLOCKERS = 2;
 const QUIET: ReadonlySet<IssueStatus> = new Set(["done", "canceled"]);
 
 /**
- * "i3 Build: Add the hello note, In review, ✓ Verified: …"; "i4 Build: Retry queue, Todo, blocked by
- * i2 and i3, Not started"; "i1 Build: Card vault, In progress, 1 of 3 sub-issues done";
- * "i5 Build: Vault schema, sub-issue of i1, In progress, Blocked: …". why a sub-issue names its parent
+ * "BBP-3 Build: Add the hello note, In review, ✓ Verified: …"; "BBP-4 Build: Retry queue, Todo, blocked by
+ * BBP-2 and BBP-3, Not started"; "BBP-1 Build: Card vault, In progress, 1 of 3 sub-issues done";
+ * "BBP-5 Build: Vault schema, sub-issue of BBP-1, In progress, Blocked: …". why a sub-issue names its parent
  * under it too: a reader who tabs or lists buttons straight to it hears no nesting.
  */
 const spoken = (issue: Row): string =>

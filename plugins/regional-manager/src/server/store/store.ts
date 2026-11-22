@@ -13,8 +13,10 @@ import type { Agent, AgentId } from "../../model/agent.ts";
 import type { HandoffId } from "../../model/handoff.ts";
 import { issueDecisions, type IssueDecision } from "../../model/decision.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
+import type { IssueKey } from "../../model/issue/issue-key.ts";
 import { agentsStore, bindRole, endAgent, insertAgent, insertTicket, type NewAgent } from "./issue/agents-store.ts";
 import { checksStore, startCheck, supersedeChecks } from "./issue/checks-store.ts";
+import { issueKeysStore } from "./issue/issue-keys-store.ts";
 import { issuesStore } from "./issue/issues-store.ts";
 import { prStore } from "./issue/pr-store.ts";
 import { MIGRATIONS } from "./migrations.ts";
@@ -47,6 +49,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     ...agentsStore(db),
     ...checksStore(db),
     ...prStore(db),
+    ...issueKeysStore(db),
 
     /** The issue's decisions, its one list, oldest first: the questions put to the user naming it, answered or not, and the decisions recorded on it. */
     issueDecisions: (coordinatorId: CoordinatorId, id: IssueId): IssueDecision[] => issueDecisions(id, inbox.decisions(coordinatorId), issues.recordedDecisions(coordinatorId, id)),
@@ -74,9 +77,12 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
       return name === null ? null : { kind: "not-started", ticket, name };
     },
 
-    /** The project a regional manager not started yet starts on, written before its thread is spawned so its row is whole once the thread binds. */
-    startsOn(id: CoordinatorId, projectId: string): void {
-      db().prepare("UPDATE coordinators SET project_id = ? WHERE id = ?").run(projectId, id);
+    /**
+     * The project a regional manager not started yet starts on, and the issue key taken from its name
+     * (issue-key.ts), written before its thread is spawned so its row is whole once the thread binds.
+     */
+    startsOn(id: CoordinatorId, projectId: string, issueKey: IssueKey): void {
+      db().prepare("UPDATE coordinators SET project_id = ?, issue_key = ? WHERE id = ?").run(projectId, issueKey, id);
     },
 
     /** Replaces what the plugin keeps of the regional manager's profile but its name. */

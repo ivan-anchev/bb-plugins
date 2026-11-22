@@ -20,7 +20,7 @@ import { harness, newThreadRequest, profileNamed } from "./server/test-harness.t
 
 const PLUGIN = join(import.meta.dirname, "..");
 
-const MEANING = `"crew" means all of one regional manager's agents. One delegated thread is an agent (a1, agent_start); one piece of work is an issue (i1, issue_create).`;
+const MEANING = `"crew" means all of one regional manager's agents. One delegated thread is an agent (a1, agent_start); one piece of work is an issue (WEB-1, issue_create).`;
 
 /** The tools about every agent at once: catching up, memory, reminders, asking the user. The only tools named crew_. */
 const FLEET_TOOLS = new Set(["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user"]);
@@ -91,7 +91,7 @@ function misusesIn(file: string): string[] {
         const advice = adviceFor(name, line.slice(0, start), line.slice(start + name.length), code && !isComment(line, start));
         return advice === null ? [] : [`${at}  ${name}: ${advice}`];
       });
-      const ids = [...line.matchAll(OLD_ID)].map(({ 0: id }) => `${at}  ${id}: an id from before agents. An agent's id is a1, a2…; an issue's is i1, i2….`);
+      const ids = [...line.matchAll(OLD_ID)].map(({ 0: id }) => `${at}  ${id}: an id from before agents. An agent's id is a1, a2…; an issue's is WEB-1, WEB-2….`);
       const possessions = [...line.matchAll(EACH_CREW_WITH_ITS)].map(({ 0: phrase }) => `${at}  "${phrase}": ${ONE_THREAD}`);
       return [...names, ...ids, ...possessions];
     });

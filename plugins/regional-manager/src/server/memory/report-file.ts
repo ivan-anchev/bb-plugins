@@ -13,7 +13,7 @@ import type { IssueId } from "../../model/issue/issue.ts";
 import { memoryFileSchema, type MemoryFile, type MemoryText } from "../../model/memory-file.ts";
 import type { Memory } from "./memory-files.ts";
 
-/** Where an issue's report is saved while nobody edits it: `reports/i2.md`. */
+/** Where an issue's report is saved while nobody edits it: `reports/BBP-2.md`. */
 export const reportFileOf = (issueId: IssueId): MemoryFile => memoryFileSchema.parse(`reports/${issueId}.md`);
 
 /**

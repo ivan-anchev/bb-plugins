@@ -679,7 +679,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       return models === null ? { modelLoadError: { code: "auth_required", detail: null, providerId }, models: [] } : { modelLoadError: null, models };
     },
   } satisfies CatalogBb["sdk"]["providers"];
-  const projects = { get: async (_: { projectId: string }) => ({ gitRemoteUrl: github.remote }) };
+  const projects = { get: async (_: { projectId: string }) => ({ name: PROJECT_NAME, gitRemoteUrl: github.remote }) };
   /**
    * bb's environments: the ones it has destroyed, as when their sandbox was removed (every other one
    * is ready), and the project's default branch bb records on each. Set `holding` to keep each answer, as read when called, until the test calls its release in `held`.
@@ -1104,7 +1104,7 @@ function configurationContext(threadId: string, pluginMetadata: PluginAgentConfi
   return {
     pluginMetadata,
     thread: { id: threadId, title: null, parentThreadId: null, sourceThreadId: null },
-    project: { id: "prj_1", kind: "standard", name: "Webhooks", gitRemoteUrl: null },
+    project: { id: "prj_1", kind: "standard", name: PROJECT_NAME, gitRemoteUrl: null },
     environment: { id: "env_1", name: null, path: "/work/webhooks", branchName: "main", workspaceProvisionType: null },
     host: { id: "host_1", name: "This Mac" },
     provider: { id: "claude-code", model: "opus", capabilities: { supportsNativeUserQuestion: true } },
@@ -1112,11 +1112,14 @@ function configurationContext(threadId: string, pluginMetadata: PluginAgentConfi
   };
 }
 
+/** The project every regional manager here works in: its issues are WEB-1, WEB-2… */
+const PROJECT_NAME = "Webhooks";
+
 /** A build issue as most tests file it: a brief, and one done-criterion. */
 export const ISSUE = { kind: "build", title: "Add retries", description: "Failed webhook deliveries are lost.", brief: "Retry failed deliveries with backoff.", doneCriteria: ["npm test passes"] };
 
 /** The id issue_create's answer names. */
-export const issueIn = (text: string): string => /Filed (i\d+)/.exec(text)?.[1] ?? assert.fail(`no issue filed: ${text}`);
+export const issueIn = (text: string): string => /Filed ([A-Z]+-\d+)/.exec(text)?.[1] ?? assert.fail(`no issue filed: ${text}`);
 
 /**
  * The regional manager `threadId` files an issue (ISSUE, with `fields` over it) and starts an agent

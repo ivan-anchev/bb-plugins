@@ -144,7 +144,7 @@ const researched = (questions: string[]): IssueDetail => ({
           concerns: [],
           deviations: [],
           findings: [],
-          report: { report: REPORT, file: memoryFileSchema.parse("reports/i2.md") },
+          report: { report: REPORT, file: memoryFileSchema.parse("reports/WEB-2.md") },
           verdict: null,
         },
       ],
@@ -208,11 +208,11 @@ test("Needs you leads with open decisions, then flagged issues showing their own
   const { view, lanes } = await mount({
     decisions: [decision("d1", false), decision("d2", true)],
     issues: [
-      issue("i1", { status: "in-progress", needsYou: BLOCKED, headline: BLOCKED, agent: agent("a1") }),
-      issue("i2", { status: "in-progress", headline: "Working", agent: agent("a2") }),
-      issue("i3", { status: "todo" }),
-      issue("i4", { status: "in-review", headline: "✓ Verified: Retries land", agent: agent("a3") }),
-      issue("i5", { status: "canceled", headline: "Canceled" }),
+      issue("WEB-1", { status: "in-progress", needsYou: BLOCKED, headline: BLOCKED, agent: agent("a1") }),
+      issue("WEB-2", { status: "in-progress", headline: "Working", agent: agent("a2") }),
+      issue("WEB-3", { status: "todo" }),
+      issue("WEB-4", { status: "in-review", headline: "✓ Verified: Retries land", agent: agent("a3") }),
+      issue("WEB-5", { status: "canceled", headline: "Canceled" }),
     ],
   });
   assert.deepEqual(lanes(), [
@@ -227,18 +227,18 @@ test("Needs you leads with open decisions, then flagged issues showing their own
   const [question, flagged] = needsYou.getAllByRole("listitem");
   assert.match(question?.textContent ?? "", /^d1Question d1\?/, "the lane's decisions first");
   assert.ok(flagged !== undefined && within(flagged).getByRole("img", { name: "In progress" }), "the flagged issue shows its status");
-  assert.equal(within(view.getByRole("region", { name: /^In progress/ })).queryByRole("button", { name: /\bi1 Build/ }), null, "and is not also in its status's lane");
+  assert.equal(within(view.getByRole("region", { name: /^In progress/ })).queryByRole("button", { name: /\bWEB-1 Build/ }), null, "and is not also in its status's lane");
 });
 
 test("a row opens in place to the issue read from the plugin, and only then: its description, Done when and record, each verdict's failures open", async () => {
-  const { view, opened } = await mount({ decisions: [], issues: [issue("i1", { status: "in-review", headline: "✓ Verified: Retries land", agent: agent("a1") }), issue("i2", {})] });
+  const { view, opened } = await mount({ decisions: [], issues: [issue("WEB-1", { status: "in-review", headline: "✓ Verified: Retries land", agent: agent("a1") }), issue("WEB-2", {})] });
   assert.deepEqual(opened, [], "nothing is read before a row opens");
 
-  const row = view.getByRole("button", { name: /\bi1 Build/ });
+  const row = view.getByRole("button", { name: /\bWEB-1 Build/ });
   fireEvent.click(row);
-  const detail = within(view.getByRole("region", { name: "i1" }));
+  const detail = within(view.getByRole("region", { name: "WEB-1" }));
   await detail.findByText(DETAIL.description);
-  assert.deepEqual(opened, [{ coordinatorId: COORDINATOR, issueId: "i1" }]);
+  assert.deepEqual(opened, [{ coordinatorId: COORDINATOR, issueId: "WEB-1" }]);
   assert.deepEqual(
     detail.getAllByRole("listitem").slice(0, 2).map((item) => item.textContent),
     DETAIL.doneCriteria,
@@ -252,7 +252,7 @@ test("a row opens in place to the issue read from the plugin, and only then: its
   assert.equal(detail.queryByRole("heading", { name: /^(Depends on|Blocks|Decisions)$/ }), null, "no relations or decisions, no section for them");
 
   fireEvent.click(row);
-  assert.equal(view.queryByRole("region", { name: "i1" }), null);
+  assert.equal(view.queryByRole("region", { name: "WEB-1" }), null);
 });
 
 test("an opened issue lists its decisions oldest first: each question put to the user with their answer or still waiting, and each the regional manager recorded", async () => {
@@ -261,9 +261,9 @@ test("an opened issue lists its decisions oldest first: each question put to the
     { kind: "recorded", text: "Retries cap at 5: the user's answer to d3 keeps the flag off.", at: 2_000 },
     { kind: "asked", id: decisionIdSchema.parse("d4"), question: "Backfill old deliveries?", at: 3_000, answer: null },
   ];
-  const { view } = await mount({ decisions: [], issues: [issue("i1", {})] }, () => {}, () => ({ ...DETAIL, decisions }));
-  fireEvent.click(view.getByRole("button", { name: /\bi1 Build/ }));
-  const detail = within(view.getByRole("region", { name: "i1" }));
+  const { view } = await mount({ decisions: [], issues: [issue("WEB-1", {})] }, () => {}, () => ({ ...DETAIL, decisions }));
+  fireEvent.click(view.getByRole("button", { name: /\bWEB-1 Build/ }));
+  const detail = within(view.getByRole("region", { name: "WEB-1" }));
   const part = within((await detail.findByRole("heading", { name: "Decisions" })).closest("section") ?? assert.fail("a Decisions part"));
 
   const entries = part.getAllByRole("listitem").map((item) => item.textContent ?? "");
@@ -294,9 +294,9 @@ test("a build parent opens to its final checks, oldest first and the latest open
       { at: 5_000, defaultBranch: "main", verdict: { state: "running", verifierThreadId: "thr_final_2" } },
     ],
   };
-  const { view } = await mount({ decisions: [], issues: [issue("i1", { status: "verifying", headline: "Final check running", subIssues: { done: 2, total: 2 } })] }, () => {}, () => parent);
-  fireEvent.click(view.getByRole("button", { name: /\bi1 Build/ }));
-  const detail = within(view.getByRole("region", { name: "i1" }));
+  const { view } = await mount({ decisions: [], issues: [issue("WEB-1", { status: "verifying", headline: "Final check running", subIssues: { done: 2, total: 2 } })] }, () => {}, () => parent);
+  fireEvent.click(view.getByRole("button", { name: /\bWEB-1 Build/ }));
+  const detail = within(view.getByRole("region", { name: "WEB-1" }));
   await detail.findByText("Final checks");
   const checks = detail.getAllByRole("group").filter((group) => group.parentElement?.parentElement?.classList.contains("rmi-final-checks"));
   assert.deepEqual(
@@ -321,27 +321,27 @@ test("a check whose verifier asks or stalled reads why on its row, and its opene
   const reason = "its verifier showed no activity for 30 minutes";
   const withVerdict = (verdict: ShownVerdict): IssueDetail => ({ ...DETAIL, record: DETAIL.record.map((held) => ({ ...held, handoffs: held.handoffs.map((handoff) => ({ ...handoff, verdict })) })) });
   const verdicts: Record<string, ShownVerdict> = {
-    i1: { state: "running", verifierThreadId: "thr_asking" },
-    i2: { state: "could-not-run", verifierThreadId: "thr_stalled", reason },
+    "WEB-1": { state: "running", verifierThreadId: "thr_asking" },
+    "WEB-2": { state: "could-not-run", verifierThreadId: "thr_stalled", reason },
   };
   const { view } = await mount(
     {
       decisions: [],
-      issues: [issue("i1", { status: "verifying", headline: asking, agent: agent("a1") }), issue("i2", { status: "in-progress", needsYou: stalled, headline: stalled, agent: agent("a2") })],
+      issues: [issue("WEB-1", { status: "verifying", headline: asking, agent: agent("a1") }), issue("WEB-2", { status: "in-progress", needsYou: stalled, headline: stalled, agent: agent("a2") })],
     },
     () => {},
     (issueId) => withVerdict(verdicts[issueId] ?? assert.fail(`no verdict for ${issueId}`)),
   );
-  assert.ok(view.getByRole("button", { name: new RegExp(`\\bi1 Build.*${asking}`) }));
-  assert.ok(view.getByRole("button", { name: new RegExp(`\\bi2 Build.*${stalled.replace(/[()]/g, "\\$&")}`) }));
+  assert.ok(view.getByRole("button", { name: new RegExp(`\\bWEB-1 Build.*${asking}`) }));
+  assert.ok(view.getByRole("button", { name: new RegExp(`\\bWEB-2 Build.*${stalled.replace(/[()]/g, "\\$&")}`) }));
 
-  fireEvent.click(view.getByRole("button", { name: /\bi1 Build/ }));
-  const askingDetail = within(view.getByRole("region", { name: "i1" }));
+  fireEvent.click(view.getByRole("button", { name: /\bWEB-1 Build/ }));
+  const askingDetail = within(view.getByRole("region", { name: "WEB-1" }));
   await askingDetail.findByText("Being verified");
   fireEvent.click(askingDetail.getByRole("button", { name: "Open Verifier's thread" }));
 
-  fireEvent.click(view.getByRole("button", { name: /\bi2 Build/ }));
-  const stalledDetail = within(view.getByRole("region", { name: "i2" }));
+  fireEvent.click(view.getByRole("button", { name: /\bWEB-2 Build/ }));
+  const stalledDetail = within(view.getByRole("region", { name: "WEB-2" }));
   await stalledDetail.findByText(`No verdict: ${reason}`);
   fireEvent.click(stalledDetail.getByRole("button", { name: "Open Verifier's thread" }));
   assert.deepEqual(view.navigateCalls, [
@@ -351,17 +351,17 @@ test("a check whose verifier asks or stalled reads why on its row, and its opene
 });
 
 test("a research row reads Research with no pull request, and opens to its Questions and its report as Markdown, with the file it is saved in and no verdict", async () => {
-  const research = issue("i2", { kind: "research", status: "done", headline: "Handed off: Vault fits our PCI scope", agent: agent("a2") });
+  const research = issue("WEB-2", { kind: "research", status: "done", headline: "Handed off: Vault fits our PCI scope", agent: agent("a2") });
   const { view } = await mount({ decisions: [], issues: [research] }, undefined, () => researched(["Which one fits our PCI scope, and why?"]));
   fireEvent.click(view.getByRole("button", { name: /^Done/ }));
-  const row = view.getByRole("button", { name: /\bi2 Research: Title of i2/ });
+  const row = view.getByRole("button", { name: /\bWEB-2 Research: Title of WEB-2/ });
   assert.equal(view.queryByRole("link", { name: /^Pull request/ }), null);
 
   fireEvent.click(row);
-  const detail = within(view.getByRole("region", { name: "i2" }));
+  const detail = within(view.getByRole("region", { name: "WEB-2" }));
   await detail.findByText("Questions");
   assert.equal(detail.queryByText("Done when"), null);
-  const report = detail.getByRole("region", { name: "Report reports/i2.md" });
+  const report = detail.getByRole("region", { name: "Report reports/WEB-2.md" });
   assert.equal(report.tabIndex, 0, "the keyboard reaches the report to scroll it");
   // why its source: the SDK's test kit stands in for bb's Markdown with the text it is given; bb renders it.
   assert.equal(within(report).getByTestId("bb-markdown").textContent, REPORT, "the report goes whole to bb's Markdown");
@@ -370,45 +370,45 @@ test("a research row reads Research with no pull request, and opens to its Quest
 });
 
 test("a research issue asked no questions opens to no Questions section", async () => {
-  const research = issue("i2", { kind: "research", status: "in-progress", headline: "Working", agent: agent("a2") });
+  const research = issue("WEB-2", { kind: "research", status: "in-progress", headline: "Working", agent: agent("a2") });
   const { view } = await mount({ decisions: [], issues: [research] }, undefined, () => researched([]));
-  fireEvent.click(view.getByRole("button", { name: /\bi2 Research/ }));
-  const detail = within(view.getByRole("region", { name: "i2" }));
+  fireEvent.click(view.getByRole("button", { name: /\bWEB-2 Research/ }));
+  const detail = within(view.getByRole("region", { name: "WEB-2" }));
   await detail.findByText("Which vault fits our PCI scope.");
   assert.equal(detail.queryByText("Questions"), null);
-  assert.ok(detail.getByRole("region", { name: "Report reports/i2.md" }));
+  assert.ok(detail.getByRole("region", { name: "Report reports/WEB-2.md" }));
 });
 
 test("an opened issue lists what it depends on and what it blocks, each by its status, id and title; pressing one unfolds its lane, opens its row, moves focus there and scrolls it to the top", async () => {
-  const relations: Record<string, Pick<IssueDetail, "dependsOn" | "blocks">> = { i1: { dependsOn: [], blocks: [id("i2")] }, i2: { dependsOn: [id("i1")], blocks: [id("i3")] }, i3: { dependsOn: [id("i2")], blocks: [] } };
+  const relations: Record<string, Pick<IssueDetail, "dependsOn" | "blocks">> = { "WEB-1": { dependsOn: [], blocks: [id("WEB-2")] }, "WEB-2": { dependsOn: [id("WEB-1")], blocks: [id("WEB-3")] }, "WEB-3": { dependsOn: [id("WEB-2")], blocks: [] } };
   const { view } = await mount(
     {
       decisions: [],
       issues: [
-        issue("i1", { kind: "research", status: "done", title: "Pick a card vault", headline: "Handed off: Vault" }),
-        issue("i2", { title: "Card vault" }),
-        issue("i3", { title: "Vault schema", blockedBy: [id("i2")] }),
+        issue("WEB-1", { kind: "research", status: "done", title: "Pick a card vault", headline: "Handed off: Vault" }),
+        issue("WEB-2", { title: "Card vault" }),
+        issue("WEB-3", { title: "Vault schema", blockedBy: [id("WEB-2")] }),
       ],
     },
     undefined,
     (issueId) => ({ ...DETAIL, ...relations[issueId] }),
   );
-  fireEvent.click(view.getByRole("button", { name: /\bi2 Build/ }));
-  const detail = within(view.getByRole("region", { name: "i2" }));
+  fireEvent.click(view.getByRole("button", { name: /\bWEB-2 Build/ }));
+  const detail = within(view.getByRole("region", { name: "WEB-2" }));
   await detail.findByText(DETAIL.description);
   const listed = (name: string) => within(detail.getByRole("heading", { name }).closest("section") ?? assert.fail(`no ${name}`)).getAllByRole("button").map((button) => button.getAttribute("aria-label"));
-  assert.deepEqual(listed("Depends on"), ["i1: Pick a card vault, Done"]);
-  assert.deepEqual(listed("Blocks"), ["i3: Vault schema, Todo"]);
-  assert.equal(view.getByRole("button", { name: /^Done/ }).getAttribute("aria-expanded"), "false", "i1's lane starts folded");
+  assert.deepEqual(listed("Depends on"), ["WEB-1: Pick a card vault, Done"]);
+  assert.deepEqual(listed("Blocks"), ["WEB-3: Vault schema, Todo"]);
+  assert.equal(view.getByRole("button", { name: /^Done/ }).getAttribute("aria-expanded"), "false", "WEB-1's lane starts folded");
 
   scrolls.length = 0;
-  fireEvent.click(detail.getByRole("button", { name: "i1: Pick a card vault, Done" }));
+  fireEvent.click(detail.getByRole("button", { name: "WEB-1: Pick a card vault, Done" }));
   assert.equal(view.getByRole("button", { name: /^Done/ }).getAttribute("aria-expanded"), "true", "its lane unfolds");
-  const research = view.getByRole("button", { name: /\bi1 Research/ });
+  const research = view.getByRole("button", { name: /\bWEB-1 Research/ });
   assert.equal(research.getAttribute("aria-expanded"), "true", "its row opens");
   assert.ok(document.activeElement === research, "focus is on its row");
   assert.deepEqual(scrolls, [{ label: research.getAttribute("aria-label"), options: { block: "start", behavior: "instant" } }], "its row goes to the top of the page, its detail under it, at once under Reduce motion");
-  const opened = within(view.getByRole("region", { name: "i1" }));
+  const opened = within(view.getByRole("region", { name: "WEB-1" }));
   await opened.findByRole("heading", { name: "Blocks" });
   assert.equal(opened.queryByRole("heading", { name: "Depends on" }), null, "it depends on nothing");
   resized();
@@ -419,39 +419,39 @@ test("an opened issue lists what it depends on and what it blocks, each by its s
 
   reduceMotion = false;
   scrolls.length = 0;
-  fireEvent.click(opened.getByRole("button", { name: "i2: Card vault, Todo" }));
+  fireEvent.click(opened.getByRole("button", { name: "WEB-2: Card vault, Todo" }));
   reduceMotion = true;
-  assert.deepEqual(scrolls, [{ label: view.getByRole("button", { name: /\bi2 Build/ }).getAttribute("aria-label"), options: { block: "start", behavior: "smooth" } }], "smoothly otherwise");
-  assert.ok(document.activeElement === view.getByRole("button", { name: /\bi2 Build/ }));
+  assert.deepEqual(scrolls, [{ label: view.getByRole("button", { name: /\bWEB-2 Build/ }).getAttribute("aria-label"), options: { block: "start", behavior: "smooth" } }], "smoothly otherwise");
+  assert.ok(document.activeElement === view.getByRole("button", { name: /\bWEB-2 Build/ }));
 });
 
 test("a relation to an issue the board hasn't read yet shows its id alone, nothing to press, and the board's next read makes it the issue's entry, going to it", async () => {
-  const pickVault = issue("i1", { kind: "research", title: "Pick a card vault", headline: "Researching" });
-  const { view, reread } = await mount({ decisions: [], issues: [pickVault] }, undefined, (issueId) => ({ ...DETAIL, blocks: issueId === "i1" ? [id("i2")] : [] }));
-  fireEvent.click(view.getByRole("button", { name: /\bi1 Research/ }));
-  const detail = within(view.getByRole("region", { name: "i1" }));
+  const pickVault = issue("WEB-1", { kind: "research", title: "Pick a card vault", headline: "Researching" });
+  const { view, reread } = await mount({ decisions: [], issues: [pickVault] }, undefined, (issueId) => ({ ...DETAIL, blocks: issueId === "WEB-1" ? [id("WEB-2")] : [] }));
+  fireEvent.click(view.getByRole("button", { name: /\bWEB-1 Research/ }));
+  const detail = within(view.getByRole("region", { name: "WEB-1" }));
   await detail.findByText(DETAIL.description);
   const blocks = () => within(detail.queryByRole("heading", { name: "Blocks" })?.closest("section") ?? assert.fail("no Blocks section"));
-  assert.deepEqual(blocks().getAllByRole("listitem").map((entry) => entry.textContent), ["i2"], "filed since the board's read, it is listed by its id");
+  assert.deepEqual(blocks().getAllByRole("listitem").map((entry) => entry.textContent), ["WEB-2"], "filed since the board's read, it is listed by its id");
   assert.equal(blocks().queryByRole("button"), null, "with no row to go to, nothing to press");
 
-  await reread({ decisions: [], issues: [pickVault, issue("i2", { title: "Card vault", blockedBy: [id("i1")] })] });
-  fireEvent.click(blocks().getByRole("button", { name: "i2: Card vault, Todo" }));
-  const card = view.getByRole("button", { name: /\bi2 Build/ });
-  assert.ok(document.activeElement === card && card.getAttribute("aria-expanded") === "true", "once read, it goes to i2's row");
+  await reread({ decisions: [], issues: [pickVault, issue("WEB-2", { title: "Card vault", blockedBy: [id("WEB-1")] })] });
+  fireEvent.click(blocks().getByRole("button", { name: "WEB-2: Card vault, Todo" }));
+  const card = view.getByRole("button", { name: /\bWEB-2 Build/ });
+  assert.ok(document.activeElement === card && card.getAttribute("aria-expanded") === "true", "once read, it goes to WEB-2's row");
 });
 
 test("a detail lists as its parent's only what the parent's row is blocked by, so a dependency removed since the board's read never reads as inherited", async () => {
-  // The board read each row before i4 and i3 dropped their dependency on i5; their details read after.
+  // The board read each row before WEB-4 and WEB-3 dropped their dependency on WEB-5; their details read after.
   const { view } = await mount(
     {
       decisions: [],
       issues: [
-        issue("i9", { kind: "research", title: "Pick a vault", headline: "Researching" }),
-        issue("i5", { title: "Audit log" }),
-        issue("i4", { title: "Retry queue", blockedBy: [id("i5")] }),
-        issue("i1", { title: "Card vault", status: "in-progress", subIssues: { done: 0, total: 1 }, blockedBy: [id("i9")], headline: null }),
-        issue("i3", { title: "Webhook", parentId: id("i1"), status: "in-progress", blockedBy: [id("i9"), id("i5")] }),
+        issue("WEB-9", { kind: "research", title: "Pick a vault", headline: "Researching" }),
+        issue("WEB-5", { title: "Audit log" }),
+        issue("WEB-4", { title: "Retry queue", blockedBy: [id("WEB-5")] }),
+        issue("WEB-1", { title: "Card vault", status: "in-progress", subIssues: { done: 0, total: 1 }, blockedBy: [id("WEB-9")], headline: null }),
+        issue("WEB-3", { title: "Webhook", parentId: id("WEB-1"), status: "in-progress", blockedBy: [id("WEB-9"), id("WEB-5")] }),
       ],
     },
     undefined,
@@ -462,32 +462,32 @@ test("a detail lists as its parent's only what the parent's row is blocked by, s
     return heading === null ? [] : within(heading.closest("section") ?? assert.fail("no section")).getAllByRole("button").map((button) => button.getAttribute("aria-label"));
   };
 
-  fireEvent.click(view.getByRole("button", { name: /\bi4 Build/ }));
-  const topLevel = within(view.getByRole("region", { name: "i4" }));
+  fireEvent.click(view.getByRole("button", { name: /\bWEB-4 Build/ }));
+  const topLevel = within(view.getByRole("region", { name: "WEB-4" }));
   await topLevel.findByText(DETAIL.description);
   assert.deepEqual(dependsOn(topLevel), [], "a top-level issue has no parent to inherit from");
 
-  fireEvent.click(view.getByRole("button", { name: /\bi3 Build/ }));
-  const sub = within(view.getByRole("region", { name: "i3" }));
+  fireEvent.click(view.getByRole("button", { name: /\bWEB-3 Build/ }));
+  const sub = within(view.getByRole("region", { name: "WEB-3" }));
   await sub.findByText(DETAIL.description);
-  assert.deepEqual(dependsOn(sub), ["i9: Pick a vault, Todo, through i1"], "only what i1 depends on, not i5, which i1 never did");
+  assert.deepEqual(dependsOn(sub), ["WEB-9: Pick a vault, Todo, through WEB-1"], "only what WEB-1 depends on, not WEB-5, which WEB-1 never did");
 });
 
 test("an issue gone to lets go of the page once a read moves its row to another lane or off the board, with no move of the user's", async () => {
   const board = (i1: Partial<IssueRow> | null): Read => ({
     decisions: [],
-    issues: [...(i1 === null ? [] : [issue("i1", { status: "done", title: "Pick a card vault", ...i1 })]), issue("i2", { title: "Card vault" })],
+    issues: [...(i1 === null ? [] : [issue("WEB-1", { status: "done", title: "Pick a card vault", ...i1 })]), issue("WEB-2", { title: "Card vault" })],
   });
-  const { view, reread } = await mount(board({}), undefined, (issueId) => ({ ...DETAIL, dependsOn: issueId === "i2" ? [id("i1")] : [] }));
+  const { view, reread } = await mount(board({}), undefined, (issueId) => ({ ...DETAIL, dependsOn: issueId === "WEB-2" ? [id("WEB-1")] : [] }));
   const watchingGone = () => [...observing.values()].filter((element) => !element.isConnected);
   const goToI1 = async () => {
-    const detail = within(view.getByRole("region", { name: "i2" }));
-    fireEvent.click(await detail.findByRole("button", { name: /^i1: Pick a card vault/ }));
+    const detail = within(view.getByRole("region", { name: "WEB-2" }));
+    fireEvent.click(await detail.findByRole("button", { name: /^WEB-1: Pick a card vault/ }));
     scrolls.length = 0;
     resized();
     assert.equal(scrolls.length, 1, "held at the top as it draws");
   };
-  fireEvent.click(view.getByRole("button", { name: /\bi2 Build/ }));
+  fireEvent.click(view.getByRole("button", { name: /\bWEB-2 Build/ }));
 
   await goToI1();
   await reread(board({ status: "in-progress" }));
@@ -503,15 +503,15 @@ test("an issue gone to lets go of the page once a read moves its row to another 
 });
 
 test("a detail leaves the nesting to the rows: a parent lists no sub-issues and a sub-issue under it no parent; the flat copy under Needs you names its Parent and goes there; a parent's dependency blocks its sub-issue through it", async () => {
-  const relations: Record<string, Pick<IssueDetail, "dependsOn" | "blocks">> = { i1: { dependsOn: [id("i9")], blocks: [] }, i9: { dependsOn: [], blocks: [id("i1")] } };
+  const relations: Record<string, Pick<IssueDetail, "dependsOn" | "blocks">> = { "WEB-1": { dependsOn: [id("WEB-9")], blocks: [] }, "WEB-9": { dependsOn: [], blocks: [id("WEB-1")] } };
   const { view } = await mount(
     {
       decisions: [],
       issues: [
-        issue("i9", { kind: "research", status: "backlog", title: "Pick a vault", headline: "Not planned" }),
-        issue("i1", { title: "Card vault", status: "in-progress", subIssues: { done: 0, total: 2 }, blockedBy: [id("i9")], headline: null }),
-        issue("i2", { title: "Vault schema", parentId: id("i1"), blockedBy: [id("i9")] }),
-        issue("i3", { title: "Webhook", parentId: id("i1"), status: "in-progress", needsYou: BLOCKED, headline: BLOCKED, blockedBy: [id("i9")], agent: agent("a3") }),
+        issue("WEB-9", { kind: "research", status: "backlog", title: "Pick a vault", headline: "Not planned" }),
+        issue("WEB-1", { title: "Card vault", status: "in-progress", subIssues: { done: 0, total: 2 }, blockedBy: [id("WEB-9")], headline: null }),
+        issue("WEB-2", { title: "Vault schema", parentId: id("WEB-1"), blockedBy: [id("WEB-9")] }),
+        issue("WEB-3", { title: "Webhook", parentId: id("WEB-1"), status: "in-progress", needsYou: BLOCKED, headline: BLOCKED, blockedBy: [id("WEB-9")], agent: agent("a3") }),
       ],
     },
     undefined,
@@ -521,33 +521,33 @@ test("a detail leaves the nesting to the rows: a parent lists no sub-issues and 
     within(detail.getByRole("heading", { name }).closest("section") ?? assert.fail(`no ${name}`)).getAllByRole("button").map((button) => button.getAttribute("aria-label"));
   const headings = (detail: ReturnType<typeof within>) => detail.getAllByRole("heading", { level: 3 }).map((heading: HTMLElement) => heading.textContent);
 
-  fireEvent.click(view.getByRole("button", { name: /\bi1 Build/ }));
-  const parent = within(view.getByRole("region", { name: "i1" }));
+  fireEvent.click(view.getByRole("button", { name: /\bWEB-1 Build/ }));
+  const parent = within(view.getByRole("region", { name: "WEB-1" }));
   await parent.findByText(DETAIL.description);
   assert.deepEqual(headings(parent), ["Depends on", "Done when", "Record"], "its sub-issues' rows sit right under it");
-  assert.deepEqual(section(parent, "Depends on"), ["i9: Pick a vault, Backlog"]);
+  assert.deepEqual(section(parent, "Depends on"), ["WEB-9: Pick a vault, Backlog"]);
 
   const working = within(view.getByRole("region", { name: /^In progress/ }));
-  fireEvent.click(working.getByRole("button", { name: /\bi3 Build/ }));
-  const nested = within(view.getByRole("region", { name: "i3" }));
+  fireEvent.click(working.getByRole("button", { name: /\bWEB-3 Build/ }));
+  const nested = within(view.getByRole("region", { name: "WEB-3" }));
   await nested.findByText(DETAIL.description);
   assert.deepEqual(headings(nested), ["Depends on", "Done when", "Record"], "its row sits under its parent's");
-  assert.deepEqual(section(nested, "Depends on"), ["i9: Pick a vault, Backlog, through i1"], "every blocker its row names, its parent's too");
-  fireEvent.click(working.getByRole("button", { name: /\bi3 Build/ }));
+  assert.deepEqual(section(nested, "Depends on"), ["WEB-9: Pick a vault, Backlog, through WEB-1"], "every blocker its row names, its parent's too");
+  fireEvent.click(working.getByRole("button", { name: /\bWEB-3 Build/ }));
 
-  fireEvent.click(within(view.getByRole("region", { name: /^Needs you/ })).getByRole("button", { name: /\bi3 Build/ }));
-  const flat = within(view.getByRole("region", { name: "i3" }));
+  fireEvent.click(within(view.getByRole("region", { name: /^Needs you/ })).getByRole("button", { name: /\bWEB-3 Build/ }));
+  const flat = within(view.getByRole("region", { name: "WEB-3" }));
   await flat.findByText(DETAIL.description);
   assert.deepEqual(headings(flat), ["Parent", "Depends on", "Done when", "Record"]);
-  assert.deepEqual(section(flat, "Parent"), ["i1: Card vault, In progress"]);
+  assert.deepEqual(section(flat, "Parent"), ["WEB-1: Card vault, In progress"]);
 
-  fireEvent.click(flat.getByRole("button", { name: "i1: Card vault, In progress" }));
-  const parentRow = view.getByRole("button", { name: /\bi1 Build/ });
+  fireEvent.click(flat.getByRole("button", { name: "WEB-1: Card vault, In progress" }));
+  const parentRow = view.getByRole("button", { name: /\bWEB-1 Build/ });
   assert.ok(document.activeElement === parentRow && parentRow.getAttribute("aria-expanded") === "true", "the parent's row opens and takes focus");
 
-  fireEvent.click(flat.getByRole("button", { name: "i9: Pick a vault, Backlog, through i1" }));
+  fireEvent.click(flat.getByRole("button", { name: "WEB-9: Pick a vault, Backlog, through WEB-1" }));
   assert.equal(view.getByRole("button", { name: /^Backlog/ }).getAttribute("aria-expanded"), "true");
-  assert.ok(document.activeElement === view.getByRole("button", { name: /\bi9 Research/ }));
+  assert.ok(document.activeElement === view.getByRole("button", { name: /\bWEB-9 Research/ }));
 });
 
 test("a board with no issues says so", async () => {

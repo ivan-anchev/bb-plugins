@@ -12,7 +12,7 @@ import { issueViews, placedByLeft, type Handed, type HolderThread, type IssueFac
 
 const coordinatorId = coordinatorIdSchema.parse("6f1c2a52-6b8e-4c43-9a51-1d6a3c0b7e10");
 const issue: Issue = {
-  id: issueIdSchema.parse("i1"),
+  id: issueIdSchema.parse("WEB-1"),
   coordinatorId,
   kind: "build",
   title: "Add retries to the webhook sender",
@@ -170,10 +170,10 @@ test("an issue named by an unanswered decision Needs you, unless something more 
   assert.deepEqual(view({ openDecision: true, ...held(thread("idle"), { handoff: blocked, check: null }) }), at("in-progress", "Blocked: Needs a staging key", "Blocked: Needs a staging key"));
 });
 
-/** A parent i1 of `kind` and its sub-issues i2, i3…, each placed by the facts given, viewed together; `own`, the parent's facts beside its issue. */
+/** A parent WEB-1 of `kind` and its sub-issues WEB-2, WEB-3…, each placed by the facts given, viewed together; `own`, the parent's facts beside its issue. */
 function family(kind: Issue["kind"], subIssues: Partial<IssueFacts>[], parent: Partial<Issue> = {}, own: Partial<IssueFacts> = {}) {
   const parentFacts = facts({ ...own, issue: { ...issue, kind, ...parent } });
-  const subFacts = subIssues.map((over, i) => facts({ ...over, issue: { ...issue, kind: "build", ...over.issue, id: issueIdSchema.parse(`i${i + 2}`), parentId: issue.id } }));
+  const subFacts = subIssues.map((over, i) => facts({ ...over, issue: { ...issue, kind: "build", ...over.issue, id: issueIdSchema.parse(`WEB-${i + 2}`), parentId: issue.id } }));
   const [placed, ...subs] = issueViews([parentFacts, ...subFacts]);
   return placed === undefined ? assert.fail("no view") : { parent: placed, subs };
 }
@@ -183,12 +183,12 @@ const rolled = (kind: Issue["kind"], subIssues: Partial<IssueFacts>[], parent: P
 };
 const resting = (rest: Issue["rest"]): Partial<IssueFacts> => ({ issue: { ...issue, rest } });
 const closedAs = (as: "canceled" | "accepted", kind: Issue["kind"] = "build"): Partial<IssueFacts> => ({ issue: { ...issue, kind, closed: { as, at: 9_000 } } });
-const reported = (at: number): Partial<IssueFacts> => ({ issue: { ...issue, kind: "research" }, ...held(thread("idle"), { handoff: { ...done, at, delivery: { kind: "report", report: "Use Stripe.", file: memoryFileSchema.parse("reports/i2.md") } }, check: null }) });
+const reported = (at: number): Partial<IssueFacts> => ({ issue: { ...issue, kind: "research" }, ...held(thread("idle"), { handoff: { ...done, at, delivery: { kind: "report", report: "Use Stripe.", file: memoryFileSchema.parse("reports/WEB-2.md") } }, check: null }) });
 
 test("a parent's headline says only what its count of Done sub-issues doesn't: nothing, or why it Needs you", () => {
   const asked = "Waiting on your answer to its decision";
   assert.deepEqual(rolled("build", [resting("todo")]), at("todo", null));
-  const [parent = assert.fail("no view")] = issueViews([facts({ openDecision: true }), facts({ issue: { ...issue, id: issueIdSchema.parse("i2"), parentId: issue.id } })]);
+  const [parent = assert.fail("no view")] = issueViews([facts({ openDecision: true }), facts({ issue: { ...issue, id: issueIdSchema.parse("WEB-2"), parentId: issue.id } })]);
   assert.deepEqual({ status: parent.status, headline: parent.headline, needsYou: parent.needsYou }, at("todo", asked, asked));
 });
 
@@ -215,13 +215,13 @@ test("once every sub-issue is closed and one is Done: a research parent is Done,
   assert.deepEqual(rolled("research", [reported(6_000), resting("todo")]), at("in-progress", null));
 
   assert.deepEqual(rolled("build", [{ pr: pr("merged") }, closedAs("canceled"), reported(6_000)]), at("verifying", "Final check due"));
-  assert.deepEqual(family("build", [{ pr: pr("merged") }, closedAs("canceled"), reported(6_000)]).parent.finalCheckDue, ["i2"], "due on the Done build sub-issue's merged work only");
-  const flag = "i2 isn't merged, so i1's work isn't all on the default branch";
+  assert.deepEqual(family("build", [{ pr: pr("merged") }, closedAs("canceled"), reported(6_000)]).parent.finalCheckDue, ["WEB-2"], "due on the Done build sub-issue's merged work only");
+  const flag = "WEB-2 isn't merged, so WEB-1's work isn't all on the default branch";
   assert.deepEqual(rolled("build", [closedAs("accepted"), { pr: pr("merged") }]), at("in-progress", flag, flag));
   assert.deepEqual(rolled("build", [closedAs("accepted")], { closed: { as: "accepted", at: 9_100 } }), at("done", "Accepted"), "the manager accepted it");
 });
 
-/** A final check of i1 on main, judging the work of `merged`, with `verdict`. */
+/** A final check of WEB-1 on main, judging the work of `merged`, with `verdict`. */
 const finalCheck = (merged: string[], verdict: Verdict): FinalCheck => ({
   ...checkOf(verdict),
   id: checkIdSchema.parse("7a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d"),
@@ -237,32 +237,32 @@ test("a build parent whose work is all merged is placed by its latest final chec
   const at2 = (status: IssueStatus, headline: string, needsYou: string | null = null) => ({ status, headline, needsYou });
   const pick = ({ status, headline, needsYou }: ReturnType<typeof placed>) => ({ status, headline, needsYou });
 
-  assert.deepEqual(placed(null), { ...at2("verifying", "Final check due"), due: ["i2", "i3"], closedBy: null }, "none made yet");
-  assert.deepEqual(pick(placed(finalCheck(["i2", "i3"], { state: "queued", checkout: null }))), at2("verifying", "Final check running"));
-  assert.deepEqual(pick(placed(finalCheck(["i2", "i3"], { state: "running", verifierThreadId: "thr_v", nudged: false, declined: [], checkout: null }))), at2("verifying", "Final check running"));
-  const passed = finalCheck(["i2", "i3"], returned(["pass"]));
+  assert.deepEqual(placed(null), { ...at2("verifying", "Final check due"), due: ["WEB-2", "WEB-3"], closedBy: null }, "none made yet");
+  assert.deepEqual(pick(placed(finalCheck(["WEB-2", "WEB-3"], { state: "queued", checkout: null }))), at2("verifying", "Final check running"));
+  assert.deepEqual(pick(placed(finalCheck(["WEB-2", "WEB-3"], { state: "running", verifierThreadId: "thr_v", nudged: false, declined: [], checkout: null }))), at2("verifying", "Final check running"));
+  const passed = finalCheck(["WEB-2", "WEB-3"], returned(["pass"]));
   assert.deepEqual(placed(passed), { ...at2("done", "✓ Final check passed"), due: null, closedBy: { by: "final-check", checkId: passed.id } });
-  assert.deepEqual(pick(placed(finalCheck(["i2", "i3"], returned(["fail"])))), at2("in-progress", "✗ Final check failed", "✗ Final check failed"));
-  assert.deepEqual(pick(placed(finalCheck(["i2", "i3"], { state: "could-not-run", verifierThreadId: "thr_v", reason: "its verifier stopped without a verdict twice" }))), at2("in-progress", "Couldn't run its final check, as its verifier stopped without a verdict twice", "Couldn't run its final check, as its verifier stopped without a verdict twice"));
-  assert.deepEqual(pick(placed(finalCheck(["i2", "i3"], { state: "waived" }))), at2("in-review", "Unverified: verification was off"));
+  assert.deepEqual(pick(placed(finalCheck(["WEB-2", "WEB-3"], returned(["fail"])))), at2("in-progress", "✗ Final check failed", "✗ Final check failed"));
+  assert.deepEqual(pick(placed(finalCheck(["WEB-2", "WEB-3"], { state: "could-not-run", verifierThreadId: "thr_v", reason: "its verifier stopped without a verdict twice" }))), at2("in-progress", "Couldn't run its final check, as its verifier stopped without a verdict twice", "Couldn't run its final check, as its verifier stopped without a verdict twice"));
+  assert.deepEqual(pick(placed(finalCheck(["WEB-2", "WEB-3"], { state: "waived" }))), at2("in-review", "Unverified: verification was off"));
 
-  const failedBefore = finalCheck(["i2", "i3"], returned(["fail"]));
+  const failedBefore = finalCheck(["WEB-2", "WEB-3"], returned(["fail"]));
   assert.deepEqual(placed(failedBefore, [...merged(2), held(thread("active"))]).status, "in-progress", "a fix filed and at work");
-  assert.deepEqual(placed(failedBefore, merged(3)), { ...at2("verifying", "Final check due"), due: ["i2", "i3", "i4"], closedBy: null }, "the fix merged: due again on all the merged work");
+  assert.deepEqual(placed(failedBefore, merged(3)), { ...at2("verifying", "Final check due"), due: ["WEB-2", "WEB-3", "WEB-4"], closedBy: null }, "the fix merged: due again on all the merged work");
   assert.deepEqual(pick(placed(failedBefore, [...merged(2), reported(6_000)])), at2("in-progress", "✗ Final check failed", "✗ Final check failed"), "a research sub-issue since puts no new work on the default branch");
   assert.deepEqual(pick(placed(failedBefore, [...merged(2), closedAs("canceled")])), at2("in-progress", "✗ Final check failed", "✗ Final check failed"), "nor does a canceled one");
 
-  const none = "i1 has no done-criteria for its final check";
+  const none = "WEB-1 has no done-criteria for its final check";
   assert.deepEqual(placed(null, merged(2), { doneCriteria: [] }), { ...at2("in-progress", none, none), due: null, closedBy: null });
   assert.deepEqual(placed(null, [{ pr: pr("merged") }], { kind: "research" }).status, "done", "a research parent never has one");
 });
 
 test("a sub-issue is blocked by its parent's dependencies, and its own", () => {
-  const i9 = facts({ issue: { ...issue, id: issueIdSchema.parse("i9") } });
-  const parent = facts({ issue: { ...issue, dependsOn: [issueIdSchema.parse("i9")] } });
-  const sub = facts({ issue: { ...issue, id: issueIdSchema.parse("i2"), parentId: issue.id } });
+  const i9 = facts({ issue: { ...issue, id: issueIdSchema.parse("WEB-9") } });
+  const parent = facts({ issue: { ...issue, dependsOn: [issueIdSchema.parse("WEB-9")] } });
+  const sub = facts({ issue: { ...issue, id: issueIdSchema.parse("WEB-2"), parentId: issue.id } });
   const [i1View, i2View] = issueViews([parent, sub, i9]);
-  assert.deepEqual([i1View?.blockedBy, i2View?.blockedBy], [[{ id: "i9", status: "todo" }], [{ id: "i9", status: "todo" }]]);
+  assert.deepEqual([i1View?.blockedBy, i2View?.blockedBy], [[{ id: "WEB-9", status: "todo" }], [{ id: "WEB-9", status: "todo" }]]);
   assert.deepEqual(issueViews([parent, sub, { ...i9, issue: { ...i9.issue, closed: { as: "canceled", at: 9_000 } } }])[1]?.blockedBy, []);
 });
 
@@ -273,6 +273,6 @@ test("a running verifier asking a person reads so while it waits, on a handoff's
   assert.deepEqual(view({ ...held(thread("idle"), { handoff: done, check: checkOf(running) }), verifierAsks: true }), at("verifying", `Verifying${asking}: ${summary}`));
   assert.deepEqual(view({ ...held(thread("idle"), { handoff: done, check: checkOf({ state: "queued", checkout: CLEAN }) }), verifierAsks: true }), at("verifying", `Verifying: ${summary}`));
   const merged = Array.from({ length: 2 }, () => ({ pr: pr("merged") }));
-  const final = finalCheck(["i2", "i3"], { ...running, checkout: null });
+  const final = finalCheck(["WEB-2", "WEB-3"], { ...running, checkout: null });
   assert.equal(family("build", merged, {}, { finalCheck: final, verifierAsks: true }).parent.headline, `Final check running${asking}`);
 });

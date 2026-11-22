@@ -5,7 +5,8 @@ import { z } from "zod";
 import { agentIdSchema } from "../../../model/agent.ts";
 import type { RecordedDecision } from "../../../model/decision.ts";
 import { executionSchema } from "../../../model/execution.ts";
-import { closedAsSchema, doneCriteriaSchema, issueIdSchema, restSchema, verifierProblem, type Issue, type IssueId, type Rest } from "../../../model/issue/issue.ts";
+import { issueKeySchema } from "../../../model/issue/issue-key.ts";
+import { closedAsSchema, doneCriteriaSchema, issueIdOf, issueIdSchema, restSchema, verifierProblem, type Issue, type IssueId, type Rest } from "../../../model/issue/issue.ts";
 import { kindSchema } from "../../../model/issue/kind.ts";
 import { planProblem } from "../../../model/issue/plan.ts";
 import { knownClose, type CloseKey, type Closes, type KnownCloses } from "../../../model/issue/relations.ts";
@@ -51,9 +52,7 @@ export function issuesStore(db: Db) {
      */
     insertIssue(coordinatorId: CoordinatorId, issue: NewIssue, closes: Closes, at: number): { issue: Issue } | { refused: string } {
       return db().transaction(() => {
-        // why the highest, not a count: an id is never reused, whatever happens to the issues before it.
-        const { last } = z.object({ last: z.number().nullable() }).parse(db().prepare("SELECT max(CAST(substr(id, 2) AS INTEGER)) AS last FROM issues WHERE coordinator_id = ?").get(coordinatorId));
-        const filed: Issue = { id: issueIdSchema.parse(`i${(last ?? 0) + 1}`), coordinatorId, ...issue, dependsOn: unique(issue.dependsOn), closed: null, createdAt: at };
+        const filed: Issue = { id: nextIssueId(db, coordinatorId), coordinatorId, ...issue, dependsOn: unique(issue.dependsOn), closed: null, createdAt: at };
         const problem = planProblem(issues(coordinatorId, null), filed, closes) ?? splitProblem(db, filed, null);
         if (problem !== null) return { refused: `${problem}.` };
         db()
@@ -110,6 +109,21 @@ export function issuesStore(db: Db) {
 const recordedRowSchema = z.object({ text: z.string(), at: z.number().int() });
 
 /**
+ * The id the regional manager's next issue is filed under: its issue key (migrations.ts issue_key),
+ * numbered after its highest. why the highest, not a count: an id is never reused, whatever happens
+ * to the issues before it. Call inside the transaction that files it.
+ */
+function nextIssueId(db: Db, coordinatorId: CoordinatorId): IssueId {
+  const row = db()
+    .prepare("SELECT issue_key AS key, (SELECT max(CAST(substr(id, instr(id, '-') + 1) AS INTEGER)) FROM issues WHERE coordinator_id = c.id) AS last FROM coordinators c WHERE id = ?")
+    .get(coordinatorId);
+  const { key, last } = nextIdRowSchema.parse(row);
+  return issueIdOf(key, (last ?? 0) + 1);
+}
+
+const nextIdRowSchema = z.object({ key: issueKeySchema, last: z.number().nullable() });
+
+/**
  * Why `issue` can't be a sub-issue of the parent it newly names (`was`: as stored; null: filed now):
  * an agent holds the parent, and a parent has no agent (brief, open question 2). Call inside the
  * transaction that writes it, so an agent starting meanwhile is seen.
@@ -126,7 +140,7 @@ function splitProblem(db: Db, issue: Pick<Issue, "coordinatorId" | "id" | "paren
  * Writes the issue's dependencies as `dependsOn` lists them, in that order, over the relations it
  * has: a removed one's relation is deleted with the close known of it, a kept one keeps its own,
  * and an added one is written knowing its dependency's close as `closes` says, the read the manager
- * is answered from ("blocked by i1"). So a dependency closed already then is no news, and any close
+ * is answered from ("blocked by BBP-1"). So a dependency closed already then is no news, and any close
  * after is (relations.ts unblockedSince). why from that read, though it was made before the write:
  * a dependency that closes in between was told open, and its close is news; one reopened in between
  * and closed again is too. Either way the error falls to an announcement more, never one lost.

@@ -11,6 +11,7 @@ import { boardHandlers } from "./src/server/board/board-rpc.ts";
 import { createBoard } from "./src/server/board/board.ts";
 import { createInbox } from "./src/server/inbox/inbox.ts";
 import { upgradeFrom030 } from "./src/server/manager/held-managers.ts";
+import { keyIssuesOfEarlierManagers } from "./src/server/manager/issue-keys.ts";
 import { managerHandlers } from "./src/server/manager/manager-rpc.ts";
 import { watchOwnTree } from "./src/server/inbox/own-tree-watch.ts";
 import { watchAgentThreads } from "./src/server/inbox/thread-watch.ts";
@@ -70,6 +71,9 @@ export default function plugin(host: BbPluginApi): void {
   // why as the plugin loads, and from the tick unwaited for: it is a one-time upgrade, retried after a failure, whose bb calls must not hold up the watch.
   const upgrade030 = upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators });
   void upgrade030();
+  // why the same: a regional manager started before issue keys reads its issues only once they are keyed, and bb may not answer for its project at once.
+  const keyIssues = keyIssuesOfEarlierManagers(bb, { store, onChange });
+  void keyIssues();
 
   registerRoles(bb, store);
   registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
@@ -89,6 +93,7 @@ export default function plugin(host: BbPluginApi): void {
     // never answers holds only its own issue, which every tick skips until it answers (issue-turns.ts).
     // why what was unblocked after both, and before the ring: a merge read this tick is announced in the same doorbell.
     void upgrade030();
+    void keyIssues();
     await agents.reconcile().catch((error: unknown) => bb.log.warn(`Could not reconcile the agents; the next tick tries again: ${messageOf(error)}`));
     await prWatch.tick(Date.now()).catch((error: unknown) => bb.log.warn(`Could not read the issues' pull requests; the next tick tries again: ${messageOf(error)}`));
     await finalChecks.tick().catch((error: unknown) => bb.log.warn(`Could not read which final checks are due; the next tick tries again: ${messageOf(error)}`));

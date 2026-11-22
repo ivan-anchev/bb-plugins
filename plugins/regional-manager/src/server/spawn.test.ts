@@ -88,9 +88,9 @@ test("an agent runs on its regional manager's provider, model and reasoning leve
   assert.deepEqual([first.providerId, first.execution], ["claude-code", { model: "opus", reasoningLevel: "high", serviceTier: "default", permissionMode: "auto" }]);
 
   kit.thread(threadId).execution = { model: "sonnet", reasoningLevel: "low", serviceTier: "default", permissionMode: "auto" };
-  const issue = /Filed (i\d+)/.exec(textOf(await kit.call("issue_create", ISSUE, threadId)))?.[1];
+  const issue = /Filed (WEB-\d+)/.exec(textOf(await kit.call("issue_create", ISSUE, threadId)))?.[1];
   const started = textOf(await kit.call("agent_start", { issue }, threadId));
-  assert.match(started, /^Started a2 on i2 as @thread:\w+, on claude-code sonnet \(low\), your own provider, model and reasoning level\./);
+  assert.match(started, /^Started a2 on WEB-2 as @thread:\w+, on claude-code sonnet \(low\), your own provider, model and reasoning level\./);
   const second = kit.thread(/@thread:(\w+)/.exec(started)?.[1] ?? assert.fail(started));
   assert.deepEqual([second.providerId, second.execution?.model, second.execution?.reasoningLevel], ["claude-code", "sonnet", "low"]);
 });
@@ -123,7 +123,7 @@ test("an agent never falls back to bb's default: with no model on record for its
   kit.thread(threadId).execution = null;
   await kit.call("issue_create", ISSUE, threadId);
 
-  const refused = await kit.call("agent_start", { issue: "i1" }, threadId);
+  const refused = await kit.call("agent_start", { issue: "WEB-1" }, threadId);
   assert.ok(isRefusal(refused));
   assert.match(textOf(refused), /^agent_start is refused: bb has no model on record for you yet, so the agent has none to inherit\. Name one with execution\./);
   assert.equal(kit.spawned(), 1, "only the regional manager was spawned");

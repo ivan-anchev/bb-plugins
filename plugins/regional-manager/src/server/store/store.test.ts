@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { z } from "zod";
 import { handoffIdSchema, type Handoff } from "../../model/handoff.ts";
+import { issueKeyOf } from "../../model/issue/issue-key.ts";
 import { issueViews } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { DEFAULT_AVATAR } from "../../model/profile.ts";
@@ -85,7 +86,7 @@ test("a regional manager is created not started, with its name and no project; i
   assert.deepEqual(store.startOf(MANAGER), { kind: "not-started", ticket: "ticket-1", name: "Scout" });
   assert.equal(store.roleFor("thr_a", "ticket-1")?.kind, "coordinator");
 
-  store.startsOn(MANAGER, "prj_1");
+  store.startsOn(MANAGER, "prj_1", issueKeyOf("Webhooks"));
   store.bindTicket("ticket-1", "thr_a");
   assert.deepEqual(store.notStarted(), []);
   assert.deepEqual(store.startOf(MANAGER), { kind: "started", threadId: "thr_a" });
@@ -170,7 +171,7 @@ test("every write to what an issue's view is read from counts for its regional m
   uncounted("a memory revision", () => store.memoryRevision(MANAGER, memoryFileSchema.parse("MEMORY.md"), "v1"));
 });
 
-/** a1 holding i1 with a done handoff whose check runs in `thr_verifier`, and a2 as a handover would insert it. */
+/** a1 holding WEB-1 with a done handoff whose check runs in `thr_verifier`, and a2 as a handover would insert it. */
 function handingOver() {
   const { db, store } = freshStore();
   const { id: issueId } = filedIssue(store, MANAGER, newIssue(), 2_000);
@@ -236,7 +237,7 @@ test("both lists are newest first: the regional managers not started yet, and th
   assert.deepEqual(store.notStarted().map(({ name }) => name), ["Scout 2", "Scout 1"]);
 
   for (const [id, n] of [[MANAGER, 1], [OTHER_MANAGER, 2]] as const) {
-    store.startsOn(id, "prj_1");
+    store.startsOn(id, "prj_1", issueKeyOf("Webhooks"));
     store.bindTicket(`ticket-${n}`, `thr_${n}`);
   }
   assert.deepEqual(store.coordinators().map(({ threadId }) => threadId), ["thr_2", "thr_1"]);

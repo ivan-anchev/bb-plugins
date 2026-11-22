@@ -267,7 +267,7 @@ test("a verifier's ticket that binds after its check was superseded leaves the c
   assert.deepEqual(store.check(stale.id)?.verdict, { state: "superseded" });
 });
 
-/** A build parent i1 with a merged sub-issue i2, its criteria and verifier named. */
+/** A build parent WEB-1 with a merged sub-issue WEB-2, its criteria and verifier named. */
 function withParent() {
   const { db, store } = freshStore();
   const parent = filedIssue(store, MANAGER, newIssue({ title: "Card vault", doneCriteria: ["npm run vault-suite passes"], verifier: EXECUTION }), 2_000);

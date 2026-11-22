@@ -12,7 +12,7 @@ import type { InteractionPayload } from "../../model/interaction.ts";
 import { bbHttpError, coordinating, HEAD, isRefusal, settled, startedAgent, textOf, type SendFailure } from "../test-harness.ts";
 
 const a1 = agentIdSchema.parse("a1");
-const i1 = issueIdSchema.parse("i1");
+const i1 = issueIdSchema.parse("WEB-1");
 const CRITERIA = ["npm test passes", "npm run lint prints no errors"];
 const DONE = {
   status: "done",
@@ -132,7 +132,7 @@ test("a first failed verdict goes back to the agent as its verifier's message, w
   await settled();
   assert.deepEqual([(await row()).lane, (await row()).headline], ["in-review", "✓ Verified: Retries land with backoff"]);
   assert.deepEqual(doorbells(), [
-    `[Regional Manager] 2 updates. Call crew_catch_up to read them in full.\n- i1 "Add retries" (a1) handed off: done, failed verification, findings sent back to it (fix round 1)\n- i1 "Add retries" (a1) handed off: done, verified`,
+    `[Regional Manager] 2 updates. Call crew_catch_up to read them in full.\n- WEB-1 "Add retries" (a1) handed off: done, failed verification, findings sent back to it (fix round 1)\n- WEB-1 "Add retries" (a1) handed off: done, verified`,
   ]);
   const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
   assert.match(catchUp, /findings sent back to it\n\nAt [^\n]* as its automatic fix round 1\. Nothing to do yet/);
@@ -153,7 +153,7 @@ test("findings sent back wake the coordinating thread neither at once nor from t
   await kit.idle(agentThreadId, "Looking at it."); // the agent's fix turn ends without a handoff
   await settled();
   assert.deepEqual(doorbells(), [
-    `[Regional Manager] 2 updates. Call crew_catch_up to read them in full.\n- i1 "Add retries" (a1) handed off: done, failed verification, findings sent back to it (fix round 1)\n- i1 "Add retries" (a1) ended its turn without a handoff`,
+    `[Regional Manager] 2 updates. Call crew_catch_up to read them in full.\n- WEB-1 "Add retries" (a1) handed off: done, failed verification, findings sent back to it (fix round 1)\n- WEB-1 "Add retries" (a1) ended its turn without a handoff`,
   ]);
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /2 updates since your last catch-up[\s\S]*findings sent back to it[\s\S]*ended its turn without a handoff/);
 });
@@ -167,7 +167,7 @@ test("a second failed verdict sends nothing to the agent, and the row waits unde
 
   assert.equal(kit.sent().filter((args) => args.threadId === agentThreadId).length, 1, "only the first verdict went back");
   assert.deepEqual([(await row()).lane, (await row()).headline], ["needs-you", "✗ Failed verification after its fix round: Retries land with backoff"]);
-  assert.match(doorbells().at(-1) ?? "", /- i1 "Add retries" \(a1\) handed off: done, failed verification$/);
+  assert.match(doorbells().at(-1) ?? "", /- WEB-1 "Add retries" \(a1\) handed off: done, failed verification$/);
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /It failed verification and is yours to decide: message the agent with agent_message, stop it with agent_stop and start a fresh agent on the issue with agent_start/);
 });
 
@@ -237,7 +237,7 @@ for (const [gone, answer] of REFUSED) {
     assert.deepEqual(kit.sent().filter((args) => args.threadId === agentThreadId), [], "bb took nothing");
     assert.deepEqual(settlement(), { kind: "checked", refused: answer, ci: { kind: "none" } });
     assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 0, "the round is given back");
-    assert.deepEqual(doorbells(), [`[Regional Manager] 1 update. Call crew_catch_up to read it in full.\n- i1 "Add retries" (a1) handed off: done, failed verification`]);
+    assert.deepEqual(doorbells(), [`[Regional Manager] 1 update. Call crew_catch_up to read it in full.\n- WEB-1 "Add retries" (a1) handed off: done, failed verification`]);
     const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
     assert.ok(
       catchUp.includes(`bb refused the verifier's findings when the plugin sent them to the agent as its automatic fix round, so the agent never got them and the round is not spent. bb answered: ${answer}. It failed verification and is yours to decide`),
@@ -255,7 +255,7 @@ test("a done handoff that supersedes a verdict while its findings are on their w
   await verdictReturned(FAILS);
 
   await kit.startTurn(agentThreadId); // the user asks the agent for one more change while bb takes the findings
-  // It waits for i1's turn, which the findings hold until bb takes them.
+  // It waits for WEB-1's turn, which the findings hold until bb takes them.
   const handing = kit.call("agent_handoff", DONE, agentThreadId);
   await settled();
   assert.equal(check().id, first, "the newer handoff is stored once the findings are through");
@@ -278,7 +278,7 @@ test("a done handoff that supersedes a verdict while its findings are on their w
 });
 
 /** The doorbell line of a failed verdict whose findings a crash left in doubt. */
-const MAYBE_SENT = `- i1 "Add retries" (a1) handed off: done, failed verification, findings may or may not have reached it`;
+const MAYBE_SENT = `- WEB-1 "Add retries" (a1) handed off: done, failed verification, findings may or may not have reached it`;
 
 /** Sends that fail without proving bb refused the findings: they may or may not have reached the agent. */
 const UNPROVEN: [string, Omit<SendFailure, "threadId">][] = [
@@ -449,7 +449,7 @@ test("an issue opened on the board reads what it is about, its criteria and each
   const sent = JSON.stringify(detail);
   for (const unshown of ["gpt-default", "codex", "Retry failed deliveries with backoff."]) assert.ok(!sent.includes(unshown), `the detail carries no ${unshown}`);
 
-  await assert.rejects(async () => kit.rpc.issue({ coordinatorId, issueId: issueIdSchema.parse("i9") }), { code: "not_found", message: "This regional manager has no issue i9." });
+  await assert.rejects(async () => kit.rpc.issue({ coordinatorId, issueId: issueIdSchema.parse("WEB-9") }), { code: "not_found", message: "This regional manager has no issue WEB-9." });
 });
 
 test("an issue opened on the board sends of each verdict only what the board shows: no checkout before it returns, no nudge, no fix round, no CI while its findings go back", async () => {
@@ -922,7 +922,7 @@ test("no registered tool can change whether a regional manager verifies, whoever
   const { kit, threadId, coordinatorId, agentThreadId, verifier, handOff } = await withAgent();
   await handOff();
   const callers = [threadId, agentThreadId, verifier()];
-  const inputs = [{}, { verify: false }, { coordinatorId, verify: false }, { id: "i1", verify: false, enabled: false, verifier: null }];
+  const inputs = [{}, { verify: false }, { coordinatorId, verify: false }, { id: "WEB-1", verify: false, enabled: false, verifier: null }];
   for (const { name, parameters } of kit.tools()) {
     // why keys only: a value such as the result "unverifiable" is no way in. why not `verifier`: it
     // names what checks an issue (a provider and a model, or null for the plugin's pick), never whether.
@@ -944,7 +944,7 @@ test("a done handoff's verifier runs on the verifier named on its issue, and the
 
   await kit.call("issue_verdict", PASSES, verifier.id);
   await settled();
-  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /checked at 0123456789abcdef0123456789abcdef01234567 by a verifier on claude-code sonnet, as named on i1\./);
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /checked at 0123456789abcdef0123456789abcdef01234567 by a verifier on claude-code sonnet, as named on WEB-1\./);
 });
 
 test("a verifier named that bb can't run in the agent's environment is passed over for today's choice, and the verdict says why", async () => {
@@ -960,7 +960,7 @@ test("a verifier named that bb can't run in the agent's environment is passed ov
 
   await kit.call("issue_verdict", PASSES, verifier.id);
   await settled();
-  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /by a verifier on claude-code sonnet, not the codex gpt-default named on i1: bb can't run it in a1's environment\./);
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /by a verifier on claude-code sonnet, not the codex gpt-default named on WEB-1: bb can't run it in a1's environment\./);
 });
 
 test("a verifier named while a check runs leaves that check as it is, and applies to the next handoff", async () => {
@@ -968,8 +968,8 @@ test("a verifier named while a check runs leaves that check as it is, and applie
   await handOff();
   const running = verifier();
   assert.equal(
-    textOf(await kit.call("issue_update", { id: "i1", verifier: { providerId: "claude-code", model: "sonnet" } }, threadId)),
-    "Updated i1. claude-code sonnet (medium) is now i1's first choice of verifier for its done handoffs, and its final check as a parent, from the next one on: each runs on it when bb lists it where the check runs and no agent whose work it checks ran on it. A check already running keeps its own.",
+    textOf(await kit.call("issue_update", { id: "WEB-1", verifier: { providerId: "claude-code", model: "sonnet" } }, threadId)),
+    "Updated WEB-1. claude-code sonnet (medium) is now WEB-1's first choice of verifier for its done handoffs, and its final check as a parent, from the next one on: each runs on it when bb lists it where the check runs and no agent whose work it checks ran on it. A check already running keeps its own.",
   );
   assert.equal(check().verifier, null);
   assert.equal(verifier(), running);
