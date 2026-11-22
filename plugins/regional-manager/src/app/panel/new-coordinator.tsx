@@ -67,7 +67,7 @@ export function NewCoordinator({ ref, onBack, onCreated }: NewCoordinatorProps) 
           {draft === null && taken.error !== null && (
             <ReadFailure onRetry={taken.retry}>Could not read the other regional managers, so a new one can't be given a look of its own yet: {taken.error.message}</ReadFailure>
           )}
-          {draft !== null && <ProfileFields value={draft} onChange={stored.store} nameError={tried && profile === null ? NAME_MISSING : null} nameRef={nameRef} />}
+          {draft !== null && <ProfileFields value={draft} onChange={(next) => stored.store(keptOf(next, draft, stored.value))} nameError={tried && profile === null ? NAME_MISSING : null} nameRef={nameRef} />}
           <div className="flex flex-col items-start gap-2">
             {/* why aria-disabled: a disabled button drops focus to the page while the create runs, or until there are fields to create from. */}
             <Button type="submit" variant="default" aria-disabled={create.isPending || draft === null}>
@@ -93,4 +93,13 @@ function shownDraft(kept: StoredDraft | null, fresh: ProfileDraft | null): Profi
   if (kept === null) return fresh;
   if (kept.avatar !== null) return withLook(kept, kept.avatar);
   return fresh === null ? null : withLook(kept, fresh.avatar);
+}
+
+/**
+ * The fields to keep in the browser: what was typed, and the avatar only once the user picked one
+ * (Shuffle, a shape or a colour). why: a look the page gave keeps following the reads (shownDraft),
+ * so typing a name never fixes a look a later read shows taken.
+ */
+function keptOf(next: ProfileDraft, shown: ProfileDraft, before: StoredDraft | null): StoredDraft {
+  return { ...next, avatar: next.avatar === shown.avatar ? (before?.avatar ?? null) : next.avatar };
 }

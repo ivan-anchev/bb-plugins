@@ -257,3 +257,27 @@ test("fields an earlier release kept, with an icon this one can't draw, keep the
   assert.deepEqual([created.name, created.description, created.avatar.kind], ["Half typed", "Moves webhooks", "blob"]);
   assert.notDeepEqual([created.avatar.shape, created.avatar.hue], [CIRCLE_IN_VIOLET.shape, CIRCLE_IN_VIOLET.hue]);
 });
+
+test("a look the page gave a new manager moves on when a later read shows it taken, even after the name was typed; a look the user picked stays", async () => {
+  const read: { failing: boolean; others: NotStarted[] } = { failing: false, others: [] };
+  const page = mount(read);
+  await page.named("Webhooks");
+  const chosen = () => page.view.getAllByRole("radio").filter((radio) => radio.matches(":checked")).map((radio) => radio.getAttribute("aria-label")?.toLowerCase());
+  const [shape, hue] = chosen();
+  const given = avatarSchema.parse({ kind: "blob", shape, hue, expression: "neutral" });
+
+  read.others = [{ id: coordinatorIdSchema.parse("1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f"), name: "Docs", description: null, avatar: given }];
+  await act(() => page.view.experimental_invalidateRpc([COORDINATORS_TAG]));
+  await waitFor(() => assert.notDeepEqual(chosen(), [given.shape, given.hue]));
+
+  fireEvent.click(page.view.getByRole("radio", { name: "Bunny" }));
+  read.others = [...read.others, { id: coordinatorIdSchema.parse("2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a"), name: "Ops", description: null, avatar: avatarSchema.parse({ kind: "blob", shape: "bunny", hue: chosen()[1], expression: "neutral" }) }];
+  await act(() => page.view.experimental_invalidateRpc([COORDINATORS_TAG]));
+  assert.equal(page.view.getByRole("radio", { name: "Bunny" }).matches(":checked"), true, "a look the user picked may be another's");
+
+  await page.create();
+  const [created] = page.creates;
+  assert.ok(created);
+  assert.equal(created.name, "Webhooks");
+  assert.notDeepEqual([created.avatar.shape, created.avatar.hue], [given.shape, given.hue]);
+});
