@@ -13,7 +13,7 @@ import type { Decision, OpenDecision } from "../../../model/decision.ts";
 import type { IssueId } from "../../../model/issue/issue.ts";
 import { useFocusKeptAcrossGroups } from "../../ui/focus-hand-off.ts";
 import { IssueRow } from "./issue-row.tsx";
-import { LaneHeader } from "./lane-header.tsx";
+import { LaneHeader } from "../../ui/lane-header/lane-header.tsx";
 import { NeedsYouGlyph, StatusGlyph } from "./status-glyph.tsx";
 
 type IssueBoardProps = {

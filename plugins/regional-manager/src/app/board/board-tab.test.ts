@@ -1,6 +1,5 @@
 import "../test-browser.ts";
 import assert from "node:assert/strict";
-import { registerHooks } from "node:module";
 import { afterEach, test } from "node:test";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { cleanup, within } from "@testing-library/react";
@@ -10,8 +9,6 @@ import { PROJECT } from "../test-sidebar.ts";
 // The Board tab of a regional manager's thread as bb mounts it: its board, and its memory below it.
 // Memory's own behavior is memory-section.test.ts's.
 
-// why: the board brings its stylesheet, which bb's build bundles and node can't load.
-registerHooks({ load: (url, context, nextLoad) => (url.endsWith(".css") ? { format: "module", source: "", shortCircuit: true } : nextLoad(url, context)) });
 // why: jsdom has neither; the board's rows observe their size and ask for Reduce motion.
 Object.assign(globalThis, {
   ResizeObserver: class {
@@ -36,17 +33,16 @@ function mount() {
   const rpc = {
     coordinators: () => ({ coordinators: [COORDINATOR], notStarted: [] }),
     board: () => ({ verify: true, ownEdits: null, prUnavailable: null, decisions: [], issues: [] }),
-    memoryList: () => ({ files: [{ file: "NOTES.md", firstLine: "1. Inventory the endpoints", modifiedAt: 1_000 }] }),
+    memoryList: () => ({ files: [{ file: "NOTES.md", preview: "# Notes\n\n1. Inventory the endpoints\n", modifiedAt: 1_000 }] }),
   };
   return renderSlot({ component: boardTab.component }, { threadId: "thr_1", projectId: PROJECT.id, environment: null }, { experimental_rpcContract: contract, rpc });
 }
 
-test("the tab shows the board, then Memory below it, which lists each file with its first line and last change", async () => {
+test("the tab shows the board, then Memory below it, which shows each file as a card previewing its text", async () => {
   const view = mount();
   const board = await view.findByText("Verify done handoffs");
   const memory = await view.findByRole("region", { name: /^Memory/ });
   assert.ok(board.compareDocumentPosition(memory) & Node.DOCUMENT_POSITION_FOLLOWING, "Memory comes after the board");
-  const row = await within(memory).findByRole("button", { name: /NOTES\.md/ });
-  assert.match(row.textContent ?? "", /NOTES\.md1\. Inventory the endpoints/);
-  assert.ok(row.querySelector("time"));
+  const card = await within(memory).findByRole("button", { name: /^NOTES\.md/ });
+  assert.match(card.textContent ?? "", /1\. Inventory the endpoints/);
 });

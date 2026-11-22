@@ -1,0 +1,119 @@
+/* Memory's files as cards (memory-card.tsx), as Capy's Drive shows them: one row of fixed-size cards
+   that scrolls sideways, each a page on the theme's card surface previewing the file, with its name
+   and folder under it. Every colour is a bb theme token, and every class carries the `rmi-` prefix,
+   since bb does not scope a plugin's stylesheet. */
+
+/* why no tab stop of its own: every card in the row is a button, so Tab reaches each one, and a card
+   that takes focus scrolls itself wholly into view (memory-card.tsx). The scrollbar is
+   hidden, while a trackpad, a sideways wheel or Shift and a wheel still scroll it. The padding gives
+   a focused card's ring room inside the clip, and the negative margin keeps the cards in line with
+   the header. */
+.rmi-memory-cards {
+  display: flex;
+  gap: 12px;
+  margin: 0 -3px;
+  padding: 6px 3px 3px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: 3px;
+  scrollbar-width: none;
+  list-style: none;
+}
+.rmi-memory-cards::-webkit-scrollbar {
+  display: none;
+}
+.rmi-memory-cards > li {
+  flex: 0 0 auto;
+}
+
+.rmi-memory-card {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 128px;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: transform 150ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.rmi-memory-card:active {
+  transform: scale(0.98);
+}
+
+/* The page: drawn first, above the name that comes first for the reader. */
+.rmi-memory-card-page {
+  order: -1;
+  box-sizing: border-box;
+  height: 168px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+}
+/* why layered: the hover's own wash on the card's surface, not a mix invented for it. */
+@media (hover: hover) {
+  .rmi-memory-card:hover .rmi-memory-card-page {
+    background: linear-gradient(var(--state-hover), var(--state-hover)), var(--card);
+  }
+}
+.rmi-memory-card:focus-visible .rmi-memory-card-page {
+  box-shadow: 0 0 0 1.5px var(--ring);
+}
+
+/* The file as a message renders it, at a smaller size, fading out where the card clips it. */
+.rmi-memory-card-preview {
+  height: 100%;
+  overflow: hidden;
+  zoom: 0.78;
+  -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent);
+  mask-image: linear-gradient(to bottom, #000 62%, transparent);
+}
+/* A code block's own buttons (copy, wrap) act on nothing in a picture of the file. */
+.rmi-memory-card-preview button {
+  display: none;
+}
+.rmi-memory-card-missing {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+}
+
+.rmi-memory-card-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--foreground);
+}
+.rmi-memory-card-file,
+.rmi-memory-card-folder {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rmi-memory-card-draft {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--foreground);
+}
+/* why muted, not subtle: the folder tells two files of one name apart, so it reads at AA on the page. */
+.rmi-memory-card-folder {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rmi-memory-card {
+    transition: none;
+  }
+  .rmi-memory-card:active {
+    transform: none;
+  }
+}

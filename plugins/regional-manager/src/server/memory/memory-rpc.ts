@@ -2,7 +2,7 @@
 // Coordinator's tools, for a started regional manager. A save wakes the thread.
 import type { PluginRpcHandlers } from "@get-bb/plugin-sdk";
 import type { coordinatorContract } from "../../contract.ts";
-import { firstLineOf } from "../../model/memory-file.ts";
+import { previewOf } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { Inbox } from "../inbox/inbox.ts";
 import type { Store } from "../store/store.ts";
@@ -18,7 +18,7 @@ export function memoryHandlers(store: Pick<Store, "coordinator">, memory: Memory
   }
 
   return {
-    // why each read whole: the list shows each file's first line, and the folder holds a few small files.
+    // why each read whole: the list previews each file's start, and the folder holds a few small files.
     memoryList: ({ coordinatorId }) => {
       const files = of(coordinatorId);
       return {
@@ -26,7 +26,7 @@ export function memoryHandlers(store: Pick<Store, "coordinator">, memory: Memory
           const text = files.read(file).text;
           const modifiedAt = files.modifiedAt(file);
           // why skipped: a file deleted since the folder was listed.
-          return text === null || modifiedAt === null ? [] : [{ file, firstLine: firstLineOf(text.content), modifiedAt }];
+          return text === null || modifiedAt === null ? [] : [{ file, preview: previewOf(text.content), modifiedAt }];
         }),
       };
     },

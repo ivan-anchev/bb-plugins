@@ -53,14 +53,8 @@ function isMarkdownInside(name: string): boolean {
   return name.endsWith(".md") && !/[\\:]/.test(name) && name.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
 }
 
-/**
- * What a memory file says first, as the board's Memory lists it: its first line of text that is not a
- * heading, without a list or quote marker, else its first heading's text; null for a blank file.
- */
-export function firstLineOf(content: string): string | null {
-  const lines = content.split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== "");
-  const heading = /^#{1,6}\s+/;
-  const text = lines.find((line) => !heading.test(line));
-  if (text !== undefined) return text.replace(/^(?:[-*+]\s+|\d+[.)]\s+|>\s*)/, "");
-  return lines[0]?.replace(heading, "") ?? null;
-}
+/** How much of a file the board's Memory previews: more than its card shows, which clips it. */
+const PREVIEW_LENGTH = 2_000;
+
+/** The start of a memory file, as the board's Memory previews it on the file's card. */
+export const previewOf = (content: string): string => content.slice(0, PREVIEW_LENGTH);

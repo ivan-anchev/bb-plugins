@@ -1,6 +1,5 @@
 import "../test-browser.ts";
 import assert from "node:assert/strict";
-import { registerHooks } from "node:module";
 import { afterEach, test } from "node:test";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
@@ -13,8 +12,6 @@ import { coordinatorIdSchema } from "../../model/role.ts";
 // The board as bb mounts it, reading the plugin: its lanes from the board's read, and its decisions'
 // answers. An issue's own tab, which its row opens, is issue-tab.test.ts's.
 
-// why: the board brings its stylesheet, which bb's build bundles and node can't load.
-registerHooks({ load: (url, context, nextLoad) => (url.endsWith(".css") ? { format: "module", source: "", shortCircuit: true } : nextLoad(url, context)) });
 // why: jsdom has none of these; the rows measure their titles, and the working ring asks for Reduce motion and a canvas.
 Object.assign(globalThis, {
   ResizeObserver: class {

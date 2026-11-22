@@ -4,7 +4,7 @@ import { afterEach, test } from "node:test";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent } from "@testing-library/react";
 import { coordinatorContract as contract, memoryTag } from "../../contract.ts";
-import { firstLineOf, memoryFileSchema, memoryRevisionSchema, type MemoryFile, type MemorySnapshot, type WriteOutcome } from "../../model/memory-file.ts";
+import { memoryFileSchema, memoryRevisionSchema, previewOf, type MemoryFile, type MemorySnapshot, type WriteOutcome } from "../../model/memory-file.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
 
 // The board's Memory keeps each unsaved draft in the browser, so bb redrawing the panel across its
@@ -42,7 +42,7 @@ function server() {
     return { version, revision };
   };
   const rpc = {
-    memoryList: () => ({ files: [...files].map(([file, { content }]) => ({ file, firstLine: firstLineOf(content), modifiedAt: 1_000 })) }),
+    memoryList: () => ({ files: [...files].map(([file, { content }]) => ({ file, preview: previewOf(content), modifiedAt: 1_000 })) }),
     memoryRead: (input: unknown) => snapshot(contract.memoryRead.input.parse(input).file),
     memoryWrite: (input: unknown): WriteOutcome => {
       const { file, content, baseVersion } = contract.memoryWrite.input.parse(input);

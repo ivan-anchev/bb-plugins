@@ -1,7 +1,5 @@
 import "../../test-browser.ts";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { registerHooks } from "node:module";
 import { afterEach, test } from "node:test";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent, within } from "@testing-library/react";
@@ -15,8 +13,6 @@ import { issueIdSchema } from "../../../model/issue/issue.ts";
 // from its row, and a focused row keeping its focus when its issue moves to another lane. board.test.ts
 // reads the board through the plugin's RPC, and issue-tab.test.ts the issue's tab.
 
-// why: the board brings its stylesheet, which bb's build bundles and node can't load.
-registerHooks({ load: (url, context, nextLoad) => (url.endsWith(".css") ? { format: "module", source: "", shortCircuit: true } : nextLoad(url, context)) });
 // why: jsdom has none of these; the rows measure their titles, and the working ring asks for Reduce motion and a canvas.
 Object.assign(globalThis, {
   ResizeObserver: class {
@@ -311,13 +307,3 @@ test("focus on a flagged sub-issue's row under Needs you moves to its row under 
   assert.ok(document.activeElement === lane(view, /^In progress/).getByRole("button", { name: /\bWEB-3 Build/ }));
 });
 
-test("every rule in the board's stylesheet is scoped to the board, so none reaches bb or another plugin", async () => {
-  // why read the file: bb doesn't scope a plugin's stylesheet, so a bare selector styles the whole page.
-  const css = (await readFile(new URL("./issue-board.css", import.meta.url), "utf8")).replace(/\/\*[\s\S]*?\*\//g, "");
-  const selectors = [...css.matchAll(/([^{}]+)\{/g)].flatMap(([, prelude = ""]) => (prelude.trim().startsWith("@") ? [] : prelude.split(",").map((selector) => selector.trim())));
-  assert.ok(selectors.length > 50, "the stylesheet's rules were read");
-  assert.deepEqual(
-    selectors.filter((selector) => !selector.includes(".rmi-")),
-    [],
-  );
-});

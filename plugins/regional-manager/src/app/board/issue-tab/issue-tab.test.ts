@@ -1,7 +1,5 @@
 import "../../test-browser.ts";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { registerHooks } from "node:module";
 import { afterEach, test } from "node:test";
 import type { JsonValue } from "@get-bb/plugin-sdk/app";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
@@ -22,8 +20,6 @@ import { shortTime } from "../../ui/time.ts";
 // read, its detail from the `issue` read. bb hands the same params back after a reload, so a tab
 // mounted with them is the tab that survived one.
 
-// why: the tab brings its stylesheets, which bb's build bundles and node can't load.
-registerHooks({ load: (url, context, nextLoad) => (url.endsWith(".css") ? { format: "module", source: "", shortCircuit: true } : nextLoad(url, context)) });
 // why: jsdom has none of these; the working ring asks for Reduce motion and a canvas.
 Object.assign(globalThis, {
   ResizeObserver: class {
@@ -398,15 +394,4 @@ test("the tab is offered only in a regional manager's thread, where its board is
   const other = visible("thr_other");
   await waitFor(() => assert.equal(manager(), true));
   assert.equal(other(), false);
-});
-
-test("every rule in the tab's stylesheet is scoped to the plugin, so none reaches bb or another plugin", async () => {
-  // why read the file: bb doesn't scope a plugin's stylesheet, so a bare selector styles the whole page.
-  const css = (await readFile(new URL("./issue-tab.css", import.meta.url), "utf8")).replace(/\/\*[\s\S]*?\*\//g, "");
-  const selectors = [...css.matchAll(/([^{}]+)\{/g)].flatMap(([, prelude = ""]) => (prelude.trim().startsWith("@") ? [] : prelude.split(",").map((selector) => selector.trim())));
-  assert.ok(selectors.length > 50, "the stylesheet's rules were read");
-  assert.deepEqual(
-    selectors.filter((selector) => !selector.includes(".rmi-")),
-    [],
-  );
 });

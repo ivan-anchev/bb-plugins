@@ -146,8 +146,8 @@ export type ComposerRequest = z.infer<typeof composerRequestSchema>;
 /** The text the user typed in bb's composer: every text part, in order. */
 export const typedText = ({ input }: Pick<ComposerRequest, "input">): string => input.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n\n");
 
-/** A memory file as the board's Memory lists it: its name, its first line of text (null: none) and when it last changed, in epoch ms. */
-const memoryEntrySchema = z.object({ file: memoryFileSchema, firstLine: z.string().nullable(), modifiedAt: z.number() });
+/** A memory file as the board's Memory lists it: its name, the start of its text (model/memory-file.ts `previewOf`) and when it last changed, in epoch ms. */
+const memoryEntrySchema = z.object({ file: memoryFileSchema, preview: z.string(), modifiedAt: z.number() });
 export type MemoryEntry = z.infer<typeof memoryEntrySchema>;
 
 export const coordinatorContract = defineRpcContract({
