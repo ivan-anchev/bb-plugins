@@ -1,9 +1,11 @@
 // How the user picks a regional manager's avatar, below its profile's fields: Shuffle, which picks a
 // look no other manager has, and the shape and the colour to pick one by hand, which may be another's.
-// Shuffle waits until the other managers' looks are read: a look it picked before could be theirs.
-import { useId, type ReactNode } from "react";
+// Shuffle waits while the other managers' looks aren't known: before the first read, and after any
+// read failed, since the list kept from before may lack a look taken since. A look it picked then could be theirs.
+import { useId, useMemo, useRef, type ReactNode } from "react";
 import { freeLook, HUE_NAMES, HUES, SHAPES, type Avatar } from "../../model/profile/avatar.ts";
 import { Button } from "../ui/button.tsx";
+import { handFocusTo } from "../ui/focus-hand-off.ts";
 import { ReadFailure } from "../ui/read-failure.tsx";
 import { AvatarBlob } from "./avatar.tsx";
 import { randomStart } from "./profile-draft.ts";
@@ -11,14 +13,23 @@ import { useTakenLooks } from "./use-manager.ts";
 
 export function AvatarPicker({ value, onChange }: { value: Avatar; onChange(next: Avatar): void }) {
   const { looks, error, retry } = useTakenLooks();
+  const known = error === null ? looks : null;
+  const shuffle = useRef<HTMLButtonElement>(null);
+  // why: a Retry that succeeds removes the notice it sits in; its focus goes to Shuffle, which that read
+  // enabled. React detaches this parent's ref before the notice's own, which would send it to the page.
+  const focusToShuffle = useMemo(() => handFocusTo(() => shuffle.current), []);
   // why aria-disabled: a disabled button drops focus to the page, and it is enabled again as soon as the looks are read.
   return (
     <div className="flex flex-col items-start gap-3">
-      <Button variant="secondary" size="sm" aria-disabled={looks === null} onClick={() => looks !== null && onChange(freeLook(randomStart(), [...looks, value]))}>
+      <Button ref={shuffle} variant="secondary" size="sm" aria-disabled={known === null} onClick={() => known !== null && onChange(freeLook(randomStart(), [...known, value]))}>
         <ShuffleGlyph />
         Shuffle
       </Button>
-      {error !== null && <ReadFailure onRetry={retry}>Could not read the other regional managers' looks, so Shuffle waits: {error.message}</ReadFailure>}
+      {error !== null && (
+        <div ref={focusToShuffle}>
+          <ReadFailure onRetry={retry}>Could not read the other regional managers' looks, so Shuffle waits: {error.message}</ReadFailure>
+        </div>
+      )}
       <Choices legend="Shape" options={SHAPES} chosen={value.shape} onChoose={(shape) => onChange({ ...value, shape })}>
         {(shape) => <AvatarBlob avatar={{ ...value, shape }} size="xs" />}
       </Choices>

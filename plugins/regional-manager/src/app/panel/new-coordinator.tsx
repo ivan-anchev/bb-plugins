@@ -70,8 +70,8 @@ export function NewCoordinator({ ref, onBack, onCreated }: NewCoordinatorProps) 
           )}
           {draft !== null && <ProfileFields value={draft} onChange={stored.store} nameError={tried && profile === null ? NAME_MISSING : null} nameRef={nameRef} />}
           <div className="flex flex-col items-start gap-2">
-            {/* why aria-disabled: a disabled button drops focus to the page while the create runs. */}
-            <Button type="submit" variant="default" aria-disabled={create.isPending}>
+            {/* why aria-disabled: a disabled button drops focus to the page while the create runs, or until there are fields to create from. */}
+            <Button type="submit" variant="default" aria-disabled={create.isPending || draft === null}>
               {create.isPending ? "Creating…" : "Create"}
             </Button>
             {create.error !== null && (

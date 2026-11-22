@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
-import { coordinatorContract as contract } from "../../contract.ts";
+import { COORDINATORS_TAG, coordinatorContract as contract } from "../../contract.ts";
 import type { Profile } from "../../model/profile/profile.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 
@@ -137,6 +137,8 @@ test("while the other managers can't be read, a new one gets no look: the page s
 
   assert.match((await page.view.findByRole("alert")).textContent ?? "", /Could not read the other regional managers, so a new one can't be given a look of its own yet: .*bb is restarting/);
   assert.equal(page.view.queryByRole("textbox", { name: "Name" }), null);
+  const create = page.view.getByRole("button", { name: "Create" });
+  assert.equal(create.getAttribute("aria-disabled"), "true");
   await page.create();
   assert.equal(page.creates.length, 0, "Create has nothing to create");
 
@@ -144,6 +146,7 @@ test("while the other managers can't be read, a new one gets no look: the page s
   await act(async () => fireEvent.click(page.view.getByRole("button", { name: "Retry" })));
 
   await page.named("Webhooks");
+  assert.equal(create.getAttribute("aria-disabled"), "false");
   assert.equal(page.view.queryByRole("alert"), null);
   await page.create();
   const [created] = page.creates;
@@ -151,7 +154,7 @@ test("while the other managers can't be read, a new one gets no look: the page s
   assert.notDeepEqual([created.avatar.shape, created.avatar.hue], [CIRCLE_IN_VIOLET.shape, CIRCLE_IN_VIOLET.hue]);
 });
 
-test("Shuffle waits while the other managers' looks can't be read, and says why; once Retry reads them it picks a look none has", async (t) => {
+test("Shuffle waits while the other managers' looks can't be read, and says why; once Retry reads them, the focus Retry had moves to Shuffle, which picks a look none has", async (t) => {
   t.mock.method(Math, "random", () => 0);
   localStorage.setItem("coordinator-new-profile", JSON.stringify({ name: "Webhooks", description: "", avatar: CIRCLE_IN_VIOLET }));
   const read = { failing: true };
@@ -165,10 +168,33 @@ test("Shuffle waits while the other managers' looks can't be read, and says why;
   assert.deepEqual(chosen(), ["Circle", "Violet"], "a Shuffle that can't know the taken looks picks none");
 
   read.failing = false;
-  await act(async () => fireEvent.click(page.view.getByRole("button", { name: "Retry" })));
+  const retry = page.view.getByRole("button", { name: "Retry" });
+  // why focus first: a click focuses the button in a browser, and jsdom's doesn't.
+  retry.focus();
+  await act(async () => fireEvent.click(retry));
   await waitFor(() => assert.equal(shuffle.getAttribute("aria-disabled"), "false"));
+  assert.ok(document.activeElement === shuffle, "the focus Retry had is on Shuffle");
   fireEvent.click(shuffle);
 
   assert.notDeepEqual(chosen(), ["Circle", "Violet"], "Shuffle steps past Scout's look");
   assert.equal(page.view.queryByRole("alert"), null);
+});
+
+test("a later read of the managers that fails keeps their last list, but Shuffle waits and says why, since that list may lack a look taken since", async () => {
+  localStorage.setItem("coordinator-new-profile", JSON.stringify({ name: "Webhooks", description: "", avatar: CIRCLE_IN_VIOLET }));
+  const read = { failing: false };
+  const page = mount(read);
+  const shuffle = await page.view.findByRole("button", { name: "Shuffle" });
+  await waitFor(() => assert.equal(shuffle.getAttribute("aria-disabled"), "false"));
+
+  read.failing = true;
+  await act(() => page.view.experimental_invalidateRpc([COORDINATORS_TAG]));
+
+  assert.match((await page.view.findByRole("alert")).textContent ?? "", /so Shuffle waits: .*bb is restarting/);
+  assert.equal(shuffle.getAttribute("aria-disabled"), "true");
+  fireEvent.click(shuffle);
+  assert.equal(page.view.getByRole("radio", { name: "Circle" }).matches(":checked"), true, "Shuffle picked nothing");
+  const name = page.view.getByRole("textbox", { name: "Name" });
+  assert.ok(name instanceof HTMLInputElement);
+  assert.equal(name.value, "Webhooks", "the fields stay");
 });
