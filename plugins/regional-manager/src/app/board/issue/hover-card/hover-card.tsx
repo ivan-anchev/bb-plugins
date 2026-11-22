@@ -19,7 +19,7 @@ import { IssuePills } from "../row/pills.tsx";
 import { Rails, type RailShape } from "../row/rails.tsx";
 import { IssueGlyph } from "../status-glyph.tsx";
 import type { CardPresence } from "./card-intent.ts";
-import { useRowPlacement, type Side } from "./placement.ts";
+import { useRowPlacement, type FloatingPlacement, type Side } from "./placement.ts";
 
 export type HoverCardProps = {
   issue: Row;
@@ -35,7 +35,7 @@ export type HoverCardProps = {
 export function HoverCard(props: HoverCardProps) {
   const { ref, placement } = useRowPlacement();
   const attach = useCallback((element: HTMLDivElement | null) => void (ref.current = element), [ref]);
-  return <Card {...props} attach={attach} placement={placement} className="rmi-card" trigger={rowOf} />;
+  return <Card {...props} attach={attach} place={{ kind: "row", placement }} className="rmi-card" trigger={rowOf} />;
 }
 
 // ------------------------------------------------------------------ layer 2
@@ -43,18 +43,16 @@ export function HoverCard(props: HoverCardProps) {
 type CardProps = HoverCardProps & {
   /** Gives the card's element to its placement, which measures it; stable. */
   attach(element: HTMLDivElement | null): void;
-  /** Where the body's element goes: a floating card's placement measures it too. */
-  body?: RefObject<HTMLDivElement | null>;
-  placement: Side;
+  /** Where the card sits: in its row's box, by the side its placement picked; or floating in the window by a link, where its placement also measures its body. */
+  place: { kind: "row"; placement: Side } | { kind: "floating"; placement: FloatingPlacement; body: RefObject<HTMLDivElement | null> };
   className: string;
-  /** Where a floating card sits in the window; left out: a row's, placed by its row's box. */
-  at?: CSSProperties;
   /** What focus in the card goes back to as it goes or loses its cap, so it never drops to the page or into a hidden card (REVIEW.md): its row's button, or its link. */
   trigger(card: HTMLElement): HTMLElement | null;
 };
 
 /** The card a row's and a link's (chat-links/card) share: Escape and its presence, focus handed back, and the issue's details. */
-export function Card({ issue, issues, presence, failure, attach, body, placement, className, at, trigger }: CardProps) {
+export function Card({ issue, issues, presence, failure, attach, place, className, trigger }: CardProps) {
+  const { placement } = place;
   useEscapeCloses(presence.close);
   useEffect(() => presence.mounted(), [presence]);
   const own = useRef<HTMLDivElement>(null);
@@ -75,8 +73,8 @@ export function Card({ issue, issues, presence, failure, attach, body, placement
     if (!capped && element !== null) handBack(element, trigger);
   }, [capped, trigger]);
   return (
-    <div ref={cardRef} className={className} data-side={placement.side} style={{ ...at, ...capStyle(placement) }} aria-hidden={!capped || undefined}>
-      <div ref={body} className="rmi-card-body" tabIndex={capped ? 0 : undefined} role={capped ? "region" : undefined} aria-label={capped ? `Details of ${issue.id}` : undefined}>
+    <div ref={cardRef} className={className} data-side={placement.side} style={{ ...(place.kind === "floating" ? place.placement.at : {}), ...capStyle(placement) }} aria-hidden={!capped || undefined}>
+      <div ref={place.kind === "floating" ? place.body : undefined} className="rmi-card-body" tabIndex={capped ? 0 : undefined} role={capped ? "region" : undefined} aria-label={capped ? `Details of ${issue.id}` : undefined}>
         <p className="rmi-card-title">{issue.title}</p>
         <p className="rmi-card-when">
           {STATUS_LABELS[issue.status]}

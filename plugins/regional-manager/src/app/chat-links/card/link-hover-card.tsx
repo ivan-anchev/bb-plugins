@@ -18,7 +18,7 @@ export function LinkHoverCard({ link, ...props }: HoverCardProps & { link: HTMLA
     [ref, body, link],
   );
   const trigger = useCallback(() => link, [link]);
-  return <Card {...props} attach={attach} body={body} placement={placement} className={`rmi-card ${FLOATING_CARD}`} at={placement.at} trigger={trigger} />;
+  return <Card {...props} attach={attach} place={{ kind: "floating", placement, body }} className={`rmi-card ${FLOATING_CARD}`} trigger={trigger} />;
 }
 
 /** The link the floating card `node` is in floats by, while it is mounted; undefined outside one: focus or the pointer in the card is on that link. */

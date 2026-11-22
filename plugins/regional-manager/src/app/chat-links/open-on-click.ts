@@ -8,7 +8,7 @@
 import { experimental_useRpcQuery, useBbNavigate } from "@get-bb/plugin-sdk/app";
 import { useEffect } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
-import { useIssueLinkAt } from "./decorated-links.ts";
+import { useIssueLinkAt } from "./links/link-at.ts";
 import { openIssueTabIn, threadOfPane } from "./panes.tsx";
 
 export function useOpenOnClick(): void {

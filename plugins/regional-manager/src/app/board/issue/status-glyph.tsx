@@ -21,7 +21,7 @@ export function StatusGlyph({ status }: { status: IssueStatus }) {
 }
 
 /** Needs you's mark, Activity Sidebar's "failed" glyph, in place of a flagged issue's status: it waits on the user whatever its status. */
-export function NeedsYouGlyph() {
+function NeedsYouGlyph() {
   return (
     <span className="rmi-state" data-state="needs-you" role="img" aria-label="Needs you">
       <Icon>

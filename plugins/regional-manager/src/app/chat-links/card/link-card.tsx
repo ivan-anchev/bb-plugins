@@ -11,7 +11,8 @@ import { createPortal } from "react-dom";
 import type { IssueLink } from "../../../model/issue/link/issue-link.ts";
 import { useCardIntent, type CardIntent } from "../../board/issue/hover-card/card-intent.ts";
 import { useBoardIssue } from "../../board/use-board-issue.ts";
-import { inPlaceOf, linkOfNode, useIssueLinkAt, type DecoratedLink, type FoundLink } from "../decorated-links.ts";
+import type { DecoratedLink } from "../links/decorated-links.ts";
+import { inPlaceOf, linkOfNode, useIssueLinkAt, type FoundLink } from "../links/link-at.ts";
 import { cappedBodyOf, cardLinkOf, LinkHoverCard } from "./link-hover-card.tsx";
 
 /** The card of the issue link the pointer rests on or focus is on, among the decorated `links`; none while there is none, or once bb took the link out. */
