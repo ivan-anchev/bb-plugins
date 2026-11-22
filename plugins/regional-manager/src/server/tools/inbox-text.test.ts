@@ -7,6 +7,7 @@ import { issueIdSchema } from "../../model/issue/issue.ts";
 import type { Handed } from "../../model/issue/status.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
 import { checkIdSchema } from "../../model/verdict/check.ts";
+import type { Review } from "../../model/verdict/review.ts";
 import { outcome, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
 import { handoffText } from "./inbox-text.ts";
 
@@ -34,8 +35,8 @@ const handoff: Handoff = {
   delivery: { kind: "commit", headSha: SHA, prUrl: null },
 };
 
-/** The handoff, checked with this verdict, on the issue that named `verifier` (null: none). */
-const checkedWith = (verdict: Verdict, verifier: Execution | null = null): Handed => ({
+/** The handoff, checked with this verdict after `review`, on the issue that named `verifier` (null: none). */
+const checkedWith = (verdict: Verdict, verifier: Execution | null = null, review: Review = { state: "none" }): Handed => ({
   handoff,
   check: {
     id: checkIdSchema.parse("5d6c1e0a-2b3f-4a5e-8c7d-9e0f1a2b3c4d"),
@@ -45,7 +46,7 @@ const checkedWith = (verdict: Verdict, verifier: Execution | null = null): Hande
     criteria: ["npm test passes"],
     verifier,
     subject: { kind: "handoff", agentId, handoffId: handoff.id, headSha: SHA, prUrl: null },
-    review: { state: "none" },
+    review,
     verdict,
   },
 });
@@ -98,4 +99,23 @@ test("a verdict says what its verifier ran on: as named on the issue, why not th
   assert.equal(by(checkedWith(returned(["pass"], { providerId: "codex", model: "gpt-default" }), OPUS), CODEX), "codex gpt-default, not the claude-code claude-opus-5-5 named on WEB-1: bb can't run it in a1's environment");
   assert.equal(by(checkedWith(returned(["pass"], CODEX, true)), CODEX), "codex gpt-5.4, a1's own model, as no other was available");
   assert.equal(by(checkedWith(returned(["pass"])), CODEX), "codex gpt-default");
+});
+
+test("a verdict's review says whether its confirmed findings reached the agent only as far as its settlement shows", () => {
+  const review: Review = { state: "reported", reviewerThreadId: "thr_r", findings: [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap." }], model: { providerId: "claude-code", model: "sonnet" } };
+  const failed: Extract<Verdict, { state: "returned" }> = { ...returned(["fail"]), triage: [{ result: "confirmed", reason: "It never caps." }] };
+  const cases: [Extract<Verdict, { state: "returned" }>["settlement"], string][] = [
+    [{ kind: "pending" }, "None has gone to the agent yet."],
+    [{ kind: "waiting-for-ci" }, "None has gone to the agent yet."],
+    [{ kind: "sending-back", round: 1, ci: { kind: "none" } }, "The confirmed ones are on their way back to the agent with the failed verdict."],
+    [{ kind: "sent-back", round: 1, ci: { kind: "none" } }, "The confirmed ones went back to the agent with the failed verdict."],
+    [{ kind: "maybe-sent-back", round: 1, ci: { kind: "none" } }, "The confirmed ones went with the failed verdict's findings, which may or may not have reached the agent."],
+    [{ kind: "checked", refused: null, ci: { kind: "none" } }, "None of them went to the agent."],
+    [{ kind: "superseded" }, "None of them went to the agent."],
+  ];
+  for (const [settlement, line] of cases) {
+    const text = handoffText(checkedWith({ ...failed, settlement }, null, review), agentOn(CODEX));
+    assert.ok(text.includes(`Review: a reviewer on claude-code sonnet reported 1 finding; the verifier confirmed 1 and rejected 0. ${line}`), settlement.kind);
+    assert.match(text, /Confirmed:\n- `src\/retry\.ts:4` \(must-fix\): No cap\.\n {2}Why: It never caps\./);
+  }
 });

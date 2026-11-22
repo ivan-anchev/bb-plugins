@@ -1,10 +1,12 @@
 // Watching a running hidden thread, a verifier or a reviewer, that nobody but the plugin watches:
 // what it asks a person is declined at once (verifier-asks.ts), and the backstop ends one that
 // stalled: a turn held open by something nobody answers, or a provider that stopped talking.
-import { declineAsks, type AsksBb, type Checker } from "./verifier-asks.ts";
+import type { CheckerRole } from "../../model/role.ts";
+import { declineAsks, type AsksBb } from "./verifier-asks.ts";
 
 /**
- * How long a running verifier may show no activity before its check ends as could-not-run. why 30
+ * How long a running verifier or reviewer may show no activity before its check ends as
+ * could-not-run, or its review as missed. why 30
  * minutes: across 34 verifiers that returned a verdict, the longest silence in bb's events was 5
  * minutes (a model reasoning after a long command), and every one returned within 14; a running
  * command streams its output as events, so only a command quiet for half an hour is cut short.
@@ -34,7 +36,7 @@ export type Watched = { kind: "running"; declined: string[] } | { kind: "ended";
 export async function watchHidden(
   bb: AsksBb & ActivityBb,
   thread: { id: string; hasPendingInteraction: boolean; createdAt: number },
-  who: Checker,
+  who: CheckerRole["kind"],
   declinedBefore: readonly string[],
   now: number,
 ): Promise<Watched> {

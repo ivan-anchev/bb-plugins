@@ -46,7 +46,7 @@ import { finalCheckerRequest, judgedTree, type FinalVerifierBb } from "./final-c
 import { findingsMessage } from "./findings.ts";
 import { refusalOf } from "./send-refusal.ts";
 import type { AsksBb } from "./verifier-asks.ts";
-import { watchHidden, type ActivityBb } from "./verifier-stall.ts";
+import { watchHidden, type ActivityBb } from "./hidden-watch.ts";
 import { verifierExecution } from "./verifier-model.ts";
 import { verifierBrief } from "./verifier-brief.ts";
 

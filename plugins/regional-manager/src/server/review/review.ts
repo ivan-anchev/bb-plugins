@@ -22,7 +22,7 @@ import type { ReviewFrom } from "../store/issue/checks-store.ts";
 import type { Store } from "../store/store.ts";
 import type { AsksBb } from "../verify/verifier-asks.ts";
 import { verifierExecution, type VerifierChoice } from "../verify/verifier-model.ts";
-import { watchHidden, type ActivityBb } from "../verify/verifier-stall.ts";
+import { watchHidden, type ActivityBb } from "../verify/hidden-watch.ts";
 import { reviewerBrief } from "./reviewer-brief.ts";
 
 type ThreadRow = Awaited<ReturnType<BbPluginApi["sdk"]["threads"]["list"]>>[number];

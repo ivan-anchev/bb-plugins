@@ -315,16 +315,18 @@ function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned
   ];
 }
 
-/** Whether a verdict's confirmed review findings reached the agent: only a failed verdict sent back as its fix round carries them. */
+/** Whether a verdict's confirmed review findings reached the agent, as far as the plugin knows: only a failed verdict sent back as its fix round carries them. */
 function confirmedSent({ settlement }: Extract<Verdict, { state: "returned" }>): string {
   switch (settlement.kind) {
     case "sent-back":
       return "The confirmed ones went back to the agent with the failed verdict.";
+    case "sending-back":
+      return "The confirmed ones are on their way back to the agent with the failed verdict.";
     case "maybe-sent-back":
       return "The confirmed ones went with the failed verdict's findings, which may or may not have reached the agent.";
     case "pending":
     case "waiting-for-ci":
-    case "sending-back":
+      return "None has gone to the agent yet.";
     case "checked":
     case "superseded":
       return "None of them went to the agent.";

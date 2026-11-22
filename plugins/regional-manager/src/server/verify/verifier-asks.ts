@@ -3,17 +3,15 @@
 // its turn active, so the check would wait for a verdict that never comes (seen live: a codex
 // verifier's GitHub connector asking to reconnect, thr_e7hmzb5wjd). Each is declined so the
 // verifier goes on without it and says in its verdict what it couldn't check.
+import type { CheckerRole } from "../../model/role.ts";
 import { isNamespaced, questionOf, type InteractionPayload } from "../../model/interaction.ts";
 
 type Pending = { id: string; status: string; payload: InteractionPayload };
 
 type Target = { threadId: string; interactionId: string };
 
-/** A hidden thread the plugin starts for a check: its verifier, or its reviewer. */
-export type Checker = "verifier" | "reviewer";
-
 /** The answer a hidden thread's question gets, in place of a person's. */
-const NOBODY_ANSWERS: Record<Checker, string> = {
+const NOBODY_ANSWERS: Record<CheckerRole["kind"], string> = {
   verifier: "Nobody answers a verifier: go on without an answer, and say in your verdict what you couldn't check because of it.",
   reviewer: "Nobody answers a reviewer: go on without an answer, and say in your findings what you couldn't check because of it.",
 };
@@ -38,7 +36,7 @@ export type AsksBb = {
 export type Declined = { asked: string; refused: string | null };
 
 /** Declines every ask pending in the thread of a `who`, each as its kind takes a no (see declineOne). */
-export async function declineAsks(bb: AsksBb, threadId: string, who: Checker): Promise<Declined[]> {
+export async function declineAsks(bb: AsksBb, threadId: string, who: CheckerRole["kind"]): Promise<Declined[]> {
   const pending = (await bb.sdk.threads.interactions.list({ threadId })).filter(({ status }) => status === "pending");
   return Promise.all(
     pending.map(async ({ id: interactionId, payload }): Promise<Declined> => {
