@@ -98,7 +98,8 @@ function ThreadSaid({ event }: { event: Extract<Entry, { kind: "thread" }>["even
     case "failed":
       return <>failed{event.error !== null && `: ${event.error}`}</>;
     case "needs-input":
-      return <>waits on you: {event.question}</>;
+      // why the past: the line is a moment of the issue's history, long after the question was answered.
+      return <>asked a person: {event.question}</>;
     default:
       // why nothing, not the object: the server may be newer than this bundle for a moment after an update.
       event satisfies never;

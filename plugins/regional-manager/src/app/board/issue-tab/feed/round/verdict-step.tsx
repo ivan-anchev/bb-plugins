@@ -2,7 +2,7 @@
 // it checked, a checkout or CI that failed it, each failing or unverifiable criterion with its
 // evidence, and the passes folded; or, with no verdict returned, where its check stands.
 import type { Round } from "../../../../../model/feed/round.ts";
-import { checkoutText, worktreeText } from "../../../../../model/verdict/checkout.ts";
+import { checkoutText, NOT_CLEAN, NOT_CLEAN_TREE, worktreeText } from "../../../../../model/verdict/checkout.ts";
 import { ciVerdictOf, failedCheckout, type CriterionResult, type ShownVerdict } from "../../../../../model/verdict/verdict.ts";
 import { DiscloseGlyph } from "../../detail/disclose-glyph.tsx";
 import { RESULT_WORD, ResultGlyph } from "./result-glyph.tsx";
@@ -104,7 +104,7 @@ function CheckoutLine({ verdict, judged }: { verdict: ReturnedVerdict; judged: J
   if (failed === null) return null;
   return (
     <p className="rmi-verdict-meta" data-tone="failed">
-      {judged.kind === "handoff" ? `Not the claimed commit on a clean tree. ${checkoutText(verdict.headSha, failed)}` : `Not a clean tree. ${worktreeText(failed)}`}
+      {judged.kind === "handoff" ? `${NOT_CLEAN}. ${checkoutText(verdict.headSha, failed)}` : `${NOT_CLEAN_TREE}. ${worktreeText(failed)}`}
     </p>
   );
 }

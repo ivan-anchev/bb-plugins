@@ -94,3 +94,9 @@ test("an agent's thread that failed reads as its line, with bb's error", async (
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [...FEED.entries, failed] }) });
   assert.ok(activity(tab()).texts().some((text) => /^a2 failed: The provider stopped responding/.test(text ?? "")));
 });
+
+test("an agent that waited on a person reads as a moment past, not as waiting now", async () => {
+  const asked: Entry = { kind: "thread", at: 6_600, agentId: agentIdSchema.parse("a2"), event: { kind: "needs-input", question: "Approve the push?" } };
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [...FEED.entries, asked] }) });
+  assert.ok(activity(tab()).texts().some((text) => /^a2 asked a person: Approve the push\?/.test(text ?? "")));
+});

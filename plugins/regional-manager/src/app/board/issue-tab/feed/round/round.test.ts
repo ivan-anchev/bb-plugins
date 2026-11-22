@@ -186,3 +186,16 @@ test("the grid's head says the latest round's own score, so one all of whose cri
   const grid = within(tab().getByRole("heading", { name: "Done when" }).closest("section") ?? assert.fail("no Done when"));
   assert.equal(grid.getByText(/^3 rounds · latest/).textContent, "3 rounds · latest CI failed");
 });
+
+test("a round nothing verified, as with verification off, shows no verifier step and no outcome line; its score says it", async () => {
+  const waived: Entry[] = FEED.entries.map((entry) =>
+    entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, outcome: { kind: "unverified" }, results: [] } } } : entry,
+  );
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: waived }) });
+  const three = rounds(tab()).card(3);
+  await three.findByText("The backoff has no cap.");
+  assert.equal(rounds(tab()).head(3).textContent, "Round 3Round 3: retries land with backoffNot verified");
+  assert.equal(three.queryByRole("button", { name: /Verifier/ }), null);
+  assert.equal(three.queryByText(/^Verifier$/), null, "no verifier ran");
+  assert.equal(tab().getByRole("article", { name: "Round 3" }).querySelector(".rmi-outcome"), null, "no outcome line");
+});

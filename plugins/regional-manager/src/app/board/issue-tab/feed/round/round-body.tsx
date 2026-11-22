@@ -48,7 +48,8 @@ export function RoundBody({ coordinatorId, issueId, round, agents }: RoundBodyPr
       <ol className="rmi-steps">
         <HandedStep round={round} agents={agents} handoff={loaded?.handoff ?? null} />
         {round.review.state !== "none" && <ReviewStep review={round.review} findings={loaded?.findings ?? []} />}
-        {round.verdict !== null && (
+        {/* why none when waived: verification was off, so no verifier ran; the round's score says so. */}
+        {round.verdict !== null && round.verdict.outcome.kind !== "unverified" && (
           <Step
             title={
               <>
@@ -160,10 +161,14 @@ function reviewedText({ findings, confirmed }: Extract<Round["review"], { state:
   return confirmed === null ? found : `${found}, ${confirmed} confirmed`;
 }
 
-/** What became of the round, once its verdict went back to its agent or was made final. */
+/**
+ * What became of a returned verdict once it went back to its agent or was made final. why only a
+ * returned one: a verdict that never came (could not run, replaced, waived) says so in the verifier's
+ * step, or the round's score.
+ */
 function Outcome({ round, agents }: { round: Round; agents: FeedAgents }) {
   const { verdict, by } = round;
-  if (verdict === null || round.inFlight) return null;
+  if (verdict === null || verdict.results.length === 0 || round.inFlight) return null;
   return (
     <p className="rmi-outcome" data-result={verdict.outcome.kind}>
       {by.kind === "agent" && verdict.fixRound !== null ? <SentBack agent={<AgentName agentId={by.agentId} agents={agents} />} {...verdict.fixRound} /> : outcomeText(verdict)}

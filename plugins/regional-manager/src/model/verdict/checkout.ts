@@ -45,6 +45,9 @@ export function checkoutProblems(claimed: string, checkout: Checkout): string[] 
 /** Why a checkout the plugin read fails a verdict, whatever its criteria say: the board's headline, the verdict's lead. */
 export const NOT_CLEAN = "Not the claimed commit on a clean tree";
 
+/** Why a final check's own worktree fails its verdict: it claims no commit, so only a changed file can. */
+export const NOT_CLEAN_TREE = "Not a clean tree";
+
 /** The checkout in a sentence, as the plugin's: what the verifier is told, and what the verdict shows. */
 export function checkoutText(claimed: string, checkout: Checkout): string {
   const problems = checkoutProblems(claimed, checkout);
