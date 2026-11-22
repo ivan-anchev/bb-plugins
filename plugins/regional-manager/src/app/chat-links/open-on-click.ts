@@ -19,7 +19,7 @@ export function useOpenOnClick(): void {
     const onClick = (event: MouseEvent) => {
       const found = linkAt(event.target);
       const managerThread = coordinators?.find(({ id }) => id === found?.link.coordinatorId)?.threadId;
-      if (found === null || managerThread === undefined || event.button !== 0 || event.shiftKey || event.altKey) return;
+      if (found === null || managerThread === undefined || event.shiftKey || event.altKey) return;
       event.preventDefault();
       event.stopPropagation();
       openIssueTabIn(managerThread, found.link.issueId);

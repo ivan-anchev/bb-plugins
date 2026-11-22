@@ -10,9 +10,9 @@ import { useEffect, useMemo, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { IssueLink } from "../../model/issue/link/issue-link.ts";
 import { useCardIntent, type CardIntent } from "../board/issue/hover-card/card-intent.ts";
-import { cardLinkOf, FLOATING_CARD, HoverCard } from "../board/issue/hover-card/hover-card.tsx";
+import { cappedBodyOf, cardLinkOf, LinkHoverCard } from "../board/issue/hover-card/hover-card.tsx";
 import { useBoardIssue } from "../board/use-board-issue.ts";
-import { useIssueLinkAt, type FoundLink } from "./decorated-links.ts";
+import { inPlaceOf, linkOfNode, useIssueLinkAt, type FoundLink } from "./decorated-links.ts";
 
 /** The card of the issue link the pointer rests on or focus is on; none while there is none. */
 export function LinkCard(): ReactNode {
@@ -28,13 +28,9 @@ export function LinkCard(): ReactNode {
 /** Tells the intent what the pointer, focus, Tab and presses do on issue links and on the card of `shown`. */
 function useLinkTriggers(intent: CardIntent<HTMLAnchorElement>, shown: HTMLAnchorElement | null, linkAt: (target: EventTarget | null) => FoundLink | null): void {
   useEffect(() => {
-    /** The link a node belongs to: the link it is in, or the link the card it is in floats by. */
-    const linkOf = (node: EventTarget | null): HTMLAnchorElement | null => linkAt(node)?.anchor ?? anchorOfCard(node);
-    /** Whether `node` is in the place of `link`: the link, or the card that floats by it. */
-    const within = (link: HTMLAnchorElement, node: EventTarget | null) => node instanceof Node && (link.contains(node) || cardLinkOf(node) === link);
     const crossing = (event: PointerEvent | FocusEvent, act: (link: HTMLAnchorElement) => void) => {
-      const link = linkOf(event.target);
-      if (link !== null && !within(link, event.relatedTarget)) act(link);
+      const link = linkOfNode(event.target, linkAt);
+      if (link !== null && !inPlaceOf(link, event.relatedTarget)) act(link);
     };
     const onOver = (event: PointerEvent) => {
       if (event.pointerType !== "touch") crossing(event, intent.enter);
@@ -65,7 +61,7 @@ function useLinkTriggers(intent: CardIntent<HTMLAnchorElement>, shown: HTMLAncho
  * reach it before the card closes.
  */
 function tabThroughCard(event: KeyboardEvent, link: HTMLAnchorElement): void {
-  const body = document.querySelector<HTMLElement>(`${FLOATING_CARD} .rmi-card-body[tabindex="0"]`);
+  const body = cappedBodyOf(link);
   if (body === null) return;
   if (event.target === link && !event.shiftKey) {
     event.preventDefault();
@@ -85,17 +81,11 @@ function listen<Type extends keyof DocumentEventMap>(type: Type, listener: (even
 
 const inCard = (node: EventTarget | null): boolean => node instanceof Node && cardLinkOf(node) !== undefined;
 
-/** The link the card `node` is in floats by; null outside a card. */
-function anchorOfCard(node: EventTarget | null): HTMLAnchorElement | null {
-  const link = node instanceof Node ? cardLinkOf(node) : undefined;
-  return link instanceof HTMLAnchorElement ? link : null;
-}
-
 /** The Board's card for the issue, from its board's read, with why a later read failed; none until a read has it, or for an issue the board has none of. */
 function IssueCard({ anchor, link, intent }: { anchor: HTMLAnchorElement; link: IssueLink; intent: CardIntent<HTMLAnchorElement> }) {
   const { read, issues, issue } = useBoardIssue(link.coordinatorId, link.issueId);
   // why per link: the card's line to the intent says which link's card is on screen.
   const presence = useMemo(() => intent.presence(anchor), [intent, anchor]);
   if (issues === undefined || issue === undefined) return null;
-  return <HoverCard issue={issue} issues={issues} link={anchor} presence={presence} failure={read.error?.message} />;
+  return <LinkHoverCard issue={issue} issues={issues} link={anchor} presence={presence} failure={read.error?.message} />;
 }

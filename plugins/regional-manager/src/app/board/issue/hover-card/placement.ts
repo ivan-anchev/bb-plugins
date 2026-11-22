@@ -9,38 +9,48 @@
 // paints.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
-/**
- * The side of its anchor the card opens on, and the most it may be tall (null: as tall as it is); a
- * floating card's place in the window, `at` (null: a row's card, placed by its row's box): below its
- * link by its top, above it by its foot, so the edge by the link stays there however tall the card
- * grows or shrinks as the board changes.
- */
-export type Placement = { side: "below" | "above"; cap: number | null; at: { left: number } & ({ top: number } | { bottom: number }) | null };
+/** The side of its anchor a card opens on, and the most it may be tall (null: as tall as it is). */
+export type Side = { side: "below" | "above"; cap: number | null };
 
-/** Spread `ref` on the card. `link`: the link it floats by; null: the card's parent is its row's box. `lost`: puts a floating card away, once its link can't be seen. */
-export function useCardPlacement(link: HTMLElement | null, lost: () => void): { ref: RefObject<HTMLDivElement | null>; placement: Placement } {
+/** A floating card's side, and its place in the window: below its link by its top, above it by its foot, so the edge by the link stays there however tall the card grows or shrinks as the board changes. */
+export type FloatingPlacement = Side & { at: { left: number } & ({ top: number } | { bottom: number }) };
+
+/** A row's card: spread `ref` on the card, whose parent is its row's box. */
+export function useRowPlacement(): { ref: RefObject<HTMLDivElement | null>; placement: Side } {
   const ref = useRef<HTMLDivElement>(null);
-  const [placement, setPlacement] = useState<Placement>(UNMEASURED);
-  /** Places a floating card by its link and its size as they are now, or puts it away once its link can't be seen; nothing for a row's card. */
-  const follow = useCallback(() => {
-    const card = ref.current;
-    // why: the ref's type only; the card is mounted as this runs.
-    if (link === null || card === null) return;
-    const box = link.getBoundingClientRect();
-    if (!overlaps(box, visibleBounds(link))) return lost();
-    const next = floatingPlacement(box, sizeOf(card));
-    setPlacement((current) => (samePlacement(current, next) ? current : next));
-  }, [link, lost]);
-  // why layout effects: the card's size and the room around its anchor are the browser's to measure, and the card must not paint where it doesn't fit.
+  const [placement, setPlacement] = useState<Side>(UNMEASURED);
+  // why a layout effect: the card's size and the room around its row are the browser's to measure, and the card must not paint where it doesn't fit.
   useLayoutEffect(() => {
     const card = ref.current;
-    const row = card?.parentElement ?? null;
-    if (link === null && card !== null && row !== null) setPlacement(rowPlacement(row, card));
-  }, [link]);
-  // why after every render: the card's content, and so its size, changes as the board does.
+    // why: the types only; the card, in its row's box, is mounted as this runs.
+    if (card === null || card.parentElement === null) return;
+    setPlacement(rowPlacement(card.parentElement, card));
+  }, []);
+  return { ref, placement };
+}
+
+/**
+ * A link's card, floating by `link`: spread `ref` on the card and `body` on its body, which scrolls
+ * when capped. `lost` puts the card away once its link can't be seen.
+ */
+export function useFloatingPlacement(link: HTMLAnchorElement, lost: () => void): { ref: RefObject<HTMLDivElement | null>; body: RefObject<HTMLDivElement | null>; placement: FloatingPlacement } {
+  const ref = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const [placement, setPlacement] = useState<FloatingPlacement>({ ...UNMEASURED, at: { left: 0, top: 0 } });
+  /** Places the card by its link and its size as they are now, or puts it away once its link can't be seen. */
+  const follow = useCallback(() => {
+    const card = ref.current;
+    // why: the refs' types only; the card is mounted as this runs.
+    if (card === null || body.current === null) return;
+    const box = link.getBoundingClientRect();
+    if (!overlaps(box, visibleBounds(link))) return lost();
+    // why the body's height: a capped card is as tall as its cap, and only its body's scroll height is all of it.
+    const next = floatingPlacement(box, { height: body.current.scrollHeight, width: card.offsetWidth });
+    setPlacement((current) => (samePlacement(current, next) ? current : next));
+  }, [link, lost]);
+  // why after every render, before paint: the card's content, and so its size, changes as the board does, and it must not paint where it doesn't fit.
   useLayoutEffect(follow);
   useEffect(() => {
-    if (link === null) return;
     // why capturing: a scroll doesn't bubble, and the link moves with whichever of its ancestors scrolls.
     window.addEventListener("scroll", follow, true);
     window.addEventListener("resize", follow);
@@ -48,22 +58,15 @@ export function useCardPlacement(link: HTMLElement | null, lost: () => void): { 
       window.removeEventListener("scroll", follow, true);
       window.removeEventListener("resize", follow);
     };
-  }, [link, follow]);
-  return { ref, placement };
+  }, [follow]);
+  return { ref, body, placement };
 }
 
 // ------------------------------------------------------------------ layer 2
 
-const UNMEASURED: Placement = { side: "below", cap: null, at: null };
+const UNMEASURED: Side = { side: "below", cap: null };
 
-/** A floating card's size now: its width, and its whole content's height, which its body scrolls when capped. */
-function sizeOf(card: HTMLElement): { height: number; width: number } {
-  // why the body's: a capped card is as tall as its cap, and only the body's scroll height is all of it.
-  const body = card.querySelector<HTMLElement>(".rmi-card-body") ?? card;
-  return { height: body.scrollHeight, width: card.offsetWidth };
-}
-
-const samePlacement = (a: Placement, b: Placement): boolean => a.side === b.side && a.cap === b.cap && JSON.stringify(a.at) === JSON.stringify(b.at);
+const samePlacement = (a: FloatingPlacement, b: FloatingPlacement): boolean => a.side === b.side && a.cap === b.cap && JSON.stringify(a.at) === JSON.stringify(b.at);
 
 /** The gap between the card and its anchor (hover-card.css `.rmi-card`). */
 const GAP = 4;
@@ -75,17 +78,17 @@ const MARGIN = 8;
 type Edges = { top: number; bottom: number };
 
 /** A row's card, kept inside every ancestor of the row that clips. */
-const rowPlacement = (row: Element, card: HTMLElement): Placement => ({ ...sideOf(row.getBoundingClientRect(), card.scrollHeight, visibleBounds(row)), at: null });
+const rowPlacement = (row: Element, card: HTMLElement): Side => sideOf(row.getBoundingClientRect(), card.scrollHeight, visibleBounds(row));
 
 /** A link's card of `size`, against the window as it is now: on the side of the link with room, from the link's left edge, kept off the window's right edge. why the size: only to pick the side and the cap. */
-function floatingPlacement(link: DOMRect, size: { height: number; width: number }): Placement {
+function floatingPlacement(link: DOMRect, size: { height: number; width: number }): FloatingPlacement {
   const { side, cap } = sideOf(link, size.height, { top: 0, bottom: window.innerHeight });
   const left = Math.max(MARGIN, Math.min(link.left, window.innerWidth - size.width - MARGIN));
   return { side, cap, at: side === "below" ? { left, top: link.bottom + GAP } : { left, bottom: window.innerHeight - link.top + GAP } };
 }
 
 /** Below when the card fits under its anchor; above when it doesn't and there is more room above; capped to its side's room when it fits on neither. */
-function sideOf(anchor: Edges, height: number, bounds: Edges): Omit<Placement, "at"> {
+function sideOf(anchor: Edges, height: number, bounds: Edges): Side {
   const below = bounds.bottom - anchor.bottom - GAP;
   const above = anchor.top - bounds.top - GAP;
   if (height <= below) return { side: "below", cap: null };

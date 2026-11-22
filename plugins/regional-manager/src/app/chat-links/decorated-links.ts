@@ -62,6 +62,14 @@ export function useDecoratedLinks(): readonly DecoratedLink[] {
 /** An issue link on screen and the issue it names. */
 export type FoundLink = { anchor: HTMLAnchorElement; link: IssueLink };
 
+/** The issue link `node` belongs to: the link it is in, or the link the card it is in floats by; null for any other node. */
+export function linkOfNode(node: EventTarget | null, linkAt: (target: EventTarget | null) => FoundLink | null): HTMLAnchorElement | null {
+  return node instanceof Node ? (cardLinkOf(node) ?? linkAt(node)?.anchor ?? null) : null;
+}
+
+/** Whether `node` is in the place of `link`: the link, or the card that floats by it. */
+export const inPlaceOf = (link: HTMLAnchorElement, node: EventTarget | null): boolean => node instanceof Node && (link.contains(node) || cardLinkOf(node) === link);
+
 /** Finds the issue link `target` is in, and the issue it names; null outside one. Stable while the plugin's id is. */
 export function useIssueLinkAt(): (target: EventTarget | null) => FoundLink | null {
   const pluginId = experimental_usePluginId();
@@ -90,13 +98,12 @@ const SLOT = "rmi-issue-glyph";
  */
 function focusKept(linkAt: (target: EventTarget | null) => FoundLink | null) {
   let kept: { anchor: HTMLAnchorElement; href: string; message: Element; index: number; composer: HTMLElement | null } | null = null;
-  /** Whether `node` is in the place of the kept link: the link, or the card that floats by it. */
-  const withKept = (node: EventTarget | null) => node instanceof Node && kept !== null && (kept.anchor.contains(node) || cardLinkOf(node) === kept.anchor);
+  const withKept = (node: EventTarget | null) => kept !== null && inPlaceOf(kept.anchor, node);
   const onFocusIn = (event: FocusEvent) => {
     if (withKept(event.target)) return;
     // why the card's link: focus in a card's scrolling body, however it got there, is focus on the link it floats by, for when bb renders that link again.
-    const anchor = event.target instanceof Node ? (cardLinkOf(event.target) ?? linkAt(event.target)?.anchor ?? null) : null;
-    kept = anchor instanceof HTMLAnchorElement ? keep(anchor) : null;
+    const anchor = linkOfNode(event.target, linkAt);
+    kept = anchor === null ? null : keep(anchor);
   };
   const onFocusOut = (event: FocusEvent) => {
     if (!withKept(event.target) || withKept(event.relatedTarget)) return;
