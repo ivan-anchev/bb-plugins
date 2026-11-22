@@ -4,14 +4,14 @@
 // the board does; its detail reads the issue itself.
 import "../issue/issue-board.css";
 import "./issue-tab.css";
-import { experimental_useRpcQuery, type ExperimentalThreadTabProps, type JsonValue } from "@get-bb/plugin-sdk/app";
+import type { ExperimentalThreadTabProps, JsonValue } from "@get-bb/plugin-sdk/app";
 import type { ReactNode } from "react";
-import { coordinatorContract as contract } from "../../../contract.ts";
 import type { IssueId } from "../../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../../model/role.ts";
 import { useCoordinatorOfThread, useIsManagerThread } from "../../profile/use-manager.ts";
 import { ReadFailure } from "../../ui/read-failure.tsx";
 import { TabPage } from "../../ui/tab-page.tsx";
+import { useBoardIssue } from "../use-board-issue.ts";
 import { IssueDetail } from "./detail/issue-detail.tsx";
 import { IssueHeader } from "./issue-header.tsx";
 import { ISSUE_TAB, issueTabParamsSchema } from "./open-issue.ts";
@@ -40,9 +40,7 @@ function IssueTab({ threadId, params }: ExperimentalThreadTabProps & { params: J
 
 /** The issue, from the board's read: its head and its detail, and whatever failed to read beside them. */
 function IssuePage({ coordinatorId, issueId }: { coordinatorId: CoordinatorId; issueId: IssueId }) {
-  const read = experimental_useRpcQuery({ contract, method: "board", input: { coordinatorId } });
-  const issues = read.data?.issues;
-  const issue = issues?.find(({ id }) => id === issueId);
+  const { read, issues, issue } = useBoardIssue(coordinatorId, issueId);
   return (
     <>
       {read.error !== null && <ReadFailure onRetry={() => void read.refetch()}>Could not read {issueId}: {read.error.message}</ReadFailure>}

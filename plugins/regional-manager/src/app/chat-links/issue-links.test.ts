@@ -67,6 +67,7 @@ function mount(chat: Chat, { declines = 0 } = {}) {
   };
   const board = (): Board => ({ verify: true, ownEdits: null, prUnavailable: null, decisions: [], issues });
   const view = renderSlot({ component: Window }, chat, {
+    pluginId: "regional-manager",
     experimental_rpcContract: contract,
     rpc: { coordinators: () => ({ coordinators: [COORDINATOR], notStarted: [] }), board },
     // why it can decline: bb declines an open in a pane it hasn't focused yet, as a split it just added as it mounts.
@@ -189,6 +190,48 @@ test("a link's card opens under the link where the window has room, else above i
   }
 });
 
+test("the card follows its link as the message scrolls, and stays open", async () => {
+  const box = { top: 100, bottom: 116, left: 40 };
+  const restore = laidOut(box, { height: 200, width: 320 });
+  try {
+    const { view, link, glyphOf, card } = mount({ panes: [MANAGER_THREAD] });
+    await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+    act(() => link(MANAGER_THREAD).focus());
+    await waitFor(() => assert.equal(card()?.style.top, "120px"));
+
+    Object.assign(box, { top: 60, bottom: 76 });
+    act(() => void fireEvent.scroll(view.container.querySelector(`[data-thread="${MANAGER_THREAD}"]`) ?? assert.fail("no pane")));
+    assert.equal(card()?.style.top, "80px", "moved with the link");
+  } finally {
+    restore();
+  }
+});
+
+test("a capped card's body is the tab stop after its link: Tab on the link goes into it, and Shift+Tab from it goes back to the link", async () => {
+  const restore = laidOut({ top: 700, bottom: 716, left: 40 }, { height: 2_000, width: 320 });
+  try {
+    const { view, link, glyphOf, card } = mount({ panes: [MANAGER_THREAD] });
+    await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+    act(() => link(MANAGER_THREAD).focus());
+    const body = await view.findByRole("region", { name: "Details of BBP-24" });
+
+    const tab = (target: Element, shiftKey = false) => {
+      const event = new KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true, cancelable: true });
+      act(() => void target.dispatchEvent(event));
+      return event.defaultPrevented;
+    };
+    assert.equal(tab(link(MANAGER_THREAD)), true);
+    assert.ok(document.activeElement === body, "into the card");
+    assert.ok(card() !== null, "the card stays while focus is in it");
+
+    assert.equal(tab(body, true), true);
+    assert.ok(document.activeElement === link(MANAGER_THREAD), "back on the link");
+    assert.ok(card() !== null);
+  } finally {
+    restore();
+  }
+});
+
 /** Every issue link's box at `link`, and the card `card` big, in a 1024 by 768 window. why stubs: jsdom lays nothing out. */
 function laidOut(link: { top: number; bottom: number; left: number }, card: { height: number; width: number }): () => void {
   const boxOf = HTMLElement.prototype.getBoundingClientRect;
@@ -217,7 +260,7 @@ test("pressing an issue link in its regional manager's thread opens the issue's 
 
   assert.equal(fireEvent.click(link(MANAGER_THREAD)), false, "bb's own handling of the link is skipped");
   await waitFor(() => assert.deepEqual(view.inspection.experimental_panelCalls, [{ method: "openTab", options: { tab: { id: "issue", context: { kind: "thread" }, availability: "action" }, params: { issueId: "BBP-24" }, title: "BBP-24 Inline issue links" } }]));
-  assert.deepEqual(view.inspection.navigateCalls, [], "it stays in the thread");
+  assert.deepEqual(view.inspection.navigateCalls, [{ method: "toThread", threadId: MANAGER_THREAD, options: { split: true } }], "bb's split brings forward the pane that shows the thread, this one");
 });
 
 test("pressing an issue link in another thread opens the regional manager's thread in a split, and its pane opens the tab once it shows, asking again after bb declines; ⌘ asks for the split from the manager's thread too", async () => {

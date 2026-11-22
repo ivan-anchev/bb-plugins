@@ -2,7 +2,8 @@
 // when there is more room above, and capped to the room on its side, scrolling inside, when it fits
 // on neither. A row's card sits in the row's box and keeps inside the panel the board scrolls in; a
 // link's card floats, fixed, against the window, by the link's box, so the message list it sits in
-// clips none of it. Measured as the card mounts, before it paints.
+// clips none of it, and follows the link as anything holding it scrolls. Measured as the card mounts,
+// before it paints.
 import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 /**
@@ -21,7 +22,14 @@ export function useCardPlacement(link: HTMLElement | null): { ref: RefObject<HTM
     const row = card?.parentElement ?? null;
     // why: the ref's type only; the card is mounted, in its row's box or by its link, as this runs.
     if (card === null || row === null) return;
-    setPlacement(link === null ? rowPlacement(row, card) : floatingPlacement(link.getBoundingClientRect(), card));
+    if (link === null) return void setPlacement(rowPlacement(row, card));
+    const size = { height: card.scrollHeight, width: card.offsetWidth };
+    const side = sideOf(link.getBoundingClientRect(), size.height, { top: 0, bottom: window.innerHeight });
+    const follow = () => setPlacement({ ...side, at: floatingAt(link.getBoundingClientRect(), side, size) });
+    follow();
+    // why capturing: a scroll doesn't bubble, and the link moves with whichever of its ancestors scrolls.
+    window.addEventListener("scroll", follow, true);
+    return () => window.removeEventListener("scroll", follow, true);
   }, [link]);
   return { ref, placement };
 }
@@ -42,13 +50,11 @@ type Edges = { top: number; bottom: number };
 /** A row's card, kept inside every ancestor of the row that clips. */
 const rowPlacement = (row: Element, card: HTMLElement): Placement => ({ ...sideOf(row.getBoundingClientRect(), card.scrollHeight, visibleBounds(row)), at: null });
 
-/** A link's card, against the window: on its side of the link, from the link's left edge, kept off the window's right edge. */
-function floatingPlacement(link: DOMRect, card: HTMLElement): Placement {
-  const side = sideOf(link, card.scrollHeight, { top: 0, bottom: window.innerHeight });
-  const height = side.cap ?? card.scrollHeight;
-  const left = Math.max(MARGIN, Math.min(link.left, window.innerWidth - card.offsetWidth - MARGIN));
-  const top = side.side === "below" ? link.bottom + GAP : link.top - GAP - height;
-  return { ...side, at: { left, top } };
+/** Where a link's card of `size` goes in the window, on its `side` of the link: from the link's left edge, kept off the window's right edge. */
+function floatingAt(link: DOMRect, { side, cap }: Omit<Placement, "at">, size: { height: number; width: number }): NonNullable<Placement["at"]> {
+  const left = Math.max(MARGIN, Math.min(link.left, window.innerWidth - size.width - MARGIN));
+  const top = side === "below" ? link.bottom + GAP : link.top - GAP - (cap ?? size.height);
+  return { left, top };
 }
 
 /** Below when the card fits under its anchor; above when it doesn't and there is more room above; capped to its side's room when it fits on neither. */

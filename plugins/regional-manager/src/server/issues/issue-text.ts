@@ -28,33 +28,33 @@ const threadLink = (threadId: string | null): string => (threadId === null ? "no
  * ones; or why it couldn't be read. A flagged sub-issue is also listed under Needs you, as the board
  * shows it.
  */
-export function boardText(reads: readonly IssueRead[] | { error: string }): string {
+export function boardText(reads: readonly IssueRead[] | { error: string }, pluginId: string): string {
   if ("error" in reads) return `## Board\n\nCould not read your agents' threads from bb: ${reads.error}. Call crew_catch_up again before relying on any issue's status.`;
   if (reads.length === 0) return "## Board\n\nNo issues yet. File one with issue_create.";
   const placed = reads.map((read) => ({ ...read, id: read.view.issue.id, parentId: read.view.issue.parentId, status: read.view.status, needsYou: read.view.needsYou }));
-  const lanes = boardGroups([], placed).map(({ lane, rows }) => [`### ${LANE_LABELS[lane]} (${rows.length})`, ...rows.flatMap(laneLines)].join("\n"));
+  const lanes = boardGroups([], placed).map(({ lane, rows }) => [`### ${LANE_LABELS[lane]} (${rows.length})`, ...rows.flatMap((item) => laneLines(item, pluginId))].join("\n"));
   return ["## Board", ...lanes, readyLine(reads.map(({ view }) => view))].join("\n\n");
 }
 
 /** A row's lines in its lane: an issue's, each of its sub-issues indented under it. why no decision: catch-up lists them in their own section. */
-function laneLines(item: BoardItem<IssueRead>): string[] {
+function laneLines(item: BoardItem<IssueRead>, pluginId: string): string[] {
   switch (item.kind) {
     case "decision":
       return [];
     case "issue":
-      return [rowLine(item.issue), ...item.subIssues.map((sub) => `  ${rowLine(sub)}`)];
+      return [rowLine(item.issue, pluginId), ...item.subIssues.map((sub) => `  ${rowLine(sub, pluginId)}`)];
     case "flagged-sub-issue":
-      return [rowLine(item.issue)];
+      return [rowLine(item.issue, pluginId)];
     default:
       return item satisfies never;
   }
 }
 
-function rowLine({ view, agent, threadId, branch }: IssueRead): string {
+function rowLine({ view, agent, threadId, branch }: IssueRead, pluginId: string): string {
   const { issue } = view;
   const held = view.subIssues !== null ? "parent" : agent === null ? "no agent" : `${agent.id}${agent.ended === null ? "" : ` (${agent.ended.how})`}, ${threadLink(threadId)}`;
   const under = issue.parentId === null ? "" : `, under ${issue.parentId}`;
-  return `- ${issue.id} "${issue.title}" (${PIPELINES[issue.kind].label}; ${held}${under}${branch === null ? "" : `, on branch \`${branch}\``}): ${headlineText(view)}${blockedText(view.blockedBy, "; blocked by ")}${blockedText(view.blocks, "; blocks ")}; link: ${linkOf(issue)}`;
+  return `- ${issue.id} "${issue.title}" (${PIPELINES[issue.kind].label}; ${held}${under}${branch === null ? "" : `, on branch \`${branch}\``}): ${headlineText(view)}${blockedText(view.blockedBy, "; blocked by ")}${blockedText(view.blocks, "; blocks ")}; link: ${linkOf(issue, pluginId)}`;
 }
 
 /** The issues in Todo that nothing blocks: those an agent can start on without waiting. */
@@ -68,12 +68,12 @@ const blockedText = (related: readonly Related[], lead: string): string => (rela
 
 const relatedText = (related: readonly Related[]): string => related.map(({ id, status }) => `${id} (${STATUS_LABELS[status]})`).join(", ");
 
-/** The issue's link, as the manager names it to the user. */
-const linkOf = ({ coordinatorId, id }: Issue): string => issueLinkMarkdown(coordinatorId, id);
+/** The issue's link, as the manager names it to the user, under the id bb gave the plugin. */
+const linkOf = ({ coordinatorId, id }: Issue, pluginId: string): string => issueLinkMarkdown(pluginId, { coordinatorId, issueId: id });
 
 /** What issue_create says it filed, what blocks it as it is filed, and its link. */
-export const filedText = (issue: Issue, blockedBy: readonly Related[]): string =>
-  `Filed ${issue.id} (${issue.kind})${issue.parentId === null ? "" : ` as a sub-issue of ${issue.parentId}`} in ${STATUS_LABELS[issue.rest]}${blockedText(blockedBy, ", blocked by ")}.${issue.verifier === null ? "" : ` Its done handoffs are checked on ${executionText(issue.verifier)}.`} Link: ${linkOf(issue)}`;
+export const filedText = (issue: Issue, blockedBy: readonly Related[], pluginId: string): string =>
+  `Filed ${issue.id} (${issue.kind})${issue.parentId === null ? "" : ` as a sub-issue of ${issue.parentId}`} in ${STATUS_LABELS[issue.rest]}${blockedText(blockedBy, ", blocked by ")}.${issue.verifier === null ? "" : ` Its done handoffs are checked on ${executionText(issue.verifier)}.`} Link: ${linkOf(issue, pluginId)}`;
 
 /** What agent_start did. */
 export function startText(issueId: Issue["id"], outcome: Exclude<StartOutcome, { kind: "refused" }>): string {
@@ -202,6 +202,7 @@ export function issueText(
   decisions: readonly IssueDecision[],
   output: string | null,
   lookups: Pick<Lookups, "agents">,
+  pluginId: string,
 ): string {
   const { issue } = view;
   const answer =
@@ -212,7 +213,7 @@ export function issueText(
         : `${output.slice(0, OUTPUT_BUDGET_CHARS)}\n\n[Cut here: it has ${output.length} characters. Read the rest in its thread.]`;
   return [
     `## ${issue.id}: ${issue.title}`,
-    `${PIPELINES[issue.kind].label}. ${sentence(`${STATUS_LABELS[view.status]}: ${headlineText(view)}`)}${view.needsYou === null ? "" : " Needs you."}${blockedText(view.blockedBy, " Blocked by ")}${view.blockedBy.length === 0 ? "" : "."} Thread: ${threadLink(threadId)}${branch === null ? "" : `, branch \`${branch}\``}. Link: ${linkOf(issue)}`,
+    `${PIPELINES[issue.kind].label}. ${sentence(`${STATUS_LABELS[view.status]}: ${headlineText(view)}`)}${view.needsYou === null ? "" : " Needs you."}${blockedText(view.blockedBy, " Blocked by ")}${view.blockedBy.length === 0 ? "" : "."} Thread: ${threadLink(threadId)}${branch === null ? "" : `, branch \`${branch}\``}. Link: ${linkOf(issue, pluginId)}`,
     `### What it is about\n\n${issue.description.trim()}`,
     `### Brief\n\n${issue.brief?.trim() ?? "None yet."}`,
     criteriaText(issue),

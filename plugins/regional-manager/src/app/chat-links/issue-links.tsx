@@ -6,11 +6,10 @@
 // message never renders again. Without the plugin, the link reads as its id.
 import "../board/issue/issue-board.css";
 import "./chat-links.css";
-import { experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { createPortal } from "react-dom";
-import { coordinatorContract as contract } from "../../contract.ts";
 import type { IssueLink } from "../../model/issue/link/issue-link.ts";
 import { IssueGlyph } from "../board/issue/status-glyph.tsx";
+import { useBoardIssue } from "../board/use-board-issue.ts";
 import { useDecoratedLinks } from "./decorated-links.ts";
 import { LinkCard } from "./link-card.tsx";
 import { useOpenOnClick } from "./open-on-click.ts";
@@ -32,7 +31,7 @@ function IssueLinks() {
 
 /** The issue's glyph and a space before its id, as its board reads now; none until the read has it, or for an issue its board has none of. */
 function LinkGlyph({ link }: { link: IssueLink }) {
-  const issue = experimental_useRpcQuery({ contract, method: "board", input: { coordinatorId: link.coordinatorId } }).data?.issues.find(({ id }) => id === link.issueId);
+  const { issue } = useBoardIssue(link.coordinatorId, link.issueId);
   return issue === undefined ? null : (
     <>
       <IssueGlyph issue={issue} />{" "}
