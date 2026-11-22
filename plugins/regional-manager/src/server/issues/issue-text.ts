@@ -1,10 +1,12 @@
 // What the issue and agent tools say to the regional manager. An issue is always named by its id
 // and an agent by its id, with a link to its thread, so the manager can both act on them and point
-// the user at them.
+// the user at them; the catch-up's rows, issue_create and issue_read also give each issue's link,
+// which the manager names it to the user by (model/issue/link).
 import { boardGroups, LANE_LABELS, type BoardItem } from "../../model/board/board-groups.ts";
 import { decisionsText, type IssueDecision } from "../../model/decision.ts";
 import type { Issue, IssueId } from "../../model/issue/issue.ts";
 import { isVerified, PIPELINES } from "../../model/issue/kind.ts";
+import { issueLinkMarkdown } from "../../model/issue/link/issue-link.ts";
 import { isReady, type Related, type Relations } from "../../model/issue/relations.ts";
 import { headlineText, STATUS_LABELS, type Handed, type IssueView } from "../../model/issue/status.ts";
 import { placementName, refOf, type Agent } from "../../model/agent.ts";
@@ -52,7 +54,7 @@ function rowLine({ view, agent, threadId, branch }: IssueRead): string {
   const { issue } = view;
   const held = view.subIssues !== null ? "parent" : agent === null ? "no agent" : `${agent.id}${agent.ended === null ? "" : ` (${agent.ended.how})`}, ${threadLink(threadId)}`;
   const under = issue.parentId === null ? "" : `, under ${issue.parentId}`;
-  return `- ${issue.id} "${issue.title}" (${PIPELINES[issue.kind].label}; ${held}${under}${branch === null ? "" : `, on branch \`${branch}\``}): ${headlineText(view)}${blockedText(view.blockedBy, "; blocked by ")}${blockedText(view.blocks, "; blocks ")}`;
+  return `- ${issue.id} "${issue.title}" (${PIPELINES[issue.kind].label}; ${held}${under}${branch === null ? "" : `, on branch \`${branch}\``}): ${headlineText(view)}${blockedText(view.blockedBy, "; blocked by ")}${blockedText(view.blocks, "; blocks ")}; link: ${linkOf(issue)}`;
 }
 
 /** The issues in Todo that nothing blocks: those an agent can start on without waiting. */
@@ -66,9 +68,12 @@ const blockedText = (related: readonly Related[], lead: string): string => (rela
 
 const relatedText = (related: readonly Related[]): string => related.map(({ id, status }) => `${id} (${STATUS_LABELS[status]})`).join(", ");
 
-/** What issue_create says it filed, and what blocks it as it is filed. */
+/** The issue's link, as the manager names it to the user. */
+const linkOf = ({ coordinatorId, id }: Issue): string => issueLinkMarkdown(coordinatorId, id);
+
+/** What issue_create says it filed, what blocks it as it is filed, and its link. */
 export const filedText = (issue: Issue, blockedBy: readonly Related[]): string =>
-  `Filed ${issue.id} (${issue.kind})${issue.parentId === null ? "" : ` as a sub-issue of ${issue.parentId}`} in ${STATUS_LABELS[issue.rest]}${blockedText(blockedBy, ", blocked by ")}.${issue.verifier === null ? "" : ` Its done handoffs are checked on ${executionText(issue.verifier)}.`}`;
+  `Filed ${issue.id} (${issue.kind})${issue.parentId === null ? "" : ` as a sub-issue of ${issue.parentId}`} in ${STATUS_LABELS[issue.rest]}${blockedText(blockedBy, ", blocked by ")}.${issue.verifier === null ? "" : ` Its done handoffs are checked on ${executionText(issue.verifier)}.`} Link: ${linkOf(issue)}`;
 
 /** What agent_start did. */
 export function startText(issueId: Issue["id"], outcome: Exclude<StartOutcome, { kind: "refused" }>): string {
@@ -207,7 +212,7 @@ export function issueText(
         : `${output.slice(0, OUTPUT_BUDGET_CHARS)}\n\n[Cut here: it has ${output.length} characters. Read the rest in its thread.]`;
   return [
     `## ${issue.id}: ${issue.title}`,
-    `${PIPELINES[issue.kind].label}. ${sentence(`${STATUS_LABELS[view.status]}: ${headlineText(view)}`)}${view.needsYou === null ? "" : " Needs you."}${blockedText(view.blockedBy, " Blocked by ")}${view.blockedBy.length === 0 ? "" : "."} Thread: ${threadLink(threadId)}${branch === null ? "" : `, branch \`${branch}\``}.`,
+    `${PIPELINES[issue.kind].label}. ${sentence(`${STATUS_LABELS[view.status]}: ${headlineText(view)}`)}${view.needsYou === null ? "" : " Needs you."}${blockedText(view.blockedBy, " Blocked by ")}${view.blockedBy.length === 0 ? "" : "."} Thread: ${threadLink(threadId)}${branch === null ? "" : `, branch \`${branch}\``}. Link: ${linkOf(issue)}`,
     `### What it is about\n\n${issue.description.trim()}`,
     `### Brief\n\n${issue.brief?.trim() ?? "None yet."}`,
     criteriaText(issue),

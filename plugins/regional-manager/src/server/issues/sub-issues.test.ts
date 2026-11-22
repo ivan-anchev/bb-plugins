@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueIdSchema } from "../../model/issue/issue.ts";
-import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn } from "../test-harness.ts";
+import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn, withoutLinks } from "../test-harness.ts";
 
 const RESEARCH = { kind: "research", title: "Pick a card vault", description: "Which vault fits our PCI scope.", brief: "Compare Vault and KMS.", doneCriteria: [] };
 const FIELDS = { summary: "Vault fits our PCI scope", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
@@ -26,11 +26,14 @@ async function managing(options: Parameters<typeof coordinating>[0] = {}) {
     return caughtUp;
   };
   /** The board section of a catch-up: the lanes and the ready line. */
-  const board = async () => (await catchUp()).split("## Board\n\n")[1]?.split("\n\n## Decisions")[0] ?? assert.fail("no board");
+  // why without links: each row's link is issues.test.ts's to prove; here, its lane and relations.
+  const board = async () => withoutLinks((await catchUp()).split("## Board\n\n")[1]?.split("\n\n## Decisions")[0] ?? assert.fail("no board"));
   const statuses = async () => Object.fromEntries((await kit.rpc.board({ coordinatorId })).issues.map(({ id, status }) => [id, status]));
   /** Starts an agent on the issue; returns its thread. */
   const started = async (issue: string) => threadIn(await text("agent_start", { issue }));
-  return { kit, threadId, coordinatorId, call, text, catchUp, board, statuses, started, unblocked: async () => (await catchUp(), [...announced]) };
+  /** The issue's link, as the manager is given it. */
+  const link = (id: string) => `[${id}](/plugins/regional-manager/regional-managers/issue/${coordinatorId}/${id})`;
+  return { kit, threadId, coordinatorId, link, call, text, catchUp, board, statuses, started, unblocked: async () => (await catchUp(), [...announced]) };
 }
 
 /** Lets every answer `holds` kept go, and the ones asked for meanwhile, until none is left. */
@@ -43,9 +46,9 @@ async function releaseAll(holds: { holding: boolean; held: (() => void)[] }): Pr
 }
 
 test("1: issue_create with a parent files a sub-issue, listed under its parent in issue_read and in the catch-up", async () => {
-  const { text, board } = await managing();
+  const { text, board, link } = await managing();
   await text("issue_create", ISSUE);
-  assert.equal(await text("issue_create", { ...RESEARCH, parent: "WEB-1" }), "Filed WEB-2 (research) as a sub-issue of WEB-1 in Todo.");
+  assert.equal(await text("issue_create", { ...RESEARCH, parent: "WEB-1" }), `Filed WEB-2 (research) as a sub-issue of WEB-1 in Todo. Link: ${link("WEB-2")}`);
   assert.match(await text("issue_read", { id: "WEB-1" }), /### Relations\n\nParent: none\.\nSub-issues: WEB-2 \(Todo\)\./);
   assert.match(await text("issue_read", { id: "WEB-2" }), /### Relations\n\nParent: WEB-1 \(Todo\)\.\nSub-issues: none\./);
   assert.equal(
@@ -133,11 +136,11 @@ test("3: agent_start on a parent is refused,and so is filing a sub-issue under a
 });
 
 test("4: a parent's dependency blocks its sub-issue, which isn't ready; when it closes, the sub-issue is announced unblocked, once, and the parent never", async () => {
-  const { kit, text, board, unblocked } = await managing();
+  const { kit, text, board, unblocked, link } = await managing();
   await text("issue_create", RESEARCH);
   const researcher = threadIn(await text("agent_start", { issue: "WEB-1" }));
   await text("issue_create", { ...ISSUE, title: "Card vault", dependsOn: ["WEB-1"] });
-  assert.equal(await text("issue_create", { ...ISSUE, title: "Vault schema", parent: "WEB-2" }), "Filed WEB-3 (build) as a sub-issue of WEB-2 in Todo, blocked by WEB-1 (In progress).");
+  assert.equal(await text("issue_create", { ...ISSUE, title: "Vault schema", parent: "WEB-2" }), `Filed WEB-3 (build) as a sub-issue of WEB-2 in Todo, blocked by WEB-1 (In progress). Link: ${link("WEB-3")}`);
   await text("issue_create", { ...ISSUE, title: "Vault client", parent: "WEB-2", status: "backlog" });
   assert.match(await board(), /\n {2}- WEB-3 "Vault schema" \(Build; no agent, under WEB-2\): Not started; blocked by WEB-1 \(In progress\)\n/);
   assert.match(await board(), /Ready: none /);
@@ -228,7 +231,7 @@ type Manager = Awaited<ReturnType<typeof managing>>;
  * and every status after.
  */
 async function filedUnderI1While(first: object, meanwhile: (store: Manager["kit"]["store"], id: Manager["coordinatorId"]) => void) {
-  const { kit, coordinatorId, call, text, statuses } = await managing();
+  const { kit, coordinatorId, call, text, statuses, link } = await managing();
   await text("issue_create", ISSUE);
   await text("issue_create", { ...ISSUE, title: "Dead letters" });
   await text("agent_start", { issue: "WEB-2" });
@@ -240,7 +243,7 @@ async function filedUnderI1While(first: object, meanwhile: (store: Manager["kit"
   assert.ok(kit.threadLists.held.length > 0, "no listing held");
   meanwhile(kit.store, coordinatorId);
   await releaseAll(kit.threadLists);
-  return { result: await filing, statuses: await statuses() };
+  return { result: await filing, statuses: await statuses(), link };
 }
 
 const I1 = issueIdSchema.parse("WEB-1");
@@ -251,7 +254,7 @@ test("filing a sub-issue is judged on its parent as stored when it is written: c
   assert.deepEqual(canceled.statuses, { "WEB-1": "canceled", "WEB-2": "in-progress" });
 
   const reopened = await filedUnderI1While({ status: "canceled" }, (store, id) => store.updateIssue(id, I1, { closed: null }, { requireUnheld: true, closes: new Map() }));
-  assert.deepEqual(reopened.result, { refused: false, text: "Filed WEB-3 (build) as a sub-issue of WEB-1 in Todo." });
+  assert.deepEqual(reopened.result, { refused: false, text: `Filed WEB-3 (build) as a sub-issue of WEB-1 in Todo. Link: ${reopened.link("WEB-3")}` });
 });
 
 test("canceling a parent is judged on its sub-issues as they are when it is written: one reopened by a message while bb's turns were read keeps it open", async () => {
@@ -300,7 +303,7 @@ test("two plan writes whose reads both finished first are judged in turn: a sub-
 });
 
 test("a plan write whose reads keep being overtaken writes nothing and says to try again", async () => {
-  const { kit, call, text, statuses } = await managing();
+  const { kit, call, text, statuses, link } = await managing();
   await text("issue_create", ISSUE);
   await text("issue_create", { ...ISSUE, title: "Dead letters" });
   await text("agent_start", { issue: "WEB-2" });
@@ -320,7 +323,7 @@ test("a plan write whose reads keep being overtaken writes nothing and says to t
 
   assert.deepEqual(await filing, { refused: true, text: "No issue filed: your issues kept changing while they were read, so nothing was written. Try again." });
   assert.deepEqual(await statuses(), { "WEB-1": "todo", "WEB-2": "in-progress" });
-  assert.equal(await text("issue_create", { ...ISSUE, title: "Replay", parent: "WEB-1" }), "Filed WEB-3 (build) as a sub-issue of WEB-1 in Todo.");
+  assert.equal(await text("issue_create", { ...ISSUE, title: "Replay", parent: "WEB-1" }), `Filed WEB-3 (build) as a sub-issue of WEB-1 in Todo. Link: ${link("WEB-3")}`);
 });
 
 /** A research parent WEB-1 with research sub-issues WEB-2 and WEB-3, WEB-4 depending on WEB-1, and one more research sub-issue per `more`, filed WEB-5 on. */

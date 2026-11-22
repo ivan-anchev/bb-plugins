@@ -1,12 +1,14 @@
-// A row's hover card (use-hover-card.ts says when it shows), Activity Sidebar's card by the row
+// An issue's hover card (card-intent.ts says when it shows), Activity Sidebar's card by the row
 // (src/ui/card/card-body.tsx): the issue's title whole, up to three lines; its status, and its agent;
 // what it waits on the user for, or else its headline, which the row leaves out; its pills spelled
 // out; and its sub-issues as a tree on the board's rails, or what blocks it and what it blocks, each
-// the other issue's glyph, id and title. It opens under its row, or above it where the panel has no
-// room below (placement.ts). Display only: the row's label speaks all of it, and pressing the row
+// the other issue's glyph, id and title. A board row's card opens under its row, or above it where
+// the panel has no room below; an issue link's card in chat floats by the link, fixed in the window
+// (placement.ts). Display only: the row's label, or the link, names the issue, and pressing either
 // opens the issue's tab, which holds the rest, so the card is hidden from a screen reader, unless it
 // is capped: then its body scrolls, and is a labelled tab stop the keyboard reaches and scrolls
-// (REVIEW.md). Focus in the card goes back to its row as the card goes, however it is put away.
+// (REVIEW.md). Focus in the card goes back to its row, or its link, as the card goes, however it is
+// put away.
 import "./hover-card.css";
 import { useCallback, type CSSProperties } from "react";
 import type { IssueRow as Row } from "../../../../contract.ts";
@@ -16,26 +18,28 @@ import { FadingText } from "../row/fading-text.tsx";
 import { IssuePills } from "../row/pills.tsx";
 import { Rails, type RailShape } from "../row/rails.tsx";
 import { handFocusTo } from "../../../ui/focus-hand-off.ts";
-import { NeedsYouGlyph, StatusGlyph } from "../status-glyph.tsx";
+import { IssueGlyph } from "../status-glyph.tsx";
 import { useCardPlacement, type Placement } from "./placement.ts";
 
 type HoverCardProps = {
   issue: Row;
   /** Every issue on the board, which its sub-issues and blockers are. */
   issues: readonly Row[];
+  /** The link in chat the card floats by, fixed; left out: the card sits in its board row's box. */
+  link?: HTMLElement;
 };
 
-export function HoverCard({ issue, issues }: HoverCardProps) {
-  const { ref, placement } = useCardPlacement();
-  // why one callback: placement measures the card, and the card hands focus back to its row as it unmounts; a ref that changed per render would hand it back on every render.
+export function HoverCard({ issue, issues, link }: HoverCardProps) {
+  const { ref, placement } = useCardPlacement(link ?? null);
+  // why one callback: placement measures the card, and the card hands focus back as it unmounts; a ref that changed per render would hand it back on every render.
   const cardRef = useCallback((card: HTMLDivElement | null) => {
     ref.current = card;
-    return focusBackToRow(card);
-  }, [ref]);
+    return (link === undefined ? focusBackToRow : handFocusTo(() => link))(card);
+  }, [ref, link]);
   const pick = (ids: readonly IssueId[]) => issues.filter(({ id }) => ids.includes(id));
   const capped = placement.cap !== null;
   return (
-    <div ref={cardRef} className="rmi-card" data-side={placement.side} style={capStyle(placement)} aria-hidden={!capped || undefined}>
+    <div ref={cardRef} className={link === undefined ? "rmi-card" : "rmi-card rmi-card-floating"} data-side={placement.side} style={placeStyle(placement)} aria-hidden={!capped || undefined}>
       <div className="rmi-card-body" tabIndex={capped ? 0 : undefined} role={capped ? "region" : undefined} aria-label={capped ? `Details of ${issue.id}` : undefined}>
         <p className="rmi-card-title">{issue.title}</p>
         <p className="rmi-card-when">
@@ -68,8 +72,11 @@ export function HoverCard({ issue, issues }: HoverCardProps) {
 /** On the card: focus in it, on its scrolling body, goes to its row's button as it unmounts, so it never drops to the page (REVIEW.md). */
 const focusBackToRow = handFocusTo((card) => card.closest(".rmi-rowbox")?.querySelector<HTMLElement>(".rmi-row"));
 
-/** The card's height cap, when its side of the row has too little room (hover-card.css `.rmi-card-body`). */
-const capStyle = ({ cap }: Placement): (CSSProperties & Record<"--rmi-card-cap", string>) | undefined => (cap === null ? undefined : { "--rmi-card-cap": `${cap}px` });
+/** A floating card's place in the window, and the card's height cap when its side of its anchor has too little room (hover-card.css `.rmi-card-body`). */
+const placeStyle = ({ cap, at }: Placement): CSSProperties & Partial<Record<"--rmi-card-cap", string>> => ({
+  ...(at === null ? {} : { left: at.left, top: at.top }),
+  ...(cap === null ? {} : { "--rmi-card-cap": `${cap}px` }),
+});
 
 /** The parent's sub-issues, hung from its heading on the rails, as on the board; none when it has none. */
 function SubIssues({ rows }: { rows: readonly Row[] }) {
@@ -111,7 +118,7 @@ function Related({ title, rows }: { title: string; rows: readonly Row[] }) {
 function Line({ row }: { row: Row }) {
   return (
     <div className="rmi-card-line">
-      {row.needsYou === null ? <StatusGlyph status={row.status} /> : <NeedsYouGlyph />}
+      <IssueGlyph issue={row} />
       <span className="rmi-card-id">{row.id}</span>
       <FadingText text={row.title} />
     </div>

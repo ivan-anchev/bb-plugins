@@ -1,41 +1,60 @@
-// Where a row's hover card goes, so it is never cut off by the panel it scrolls in: under its row
-// when it fits there, else above it when there is more room above, and capped to the room on its
-// side, scrolling inside, when it fits on neither. Measured as the card mounts, before it paints.
+// Where a hover card goes, so it is never cut off: under its anchor when it fits there, else above it
+// when there is more room above, and capped to the room on its side, scrolling inside, when it fits
+// on neither. A row's card sits in the row's box and keeps inside the panel the board scrolls in; a
+// link's card floats, fixed, against the window, by the link's box, so the message list it sits in
+// clips none of it. Measured as the card mounts, before it paints.
 import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 
-/** The side of its row the card opens on, and the most it may be tall (null: as tall as it is). */
-export type Placement = { side: "below" | "above"; cap: number | null };
+/**
+ * The side of its anchor the card opens on, and the most it may be tall (null: as tall as it is); a
+ * floating card's place in the window, `at` (null: a row's card, placed by its row's box).
+ */
+export type Placement = { side: "below" | "above"; cap: number | null; at: { left: number; top: number } | null };
 
-/** Spread `ref` on the card, whose parent is its row's box; `placement` is where it goes. */
-export function useCardPlacement(): { ref: RefObject<HTMLDivElement | null>; placement: Placement } {
+/** Spread `ref` on the card. `link`: the link it floats by; null: the card's parent is its row's box. */
+export function useCardPlacement(link: HTMLElement | null): { ref: RefObject<HTMLDivElement | null>; placement: Placement } {
   const ref = useRef<HTMLDivElement>(null);
   const [placement, setPlacement] = useState<Placement>(UNMEASURED);
-  // why a layout effect: the card's height and the panel's edges are the browser's to measure, and the card must not paint where it doesn't fit.
+  // why a layout effect: the card's size and the room around its anchor are the browser's to measure, and the card must not paint where it doesn't fit.
   useLayoutEffect(() => {
     const card = ref.current;
     const row = card?.parentElement ?? null;
-    // why: the ref's type only; the card is mounted in its row's box as this runs.
+    // why: the ref's type only; the card is mounted, in its row's box or by its link, as this runs.
     if (card === null || row === null) return;
-    setPlacement(placementOf(row.getBoundingClientRect(), card.scrollHeight, visibleBounds(row)));
-  }, []);
+    setPlacement(link === null ? rowPlacement(row, card) : floatingPlacement(link.getBoundingClientRect(), card));
+  }, [link]);
   return { ref, placement };
 }
 
 // ------------------------------------------------------------------ layer 2
 
-const UNMEASURED: Placement = { side: "below", cap: null };
+const UNMEASURED: Placement = { side: "below", cap: null, at: null };
 
-/** The gap between the card and its row (hover-card.css `.rmi-card`). */
+/** The gap between the card and its anchor (hover-card.css `.rmi-card`). */
 const GAP = 4;
 /** The least a capped card is tall: its title, its status and the start of what follows. */
 const MIN_CAP = 96;
+/** The least room a floating card keeps from the window's sides. */
+const MARGIN = 8;
 
 type Edges = { top: number; bottom: number };
 
-/** Below when the card fits under its row; above when it doesn't and there is more room above; capped to its side's room when it fits on neither. */
-function placementOf(row: Edges, height: number, bounds: Edges): Placement {
-  const below = bounds.bottom - row.bottom - GAP;
-  const above = row.top - bounds.top - GAP;
+/** A row's card, kept inside every ancestor of the row that clips. */
+const rowPlacement = (row: Element, card: HTMLElement): Placement => ({ ...sideOf(row.getBoundingClientRect(), card.scrollHeight, visibleBounds(row)), at: null });
+
+/** A link's card, against the window: on its side of the link, from the link's left edge, kept off the window's right edge. */
+function floatingPlacement(link: DOMRect, card: HTMLElement): Placement {
+  const side = sideOf(link, card.scrollHeight, { top: 0, bottom: window.innerHeight });
+  const height = side.cap ?? card.scrollHeight;
+  const left = Math.max(MARGIN, Math.min(link.left, window.innerWidth - card.offsetWidth - MARGIN));
+  const top = side.side === "below" ? link.bottom + GAP : link.top - GAP - height;
+  return { ...side, at: { left, top } };
+}
+
+/** Below when the card fits under its anchor; above when it doesn't and there is more room above; capped to its side's room when it fits on neither. */
+function sideOf(anchor: Edges, height: number, bounds: Edges): Omit<Placement, "at"> {
+  const below = bounds.bottom - anchor.bottom - GAP;
+  const above = anchor.top - bounds.top - GAP;
   if (height <= below) return { side: "below", cap: null };
   if (above > below) return { side: "above", cap: height <= above ? null : Math.max(above, MIN_CAP) };
   return { side: "below", cap: Math.max(below, MIN_CAP) };

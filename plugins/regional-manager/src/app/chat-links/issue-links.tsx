@@ -1,0 +1,41 @@
+// Issue links in chat, experimental: a regional manager names an issue to the user as its link
+// (model/issue/link), and in any message bb renders it shows as the issue's live glyph and its id,
+// mid-sentence; resting on it or focusing it shows the Board's hover card, and pressing it opens the
+// issue's tab beside the Board. One overlay per app window finds the links (decorated-links.ts) and
+// draws each glyph into its link from the board's read, which changes as the board does, while the
+// message never renders again. Without the plugin, the link reads as its id.
+import "../board/issue/issue-board.css";
+import "./chat-links.css";
+import { experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
+import { createPortal } from "react-dom";
+import { coordinatorContract as contract } from "../../contract.ts";
+import type { IssueLink } from "../../model/issue/link/issue-link.ts";
+import { IssueGlyph } from "../board/issue/status-glyph.tsx";
+import { useDecoratedLinks } from "./decorated-links.ts";
+import { LinkCard } from "./link-card.tsx";
+import { useOpenOnClick } from "./open-on-click.ts";
+
+export const issueLinks = { id: "issue-links", component: IssueLinks };
+
+function IssueLinks() {
+  const links = useDecoratedLinks();
+  useOpenOnClick();
+  return (
+    <>
+      {links.map(({ key, link, slot }) => createPortal(<LinkGlyph link={link} />, slot, String(key)))}
+      <LinkCard />
+    </>
+  );
+}
+
+// ------------------------------------------------------------------ layer 2
+
+/** The issue's glyph and a space before its id, as its board reads now; none until the read has it, or for an issue its board has none of. */
+function LinkGlyph({ link }: { link: IssueLink }) {
+  const issue = experimental_useRpcQuery({ contract, method: "board", input: { coordinatorId: link.coordinatorId } }).data?.issues.find(({ id }) => id === link.issueId);
+  return issue === undefined ? null : (
+    <>
+      <IssueGlyph issue={issue} />{" "}
+    </>
+  );
+}

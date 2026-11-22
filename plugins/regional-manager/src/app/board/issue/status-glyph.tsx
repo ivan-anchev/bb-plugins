@@ -4,7 +4,13 @@
 // three eighths, Verifying a half, In review three quarters; Done closes on its check. Backlog's ring is dotted, Canceled's
 // crossed.
 import type { ReactNode } from "react";
+import type { IssueRow } from "../../../contract.ts";
 import { STATUS_LABELS, type IssueStatus } from "../../../model/issue/status.ts";
+
+/** An issue's glyph wherever it is named: Needs you's while it waits on the user, else its status's. */
+export function IssueGlyph({ issue }: { issue: Pick<IssueRow, "status" | "needsYou"> }) {
+  return issue.needsYou === null ? <StatusGlyph status={issue.status} /> : <NeedsYouGlyph />;
+}
 
 export function StatusGlyph({ status }: { status: IssueStatus }) {
   return (

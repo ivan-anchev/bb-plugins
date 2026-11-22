@@ -13,7 +13,7 @@ import type { IssueId } from "../../../../model/issue/issue.ts";
 import { STATUS_LABELS, type IssueStatus } from "../../../../model/issue/status.ts";
 import { useOpenIssue } from "../../issue-tab/open-issue.ts";
 import { PrBadge } from "../pr-badge.tsx";
-import { NeedsYouGlyph, StatusGlyph } from "../status-glyph.tsx";
+import { IssueGlyph } from "../status-glyph.tsx";
 import { FadingText } from "./fading-text.tsx";
 import { IssuePills } from "./pills.tsx";
 
@@ -43,7 +43,7 @@ export function IssueRow({ ref, issue, under, ask, hover, children }: IssueRowPr
         aria-label={spoken(issue)}
         onClick={() => open(issue)}
       >
-        <span className="rmi-slot">{issue.needsYou === null ? <StatusGlyph status={issue.status} /> : <NeedsYouGlyph />}</span>
+        <span className="rmi-slot"><IssueGlyph issue={issue} /></span>
         <span className="rmi-row-id">
           {under !== null && (
             <>

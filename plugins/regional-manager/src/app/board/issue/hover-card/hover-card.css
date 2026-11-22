@@ -2,6 +2,7 @@
    surface, ringed by its border with the menu's shadow. It sits in the row's box, so the pointer
    crossing onto it never leaves the row, and its edge reaches over the 4 between them. Under its row,
    or above it where the panel has no room below (placement.ts); its body scrolls when it is capped.
+   An issue link's card in chat floats, fixed in the window by its link (`.rmi-card-floating`).
    Every colour is a bb theme token, and every class carries the `rmi-` prefix. */
 .rmi-card {
   position: absolute;
@@ -36,6 +37,13 @@
 }
 .rmi-card[data-side="above"]::before {
   inset: 100% 0 -4px;
+}
+/* Placed in the window by placement.ts, over bb's message list and its panes, which would clip a card in them. */
+.rmi-card.rmi-card-floating {
+  position: fixed;
+  z-index: 50;
+  bottom: auto;
+  width: min(320px, calc(100vw - 16px));
 }
 /* why the body scrolls, not the card: the card's edge reaches past its box to the row, which a scrolling box would clip. */
 .rmi-card-body {

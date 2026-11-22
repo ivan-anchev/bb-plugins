@@ -1129,6 +1129,9 @@ export function newThreadRequest(goal: string): ComposerRequest {
 /** A tool result's text, whichever form it took. */
 export const textOf = (result: PluginAgentToolResult): string => (typeof result === "string" ? result : result.content.map((part) => (part.type === "text" ? part.text : "")).join(""));
 
+/** A catch-up's board with each row's issue link taken out, for a test of its lanes and relations: the links are issues.test.ts's. */
+export const withoutLinks = (board: string): string => board.replace(/; link: \[[^\]]+\]\([^)]+\)/g, "");
+
 export const isRefusal = (result: PluginAgentToolResult): boolean => typeof result !== "string" && result.isError === true;
 
 /** The skills the plugin's manifest declares, as bb reads them: each folder in the directories its bb.skills names. */

@@ -1,15 +1,17 @@
-// The nav panel: the list at its root, the New page at `new`, and the page of a regional manager not
-// started yet at `board/<id>`. Its title bar holds New, and bb's title bar names the regional manager open.
+// The nav panel: the list at its root, the New page at `new`, the page of a regional manager not
+// started yet at `board/<id>`, and where an issue link lands at `issue/<id>/<issue>`. Its title bar holds New, and bb's title bar names the regional manager open.
 import { experimental_Icon as Icon, useBbNavigate, type ExperimentalPageTitle, type PluginNavPanelProps } from "@get-bb/plugin-sdk/app";
 import { useCallback } from "react";
+import { PANEL_PATH } from "../../model/issue/link/issue-link.ts";
 import type { CoordinatorId } from "../../model/role.ts";
+import { IssueLanding } from "../chat-links/issue-landing.tsx";
 import { useManager } from "../profile/use-manager.ts";
 import { Button } from "../ui/button.tsx";
 import { useFocusHandOff } from "../ui/focus-hand-off.ts";
 import { CoordinatorList } from "./coordinator-list.tsx";
 import { ManagerPage } from "./manager/manager-page.tsx";
 import { NewCoordinator } from "./new-coordinator.tsx";
-import { managerSubPath, NEW_SUBPATH, PANEL_PATH, pageOf } from "./routes.ts";
+import { managerSubPath, NEW_SUBPATH, pageOf } from "./routes.ts";
 
 export function CoordinatorPanel({ subPath }: PluginNavPanelProps) {
   const { openList, openManager } = usePanelNavigation();
@@ -27,6 +29,8 @@ export function CoordinatorPanel({ subPath }: PluginNavPanelProps) {
       return <NewCoordinator ref={pageRoot} onBack={openList} onCreated={openManager} />;
     case "manager":
       return <ManagerPage key={page.coordinatorId} ref={pageRoot} coordinatorId={page.coordinatorId} onBack={openList} />;
+    case "issue":
+      return <IssueLanding key={`${page.link.coordinatorId}/${page.link.issueId}`} ref={pageRoot} link={page.link} onBack={openList} />;
     case "list":
       return <CoordinatorList ref={pageRoot} onOpen={openManager} />;
     default:

@@ -118,6 +118,12 @@ issue.
   answer.
 - **Record a decision** on one with `issue_update` and `decision` (see
   [One place for each thing](#one-place-for-each-thing)).
+- **Name** one to the user by its link, as `crew_catch_up`, `issue_create`
+  and `issue_read` give it: `[BBP-24](/plugins/regional-manager/regional-managers/issue/<id>/BBP-24)`,
+  copied whole. In chat it reads as the issue's live status and id, shows the
+  issue's card on hover, and opens the issue beside your Board when pressed.
+  Never write a bare `BBP-24` to the user, and never put the link in code or
+  a code block, where it is plain text.
 - Say in `NOTES.md` what can run at once.
 
 ### Issue ids

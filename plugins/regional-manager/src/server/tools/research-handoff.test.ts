@@ -28,7 +28,7 @@ const I1_REPORT = memoryFileSchema.parse("reports/WEB-1.md");
 async function researching(fields: object = {}, storage = memoryStorage().storage) {
   const { kit, threadId, coordinatorId } = await coordinating({ storage });
   const call = (tool: string, input: object) => kit.call(tool, input, threadId);
-  assert.equal(textOf(await call("issue_create", { ...RESEARCH, ...fields })), "Filed WEB-1 (research) in Todo.");
+  assert.equal(textOf(await call("issue_create", { ...RESEARCH, ...fields })), `Filed WEB-1 (research) in Todo. Link: [WEB-1](/plugins/regional-manager/regional-managers/issue/${coordinatorId}/WEB-1)`);
   const agentThreadId = threadIn(textOf(await call("agent_start", { issue: "WEB-1" })));
   const files = kit.memory.of(coordinatorId);
   /** The status line issue_read gives: its kind, status and why. */
@@ -96,7 +96,7 @@ test("a research done handoff is Done at once: no verifier, no git read, a commi
   const { handoff, check } = kit.store.record(coordinatorId, I1)[0] ?? assert.fail("no handoff stored");
   assert.equal(check, null);
   assert.deepEqual(handoff.status === "done" && handoff.delivery, { kind: "report", report: REPORT, file: I1_REPORT });
-  assert.equal(await statusOf("WEB-1"), `Research. Done: Handed off: Vault fits our PCI scope. Thread: @thread:${agentThreadId}, branch \`bb/${agentThreadId}\`.`);
+  assert.equal(await statusOf("WEB-1"), `Research. Done: Handed off: Vault fits our PCI scope. Thread: @thread:${agentThreadId}, branch \`bb/${agentThreadId}\`. Link: [WEB-1](/plugins/regional-manager/regional-managers/issue/${coordinatorId}/WEB-1)`);
 
   const doorbell = kit.doorbellsSent(threadId).at(-1) ?? "";
   assert.match(doorbell, /- WEB-1 "Pick a card vault" \(a1\) handed off: done$/);
@@ -149,7 +149,7 @@ test("a research issue can't be accepted Done by the manager, and nothing can na
   const named = await call("issue_update", { id: "WEB-1", verifier: { providerId: "codex", model: "gpt-default" } });
   assert.equal(textOf(named), "WEB-1 can't be changed so: a research issue has no verifier: nothing verifies it. Give verifier: null with the change to drop the one named.");
 
-  assert.equal(textOf(await call("issue_create", { ...ISSUE, verifier: { providerId: "codex", model: "gpt-default" } })), "Filed WEB-2 (build) in Todo. Its done handoffs are checked on codex gpt-default (low).");
+  assert.equal(textOf(await call("issue_create", { ...ISSUE, verifier: { providerId: "codex", model: "gpt-default" } })), `Filed WEB-2 (build) in Todo. Its done handoffs are checked on codex gpt-default (low). Link: [WEB-2](/plugins/regional-manager/regional-managers/issue/${coordinatorId}/WEB-2)`);
   const toResearch = await call("issue_update", { id: "WEB-2", kind: "research" });
   assert.equal(textOf(toResearch), "WEB-2 can't be changed so: a research issue has no verifier: nothing verifies it. Give verifier: null with the change to drop the one named.");
   assert.equal(textOf(await call("issue_update", { id: "WEB-2", kind: "research", verifier: null })), "Updated WEB-2. WEB-2 has no verifier: nothing verifies a research issue.");

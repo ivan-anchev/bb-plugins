@@ -1,0 +1,22 @@
+/* An issue link in a message (issue-links.tsx): the issue's glyph, then its id in the board's mono,
+   in the text's own colour, mid-sentence, as the board's rows name an issue. bb's link underline
+   comes back on hover and focus, so it still reads as a link. Its glyph's colours are the board's
+   (issue-board.css `.rmi-state`). Every class carries the `rmi-` prefix; the link is bb's, styled
+   only once it holds the plugin's slot. */
+a:has(> .rmi-issue-glyph) {
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+a:has(> .rmi-issue-glyph):hover,
+a:has(> .rmi-issue-glyph):focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+/* The glyph sits on the line, a space before the id, which a screen reader hears too: "In progress BBP-24". */
+.rmi-issue-glyph > .rmi-state {
+  display: inline-flex;
+  vertical-align: -3px;
+}

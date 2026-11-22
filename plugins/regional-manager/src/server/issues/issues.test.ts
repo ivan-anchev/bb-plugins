@@ -19,18 +19,34 @@ async function managing(options: Parameters<typeof coordinating>[0] = {}) {
 }
 
 test("issue_create files a build issue in Todo, or in Backlog, numbered per regional manager, and never reuses an id", async () => {
-  const { kit, call, statuses } = await managing();
-  assert.equal(textOf(await call("issue_create", ISSUE)), "Filed WEB-1 (build) in Todo.");
-  assert.equal(textOf(await call("issue_create", { ...ISSUE, title: "Dead letters", status: "backlog" })), "Filed WEB-2 (build) in Backlog.");
+  const { kit, coordinatorId, call, statuses } = await managing();
+  const link = (id: string, coordinator: string = coordinatorId) => `[${id}](/plugins/regional-manager/regional-managers/issue/${coordinator}/${id})`;
+  assert.equal(textOf(await call("issue_create", ISSUE)), `Filed WEB-1 (build) in Todo. Link: ${link("WEB-1")}`);
+  assert.equal(textOf(await call("issue_create", { ...ISSUE, title: "Dead letters", status: "backlog" })), `Filed WEB-2 (build) in Backlog. Link: ${link("WEB-2")}`);
   assert.deepEqual(await statuses(), [
     ["WEB-1", "todo"],
     ["WEB-2", "backlog"],
   ]);
 
   assert.equal(textOf(await call("issue_update", { id: "WEB-2", status: "canceled" })), "Updated WEB-2.");
-  assert.equal(textOf(await call("issue_create", ISSUE)), "Filed WEB-3 (build) in Todo.");
+  assert.equal(textOf(await call("issue_create", ISSUE)), `Filed WEB-3 (build) in Todo. Link: ${link("WEB-3")}`);
   const other = await kit.startManager("Retire the cron box");
-  assert.equal(textOf(await kit.call("issue_create", ISSUE, other.threadId)), "Filed WEB-1 (build) in Todo.");
+  assert.equal(textOf(await kit.call("issue_create", ISSUE, other.threadId)), `Filed WEB-1 (build) in Todo. Link: ${link("WEB-1", other.coordinatorId)}`, "the same id, another manager's link");
+});
+
+test("each issue's link is in the catch-up's row, issue_create and issue_read, and the rules tell the manager to name issues to the user by it, never bare or in code", async () => {
+  const { kit, threadId, coordinatorId, call } = await managing();
+  const link = (id: string) => `[${id}](/plugins/regional-manager/regional-managers/issue/${coordinatorId}/${id})`;
+  assert.ok(textOf(await call("issue_create", ISSUE)).endsWith(` Link: ${link("WEB-1")}`));
+  await call("issue_create", { ...ISSUE, title: "Dead letters", dependsOn: ["WEB-1"] });
+
+  const caughtUp = textOf(await call("crew_catch_up", {}));
+  assert.ok(caughtUp.includes(`\n- WEB-1 "Add retries" (Build; no agent): Not started; blocks WEB-2 (Todo); link: ${link("WEB-1")}\n`), caughtUp);
+  assert.ok(caughtUp.includes(`\n- WEB-2 "Dead letters" (Build; no agent): Not started; blocked by WEB-1 (Todo); link: ${link("WEB-2")}\n`), caughtUp);
+  assert.ok(textOf(await call("issue_read", { id: "WEB-2" })).startsWith(`## WEB-2: Dead letters\n\nBuild. Todo: Not started. Blocked by WEB-1 (Todo). Thread: no thread. Link: ${link("WEB-2")}\n`));
+
+  const rules = kit.configurationFor(threadId, {}).instructions ?? "";
+  assert.match(rules, /Name an issue to the user by its link, exactly as crew_catch_up, issue_create and issue_read give it, .*: never by its bare id, and never inside code or a code block\./);
 });
 
 test("issue_create rejects a missing or unknown kind, a blank or a thirteenth criterion, or a field it doesn't take, and files nothing", async () => {
@@ -132,7 +148,7 @@ test("an issue no agent holds is canceled, and reopened into Todo, ready again; 
 
 test("a verifier named on an issue is stored with its catalog default reasoning level, shown, and cleared with null", async () => {
   const { kit, coordinatorId, call, update } = await managing();
-  assert.equal(textOf(await call("issue_create", { ...ISSUE, verifier: { providerId: "claude-code", model: "opus" } })), "Filed WEB-1 (build) in Todo. Its done handoffs are checked on claude-code opus (high).");
+  assert.match(textOf(await call("issue_create", { ...ISSUE, verifier: { providerId: "claude-code", model: "opus" } })), /^Filed WEB-1 \(build\) in Todo\. Its done handoffs are checked on claude-code opus \(high\)\. Link: /);
   assert.deepEqual(kit.store.issue(coordinatorId, ISSUE_ID)?.verifier, { providerId: "claude-code", model: "opus", reasoningLevel: "high" });
   assert.match(textOf(await call("issue_read", { id: "WEB-1" })), /### Verifier\n\nNamed: claude-code opus \(high\)\./);
 
