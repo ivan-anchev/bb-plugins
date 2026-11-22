@@ -3,7 +3,7 @@
    (issue-board.css). Every colour is a bb theme token, never a literal; every class carries the
    `rmi-` prefix, since bb does not scope a plugin's stylesheet. */
 
-/* --- The tab's page: its head, then its parts, its words lined up under the head's id ------------ */
+/* --- The tab's page: its head, then its parts, in one column ----------------------------------- */
 .rmi-detail {
   display: flex;
   flex-direction: column;
