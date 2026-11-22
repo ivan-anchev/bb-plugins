@@ -1101,7 +1101,9 @@ id of the manager is in it because two managers can both have a BBP-24.
   for the issue, floating by the link so the message list never cuts it off.
   It stays while the pointer is on the link or the card; Escape closes it
   wherever focus is, and focus stays on, or goes back to, the link. A press
-  or a scroll puts it away.
+  puts it away; a scroll carries it along with its link. When the card is
+  too tall for the window and its body scrolls, Tab moves from the link into
+  the card and Shift+Tab goes back.
 - **Pressing it** opens the issue's tab beside the Board: in the manager's own
   thread, in that thread's side panel; from any other thread, the manager's
   thread opens in a split (or comes forward where it already shows) with the
