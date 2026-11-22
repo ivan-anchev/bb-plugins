@@ -55,7 +55,7 @@ const checkedWith = (verdict: Verdict, verifier: Execution | null = null, review
 const agentOn = (execution: Execution) => ({ agents: (): Agent[] => [{ id: agentId, coordinatorId, issueId, placement: { kind: "worktree" }, base: { kind: "default" }, execution, threadId: "thr_a1", checkout: { environmentId: null, branch: null, head: null }, fixRounds: 0, startedAt: 1_000, ended: null }] });
 
 const returned = (results: CriterionResult[], ranOn: Pick<Execution, "providerId" | "model"> = { providerId: "codex", model: "gpt-default" }, sameModel = false): Extract<Verdict, { state: "returned" }> => ({
-  state: "returned",
+  state: "returned", at: 5_000,
   verifierThreadId: "thr_v",
   headSha: SHA,
   checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 },
@@ -102,7 +102,7 @@ test("a verdict says what its verifier ran on: as named on the issue, why not th
 });
 
 test("a verdict's review says whether its confirmed findings reached the agent only as far as its settlement shows", () => {
-  const review: Review = { state: "reported", reviewerThreadId: "thr_r", findings: [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap." }], model: { providerId: "claude-code", model: "sonnet" } };
+  const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap." }], model: { providerId: "claude-code", model: "sonnet" } };
   const failed: Extract<Verdict, { state: "returned" }> = { ...returned(["fail"]), triage: [{ result: "confirmed", reason: "It never caps." }] };
   const cases: [Extract<Verdict, { state: "returned" }>["settlement"], string][] = [
     [{ kind: "pending" }, "None has gone to the agent yet."],

@@ -473,13 +473,13 @@ test("an issue opened on the board sends of each verdict only what the board sho
   await kit.call("issue_verdict", FAILS, verifierThreadId);
   await kit.idle(verifierThreadId, "Verdict returned.");
   const sendingBack = await shown();
-  assert.deepEqual(Object.keys(sendingBack).sort(), ["checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
+  assert.deepEqual(Object.keys(sendingBack).sort(), ["at", "checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
   assert.deepEqual(sendingBack.state === "returned" && sendingBack.settlement, { kind: "sending-back" });
 
   take();
   await settled();
   const returned = await shown();
-  assert.deepEqual(Object.keys(returned).sort(), ["checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
+  assert.deepEqual(Object.keys(returned).sort(), ["at", "checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
   assert.deepEqual(returned.state === "returned" && returned.settlement, { kind: "sent-back", ci: { kind: "none" } });
 });
 
@@ -671,7 +671,7 @@ test("a verifier that goes idle without a verdict is nudged once, then the row r
   await kit.idle(verifierThreadId, "Still all good.");
   await kit.tick();
   await settled();
-  assert.deepEqual(verdict(), { state: "could-not-run", verifierThreadId, reason: "its verifier stopped without a verdict twice, the second time after a reminder" });
+  assert.deepEqual(verdict(), { state: "could-not-run", at: kit.clock.now, verifierThreadId, reason: "its verifier stopped without a verdict twice, the second time after a reminder" });
   assert.deepEqual([(await row()).lane, (await row()).headline], ["needs-you", "Couldn't verify, as its verifier stopped without a verdict twice, the second time after a reminder: Retries land with backoff"]);
   assert.match(doorbells()[0] ?? "", /handed off: done, could not be verified$/);
   assert.ok(isRefusal(await kit.call("issue_verdict", PASSES, verifierThreadId)), "a verdict after giving up is refused");
@@ -688,6 +688,7 @@ test("a verifier whose sandbox was removed before its verdict reads Couldn't ver
   await settled();
   assert.deepEqual(verdict(), {
     state: "could-not-run",
+    at: kit.clock.now,
     verifierThreadId,
     reason: "its environment was removed (a sandbox removed or reaped) before its verifier returned a verdict",
   });
@@ -752,7 +753,7 @@ test("a verifier's ask bb won't let the plugin decline ends its check Couldn't v
   await settled();
 
   const reason = 'its verifier asked a person "Reconnect GitHub on ChatGPT", and bb refused the plugin\'s decline: bb is restarting';
-  assert.deepEqual(verdict(), { state: "could-not-run", verifierThreadId, reason });
+  assert.deepEqual(verdict(), { state: "could-not-run", at: kit.clock.now, verifierThreadId, reason });
   assert.equal(kit.thread(verifierThreadId).status, "idle", "the verifier no longer holds the agent's environment");
   assert.deepEqual([(await row()).lane, (await row()).headline], ["needs-you", `Couldn't verify, as ${reason}: Retries land with backoff`]);
   await kit.tick();
@@ -775,10 +776,10 @@ test("a verifier silent for 30 minutes ends its check Couldn't verify with that 
   await kit.tick();
   await settled();
   const reason = "its verifier showed no activity for 30 minutes";
-  assert.deepEqual(verdict(), { state: "could-not-run", verifierThreadId, reason });
+  assert.deepEqual(verdict(), { state: "could-not-run", at: kit.clock.now, verifierThreadId, reason });
   assert.equal(kit.thread(verifierThreadId).status, "idle", "the verifier no longer holds the agent's environment");
   assert.deepEqual([(await row()).lane, (await row()).headline], ["needs-you", `Couldn't verify, as ${reason}: Retries land with backoff`]);
-  assert.deepEqual((await opened()).record[0]?.handoffs.at(-1)?.verdict, { state: "could-not-run", verifierThreadId, reason }, "the opened issue has the reason and the verifier to link");
+  assert.deepEqual((await opened()).record[0]?.handoffs.at(-1)?.verdict, { state: "could-not-run", at: kit.clock.now, verifierThreadId, reason }, "the opened issue has the reason and the verifier to link");
   assert.match(doorbells().at(-1) ?? "", /handed off: done, could not be verified$/);
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /Couldn't verify: its verifier showed no activity for 30 minutes\./);
 });
@@ -800,6 +801,7 @@ test("a verifier silent for 30 minutes after an ask was declined counts from the
   await settled();
   assert.deepEqual(verdict(), {
     state: "could-not-run",
+    at: kit.clock.now,
     verifierThreadId,
     reason: 'its verifier showed no activity for 30 minutes, after the plugin declined what it asked a person ("Reconnect GitHub on ChatGPT")',
   });
@@ -850,7 +852,7 @@ test("a verifier whose thread is archived is given up on at the next tick", asyn
   const verifierThreadId = verifier();
   kit.thread(verifierThreadId).archivedAt = Date.now();
   await kit.tick();
-  assert.deepEqual(verdict(), { state: "could-not-run", verifierThreadId, reason: "its verifier thread was archived or deleted before it returned a verdict" });
+  assert.deepEqual(verdict(), { state: "could-not-run", at: kit.clock.now, verifierThreadId, reason: "its verifier thread was archived or deleted before it returned a verdict" });
 });
 
 test("a second done handoff supersedes the first verdict and stops its verifier, whose verdict is then refused", async () => {
@@ -880,7 +882,7 @@ test("a verifier bb won't start leaves the row Couldn't verify, with bb's reason
   lost.kit.spawns.created = false;
   lost.kit.spawns.answer = "lost";
   await lost.handOff();
-  assert.deepEqual(lost.verdict(), { state: "could-not-run", verifierThreadId: null, reason: "bb did not start a verifier: socket hang up" });
+  assert.deepEqual(lost.verdict(), { state: "could-not-run", at: lost.kit.clock.now, verifierThreadId: null, reason: "bb did not start a verifier: socket hang up" });
   assert.equal((await lost.row()).headline, "Couldn't verify, as bb did not start a verifier: socket hang up: Retries land with backoff");
   assert.match(lost.doorbells()[0] ?? "", /could not be verified$/);
 

@@ -60,7 +60,7 @@ export type Review = ReturnType<typeof createReview>;
 export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
   /** Ends the review as missed, from where it is, and stops its reviewer, if it had one: it holds the agent's environment, still on what held it. */
   async function miss(check: HandoffCheck, from: ReviewFrom, reason: string): Promise<void> {
-    if (!store.missReview(check.id, from, reason) || from.state !== "running") return;
+    if (!store.missReview(check.id, from, reason, now()) || from.state !== "running") return;
     const { unstopped } = await stopThreads(bb, [from.reviewerThreadId]);
     for (const { why } of unstopped) bb.log.warn(`The reviewer ${from.reviewerThreadId} of check ${check.id}, whose review was missed, ${why}; nothing waits on it.`);
   }
@@ -140,7 +140,7 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
         const ran = await threadExecution(bb, reviewerThreadId);
         // why throw: the reviewer calls issue_review from inside a turn, so bb has its model on record.
         if (ran === null) throw new Error(`bb has no model on record for ${reviewerThreadId}.`);
-        return store.receiveReview(checkId, reviewerThreadId, findings, { providerId: ran.providerId, model: ran.model }) ? "recorded" : "not-running";
+        return store.receiveReview(checkId, reviewerThreadId, findings, { providerId: ran.providerId, model: ran.model }, now()) ? "recorded" : "not-running";
       });
     },
   };

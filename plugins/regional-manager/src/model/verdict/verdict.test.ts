@@ -8,7 +8,7 @@ import { judge, outcome, verdictSchema, type CriterionResult, type Verdict } fro
 const CLEAN = { headSha: "a".repeat(40), changedFiles: [], changedFileCount: 0 };
 
 const returned = (results: CriterionResult[], settlement: Settlement = { kind: "checked", refused: null, ci: { kind: "none" } }): Verdict => ({
-  state: "returned",
+  state: "returned", at: 5_000,
   verifierThreadId: "thr_v",
   headSha: "a".repeat(40),
   checkout: CLEAN,
@@ -29,7 +29,7 @@ test("a verdict's outcome is derived from its state, and a returned one from eve
     [returned(["pass"]), "pass"],
     [returned(["pass", "pass", "pass"]), "pass"],
     [returned(["pass", "fail"]), "fail"],
-    [{ state: "could-not-run", verifierThreadId: null, reason: "bb did not start a verifier" }, "could-not-run"],
+    [{ state: "could-not-run", at: 5_000, verifierThreadId: null, reason: "bb did not start a verifier" }, "could-not-run"],
     [{ state: "superseded" }, "superseded"],
     [{ state: "waived" }, "unverified"],
   ];
@@ -53,7 +53,7 @@ test("a returned verdict is pending until it is settled: its findings reached th
 });
 
 test("a verdict stored before settlements existed reads as settled", () => {
-  const stored = verdictSchema.parse({ state: "returned", verifierThreadId: "thr_v", headSha: "a".repeat(40), checkout: CLEAN, criteria: [{ criterion: "npm test passes", result: "pass", evidence: "ran it" }], findings: [], model: { providerId: "codex", model: "gpt-default" }, sameModel: false });
+  const stored = verdictSchema.parse({ state: "returned", at: 5_000, verifierThreadId: "thr_v", headSha: "a".repeat(40), checkout: CLEAN, criteria: [{ criterion: "npm test passes", result: "pass", evidence: "ran it" }], findings: [], model: { providerId: "codex", model: "gpt-default" }, sameModel: false });
   assert.equal(outcome(stored), "pass");
 });
 

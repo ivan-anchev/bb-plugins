@@ -76,7 +76,7 @@ const DETAIL: IssueDetail = {
           findings: [],
           report: null,
           verdict: {
-            state: "returned",
+            state: "returned", at: 5_000,
             verifierThreadId: "thr_verifier",
             headSha: SHA,
             checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 },
@@ -239,7 +239,7 @@ test("the tab lists its decisions oldest first: each question put to the user wi
 test("a build parent's tab shows its final checks, oldest first and the latest open, each on its default branch with the verdict's criteria, evidence, findings and verifier", async () => {
   const MERGED = "b".repeat(40);
   const failed: ShownVerdict = {
-    state: "returned",
+    state: "returned", at: 5_000,
     verifierThreadId: "thr_final_1",
     headSha: MERGED,
     checkout: { headSha: MERGED, changedFiles: ["?? scratch.txt"], changedFileCount: 1 },
@@ -285,7 +285,7 @@ test("a check whose verifier asks or stalled gives the reason in its tab and lin
   assert.deepEqual(asking.view.navigateCalls, [{ method: "toThread", threadId: "thr_asking" }]);
   cleanup();
 
-  const stalled = await opened("WEB-2", [issue("WEB-2", { status: "in-progress", agent: agent("a2") })], () => withVerdict({ state: "could-not-run", verifierThreadId: "thr_stalled", reason }));
+  const stalled = await opened("WEB-2", [issue("WEB-2", { status: "in-progress", agent: agent("a2") })], () => withVerdict({ state: "could-not-run", at: 5_000, verifierThreadId: "thr_stalled", reason }));
   assert.ok(stalled.tab().getByText(`No verdict: ${reason}`));
   fireEvent.click(stalled.tab().getByRole("button", { name: "Open Verifier's thread" }));
   assert.deepEqual(stalled.view.navigateCalls, [{ method: "toThread", threadId: "thr_stalled" }]);

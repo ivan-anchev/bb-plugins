@@ -28,14 +28,15 @@ const reviewerThreadIdSchema = z.string().min(1);
  * reviews existed. `queued`: its reviewer starts once the agent's thread is idle. `running`: a
  * reviewer thread reviews.
  * `reported`: it returned its findings ([] for none), on the model bb ran it on. `missed`: no
- * review was had, and why; its thread, if it had one. Verification goes ahead either way.
+ * review was had, and why; its thread, if it had one. Verification goes ahead either way. Each of
+ * the two keeps `at`, when it came (the migration gave every one stored before a time).
  */
 export const reviewSchema = z.discriminatedUnion("state", [
   z.object({ state: z.literal("none") }),
   z.object({ state: z.literal("queued") }),
   z.object({ state: z.literal("running"), reviewerThreadId: reviewerThreadIdSchema }),
-  z.object({ state: z.literal("reported"), reviewerThreadId: reviewerThreadIdSchema, findings: z.array(reviewFindingSchema), model: modelRefSchema }),
-  z.object({ state: z.literal("missed"), reviewerThreadId: reviewerThreadIdSchema.nullable(), reason: z.string() }),
+  z.object({ state: z.literal("reported"), at: z.number(), reviewerThreadId: reviewerThreadIdSchema, findings: z.array(reviewFindingSchema), model: modelRefSchema }),
+  z.object({ state: z.literal("missed"), at: z.number(), reviewerThreadId: reviewerThreadIdSchema.nullable(), reason: z.string() }),
 ]);
 export type Review = z.infer<typeof reviewSchema>;
 

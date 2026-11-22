@@ -58,7 +58,7 @@ const checkOf = (verdict: Verdict): Check => ({
   verdict,
 });
 const returned = (results: CriterionResult[], settlement: Extract<Verdict, { state: "returned" }>["settlement"] = { kind: "checked", refused: null, ci: { kind: "none" } }): Extract<Verdict, { state: "returned" }> => ({
-  state: "returned",
+  state: "returned", at: 5_000,
   verifierThreadId: "thr_v",
   headSha: SHA,
   checkout: CLEAN,
@@ -130,7 +130,7 @@ test("a done handoff walks Verifying, then In review, by its check", () => {
     [{ state: "waived" }, at("in-review", `Unverified: ${summary}`)],
     [returned(["fail"], { kind: "sent-back", round: 1, ci: { kind: "none" } }), at("in-progress", `Fixing its verifier's findings: ${summary}`)],
     [returned(["fail"]), at("in-progress", `✗ Failed verification: ${summary}`, `✗ Failed verification: ${summary}`)],
-    [{ state: "could-not-run", verifierThreadId: null, reason: "unread" }, at("in-progress", `Couldn't verify, as unread: ${summary}`, `Couldn't verify, as unread: ${summary}`)],
+    [{ state: "could-not-run", at: 5_000, verifierThreadId: null, reason: "unread" }, at("in-progress", `Couldn't verify, as unread: ${summary}`, `Couldn't verify, as unread: ${summary}`)],
     [{ state: "superseded" }, at("in-progress", `Replaced by a newer handoff: ${summary}`)],
   ];
   for (const [verdict, expected] of cases) assert.deepEqual(view(held(thread("idle"), { handoff: done, check: checkOf(verdict) })), expected, JSON.stringify(verdict));
@@ -246,7 +246,7 @@ test("a build parent whose work is all merged is placed by its latest final chec
   const passed = finalCheck(["WEB-2", "WEB-3"], returned(["pass"]));
   assert.deepEqual(placed(passed), { ...at2("done", "✓ Final check passed"), due: null, closedBy: { by: "final-check", checkId: passed.id } });
   assert.deepEqual(pick(placed(finalCheck(["WEB-2", "WEB-3"], returned(["fail"])))), at2("in-progress", "✗ Final check failed", "✗ Final check failed"));
-  assert.deepEqual(pick(placed(finalCheck(["WEB-2", "WEB-3"], { state: "could-not-run", verifierThreadId: "thr_v", reason: "its verifier stopped without a verdict twice" }))), at2("in-progress", "Couldn't run its final check, as its verifier stopped without a verdict twice", "Couldn't run its final check, as its verifier stopped without a verdict twice"));
+  assert.deepEqual(pick(placed(finalCheck(["WEB-2", "WEB-3"], { state: "could-not-run", at: 5_000, verifierThreadId: "thr_v", reason: "its verifier stopped without a verdict twice" }))), at2("in-progress", "Couldn't run its final check, as its verifier stopped without a verdict twice", "Couldn't run its final check, as its verifier stopped without a verdict twice"));
   assert.deepEqual(pick(placed(finalCheck(["WEB-2", "WEB-3"], { state: "waived" }))), at2("in-review", "Unverified: verification was off"));
 
   const failedBefore = finalCheck(["WEB-2", "WEB-3"], returned(["fail"]));

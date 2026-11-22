@@ -14,11 +14,10 @@ import type { CoordinatorId } from "../../model/role.ts";
 import type { CheckId } from "../../model/verdict/check.ts";
 import type { CheckoutRead } from "../../model/verdict/checkout.ts";
 import type { PrSnapshot, PrUnavailable } from "../../model/verdict/pr.ts";
-import type { Verdict } from "../../model/verdict/verdict.ts";
 import { isLive, threadsById } from "../agents/threads.ts";
 import type { MemoryRoot } from "../memory/memory-files.ts";
 import { storeReport } from "../memory/report-file.ts";
-import type { Settlement, VerdictFrom } from "../store/issue/checks-store.ts";
+import type { GivenUp, Settlement, VerdictFrom } from "../store/issue/checks-store.ts";
 import type { Store } from "../store/store.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
@@ -240,9 +239,9 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
       return inserted;
     },
 
-    /** Gives up on a waiting check and announces it checked, if it is still where `from` says. */
-    giveUpCheck(checkId: CheckId, from: VerdictFrom, verdict: Extract<Verdict, { state: "could-not-run" }>): void {
-      const id = store.giveUpCheck(checkId, from, verdict, Date.now());
+    /** Gives up on a waiting check at `at` and announces it checked, if it is still where `from` says. */
+    giveUpCheck(checkId: CheckId, from: VerdictFrom, why: GivenUp, at: number): void {
+      const id = store.giveUpCheck(checkId, from, why, at);
       if (id !== null) recorded(id);
     },
 

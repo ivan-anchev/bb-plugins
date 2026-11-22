@@ -128,10 +128,10 @@ test("a check starts running as its verifier's ticket binds, is nudged once, un-
   assert.equal(store.markNudged(check.id, "thr_verifier", false), true, "its reminder was taken back from bb's queue");
   assert.equal(store.markNudged(check.id, "thr_verifier", false), false);
 
-  const gaveUp = { state: "could-not-run", verifierThreadId: "thr_verifier", reason: "its verifier stopped without a verdict" } as const;
+  const gaveUp = { verifierThreadId: "thr_verifier", reason: "its verifier stopped without a verdict" } as const;
   assert.equal(store.giveUpCheck(check.id, { state: "queued" }, gaveUp, 4_000), null, "it isn't queued any more");
   assert.equal(store.giveUpCheck(check.id, { state: "running", verifierThreadId: "thr_verifier" }, gaveUp, 4_000), MANAGER);
-  assert.deepEqual(store.check(check.id)?.verdict, gaveUp);
+  assert.deepEqual(store.check(check.id)?.verdict, { state: "could-not-run", at: 4_000, ...gaveUp });
   assert.deepEqual(events(store), [{ kind: "checked", issueId: issue.id, checkId: check.id }]);
 });
 
@@ -151,8 +151,8 @@ test("a fix round claimed before its findings are sent survives a reload, and se
     sameModel: false,
     triage: [],
   };
-  assert.equal(store.receiveVerdict(check.id, { ...failed, verifierThreadId: "thr_other" }), false, "only its running verifier's verdict is taken");
-  assert.equal(store.receiveVerdict(check.id, failed), true);
+  assert.equal(store.receiveVerdict(check.id, { ...failed, verifierThreadId: "thr_other" }, 4_500), false, "only its running verifier's verdict is taken");
+  assert.equal(store.receiveVerdict(check.id, failed, 4_500), true);
   assert.deepEqual(store.unsettledChecks(), [check.id]);
   store.claimFixRound(check.id, { kind: "none" });
 
@@ -168,7 +168,7 @@ test("a verdict that passed waits for CI, and one settled as checked gives back 
   const { store, issue, agentId } = withAgent();
 
   const passed = runningCheck(store, issue.id, agentId, 1);
-  store.receiveVerdict(passed.id, returned("thr_verifier_1", "pass"));
+  store.receiveVerdict(passed.id, returned("thr_verifier_1", "pass"), 4_500);
   assert.equal(store.settleReturned(passed.id, { kind: "waiting-for-ci" }, 4_000), MANAGER);
   assert.deepEqual(store.waitingForCi(MANAGER, agentId), [passed.id]);
   assert.deepEqual(events(store), [], "nobody is told while it waits for CI");
@@ -176,7 +176,7 @@ test("a verdict that passed waits for CI, and one settled as checked gives back 
   const waiting = store.check(passed.id)?.verdict;
   const failed = runningCheck(store, issue.id, agentId, 2);
   assert.deepEqual(store.check(passed.id)?.verdict, { ...waiting, settlement: { kind: "superseded" } }, "a newer done handoff supersedes one waiting for CI, its verdict kept whole");
-  store.receiveVerdict(failed.id, returned("thr_verifier_2", "fail"));
+  store.receiveVerdict(failed.id, returned("thr_verifier_2", "fail"), 4_500);
   store.claimFixRound(failed.id, { kind: "none" });
   assert.equal(store.settleReturned(failed.id, { kind: "checked", refused: "bb refused the message", ci: { kind: "none" } }, 4_100), MANAGER);
   assert.equal(store.agent(MANAGER, agentId)?.fixRounds, 0);
@@ -209,7 +209,7 @@ test("a check given up that fails before the manager is told keeps running", () 
   const { db, store, issue, agentId } = withAgent();
   const check = runningCheck(store, issue.id, agentId, 1);
   failWrites(db, "INSERT", "events");
-  const gaveUp = { state: "could-not-run", verifierThreadId: "thr_verifier_1", reason: "its verifier stopped without a verdict" } as const;
+  const gaveUp = { verifierThreadId: "thr_verifier_1", reason: "its verifier stopped without a verdict" } as const;
   assert.throws(() => store.giveUpCheck(check.id, { state: "running", verifierThreadId: "thr_verifier_1" }, gaveUp, 4_000), /forced failure/);
   assert.equal(store.check(check.id)?.verdict.state, "running");
 });
@@ -217,7 +217,7 @@ test("a check given up that fails before the manager is told keeps running", () 
 test("a fix round whose claim fails partway is not counted", () => {
   const { db, store, issue, agentId } = withAgent();
   const check = runningCheck(store, issue.id, agentId, 1);
-  store.receiveVerdict(check.id, returned("thr_verifier_1", "fail"));
+  store.receiveVerdict(check.id, returned("thr_verifier_1", "fail"), 4_500);
   failWrites(db, "UPDATE", "checks");
   assert.throws(() => store.claimFixRound(check.id, { kind: "none" }), /forced failure/);
   assert.equal(store.agent(MANAGER, agentId)?.fixRounds, 0);
@@ -226,7 +226,7 @@ test("a fix round whose claim fails partway is not counted", () => {
 test("a settlement that fails before the manager is told leaves the verdict unsettled and its round claimed", () => {
   const { db, store, issue, agentId } = withAgent();
   const check = runningCheck(store, issue.id, agentId, 1);
-  store.receiveVerdict(check.id, returned("thr_verifier_1", "fail"));
+  store.receiveVerdict(check.id, returned("thr_verifier_1", "fail"), 4_500);
   store.claimFixRound(check.id, { kind: "none" });
   failWrites(db, "INSERT", "events");
   assert.throws(() => store.settleReturned(check.id, CHECKED, 4_000), /forced failure/);
@@ -237,25 +237,25 @@ test("a settlement that fails before the manager is told leaves the verdict unse
 test("a verdict, a give-up or a CI result that arrives after its check settled or was superseded changes nothing", () => {
   const { store, issue, agentId } = withAgent();
   const running = (n: number) => ({ state: "running", verifierThreadId: `thr_verifier_${n}` }) as const;
-  const gaveUp = (n: number) => ({ state: "could-not-run", verifierThreadId: `thr_verifier_${n}`, reason: "its verifier stopped without a verdict" }) as const;
+  const gaveUp = (n: number) => ({ verifierThreadId: `thr_verifier_${n}`, reason: "its verifier stopped without a verdict" }) as const;
 
   const settled = runningCheck(store, issue.id, agentId, 1);
-  store.receiveVerdict(settled.id, returned("thr_verifier_1", "pass"));
+  store.receiveVerdict(settled.id, returned("thr_verifier_1", "pass"), 4_500);
   store.settleReturned(settled.id, CHECKED, 4_000);
   const final = store.check(settled.id)?.verdict;
-  assert.equal(store.receiveVerdict(settled.id, returned("thr_verifier_1", "fail")), false);
+  assert.equal(store.receiveVerdict(settled.id, returned("thr_verifier_1", "fail"), 4_500), false);
   assert.equal(store.giveUpCheck(settled.id, running(1), gaveUp(1), 4_100), null);
   assert.equal(store.settleReturned(settled.id, { kind: "sent-back" }, 4_100), null);
   assert.deepEqual(store.check(settled.id)?.verdict, final);
 
   const waiting = runningCheck(store, issue.id, agentId, 2);
-  store.receiveVerdict(waiting.id, returned("thr_verifier_2", "pass"));
+  store.receiveVerdict(waiting.id, returned("thr_verifier_2", "pass"), 4_500);
   store.settleReturned(waiting.id, { kind: "waiting-for-ci" }, 4_200);
   const waited = store.check(waiting.id)?.verdict;
   const superseded = runningCheck(store, issue.id, agentId, 3);
   runningCheck(store, issue.id, agentId, 4);
   assert.equal(store.settleReturned(waiting.id, CHECKED, 4_300), null, "CI on a superseded commit");
-  assert.equal(store.receiveVerdict(superseded.id, returned("thr_verifier_3", "pass")), false);
+  assert.equal(store.receiveVerdict(superseded.id, returned("thr_verifier_3", "pass"), 4_500), false);
   assert.equal(store.giveUpCheck(superseded.id, running(3), gaveUp(3), 4_300), null);
   assert.deepEqual([store.check(waiting.id)?.verdict, store.check(superseded.id)?.verdict], [{ ...waited, settlement: { kind: "superseded" } }, { state: "superseded" }]);
   assert.deepEqual(events(store), [{ kind: "checked", issueId: issue.id, checkId: settled.id }]);
@@ -269,21 +269,21 @@ test("a review starts running as its reviewer's ticket binds, and takes its find
   assert.deepEqual(store.check(check.id)?.review, { state: "running", reviewerThreadId: "thr_reviewer" });
   assert.deepEqual(store.check(check.id)?.verdict, { state: "queued", checkout: CLEAN.checkout }, "its verifier is still to start");
 
-  assert.equal(store.missReview(check.id, { state: "queued" }, "never started"), false, "it isn't queued any more");
+  assert.equal(store.missReview(check.id, { state: "queued" }, "never started", 4_100), false, "it isn't queued any more");
   const finding = { file: "src/retry.ts", line: 4, severity: "should-fix", claim: "No cap." } as const;
   const model = { providerId: "claude-code", model: "sonnet" };
-  assert.equal(store.receiveReview(check.id, "thr_other", [finding], model), false);
-  assert.equal(store.receiveReview(check.id, "thr_reviewer", [finding], model), true);
-  assert.deepEqual(store.check(check.id)?.review, { state: "reported", reviewerThreadId: "thr_reviewer", findings: [finding], model });
-  assert.equal(store.receiveReview(check.id, "thr_reviewer", [], model), false, "a second report changes nothing");
-  assert.equal(store.missReview(check.id, { state: "running", reviewerThreadId: "thr_reviewer" }, "stalled"), false, "nor a late miss");
+  assert.equal(store.receiveReview(check.id, "thr_other", [finding], model, 4_200), false);
+  assert.equal(store.receiveReview(check.id, "thr_reviewer", [finding], model, 4_200), true);
+  assert.deepEqual(store.check(check.id)?.review, { state: "reported", at: 4_200, reviewerThreadId: "thr_reviewer", findings: [finding], model });
+  assert.equal(store.receiveReview(check.id, "thr_reviewer", [], model, 4_200), false, "a second report changes nothing");
+  assert.equal(store.missReview(check.id, { state: "running", reviewerThreadId: "thr_reviewer" }, "stalled", 4_100), false, "nor a late miss");
   assert.deepEqual(events(store), [], "nobody is told of a review");
 
   const next = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done", 3_100), CLEAN));
   store.insertCheckerTicket("reviewer-2", { kind: "reviewer", coordinatorId: MANAGER, issueId: issue.id, checkId: next.id }, 3_100);
   store.bindTicket("reviewer-2", "thr_reviewer_2");
   store.insertHandoff(handoff(issue.id, agentId, "done", 3_200), CLEAN);
-  assert.equal(store.receiveReview(next.id, "thr_reviewer_2", [], model), false, "its check was superseded");
+  assert.equal(store.receiveReview(next.id, "thr_reviewer_2", [], model, 4_200), false, "its check was superseded");
   assert.deepEqual(store.check(next.id)?.review, { state: "running", reviewerThreadId: "thr_reviewer_2" });
 });
 
@@ -333,7 +333,7 @@ test("a final check copies its parent's criteria and verifier, supersedes the on
   store.bindTicket("final-1", "thr_final_1");
   assert.ok(writes() > queued, "started");
   const running = writes();
-  assert.ok(store.receiveVerdict(first.id, { ...returned("thr_final_1", "pass"), headSha: "b".repeat(40), checkout: { headSha: "b".repeat(40), changedFiles: [], changedFileCount: 0 } }));
+  assert.ok(store.receiveVerdict(first.id, { ...returned("thr_final_1", "pass"), headSha: "b".repeat(40), checkout: { headSha: "b".repeat(40), changedFiles: [], changedFileCount: 0 } }, 4_500));
   assert.ok(writes() > running, "returned");
 
   const second = store.insertFinalCheck(MANAGER, parent.id, { defaultBranch: "main", merged: [sub.id] }, 5_000);
