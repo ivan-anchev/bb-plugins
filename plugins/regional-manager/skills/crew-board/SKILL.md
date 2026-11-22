@@ -917,12 +917,15 @@ and ends with its [memory](#read-and-edit-memory):
   is not a lane, and doesn't put it under Needs you. `crew_catch_up` says
   both too: "; blocked by BBP-6 (Todo)" and "; blocks BBP-7 (Todo)".
 - **Its card**: rest the pointer on a row for half a second, or move
-  keyboard focus to it, and its card opens under it: its title whole, up to
+  keyboard focus to it, and its card opens under it, or above it when the
+  panel has no room below (a card too tall for either side scrolls inside):
+  its title whole, up to
   three lines; its status, and its agent; what it waits on you for, or else
   its headline (such as "Working", "Verifying: <summary>" or "✓ Verified:
   <summary>"); its pills spelled out ("3 of 7 done", "Blocked by BBP-6",
-  "Blocks BBP-7, BBP-19"); and its sub-issues, or what blocks it and what it
-  blocks, each with its glyph, id and title. Once one card shows, resting on
+  "Blocks BBP-7, BBP-19"); and its sub-issues, hung from their heading on
+  the board's rails, or what blocks it and what it blocks, each with its
+  glyph, id and title. Once one card shows, resting on
   another row swaps it at once. It stays while the pointer is on its row or
   on the card, or focus is on its row; Escape, wherever focus is, a press,
   or both pointer and focus leaving close it. Touch has no card: a tap opens

@@ -54,7 +54,8 @@ function mount() {
     const shown = view.container.querySelectorAll<HTMLElement>(".rmi-card");
     assert.ok(shown.length <= 1, "one card at a time");
     const [only] = shown;
-    return only === undefined ? null : { on: only.closest(".rmi-rowbox")?.querySelector(".rmi-row-id")?.textContent, lines: [...only.children].map((part) => part.textContent) };
+    const body = only?.querySelector(".rmi-card-body");
+    return only === undefined ? null : { on: only.closest(".rmi-rowbox")?.querySelector(".rmi-row-id")?.textContent, lines: [...(body?.children ?? [])].map((part) => part.textContent) };
   };
   return { view, row, card };
 }
@@ -80,10 +81,19 @@ test("keyboard focus on a row opens its card at once, with what the row leaves o
   assert.equal(later.defaultPrevented, false, "with no card, Escape is bb's again");
 });
 
-test("a parent's card counts its sub-issues and lists them; a flagged one's leads with what it waits on the user for", () => {
-  const { row, card } = mount();
+test("a parent's card counts its sub-issues and hangs them from its heading on the board's rails; a flagged one's leads with what it waits on the user for", () => {
+  const { view, row, card } = mount();
   act(() => row("WEB-1", /^In progress/).focus());
   assert.deepEqual(card()?.lines, ["Regional manager 0.7", "In progress", "1 of 2 done", "Sub-issuesWEB-2Issue WEB-2WEB-3Issue WEB-3"]);
+  const tree = view.container.querySelectorAll(".rmi-card .rmi-card-tree > li");
+  assert.deepEqual(
+    [...tree].map((item) => [item.querySelector(".rmi-card-id")?.textContent, item.querySelector(".rmi-rails path")?.getAttribute("d")]),
+    [
+      ["WEB-2", "M4.5 -2V7A4 4 0 0 0 8.5 11H14M4.5 7V22"],
+      ["WEB-3", "M4.5 0V7A4 4 0 0 0 8.5 11H14"],
+    ],
+    "the first reaches up to the heading, each bends in, and the last stops",
+  );
 
   act(() => row("WEB-3", /^Needs you/).focus());
   assert.deepEqual(card(), { on: "WEB-1›WEB-3", lines: ["Issue WEB-3", "In progress · a17", `Needs you${ASK}`] }, "the flat row's own card, not its copy's under the parent");
@@ -120,4 +130,56 @@ test("a press puts the card away, and the focus the press gives the row opens no
   fireEvent.pointerDown(pressed);
   act(() => pressed.focus());
   assert.equal(card(), null);
+});
+
+/**
+ * The board laid out as the browser would: the panel it scrolls in (`data-panel`, overflow auto)
+ * stands at `panel`, the row's box at `row`, and the card's content is `height` tall. why stubs:
+ * jsdom lays nothing out.
+ */
+function laidOut({ panel, row, height }: { panel: { top: number; bottom: number }; row: { top: number; bottom: number }; height: number }): () => void {
+  const rect = (top: number, bottom: number) => ({ top, bottom, left: 0, right: 360, x: 0, y: top, width: 360, height: bottom - top, toJSON: () => ({}) });
+  const boxOf = HTMLElement.prototype.getBoundingClientRect;
+  const scrollHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollHeight");
+  HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+    if (this.classList.contains("rmi-rowbox")) return rect(row.top, row.bottom);
+    if (this.dataset.panel !== undefined) return rect(panel.top, panel.bottom);
+    return rect(0, 0);
+  };
+  Object.defineProperty(HTMLElement.prototype, "scrollHeight", { configurable: true, get(this: HTMLElement) { return this.classList.contains("rmi-card") ? height : 0; } });
+  return () => {
+    HTMLElement.prototype.getBoundingClientRect = boxOf;
+    if (scrollHeight !== undefined) Object.defineProperty(HTMLElement.prototype, "scrollHeight", scrollHeight);
+  };
+}
+
+/** The board inside a panel that scrolls, as the Board tab mounts it. */
+function mountInPanel() {
+  const Panel = () => createElement("div", { "data-panel": "", style: { overflowY: "auto" } }, createElement(IssueBoard, { decisions: [], issues: ISSUES, decisionRow: () => null }));
+  const view = renderSlot({ component: Panel }, {}, { experimental_panel: { openTab: () => true } });
+  const shown = () => {
+    const card = view.container.querySelector<HTMLElement>(".rmi-card");
+    return card === null ? null : { side: card.dataset.side, cap: card.style.getPropertyValue("--rmi-card-cap") };
+  };
+  return { view, shown };
+}
+
+test("a card that doesn't fit under its row at the panel's foot opens above it, whole; one that fits on neither side keeps the bigger side and scrolls inside", () => {
+  const cases = [
+    { name: "room below", row: { top: 100, bottom: 130 }, height: 174, want: { side: "below", cap: "" } },
+    { name: "the panel's foot", row: { top: 656, bottom: 686 }, height: 174, want: { side: "above", cap: "" } },
+    { name: "room on neither side, more below", row: { top: 300, bottom: 330 }, height: 600, want: { side: "below", cap: "366px" } },
+    { name: "room on neither side, more above", row: { top: 450, bottom: 480 }, height: 600, want: { side: "above", cap: "446px" } },
+  ];
+  for (const { name, row, height, want } of cases) {
+    const restore = laidOut({ panel: { top: 0, bottom: 700 }, row, height });
+    try {
+      const { view, shown } = mountInPanel();
+      act(() => within(view.getByRole("region", { name: /^In review/ })).getByRole("button", { name: /^WEB-4:/ }).focus());
+      assert.deepEqual(shown(), want, name);
+      cleanup();
+    } finally {
+      restore();
+    }
+  }
 });

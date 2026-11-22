@@ -1,14 +1,14 @@
-/* A row's hover card (hover-card.tsx), Activity Sidebar's card under its row: the theme's popover
+/* A row's hover card (hover-card.tsx), Activity Sidebar's card by its row: the theme's popover
    surface, ringed by its border with the menu's shadow. It sits in the row's box, so the pointer
-   crossing onto it never leaves the row, and its top edge reaches up over the 4 between them. Every
-   colour is a bb theme token, and every class carries the `rmi-` prefix. */
+   crossing onto it never leaves the row, and its edge reaches over the 4 between them. Under its row,
+   or above it where the panel has no room below (placement.ts); its body scrolls when it is capped.
+   Every colour is a bb theme token, and every class carries the `rmi-` prefix. */
 .rmi-card {
   position: absolute;
   z-index: 1;
   top: calc(100% + 4px);
   left: 30px;
   width: min(320px, calc(100% - 38px));
-  padding: 12px;
   border-radius: 10px;
   background: var(--popover);
   box-shadow: 0 0 0 1px var(--border), var(--z-menu-shadow);
@@ -29,6 +29,21 @@
   content: "";
   position: absolute;
   inset: -4px 0 100%;
+}
+.rmi-card[data-side="above"] {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+.rmi-card[data-side="above"]::before {
+  inset: 100% 0 -4px;
+}
+/* why the body scrolls, not the card: the card's edge reaches past its box to the row, which a scrolling box would clip. */
+.rmi-card-body {
+  max-height: var(--rmi-card-cap, none);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px;
+  border-radius: inherit;
 }
 .rmi-card-title {
   margin: 0;
@@ -75,6 +90,16 @@
   font-size: 11px;
   line-height: 14px;
   color: var(--muted-foreground);
+}
+/* A parent's sub-issues hang from the heading on the board's rails, each set in by 16. */
+.rmi-card-tree {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rmi-card-tree > li {
+  position: relative;
+  padding-left: 16px;
 }
 .rmi-card-line {
   display: flex;

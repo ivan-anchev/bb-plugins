@@ -1,6 +1,6 @@
 /* An issue's row (issue-row.tsx), Activity Sidebar's one-line row from its app.css: the 30 slot, the
    mono id in the column the board's ids share, the fading title, the pills and pull request, the
-   flat wash; under Needs you, the ask on a second line. Then a parent's sub-issues on their rails
+   flat wash; under Needs you, the ask on a second line. Then a parent's sub-issues
    (sub-issue-tree.tsx) and the pills (pills.tsx). Every colour is a bb theme token, never a literal,
    and every class carries the `rmi-` prefix, since bb does not scope a plugin's stylesheet. */
 
@@ -102,25 +102,13 @@
 }
 
 /* --- A parent's sub-issues, on Activity Sidebar's rails ----------------------------------------- */
-/* Each sits in from its parent by 22, its wash starting there, so the rails stay outside it. */
+/* Each sits in from its parent by 22, its wash starting there, so the rails (rails.css) stay outside it. */
 .rmi-list.rmi-sub-issues {
   margin: 0;
 }
 .rmi-sub-issues > li {
   position: relative;
   padding-left: 22px;
-}
-.rmi-rails {
-  position: absolute;
-  top: 0;
-  left: 0;
-  overflow: visible;
-  pointer-events: none;
-}
-.rmi-rails path {
-  fill: none;
-  stroke: var(--border);
-  stroke-width: 1;
 }
 
 /* --- Pills: a glyph and words in their token on a 10% wash of it, the PR badge's metrics -------- */

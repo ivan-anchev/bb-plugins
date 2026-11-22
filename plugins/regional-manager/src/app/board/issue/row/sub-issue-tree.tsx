@@ -1,8 +1,8 @@
-// A parent's sub-issues under its row, hung on Activity Sidebar's subthread rails
-// (src/ui/card/subthread-section.tsx Rails), copied since plugins cannot import each other: a
-// hairline trunk under the parent's glyph bends, radius 4, into each sub-issue, and runs on past it
-// unless it is the last. Each sub-issue is a row of its own, one line, set in by the rails.
+// A parent's sub-issues under its row, hung on the rails (rails.tsx): a hairline trunk under the
+// parent's glyph bends into each sub-issue. Each sub-issue is a row of its own, one line, set in by
+// the rails.
 import type { ReactNode, RefCallback } from "react";
+import { Rails, type RailShape } from "./rails.tsx";
 
 type SubIssueTreeProps<Sub> = {
   subIssues: readonly Sub[];
@@ -20,7 +20,7 @@ export function SubIssueTree<Sub>({ subIssues, keyOf, itemRef, parentAsks, child
     <ul className="rmi-list rmi-sub-issues">
       {subIssues.map((sub, i) => (
         <li key={keyOf(sub)} ref={itemRef(sub)}>
-          <Rails reach={i === 0 ? reach : 0} last={i === subIssues.length - 1} />
+          <Rails shape={ROW_RAILS} reach={i === 0 ? reach : 0} last={i === subIssues.length - 1} />
           {children(sub)}
         </li>
       ))}
@@ -35,19 +35,5 @@ const ONE_LINE_REACH = 8;
 /** The height an ask adds under a row's title (issue-row.css `.rmi-rowbox[data-asks]`). */
 const ASK_LINE = 18;
 
-const CH = 30; // a sub-issue's row: one line
-const BEND = 4; // the elbow's radius
-const TRUNK = 14.5; // the 1px trunk on pixels 14–15, under the centre of the parent's glyph in its 30 slot
-const TIP = 26; // where the elbow ends, short of the sub-issue's own glyph (issue-row.css `.rmi-sub-issues > li`)
-
-/** One sub-issue's hairlines: the trunk coming down to it (from the parent's glyph, for the first) and bending into it, and on below unless it is the last. */
-function Rails({ reach, last }: { reach: number; last: boolean }) {
-  const mid = CH / 2;
-  let d = `M${TRUNK} ${-reach}V${mid - BEND}A${BEND} ${BEND} 0 0 0 ${TRUNK + BEND} ${mid}H${TIP}`;
-  if (!last) d += `M${TRUNK} ${mid - BEND}V${CH}`;
-  return (
-    <svg className="rmi-rails" width={TIP + 1} height={CH} aria-hidden>
-      <path d={d} />
-    </svg>
-  );
-}
+/** A sub-issue's row is one line, 30 tall; the trunk runs on pixels 14–15, under the centre of the parent's glyph in its 30 slot, and the elbow ends short of the sub-issue's own glyph (issue-row.css `.rmi-sub-issues > li`). */
+const ROW_RAILS: RailShape = { line: 30, trunk: 14.5, tip: 26 };
