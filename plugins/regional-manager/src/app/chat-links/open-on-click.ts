@@ -1,10 +1,11 @@
 // A press on an issue link opens the issue's tab in its regional manager's side panel, which is where
 // an issue lives: in the manager's own thread, in that pane's panel; from any other thread, the
 // manager's thread opens in a split, or comes forward where it shows, with the tab open. ⌘ or Ctrl
-// opens the split from the manager's thread too, as it does for bb's own links. The press is the
-// plugin's before bb's, which would follow the link: caught on the way down, and kept from bb. A
-// link to a manager the plugin doesn't know of, or doesn't know of yet, or a press with Shift or Alt,
-// is left to bb, which follows it to the panel (issue-landing.tsx).
+// asks bb for that split from the manager's thread too, as for bb's own links, which brings forward
+// the pane that shows it. The press is the plugin's before bb's, which would follow the link: caught
+// on the way down, and kept from bb. A link to a manager the plugin doesn't know of, or doesn't know
+// of yet, or a press with Shift or Alt, is left to bb, which follows it to the panel
+// (issue-landing.tsx).
 import { experimental_useRpcQuery, useBbNavigate } from "@get-bb/plugin-sdk/app";
 import { useEffect } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";

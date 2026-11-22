@@ -45,9 +45,9 @@ type Chat = { panes: readonly string[]; linkKey?: string; label?: string };
 /**
  * bb's window, as the overlay sees it: the overlay, and a pane per thread, each with its header row's
  * marker and one assistant message. `linkKey` and `label`: the first link's key and text, which a
- * re-render changes. Counts the message's renders.
+ * re-render changes; `declines`: how many opens the side panel declines first. Counts the message's renders.
  */
-function mount(chat: Chat) {
+function mount(chat: Chat, { declines = 0 } = {}) {
   let issues = [issue("BBP-24", { title: "Inline issue links", status: "in-progress", headline: "Working", blocks: [issueIdSchema.parse("BBP-27")] }), issue("BBP-27", { title: "Avatars", blockedBy: [issueIdSchema.parse("BBP-24")] })];
   const renders = { count: 0 };
   const Message = ({ linkKey = "first", label = "BBP-24" }: Omit<Chat, "panes">) => {
@@ -69,7 +69,8 @@ function mount(chat: Chat) {
   const view = renderSlot({ component: Window }, chat, {
     experimental_rpcContract: contract,
     rpc: { coordinators: () => ({ coordinators: [COORDINATOR], notStarted: [] }), board },
-    experimental_panel: { openTab: () => true },
+    // why it can decline: bb declines an open in a pane it hasn't focused yet, as a split it just added as it mounts.
+    experimental_panel: { openTab: () => declines-- <= 0 },
   });
   const pane = (threadId: string) => view.container.querySelector<HTMLElement>(`[data-thread="${threadId}"]`) ?? assert.fail(`no pane ${threadId}`);
   const link = (threadId: string, id = "BBP-24") => pane(threadId).querySelector<HTMLAnchorElement>(`a[href="${HREF(id)}"]`) ?? assert.fail(`no link to ${id}`);
@@ -219,16 +220,21 @@ test("pressing an issue link in its regional manager's thread opens the issue's 
   assert.deepEqual(view.inspection.navigateCalls, [], "it stays in the thread");
 });
 
-test("pressing an issue link in another thread opens the regional manager's thread in a split, and its pane opens the tab once it shows; ⌘ asks for the split from the manager's thread too", async () => {
-  const { view, link, glyphOf, show } = mount({ panes: [AGENT_THREAD] });
+test("pressing an issue link in another thread opens the regional manager's thread in a split, and its pane opens the tab once it shows, asking again after bb declines; ⌘ asks for the split from the manager's thread too", async () => {
+  const { view, link, glyphOf, show, setStatus } = mount({ panes: [AGENT_THREAD] }, { declines: 1 });
   await waitFor(() => assert.equal(glyphOf(link(AGENT_THREAD)), "In progress"));
+  const opened = () => view.inspection.experimental_panelCalls.map((call) => call.method === "openTab" && call.options.title);
 
   assert.equal(fireEvent.click(link(AGENT_THREAD, "BBP-27")), false);
   assert.deepEqual(view.inspection.navigateCalls, [{ method: "toThread", threadId: MANAGER_THREAD, options: { split: true } }]);
-  assert.deepEqual(view.inspection.experimental_panelCalls, [], "the agent's pane hides the issue tab, so it opens none");
+  assert.deepEqual(opened(), [], "no pane shows the manager's thread yet");
 
   show({ panes: [AGENT_THREAD, MANAGER_THREAD] });
-  await waitFor(() => assert.deepEqual(view.inspection.experimental_panelCalls.map((call) => call.method === "openTab" && call.options.title), ["BBP-27 Avatars"]));
+  await waitFor(() => assert.deepEqual(opened(), ["BBP-27 Avatars"], "the new pane asks, and bb declines"));
+  await setStatus("BBP-27", { status: "in-progress" });
+  await waitFor(() => assert.deepEqual(opened(), ["BBP-27 Avatars", "BBP-27 Avatars"], "kept, and asked again"));
+  await setStatus("BBP-27", { status: "todo" });
+  assert.deepEqual(opened(), ["BBP-27 Avatars", "BBP-27 Avatars"], "once opened, never again");
 
   assert.equal(fireEvent.click(link(MANAGER_THREAD), { metaKey: true }), false);
   assert.deepEqual(view.inspection.navigateCalls.at(-1), { method: "toThread", threadId: MANAGER_THREAD, options: { split: true } });
