@@ -30,7 +30,8 @@ export function pictureIconManagers(db: Db): void {
  * creates never both take the look that was free when they began.
  */
 export function lookFor(db: Db, choice: AvatarChoice): Avatar {
-  if (choice.kind === "blob") return choice;
+  // why on `auto`: any other kind is a look chosen, as a later kind would be too, and is saved as given.
+  if (choice.kind !== "auto") return choice;
   const stored = db().prepare("SELECT avatar FROM coordinators").all().map((row) => storedAvatarSchema.parse(row).avatar);
   return freeLook(randomStart(), stored.flatMap((json) => blobOf(json) ?? []));
 }
