@@ -14,15 +14,13 @@ import { issueIdSchema } from "../../../model/issue/issue.ts";
 // when its issue moves to another lane. board.test.ts reads the board through the plugin's RPC,
 // hover-card/hover-card.test.ts opens a row's card, and issue-tab.test.ts the issue's tab.
 
-// why: jsdom has none of these; the rows measure their titles, and the working ring asks for Reduce motion and a canvas.
+// why: jsdom has none; the rows measure their titles.
 Object.assign(globalThis, {
   ResizeObserver: class {
     observe() {}
     disconnect() {}
   },
-  matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }),
 });
-HTMLCanvasElement.prototype.getContext = () => null;
 
 const { IssueBoard } = await import("./issue-board.tsx");
 
@@ -124,13 +122,26 @@ test("a row is one line: its status's glyph, its id apart from its title, its ti
   assert.equal(view.container.querySelector<HTMLElement>(".rmi-board")?.style.getPropertyValue("--rmi-id-ch"), "5", "the ids' column is as wide as the longest id, WEB-n");
 });
 
-test("In review's glyph is its own, not Done's check", () => {
+test("the open stages fill one ring clockwise from 12 o'clock, Todo empty, In progress a quarter, Verifying a half, In review three quarters; Done keeps its check", () => {
   const { view } = mount(ISSUES);
   fireEvent.click(laneHeader(view, /^Done/));
-  const drawn = (id: string) => boxOf(row(view, id)).querySelector(".rmi-slot svg")?.innerHTML ?? assert.fail(`no glyph on ${id}`);
-  assert.match(drawn("WEB-7"), /d="m9 12 2 2 4-4"/, "Done is the check in a circle");
-  assert.doesNotMatch(drawn("WEB-2"), /m9 12 2 2 4-4/, "In review draws no check");
-  assert.notEqual(drawn("WEB-2"), drawn("WEB-7"));
+  /** The ring's pie: its path, or null for an empty ring. */
+  const pie = (id: string) => {
+    const svg = boxOf(row(view, id)).querySelector(".rmi-slot svg") ?? assert.fail(`no glyph on ${id}`);
+    return { ring: svg.querySelector("circle")?.getAttribute("r"), fill: svg.querySelector("path[fill=currentColor]")?.getAttribute("d") ?? null };
+  };
+  assert.deepEqual(
+    [pie("WEB-5"), pie("WEB-4"), pie("WEB-3"), pie("WEB-2")],
+    [
+      { ring: "10", fill: null },
+      { ring: "10", fill: "M12 12V6a6 6 0 0 1 6 6z" },
+      { ring: "10", fill: "M12 6a6 6 0 0 1 0 12z" },
+      { ring: "10", fill: "M12 12V6a6 6 0 1 1-6 6z" },
+    ],
+  );
+  const done = boxOf(row(view, "WEB-7")).querySelector(".rmi-slot svg")?.innerHTML ?? "";
+  assert.match(done, /d="m9 12 2 2 4-4"/, "Done is the check in a circle");
+  assert.equal(boxOf(row(view, "WEB-2")).querySelector(".rmi-slot svg path[d='m9 12 2 2 4-4']"), null, "In review draws no check");
 });
 
 test("a row's pills: what blocks it, by its id when one does and by count when more do; how many it blocks; never a word on its title's line", () => {

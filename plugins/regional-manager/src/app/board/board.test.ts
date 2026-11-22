@@ -12,15 +12,13 @@ import { coordinatorIdSchema } from "../../model/role.ts";
 // The board as bb mounts it, reading the plugin: its lanes from the board's read, and its decisions'
 // answers. An issue's own tab, which its row opens, is issue-tab.test.ts's.
 
-// why: jsdom has none of these; the rows measure their titles, and the working ring asks for Reduce motion and a canvas.
+// why: jsdom has none; the rows measure their titles.
 Object.assign(globalThis, {
   ResizeObserver: class {
     observe() {}
     disconnect() {}
   },
-  matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }),
 });
-HTMLCanvasElement.prototype.getContext = () => null;
 
 const { Board } = await import("./board.tsx");
 

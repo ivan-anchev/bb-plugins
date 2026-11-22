@@ -9,13 +9,12 @@ import { PROJECT } from "../test-sidebar.ts";
 // The Board tab of a regional manager's thread as bb mounts it: its board, and its memory below it.
 // Memory's own behavior is memory-section.test.ts's.
 
-// why: jsdom has neither; the board's rows observe their size and ask for Reduce motion.
+// why: jsdom has none; the board's rows observe their size.
 Object.assign(globalThis, {
   ResizeObserver: class {
     observe() {}
     disconnect() {}
   },
-  matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }),
 });
 
 const { boardTab } = await import("./board-tab.tsx");

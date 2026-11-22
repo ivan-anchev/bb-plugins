@@ -1,18 +1,15 @@
-// An issue status's glyph, 14 in a 16 box, in its status's token (issue-board.css `.rmi-state`):
-// Activity Sidebar's state glyphs (src/ui/state-glyph.tsx), one per status. Under-way statuses
-// draw its working ring: turning on a row, still where it only names the status (a relation in the
-// issue's tab). In review is PR Reviews' "awaiting review" mark (src/app/page/status-glyph.tsx), a
-// ring half filled, so it never reads as Done's check.
-import { useRef, type ReactNode } from "react";
+// An issue status's glyph, 14 in a 16 box, in its status's token (issue-board.css `.rmi-state`), in
+// the stroke of Activity Sidebar's state glyphs (src/ui/state-glyph.tsx). The open stages fill one
+// ring clockwise from 12 o'clock as the issue moves on: Todo empty, In progress a quarter, Verifying
+// a half, In review three quarters; Done closes on its check. Backlog's ring is dotted, Canceled's
+// crossed.
+import type { ReactNode } from "react";
 import { STATUS_LABELS, type IssueStatus } from "../../../model/issue/status.ts";
-import { useRing } from "./motion/ring.ts";
 
-const SIZE = 14;
-
-export function StatusGlyph({ status, still = false }: { status: IssueStatus; still?: boolean }) {
+export function StatusGlyph({ status }: { status: IssueStatus }) {
   return (
     <span className="rmi-state" data-state={status} role="img" aria-label={STATUS_LABELS[status]}>
-      {glyph(status, still)}
+      {glyph(status)}
     </span>
   );
 }
@@ -29,31 +26,25 @@ export function NeedsYouGlyph() {
   );
 }
 
-function glyph(status: IssueStatus, still: boolean): ReactNode {
+// ------------------------------------------------------------------ layer 2
+
+function glyph(status: IssueStatus): ReactNode {
   switch (status) {
     case "backlog":
-      // why dots: the working ring at rest is eight dashes; a dashed circle read as it.
+      // why dots: not planned yet reads apart from the stages' solid ring.
       return (
         <Icon>
           <circle cx="12" cy="12" r="9" strokeWidth={2.25} strokeDasharray="0.01 4.71" />
         </Icon>
       );
     case "todo":
-      return (
-        <Icon>
-          <circle cx="12" cy="12" r="9" strokeWidth={1.75} />
-        </Icon>
-      );
+      return <Stage fill={null} />;
     case "in-progress":
+      return <Stage fill={QUARTER} />;
     case "verifying":
-      return <Ring still={still} />;
+      return <Stage fill={HALF} />;
     case "in-review":
-      return (
-        <Icon>
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 6a6 6 0 0 1 0 12z" fill="currentColor" stroke="none" />
-        </Icon>
-      );
+      return <Stage fill={THREE_QUARTERS} />;
     case "done":
       return (
         <Icon>
@@ -73,17 +64,25 @@ function glyph(status: IssueStatus, still: boolean): ReactNode {
   }
 }
 
-function Icon({ children }: { children: ReactNode }) {
+/** An open stage's ring, filled from 12 o'clock clockwise by `fill`, a pie inside the ring with a gap to it (null: empty). */
+function Stage({ fill }: { fill: string | null }) {
   return (
-    <svg width={SIZE} height={SIZE} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      {children}
-    </svg>
+    <Icon>
+      <circle cx="12" cy="12" r="10" />
+      {fill !== null && <path d={fill} fill="currentColor" stroke="none" />}
+    </Icon>
   );
 }
 
-/** Activity Sidebar's working ring, in the box's colour. */
-function Ring({ still }: { still: boolean }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useRing(ref, SIZE, still);
-  return <canvas ref={ref} className="rmi-ring" style={{ width: SIZE, height: SIZE }} aria-hidden />;
+/** The pie's slices, radius 6 about the ring's centre: to 3, 6 and 9 o'clock. */
+const QUARTER = "M12 12V6a6 6 0 0 1 6 6z";
+const HALF = "M12 6a6 6 0 0 1 0 12z";
+const THREE_QUARTERS = "M12 12V6a6 6 0 1 1-6 6z";
+
+function Icon({ children }: { children: ReactNode }) {
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {children}
+    </svg>
+  );
 }

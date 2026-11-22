@@ -12,15 +12,13 @@ import { issueIdSchema } from "../../../../model/issue/issue.ts";
 // Escape closes it wherever focus is; the pointer resting on a row opens it after half a second, and
 // on the next row at once; leaving, or a press, puts it away. It shows what the row leaves out.
 
-// why: jsdom has none of these; the rows measure their titles, and the working ring asks for Reduce motion and a canvas.
+// why: jsdom has none; the rows measure their titles.
 Object.assign(globalThis, {
   ResizeObserver: class {
     observe() {}
     disconnect() {}
   },
-  matchMedia: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }),
 });
-HTMLCanvasElement.prototype.getContext = () => null;
 
 const { IssueBoard } = await import("../issue-board.tsx");
 

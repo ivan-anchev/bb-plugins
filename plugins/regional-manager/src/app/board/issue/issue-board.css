@@ -119,12 +119,10 @@ button.rmi-thread-link {
 }
 .rmi-state[data-state="backlog"],
 .rmi-state[data-state="canceled"] { color: var(--subtle-foreground); }
-.rmi-state[data-state="todo"],
-.rmi-state[data-state="in-progress"] { color: var(--muted-foreground); }
+.rmi-state[data-state="todo"] { color: var(--muted-foreground); }
+/* why light-dark: bb's blue scale, one step per scheme so the glyph holds 3:1 on either canvas, as Activity Sidebar's working blue does. */
+.rmi-state[data-state="in-progress"] { color: light-dark(var(--color-blue-600), var(--color-blue-400)); }
 .rmi-state[data-state="verifying"] { color: var(--warning-text); }
 .rmi-state[data-state="in-review"] { color: var(--success); }
 .rmi-state[data-state="done"] { color: var(--pr-merged); }
 .rmi-state[data-state="needs-you"] { color: var(--destructive-text); }
-.rmi-ring {
-  display: block;
-}

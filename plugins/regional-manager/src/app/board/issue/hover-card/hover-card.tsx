@@ -111,7 +111,7 @@ function Related({ title, rows }: { title: string; rows: readonly Row[] }) {
 function Line({ row }: { row: Row }) {
   return (
     <div className="rmi-card-line">
-      {row.needsYou === null ? <StatusGlyph status={row.status} still /> : <NeedsYouGlyph />}
+      {row.needsYou === null ? <StatusGlyph status={row.status} /> : <NeedsYouGlyph />}
       <span className="rmi-card-id">{row.id}</span>
       <FadingText text={row.title} />
     </div>
