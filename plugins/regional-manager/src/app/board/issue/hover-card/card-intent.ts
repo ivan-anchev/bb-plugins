@@ -55,6 +55,7 @@ function cardIntent<Key>(show: (key: Key | null) => void): CardIntent<Key> & { s
   let focused: Key | null = null;
   let closedAt = -Infinity;
   let pressing = false;
+  let stopped = false;
   let opening: ReturnType<typeof setTimeout> | undefined;
   let closing: ReturnType<typeof setTimeout> | undefined;
   let pressed: ReturnType<typeof setTimeout> | undefined;
@@ -123,15 +124,19 @@ function cardIntent<Key>(show: (key: Key | null) => void): CardIntent<Key> & { s
         onScreen = key;
         return () => {
           if (onScreen === key) onScreen = null;
-          if (shown !== key) return;
-          // why the pointer too: a trigger whose card left without it (a row that moved lanes, a link bb rendered again) is no longer under the pointer as far as anyone can tell.
-          if (focused === key) focused = null;
+          // why the pointer at once: a trigger whose card left without it (a row that moved lanes, a link bb rendered again) is no longer under the pointer as far as anyone can tell.
           if (hovered === key) hovered = null;
-          close();
+          // why the rest once the commit is done: a focused row that moves lanes mounts its card again in its new lane, after this one leaves, and keeps it while it has focus.
+          queueMicrotask(() => {
+            if (stopped || shown !== key || (onScreen === key && focused === key)) return;
+            if (focused === key) focused = null;
+            close();
+          });
         };
       },
     }),
     stop() {
+      stopped = true;
       cancel();
       clearTimeout(pressed);
     },

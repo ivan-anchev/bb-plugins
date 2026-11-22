@@ -99,9 +99,12 @@ function focusKept(linkAt: (target: EventTarget | null) => FoundLink | null) {
     kept = anchor instanceof HTMLAnchorElement ? keep(anchor) : null;
   };
   const onFocusOut = (event: FocusEvent) => {
-    // why only when focus moved within the page: bb taking the link out is the case `restore` is for, and so is the user switching windows, which leaves the link focused; the user moving focus elsewhere is not.
-    const moved = document.activeElement !== event.target;
-    if (moved && event.target instanceof Node && event.target.isConnected && withKept(event.target) && !withKept(event.relatedTarget)) kept = null;
+    if (!withKept(event.target) || withKept(event.relatedTarget)) return;
+    const left = kept;
+    // why after the event: Chrome fires focusout while it takes a focused link out, with the link still in the page, so whether focus was moved or the link taken is known only once the removal is done. bb taking the link out is the case `restore` is for, and so is the user switching windows, which leaves the link focused; the user moving focus elsewhere in the page is not.
+    queueMicrotask(() => {
+      if (kept === left && left !== null && left.anchor.isConnected && !withKept(document.activeElement)) kept = null;
+    });
   };
   document.addEventListener("focusin", onFocusIn);
   document.addEventListener("focusout", onFocusOut);

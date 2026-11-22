@@ -110,6 +110,14 @@ function mount(chat: Chat, { focused, board: reading = "reads" }: { focused?: st
     shown.now = next;
     act(() => shown.set(next));
   };
+  /** Renders `next` as Chrome removes a focused element: it fires focusout on `focused` first, while it is still in the page, in the same task. why by hand: jsdom fires no focusout on removal. */
+  const showAsChromeRemoves = (focused: HTMLElement, next: Chat) => {
+    shown.now = next;
+    act(() => {
+      focused.blur();
+      shown.set(next);
+    });
+  };
   /** bb focuses another thread: the selection changes and the window renders again, nothing else. */
   const focusThread = (threadId: string) => {
     const selection = context.current ?? assert.fail("no selection read");
@@ -121,7 +129,7 @@ function mount(chat: Chat, { focused, board: reading = "reads" }: { focused?: st
     boardState.reading = "fails";
     await view.behavior.experimental_invalidateRpc([boardTag(COORDINATOR_ID)]);
   };
-  return { view, pane, link, glyphOf, card, renders, setStatus, show, focusThread, failBoard, opened };
+  return { view, pane, link, glyphOf, card, renders, setStatus, show, showAsChromeRemoves, focusThread, failBoard, opened };
 }
 
 test("an issue link in a message shows its issue's glyph before its id, mid-sentence; a link in code, a bare id and another link stay as they are", async () => {
@@ -250,6 +258,26 @@ test("focus put straight into a link's card, with another link focused before, s
 
     show({ panes: [MANAGER_THREAD], linkKey: "streamed" });
     await waitFor(() => assert.ok(document.activeElement === link(MANAGER_THREAD) && link(MANAGER_THREAD) !== first, "on the link that replaced BBP-24's, not BBP-27, not the page"));
+  } finally {
+    restore();
+  }
+});
+
+test("as Chrome takes out a focused link, or its focused card's link, firing focusout first, focus still moves to the link that replaces it", async () => {
+  const restore = laidOut({ top: 700, bottom: 716, left: 40 }, { height: 2_000, width: 320 });
+  try {
+    const { view, link, glyphOf, showAsChromeRemoves } = mount({ panes: [MANAGER_THREAD] });
+    await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+    const first = link(MANAGER_THREAD);
+    act(() => first.focus());
+    showAsChromeRemoves(first, { panes: [MANAGER_THREAD], linkKey: "streamed" });
+    await waitFor(() => assert.ok(document.activeElement === link(MANAGER_THREAD) && link(MANAGER_THREAD) !== first, "the link"));
+
+    const second = link(MANAGER_THREAD);
+    const body = await view.findByRole("region", { name: "Details of BBP-24" });
+    act(() => body.focus());
+    showAsChromeRemoves(body, { panes: [MANAGER_THREAD], linkKey: "streamed again" });
+    await waitFor(() => assert.ok(document.activeElement === link(MANAGER_THREAD) && link(MANAGER_THREAD) !== second, "its card's body"));
   } finally {
     restore();
   }
@@ -508,6 +536,16 @@ test("a capped card that no longer needs its cap gives focus in its body back to
   }
 });
 
+/** The count `count` gives once it holds still for a few turns of the event loop: a read the page started is in. */
+async function settledReads(count: () => number): Promise<number> {
+  let last = -1;
+  for (let still = 0; still < 5; still = count() === last ? still + 1 : 0) {
+    last = count();
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+  }
+  return last;
+}
+
 /** Every issue link's box at `link`, and the card `card` big, in a 1024 by 768 window; a test changes them by changing the objects. why stubs: jsdom lays nothing out. */
 function laidOut(link: { top: number; bottom: number; left: number }, card: { height: number; width: number }): () => void {
   const boxOf = HTMLElement.prototype.getBoundingClientRect;
@@ -551,7 +589,8 @@ test("pressing an issue link in another thread opens the manager's thread in a s
   show({ panes: [AGENT_THREAD, MANAGER_THREAD] });
   await waitFor(() => assert.ok(asked() > 0, "the new pane asks"));
   assert.deepEqual(opened, [], "and bb declines: the pane isn't focused");
-  const reads = boardReads();
+  // why wait: the new pane's board read may still be on its way; only reads after this one count against the focus.
+  const reads = await settledReads(boardReads);
 
   focusThread(MANAGER_THREAD);
   await waitFor(() => assert.deepEqual(opened, ["BBP-27 Avatars"], "asked again as bb focused the pane, and opened"));
