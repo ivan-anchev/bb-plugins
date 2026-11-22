@@ -35,16 +35,18 @@ test("issue_create files a build issue in Todo, or in Backlog, numbered per regi
   assert.equal(textOf(await kit.call("issue_create", ISSUE, other.threadId)), `Filed WEB-1 (build) in Todo. Link: ${link("WEB-1", other.coordinatorId)}`, "the same id, another manager's link");
 });
 
-test("each issue's link is in the catch-up's row, issue_create, issue_read and issue_update, and the rules tell the manager to name issues to the user by it, never bare or in code", async () => {
+test("each issue's link, and each related issue's, is in the catch-up's row, issue_create, issue_read and issue_update, and the rules tell the manager to name issues to the user by it, never bare or in code", async () => {
   const { kit, threadId, coordinatorId, call } = await managing();
   const link = (id: string) => `[${id}](/plugins/regional-manager/regional-managers/issue/${coordinatorId}/${id})`;
   assert.ok(textOf(await call("issue_create", ISSUE)).endsWith(` Link: ${link("WEB-1")}`));
   await call("issue_create", { ...ISSUE, title: "Dead letters", dependsOn: ["WEB-1"] });
 
   const caughtUp = textOf(await call("crew_catch_up", {}));
-  assert.ok(caughtUp.includes(`\n- WEB-1 "Add retries" (Build; no agent): Not started; blocks WEB-2 (Todo); link: ${link("WEB-1")}\n`), caughtUp);
-  assert.ok(caughtUp.includes(`\n- WEB-2 "Dead letters" (Build; no agent): Not started; blocked by WEB-1 (Todo); link: ${link("WEB-2")}\n`), caughtUp);
-  assert.ok(textOf(await call("issue_read", { id: "WEB-2" })).startsWith(`## WEB-2: Dead letters\n\nBuild. Todo: Not started. Blocked by WEB-1 (Todo). Thread: no thread. Link: ${link("WEB-2")}\n`));
+  assert.ok(caughtUp.includes(`\n- WEB-1 "Add retries" (Build; no agent): Not started; blocks ${link("WEB-2")} (Todo); link: ${link("WEB-1")}\n`), caughtUp);
+  assert.ok(caughtUp.includes(`\n- WEB-2 "Dead letters" (Build; no agent): Not started; blocked by ${link("WEB-1")} (Todo); link: ${link("WEB-2")}\n`), caughtUp);
+  const read = textOf(await call("issue_read", { id: "WEB-2" }));
+  assert.ok(read.startsWith(`## WEB-2: Dead letters\n\nBuild. Todo: Not started. Blocked by ${link("WEB-1")} (Todo). Thread: no thread. Link: ${link("WEB-2")}\n`), read);
+  assert.ok(read.includes(`\nDepends on: ${link("WEB-1")} (Todo).\nBlocks: nothing.\n`), read);
 
   assert.equal(textOf(await call("issue_update", { id: "WEB-1", status: "backlog" })), `Updated WEB-1. Link: ${link("WEB-1")}`);
   assert.equal(textOf(await call("issue_update", { id: "WEB-1", status: "canceled" })), `Updated WEB-1. Now ready: ${link("WEB-2")}. Link: ${link("WEB-1")}`, "an issue it made ready, by its link too");

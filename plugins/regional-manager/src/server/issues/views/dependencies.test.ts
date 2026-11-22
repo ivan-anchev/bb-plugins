@@ -125,7 +125,7 @@ test("a handoff that closes nothing, or closes an issue nothing waits on, announ
   await kit.idle(other, "Handed off.");
   await settled();
   assert.deepEqual(await unblocked(), []);
-  assert.match(textOf(await kit.call("issue_read", { id: "WEB-2" }, threadId)), /Blocked by WEB-1 \(In progress\)\./);
+  assert.match(withoutLinks(textOf(await kit.call("issue_read", { id: "WEB-2" }, threadId))), /Blocked by WEB-1 \(In progress\)\./);
 });
 
 test("a build dependency whose pull request merges unblocks its dependent once; one still blocked by another is not announced", async () => {

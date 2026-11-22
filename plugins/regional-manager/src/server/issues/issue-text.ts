@@ -54,7 +54,7 @@ function rowLine({ view, agent, threadId, branch }: IssueRead, pluginId: string)
   const { issue } = view;
   const held = view.subIssues !== null ? "parent" : agent === null ? "no agent" : `${agent.id}${agent.ended === null ? "" : ` (${agent.ended.how})`}, ${threadLink(threadId)}`;
   const under = issue.parentId === null ? "" : `, under ${issue.parentId}`;
-  return `- ${issue.id} "${issue.title}" (${PIPELINES[issue.kind].label}; ${held}${under}${branch === null ? "" : `, on branch \`${branch}\``}): ${headlineText(view)}${blockedText(view.blockedBy, "; blocked by ")}${blockedText(view.blocks, "; blocks ")}; link: ${linkOf(issue, pluginId)}`;
+  return `- ${issue.id} "${issue.title}" (${PIPELINES[issue.kind].label}; ${held}${under}${branch === null ? "" : `, on branch \`${branch}\``}): ${headlineText(view)}${blockedText(view.blockedBy, "; blocked by ", linksOf(pluginId, issue))}${blockedText(view.blocks, "; blocks ", linksOf(pluginId, issue))}; link: ${linksOf(pluginId, issue)(issue.id)}`;
 }
 
 /** The issues in Todo that nothing blocks: those an agent can start on without waiting. */
@@ -63,22 +63,28 @@ function readyLine(views: readonly IssueView[]): string {
   return `Ready: ${ready.length === 0 ? "none" : ready.join(", ")} (in Todo, no sub-issues, and nothing they or their parent depend on is open).`;
 }
 
-/** The issues as `BBP-2 (Todo), BBP-4 (In progress)`, after `lead`; nothing when there are none. */
-const blockedText = (related: readonly Related[], lead: string): string => (related.length === 0 ? "" : `${lead}${relatedText(related)}`);
+/** The issues as `BBP-2 (Todo), BBP-4 (In progress)`, each named by `name`, after `lead`; nothing when there are none. */
+const blockedText = (related: readonly Related[], lead: string, name: NameOf): string => (related.length === 0 ? "" : `${lead}${relatedText(related, name)}`);
 
-const relatedText = (related: readonly Related[]): string => related.map(({ id, status }) => `${id} (${STATUS_LABELS[status]})`).join(", ");
+const relatedText = (related: readonly Related[], name: NameOf): string => related.map(({ id, status }) => `${name(id)} (${STATUS_LABELS[status]})`).join(", ");
 
-/** The issue's link, as the manager names it to the user, under the id bb gave the plugin. */
-const linkOf = ({ coordinatorId, id }: Issue, pluginId: string): string => issueLinkMarkdown(pluginId, { coordinatorId, issueId: id });
+/** How a text names an issue: by its id, or by its link. */
+type NameOf = (issueId: IssueId) => string;
+
+/** Names `issue`'s manager's issues by their links, as the manager names them to the user, under the id bb gave the plugin. */
+const linksOf = (pluginId: string, { coordinatorId }: Issue): NameOf => (issueId) => issueLinkMarkdown(pluginId, { coordinatorId, issueId });
+
+const byId: NameOf = (issueId) => issueId;
 
 /** What issue_create says it filed, what blocks it as it is filed, and its link. */
 export const filedText = (issue: Issue, blockedBy: readonly Related[], pluginId: string): string =>
-  `Filed ${issue.id} (${issue.kind})${issue.parentId === null ? "" : ` as a sub-issue of ${issue.parentId}`} in ${STATUS_LABELS[issue.rest]}${blockedText(blockedBy, ", blocked by ")}.${issue.verifier === null ? "" : ` Its done handoffs are checked on ${executionText(issue.verifier)}.`} Link: ${linkOf(issue, pluginId)}`;
+  `Filed ${issue.id} (${issue.kind})${issue.parentId === null ? "" : ` as a sub-issue of ${issue.parentId}`} in ${STATUS_LABELS[issue.rest]}${blockedText(blockedBy, ", blocked by ", linksOf(pluginId, issue))}.${issue.verifier === null ? "" : ` Its done handoffs are checked on ${executionText(issue.verifier)}.`} Link: ${linksOf(pluginId, issue)(issue.id)}`;
 
 /** What issue_update says it did: anything its change implies, the issues it made ready, by their links, and its own link. */
 export function updatedText(issue: Issue, { note, nowReady }: { note: string | null; nowReady: readonly IssueId[] }, pluginId: string): string {
-  const ready = nowReady.length === 0 ? null : `Now ready: ${nowReady.map((id) => issueLinkMarkdown(pluginId, { coordinatorId: issue.coordinatorId, issueId: id })).join(", ")}.`;
-  return [`Updated ${issue.id}.`, note, ready, `Link: ${linkOf(issue, pluginId)}`].filter((line) => line !== null).join(" ");
+  const link = linksOf(pluginId, issue);
+  const ready = nowReady.length === 0 ? null : `Now ready: ${nowReady.map(link).join(", ")}.`;
+  return [`Updated ${issue.id}.`, note, ready, `Link: ${link(issue.id)}`].filter((line) => line !== null).join(" ");
 }
 
 /** What agent_start did. */
@@ -171,7 +177,7 @@ function withdrawnText(withdrawn: readonly Withdrawn[]): string {
 
 /** What a start on a blocked issue adds: it started anyway, with nothing of what blocks it. */
 const startedBlockedText = (issueId: IssueId, blockedBy: readonly Related[]): string =>
-  blockedBy.length === 0 ? "" : ` ${issueId} is blocked by ${relatedText(blockedBy)}: its agent started anyway, and has nothing of that work but what its brief names.`;
+  blockedBy.length === 0 ? "" : ` ${issueId} is blocked by ${relatedText(blockedBy, byId)}: its agent started anyway, and has nothing of that work but what its brief names.`;
 
 /** What agent_stop did. */
 export function stopText(agent: Agent, outcome: StopOutcome): string {
@@ -219,12 +225,12 @@ export function issueText(
         : `${output.slice(0, OUTPUT_BUDGET_CHARS)}\n\n[Cut here: it has ${output.length} characters. Read the rest in its thread.]`;
   return [
     `## ${issue.id}: ${issue.title}`,
-    `${PIPELINES[issue.kind].label}. ${sentence(`${STATUS_LABELS[view.status]}: ${headlineText(view)}`)}${view.needsYou === null ? "" : " Needs you."}${blockedText(view.blockedBy, " Blocked by ")}${view.blockedBy.length === 0 ? "" : "."} Thread: ${threadLink(threadId)}${branch === null ? "" : `, branch \`${branch}\``}. Link: ${linkOf(issue, pluginId)}`,
+    `${PIPELINES[issue.kind].label}. ${sentence(`${STATUS_LABELS[view.status]}: ${headlineText(view)}`)}${view.needsYou === null ? "" : " Needs you."}${blockedText(view.blockedBy, " Blocked by ", linksOf(pluginId, issue))}${view.blockedBy.length === 0 ? "" : "."} Thread: ${threadLink(threadId)}${branch === null ? "" : `, branch \`${branch}\``}. Link: ${linksOf(pluginId, issue)(issue.id)}`,
     `### What it is about\n\n${issue.description.trim()}`,
     `### Brief\n\n${issue.brief?.trim() ?? "None yet."}`,
     criteriaText(issue),
     `### Decisions\n\n${decisions.length === 0 ? "None yet. Record one with issue_update's decision." : decisionsText(decisions)}`,
-    `### Relations\n\n${relationsText(relations)}`,
+    `### Relations\n\n${relationsText(relations, linksOf(pluginId, issue))}`,
     `### Verifier\n\n${verifierLine(issue)}`,
     `### Agents\n\n${agents.length === 0 ? "None started." : agents.map((agent) => agentLine(agent, threadId)).join("\n")}`,
     `### Its record\n\n${record.handed.length === 0 ? "No handoff yet." : record.handed.map((handed) => `#### ${handed.handoff.agentId}'s handoff\n\n${handoffText(handed, lookups)}`).join("\n\n")}`,
@@ -240,13 +246,13 @@ function criteriaText({ kind, doneCriteria }: Issue): string {
   return `### ${verified ? "Done when" : "Questions"}\n\n${doneCriteria.length > 0 ? numbered : verified ? "No criteria yet." : "None."}`;
 }
 
-/** Its parent and sub-issues, what it depends on and what it blocks, each with its status. */
-function relationsText({ parent, subIssues, dependsOn, blocks }: Relations): string {
+/** Its parent and sub-issues, what it depends on and what it blocks, each named by `name`, with its status. */
+function relationsText({ parent, subIssues, dependsOn, blocks }: Relations, name: NameOf): string {
   return [
-    `Parent: ${parent === null ? "none" : relatedText([parent])}.`,
-    `Sub-issues: ${subIssues.length === 0 ? "none" : relatedText(subIssues)}.`,
-    `Depends on: ${dependsOn.length === 0 ? "nothing" : relatedText(dependsOn)}.`,
-    `Blocks: ${blocks.length === 0 ? "nothing" : relatedText(blocks)}.`,
+    `Parent: ${parent === null ? "none" : relatedText([parent], name)}.`,
+    `Sub-issues: ${subIssues.length === 0 ? "none" : relatedText(subIssues, name)}.`,
+    `Depends on: ${dependsOn.length === 0 ? "nothing" : relatedText(dependsOn, name)}.`,
+    `Blocks: ${blocks.length === 0 ? "nothing" : relatedText(blocks, name)}.`,
   ].join("\n");
 }
 
