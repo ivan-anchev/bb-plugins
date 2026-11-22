@@ -26,7 +26,7 @@ import type { Coordinator } from "../../contract.ts";
 import type { Issue, IssueId } from "../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { checkedAgents, type Check, type CheckId, type HandoffCheck } from "../../model/verdict/check.ts";
-import { isReviewing } from "../../model/verdict/review.ts";
+import { isReviewing, reviewPending } from "../../model/verdict/review.ts";
 import type { Checkout, CheckoutRead } from "../../model/verdict/checkout.ts";
 import { ciOf, type CiVerdict } from "../../model/verdict/pr.ts";
 import { isSettled, judge, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
@@ -478,7 +478,7 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
   async function tend(checkId: CheckId): Promise<void> {
     const check = checkOf(checkId);
     const { subject } = check;
-    if (check.verdict.state === "queued" && isReviewing(check.review) && subject.kind === "handoff") return reviewInTurn({ ...check, subject });
+    if (reviewPending(check) && subject.kind === "handoff") return reviewInTurn({ ...check, subject });
     if (check.verdict.state === "queued") return startInTurn(check);
     if (check.verdict.state === "running") return followInTurn(checkId);
     return settleInTurn(checkId, "look");

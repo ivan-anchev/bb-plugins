@@ -188,12 +188,6 @@ function SentBack({ agent, round, delivery }: { agent: ReactNode } & NonNullable
           Maybe sent back to {agent} as fix round {round}: the regional manager decides
         </>
       );
-    case "sending":
-      return (
-        <>
-          Sending back to {agent} as fix round {round}
-        </>
-      );
     default:
       // why nothing: the server may be newer than this bundle for a moment after an update.
       delivery satisfies never;

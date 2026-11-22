@@ -54,6 +54,13 @@ export const firstReview = (verdict: Verdict): Review => (verdict.state === "que
 export const isReviewing = (review: Review): boolean => review.state === "queued" || review.state === "running";
 
 /**
+ * Whether the check waits on its review: its verdict is still queued and its review still to come.
+ * why the verdict too: a check superseded mid-review keeps that review as it was, and none comes.
+ * The one rule for an issue's Reviewing status and a round's Reviewing… score.
+ */
+export const reviewPending = ({ review, verdict }: { review: Review; verdict: Pick<Verdict, "state"> }): boolean => verdict.state === "queued" && isReviewing(review);
+
+/**
  * Each finding the reviewer reported, with the verifier's triage of it (`triage`, in the
  * findings' order); [] when it reported none or none was had. why throw on a count that differs:
  * issue_verdict refuses a triage that doesn't take every finding once, and the two are stored together.

@@ -9,7 +9,7 @@ import type { Handoff, HandoffId } from "../agent/handoff.ts";
 import type { Check, CheckId, FinalCheck } from "../verdict/check.ts";
 import type { CiVerdict, PrSnapshot } from "../verdict/pr.ts";
 import { NOT_CLEAN } from "../verdict/checkout.ts";
-import { isReviewing } from "../verdict/review.ts";
+import { reviewPending } from "../verdict/review.ts";
 import { allPassed, ciVerdictOf, failedCheckout, mayHaveReachedAgent, outcome, type Verdict } from "../verdict/verdict.ts";
 import type { Issue, IssueId } from "./issue.ts";
 import { isVerified, PIPELINES, shipsCode, type Kind, type Stage } from "./kind.ts";
@@ -346,7 +346,7 @@ const STAGES: Record<Stage, (evidence: Evidence) => Placing | "left"> = {
   // Left once its review reported or none could be had, or its verdict moved on without one; at once for a check with no review stage.
   reviewing({ summary, check }) {
     const { verdict, review } = checked(check);
-    return verdict.state === "queued" && isReviewing(review) ? { status: "reviewing", headline: `Reviewing: ${summary}`, needsYou: null } : "left";
+    return reviewPending({ review, verdict }) ? { status: "reviewing", headline: `Reviewing: ${summary}`, needsYou: null } : "left";
   },
   // Left once the check passed, or nobody checks it. A failure stays In progress.
   verifying({ summary, check, fixRounds, pr, verifierAsks }) {

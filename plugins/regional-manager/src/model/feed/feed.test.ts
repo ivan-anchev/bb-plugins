@@ -128,9 +128,9 @@ test("BBP-19's feed: every moment in the order it happened, each round numbered,
   assert.deepEqual(
     roundsIn(entries).map((round) => ({ number: round.number, by: round.by.kind === "agent" && round.by.agentId, score: scoreOf(round), outcomeAt: round.outcomeAt, fixRound: round.verdict?.fixRound })),
     [
-      { number: 1, by: "a1", score: { kind: "judged", passed: 1, of: 3, failed: true }, outcomeAt: 3_600, fixRound: { round: 1, delivery: "sent" } },
-      { number: 2, by: "a1", score: { kind: "judged", passed: 2, of: 3, failed: true }, outcomeAt: 4_600, fixRound: null },
-      { number: 3, by: "a2", score: { kind: "judged", passed: 2, of: 3, failed: true }, outcomeAt: 5_600, fixRound: { round: 1, delivery: "sent" } },
+      { number: 1, by: "a1", score: { kind: "failed", by: "criteria", passed: 1, of: 3 }, outcomeAt: 3_600, fixRound: { round: 1, delivery: "sent" } },
+      { number: 2, by: "a1", score: { kind: "failed", by: "criteria", passed: 2, of: 3 }, outcomeAt: 4_600, fixRound: null },
+      { number: 3, by: "a2", score: { kind: "failed", by: "criteria", passed: 2, of: 3 }, outcomeAt: 5_600, fixRound: { round: 1, delivery: "sent" } },
       { number: 4, by: "a2", score: { kind: "judged", passed: 3, of: 3, failed: false }, outcomeAt: 6_500, fixRound: null },
     ],
     "the first event naming a check times its outcome; a later one doesn't move it",
@@ -205,15 +205,18 @@ test("a round whose criteria all passed scores a pass only once it is settled: b
   assert.deepEqual(passed({ kind: "waiting-for-ci" }), { kind: "pending", stage: "ci" });
   assert.deepEqual(passed({ kind: "superseded" }), { kind: "unjudged", outcome: "superseded" });
   assert.deepEqual(passed({ kind: "checked", refused: null, ci: { kind: "pass", number: 7 } }), { kind: "judged", passed: 3, of: 3, failed: false });
-  assert.deepEqual(passed({ kind: "checked", refused: null, ci: { kind: "fail", number: 7, failedChecks: ["test"] } }), { kind: "judged", passed: 3, of: 3, failed: true });
-  assert.deepEqual(scored(returned(["pass", "fail", "pass"], 3_500, { kind: "pending" })), { kind: "judged", passed: 2, of: 3, failed: true });
+  assert.deepEqual(passed({ kind: "checked", refused: null, ci: { kind: "fail", number: 7, failedChecks: ["test"] } }), { kind: "failed", by: "ci" }, "every criterion passed: it leads with why it failed");
+  const clean = returned(["pass", "pass", "pass"], 3_500, { kind: "checked", refused: null, ci: { kind: "none" } });
+  const dirty: Verdict = clean.state === "returned" ? { ...clean, checkout: { headSha: SHA, changedFiles: ["?? notes.md"], changedFileCount: 1 } } : assert.fail("not returned");
+  assert.deepEqual(scored(dirty), { kind: "failed", by: "checkout" });
+  assert.deepEqual(scored(returned(["pass", "fail", "pass"], 3_500, { kind: "pending" })), { kind: "failed", by: "criteria", passed: 2, of: 3 });
 });
 
-test("a fix round says whether its findings reached the agent: on their way, sent, or maybe, when the plugin can't tell", () => {
+test("a fix round says whether its findings reached the agent: sent, or maybe, when the plugin can't tell; none while they are on their way, as the round is in flight", () => {
   const fixRound = (settlement: Extract<Verdict, { state: "returned" }>["settlement"]) => roundOf(handed(handoff(1, A1, 3_000), returned(["fail", "pass", "pass"], 3_500, settlement)), 1, null).verdict?.fixRound;
   assert.deepEqual(
     [fixRound({ kind: "sending-back", round: 1, ci: { kind: "none" } }), fixRound({ kind: "sent-back", round: 1, ci: { kind: "none" } }), fixRound({ kind: "maybe-sent-back", round: 2, ci: { kind: "none" } }), fixRound({ kind: "checked", refused: null, ci: { kind: "none" } })],
-    [{ round: 1, delivery: "sending" }, { round: 1, delivery: "sent" }, { round: 2, delivery: "maybe" }, null],
+    [null, { round: 1, delivery: "sent" }, { round: 2, delivery: "maybe" }, null],
   );
 });
 

@@ -1,4 +1,4 @@
-// What a round says of its check in a word or two (round.ts scoreOf): ✓ 6 of 6, ✗ 3 of 6,
+// What a round says of its check in a word or two (round.ts scoreOf): ✓ 6 of 6, ✗ 3 of 6, ✗ CI failed,
 // Reviewing…, Verifying…, Waiting for CI…, or why it has none; a blocked or abandoned handoff's round says so.
 import { scoreOf, type Round } from "../../../../../model/feed/round.ts";
 import { ResultGlyph } from "./result-glyph.tsx";
@@ -9,10 +9,24 @@ export function Score({ round }: { round: Round }) {
   switch (score.kind) {
     case "judged":
       return (
-        <span className="rmi-score" data-result={score.failed ? "fail" : "pass"}>
-          <ResultGlyph result={score.failed ? "fail" : "pass"} />
-          <span className="sr-only">{score.failed ? "Failed: " : "Passed: "}</span>
+        <span className="rmi-score" data-result="pass">
+          <ResultGlyph result="pass" />
+          <span className="sr-only">Passed: </span>
           {score.passed} of {score.of}
+        </span>
+      );
+    case "failed":
+      return (
+        <span className="rmi-score" data-result="fail">
+          <ResultGlyph result="fail" />
+          {score.by === "criteria" ? (
+            <>
+              <span className="sr-only">Failed: </span>
+              {score.passed} of {score.of}
+            </>
+          ) : (
+            FAILED_BY[score.by]
+          )}
         </span>
       );
     case "pending":
@@ -65,6 +79,9 @@ function HandoffStatus({ status }: { status: Extract<Round["by"], { kind: "agent
       return null;
   }
 }
+
+/** What failed a round whose criteria all passed, leading its line: the reason, never "n of n". */
+const FAILED_BY = { checkout: "Not the claimed commit on a clean tree", ci: "CI failed" } as const;
 
 const PENDING = { reviewing: "Reviewing…", verifying: "Verifying…", ci: "Waiting for CI…" } as const;
 

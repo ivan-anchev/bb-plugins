@@ -1029,7 +1029,8 @@ what was handed off ("Final check on main" for a parent's) and its score: "✓ 6
 of 6", "✗ 3 of 6", "Reviewing…", "Verifying…", "Waiting for CI…",
 "Couldn't verify", "Replaced", "Not verified", or "Blocked" or "Gave up" for a
 handoff nothing checks. A round whose criteria all passed shows ✓ only once
-its verdict is settled. The latest round is open; any other opens when you
+its verdict is settled, and one they all passed that CI or its checkout failed
+leads with that: "✗ CI failed", "✗ Not the claimed commit on a clean tree". The latest round is open; any other opens when you
 press it, and stays as you left it while the tab is open, also when a new
 round arrives, which opens as the new latest; a round you are reading in,
 having pressed or focused something inside it, stays open too. Open, a round shows its steps on a rail: who

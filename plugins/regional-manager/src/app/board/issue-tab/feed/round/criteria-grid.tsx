@@ -3,11 +3,12 @@
 // a button, named by a tooltip on hover and focus; pressed, the row opens under it to that round's
 // evidence for the criterion, read with the round's body. A research issue's questions list alone:
 // nothing judges them.
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import { criteriaGrid, type GridRow, type Round } from "../../../../../model/feed/round.ts";
 import type { IssueId } from "../../../../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../../../../model/role.ts";
 import type { CriterionResult } from "../../../../../model/verdict/verdict.ts";
+import { useEscapeToClose } from "../../../../ui/hold-escape.ts";
 import { ReadFailure } from "../../../../ui/read-failure.tsx";
 import { ResultGlyph } from "./result-glyph.tsx";
 import { useRoundBody } from "./round-body.tsx";
@@ -69,7 +70,7 @@ function GridCell({ round, result, expanded, onPress }: GridCellProps) {
   const [focused, setFocused] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const shown = (hovered || focused) && !dismissed;
-  useEscape(shown, () => setDismissed(true));
+  useEscapeToClose(shown, () => setDismissed(true));
   const named = `Round ${round}: ${result === null ? "not judged" : RESULT_WORD[result]}`;
   return (
     <span
@@ -103,25 +104,6 @@ function GridCell({ round, result, expanded, onPress }: GridCellProps) {
       )}
     </span>
   );
-}
-
-/**
- * While `active`, Escape anywhere calls `close`. why on the document, and preventing its default:
- * focus may be anywhere, and bb's own Escape mustn't also act on the press that closes the tooltip.
- */
-function useEscape(active: boolean, close: () => void): void {
-  const closing = useRef(close);
-  closing.current = close;
-  useEffect(() => {
-    if (!active) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      closing.current();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [active]);
 }
 
 /** One round's judgement of one criterion: the words it judged and its evidence, from the round's body. */

@@ -159,3 +159,11 @@ test("a round whose passing verdict was replaced while it waited for CI says it 
   assert.ok(await three.findByText(/^Replaced before CI was judged/));
   assert.ok(three.getAllByText("Replaced", { selector: ".rmi-score" }).length > 0, "its score says replaced, not passed");
 });
+
+test("a round whose criteria all passed but CI failed leads its line with that reason, never a count of passes", async () => {
+  const ciFailed: Entry[] = FEED.entries.map((entry) =>
+    entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, outcome: "fail", failedBy: "ci" } } } : entry,
+  );
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: ciFailed }) });
+  assert.equal(rounds(tab()).head(3).textContent, "Round 3Round 3: retries land with backoffCI failed");
+});
