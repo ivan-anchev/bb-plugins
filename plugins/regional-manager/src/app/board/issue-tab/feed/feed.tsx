@@ -26,13 +26,15 @@ type FeedProps = { coordinatorId: CoordinatorId; issue: IssueRow; feed: IssueFee
 export function Feed({ coordinatorId, issue, feed }: FeedProps) {
   const titleId = useId();
   const [filter, setFilter] = useState<Filter>("all");
-  // The rounds the reader opened or folded. why only their choices: a read that brings a new round
-  // keeps what they chose, and a round nobody chose is open while it is the latest.
+  // The rounds the reader opened, folded or engaged with. why only their choices: a read that brings a
+  // new round keeps what they chose, and a round nobody chose is open while it is the latest. why
+  // engaging counts: a new round must not fold the one the reader is reading, or drop focus inside it.
   const [chosen, setChosen] = useState<ReadonlyMap<RoundKey, boolean>>(new Map());
   const rounds = roundsIn(feed.entries);
   const latest = rounds.at(-1)?.key ?? null;
   const isOpen = (round: Round): boolean => chosen.get(round.key) ?? round.key === latest;
   const toggle = (round: Round) => setChosen((now) => new Map(now).set(round.key, !isOpen(round)));
+  const engage = (round: Round) => setChosen((now) => (now.has(round.key) ? now : new Map(now).set(round.key, true)));
   const shown = feed.entries.filter((entry) => shownIn(filter, entry));
   return (
     <>
@@ -56,7 +58,7 @@ export function Feed({ coordinatorId, issue, feed }: FeedProps) {
           <ol className="rmi-entries">
             {shown.map((entry, i) => (
               <li key={keyOf(entry, i)}>
-                <EntryView coordinatorId={coordinatorId} issue={issue} agents={feed.agents} entry={entry} isOpen={isOpen} onToggle={toggle} />
+                <EntryView coordinatorId={coordinatorId} issue={issue} agents={feed.agents} entry={entry} isOpen={isOpen} onToggle={toggle} onEngage={engage} />
               </li>
             ))}
           </ol>
@@ -66,13 +68,13 @@ export function Feed({ coordinatorId, issue, feed }: FeedProps) {
   );
 }
 
-type EntryViewProps = { coordinatorId: CoordinatorId; issue: IssueRow; agents: FeedAgents; entry: Entry; isOpen(round: Round): boolean; onToggle(round: Round): void };
+type EntryViewProps = { coordinatorId: CoordinatorId; issue: IssueRow; agents: FeedAgents; entry: Entry; isOpen(round: Round): boolean; onToggle(round: Round): void; onEngage(round: Round): void };
 
 /** One entry, by its kind: a round as its card, a decision as its card, anything else as a quiet line. */
-function EntryView({ coordinatorId, issue, agents, entry, isOpen, onToggle }: EntryViewProps) {
+function EntryView({ coordinatorId, issue, agents, entry, isOpen, onToggle, onEngage }: EntryViewProps) {
   switch (entry.kind) {
     case "round":
-      return <RoundCard coordinatorId={coordinatorId} issueId={issue.id} round={entry.round} agents={agents} open={isOpen(entry.round)} onToggle={() => onToggle(entry.round)} />;
+      return <RoundCard coordinatorId={coordinatorId} issueId={issue.id} round={entry.round} agents={agents} open={isOpen(entry.round)} onToggle={() => onToggle(entry.round)} onEngage={() => onEngage(entry.round)} />;
     case "decision":
       return <DecisionCard coordinatorId={coordinatorId} decision={entry.decision} />;
     case "created":

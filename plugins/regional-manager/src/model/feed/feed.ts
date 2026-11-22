@@ -59,7 +59,7 @@ function agentEntries({ id, startedAt, ended }: FeedFacts["agents"][number]): En
 function eventEntries(at: number, event: InboxEvent): Entry[] {
   switch (event.kind) {
     case "pr":
-      return [{ kind: "pr", at, agentId: event.agentId, number: event.pr.number, changes: event.changes }];
+      return [{ kind: "pr", at, number: event.pr.number, changes: event.changes }];
     case "idle-without-handoff":
       return [{ kind: "thread", at, agentId: event.agentId, event: { kind: "reported-back", lastAnswer: event.lastAnswer } }];
     case "failed":

@@ -6,7 +6,7 @@ import type { PrChange } from "../../../../model/verdict/pr.ts";
 import { AgentName, When, type FeedAgents } from "./byline.tsx";
 
 /** The entries drawn as lines: everything but rounds and decisions, which are cards. */
-export type LineEntry = Exclude<Entry, { kind: "round" | "decision" }>;
+type LineEntry = Exclude<Entry, { kind: "round" | "decision" }>;
 
 export function EntryLine({ entry, agents }: { entry: LineEntry; agents: FeedAgents }) {
   return (
@@ -35,7 +35,9 @@ function Who({ actor, agents }: { actor: Actor; agents: FeedAgents }) {
     case "plugin":
       return null;
     default:
-      return actor satisfies never;
+      // why nothing: the server may be newer than this bundle for a moment after an update.
+      actor satisfies never;
+      return null;
   }
 }
 
@@ -52,13 +54,15 @@ function whatOf(entry: LineEntry, agents: FeedAgents): ReactNode {
     case "agent-ended":
       return <Ended agentId={entry.agentId} how={entry.how} agents={agents} />;
     case "pr":
-      return entry.changes.map((change) => PR_CHANGE[change](entry.number)).join(", ");
+      return entry.changes.flatMap((change) => prChangeText(change, entry.number) ?? []).join(", ");
     case "thread":
       return <ThreadSaid event={entry.event} />;
     case "unblocked":
       return `Unblocked: ${entry.by}, the last of its dependencies, closed`;
     default:
-      return entry satisfies never;
+      // why nothing: the server may be newer than this bundle for a moment after an update.
+      entry satisfies never;
+      return null;
   }
 }
 
@@ -76,7 +80,9 @@ function Ended({ agentId, how, agents }: { agentId: Extract<Entry, { kind: "agen
     case "spawn-failed":
       return <>{agent} never started: bb didn't confirm its thread</>;
     default:
-      return how satisfies never;
+      // why nothing: the server may be newer than this bundle for a moment after an update.
+      how satisfies never;
+      return null;
   }
 }
 
@@ -90,21 +96,37 @@ function ThreadSaid({ event }: { event: Extract<Entry, { kind: "thread" }>["even
         </>
       );
     case "failed":
-      return <>'s thread failed{event.error !== null && `: ${event.error}`}</>;
+      return <>failed{event.error !== null && `: ${event.error}`}</>;
     case "needs-input":
       return <>waits on you: {event.question}</>;
     default:
-      return event satisfies never;
+      // why nothing, not the object: the server may be newer than this bundle for a moment after an update.
+      event satisfies never;
+      return null;
   }
 }
 
-const PR_CHANGE: Record<PrChange, (number: number) => string> = {
-  opened: (n) => `#${n} opened`,
-  reopened: (n) => `#${n} reopened`,
-  merged: (n) => `#${n} merged`,
-  closed: (n) => `#${n} closed`,
-  "ci-passed": (n) => `CI passed on #${n}`,
-  "ci-failed": (n) => `CI failed on #${n}`,
-  approved: (n) => `#${n} approved`,
-  "changes-requested": (n) => `Changes requested on #${n}`,
-};
+/** A change to the pull request #`number` in words; null for a change this bundle doesn't know, from a newer server. */
+function prChangeText(change: PrChange, number: number): string | null {
+  switch (change) {
+    case "opened":
+      return `#${number} opened`;
+    case "reopened":
+      return `#${number} reopened`;
+    case "merged":
+      return `#${number} merged`;
+    case "closed":
+      return `#${number} closed`;
+    case "ci-passed":
+      return `CI passed on #${number}`;
+    case "ci-failed":
+      return `CI failed on #${number}`;
+    case "approved":
+      return `#${number} approved`;
+    case "changes-requested":
+      return `Changes requested on #${number}`;
+    default:
+      change satisfies never;
+      return null;
+  }
+}

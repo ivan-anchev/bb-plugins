@@ -68,6 +68,18 @@ test("a round the reader folded stays folded, and one they opened stays open, ac
   await waitFor(() => assert.deepEqual(open(), [1, 4]));
 });
 
+test("a round the reader is reading in stays open, with their focus, when a read brings a newer round", async () => {
+  const { tab, refeed } = await opened("WEB-1", WEB_1);
+  const { card, open } = rounds(tab());
+  const report = (await card(3).findByText(/^Report ·/)).closest("summary") ?? assert.fail("no report fold");
+  report.focus();
+  fireEvent.focus(report);
+  const four = FEED.entries.flatMap((entry) => (entry.kind === "round" && entry.round.number === 3 ? [{ ...entry, at: 8_000, round: { ...entry.round, key: roundKey(4), number: 4, at: 8_000 } }] : []));
+  await refeed("WEB-1", () => ({ ...FEED, entries: [...FEED.entries, ...four] satisfies Entry[] }));
+  await waitFor(() => assert.deepEqual(open(), [3, 4]));
+  assert.equal(document.activeElement, report, "focus stays where the reader put it");
+});
+
 test("a criterion's cell opens to that round's evidence for it, read with the round's body, and closes again", async () => {
   const { tab } = await opened("WEB-1", WEB_1);
   const grid = within(tab().getByRole("heading", { name: "Done when" }).closest("section") ?? assert.fail("no Done when"));

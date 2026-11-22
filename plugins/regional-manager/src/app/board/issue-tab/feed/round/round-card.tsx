@@ -10,9 +10,10 @@ import type { FeedAgents } from "../byline.tsx";
 import { RoundBody } from "./round-body.tsx";
 import { Score } from "./score.tsx";
 
-type RoundCardProps = { coordinatorId: CoordinatorId; issueId: IssueId; round: Round; agents: FeedAgents; open: boolean; onToggle(): void };
+/** `onEngage`: the reader pressed or focused something inside the open round, which keeps it open as theirs. */
+type RoundCardProps = { coordinatorId: CoordinatorId; issueId: IssueId; round: Round; agents: FeedAgents; open: boolean; onToggle(): void; onEngage(): void };
 
-export function RoundCard({ coordinatorId, issueId, round, agents, open, onToggle }: RoundCardProps) {
+export function RoundCard({ coordinatorId, issueId, round, agents, open, onToggle, onEngage }: RoundCardProps) {
   const bodyId = useId();
   return (
     <article className="rmi-round" data-open={open || undefined} aria-label={`Round ${round.number}`}>
@@ -22,7 +23,7 @@ export function RoundCard({ coordinatorId, issueId, round, agents, open, onToggl
         <span className="rmi-round-summary">{headlineOf(round)}</span>
         <Score round={round} />
       </button>
-      <div id={bodyId} hidden={!open}>
+      <div id={bodyId} hidden={!open} onFocusCapture={onEngage} onPointerDownCapture={onEngage}>
         {open && <RoundBody coordinatorId={coordinatorId} issueId={issueId} round={round} agents={agents} />}
       </div>
     </article>

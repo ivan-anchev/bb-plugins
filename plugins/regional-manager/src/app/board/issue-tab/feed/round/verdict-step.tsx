@@ -7,7 +7,7 @@ import { DiscloseGlyph } from "../../detail/disclose-glyph.tsx";
 import { ResultGlyph } from "./result-glyph.tsx";
 
 /** What a verdict judged: an agent's done handoff, or a build parent's final check on its default branch. */
-export type Judged = { kind: "handoff" } | { kind: "final"; defaultBranch: string };
+type Judged = { kind: "handoff" } | { kind: "final"; defaultBranch: string };
 
 export function VerdictStep({ verdict, judged }: { verdict: ShownVerdict; judged: Judged }) {
   switch (verdict.state) {
@@ -28,7 +28,9 @@ export function VerdictStep({ verdict, judged }: { verdict: ShownVerdict; judged
     case "waived":
       return <p className="rmi-verdict-meta">Not verified: verification was off</p>;
     default:
-      return verdict satisfies never;
+      // why nothing: the server may be newer than this bundle for a moment after an update.
+      verdict satisfies never;
+      return null;
   }
 }
 
@@ -105,7 +107,9 @@ function UnjudgedCiLine({ verdict }: { verdict: ReturnedVerdict }) {
     case "checked":
       return null;
     default:
-      return verdict.settlement satisfies never;
+      // why nothing: the server may be newer than this bundle for a moment after an update.
+      verdict.settlement satisfies never;
+      return null;
   }
 }
 
@@ -132,7 +136,9 @@ function CiLine({ verdict }: { verdict: ReturnedVerdict }) {
         </p>
       );
     default:
-      return ci satisfies never;
+      // why nothing: the server may be newer than this bundle for a moment after an update.
+      ci satisfies never;
+      return null;
   }
 }
 

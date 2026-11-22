@@ -42,9 +42,9 @@ export const roundSchema = z.object({
   /**
    * Its verdict (null: nothing checks this round, as a blocked or research handoff): what it says,
    * each criterion's result in the check's order ([] until it returned), the fix round it went back
-   * to its agent as (null: none), and when it returned or could not run (null: not yet).
+   * to its agent as (null: none). When it returned is the body's (the verifier's step shows only open).
    */
-  verdict: z.object({ outcome: outcomeSchema, results: z.array(criterionResultSchema), fixRound: z.number().int().nullable(), at: z.number().nullable() }).nullable(),
+  verdict: z.object({ outcome: outcomeSchema, results: z.array(criterionResultSchema), fixRound: z.number().int().nullable() }).nullable(),
   /** When its verdict was sent back or made final, from the inbox event that said so (null: not yet). */
   outcomeAt: z.number().nullable(),
   /** Its check is in flight: its review, its verdict or CI is still to come. */
@@ -52,9 +52,13 @@ export const roundSchema = z.object({
 });
 export type Round = z.infer<typeof roundSchema>;
 
+/** What a round's handoff opens to: the agent's account and a research handoff's report. why without its id, time, status and summary: the folded round carries those. */
+const handoffBodySchema = shownHandoffSchema.omit({ id: true, at: true, status: true, summary: true });
+export type HandoffBody = z.infer<typeof handoffBodySchema>;
+
 export const roundBodySchema = z.object({
-  /** The handoff as the user is shown it (null: a final check's round, which has none). */
-  handoff: shownHandoffSchema.nullable(),
+  /** The handoff's account (null: a final check's round, which has none). */
+  handoff: handoffBodySchema.nullable(),
   verdict: shownVerdictSchema.nullable(),
   /** The reviewer's findings, each with the verifier's triage once its verdict returned (null triage before). */
   findings: z.array(reviewFindingSchema.extend({ triage: triageSchema.nullable() })),
@@ -92,7 +96,8 @@ export function finalRoundOf(check: FinalCheck, number: number, outcomeAt: numbe
 /** What a round opens to: its handoff (null: a final check's round), and its check's verdict and the review's findings (null, none: nothing checks it). */
 export function bodyOf(handoff: Handoff | null, check: Check | null): RoundBody {
   return {
-    handoff: handoff === null ? null : shownHandoff(handoff),
+    // why parse: zod drops every key its schema doesn't name, as shownVerdict does.
+    handoff: handoff === null ? null : handoffBodySchema.parse(shownHandoff(handoff)),
     verdict: check === null ? null : shownVerdict(check.verdict),
     findings: check === null ? [] : findingsOf(check),
   };
@@ -129,7 +134,9 @@ export function scoreOf({ review, verdict }: Pick<Round, "review" | "verdict">):
     case "fail":
       return { kind: "pending", stage: "verifying" };
     default:
-      return outcome satisfies never;
+      // why no score: the server may be newer than this bundle for a moment after an update.
+      outcome satisfies never;
+      return null;
   }
 }
 
@@ -171,14 +178,13 @@ function confirmedOf(review: Review, verdict: Verdict): number | null {
 function verdictOf(verdict: Verdict): Round["verdict"] {
   switch (verdict.state) {
     case "returned":
-      return { outcome: outcome(verdict), results: verdict.criteria.map(({ result }) => result), fixRound: fixRoundOf(verdict), at: verdict.at };
+      return { outcome: outcome(verdict), results: verdict.criteria.map(({ result }) => result), fixRound: fixRoundOf(verdict) };
     case "could-not-run":
-      return { outcome: outcome(verdict), results: [], fixRound: null, at: verdict.at };
     case "queued":
     case "running":
     case "superseded":
     case "waived":
-      return { outcome: outcome(verdict), results: [], fixRound: null, at: null };
+      return { outcome: outcome(verdict), results: [], fixRound: null };
     default:
       return verdict satisfies never;
   }

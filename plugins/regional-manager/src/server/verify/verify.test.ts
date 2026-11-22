@@ -435,10 +435,10 @@ test("an issue opened on the board reads what it is about, its criteria and each
   const { feed, rounds } = await opened();
   assert.deepEqual([feed.description, feed.doneCriteria, feed.agents], ["Failed webhook deliveries are lost.", CRITERIA, [{ id: "a1", threadId: agentThreadId }]]);
   assert.deepEqual(
-    rounds.map(({ round, body }) => [round.number, round.by, round.verdict?.results, body.handoff?.status, body.verdict?.state === "returned" && body.verdict.criteria.map((check) => check.result)]),
+    rounds.map(({ round, body }) => [round.number, round.by, round.verdict?.results, body.handoff?.did, body.verdict?.state === "returned" && body.verdict.criteria.map((check) => check.result)]),
     [
-      [1, { kind: "agent", agentId: "a1", status: "done", summary: "Retries land with backoff" }, ["fail", "pass"], "done", ["fail", "pass"]],
-      [2, { kind: "agent", agentId: "a1", status: "done", summary: "Retries land with backoff" }, ["pass", "pass"], "done", ["pass", "pass"]],
+      [1, { kind: "agent", agentId: "a1", status: "done", summary: "Retries land with backoff" }, ["fail", "pass"], DONE.did, ["fail", "pass"]],
+      [2, { kind: "agent", agentId: "a1", status: "done", summary: "Retries land with backoff" }, ["pass", "pass"], DONE.did, ["pass", "pass"]],
     ],
   );
   const sent = JSON.stringify({ feed, rounds });

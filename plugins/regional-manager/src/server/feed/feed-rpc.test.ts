@@ -103,7 +103,7 @@ test("an issue's feed sends exactly what its tab reads: its plan's text and rela
     "agent-ended": ["agentId", "at", "how", "kind"],
     round: ["at", "kind", "round"],
     decision: ["at", "decision", "kind"],
-    pr: ["agentId", "at", "changes", "kind", "number"],
+    pr: ["at", "changes", "kind", "number"],
     thread: ["agentId", "at", "event", "kind"],
     unblocked: ["at", "by", "kind"],
   };
@@ -117,7 +117,7 @@ test("an issue's feed sends exactly what its tab reads: its plan's text and rela
     {
       by: { kind: "agent", agentId: "a1", status: "done", summary: "Retries land" },
       review: { state: "reported", at: 3_200, findings: 1, confirmed: 1 },
-      verdict: { outcome: "fail", results: ["fail"], fixRound: 1, at: 3_500 },
+      verdict: { outcome: "fail", results: ["fail"], fixRound: 1 },
       outcomeAt: 3_600,
       inFlight: false,
     },
@@ -139,7 +139,7 @@ test("an opened round's body sends its handoff, its verdict and the findings wit
   assert.deepStrictEqual([bodies[gone], bodies[otherIssue], bodies["not a key"]], [null, null, null]);
   const body = bodies[key] ?? assert.fail("no body");
   assert.deepStrictEqual(keysOf(body), ["findings", "handoff", "verdict"]);
-  assert.deepStrictEqual(keysOf(body.handoff ?? assert.fail()), ["at", "concerns", "deviations", "did", "evidence", "findings", "id", "report", "status", "summary"]);
+  assert.deepStrictEqual(keysOf(body.handoff ?? assert.fail()), ["concerns", "deviations", "did", "evidence", "findings", "report"], "no id, time, status or summary: the folded round has them");
   assert.deepStrictEqual(keysOf(body.verdict ?? assert.fail()), ["at", "checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
   assert.deepStrictEqual(body.findings, [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", triage: { result: "confirmed", reason: "No cap in retry.ts." } }]);
 });

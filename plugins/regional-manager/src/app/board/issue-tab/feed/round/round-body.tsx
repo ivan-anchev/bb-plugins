@@ -5,8 +5,7 @@
 import { experimental_useRpcKeyedQuery, Markdown } from "@get-bb/plugin-sdk/app";
 import { useId, type ReactNode } from "react";
 import { coordinatorContract as contract, roundBodyKey } from "../../../../../contract.ts";
-import type { ShownHandoff } from "../../../../../model/agent/handoff.ts";
-import type { Round, RoundBody as Body, RoundKey } from "../../../../../model/feed/round.ts";
+import type { HandoffBody, Round, RoundBody as Body, RoundKey } from "../../../../../model/feed/round.ts";
 import type { IssueId } from "../../../../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../../../../model/role.ts";
 import type { Outcome } from "../../../../../model/verdict/verdict.ts";
@@ -53,7 +52,7 @@ export function RoundBody({ coordinatorId, issueId, round, agents }: RoundBodyPr
             title={
               <>
                 <ThreadLink name="Verifier" threadId={verifierThreadOf(loaded)} /> <Score round={round} />
-                {round.verdict.at !== null && <When at={round.verdict.at} />}
+                <VerdictTime body={loaded} />
               </>
             }
           >
@@ -80,7 +79,7 @@ function Step({ title, children }: { title: ReactNode; children?: ReactNode }) {
   );
 }
 
-function HandedStep({ round, agents, handoff }: { round: Round; agents: FeedAgents; handoff: ShownHandoff | null }) {
+function HandedStep({ round, agents, handoff }: { round: Round; agents: FeedAgents; handoff: HandoffBody | null }) {
   const { by } = round;
   if (by.kind === "final") return <Step title={<>Final check on {by.defaultBranch} <When at={round.at} /></>} />;
   return (
@@ -97,7 +96,7 @@ function HandedStep({ round, agents, handoff }: { round: Round; agents: FeedAgen
   );
 }
 
-const HANDED: Record<ShownHandoff["status"], string> = { done: "handed off", blocked: "handed off blocked", "gave-up": "gave up" };
+const HANDED: Record<Extract<Round["by"], { kind: "agent" }>["status"], string> = { done: "handed off", blocked: "handed off blocked", "gave-up": "gave up" };
 
 function ReviewStep({ review, findings }: { review: Exclude<Round["review"], { state: "none" }>; findings: Body["findings"] }) {
   switch (review.state) {
@@ -126,7 +125,9 @@ function ReviewStep({ review, findings }: { review: Exclude<Round["review"], { s
         </Step>
       );
     default:
-      return review satisfies never;
+      // why nothing, not the object: the server may be newer than this bundle for a moment after an update.
+      review satisfies never;
+      return null;
   }
 }
 
@@ -166,13 +167,19 @@ const OUTCOME: Record<Outcome, string> = {
   "waiting-for-ci": "Waiting for CI",
 };
 
+/** When the verdict returned or couldn't be had, once the body is read; nothing before. */
+function VerdictTime({ body }: { body: Body | null }) {
+  const verdict = body?.verdict ?? null;
+  return verdict !== null && (verdict.state === "returned" || verdict.state === "could-not-run") ? <When at={verdict.at} /> : null;
+}
+
 const verifierThreadOf = (body: Body | null): string | null => {
   const verdict = body?.verdict ?? null;
   return verdict !== null && (verdict.state === "running" || verdict.state === "returned" || verdict.state === "could-not-run") ? verdict.verifierThreadId : null;
 };
 
 /** The handoff's own account, folded: what the agent did, its evidence, concerns and the rest, and a research handoff's report. */
-function Report({ handoff }: { handoff: ShownHandoff }) {
+function Report({ handoff }: { handoff: HandoffBody }) {
   const parts = [
     { title: "Did", counted: "did", items: handoff.did },
     { title: "Evidence", counted: "evidence", items: handoff.evidence, code: true },
@@ -210,7 +217,7 @@ function Report({ handoff }: { handoff: ShownHandoff }) {
  * A research handoff's report, as the Markdown it is, and the memory file it was saved to. why a box
  * that scrolls: a report runs to 20,000 characters; the tab stop lets the keyboard scroll it.
  */
-function ResearchReport({ report, file }: NonNullable<ShownHandoff["report"]>) {
+function ResearchReport({ report, file }: NonNullable<HandoffBody["report"]>) {
   const headId = useId();
   return (
     <section className="rmi-reported">

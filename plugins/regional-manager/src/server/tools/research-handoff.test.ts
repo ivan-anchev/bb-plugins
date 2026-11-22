@@ -257,9 +257,9 @@ test("an issue opened on the board sends its questions and, in its rounds, a res
   assert.deepEqual(feed.doneCriteria, RESEARCH.doneCriteria);
   const [blocked, done] = rounds;
   assert.deepEqual([done?.round.verdict, done?.round.review], [null, { state: "none" }], "nothing checks a research handoff");
-  assert.deepEqual(Object.keys(done?.body.handoff ?? assert.fail("no done handoff")).sort(), ["at", "concerns", "deviations", "did", "evidence", "findings", "id", "report", "status", "summary"]);
+  assert.deepEqual(Object.keys(done?.body.handoff ?? assert.fail("no done handoff")).sort(), ["concerns", "deviations", "did", "evidence", "findings", "report"]);
   assert.deepEqual([done?.body.handoff?.report, done?.body.verdict], [{ report: REPORT, file: I1_REPORT }, null]);
-  assert.deepEqual([blocked?.body.handoff?.status, blocked?.body.handoff?.report], ["blocked", null]);
+  assert.deepEqual([blocked?.round.by, blocked?.body.handoff?.report], [{ kind: "agent", agentId: "a1", status: "blocked", summary: "Needs the PCI auditor's scope" }, null]);
 });
 
 /** The reports/ files in the manager's memory, each with what it holds. */

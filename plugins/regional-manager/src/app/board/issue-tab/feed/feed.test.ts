@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { cleanup, fireEvent, waitFor, within } from "@testing-library/react";
+import { agentIdSchema } from "../../../../model/agent/agent.ts";
 import type { Entry } from "../../../../model/feed/entry.ts";
 import { COORDINATOR, FEED, issue, opened } from "../test-tab.ts";
 
@@ -71,4 +72,25 @@ test("an open question's options are buttons: pressing one answers it with that 
   assert.ok(question.getByRole("status"));
   fireEvent.click(question.getByRole("button", { name: "Wait a day" }));
   assert.equal(answers.length, 1, "one answer at a time");
+});
+
+test("once the answer lands the question shows it answered, and focus on the option pressed moves to the question's card, never the page", async () => {
+  const { tab, answers, refeed } = await opened("WEB-1", WEB_1);
+  const card = () => activity(tab()).section.getByRole("article", { name: "Question d2" });
+  const option = within(card()).getByRole("button", { name: "Ship now" });
+  option.focus();
+  fireEvent.click(option);
+  await waitFor(() => assert.equal(answers.length, 1));
+  const answered: Entry[] = FEED.entries.map((entry) =>
+    entry.kind === "decision" && entry.decision.kind === "asked" && entry.decision.id === "d2" ? { ...entry, decision: { ...entry.decision, answer: { text: "Ship now", at: 7_000 } } } : entry,
+  );
+  await refeed("WEB-1", () => ({ ...FEED, entries: answered }));
+  await waitFor(() => assert.match(card().textContent ?? "", /You answered/));
+  assert.equal(document.activeElement, card());
+});
+
+test("an agent's thread that failed reads as its line, with bb's error", async () => {
+  const failed: Entry = { kind: "thread", at: 6_500, agentId: agentIdSchema.parse("a2"), event: { kind: "failed", error: "The provider stopped responding" } };
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [...FEED.entries, failed] }) });
+  assert.ok(activity(tab()).texts().some((text) => /^a2 failed: The provider stopped responding/.test(text ?? "")));
 });

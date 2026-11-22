@@ -1,6 +1,7 @@
 // A decision in an issue's feed, full size between its rounds: a question the regional manager put to
 // the user about the issue, with its options and the user's answer; or a decision it recorded on the
 // issue. An open question's options are buttons that answer it here, as on the Board.
+import { useLayoutEffect, useRef } from "react";
 import type { IssueDecision } from "../../../../model/decision.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
 import { Button } from "../../../ui/button.tsx";
@@ -13,7 +14,7 @@ type Asked = Extract<IssueDecision, { kind: "asked" }>;
 export function DecisionCard({ coordinatorId, decision }: { coordinatorId: CoordinatorId; decision: IssueDecision }) {
   switch (decision.kind) {
     case "asked":
-      return decision.answer === null ? <OpenQuestion coordinatorId={coordinatorId} decision={decision} /> : <Answered decision={decision} answer={decision.answer} />;
+      return <Question coordinatorId={coordinatorId} decision={decision} />;
     case "recorded":
       return (
         <article className="rmi-decision" aria-label="Decision">
@@ -24,43 +25,34 @@ export function DecisionCard({ coordinatorId, decision }: { coordinatorId: Coord
         </article>
       );
     default:
-      return decision satisfies never;
+      // why nothing: the server may be newer than this bundle for a moment after an update.
+      decision satisfies never;
+      return null;
   }
 }
 
-function Question({ decision }: { decision: Asked }) {
+/**
+ * A question put to the user: open, a button per option that answers it; answered, its options with
+ * the one chosen marked, and the answer. One component for both, so the card stays as the answer
+ * lands, and focus on the option pressed, which unmounts then, moves to the card.
+ */
+function Question({ coordinatorId, decision }: { coordinatorId: CoordinatorId; decision: Asked }) {
+  const { sent, send, error } = useAnswer(coordinatorId, decision.id);
+  const card = useRef<HTMLElement>(null);
+  const answered = decision.answer !== null;
+  // why an effect: focus is the browser's, and the option it was on is gone only once this commit lands.
+  useLayoutEffect(() => {
+    if (answered && sent !== null && document.activeElement === document.body) card.current?.focus();
+  }, [answered, sent]);
   return (
-    <>
+    <article ref={card} tabIndex={-1} className="rmi-decision" aria-label={`Question ${decision.id}`}>
       <p className="rmi-decision-head">
         <span className="rmi-actor">Regional manager</span> asked you <When at={decision.at} />
         <span className="rmi-decision-id">{decision.id}</span>
       </p>
       <p className="rmi-decision-text">{decision.question}</p>
-    </>
-  );
-}
-
-/** Waiting for the user: each option answers it; one with no options is answered in words, on the Board. */
-function OpenQuestion({ coordinatorId, decision }: { coordinatorId: CoordinatorId; decision: Asked }) {
-  const { sent, send, error } = useAnswer(coordinatorId, decision.id);
-  return (
-    <article className="rmi-decision" aria-label={`Question ${decision.id}`} data-open>
-      <Question decision={decision} />
-      {decision.options.length > 0 ? (
-        <ul aria-label="Options" className="rmi-options">
-          {decision.options.map((option) => (
-            <li key={option} className="max-w-full">
-              {/* why aria-disabled, not disabled: a disabled button drops focus to the page while the answer sends. */}
-              <Button variant="secondary" size="sm-wrap" aria-disabled={sent !== null} onClick={() => send(option)}>
-                {option}
-              </Button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="rmi-verdict-meta">Answer it in your own words under Needs you on the Board.</p>
-      )}
-      {sent !== null && (
+      {decision.answer === null ? <Options decision={decision} sent={sent} send={send} /> : <Answer decision={decision} answer={decision.answer} />}
+      {sent !== null && !answered && (
         <p role="status" className="rmi-verdict-meta">
           Sending your answer…
         </p>
@@ -74,10 +66,26 @@ function OpenQuestion({ coordinatorId, decision }: { coordinatorId: CoordinatorI
   );
 }
 
-function Answered({ decision, answer }: { decision: Asked; answer: NonNullable<Asked["answer"]> }) {
+/** Waiting for the user: each option answers it; one with no options is answered in words, on the Board. */
+function Options({ decision, sent, send }: { decision: Asked; sent: string | null; send(text: string): void }) {
+  if (decision.options.length === 0) return <p className="rmi-verdict-meta">Answer it in your own words under Needs you on the Board.</p>;
   return (
-    <article className="rmi-decision" aria-label={`Question ${decision.id}`}>
-      <Question decision={decision} />
+    <ul aria-label="Options" className="rmi-options">
+      {decision.options.map((option) => (
+        <li key={option} className="max-w-full">
+          {/* why aria-disabled, not disabled: a disabled button drops focus to the page while the answer sends. */}
+          <Button variant="secondary" size="sm-wrap" aria-disabled={sent !== null} onClick={() => send(option)}>
+            {option}
+          </Button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Answer({ decision, answer }: { decision: Asked; answer: NonNullable<Asked["answer"]> }) {
+  return (
+    <>
       {decision.options.length > 0 && (
         <ul aria-label="Options" className="rmi-options">
           {decision.options.map((option) => (
@@ -93,6 +101,6 @@ function Answered({ decision, answer }: { decision: Asked; answer: NonNullable<A
         <span className="rmi-actor">You</span> answered <When at={answer.at} />
       </p>
       <p className="rmi-decision-text">{answer.text}</p>
-    </article>
+    </>
   );
 }

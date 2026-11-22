@@ -66,7 +66,7 @@ function round(number: number, agentId: typeof A1, at: number, results: Criterio
     at,
     by: { kind: "agent", agentId, status: "done", summary: `Round ${number}: retries land with backoff` },
     review: { state: "reported", at: at + 100, findings: 2, confirmed: 1 },
-    verdict: { outcome: failed ? "fail" : "pass", results, fixRound, at: at + 500 },
+    verdict: { outcome: failed ? "fail" : "pass", results, fixRound },
     outcomeAt: at + 600,
     inFlight: false,
   };
@@ -91,7 +91,7 @@ export const FEED: IssueFeed = {
     { kind: "agent-ended", at: 4_800, agentId: A1, how: "replaced" },
     { kind: "agent-started", at: 4_800, agentId: A2 },
     roundEntry(round(3, A2, 5_000, ["pass", "pass", "pass"], null)),
-    { kind: "pr", at: 6_000, agentId: A2, number: 219, changes: ["ci-passed", "merged"] },
+    { kind: "pr", at: 6_000, number: 219, changes: ["ci-passed", "merged"] },
     { kind: "thread", at: 6_100, agentId: A2, event: { kind: "reported-back", lastAnswer: "Merged; nothing left." } },
     { kind: "unblocked", at: 6_200, by: id("WEB-7") },
     { kind: "decision", at: 6_300, decision: { kind: "asked", id: decisionIdSchema.parse("d2"), question: "Ship #219 to everyone now?", options: ["Ship now", "Wait a day"], at: 6_300, answer: null } },
@@ -117,7 +117,7 @@ function verdictOf(n: number, results: readonly CriterionResult[]): ShownVerdict
 export function bodyOf(n: number): RoundBody {
   const results = FEED.entries.flatMap((entry) => (entry.kind === "round" && entry.round.number === n ? (entry.round.verdict?.results ?? []) : []));
   return {
-    handoff: { id: handoffId(n), at: 3_000, status: "done", summary: `Round ${n}: retries land with backoff`, did: ["Added exponential backoff"], evidence: ["$ npm test"], concerns: [], deviations: [], findings: [], report: null },
+    handoff: { did: ["Added exponential backoff"], evidence: ["$ npm test"], concerns: [], deviations: [], findings: [], report: null },
     verdict: verdictOf(n, results),
     findings: [
       { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "The backoff has no cap.", triage: { result: "confirmed", reason: "Seen: it grows without bound." } },

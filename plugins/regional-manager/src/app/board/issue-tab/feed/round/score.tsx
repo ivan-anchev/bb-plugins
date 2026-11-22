@@ -24,7 +24,9 @@ export function Score({ round }: { round: Round }) {
         </span>
       );
     default:
-      return score satisfies never;
+      // why nothing: the server may be newer than this bundle for a moment after an update.
+      score satisfies never;
+      return null;
   }
 }
 

@@ -42,6 +42,7 @@
     color: var(--foreground);
   }
 }
+.rmi-decision:focus-visible,
 .rmi-filter button:focus-visible,
 .rmi-grid-cell:focus-visible,
 .rmi-round-head:focus-visible,
