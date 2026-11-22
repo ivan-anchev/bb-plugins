@@ -161,7 +161,8 @@ test("an avatar this release can't draw, as a kind a later one stored or text th
 
   const store = openStore(storage);
 
-  assert.deepEqual(store.coordinators().map(({ avatar }) => avatar.kind), ["blob", "blob"]);
+  const drawn = new Map(store.coordinators().map(({ id, avatar }) => [id, avatar]));
+  assert.deepEqual(drawn, new Map([[MANAGER, freeLook(seedOf(MANAGER), [])], [OTHER_MANAGER, freeLook(seedOf(OTHER_MANAGER), [])]]));
   const stored = db.prepare("SELECT avatar FROM coordinators ORDER BY created_at, rowid").all().map((row) => z.object({ avatar: z.string() }).parse(row).avatar);
   assert.deepEqual(stored, [later, "{not json"]);
 });
