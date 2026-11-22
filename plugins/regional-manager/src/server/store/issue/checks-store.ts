@@ -49,7 +49,7 @@ export function startCheck(db: Db, checkId: CheckId, verifierThreadId: string): 
 
 /** Starts a queued review running in its reviewer's thread, as the reviewer's ticket binds; one whose check was superseded meanwhile stays as it is. Call inside a transaction. */
 export function startReview(db: Db, checkId: CheckId, reviewerThreadId: string): void {
-  moveReview(db, checkId, { state: "queued" }, { state: "running", reviewerThreadId, declined: [] });
+  moveReview(db, checkId, { state: "queued" }, { state: "running", reviewerThreadId });
 }
 
 /** Replaces the review if its verdict is still queued and it is still where `from` says, and says whether it did. Call inside a transaction. */
@@ -301,15 +301,6 @@ export function checksStore(db: Db) {
         const current = verdictOf(db, checkId);
         if (current?.state !== "running" || current.verifierThreadId !== verifierThreadId) return false;
         return moveVerdict(checkId, { state: "running", verifierThreadId }, { ...current, declined: [...current.declined, ...asked] });
-      })();
-    },
-
-    /** Adds to a running review what its reviewer asked a person that the plugin declined; says whether it is still that reviewer's review. */
-    recordReviewDeclined(checkId: CheckId, reviewerThreadId: string, asked: readonly string[]): boolean {
-      return db().transaction(() => {
-        const review = check(checkId)?.review;
-        if (review?.state !== "running") return false;
-        return moveReview(db, checkId, { state: "running", reviewerThreadId }, { ...review, declined: [...review.declined, ...asked] });
       })();
     },
 

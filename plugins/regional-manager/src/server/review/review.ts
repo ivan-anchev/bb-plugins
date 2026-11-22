@@ -8,22 +8,21 @@
 // its verdict saying no review was had. The verify step calls start and follow in the issue's turn
 // (verify.ts reviewInTurn), which owns when the environment changes hands.
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
-import type { Agent } from "../../model/agent.ts";
 import type { Execution } from "../../model/execution.ts";
 import type { HandoffCheck, CheckId } from "../../model/verdict/check.ts";
-import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { ReviewFinding } from "../../model/verdict/review.ts";
+import { handingAgent } from "../agents/handing-agent.ts";
 import { isRunning, listedThreads, stopThreads, type StopBb } from "../agents/threads.ts";
 import type { CatalogBb } from "../execution/catalog.ts";
 import { threadExecution, type ThreadExecutionBb } from "../execution/thread-execution.ts";
 import type { Busy, IssueTurns } from "../issues/issue-turns.ts";
-import type { MemoryRoot } from "../memory/memory-files.ts";
+import { CREW_FILE, type MemoryRoot } from "../memory/memory-files.ts";
 import type { Spawner } from "../spawn.ts";
 import type { ReviewFrom } from "../store/issue/checks-store.ts";
 import type { Store } from "../store/store.ts";
-import { declineAsks, type AsksBb } from "../verify/verifier-asks.ts";
+import type { AsksBb } from "../verify/verifier-asks.ts";
 import { verifierExecution, type VerifierChoice } from "../verify/verifier-model.ts";
-import { stalled, STALL_MS, type ActivityBb } from "../verify/verifier-stall.ts";
+import { watchHidden, type ActivityBb } from "../verify/verifier-stall.ts";
 import { reviewerBrief } from "./reviewer-brief.ts";
 
 type ThreadRow = Awaited<ReturnType<BbPluginApi["sdk"]["threads"]["list"]>>[number];
@@ -46,7 +45,7 @@ type ReviewBb = CatalogBb &
 
 type Deps = {
   bb: ReviewBb;
-  store: Pick<Store, "check" | "agent" | "issue" | "coordinator" | "missReview" | "recordReviewDeclined" | "receiveReview">;
+  store: Pick<Store, "check" | "agent" | "issue" | "coordinator" | "missReview" | "receiveReview">;
   spawner: Pick<Spawner, "checker">;
   memory: MemoryRoot;
   turns: IssueTurns;
@@ -56,18 +55,9 @@ type Deps = {
 /** What became of a reviewer's findings: stored, or refused, as its review no longer waits for them. */
 type Received = "recorded" | "not-running";
 
-const CREW_RULES = memoryFileSchema.parse("CREW.md");
-
 export type Review = ReturnType<typeof createReview>;
 
 export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
-  /** The agent whose handoff the check judges. why throw: a handoff's check is made of a bound agent's handoff, and agents are kept while their regional manager is. */
-  function agentOf({ coordinatorId, subject }: HandoffCheck): Agent & { threadId: string } {
-    const agent = store.agent(coordinatorId, subject.agentId);
-    if (agent === null || agent.threadId === null) throw new Error(`The agent ${subject.agentId} of ${coordinatorId} has no thread.`);
-    return { ...agent, threadId: agent.threadId };
-  }
-
   /** Ends the review as missed, from where it is, and stops its reviewer, if it had one: it holds the agent's environment, still on what held it. */
   async function miss(check: HandoffCheck, from: ReviewFrom, reason: string): Promise<void> {
     if (!store.missReview(check.id, from, reason) || from.state !== "running") return;
@@ -81,7 +71,7 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
     const issue = store.issue(check.coordinatorId, check.issueId);
     // why throw: checks are kept while their issue and regional manager are, and an agent starts only on an issue with a brief.
     if (coordinator === null || issue === null || issue.brief === null) throw new Error(`The issue ${check.issueId} of ${check.coordinatorId}, its brief or its regional manager is missing.`);
-    const agent = agentOf(check);
+    const agent = handingAgent(store, check);
     const environmentId = (await listedThreads(bb, [agent.threadId])).get(agent.threadId)?.environmentId ?? null;
     if (environmentId === null) throw new Error("the agent's thread has no environment to review");
     const [execution, { defaultBranch }] = await Promise.all([
@@ -95,7 +85,7 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
       title: `Review ${issue.id}: ${issue.title}`,
       environment: { type: "reuse", environmentId } as const,
       execution,
-      prompt: reviewerBrief({ ...issue, brief: issue.brief, doneCriteria: check.criteria }, { ...check.subject, defaultBranch }, memory.of(check.coordinatorId).read(CREW_RULES).text),
+      prompt: reviewerBrief({ ...issue, brief: issue.brief, doneCriteria: check.criteria }, { ...check.subject, defaultBranch }, memory.of(check.coordinatorId).read(CREW_FILE).text),
     };
   }
 
@@ -116,11 +106,10 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
 
     /**
      * In its issue's turn: a running reviewer nobody but the plugin watches, as a verifier is
-     * (verify.ts watchRunning). Whatever its provider asks a person is declined and kept on the
-     * review. It is missed, and stopped, when its thread is gone, when it went idle without
-     * reporting, when bb refused the plugin's decline, and when it showed no activity for
-     * STALL_MS. why no reminder, as a verifier gets: a review is advice for the verifier, and a
-     * missed one costs only itself.
+     * (watchHidden): whatever its provider asks a person is declined. It is missed, and stopped,
+     * when its thread is gone, when it went idle without reporting, when bb refused the plugin's
+     * decline, and when it showed no activity for STALL_MS. why no reminder, as a verifier gets: a
+     * review is advice for the verifier, and a missed one costs only itself.
      */
     async follow(check: HandoffCheck): Promise<void> {
       const { review } = check;
@@ -130,14 +119,8 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
       const thread = (await listedThreads(bb, [reviewerThreadId])).get(reviewerThreadId) ?? null;
       if (thread === null) return miss(check, from, "its reviewer thread was archived or deleted before it reported");
       if (!isRunning(thread)) return miss(check, from, "its reviewer ended its turn without reporting");
-      if (thread.hasPendingInteraction) {
-        const declined = await declineAsks(bb, thread.id);
-        const refused = declined.find(({ refused }) => refused !== null);
-        if (refused !== undefined) return miss(check, from, `its reviewer asked a person "${refused.asked}", and bb refused the plugin's decline: ${refused.refused}`);
-        store.recordReviewDeclined(check.id, thread.id, declined.map(({ asked }) => asked));
-        return;
-      }
-      if (await stalled(bb, thread.id, thread.createdAt, now())) await miss(check, from, `its reviewer showed no activity for ${STALL_MS / 60_000} minutes`);
+      const watched = await watchHidden(bb, thread, "reviewer", [], now());
+      if (watched.kind === "ended") await miss(check, from, watched.reason);
     },
 
     /**

@@ -31,6 +31,7 @@ import type { Checkout, CheckoutRead } from "../../model/verdict/checkout.ts";
 import { ciOf, type CiVerdict } from "../../model/verdict/pr.ts";
 import { isSettled, judge, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
 import { environmentGone, type EnvironmentsBb } from "../agents/environments.ts";
+import { handingAgent } from "../agents/handing-agent.ts";
 import { isRunning, latestTurnSeq, listedThreads, stopThreads, threadsById, type TurnsBb } from "../agents/threads.ts";
 import type { CatalogBb } from "../execution/catalog.ts";
 import { threadExecution, type ThreadExecutionBb } from "../execution/thread-execution.ts";
@@ -44,8 +45,8 @@ import type { Store } from "../store/store.ts";
 import { finalCheckerRequest, judgedTree, type FinalVerifierBb } from "./final-check/final-verifier.ts";
 import { findingsMessage } from "./findings.ts";
 import { refusalOf } from "./send-refusal.ts";
-import { declineAsks, type AsksBb } from "./verifier-asks.ts";
-import { stalled, STALL_MS, type ActivityBb } from "./verifier-stall.ts";
+import type { AsksBb } from "./verifier-asks.ts";
+import { watchHidden, type ActivityBb } from "./verifier-stall.ts";
 import { verifierExecution } from "./verifier-model.ts";
 import { verifierBrief } from "./verifier-brief.ts";
 
@@ -146,12 +147,8 @@ const NUDGE =
 export type Verify = ReturnType<typeof createVerify>;
 
 export function createVerify({ bb, store, spawner, review, inbox, turns, now }: Deps) {
-  /** The agent whose done handoff the check judges. why throw: a handoff's check is made of a bound agent's handoff, and agents are never deleted while their regional manager is kept. */
-  function agentOf(check: HandoffCheck): Agent & { threadId: string } {
-    const agent = store.agent(check.coordinatorId, check.subject.agentId);
-    if (agent === null || agent.threadId === null) throw new Error(`The agent ${check.subject.agentId} of ${check.coordinatorId} has no thread.`);
-    return { ...agent, threadId: agent.threadId };
-  }
+  /** The agent whose done handoff the check judges (see handingAgent). */
+  const agentOf = (check: HandoffCheck): Agent & { threadId: string } => handingAgent(store, check);
 
   /** A regional manager's thread. why throw: checks are kept while their regional manager is. */
   function managerThreadOf(coordinatorId: CoordinatorId): string {
@@ -279,11 +276,9 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
   }
 
   /**
-   * In its issue's turn: a running verifier nobody but the plugin watches. Whatever its provider
-   * asks a person is declined at once (see declineAsks) and kept on the check for its verdict to
-   * name; an ask bb won't let the plugin decline ends the check, naming it, as does a verifier that
-   * showed no activity for STALL_MS, whatever held it. why stop it then: its check is over, and
-   * left running it holds the agent's environment, still on its ask or its stalled command (seen live).
+   * In its issue's turn: a running verifier nobody but the plugin watches (see watchHidden).
+   * Whatever its provider asks a person is declined and kept on the check for its verdict to name;
+   * an ask bb won't let the plugin decline, or no activity for STALL_MS, ends the check and stops it.
    */
   async function watchRunning(checkId: CheckId, verdict: Running, thread: ListedThread, giveUp: (reason: string) => void): Promise<void> {
     const end = async (reason: string) => {
@@ -291,16 +286,9 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
       const { unstopped } = await stopThreads(bb, [thread.id]);
       for (const { why } of unstopped) bb.log.warn(`The verifier ${thread.id} of check ${checkId}, which ended, ${why}; nothing waits on it.`);
     };
-    if (thread.hasPendingInteraction) {
-      const declined = await declineAsks(bb, thread.id);
-      const refused = declined.find(({ refused }) => refused !== null);
-      if (refused !== undefined) return end(`its verifier asked a person "${refused.asked}", and bb refused the plugin's decline: ${refused.refused}`);
-      store.recordDeclined(checkId, thread.id, declined.map(({ asked }) => asked));
-      return;
-    }
-    if (!(await stalled(bb, thread.id, thread.createdAt, now()))) return;
-    const asked = verdict.declined.length === 0 ? "" : `, after the plugin declined what it asked a person (${verdict.declined.map((ask) => `"${ask}"`).join("; ")})`;
-    await end(`its verifier showed no activity for ${STALL_MS / 60_000} minutes${asked}`);
+    const watched = await watchHidden(bb, thread, "verifier", verdict.declined, now());
+    if (watched.kind === "ended") return end(watched.reason);
+    if (watched.declined.length > 0) store.recordDeclined(checkId, thread.id, watched.declined);
   }
 
   /**

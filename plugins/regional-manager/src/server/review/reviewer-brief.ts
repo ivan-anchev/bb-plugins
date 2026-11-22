@@ -6,7 +6,7 @@
 import type { Issue } from "../../model/issue/issue.ts";
 import type { MemoryText } from "../../model/memory-file.ts";
 import type { HandoffCheck } from "../../model/verdict/check.ts";
-import { memorySection } from "../agents/brief.ts";
+import { crewSection } from "../agents/brief.ts";
 import { REVIEW } from "./review-tool.ts";
 
 /** The diff to review: the claimed commit, the pull request the agent named (null: none), and the branch it is reviewed against (null: bb records no default branch). */
@@ -19,7 +19,7 @@ export function reviewerBrief(issue: Pick<Issue, "id" | "title" | "doneCriteria"
     `## The diff\n\n${diffText(diff)}`,
     `## The issue's brief\n\n${issue.brief.trim()}`,
     `## Done-criteria\n\n${issue.doneCriteria.map((criterion, i) => `${i + 1}. ${criterion}`).join("\n")}`,
-    memorySection("CREW.md", "the rules every agent follows", null, crewRules),
+    crewSection(crewRules),
   ].join("\n\n");
 }
 

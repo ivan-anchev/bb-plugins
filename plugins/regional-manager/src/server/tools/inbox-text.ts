@@ -297,7 +297,7 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
 /**
  * What came of a returned verdict's review: no review was had, and why; or what its reviewer found,
  * on what model, each finding as the verifier triaged it, confirmed ones first, each with the
- * verifier's reason. Only confirmed ones went to the agent. Nothing for a check with no review stage.
+ * verifier's reason, and whether the confirmed ones went to the agent. Nothing for a check with no review stage.
  */
 function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned" }>): string[] {
   if (review.state === "missed") return [`Review: no review was had, as ${review.reason}.`];
@@ -309,10 +309,28 @@ function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned
   const confirmed = lines("confirmed");
   const rejected = lines("rejected");
   return [
-    `Review: a reviewer on ${by} reported ${all.length} finding${all.length === 1 ? "" : "s"}; the verifier confirmed ${confirmed.length} and rejected ${rejected.length}. Only confirmed ones go to the agent.`,
+    [`Review: a reviewer on ${by} reported ${all.length} finding${all.length === 1 ? "" : "s"}; the verifier confirmed ${confirmed.length} and rejected ${rejected.length}.`, ...(confirmed.length === 0 ? [] : [confirmedSent(verdict)])].join(" "),
     ...(confirmed.length === 0 ? [] : [`Confirmed:\n${confirmed.join("\n")}`]),
     ...(rejected.length === 0 ? [] : [`Rejected:\n${rejected.join("\n")}`]),
   ];
+}
+
+/** Whether a verdict's confirmed review findings reached the agent: only a failed verdict sent back as its fix round carries them. */
+function confirmedSent({ settlement }: Extract<Verdict, { state: "returned" }>): string {
+  switch (settlement.kind) {
+    case "sent-back":
+      return "The confirmed ones went back to the agent with the failed verdict.";
+    case "maybe-sent-back":
+      return "The confirmed ones went with the failed verdict's findings, which may or may not have reached the agent.";
+    case "pending":
+    case "waiting-for-ci":
+    case "sending-back":
+    case "checked":
+    case "superseded":
+      return "None of them went to the agent.";
+    default:
+      return settlement satisfies never;
+  }
 }
 
 /** Why the tree failed a verdict, whatever its criteria say: the agent's claimed commit wasn't checked out on a clean tree; a final check's verifier's worktree wasn't clean. */

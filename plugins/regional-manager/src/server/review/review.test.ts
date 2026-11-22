@@ -5,6 +5,7 @@ import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
+import type { InteractionPayload } from "../../model/interaction.ts";
 import type { Review } from "../../model/verdict/review.ts";
 import { memoryStorage } from "../memory-storage.ts";
 import { MIGRATIONS } from "../store/migrations.ts";
@@ -142,7 +143,7 @@ test("a reviewer runs on neither the agent's model nor the one its verifier then
 });
 
 test("the verifier's brief lists the review's findings; its verdict triages each, and a failed one sends the agent only those it confirmed, with why", async () => {
-  const { kit, agentThreadId, check, verifier, handOff, reported } = await withAgent();
+  const { kit, agentThreadId, check, verifier, handOff, reported, catchUp } = await withAgent();
   await handOff();
   assert.equal(await reported(FINDINGS), "Review recorded: 2 findings. A verifier triages them next. Stop here; don't change anything in this environment.");
   const brief = kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no prompt");
@@ -167,6 +168,7 @@ test("the verifier's brief lists the review's findings; its verdict triages each
     /### Review findings the verifier confirmed\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps, so a dead endpoint is retried every 2\^n ms forever\.\n {2}The verifier: retry\.ts:42 doubles the delay with no ceiling; a test with 20 failures waits 17 minutes\.$/,
   );
   assert.doesNotMatch(sent, /helper's name|naming taste/, "a rejected finding never reaches the agent");
+  assert.match(await catchUp(), /the verifier confirmed 1 and rejected 1\. The confirmed ones went back to the agent with the failed verdict\./);
   const stored = check().verdict;
   assert.deepEqual(stored.state === "returned" && stored.triage, [
     { result: "confirmed", reason: triage[0]?.reason },
@@ -181,7 +183,7 @@ test("the manager's update shows the review's confirmed findings and its rejecte
   await returned({ ...PASSES, triage: [{ finding: 1, result: "confirmed", reason: "It never caps." }, { finding: 2, result: "rejected", reason: "Taste." }] });
   await settled();
   const update = await catchUp();
-  assert.match(update, /Review: a reviewer on claude-code sonnet reported 2 findings; the verifier confirmed 1 and rejected 1\. Only confirmed ones go to the agent\./);
+  assert.match(update, /Review: a reviewer on claude-code sonnet reported 2 findings; the verifier confirmed 1 and rejected 1\. None of them went to the agent\./, "a passed verdict sends nothing back");
   assert.match(update, /Confirmed:\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps[^\n]*\n {2}Why: It never caps\./);
   assert.match(update, /Rejected:\n- `src\/retry\.ts` \(nit\): The retry helper's name says nothing about backoff\.\n {2}Why: Taste\./);
 });
@@ -224,6 +226,31 @@ test("a reviewer that ends its turn without reporting, or that bb won't start, n
   assert.deepEqual(refused.review(), { state: "missed", reviewerThreadId: null, reason: "bb did not start a reviewer: HTTP 400: Invalid environment" });
   assert.deepEqual(await refused.row(), ["verifying", "Verifying: Retries land with backoff"]);
   refused.verifier();
+});
+
+const RECONNECT: InteractionPayload = { kind: "provider-codex/mcp-elicitation", title: "Reconnect GitHub on ChatGPT", data: null };
+
+test("whatever a reviewer asks a person is declined, as nobody answers a reviewer, and it reviews on; an ask bb won't let the plugin decline misses the review, stops the reviewer and starts the verifier", async () => {
+  const { kit, review, reviewer, verifier, handOff, reported } = await withAgent();
+  await handOff();
+  const asking = reviewer();
+  await kit.ask(asking, RECONNECT);
+  await settled();
+  assert.deepEqual(kit.askAnswers.answered.map(({ threadId, how }) => [threadId, how]), [[asking, "decline"]]);
+  assert.deepEqual([review(), kit.thread(asking).hasPendingInteraction], [{ state: "running", reviewerThreadId: asking }, false], "it reviews on");
+  await reported([]);
+  verifier();
+
+  const refused = await withAgent();
+  await refused.handOff();
+  const stuck = refused.reviewer();
+  refused.kit.askAnswers.refusal = new Error("bb is restarting");
+  await refused.kit.ask(stuck, RECONNECT);
+  await settled();
+  assert.deepEqual(refused.review(), { state: "missed", reviewerThreadId: stuck, reason: 'its reviewer asked a person "Reconnect GitHub on ChatGPT", and bb refused the plugin\'s decline: bb is restarting' });
+  assert.equal(refused.kit.thread(stuck).status, "idle", "the reviewer no longer holds the agent's environment");
+  assert.deepEqual(await refused.row(), ["verifying", "Verifying: Retries land with backoff"]);
+  assert.match(refused.kit.thread(refused.verifier()).spawnedWith.prompt ?? "", /No review was had: its reviewer asked a person "Reconnect GitHub on ChatGPT"/);
 });
 
 test("issue_review is refused to a thread that isn't the running reviewer of its check, and once its review was missed", async () => {

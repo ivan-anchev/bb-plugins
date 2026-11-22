@@ -46,7 +46,7 @@ export function agentBrief(
     whereSection(start),
     earlierSection(issue.id, start),
     handingOff,
-    memorySection("CREW.md", "the rules every agent follows", null, memory.crewRules),
+    crewSection(memory.crewRules),
     memorySection("MEMORY.md", "your regional manager's memory, for context", MEMORY_IS_CONTEXT, memory.index),
   ]
     .filter((section) => section !== null)
@@ -141,8 +141,11 @@ function earlierSection(issueId: Issue["id"], { base, earlier }: StartingPoint):
   return [`## Earlier work on ${issueId}\n\n${EARLIER_IS_CONTEXT}\n\nBefore you, ${agents} handed off on ${issueId}.${clean} Their handoffs, oldest first, each quoted whole, each done one with its verifier's verdict:`, ...handoffs].join("\n\n");
 }
 
+/** CREW.md under its own `##` section, as every agent's first message and a reviewer's carry it. */
+export const crewSection = (text: MemoryText | null): string => memorySection("CREW.md", "the rules every agent follows", null, text);
+
 /** A memory file under its own `##` section, with what it is to the agent (null: the heading says it all). */
-export function memorySection(file: string, holds: string, note: string | null, text: MemoryText | null): string {
+function memorySection(file: string, holds: string, note: string | null, text: MemoryText | null): string {
   const lead = [`## ${file}: ${holds}`, ...(note === null ? [] : [note])].join("\n\n");
   if (text === null) return `${lead}\n\n(There is no ${file}.)`;
   return `${lead}\n\n${nested(withoutOuterBlanks(text.content))}`;

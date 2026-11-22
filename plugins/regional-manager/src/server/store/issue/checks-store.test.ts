@@ -261,16 +261,14 @@ test("a verdict, a give-up or a CI result that arrives after its check settled o
   assert.deepEqual(events(store), [{ kind: "checked", issueId: issue.id, checkId: settled.id }]);
 });
 
-test("a review starts running as its reviewer's ticket binds, and takes what it declined, its findings or its miss only from where it is, while its check waits", () => {
+test("a review starts running as its reviewer's ticket binds, and takes its findings or its miss only from where it is, while its check waits", () => {
   const { store, issue, agentId } = withAgent();
   const check = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), CLEAN));
   store.insertCheckerTicket("reviewer-1", { kind: "reviewer", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id }, 3_000);
   assert.deepEqual(store.bindTicket("reviewer-1", "thr_reviewer"), { kind: "reviewer", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id });
-  assert.deepEqual(store.check(check.id)?.review, { state: "running", reviewerThreadId: "thr_reviewer", declined: [] });
+  assert.deepEqual(store.check(check.id)?.review, { state: "running", reviewerThreadId: "thr_reviewer" });
   assert.deepEqual(store.check(check.id)?.verdict, { state: "queued", checkout: CLEAN.checkout }, "its verifier is still to start");
 
-  assert.equal(store.recordReviewDeclined(check.id, "thr_other", ["Sign in?"]), false, "only for its running reviewer");
-  assert.equal(store.recordReviewDeclined(check.id, "thr_reviewer", ["Sign in?"]), true);
   assert.equal(store.missReview(check.id, { state: "queued" }, "never started"), false, "it isn't queued any more");
   const finding = { file: "src/retry.ts", line: 4, severity: "should-fix", claim: "No cap." } as const;
   const model = { providerId: "claude-code", model: "sonnet" };
@@ -286,7 +284,7 @@ test("a review starts running as its reviewer's ticket binds, and takes what it 
   store.bindTicket("reviewer-2", "thr_reviewer_2");
   store.insertHandoff(handoff(issue.id, agentId, "done", 3_200), CLEAN);
   assert.equal(store.receiveReview(next.id, "thr_reviewer_2", [], model), false, "its check was superseded");
-  assert.deepEqual(store.check(next.id)?.review, { state: "running", reviewerThreadId: "thr_reviewer_2", declined: [] });
+  assert.deepEqual(store.check(next.id)?.review, { state: "running", reviewerThreadId: "thr_reviewer_2" });
 });
 
 test("a reviewer's ticket whose review fails to start stays unbound, and binds once a retry's write succeeds", () => {
@@ -298,7 +296,7 @@ test("a reviewer's ticket whose review fails to start stays unbound, and binds o
   assert.deepEqual([store.roleOfThread("thr_reviewer_1"), store.check(check.id)?.review], [null, { state: "queued" }]);
   allow();
   assert.equal(store.bindTicket("reviewer-1", "thr_reviewer_1")?.kind, "reviewer");
-  assert.deepEqual(store.check(check.id)?.review, { state: "running", reviewerThreadId: "thr_reviewer_1", declined: [] });
+  assert.deepEqual(store.check(check.id)?.review, { state: "running", reviewerThreadId: "thr_reviewer_1" });
 });
 
 test("a verifier's ticket that binds after its check was superseded leaves the check superseded", () => {

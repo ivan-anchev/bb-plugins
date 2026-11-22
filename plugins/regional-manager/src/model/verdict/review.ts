@@ -26,14 +26,14 @@ const reviewerThreadIdSchema = z.string().min(1);
  * Where a check's review stands. `none`: the check has no review stage, as a final check, one made
  * while verification was off or of a checkout bb's git plugin couldn't read, and one made before
  * reviews existed. `queued`: its reviewer starts once the agent's thread is idle. `running`: a
- * reviewer thread reviews, with what its provider asked a person that the plugin declined.
+ * reviewer thread reviews.
  * `reported`: it returned its findings ([] for none), on the model bb ran it on. `missed`: no
  * review was had, and why; its thread, if it had one. Verification goes ahead either way.
  */
 export const reviewSchema = z.discriminatedUnion("state", [
   z.object({ state: z.literal("none") }),
   z.object({ state: z.literal("queued") }),
-  z.object({ state: z.literal("running"), reviewerThreadId: reviewerThreadIdSchema, declined: z.array(z.string()) }),
+  z.object({ state: z.literal("running"), reviewerThreadId: reviewerThreadIdSchema }),
   z.object({ state: z.literal("reported"), reviewerThreadId: reviewerThreadIdSchema, findings: z.array(reviewFindingSchema), model: modelRefSchema }),
   z.object({ state: z.literal("missed"), reviewerThreadId: reviewerThreadIdSchema.nullable(), reason: z.string() }),
 ]);

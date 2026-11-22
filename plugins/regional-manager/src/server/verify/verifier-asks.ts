@@ -9,8 +9,14 @@ type Pending = { id: string; status: string; payload: InteractionPayload };
 
 type Target = { threadId: string; interactionId: string };
 
-/** The answer a verifier's question gets, in place of a person's. */
-const NOBODY_ANSWERS = "Nobody answers a verifier: go on without an answer, and say in your verdict what you couldn't check because of it.";
+/** A hidden thread the plugin starts for a check: its verifier, or its reviewer. */
+export type Checker = "verifier" | "reviewer";
+
+/** The answer a hidden thread's question gets, in place of a person's. */
+const NOBODY_ANSWERS: Record<Checker, string> = {
+  verifier: "Nobody answers a verifier: go on without an answer, and say in your verdict what you couldn't check because of it.",
+  reviewer: "Nobody answers a reviewer: go on without an answer, and say in your findings what you couldn't check because of it.",
+};
 
 /** The part of bb declining uses: a thread's interactions, and each way it takes a no. */
 export type AsksBb = {
@@ -31,14 +37,14 @@ export type AsksBb = {
 /** One ask the plugin declined: what it asked, and bb's refusal to take the no (null: taken). */
 export type Declined = { asked: string; refused: string | null };
 
-/** Declines every ask pending in the thread, each as its kind takes a no (see declineOne). */
-export async function declineAsks(bb: AsksBb, threadId: string): Promise<Declined[]> {
+/** Declines every ask pending in the thread of a `who`, each as its kind takes a no (see declineOne). */
+export async function declineAsks(bb: AsksBb, threadId: string, who: Checker): Promise<Declined[]> {
   const pending = (await bb.sdk.threads.interactions.list({ threadId })).filter(({ status }) => status === "pending");
   return Promise.all(
     pending.map(async ({ id: interactionId, payload }): Promise<Declined> => {
       const asked = questionOf(payload);
       try {
-        await declineOne(bb, { threadId, interactionId }, payload);
+        await declineOne(bb, { threadId, interactionId }, payload, NOBODY_ANSWERS[who]);
         return { asked, refused: null };
       } catch (error) {
         return { asked, refused: error instanceof Error ? error.message : String(error) };
@@ -54,7 +60,7 @@ export async function declineAsks(bb: AsksBb, threadId: string): Promise<Decline
  * has no "no" of its own. A provider's own request (codex's MCP elicitation, a connector's
  * sign-in) is answered as MCP declines one.
  */
-function declineOne(bb: AsksBb, target: Target, payload: InteractionPayload): Promise<unknown> {
+function declineOne(bb: AsksBb, target: Target, payload: InteractionPayload, nobodyAnswers: string): Promise<unknown> {
   const { interactions } = bb.sdk.threads;
   switch (payload.kind) {
     case "approval":
@@ -62,7 +68,7 @@ function declineOne(bb: AsksBb, target: Target, payload: InteractionPayload): Pr
     case "user_question":
       return interactions.resolve({
         ...target,
-        resolution: { kind: "user_answer", answers: Object.fromEntries(payload.questions.map(({ id }) => [id, { selected: [], freeText: NOBODY_ANSWERS }])) },
+        resolution: { kind: "user_answer", answers: Object.fromEntries(payload.questions.map(({ id }) => [id, { selected: [], freeText: nobodyAnswers }])) },
       });
     case "plugin":
       return interactions.cancel(target);
