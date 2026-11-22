@@ -165,7 +165,7 @@ function Outcome({ round, agents }: { round: Round; agents: FeedAgents }) {
   const { verdict, by } = round;
   if (verdict === null || round.inFlight) return null;
   return (
-    <p className="rmi-outcome" data-result={verdict.outcome}>
+    <p className="rmi-outcome" data-result={verdict.outcome.kind}>
       {by.kind === "agent" && verdict.fixRound !== null ? <SentBack agent={<AgentName agentId={by.agentId} agents={agents} />} {...verdict.fixRound} /> : outcomeText(verdict)}
       {round.outcomeAt !== null && <When at={round.outcomeAt} />}
     </p>
@@ -197,7 +197,7 @@ function SentBack({ agent, round, delivery }: { agent: ReactNode } & NonNullable
 
 /** What became of a verdict nothing went back to an agent from. why the results: one superseded after it returned waited for CI, so it was replaced before CI, not before its verdict. */
 function outcomeText({ outcome, results }: NonNullable<Round["verdict"]>): string {
-  return outcome === "superseded" && results.length > 0 ? "Replaced before CI was judged" : OUTCOME[outcome];
+  return outcome.kind === "superseded" && results.length > 0 ? "Replaced before CI was judged" : OUTCOME[outcome.kind];
 }
 
 const OUTCOME: Record<Outcome, string> = {

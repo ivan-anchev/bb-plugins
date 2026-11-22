@@ -1014,7 +1014,8 @@ cell per round that has a verdict, a green check for passed, a red cross for
 failed, an amber warning sign for couldn't check, lined up by the criterion's
 place. Resting the pointer on a cell, or moving keyboard focus to it, shows a
 tooltip naming it ("Round 2: failed"); Escape closes it. The head counts the rounds
-and the latest's score ("3 rounds · latest 6 of 6", or "no verdict yet").
+and the latest's own score, as its round's line says it ("3 rounds · latest ✓ 6
+of 6", "latest ✗ CI failed", or "no verdict yet").
 Pressing a cell, or Enter or Space on it, opens the row to that round's
 evidence for the criterion, with the words that round judged; pressing it
 again closes it. A research issue lists its **Questions** with no cells, and

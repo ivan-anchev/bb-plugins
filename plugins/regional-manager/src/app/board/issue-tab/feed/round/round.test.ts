@@ -83,7 +83,7 @@ test("a round the reader is reading in stays open, with their focus, when a read
 test("a criterion's cell opens to that round's evidence for it, read with the round's body, and closes again", async () => {
   const { tab } = await opened("WEB-1", WEB_1);
   const grid = within(tab().getByRole("heading", { name: "Done when" }).closest("section") ?? assert.fail("no Done when"));
-  assert.ok(grid.getByText("3 rounds · latest 3 of 3"));
+  assert.equal(grid.getByText(/^3 rounds · latest/).textContent, "3 rounds · latest Passed: 3 of 3", "the latest round's own score, as its line says it");
   const cells = within(grid.getByRole("group", { name: "Criterion 3 by round" })).getAllByRole("button");
   assert.deepEqual(cells.map((cell) => cell.getAttribute("aria-label")), ["Round 1: failed", "Round 2: failed", "Round 3: passed"]);
 
@@ -152,7 +152,7 @@ test("a cell shows its result by glyph, and its tooltip names it on focus and ho
 
 test("a round whose passing verdict was replaced while it waited for CI says it was replaced before CI, not before its verdict", async () => {
   const replaced: Entry[] = FEED.entries.map((entry) =>
-    entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, outcome: "superseded" } } } : entry,
+    entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, outcome: { kind: "superseded" } } } } : entry,
   );
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: replaced }) });
   const three = rounds(tab()).card(3);
@@ -162,7 +162,7 @@ test("a round whose passing verdict was replaced while it waited for CI says it 
 
 test("a round whose criteria all passed but CI failed leads its line with that reason, never a count of passes", async () => {
   const ciFailed: Entry[] = FEED.entries.map((entry) =>
-    entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, outcome: "fail", failedBy: "ci" } } } : entry,
+    entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, outcome: { kind: "fail", by: "ci" } } } } : entry,
   );
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: ciFailed }) });
   assert.equal(rounds(tab()).head(3).textContent, "Round 3Round 3: retries land with backoffCI failed");
@@ -171,9 +171,18 @@ test("a round whose criteria all passed but CI failed leads its line with that r
 test("a final check whose own worktree was dirty says so, never that a claimed commit was missing", async () => {
   const dirty: Entry[] = FEED.entries.map((entry) =>
     entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null
-      ? { ...entry, round: { ...entry.round, by: { kind: "final", defaultBranch: "main" }, verdict: { ...entry.round.verdict, outcome: "fail", failedBy: "checkout" } } }
+      ? { ...entry, round: { ...entry.round, by: { kind: "final", defaultBranch: "main" }, verdict: { ...entry.round.verdict, outcome: { kind: "fail", by: "checkout" } } } }
       : entry,
   );
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: dirty }) });
   assert.equal(rounds(tab()).head(3).textContent, "Round 3Final check on mainNot a clean tree");
+});
+
+test("the grid's head says the latest round's own score, so one all of whose criteria passed but CI failed reads as failed there too", async () => {
+  const ciFailed: Entry[] = FEED.entries.map((entry) =>
+    entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, outcome: { kind: "fail", by: "ci" } } } } : entry,
+  );
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: ciFailed }) });
+  const grid = within(tab().getByRole("heading", { name: "Done when" }).closest("section") ?? assert.fail("no Done when"));
+  assert.equal(grid.getByText(/^3 rounds · latest/).textContent, "3 rounds · latest CI failed");
 });

@@ -5,7 +5,7 @@ import type { Round } from "../../../../../model/feed/round.ts";
 import { checkoutText, worktreeText } from "../../../../../model/verdict/checkout.ts";
 import { ciVerdictOf, failedCheckout, type CriterionResult, type ShownVerdict } from "../../../../../model/verdict/verdict.ts";
 import { DiscloseGlyph } from "../../detail/disclose-glyph.tsx";
-import { ResultGlyph } from "./result-glyph.tsx";
+import { RESULT_WORD, ResultGlyph } from "./result-glyph.tsx";
 
 /** What a verdict judged: an agent's done handoff, or a build parent's final check on its default branch. */
 type Judged = { kind: "handoff" } | { kind: "final"; defaultBranch: string };
@@ -169,7 +169,7 @@ function Failing({ number, criterion, result, evidence }: Criterion) {
         <span className="rmi-criterion-number">{number}</span>
         <span className="rmi-criterion-text">{criterion}</span>
         <span className="rmi-result" data-result={result}>
-          {RESULT_LABEL[result]}
+          {RESULT_WORD[result]}
         </span>
       </p>
       <Evidence number={number} evidence={evidence} />
@@ -201,4 +201,3 @@ const Evidence = ({ number, evidence }: { number: number; evidence: string }) =>
   </pre>
 );
 
-const RESULT_LABEL: Record<CriterionResult, string> = { pass: "Pass", fail: "Fail", unverifiable: "Unverifiable" };

@@ -1,6 +1,9 @@
-// A criterion's result as a glyph: a check, a cross, or a warning sign. Shape tells them apart, not
-// colour alone; the words beside it or its cell's name say which.
+// A criterion's result as a glyph, a check, a cross or a warning sign, and in words. Shape tells
+// them apart, not colour alone; the words beside it or its cell's name say which.
 import type { CriterionResult } from "../../../../../model/verdict/verdict.ts";
+
+/** A criterion's result in words, wherever the tab names one: the grid's cells and an open round's criteria. */
+export const RESULT_WORD: Record<CriterionResult, string> = { pass: "passed", fail: "failed", unverifiable: "couldn't check" };
 
 export function ResultGlyph({ result }: { result: CriterionResult }) {
   return (

@@ -4,13 +4,14 @@
 // evidence for the criterion, read with the round's body. A research issue's questions list alone:
 // nothing judges them.
 import { useId, useState } from "react";
-import { criteriaGrid, type GridRow, type Round } from "../../../../../model/feed/round.ts";
+import { criteriaGrid, type Round } from "../../../../../model/feed/round.ts";
 import type { IssueId } from "../../../../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../../../../model/role.ts";
 import type { CriterionResult } from "../../../../../model/verdict/verdict.ts";
 import { useEscapeToClose } from "../../../../ui/hold-escape.ts";
 import { ReadFailure } from "../../../../ui/read-failure.tsx";
-import { ResultGlyph } from "./result-glyph.tsx";
+import { RESULT_WORD, ResultGlyph } from "./result-glyph.tsx";
+import { Score } from "./score.tsx";
 import { useRoundBody } from "./round-body.tsx";
 
 /** `verified`: the issue is of a kind a verifier judges; else its criteria are questions its report answers. */
@@ -32,7 +33,7 @@ export function CriteriaGrid({ coordinatorId, issueId, verified, criteria, round
         <h3 id={titleId} className="rmi-part-title">
           {verified ? "Done when" : "Questions"}
         </h3>
-        {verified && <span className="rmi-section-sub">{subtitleOf(rows, judged)}</span>}
+        {verified && rows.length > 0 && <GridSubtitle criteria={rows.length} rounds={rounds} />}
       </div>
       <ol className="rmi-grid">
         {rows.map((row, i) => (
@@ -131,13 +132,19 @@ function CellEvidence({ coordinatorId, issueId, round, row }: { coordinatorId: C
   );
 }
 
-/** How many rounds judged the criteria and the latest's score, or how many criteria wait for one. */
-function subtitleOf(rows: readonly GridRow[], judged: number): string {
-  if (rows.length === 0) return "";
-  if (judged === 0) return `${rows.length} · no verdict yet`;
-  const latest = rows.map(({ cells }) => cells.at(-1)?.result ?? null);
-  const passed = latest.filter((result) => result === "pass").length;
-  return `${judged === 1 ? "1 round" : `${judged} rounds`} · latest ${passed} of ${latest.filter((result) => result !== null).length}`;
+/**
+ * How many rounds judged the criteria and the latest's own score, as its line says it (score.tsx),
+ * or how many criteria wait for a verdict. why its score, not a count of the cells: a round all of
+ * whose criteria passed may have failed by CI or its checkout, or not be settled yet.
+ */
+function GridSubtitle({ criteria, rounds }: { criteria: number; rounds: readonly Round[] }) {
+  const judged = rounds.filter(({ verdict }) => verdict !== null && verdict.results.length > 0);
+  const latest = judged.at(-1);
+  if (latest === undefined) return <span className="rmi-section-sub">{criteria} · no verdict yet</span>;
+  return (
+    <span className="rmi-section-sub">
+      {judged.length === 1 ? "1 round" : `${judged.length} rounds`} · latest <Score round={latest} />
+    </span>
+  );
 }
 
-const RESULT_WORD: Record<CriterionResult, string> = { pass: "passed", fail: "failed", unverifiable: "couldn't check" };

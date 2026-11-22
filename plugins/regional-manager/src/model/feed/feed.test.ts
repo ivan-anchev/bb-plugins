@@ -131,7 +131,7 @@ test("BBP-19's feed: every moment in the order it happened, each round numbered,
       { number: 1, by: "a1", score: { kind: "failed", by: "criteria", passed: 1, of: 3 }, outcomeAt: 3_600, fixRound: { round: 1, delivery: "sent" } },
       { number: 2, by: "a1", score: { kind: "failed", by: "criteria", passed: 2, of: 3 }, outcomeAt: 4_600, fixRound: null },
       { number: 3, by: "a2", score: { kind: "failed", by: "criteria", passed: 2, of: 3 }, outcomeAt: 5_600, fixRound: { round: 1, delivery: "sent" } },
-      { number: 4, by: "a2", score: { kind: "judged", passed: 3, of: 3, failed: false }, outcomeAt: 6_500, fixRound: null },
+      { number: 4, by: "a2", score: { kind: "judged", passed: 3, of: 3 }, outcomeAt: 6_500, fixRound: null },
     ],
     "the first event naming a check times its outcome; a later one doesn't move it",
   );
@@ -204,7 +204,7 @@ test("a round whose criteria all passed scores a pass only once it is settled: b
   assert.deepEqual(passed({ kind: "pending" }), { kind: "pending", stage: "verifying" });
   assert.deepEqual(passed({ kind: "waiting-for-ci" }), { kind: "pending", stage: "ci" });
   assert.deepEqual(passed({ kind: "superseded" }), { kind: "unjudged", outcome: "superseded" });
-  assert.deepEqual(passed({ kind: "checked", refused: null, ci: { kind: "pass", number: 7 } }), { kind: "judged", passed: 3, of: 3, failed: false });
+  assert.deepEqual(passed({ kind: "checked", refused: null, ci: { kind: "pass", number: 7 } }), { kind: "judged", passed: 3, of: 3 });
   assert.deepEqual(passed({ kind: "checked", refused: null, ci: { kind: "fail", number: 7, failedChecks: ["test"] } }), { kind: "failed", by: "ci" }, "every criterion passed: it leads with why it failed");
   const clean = returned(["pass", "pass", "pass"], 3_500, { kind: "checked", refused: null, ci: { kind: "none" } });
   const dirty: Verdict = clean.state === "returned" ? { ...clean, checkout: { headSha: SHA, changedFiles: ["?? notes.md"], changedFileCount: 1 } } : assert.fail("not returned");
