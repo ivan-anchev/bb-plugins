@@ -8,9 +8,11 @@ import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 /**
  * The side of its anchor the card opens on, and the most it may be tall (null: as tall as it is); a
- * floating card's place in the window, `at` (null: a row's card, placed by its row's box).
+ * floating card's place in the window, `at` (null: a row's card, placed by its row's box): below its
+ * link by its top, above it by its foot, so the edge by the link stays there however tall the card
+ * grows or shrinks as the board changes.
  */
-export type Placement = { side: "below" | "above"; cap: number | null; at: { left: number; top: number } | null };
+export type Placement = { side: "below" | "above"; cap: number | null; at: { left: number } & ({ top: number } | { bottom: number }) | null };
 
 /** Spread `ref` on the card. `link`: the link it floats by; null: the card's parent is its row's box. */
 export function useCardPlacement(link: HTMLElement | null): { ref: RefObject<HTMLDivElement | null>; placement: Placement } {
@@ -54,12 +56,11 @@ type Edges = { top: number; bottom: number };
 /** A row's card, kept inside every ancestor of the row that clips. */
 const rowPlacement = (row: Element, card: HTMLElement): Placement => ({ ...sideOf(row.getBoundingClientRect(), card.scrollHeight, visibleBounds(row)), at: null });
 
-/** A link's card of `size`, against the window as it is now: on the side of the link with room, from the link's left edge, kept off the window's right edge. */
+/** A link's card of `size`, against the window as it is now: on the side of the link with room, from the link's left edge, kept off the window's right edge. why the size: only to pick the side and the cap. */
 function floatingPlacement(link: DOMRect, size: { height: number; width: number }): Placement {
   const { side, cap } = sideOf(link, size.height, { top: 0, bottom: window.innerHeight });
   const left = Math.max(MARGIN, Math.min(link.left, window.innerWidth - size.width - MARGIN));
-  const top = side === "below" ? link.bottom + GAP : link.top - GAP - (cap ?? size.height);
-  return { side, cap, at: { left, top } };
+  return { side, cap, at: side === "below" ? { left, top: link.bottom + GAP } : { left, bottom: window.innerHeight - link.top + GAP } };
 }
 
 /** Below when the card fits under its anchor; above when it doesn't and there is more room above; capped to its side's room when it fits on neither. */

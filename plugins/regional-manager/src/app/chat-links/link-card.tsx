@@ -20,6 +20,11 @@ export function LinkCard(): ReactNode {
   const linkAt = useIssueLinkAt();
   useLinkTriggers(intent, shown, linkAt);
   const found = shown?.isConnected ? linkAt(shown) : null;
+  const gone = shown !== null && found === null;
+  // why: bb renders a link again as a new element as a reply streams; the card goes with the old one, and so must its hold on Escape.
+  useEffect(() => {
+    if (gone) intent.close();
+  }, [gone, intent]);
   return found === null ? null : createPortal(<IssueCard anchor={found.anchor} link={found.link} />, document.body);
 }
 

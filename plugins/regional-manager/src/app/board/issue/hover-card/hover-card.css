@@ -42,7 +42,6 @@
 .rmi-card.rmi-card-floating {
   position: fixed;
   z-index: 50;
-  bottom: auto;
   width: min(320px, calc(100vw - 16px));
 }
 /* why the body scrolls, not the card: the card's edge reaches past its box to the row, which a scrolling box would clip. */

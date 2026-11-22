@@ -145,7 +145,21 @@ test("a link whose href bb changes in place to another address loses its glyph",
   assert.equal(view.container.querySelectorAll(".rmi-issue-glyph").length, 1, "only BBP-27's is left");
 });
 
-test("hovering another link leaves the card of the link that has focus", async () => {
+test("when bb renders the shown link again, as a reply streams, its card goes, and Escape is bb's again", async () => {
+  const { link, glyphOf, card, show } = mount({ panes: [MANAGER_THREAD] });
+  await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+  act(() => link(MANAGER_THREAD).focus());
+  await waitFor(() => assert.ok(card() !== null));
+
+  show({ panes: [MANAGER_THREAD], linkKey: "streamed" });
+  await waitFor(() => assert.ok(card() === null));
+  await act(async () => {});
+  const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+  act(() => void document.body.dispatchEvent(escape));
+  assert.equal(escape.defaultPrevented, false);
+});
+
+test("hovering another link leaves the card of the link that has focus, while it shows", async () => {
   const { link, glyphOf, card } = mount({ panes: [MANAGER_THREAD] });
   await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
   act(() => link(MANAGER_THREAD).focus());
@@ -158,6 +172,12 @@ test("hovering another link leaves the card of the link that has focus", async (
   fireEvent.pointerOut(link(MANAGER_THREAD, "BBP-27"), { relatedTarget: document.body });
   act(() => mock.timers.tick(1_000));
   assert.equal(card()?.querySelector(".rmi-card-title")?.textContent, "Inline issue links");
+
+  act(() => void link(MANAGER_THREAD).dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+  assert.ok(card() === null);
+  fireEvent.pointerOver(link(MANAGER_THREAD, "BBP-27"), { relatedTarget: document.body });
+  act(() => mock.timers.tick(500));
+  assert.equal(card()?.querySelector(".rmi-card-title")?.textContent, "Avatars", "once Escape put the focused link's card away, hovering opens another's");
 });
 
 test("focusing an issue link shows the Board's card for the issue at once, floating outside the message; Escape closes it wherever focus is, holding bb's Escape, and focus stays on the link", async () => {
@@ -171,7 +191,7 @@ test("focusing an issue link shows the Board's card for the issue at once, float
 
   const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
   act(() => link(MANAGER_THREAD).dispatchEvent(escape));
-  assert.equal(card(), null);
+  assert.ok(card() === null);
   assert.equal(escape.defaultPrevented, true, "bb's own Escape, which leaves the page, skips it");
   assert.ok(document.activeElement === link(MANAGER_THREAD));
 });
@@ -184,7 +204,7 @@ test("the pointer resting on an issue link opens its card after half a second; c
 
   fireEvent.pointerOver(anchor, { relatedTarget: document.body });
   act(() => mock.timers.tick(499));
-  assert.equal(card(), null, "not while the pointer only passes");
+  assert.ok(card() === null, "not while the pointer only passes");
   act(() => mock.timers.tick(1));
   const shown = card() ?? assert.fail("no card");
 
@@ -197,13 +217,13 @@ test("the pointer resting on an issue link opens its card after half a second; c
   act(() => mock.timers.tick(149));
   assert.ok(card() !== null, "time to cross back");
   act(() => mock.timers.tick(1));
-  assert.equal(card(), null);
+  assert.ok(card() === null);
 });
 
 test("a link's card opens under the link where the window has room, else above it, and keeps off the window's right edge", async () => {
   const cases = [
-    { name: "room below", link: { top: 100, bottom: 116, left: 40 }, want: { side: "below", left: "40px", top: "120px" } },
-    { name: "the window's foot and right edge", link: { top: 700, bottom: 716, left: 900 }, want: { side: "above", left: `${1024 - 320 - 8}px`, top: `${700 - 4 - 200}px` } },
+    { name: "room below", link: { top: 100, bottom: 116, left: 40 }, want: { side: "below", left: "40px", top: "120px", bottom: "" } },
+    { name: "the window's foot and right edge", link: { top: 700, bottom: 716, left: 900 }, want: { side: "above", left: `${1024 - 320 - 8}px`, bottom: `${768 - 700 + 4}px` } },
   ];
   for (const { name, link: box, want } of cases) {
     const restore = laidOut(box, { height: 200, width: 320 });
@@ -212,7 +232,7 @@ test("a link's card opens under the link where the window has room, else above i
       await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
       act(() => link(MANAGER_THREAD).focus());
       await waitFor(() => assert.ok(card() !== null));
-      assert.deepEqual({ side: card()?.dataset.side, left: card()?.style.left, top: card()?.style.top }, want, name);
+      assert.deepEqual({ side: card()?.dataset.side, left: card()?.style.left, ...(want.side === "below" ? { top: card()?.style.top, bottom: card()?.style.bottom } : { bottom: card()?.style.bottom }) }, want, name);
       cleanup();
     } finally {
       restore();
@@ -236,7 +256,7 @@ test("the card follows its link as the message scrolls, on the side with room, a
 
     Object.assign(box, { top: 700, bottom: 716 });
     act(() => void fireEvent.scroll(pane));
-    assert.deepEqual([card()?.dataset.side, card()?.style.top], ["above", `${700 - 4 - 200}px`], "to the side with room, once the link nears the window's foot");
+    assert.deepEqual([card()?.dataset.side, card()?.style.bottom], ["above", `${768 - 700 + 4}px`], "to the side with room, by its foot, once the link nears the window's foot");
   } finally {
     restore();
   }

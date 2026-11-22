@@ -74,7 +74,7 @@ const focusBackToRow = handFocusTo((card) => card.closest(".rmi-rowbox")?.queryS
 
 /** A floating card's place in the window, and the card's height cap when its side of its anchor has too little room (hover-card.css `.rmi-card-body`). */
 const placeStyle = ({ cap, at }: Placement): CSSProperties & Partial<Record<"--rmi-card-cap", string>> => ({
-  ...(at === null ? {} : { left: at.left, top: at.top }),
+  ...(at ?? {}),
   ...(cap === null ? {} : { "--rmi-card-cap": `${cap}px` }),
 });
 
