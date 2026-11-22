@@ -1,8 +1,9 @@
 // An issue's pills: how many of its sub-issues are Done, what blocks it and what it blocks, each a
 // glyph and words on a 10% wash of its token (issue-row.css `.rmi-pill`), as the PR badge beside
-// them. Two lengths of the same pills: short on a row ("◔ 3/7", "⊘ BBP-6" or "⊘ 2", "→| 2"), long in
-// the hover card ("3 of 7 done", "Blocked by BBP-6, BBP-7", "Blocks BBP-7, BBP-19"). Display only:
-// the row speaks all of it in its label, so the pills are hidden from a screen reader.
+// them. Two lengths of the same pills: short on a row ("◔ 3/7", "⊘ 1", "→| 2"), a count even for one
+// issue so the row keeps to its line; long in the hover card ("3 of 7 done", "Blocked by BBP-6,
+// BBP-7", "Blocks BBP-7, BBP-19"). Display only: the row speaks all of it, ids included, in its
+// label, so the pills are hidden from a screen reader.
 import type { ReactNode } from "react";
 import type { IssueRow } from "../../../../contract.ts";
 import type { IssueId } from "../../../../model/issue/issue.ts";
@@ -16,7 +17,7 @@ export function IssuePills({ issue: { subIssues, blockedBy, blocks }, length }: 
     <>
       {blockedBy.length > 0 && (
         <Pill tone="blocked" glyph={<BlockedGlyph />}>
-          {length === "short" ? countOrOnly(blockedBy) : <Listed lead="Blocked by" ids={blockedBy} />}
+          {length === "short" ? blockedBy.length : <Listed lead="Blocked by" ids={blockedBy} />}
         </Pill>
       )}
       {blocks.length > 0 && (
@@ -45,9 +46,6 @@ function Pill({ tone, glyph, children }: { tone: Tone; glyph: ReactNode; childre
     </span>
   );
 }
-
-/** A lone blocker by its id, as it is the one to open; more by their count, which keeps the row to its line. */
-const countOrOnly = (ids: readonly IssueId[]): string | number => (ids.length === 1 ? ids.join("") : ids.length);
 
 function Listed({ lead, ids }: { lead: string; ids: readonly IssueId[] }) {
   return (
