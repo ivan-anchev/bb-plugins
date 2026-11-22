@@ -1,5 +1,5 @@
 // The regional manager's tools that are about the whole crew rather than one issue or agent:
-// catching up, its memory, its reminders and its questions to the user. Every call resolves the
+// catching up, its memory, its reminders, its questions to the user and ending a quiet turn. Every call resolves the
 // caller's role from the plugin's database by its thread id, never from the thread's metadata, which
 // any client, plugin or the thread's own agent can write.
 import { z } from "zod";
@@ -23,9 +23,10 @@ export const MEMORY_READ = "crew_memory_read";
 const MEMORY_WRITE = "crew_memory_write";
 const REMIND = "crew_remind";
 const ASK_USER = "crew_ask_user";
+const END_TURN = "crew_end_turn";
 
 /** What configure offers a regional manager of these tools. */
-export const CREW_TOOLS = [CATCH_UP, MEMORY_READ, MEMORY_WRITE, REMIND, ASK_USER];
+export const CREW_TOOLS = [CATCH_UP, MEMORY_READ, MEMORY_WRITE, REMIND, ASK_USER, END_TURN];
 
 type Deps = {
   store: Pick<Store, "roleOfThread" | "issue" | "issues" | "agent" | "agents" | "handoff" | "check" | "reminders" | "insertReminder" | "cancelReminder" | "decision" | "decisions" | "insertDecision">;
@@ -129,6 +130,18 @@ export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, on
       onChange(id);
       return `Asked the user ${decision.id} on their board, under Needs you. Carry on with other work, or end your turn: their answer wakes you, and crew_catch_up returns it.`;
     }),
+  });
+
+  // why no side effect: the turn ends when the provider stops writing. Codex stops by itself; on
+  // Claude Code a PostToolUse hook returning {"continue": false} for this tool ends it (BBP-20).
+  // Stopping the thread instead would leave a "Stopped manually" row and cold-start the next wake.
+  bb.agents.registerTool({
+    name: END_TURN,
+    description:
+      "End a turn that changes nothing for the user, instead of replying: a wake you expected, one for something the user did themselves, or one that only confirms work under way. Do your bookkeeping first, then call it last, with the reason in one line, such as \"BBP-4's CI passed; its agent is still shipping it\". After it, write nothing: no text, no whitespace and no other tool call.",
+    presentation: { label: { pending: "Ending the turn", completed: "Ended the turn" }, icon: { glyph: "Square" } },
+    parameters: z.object({ reason: z.string().min(1).max(200).describe("Why nothing here needs the user, in one line.") }),
+    execute: forManager(store, END_TURN, (_id, { reason }) => `${reason}\n\nYour turn is over. Write nothing more: no text, no whitespace and no other tool call.`),
   });
 }
 

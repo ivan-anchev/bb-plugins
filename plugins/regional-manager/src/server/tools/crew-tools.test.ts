@@ -5,10 +5,11 @@ import { test } from "node:test";
 import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
 import plugin from "../../../server.ts";
 import { coordinatorContract } from "../../contract.ts";
+import { agentIdSchema } from "../../model/agent.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
 import { upgradeMemoryFrom040 } from "../memory/memory-upgrade.ts";
-import { harness, isRefusal, textOf } from "../test-harness.ts";
+import { coordinating, harness, HEAD, isRefusal, startedAgent, textOf } from "../test-harness.ts";
 
 
 const NOTES = memoryFileSchema.parse("NOTES.md");
@@ -168,11 +169,41 @@ test("a catch-up past its budget names the files it left out", async () => {
   assert.match(text, /Not shown, to keep this short: NOTES\.md\./);
 });
 
+test("crew_end_turn repeats the manager's reason and says its turn is over, and leaves the thread running, unstopped and unmessaged", async () => {
+  const { kit, threadId } = await started();
+  const reason = "BBP-4's CI passed; its agent is still shipping it";
+  const sent = kit.sent().length;
+
+  const result = await kit.call("crew_end_turn", { reason }, threadId);
+
+  assert.ok(!isRefusal(result));
+  assert.equal(textOf(result), `${reason}\n\nYour turn is over. Write nothing more: no text, no whitespace and no other tool call.`);
+  // why active: the manager calls it mid-turn, and a stop would leave the thread idle.
+  assert.equal(kit.thread(threadId).status, "active");
+  assert.equal(kit.sent().length, sent);
+});
+
+test("crew_end_turn is the regional manager's alone: an agent and a verifier are refused it", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  const { agentThreadId } = await startedAgent(kit, threadId);
+  await kit.call("agent_handoff", { status: "done", summary: "Did it", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD }, agentThreadId);
+  await kit.idle(agentThreadId, "Handed off.");
+  const verdict = kit.store.latestHandoff(coordinatorId, agentIdSchema.parse("a1"))?.check?.verdict;
+  const verifierThreadId = verdict?.state === "running" ? verdict.verifierThreadId : assert.fail("no verifier running");
+
+  for (const thread of [agentThreadId, verifierThreadId]) {
+    assert.ok(!kit.configurationFor(thread, {}).tools.includes("crew_end_turn"), `${thread} is not offered it`);
+    const result = await kit.call("crew_end_turn", { reason: "Nothing new" }, thread);
+    assert.ok(isRefusal(result), thread);
+    assert.match(textOf(result), /crew_end_turn is refused: only a regional manager can use it/);
+  }
+});
+
 test("the plugin loads in the SDK's fake host, which checks every tool's parameters as bb does", () => {
   const { bb, harness: host } = createFakePluginHost();
   plugin(bb);
   assert.deepEqual(
     new Set(host.registrations.agentTools.map(({ name }) => name)),
-    new Set(["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "issue_create", "issue_update", "issue_read", "agent_start", "agent_message", "agent_stop", "agent_handoff", "issue_verdict"]),
+    new Set(["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "crew_end_turn", "issue_create", "issue_update", "issue_read", "agent_start", "agent_message", "agent_stop", "agent_handoff", "issue_verdict"]),
   );
 });

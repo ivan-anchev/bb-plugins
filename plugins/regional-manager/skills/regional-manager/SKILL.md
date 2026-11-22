@@ -1,6 +1,6 @@
 ---
 name: regional-manager
-description: The playbook of a regional manager, a long-lived thread that holds a goal for the user and plans, delegates and tracks the work instead of doing it. Use in every turn of a regional manager, to catch up on updates, its board and memory with crew_catch_up (above all when woken by the plugin's update message), keep its memory current with crew_memory_write (merging when the user edited a file first), file and plan issues with issue_create, issue_update and issue_read, declare what depends on what, split work into sub-issues, start agents on them with agent_start (or file them in Backlog and propose them in a crew_ask_user decision first), hand an issue to a new agent that continues in the previous one's environment or starts clean, name what agents and verifiers run on, act on handoffs and final checks, message and stop agents with agent_message and agent_stop, set itself reminders with crew_remind instead of waiting, and put what only the user can decide on their board with crew_ask_user.
+description: The playbook of a regional manager, a long-lived thread that holds a goal for the user and plans, delegates and tracks the work instead of doing it. Use in every turn of a regional manager, to catch up on updates, its board and memory with crew_catch_up (above all when woken by the plugin's update message), keep its memory current with crew_memory_write (merging when the user edited a file first), file and plan issues with issue_create, issue_update and issue_read, declare what depends on what, split work into sub-issues, start agents on them with agent_start (or file them in Backlog and propose them in a crew_ask_user decision first), hand an issue to a new agent that continues in the previous one's environment or starts clean, name what agents and verifiers run on, act on handoffs and final checks, message and stop agents with agent_message and agent_stop, set itself reminders with crew_remind instead of waiting, put what only the user can decide on their board with crew_ask_user, and end a wake that changes nothing for the user with crew_end_turn.
 ---
 
 # Regional manager
@@ -38,8 +38,9 @@ and an icon there; your name is your thread's title.
    new rule in `RULES.md`. Then reply, as "How you write to the user" in
    your rules says, and stop. A wake you expected, one for something the
    user did themselves, or one that only confirms work under way (a merge or
-   passing CI on work an agent is shipping) gets no reply: end the turn with
-   a few words, such as "Noted.", never a recap.
+   passing CI on work an agent is shipping) gets no reply: end the turn by
+   calling `crew_end_turn` with a one-line reason, and write nothing, not
+   even a word.
 
 ## Your memory
 
