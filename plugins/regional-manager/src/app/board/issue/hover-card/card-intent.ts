@@ -3,8 +3,8 @@
 // is open, or within a moment of one closing, another trigger's opens at once, but never in place of
 // the card of the trigger that has focus while it shows (REVIEW.md). The card stays while
 // the pointer is on its trigger or on the card, or focus is on its trigger; once both have left it
-// closes after a beat. Escape closes it wherever focus is, and holds bb's own Escape, which would
-// leave the page. A press puts it away, and the focus the press gives a trigger opens none. No timer
+// closes after a beat. Escape closes it wherever focus is, while the card is on screen (hover-card.tsx
+// holds it). A press puts it away, and the focus the press gives a trigger opens none. No timer
 // outlives its owner. A board row is a trigger (use-hover-card.ts), and so is an issue link in chat
 // (chat-links/link-card.ts); `Key` names one.
 import { useEffect, useMemo, useState } from "react";
@@ -25,17 +25,6 @@ export function useCardIntent<Key>(): { shown: Key | null; intent: CardIntent<Ke
   const [shown, setShown] = useState<Key | null>(null);
   const intent = useMemo(() => cardIntent<Key>(setShown), []);
   useEffect(() => () => intent.stop(), [intent]);
-  useEffect(() => {
-    if (shown === null) return;
-    // why the document, bubbling: what has focus acts on Escape first, and bb's, on the window, after; it skips an Escape whose default was prevented.
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      intent.close();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [shown, intent]);
   return { shown, intent };
 }
 

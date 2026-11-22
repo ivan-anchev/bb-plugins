@@ -10,7 +10,7 @@
 // (REVIEW.md). Focus in the card goes back to its row, or its link, as the card goes, however it is
 // put away.
 import "./hover-card.css";
-import { useCallback, useLayoutEffect, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, type CSSProperties } from "react";
 import type { IssueRow as Row } from "../../../../contract.ts";
 import type { IssueId } from "../../../../model/issue/issue.ts";
 import { STATUS_LABELS } from "../../../../model/issue/status.ts";
@@ -27,9 +27,14 @@ type HoverCardProps = {
   issues: readonly Row[];
   /** The link in chat the card floats by, fixed; left out: the card sits in its board row's box. */
   link?: HTMLElement;
+  /** Puts the card away: on Escape, wherever focus is, while the card is on screen. */
+  onClose(): void;
+  /** Why the latest read of the board failed while the card shows what an earlier one read; left out: it didn't. */
+  failure?: string;
 };
 
-export function HoverCard({ issue, issues, link }: HoverCardProps) {
+export function HoverCard({ issue, issues, link, onClose, failure }: HoverCardProps) {
+  useEscapeCloses(onClose);
   const { ref, placement } = useCardPlacement(link ?? null);
   // why one callback: placement measures the card, and the card hands focus back as it unmounts; a ref that changed per render would hand it back on every render.
   const cardRef = useCallback((card: HTMLDivElement | null) => {
@@ -67,12 +72,31 @@ export function HoverCard({ issue, issues, link }: HoverCardProps) {
         <SubIssues rows={issues.filter(({ parentId }) => parentId === issue.id)} />
         <Related title="Blocked by" rows={pick(issue.blockedBy)} />
         <Related title="Blocks" rows={pick(issue.blocks)} />
+        {failure !== undefined && <p className="rmi-card-failure">Couldn&apos;t refresh: {failure}</p>}
       </div>
     </div>
   );
 }
 
 // ------------------------------------------------------------------ layer 2
+
+/**
+ * Escape, wherever focus is, puts the card away and holds bb's own Escape, which would leave the page,
+ * only while the card is mounted, so nothing hidden ever swallows it. why the document, bubbling: what
+ * has focus acts on Escape first, and bb's, on the window, after; it skips an Escape whose default was
+ * prevented.
+ */
+function useEscapeCloses(onClose: () => void): void {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+}
 
 /** What focus in the card goes back to, as it unmounts or loses its cap, so it never drops to the page or into a hidden card (REVIEW.md): its link, or its row's button. */
 const triggerOf = (card: HTMLElement, link: HTMLElement | undefined): HTMLElement | null | undefined => link ?? card.closest(".rmi-rowbox")?.querySelector<HTMLElement>(".rmi-row");

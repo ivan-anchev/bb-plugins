@@ -4,7 +4,8 @@
 // portals the issue's glyph into (issue-links.tsx). The page follows the DOM as messages come, stream
 // and go: a link that bb renders again, as a new element or with its children replaced, has lost its
 // slot and gets a new one, and a link whose href changes, to another issue's or to anything else,
-// loses the slot it had. A link in code is no `<a>`, and a bare id is text: neither is touched.
+// loses the slot it had. Focus on a link bb renders again goes to the link that replaces it in its
+// message, or, once that message is gone too, to its pane's composer, never to the page. A link in code is no `<a>`, and a bare id is text: neither is touched.
 // why touch bb's DOM: bb gives a plugin no renderer for a link inside a message (reports/BBP-28.md),
 // so this rests on bb's markup, `[data-markdown-preview] a[href]`, and is experimental.
 import { experimental_usePluginId } from "@get-bb/plugin-sdk/app";
@@ -22,8 +23,10 @@ export function useDecoratedLinks(): readonly DecoratedLink[] {
     let next = 0;
     const slots = new Set<HTMLElement>();
     const own = ownWrites();
+    const focus = focusKept(linkAt);
     /** One pass over the page; one that finds nothing to change writes nothing, to the page or to React. */
     const scan = () => {
+      focus.restore();
       removeStale(linkAt, own);
       const fresh = undecorated(linkAt).map(({ anchor, link }) => ({ key: next++, link, slot: decorate(anchor, own) }));
       const gone = [...slots].filter((slot) => !slot.isConnected);
@@ -47,6 +50,7 @@ export function useDecoratedLinks(): readonly DecoratedLink[] {
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["href"] });
     return () => {
       observer.disconnect();
+      focus.stop();
       if (frame !== null) cancelAnimationFrame(frame);
       for (const slot of document.querySelectorAll(`.${SLOT}`)) slot.remove();
     };
@@ -69,10 +73,62 @@ export function useIssueLinkAt(): (target: EventTarget | null) => FoundLink | nu
 
 // ------------------------------------------------------------------ layer 2
 
+/** A message's Markdown as bb renders it. */
+const MESSAGE = "[data-markdown-preview]";
 /** Every link bb renders in a message's Markdown. */
-const LINKS = "[data-markdown-preview] a[href]";
+const LINKS = `${MESSAGE} a[href]`;
+/** A pane's composer, where focus goes when the link it had and its message are gone. */
+const COMPOSER = '[contenteditable="true"]';
 /** The glyph's slot (chat-links.css). */
 const SLOT = "rmi-issue-glyph";
+
+/**
+ * The issue link that has focus, kept so that when bb renders it again its focus goes to the link
+ * that replaces it: the one with its href at its place among them in its message, or, with the
+ * message gone, the composer of its pane.
+ */
+function focusKept(linkAt: (target: EventTarget | null) => FoundLink | null) {
+  let kept: { anchor: HTMLAnchorElement; href: string; message: Element; index: number; composer: HTMLElement | null } | null = null;
+  const onFocus = (event: FocusEvent) => {
+    const found = linkAt(event.target);
+    kept = found === null ? null : keep(found.anchor);
+  };
+  document.addEventListener("focusin", onFocus);
+  return {
+    /** Gives the focus the kept link lost to the page, as bb took it out, to what replaces it. */
+    restore() {
+      if (kept === null || kept.anchor.isConnected || !focusLost()) return;
+      const links = sameLinks(kept.message, kept.href);
+      const target = links[kept.index] ?? links.at(-1) ?? kept.composer;
+      if (target?.isConnected) target.focus();
+    },
+    stop: () => document.removeEventListener("focusin", onFocus),
+  };
+}
+
+/** Whether focus is on no element of the page: on its body, or on one taken out of it. */
+function focusLost(): boolean {
+  const active = document.activeElement;
+  return active === null || active === document.body || !active.isConnected;
+}
+
+function keep(anchor: HTMLAnchorElement) {
+  const href = anchor.getAttribute("href") ?? "";
+  const message = anchor.closest(MESSAGE) ?? anchor;
+  return { anchor, href, message, index: sameLinks(message, href).indexOf(anchor), composer: composerOf(anchor) };
+}
+
+/** The links in `message` to `href`, in order; none once the message is out of the page. */
+const sameLinks = (message: Element, href: string): HTMLAnchorElement[] => (message.isConnected ? [...message.querySelectorAll<HTMLAnchorElement>("a[href]")].filter((a) => a.getAttribute("href") === href) : []);
+
+/** The composer of the pane `element` is in: the nearest one an ancestor of it holds. */
+function composerOf(element: Element): HTMLElement | null {
+  for (let at = element.parentElement; at !== null; at = at.parentElement) {
+    const composer = at.querySelector<HTMLElement>(COMPOSER);
+    if (composer !== null) return composer;
+  }
+  return null;
+}
 
 /** The slots the plugin put in and took out itself, and whether a change is only that, or inside a slot (its glyph). */
 function ownWrites() {

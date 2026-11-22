@@ -94,6 +94,11 @@
   gap: 4px;
   margin-top: 8px;
 }
+/* A refresh that failed, under the details an earlier read gave (REVIEW.md: an error shows next to the data still displayed). */
+.rmi-card-failure {
+  margin: 10px 0 0;
+  color: var(--destructive-text);
+}
 .rmi-card-section {
   margin-top: 10px;
 }

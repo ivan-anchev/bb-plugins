@@ -42,7 +42,7 @@ export function IssueBoard({ decisions, issues, decisionRow }: IssueBoardProps) 
    */
   const issueRow = (issue: Row, rowKey: string, ask: string | null, under: Row["parentId"] = null) => (
     <IssueRow ref={focus.target(rowKey)} issue={issue} under={under} ask={ask} hover={cards.trigger(rowKey)}>
-      {cards.shown === rowKey && <HoverCard issue={issue} issues={issues} />}
+      {cards.shown === rowKey && <HoverCard issue={issue} issues={issues} onClose={cards.close} />}
     </IssueRow>
   );
 

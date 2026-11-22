@@ -1,6 +1,7 @@
 import "../test-browser.ts";
 import assert from "node:assert/strict";
 import { afterEach, mock, test } from "node:test";
+import { useBbContext, type BbContext } from "@get-bb/plugin-sdk/app";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { createElement as h, Fragment, useState } from "react";
@@ -45,10 +46,12 @@ type Chat = { panes: readonly string[]; linkKey?: string; label?: string; href?:
 /**
  * bb's window, as the overlay sees it: the overlay, and a pane per thread, each with its header row's
  * marker and one assistant message. `linkKey`, `label` and `href`: the first link's key, text and
- * href, which a re-render changes; `declines`: how many opens the side panel declines first;
- * `boardFails`: the board can't be read. Counts the message's renders.
+ * href, which a re-render changes. `focused`: the thread the app has focused, as bb's route says it;
+ * given, the side panel declines an open while that isn't the manager's thread, as bb does for a
+ * pane it hasn't focused. `board`: whether the board reads, fails, or never answers. Counts the
+ * message's renders.
  */
-function mount(chat: Chat, { declines = 0, boardFails = false } = {}) {
+function mount(chat: Chat, { focused, board: reading = "reads" }: { focused?: string; board?: "reads" | "fails" | "pending" } = {}) {
   let issues = [issue("BBP-24", { title: "Inline issue links", status: "in-progress", headline: "Working", blocks: [issueIdSchema.parse("BBP-27")] }), issue("BBP-27", { title: "Avatars", blockedBy: [issueIdSchema.parse("BBP-24")] })];
   const renders = { count: 0 };
   const Message = ({ linkKey = "first", label = "BBP-24", href = HREF("BBP-24") }: Omit<Chat, "panes">) => {
@@ -60,22 +63,39 @@ function mount(chat: Chat, { declines = 0, boardFails = false } = {}) {
     );
   };
   /** Shows the window as `chat` says now: a test changes it as bb would, by rendering again. */
-  const shown: { set(chat: Chat): void } = { set: () => assert.fail("not mounted") };
+  const shown: { set(chat: Chat): void; now: Chat } = { set: () => assert.fail("not mounted"), now: chat };
+  /** The fake's selection, the one object its useBbContext gives every render: a test moves its focus by changing it, as bb's route does. */
+  const context: { current: BbContext | null } = { current: null };
+  const Selection = () => {
+    context.current = useBbContext();
+    return null;
+  };
   const Window = (first: Chat) => {
     const [{ panes, ...message }, set] = useState(first);
     shown.set = set;
-    return h(Fragment, null, h(issueLinks.component, {}), ...panes.map((threadId) => h("section", { key: threadId, "data-thread": threadId }, h(paneMarker.component, { threadId, projectId: "prj_1", environment: null }), h(Message, message))));
+    return h(Fragment, null, h(Selection), h(issueLinks.component, {}), ...panes.map((threadId) => h("section", { key: threadId, "data-thread": threadId }, h(paneMarker.component, { threadId, projectId: "prj_1", environment: null }), h(Message, message))));
   };
-  const board = (): Board => {
-    if (boardFails) throw new Error("bb is restarting");
+  const boardState = { reading };
+  /** The tabs the side panel opened, by title: the opens it accepted. */
+  const opened: string[] = [];
+  const board = (): Board | Promise<Board> => {
+    if (boardState.reading === "fails") throw new Error("bb is restarting");
+    if (boardState.reading === "pending") return new Promise<Board>(() => {});
     return { verify: true, ownEdits: null, prUnavailable: null, decisions: [], issues };
   };
   const view = renderSlot({ component: Window }, chat, {
     pluginId: "regional-manager",
     experimental_rpcContract: contract,
     rpc: { coordinators: () => ({ coordinators: [COORDINATOR], notStarted: [] }), board },
+    ...(focused === undefined ? {} : { context: { threadId: focused } }),
     // why it can decline: bb declines an open in a pane it hasn't focused yet, as a split it just added as it mounts.
-    experimental_panel: { openTab: () => declines-- <= 0 },
+    experimental_panel: {
+      openTab: ({ title }) => {
+        const accepted = focused === undefined || context.current?.threadId === MANAGER_THREAD;
+        if (accepted) opened.push(title ?? "");
+        return accepted;
+      },
+    },
   });
   const pane = (threadId: string) => view.container.querySelector<HTMLElement>(`[data-thread="${threadId}"]`) ?? assert.fail(`no pane ${threadId}`);
   const link = (threadId: string, id = "BBP-24") => pane(threadId).querySelector<HTMLAnchorElement>(`a[href="${HREF(id)}"]`) ?? assert.fail(`no link to ${id}`);
@@ -86,8 +106,22 @@ function mount(chat: Chat, { declines = 0, boardFails = false } = {}) {
     issues = issues.map((row) => (row.id === id ? { ...row, ...fields } : row));
     await view.behavior.experimental_invalidateRpc([boardTag(COORDINATOR_ID)]);
   };
-  const show = (next: Chat) => act(() => shown.set(next));
-  return { view, pane, link, glyphOf, card, renders, setStatus, show };
+  const show = (next: Chat) => {
+    shown.now = next;
+    act(() => shown.set(next));
+  };
+  /** bb focuses another thread: the selection changes and the window renders again, nothing else. */
+  const focusThread = (threadId: string) => {
+    const selection = context.current ?? assert.fail("no selection read");
+    selection.threadId = threadId;
+    act(() => shown.set({ ...shown.now }));
+  };
+  /** The board's next read fails, as when bb restarts. */
+  const failBoard = async () => {
+    boardState.reading = "fails";
+    await view.behavior.experimental_invalidateRpc([boardTag(COORDINATOR_ID)]);
+  };
+  return { view, pane, link, glyphOf, card, renders, setStatus, show, focusThread, failBoard, opened };
 }
 
 test("an issue link in a message shows its issue's glyph before its id, mid-sentence; a link in code, a bare id and another link stay as they are", async () => {
@@ -154,18 +188,60 @@ test("a link whose href bb changes in place to another address loses its glyph",
   assert.equal(view.container.querySelectorAll(".rmi-issue-glyph").length, 1, "only BBP-27's is left");
 });
 
-test("when bb renders the shown link again, as a reply streams, its card goes, and Escape is bb's again", async () => {
+test("when bb renders the focused link again, as a reply streams, focus moves to the link that replaced it, not the page, and its card with it", async () => {
+  const { link, glyphOf, card, show } = mount({ panes: [MANAGER_THREAD] });
+  await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+  const first = link(MANAGER_THREAD);
+  act(() => first.focus());
+  await waitFor(() => assert.ok(card() !== null));
+
+  show({ panes: [MANAGER_THREAD], linkKey: "streamed" });
+  assert.ok(link(MANAGER_THREAD) !== first, "a new element");
+  await waitFor(() => assert.ok(document.activeElement === link(MANAGER_THREAD), "focus is on the link that replaced it"));
+  await waitFor(() => assert.equal(card()?.querySelector(".rmi-card-title")?.textContent, "Inline issue links"));
+});
+
+test("when the shown link stops being an issue link, its card goes, and Escape is bb's again", async () => {
   const { link, glyphOf, card, show } = mount({ panes: [MANAGER_THREAD] });
   await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
   act(() => link(MANAGER_THREAD).focus());
   await waitFor(() => assert.ok(card() !== null));
 
-  show({ panes: [MANAGER_THREAD], linkKey: "streamed" });
+  show({ panes: [MANAGER_THREAD], href: "https://example.com/elsewhere" });
   await waitFor(() => assert.ok(card() === null));
   await act(async () => {});
   const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
   act(() => void document.body.dispatchEvent(escape));
   assert.equal(escape.defaultPrevented, false);
+});
+
+test("a focused link whose card shows nothing, as its issue isn't on the board or the board isn't read yet, leaves Escape to bb", async () => {
+  for (const [name, chat, options] of [
+    ["an issue the board has none of", { panes: [MANAGER_THREAD], href: HREF("BBP-999"), label: "BBP-999" }, {}],
+    ["a board not read yet", { panes: [MANAGER_THREAD] }, { board: "pending" }],
+  ] as const) {
+    const { link, glyphOf, card } = mount(chat, options);
+    if (!("board" in options)) await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD, "BBP-27")), "Todo", "the board is read"));
+    const anchor = name === "a board not read yet" ? link(MANAGER_THREAD) : link(MANAGER_THREAD, "BBP-999");
+    await waitFor(() => assert.ok(anchor.querySelector(".rmi-issue-glyph") !== null));
+    act(() => anchor.focus());
+    assert.ok(card() === null, name);
+    const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    act(() => void anchor.dispatchEvent(escape));
+    assert.equal(escape.defaultPrevented, false, name);
+    cleanup();
+  }
+});
+
+test("a refresh of the board that fails while a card shows keeps its details and says it couldn't refresh", async () => {
+  const { link, glyphOf, card, failBoard } = mount({ panes: [MANAGER_THREAD] });
+  await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+  act(() => link(MANAGER_THREAD).focus());
+  await waitFor(() => assert.equal(card()?.querySelector(".rmi-card-title")?.textContent, "Inline issue links"));
+
+  await failBoard();
+  await waitFor(() => assert.equal(card()?.querySelector(".rmi-card-failure")?.textContent, "Couldn't refresh: bb is restarting"));
+  assert.equal(card()?.querySelector(".rmi-card-title")?.textContent, "Inline issue links", "the details it had stay");
 });
 
 test("hovering another link leaves the card of the link that has focus, while it shows, and shows its own once focus goes", async () => {
@@ -375,22 +451,25 @@ test("pressing an issue link in its regional manager's thread opens the issue's 
   assert.deepEqual(view.inspection.navigateCalls, [], "it stays in this pane");
 });
 
-test("pressing an issue link in another thread opens the regional manager's thread in a split, and its pane opens the tab once it shows, asking again after bb declines; ⌘ asks for the split from the manager's thread too", async () => {
-  const { view, link, glyphOf, show, setStatus } = mount({ panes: [AGENT_THREAD] }, { declines: 1 });
+test("pressing an issue link in another thread opens the manager's thread in a split; bb declines the tab while that pane isn't focused, and the pane opens it once bb focuses it, the board unchanged", async () => {
+  const { view, link, glyphOf, show, focusThread, opened } = mount({ panes: [AGENT_THREAD] }, { focused: AGENT_THREAD });
   await waitFor(() => assert.equal(glyphOf(link(AGENT_THREAD)), "In progress"));
-  const opened = () => view.inspection.experimental_panelCalls.map((call) => call.method === "openTab" && call.options.title);
+  const asked = () => view.inspection.experimental_panelCalls.filter((call) => call.method === "openTab").length;
+  const boardReads = () => view.inspection.rpcCalls.filter(({ method }) => method === "board").length;
 
   assert.equal(fireEvent.click(link(AGENT_THREAD, "BBP-27")), false);
   assert.deepEqual(view.inspection.navigateCalls, [{ method: "toThread", threadId: MANAGER_THREAD, options: { split: true } }]);
-  assert.deepEqual(opened(), [], "no pane shows the manager's thread yet");
-
   show({ panes: [AGENT_THREAD, MANAGER_THREAD] });
-  await waitFor(() => assert.deepEqual(opened(), ["BBP-27 Avatars"], "the new pane asks, and bb declines"));
-  await setStatus("BBP-27", { status: "in-progress" });
-  await waitFor(() => assert.deepEqual(opened(), ["BBP-27 Avatars", "BBP-27 Avatars"], "kept, and asked again"));
-  await setStatus("BBP-27", { status: "todo" });
-  assert.deepEqual(opened(), ["BBP-27 Avatars", "BBP-27 Avatars"], "once opened, never again");
+  await waitFor(() => assert.ok(asked() > 0, "the new pane asks"));
+  assert.deepEqual(opened, [], "and bb declines: the pane isn't focused");
+  const reads = boardReads();
 
+  focusThread(MANAGER_THREAD);
+  await waitFor(() => assert.deepEqual(opened, ["BBP-27 Avatars"], "asked again as bb focused the pane, and opened"));
+  focusThread(AGENT_THREAD);
+  focusThread(MANAGER_THREAD);
+  assert.deepEqual(opened, ["BBP-27 Avatars"], "once opened, never again");
+  assert.equal(boardReads(), reads, "the board was not read again: only the focus moved");
 });
 
 test("a press with ⌘ or Ctrl, even in the manager's own pane, asks bb for the manager's thread in a split, and the pane showing it opens the tab", async () => {
@@ -426,7 +505,7 @@ test("a link to an issue its manager's board has none of still opens the issue's
 });
 
 test("while the board can't be read, a press still opens the issue's tab, by its id, where the tab shows the failure and Retry", async () => {
-  const { view, link } = mount({ panes: [MANAGER_THREAD] }, { boardFails: true });
+  const { view, link } = mount({ panes: [MANAGER_THREAD] }, { board: "fails" });
   // why: with no glyph to wait for, the press is made until the plugin knows the link's manager; bb's own handling (here a stand-in, as jsdom can't follow a link) has the presses before that.
   let reachedBb = false;
   const bbs = (event: Event) => {

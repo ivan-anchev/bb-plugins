@@ -11,12 +11,15 @@ type HoverCards = {
   trigger(key: string): HTMLAttributes<HTMLDivElement>;
   /** On the board: a press puts the card away. */
   board: HTMLAttributes<HTMLDivElement>;
+  /** Puts the card away, as Escape does (hover-card.tsx). */
+  close(): void;
 };
 
 export function useHoverCards(): HoverCards {
   const { shown, intent } = useCardIntent<string>();
   return {
     shown,
+    close: intent.close,
     trigger: (key) => ({
       onPointerEnter: (event: PointerEvent) => {
         if (event.pointerType !== "touch") intent.enter(key);

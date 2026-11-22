@@ -21,11 +21,11 @@ export function LinkCard(): ReactNode {
   useLinkTriggers(intent, shown, linkAt);
   const found = shown?.isConnected ? linkAt(shown) : null;
   const gone = shown !== null && found === null;
-  // why: bb renders a link again as a new element as a reply streams; the card goes with the old one, and so must its hold on Escape.
+  // why: bb renders a link again as a new element as a reply streams; the card goes with the old one, and so must the intent's hold on it.
   useEffect(() => {
     if (gone) intent.close();
   }, [gone, intent]);
-  return found === null ? null : createPortal(<IssueCard anchor={found.anchor} link={found.link} />, document.body);
+  return found === null ? null : createPortal(<IssueCard anchor={found.anchor} link={found.link} onClose={intent.close} />, document.body);
 }
 
 // ------------------------------------------------------------------ layer 2
@@ -93,8 +93,9 @@ function listen<Type extends keyof DocumentEventMap>(type: Type, listener: (even
 
 const inCard = (node: EventTarget | null): boolean => node instanceof Element && node.closest(CARD) !== null;
 
-/** The Board's card for the issue, from its board's read; none until the read has it. */
-function IssueCard({ anchor, link }: { anchor: HTMLAnchorElement; link: IssueLink }) {
-  const { issues, issue } = useBoardIssue(link.coordinatorId, link.issueId);
-  return issues === undefined || issue === undefined ? null : <HoverCard issue={issue} issues={issues} link={anchor} />;
+/** The Board's card for the issue, from its board's read, with why a later read failed; none until a read has it, or for an issue the board has none of. */
+function IssueCard({ anchor, link, onClose }: { anchor: HTMLAnchorElement; link: IssueLink; onClose(): void }) {
+  const { read, issues, issue } = useBoardIssue(link.coordinatorId, link.issueId);
+  if (issues === undefined || issue === undefined) return null;
+  return <HoverCard issue={issue} issues={issues} link={anchor} onClose={onClose} failure={read.error?.message} />;
 }
