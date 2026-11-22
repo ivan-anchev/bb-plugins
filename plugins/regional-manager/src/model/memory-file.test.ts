@@ -1,15 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { firstLineOf } from "./memory-file.ts";
+import { previewOf } from "./memory-file.ts";
 
-test("a memory file's first line is its first text that is not a heading, without a list or quote marker", () => {
-  assert.equal(firstLineOf("# Plan\n\n1. Inventory the endpoints\n2. Retire cron\n"), "Inventory the endpoints");
-  assert.equal(firstLineOf("# Preferences\n\n- 2026-11-20: Rows show only the icon\n"), "2026-11-20: Rows show only the icon");
-  assert.equal(firstLineOf("> Quoted\n"), "Quoted");
-  assert.equal(firstLineOf("Migrate the webhook service"), "Migrate the webhook service");
-});
-
-test("a file of headings only gives its first heading's text, and a blank one gives none", () => {
-  assert.equal(firstLineOf("# Crew rules\n\n## Later\n"), "Crew rules");
-  assert.equal(firstLineOf("\n  \n"), null);
+test("a memory file's preview is its text as it starts, up to 2,000 characters", () => {
+  assert.equal(previewOf("# Plan\n\n1. Inventory the endpoints\n"), "# Plan\n\n1. Inventory the endpoints\n");
+  assert.equal(previewOf(""), "");
+  const long = `# Notes\n\n${"x".repeat(5_000)}`;
+  assert.equal(previewOf(long), long.slice(0, 2_000));
 });

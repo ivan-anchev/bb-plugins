@@ -1,6 +1,7 @@
-// A lane's header: a bar on the theme's recessed surface (issue-board.css `.rmi-lane`) holding the
-// lane's status glyph, its name, how many it holds and a chevron. The whole bar folds the lane, as
-// Activity Sidebar's section title does (src/ui/shelf-title.tsx).
+// A folding section's header, a board lane's or Memory's: a bar on the theme's recessed surface
+// holding the section's glyph, its name, how many it holds and a chevron. The whole bar folds the
+// section, as Activity Sidebar's section title does (src/ui/shelf-title.tsx).
+import "./lane-header.css";
 import type { ReactNode, Ref } from "react";
 
 type LaneHeaderProps = { ref: Ref<HTMLButtonElement>; id: string; glyph: ReactNode; name: string; count: number; open: boolean; listId: string; onToggle(): void };

@@ -36,7 +36,14 @@ test("a file written with crew_memory_write is in the next catch-up and in the b
   assert.match(after, /## NOTES\.md \(version \w+\)\n\n# Notes\n\n1\. Inventory the endpoints/);
   assert.match(after, /Other memory files, read each with crew_memory_read: notes\/api\.md\./);
 
-  assert.deepEqual((await kit.rpc.memoryList({ coordinatorId })).files.slice(-2).map(({ file, firstLine }) => [file, firstLine]), [["CREW.md", "None yet."], ["notes/api.md", "API"]]);
+  const long = `# Log\n\n${"Delivered once. ".repeat(400)}`;
+  await kit.call("crew_memory_write", { file: "notes/log.md", content: long, baseVersion: null }, threadId);
+  const files = kit.memory.of(coordinatorId);
+  // why every key: the board reads each, and a preview is the file's first 2,000 characters, not all of it.
+  assert.deepEqual((await kit.rpc.memoryList({ coordinatorId })).files.slice(-2), [
+    { file: "notes/api.md", preview: "# API\n", modifiedAt: files.modifiedAt(memoryFileSchema.parse("notes/api.md")) },
+    { file: "notes/log.md", preview: long.slice(0, 2_000), modifiedAt: files.modifiedAt(memoryFileSchema.parse("notes/log.md")) },
+  ]);
   assert.equal((await kit.rpc.memoryRead({ coordinatorId, file: NOTES })).text?.content, plan);
   assert.deepEqual(kit.memoryWrites().slice(-2), [coordinatorId, coordinatorId], "each write refreshes the editor");
 });

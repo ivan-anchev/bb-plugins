@@ -1011,9 +1011,11 @@ replaced, and the handoff never fails over it.
 ## Read and edit memory
 
 **Memory** is the last section of a started regional manager's Board tab,
-under its board. It lists its files (the core ones first, then the
-rest by name), each with its first line of text and when it last changed;
-a dot marks one with unsaved changes. Pressing one shows it, rendered, with
+under its board. Its header folds it, as a lane's does, and it stays folded
+through a reload. It shows its files (the core ones first, then the rest by
+name) as one row of cards that scrolls sideways, each previewing the start of the file, rendered, with its
+name under it and, for a file in a subfolder, its folder; a dot marks one
+with unsaved changes. Pressing one shows it, rendered, with
 **All files** to go back and **Edit**. Edit opens it in place, with **Save**
 (or Ctrl/Cmd+S), which writes it and closes the editor, and **Cancel**, which
 drops your changes. Each save wakes the regional manager with "The user
@@ -1021,7 +1023,7 @@ edited <file>". A file you aren't editing shows its latest text, including
 the thread's writes as they land. Unsaved text stays in the browser, on the
 file you had open, through a resize, a reload and another tab, until you save
 it, cancel or take the newer version. A file deleted under unsaved text stays
-listed ("Not in the folder"), with the text; saving makes it again. While you have unsaved changes, Esc
+shown ("Not in the folder"), with the text; saving makes it again. While you have unsaved changes, Esc
 doesn't leave the tab. A regional manager not started yet has no memory.
 
 Neither side can silently overwrite the other. Every write names the version
