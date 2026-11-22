@@ -4,7 +4,7 @@
 // evidence; a passed one keeps it folded.
 import { checkoutText, worktreeText } from "../../../../model/verdict/checkout.ts";
 import { allPassed, ciVerdictOf, failedCheckout, outcome, type CriterionResult, type ShownVerdict } from "../../../../model/verdict/verdict.ts";
-import { ThreadLink } from "../thread-link.tsx";
+import { ThreadLink } from "../../issue/thread-link.tsx";
 import { DiscloseGlyph } from "./disclose-glyph.tsx";
 
 /** What a verdict judged: an agent's done handoff, or a build parent's final check on its default branch. */

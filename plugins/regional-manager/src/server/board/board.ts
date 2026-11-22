@@ -98,7 +98,7 @@ export function createBoard(bb: FactsBb, store: BoardStore) {
       };
     },
 
-    /** An issue opened on the board: its plan for the user, its decisions, what it depends on and what depends on it, its record and a build parent's final checks, from the store, with its agents' threads as bb lists them (null: the regional manager has no such issue). */
+    /** An issue in its tab: its plan for the user, its decisions, what it depends on and what depends on it, its record and a build parent's final checks, from the store, with its agents' threads as bb lists them (null: the regional manager has no such issue). */
     async detail(id: CoordinatorId, issueId: IssueId): Promise<IssueDetail | null> {
       const issue = store.issue(id, issueId);
       if (issue === null) return null;

@@ -11,9 +11,9 @@ import { agentIdSchema } from "../../../model/agent.ts";
 import { decisionIdSchema, type Decision, type OpenDecision } from "../../../model/decision.ts";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
 
-// The board's lanes and in-place detail, driven as the user drives them: folding lanes, opening rows,
-// and an open row keeping its place and focus when its issue moves to another lane. board.test.ts
-// reads the detail through the plugin's RPC.
+// The board's lanes and rows, driven as the user drives them: folding lanes, opening an issue's tab
+// from its row, and a focused row keeping its focus when its issue moves to another lane. board.test.ts
+// reads the board through the plugin's RPC, and issue-tab.test.ts the issue's tab.
 
 // why: the board brings its stylesheet, which bb's build bundles and node can't load.
 registerHooks({ load: (url, context, nextLoad) => (url.endsWith(".css") ? { format: "module", source: "", shortCircuit: true } : nextLoad(url, context)) });
@@ -57,21 +57,19 @@ const ISSUES: IssueRow[] = [
 /** The board in the root it scrolls in, as the Board tab draws it: a tab stop. */
 const Page = (props: ComponentProps<typeof IssueBoard>) => createElement("div", { tabIndex: 0, "aria-label": "Board tab" }, createElement(IssueBoard, props));
 
-/** The board, with a detail standing in for the one read from the plugin; every detail drawn is recorded in `read`. */
+/** The board in a side panel that accepts every tab it is asked to open. */
 function mount(issues: readonly IssueRow[], decisions: readonly Decision[] = [QUESTION]) {
-  const read: string[] = [];
   const props = (rows: readonly IssueRow[], shown: readonly Decision[]) => ({
     decisions: shown,
     issues: rows,
     decisionRow: (decision: OpenDecision) => createElement("p", { tabIndex: -1 }, decision.question),
-    detailOf: (shown: IssueRow) => {
-      read.push(shown.id);
-      return createElement("button", { type: "button" }, `Detail of ${shown.id}`);
-    },
   });
-  const view = renderSlot({ component: Page }, props(issues, decisions));
-  return { view, read, reread: (rows: readonly IssueRow[], next: readonly Decision[] = decisions) => view.rerender(createElement(Page, props(rows, next))) };
+  const view = renderSlot({ component: Page }, props(issues, decisions), { experimental_panel: { openTab: () => true } });
+  return { view, reread: (rows: readonly IssueRow[], next: readonly Decision[] = decisions) => view.rerender(createElement(Page, props(rows, next))) };
 }
+
+/** The issue tab bb is asked to open, as the side panel's `openTab` gets it: its address, the params bb keys it by, and its title. */
+const issueTab = (id: string, title: string) => ({ method: "openTab", options: { tab: { id: "issue", context: { kind: "thread" }, availability: "action" }, params: { issueId: id }, title: `${id} ${title}` } });
 
 const laneHeader = (view: ReturnType<typeof mount>["view"], name: RegExp) => view.getByRole("button", { name });
 const row = (view: ReturnType<typeof mount>["view"], id: string) => view.getByRole("button", { name: new RegExp(`\\b${id} Build`) });
@@ -147,65 +145,27 @@ test("a lane's header unfolds and folds its rows, and focus stays on the header"
   assert.ok(document.activeElement === done, "focus stays on the header");
 });
 
-test("a row opens its detail in place under it, reading only that issue, and closes it again", () => {
-  const { view, read } = mount(ISSUES);
+test("a row opens its issue in its own tab, titled with its id and title, and pressing it again asks for the same tab, which bb focuses rather than adding a second", () => {
+  const { view } = mount(ISSUES);
   const todo = row(view, "WEB-5");
-  todo.focus();
-  assert.equal(read.length, 0, "nothing is read before a row opens");
+  assert.equal(todo.hasAttribute("aria-expanded"), false, "a row opens nothing in place");
 
   fireEvent.click(todo);
-  assert.equal(todo.getAttribute("aria-expanded"), "true");
-  const detail = view.getByRole("region", { name: "WEB-5" });
-  assert.equal(todo.getAttribute("aria-controls"), detail.id);
-  assert.ok(todo.closest("li")?.contains(detail) === true, "the detail sits under its row");
-  assert.ok(within(detail).getByText("Detail of WEB-5"));
-  assert.deepEqual(read, ["WEB-5"]);
-
+  fireEvent.click(row(view, "WEB-4"));
   fireEvent.click(todo);
-  assert.equal(todo.getAttribute("aria-expanded"), "false");
-  assert.equal(view.queryByRole("region", { name: "WEB-5" }), null);
-  assert.ok(document.activeElement === todo, "focus stays on the row");
+
+  // why the same call twice: bb keys an action tab by its params, so opening the same params again selects the tab open for them.
+  assert.deepEqual(view.experimental_panelCalls, [issueTab("WEB-5", "Issue WEB-5"), issueTab("WEB-4", "Issue WEB-4"), issueTab("WEB-5", "Issue WEB-5")]);
+  assert.equal(view.queryByRole("region", { name: "WEB-5" }), null, "and draws no detail on the board");
 });
-
-test("an open row whose issue moves to another lane stays open there, with focus on it", () => {
+test("a focused row whose issue moves to another lane keeps focus there", () => {
   const { view, reread } = mount(ISSUES);
-  const working = row(view, "WEB-4");
-  working.focus();
-  fireEvent.click(working);
+  row(view, "WEB-4").focus();
 
   act(() => reread(ISSUES.map((each) => (each.id === "WEB-4" ? { ...each, status: "verifying", headline: "Verifying: added it" } : each))));
 
-  const moved = lane(view, /^Verifying/).getByRole("button", { name: /\bWEB-4 Build/ });
-  assert.equal(moved.getAttribute("aria-expanded"), "true");
-  assert.ok(view.getByRole("region", { name: "WEB-4" }));
-  assert.ok(document.activeElement === moved, "focus moved with the row");
+  assert.ok(document.activeElement === lane(view, /^Verifying/).getByRole("button", { name: /\bWEB-4 Build/ }), "focus moved with the row");
 });
-
-test("an open row shows its title and its headline whole, which it fades out at its edge while closed, and its detail doesn't repeat them", (t) => {
-  const title = "Retry failed webhook deliveries with exponential backoff, capped at five attempts, and record each one";
-  const headline = "Blocked: Needs a staging key for the webhook sandbox before the retry test can run against it";
-  t.after(narrowRows());
-  const { view } = mount([issue("WEB-9", { status: "in-progress", needsYou: headline, headline, title })]);
-  const flagged = row(view, "WEB-9");
-  const fading = (text: string) => within(flagged).getByText(text).closest("[data-over]") !== null;
-  assert.deepEqual([fading(title), fading(headline)], [true, true], "closed, both run past the row and fade");
-
-  fireEvent.click(flagged);
-  assert.deepEqual([fading(title), fading(headline)], [false, false], "open, both show whole in the row");
-  const detail = view.getByRole("region", { name: "WEB-9" });
-  assert.deepEqual([within(detail).queryByText(title), within(detail).queryByText(headline)], [null, null]);
-  assert.equal(flagged.getAttribute("aria-label")?.split(title).length, 2, "the row speaks the title once");
-});
-
-/** Rows 300px wide, their text 7px a character, until the returned restore runs: jsdom lays nothing out, and a row fades only text that runs past it. */
-function narrowRows(): () => void {
-  const width = (property: "scrollWidth" | "clientWidth", of: (el: HTMLElement) => number) =>
-    Object.defineProperty(HTMLElement.prototype, property, { configurable: true, get(this: HTMLElement) { return of(this); } });
-  width("scrollWidth", (el) => (el.textContent ?? "").length * 7);
-  width("clientWidth", () => 300);
-  return () => ["scrollWidth", "clientWidth"].forEach((property) => Reflect.deleteProperty(HTMLElement.prototype, property));
-}
-
 const moved = (id: string, fields: Partial<IssueRow>) => ISSUES.map((each) => (each.id === id ? { ...each, ...fields } : each));
 
 test("a focused row whose issue moves into a folded lane hands focus to that lane's header", () => {
@@ -229,20 +189,14 @@ test("a focused row whose issue is gone from the next read hands focus to the pa
   assert.ok(document.activeElement === view.getByLabelText("Board tab"), "focus is on the tab's tab stop, not the body");
 });
 
-test("focus on a row's agent link or in its open detail moves with the issue, to its row where it lands", () => {
+test("focus on a row's agent link moves with the issue, to its row where it lands", () => {
   const { view, reread } = mount(ISSUES);
   view.getByRole("button", { name: "Open a2's thread" }).focus();
   act(() => reread(moved("WEB-2", { status: "verifying", headline: "Waiting for CI on #41" })));
-  assert.ok(document.activeElement === lane(view, /^Verifying/).getByRole("button", { name: /\bWEB-2 Build/ }), "from the agent link");
-
-  fireEvent.click(row(view, "WEB-4"));
-  view.getByRole("button", { name: "Detail of WEB-4" }).focus();
-  act(() => reread(moved("WEB-4", { status: "verifying", headline: "Verifying: added it" })));
-  assert.ok(document.activeElement === lane(view, /^Verifying/).getByRole("button", { name: /\bWEB-4 Build/ }), "from the open detail");
+  assert.ok(document.activeElement === lane(view, /^Verifying/).getByRole("button", { name: /\bWEB-2 Build/ }));
 });
-
 test("a row links its agent's thread and its pull request with CI, apart from opening it", () => {
-  const { view, read } = mount(ISSUES);
+  const { view } = mount(ISSUES);
 
   const pr = view.getByRole("link", { name: "Pull request 41, open, CI passing" });
   assert.equal(pr.getAttribute("href"), "https://github.com/acme/notes/pull/41");
@@ -252,8 +206,7 @@ test("a row links its agent's thread and its pull request with CI, apart from op
     view.navigateCalls.map((call) => call.method === "toThread" && call.threadId),
     ["thr_two"],
   );
-  assert.equal(row(view, "WEB-2").getAttribute("aria-expanded"), "false");
-  assert.deepEqual(read, []);
+  assert.deepEqual(view.experimental_panelCalls, [], "and opens no tab");
 });
 
 const I1 = issueIdSchema.parse("WEB-1");
@@ -313,7 +266,7 @@ test("a parent says its count once, on its first line at the right, headline or 
   );
 });
 
-test("a flagged sub-issue sits under its parent and flat under Needs you, each naming its parent to a screen reader and the flat one ahead of its id; each row opens on its own", () => {
+test("a flagged sub-issue sits under its parent and flat under Needs you, each naming its parent to a screen reader and the flat one ahead of its id; both open its one tab", () => {
   const { view } = mount(SPLIT, []);
   const flat = lane(view, /^Needs you/).getByRole("button", { name: /\bWEB-3 Build/ });
   assert.match(flat.getAttribute("aria-label") ?? "", /^WEB-3 Build: Issue WEB-3, sub-issue of WEB-1, In progress,/);
@@ -324,8 +277,8 @@ test("a flagged sub-issue sits under its parent and flat under Needs you, each n
   assert.equal(nested.textContent?.includes("›"), false, "where it shows no breadcrumb");
 
   fireEvent.click(flat);
-  assert.deepEqual([flat.getAttribute("aria-expanded"), nested.getAttribute("aria-expanded")], ["true", "false"]);
-  assert.equal(view.getAllByRole("region", { name: "WEB-3" }).length, 1);
+  fireEvent.click(nested);
+  assert.deepEqual(view.experimental_panelCalls, [issueTab("WEB-3", "Issue WEB-3"), issueTab("WEB-3", "Issue WEB-3")]);
 });
 
 test("folding a parent's lane folds its sub-issues with it", () => {

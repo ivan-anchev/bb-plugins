@@ -1,7 +1,8 @@
 // The board of one regional manager: its verification switch, a warning while its own working
 // tree has changed files and why PR status is unavailable when it is, then the decisions waiting
-// for the user and its issues in lanes (issue/issue-board.tsx), each issue opening in place to its
-// detail. Its thread's Board tab draws it, in the scrolling root the tab gives it (board-tab.tsx).
+// for the user and its issues in lanes (issue/issue-board.tsx), each issue opening in its own tab
+// beside the Board (issue-tab/issue-tab.tsx). Its thread's Board tab draws it, in the scrolling root
+// the tab gives it (board-tab.tsx).
 import { experimental_Icon as Icon, experimental_useRpcMutation, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { useState } from "react";
 import { coordinatorContract as contract, type Board as BoardData } from "../../contract.ts";
@@ -13,7 +14,6 @@ import { Switch } from "../ui/switch.tsx";
 import { shortTime } from "../ui/time.ts";
 import { useAnsweredDraftsDropped } from "./answer-draft.ts";
 import { DecisionRow } from "./decision-row.tsx";
-import { IssueDetail } from "./issue/detail/issue-detail.tsx";
 import { IssueBoard } from "./issue/issue-board.tsx";
 
 export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
@@ -34,7 +34,6 @@ export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
             decisions={data.decisions}
             issues={data.issues}
             decisionRow={(decision) => <DecisionRow coordinatorId={coordinatorId} decision={decision} />}
-            detailOf={(issue, under, goTo) => <IssueDetail coordinatorId={coordinatorId} issue={issue} under={under} issues={data.issues} goTo={goTo} />}
           />
           {data.issues.length === 0 && <p className="px-2 text-sm text-muted-foreground">No issues yet.</p>}
         </>
