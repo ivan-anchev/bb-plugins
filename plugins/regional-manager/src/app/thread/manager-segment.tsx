@@ -3,9 +3,9 @@
 // and Cancel close it, and the focus goes back to them.
 import { experimental_THREAD_CONTEXT_SEGMENT_GROUPS as GROUPS, type ExperimentalThreadContextSegmentProps } from "@get-bb/plugin-sdk/app";
 import { useCallback, useMemo } from "react";
-import type { Profile } from "../../model/profile.ts";
+import type { Profile } from "../../model/profile/profile.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { AvatarTile } from "../profile/avatar.tsx";
+import { AvatarBlob } from "../profile/avatar.tsx";
 import { draftOf, profileDraftSchema, profileEditKeyOf } from "../profile/profile-draft.ts";
 import { ProfileEditor } from "../profile/profile-editor.tsx";
 import { useCoordinatorOfThread, useManager } from "../profile/use-manager.ts";
@@ -46,7 +46,7 @@ function ManagerToggle({ threadId, isExpanded, onToggle }: ExperimentalThreadCon
       onClick={onToggle}
       className="flex min-w-0 cursor-pointer items-center gap-1.5 rounded-sm text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
     >
-      <AvatarTile avatar={manager.profile.avatar} size="xs" />
+      <AvatarBlob avatar={manager.profile.avatar} size="xs" />
       <span className="truncate">{manager.profile.name}</span>
     </button>
   );

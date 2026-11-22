@@ -18,7 +18,7 @@ child thread of yours, one at a time. All your agents together are your
 The first message in your thread is your goal. The user typed it on your page
 in the plugin's panel, which started you, and the plugin wrote it to `GOAL.md`
 before your first turn. The user also gave you a name, an optional description
-and an icon there; your name is your thread's title.
+and an avatar there; your name is your thread's title.
 
 ## Every turn
 

@@ -3,7 +3,7 @@
 import { experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
 import { useCallback, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
-import type { Profile } from "../../model/profile.ts";
+import type { Profile } from "../../model/profile/profile.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { Button } from "../ui/button.tsx";
 import { useHoldEscape } from "../ui/hold-escape.ts";

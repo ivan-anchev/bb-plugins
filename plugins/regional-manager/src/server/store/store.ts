@@ -5,7 +5,7 @@
 import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { coordinatorSchema, notStartedSchema, type Coordinator, type NotStarted } from "../../contract.ts";
-import { avatarSchema, DEFAULT_AVATAR, type Profile } from "../../model/profile.ts";
+import type { Profile } from "../../model/profile/profile.ts";
 import { memoryRevisionSchema, type MemoryFile, type MemoryRevision, type MemoryVersion } from "../../model/memory-file.ts";
 import type { CoordinatorId, Role } from "../../model/role.ts";
 import { inboxStore } from "./inbox/inbox-store.ts";
@@ -20,6 +20,7 @@ import { issueKeysStore } from "./issue/keys/issue-keys-store.ts";
 import { issuesStore } from "./issue/issues-store.ts";
 import { prStore } from "./issue/pr-store.ts";
 import { MIGRATIONS } from "./migrations.ts";
+import { pictureIconManagers, withAvatar } from "./avatars.ts";
 
 export type Store = ReturnType<typeof openStore>;
 
@@ -27,6 +28,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
   // The host closes the handle on reload and reopens it on the next call, so never keep it.
   const db = () => storage.database();
   storage.migrate(db(), [...MIGRATIONS]);
+  pictureIconManagers(db);
 
   function coordinators(id: CoordinatorId | null): Coordinator[] {
     return db()
@@ -111,7 +113,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
             ORDER BY c.created_at DESC, c.rowid DESC`,
         )
         .all()
-        .map((row) => notStartedRowSchema.parse(row));
+        .map((row) => withAvatar(notStartedRowSchema.parse(row)));
     },
 
     /**
@@ -231,10 +233,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
   };
 }
 
-// why: the avatar is stored as JSON, and one this release can't draw, as an icon a later release
-// dropped from its picker, reads as the default rather than hiding every regional manager from the list.
-const storedAvatarSchema = z.string().transform((json) => avatarSchema.catch(DEFAULT_AVATAR).parse(JSON.parse(json)));
-const toCoordinator = (row: unknown): Coordinator => coordinatorSchema.extend({ avatar: storedAvatarSchema }).parse(row);
-const notStartedRowSchema = notStartedSchema.extend({ avatar: storedAvatarSchema });
+const toCoordinator = (row: unknown): Coordinator => withAvatar(coordinatorSchema.extend({ avatar: z.string() }).parse(row));
+const notStartedRowSchema = notStartedSchema.extend({ avatar: z.string() });
 const startRowSchema = z.object({ ticket: z.string(), name: z.string().nullable(), threadId: z.string().nullable() });
 const candidateRowSchema = z.object({ id: coordinatorSchema.shape.id, ticket: z.string(), threadId: z.string().nullable(), flagged: z.number().transform((flag) => flag === 1) });

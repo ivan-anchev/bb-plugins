@@ -13,7 +13,7 @@ import { kindSchema } from "./model/issue/kind.ts";
 import { issueStatusSchema } from "./model/issue/status.ts";
 import { memoryContentSchema, memoryFileSchema, memorySnapshotSchema, memoryVersionSchema, writeOutcomeSchema } from "./model/memory-file.ts";
 import { prSnapshotSchema } from "./model/verdict/pr.ts";
-import { avatarSchema, profileSchema } from "./model/profile.ts";
+import { profileSchema } from "./model/profile/profile.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "./model/role.ts";
 import { shownVerdictSchema } from "./model/verdict/verdict.ts";
 
@@ -26,7 +26,7 @@ export const coordinatorSchema = z.object({
   threadId: z.string().min(1),
   projectId: z.string().min(1),
   description: profileSchema.shape.description,
-  avatar: avatarSchema,
+  avatar: profileSchema.shape.avatar,
 });
 export type Coordinator = z.infer<typeof coordinatorSchema>;
 

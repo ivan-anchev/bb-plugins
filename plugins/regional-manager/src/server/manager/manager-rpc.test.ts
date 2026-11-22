@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import plugin from "../../../server.ts";
 import { COORDINATORS_TAG, coordinatorContract as contract } from "../../contract.ts";
-import type { Profile } from "../../model/profile.ts";
+import type { Profile } from "../../model/profile/profile.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
 import { memoryStorage } from "../memory-storage.ts";
 import { heldAs030 } from "../store/test-store.ts";
@@ -15,7 +15,7 @@ import { PLACEHOLDER } from "./held-managers.ts";
 // with its profile and no thread, started by the goal sent from its page, edited before and after,
 // and deleted while it has no thread.
 
-const PROFILE: Profile = { name: "Webhooks", description: "Moves the webhook service off the cron box.", avatar: { kind: "icon", icon: "Zap" } };
+const PROFILE: Profile = { name: "Webhooks", description: "Moves the webhook service off the cron box.", avatar: { kind: "blob", shape: "cloud", hue: "amber", expression: "happy" } };
 const GOAL = "Migrate the webhook service";
 
 const goalFile = (kit: ReturnType<typeof harness>, id: CoordinatorId) => join(kit.memory.of(id).dir, "GOAL.md");
@@ -130,7 +130,7 @@ test("a start passes on only the composer's fields: one bb would take from anoth
 
 test("an edit before the start renames no thread and keeps the whole profile; the start then titles the thread with the new name", async () => {
   const { kit, listed, start, setProfile } = await created();
-  const edited: Profile = { name: "Scout", description: null, avatar: { kind: "icon", icon: "Brain" } };
+  const edited: Profile = { name: "Scout", description: null, avatar: { kind: "blob", shape: "cat", hue: "teal", expression: "curious" } };
   const before = kit.invalidated().length;
 
   assert.deepEqual(await setProfile(edited), {});
@@ -144,13 +144,27 @@ test("an edit before the start renames no thread and keeps the whole profile; th
 test("an edit after the start retitles the thread in bb and replaces the description and avatar the list reads", async () => {
   const { kit, listed, start, setProfile } = await created();
   const threadId = await start();
-  const edited: Profile = { name: "Webhooks v2", description: null, avatar: { kind: "icon", icon: "Brain" } };
+  const edited: Profile = { name: "Webhooks v2", description: null, avatar: { kind: "blob", shape: "cat", hue: "teal", expression: "curious" } };
 
   assert.deepEqual(await setProfile(edited), {});
 
   assert.equal(kit.thread(threadId).title, "Webhooks v2");
   const [coordinator] = (await listed()).coordinators;
   assert.deepEqual([coordinator?.description, coordinator?.avatar], [null, edited.avatar]);
+});
+
+test("a rename, before the start, in bb's sidebar after it, or through an edit, never changes the avatar, through a reload too", async () => {
+  const { kit, coordinatorId, listed, start, setProfile } = await created();
+  await setProfile({ ...PROFILE, name: "Scout" });
+  assert.deepEqual((await listed()).notStarted.map(({ name, avatar }) => [name, avatar]), [["Scout", PROFILE.avatar]]);
+
+  const threadId = await start();
+  kit.thread(threadId).title = "Renamed in bb";
+  kit.reload();
+  assert.deepEqual(kit.store.coordinator(coordinatorId)?.avatar, PROFILE.avatar);
+
+  await setProfile({ ...PROFILE, name: "Webhooks v3" });
+  assert.deepEqual([kit.thread(threadId).title, kit.store.coordinator(coordinatorId)?.avatar], ["Webhooks v3", PROFILE.avatar]);
 });
 
 test("an edit or a start of a regional manager that doesn't exist is refused as not found, and renames and spawns nothing", async () => {
@@ -167,7 +181,7 @@ test("an edit bb refuses to rename writes nothing of the profile", async () => {
   const threadId = await start();
   kit.thread(threadId).deletedAt = 5_000;
 
-  await assert.rejects(setProfile({ name: "Gone", description: "Never kept", avatar: { kind: "icon", icon: "Bug" } }));
+  await assert.rejects(setProfile({ name: "Gone", description: "Never kept", avatar: { kind: "blob", shape: "ghost", hue: "rose", expression: "content" } }));
   const [coordinator] = (await listed()).coordinators;
   assert.deepEqual([coordinator?.description, coordinator?.avatar], [PROFILE.description, PROFILE.avatar]);
 });
@@ -175,8 +189,8 @@ test("an edit bb refuses to rename writes nothing of the profile", async () => {
 test("two edits at once land one after the other, so the profile is the later one whole", async () => {
   const { kit, listed, start, setProfile } = await created();
   const threadId = await start();
-  const first: Profile = { name: "First", description: "First", avatar: { kind: "icon", icon: "Bug" } };
-  const second: Profile = { name: "Second", description: "Second", avatar: { kind: "icon", icon: "Star" } };
+  const first: Profile = { name: "First", description: "First", avatar: { kind: "blob", shape: "ghost", hue: "rose", expression: "content" } };
+  const second: Profile = { name: "Second", description: "Second", avatar: { kind: "blob", shape: "star", hue: "blue", expression: "attentive" } };
   kit.threadUpdates.holding = true;
 
   const both = Promise.all([setProfile(first), setProfile(second)]);

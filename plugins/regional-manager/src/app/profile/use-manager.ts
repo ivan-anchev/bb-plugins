@@ -2,7 +2,8 @@
 // not started yet, its name the plugin's. Its description and avatar are the plugin's either way.
 import { experimental_useRpcQuery, experimental_useSidebarThreads as useSidebarThreads } from "@get-bb/plugin-sdk/app";
 import { coordinatorContract as contract } from "../../contract.ts";
-import type { Profile } from "../../model/profile.ts";
+import type { Avatar } from "../../model/profile/avatar.ts";
+import type { Profile } from "../../model/profile/profile.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 
 /** `profile` of a started one: null while bb lists its thread no more (archived), which names it. */
@@ -18,6 +19,16 @@ export function useManager(coordinatorId: CoordinatorId | null): Manager | null 
   if (started === undefined) return null;
   const thread = threads.find(({ id }) => id === started.threadId);
   return { kind: "started", threadId: started.threadId, profile: thread === undefined ? null : { name: thread.displayTitle, description: started.description, avatar: started.avatar } };
+}
+
+/**
+ * The look of every regional manager, started or not, from the same read as the panel's list; null
+ * until the read answers, and none once it failed, when no look is known to be taken.
+ */
+export function useTakenLooks(): Avatar[] | null {
+  const read = experimental_useRpcQuery({ contract, method: "coordinators", input: {} });
+  if (read.data !== undefined) return [...read.data.coordinators, ...read.data.notStarted].map(({ avatar }) => avatar);
+  return read.error === null ? null : [];
 }
 
 /** The started regional manager whose thread this is, from the same read as the panel's list; null for any other thread, or before the read. */

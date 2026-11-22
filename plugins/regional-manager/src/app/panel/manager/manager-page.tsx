@@ -3,9 +3,9 @@
 // and starts it. A started one has its thread instead, so its page sends there.
 import { experimental_Icon as Icon, useBbNavigate } from "@get-bb/plugin-sdk/app";
 import { useCallback, useEffect, useRef, type Ref } from "react";
-import type { Profile } from "../../../model/profile.ts";
+import type { Profile } from "../../../model/profile/profile.ts";
 import type { CoordinatorId } from "../../../model/role.ts";
-import { AvatarTile } from "../../profile/avatar.tsx";
+import { AvatarBlob } from "../../profile/avatar.tsx";
 import { DeleteManager } from "../../profile/delete-manager.tsx";
 import { draftOf, profileDraftSchema, profileEditKeyOf } from "../../profile/profile-draft.ts";
 import { ProfileEditor } from "../../profile/profile-editor.tsx";
@@ -103,7 +103,7 @@ function useOpenThreadOnce(): (threadId: string) => void {
 function Identity({ profile: { name, description, avatar } }: { profile: Profile }) {
   return (
     <div className="flex items-start gap-3 px-3">
-      <AvatarTile avatar={avatar} size="lg" />
+      <AvatarBlob avatar={avatar} size="lg" />
       <div className="flex min-w-0 flex-col gap-0.5 py-0.5">
         <h1 className="text-base font-medium text-pretty [overflow-wrap:anywhere]">{name}</h1>
         {description !== null && <p className="text-sm whitespace-pre-wrap text-pretty text-muted-foreground [overflow-wrap:anywhere]">{description}</p>}

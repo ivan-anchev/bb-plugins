@@ -6,12 +6,13 @@ import { handoffIdSchema, type Handoff } from "../../model/handoff.ts";
 import { issueKeyOf } from "../../model/issue/key/issue-key.ts";
 import { issueViews } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
-import { DEFAULT_AVATAR } from "../../model/profile.ts";
+import type { Avatar } from "../../model/profile/avatar.ts";
+import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
 import { memoryStorage } from "../memory-storage.ts";
 import type { NewAgent } from "./issue/agents-store.ts";
 import { MIGRATIONS } from "./migrations.ts";
-import { openStore } from "./store.ts";
-import { EXECUTION, failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "./test-store.ts";
+import { openStore, type Store } from "./store.ts";
+import { AVATAR, EXECUTION, failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "./test-store.ts";
 
 test("a fresh database holds the design's tables and indexes, and nothing else", () => {
   const { db } = freshStore();
@@ -47,25 +48,89 @@ test("a store opened again, as after a reload, keeps what was stored", () => {
   assert.deepEqual(openStore(storage).issue(MANAGER, filed.id), filed);
 });
 
-test("a regional manager started before profiles lists with no description and the plugin's own icon once the store is opened by this release", () => {
+/**
+ * A database as the release before blobs left it: each regional manager named, in the order given,
+ * created a second apart, its thread bound, pictured by one of bb's icons.
+ */
+function iconManagers(managers: readonly (readonly [CoordinatorId, string])[]) {
   const { db, storage } = memoryStorage();
-  const profiles = MIGRATIONS.findIndex((statement) => statement.includes("ADD COLUMN description"));
-  storage.migrate(db, MIGRATIONS.slice(0, profiles));
-  db.prepare("INSERT INTO roles (ticket, thread_id, role, created_at) VALUES ('ticket-1', 'thr_a', ?, 1000)").run(JSON.stringify({ kind: "coordinator", coordinatorId: MANAGER }));
-  db.prepare("INSERT INTO coordinators (id, ticket, project_id, verify, created_at) VALUES (?, 'ticket-1', 'prj_1', 1, 1000)").run(MANAGER);
+  storage.migrate(db, [...MIGRATIONS]);
+  managers.forEach(([id, name], n) => {
+    db.prepare("INSERT INTO roles (ticket, thread_id, role, created_at) VALUES (?, ?, ?, ?)").run(`ticket-${n}`, `thr_${n}`, JSON.stringify({ kind: "coordinator", coordinatorId: id }), 1_000 + n);
+    // why no avatar: the column's default is the icon every manager had before profiles, and the plugin's own icon after.
+    db.prepare("INSERT INTO coordinators (id, ticket, project_id, name, created_at) VALUES (?, ?, 'prj_1', ?, ?)").run(id, `ticket-${n}`, name, 1_000 + n);
+  });
+  const stored = () => db.prepare("SELECT id, avatar FROM coordinators ORDER BY created_at").all().map((row) => z.object({ id: z.string(), avatar: z.string() }).parse(row));
+  return { db, storage, stored };
+}
 
-  assert.deepEqual(openStore(storage).coordinators(), [{ id: MANAGER, threadId: "thr_a", projectId: "prj_1", description: null, avatar: { kind: "icon", icon: "Workflow" } }]);
+const THIRD_MANAGER = coordinatorIdSchema.parse("0b9c8e5d-7a3f-4e2b-9c1d-5f6a7b8c9d0e");
+const THREE = [[MANAGER, "Webhooks"], [OTHER_MANAGER, "Scout"], [THIRD_MANAGER, "Docs"]] as const;
+const looksOf = (store: Store) => new Map(store.coordinators().map(({ id, avatar }) => [id, avatar]));
+const lookKey = ({ shape, hue }: Avatar) => `${shape}/${hue}`;
+
+test("regional managers pictured by an icon each get a blob look of their own as the store opens, taken from their ids and never their names", () => {
+  const looks = looksOf(openStore(iconManagers(THREE).storage));
+
+  assert.equal(looks.size, 3);
+  assert.equal(new Set([...looks.values()].map(lookKey)).size, 3, "no two share a shape in a hue");
+  const renamed = looksOf(openStore(iconManagers(THREE.map(([id]) => [id, "Another name"] as const)).storage));
+  assert.deepEqual(renamed, looks, "the same ids under other names get the same looks");
 });
 
-test("an avatar this release can't draw, as an icon a later one stored, reads as the plugin's own icon, and the list still reads", () => {
-  const { db, store } = freshStore();
-  db.prepare("UPDATE coordinators SET avatar = ? WHERE id = ?").run(JSON.stringify({ kind: "icon", icon: "Rocket" }), MANAGER);
+test("a regional manager whose id seeds a look an earlier one has gets the next free one, in the order they were created", () => {
+  const first = openStore(iconManagers([[MANAGER, "Webhooks"]]).storage).coordinator(MANAGER)?.avatar;
+  assert.ok(first, "the look its id seeds");
+  const { db, storage } = iconManagers([[OTHER_MANAGER, "Scout"], [MANAGER, "Webhooks"]]);
+  db.prepare("UPDATE coordinators SET avatar = ? WHERE id = ?").run(JSON.stringify(first), OTHER_MANAGER);
 
-  assert.deepEqual(store.coordinator(MANAGER)?.avatar, DEFAULT_AVATAR);
-  assert.equal(store.coordinators().length, 2);
+  const looks = looksOf(openStore(storage));
+
+  const later = looks.get(MANAGER);
+  assert.ok(later);
+  assert.deepEqual(looks.get(OTHER_MANAGER), first, "a manager with a blob keeps it");
+  assert.notEqual(lookKey(later), lookKey(first), "the later one steps past the look its id seeds");
 });
 
-const SCOUT = { name: "Scout", description: null, avatar: DEFAULT_AVATAR };
+test("opening the store again changes no avatar: not the looks it gave, nor a look the user picked that another manager has", () => {
+  const { db, storage, stored } = iconManagers(THREE);
+  openStore(storage);
+  const shared = looksOf(openStore(storage)).get(MANAGER);
+  db.prepare("UPDATE coordinators SET avatar = ? WHERE id = ?").run(JSON.stringify(shared), OTHER_MANAGER);
+  const before = stored();
+
+  openStore(storage);
+
+  assert.deepEqual(stored(), before);
+});
+
+test("a failed write gives no regional manager a look, and opening the store again gives each the look it would have had", () => {
+  const { db, storage, stored } = iconManagers(THREE);
+  const expected = looksOf(openStore(iconManagers(THREE).storage));
+  const before = stored();
+  const allow = failWrites(db, "UPDATE", "coordinators", `OLD.id = '${THIRD_MANAGER}'`);
+
+  assert.throws(() => openStore(storage), /forced failure/);
+  assert.deepEqual(stored(), before, "the two looks written before it were undone");
+
+  allow();
+  assert.deepEqual(looksOf(openStore(storage)), expected);
+});
+
+test("an avatar this release can't draw, as a kind a later one stored or text that isn't JSON, reads as the look its id seeds, stays stored, and the list still reads", () => {
+  const { db, storage } = freshStore();
+  const later = JSON.stringify({ kind: "image", url: "https://example.com/a.png" });
+  db.prepare("UPDATE coordinators SET avatar = ? WHERE id = ?").run(later, MANAGER);
+  db.prepare("UPDATE coordinators SET avatar = ? WHERE id = ?").run("{not json", OTHER_MANAGER);
+
+  const store = openStore(storage);
+
+  assert.deepEqual(store.coordinators().map(({ avatar }) => avatar.kind), ["blob", "blob"]);
+  const stored = db.prepare("SELECT avatar FROM coordinators ORDER BY created_at, rowid").all().map((row) => z.object({ avatar: z.string() }).parse(row).avatar);
+  assert.deepEqual(stored, [later, "{not json"]);
+});
+
+const SCOUT = { name: "Scout", description: null, avatar: AVATAR };
 
 test("a ticket binds once: a second bind, to the same or another thread, changes nothing", () => {
   const store = openStore(memoryStorage().storage);
@@ -90,7 +155,7 @@ test("a regional manager is created not started, with its name and no project; i
   store.bindTicket("ticket-1", "thr_a");
   assert.deepEqual(store.notStarted(), []);
   assert.deepEqual(store.startOf(MANAGER), { kind: "started", threadId: "thr_a" });
-  assert.deepEqual(store.coordinators(), [{ id: MANAGER, threadId: "thr_a", projectId: "prj_1", description: null, avatar: DEFAULT_AVATAR }]);
+  assert.deepEqual(store.coordinators(), [{ id: MANAGER, threadId: "thr_a", projectId: "prj_1", description: null, avatar: AVATAR }]);
   assert.equal(store.roleFor("thr_b", "ticket-1"), null);
 });
 
@@ -225,7 +290,7 @@ test("a 0.3.0 regional manager is a candidate of the upgrade until unheld: then 
   store.unhold(MANAGER, "ticket-1", "Again", "ticket-3", 3_000);
 
   assert.deepEqual([store.upgradeCandidates(), store.coordinators()], [[], []]);
-  assert.deepEqual(store.notStarted(), [{ id: MANAGER, name: "Webhooks", description: null, avatar: DEFAULT_AVATAR }]);
+  assert.deepEqual(store.notStarted().map(({ id, name, description }) => ({ id, name, description })), [{ id: MANAGER, name: "Webhooks", description: null }]);
   assert.deepEqual(store.startOf(MANAGER), { kind: "not-started", ticket: "ticket-2", name: "Webhooks" });
   assert.equal(store.roleOfThread("thr_a"), null);
   assert.equal(store.roleFor("thr_a", "ticket-1"), null);
@@ -249,6 +314,6 @@ test("a regional manager's stored name changes before its start only: once start
   store.rename(MANAGER, "Scout 2");
   assert.deepEqual(store.startOf(MANAGER), { kind: "not-started", ticket: "ticket-1", name: "Scout 2" });
 
-  store.setProfile(MANAGER, { description: "Finds work", avatar: DEFAULT_AVATAR });
-  assert.deepEqual(store.notStarted(), [{ id: MANAGER, name: "Scout 2", description: "Finds work", avatar: DEFAULT_AVATAR }]);
+  store.setProfile(MANAGER, { description: "Finds work", avatar: AVATAR });
+  assert.deepEqual(store.notStarted(), [{ id: MANAGER, name: "Scout 2", description: "Finds work", avatar: AVATAR }]);
 });

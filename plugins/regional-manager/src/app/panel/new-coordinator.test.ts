@@ -2,9 +2,9 @@ import "../test-browser.ts";
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
-import { act, cleanup, fireEvent } from "@testing-library/react";
+import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { coordinatorContract as contract } from "../../contract.ts";
-import type { Profile } from "../../model/profile.ts";
+import type { Profile } from "../../model/profile/profile.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 
 // The New page as bb mounts it: the profile's fields under its heading, and Create, which saves the
@@ -13,6 +13,8 @@ import type { CoordinatorId } from "../../model/role.ts";
 const { NewCoordinator } = await import("./new-coordinator.tsx");
 
 const CREATED = "6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10";
+const TAKEN = "0b9c8e5d-7a3f-4e2b-9c1d-5f6a7b8c9d0e";
+const CIRCLE_IN_VIOLET = { kind: "blob", shape: "circle", hue: "violet", expression: "neutral" } as const;
 
 afterEach(() => {
   cleanup();
@@ -24,12 +26,13 @@ function mount() {
   const creates: Profile[] = [];
   const opened: CoordinatorId[] = [];
   const rpc = {
+    coordinators: () => ({ coordinators: [], notStarted: [{ id: TAKEN, name: "Scout", description: null, avatar: CIRCLE_IN_VIOLET }] }),
     createCoordinator: (input: unknown) => {
       creates.push(contract.createCoordinator.input.parse(input).profile);
       return { coordinatorId: CREATED };
     },
   };
-  const view = renderSlot({ component: NewCoordinator }, { ref: null, onBack: () => {}, onCreated: (id: CoordinatorId) => void opened.push(id) }, { rpc });
+  const view = renderSlot({ component: NewCoordinator }, { ref: null, onBack: () => {}, onCreated: (id: CoordinatorId) => void opened.push(id) }, { experimental_rpcContract: contract, rpc });
   return {
     view,
     creates,
@@ -45,7 +48,7 @@ function mount() {
 
 test("the page is the profile's fields under its heading, and Create: no prompt, no place, no pickers", async () => {
   const page = mount();
-  await page.view.findByRole("button", { name: "Create" });
+  await page.view.findByRole("textbox", { name: "Name" });
 
   assert.equal(page.view.getByRole("heading", { level: 1 }).textContent, "New regional manager");
   assert.deepEqual(
@@ -68,15 +71,31 @@ test("a create with no name is refused: the name field says so and takes the foc
   assert.deepEqual(page.creates, []);
 });
 
-test("Create sends the profile as typed, opens the new regional manager's page, starts no thread and forgets the fields", async () => {
+test("a new regional manager's look is one no other manager has", async (t) => {
+  // why 0: the look a new manager starts from is then the one Scout has, which it must step past.
+  t.mock.method(Math, "random", () => 0);
   const page = mount();
-  await page.named("  Webhooks ");
-  fireEvent.change(page.view.getByRole("textbox", { name: "Description" }), { target: { value: " " } });
-  fireEvent.click(page.view.getByRole("radio", { name: "Lightning" }));
+  await page.named("Webhooks");
+  await waitFor(() => assert.equal(page.view.getByRole("radio", { name: "Circle" }).matches(":checked"), false));
 
   await page.create();
 
-  assert.deepEqual(page.creates, [{ name: "Webhooks", description: null, avatar: { kind: "icon", icon: "Zap" } }]);
+  const [created] = page.creates;
+  assert.ok(created);
+  assert.notDeepEqual([created.avatar.shape, created.avatar.hue], [CIRCLE_IN_VIOLET.shape, CIRCLE_IN_VIOLET.hue]);
+});
+
+test("Create sends the profile as typed, opens the new regional manager's page, starts no thread and forgets the fields", async (t) => {
+  t.mock.method(Math, "random", () => 0);
+  const page = mount();
+  await page.named("  Webhooks ");
+  fireEvent.change(page.view.getByRole("textbox", { name: "Description" }), { target: { value: " " } });
+  fireEvent.click(page.view.getByRole("radio", { name: "Cloud" }));
+  fireEvent.click(page.view.getByRole("radio", { name: "Amber" }));
+
+  await page.create();
+
+  assert.deepEqual(page.creates, [{ name: "Webhooks", description: null, avatar: { kind: "blob", shape: "cloud", hue: "amber", expression: "neutral" } }]);
   assert.deepEqual(page.opened, [CREATED]);
   assert.deepEqual(page.view.navigateCalls, []);
   assert.equal(localStorage.getItem("coordinator-new-profile"), null);
@@ -94,12 +113,12 @@ test("the form's submit, which Enter in a field sends, creates it", async () => 
 test("the fields outlive the page", async () => {
   const page = mount();
   await page.named("Webhooks");
-  fireEvent.click(page.view.getByRole("radio", { name: "Brain" }));
+  fireEvent.click(page.view.getByRole("radio", { name: "Cat" }));
   cleanup();
 
   const again = mount();
   const name = await again.view.findByRole("textbox", { name: "Name" });
   assert.ok(name instanceof HTMLInputElement);
   assert.equal(name.value, "Webhooks");
-  assert.equal(again.view.getByRole("radio", { name: "Brain" }).matches(":checked"), true);
+  assert.equal(again.view.getByRole("radio", { name: "Cat" }).matches(":checked"), true);
 });

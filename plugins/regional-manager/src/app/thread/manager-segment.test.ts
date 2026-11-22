@@ -5,7 +5,7 @@ import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { createElement, Fragment, useState } from "react";
 import { COORDINATORS_TAG, coordinatorContract as contract, type Coordinator } from "../../contract.ts";
-import type { Profile } from "../../model/profile.ts";
+import type { Profile } from "../../model/profile/profile.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
 import { PROJECT, sidebarThread } from "../test-sidebar.ts";
 
@@ -32,7 +32,7 @@ function ContextRow({ threadId }: { threadId: string }) {
  * profile it is sent, as setProfile does but for the title, which bb keeps, once `saved` settles.
  */
 function mount(threadId: string, saved: Promise<void> = Promise.resolve()) {
-  let coordinator: Coordinator = { id: coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10"), threadId: "thr_1", projectId: PROJECT.id, description: "Moves webhooks off cron.", avatar: { kind: "icon", icon: "Target" } };
+  let coordinator: Coordinator = { id: coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10"), threadId: "thr_1", projectId: PROJECT.id, description: "Moves webhooks off cron.", avatar: { kind: "blob", shape: "bear", hue: "emerald", expression: "determined" } };
   const saves: Profile[] = [];
   const rpc = {
     coordinators: () => ({ coordinators: [coordinator], notStarted: [] }),
@@ -48,11 +48,11 @@ function mount(threadId: string, saved: Promise<void> = Promise.resolve()) {
   return { view, saves };
 }
 
-test("a regional manager's thread shows its icon and its name, and not its description", async () => {
+test("a regional manager's thread shows its blob and its name, and not its description", async () => {
   const { view } = mount("thr_1");
 
   assert.ok(await view.findByText("Webhooks"));
-  assert.ok(view.container.querySelector('[data-icon="Target"]'), "its avatar");
+  assert.ok(view.container.querySelector('[fill="#27ac7a"]'), "its emerald blob");
   assert.equal(view.queryByText("Moves webhooks off cron."), null);
 });
 
@@ -63,7 +63,7 @@ test("any other thread shows nothing", async () => {
   assert.equal(view.container.textContent, "");
 });
 
-test("pressing the icon and name opens the profile's editor on the name, and Save sends the changed profile, closes it and gives the focus back to them", async () => {
+test("pressing the blob and name opens the profile's editor on the name, and Save sends the changed profile, closes it and gives the focus back to them", async () => {
   const { view, saves } = mount("thr_1");
   const toggle = await view.findByRole("button", { name: "Webhooks, edit profile" });
   // why focus first: a click focuses the button in a browser, and jsdom's doesn't.
@@ -74,16 +74,17 @@ test("pressing the icon and name opens the profile's editor on the name, and Sav
   assert.ok(document.activeElement === name, "the focus the toggle had moves to the name");
 
   fireEvent.change(name, { target: { value: "Webhooks v2" } });
-  fireEvent.click(view.getByRole("radio", { name: "Brain" }));
+  fireEvent.click(view.getByRole("radio", { name: "Cat" }));
+  fireEvent.click(view.getByRole("radio", { name: "Teal" }));
   view.getByRole("button", { name: "Save" }).focus();
   await act(async () => fireEvent.click(view.getByRole("button", { name: "Save" })));
   await act(() => view.experimental_invalidateRpc([COORDINATORS_TAG]));
 
-  assert.deepEqual(saves, [{ name: "Webhooks v2", description: "Moves webhooks off cron.", avatar: { kind: "icon", icon: "Brain" } }]);
+  assert.deepEqual(saves, [{ name: "Webhooks v2", description: "Moves webhooks off cron.", avatar: { kind: "blob", shape: "cat", hue: "teal", expression: "determined" } }]);
   assert.equal(view.queryByRole("form", { name: "Edit profile" }), null);
   assert.equal(toggle.getAttribute("aria-expanded"), "false");
   assert.ok(document.activeElement === toggle, "the focus goes back to the toggle");
-  await waitFor(() => assert.ok(view.container.querySelector('[data-icon="Brain"]'), "the new icon"));
+  await waitFor(() => assert.ok(view.container.querySelector('[fill="#18aa99"]'), "the new teal blob"));
 });
 
 test("Esc closes an edit nothing changed in, with the focus back on the toggle; Cancel drops one that has changes", async () => {

@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PluginSidebarThreadsState } from "@get-bb/plugin-sdk/app";
 import type { Coordinator, NotStarted } from "../../contract.ts";
-import { DEFAULT_AVATAR } from "../../model/profile.ts";
+import type { Avatar } from "../../model/profile/avatar.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
 import { listView } from "./coordinator-groups.ts";
+
+const AVATAR: Avatar = { kind: "blob", shape: "circle", hue: "violet", expression: "neutral" };
 
 const project = (id: string) => ({ id, name: `Project ${id}` });
 const thread = (n: number, projectId: string) => ({ id: `thr_${n}`, projectId });
@@ -14,10 +16,10 @@ const coordinator = (n: number, projectId: string): Coordinator => ({
   threadId: `thr_${n}`,
   projectId,
   description: null,
-  avatar: DEFAULT_AVATAR,
+  avatar: AVATAR,
 });
 
-const notStarted = (n: number): NotStarted => ({ id: coordinatorIdSchema.parse(`9a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2${n}`), name: `Scout ${n}`, description: null, avatar: DEFAULT_AVATAR });
+const notStarted = (n: number): NotStarted => ({ id: coordinatorIdSchema.parse(`9a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2${n}`), name: `Scout ${n}`, description: null, avatar: AVATAR });
 
 const read = (coordinators: Coordinator[] | undefined, error: Error | null = null, waiting: NotStarted[] = []) => ({
   data: coordinators === undefined ? undefined : { coordinators, notStarted: waiting },

@@ -10,7 +10,7 @@ import { z } from "zod";
 import type { EnvironmentProvider } from "../model/agent.ts";
 import type { HolderThread } from "../model/issue/status.ts";
 import type { ComposerRequest } from "../contract.ts";
-import { DEFAULT_AVATAR, type Profile } from "../model/profile.ts";
+import type { Profile } from "../model/profile/profile.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../model/role.ts";
 import type { CheckId } from "../model/verdict/check.ts";
 import { DISPLAY_NAME } from "../name.ts";
@@ -36,7 +36,7 @@ import { openMemoryRoot } from "./memory/memory-files.ts";
 import { memoryHandlers } from "./memory/memory-rpc.ts";
 import { managerHandlers } from "./manager/manager-rpc.ts";
 import { memoryStorage } from "./memory-storage.ts";
-import { verifyOff } from "./store/test-store.ts";
+import { AVATAR, verifyOff } from "./store/test-store.ts";
 import { createReview } from "./review/review.ts";
 import { registerReviewTool } from "./review/review-tool.ts";
 import { registerRoles } from "./roles.ts";
@@ -1108,7 +1108,7 @@ export const settled = (): Promise<void> => new Promise((resolve) => setTimeout(
 export const threadIn = (text: string): string => /@thread:(\w+)/.exec(text)?.[1] ?? assert.fail(`no thread link in: ${text}`);
 
 /** What the New page creates a regional manager named `name` with: no description and the default icon. */
-export const profileNamed = (name: string): Profile => ({ name, description: null, avatar: DEFAULT_AVATAR });
+export const profileNamed = (name: string): Profile => ({ name, description: null, avatar: AVATAR });
 
 /**
  * What bb's composer on a regional manager's page submits for this goal, as bb's RPC hands it to the

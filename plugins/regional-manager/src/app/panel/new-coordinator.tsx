@@ -4,8 +4,9 @@ import { experimental_Icon as Icon, experimental_useRpcMutation } from "@get-bb/
 import { useRef, useState, type Ref } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { EMPTY_DRAFT, NAME_MISSING, NEW_PROFILE_KEY, profileDraftSchema, profileOf } from "../profile/profile-draft.ts";
+import { NAME_MISSING, NEW_PROFILE_KEY, newDraft, profileDraftSchema, profileOf, randomStart } from "../profile/profile-draft.ts";
 import { ProfileFields } from "../profile/profile-fields.tsx";
+import { useTakenLooks } from "../profile/use-manager.ts";
 import { Button } from "../ui/button.tsx";
 import { useStored } from "../ui/stored.ts";
 
@@ -15,11 +16,15 @@ export function NewCoordinator({ ref, onBack, onCreated }: NewCoordinatorProps) 
   const create = experimental_useRpcMutation({ contract, method: "createCoordinator" });
   // why kept in the browser: what the user typed outlives bb redrawing the panel, until Create saves it.
   const stored = useStored(localStorage, NEW_PROFILE_KEY, profileDraftSchema);
-  const draft = stored.value ?? EMPTY_DRAFT;
+  // why a start kept for the page's life: the look it shows stays put until the user changes it.
+  const [start] = useState(randomStart);
+  const taken = useTakenLooks();
+  // why null until the managers are read: a look picked before then could be one of theirs, and typing would keep it.
+  const draft = stored.value ?? (taken === null ? null : newDraft(start, taken));
   // Whether a create found no name: the field says so from then on, until it has one.
   const [tried, setTried] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
-  const profile = profileOf(draft);
+  const profile = draft === null ? null : profileOf(draft);
 
   async function submit() {
     if (create.isPending) return;
@@ -56,7 +61,7 @@ export function NewCoordinator({ ref, onBack, onCreated }: NewCoordinatorProps) 
           </h1>
         </div>
         <div className="flex flex-col gap-5 px-3">
-          <ProfileFields value={draft} onChange={stored.store} nameError={tried && profile === null ? NAME_MISSING : null} nameRef={nameRef} />
+          {draft !== null && <ProfileFields value={draft} onChange={stored.store} nameError={tried && profile === null ? NAME_MISSING : null} nameRef={nameRef} />}
           <div className="flex flex-col items-start gap-2">
             {/* why aria-disabled: a disabled button drops focus to the page while the create runs. */}
             <Button type="submit" variant="default" aria-disabled={create.isPending}>
