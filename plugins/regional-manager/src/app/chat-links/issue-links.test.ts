@@ -472,6 +472,32 @@ test("the card follows its link as the message scrolls, on the side with room, a
   }
 });
 
+test("a focused link scrolled out of sight takes its card with it, capped or not: no card off-screen keeps a tab stop or bb's Escape, and focus is on the link", async () => {
+  for (const height of [200, 2_000]) {
+    const box = { top: 100, bottom: 116, left: 40 };
+    const restore = laidOut(box, { height, width: 320 });
+    try {
+      const { pane, link, glyphOf, card } = mount({ panes: [MANAGER_THREAD] });
+      await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
+      act(() => link(MANAGER_THREAD).focus());
+      await waitFor(() => assert.ok(card() !== null));
+      // why: a card taller than the window is capped, and its body is a tab stop focus can be in.
+      if (height > 768) act(() => (card()?.querySelector<HTMLElement>('.rmi-card-body[tabindex="0"]') ?? assert.fail("no tab stop")).focus());
+
+      Object.assign(box, { top: -266, bottom: -250 });
+      act(() => void fireEvent.scroll(pane(MANAGER_THREAD)));
+      assert.ok(card() === null, `the card of a link past the window's top goes (${height}px)`);
+      assert.ok(document.activeElement === link(MANAGER_THREAD), "focus stays with the link, not in a card gone or the page");
+      const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+      act(() => link(MANAGER_THREAD).dispatchEvent(escape));
+      assert.equal(escape.defaultPrevented, false, "Escape is bb's again");
+      cleanup();
+    } finally {
+      restore();
+    }
+  }
+});
+
 test("a capped card's body is the tab stop after its link: Tab on the link goes into it, and Shift+Tab from it goes back to the link", async () => {
   const restore = laidOut({ top: 700, bottom: 716, left: 40 }, { height: 2_000, width: 320 });
   try {
@@ -632,23 +658,26 @@ test("a link to an issue its manager's board has none of still opens the issue's
   await waitFor(() => assert.deepEqual(view.inspection.experimental_panelCalls.map((call) => call.method === "openTab" && call.options.title), ["BBP-999"]));
 });
 
-test("while the board can't be read, a press still opens the issue's tab, by its id, where the tab shows the failure and Retry", async () => {
-  const { view, link } = mount({ panes: [MANAGER_THREAD] }, { board: "fails" });
-  // why: with no glyph to wait for, the press is made until the plugin knows the link's manager; bb's own handling (here a stand-in, as jsdom can't follow a link) has the presses before that.
-  let reachedBb = false;
-  const bbs = (event: Event) => {
-    reachedBb = true;
-    event.preventDefault();
-  };
-  document.addEventListener("click", bbs);
-  try {
-    await waitFor(() => {
-      reachedBb = false;
-      fireEvent.click(link(MANAGER_THREAD));
-      assert.equal(reachedBb, false, "caught");
-    });
-  } finally {
-    document.removeEventListener("click", bbs);
+test("while the board can't be read, or hasn't answered yet, a press still opens the issue's tab at once, by its id, where the tab shows the failure and Retry, or the loading", async () => {
+  for (const board of ["fails", "pending"] as const) {
+    const { view, link } = mount({ panes: [MANAGER_THREAD] }, { board });
+    // why: with no glyph to wait for, the press is made until the plugin knows the link's manager; bb's own handling (here a stand-in, as jsdom can't follow a link) has the presses before that.
+    let reachedBb = false;
+    const bbs = (event: Event) => {
+      reachedBb = true;
+      event.preventDefault();
+    };
+    document.addEventListener("click", bbs);
+    try {
+      await waitFor(() => {
+        reachedBb = false;
+        fireEvent.click(link(MANAGER_THREAD));
+        assert.equal(reachedBb, false, "caught");
+      });
+    } finally {
+      document.removeEventListener("click", bbs);
+    }
+    await waitFor(() => assert.deepEqual(view.inspection.experimental_panelCalls.map((call) => call.method === "openTab" && call.options.title), ["BBP-24"], board));
+    cleanup();
   }
-  await waitFor(() => assert.deepEqual(view.inspection.experimental_panelCalls.map((call) => call.method === "openTab" && call.options.title), ["BBP-24"]));
 });

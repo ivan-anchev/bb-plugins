@@ -64,23 +64,22 @@ function TabOpener({ threadId, issueId }: { threadId: string; issueId: IssueId }
 }
 
 /**
- * Opens the issue's tab once the board has been read, or has failed to be: titled from its board row,
- * as the Board does, or by the issue's id alone, where the tab says the board has no such issue, or
- * shows the failure and Retry. bb declines the open while the pane isn't the one the app has focused, as a split
- * it just added isn't yet as it mounts (measured live, bb 0.50.1), so the open is asked again as the
- * focused thread changes, and as the board reads again.
+ * Opens the issue's tab as soon as the pane can: titled from its board row, as the Board does, or by
+ * the issue's id alone while the board isn't read, can't be, or has no such issue; the tab itself
+ * shows the loading, the failure and Retry, or that the board has none. why not wait for the board: it
+ * names the tab, nothing more, and a press must open something. bb declines the open while the pane
+ * isn't the one the app has focused, as a split it just added isn't yet as it mounts (measured live,
+ * bb 0.50.1), so the open is asked again as the focused thread changes.
  */
 function BoardTabOpener({ threadId, coordinatorId, issueId }: { threadId: string; coordinatorId: CoordinatorId; issueId: IssueId }) {
   const panel = experimental_useAppPanel();
   const focused = useBbContext().threadId;
-  const { read, issues, issue } = useBoardIssue(coordinatorId, issueId);
-  const settled = issues !== undefined || read.error !== null;
+  const title = useBoardIssue(coordinatorId, issueId).issue?.title ?? null;
   useEffect(() => {
-    if (!settled) return;
-    if (!panel.openTab(issueTabOf(issueId, issue?.title ?? null))) return;
+    if (!panel.openTab(issueTabOf(issueId, title))) return;
     if (requested.get(threadId) !== issueId) return;
     requested.delete(threadId);
     notify();
-  }, [settled, issue, issueId, panel, threadId, focused]);
+  }, [title, issueId, panel, threadId, focused]);
   return null;
 }

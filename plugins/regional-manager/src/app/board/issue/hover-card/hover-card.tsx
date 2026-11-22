@@ -49,7 +49,7 @@ type HoverCardProps = {
 export function HoverCard({ issue, issues, link, presence, failure }: HoverCardProps) {
   useEscapeCloses(presence.close);
   useEffect(() => presence.mounted(), [presence]);
-  const { ref, placement } = useCardPlacement(link ?? null);
+  const { ref, placement } = useCardPlacement(link ?? null, presence.close);
   // why one callback: placement measures the card, and the card hands focus back as it unmounts; a ref that changed per render would hand it back on every render.
   const cardRef = useCallback((card: HTMLDivElement | null) => {
     ref.current = card;

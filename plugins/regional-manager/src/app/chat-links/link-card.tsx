@@ -4,8 +4,8 @@
 // document: a link and its card are one place, so the pointer crossing from one to the other, or focus
 // going back from the card to its link, keeps it. A capped card's body, which scrolls, is the next tab
 // stop after its link and the previous before what follows it, as a board row's card is. A press
-// anywhere but on the card puts it away; a scroll moves it with its link (placement.ts). Escape
-// closes it wherever focus is.
+// anywhere but on the card puts it away; a scroll moves it with its link, and takes it away once the
+// link can't be seen (placement.ts). Escape closes it wherever focus is.
 import { useEffect, useMemo, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { IssueLink } from "../../model/issue/link/issue-link.ts";

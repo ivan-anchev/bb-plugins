@@ -17,7 +17,6 @@ export type CardIntent<Key> = {
   blur(key: Key): void;
   /** A press: the card goes, and the focus it gives a trigger in the same moment opens none. */
   press(): void;
-  close(): void;
   /** What the card of `key` tells the intent while it is mounted (hover-card.tsx). */
   presence(key: Key): CardPresence;
 };
@@ -120,7 +119,6 @@ function cardIntent<Key>(show: (key: Key | null) => void): CardIntent<Key> & { s
       pressed = setTimeout(() => (pressing = false));
       close();
     },
-    close,
     presence: (key) => ({
       close,
       mounted() {

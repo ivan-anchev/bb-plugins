@@ -1101,7 +1101,8 @@ id of the manager is in it because two managers can both have a BBP-24.
   for the issue, floating by the link so the message list never cuts it off.
   It stays while the pointer is on the link or the card; Escape closes it
   wherever focus is, and focus stays on, or goes back to, the link. A press
-  puts it away; a scroll carries it along with its link. When the card is
+  puts it away; a scroll carries it along with its link, and takes it away
+  once the link scrolls out of sight. When the card is
   too tall for the window and its body scrolls, Tab moves from the link into
   the card and Shift+Tab goes back.
 - **Pressing it** opens the issue's tab beside the Board: in the manager's own
@@ -1110,7 +1111,8 @@ id of the manager is in it because two managers can both have a BBP-24.
   tab open. ⌘ or Ctrl asks for the split from the manager's thread too.
 - **Elsewhere**: a link followed where the plugin's overlay doesn't run lands
   on the plugin's panel, which opens the manager's thread with the issue's
-  tab, or says the manager is gone. With the plugin disabled or removed, the
+  tab, or says the manager is gone; Back from the thread goes to the panel's
+  list, not to that page again. With the plugin disabled or removed, the
   link reads as a plain "BBP-24" and bb's plugin-unavailable page answers it;
   exported text and the CLI show the Markdown as written.
 

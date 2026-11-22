@@ -4,7 +4,7 @@
 // can't. why the issue is checked here: a link outlives its issue's manager, which a user can delete.
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import { useEffect, useRef, type ReactNode, type Ref } from "react";
-import type { IssueLink } from "../../model/issue/link/issue-link.ts";
+import { PANEL_PATH, type IssueLink } from "../../model/issue/link/issue-link.ts";
 import { useManagerRead } from "../profile/use-manager.ts";
 import { ReadFailure } from "../ui/read-failure.tsx";
 import { openIssueTabIn } from "./panes.tsx";
@@ -37,7 +37,9 @@ export function IssueLanding({ ref, link, onBack }: IssueLandingProps) {
 
 /**
  * Asks the manager's thread for the issue's tab and opens the thread, once per page. why once: every
- * call navigates, so a later read would pull the user back to it.
+ * call navigates, so a later read would pull the user back to it. why the list first, in this page's
+ * place in the history: bb opens a thread as a new entry, and Back to this page would open the thread
+ * again, so Back never got past it; the list, which takes its place, opens nothing.
  */
 function useOpenOnce(threadId: string | null, { issueId }: IssueLink): void {
   const navigate = useBbNavigate();
@@ -46,6 +48,7 @@ function useOpenOnce(threadId: string | null, { issueId }: IssueLink): void {
     if (threadId === null || opened.current) return;
     opened.current = true;
     openIssueTabIn(threadId, issueId);
+    navigate.toPluginPanel(PANEL_PATH, { replace: true });
     navigate.toThread(threadId);
   }, [threadId, issueId, navigate]);
 }

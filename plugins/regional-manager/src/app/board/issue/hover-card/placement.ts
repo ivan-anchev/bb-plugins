@@ -3,8 +3,10 @@
 // on neither. A row's card sits in the row's box and keeps inside the panel the board scrolls in; a
 // link's card floats, fixed, against the window, by the link's box, so the message list it sits in
 // clips none of it, and follows the link, on whichever side has room, as anything holding it scrolls
-// or the window resizes; its size is measured again each time, and as its content changes. Measured
-// before it paints.
+// or the window resizes; its size is measured again each time, and as its content changes. Once the
+// link can't be seen, scrolled out of the message list or the window, its card goes: a card by nothing
+// on screen would hold a tab stop and bb's Escape for a link the user can't see. Measured before it
+// paints.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 /**
@@ -15,18 +17,20 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObje
  */
 export type Placement = { side: "below" | "above"; cap: number | null; at: { left: number } & ({ top: number } | { bottom: number }) | null };
 
-/** Spread `ref` on the card. `link`: the link it floats by; null: the card's parent is its row's box. */
-export function useCardPlacement(link: HTMLElement | null): { ref: RefObject<HTMLDivElement | null>; placement: Placement } {
+/** Spread `ref` on the card. `link`: the link it floats by; null: the card's parent is its row's box. `lost`: puts a floating card away, once its link can't be seen. */
+export function useCardPlacement(link: HTMLElement | null, lost: () => void): { ref: RefObject<HTMLDivElement | null>; placement: Placement } {
   const ref = useRef<HTMLDivElement>(null);
   const [placement, setPlacement] = useState<Placement>(UNMEASURED);
-  /** Places a floating card by its link and its size as they are now; nothing for a row's card. */
+  /** Places a floating card by its link and its size as they are now, or puts it away once its link can't be seen; nothing for a row's card. */
   const follow = useCallback(() => {
     const card = ref.current;
     // why: the ref's type only; the card is mounted as this runs.
     if (link === null || card === null) return;
-    const next = floatingPlacement(link.getBoundingClientRect(), sizeOf(card));
+    const box = link.getBoundingClientRect();
+    if (!overlaps(box, visibleBounds(link))) return lost();
+    const next = floatingPlacement(box, sizeOf(card));
     setPlacement((current) => (samePlacement(current, next) ? current : next));
-  }, [link]);
+  }, [link, lost]);
   // why layout effects: the card's size and the room around its anchor are the browser's to measure, and the card must not paint where it doesn't fit.
   useLayoutEffect(() => {
     const card = ref.current;
@@ -88,6 +92,9 @@ function sideOf(anchor: Edges, height: number, bounds: Edges): Omit<Placement, "
   if (above > below) return { side: "above", cap: height <= above ? null : Math.max(above, MIN_CAP) };
   return { side: "below", cap: Math.max(below, MIN_CAP) };
 }
+
+/** Whether `box` reaches into `bounds`, touching its edge included. */
+const overlaps = (box: Edges, bounds: Edges): boolean => box.bottom >= bounds.top && box.top <= bounds.bottom;
 
 /** The part of the window `el` can be seen in: the window, cut by every ancestor that clips what overflows it, as the panel the board scrolls in does. */
 function visibleBounds(el: Element): Edges {

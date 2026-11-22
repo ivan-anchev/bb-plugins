@@ -19,11 +19,27 @@ const COORDINATOR: Coordinator = { id: coordinatorIdSchema.parse("6f1c2b0e-8d4a-
 const land = (coordinators: Coordinator[]) =>
   renderSlot({ component: CoordinatorPanel }, { subPath: `issue/${COORDINATOR.id}/BBP-24` }, { experimental_rpcContract: contract, rpc: { coordinators: () => ({ coordinators, notStarted: [] }) } });
 
-test("an issue link's page opens its regional manager's thread, once", async () => {
+test("an issue link's page opens its regional manager's thread, once, and Back from the thread leads past the page, to the list", async () => {
   const view = land([COORDINATOR]);
   await view.findByText("BBP-24 opens in its regional manager's thread.");
-  await waitFor(() => assert.deepEqual(view.inspection.navigateCalls, [{ method: "toThread", threadId: "thr_manager" }]));
+  await waitFor(() => assert.ok(view.inspection.navigateCalls.some(({ method }) => method === "toThread")));
+  const history = historyAfter(["thread thr_chat", `panel regional-managers/issue/${COORDINATOR.id}/BBP-24`], view.inspection.navigateCalls);
+  assert.deepEqual(history.slice(-2), ["panel regional-managers/", "thread thr_manager"], "Back from the manager's thread is the list, which opens nothing; it was the link's page, which opened the thread again");
+  assert.equal(history.length, 3, "and Back from the list is where the link was followed from");
 });
+
+/**
+ * bb's history, `entries` oldest first, after the navigation `calls`, as bb's navigate documents it:
+ * opening a thread adds an entry, and so does opening a panel, unless it replaces the current one.
+ */
+function historyAfter(entries: readonly string[], calls: ReturnType<typeof land>["inspection"]["navigateCalls"]): string[] {
+  return calls.reduce<string[]>((history, call) => {
+    if (call.method === "toThread") return [...history, `thread ${call.threadId}`];
+    if (call.method !== "toPluginPanel") return assert.fail(`unexpected ${call.method}`);
+    const entry = `panel ${call.path}/${call.options?.subPath ?? ""}`;
+    return call.options?.replace === true ? [...history.slice(0, -1), entry] : [...history, entry];
+  }, [...entries]);
+}
 
 test("a link whose regional manager is gone says so, and leads to the list", async () => {
   const view = land([]);
