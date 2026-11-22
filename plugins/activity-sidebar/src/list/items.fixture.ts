@@ -1,6 +1,6 @@
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { buildActivity, type SectionKey } from "../model/activity.ts";
-import { thread } from "../model/fixtures.ts";
+import { thread } from "../model/thread.fixture.ts";
 import { listItems, type ArchivePager, type ListView } from "./items.ts";
 import { layoutItems, type Layout } from "./layout.ts";
 

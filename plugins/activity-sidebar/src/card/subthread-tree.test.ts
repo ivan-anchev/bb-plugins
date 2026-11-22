@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
-import { thread, WORKING } from "../model/fixtures.ts";
+import { thread, WORKING } from "../model/thread.fixture.ts";
 import { indexThreads } from "../model/thread-index.ts";
 import { checkoutOf, subthreadLines, type TreeLine } from "./subthread-tree.ts";
 

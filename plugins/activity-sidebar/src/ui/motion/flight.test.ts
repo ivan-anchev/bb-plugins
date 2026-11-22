@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
-import { layout, quiet, SHOWN } from "../../list/fixtures.ts";
+import { layout, quiet, SHOWN } from "../../list/items.fixture.ts";
 import type { Layout } from "../../list/layout.ts";
 import { STILL } from "../../list/motion-plan.ts";
-import { thread, WORKING } from "../../model/fixtures.ts";
+import { thread, WORKING } from "../../model/thread.fixture.ts";
 import { atRest, landed, passing, settled, takeOff } from "./flight.ts";
 
 const y = (l: Layout, key: string) => l.entries.find((e) => e.key === key)!.y;

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { experimental_PluginRpcCallError, type PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { buildActivity, type SectionKey } from "../model/activity.ts";
-import { project, thread, WORKING } from "../model/fixtures.ts";
-import { LOADED, view } from "./fixtures.ts";
+import { project, thread, WORKING } from "../model/thread.fixture.ts";
+import { LOADED, view } from "./items.fixture.ts";
 import { archivedCountFor, listItems, retryNotice, sleepsStatus, type ListItem, type NoticeKey } from "./items.ts";
 
 function sections(threads = [thread("a", { latestAttentionAt: 2 }), thread("b", { latestAttentionAt: 1 })]) {

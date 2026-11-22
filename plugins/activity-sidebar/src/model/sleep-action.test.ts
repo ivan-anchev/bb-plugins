@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { buildActivity, type RowModel } from "./activity.ts";
-import { project, thread } from "./fixtures.ts";
+import { project, thread } from "./thread.fixture.ts";
 import type { SleepRecord } from "../contract.ts";
 import { sleepItem, type SleepHandlers } from "./sleep-action.ts";
 

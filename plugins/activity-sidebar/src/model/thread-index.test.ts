@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { thread, WORKING } from "./fixtures.ts";
+import { thread, WORKING } from "./thread.fixture.ts";
 import { indexThreads } from "./thread-index.ts";
 
 const TREE = [

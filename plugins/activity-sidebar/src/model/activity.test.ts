@@ -3,7 +3,7 @@ import { test } from "node:test";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import type { SleepRecord } from "../contract.ts";
 import { buildActivity, sleepersAskingForYou, type ActivityInput, type SectionKey } from "./activity.ts";
-import { project, thread, WORKING } from "./fixtures.ts";
+import { project, thread, WORKING } from "./thread.fixture.ts";
 
 const NOW = 10 * 3_600_000;
 

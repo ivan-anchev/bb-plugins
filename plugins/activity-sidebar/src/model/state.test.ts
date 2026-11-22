@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
-import { thread } from "./fixtures.ts";
+import { thread } from "./thread.fixture.ts";
 import { askOf, baseState, stateOf, withAsk, withWait, type ZState } from "./state.ts";
 
 const EXPECTED: Record<PluginSidebarThread["indicator"], ZState | null> = {

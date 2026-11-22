@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { SleepRecord } from "../contract.ts";
-import { thread } from "./fixtures.ts";
+import { thread } from "./thread.fixture.ts";
 import { NOTHING_TRIED, upkeepWrites } from "./sleep-upkeep.ts";
 
 const H = 3_600_000;

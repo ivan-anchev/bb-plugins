@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildActivity } from "../model/activity.ts";
-import { thread } from "../model/fixtures.ts";
-import { view } from "./fixtures.ts";
+import { thread } from "../model/thread.fixture.ts";
+import { view } from "./items.fixture.ts";
 import { listItems, type ListItem } from "./items.ts";
 import { layoutItems, METRICS, visibleKeys } from "./layout.ts";
 

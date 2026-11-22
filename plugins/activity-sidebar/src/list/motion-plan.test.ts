@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
-import { thread, WORKING } from "../model/fixtures.ts";
-import { layout, quiet, SHOWN, view } from "./fixtures.ts";
+import { thread, WORKING } from "../model/thread.fixture.ts";
+import { layout, quiet, SHOWN, view } from "./items.fixture.ts";
 import { listItems } from "./items.ts";
 import { layoutItems, type Layout } from "./layout.ts";
 import { EASE, glideMs, OUT3, planMotion, STILL } from "./motion-plan.ts";
