@@ -271,3 +271,49 @@ test("Shuffle never lands on a look another manager has while one is free: with 
 
   assert.deepEqual(page.creates.map(({ avatar }) => avatar), [free], "the look kept, face and all");
 });
+
+test("every shape, every colour and Shuffle is a finger's tap target, 44px square or more, while the tiles and their artwork keep their size", async () => {
+  const page = mount();
+  const shuffle = await page.view.findByRole("button", { name: "Shuffle" });
+  const radios = page.view.getAllByRole("radio");
+  assert.equal(radios.length, SHAPES.length + HUE_NAMES.length);
+  const labels = radios.map((radio) => {
+    const label = radio.closest("label");
+    assert.ok(label, `${radio.getAttribute("aria-label")} has a label to tap`);
+    return label;
+  });
+
+  for (const [n, label] of labels.entries()) {
+    const { width, height } = tailwindBox(label);
+    assert.ok(width >= 44 && height >= 44, `${radios[n]?.getAttribute("aria-label")}'s tap target is ${width}×${height}px`);
+  }
+  // why so: Shuffle's width is its label beside its glyph, inside its padding; the glyph and the padding alone make it 46px.
+  const shuffleWidth = 2 * tailwindPx(shuffle, ["px"]) + tailwindPx(shuffle, ["gap"]) + tailwindBox(shuffle.querySelector("svg")!).width;
+  const shuffleHeight = tailwindBox(shuffle).height;
+  assert.ok(shuffleWidth >= 44 && shuffleHeight >= 44, `Shuffle's tap target is at least ${shuffleWidth}×${shuffleHeight}px`);
+  fireEvent.click(labels[SHAPES.indexOf("cloud")]!);
+  assert.equal(page.view.getByRole("radio", { name: "Cloud" }).matches(":checked"), true, "a tap on the label picks its shape");
+
+  const sizes = (boxes: { width: number; height: number }[]) => new Set(boxes.map(({ width, height }) => `${width}×${height}`));
+  assert.deepEqual(sizes(labels.map((label) => tailwindBox(label.querySelector(":scope > span")!))), new Set(["32×32"]), "every tile is 32px");
+  const blobs = labels.slice(0, SHAPES.length).map((label) => label.querySelector<HTMLElement>("[role=img]")!.style);
+  assert.deepEqual(new Set(blobs.map((style) => parseFloat(style.width) + 2 * parseFloat(style.margin))), new Set([20]), "every shape's blob is 20px");
+  assert.deepEqual(sizes(labels.slice(SHAPES.length).map((label) => tailwindBox(label.querySelector(":scope > span > span")!))), new Set(["16×16"]), "every colour's swatch is 16px");
+});
+
+/**
+ * The box an element's Tailwind sizing classes give it in bb's stylesheet, in px: the larger of its
+ * fixed and its minimum size. why classes: jsdom lays nothing out; the live editor's captures measure
+ * the laid-out boxes.
+ */
+function tailwindBox(element: Element): { width: number; height: number } {
+  return { width: tailwindPx(element, ["size", "w", "min-w"]), height: tailwindPx(element, ["size", "h", "min-h"]) };
+}
+
+/** The largest length, in px, an element's Tailwind classes with these prefixes set: one spacing step is 4px. */
+function tailwindPx(element: Element, prefixes: string[]): number {
+  return Math.max(0, ...[...element.classList].flatMap((name) => {
+    const [, prefix, steps] = /^([a-z-]+)-(\d+(?:\.\d+)?)$/.exec(name) ?? [];
+    return prefix !== undefined && prefixes.includes(prefix) ? [Number(steps) * 4] : [];
+  }));
+}
