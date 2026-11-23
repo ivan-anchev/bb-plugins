@@ -678,10 +678,10 @@ one of three things with it:
 - **Record** what it decides with `issue_update`'s `decision`.
 - **Relay** it to the issue's agent with `agent_message`, only when it
   concerns the agent's work: quote the user's words and name the comment's id
-  (such as `m4`), so the agent can answer it with `replyTo`. Never relay while the issue
-  is Reviewing or Verifying: a message stops its check. Relay once the check
-  has settled, and set yourself a reminder with `crew_remind` if it must
-  wait.
+  (such as `m4`), so the agent can answer it with `replyTo`. Never relay while
+  the issue is Reviewing or Verifying: a message stops its check. Relay once
+  the check has settled, and set yourself a reminder with `crew_remind` if it
+  must wait.
 
 The agent holding an issue can comment on it too, as to a comment you relayed.
 Its comments reach you in your next catch-up without waking you.

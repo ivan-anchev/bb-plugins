@@ -194,7 +194,8 @@ test("the user's comment, posted through commentIssue, answers only its id, wake
   const update = caughtUp.slice(caughtUp.indexOf("### "), caughtUp.indexOf("## Board"));
   assert.match(update, new RegExp(`^### The user commented on ${issueId} "Add retries": ${posted.commentId}\n\nAt [^\n]+ In their own words:\n\n${text.replaceAll("\n", "\\n")}\n\n`));
   assert.ok(update.includes(`Reply on the issue with issue_comment (issue "${issueId}", replyTo "${posted.commentId}")`), update);
-  assert.ok(update.includes(`${issueId} is Todo now.`), update);
+  assert.ok(update.includes(`or put it in the brief of the agent you start on it. ${issueId} is Todo now, and no agent holds it.`), update);
+  assert.ok(!update.includes("agent_message"), "no relay to an agent the issue doesn't have");
 
   const feed = coordinatorContract.issueFeed.output.parse(await kit.rpc.issueFeed({ coordinatorId, issueId }));
   const entry = feed.entries.find((one) => one.kind === "comment") ?? assert.fail("no comment entry");

@@ -896,9 +896,9 @@ Each comment shows as a card in the order posted, with its id (`m1`, `m2`…):
 yours with "Sent to" and the manager's name, the manager's and the agent's
 replies with a line of the comment they answer. A comment you just sent shows
 as a card saying "Sending…", then "Sent as" its id once the server takes it,
-until the tab reads it. The manager and the
-agent holding the issue comment with `issue_comment`; an agent's comment
-reaches the manager in its next catch-up without waking it.
+until the tab reads it. The manager and the agent holding the issue comment
+with `issue_comment`; an agent's comment reaches the manager in its next
+catch-up without waking it.
 
 ## Decisions
 

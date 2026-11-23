@@ -8,7 +8,7 @@ import { issueIdSchema, type IssueId } from "../../model/issue/issue.ts";
 import type { CoordinatorId, Role } from "../../model/role.ts";
 import type { Inbox } from "../inbox/inbox.ts";
 import type { Store } from "../store/store.ts";
-import { failed, type ToolsBb } from "../tools/tool-kit.ts";
+import { agentOf, failed, type ToolsBb } from "../tools/tool-kit.ts";
 
 export const COMMENT = "issue_comment";
 
@@ -22,7 +22,7 @@ export function registerCommentTool(bb: ToolsBb, { store, inbox }: Deps): void {
       case "coordinator":
         return store.issue(role.coordinatorId, issueId) === null ? { refused: `you have no issue ${issueId}. crew_catch_up lists your issues.` } : { coordinatorId: role.coordinatorId, author: { kind: "manager" } };
       case "agent": {
-        const agent = agentOf(role);
+        const agent = agentOf(store, role);
         if (agent.ended !== null) return { refused: `you no longer hold ${agent.issueId} (you were ${agent.ended.how}). ${ONLY_THESE}` };
         if (agent.issueId !== issueId) return { refused: `you hold ${agent.issueId}, not ${issueId}. ${ONLY_THESE}` };
         return { coordinatorId: role.coordinatorId, author: { kind: "agent", agentId: agent.id } };
@@ -35,12 +35,6 @@ export function registerCommentTool(bb: ToolsBb, { store, inbox }: Deps): void {
     }
   }
 
-  /** The caller's agent as stored now. why throw: an agent's role is inserted with its agent, in one transaction. */
-  function agentOf(role: Extract<Role, { kind: "agent" }>): Agent {
-    const agent = store.agent(role.coordinatorId, role.agentId);
-    if (agent === null) throw new Error(`The agent ${role.agentId} of ${role.coordinatorId} is missing.`);
-    return agent;
-  }
 
   bb.agents.registerTool({
     name: COMMENT,

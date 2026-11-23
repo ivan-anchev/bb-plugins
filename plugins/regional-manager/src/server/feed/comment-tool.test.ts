@@ -15,14 +15,16 @@ async function asked() {
   kit.thread(threadId).status = "idle";
   const { commentId } = await kit.rpc.commentIssue({ coordinatorId, issueId, text: "Cap retries at five?" });
   await settled();
-  await kit.call("crew_catch_up", {}, threadId);
+  const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
   const comments = () => kit.store.commentsOf(coordinatorId, issueId).map(({ id, text, replyTo, author }) => ({ id, text, replyTo, author }));
-  return { kit, threadId, coordinatorId, issueId, agentThreadId, commentId, comments, doorbells: () => kit.doorbellsSent(threadId) };
+  return { kit, threadId, coordinatorId, issueId, agentThreadId, commentId, comments, caughtUp, doorbells: () => kit.doorbellsSent(threadId) };
 }
 
 test("the regional manager's issue_comment posts its reply on the issue and tells it nothing; the holding agent's posts one and a comment event that wakes no one", async () => {
-  const { kit, threadId, coordinatorId, issueId, agentThreadId, commentId, comments, doorbells } = await asked();
+  const { kit, threadId, coordinatorId, issueId, agentThreadId, commentId, comments, caughtUp: told, doorbells } = await asked();
   assert.equal(doorbells().length, 1, "the user's comment woke the regional manager");
+  assert.ok(told.includes(`Nothing reaches a1 on its own: the user's comments come to you.`), told);
+  assert.ok(told.includes(`or, when it concerns a1's work, relay it with agent_message, quoting their words and naming ${commentId}, so it can answer on the issue. Never relay while ${issueId} is Reviewing or Verifying`), told);
 
   const managers = textOf(await kit.call("issue_comment", { issue: issueId, text: "Yes, five.", replyTo: commentId }, threadId));
   assert.equal(managers, `Posted m2 on ${issueId}. The user reads it on the issue's tab.`);

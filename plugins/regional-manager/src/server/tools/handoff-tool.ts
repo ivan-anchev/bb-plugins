@@ -14,7 +14,7 @@ import { threadExecution, type ThreadExecutionBb } from "../execution/thread-exe
 import { checkoutReadOf, gitStatusOf, type GitStatus, type GitStatusBb } from "../git-status.ts";
 import type { Store } from "../store/store.ts";
 import type { Verify } from "../verify/verify.ts";
-import { failed, refusedBusy, type ToolsBb } from "./tool-kit.ts";
+import { agentOf, failed, refusedBusy, type ToolsBb } from "./tool-kit.ts";
 
 export const HANDOFF = "agent_handoff";
 
@@ -26,12 +26,6 @@ type HandoffBb = ToolsBb & TurnsBb & GitStatusBb & ThreadExecutionBb & { sdk: { 
 type Deps = { store: Pick<Store, "roleOfThread" | "agent" | "issue">; verify: Pick<Verify, "handoff"> };
 
 export function registerHandoffTool(bb: HandoffBb, { store, verify }: Deps): void {
-  /** The caller's agent as stored now. why throw: an agent's role is inserted with its agent, in one transaction. */
-  function agentOf(role: Extract<Role, { kind: "agent" }>): Agent {
-    const agent = store.agent(role.coordinatorId, role.agentId);
-    if (agent === null) throw new Error(`The agent ${role.agentId} of ${role.coordinatorId} is missing.`);
-    return agent;
-  }
 
   /** The agent's environment, and bb's git plugin's read of it, once, now, while the agent is awake to hand off; null when its thread has none. */
   async function readEnvironment(threadId: string): Promise<EnvironmentRead | null> {
@@ -49,7 +43,7 @@ export function registerHandoffTool(bb: HandoffBb, { store, verify }: Deps): voi
     execute: async (input, { threadId }) => {
       const role = store.roleOfThread(threadId);
       if (role?.kind !== "agent") return failed(`${HANDOFF} is refused: only an agent thread of a regional manager hands off, and this thread is not one. Carry on without it.`);
-      const caller = agentOf(role);
+      const caller = agentOf(store, role);
       const issue = store.issue(caller.coordinatorId, caller.issueId);
       // why throw: an agent is inserted on an issue of its regional manager, and issues are never deleted.
       if (issue === null) throw new Error(`The issue ${caller.issueId} of ${caller.coordinatorId} is missing.`);

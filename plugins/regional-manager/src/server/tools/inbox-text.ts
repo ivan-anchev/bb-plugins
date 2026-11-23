@@ -151,8 +151,11 @@ function firstLine(text: string): string {
  * Verifying to end.
  */
 function commentNextStep({ id, issueId }: Comment, view: IssueView | null): string {
-  const now = view === null ? `Where ${issueId} stands now couldn't be read with the board: call crew_catch_up again before you relay it.` : `${issueId} is ${STATUS_LABELS[view.status]} now.`;
-  return `Nothing reaches the issue's agent on its own: the user's comments come to you. Reply on the issue with issue_comment (issue "${issueId}", replyTo "${id}"), record what it decides with issue_update (id "${issueId}", decision), or, when it concerns the agent's work, relay it with agent_message, quoting their words and naming ${id}, so the agent can answer it on the issue. Never relay while ${issueId} is Reviewing or Verifying: a message stops its check. Relay once the check has settled, and set yourself a reminder with crew_remind if it must wait. ${now}`;
+  const answer = `Reply on the issue with issue_comment (issue "${issueId}", replyTo "${id}"), record what it decides with issue_update (id "${issueId}", decision)`;
+  if (view === null) return `${answer}. Where ${issueId} stands, and whether an agent holds it, couldn't be read with the board: call crew_catch_up again before you relay it to an agent.`;
+  const now = `${issueId} is ${STATUS_LABELS[view.status]} now`;
+  if (view.holder === null) return `${answer}, or put it in the brief of the agent you start on it. ${now}, and no agent holds it.`;
+  return `Nothing reaches ${view.holder.id} on its own: the user's comments come to you. ${answer}, or, when it concerns ${view.holder.id}'s work, relay it with agent_message, quoting their words and naming ${id}, so it can answer on the issue. Never relay while ${issueId} is Reviewing or Verifying: a message stops its check. Relay once the check has settled, and set yourself a reminder with crew_remind if it must wait. ${now}.`;
 }
 
 /** A decision the user answered: what was asked and offered, then the answer, marked as theirs. */

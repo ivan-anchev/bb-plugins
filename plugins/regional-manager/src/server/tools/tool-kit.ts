@@ -1,6 +1,7 @@
 // What every tool module shares: the part of bb that registers a tool, and the shape of a refusal.
 import type { PluginAgentToolContext, PluginAgentToolRegistrationBase, PluginAgentToolResult } from "@get-bb/plugin-sdk";
 import type { z } from "zod";
+import type { Agent } from "../../model/agent/agent.ts";
 import type { CoordinatorId, Role } from "../../model/role.ts";
 import type { Busy } from "../issues/issue-turns.ts";
 
@@ -36,4 +37,11 @@ export function forManager<Input>(
     if (role?.kind !== "coordinator") return failed(`${tool} is refused: only a regional manager can use it, and this thread was not started as one. Carry on without it.`);
     return run(role.coordinatorId, input);
   };
+}
+
+/** An agent thread's agent as stored now. why throw: an agent's role is inserted with its agent, in one transaction. */
+export function agentOf(store: { agent(coordinatorId: CoordinatorId, agentId: Agent["id"]): Agent | null }, role: Extract<Role, { kind: "agent" }>): Agent {
+  const agent = store.agent(role.coordinatorId, role.agentId);
+  if (agent === null) throw new Error(`The agent ${role.agentId} of ${role.coordinatorId} is missing.`);
+  return agent;
 }
