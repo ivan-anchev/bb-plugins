@@ -540,12 +540,10 @@ test("a commit bb reads other than the claimed one fails the verdict with bb's e
   assert.equal(kit.sent().filter((args) => args.threadId === agentThreadId).length, 1, "only the first verdict went back");
   assert.deepEqual([(await row()).lane, (await row()).headline], ["needs-you", "✗ Not the claimed commit on a clean tree after its fix round: Retries land with backoff"]);
   assert.match(doorbells().at(-1) ?? "", /- WEB-1 "Add retries" \(a1\) handed off: done, failed verification, not the claimed commit on a clean tree$/, "the doorbell names what failed it");
-  const stored = kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict;
   assert.deepEqual(
     (await opened()).rounds.at(-1)?.body.verdict,
     {
       state: "returned",
-      at: stored?.state === "returned" ? stored.at : assert.fail("not returned"),
       verifierThreadId,
       headSha: HEAD,
       checkout: { headSha: "f".repeat(40), changedFiles: [], changedFileCount: 0 },
