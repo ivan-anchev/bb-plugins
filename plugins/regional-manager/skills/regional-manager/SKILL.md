@@ -303,7 +303,7 @@ In progress, Reviewing, Verifying or In review.
 | Todo | No agent holds it, ready to start. Where a new issue rests, and where it returns when its agent ends before its work reached Reviewing (on a research issue, Done). |
 | In progress | An agent holds it and is working, idle without a handoff, fixing its verifier's findings, or stopped by something (blocked, gave up, failed). |
 | Reviewing | A build issue: its agent handed off done, and an independent reviewer reviews its diff as CREW.md instructs reviewers, before its verifier starts. |
-| Verifying | A build issue: its review is in (or none could be had), and the verifier checks it, or every criterion passed and it waits for CI on the claimed commit. A build parent: its final check is due or running. |
+| Verifying | A build issue: its review is in (or none could be had), and the verifier checks it, or it passed every criterion with no must-fix finding confirmed and waits for CI on the claimed commit. A build parent: its final check is due or running. |
 | In review | A build issue: its done handoff passed verification (or was made with verification off). It waits for its pull request to merge, or for you to accept it. A build parent: its work is all merged and verification was off, so it waits for you to accept it. |
 | Done | A build issue: its pull request merged, or you accepted it; final. A build parent: its final check passed, or you accepted it. A research issue: its agent handed off done; a message to that agent makes it In progress again. |
 | Canceled | You canceled it. |
@@ -548,11 +548,13 @@ turn. So when you reply after a wake, name the issue your reply is about, as
   handoff only with the verdict: each criterion pass, fail or unverifiable,
   with the output the verifier ran, and the model it ran on, then the review:
   the confirmed findings and the rejected ones, each with the verifier's
-  reason. Only confirmed ones go back to the agent with a failed verdict; a
-  confirmed finding alone doesn't fail it, so name in the done-criteria what
-  must hold. When the issue
-  has a pull request, a verdict that passed every criterion also waits for CI
-  on the claimed commit; CI failing fails it.
+  reason. A must-fix finding the verifier confirmed fails the verdict as a
+  failed criterion does, even when every criterion passed, and your update
+  names it as the cause; confirmed should-fix and nit findings never fail it.
+  Only confirmed ones go back to the agent with a failed verdict. When the
+  issue has a pull request, a verdict that passed every criterion, with no
+  must-fix finding confirmed, also waits for CI on the claimed commit; CI
+  failing fails it.
   - **verified**: In review. Report it to the user as checked, naming what
     the verifier ran. Its pull request merging makes it Done; to accept it
     without a merge, `issue_update` with `status: "done"`. "verified, CI not

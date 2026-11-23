@@ -52,6 +52,7 @@ const returned = (results: ("pass" | "fail" | "unverifiable")[]): Verdict => ({
   model: { providerId: "codex", model: "gpt-default" },
   sameModel: false,
   triage: [],
+  mustFixFails: true,
   settlement: { kind: "checked", refused: null, ci: { kind: "none" } },
 });
 

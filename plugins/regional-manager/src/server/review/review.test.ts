@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { z } from "zod";
 import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent/agent.ts";
@@ -7,10 +8,11 @@ import { issueIdSchema } from "../../model/issue/issue.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { InteractionPayload } from "../../model/interaction.ts";
 import type { Review } from "../../model/verdict/review.ts";
+import type { Verdict } from "../../model/verdict/verdict.ts";
 import { memoryStorage } from "../memory-storage.ts";
 import { MIGRATIONS } from "../store/migrations.ts";
+import { failWrites } from "../store/test-store.ts";
 import { coordinating, HEAD, isRefusal, levels, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
-import { z } from "zod";
 
 const a1 = agentIdSchema.parse("a1");
 const CRITERIA = ["npm test passes", "npm run lint prints no errors"];
@@ -27,6 +29,13 @@ const FINDINGS = [
   { file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps, so a dead endpoint is retried every 2^n ms forever." },
   { file: "src/retry.ts", line: null, severity: "nit", claim: "The retry helper's name says nothing about backoff." },
 ];
+/** The verdict `stored` of a handoff that passed both its criteria, as the board shows it in its round, settled as `settlement`: no model, triage or rule's flag. */
+function shownPassing(stored: Verdict, settlement: object) {
+  if (stored.state !== "returned") return assert.fail("not returned");
+  const criteria = PASSES.criteria.map(({ criterion, result, evidence }) => ({ criterion: CRITERIA[criterion - 1], result, evidence }));
+  return { state: "returned", at: stored.at, verifierThreadId: stored.verifierThreadId, headSha: HEAD, checkout: { headSha: HEAD, changedFiles: [], changedFileCount: 0 }, criteria, findings: [], sameModel: false, settlement };
+}
+
 const CREW = "# Crew rules\n\n- Reviewers: run the house review against REVIEW.md and report what it finds.\n- Keep every folder at nine files or fewer.\n";
 
 /** A regional manager with one agent on WEB-1, both idle, whose reviewers the test drives (`reportAtOnce` off). */
@@ -68,7 +77,9 @@ async function withAgent(options: Parameters<typeof coordinating>[0] = {}) {
     await kit.idle(threadId, "Verdict returned.");
   }
   const catchUp = async () => textOf(await kit.call("crew_catch_up", {}, threadId));
-  return { kit, threadId, coordinatorId, agentThreadId, row, check, review, reviewer, verifier, handOff, reported, returned, catchUp };
+  /** The round of the agent's latest handoff as the board opens it: its line and its body. */
+  const opened = async () => (await kit.opened(coordinatorId, check().issueId)).rounds.at(-1) ?? assert.fail("no round");
+  return { kit, threadId, coordinatorId, agentThreadId, row, check, review, reviewer, verifier, handOff, reported, returned, catchUp, opened };
 }
 
 test("with verification on, a done handoff is Reviewing once its agent is idle, Verifying once its reviewer reports, then its verdict places it; with it off, neither stage runs", async () => {
@@ -192,7 +203,7 @@ test("the verifier's brief lists the review's findings; its verdict triages each
   await handOff();
   assert.equal(await reported(FINDINGS), "Review recorded: 2 findings. A verifier triages them next. Stop here; don't change anything in this environment.");
   const brief = kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no prompt");
-  assert.match(brief, /## The reviewer's findings\n\nAn independent reviewer read the diff before you and claims these\. They are claims, not facts[^\n]*\n\n1\. `src\/retry\.ts:42` \(must-fix\): The backoff never caps, so a dead endpoint is retried every 2\^n ms forever\.\n2\. `src\/retry\.ts` \(nit\): The retry helper's name says nothing about backoff\./);
+  assert.match(brief, /## The reviewer's findings\n\nAn independent reviewer read the diff before you and claims these\. They are claims, not facts[^\n]*Confirming a must-fix finding fails the verdict as a failed criterion does, even when every criterion passes: confirm one only when what you ran or read shows it holds\. Should-fix and nit findings never fail it\.\n\n1\. `src\/retry\.ts:42` \(must-fix\): The backoff never caps, so a dead endpoint is retried every 2\^n ms forever\.\n2\. `src\/retry\.ts` \(nit\): The retry helper's name says nothing about backoff\./);
 
   const untriaged = await kit.call("issue_verdict", FAILS, verifier());
   assert.ok(isRefusal(untriaged));
@@ -210,27 +221,92 @@ test("the verifier's brief lists the review's findings; its verdict triages each
   const sent = kit.delivered(agentThreadId).at(-1) ?? assert.fail("nothing reached the agent");
   assert.match(
     sent,
-    /### Review findings the verifier confirmed\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps, so a dead endpoint is retried every 2\^n ms forever\.\n {2}The verifier: retry\.ts:42 doubles the delay with no ceiling; a test with 20 failures waits 17 minutes\.$/,
+    /### Must-fix review findings the verifier confirmed\n\nEach of these fails the verdict on its own, whatever the done-criteria say\.\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps, so a dead endpoint is retried every 2\^n ms forever\.\n {2}The verifier: retry\.ts:42 doubles the delay with no ceiling; a test with 20 failures waits 17 minutes\.$/,
   );
   assert.doesNotMatch(sent, /helper's name|naming taste/, "a rejected finding never reaches the agent");
   assert.match(await catchUp(), /the verifier confirmed 1 and rejected 1\. The confirmed ones went back to the agent with the failed verdict\./);
   const stored = check().verdict;
   assert.deepEqual(stored.state === "returned" && stored.triage, [
-    { result: "confirmed", reason: triage[0]?.reason },
-    { result: "rejected", reason: triage[1]?.reason },
+    { ...FINDINGS[0], result: "confirmed", reason: triage[0]?.reason },
+    { ...FINDINGS[1], result: "rejected", reason: triage[1]?.reason },
   ]);
 });
 
-test("the manager's update shows the review's confirmed findings and its rejected ones, each with the verifier's reason", async () => {
-  const { handOff, reported, returned, catchUp } = await withAgent();
+test("a verdict that passes every criterion but confirms a must-fix finding fails: the finding goes back to the agent with the verifier's reason as its fix round, and the manager's update names it as the cause", async () => {
+  const { kit, threadId, coordinatorId, agentThreadId, row, check, handOff, reported, returned, catchUp, opened } = await withAgent();
   await handOff();
   await reported(FINDINGS);
-  await returned({ ...PASSES, triage: [{ finding: 1, result: "confirmed", reason: "It never caps." }, { finding: 2, result: "rejected", reason: "Taste." }] });
+  await returned({ ...PASSES, triage: [{ finding: 1, result: "confirmed", reason: "It never caps: 20 failures wait 17 minutes." }, { finding: 2, result: "rejected", reason: "Taste." }] });
   await settled();
+
+  const stored = check().verdict;
+  assert.deepEqual(stored.state === "returned" && [stored.criteria.map(({ result }) => result), stored.settlement], [["pass", "pass"], { kind: "sent-back", round: 1, ci: { kind: "none" } }], "every criterion passed, and it went back as fix round 1");
+  assert.deepEqual(await row(), ["in-progress", "Working"], "its agent works on its fix round");
+
+  const sent = kit.delivered(agentThreadId).at(-1) ?? assert.fail("nothing reached the agent");
+  assert.match(sent, /^## Verifier findings: a must-fix review finding confirmed, though every done-criterion passed\n/);
+  assert.match(
+    sent,
+    /### Must-fix review findings the verifier confirmed\n\nEach of these fails the verdict on its own, whatever the done-criteria say\.\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps, so a dead endpoint is retried every 2\^n ms forever\.\n {2}The verifier: It never caps: 20 failures wait 17 minutes\.$/,
+  );
+  assert.doesNotMatch(sent, /helper's name|Taste/, "a rejected finding never reaches the agent");
+  assert.doesNotMatch(sent, /nothing to fix/, "the must-fix finding is what there is to fix");
+
+  await kit.idle(agentThreadId, "Looking at it."); // the doorbell for a sent-back verdict waits for the agent's fix turn to end
+  await settled();
+  assert.match(kit.doorbellsSent(threadId).at(-1) ?? "", /handed off: done, failed verification, a must-fix review finding confirmed, findings sent back to it \(fix round 1\)$/m, "the doorbell names the cause");
   const update = await catchUp();
-  assert.match(update, /Review: a reviewer on claude-code sonnet reported 2 findings; the verifier confirmed 1 and rejected 1\. None of them went to the agent\./, "a passed verdict sends nothing back");
-  assert.match(update, /Confirmed:\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps[^\n]*\n {2}Why: It never caps\./);
+  assert.match(update, /handed off: done, failed verification, a must-fix review finding confirmed, findings sent back to it\n/);
+  assert.match(update, /Failed verification: a must-fix review finding confirmed\. 2 of 2 criteria passed/);
+  assert.match(update, /the verifier confirmed 1 and rejected 1\. The confirmed ones went back to the agent with the failed verdict\./);
+  assert.match(update, /Confirmed must-fix, each of which fails the verdict:\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps[^\n]*\n {2}Why: It never caps: 20 failures wait 17 minutes\./);
   assert.match(update, /Rejected:\n- `src\/retry\.ts` \(nit\): The retry helper's name says nothing about backoff\.\n {2}Why: Taste\./);
+
+  const { round, body } = await opened();
+  assert.deepEqual(round.verdict, { outcome: { kind: "fail", by: "must-fix" }, results: ["pass", "pass"], fixRound: { round: 1, delivery: "sent" } }, "its round names the confirmed must-fix finding as what failed it");
+  assert.deepEqual(body.verdict, shownPassing(stored, { kind: "sent-back", ci: { kind: "none" } }), "the verdict whole, never its model, its triage, the rule's flag or the fix round");
+});
+
+test("a verdict that fails on a must-fix finding while CI is still to come says CI hadn't finished when the verdict failed, never that its criteria failed", async () => {
+  const { check, handOff, reported, returned, catchUp } = await withAgent();
+  await handOff({ ...DONE, prUrl: "https://github.com/acme/webhooks/pull/7" });
+  await reported([FINDINGS[0]]);
+  await returned({ ...PASSES, triage: [{ finding: 1, result: "confirmed", reason: "It never caps." }] });
+  await settled();
+
+  const stored = check().verdict;
+  assert.deepEqual(stored.state === "returned" && stored.settlement, { kind: "sent-back", round: 1, ci: { kind: "not-checked", reason: "CI hadn't finished when the verdict failed" } });
+  assert.match(await catchUp(), /Failed verification: a must-fix review finding confirmed\. 2 of 2 criteria passed[^\n]*CI: not checked \(CI hadn't finished when the verdict failed\)\./);
+});
+
+test("confirmed should-fix and nit findings, and a rejected must-fix one, leave a verdict that passes every criterion passed, and nothing goes back to the agent", async () => {
+  const { kit, coordinatorId, agentThreadId, row, check, handOff, reported, returned, catchUp, opened } = await withAgent();
+  await handOff();
+  await reported([...FINDINGS, { file: "src/retry.ts", line: 7, severity: "should-fix", claim: "The jitter is computed twice." }]);
+  const sentBefore = kit.delivered(agentThreadId).length;
+  await returned({
+    ...PASSES,
+    triage: [
+      { finding: 1, result: "rejected", reason: "retry.ts:44 caps it at 5 minutes." },
+      { finding: 2, result: "confirmed", reason: "The name says retry, not backoff." },
+      { finding: 3, result: "confirmed", reason: "Both calls sit on line 7." },
+    ],
+  });
+  await settled();
+
+  const stored = check().verdict;
+  assert.deepEqual(stored.state === "returned" && stored.settlement, { kind: "checked", refused: null, ci: { kind: "none" } });
+  assert.deepEqual(await row(), ["in-review", "✓ Verified: Retries land with backoff"]);
+  assert.equal(kit.delivered(agentThreadId).length, sentBefore, "nothing went back to the agent");
+  const update = await catchUp();
+  assert.match(update, /Verified: 2 of 2 criteria passed/);
+  assert.match(update, /the verifier confirmed 2 and rejected 1\. None of them went to the agent\./);
+  assert.match(update, /Confirmed:\n- `src\/retry\.ts` \(nit\)[^\n]*\n {2}Why: The name says retry, not backoff\.\n- `src\/retry\.ts:7` \(should-fix\)/);
+  assert.doesNotMatch(update, /Confirmed must-fix/);
+
+  const { round, body } = await opened();
+  assert.deepEqual(round.verdict?.outcome, { kind: "pass" }, "no finding fails its round");
+  assert.deepEqual(body.verdict, shownPassing(stored, { kind: "checked", ci: { kind: "none" } }), "the verdict whole, never its model, its triage or the rule's flag");
 });
 
 test("a reviewer silent for 30 minutes never holds the issue in Reviewing: it is stopped, the verifier starts, and the verdict says no review was had; 29 minutes is not enough", async () => {
@@ -392,4 +468,136 @@ test("issues stored before reviews, in every status, load with the same status, 
   assert.equal(started8?.state, "running", "its verifier starts at once");
   assert.equal(kit.spawned(), spawned + 1, "with no reviewer before it");
   assert.equal(kit.store.roleOfThread(started8?.state === "running" ? started8.verifierThreadId : "")?.kind, "verifier");
+});
+
+test("a check stores each finding's severity once, on its review; a verdict settled before a must-fix finding could fail one keeps its outcome, and one still to settle settles by the rule", async () => {
+  const { db, storage, migrated } = rollbackableStorage();
+  const settledBefore = await withAgent({ storage });
+  await settledBefore.handOff();
+  await settledBefore.reported(FINDINGS);
+  await settledBefore.returned({ ...PASSES, triage: [{ finding: 1, result: "rejected", reason: "It caps at 5 minutes." }, { finding: 2, result: "confirmed", reason: "A fair point." }] });
+  await settled();
+  const row = () => z.object({ verdict: z.string() }).parse(db.prepare("SELECT verdict FROM checks").get()).verdict;
+  assert.deepEqual(z.object({ triage: z.unknown() }).parse(JSON.parse(row())).triage, [
+    { result: "rejected", reason: "It caps at 5 minutes." },
+    { result: "confirmed", reason: "A fair point." },
+  ], "the verdict stores only the verifier's triage");
+
+  // As the release before this rule left a verdict that passed with the must-fix finding confirmed: settled, and its last migration still to run.
+  db.exec(`UPDATE checks SET verdict = json_remove(json_set(verdict, '$.triage[0].result', 'confirmed'), '$.mustFixFails')`);
+  migrated.applied = BEFORE_MUST_FIX;
+  settledBefore.kit.reload();
+  const kept = settledBefore.check().verdict;
+  assert.deepEqual(kept.state === "returned" && [kept.mustFixFails, kept.triage.map(({ severity, result }) => [severity, result])], [false, [["must-fix", "confirmed"], ["nit", "confirmed"]]]);
+  assert.deepEqual(await settledBefore.row(), ["in-review", "✓ Verified: Retries land with backoff"], "it keeps the outcome it was settled and announced with");
+  const keptRound = await settledBefore.opened();
+  assert.deepEqual(keptRound.round.verdict, { outcome: { kind: "pass" }, results: ["pass", "pass"], fixRound: null }, "its round still reads passed");
+  assert.deepEqual(keptRound.body.verdict, shownPassing(kept, { kind: "checked", ci: { kind: "none" } }));
+  const update = await settledBefore.catchUp();
+  assert.match(update, /Verified: 2 of 2 criteria passed/);
+  assert.match(update, /Confirmed:\n- `src\/retry\.ts:42` \(must-fix\)/, "the confirmed must-fix finding is listed as confirmed");
+  assert.doesNotMatch(update, /Confirmed must-fix|must-fix review finding confirmed/, "never as failing a verdict it didn't fail");
+
+  // One still to settle settles by the rule: failed, its finding sent back as the fix round, and the manager told.
+  const settles = await releasedWith("waiting-for-ci");
+  const sentBefore = settles.kit.delivered(settles.agentThreadId).length;
+  await settles.kit.tick();
+  await settled();
+  const sentBack = settles.check().verdict;
+  assert.deepEqual(sentBack.state === "returned" && [sentBack.mustFixFails, sentBack.settlement], [true, { kind: "sent-back", round: 1, ci: { kind: "not-checked", reason: "CI hadn't finished when the verdict failed" } }]);
+  assert.equal(settles.kit.delivered(settles.agentThreadId).length, sentBefore + 1);
+  assert.match(settles.kit.delivered(settles.agentThreadId).at(-1) ?? "", /^## Verifier findings: a must-fix review finding confirmed[\s\S]*The verifier: It never caps\./);
+  assert.match(await settles.catchUp(), /Failed verification: a must-fix review finding confirmed\. 2 of 2 criteria passed/);
+
+  // One whose must-fix finding was rejected waits for CI again, and nothing goes back.
+  const stillWaits = await releasedWith("waiting-for-ci", "rejected");
+  const before = stillWaits.kit.delivered(stillWaits.agentThreadId).length;
+  await stillWaits.kit.tick();
+  await settled();
+  const waitsAgain = stillWaits.check().verdict;
+  assert.deepEqual(waitsAgain.state === "returned" && [waitsAgain.mustFixFails, waitsAgain.settlement], [true, { kind: "waiting-for-ci" }]);
+  assert.equal(stillWaits.kit.delivered(stillWaits.agentThreadId).length, before);
+
+  // One left pending, as when the plugin stopped before settling it, settles by the rule too.
+  const stopped = await releasedWith("pending");
+  await stopped.kit.tick();
+  await settled();
+  const pendingSettles = stopped.check().verdict;
+  assert.deepEqual(pendingSettles.state === "returned" && [pendingSettles.mustFixFails, pendingSettles.settlement.kind], [true, "sent-back"]);
+  assert.match(stopped.kit.delivered(stopped.agentThreadId).at(-1) ?? "", /^## Verifier findings: a must-fix review finding confirmed[\s\S]*The verifier: It never caps\./);
+
+  // A handover before the plugin's first tick leaves it to settle as failed, never superseded unjudged.
+  const replaced = await releasedWith("waiting-for-ci");
+  const old = replaced.check().id;
+  assert.match(textOf(await replaced.kit.call("agent_start", { issue: "WEB-1" }, replaced.threadId)), /a2/);
+  await replaced.kit.tick();
+  await settled();
+  const checked = replaced.kit.store.check(old)?.verdict;
+  assert.deepEqual(checked?.state === "returned" && checked.settlement.kind, "checked", "its agent was replaced, so it is the manager's");
+  assert.match(await replaced.catchUp(), /Failed verification: a must-fix review finding confirmed\. 2 of 2 criteria passed/);
+
+  // One that still passes, handed over before the first tick, is superseded as it would have been while it waited: nobody is told, even once CI passes.
+  const moot = await releasedWith("waiting-for-ci", "rejected");
+  const mootCheck = moot.check().id;
+  const toldBefore = await moot.catchUp();
+  assert.match(textOf(await moot.kit.call("agent_start", { issue: "WEB-1" }, moot.threadId)), /a2/);
+  await moot.kit.tick();
+  await settled();
+  const branch = moot.kit.thread(moot.agentThreadId).environmentBranchName ?? assert.fail("no branch");
+  moot.kit.github.prs.set(branch, { number: 7, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
+  await moot.kit.tick();
+  await settled();
+  const superseded = moot.kit.store.check(mootCheck)?.verdict;
+  assert.deepEqual(superseded?.state === "returned" && superseded.settlement, { kind: "superseded" });
+  assert.doesNotMatch(await moot.catchUp(), /\(a1\) handed off: done/, "nothing about the replaced agent's handoff");
+  assert.doesNotMatch(toldBefore, /\(a1\) handed off: done/);
+});
+
+/** The last migration statement the release before this rule ran: the next makes a confirmed must-fix finding fail a verdict. */
+const BEFORE_MUST_FIX = MIGRATIONS.findIndex((statement) => statement.includes("'$.mustFixFails'"));
+
+/**
+ * An agent whose done handoff, as the release before this rule left it, passed every criterion with its must-fix finding
+ * `triaged` (by default confirmed), and was `left`: waiting for CI still to finish on its pull
+ * request, or pending, its settlement's write failed as when the plugin stops before settling it;
+ * then the plugin upgrades.
+ */
+async function releasedWith(left: "waiting-for-ci" | "pending", triaged: "confirmed" | "rejected" = "confirmed") {
+  const before = rollbackableStorage();
+  const agent = await withAgent({ storage: before.storage });
+  const branch = agent.kit.thread(agent.agentThreadId).environmentBranchName ?? assert.fail("no branch");
+  agent.kit.github.prs.set(branch, { number: 7, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup: left === "pending" ? "SUCCESS" : "PENDING", failed: [] });
+  await agent.handOff({ ...DONE, prUrl: "https://github.com/acme/webhooks/pull/7" });
+  await agent.kit.tick();
+  await agent.reported([FINDINGS[0]]);
+  const restore = left === "pending" ? failWrites(before.db, "INSERT", "events") : () => {};
+  const verifierThreadId = agent.verifier();
+  await agent.kit.call("issue_verdict", { ...PASSES, triage: [{ finding: 1, result: "rejected", reason: "It caps." }] }, verifierThreadId);
+  await settled();
+  restore();
+  const stored = agent.check().verdict;
+  assert.equal(stored.state === "returned" && stored.settlement.kind, left, "as the release before this rule left it");
+  // The release before this rule let a confirmed must-fix finding pass, and stored no mustFixFails.
+  before.db.prepare("UPDATE checks SET verdict = json_remove(json_set(verdict, '$.triage[0]', json(?)), '$.mustFixFails')").run(JSON.stringify({ result: triaged, reason: "It never caps." }));
+  before.migrated.applied = BEFORE_MUST_FIX;
+  agent.kit.reload();
+  return agent;
+}
+
+test("a verdict that fails only on confirmed must-fix findings after the agent's fix round waits under Needs you, its headline and doorbell naming them", async () => {
+  const { kit, threadId, agentThreadId, row, handOff, reported, returned } = await withAgent();
+  await handOff();
+  await reported([]);
+  await returned(FAILS);
+  await settled();
+  const sentBefore = kit.delivered(agentThreadId).length;
+
+  await handOff();
+  await reported([FINDINGS[0], { file: "src/retry.ts", line: 9, severity: "must-fix", claim: "A 4xx is retried." }]);
+  await returned({ ...PASSES, triage: [{ finding: 1, result: "confirmed", reason: "It never caps." }, { finding: 2, result: "confirmed", reason: "A 404 is retried 5 times." }] });
+  await settled();
+
+  assert.equal(kit.delivered(agentThreadId).length, sentBefore, "its one fix round is spent: nothing more goes back");
+  assert.deepEqual(await row(), ["needs-you", "✗ 2 must-fix review findings confirmed after its fix round: Retries land with backoff"]);
+  assert.match(kit.doorbellsSent(threadId).at(-1) ?? "", /- WEB-1 "Add retries" \(a1\) handed off: done, failed verification, 2 must-fix review findings confirmed$/);
 });

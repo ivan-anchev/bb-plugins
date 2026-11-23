@@ -7,16 +7,16 @@ import type { Decision, DecisionId } from "../../model/decision.ts";
 import type { Handoff, HandoffId } from "../../model/agent/handoff.ts";
 import type { StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { filesText } from "../../model/inbox/own-tree.ts";
-import { askedOf, checkedOf, issueName, titled } from "../../model/inbox/wake-text.ts";
+import { askedOf, checkedOf, failedVerification, issueName, titled } from "../../model/inbox/wake-text.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
 import { STATUS_LABELS, type Handed, type IssueView } from "../../model/issue/status.ts";
 import type { MemoryFile } from "../../model/memory-file.ts";
 import { intervalText, type Reminder } from "../../model/reminder.ts";
 import { checkedAgents, type Check, type CheckId, type FinalCheck } from "../../model/verdict/check.ts";
-import { checkoutText, NOT_CLEAN, worktreeText } from "../../model/verdict/checkout.ts";
+import { checkoutText, worktreeText } from "../../model/verdict/checkout.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
-import { findingText, triaged, type Review, type Triage } from "../../model/verdict/review.ts";
-import { allPassed, ciVerdictOf, failedCheckout, judge, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
+import { findingText, type Review } from "../../model/verdict/review.ts";
+import { ciVerdictOf, confirmedFindings, failurePhrases, failureReasons, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
 import { reportFileOf } from "../memory/report-file.ts";
 
 /** What the texts look up, all within one regional manager. */
@@ -80,10 +80,11 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
       return `### ${on} handed off: ${handed.handoff.status}\n\n${when} Its report, in its own words:\n\n${handoffText(handed, lookups)}`;
     }
     case "sent-back": {
-      const { subject } = checkedOf(lookups.check(event.checkId));
+      const check = checkedOf(lookups.check(event.checkId));
+      const { subject } = check;
       // why throw: only a handoff's verdict goes back to an agent.
       if (subject.kind !== "handoff") throw new Error(`The check ${event.checkId} sent back judges no handoff.`);
-      return `### ${on} handed off: done, failed verification, findings sent back to it\n\n${when} The plugin sent the verifier's findings to ${event.agentId} as its automatic fix round ${event.round}. Nothing to do yet: it fixes them and hands off again, and a new verifier checks that. If that fails too, it comes to you. Its report, in its own words:\n\n${handoffText(handedOf(subject.handoffId, lookups), lookups)}`;
+      return `### ${on} handed off: done, ${failedVerification(check)}, findings sent back to it\n\n${when} The plugin sent the verifier's findings to ${event.agentId} as its automatic fix round ${event.round}. Nothing to do yet: it fixes them and hands off again, and a new verifier checks that. If that fails too, it comes to you. Its report, in its own words:\n\n${handoffText(handedOf(subject.handoffId, lookups), lookups)}`;
     }
     case "idle-without-handoff":
       return `### ${on} ended its turn without a handoff\n\n${when} ${event.lastAnswer === null ? "It gave no answer." : `Its last answer, in its own words:\n\n${event.lastAnswer.trim()}`}`;
@@ -262,10 +263,10 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
       return "Not in yet: a verifier is checking it.";
     case "returned": {
       const ci = ciVerdictOf(verdict);
-      const passed = ci === null ? allPassed(verdict) : judge(verdict, ci) === "pass";
-      const label = passed ? (ci === null ? "Passed every criterion" : "Verified") : "Failed verification";
-      // why the checkout and CI first when they failed the verdict: its criteria may all have passed.
-      const reasons = [...(failedCheckout(verdict) === null ? [] : [notCleanReason(check)]), ...(ci?.kind === "fail" ? [`CI failed on #${ci.number}`] : [])];
+      const failedBy = failureReasons(verdict);
+      const label = failedBy.length > 0 ? "Failed verification" : ci === null ? "Passed every criterion" : "Verified";
+      // why the checkout, must-fix findings and CI first when they failed the verdict: its criteria may all have passed.
+      const reasons = failurePhrases(failedBy, subject.kind);
       const reason = reasons.length === 0 ? "" : ` ${reasons.join(", and ")}.`;
       const count = verdict.criteria.filter((check) => check.result === "pass").length;
       const by = verifiedOn(verdict, check, checkedAgents(check, lookups.agents()));
@@ -296,7 +297,8 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
 
 /**
  * What came of a returned verdict's review: no review was had, and why; or what its reviewer found,
- * on what model, each finding as the verifier triaged it, confirmed ones first, each with the
+ * on what model, each finding as the verifier triaged it, confirmed must-fix ones first, as each
+ * failed the verdict, then the other confirmed ones, then the rejected ones, each with the
  * verifier's reason, and whether the confirmed ones went to the agent. Nothing for a check with no review stage.
  */
 function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned" }>): string[] {
@@ -304,13 +306,17 @@ function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned
   if (review.state !== "reported") return [];
   const by = `${review.model.providerId} ${review.model.model}`;
   if (review.findings.length === 0) return [`Review: a reviewer on ${by} found nothing.`];
-  const all = triaged(review, verdict.triage);
-  const lines = (result: Triage["result"]) => all.filter((finding) => finding.result === result).map((finding) => `- ${findingText(finding).replaceAll("\n", "\n  ")}\n  Why: ${finding.reason}`);
-  const confirmed = lines("confirmed");
-  const rejected = lines("rejected");
+  const all = verdict.triage;
+  const lines = (findings: typeof all) => findings.map((finding) => `- ${findingText(finding).replaceAll("\n", "\n  ")}\n  Why: ${finding.reason}`);
+  const { failing, others } = confirmedFindings(verdict);
+  const mustFix = lines(failing);
+  const confirmed = lines(others);
+  const rejected = lines(all.filter((finding) => finding.result === "rejected"));
+  const confirmedCount = mustFix.length + confirmed.length;
   return [
-    [`Review: a reviewer on ${by} reported ${all.length} finding${all.length === 1 ? "" : "s"}; the verifier confirmed ${confirmed.length} and rejected ${rejected.length}.`, ...(confirmed.length === 0 ? [] : [confirmedSent(verdict)])].join(" "),
-    ...(confirmed.length === 0 ? [] : [`Confirmed:\n${confirmed.join("\n")}`]),
+    [`Review: a reviewer on ${by} reported ${all.length} finding${all.length === 1 ? "" : "s"}; the verifier confirmed ${confirmedCount} and rejected ${rejected.length}.`, ...(confirmedCount === 0 ? [] : [confirmedSent(verdict)])].join(" "),
+    ...(mustFix.length === 0 ? [] : [`Confirmed must-fix, each of which fails the verdict:\n${mustFix.join("\n")}`]),
+    ...(confirmed.length === 0 ? [] : [`${mustFix.length === 0 ? "Confirmed" : "Confirmed, the others"}:\n${confirmed.join("\n")}`]),
     ...(rejected.length === 0 ? [] : [`Rejected:\n${rejected.join("\n")}`]),
   ];
 }
@@ -332,18 +338,6 @@ function confirmedSent({ settlement }: Extract<Verdict, { state: "returned" }>):
       return "None of them went to the agent.";
     default:
       return settlement satisfies never;
-  }
-}
-
-/** Why the tree failed a verdict, whatever its criteria say: the agent's claimed commit wasn't checked out on a clean tree; a final check's verifier's worktree wasn't clean. */
-function notCleanReason({ subject }: Check): string {
-  switch (subject.kind) {
-    case "handoff":
-      return NOT_CLEAN.toLowerCase();
-    case "final":
-      return "the verifier's worktree wasn't clean";
-    default:
-      return subject satisfies never;
   }
 }
 

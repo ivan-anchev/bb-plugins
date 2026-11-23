@@ -169,6 +169,14 @@ test("a round whose criteria all passed but CI failed leads its line with that r
   assert.equal(rounds(tab()).head(3).textContent, "Round 3Round 3: retries land with backoffCI failed");
 });
 
+test("a round whose criteria all passed but whose must-fix finding the verifier confirmed leads with that reason, never its score", async () => {
+  const mustFix: Entry[] = FEED.entries.map((entry) =>
+    entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, outcome: { kind: "fail", by: "must-fix" } } } } : entry,
+  );
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: mustFix }) });
+  assert.equal(rounds(tab()).head(3).textContent, "Round 3Round 3: retries land with backoffMust-fix confirmed");
+});
+
 test("a final check whose own worktree was dirty says so, never that a claimed commit was missing", async () => {
   const dirty: Entry[] = FEED.entries.map((entry) =>
     entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null

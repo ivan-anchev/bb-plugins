@@ -68,9 +68,13 @@ For a final check:
    - **rejected**: it doesn't hold, or isn't worth fixing.
 
    Give each its reason in a line: what you ran or read that decides it. A
-   finding never decides a criterion for you, and a confirmed one alone
-   doesn't fail the verdict: when it breaks a criterion, fail that criterion
-   on your own evidence.
+   finding never decides a criterion for you: when it breaks a criterion,
+   fail that criterion on your own evidence.
+
+   **Confirming a must-fix finding fails the verdict** as a failed criterion
+   does, even when every criterion passes. Confirm one only when what you ran
+   or read shows it holds. Should-fix and nit findings never fail the verdict, confirmed or
+   not.
 
 ## Never
 
@@ -92,13 +96,23 @@ Call `issue_verdict` once, as your last action, then stop:
   `result` confirmed or rejected, and `reason`, in a line. `[]` when your
   first message lists none.
 
-If it is an agent's first failed verdict on a done handoff, the plugin sends
-the agent each criterion that didn't pass, with your evidence, your findings
-and the reviewer's findings you confirmed, with your reasons, as a message from
-your thread (never one you rejected), for it to fix, once your turn ends
-and your thread is stopped, which ends any command you left running in the
-background: the agent never works beside you. A final check's
-verdict goes to the regional manager only, which files the fix as new work.
+A failed verdict on a done handoff, whatever failed it (a criterion, a
+must-fix finding you confirmed, the plugin's read of the commit and the tree,
+or CI on its pull request), goes back to the agent as its one automatic fix
+round when:
+
+- it is the agent's first failed verdict: it has its fix round left;
+- the agent still holds the issue, and the handoff is still its latest turn;
+- the pull request hasn't merged.
+
+Then the plugin sends the agent what failed it: each criterion that didn't
+pass, with your evidence, the commit and the tree or CI when they failed it,
+your findings, and the reviewer's findings you confirmed, must-fix ones first,
+with your reasons, as a message from your thread (never one you rejected),
+once your turn ends and your thread is stopped, which ends any command you
+left running in the background: the agent never works beside you. Any other
+failed verdict goes to the regional manager. A final check's verdict goes to
+the regional manager only, which files the fix as new work.
 Either way, write evidence and findings someone can act on: the failing
 command and its failing lines, not a summary.
 

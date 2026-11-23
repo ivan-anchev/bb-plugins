@@ -209,6 +209,15 @@ export const MIGRATIONS: readonly string[] = [
       "(SELECT issue_id FROM agents WHERE ticket = NEW.ticket)",
     ),
   ].join(";\n"),
+
+  // Whether a confirmed must-fix finding fails a returned verdict (verdict.ts mustFixFails), as it
+  // does since this release. One that settled before keeps the outcome it was settled and announced
+  // with, and so does one whose findings were on their way back, as they were sent; one still to
+  // settle (pending, or waiting for CI) settles by the rule. A waiter the rule now fails is left
+  // for that settlement, never superseded first (checks-store.ts supersedeChecks).
+  `UPDATE checks SET verdict = json_set(verdict, '$.mustFixFails',
+     json(CASE WHEN json_extract(verdict, '$.settlement.kind') IN ('pending', 'waiting-for-ci') THEN 'true' ELSE 'false' END))
+   WHERE json_extract(verdict, '$.state') = 'returned'`,
 ];
 
 /** The trigger `name`: after each row `on` names, one more write of the issue `issue` of the regional manager `manager`. */

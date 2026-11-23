@@ -467,15 +467,27 @@ test("an issue opened on the board sends of each verdict only what the board sho
   const verifierThreadId = verifier();
   await kit.call("issue_verdict", FAILS, verifierThreadId);
   await kit.idle(verifierThreadId, "Verdict returned.");
-  const sendingBack = await shown();
-  assert.deepEqual(Object.keys(sendingBack).sort(), ["at", "checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
-  assert.deepEqual(sendingBack.state === "returned" && sendingBack.settlement, { kind: "sending-back" });
+  const at = () => {
+    const stored = kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict;
+    return stored?.state === "returned" ? stored.at : assert.fail("not returned");
+  };
+  /** The returned verdict as the board is shown it, settled as `settlement`. */
+  const failed = (settlement: object) => ({
+    state: "returned",
+    at: at(),
+    verifierThreadId,
+    headSha: HEAD,
+    checkout: { headSha: HEAD, changedFiles: [], changedFileCount: 0 },
+    criteria: FAILS.criteria.map(({ criterion, result, evidence }) => ({ criterion: CRITERIA[criterion - 1], result, evidence })),
+    findings: [],
+    sameModel: false,
+    settlement,
+  });
+  assert.deepEqual(await shown(), failed({ kind: "sending-back" }));
 
   take();
   await settled();
-  const returned = await shown();
-  assert.deepEqual(Object.keys(returned).sort(), ["at", "checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
-  assert.deepEqual(returned.state === "returned" && returned.settlement, { kind: "sent-back", ci: { kind: "none" } });
+  assert.deepEqual(await shown(), failed({ kind: "sent-back", ci: { kind: "none" } }));
 });
 
 // QA-03: a Claude Code verifier's per-command sandbox showed a boat sandbox's home dotfiles as
@@ -506,7 +518,7 @@ test("a tree bb reads with changes fails the verdict with bb's evidence, whateve
 
   await verdictReturned(PASSES);
   const findings = kit.delivered(agentThreadId).at(-1) ?? assert.fail("nothing reached the agent");
-  assert.match(findings, /^## Verifier findings: every done-criterion passed, and the claimed commit wasn't checked out on a clean tree\n/);
+  assert.match(findings, /^## Verifier findings: not the claimed commit on a clean tree, though every done-criterion passed\n/);
   assert.match(findings, /### The commit and the tree\n\nbb's git plugin read the agent's environment as it handed off: the working tree had 2 changed files: \?\? scratch-1\.txt, \?\? scratch-2\.txt\. Commit what belongs/);
   assert.deepEqual([(await row()).lane, (await row()).headline], ["in-progress", "Working"], "the agent works again, on its one fix round");
   assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 1);
@@ -521,19 +533,34 @@ test("a tree bb reads with changes fails the verdict with bb's evidence, whateve
 });
 
 test("a commit bb reads other than the claimed one fails the verdict with bb's evidence; failing again after the fix round goes to the coordinating thread", async () => {
-  const { kit, agentThreadId, row, opened, handOff, verdictReturned } = await withAgent();
+  const { kit, coordinatorId, agentThreadId, doorbells, row, opened, handOff, verifier, verdictReturned } = await withAgent();
   kit.git.heads.set(kit.thread(agentThreadId).environmentId ?? assert.fail("no environment"), "f".repeat(40));
   await handOff();
   await verdictReturned(PASSES);
   assert.match(kit.delivered(agentThreadId).at(-1) ?? "", new RegExp(`HEAD was f{40}, not the claimed ${HEAD}\\.`));
 
   await handOff();
+  const verifierThreadId = verifier();
   await verdictReturned(PASSES);
   assert.equal(kit.sent().filter((args) => args.threadId === agentThreadId).length, 1, "only the first verdict went back");
   assert.deepEqual([(await row()).lane, (await row()).headline], ["needs-you", "✗ Not the claimed commit on a clean tree after its fix round: Retries land with backoff"]);
-  const shown = (await opened()).rounds.at(-1)?.body.verdict;
-  assert.ok(shown?.state === "returned");
-  assert.deepEqual(shown.checkout, { headSha: "f".repeat(40), changedFiles: [], changedFileCount: 0 }, "the board has bb's read to show");
+  assert.match(doorbells().at(-1) ?? "", /- WEB-1 "Add retries" \(a1\) handed off: done, failed verification, not the claimed commit on a clean tree$/, "the doorbell names what failed it");
+  const stored = kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict;
+  assert.deepEqual(
+    (await opened()).rounds.at(-1)?.body.verdict,
+    {
+      state: "returned",
+      at: stored?.state === "returned" ? stored.at : assert.fail("not returned"),
+      verifierThreadId,
+      headSha: HEAD,
+      checkout: { headSha: "f".repeat(40), changedFiles: [], changedFileCount: 0 },
+      criteria: PASSES.criteria.map(({ criterion, result, evidence }) => ({ criterion: CRITERIA[criterion - 1], result, evidence })),
+      findings: [],
+      sameModel: false,
+      settlement: { kind: "checked", ci: { kind: "none" } },
+    },
+    "the board has bb's read to show",
+  );
 });
 
 test("a checkout bb's git plugin can't read is Couldn't verify at once: no verifier, nothing sent to the agent, no fix round spent", async () => {

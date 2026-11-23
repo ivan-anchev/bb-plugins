@@ -10,7 +10,7 @@ import type { Decision, DecisionId } from "../decision.ts";
 import type { IssueId } from "../issue/issue.ts";
 import type { Check, CheckId } from "../verdict/check.ts";
 import { PR_CHANGE_WORDS } from "../verdict/pr.ts";
-import { ciVerdictOf, mayHaveReachedAgent, outcome } from "../verdict/verdict.ts";
+import { ciVerdictOf, failurePhrases, failureReasons, mayHaveReachedAgent, outcome } from "../verdict/verdict.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import type { InboxEvent, StoredEvent } from "./inbox-event.ts";
 import { filesText } from "./own-tree.ts";
@@ -42,7 +42,7 @@ function line(event: InboxEvent, { titles, check, decision }: Lookups): string {
     case "handoff":
       return `${on} handed off: ${event.status}`;
     case "sent-back":
-      return `${on} handed off: done, failed verification, findings sent back to it (fix round ${event.round})`;
+      return `${on} handed off: done, ${failedVerification(checkedOf(check(event.checkId)))}, findings sent back to it (fix round ${event.round})`;
     case "idle-without-handoff":
       return `${on} ended its turn without a handoff`;
     case "failed":
@@ -114,6 +114,16 @@ function finalCheckedAs({ verdict }: Check): string {
   }
 }
 
+/**
+ * A failed done handoff's verdict in a phrase: "failed verification", then what failed it besides
+ * its criteria, as "failed verification" already says those. One wording for every update that
+ * announces it: sent back as the fix round, or checked.
+ */
+export function failedVerification({ verdict }: Pick<Check, "verdict">): string {
+  const because = verdict.state === "returned" ? failurePhrases(failureReasons(verdict), "handoff") : [];
+  return ["failed verification", ...because].join(", ");
+}
+
 /** What the plugin's check of a done handoff found, in words derived from its verdict alone. */
 function checkedAs({ verdict }: Check): string {
   const result = outcome(verdict);
@@ -123,7 +133,7 @@ function checkedAs({ verdict }: Check): string {
       if (ci?.kind === "not-checked") return "verified, CI not checked";
       return ci?.kind === "no-checks" ? "verified, no CI checks" : "verified";
     case "fail": {
-      const failed = ci?.kind === "fail" ? `failed verification, CI failed on #${ci.number}` : "failed verification";
+      const failed = failedVerification({ verdict });
       return mayHaveReachedAgent(verdict) ? `${failed}, findings may or may not have reached it` : failed;
     }
     case "could-not-run":

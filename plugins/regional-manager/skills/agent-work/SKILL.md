@@ -163,11 +163,15 @@ its verdict, which ends any command you left running in the background; your
 handoff stands. Leave your environment as it is until you hear back from the
 verifier or your regional manager.
 
+A must-fix finding of the reviewer's that the verifier confirms fails your
+verdict, even when every done-criterion passes; should-fix and nit findings
+never do.
+
 If your first verdict fails, its findings come back to you, once the verifier
 has finished, as a message from the verifier thread, headed "Verifier findings": each criterion that didn't
 pass, with the verifier's evidence, what was wrong with the commit or the tree,
 the CI checks that failed, its other findings, and the reviewer's findings it
-confirmed, each with its reason; the ones it rejected don't reach you. Fix each one, commit, check
+confirmed, must-fix ones first, each with its reason; the ones it rejected aren't in it. Fix each one, commit, check
 every criterion again, and call `agent_handoff` with `done` and your new
 commit. A new verifier checks it. This happens once: if that check fails too,
 your regional manager decides what happens next.

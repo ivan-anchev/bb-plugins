@@ -6,6 +6,7 @@ import { handoffIdSchema, type Handoff } from "../../../model/agent/handoff.ts";
 import type { IssueId } from "../../../model/issue/issue.ts";
 import type { Check } from "../../../model/verdict/check.ts";
 import type { CheckoutRead } from "../../../model/verdict/checkout.ts";
+import { judge } from "../../../model/verdict/verdict.ts";
 import { openStore, type Store } from "../store.ts";
 import { EXECUTION, failWrites, filedIssue, freshStore, MANAGER, newIssue, startAgent } from "../test-store.ts";
 
@@ -49,6 +50,22 @@ function runningCheck(store: Store, issueId: IssueId, agentId: AgentId, n: numbe
   store.bindTicket(`verifier-${n}`, `thr_verifier_${n}`);
   return check;
 }
+
+/** A done handoff's check whose reviewer reported one must-fix finding, running in the verifier thread `thr_verifier_<n>`. */
+function reviewedCheck(store: Store, issueId: IssueId, agentId: AgentId, n: number): Check {
+  const check = checkOf(store.insertHandoff(handoff(issueId, agentId, "done", 3_000 + n), CLEAN));
+  const at = { coordinatorId: MANAGER, issueId, checkId: check.id };
+  store.insertCheckerTicket(`reviewer-${n}`, { kind: "reviewer", ...at }, 3_000);
+  store.bindTicket(`reviewer-${n}`, `thr_reviewer_${n}`);
+  const finding = { file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." } as const;
+  assert.equal(store.receiveReview(check.id, `thr_reviewer_${n}`, [finding], { providerId: "codex", model: "gpt-default" }, 3_000 + n), true);
+  store.insertCheckerTicket(`verifier-${n}`, { kind: "verifier", ...at }, 3_000);
+  store.bindTicket(`verifier-${n}`, `thr_verifier_${n}`);
+  return check;
+}
+
+/** A verdict that passed every criterion and confirmed its review's must-fix finding. */
+const confirmedMustFix = (verifierThreadId: string): Received => ({ ...returned(verifierThreadId, "pass"), triage: [{ result: "confirmed", reason: "It never caps." }] });
 
 const CHECKED = { kind: "checked", refused: null, ci: { kind: "none" } } as const;
 
@@ -164,6 +181,16 @@ test("a fix round claimed before its findings are sent survives a reload, and se
   assert.deepEqual(events(reloaded), [{ kind: "sent-back", issueId: issue.id, agentId, checkId: check.id, round: 1 }]);
 });
 
+test("every verdict the store receives is judged by the must-fix rule: one that passes every criterion but confirms a must-fix finding fails", () => {
+  const { store, issue, agentId } = withAgent();
+  const check = reviewedCheck(store, issue.id, agentId, 1);
+  assert.equal(store.receiveVerdict(check.id, confirmedMustFix("thr_verifier_1"), 4_000), true);
+  const stored = store.check(check.id)?.verdict;
+  assert.ok(stored?.state === "returned");
+  assert.equal(stored.mustFixFails, true, "the store sets it; no caller passes it");
+  assert.equal(judge(stored, { kind: "none" }), "fail");
+});
+
 test("a verdict that passed waits for CI, and one settled as checked gives back a round claimed for findings that never left", () => {
   const { store, issue, agentId } = withAgent();
 
@@ -196,6 +223,34 @@ test("a done handoff that fails partway leaves no handoff, no check, the checks 
   assert.deepEqual(events(store), [{ kind: "verification-toggled", verify: false }]);
 });
 
+test("a done handoff that fails partway keeps the checks waiting for CI whole and waiting, and a retry supersedes the one that passed all but CI once, leaving one the must-fix rule fails to settle", () => {
+  const { db, store, issue, agentId } = withAgent();
+  // As a verdict that waited for CI before a confirmed must-fix finding could fail one is left (migrations.ts).
+  const fails = reviewedCheck(store, issue.id, agentId, 1);
+  store.receiveVerdict(fails.id, confirmedMustFix("thr_verifier_1"), 3_900);
+  assert.equal(store.settleReturned(fails.id, { kind: "waiting-for-ci" }, 4_000), MANAGER);
+  const passed = runningCheck(store, issue.id, agentId, 2);
+  assert.deepEqual(store.waitingForCi(MANAGER, agentId), [fails.id], "the newer handoff left the one the rule fails waiting");
+  store.receiveVerdict(passed.id, returned("thr_verifier_2", "pass"), 4_050);
+  assert.equal(store.settleReturned(passed.id, { kind: "waiting-for-ci" }, 4_100), MANAGER);
+  const before = [store.check(fails.id)?.verdict, store.check(passed.id)?.verdict];
+  const newer = handoff(issue.id, agentId, "done", 5_000);
+  const restore = failWrites(db, "INSERT", "checks");
+  assert.throws(() => store.insertHandoff(newer, CLEAN), /forced failure/);
+  assert.equal(store.handoff(newer.id), null);
+  assert.deepEqual([store.check(fails.id)?.verdict, store.check(passed.id)?.verdict], before, "both verdicts and settlements kept");
+  assert.deepEqual(store.waitingForCi(MANAGER, agentId), [fails.id, passed.id]);
+
+  restore();
+  const made = checkOf(store.insertHandoff(newer, CLEAN));
+  assert.deepEqual(store.check(passed.id)?.verdict, { ...before[1], settlement: { kind: "superseded" } }, "superseded, its verdict kept whole");
+  assert.deepEqual(store.check(fails.id)?.verdict, before[0], "left for its settlement to judge failed");
+  assert.deepEqual(store.waitingForCi(MANAGER, agentId), [fails.id]);
+  assert.deepEqual(store.unsettledChecks(), [fails.id]);
+  assert.deepEqual(store.record(MANAGER, issue.id).map(({ check }) => check?.id), [fails.id, passed.id, made.id], "one newer check");
+  assert.deepEqual(events(store), [], "nobody is told");
+});
+
 test("a verifier's ticket whose check fails to start stays unbound", () => {
   const { db, store, issue, agentId } = withAgent();
   const check = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), CLEAN));
@@ -214,24 +269,60 @@ test("a check given up that fails before the manager is told keeps running", () 
   assert.equal(store.check(check.id)?.verdict.state, "running");
 });
 
-test("a fix round whose claim fails partway is not counted", () => {
+test("a fix round whose claim fails partway is not counted, and a retry claims it once", () => {
   const { db, store, issue, agentId } = withAgent();
   const check = runningCheck(store, issue.id, agentId, 1);
   store.receiveVerdict(check.id, returned("thr_verifier_1", "fail"), 4_500);
-  failWrites(db, "UPDATE", "checks");
+  const restore = failWrites(db, "UPDATE", "checks");
   assert.throws(() => store.claimFixRound(check.id, { kind: "none" }), /forced failure/);
   assert.equal(store.agent(MANAGER, agentId)?.fixRounds, 0);
+
+  restore();
+  store.claimFixRound(check.id, { kind: "none" });
+  assert.equal(store.agent(MANAGER, agentId)?.fixRounds, 1);
+  const claimed = store.check(check.id)?.verdict;
+  assert.deepEqual(claimed?.state === "returned" && claimed.settlement, { kind: "sending-back", round: 1, ci: { kind: "none" } });
 });
 
-test("a settlement that fails before the manager is told leaves the verdict unsettled and its round claimed", () => {
+test("a settlement that fails before the manager is told leaves the verdict unsettled and its round claimed, and a retry settles it once", () => {
   const { db, store, issue, agentId } = withAgent();
   const check = runningCheck(store, issue.id, agentId, 1);
   store.receiveVerdict(check.id, returned("thr_verifier_1", "fail"), 4_500);
   store.claimFixRound(check.id, { kind: "none" });
-  failWrites(db, "INSERT", "events");
-  assert.throws(() => store.settleReturned(check.id, CHECKED, 4_000), /forced failure/);
+  const restore = failWrites(db, "INSERT", "events");
+  assert.throws(() => store.settleReturned(check.id, { kind: "sent-back" }, 4_000), /forced failure/);
   assert.equal(store.agent(MANAGER, agentId)?.fixRounds, 1);
   assert.deepEqual(store.unsettledChecks(), [check.id]);
+  assert.deepEqual(events(store), []);
+
+  restore();
+  assert.equal(store.settleReturned(check.id, { kind: "sent-back" }, 4_000), MANAGER);
+  assert.equal(store.agent(MANAGER, agentId)?.fixRounds, 1, "the round claimed once");
+  const settled = store.check(check.id)?.verdict;
+  assert.deepEqual(settled?.state === "returned" && settled.settlement, { kind: "sent-back", round: 1, ci: { kind: "none" } });
+  assert.deepEqual(store.unsettledChecks(), []);
+  assert.deepEqual(events(store), [{ kind: "sent-back", issueId: issue.id, agentId, checkId: check.id, round: 1 }], "the manager is told once");
+});
+
+test("a settlement as checked that fails before the manager is told keeps its round claimed, and a retry releases it once", () => {
+  const { db, store, issue, agentId } = withAgent();
+  const check = runningCheck(store, issue.id, agentId, 1);
+  store.receiveVerdict(check.id, returned("thr_verifier_1", "fail"), 3_500);
+  store.claimFixRound(check.id, { kind: "none" });
+  const claimed = { kind: "sending-back", round: 1, ci: { kind: "none" } };
+  const settlementOf = () => {
+    const verdict = store.check(check.id)?.verdict;
+    return verdict?.state === "returned" ? verdict.settlement : assert.fail("not returned");
+  };
+  const restore = failWrites(db, "INSERT", "events");
+  assert.throws(() => store.settleReturned(check.id, CHECKED, 4_000), /forced failure/);
+  assert.deepEqual([settlementOf(), store.agent(MANAGER, agentId)?.fixRounds, events(store)], [claimed, 1, []], "the claim and its round stand, and nobody is told");
+
+  restore();
+  assert.equal(store.settleReturned(check.id, CHECKED, 4_000), MANAGER);
+  assert.deepEqual(settlementOf(), CHECKED);
+  assert.equal(store.agent(MANAGER, agentId)?.fixRounds, 0, "the claimed round released once");
+  assert.deepEqual(events(store), [{ kind: "checked", issueId: issue.id, checkId: check.id }], "the manager is told once");
 });
 
 test("a verdict, a give-up or a CI result that arrives after its check settled or was superseded changes nothing", () => {

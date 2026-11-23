@@ -112,7 +112,7 @@ test("the same verdict with failing CI fails, and the findings sent back to the 
   pr({ rollup: "FAILURE", failed: ["test (node 22)", "e2e"] });
   await minute();
   const findings = kit.delivered(agentThreadId).at(-1) ?? assert.fail("nothing reached the agent");
-  assert.match(findings, /^## Verifier findings: every done-criterion passed, and CI failed on #41\n/);
+  assert.match(findings, /^## Verifier findings: CI failed on #41, though every done-criterion passed\n/);
   assert.match(findings, /### CI failed on #41\n\nFailed checks on this commit: `test \(node 22\)`, `e2e`\./);
   assert.doesNotMatch(findings, /`lint`/, "a check that passed is not named");
   const verdict = kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict;
