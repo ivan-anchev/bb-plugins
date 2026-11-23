@@ -231,3 +231,19 @@ test("a comment on a parent issue points the regional manager at the sub-issue i
   // The way forward it gives works: the sub-issue's brief takes the comment.
   assert.ok(!isRefusal(await kit.call("issue_update", { id: sub, brief: "Retries first, then dead letters (the user's comment)." }, threadId)));
 });
+
+test("a comment on a closed issue points the regional manager at a new issue, never at an agent of it", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
+  const issueId = issueIdSchema.parse(issueIn(textOf(await kit.call("issue_create", ISSUE, threadId))));
+  await kit.call("issue_update", { id: issueId, status: "canceled" }, threadId);
+  await kit.call("crew_catch_up", {}, threadId);
+
+  await kit.rpc.commentIssue({ coordinatorId, issueId, text: "We still need retries, just later." });
+  const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
+  const update = caughtUp.slice(caughtUp.indexOf("### "), caughtUp.indexOf("## Board"));
+
+  assert.ok(update.includes(`or file what it asks for as a new issue with issue_create. ${issueId} is Canceled now, so no agent can start on it.`), update);
+  assert.ok(!update.includes("agent_message") && !update.includes("the agent you start on it"), update);
+  // The way forward it gives works.
+  assert.match(textOf(await kit.call("issue_create", { ...ISSUE, title: "Retries, later" }, threadId)), /^Filed /);
+});
