@@ -226,7 +226,7 @@ test("criterion 5 (sandbox, harness): worktree to sandbox cuts from origin at a1
   pushAndOpen();
   const result = textOf(await call({ placement: SANDBOX, execution: { providerId: "codex", model: "gpt-default" } }));
   const next = threadIn(result);
-  assert.match(result, new RegExp(`in a new boat-sandbox environment, on a new branch cut from a1's \`origin/${branch}\` expecting 1111111, on codex gpt-default \\(low\\)\\. a2 checks that commit is on its branch before it changes anything, and hands off blocked if it isn't\\. Nothing a1 left uncommitted comes with it; if bb can't cut that branch, its thread fails and you are woken\\. a1's PR #44 stays on its branch; a2 opens its own\\.`));
+  assert.match(result, new RegExp(`in a new boat-sandbox environment, on a new branch cut from a1's \`origin/${branch}\` expecting 1111111, on codex gpt-default \\(high\\)\\. a2 checks that commit is on its branch before it changes anything, and hands off blocked if it isn't\\. Nothing a1 left uncommitted comes with it; if bb can't cut that branch, its thread fails and you are woken\\. a1's PR #44 stays on its branch; a2 opens its own\\.`));
   assert.deepEqual(kit.thread(next).spawnedWith.environment, {
     type: "provider",
     environmentProviderId: "boat-sandbox",

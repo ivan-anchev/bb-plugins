@@ -44,7 +44,7 @@ export function registerAgentTools(bb: ToolsBb, { store, agents }: Deps): void {
       execution: requestedExecutionSchema
         .optional()
         .describe(
-          "What the agent runs on: a provider and a model bb can run where it will work, and optionally a reasoning level (left out: the model's default). Left out, it runs on your own provider, model and reasoning level, on a handover too, whatever the previous agent ran on.",
+          "What the agent runs on: a provider and a model bb can run where it will work, and optionally a reasoning level. Left out, it runs on your own provider, model and reasoning level, on a handover too, whatever the previous agent ran on.",
         ),
       placement: requestedPlacementSchema
         .optional()

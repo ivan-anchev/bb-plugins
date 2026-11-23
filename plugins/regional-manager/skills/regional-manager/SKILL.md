@@ -493,12 +493,15 @@ opus".
 - Apply them by naming `execution` on every `agent_start` they cover, and
   `verifier` on every build issue they cover (`issue_create`, or `issue_update`
   before its agent hands off done). Each is `{ providerId, model }`, with an
-  optional `reasoningLevel` (left out: the model's default).
+  optional `reasoningLevel` (left out: high; medium on a model that lists no
+  high; the model's default on one that lists neither). Name `low` only for tests and throwaway
+  work.
 - With no such preference, leave both out. The agent then runs on your own
   provider, model and reasoning level as they are when it starts, and the
   plugin picks the verifier: yours when the agent runs on another model, else
   another provider's default model, else another model of the agent's
-  provider, else the agent's own, which the verdict then says.
+  provider, else the agent's own, which the verdict then says. A model the
+  plugin picks runs at the level one named with no reasoning level does.
 - A refusal lists what bb can run there (providers whose models load there,
   and a known provider's models): pick from it. Nothing is started or saved on a refusal.
 - A verifier on the model of the agent holding the issue is refused, and so is

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
 import type { FinalCheck } from "../../../model/verdict/check.ts";
-import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn, withoutLinks } from "../../test-harness.ts";
+import { coordinating, HEAD, isRefusal, ISSUE, levels, settled, textOf, threadIn, withoutLinks } from "../../test-harness.ts";
 
 const i1 = issueIdSchema.parse("WEB-1");
 const PARENT = { ...ISSUE, title: "Card vault", description: "Cards are stored in a vault, never in our database.", brief: "Split into sub-issues.", doneCriteria: ["npm run vault-suite passes on the default branch"] };
@@ -286,7 +286,7 @@ test("8: the final check runs on the parent's named verifier unless an agent of 
   assert.deepEqual(runsOn(managers.kit, managers.verifier()), ["codex", "gpt-default"], "the agents ran on the manager's model");
 
   const alone = await withParent();
-  alone.kit.providers.list = [{ id: "claude-code", available: true, models: [{ model: "opus", isDefault: true, defaultReasoningEffort: "high" }] }];
+  alone.kit.providers.list = [{ id: "claude-code", available: true, models: [{ model: "opus", isDefault: true, defaultReasoningEffort: "high", supportedReasoningEfforts: levels("low", "medium", "high", "max") }] }];
   await alone.mergeAll();
   assert.deepEqual(runsOn(alone.kit, alone.verifier()), ["claude-code", "opus"]);
   await alone.returns(PASSES);
@@ -294,7 +294,7 @@ test("8: the final check runs on the parent's named verifier unless an agent of 
 
   // The named one is the only model there, and the agents' own: passed over, then the last resort.
   const namedAlone = await withParent({ parent: { verifier: { providerId: "claude-code", model: "opus" } } });
-  namedAlone.kit.providers.list = [{ id: "claude-code", available: true, models: [{ model: "opus", isDefault: true, defaultReasoningEffort: "high" }] }];
+  namedAlone.kit.providers.list = [{ id: "claude-code", available: true, models: [{ model: "opus", isDefault: true, defaultReasoningEffort: "high", supportedReasoningEfforts: levels("low", "medium", "high", "max") }] }];
   await namedAlone.mergeAll();
   assert.deepEqual(runsOn(namedAlone.kit, namedAlone.verifier()), ["claude-code", "opus"]);
   await namedAlone.returns(PASSES);

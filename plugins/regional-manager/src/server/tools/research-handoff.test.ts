@@ -149,7 +149,7 @@ test("a research issue can't be accepted Done by the manager, and nothing can na
   const named = await call("issue_update", { id: "WEB-1", verifier: { providerId: "codex", model: "gpt-default" } });
   assert.equal(textOf(named), "WEB-1 can't be changed so: a research issue has no verifier: nothing verifies it. Give verifier: null with the change to drop the one named.");
 
-  assert.equal(textOf(await call("issue_create", { ...ISSUE, verifier: { providerId: "codex", model: "gpt-default" } })), `Filed WEB-2 (build) in Todo. Its done handoffs are checked on codex gpt-default (low). Link: [WEB-2](/plugins/regional-manager/regional-managers/issue/${coordinatorId}/WEB-2)`);
+  assert.equal(textOf(await call("issue_create", { ...ISSUE, verifier: { providerId: "codex", model: "gpt-default" } })), `Filed WEB-2 (build) in Todo. Its done handoffs are checked on codex gpt-default (high). Link: [WEB-2](/plugins/regional-manager/regional-managers/issue/${coordinatorId}/WEB-2)`);
   const toResearch = await call("issue_update", { id: "WEB-2", kind: "research" });
   assert.equal(textOf(toResearch), "WEB-2 can't be changed so: a research issue has no verifier: nothing verifies it. Give verifier: null with the change to drop the one named.");
   assert.equal(withoutLinks(textOf(await call("issue_update", { id: "WEB-2", kind: "research", verifier: null }))), "Updated WEB-2. WEB-2 has no verifier: nothing verifies a research issue.");

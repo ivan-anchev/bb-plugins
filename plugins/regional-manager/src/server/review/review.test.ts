@@ -9,7 +9,7 @@ import type { InteractionPayload } from "../../model/interaction.ts";
 import type { Review } from "../../model/verdict/review.ts";
 import { memoryStorage } from "../memory-storage.ts";
 import { MIGRATIONS } from "../store/migrations.ts";
-import { coordinating, HEAD, isRefusal, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
+import { coordinating, HEAD, isRefusal, levels, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
 import { z } from "zod";
 
 const a1 = agentIdSchema.parse("a1");
@@ -143,9 +143,36 @@ test("a reviewer runs on neither the agent's model nor the one its verifier then
   assert.equal(onlyOther(alone.verifier()), "claude-code/sonnet", "the verifier on the one model that isn't the agent's, as the reviewer is");
 });
 
+test("the reviewer and verifier the plugin picks run at high, else at the highest level their model lists below high, never their catalog default", async () => {
+  const { kit, reviewer, verifier, handOff, reported } = await withAgent();
+  await handOff();
+  const ranAt = (threadId: string) => `${kit.thread(threadId).providerId}/${kit.thread(threadId).execution?.model} at ${kit.thread(threadId).execution?.reasoningLevel}`;
+  assert.equal(ranAt(reviewer()), "claude-code/sonnet at high", "sonnet's default is medium");
+  await reported([]);
+  assert.equal(ranAt(verifier()), "codex/gpt-default at high", "gpt-default's default is low");
+
+  const noHigh = await withAgent();
+  noHigh.kit.providers.list = [
+    {
+      id: "claude-code",
+      available: true,
+      models: [
+        { model: "opus", isDefault: true, defaultReasoningEffort: "high", supportedReasoningEfforts: levels("low", "medium", "high", "max") },
+        { model: "sonnet", isDefault: false, defaultReasoningEffort: "low", supportedReasoningEfforts: levels("low", "medium") },
+      ],
+    },
+    { id: "codex", available: true, models: [{ model: "gpt-mini", isDefault: true, defaultReasoningEffort: "low", supportedReasoningEfforts: levels("minimal", "low", "medium") }] },
+  ];
+  await noHigh.handOff();
+  const lowerAt = (threadId: string) => `${noHigh.kit.thread(threadId).providerId}/${noHigh.kit.thread(threadId).execution?.model} at ${noHigh.kit.thread(threadId).execution?.reasoningLevel}`;
+  assert.equal(lowerAt(noHigh.reviewer()), "claude-code/sonnet at medium");
+  await noHigh.reported([]);
+  assert.equal(lowerAt(noHigh.verifier()), "codex/gpt-mini at medium");
+});
+
 test("with only the agent's own model to run, no reviewer starts: the review is missed as having no independent reviewer model, and the verifier starts, told no review was had", async () => {
   const { kit, coordinatorId, check, review, verifier, handOff, row } = await withAgent();
-  kit.providers.list = [{ id: "claude-code", available: true, models: [{ model: "opus", isDefault: true, defaultReasoningEffort: "high" }] }];
+  kit.providers.list = [{ id: "claude-code", available: true, models: [{ model: "opus", isDefault: true, defaultReasoningEffort: "high", supportedReasoningEfforts: levels("low", "medium", "high", "max") }] }];
   const spawned = kit.spawned();
   await handOff();
   const reason = "no independent reviewer model: bb can run none there but a1's own";

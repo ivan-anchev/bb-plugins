@@ -246,7 +246,7 @@ test("an execution named on a handover is checked where the previous agent works
 
   const result = textOf(await handover());
   assert.match(result, /, on claude-code opus \(high\), your own provider, model and reasoning level\./, "not a1's codex");
-  assert.match(textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId)), /### Agents\n\n- a1, replaced, on codex gpt-default \(low\)\n- a2, holds it, on claude-code opus \(high\), @thread:\w+/);
+  assert.match(textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId)), /### Agents\n\n- a1, replaced, on codex gpt-default \(high\)\n- a2, holds it, on claude-code opus \(high\), @thread:\w+/);
 });
 
 // One thing at a time per issue (issue-turns.ts): each case holds one operation in bb while another
