@@ -88,7 +88,8 @@ function loggedText(event: Extract<Entry, { kind: "logged" }>["event"]): string 
       // why the fields' own names: they are the words the feed names them by (log-event.ts).
       return `edited ${event.fields.join(", ")}`;
     case "rested":
-      return `moved it to ${STATUS_LABELS[event.rest]}`;
+      // why a setting, not a move: where it rests shows only while no agent's work or sub-issue places it; what it moved to is the status observed (its glyph).
+      return `set it to rest in ${STATUS_LABELS[event.rest]}`;
     case "closed":
       return event.as === "canceled" ? "canceled it" : "accepted it as Done";
     case "reopened":

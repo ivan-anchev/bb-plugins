@@ -1,7 +1,8 @@
 // Issues' logs (migrations.ts issue_log): appended to, never rewritten. Its writers are the plan's
 // one writer (issues-store.ts updateIssue, through appendLog in its own transaction) and the status
 // watch (observeStatuses). Rows are parsed into Logged here and nowhere else, one at a time: a row
-// this version can't read (a kind or status a newer one logged) is left out, never failing the rest.
+// this version can't read (a kind or status a newer one logged, or text it can't decode) is left
+// out, never failing the rest.
 import { z } from "zod";
 import { logEventSchema, statusMoves, type LogEvent, type Logged } from "../../../model/feed/log-event.ts";
 import { issueIdSchema, type IssueId } from "../../../model/issue/issue.ts";
@@ -57,11 +58,15 @@ function lastStatuses(db: Db, coordinatorId: CoordinatorId): Map<IssueId, IssueS
   return new Map(rows.flatMap((row) => lastStatusRowSchema.safeParse(row).data ?? []).map(({ issueId, status }) => [issueId, status]));
 }
 
-/**
- * The event `text` holds, or null when it is a kind or status this version doesn't know. why no
- * guard on JSON.parse: SQLite refuses to write malformed JSON here, as its status index reads it.
- */
-const eventOf = (text: string): LogEvent | null => logEventSchema.safeParse(JSON.parse(text)).data ?? null;
+/** The event `text` holds, or null when this version can't read it: a kind or status it doesn't know, or text JSON.parse can't decode (SQLite stores JSON5, as a trailing comma, that it can't). */
+function eventOf(text: string): LogEvent | null {
+  try {
+    return logEventSchema.safeParse(JSON.parse(text)).data ?? null;
+  } catch {
+    // why here: an undecodable row is left out at this boundary, as an unknown one is, never failing the rest.
+    return null;
+  }
+}
 
 const logRowSchema = z.object({ at: z.number().int(), event: z.string() });
 const lastStatusRowSchema = z.object({ issueId: issueIdSchema, status: issueStatusSchema });

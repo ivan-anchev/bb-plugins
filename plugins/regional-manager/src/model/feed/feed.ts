@@ -51,18 +51,22 @@ const isAfter = (a: Point, b: Point): boolean => a.at > b.at || (a.at === b.at &
 const inOrder = <T extends Point>(items: readonly T[]): T[] => [...items].sort((a, b) => a.at - b.at || a.seq - b.seq);
 
 type Placed = Point & { entry: Entry };
-type Observed = Point & { status: IssueStatus };
+/** A status observed, placed at `at` and shown with the time it was logged at, `shownAt`. */
+type Observed = Point & { shownAt: number; status: IssueStatus };
 
 /**
  * The log as the feed shows it: its lines, the statuses observed, and where it began for an issue
  * filed before it (null: filed since, so it holds everything). why a status before it began is
- * dropped: nothing before then was observed, so nothing above the marker shows one.
+ * dropped: nothing before then was observed, so nothing above the marker shows one. why a row
+ * written after it is placed no earlier than it, whatever its time: the clock can step back, and
+ * what the log kept from its start must still sit below the marker.
  */
 function readLog(log: readonly Logged[]): { lines: Placed[]; statuses: Observed[]; began: Point | null } {
   const rows = log.map((row, seq) => ({ ...row, seq }));
   const marker = rows.find(({ event }) => event.kind === "log-began") ?? null;
-  const statuses = rows.flatMap(({ at, seq, event }) => (event.kind === "status" && (marker === null || seq > marker.seq) ? [{ at, seq, status: event.status }] : []));
-  const lines = rows.flatMap(({ at, seq, event }): Placed[] => (event.kind === "status" ? [] : [{ at, seq, entry: { kind: "logged", at, event, moved: null } }]));
+  const placedAt = (at: number, seq: number): number => (marker !== null && seq > marker.seq ? Math.max(at, marker.at) : at);
+  const statuses = rows.flatMap(({ at, seq, event }) => (event.kind === "status" && (marker === null || seq > marker.seq) ? [{ at: placedAt(at, seq), seq, shownAt: at, status: event.status }] : []));
+  const lines = rows.flatMap(({ at, seq, event }): Placed[] => (event.kind === "status" ? [] : [{ at: placedAt(at, seq), seq, entry: { kind: "logged", at, event, moved: null } }]));
   return { lines, statuses, began: marker === null ? null : { at: marker.at, seq: marker.seq } };
 }
 
@@ -85,7 +89,7 @@ function attachStatuses(placed: readonly Placed[], statuses: readonly Observed[]
   let since = began;
   for (const observed of statuses) {
     const moment = latestFirst.find((candidate) => (since === null || isAfter(candidate, since)) && !isAfter(candidate, observed));
-    if (moment === undefined) unexplained.push({ at: observed.at, seq: observed.seq, entry: { kind: "moved", at: observed.at, status: observed.status } });
+    if (moment === undefined) unexplained.push({ at: observed.at, seq: observed.seq, entry: { kind: "moved", at: observed.shownAt, status: observed.status } });
     else shown.set(momentKey(moment.entry, moment.step), observed.status);
     since = observed;
   }

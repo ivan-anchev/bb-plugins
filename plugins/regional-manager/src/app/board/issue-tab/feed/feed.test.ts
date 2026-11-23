@@ -128,6 +128,7 @@ test("an entry that moved the issue shows the status it moved to, as the Board d
   const logged: Entry[] = [
     { kind: "logged", at: 6_400, event: { kind: "edited", fields: ["title", "criteria"] }, moved: null },
     { kind: "logged", at: 6_410, event: { kind: "dependency-added", on: id("WEB-7") }, moved: null },
+    { kind: "logged", at: 6_420, event: { kind: "rested", rest: "backlog" }, moved: null },
     { kind: "moved", at: 6_450, status: "reviewing" },
   ];
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [began, ...FEED.entries.map(moved), ...logged] }) });
@@ -137,6 +138,7 @@ test("an entry that moved the issue shows the status it moved to, as the Board d
   assert.ok(lines.some((text) => /^#219 CI passed, merged ·\s+Done/.test(text ?? "")), lines.join("\n"));
   assert.ok(lines.some((text) => /^Regional manager edited title, criteria Jan/.test(text ?? "")), "an edit names its fields, and moved nothing");
   assert.ok(lines.some((text) => /^Regional manager made it depend on WEB-7/.test(text ?? "")));
+  assert.ok(lines.some((text) => /^Regional manager set it to rest in Backlog Jan/.test(text ?? "")), "where it rests is a setting: a move is only the status observed");
   assert.ok(lines.some((text) => /^Reviewing Jan/.test(text ?? "")), "a move nothing explains: its glyph and name alone");
   const card = within(section.getByRole("article", { name: "Round 3" }));
   assert.match(card.getAllByRole("listitem")[0]?.textContent ?? "", /^a2 handed off ·\s+Verifying/);

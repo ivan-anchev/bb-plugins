@@ -345,3 +345,14 @@ test("rows of the log written in one millisecond keep the order they were writte
     { kind: "logged", at: 2_000, event: { kind: "closed", as: "canceled" }, moved: "canceled" },
   ]);
 });
+
+test("a row the log kept after its start sits below the marker even when the clock stepped back: as written, with its own time", () => {
+  const log: Logged[] = [{ at: 5_000, event: { kind: "log-began" } }, ...observed([[4_500, "todo"]]), { at: 4_600, event: { kind: "edited", fields: ["title"] } }];
+  const entries = feedOf({ issue: { createdAt: 1_000 }, agents: [], handed: [], finalChecks: [], decisions: [], events: [], log });
+  assert.deepEqual(entries, [
+    { kind: "created", at: 1_000, moved: null },
+    { kind: "logged", at: 5_000, event: { kind: "log-began" }, moved: null },
+    { kind: "moved", at: 4_500, status: "todo" },
+    { kind: "logged", at: 4_600, event: { kind: "edited", fields: ["title"] }, moved: null },
+  ]);
+});
