@@ -1,7 +1,7 @@
 // The verify step: the plugin, not the regional manager, starts a verifier for every check of a done
 // handoff, and for a build parent's final check (final-check/), while verification is on, and the
 // handoff reaches the regional manager only with its verdict. A done handoff's verifier starts once
-// its review is in, or was missed (review/): the reviewer takes the environment first, the same way. A returned verdict is stored first, then settled: one that passed every criterion waits
+// its review is in, or was missed (review/): the reviewer takes the environment first, the same way. A returned verdict is stored first, then settled: one that passed all but CI waits
 // while CI on its commit is still to come, an agent's first failed verdict goes back to the agent,
 // as the verifier's message, with no turn of the regional manager, and any other goes to the
 // regional manager. The handoff tool, the verifier's issue_verdict, the tick and an issue's thread
@@ -40,7 +40,7 @@ import type { Busy, IssueTurns } from "../issues/issue-turns.ts";
 import { quietIssue, unquietText, type GivenTo, type QuietBb } from "../issues/quiet.ts";
 import type { Review } from "../review/review.ts";
 import type { Spawner, CheckerRequest } from "../spawn.ts";
-import type { Settlement } from "../store/issue/checks-store.ts";
+import type { ReceivedVerdict, Settlement } from "../store/issue/checks-store.ts";
 import type { Store } from "../store/store.ts";
 import { finalCheckerRequest, judgedTree, type FinalVerifierBb } from "./final-check/final-verifier.ts";
 import { findingsMessage } from "./findings.ts";
@@ -106,8 +106,8 @@ type Deps = {
   now(): number;
 };
 
-/** A verifier's report: each criterion named by its text, its findings, and its triage of the review's findings. */
-export type VerifierReport = Pick<Extract<Verdict, { state: "returned" }>, "findings" | "triage"> & { criteria: { criterion: string; result: CriterionResult; evidence: string }[] };
+/** A verifier's report: each criterion named by its text, its findings, and its triage of the review's findings, in their order. */
+export type VerifierReport = Pick<ReceivedVerdict, "findings" | "triage"> & { criteria: { criterion: string; result: CriterionResult; evidence: string }[] };
 
 /** What became of a verifier's report: stored; refused, as its check no longer waits for it; or, for a final check, why its worktree couldn't be read, which ended the check as could-not-run. */
 type Received = "recorded" | "not-running" | { unread: string };
@@ -135,8 +135,8 @@ type Settler = "verdict-tool" | "look";
 /** How a final check's returned verdict settles: final at once, with no fix round and no pull request to wait for. Its fix is a new sub-issue. */
 const FINAL_SETTLED: Settlement = { kind: "checked", refused: null, ci: { kind: "none" } };
 
-/** What a verdict that settles before CI finished on its commit says of CI: it failed on its criteria first. */
-const CI_UNFINISHED: CiVerdict = { kind: "not-checked", reason: "CI hadn't finished when its criteria failed" };
+/** What a verdict that settles before CI finished on its commit says of CI: it failed first, on its criteria, its checkout or a must-fix finding. */
+const CI_UNFINISHED: CiVerdict = { kind: "not-checked", reason: "CI hadn't finished when the verdict failed" };
 
 /** How many failed verdicts go back to an agent before the next one goes to its regional manager. */
 const MAX_AUTO_FIX_ROUNDS = 1;
@@ -336,8 +336,8 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
   /**
    * The next step for an unsettled verdict (`current`: its handoff is still current in its agent's
    * thread, which bb still has; `thread`: that thread, as bb lists it), judged with CI on its commit
-   * as the PR status of the agent's branch says, the branch the PR watch reads. One that passed every
-   * criterion waits while CI is still to come. A failed one is sent back when its handoff is current,
+   * as the PR status of the agent's branch says, the branch the PR watch reads. One that passed all
+   * but CI waits while CI is still to come. A failed one is sent back when its handoff is current,
    * the agent still holds its issue with a round left and its pull request hasn't merged (a merge
    * made the issue Done); else it is checked. One whose round is claimed was being sent when the
    * plugin stopped, as settle owns a claim until it settles it. Its findings may or may not have

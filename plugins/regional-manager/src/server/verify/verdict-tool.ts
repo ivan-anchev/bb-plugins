@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { MAX_CRITERIA } from "../../model/issue/issue.ts";
 import type { Check } from "../../model/verdict/check.ts";
-import { triageSchema } from "../../model/verdict/review.ts";
+import { TRIAGE_RULE, triageSchema } from "../../model/verdict/review.ts";
 import { criterionResultSchema, UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 import type { Store } from "../store/store.ts";
 import { failed, refusedBusy, type ToolsBb } from "../tools/tool-kit.ts";
@@ -35,7 +35,7 @@ const verdictInputSchema = z.object({
     )
     .max(50)
     .default([])
-    .describe("One entry for every finding of the reviewer's in your first message, none skipped: confirmed, it holds and is worth fixing; rejected, it doesn't hold or isn't worth fixing. [] when it lists none."),
+    .describe(`One entry for every finding of the reviewer's in your first message, none skipped, by its number. ${TRIAGE_RULE} [] when it lists none.`),
 });
 type VerdictInput = z.infer<typeof verdictInputSchema>;
 
@@ -69,7 +69,7 @@ export function registerVerdictTool(bb: ToolsBb, { store, verify }: Deps): void 
   });
 }
 
-/** The verdict, each criterion named by its text and each of the review's findings triaged, in the check's order; or why it can't be taken. */
+/** The verdict, each criterion named by its text and the verifier's triage of each of the review's findings, in the check's order; or why it can't be taken. */
 function reportOf(input: VerdictInput, { criteria, review }: Pick<Check, "criteria" | "review">): VerifierReport | string {
   const findings = review.state === "reported" ? review.findings.length : 0;
   const refused =
@@ -115,7 +115,7 @@ function numbersRefusal(numbers: readonly number[], count: number, words: { verb
 
 const NOT_RUNNING = `${VERDICT} is refused and nothing was saved: this check no longer waits for your verdict (a newer handoff or final check replaced it, or it already has one). Stop here.`;
 
-const VERDICT_INSTRUCTIONS = `Returning your verdict: call issue_verdict once, as your last action, then stop. The plugin judges the commit and the tree itself, through bb's git plugin (your first message says when it reads them); you judge only the criteria.
+const VERDICT_INSTRUCTIONS = `Returning your verdict: call issue_verdict once, as your last action, then stop. The plugin judges the commit and the tree itself, through bb's git plugin (your first message says when it reads them); you judge the criteria, and triage the reviewer's findings.
 - criteria: one entry per done-criterion, by its number in your first message: result pass, fail or unverifiable, and evidence quoting what you ran and what it printed (up to 4,000 characters). ${UNCHECKABLE_RULE}
 - findings: problems no criterion covers, up to 20. [] for none.
-- triage: when your first message lists the reviewer's findings, one entry for each by its number: confirmed when it holds and is worth fixing, rejected when it doesn't hold or isn't worth fixing, with the reason in a line. Only confirmed findings reach the agent. [] when it lists none.`;
+- triage: when your first message lists the reviewer's findings, one entry for each by its number. ${TRIAGE_RULE} [] when it lists none.`;

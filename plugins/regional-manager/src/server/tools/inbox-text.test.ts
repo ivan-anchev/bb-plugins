@@ -62,6 +62,7 @@ const returned = (results: CriterionResult[], ranOn: Pick<Execution, "providerId
   criteria: results.map((result) => ({ criterion: "npm test passes", result, evidence: "ran npm test" })),
   findings: [],
   triage: [],
+  mustFixFails: true,
   model: { providerId: ranOn.providerId, model: ranOn.model },
   sameModel,
   settlement: { kind: "checked", refused: null, ci: { kind: "none" } },
@@ -103,7 +104,7 @@ test("a verdict says what its verifier ran on: as named on the issue, why not th
 
 test("a verdict's review says whether its confirmed findings reached the agent only as far as its settlement shows", () => {
   const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap." }], model: { providerId: "claude-code", model: "sonnet" } };
-  const failed: Extract<Verdict, { state: "returned" }> = { ...returned(["fail"]), triage: [{ result: "confirmed", reason: "It never caps." }] };
+  const failed: Extract<Verdict, { state: "returned" }> = { ...returned(["fail"]), triage: [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", result: "confirmed", reason: "It never caps." }] };
   const cases: [Extract<Verdict, { state: "returned" }>["settlement"], string][] = [
     [{ kind: "pending" }, "None has gone to the agent yet."],
     [{ kind: "waiting-for-ci" }, "None has gone to the agent yet."],
@@ -116,6 +117,6 @@ test("a verdict's review says whether its confirmed findings reached the agent o
   for (const [settlement, line] of cases) {
     const text = handoffText(checkedWith({ ...failed, settlement }, null, review), agentOn(CODEX));
     assert.ok(text.includes(`Review: a reviewer on claude-code sonnet reported 1 finding; the verifier confirmed 1 and rejected 0. ${line}`), settlement.kind);
-    assert.match(text, /Confirmed:\n- `src\/retry\.ts:4` \(must-fix\): No cap\.\n {2}Why: It never caps\./);
+    assert.match(text, /Confirmed must-fix, each of which fails the verdict:\n- `src\/retry\.ts:4` \(must-fix\): No cap\.\n {2}Why: It never caps\./);
   }
 });

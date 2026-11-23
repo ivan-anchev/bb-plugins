@@ -27,7 +27,7 @@ export const checkSubjectSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("handoff"), agentId: agentIdSchema, handoffId: handoffIdSchema, headSha: commitSchema, prUrl: z.string().nullable() }),
   finalSubjectSchema,
 ]);
-type CheckSubject = z.infer<typeof checkSubjectSchema>;
+export type CheckSubject = z.infer<typeof checkSubjectSchema>;
 
 export type Check = {
   id: CheckId;

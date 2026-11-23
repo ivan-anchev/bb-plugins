@@ -9,7 +9,7 @@ import type { Handed } from "../issue/status.ts";
 import { coordinatorIdSchema } from "../role.ts";
 import { checkIdSchema, type Check, type FinalCheck } from "../verdict/check.ts";
 import type { PrSnapshot } from "../verdict/pr.ts";
-import type { Review, Triage } from "../verdict/review.ts";
+import type { Review, Triaged } from "../verdict/review.ts";
 import type { CriterionResult, Verdict } from "../verdict/verdict.ts";
 import { actorOf, shownIn, timeOf, type Entry } from "./entry.ts";
 import { feedOf } from "./feed.ts";
@@ -32,7 +32,7 @@ function handoff(n: number, agentId: AgentId, at: number, status: Handoff["statu
   return status === "done" ? { ...made, status, delivery: { kind: "commit", headSha: SHA, prUrl: null } } : { ...made, status };
 }
 
-function returned(results: readonly CriterionResult[], at: number, settlement: Extract<Verdict, { state: "returned" }>["settlement"], triage: Triage[] = []): Verdict {
+function returned(results: readonly CriterionResult[], at: number, settlement: Extract<Verdict, { state: "returned" }>["settlement"], triage: Triaged[] = []): Verdict {
   return {
     state: "returned",
     at,
@@ -42,6 +42,7 @@ function returned(results: readonly CriterionResult[], at: number, settlement: E
     criteria: results.map((result, i) => ({ criterion: CRITERIA[i] ?? "", result, evidence: `evidence ${i + 1}` })),
     findings: [],
     triage,
+    mustFixFails: true,
     model: { providerId: "claude-code", model: "sonnet" },
     sameModel: false,
     settlement,
@@ -62,8 +63,8 @@ const agent = (id: AgentId, startedAt: number, ended: Agent["ended"]): FeedFacts
 /** BBP-19 as it went: a1 failed twice, the manager handed it to a2, which failed once and then passed; #219 opened, passed CI and merged. */
 function bbp19(): FeedFacts {
   const one = handed(handoff(1, A1, 3_000), returned(["pass", "fail", "fail"], 3_500, { kind: "sent-back", round: 1, ci: { kind: "none" } }, [
-    { result: "confirmed", reason: "Seen." },
-    { result: "rejected", reason: "Matches the row." },
+    { file: "src/card.tsx", line: 4, severity: "must-fix", claim: "The spinner stays.", result: "confirmed", reason: "Seen." },
+    { file: "src/card.css", line: null, severity: "nit", claim: "Padding.", result: "rejected", reason: "Matches the row." },
   ]), {
     state: "reported",
     at: 3_200,
@@ -234,7 +235,7 @@ test("a missed review's reason is the round's body's, read only when the round o
   assert.equal(bodyOf(handed(handoff(2, A1, 4_000), null).handoff, null).reviewMissed, null);
 });
 
-test("a verdict failed by its checkout and a criterion names its checkout first, in its round as in the issue's headline (verdict.ts failureOf)", () => {
+test("a verdict failed by its checkout and a criterion names its checkout first, in its round as in the issue's headline (verdict.ts failureReasons)", () => {
   const both = returned(["fail", "pass", "pass"], 3_500, { kind: "checked", refused: null, ci: { kind: "none" } });
   const dirty: Verdict = both.state === "returned" ? { ...both, checkout: { headSha: SHA, changedFiles: ["?? notes.md"], changedFileCount: 1 } } : assert.fail("not returned");
   const round = roundOf(handed(handoff(1, A1, 3_000), dirty), 1, null);

@@ -2,13 +2,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { handoffIdSchema } from "../agent/handoff.ts";
 import { ciOf, type PrSnapshot } from "./pr.ts";
-import { judge, outcome, verdictSchema, type CriterionResult, type Verdict } from "./verdict.ts";
+import type { Review } from "./review.ts";
+import { failureReasons, judge, outcome, shownVerdict, storedVerdictSchema, withReview, type CriterionResult, type Verdict } from "./verdict.ts";
 
 /** The claimed commit, on a clean tree, as bb's git plugin read it. */
 const CLEAN = { headSha: "a".repeat(40), changedFiles: [], changedFileCount: 0 };
 
-const returned = (results: CriterionResult[], settlement: Settlement = { kind: "checked", refused: null, ci: { kind: "none" } }): Verdict => ({
-  state: "returned", at: 5_000,
+/** A returned verdict as the plugin holds it, with no review findings. */
+const returned = (results: CriterionResult[], settlement: Settlement = { kind: "checked", refused: null, ci: { kind: "none" } }): Extract<Verdict, { state: "returned" }> => ({
+  state: "returned",
+  at: 5_000,
   verifierThreadId: "thr_v",
   headSha: "a".repeat(40),
   checkout: CLEAN,
@@ -17,6 +20,7 @@ const returned = (results: CriterionResult[], settlement: Settlement = { kind: "
   model: { providerId: "codex", model: "gpt-default" },
   sameModel: false,
   triage: [],
+  mustFixFails: true,
   settlement,
 });
 
@@ -41,6 +45,24 @@ test("a criterion the verifier couldn't check is not a pass", () => {
   assert.equal(outcome(returned(["unverifiable"])), "fail");
 });
 
+test("a must-fix finding the verifier confirmed fails a verdict that passes every criterion; a rejected one, and confirmed should-fix and nit ones, never do", () => {
+  type Triaged = [severity: "must-fix" | "should-fix" | "nit", result: "confirmed" | "rejected"];
+  /** A verdict that passed both its criteria, as the store reads it with its review (each finding triaged as given). */
+  const read = (triaged: Triaged[], mustFixFails = true) => {
+    const { triage, ...stored } = returned(["pass", "pass"]);
+    const findings = triaged.map(([severity]) => ({ file: "src/retry.ts", line: 4, severity, claim: "The backoff never caps." }));
+    const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings, model: { providerId: "codex", model: "gpt-default" } };
+    const verdict = withReview({ ...stored, mustFixFails, triage: triaged.map(([, result]) => ({ result, reason: "ran it" })) }, review);
+    return verdict.state === "returned" ? verdict : assert.fail("not returned");
+  };
+  assert.equal(outcome(read([["must-fix", "confirmed"]])), "fail");
+  assert.equal(outcome(read([["nit", "rejected"], ["must-fix", "confirmed"]])), "fail");
+  assert.equal(outcome(read([["must-fix", "rejected"], ["should-fix", "confirmed"], ["nit", "confirmed"]])), "pass");
+  assert.equal(outcome(read([["must-fix", "confirmed"]], false)), "pass", "a verdict settled before the rule keeps its outcome");
+  assert.deepEqual(failureReasons(read([["must-fix", "confirmed"], ["nit", "confirmed"], ["must-fix", "rejected"]])), [{ kind: "must-fix", count: 1 }], "only the confirmed must-fix finding counts");
+  assert.equal(judge(read([["must-fix", "confirmed"]]), { kind: "waiting", number: 41 }), "fail", "it fails before CI is judged, as a failed criterion does");
+});
+
 test("a returned verdict is pending until it is settled: its findings reached the agent, or it is checked", () => {
   const cases: [Settlement, ReturnType<typeof outcome>][] = [
     [{ kind: "pending" }, "pending"],
@@ -53,17 +75,14 @@ test("a returned verdict is pending until it is settled: its findings reached th
 });
 
 test("a verdict stored before settlements existed reads as settled", () => {
-  const stored = verdictSchema.parse({ state: "returned", at: 5_000, verifierThreadId: "thr_v", headSha: "a".repeat(40), checkout: CLEAN, criteria: [{ criterion: "npm test passes", result: "pass", evidence: "ran it" }], findings: [], model: { providerId: "codex", model: "gpt-default" }, sameModel: false });
-  assert.equal(outcome(stored), "pass");
+  // As migrations.ts left it: no settlement and no triage, and mustFixFails false, as it settled before that rule.
+  const stored = storedVerdictSchema.parse({ state: "returned", at: 5_000, verifierThreadId: "thr_v", headSha: "a".repeat(40), checkout: CLEAN, criteria: [{ criterion: "npm test passes", result: "pass", evidence: "ran it" }], findings: [], mustFixFails: false, model: { providerId: "codex", model: "gpt-default" }, sameModel: false });
+  assert.equal(outcome(withReview(stored, { state: "none" })), "pass");
 });
 
 const HEAD = "a".repeat(40);
 const PR_URL = "https://github.com/octo-org/widgets/pull/12";
-const passed = (): Extract<Verdict, { state: "returned" }> => {
-  const verdict = returned(["pass", "pass"], { kind: "pending" });
-  if (verdict.state !== "returned") throw new Error("returned() returns a returned verdict");
-  return verdict;
-};
+const passed = () => returned(["pass", "pass"], { kind: "pending" });
 const snapshot = (fields: Partial<PrSnapshot>): PrSnapshot => ({ number: 12, url: PR_URL, state: "open", draft: false, review: "none", ci: "pending", headSha: HEAD, failedChecks: [], ...fields });
 const HANDOFF = handoffIdSchema.parse("6f1c2a54-0b8e-4c3e-9d7a-2f5e8b1c4d90");
 /** The done handoff CI is judged for: its commit is HEAD, and it names this pull request (null: none). */
@@ -93,7 +112,6 @@ test("judge: CI on the handoff's commit decides a verdict that passed every crit
   assert.equal(judge(passed(), ciOf(claim(PR_URL), { snapshot: null, unavailable: { kind: "persistent", reason: "gh isn't signed in" } })), "pass", "a pass whose CI can't be checked, labelled so elsewhere");
   assert.equal(judge(passed(), ciOf(claim(PR_URL), { snapshot: null, unavailable: { kind: "transient", reason: "couldn't reach GitHub" } })), "waiting-for-ci", "a read that failed for now says nothing about CI");
   const failed = returned(["pass", "fail"], { kind: "pending" });
-  if (failed.state !== "returned") throw new Error("returned() returns a returned verdict");
   assert.equal(judge(failed, ci({ ci: "pending" })), "fail");
   assert.equal(judge(failed, ci({ ci: "pass" })), "fail");
 });

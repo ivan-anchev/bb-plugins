@@ -324,14 +324,30 @@ test("8: the final check runs on the parent's named verifier unless an agent of 
 });
 
 test("an opened parent sends its final checks as rounds, each with only what its tab shows; its row only its headline", async () => {
-  const { kit, coordinatorId, mergeAll, returns } = await withParent();
+  const { kit, coordinatorId, mergeAll, latest, verifier, returns } = await withParent();
   await mergeAll();
+  const verifierThreadId = verifier();
   await returns(FAILS);
   const { rounds } = await kit.opened(coordinatorId, i1);
   assert.equal(rounds.length, 1);
   const [{ round, body } = assert.fail("no final check")] = rounds;
   assert.deepEqual([round.by, round.review, body.handoff, body.findings], [{ kind: "final", defaultBranch: "main" }, { state: "none" }, null, []]);
-  assert.deepEqual(Object.keys(body.verdict ?? assert.fail("no verdict")).sort(), ["at", "checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"], "no model");
+  const stored = latest().verdict;
+  assert.deepEqual(
+    body.verdict,
+    {
+      state: "returned",
+      at: stored.state === "returned" ? stored.at : assert.fail("not returned"),
+      verifierThreadId,
+      headSha: MERGED,
+      checkout: { headSha: MERGED, changedFiles: [], changedFileCount: 0 },
+      criteria: FAILS.criteria.map(({ result, evidence }) => ({ criterion: "npm run vault-suite passes on the default branch", result, evidence })),
+      findings: FAILS.findings,
+      sameModel: false,
+      settlement: { kind: "checked", ci: { kind: "none" } },
+    },
+    "no model and no triage: a final check has no review",
+  );
   const row = (await kit.rpc.board({ coordinatorId })).issues[0] ?? assert.fail("no row");
   assert.deepEqual(Object.keys(row).sort(), ["agent", "blockedBy", "blocks", "headline", "id", "kind", "needsYou", "parentId", "pr", "status", "subIssues", "title"]);
   assert.deepEqual((await kit.opened(coordinatorId, issueIdSchema.parse("WEB-2"))).rounds, [], "a sub-issue has none");

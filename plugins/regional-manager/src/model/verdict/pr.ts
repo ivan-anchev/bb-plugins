@@ -78,7 +78,7 @@ export function meaningfulChanges(before: PrSnapshot | null, after: PrSnapshot):
 /** Whether a pull request's CI is still running, so the watch reads it again on the next tick. */
 export const ciRunning = (pr: PrSnapshot): boolean => pr.state === "open" && pr.ci === "pending";
 
-/** What CI says about a commit: a verdict that passed every criterion is judged with it. */
+/** What CI says about a commit: a verdict that passed all but CI is judged with it. */
 export const ciVerdictSchema = z.discriminatedUnion("kind", [
   /** There is no pull request to check. */
   z.object({ kind: z.literal("none") }),

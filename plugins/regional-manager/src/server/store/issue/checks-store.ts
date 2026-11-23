@@ -15,7 +15,7 @@ import { checkIdSchema, checkSubjectSchema, type Check, type CheckId, type Final
 import type { CheckoutRead } from "../../../model/verdict/checkout.ts";
 import type { CiVerdict } from "../../../model/verdict/pr.ts";
 import { firstReview, reviewSchema, type Review, type ReviewFinding } from "../../../model/verdict/review.ts";
-import { firstVerdict, isSettled, verdictSchema, type Verdict } from "../../../model/verdict/verdict.ts";
+import { failureReasons, firstVerdict, isSettled, storedVerdictSchema, withReview, type FirstVerdict, type StoredVerdict, type Verdict } from "../../../model/verdict/verdict.ts";
 import type { ModelRef } from "../../../model/agent/execution.ts";
 import { insertEvent } from "../inbox/inbox-store.ts";
 import { json, jsonOrNull, nullableJson, type Db } from "../rows.ts";
@@ -32,8 +32,17 @@ type Returned = Extract<Verdict, { state: "returned" }>;
 /** Why no verdict will come of a check given up on: its verifier's thread, if it had one, and the reason. */
 export type GivenUp = Omit<Extract<Verdict, { state: "could-not-run" }>, "state" | "at">;
 
+/** A verifier's verdict as the store takes it: its triage only the verifier's result and reason for each finding, in the review's order, stored as it is. */
+export type ReceivedVerdict = Omit<Extract<StoredVerdict, { state: "returned" }>, "settlement" | "mustFixFails" | "at">;
+
+/** A check as it is made, with its first verdict (verdict.ts firstVerdict), which is stored as it is. */
+type NewCheck<C extends Check> = C & { verdict: FirstVerdict };
+
+/** A verdict before it returns: every state but returned, stored and read alike. */
+type Unreturned = Exclude<Verdict, { state: "returned" }>;
+
 /**
- * How a returned verdict ends, or that it waits: `waiting-for-ci`, it passed every criterion and
+ * How a returned verdict ends, or that it waits: `waiting-for-ci`, it passed all but CI and
  * waits for CI on its commit; `checked`, final and its regional manager's, with bb's refusal of its
  * findings if they were refused and what CI said; `sent-back`, its findings reached the agent for
  * the fix round it claimed; `maybe-sent-back`, its regional manager's, with that round kept, as
@@ -59,14 +68,14 @@ export function startReview(db: Db, checkId: CheckId, reviewerThreadId: string):
 function moveReview(db: Db, checkId: CheckId, from: ReviewFrom, next: Review): boolean {
   const row = db().prepare("SELECT review, verdict FROM checks WHERE id = ?").get(checkId);
   if (row === undefined) return false;
-  const { review, verdict } = z.object({ review: json(reviewSchema), verdict: json(verdictSchema) }).parse(row);
+  const { review, verdict } = z.object({ review: json(reviewSchema), verdict: json(storedVerdictSchema) }).parse(row);
   const at = from.state === "queued" ? review.state === "queued" : review.state === "running" && review.reviewerThreadId === from.reviewerThreadId;
   if (verdict.state !== "queued" || !at) return false;
   db().prepare("UPDATE checks SET review = ? WHERE id = ?").run(JSON.stringify(next), checkId);
   return true;
 }
 
-/** The agent's checks that passed every criterion and wait for CI on their commit, oldest first. */
+/** The agent's checks that passed all but CI and wait for CI on their commit, oldest first. */
 function waitingForCi(db: Db, coordinatorId: CoordinatorId, agentId: AgentId): CheckId[] {
   return db()
     .prepare(
@@ -81,8 +90,11 @@ function waitingForCi(db: Db, coordinatorId: CoordinatorId, agentId: AgentId): C
 /**
  * Marks every check of the issue still waiting as superseded, whichever of its agents handed off: a
  * newer done handoff or a new agent makes them moot, and a new final check of a parent its last. One waiting for its verifier has no verdict to
- * keep; one waiting for CI keeps its returned verdict whole, settled as superseded. Its verifier may
- * still run: whatever starts next on the issue asks bb, and stops it. Call inside a transaction.
+ * keep; one waiting for CI keeps its returned verdict whole, settled as superseded. One that waits
+ * for CI though it fails by the rules over it (failureReasons), as a verdict that waited before a
+ * confirmed must-fix finding could fail one can (migrations.ts), is left for its next settlement to
+ * judge failed. Its verifier may still run: whatever starts next on the issue asks bb, and stops
+ * it. Call inside a transaction.
  */
 export function supersedeChecks(db: Db, coordinatorId: CoordinatorId, issueId: IssueId): void {
   supersedeOpen(db, coordinatorId, issueId);
@@ -94,7 +106,8 @@ export function supersedeChecks(db: Db, coordinatorId: CoordinatorId, issueId: I
     const verdict = verdictOf(db, checkId);
     // why throw: only a returned verdict has a settlement.
     if (verdict?.state !== "returned") throw new Error(`The check ${checkId} waits for CI with no returned verdict.`);
-    writeVerdict(db, checkId, { ...verdict, settlement: { kind: "superseded" } });
+    if (failureReasons(verdict, null).length > 0) continue;
+    writeSettlement(db, checkId, { kind: "superseded" });
   }
 }
 
@@ -114,7 +127,7 @@ export function checksStore(db: Db) {
   }
 
   /** Replaces the verdict if it is still where `from` says, and says whether it did. Call inside a transaction. */
-  function moveVerdict(checkId: CheckId, from: VerdictFrom, next: Verdict): boolean {
+  function moveVerdict(checkId: CheckId, from: VerdictFrom, next: Unreturned): boolean {
     const current = verdictOf(db, checkId);
     if (current === null || !isAt(current, from)) return false;
     writeVerdict(db, checkId, next);
@@ -139,8 +152,8 @@ export function checksStore(db: Db) {
     return verdict?.state === "returned" && !isSettled(verdict) ? verdict : null;
   }
 
-  /** Inserts a check made of the handoff `handoffId` (null: a final check, made of none). Call inside a transaction. */
-  function insertCheck({ id, coordinatorId, issueId, subject, criteria, verifier, review, verdict, at }: Check, handoffId: HandoffId | null): void {
+  /** Inserts a check made of the handoff `handoffId` (null: a final check, made of none), with its first verdict. Call inside a transaction. */
+  function insertCheck({ id, coordinatorId, issueId, subject, criteria, verifier, review, verdict, at }: NewCheck<Check>, handoffId: HandoffId | null): void {
     db()
       .prepare("INSERT INTO checks (id, coordinator_id, issue_id, handoff_id, subject, criteria, verifier, review, verdict, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
       .run(id, coordinatorId, issueId, handoffId, JSON.stringify(subject), JSON.stringify(criteria), jsonOrNull(verifier), JSON.stringify(review), JSON.stringify(verdict), at);
@@ -205,7 +218,7 @@ export function checksStore(db: Db) {
         if (stored.delivery.kind !== "commit") throw new Error(`A done handoff of ${issueId}, a ${kind} issue, delivers no commit to check.`);
         const { headSha, prUrl } = stored.delivery;
         const verdict = firstVerdict(verifies(coordinatorId), checkout, at);
-        const made: Check = {
+        const made: NewCheck<Check> = {
           id: checkIdSchema.parse(randomUUID()),
           coordinatorId,
           issueId,
@@ -235,7 +248,7 @@ export function checksStore(db: Db) {
         const { criteria, verifier } = z
           .object({ criteria: json(doneCriteriaSchema), verifier: nullableJson(executionSchema) })
           .parse(db().prepare("SELECT done_criteria AS criteria, verifier FROM issues WHERE coordinator_id = ? AND id = ?").get(coordinatorId, issueId));
-        const made: FinalCheck = {
+        const made: NewCheck<FinalCheck> = {
           id: checkIdSchema.parse(randomUUID()),
           coordinatorId,
           issueId,
@@ -328,12 +341,16 @@ export function checksStore(db: Db) {
       })();
     },
 
-    /** Stores a verifier's verdict, returned at `at` and not yet settled, if its verifier is still the check's running one; says whether it was. Nobody is told until it is settled. */
-    receiveVerdict(checkId: CheckId, verdict: Omit<Returned, "settlement" | "at">, at: number): boolean {
+    /**
+     * Stores a verifier's verdict, returned at `at` and not yet settled, if its verifier is still the
+     * check's running one; says whether it was. Nobody is told until it is settled. why mustFixFails
+     * is set here: every verdict returned now is judged by the must-fix rule; only the migration wrote false.
+     */
+    receiveVerdict(checkId: CheckId, verdict: ReceivedVerdict, at: number): boolean {
       return db().transaction(() => {
         const running = verdictOf(db, checkId);
         if (running?.state !== "running" || running.verifierThreadId !== verdict.verifierThreadId) return false;
-        writeVerdict(db, checkId, { ...verdict, at, settlement: { kind: "pending" } });
+        writeVerdict(db, checkId, { ...verdict, at, mustFixFails: true, settlement: { kind: "pending" } });
         return true;
       })();
     },
@@ -345,7 +362,7 @@ export function checksStore(db: Db) {
         // why throw: it is claimed right after it was read pending or waiting, with no await between.
         if (verdict === null || verdict.settlement.kind === "sending-back") throw new Error(`The verdict of check ${checkId} is not pending, so it has no round to claim.`);
         const { coordinatorId } = ownerOf(checkId);
-        writeVerdict(db, checkId, { ...verdict, settlement: { kind: "sending-back", round: countFixRound(db, coordinatorId, handingAgentOf(checkId), 1), ci } });
+        writeSettlement(db, checkId, { kind: "sending-back", round: countFixRound(db, coordinatorId, handingAgentOf(checkId), 1), ci });
       })();
     },
 
@@ -364,24 +381,24 @@ export function checksStore(db: Db) {
         const { coordinatorId, issueId } = ownerOf(checkId);
         if (as.kind === "waiting-for-ci") {
           if (settlement.kind !== "pending") return null;
-          writeVerdict(db, checkId, { ...verdict, settlement: as });
+          writeSettlement(db, checkId, as);
           return coordinatorId;
         }
         if (as.kind === "checked") {
           if (settlement.kind === "sending-back") countFixRound(db, coordinatorId, handingAgentOf(checkId), -1);
-          writeVerdict(db, checkId, { ...verdict, settlement: as });
+          writeSettlement(db, checkId, as);
           insertEvent(db, coordinatorId, { kind: "checked", issueId, checkId }, at);
           return coordinatorId;
         }
         if (settlement.kind !== "sending-back") return null;
         const { round, ci } = settlement;
-        writeVerdict(db, checkId, { ...verdict, settlement: { kind: as.kind, round, ci } });
+        writeSettlement(db, checkId, { kind: as.kind, round, ci });
         insertEvent(db, coordinatorId, as.kind === "sent-back" ? { kind: "sent-back", issueId, agentId: handingAgentOf(checkId), checkId, round } : { kind: "checked", issueId, checkId }, at);
         return coordinatorId;
       })();
     },
 
-    /** The agent's checks that passed every criterion and wait for CI on their commit, oldest first. */
+    /** The agent's checks that passed all but CI and wait for CI on their commit, oldest first. */
     waitingForCi: (coordinatorId: CoordinatorId, agentId: AgentId): CheckId[] => waitingForCi(db, coordinatorId, agentId),
 
     /** Every returned verdict not settled yet, oldest first: one waiting for CI, or one a crash or a reload stopped settling. */
@@ -392,12 +409,19 @@ export function checksStore(db: Db) {
 }
 
 function verdictOf(db: Db, checkId: CheckId): Verdict | null {
-  const row = db().prepare("SELECT verdict FROM checks WHERE id = ?").get(checkId);
-  return row === undefined ? null : z.object({ verdict: json(verdictSchema) }).parse(row).verdict;
+  const row = db().prepare("SELECT review, verdict FROM checks WHERE id = ?").get(checkId);
+  if (row === undefined) return null;
+  const { review, verdict } = z.object({ review: json(reviewSchema), verdict: json(storedVerdictSchema) }).parse(row);
+  return withReview(verdict, review);
 }
 
-function writeVerdict(db: Db, checkId: CheckId, verdict: Verdict): void {
+function writeVerdict(db: Db, checkId: CheckId, verdict: StoredVerdict): void {
   db().prepare("UPDATE checks SET verdict = ? WHERE id = ?").run(JSON.stringify(verdict), checkId);
+}
+
+/** Moves a returned verdict's settlement, and nothing else of it: the rest stays as it was stored. */
+function writeSettlement(db: Db, checkId: CheckId, settlement: Returned["settlement"]): void {
+  db().prepare("UPDATE checks SET verdict = json_set(verdict, '$.settlement', json(?)) WHERE id = ?").run(JSON.stringify(settlement), checkId);
 }
 
 const isAt = (verdict: Verdict, from: VerdictFrom): boolean =>
@@ -415,9 +439,12 @@ const checkRowSchema = z.object({
   verifier: nullableJson(executionSchema),
   subject: json(checkSubjectSchema),
   review: json(reviewSchema),
-  verdict: json(verdictSchema),
+  verdict: json(storedVerdictSchema),
 });
-const toCheck = (row: unknown): Check => checkRowSchema.parse(row);
+function toCheck(row: unknown): Check {
+  const check = checkRowSchema.parse(row);
+  return { ...check, verdict: withReview(check.verdict, check.review) };
+}
 
 function toFinalCheck(row: unknown): FinalCheck {
   const check = toCheck(row);

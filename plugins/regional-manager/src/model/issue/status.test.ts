@@ -67,6 +67,7 @@ const returned = (results: CriterionResult[], settlement: Extract<Verdict, { sta
   model: { providerId: "claude-code", model: "sonnet" },
   sameModel: false,
   triage: [],
+  mustFixFails: true,
   settlement,
 });
 const pr = (state: PrSnapshot["state"]): PrSnapshot => ({ number: 12, url: "https://github.com/o/r/pull/12", state, draft: false, review: "none", ci: "pass", headSha: SHA, failedChecks: [] });

@@ -7,7 +7,7 @@ import type { AgentId } from "../../model/agent/agent.ts";
 import type { Issue } from "../../model/issue/issue.ts";
 import type { FinalCheck, HandoffCheck } from "../../model/verdict/check.ts";
 import { checkoutProblems, checkoutText, type Checkout } from "../../model/verdict/checkout.ts";
-import { findingText, type Review } from "../../model/verdict/review.ts";
+import { findingText, TRIAGE_RULE, type Review } from "../../model/verdict/review.ts";
 import { UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 
 /**
@@ -66,7 +66,7 @@ function reviewPart(review: Review): string[] {
     case "reported":
       if (review.findings.length === 0) return ["## The review\n\nAn independent reviewer read the diff before you and found nothing. There is nothing to triage: pass triage as []."];
       return [
-        `## The reviewer's findings\n\nAn independent reviewer read the diff before you and claims these. They are claims, not facts: check each one yourself here, and triage every one in issue_verdict by its number. It reviewed as the regional manager's CREW.md instructs reviewers: read CREW.md with crew_memory_read when a finding cites it. Confirmed: it holds, and is worth fixing. Rejected: it doesn't hold, or isn't worth fixing. Give each its reason in a line. Only confirmed findings reach the agent.\n\n${review.findings.map((finding, i) => `${i + 1}. ${findingText(finding).replaceAll("\n", "\n   ")}`).join("\n")}`,
+        `## The reviewer's findings\n\nAn independent reviewer read the diff before you and claims these. They are claims, not facts: check each one yourself here, and triage every one in issue_verdict by its number. It reviewed as the regional manager's CREW.md instructs reviewers: read CREW.md with crew_memory_read when a finding cites it. ${TRIAGE_RULE}\n\n${review.findings.map((finding, i) => `${i + 1}. ${findingText(finding).replaceAll("\n", "\n   ")}`).join("\n")}`,
       ];
     default:
       return review satisfies never;

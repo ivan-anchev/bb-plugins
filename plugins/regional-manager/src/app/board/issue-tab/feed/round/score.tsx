@@ -1,4 +1,4 @@
-// What a round says of its check in a word or two (round.ts scoreOf): ✓ 6 of 6, ✗ 3 of 6, ✗ CI failed,
+// What a round says of its check in a word or two (round.ts scoreOf): ✓ 6 of 6, ✗ 3 of 6, ✗ CI failed, ✗ Must-fix confirmed,
 // Reviewing…, Verifying…, Waiting for CI…, or why it has none; a blocked or abandoned handoff's round says so.
 import { scoreOf, type Round } from "../../../../../model/feed/round.ts";
 import { NOT_CLEAN, NOT_CLEAN_TREE } from "../../../../../model/verdict/checkout.ts";
@@ -84,9 +84,17 @@ function HandoffStatus({ status }: { status: Extract<Round["by"], { kind: "agent
 }
 
 /** What failed a round whose criteria all passed, leading its line: the reason, never "n of n". why by the round: a final check claims no commit, so its checkout fails only by a dirty tree. */
-function failedByText(by: "checkout" | "ci", round: Round["by"]): string {
-  if (by === "ci") return "CI failed";
-  return round.kind === "final" ? NOT_CLEAN_TREE : NOT_CLEAN;
+function failedByText(by: "checkout" | "must-fix" | "ci", round: Round["by"]): string {
+  switch (by) {
+    case "ci":
+      return "CI failed";
+    case "must-fix":
+      return "Must-fix confirmed";
+    case "checkout":
+      return round.kind === "final" ? NOT_CLEAN_TREE : NOT_CLEAN;
+    default:
+      return by satisfies never;
+  }
 }
 
 const PENDING = { reviewing: "Reviewing…", verifying: "Verifying…", ci: "Waiting for CI…" } as const;

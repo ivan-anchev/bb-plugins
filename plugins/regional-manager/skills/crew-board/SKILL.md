@@ -153,7 +153,7 @@ An issue's status is derived from what its agents did, never stored:
 | Todo | No agent holds it, ready to start. A new issue rests here, and returns here when its agent ends before its work reached Reviewing (on a research issue, Done). |
 | In progress | An agent holds it: working, starting, idle without a handoff, fixing its verifier's findings, blocked, gave up, or its last turn failed. |
 | Reviewing | A build issue: its agent handed off done, and an independent reviewer reviews its diff before its verifier starts (see [Review](#review)). |
-| Verifying | A build issue: its review is in, or none could be had, and the verifier checks it, or every criterion passed and it waits for CI. |
+| Verifying | A build issue: its review is in, or none could be had, and the verifier checks it, or it passed every criterion with no must-fix finding confirmed and waits for CI. |
 | In review | A build issue: its done handoff passed ("✓ Verified"), or was made with verification off ("Unverified"). |
 | Done | A build issue: its pull request merged ("Merged #41"), or the manager accepted it; final. A research issue: its agent handed off done ("Handed off: <summary>"); a message to that agent makes it In progress again until its next handoff. |
 | Canceled | The manager canceled it. |
@@ -161,8 +161,10 @@ An issue's status is derived from what its agents did, never stored:
 **Needs you** is a flag on an open issue, shown above every status: its agent
 is blocked or gave up, waits for your answer or approval in its thread, its
 last turn failed, its work failed verification after its fix round ("✗ Failed
-verification after its fix round", "✗ CI failed on #41", or "✗ Not the claimed
-commit on a clean tree" when the plugin's own read failed it), its findings
+verification after its fix round", "✗ A must-fix review finding confirmed"
+when every criterion passed but the verifier confirmed one, "✗ CI failed on
+#41", or "✗ Not the claimed commit on a clean tree" when the plugin's own read
+failed it), its findings
 may or may not have reached it, it couldn't be verified, bb never confirmed starting
 its agent's thread ("No thread: bb never confirmed starting one": the manager
 ends that agent with `agent_stop`, which ends it at once, and starts another
@@ -637,10 +639,15 @@ before its verifier starts. The plugin starts a **reviewer**:
   claims to check; its verdict confirms or rejects each, with a reason in a
   line. The manager's update lists the confirmed ones and the rejected ones,
   each with its reason; a failed verdict that goes back to the agent carries
-  only the confirmed ones. A confirmed finding alone doesn't fail the
-  verdict: the done-criteria decide it.
+  only the confirmed ones. A must-fix finding the verifier confirms fails the
+  verdict as a failed criterion does, even when every criterion passed: it
+  goes back to the agent while it has its fix round left, and the manager's
+  update names it as the cause. Confirmed should-fix and nit findings, and
+  rejected ones, never fail it.
 - A check made before reviews existed has no review: its verifier starts as
-  before.
+  before. A verdict that settled before a confirmed must-fix finding could
+  fail one keeps the outcome it settled with; one still to settle then
+  settles by the rule.
 
 ## Verification
 
@@ -697,7 +704,8 @@ a **verifier** for each one:
   passed on a nearby fact. A verdict that skips, repeats or invents a
   criterion is refused.
 - **Outcome**: derived, never stored. Verified only when the commit and the
-  tree were as claimed, every criterion passed, and CI didn't fail on the
+  tree were as claimed, every criterion passed, the verifier confirmed no
+  must-fix finding of the reviewer's, and CI didn't fail on the
   commit when the issue has a pull request; an unverifiable criterion is not a
   pass. The manager's catch-up says which model checked it and why, as in
   "on claude-code opus, as named on BBP-1".
@@ -813,7 +821,8 @@ with `gh` on the machine running bb, on the same once-a-minute tick:
   github.com are read.
 - **A merge makes the issue Done**, whatever its agent is doing; a check still
   pending or failed then is never sent back.
-- **A verdict waits for CI**: a done handoff that passed every criterion, when
+- **A verdict waits for CI**: a done handoff that passed every criterion, with
+  no must-fix finding confirmed, when
   it names a pull request or one is known for the issue, waits under Verifying
   as "Waiting for CI on #41: <summary>" (or "Waiting for CI" before the pull
   request is seen) until CI finishes on the very commit the handoff claims;

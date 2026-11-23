@@ -40,12 +40,24 @@ export const reviewSchema = z.discriminatedUnion("state", [
 ]);
 export type Review = z.infer<typeof reviewSchema>;
 
-/** The verifier's triage of one finding: confirmed, it holds and is worth fixing; rejected, it doesn't or isn't; with why, in a line. */
+/**
+ * The verifier's triage of one finding, as issue_verdict takes it and the check stores it, in the
+ * review's order: confirmed, it holds and is worth fixing; rejected, it doesn't or isn't; with why,
+ * in a line.
+ */
 export const triageSchema = z.object({ result: z.enum(["confirmed", "rejected"]), reason: z.string().min(1) });
-export type Triage = z.infer<typeof triageSchema>;
+type Triage = z.infer<typeof triageSchema>;
 
-/** A finding with the verifier's triage of it. */
-type Triaged = ReviewFinding & Triage;
+/**
+ * A finding of the reviewer's with the verifier's triage of it: the one shape a verdict's readers
+ * get. why joined, never stored: the finding is stored once, on the review, and the store joins
+ * them as it reads the check (verdict.ts withReview).
+ */
+export type Triaged = ReviewFinding & Triage;
+
+/** How a verifier triages the reviewer's findings, and what its triage does, in the one wording each place a verifier reads gives it. */
+export const TRIAGE_RULE =
+  "Confirmed: it holds, and is worth fixing. Rejected: it doesn't hold, or isn't worth fixing. Give each its reason in a line. Only confirmed findings go back to the agent in its automatic fix round. Confirming a must-fix finding fails the verdict as a failed criterion does, even when every criterion passes: confirm one only when what you ran or read shows it holds. Should-fix and nit findings never fail it.";
 
 /** The review a check starts with: queued for a reviewer when its verdict is queued for a verifier, else none. A final check's is none: it reviews no diff. */
 export const firstReview = (verdict: Verdict): Review => (verdict.state === "queued" ? { state: "queued" } : { state: "none" });
@@ -63,7 +75,8 @@ export const reviewPending = ({ review, verdict }: { review: Review; verdict: Pi
 /**
  * Each finding the reviewer reported, with the verifier's triage of it (`triage`, in the
  * findings' order); [] when it reported none or none was had. why throw on a count that differs:
- * issue_verdict refuses a triage that doesn't take every finding once, and the two are stored together.
+ * issue_verdict refuses a triage that doesn't take every finding once, and the two are stored
+ * together, so a stored check that breaks it is refused as the store reads it.
  */
 export function triaged(review: Review, triage: readonly Triage[]): Triaged[] {
   const findings = review.state === "reported" ? review.findings : [];
