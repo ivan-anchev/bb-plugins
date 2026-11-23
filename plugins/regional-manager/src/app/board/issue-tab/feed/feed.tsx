@@ -10,6 +10,9 @@ import type { Round, RoundKey } from "../../../../model/feed/round.ts";
 import { isVerified } from "../../../../model/issue/kind.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
 import type { FeedAgents } from "./byline.tsx";
+import type { Comment, CommentId } from "../../../../model/feed/comment.ts";
+import { CommentCard } from "./comment-card.tsx";
+import { CommentComposer } from "./comment-composer.tsx";
 import { DecisionCard } from "./decision-card.tsx";
 import { EntryLine, MovedLine } from "./entry-line.tsx";
 import { CriteriaGrid } from "./round/criteria-grid.tsx";
@@ -36,6 +39,7 @@ export function Feed({ coordinatorId, issue, feed }: FeedProps) {
   const toggle = (round: Round) => setChosen((now) => new Map(now).set(round.key, !isOpen(round)));
   const engage = (round: Round) => setChosen((now) => (now.has(round.key) ? now : new Map(now).set(round.key, true)));
   const shown = feed.entries.filter((entry) => shownIn(filter, entry));
+  const comments = commentsIn(feed.entries);
   return (
     <>
       {feed.doneCriteria.length > 0 && <CriteriaGrid coordinatorId={coordinatorId} issueId={issue.id} verified={isVerified(issue.kind)} criteria={feed.doneCriteria} rounds={rounds} />}
@@ -53,30 +57,35 @@ export function Feed({ coordinatorId, issue, feed }: FeedProps) {
           </div>
         </div>
         {shown.length === 0 ? (
-          <p className="rmi-verdict-meta">{filter === "discussion" ? "No decisions or questions yet." : "No rounds yet."}</p>
+          <p className="rmi-verdict-meta">{filter === "discussion" ? "No comments, decisions or questions yet." : "No rounds yet."}</p>
         ) : (
           <ol className="rmi-entries">
             {shown.map((entry, i) => (
               <li key={keyOf(entry, i)}>
-                <EntryView coordinatorId={coordinatorId} issue={issue} agents={feed.agents} entry={entry} isOpen={isOpen} onToggle={toggle} onEngage={engage} />
+                <EntryView coordinatorId={coordinatorId} issue={issue} agents={feed.agents} comments={comments} entry={entry} isOpen={isOpen} onToggle={toggle} onEngage={engage} />
               </li>
             ))}
           </ol>
         )}
+        <CommentComposer coordinatorId={coordinatorId} issueId={issue.id} posted={comments} />
       </section>
     </>
   );
 }
 
-type EntryViewProps = { coordinatorId: CoordinatorId; issue: IssueRow; agents: FeedAgents; entry: Entry; isOpen(round: Round): boolean; onToggle(round: Round): void; onEngage(round: Round): void };
+type EntryViewProps = { coordinatorId: CoordinatorId; issue: IssueRow; agents: FeedAgents; comments: ReadonlyMap<CommentId, Comment>; entry: Entry; isOpen(round: Round): boolean; onToggle(round: Round): void; onEngage(round: Round): void };
 
-/** One entry, by its kind: a round as its card, a decision as its card, anything else as a quiet line. */
-function EntryView({ coordinatorId, issue, agents, entry, isOpen, onToggle, onEngage }: EntryViewProps) {
+/** One entry, by its kind: a round, a decision or a comment as its card, anything else as a quiet line. */
+function EntryView({ coordinatorId, issue, agents, comments, entry, isOpen, onToggle, onEngage }: EntryViewProps) {
   switch (entry.kind) {
     case "round":
       return <RoundCard coordinatorId={coordinatorId} issueId={issue.id} round={entry.round} agents={agents} open={isOpen(entry.round)} onToggle={() => onToggle(entry.round)} onEngage={() => onEngage(entry.round)} />;
     case "decision":
       return <DecisionCard coordinatorId={coordinatorId} decision={entry.decision} moved={entry.moved} />;
+    case "comment": {
+      const { replyTo } = entry.comment;
+      return <CommentCard coordinatorId={coordinatorId} entry={entry} answered={replyTo === null ? null : (comments.get(replyTo) ?? null)} agents={agents} />;
+    }
     case "moved":
       return <MovedLine entry={entry} />;
     case "created":
@@ -94,11 +103,15 @@ function EntryView({ coordinatorId, issue, agents, entry, isOpen, onToggle, onEn
   }
 }
 
+/** The feed's comments, by id. */
+const commentsIn = (entries: readonly Entry[]): Map<CommentId, Comment> => new Map(entries.flatMap((entry) => (entry.kind === "comment" ? [[entry.comment.id, entry.comment] as const] : [])));
+
 const roundsIn = (entries: readonly Entry[]): Round[] => entries.flatMap((entry) => (entry.kind === "round" ? [entry.round] : []));
 
-/** A round's or a question's own id, which keeps its state across reads; anything else, which keeps none, by its place. */
+/** A round's, a question's or a comment's own id, which keeps its state across reads; anything else, which keeps none, by its place. */
 function keyOf(entry: Entry, place: number): string {
   if (entry.kind === "round") return entry.round.key;
+  if (entry.kind === "comment") return entry.comment.id;
   if (entry.kind === "decision" && entry.decision.kind === "asked") return entry.decision.id;
   return `${entry.kind}-${place}`;
 }

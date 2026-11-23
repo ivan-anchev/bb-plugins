@@ -22,7 +22,7 @@ type IssuesBb = FactsBb & CatalogBb & { pluginId: string; sdk: { threads: { outp
 
 type Deps = {
   bb: IssuesBb;
-  store: FactsStore & Pick<Store, "issue" | "insertIssue" | "updateIssue" | "record" | "check" | "agent" | "finalChecks" | "issueDecisions">;
+  store: FactsStore & Pick<Store, "issue" | "insertIssue" | "updateIssue" | "record" | "check" | "agent" | "finalChecks" | "issueDecisions" | "commentsOf">;
   views: Pick<CurrentViews, "whileCurrent">;
   /** Runs after anything that changes a regional manager's board. */
   onChange(id: CoordinatorId): void;
@@ -159,8 +159,8 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
       const agents = store.agents(coordinatorId).filter((agent) => agent.issueId === id);
       const output = read.threadId === null ? null : (await bb.sdk.threads.output({ threadId: read.threadId })).output;
       const views = reads.map(({ view }) => view);
-      const record = { handed: store.record(coordinatorId, id), finalChecks: store.finalChecks(coordinatorId, id) };
-      return issueText(read, relationsOf(views, read.view.issue), agents, record, store.issueDecisions(coordinatorId, id), output, { agents: () => store.agents(coordinatorId) }, bb.pluginId);
+      const record = { handed: read.record, finalChecks: store.finalChecks(coordinatorId, id) };
+      return issueText(read, relationsOf(views, read.view.issue), agents, record, store.issueDecisions(coordinatorId, id), store.commentsOf(coordinatorId, id), output, { agents: () => store.agents(coordinatorId) }, bb.pluginId);
     },
   };
 }

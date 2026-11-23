@@ -3,6 +3,7 @@
 // observed after it, as the Board draws a status.
 import type { IssueFeed } from "../../../../contract.ts";
 import type { AgentId } from "../../../../model/agent/agent.ts";
+import type { Actor } from "../../../../model/feed/entry.ts";
 import { STATUS_LABELS, type IssueStatus } from "../../../../model/issue/status.ts";
 import { shortTime } from "../../../ui/time.ts";
 import { StatusGlyph } from "../../issue/status-glyph.tsx";
@@ -38,3 +39,29 @@ export const Status = ({ status }: { status: IssueStatus }) => (
     <StatusGlyph status={status} /> <span aria-hidden>{STATUS_LABELS[status]}</span>
   </span>
 );
+
+/** Who did it, named where the entry names someone; a line by GitHub, bb or the plugin itself names no one. */
+export function Who({ actor, agents }: { actor: Actor; agents: FeedAgents }) {
+  switch (actor.kind) {
+    case "user":
+      return <span className="rmi-actor">You </span>;
+    case "manager":
+      return <span className="rmi-actor">Regional manager </span>;
+    case "agent":
+      return (
+        <>
+          <AgentName agentId={actor.agentId} agents={agents} />{" "}
+        </>
+      );
+    case "verifier":
+      return <span className="rmi-actor">Verifier </span>;
+    case "github":
+    case "bb":
+    case "plugin":
+      return null;
+    default:
+      // why nothing: the server may be newer than this bundle for a moment after an update.
+      actor satisfies never;
+      return null;
+  }
+}

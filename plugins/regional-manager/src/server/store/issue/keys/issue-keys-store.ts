@@ -52,6 +52,7 @@ const RENAMES: readonly string[] = [
     ["decisions", "issue_id"],
     ["issue_decisions", "issue_id"],
     ["issue_log", "issue_id"],
+    ["comments", "issue_id"],
   ].map(([table, column]) => `UPDATE ${table} SET ${column} = ${keyed(column)} WHERE coordinator_id = @id`),
   ...["$.issueId", "$.by"].map(
     (path) => `UPDATE events SET event = json_set(event, '${path}', ${keyed(`json_extract(event, '${path}')`)}) WHERE coordinator_id = @id AND json_extract(event, '${path}') IS NOT NULL`,

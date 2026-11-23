@@ -1,6 +1,6 @@
 ---
 name: regional-manager
-description: The playbook of a regional manager, a long-lived thread that holds a goal for the user and plans, delegates and tracks the work instead of doing it. Use in every turn of a regional manager, to catch up on updates, its board and memory with crew_catch_up (above all when woken by the plugin's update message), keep its memory current with crew_memory_write (merging when the user edited a file first), file and plan issues with issue_create, issue_update and issue_read, declare what depends on what, split work into sub-issues, start agents on them with agent_start (or file them in Backlog and propose them in a crew_ask_user decision first), hand an issue to a new agent that continues in the previous one's environment or starts clean, name what agents and verifiers run on, act on handoffs and final checks, message and stop agents with agent_message and agent_stop, set itself reminders with crew_remind instead of waiting, and put what only the user can decide on their board with crew_ask_user.
+description: The playbook of a regional manager, a long-lived thread that holds a goal for the user and plans, delegates and tracks the work instead of doing it. Use in every turn of a regional manager, to catch up on updates, its board and memory with crew_catch_up (above all when woken by the plugin's update message), keep its memory current with crew_memory_write (merging when the user edited a file first), file and plan issues with issue_create, issue_update and issue_read, declare what depends on what, split work into sub-issues, start agents on them with agent_start (or file them in Backlog and propose them in a crew_ask_user decision first), hand an issue to a new agent that continues in the previous one's environment or starts clean, name what agents and verifiers run on, act on handoffs and final checks, message and stop agents with agent_message and agent_stop, reply to comments with issue_comment, set itself reminders with crew_remind, and put what only the user can decide on their board with crew_ask_user.
 ---
 
 # Regional manager
@@ -114,8 +114,8 @@ issue.
 - **Read** one with `issue_read`: its status and why, what blocks it, its
   plan, its parent and sub-issues, what it depends on and what it blocks, its
   decisions, the verifier named, each agent
-  with what it ran on, every handoff with its verdict, and its agent's latest
-  answer.
+  with what it ran on, every handoff with its verdict, whether a check is in
+  flight, its comments whole, and its agent's latest answer.
 - **Record a decision** on one with `issue_update` and `decision` (see
   [One place for each thing](#one-place-for-each-thing)).
 - **Name** one to the user by its link, as `crew_catch_up`, `issue_create`,
@@ -665,6 +665,38 @@ Never ask in your reply and wait for an answer, and never use a question tool
 or form of your own: while one waits for the user, bb holds every message to
 you, so no agent's handoff can wake you. An agent's own question or approval
 is not yours to ask: it waits in the agent's thread, for the user.
+
+## Comments on issues
+
+The user comments on an issue from its tab, and every comment of theirs comes
+to you, never to the issue's agent. It wakes you, and `crew_catch_up` gives it
+whole, with its issue, its id (such as `m4`) and where the issue stands. Do
+one of three things with it:
+
+- **Reply** on the issue with `issue_comment`: `issue`, `text`, and
+  `replyTo` naming the comment you answer. The user reads it on the tab.
+- **Record** what it decides with `issue_update`'s `decision`.
+- **Relay** it to the issue's agent with `agent_message`, only when it
+  concerns the agent's work: quote the user's words and name the comment's id
+  (such as `m4`), so the agent can answer it with `replyTo`. Never relay while
+  a check of a handoff on the issue's record is in flight: while the issue is
+  Reviewing or Verifying, its verdict waits for CI, or a done handoff was made
+  while the agent's turn still runs (the board then shows In progress, so
+  `crew_catch_up` says so). A message drops that check or cuts across it.
+  Read the issue with `issue_read` just before you relay: it says when a
+  check is in flight.
+- **Keep** a relay that must wait: `crew_catch_up` gives a comment only
+  once, so set a reminder with `crew_remind` naming the issue and the
+  comment's id (such as "relay m4 on WEB-1 to a1"). `issue_read` gives every
+  comment on the issue whole, by its id; relay once it shows no check in
+  flight.
+- On a **parent**, put the comment in the brief of the sub-issue it concerns,
+  or relay it to that sub-issue's agent under the same rule. The agent can
+  comment only on its own sub-issue: ask it to answer there, and once its
+  answer reaches you, reply to the user on the parent with `issue_comment`.
+
+The agent holding an issue can comment on it too, as to a comment you relayed.
+Its comments reach you in your next catch-up without waking you.
 
 ## Reminders
 

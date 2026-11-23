@@ -14,6 +14,9 @@ type Manager = { kind: "started"; threadId: string; profile: Profile | null } | 
 /** The regional manager, once the plugin's read has it; null before, when there is none by that id, or for no id. */
 export const useManager = (coordinatorId: CoordinatorId | null): Manager | null => useManagerRead(coordinatorId).manager;
 
+/** The regional manager's name as the panel shows it: "the regional manager" before the read, and while bb doesn't list its thread. */
+export const useManagerName = (coordinatorId: CoordinatorId): string => useManager(coordinatorId)?.profile?.name ?? "the regional manager";
+
 /** The plugin's read of its regional managers, which tells "not read yet" from "none by that id", and the one by `coordinatorId`, as useManager gives it. */
 export function useManagerRead(coordinatorId: CoordinatorId | null) {
   const read = experimental_useRpcQuery({ contract, method: "coordinators", input: {} });

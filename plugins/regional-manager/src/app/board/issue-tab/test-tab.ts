@@ -133,13 +133,16 @@ function bodyOfKey(key: string): RoundBody | null {
   return made?.kind === "round" ? bodyOf(made.round.number) : null;
 }
 
-type MountOptions = { feedOf?: (issueId: string) => IssueFeed; bodies?: (key: string) => RoundBody | null };
+/** How the plugin answers a comment posted from the tab: its output, a promise of it, or a throw. */
+type CommentAnswer = (input: unknown) => unknown;
+type MountOptions = { feedOf?: (issueId: string) => IssueFeed; bodies?: (key: string) => RoundBody | null; comment?: CommentAnswer };
 
 /** The tab mounted with `params`, on a board of `issues`; the reads and writes it made, and ways to make the plugin answer anew. */
-export async function mount(params: JsonValue | null, issues: readonly IssueRow[], { feedOf = () => FEED, bodies = bodyOfKey }: MountOptions = {}) {
+export async function mount(params: JsonValue | null, issues: readonly IssueRow[], { feedOf = () => FEED, bodies = bodyOfKey, comment = () => ({ commentId: "m9" }) }: MountOptions = {}) {
   const feedReads: unknown[] = [];
   const bodyReads: string[][] = [];
   const answers: unknown[] = [];
+  const comments: unknown[] = [];
   let currentIssues = issues;
   let currentFeed = feedOf;
   const view = renderSlot(
@@ -164,6 +167,10 @@ export async function mount(params: JsonValue | null, issues: readonly IssueRow[
           answers.push(input);
           return {};
         },
+        commentIssue: (input: unknown) => {
+          comments.push(input);
+          return comment(input);
+        },
       },
     },
   );
@@ -172,6 +179,7 @@ export async function mount(params: JsonValue | null, issues: readonly IssueRow[
     feedReads,
     bodyReads,
     answers,
+    comments,
     /** The issue's own article; its rounds and decisions are articles inside it. */
     tab: () => within(view.container.querySelector<HTMLElement>("article.rmi-detail") ?? assert.fail("no issue drawn")),
     /** The board reads again, with `next` as its rows. */

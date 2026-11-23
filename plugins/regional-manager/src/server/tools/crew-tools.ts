@@ -4,7 +4,7 @@
 // any client, plugin or the thread's own agent can write.
 import { z } from "zod";
 import { optionsSchema, questionSchema } from "../../model/decision.ts";
-import { issueIdSchema } from "../../model/issue/issue.ts";
+import { issueIdSchema, type IssueId } from "../../model/issue/issue.ts";
 import { memoryContentSchema, memoryFileSchema, memoryVersionSchema } from "../../model/memory-file.ts";
 import { AT_FORMS, parseAt, parseEvery, reminderIdSchema, reminderNoteSchema } from "../../model/reminder.ts";
 import type { CoordinatorId, Role } from "../../model/role.ts";
@@ -29,7 +29,7 @@ const END_TURN = "crew_end_turn";
 export const CREW_TOOLS = [CATCH_UP, MEMORY_READ, MEMORY_WRITE, REMIND, ASK_USER, END_TURN];
 
 type Deps = {
-  store: Pick<Store, "roleOfThread" | "issue" | "issues" | "agent" | "agents" | "handoff" | "check" | "reminders" | "insertReminder" | "cancelReminder" | "decision" | "decisions" | "insertDecision">;
+  store: Pick<Store, "roleOfThread" | "issue" | "issues" | "agent" | "agents" | "handoff" | "check" | "reminders" | "insertReminder" | "cancelReminder" | "decision" | "decisions" | "insertDecision" | "comment" | "record">;
   inbox: Pick<Inbox, "takeUnread">;
   memory: MemoryRoot;
   board: Pick<BoardReader, "issues">;
@@ -41,19 +41,23 @@ export function registerCrewTools(bb: ToolsBb & { pluginId: string }, { store, i
   bb.agents.registerTool({
     name: CATCH_UP,
     description:
-      "Catch up: returns every update since your last catch-up in full (agents' handoffs, a done one with its verifier's verdict, agents that failed, wait on the user, stopped without a handoff or ended before their work was done, issues unblocked, pull requests, your reminders that came due, the user's answers to your questions, and the user's memory edits and verification switch), then the board (every issue you filed, under Needs you, In review, Verifying, Reviewing, In progress, Todo, Backlog, Done or Canceled, with its agent, thread and branch, what blocks it and what it blocks) and the issues ready to start (in Todo, not blocked), the questions still waiting for the user, your reminders with their ids, and your memory files (MEMORY.md, GOAL.md, NOTES.md, RULES.md, CREW.md) in full, each with its version, and names any other memory file. Each update is returned once. Call it first on every wake.",
+      "Catch up: returns every update since your last catch-up in full (agents' handoffs, a done one with its verifier's verdict, agents that failed, wait on the user, stopped without a handoff or ended before their work was done, issues unblocked, pull requests, your reminders that came due, the user's answers to your questions, the user's comments on issues and your agents' replies there, and the user's memory edits and verification switch), then the board (every issue you filed, under Needs you, In review, Verifying, Reviewing, In progress, Todo, Backlog, Done or Canceled, with its agent, thread and branch, what blocks it and what it blocks) and the issues ready to start (in Todo, not blocked), the questions still waiting for the user, your reminders with their ids, and your memory files (MEMORY.md, GOAL.md, NOTES.md, RULES.md, CREW.md) in full, each with its version, and names any other memory file. Each update is returned once. Call it first on every wake.",
     presentation: { label: { pending: "Catching up", completed: "Caught up" }, icon: { glyph: "Workflow" } },
     parameters: z.object({}),
     execute: forManager(store, CATCH_UP, async (id) => {
       // why caught: the updates and the memory are still worth reading when bb's thread list can't be.
       const issues = await board.issues(id).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
+      const readOf = (issueId: IssueId) => ("error" in issues ? null : (issues.find(({ view }) => view.issue.id === issueId) ?? null));
       const updates = updatesText(inbox.takeUnread(id), {
         titles: new Map(store.issues(id).map((issue) => [issue.id, issue.title])),
         handoff: store.handoff,
         check: store.check,
         agents: () => store.agents(id),
         decision: store.decision,
-        view: (issueId) => ("error" in issues ? null : (issues.find(({ view }) => view.issue.id === issueId)?.view ?? null)),
+        comment: store.comment,
+        // why the store when bb's thread list couldn't be read: there is no view for the record to agree with.
+        record: (issueId) => readOf(issueId)?.record ?? store.record(id, issueId),
+        view: (issueId) => readOf(issueId)?.view ?? null,
       });
       return `${updates}\n\n${boardText(issues, bb.pluginId)}\n\n${openDecisionsText(store.decisions(id))}\n\n${remindersText(store.reminders(id))}\n\n${catchUpText(memory.of(id))}`;
     }),

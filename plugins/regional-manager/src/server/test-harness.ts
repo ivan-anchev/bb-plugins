@@ -49,6 +49,7 @@ import { registerRoles } from "./roles.ts";
 import { createSpawner } from "./spawn.ts";
 import { openStore } from "./store/store.ts";
 import { toldWrites } from "./store/told-writes.ts";
+import { registerCommentTool } from "./feed/comment-tool.ts";
 import { registerCrewTools } from "./tools/crew-tools.ts";
 import { registerHandoffTool } from "./tools/handoff-tool.ts";
 import type { ToolsBb } from "./tools/tool-kit.ts";
@@ -56,6 +57,7 @@ import { createFinalChecks } from "./verify/final-check/final-checks.ts";
 import { registerVerdictTool } from "./verify/verdict-tool.ts";
 import { createVerify } from "./verify/verify.ts";
 import { createPrWatch } from "./watch/pr-watch.ts";
+import { submissionIdSchema, type SubmissionId } from "../model/feed/comment.ts";
 
 const PLUGIN_ID = "regional-manager";
 
@@ -146,6 +148,10 @@ export const BB_DEFAULT = { providerId: "codex", model: "gpt-default" };
 
 /** The commit bb's git plugin reads checked out in every environment a test doesn't set another for: the one its done handoffs claim. */
 export const HEAD = "0123456789abcdef0123456789abcdef01234567";
+
+let submissions = 0;
+/** A submission no other press of Send in the run has: one per comment posted through commentIssue. */
+export const newSubmission = (): SubmissionId => submissionIdSchema.parse((++submissions).toString(16).padStart(32, "0"));
 
 /**
  * What bb runs a spawn on, by bb's rule for a create: a requested field counts only when its
@@ -815,12 +821,13 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     registerIssueTools(bb, { store, issues });
     registerAgentTools(bb, { store, agents });
     registerHandoffTool(bb, { store, verify });
+    registerCommentTool(bb, { store, inbox, turns });
     registerReviewTool(bb, { store, review });
     registerVerdictTool(bb, { store, verify });
     const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard: refreshIssues, refreshIssue: (id, issueId) => invalidated.push(issueTag(id, issueId)) });
     watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });
-    return { spawner, inbox, verify, agents, prWatch, finalChecks, viewWatch, issueTags, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }), ...feedHandlers({ store, reader: createFeedReader(bb, store) }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }, upgrade030: upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators }) };
+    return { spawner, inbox, verify, agents, prWatch, finalChecks, viewWatch, issueTags, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }), ...feedHandlers({ store, reader: createFeedReader(bb, store), inbox }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }, upgrade030: upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators }) };
   }
   /** `turns`, whose every operation waits, once it holds its issue's turn, while turnsTaken says to hold it. */
   function heldWhileTaken(turns: IssueTurns): IssueTurns {

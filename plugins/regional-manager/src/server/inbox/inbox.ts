@@ -5,6 +5,7 @@
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
 import type { Agent, AgentId, EndedHow } from "../../model/agent/agent.ts";
 import type { DecisionId } from "../../model/decision.ts";
+import type { CommentId } from "../../model/feed/comment.ts";
 import type { GivenHandoff, Handoff, HandoffId } from "../../model/agent/handoff.ts";
 import { wakes, type InboxEvent, type StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { doorbellText } from "../../model/inbox/wake-text.ts";
@@ -18,6 +19,7 @@ import { isLive, threadsById } from "../agents/threads.ts";
 import type { MemoryRoot } from "../memory/memory-files.ts";
 import { storeReport } from "../memory/report-file.ts";
 import type { GivenUp, Settlement, VerdictFrom } from "../store/issue/checks-store.ts";
+import type { NewComment } from "../store/feed/comments-store.ts";
 import type { Store } from "../store/store.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
@@ -49,6 +51,7 @@ type InboxBb = {
 type InboxStore = Pick<
   Store,
   | "coordinator"
+  | "commentIssue"
   | "issues"
   | "check"
   | "insertHandoff"
@@ -283,6 +286,17 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
       const outcome = store.answerDecision(id, decisionId, answer, Date.now());
       if (outcome === "answered") recorded(id);
       return outcome;
+    },
+
+    /**
+     * A comment on one of the regional manager's issues: stores it with what the regional manager is
+     * told of it, then shows it and rings, which only the user's comment wakes it for (see
+     * commentIssue). Returns its id; null when it answers no comment of the same issue.
+     */
+    commentIssue(id: CoordinatorId, comment: NewComment): CommentId | null {
+      const commentId = store.commentIssue(id, comment, Date.now());
+      if (commentId !== null) recorded(id);
+      return commentId;
     },
 
     /**

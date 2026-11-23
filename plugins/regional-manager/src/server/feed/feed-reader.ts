@@ -10,7 +10,7 @@ import type { CoordinatorId } from "../../model/role.ts";
 import { threadsById, type ListBb } from "../agents/threads.ts";
 import type { Store } from "../store/store.ts";
 
-type FeedStore = Pick<Store, "issue" | "issues" | "agents" | "record" | "finalChecks" | "issueDecisions" | "eventsOfIssue" | "logOf" | "handoff" | "check">;
+type FeedStore = Pick<Store, "issue" | "issues" | "agents" | "record" | "finalChecks" | "issueDecisions" | "eventsOfIssue" | "logOf" | "commentsOf" | "handoff" | "check">;
 
 export type FeedReader = ReturnType<typeof createFeedReader>;
 
@@ -30,6 +30,7 @@ export function createFeedReader(bb: ListBb<{ id: string; deletedAt: number | nu
         decisions: store.issueDecisions(coordinatorId, issueId),
         events: store.eventsOfIssue(coordinatorId, issueId),
         log: store.logOf(coordinatorId, issueId),
+        comments: store.commentsOf(coordinatorId, issueId),
       });
       const blocks = dependentsOf(store.issues(coordinatorId), issueId);
       // why bb's listing, not how the agent ended: a thread archived or kept when its agent ended may be deleted since, and the agent's row never says so.

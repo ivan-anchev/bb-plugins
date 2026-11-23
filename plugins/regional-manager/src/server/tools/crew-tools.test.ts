@@ -6,10 +6,11 @@ import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
 import plugin from "../../../server.ts";
 import { coordinatorContract } from "../../contract.ts";
 import { agentIdSchema } from "../../model/agent/agent.ts";
+import { issueIdSchema } from "../../model/issue/issue.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
-import { coordinatorIdSchema } from "../../model/role.ts";
+import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
 import { upgradeMemoryFrom040 } from "../memory/memory-upgrade.ts";
-import { coordinating, harness, HEAD, isRefusal, startedAgent, textOf } from "../test-harness.ts";
+import { coordinating, harness, HEAD, isRefusal, ISSUE, issueIn, newSubmission, settled, startedAgent, textOf, type FakePr } from "../test-harness.ts";
 
 
 const NOTES = memoryFileSchema.parse("NOTES.md");
@@ -204,6 +205,137 @@ test("the plugin loads in the SDK's fake host, which checks every tool's paramet
   plugin(bb);
   assert.deepEqual(
     new Set(host.registrations.agentTools.map(({ name }) => name)),
-    new Set(["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "crew_end_turn", "issue_create", "issue_update", "issue_read", "agent_start", "agent_message", "agent_stop", "agent_handoff", "issue_review", "issue_verdict"]),
+    new Set(["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "crew_end_turn", "issue_create", "issue_update", "issue_read", "agent_start", "agent_message", "agent_stop", "agent_handoff", "issue_comment", "issue_review", "issue_verdict"]),
   );
+});
+
+/** The update crew_catch_up gives for the user's comment `text` on `issueId`, posted from the issue's tab, and the comment's id. */
+async function commentCaughtUp(kit: Awaited<ReturnType<typeof coordinating>>["kit"], threadId: string, coordinatorId: CoordinatorId, issueId: string, text: string) {
+  await kit.call("crew_catch_up", {}, threadId);
+  const { commentId } = await kit.rpc.commentIssue({ coordinatorId, issueId: issueIdSchema.parse(issueId), text, replyTo: null, submission: newSubmission() });
+  const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
+  return { commentId, update: caughtUp.slice(caughtUp.indexOf("### "), caughtUp.indexOf("## Board")) };
+}
+
+const RELAY_WAIT =
+  "Never relay while a check of its agent's handoff is in flight (Reviewing or Verifying, or a done handoff its agent made while its turn still runs): a message drops that check or cuts across it. Read the agent's issue with issue_read just before you relay: it says when a check is in flight, and gives every comment on it whole, by its id. To relay later, set a reminder with crew_remind naming the issue and the comment's id, and relay once issue_read shows no check in flight.";
+const IN_FLIGHT = "A check on its record is in flight: its verdict is still to come or to settle, or it waits for CI (see Its record). Message its agent only once it has settled: a message drops it or cuts across it.";
+const DONE_HANDOFF = { status: "done", summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD };
+
+test("the user's comment on an issue an agent holds offers a relay to that agent, naming the comment, and says to read the issue's check first", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  const { issue } = await startedAgent(kit, threadId);
+  const { commentId, update } = await commentCaughtUp(kit, threadId, coordinatorId, issue, "Cap retries at five?");
+  assert.ok(update.includes(`Nothing reaches a1 on its own: the user's comments come to you. Reply on the issue with issue_comment (issue "${issue}", replyTo "${commentId}")`), update);
+  assert.ok(update.includes(`or, when it concerns a1's work, relay it to a1 with agent_message, quoting their words and naming ${commentId}, so it can answer on the issue. ${RELAY_WAIT}`), update);
+  assert.ok(!textOf(await kit.call("issue_read", { id: issue }, threadId)).includes(IN_FLIGHT), "no check is in flight, as the read shows");
+  assert.equal(textOf(await kit.call("agent_message", { agent: "a1", text: `The user asks (${commentId}): "Cap retries at five?"` }, threadId)), "Sent to a1.");
+});
+
+test("the user's comment on an issue whose done handoff's check is queued says not to relay now, though its agent's turn still runs and the board shows it In progress", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  const { issue, agentThreadId } = await startedAgent(kit, threadId);
+  await kit.call("agent_handoff", DONE_HANDOFF, agentThreadId);
+  const { update } = await commentCaughtUp(kit, threadId, coordinatorId, issue, "Cap retries at five?");
+  assert.ok(update.includes(`Don't relay it to a1 now: a check of its handoff is in flight, and a message drops it or cuts across it. Only if it concerns a1's work, relay it to a1`), update);
+  assert.ok(update.includes(RELAY_WAIT), "a relay after the check, too, waits on a fresh issue_read");
+  assert.ok(update.includes(`${issue} is In progress now, while its check is in flight.`), update);
+  assert.ok(textOf(await kit.call("issue_read", { id: issue }, threadId)).includes(IN_FLIGHT), "the read the guidance names shows the check in flight");
+});
+
+test("the user's comment on an issue whose verdict waits for CI says not to relay, and issue_read shows the check in flight until CI settles it", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  const { issue, agentThreadId } = await startedAgent(kit, threadId);
+  kit.thread(threadId).status = "idle";
+  const branch = kit.thread(agentThreadId).environmentBranchName ?? assert.fail("no branch");
+  const pr: FakePr = { number: 44, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup: "PENDING", failed: [] };
+  kit.github.prs.set(branch, pr);
+  await kit.call("agent_handoff", { ...DONE_HANDOFF, prUrl: "https://github.com/acme/webhooks/pull/44" }, agentThreadId);
+  await kit.idle(agentThreadId, "Handed off.");
+  await kit.tick();
+  const running = kit.store.latestHandoff(coordinatorId, agentIdSchema.parse("a1"))?.check?.verdict;
+  const verifierThreadId = running?.state === "running" ? running.verifierThreadId : assert.fail("no verifier running");
+  await kit.call("issue_verdict", { criteria: [{ criterion: 1, result: "pass", evidence: "$ npm test\n# pass 13" }], findings: [] }, verifierThreadId);
+  await settled();
+  const waiting = kit.store.latestHandoff(coordinatorId, agentIdSchema.parse("a1"))?.check?.verdict;
+  assert.equal(waiting?.state === "returned" && waiting.settlement.kind, "waiting-for-ci");
+
+  const { update } = await commentCaughtUp(kit, threadId, coordinatorId, issue, "Cap retries at five?");
+  assert.ok(update.includes("Don't relay it to a1 now: a check of its handoff is in flight") && update.includes(`${issue} is Verifying now, while its check is in flight.`), update);
+  assert.ok(textOf(await kit.call("issue_read", { id: issue }, threadId)).includes(IN_FLIGHT), "the fresh read shows it in flight too");
+
+  kit.github.prs.set(branch, { ...pr, rollup: "SUCCESS" });
+  await kit.tick();
+  await settled();
+  assert.ok(!textOf(await kit.call("issue_read", { id: issue }, threadId)).includes(IN_FLIGHT), "settled: the read no longer holds a relay back");
+});
+
+test("the user's comment while bb's thread list can't be read still says a check is in flight, and asks for a fresh issue_read before any relay", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  const { issue, agentThreadId } = await startedAgent(kit, threadId);
+  await kit.call("agent_handoff", DONE_HANDOFF, agentThreadId);
+  await kit.call("crew_catch_up", {}, threadId);
+  await kit.rpc.commentIssue({ coordinatorId, issueId: issueIdSchema.parse(issue), text: "Cap retries at five?", replyTo: null, submission: newSubmission() });
+  kit.threadLists.failure = new Error("HTTP 503: bb is restarting");
+  const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
+  const update = caughtUp.slice(caughtUp.indexOf("### "), caughtUp.indexOf("## Board"));
+  assert.ok(update.includes(`Where ${issue} stands, and whether an agent holds it, couldn't be read with the board, but a check on its record is in flight, so don't relay it to an agent now. ${RELAY_WAIT}`), update);
+  kit.threadLists.failure = null;
+  assert.ok(textOf(await kit.call("issue_read", { id: issue }, threadId)).includes(IN_FLIGHT), "the read it names shows the check in flight");
+});
+
+test("a relay put off for a check keeps the comment: once its catch-up is spent, issue_read gives it whole by its id, and a reminder can name it", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  const { issue, agentThreadId } = await startedAgent(kit, threadId);
+  await kit.call("agent_handoff", DONE_HANDOFF, agentThreadId);
+  const text = "Cap retries at five.\n\nAnd log each one.";
+  const { commentId } = await commentCaughtUp(kit, threadId, coordinatorId, issue, text);
+  await kit.call("issue_comment", { issue, text: "Noted; I'll pass it on once the check is done.", replyTo: commentId }, threadId);
+  assert.ok(!textOf(await kit.call("crew_catch_up", {}, threadId)).includes(text), "the update came once");
+
+  const read = textOf(await kit.call("issue_read", { id: issue }, threadId));
+  assert.ok(read.includes(`### Comments\n\n#### ${commentId}, the user's, at `), read);
+  assert.ok(read.includes(`\n\n${text}\n\n#### m2, yours, at `) && read.includes(`, answering ${commentId}\n\nNoted; I'll pass it on once the check is done.`), read);
+  assert.match(textOf(await kit.call("crew_remind", { note: `relay ${commentId} on ${issue} to a1 once its check settles`, at: "in 30m" }, threadId)), /^Set r1, due /);
+});
+
+test("the user's comment on an issue no agent holds points at the brief of the agent started on it, never at a relay", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
+  const issue = issueIn(textOf(await kit.call("issue_create", ISSUE, threadId)));
+  const { update } = await commentCaughtUp(kit, threadId, coordinatorId, issue, "Cap retries at five?");
+  assert.ok(update.includes(`or put it in the brief of the agent you start on it. ${issue} is Todo now, and no agent holds it.`), update);
+  assert.ok(!update.includes("agent_message"), update);
+});
+
+test("the user's comment on a parent points at the sub-issue it concerns, never at an agent of the parent, and that step works", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
+  const parent = issueIn(textOf(await kit.call("issue_create", { ...ISSUE, title: "Webhook delivery" }, threadId)));
+  const sub = issueIn(textOf(await kit.call("issue_create", { ...ISSUE, parent }, threadId)));
+  const { update } = await commentCaughtUp(kit, threadId, coordinatorId, parent, "Retries first, then dead letters.");
+  assert.ok(update.includes("or put it in the brief of the sub-issue it concerns. An agent already on that sub-issue gets it only as a relay with agent_message") && update.includes("a parent has no agent of its own."), update);
+  assert.ok(!update.includes("Nothing reaches") && !update.includes("the agent you start on it"), "no agent of the parent to relay to or start");
+  assert.ok(!isRefusal(await kit.call("issue_update", { id: sub, brief: "Retries first, then dead letters (the user's comment)." }, threadId)));
+});
+
+test("the user's comment on a parent whose sub-issue has an agent: that agent answers on its own sub-issue, and the manager replies on the parent, as the update says", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
+  const parent = issueIn(textOf(await kit.call("issue_create", { ...ISSUE, title: "Webhook delivery" }, threadId)));
+  const { issue: sub, agentThreadId } = await startedAgent(kit, threadId, { parent });
+  const { commentId, update } = await commentCaughtUp(kit, threadId, coordinatorId, parent, "Retries first, then dead letters.");
+  assert.ok(update.includes(`It can't comment on ${parent}: ask it to answer with issue_comment on its own sub-issue, and once its answer reaches you, reply to the user on ${parent} with issue_comment (replyTo "${commentId}").`), update);
+
+  assert.equal(textOf(await kit.call("agent_message", { agent: "a1", text: "The user says: \"Retries first, then dead letters.\" Answer on your own issue." }, threadId)), "Sent to a1.");
+  assert.match(textOf(await kit.call("issue_comment", { issue: sub, text: "Retries land first." }, agentThreadId)), /^Posted m2 on /);
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), new RegExp(`${sub} "Add retries" \\(a1\\) commented: m2\n\nAt [^\n]+ In its own words:\n\nRetries land first\\.`));
+  assert.match(textOf(await kit.call("issue_comment", { issue: parent, text: "Retries land first, then dead letters.", replyTo: commentId }, threadId)), /^Posted m3 on /);
+});
+
+test("the user's comment on a closed issue points at a new issue, never at an agent of it, and that step works", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
+  const issue = issueIn(textOf(await kit.call("issue_create", ISSUE, threadId)));
+  await kit.call("issue_update", { id: issue, status: "canceled" }, threadId);
+  const { update } = await commentCaughtUp(kit, threadId, coordinatorId, issue, "We still need retries, just later.");
+  assert.ok(update.includes(`or file what it asks for as a new issue with issue_create. ${issue} is Canceled now, so no agent can start on it.`), update);
+  assert.ok(!update.includes("agent_message") && !update.includes("the agent you start on it"), update);
+  assert.match(textOf(await kit.call("issue_create", { ...ISSUE, title: "Retries, later" }, threadId)), /^Filed /);
 });

@@ -4,6 +4,7 @@
 import { sameModel } from "../../model/agent/execution.ts";
 import type { Agent } from "../../model/agent/agent.ts";
 import type { Decision, DecisionId } from "../../model/decision.ts";
+import { firstLine, type Comment, type CommentId } from "../../model/feed/comment.ts";
 import type { Handoff, HandoffId } from "../../model/agent/handoff.ts";
 import type { StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { filesText } from "../../model/inbox/own-tree.ts";
@@ -16,7 +17,7 @@ import { checkedAgents, type Check, type CheckId, type FinalCheck } from "../../
 import { checkoutText, worktreeText } from "../../model/verdict/checkout.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
 import { findingText, type Review } from "../../model/verdict/review.ts";
-import { ciVerdictOf, confirmedFindings, failurePhrases, failureReasons, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
+import { checkInFlight, ciVerdictOf, confirmedFindings, failurePhrases, failureReasons, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
 import { reportFileOf } from "../memory/report-file.ts";
 
 /** What the texts look up, all within one regional manager. */
@@ -28,6 +29,9 @@ export type Lookups = {
   /** Every agent of the regional manager. */
   agents(): readonly Agent[];
   decision(id: DecisionId): Decision | null;
+  comment(id: CommentId): Comment | null;
+  /** Every handoff on the issue's record, each with its check, oldest first. */
+  record(id: IssueId): readonly Handed[];
   /** The issue's view, as the board in the same catch-up places it; null when bb's thread list couldn't be read. */
   view(id: IssueId): IssueView | null;
 };
@@ -73,8 +77,16 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
   if (event.kind === "unblocked") {
     return `### ${titled(event.issueId, titles)} is unblocked: ${event.by} ${event.closedAs}\n\n${when} ${event.by} was the last open issue blocking ${event.issueId}, as its own dependency or its parent's. Nothing of ${event.by} reaches ${event.issueId} on its own: what its agent needs from it, such as a report's file, goes in its brief or a message to its agent. The board below says where ${event.issueId} stands now.`;
   }
+  if (event.kind === "comment-to-you") {
+    const comment = commentOf(event.commentId, lookups);
+    return `### The user commented on ${titled(event.issueId, titles)}: ${comment.id}\n\n${when}${answers(comment, lookups)} In their own words:\n\n${comment.text}\n\n${commentNextStep(comment, lookups.view(event.issueId), checkOnRecordInFlight(lookups.record(event.issueId)))}`;
+  }
   const on = issueName(event.issueId, titles, event.agentId);
   switch (event.kind) {
+    case "comment": {
+      const comment = commentOf(event.commentId, lookups);
+      return `### ${on} commented: ${comment.id}\n\n${when}${answers(comment, lookups)} In its own words:\n\n${comment.text}`;
+    }
     case "handoff": {
       const handed = handedOf(event.handoffId, lookups);
       return `### ${on} handed off: ${handed.handoff.status}\n\n${when} Its report, in its own words:\n\n${handoffText(handed, lookups)}`;
@@ -99,6 +111,71 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
     default:
       return event satisfies never;
   }
+}
+
+/** The comment an event names. why throw: its event is inserted with it, in one transaction. */
+function commentOf(id: CommentId, { comment }: Lookups): Comment {
+  const found = comment(id);
+  if (found === null) throw new Error(`The comment ${id} is missing.`);
+  return found;
+}
+
+/** What a comment answers, as " It answers m1, the user's: <its first line>"; nothing when it answers none. */
+function answers({ replyTo }: Comment, lookups: Lookups): string {
+  if (replyTo === null) return "";
+  const { author, text } = commentOf(replyTo, lookups);
+  return ` It answers ${replyTo}, ${whose(author)}: "${firstLine(text)}".`;
+}
+
+function whose(author: Comment["author"]): string {
+  switch (author.kind) {
+    case "user":
+      return "the user's";
+    case "manager":
+      return "yours";
+    case "agent":
+      return `${author.agentId}'s`;
+    default:
+      return author satisfies never;
+  }
+}
+
+/**
+ * Whether a check of a handoff on the issue's record is in flight (checkInFlight): its verdict is
+ * still to come or to settle, or it waits for CI. A message to the issue's agent drops such a check
+ * or cuts across it, so the regional manager relays nothing to it meanwhile.
+ */
+export const checkOnRecordInFlight = (record: readonly Handed[]): boolean => record.some(({ check }) => check !== null && checkInFlight(check));
+
+/**
+ * What the regional manager does with the user's comment, by where its issue stands now (`view`, as
+ * the board in the same catch-up places it; null: bb's thread list couldn't be read) and whether a
+ * check on its record is in flight (`inFlight`). why the check, not only the status: a done handoff
+ * queues its check while the agent's turn still runs, which the board shows as In progress.
+ */
+function commentNextStep({ id, issueId }: Comment, view: IssueView | null, inFlight: boolean): string {
+  const answer = `Reply on the issue with issue_comment (issue "${issueId}", replyTo "${id}"), record what it decides with issue_update (id "${issueId}", decision)`;
+  // why issue_read, not another catch-up: this update comes only once, and the plugin's own record of the issue doesn't need bb's thread list.
+  if (view === null) return `${answer}. Where ${issueId} stands, and whether an agent holds it, couldn't be read with the board${inFlight ? `, but a check on its record is in flight, so don't relay it to an agent now` : ""}. ${RELAY_WAIT}`;
+  const now = `${issueId} is ${STATUS_LABELS[view.status]} now`;
+  // why first: a parent never has an agent, so its work is its sub-issues'. Their agents can comment only on their own issue, so the answer comes back through the manager.
+  if (view.subIssues !== null) return `${answer}, or put it in the brief of the sub-issue it concerns. An agent already on that sub-issue gets it only as a relay with agent_message, quoting their words. ${RELAY_WAIT} It can't comment on ${issueId}: ask it to answer with issue_comment on its own sub-issue, and once its answer reaches you, reply to the user on ${issueId} with issue_comment (replyTo "${id}"). ${now}; a parent has no agent of its own.`;
+  // why: agent_start refuses a closed issue.
+  if (view.status === "done" || view.status === "canceled") return `${answer}, or file what it asks for as a new issue with issue_create. ${now}, so no agent can start on it.`;
+  if (view.holder === null) return `${answer}, or put it in the brief of the agent you start on it. ${now}, and no agent holds it.`;
+  const agent = view.holder.id;
+  const relay = `relay it to ${agent} with agent_message, quoting their words and naming ${id}, so it can answer on the issue`;
+  if (inFlight) return `Nothing reaches ${agent} on its own: the user's comments come to you. ${answer}. Don't relay it to ${agent} now: a check of its handoff is in flight, and a message drops it or cuts across it. Only if it concerns ${agent}'s work, ${relay}, once that check has settled. ${RELAY_WAIT} ${now}, while its check is in flight.`;
+  return `Nothing reaches ${agent} on its own: the user's comments come to you. ${answer}, or, when it concerns ${agent}'s work, ${relay}. ${RELAY_WAIT} ${now}.`;
+}
+
+/** When a relay must wait, the fresh read that tells, and how a relay that waits is kept: this update comes only once. */
+const RELAY_WAIT = `Never relay while a check of its agent's handoff is in flight (Reviewing or Verifying, or a done handoff its agent made while its turn still runs): a message drops that check or cuts across it. Read the agent's issue with issue_read just before you relay: it says when a check is in flight, and gives every comment on it whole, by its id. To relay later, set a reminder with crew_remind naming the issue and the comment's id, and relay once issue_read shows no check in flight.`;
+
+/** An issue's comments whole, in the order posted, each with its id, whose it is, when, and what it answers; as issue_read gives them. */
+export function commentsText(comments: readonly Comment[]): string {
+  if (comments.length === 0) return "None yet.";
+  return comments.map(({ id, at, author, replyTo, text }) => `#### ${id}, ${whose(author)}, at ${new Date(at).toISOString()}${replyTo === null ? "" : `, answering ${replyTo}`}\n\n${text}`).join("\n\n");
 }
 
 /** A decision the user answered: what was asked and offered, then the answer, marked as theirs. */

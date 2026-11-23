@@ -1,14 +1,21 @@
+import "../../../test-browser.ts";
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { cleanup, fireEvent, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
+import { coordinatorContract } from "../../../../contract.ts";
 import { agentIdSchema } from "../../../../model/agent/agent.ts";
+import { commentIdSchema, type Comment } from "../../../../model/feed/comment.ts";
 import type { Entry } from "../../../../model/feed/entry.ts";
 import { COORDINATOR, FEED, id, issue, opened } from "../test-tab.ts";
 
 // An issue's Activity: every entry of its feed in order, each drawn by its kind, under a filter; and
 // an open question answered from its card.
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  // why: the composer keeps its draft in the browser, by issue.
+  localStorage.clear();
+});
 
 const WEB_1 = [issue("WEB-1", { status: "in-review", headline: "✓ Verified: Retries land" })];
 
@@ -146,4 +153,183 @@ test("an entry that moved the issue shows the status it moved to, as the Board d
   const outcome = section.getByRole("article", { name: "Round 3" }).querySelector(".rmi-outcome");
   assert.match(outcome?.textContent ?? "", /^Passed ·\s+In review/, "what became of its verdict, and the status that moved it to");
   assert.equal(section.getAllByRole("img", { name: "Done" }).length, 1);
+});
+
+/** What the tab posted, without each post's submission, which the browser makes up. */
+const postedOf = (comments: readonly unknown[]) => comments.map((input) => coordinatorContract.commentIssue.input.omit({ submission: true }).parse(input));
+/** The submission each post was sent with. */
+const submissionsOf = (comments: readonly unknown[]) => comments.map((input) => coordinatorContract.commentIssue.input.parse(input).submission);
+
+const comment = (n: number, at: number, author: Comment["author"], text: string, replyTo: number | null): Entry => ({
+  kind: "comment",
+  comment: { id: commentIdSchema.parse(`m${n}`), issueId: id("WEB-1"), at, text, replyTo: replyTo === null ? null : commentIdSchema.parse(`m${replyTo}`), author },
+});
+const COMMENTED = { ...FEED, entries: [...FEED.entries, comment(1, 6_400, { kind: "user" }, "Cap retries at five.\nAnd log each.", null), comment(2, 6_500, { kind: "manager" }, "Capped at five.", 1), comment(3, 6_600, { kind: "agent", agentId: agentIdSchema.parse("a2") }, "Done in retry.ts.", 1)] };
+
+/** The comment field at the foot of Activity, and its form's controls. */
+function composer(tab: ReturnType<typeof within>) {
+  const form = within(tab.getByRole("form", { name: "Comment on WEB-1" }));
+  return { form, field: form.getByRole("textbox", { name: "Comment on WEB-1" }) as HTMLTextAreaElement, send: form.getByRole("button", { name: "Comment" }) };
+}
+
+test("comments are cards in Activity and the Discussion: the user's says where it went, and a reply names and quotes what it answers", async () => {
+  const { tab, view } = await opened("WEB-1", WEB_1, { feedOf: () => COMMENTED });
+  const { section } = activity(tab());
+  const card = (n: number) => within(section.getByRole("article", { name: `Comment m${n}` }));
+  assert.match(card(1).getAllByRole("paragraph")[0]?.textContent ?? "", /^You commented/);
+  assert.ok(card(1).getByText("Sent to the regional manager"), "the user's comment says where it went");
+  assert.match(card(2).getAllByRole("paragraph")[0]?.textContent ?? "", /^Regional manager replied to m1/);
+  assert.equal(card(2).getByText("Cap retries at five.").className, "rmi-comment-quote", "a reply quotes the first line of what it answers");
+  assert.equal(card(2).queryByText(/And log each/), null, "and no more of it");
+  assert.equal(card(2).queryByText(/^Sent to/), null, "only the user's own comments say where they went");
+  fireEvent.click(card(3).getByRole("button", { name: "Open a2's thread" }));
+  assert.deepEqual(view.navigateCalls, [{ method: "toThread", threadId: "thr_a2" }], "an agent's reply names it, opening its thread");
+  fireEvent.click(within(section.getByRole("group", { name: "Show" })).getByRole("button", { name: "Discussion" }));
+  assert.deepEqual(section.getAllByRole("article").map((article) => article.getAttribute("aria-label")), ["Question d1", "Decision", "Question d2", "Comment m1", "Comment m2", "Comment m3"]);
+});
+
+test("⌘↵ or Ctrl+↵ sends the comment and Enter breaks the line; the field keeps focus, empties once the server took it, and its card says Sending…, then Sent, until the feed reads it", async () => {
+  const releases: Array<() => void> = [];
+  const { tab, comments, refeed } = await opened("WEB-1", WEB_1, { comment: () => new Promise((resolve) => releases.push(() => resolve({ commentId: `m${releases.length}` }))) });
+  const { field } = composer(tab());
+  field.focus();
+  fireEvent.change(field, { target: { value: "Cap retries at five." } });
+  assert.equal(fireEvent.keyDown(field, { key: "Enter" }), true, "Enter alone is left to the browser, which breaks the line");
+  assert.deepEqual(comments, [], "and sends nothing");
+  // As the browser leaves the field once it broke the line and the user typed on.
+  fireEvent.change(field, { target: { value: "Cap retries at five.\nAnd log each." } });
+
+  assert.equal(fireEvent.keyDown(field, { key: "Enter", metaKey: true }), false, "⌘↵ is the composer's, never a line break");
+  await waitFor(() => assert.deepEqual(postedOf(comments), [{ coordinatorId: COORDINATOR.id, issueId: "WEB-1", text: "Cap retries at five.\nAnd log each.", replyTo: null }]));
+  const sending = () => activity(tab()).section.queryByRole("article", { name: "Your comment" });
+  assert.equal(within(sending() ?? assert.fail("no card")).getByRole("status").textContent, "Sending…");
+  assert.equal(field.readOnly, true, "read-only, never disabled, while it sends");
+  assert.equal(document.activeElement, field);
+  fireEvent.keyDown(field, { key: "Enter", ctrlKey: true });
+  assert.equal(comments.length, 1, "one comment at a time");
+
+  await act(async () => releases[0]?.());
+  await waitFor(() => assert.equal(composer(tab()).field.value, ""));
+  assert.equal(within(sending() ?? assert.fail("no card")).getByRole("status").textContent, "Sent as m1");
+  assert.equal(document.activeElement, composer(tab()).field, "focus stays in the field");
+  await refeed("WEB-1", () => ({ ...FEED, entries: [...FEED.entries, comment(1, 6_400, { kind: "user" }, "Cap retries at five.\nAnd log each.", null)] }));
+  await waitFor(() => assert.equal(sending(), null, "the feed's card takes over"));
+  assert.ok(activity(tab()).section.getByRole("article", { name: "Comment m1" }));
+
+  fireEvent.change(composer(tab()).field, { target: { value: "Also alert on-call." } });
+  assert.equal(fireEvent.keyDown(composer(tab()).field, { key: "Enter", ctrlKey: true }), false, "Ctrl+↵ is the composer's too");
+  await waitFor(() => assert.deepEqual(postedOf(comments).at(-1), { coordinatorId: COORDINATOR.id, issueId: "WEB-1", text: "Also alert on-call.", replyTo: null }));
+  assert.equal(comments.length, 2);
+  assert.notEqual(submissionsOf(comments)[1], submissionsOf(comments)[0], "a new comment is a new submission");
+  await act(async () => releases[1]?.());
+  await waitFor(() => assert.equal(composer(tab()).field.value, ""));
+});
+
+test("a draft the browser kept fills the field, and a send that fails keeps it, beside its error", async () => {
+  // As a reload finds it: the draft typed before, kept in the browser by issue.
+  localStorage.setItem(`coordinator-issue-comment:${COORDINATOR.id}:WEB-1`, JSON.stringify("Cap retries at five."));
+  const { tab, comments } = await opened("WEB-1", WEB_1, {
+    comment: () => {
+      throw new Error("bb is unreachable");
+    },
+  });
+  assert.equal(composer(tab()).field.value, "Cap retries at five.");
+  fireEvent.click(composer(tab()).send);
+  await waitFor(() => assert.match(composer(tab()).form.getByRole("alert").textContent ?? "", /^Could not post your comment: .*bb is unreachable/));
+  assert.equal(comments.length, 1);
+  assert.equal(composer(tab()).field.value, "Cap retries at five.", "the draft stays to send again");
+});
+
+test("a send the server takes drops only the draft it sent: one typed since, after a remount, stays", async () => {
+  const key = `coordinator-issue-comment:${COORDINATOR.id}:WEB-1`;
+  localStorage.setItem(key, JSON.stringify("Cap retries at five."));
+  let release: () => void = () => {};
+  const first = await opened("WEB-1", WEB_1, { comment: () => new Promise((resolve) => (release = () => resolve({ commentId: "m1" }))) });
+  fireEvent.click(composer(first.tab()).send);
+  await waitFor(() => assert.equal(first.comments.length, 1));
+  first.view.unmount();
+
+  // As the remounted tab finds it once the user typed another draft there.
+  localStorage.setItem(key, JSON.stringify("A different draft."));
+  const second = await opened("WEB-1", WEB_1);
+  assert.equal(composer(second.tab()).field.value, "A different draft.");
+  await act(async () => release());
+
+  assert.equal(localStorage.getItem(key), JSON.stringify("A different draft."), "the newer draft is kept");
+  assert.equal(composer(second.tab()).field.value, "A different draft.");
+});
+
+test("a comment on its way stays on its way across a remount: the remounted field is read-only with its card, and sending again posts nothing more", async () => {
+  const key = `coordinator-issue-comment:${COORDINATOR.id}:WEB-1`;
+  localStorage.setItem(key, JSON.stringify("Same pending draft."));
+  let release: () => void = () => {};
+  const first = await opened("WEB-1", WEB_1, { comment: () => new Promise((resolve) => (release = () => resolve({ commentId: "m1" }))) });
+  fireEvent.click(composer(first.tab()).send);
+  await waitFor(() => assert.equal(first.comments.length, 1));
+  first.view.unmount();
+
+  const second = await opened("WEB-1", WEB_1, { comment: () => assert.fail("the draft on its way was sent again") });
+  const { field, send } = composer(second.tab());
+  assert.equal(field.value, "Same pending draft.");
+  assert.equal(field.readOnly, true, "still sending");
+  assert.equal(within(activity(second.tab()).section.getByRole("article", { name: "Your comment" })).getByRole("status").textContent, "Sending…");
+  fireEvent.click(send);
+  fireEvent.keyDown(field, { key: "Enter", metaKey: true });
+  assert.deepEqual(second.comments, [], "nothing more is posted");
+
+  await act(async () => release());
+  await waitFor(() => assert.equal(composer(second.tab()).field.value, ""));
+  assert.equal(within(activity(second.tab()).section.getByRole("article", { name: "Your comment" })).getByRole("status").textContent, "Sent as m1");
+});
+
+test("a send that fails after a remount shows its error beside the kept draft in the remounted field, which sends it again as the same submission", async () => {
+  const key = `coordinator-issue-comment:${COORDINATOR.id}:WEB-1`;
+  localStorage.setItem(key, JSON.stringify("Draft that fails."));
+  let reject: () => void = () => {};
+  const first = await opened("WEB-1", WEB_1, { comment: () => new Promise((_, fail) => (reject = () => fail(new Error("bb is unreachable")))) });
+  fireEvent.click(composer(first.tab()).send);
+  await waitFor(() => assert.equal(first.comments.length, 1));
+  first.view.unmount();
+
+  const second = await opened("WEB-1", WEB_1);
+  await act(async () => reject());
+  const { form, field, send } = composer(second.tab());
+  await waitFor(() => assert.match(form.getByRole("alert").textContent ?? "", /^Could not post your comment: .*bb is unreachable/));
+  assert.equal(field.value, "Draft that fails.", "the draft stays to send again");
+  assert.equal(field.readOnly, false);
+  assert.equal(activity(second.tab()).section.queryByRole("article", { name: "Your comment" }), null, "no card for a comment that never arrived");
+  fireEvent.click(send);
+  await waitFor(() => assert.deepEqual(postedOf(second.comments), [{ coordinatorId: COORDINATOR.id, issueId: "WEB-1", text: "Draft that fails.", replyTo: null }]));
+  assert.deepEqual(submissionsOf(second.comments), submissionsOf(first.comments), "the server can tell the retry from a new comment, in case the first was taken and only its answer lost");
+});
+
+test("the submission is kept with the text until the server takes it: a retry of the same text reuses it, an edited text and a later comment get new ones", async () => {
+  const key = `coordinator-issue-comment:${COORDINATOR.id}:WEB-1`;
+  const answers: Array<() => unknown> = [
+    () => {
+      throw new Error("bb is unreachable");
+    },
+    () => {
+      throw new Error("bb is unreachable");
+    },
+    () => ({ commentId: "m1" }),
+    () => ({ commentId: "m2" }),
+  ];
+  const { tab, comments } = await opened("WEB-1", WEB_1, { comment: () => (answers.shift() ?? assert.fail("one post too many"))() });
+  const sendText = async (text: string, alert: boolean) => {
+    fireEvent.change(composer(tab()).field, { target: { value: text } });
+    const before = comments.length;
+    fireEvent.click(composer(tab()).send);
+    await waitFor(() => assert.equal(comments.length, before + 1));
+    await waitFor(() => assert.equal(composer(tab()).form.queryByRole("alert") !== null, alert));
+  };
+  await sendText("Cap at five.", true);
+  await sendText("Cap at five, please.", true);
+  await sendText("Cap at five, please.", false);
+  assert.equal(localStorage.getItem(`${key}:submission`), null, "dropped once the server took it");
+  await sendText("Cap at five, please.", false);
+  const [first, edited, retried, again] = submissionsOf(comments);
+  assert.notEqual(edited, first, "an edited text is another comment");
+  assert.equal(retried, edited, "the same text sent again after a failure is the same submission");
+  assert.notEqual(again, retried, "the same words posted again once taken are a new comment");
 });
