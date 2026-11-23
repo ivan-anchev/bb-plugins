@@ -317,5 +317,31 @@ test("an issue filed before the log shows where it began, no status on anything 
   );
   assert.equal(entries.some((entry) => entry.kind === "moved" && entry.status === "todo"), false);
   assert.deepEqual([actorOf(entries.at(-3) ?? assert.fail()), actorOf(entries.at(-2) ?? assert.fail()), actorOf(entries.at(-1) ?? assert.fail())], [{ kind: "plugin" }, { kind: "plugin" }, { kind: "manager" }]);
-  assert.deepEqual(["all", "rounds", "discussion"].map((filter) => entries.slice(-3).filter((entry) => shownIn(filter as Filter, entry)).length), [3, 0, 0]);
+  const filters = ["all", "rounds", "discussion"] as const satisfies readonly Filter[];
+  assert.deepEqual(filters.map((filter) => entries.slice(-3).filter((entry) => shownIn(filter, entry)).length), [3, 0, 0]);
+});
+
+test("a round begun before the log shows no status on a step after the marker: the move it made is a line of its own, below it", () => {
+  const spanning = handed(handoff(1, A1, 100), { state: "running", verifierThreadId: "thr_v", nudged: false, declined: [], checkout: null }, { state: "missed", at: 300, reviewerThreadId: null, reason: "no reviewer model" });
+  const log: Logged[] = [{ at: 200, event: { kind: "log-began" } }, ...observed([[400, "verifying"]])];
+  const entries = feedOf({ issue: { createdAt: 0 }, agents: [], handed: [spanning], finalChecks: [], decisions: [], events: [], log });
+  assert.deepEqual(glyphsOf(entries), [], "nothing at or above the marker shows a status, its round's later steps included");
+  assert.deepEqual(
+    entries.map((entry) => [entry.kind, timeOf(entry)]),
+    [
+      ["created", 0],
+      ["round", 100],
+      ["logged", 200],
+      ["moved", 400],
+    ],
+  );
+});
+
+test("rows of the log written in one millisecond keep the order they were written: a status shows only on what came before it", () => {
+  const log: Logged[] = [...observed([[2_000, "todo"]]), { at: 2_000, event: { kind: "closed", as: "canceled" } }, ...observed([[2_001, "canceled"]])];
+  const entries = feedOf({ issue: { createdAt: 0 }, agents: [], handed: [], finalChecks: [], decisions: [], events: [], log });
+  assert.deepEqual(entries, [
+    { kind: "created", at: 0, moved: "todo" },
+    { kind: "logged", at: 2_000, event: { kind: "closed", as: "canceled" }, moved: "canceled" },
+  ]);
 });

@@ -2,9 +2,14 @@
 // turns and the tick: each logged once as it is seen, on a read no change overtook, never replayed.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import type { Coordinator } from "../../../contract.ts";
 import { agentIdSchema } from "../../../model/agent/agent.ts";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
+import type { IssueView } from "../../../model/issue/status.ts";
+import type { CoordinatorId } from "../../../model/role.ts";
+import { AVATAR, MANAGER, OTHER_MANAGER } from "../../store/test-store.ts";
 import { coordinating, HEAD, settled, startedAgent, textOf } from "../../test-harness.ts";
+import { watchViews } from "./view-watch.ts";
 
 const WEB_1 = issueIdSchema.parse("WEB-1");
 const A1 = agentIdSchema.parse("a1");
@@ -76,4 +81,34 @@ test("a read a change overtook logs nothing on its pass; the next read no change
   await kit.tick();
   await settled();
   assert.deepEqual(statuses(), [...before, "in-review"]);
+});
+
+test("a regional manager whose read bb never answers holds no other: the tick reads every manager side by side, and goes on after its wait", async () => {
+  const manager = (id: CoordinatorId, n: number): Coordinator => ({ id, threadId: `thr_manager_${n}`, projectId: "prj_1", description: null, avatar: AVATAR });
+  const read: CoordinatorId[] = [];
+  const published: CoordinatorId[] = [];
+  const unanswered = new Promise<never>(() => {});
+  const watch = watchViews(
+    {
+      bb: { log: { warn: () => {} }, onDispose: () => {} },
+      store: { coordinators: () => [manager(MANAGER, 1), manager(OTHER_MANAGER, 2)], observeStatuses: () => 1 },
+      views: {
+        async whileCurrent<R>(id: CoordinatorId, act: (views: IssueView[]) => R): Promise<{ acted: R } | null> {
+          read.push(id);
+          if (id === MANAGER) return unanswered;
+          return { acted: act([]) };
+        },
+      },
+      inbox: { unblocked: () => {} },
+      publish: (id) => void published.push(id),
+      now: () => 1_000,
+    },
+    50,
+  );
+
+  await watch.tick();
+  assert.deepEqual(read, [MANAGER, OTHER_MANAGER], "the second manager is read while the first's read is out");
+  assert.deepEqual(published, [OTHER_MANAGER], "and what it logged is published");
+  await watch.tick();
+  assert.deepEqual(read, [MANAGER, OTHER_MANAGER, OTHER_MANAGER], "the next tick reads the others again, and leaves the first's one read running");
 });

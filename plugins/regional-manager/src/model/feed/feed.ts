@@ -25,67 +25,82 @@ type FeedFacts = {
   log: readonly Logged[];
 };
 
-/** The issue's feed, oldest first; two moments at one millisecond keep the order listed here. */
+/** The issue's feed, oldest first; two moments at one millisecond keep the order listed here, the log's rows in the order written. */
 export function feedOf(facts: FeedFacts): Entry[] {
   const { lines, statuses, began } = readLog(facts.log);
-  const entries: Entry[] = [
+  const others: Entry[] = [
     { kind: "created", at: facts.issue.createdAt, moved: null },
-    ...lines,
     ...facts.agents.flatMap(agentEntries),
     ...roundsOf(facts).map((round): Entry => ({ kind: "round", round })),
     ...facts.decisions.map((decision): Entry => ({ kind: "decision", decision, moved: null })),
     ...facts.events.flatMap(({ at, event }) => eventEntries(at, event)),
   ];
-  return inTimeOrder(attachStatuses(inTimeOrder(entries), statuses, began));
+  const placed = inOrder([...others.map((entry) => ({ at: timeOf(entry), seq: NOT_LOGGED, entry })), ...lines]);
+  return inOrder(attachStatuses(placed, statuses, began)).map(({ entry }) => entry);
 }
 
-type Observed = { at: number; status: IssueStatus };
+/**
+ * Where something sits in the issue's history: its time, then, for a row of its log, its place
+ * there. why the log's place: rows of one millisecond keep the order they were written in, and a
+ * fact from another table at that millisecond comes before them, as the read that logs a status
+ * follows the write it saw.
+ */
+type Point = { at: number; seq: number };
+const NOT_LOGGED = -1;
+const isAfter = (a: Point, b: Point): boolean => a.at > b.at || (a.at === b.at && a.seq > b.seq);
+const inOrder = <T extends Point>(items: readonly T[]): T[] => [...items].sort((a, b) => a.at - b.at || a.seq - b.seq);
+
+type Placed = Point & { entry: Entry };
+type Observed = Point & { status: IssueStatus };
 
 /**
- * The log as the feed shows it: its lines, the statuses observed, and when it began for an issue
+ * The log as the feed shows it: its lines, the statuses observed, and where it began for an issue
  * filed before it (null: filed since, so it holds everything). why a status before it began is
  * dropped: nothing before then was observed, so nothing above the marker shows one.
  */
-function readLog(log: readonly Logged[]): { lines: Entry[]; statuses: Observed[]; began: number | null } {
-  const marker = log.find(({ event }) => event.kind === "log-began") ?? null;
-  const since = marker === null ? log : log.slice(log.indexOf(marker));
-  const statuses = since.flatMap(({ at, event }) => (event.kind === "status" ? [{ at, status: event.status }] : []));
-  const lines = log.flatMap(({ at, event }): Entry[] => (event.kind === "status" ? [] : [{ kind: "logged", at, event, moved: null }]));
-  return { lines, statuses, began: marker?.at ?? null };
+function readLog(log: readonly Logged[]): { lines: Placed[]; statuses: Observed[]; began: Point | null } {
+  const rows = log.map((row, seq) => ({ ...row, seq }));
+  const marker = rows.find(({ event }) => event.kind === "log-began") ?? null;
+  const statuses = rows.flatMap(({ at, seq, event }) => (event.kind === "status" && (marker === null || seq > marker.seq) ? [{ at, seq, status: event.status }] : []));
+  const lines = rows.flatMap(({ at, seq, event }): Placed[] => (event.kind === "status" ? [] : [{ at, seq, entry: { kind: "logged", at, event, moved: null } }]));
+  return { lines, statuses, began: marker === null ? null : { at: marker.at, seq: marker.seq } };
 }
 
-/** A moment a status can be shown on: an entry, or one step of a round. */
-type Moment = { at: number; entry: number; step: "handed" | "review" | "verdict" | "outcome" | null };
+/** A moment a status can be shown on: an entry, or one step of a round, the `entry`th placed. */
+type Moment = Point & { entry: number; step: "handed" | "review" | "verdict" | "outcome" | null };
 
 /**
  * Each observed status on the latest moment after the status before it (and after the log began)
- * and at or before itself: the moment it followed. A status no such moment explains, as a parent
- * rolling up or a turn ending, is a `moved` entry of its own. `entries` in time order.
+ * and not after itself: the moment it followed. A status no such moment explains, as a parent
+ * rolling up or a turn ending, is a `moved` entry of its own. `placed` in order.
  */
-function attachStatuses(entries: readonly Entry[], statuses: readonly Observed[], began: number | null): Entry[] {
-  // why by each moment's own time: a round's later steps come after entries that follow its start. why latest first: the moment a status followed is the last one before it.
-  const latestFirst = sortByTime(entries.flatMap(momentsOf)).reverse();
+function attachStatuses(placed: readonly Placed[], statuses: readonly Observed[], began: Point | null): Placed[] {
+  // why only the moments of entries below the marker: one above it, as a round begun before the log,
+  // shows nothing observed, so none of its steps takes a status, and a later move of it is a line of its own.
+  const below = placed.flatMap((one, index) => (began === null || isAfter(one, began) ? momentsOf(one, index) : []));
+  // why by each moment's own place: a round's later steps come after entries that follow its start. why latest first: the moment a status followed is the last one before it.
+  const latestFirst = inOrder(below).reverse();
   const shown = new Map<string, IssueStatus>();
-  const unexplained: Entry[] = [];
-  let since = began ?? -Infinity;
-  for (const { at, status } of statuses) {
-    const moment = latestFirst.find((candidate) => candidate.at > since && candidate.at <= at);
-    if (moment === undefined) unexplained.push({ kind: "moved", at, status });
-    else shown.set(momentKey(moment.entry, moment.step), status);
-    since = at;
+  const unexplained: Placed[] = [];
+  let since = began;
+  for (const observed of statuses) {
+    const moment = latestFirst.find((candidate) => (since === null || isAfter(candidate, since)) && !isAfter(candidate, observed));
+    if (moment === undefined) unexplained.push({ at: observed.at, seq: observed.seq, entry: { kind: "moved", at: observed.at, status: observed.status } });
+    else shown.set(momentKey(moment.entry, moment.step), observed.status);
+    since = observed;
   }
-  return [...entries.map((entry, i) => withMoved(entry, (step) => shown.get(momentKey(i, step)) ?? null)), ...unexplained];
+  return [...placed.map((one, i) => ({ ...one, entry: withMoved(one.entry, (step) => shown.get(momentKey(i, step)) ?? null) })), ...unexplained];
 }
 
 const momentKey = (entry: number, step: Moment["step"]): string => `${entry}:${step}`;
 
-/** The moments of the entry at `index`: a round's steps that happened, in order, or the entry itself. why not a `moved` entry: it is a status already. */
-function momentsOf(entry: Entry, index: number): Moment[] {
+/** The moments of the `index`th placed entry: a round's steps that happened, or the entry itself. why not a `moved` entry: it is a status already. */
+function momentsOf({ entry, at, seq }: Placed, index: number): Moment[] {
   switch (entry.kind) {
     case "round": {
       const { handed, review, verdict, outcome } = entry.round;
       const steps: [Moment["step"], Step | null][] = [["handed", handed], ["review", reviewStep(review)], ["verdict", verdict?.step ?? null], ["outcome", outcome]];
-      return steps.flatMap(([step, happened]) => (happened === null ? [] : [{ at: happened.at, entry: index, step }]));
+      return steps.flatMap(([step, happened]) => (happened === null ? [] : [{ at: happened.at, seq: NOT_LOGGED, entry: index, step }]));
     }
     case "moved":
       return [];
@@ -97,7 +112,7 @@ function momentsOf(entry: Entry, index: number): Moment[] {
     case "pr":
     case "thread":
     case "unblocked":
-      return [{ at: timeOf(entry), entry: index, step: null }];
+      return [{ at, seq, entry: index, step: null }];
     default:
       return entry satisfies never;
   }
@@ -187,5 +202,3 @@ function eventEntries(at: number, event: InboxEvent): Entry[] {
 
 /** Sorted by time; why stable: two moments of one millisecond keep the order their sources gave. */
 const sortByTime = <T extends { at: number }>(items: readonly T[]): T[] => [...items].sort((a, b) => a.at - b.at);
-
-const inTimeOrder = (entries: readonly Entry[]): Entry[] => sortByTime(entries.map((entry) => ({ at: timeOf(entry), entry }))).map(({ entry }) => entry);

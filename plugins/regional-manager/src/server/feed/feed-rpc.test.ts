@@ -59,7 +59,7 @@ function sentBack(store: Store, coordinatorId: CoordinatorId, issueId: IssueId, 
   return handoff;
 }
 
-/** WEB-2 with an entry of every kind, the status it was seen in after its edit and one no moment explains; WEB-1 it depends on, WEB-3 depending on it; and another manager's handoff, the manager then removed. */
+/** WEB-2 with an entry of every kind, the status its round's outcome moved it to, the one it was seen in after its edit and one no moment explains; WEB-1 it depends on, WEB-3 depending on it; and another manager's handoff, the manager then removed. */
 function seeded() {
   const { store } = freshStore();
   const dependency = filedIssue(store, MANAGER, newIssue(), 1_000).id;
@@ -67,6 +67,8 @@ function seeded() {
   filedIssue(store, MANAGER, newIssue({ dependsOn: [issueId] }), 1_000);
   const handoff = sentBack(store, MANAGER, issueId, "agent-1");
   const agentId = handoff.agentId;
+  // why here: the move its verdict's going back made, observed after its outcome, as the watch logs it.
+  store.observeStatuses(MANAGER, [{ issue: store.issue(MANAGER, issueId) ?? assert.fail("no issue"), status: "in-progress" }], 3_650);
   store.insertDecision(MANAGER, { question: "Which queue?", options: ["SQS", "Redis"], issueId }, 3_700);
   store.updateIssue(MANAGER, issueId, { decision: { text: "SQS: it is already deployed.", at: 3_800 } }, { requireUnheld: false, closes: new Map(), at: 3_000 });
   const pr: PrSnapshot = { number: 7, url: "https://github.com/acme/webhooks/pull/7", state: "open", draft: false, review: "none", ci: "pending", headSha: SHA, failedChecks: [] };
@@ -125,7 +127,7 @@ test("an issue's feed sends exactly what its tab reads: its plan's text and rela
       handed: { at: 3_000, moved: null },
       review: { state: "reported", step: { at: 3_200, moved: null }, findings: 1, confirmed: 1 },
       verdict: { outcome: { kind: "fail", by: "criteria" }, results: ["fail"], fixRound: { round: 1, delivery: "sent" }, step: { at: 3_500, moved: null } },
-      outcome: { at: 3_600, moved: null },
+      outcome: { at: 3_600, moved: "in-progress" },
       inFlight: false,
     },
   );

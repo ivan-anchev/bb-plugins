@@ -12,8 +12,16 @@ import type { PluginLogger } from "@get-bb/plugin-sdk";
 import type { IssueView } from "../../../model/issue/status.ts";
 import type { CoordinatorId } from "../../../model/role.ts";
 import type { Inbox } from "../../inbox/inbox.ts";
+import { settlesWithin } from "../../settles-within.ts";
 import type { Store } from "../../store/store.ts";
 import type { CurrentViews } from "./current-views.ts";
+
+/**
+ * How long the tick waits for the reads it starts. why a bound: a read bb never answers holds only
+ * its own regional manager, as an issue's turn does (issue-turns.ts); the tick goes on to publish
+ * and ring, and the read records what it saw whenever it ends.
+ */
+const TICK_WAIT_MS = 20_000;
 
 type Deps = {
   bb: { log: Pick<PluginLogger, "warn">; onDispose(hook: () => void): void };
@@ -25,7 +33,8 @@ type Deps = {
   now(): number;
 };
 
-export function watchViews({ bb, store, views, inbox, publish, now }: Deps) {
+/** `tickWaitMs`: how long the tick waits for its reads; tests shorten it. */
+export function watchViews({ bb, store, views, inbox, publish, now }: Deps, tickWaitMs = TICK_WAIT_MS) {
   /** The read running for each regional manager. why one at a time: a second would compare against what the first is about to record. */
   const running = new Map<CoordinatorId, Promise<void>>();
   let disposed = false;
@@ -71,12 +80,14 @@ export function watchViews({ bb, store, views, inbox, publish, now }: Deps) {
       settled(id).catch((error: unknown) => bb.log.warn(`Could not read what ${id}'s issues say now; the next tick tries again: ${messageOf(error)}`));
     },
 
-    /** The tick's pass: reads every regional manager's issues, for a read that failed or a change the plugin missed, as across a reload. */
+    /**
+     * The tick's pass: reads every regional manager's issues, for a read that failed or a change the
+     * plugin missed, as across a reload. why side by side, and waited for only so long: one manager's
+     * read bb is slow to answer must hold no other's, nor the rest of the tick.
+     */
     async tick(): Promise<void> {
-      for (const { id } of store.coordinators()) {
-        if (disposed) return;
-        await settled(id).catch((error: unknown) => bb.log.warn(`Could not read what ${id}'s issues say now; the next tick tries again: ${messageOf(error)}`));
-      }
+      const reads = store.coordinators().map(({ id }) => settled(id).catch((error: unknown) => bb.log.warn(`Could not read what ${id}'s issues say now; the next tick tries again: ${messageOf(error)}`)));
+      await settlesWithin(Promise.all(reads), tickWaitMs);
     },
   };
 }

@@ -124,13 +124,13 @@ test("an entry that moved the issue shows the status it moved to, as the Board d
     }
     return entry.kind === "pr" ? { ...entry, moved: "done" } : entry;
   };
+  const began: Entry = { kind: "logged", at: 900, event: { kind: "log-began" }, moved: null };
   const logged: Entry[] = [
-    { kind: "logged", at: 900, event: { kind: "log-began" }, moved: null },
     { kind: "logged", at: 6_400, event: { kind: "edited", fields: ["title", "criteria"] }, moved: null },
     { kind: "logged", at: 6_410, event: { kind: "dependency-added", on: id("WEB-7") }, moved: null },
     { kind: "moved", at: 6_450, status: "reviewing" },
   ];
-  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [logged[0] as Entry, ...FEED.entries.map(moved), ...logged.slice(1)] }) });
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [began, ...FEED.entries.map(moved), ...logged] }) });
   const { section, texts } = activity(tab());
   const lines = texts();
   assert.match(lines[0] ?? "", /^Edits and status moves are kept from here; verdict times above are as announced or approximate/);
