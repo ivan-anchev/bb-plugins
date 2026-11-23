@@ -73,4 +73,8 @@ test("an ended agent, another regional manager and a verifier are refused issue_
   const elsewhere = await kit.call("issue_comment", { ...comment, replyTo: "m9" }, threadId);
   assert.equal(textOf(elsewhere), `issue_comment is refused, and nothing was posted: m9 is no comment on ${issueId}. Leave replyTo out, or give a comment of ${issueId}'s.`);
   assert.deepEqual(comments(), before);
+
+  // The refusal's way forward: the same comment with replyTo left out posts.
+  assert.equal(textOf(await kit.call("issue_comment", comment, threadId)), `Posted m2 on ${issueId}. The user reads it on the issue's tab.`);
+  assert.deepEqual(comments(), [...before, { id: "m2", text: "Done here.", replyTo: null, author: { kind: "manager" } }]);
 });

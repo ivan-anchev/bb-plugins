@@ -33,7 +33,7 @@ export function CommentCard({ coordinatorId, entry, answered, agents }: CommentC
 /** A comment of the user's from Send until the feed reads it: on its way, or taken by the server as `commentId` (null: not yet). */
 export function SendingCard({ text, commentId }: { text: string; commentId: CommentId | null }) {
   return (
-    <article className="rmi-decision" aria-label="Your comment, sending">
+    <article className="rmi-decision" aria-label="Your comment">
       <p className="rmi-decision-head">
         <span className="rmi-actor">You</span> commented
       </p>
