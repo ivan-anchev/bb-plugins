@@ -37,7 +37,7 @@ type Deps = {
 export function watchViews({ bb, store, views, inbox, publish, now }: Deps, tickWaitMs = TICK_WAIT_MS) {
   /** The read running for each regional manager. why one at a time: a second would compare against what the first is about to record. */
   const running = new Map<CoordinatorId, Promise<void>>();
-  /** How many changes each regional manager was told of: a pass covers those told before its read began. */
+  /** How many changes each regional manager was told of: a pass covers those told before it acts, as one told during its read overtakes it (whileCurrent reads again). */
   const told = new Map<CoordinatorId, number>();
   /** Reads a tick waited for in vain. why kept: a later tick waits for none of them again, so a read bb never answers gathers no more waiters. */
   const outwaited = new WeakSet<Promise<void>>();
@@ -57,7 +57,7 @@ export function watchViews({ bb, store, views, inbox, publish, now }: Deps, tick
   /**
    * Records what the views say, on views no change overtook (current-views.ts): a stale read could
    * miss an open dependency added, or a status moved, while bb was read. Then tells the open tabs of
-   * an issue whose status it logged, and reads again for a change told since its read began, as one
+   * an issue whose status it logged, and reads again for a change told as it acted or since, as one
    * told while the pass returned. Out of reads, or failed, it records nothing and waits for the next
    * change or tick.
    */
