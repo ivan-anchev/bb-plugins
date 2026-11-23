@@ -144,7 +144,7 @@ test("the open stages fill one ring clockwise from 12 o'clock, Todo empty, In pr
   assert.equal(boxOf(row(view, "WEB-2")).querySelector(".rmi-slot svg path[d='m9 12 2 2 4-4']"), null, "In review draws no check");
 });
 
-test("a row's pills: what blocks it, by its id when one does and by count when more do; how many it blocks; never a word on its title's line", () => {
+test("a row's pills: how many block it and how many it blocks, a count even for one, never an id; never a word on its title's line", () => {
   const blocked = (ids: string[]) => ids.map((each) => issueIdSchema.parse(each));
   const { view } = mount([
     issue("WEB-1", { status: "in-progress", needsYou: "Blocked: Needs a staging key", headline: "Blocked: Needs a staging key", agent: { id: agentIdSchema.parse("a1"), threadId: "thr_one" } }),
@@ -152,9 +152,10 @@ test("a row's pills: what blocks it, by its id when one does and by count when m
     issue("WEB-8", { headline: "Not started", blockedBy: blocked(["WEB-6", "WEB-7", "WEB-9"]) }),
     issue("WEB-6", { headline: "Not started", blocks: blocked(["WEB-5", "WEB-8"]) }),
   ]);
-  assert.deepEqual(shown(row(view, "WEB-5")).pills, ["blocked WEB-6"]);
+  assert.deepEqual(shown(row(view, "WEB-5")).pills, ["blocked 1"], "a lone blocker is counted, not named");
   assert.deepEqual(shown(row(view, "WEB-8")).pills, ["blocked 3"]);
   assert.deepEqual(shown(row(view, "WEB-6")).pills, ["blocking 2"]);
+  assert.equal(row(view, "WEB-5").getAttribute("aria-label"), "WEB-5: Issue WEB-5, Todo, blocked by WEB-6, Not started", "the lone blocker is still spoken by its id");
   assert.equal(row(view, "WEB-8").getAttribute("aria-label"), "WEB-8: Issue WEB-8, Todo, blocked by WEB-6, WEB-7, and WEB-9, Not started", "every blocker is spoken");
   assert.equal(row(view, "WEB-6").getAttribute("aria-label"), "WEB-6: Issue WEB-6, Todo, blocks WEB-5 and WEB-8, Not started");
 
@@ -274,7 +275,7 @@ test("a parent's sub-issues hang under it in its lane on elbow rails, each with 
     [
       { glyph: "Done", id: "WEB-2", title: "Issue WEB-2", pills: [], pr: null, ask: null },
       { glyph: "Needs you", id: "WEB-3", title: "Issue WEB-3", pills: [], pr: null, ask: null },
-      { glyph: "Todo", id: "WEB-4", title: "Issue WEB-4", pills: ["blocked WEB-5"], pr: null, ask: null },
+      { glyph: "Todo", id: "WEB-4", title: "Issue WEB-4", pills: ["blocked 1"], pr: null, ask: null },
     ],
     "one line each: a flagged one asks under Needs you, not here",
   );
