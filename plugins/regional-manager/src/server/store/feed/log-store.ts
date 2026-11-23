@@ -1,12 +1,13 @@
 // Issues' logs (migrations.ts issue_log): appended to, never rewritten. Its writers are the plan's
 // one writer (issues-store.ts updateIssue, through appendLog in its own transaction) and the status
-// watch (observeStatuses). Rows are parsed into Logged here and nowhere else.
+// watch (observeStatuses). Rows are parsed into Logged here and nowhere else, one at a time: a row
+// this version can't read (a kind or status a newer one logged) is left out, never failing the rest.
 import { z } from "zod";
 import { logEventSchema, statusMoves, type LogEvent, type Logged } from "../../../model/feed/log-event.ts";
 import { issueIdSchema, type IssueId } from "../../../model/issue/issue.ts";
 import { issueStatusSchema, type IssueStatus, type IssueView } from "../../../model/issue/status.ts";
 import type { CoordinatorId } from "../../../model/role.ts";
-import { json, type Db } from "../rows.ts";
+import type { Db } from "../rows.ts";
 
 /** Appends `events` to the issue's log, in order, at `at`. Call inside the transaction of the write they tell. */
 export function appendLog(db: Db, coordinatorId: CoordinatorId, issueId: IssueId, at: number, events: readonly LogEvent[]): void {
@@ -21,7 +22,11 @@ export function logStore(db: Db) {
       return db()
         .prepare("SELECT at, event FROM issue_log WHERE coordinator_id = ? AND issue_id = ? ORDER BY seq")
         .all(coordinatorId, issueId)
-        .map((row) => loggedRowSchema.parse(row));
+        .flatMap((row) => {
+          const { at, event } = logRowSchema.parse(row);
+          const logged = eventOf(event);
+          return logged === null ? [] : [{ at, event: logged }];
+        });
     },
 
     /**
@@ -40,13 +45,23 @@ export function logStore(db: Db) {
   };
 }
 
-/** The last status logged for each of the regional manager's issues; an issue with none logged is absent. why max(seq) with its row: SQLite gives a bare column the row the max came from. */
+/**
+ * The last status logged for each of the regional manager's issues; an issue with none logged is
+ * absent, and so is one whose last is a status this version doesn't know, so the status it sees is
+ * logged after it. why max(seq) with its row: SQLite gives a bare column the row the max came from.
+ */
 function lastStatuses(db: Db, coordinatorId: CoordinatorId): Map<IssueId, IssueStatus> {
   const rows = db()
     .prepare("SELECT issue_id AS issueId, json_extract(event, '$.status') AS status, max(seq) FROM issue_log WHERE coordinator_id = ? AND json_extract(event, '$.kind') = 'status' GROUP BY issue_id")
     .all(coordinatorId);
-  return new Map(rows.map((row) => lastStatusRowSchema.parse(row)).map(({ issueId, status }) => [issueId, status]));
+  return new Map(rows.flatMap((row) => lastStatusRowSchema.safeParse(row).data ?? []).map(({ issueId, status }) => [issueId, status]));
 }
 
-const loggedRowSchema = z.object({ at: z.number().int(), event: json(logEventSchema) });
+/**
+ * The event `text` holds, or null when it is a kind or status this version doesn't know. why no
+ * guard on JSON.parse: SQLite refuses to write malformed JSON here, as its status index reads it.
+ */
+const eventOf = (text: string): LogEvent | null => logEventSchema.safeParse(JSON.parse(text)).data ?? null;
+
+const logRowSchema = z.object({ at: z.number().int(), event: z.string() });
 const lastStatusRowSchema = z.object({ issueId: issueIdSchema, status: issueStatusSchema });

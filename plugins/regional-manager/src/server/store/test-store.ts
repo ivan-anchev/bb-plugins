@@ -63,7 +63,7 @@ export function startAgent(store: Store, issueId: IssueId, ticket: string, coord
  * row would. A write that fails after earlier ones of its transaction proves those were rolled back
  * with it; calling the function lets a test retry the same write.
  */
-export function failWrites(db: Database.Database, op: "INSERT" | "UPDATE", table: string, when = "1"): () => void {
+export function failWrites(db: Database.Database, op: "INSERT" | "UPDATE" | "DELETE", table: string, when = "1"): () => void {
   const trigger = `fail_${op}_${table}`;
   db.exec(`CREATE TRIGGER ${trigger} BEFORE ${op} ON ${table} WHEN ${when} BEGIN SELECT RAISE(ABORT, 'forced failure'); END`);
   return () => db.exec(`DROP TRIGGER ${trigger}`);

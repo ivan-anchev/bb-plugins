@@ -7,7 +7,7 @@ import { z } from "zod";
 import { coordinatorSchema, notStartedSchema, type Coordinator, type NotStarted } from "../../contract.ts";
 import type { NewProfile, Profile } from "../../model/profile/profile.ts";
 import { memoryRevisionSchema, type MemoryFile, type MemoryRevision, type MemoryVersion } from "../../model/memory-file.ts";
-import type { CoordinatorId, Role } from "../../model/role.ts";
+import { coordinatorIdSchema, type CoordinatorId, type Role } from "../../model/role.ts";
 import { inboxStore } from "./inbox/inbox-store.ts";
 import type { Agent, AgentId } from "../../model/agent/agent.ts";
 import type { HandoffId } from "../../model/agent/handoff.ts";
@@ -219,6 +219,12 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
       return row === undefined ? 0 : z.object({ writes: z.number().int() }).parse(row).writes;
     },
 
+    /** factWrites of every regional manager, by manager; one never written is absent. */
+    everyFactWrites(): Map<CoordinatorId, number> {
+      const rows = db().prepare("SELECT coordinator_id AS id, writes FROM fact_writes").all();
+      return new Map(rows.map((row) => factWritesRowSchema.parse(row)).map(({ id, writes }) => [id, writes]));
+    },
+
     /** How many times each of the regional manager's issues' feed facts were written (migrations.ts issue_writes), by issue; an issue never written is absent. */
     issueWrites(id: CoordinatorId): Map<IssueId, number> {
       const rows = db().prepare("SELECT issue_id AS issueId, writes FROM issue_writes WHERE coordinator_id = ?").all(id);
@@ -246,6 +252,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
 
 const toCoordinator = (row: unknown): Coordinator => withAvatar(coordinatorSchema.extend({ avatar: z.string() }).parse(row));
 const notStartedRowSchema = notStartedSchema.extend({ avatar: z.string() });
+const factWritesRowSchema = z.object({ id: coordinatorIdSchema, writes: z.number().int() });
 const issueWritesRowSchema = z.object({ issueId: issueIdSchema, writes: z.number().int() });
 const startRowSchema = z.object({ ticket: z.string(), name: z.string().nullable(), threadId: z.string().nullable() });
 const candidateRowSchema = z.object({ id: coordinatorSchema.shape.id, ticket: z.string(), threadId: z.string().nullable(), flagged: z.number().transform((flag) => flag === 1) });

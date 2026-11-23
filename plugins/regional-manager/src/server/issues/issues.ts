@@ -69,7 +69,7 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
    * The edit a status asks for, or why the issue as it stands now (`view`, current as the edit is
    * written) can't take it. why the holder read after the view: an agent started meanwhile holds it
    * (updateIssue checks that again). A parent's open sub-issues are the plan's to refuse (plan.ts).
-   * A close is at `at`.
+   * A close is at `at`; a canceled issue canceled again keeps its close.
    */
   function statusEdit(issue: Issue, view: IssueView, status: NonNullable<IssueChange["status"]>, at: number): IssueEdit | Refused {
     const now = `${issue.id} is ${STATUS_LABELS[view.status]} (${headlineText(view)})`;
@@ -77,7 +77,9 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
     const holder = holderOf(issue);
     if (holder !== null) return { refused: `${holder.id} holds ${issue.id}, so it can't be ${status === "canceled" ? "canceled" : `moved to ${STATUS_LABELS[status]}`}. Stop ${holder.id} with agent_stop first.` };
     if (view.status === "done") return { refused: `${now}, and Done is final.` };
-    return status === "canceled" ? { closed: { as: "canceled", at } } : { rest: status, closed: null };
+    if (status !== "canceled") return { rest: status, closed: null };
+    // why the closure kept: canceling a canceled issue again, as a retried call, changes nothing, its time included.
+    return { closed: view.issue.closed?.as === "canceled" ? view.issue.closed : { as: "canceled", at } };
   }
 
   return {

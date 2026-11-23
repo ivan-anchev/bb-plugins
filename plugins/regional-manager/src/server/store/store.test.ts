@@ -206,8 +206,8 @@ test("a regional manager is created not started, with its name and no project; i
 
 const WEB_1 = issueIdSchema.parse("WEB-1");
 
-test("removing a regional manager removes everything it owns, and nothing of another's", () => {
-  const { store } = freshStore();
+test("removing a regional manager removes everything it owns, and nothing of another's; a removal that fails part way removes nothing, and the same removal then succeeds", () => {
+  const { db, store } = freshStore();
   for (const manager of [MANAGER, OTHER_MANAGER]) {
     const { id } = filedIssue(store, manager, newIssue(), 2_000);
     const agentId = startAgent(store, id, `agent-of-${manager}`, manager);
@@ -224,6 +224,16 @@ test("removing a regional manager removes everything it owns, and nothing of ano
     store.updateIssue(manager, id, { title: "Retries, with jitter" }, { requireUnheld: false, closes: new Map(), at: 3_000 });
   }
 
+  // why the issues: they are deleted after their log, so the failure comes once the log is gone.
+  const restore = failWrites(db, "DELETE", "issues");
+  assert.throws(() => store.removeCoordinator(MANAGER), /forced failure/);
+  assert.equal(store.issues(MANAGER).length, 2, "its issues stay");
+  assert.deepEqual(store.logOf(MANAGER, WEB_1), [{ at: 3_000, event: { kind: "edited", fields: ["title"] } }], "and their log with them");
+  assert.equal(store.agents(MANAGER).length, 1);
+  assert.equal(store.decisions(MANAGER).length, 1);
+  assert.equal(store.roleOfThread("thr_manager_1")?.kind, "coordinator");
+
+  restore();
   store.removeCoordinator(MANAGER);
 
   assert.equal(store.startOf(MANAGER), null);

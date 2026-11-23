@@ -37,10 +37,16 @@ type Deps = {
 export function watchViews({ bb, store, views, inbox, publish, now }: Deps, tickWaitMs = TICK_WAIT_MS) {
   /** The read running for each regional manager. why one at a time: a second would compare against what the first is about to record. */
   const running = new Map<CoordinatorId, Promise<void>>();
+  /** How many changes each regional manager was told of: a pass covers those told before its read began. */
+  const told = new Map<CoordinatorId, number>();
+  /** Reads a tick waited for in vain. why kept: a later tick waits for none of them again, so a read bb never answers gathers no more waiters. */
+  const outwaited = new WeakSet<Promise<void>>();
   let disposed = false;
   bb.onDispose(() => {
     disposed = true;
   });
+
+  const toldOf = (id: CoordinatorId): number => told.get(id) ?? 0;
 
   /** What the views say, recorded in one act: no change can come between the unblocked and the statuses. */
   function observe(id: CoordinatorId, current: readonly IssueView[]): number {
@@ -50,21 +56,33 @@ export function watchViews({ bb, store, views, inbox, publish, now }: Deps, tick
 
   /**
    * Records what the views say, on views no change overtook (current-views.ts): a stale read could
-   * miss an open dependency added, or a status moved, while bb was read. Out of reads, it records
-   * nothing. Then tells the open tabs of an issue whose status it logged.
+   * miss an open dependency added, or a status moved, while bb was read. Then tells the open tabs of
+   * an issue whose status it logged, and reads again for a change told since its read began, as one
+   * told while the pass returned. Out of reads, or failed, it records nothing and waits for the next
+   * change or tick.
    */
   async function settle(id: CoordinatorId): Promise<void> {
     try {
-      if (disposed) return;
-      const observed = await views.whileCurrent(id, (current) => observe(id, current));
-      if (observed !== null && observed.acted > 0) publish(id);
+      for (;;) {
+        if (disposed) return;
+        let covered = 0;
+        const observed = await views.whileCurrent(id, (current) => {
+          covered = toldOf(id);
+          return observe(id, current);
+        });
+        if (observed === null) return;
+        if (observed.acted > 0) publish(id);
+        if (toldOf(id) === covered) return;
+      }
+    } catch (error: unknown) {
+      // why here, once for the read: every change and tick waiting for it shares this one handler.
+      bb.log.warn(`Could not read what ${id}'s issues say now; the next change or tick tries again: ${messageOf(error)}`);
     } finally {
-      // why here, as it returns: a change after this starts a read of its own.
       running.delete(id);
     }
   }
 
-  /** The read running for the manager, which reads again for any change since it began while it has reads left, or a new one. */
+  /** The read running for the manager, or a new one. */
   function settled(id: CoordinatorId): Promise<void> {
     const current = running.get(id);
     if (current !== undefined) return current;
@@ -75,9 +93,10 @@ export function watchViews({ bb, store, views, inbox, publish, now }: Deps, tick
   }
 
   return {
-    /** Something the regional manager's views are derived from changed (the store counted its write as it committed, or current-views.ts was told first of what bb moved): reads them, or has the read running read them again. A failure, or a pass out of reads, waits for the next change or tick. */
+    /** Something the regional manager's views are derived from changed (the store counted a write as a call through it returned, told-writes.ts, or bb moved one of its threads): reads them, or has the read running read them again once it is done. */
     changed(id: CoordinatorId): void {
-      settled(id).catch((error: unknown) => bb.log.warn(`Could not read what ${id}'s issues say now; the next tick tries again: ${messageOf(error)}`));
+      told.set(id, toldOf(id) + 1);
+      void settled(id);
     },
 
     /**
@@ -86,8 +105,12 @@ export function watchViews({ bb, store, views, inbox, publish, now }: Deps, tick
      * read bb is slow to answer must hold no other's, nor the rest of the tick.
      */
     async tick(): Promise<void> {
-      const reads = store.coordinators().map(({ id }) => settled(id).catch((error: unknown) => bb.log.warn(`Could not read what ${id}'s issues say now; the next tick tries again: ${messageOf(error)}`)));
-      await settlesWithin(Promise.all(reads), tickWaitMs);
+      const reads = store
+        .coordinators()
+        .map(({ id }) => settled(id))
+        .filter((read) => !outwaited.has(read));
+      if (await settlesWithin(Promise.all(reads), tickWaitMs)) return;
+      for (const read of reads) outwaited.add(read);
     },
   };
 }

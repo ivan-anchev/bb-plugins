@@ -33,7 +33,7 @@ import { PLACEHOLDER, upgradeFrom030 } from "./manager/held-managers.ts";
 import { watchOwnTree } from "./inbox/own-tree-watch.ts";
 import { watchAgentThreads } from "./inbox/thread-watch.ts";
 import { registerIssueTools } from "./issues/issue-tools.ts";
-import { issueTurns } from "./issues/issue-turns.ts";
+import { issueTurns, type IssueTurns } from "./issues/issue-turns.ts";
 import { createIssues } from "./issues/issues.ts";
 import { currentViews } from "./issues/views/current-views.ts";
 import { pluginInstance } from "./lifetime.ts";
@@ -48,6 +48,7 @@ import { registerReviewTool } from "./review/review-tool.ts";
 import { registerRoles } from "./roles.ts";
 import { createSpawner } from "./spawn.ts";
 import { openStore } from "./store/store.ts";
+import { toldWrites } from "./store/told-writes.ts";
 import { registerCrewTools } from "./tools/crew-tools.ts";
 import { registerHandoffTool } from "./tools/handoff-tool.ts";
 import type { ToolsBb } from "./tools/tool-kit.ts";
@@ -356,6 +357,11 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
    * Set `holding` to keep each answer, as read when called, until the test calls its release in `held`.
    */
   const threadLists: { failure: Error | null; holding: boolean; held: (() => void)[] } = { failure: null, holding: false, held: [] };
+  /**
+   * Set `holding` to keep each operation that takes an issue's turn (issue-turns.ts), once it holds
+   * the turn and before it runs, until the test calls its release in `held`, which names its issue.
+   */
+  const turnsTaken: { holding: boolean; held: { issueId: IssueId; release(): void }[] } = { holding: false, held: [] };
   /**
    * Set `pending` to hold every stop until it settles, as a slow bb does; set `failure` to make every
    * stop reject with it then. `byThread` overrides one thread's stop: an error it rejects with, or
@@ -769,7 +775,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const instance = pluginInstance(fakeBb);
     const { bb } = instance;
     // why shadowed: the modules act through the store bound to their instance; the tests read the store as it is.
-    const store = instance.bind(openedStore);
+    const written = toldWrites(openedStore);
+    const store = instance.bind(written.store);
     // why the issues' tags with the board's, as server.ts does: whatever refreshes a board may have written to its issues.
     const refreshIssues = (id: CoordinatorId) => {
       refreshBoard(id);
@@ -795,7 +802,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const inbox = createInbox({ bb, store, memory, onChange });
     const views = currentViews({ bb, store });
     const viewWatch = watchViews({ bb, store, views, inbox, publish: (id) => issueTags.publish(id), now: () => clock.now });
-    const turns = turnWaitMs === null ? issueTurns(instance.signal) : issueTurns(instance.signal, turnWaitMs);
+    written.tell((id) => viewWatch.changed(id));
+    const turns = heldWhileTaken(turnWaitMs === null ? issueTurns(instance.signal) : issueTurns(instance.signal, turnWaitMs));
     const prWatch = createPrWatch({ bb, store, inbox, gh, now: () => clock.now });
     const agents = createAgents({ bb, store, spawner, inbox, memory, turns, prs: prWatch, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
     const issues = createIssues({ bb, store, views, onChange });
@@ -814,6 +822,20 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     watchOwnTree({ bb, store, inbox });
     return { spawner, inbox, verify, agents, prWatch, finalChecks, viewWatch, issueTags, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }), ...feedHandlers({ store, reader: createFeedReader(bb, store) }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }, upgrade030: upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators }) };
   }
+  /** `turns`, whose every operation waits, once it holds its issue's turn, while turnsTaken says to hold it. */
+  function heldWhileTaken(turns: IssueTurns): IssueTurns {
+    const held =
+      <T>(issueId: IssueId, operation: () => Promise<T>) =>
+      async (): Promise<T> => {
+        if (turnsTaken.holding) await new Promise<void>((release) => turnsTaken.held.push({ issueId, release }));
+        return operation();
+      };
+    return {
+      run: (coordinatorId, issueId, operation) => turns.run(coordinatorId, issueId, held(issueId, operation)),
+      runIfFree: (coordinatorId, issueId, operation) => turns.runIfFree(coordinatorId, issueId, held(issueId, operation)),
+    };
+  }
+
   let plugin = wire();
 
   /** A reviewer that reports no findings as its turn starts, then ends its turn, as reviewers.reportAtOnce says. */
@@ -924,6 +946,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     queueReads,
     /** How bb answers a listing of threads by id; a test may make it fail. */
     threadLists,
+    /** The issues' turns as operations take them; a test may hold an operation in its turn. */
+    turnsTaken,
     /** How bb answers a stop; a test may hold it or make it fail. */
     stopRequests,
     /** The titles bb was asked to rename threads to; a test may hold the renames. */

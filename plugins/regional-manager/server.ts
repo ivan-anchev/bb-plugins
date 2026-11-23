@@ -32,6 +32,7 @@ import { registerReviewTool } from "./src/server/review/review-tool.ts";
 import { registerRoles } from "./src/server/roles.ts";
 import { createSpawner } from "./src/server/spawn.ts";
 import { openStore } from "./src/server/store/store.ts";
+import { toldWrites } from "./src/server/store/told-writes.ts";
 import { registerCrewTools } from "./src/server/tools/crew-tools.ts";
 import { registerHandoffTool } from "./src/server/tools/handoff-tool.ts";
 import { createFinalChecks } from "./src/server/verify/final-check/final-checks.ts";
@@ -43,7 +44,9 @@ import { createPrWatch } from "./src/server/watch/pr-watch.ts";
 export default function plugin(host: BbPluginApi): void {
   const instance = pluginInstance(host);
   const { bb } = instance;
-  const store = instance.bind(openStore(bb.storage));
+  // why told: a write that can move a status, whoever made it, wakes the view watch as it commits (told-writes.ts).
+  const written = toldWrites(openStore(bb.storage));
+  const store = instance.bind(written.store);
   const memory = openMemoryRoot(bb.storage.database().name, store, (id) => bb.rpc.experimental_invalidate([memoryTag(id)]));
   bb.log.info(`Memory files are in ${memory.dir}`);
   upgradeMemoryFrom040(memory, store.coordinators().map(({ id }) => id));
@@ -72,6 +75,7 @@ export default function plugin(host: BbPluginApi): void {
   const inbox = createInbox({ bb, store, memory, onChange });
   const views = currentViews({ bb, store });
   const viewWatch = watchViews({ bb, store, views, inbox, publish: (id) => issueTags.publish(id), now: Date.now });
+  written.tell((id) => viewWatch.changed(id));
   const turns = issueTurns(instance.signal);
   const prWatch = createPrWatch({ bb, store, inbox, gh: runGh, now: Date.now });
   const agents = createAgents({ bb, store, spawner, inbox, memory, turns, prs: prWatch, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });

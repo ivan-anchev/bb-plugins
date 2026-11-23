@@ -154,10 +154,20 @@ test("an accepted issue stays Done when its agent, which took another turn since
 });
 
 test("an issue no agent holds is canceled, and reopened into Todo, ready again; no agent starts on a canceled one", async () => {
-  const { call, update, statuses } = await managing();
+  const { kit, coordinatorId, call, update, statuses } = await managing();
   await call("issue_create", ISSUE);
   assert.deepEqual(await update({ status: "canceled" }), { refused: false, text: "Updated WEB-1." });
   assert.deepEqual(await statuses(), [["WEB-1", "canceled"]]);
+  const closed = kit.store.issue(coordinatorId, ISSUE_ID)?.closed;
+  // why a wait: an edit is timed by the wall clock, and a cancel retried a moment later must not close it again.
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.deepEqual(await update({ status: "canceled" }), { refused: false, text: "Updated WEB-1." }, "the same cancel again, as a retried call");
+  assert.deepEqual(kit.store.issue(coordinatorId, ISSUE_ID)?.closed, closed, "keeps its close and its time");
+  assert.deepEqual(
+    kit.store.logOf(coordinatorId, ISSUE_ID).flatMap(({ event }) => (event.kind === "closed" ? [event] : [])),
+    [{ kind: "closed", as: "canceled" }],
+    "and logs one close",
+  );
   assert.equal(textOf(await call("agent_start", { issue: "WEB-1" })), "agent_start is refused: WEB-1 is canceled, so no agent can start on it.");
   assert.deepEqual(await update({ status: "todo" }), { refused: false, text: "Updated WEB-1. Now ready: WEB-1." });
   assert.deepEqual(await statuses(), [["WEB-1", "todo"]]);

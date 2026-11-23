@@ -66,3 +66,21 @@ test("a status that fails to be logged takes the pass's other statuses back with
   assert.equal(store.observeStatuses(MANAGER, seen([one, "todo"], [two, "backlog"]), 3_100), 2);
   assert.deepEqual([store.logOf(MANAGER, one.id).length, store.logOf(MANAGER, two.id).length], [1, 1]);
 });
+
+test("a row this version can't read is left out of the log, and a status it doesn't know is logged after with the status seen", () => {
+  const { db, store } = freshStore();
+  const one = filedIssue(store, MANAGER, newIssue(), 2_000);
+  store.observeStatuses(MANAGER, seen([one, "todo"]), 3_000);
+  // why raw rows: they stand in for what a newer version of the plugin logged, a kind and a status this one doesn't know.
+  const insert = db.prepare("INSERT INTO issue_log (coordinator_id, issue_id, at, event) VALUES (?, ?, ?, ?)");
+  insert.run(MANAGER, one.id, 3_100, JSON.stringify({ kind: "commented", text: "Looks right" }));
+  insert.run(MANAGER, one.id, 3_300, JSON.stringify({ kind: "status", status: "parked" }));
+
+  assert.deepEqual(store.logOf(MANAGER, one.id), [{ at: 3_000, event: { kind: "status", status: "todo" } }], "the rows it can read, in order");
+  assert.equal(store.observeStatuses(MANAGER, seen([one, "todo"]), 3_400), 1, "the watch goes on, and logs the status it sees after one it doesn't know");
+  assert.equal(store.observeStatuses(MANAGER, seen([one, "todo"]), 3_500), 0, "once");
+  assert.deepEqual(store.logOf(MANAGER, one.id), [
+    { at: 3_000, event: { kind: "status", status: "todo" } },
+    { at: 3_400, event: { kind: "status", status: "todo" } },
+  ]);
+});
