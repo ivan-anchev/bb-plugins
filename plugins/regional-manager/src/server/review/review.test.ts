@@ -483,7 +483,7 @@ test("a check stores each finding's severity once, on its review; a verdict sett
     { result: "confirmed", reason: "A fair point." },
   ], "the verdict stores only the verifier's triage");
 
-  // As 0.8.0 left a verdict that passed with the must-fix finding confirmed: settled, and its last migration still to run.
+  // As the release before this rule left a verdict that passed with the must-fix finding confirmed: settled, and its last migration still to run.
   db.exec(`UPDATE checks SET verdict = json_remove(json_set(verdict, '$.triage[0].result', 'confirmed'), '$.mustFixFails')`);
   migrated.applied = BEFORE_MUST_FIX;
   settledBefore.kit.reload();
@@ -491,7 +491,7 @@ test("a check stores each finding's severity once, on its review; a verdict sett
   assert.deepEqual(kept.state === "returned" && [kept.mustFixFails, kept.triage.map(({ severity, result }) => [severity, result])], [false, [["must-fix", "confirmed"], ["nit", "confirmed"]]]);
   assert.deepEqual(await settledBefore.row(), ["in-review", "✓ Verified: Retries land with backoff"], "it keeps the outcome it was settled and announced with");
   const keptRound = await settledBefore.opened();
-  assert.deepEqual(keptRound.round.verdict?.outcome, { kind: "pass" }, "its round still reads passed");
+  assert.deepEqual(keptRound.round.verdict, { outcome: { kind: "pass" }, results: ["pass", "pass"], fixRound: null }, "its round still reads passed");
   assert.deepEqual(keptRound.body.verdict, shownPassing(kept, { kind: "checked", ci: { kind: "none" } }));
   const update = await settledBefore.catchUp();
   assert.match(update, /Verified: 2 of 2 criteria passed/);
@@ -553,11 +553,11 @@ test("a check stores each finding's severity once, on its review; a verdict sett
   assert.doesNotMatch(toldBefore, /\(a1\) handed off: done/);
 });
 
-/** The last migration statement 0.8.0 ran: the next makes a confirmed must-fix finding fail a verdict. */
+/** The last migration statement the release before this rule ran: the next makes a confirmed must-fix finding fail a verdict. */
 const BEFORE_MUST_FIX = MIGRATIONS.findIndex((statement) => statement.includes("'$.mustFixFails'"));
 
 /**
- * An agent whose done handoff, as 0.8.0 left it, passed every criterion with its must-fix finding
+ * An agent whose done handoff, as the release before this rule left it, passed every criterion with its must-fix finding
  * `triaged` (by default confirmed), and was `left`: waiting for CI still to finish on its pull
  * request, or pending, its settlement's write failed as when the plugin stops before settling it;
  * then the plugin upgrades.
@@ -576,8 +576,8 @@ async function releasedWith(left: "waiting-for-ci" | "pending", triaged: "confir
   await settled();
   restore();
   const stored = agent.check().verdict;
-  assert.equal(stored.state === "returned" && stored.settlement.kind, left, "as 0.8.0 left it");
-  // 0.8.0's rule let a confirmed must-fix finding pass, and stored no mustFixFails.
+  assert.equal(stored.state === "returned" && stored.settlement.kind, left, "as the release before this rule left it");
+  // The release before this rule let a confirmed must-fix finding pass, and stored no mustFixFails.
   before.db.prepare("UPDATE checks SET verdict = json_remove(json_set(verdict, '$.triage[0]', json(?)), '$.mustFixFails')").run(JSON.stringify({ result: triaged, reason: "It never caps." }));
   before.migrated.applied = BEFORE_MUST_FIX;
   agent.kit.reload();

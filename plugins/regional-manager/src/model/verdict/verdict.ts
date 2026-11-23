@@ -192,7 +192,7 @@ export function outcome(verdict: Verdict): Outcome {
     case "returned": {
       if (verdict.settlement.kind === "superseded") return "superseded";
       const ci = ciVerdictOf(verdict);
-      if (ci !== null) return failureReasons(verdict, ci).length > 0 ? "fail" : "pass";
+      if (ci !== null) return judge(verdict, ci);
       // why pending until settled: the row says Verifying until the findings reach the agent or the verdict is final.
       return verdict.settlement.kind === "waiting-for-ci" ? "waiting-for-ci" : "pending";
     }
@@ -300,12 +300,6 @@ export function failureText(reason: ReasonBesidesCriteria, judged: Judged): stri
 /** Each reason a verdict failed besides its criteria (`reasons`, failureReasons), as its phrase (failureText), in order. */
 export const failurePhrases = (reasons: readonly FailureReason[], judged: Judged): string[] =>
   reasons.filter(besidesCriteria).map((reason) => failureText(reason, judged));
-
-/** Those phrases joined, as a line that leads with them gives them: capitalised; null when only the criteria failed it. */
-export function failureLead(reasons: readonly FailureReason[], judged: Judged): string | null {
-  const words = failurePhrases(reasons, judged).join(", ");
-  return words === "" ? null : `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
-}
 
 /** The plugin's read of the checkout when it wasn't the claimed commit on a clean tree, which fails the verdict; null when it was. */
 export function failedCheckout(verdict: EitherReturned): Checkout | null {
