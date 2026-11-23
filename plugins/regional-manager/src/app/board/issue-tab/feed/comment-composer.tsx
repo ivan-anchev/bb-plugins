@@ -10,13 +10,13 @@ import { MAX_ANSWER_CHARS } from "../../../../model/decision.ts";
 import type { CommentId } from "../../../../model/feed/comment.ts";
 import type { IssueId } from "../../../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
-import { useManager } from "../../../profile/use-manager.ts";
+import { useManagerName } from "../../../profile/use-manager.ts";
 import { Button } from "../../../ui/button.tsx";
 import { GrowingTextarea } from "../../../ui/growing-textarea.tsx";
 import { useHoldEscape } from "../../../ui/hold-escape.ts";
 import { useStored } from "../../../ui/stored.ts";
 import { answerDraftSchema } from "../../answer-draft.ts";
-import { managerName, SendingCard } from "./comment-card.tsx";
+import { SendingCard } from "./comment-card.tsx";
 
 type CommentComposerProps = {
   coordinatorId: CoordinatorId;
@@ -27,7 +27,7 @@ type CommentComposerProps = {
 
 export function CommentComposer({ coordinatorId, issueId, posted }: CommentComposerProps) {
   const ids = useId();
-  const manager = managerName(useManager(coordinatorId));
+  const manager = useManagerName(coordinatorId);
   // why an answer's draft schema: a comment's bounds are an answer's (comment.ts).
   const typed = useStored(localStorage, commentDraftKeyOf(coordinatorId, issueId), answerDraftSchema);
   const draft = typed.value ?? "";

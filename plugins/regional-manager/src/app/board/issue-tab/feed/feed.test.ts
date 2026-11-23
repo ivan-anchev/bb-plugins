@@ -1,14 +1,19 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { cleanup, fireEvent, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { agentIdSchema } from "../../../../model/agent/agent.ts";
+import { commentIdSchema, type Comment } from "../../../../model/feed/comment.ts";
 import type { Entry } from "../../../../model/feed/entry.ts";
 import { COORDINATOR, FEED, id, issue, opened } from "../test-tab.ts";
 
 // An issue's Activity: every entry of its feed in order, each drawn by its kind, under a filter; and
 // an open question answered from its card.
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  // why: the composer keeps its draft in the browser, by issue.
+  localStorage.clear();
+});
 
 const WEB_1 = [issue("WEB-1", { status: "in-review", headline: "✓ Verified: Retries land" })];
 
@@ -146,4 +151,73 @@ test("an entry that moved the issue shows the status it moved to, as the Board d
   const outcome = section.getByRole("article", { name: "Round 3" }).querySelector(".rmi-outcome");
   assert.match(outcome?.textContent ?? "", /^Passed ·\s+In review/, "what became of its verdict, and the status that moved it to");
   assert.equal(section.getAllByRole("img", { name: "Done" }).length, 1);
+});
+
+const comment = (n: number, at: number, author: Comment["author"], text: string, replyTo: number | null): Entry => ({
+  kind: "comment",
+  comment: { id: commentIdSchema.parse(`m${n}`), issueId: id("WEB-1"), at, text, replyTo: replyTo === null ? null : commentIdSchema.parse(`m${replyTo}`), author },
+});
+const COMMENTED = { ...FEED, entries: [...FEED.entries, comment(1, 6_400, { kind: "user" }, "Cap retries at five.\nAnd log each.", null), comment(2, 6_500, { kind: "manager" }, "Capped at five.", 1), comment(3, 6_600, { kind: "agent", agentId: agentIdSchema.parse("a2") }, "Done in retry.ts.", 1)] };
+
+/** The comment field at the foot of Activity, and its form's controls. */
+function composer(tab: ReturnType<typeof within>) {
+  const form = within(tab.getByRole("form", { name: "Comment on WEB-1" }));
+  return { form, field: form.getByRole("textbox", { name: "Comment on WEB-1" }) as HTMLTextAreaElement, send: form.getByRole("button", { name: "Comment" }) };
+}
+
+test("comments are cards in Activity and the Discussion: the user's says where it went, and a reply names and quotes what it answers", async () => {
+  const { tab, view } = await opened("WEB-1", WEB_1, { feedOf: () => COMMENTED });
+  const { section } = activity(tab());
+  const card = (n: number) => within(section.getByRole("article", { name: `Comment m${n}` }));
+  assert.match(card(1).getAllByRole("paragraph")[0]?.textContent ?? "", /^You commented/);
+  assert.ok(card(1).getByText("Sent to the regional manager"), "the user's comment says where it went");
+  assert.match(card(2).getAllByRole("paragraph")[0]?.textContent ?? "", /^Regional manager replied to m1/);
+  assert.ok(card(2).getByText("Cap retries at five. And log each.", { normalizer: (text) => text.replace(/\s+/g, " ").trim() }), "a reply quotes what it answers");
+  assert.equal(card(2).queryByText(/^Sent to/), null, "only the user's own comments say where they went");
+  fireEvent.click(card(3).getByRole("button", { name: "Open a2's thread" }));
+  assert.deepEqual(view.navigateCalls, [{ method: "toThread", threadId: "thr_a2" }], "an agent's reply names it, opening its thread");
+  fireEvent.click(within(section.getByRole("group", { name: "Show" })).getByRole("button", { name: "Discussion" }));
+  assert.deepEqual(section.getAllByRole("article").map((article) => article.getAttribute("aria-label")), ["Question d1", "Decision", "Question d2", "Comment m1", "Comment m2", "Comment m3"]);
+});
+
+test("⌘↵ or Ctrl+↵ sends the comment and Enter breaks the line; the field keeps focus, empties once the server took it, and its card says Sending…, then Sent, until the feed reads it", async () => {
+  let release: () => void = () => {};
+  const { tab, comments, refeed } = await opened("WEB-1", WEB_1, { comment: () => new Promise((resolve) => (release = () => resolve({ commentId: "m1" }))) });
+  const { field } = composer(tab());
+  field.focus();
+  fireEvent.change(field, { target: { value: "Cap retries at five." } });
+  fireEvent.keyDown(field, { key: "Enter" });
+  assert.deepEqual(comments, [], "Enter alone breaks the line");
+
+  fireEvent.keyDown(field, { key: "Enter", metaKey: true });
+  await waitFor(() => assert.deepEqual(comments, [{ coordinatorId: COORDINATOR.id, issueId: "WEB-1", text: "Cap retries at five." }]));
+  const sending = () => activity(tab()).section.queryByRole("article", { name: "Your comment" });
+  assert.equal(within(sending() ?? assert.fail("no card")).getByRole("status").textContent, "Sending…");
+  assert.equal(field.readOnly, true, "read-only, never disabled, while it sends");
+  assert.equal(document.activeElement, field);
+  fireEvent.keyDown(field, { key: "Enter", ctrlKey: true });
+  assert.equal(comments.length, 1, "one comment at a time");
+
+  await act(async () => release());
+  await waitFor(() => assert.equal(composer(tab()).field.value, ""));
+  assert.equal(within(sending() ?? assert.fail("no card")).getByRole("status").textContent, "Sent as m1");
+  assert.equal(document.activeElement, composer(tab()).field, "focus stays in the field");
+  await refeed("WEB-1", () => ({ ...FEED, entries: [...FEED.entries, comment(1, 6_400, { kind: "user" }, "Cap retries at five.", null)] }));
+  await waitFor(() => assert.equal(sending(), null, "the feed's card takes over"));
+  assert.ok(activity(tab()).section.getByRole("article", { name: "Comment m1" }));
+});
+
+test("a draft the browser kept fills the field, and a send that fails keeps it, beside its error", async () => {
+  // As a reload finds it: the draft typed before, kept in the browser by issue.
+  localStorage.setItem(`coordinator-issue-comment:${COORDINATOR.id}:WEB-1`, JSON.stringify("Cap retries at five."));
+  const { tab, comments } = await opened("WEB-1", WEB_1, {
+    comment: () => {
+      throw new Error("bb is unreachable");
+    },
+  });
+  assert.equal(composer(tab()).field.value, "Cap retries at five.");
+  fireEvent.click(composer(tab()).send);
+  await waitFor(() => assert.match(composer(tab()).form.getByRole("alert").textContent ?? "", /^Could not post your comment: .*bb is unreachable/));
+  assert.equal(comments.length, 1);
+  assert.equal(composer(tab()).field.value, "Cap retries at five.", "the draft stays to send again");
 });

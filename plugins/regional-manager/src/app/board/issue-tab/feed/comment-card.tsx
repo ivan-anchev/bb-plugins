@@ -3,7 +3,7 @@
 import type { Comment, CommentId } from "../../../../model/feed/comment.ts";
 import { actorOf, type Entry } from "../../../../model/feed/entry.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
-import { useManager } from "../../../profile/use-manager.ts";
+import { useManagerName } from "../../../profile/use-manager.ts";
 import { When, Who, type FeedAgents } from "./byline.tsx";
 
 type CommentCardProps = {
@@ -47,9 +47,5 @@ export function SendingCard({ text, commentId }: { text: string; commentId: Comm
 
 /** Where every comment of the user's goes: to the regional manager, by its thread's title while bb lists it. */
 function SentTo({ coordinatorId }: { coordinatorId: CoordinatorId }) {
-  const name = managerName(useManager(coordinatorId));
-  return <p className="rmi-verdict-meta">Sent to {name}</p>;
+  return <p className="rmi-verdict-meta">Sent to {useManagerName(coordinatorId)}</p>;
 }
-
-/** The regional manager's name as the panel shows it; "the regional manager" while bb doesn't list its thread. */
-export const managerName = (manager: ReturnType<typeof useManager>): string => manager?.profile?.name ?? "the regional manager";

@@ -12,7 +12,7 @@ import type { Store } from "../store/store.ts";
 import { filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "../store/test-store.ts";
 import type { ListBb } from "../agents/threads.ts";
 import { createFeedReader } from "./feed-reader.ts";
-import { coordinating, doorbellOf, ISSUE, issueIn, settled, textOf } from "../test-harness.ts";
+import { coordinating, doorbellOf, isRefusal, ISSUE, issueIn, settled, textOf } from "../test-harness.ts";
 import { feedHandlers } from "./feed-rpc.ts";
 
 const SHA = "a".repeat(40);
@@ -212,4 +212,22 @@ test("a comment on an issue the manager doesn't have, or one of a manager not st
   await assert.rejects(async () => kit.rpc.commentIssue({ coordinatorId: OTHER_MANAGER, issueId: issueIdSchema.parse("WEB-1"), text: "Hello?" }), /no started regional manager/);
   await settled();
   assert.deepStrictEqual(kit.doorbellsSent(threadId), []);
+});
+
+test("a comment on a parent issue points the regional manager at the sub-issue it concerns, never at an agent of the parent", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
+  const parent = issueIdSchema.parse(issueIn(textOf(await kit.call("issue_create", { ...ISSUE, title: "Webhook delivery" }, threadId))));
+  const sub = issueIn(textOf(await kit.call("issue_create", { ...ISSUE, parent }, threadId)));
+  await kit.call("crew_catch_up", {}, threadId);
+
+  const { commentId } = await kit.rpc.commentIssue({ coordinatorId, issueId: parent, text: "Retries first, then dead letters." });
+  const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
+  const update = caughtUp.slice(caughtUp.indexOf("### "), caughtUp.indexOf("## Board"));
+
+  assert.ok(update.includes(`Reply on the issue with issue_comment (issue "${parent}", replyTo "${commentId}")`), update);
+  assert.ok(update.includes("or put it in the brief of the sub-issue it concerns."), update);
+  assert.ok(update.includes("a parent has no agent of its own."), update);
+  assert.ok(!update.includes("agent_message") && !update.includes("the agent you start on it"), update);
+  // The way forward it gives works: the sub-issue's brief takes the comment.
+  assert.ok(!isRefusal(await kit.call("issue_update", { id: sub, brief: "Retries first, then dead letters (the user's comment)." }, threadId)));
 });

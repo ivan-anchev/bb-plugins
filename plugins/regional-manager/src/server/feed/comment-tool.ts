@@ -2,6 +2,7 @@
 // agent holding it, as a reply to the user's comments there or to each other's. The caller's role
 // comes from the plugin's database by its thread id, never its metadata, and decides who it posts as.
 import { z } from "zod";
+import { holderOf } from "../../model/agent/agent.ts";
 import { commentIdSchema, commentTextSchema, type CommentAuthor } from "../../model/feed/comment.ts";
 import { issueIdSchema, type IssueId } from "../../model/issue/issue.ts";
 import type { CoordinatorId, Role } from "../../model/role.ts";
@@ -11,7 +12,7 @@ import { agentOf, failed, type ToolsBb } from "../tools/tool-kit.ts";
 
 export const COMMENT = "issue_comment";
 
-type Deps = { store: Pick<Store, "roleOfThread" | "issue" | "agent">; inbox: Pick<Inbox, "commentIssue"> };
+type Deps = { store: Pick<Store, "roleOfThread" | "issue" | "agent" | "agents">; inbox: Pick<Inbox, "commentIssue"> };
 
 export function registerCommentTool(bb: ToolsBb, { store, inbox }: Deps): void {
   /** Who the caller posts on `issueId` as, or why it can't post there. */
@@ -21,10 +22,10 @@ export function registerCommentTool(bb: ToolsBb, { store, inbox }: Deps): void {
       case "coordinator":
         return store.issue(role.coordinatorId, issueId) === null ? { refused: `you have no issue ${issueId}. crew_catch_up lists your issues.` } : { coordinatorId: role.coordinatorId, author: { kind: "manager" } };
       case "agent": {
+        if (holderOf(store.agents(role.coordinatorId), issueId)?.id === role.agentId) return { coordinatorId: role.coordinatorId, author: { kind: "agent", agentId: role.agentId } };
+        // why the caller's own row: it says why it doesn't hold the issue.
         const agent = agentOf(store, role);
-        if (agent.ended !== null) return { refused: `you no longer hold ${agent.issueId} (you were ${agent.ended.how}). ${ONLY_THESE}` };
-        if (agent.issueId !== issueId) return { refused: `you hold ${agent.issueId}, not ${issueId}. ${ONLY_THESE}` };
-        return { coordinatorId: role.coordinatorId, author: { kind: "agent", agentId: agent.id } };
+        return { refused: agent.ended === null ? `you hold ${agent.issueId}, not ${issueId}. ${ONLY_THESE}` : `you no longer hold ${agent.issueId} (you were ${agent.ended.how}). ${ONLY_THESE}` };
       }
       case "verifier":
       case "reviewer":
